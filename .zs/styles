@@ -2,7 +2,7 @@
 
 set -e
 
-CSS="reset index"
+CSS="reset main"
 CSS_ZS_FILE=$(echo $ZS_FILE | sed -e 's/.[^.]*$/.css/')
 
 for css in $CSS; do
