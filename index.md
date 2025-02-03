@@ -1,5 +1,5 @@
 ---
-title: Homepag
+title: Homepage
 ---
 
 # hello! cześć! привіт! привет! toki!
