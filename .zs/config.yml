@@ -1,0 +1,13 @@
+---
+title: delta.twoexem.com
+description: ma olin mi lon kulupu nanpa
+
+extensions:
+    - anchor
+    - definitionlist
+    - linkify
+    - footnote
+    - strikethrough
+    - table
+    - typography
+    - wikilink

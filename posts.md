@@ -1,0 +1,5 @@
+---
+title: Ramblings
+---
+
+{{ list blog }}

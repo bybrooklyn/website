@@ -1,0 +1,14 @@
+#!/bin/sh
+
+set -e
+
+CSS="reset index"
+CSS_ZS_FILE=$(echo $ZS_FILE | sed -e 's/.[^.]*$/.css/')
+
+for css in $CSS; do
+    printf "<link rel=\"stylesheet\" href=\"assets/css/%s.css\">\n" "$css"
+done
+
+if [ -f $(printf "assets/css/%s" "$CSS_ZS_FILE") ]; then
+    printf "<link rel=\"stylesheet\" href=\"assets/css/%s\">\n" "$CSS_ZS_FILE"
+fi

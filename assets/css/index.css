@@ -1,0 +1,198 @@
+:root {
+    --font: "Iosevka Comfy Duo";
+
+    --fg-low: oklch(70% 0.01368 253.09);
+    --fg: oklch(80% 0.01368 253.09);
+    --fg-high: oklch(90% 0.01368 253.09);
+
+    --bg-lowest: oklch(15% 0.01368 253.09);
+    --bg-low: oklch(17.5% 0.01368 253.09);
+    --bg: oklch(20% 0.01368 253.09);
+    --bg-high: oklch(22.5% 0.01368 253.09);
+    --bg-highest: oklch(25% 0.01368 253.09);
+
+    --border: oklch(35% 0.023 253.09);
+    --border-variant: oklch(30% 0.023 253.09);
+
+    --red: oklch(80% 0.15765 24.728);
+    --red-bright: oklch(90% 0.15765 24.728);
+    --orange: oklch(80% 0.139 45.216);
+    --orange-bright: oklch(90% 0.139 45.216);
+    --yellow: oklch(80% 0.12758 76.402);
+    --yellow-bright: oklch(90% 0.12758 76.402);
+    --green: oklch(80% 0.11211 147.63);
+    --green-bright: oklch(90% 0.11211 147.63);
+    --cyan: oklch(80% 0.09919 181.49);
+    --cyan-bright: oklch(90% 0.09919 181.49);
+    --blue: oklch(80% 0.09994 249.58);
+    --blue-bright: oklch(90% 0.09994 249.58);
+    --purple: oklch(80% 0.09923 296.61);
+    --purple-bright: oklch(90% 0.09923 296.61);
+    --pink: oklch(80% 0.06662 9.2146);
+    --pink-bright: oklch(90% 0.06662 9.2146);
+
+    --border-radius: 5px;
+    --border-width: 2px;
+    --padding: 5px;
+    --padding-big: 10px;
+}
+
+body {
+    font-family: "Iosevka Comfy Duo";
+    background-color: var(--bg);
+    color: var(--fg);
+    display: flex;
+    gap: var(--padding-big);
+    min-height: 100vh;
+    padding: var(--padding-big);
+    box-sizing: border-box;
+    position: relative;
+}
+
+#lower {
+    --bar-size: 0.3em;
+    position: absolute;
+    z-index: -1;
+    bottom: 0;
+    right: 0;
+    aspect-ratio: 1 / 1;
+    height: calc(var(--bar-size) * 14); /* magic number */
+    background-image: linear-gradient(
+        -45deg,
+        transparent,
+        transparent var(--bar-size),
+        var(--blue) var(--bar-size),
+        var(--blue) calc(var(--bar-size) * 2),
+        transparent calc(var(--bar-size) * 2),
+        transparent calc(var(--bar-size) * 3),
+        var(--green) calc(var(--bar-size) * 3),
+        var(--green) calc(var(--bar-size) * 4),
+        transparent calc(var(--bar-size) * 4),
+        transparent calc(var(--bar-size) * 5),
+        var(--yellow) calc(var(--bar-size) * 5),
+        var(--yellow) calc(var(--bar-size) * 6),
+        transparent calc(var(--bar-size) * 6),
+        transparent calc(var(--bar-size) * 7),
+        var(--orange) calc(var(--bar-size) * 7),
+        var(--orange) calc(var(--bar-size) * 8),
+        transparent calc(var(--bar-size) * 8),
+        transparent calc(var(--bar-size) * 9),
+        var(--red) calc(var(--bar-size) * 9),
+        var(--red) calc(var(--bar-size) * 10),
+        transparent calc(var(--bar-size) * 10)
+    );
+}
+
+/*
+ * failsafe for when the viewport is too small and the rainbow overlaps the text
+ */
+main > div,
+footer > span {
+    background-color: var(--bg);
+}
+
+#upper {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+}
+
+#upper > div {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    gap: var(--padding-big);
+    align-items: center;
+}
+
+.subtle {
+    color: var(--fg-low);
+}
+
+main {
+    flex-grow: 1;
+    width: 80vw;
+    line-height: 1.5;
+}
+
+nav > ul {
+    display: flex;
+}
+
+main,
+nav {
+    padding: var(--padding-big);
+}
+
+nav li:not(:last-of-type)::after,
+footer > span:not(:last-of-type)::after {
+    content: "|";
+    margin-left: var(--padding);
+    margin-right: var(--padding);
+    color: var(--border);
+}
+
+footer {
+    text-align: center;
+    padding: var(--padding);
+    font-size: 0.8em;
+}
+
+a,
+a:link {
+    color: var(--yellow);
+}
+
+a:visited {
+    color: var(--pink);
+}
+
+a:focus,
+a:hover {
+    color: var(--yellow-bright);
+}
+
+a:active {
+    color: var(--yellow);
+}
+
+h1 {
+    font-size: 1.5em;
+    margin-bottom: calc(var(--padding-big) * 2);
+}
+
+h2 {
+    font-size: 1.25em;
+    margin-bottom: calc(var(--padding-big) * 1.5);
+}
+
+p:not(:last-of-type) {
+    margin-bottom: var(--padding-big);
+}
+
+main li {
+    margin-left: var(--padding-big);
+    list-style-type: "- ";
+    list-style-position: inside;
+}
+
+main li::marker {
+    color: var(--border);
+}
+
+main ol,
+main ul {
+    padding-top: var(--padding);
+    gap: var(--padding);
+    display: flex;
+    flex-direction: column;
+}
+
+main ol:not(:last-child),
+main ul:not(:last-child) {
+    margin-bottom: var(--padding-big);
+}
+
+strong {
+    font-weight: bold;
+}

@@ -1,0 +1,7 @@
+.list > li {
+    margin-left: 0;
+}
+
+.list > li > span {
+    float: right;
+}

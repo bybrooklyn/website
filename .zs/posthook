@@ -1,0 +1,19 @@
+#!/bin/sh
+
+set -e
+
+minify_assets() {
+  p="$1"
+  t="$2"
+
+  find "$p" -type f -name "*.$t" | while read -r file; do
+    name="${file#"$p"}"
+    name="${name#"/"}"
+    minify -o "${p}/${name}" "$file"
+  done
+}
+
+if command -v minify > /dev/null; then
+  minify_assets "$ZS_OUTDIR" "css"
+  minify_assets "$ZS_OUTDIR" "js"
+fi
