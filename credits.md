@@ -1,0 +1,3 @@
+- [twoexem](https://twoexem.com) - for hosting my website and being a good friend
+- [aporetic](https://github.com/protesilaos/aporetic) - the font used on this website
+- [zs](https://git.mills.io/prologic/zs) - the tool used to build this website
