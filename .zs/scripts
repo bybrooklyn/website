@@ -12,3 +12,5 @@ fi
 for js in $JS; do
   printf "<script type=\"application/javascript\" src=\"assets/js/%s.js\"></script>\n" "$js"
 done
+
+printf "<script>let FOUC_FIX</script>"
