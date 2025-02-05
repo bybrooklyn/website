@@ -1,0 +1,57 @@
+/* Duo */
+@font-face {
+    font-family: "Aporetic";
+    src: local("Aporetic"), url("/assets/fonts/aporetic-sans-normalbolditalic.woff2");
+    font-style: italic;
+    font-weight: bold;
+}
+
+@font-face {
+    font-family: "Aporetic";
+    src: local("Aporetic"), url("/assets/fonts/aporetic-sans-normalboldupright.woff2");
+    font-style: normal;
+    font-weight: bold;
+}
+
+@font-face {
+    font-family: "Aporetic";
+    src: local("Aporetic"), url("/assets/fonts/aporetic-sans-normalregularitalic.woff2");
+    font-style: italic;
+    font-weight: normal;
+}
+
+@font-face {
+    font-family: "Aporetic";
+    src: local("Aporetic"), url("/assets/fonts/aporetic-sans-normalregularupright.woff2");
+    font-style: normal;
+    font-weight: normal;
+}
+
+/* Mono */
+@font-face {
+    font-family: "Aporetic Mono";
+    src: local("Aporetic Mono"), url("/assets/fonts/aporetic-sans-mono-normalbolditalic.woff2");
+    font-style: italic;
+    font-weight: bold;
+}
+
+@font-face {
+    font-family: "Aporetic Mono";
+    src: local("Aporetic Mono"), url("/assets/fonts/aporetic-sans-mono-normalboldupright.woff2");
+    font-style: normal;
+    font-weight: bold;
+}
+
+@font-face {
+    font-family: "Aporetic Mono";
+    src: local("Aporetitalicic Mono"), url("/assets/fonts/aporetic-sans-mono-normalregularitalic.woff2");
+    font-style: italic;
+    font-weight: normal;
+}
+
+@font-face {
+    font-family: "Aporetic Mono";
+    src: local("Aporetic Mono"), url("/assets/fonts/aporetic-sans-mono-normalregularupright.woff2");
+    font-style: normal;
+    font-weight: normal;
+}

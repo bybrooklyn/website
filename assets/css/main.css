@@ -1,6 +1,6 @@
-:root {
-    --font: "Iosevka Comfy Duo";
+@import url("/assets/css/fonts.css");
 
+:root {
     --fg-low: oklch(70% 0.01368 253.09);
     --fg: oklch(80% 0.01368 253.09);
     --fg-high: oklch(90% 0.01368 253.09);
@@ -38,7 +38,7 @@
 }
 
 body {
-    font-family: "Iosevka Comfy Duo";
+    font-family: "Aporetic", "Open Sans", sans-serif;
     background-color: var(--bg);
     color: var(--fg);
     display: flex;
