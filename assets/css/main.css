@@ -60,7 +60,7 @@ body {
     z-index: -1;
 }
 
-#features {
+#triangles {
     content: "";
     width: 200%;
     height: 200%;
@@ -70,6 +70,13 @@ body {
     left: 50%;
     top: 50%;
     z-index: -2;
+    animation: scroll 12s linear infinite;
+}
+
+@keyframes scroll {
+    to {
+       background-position: -96px 0; /* svg size */
+    }
 }
 
 #rainbow {
@@ -110,8 +117,11 @@ body {
  * failsafe for when the viewport is too small and the rainbow overlaps the text
  */
 main > div,
-footer > span {
+footer,
+nav > ul {
     background-color: var(--bg);
+    box-shadow: var(--bg) 0 0 32px 8px;
+    border-radius: var(--border-radius);
 }
 
 #upper {

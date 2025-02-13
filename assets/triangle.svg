@@ -2,9 +2,9 @@
 <!-- Created with Inkscape (http://www.inkscape.org/) -->
 
 <svg
-   width="48"
-   height="48"
-   viewBox="0 0 12.7 12.7"
+   width="96"
+   height="96"
+   viewBox="0 0 25.4 25.4"
    version="1.1"
    id="svg1"
    xmlns="http://www.w3.org/2000/svg"
@@ -12,11 +12,41 @@
   <defs
      id="defs1" />
   <g
-     id="layer1">
+     id="layer1"
+     transform="matrix(0.33333334,0,0,0.33333332,4.2333331,4.2333329)"
+     style="fill:#0c1116;fill-opacity:1">
     <path
-       style="fill:#0c1116;fill-opacity:1;stroke:none;stroke-width:0.661458;stroke-linecap:round;stroke-miterlimit:16;stroke-opacity:1"
+       style="fill:#0c1116;fill-opacity:1;stroke-width:0.661458;stroke-linecap:round;stroke-miterlimit:16"
        id="path1"
-       d="m 5.6178411,3.720292 -3.8741438,0 1.9370719,-3.35510698 z"
-       transform="matrix(0.81953592,0,0,0.94631856,3.3334774,4.4169186)" />
+       d="M 5.6178411,3.720292 H 1.7436973 L 3.6807692,0.36518502 Z"
+       transform="matrix(1.6390718,0,0,1.8926372,0.3169551,2.4838372)" />
+  </g>
+  <g
+     id="layer1-5"
+     transform="matrix(0.33333334,0,0,-0.33333332,15.08125,8.9958329)"
+     style="fill:#171c22;fill-opacity:1">
+    <path
+       style="fill:#171c22;fill-opacity:1;stroke-width:1.16502;stroke-linecap:round;stroke-miterlimit:16"
+       id="path1-3"
+       d="M 15.08125,11.1125 H 8.7312506 L 11.906251,4.7624993 Z" />
+  </g>
+  <g
+     id="layer1-3"
+     transform="matrix(0.33333334,0,0,0.33333332,16.933333,16.933335)"
+     style="fill:#0c1116;fill-opacity:1">
+    <path
+       style="fill:#0c1116;fill-opacity:1;stroke-width:0.661458;stroke-linecap:round;stroke-miterlimit:16"
+       id="path1-7"
+       d="M 5.6178411,3.720292 H 1.7436973 L 3.6807692,0.36518502 Z"
+       transform="matrix(1.6390718,0,0,1.8926372,0.3169551,2.4838372)" />
+  </g>
+  <g
+     id="layer1-5-5"
+     transform="matrix(0.33333334,0,0,-0.33333332,2.3812497,21.695833)"
+     style="fill:#171c22;fill-opacity:1">
+    <path
+       style="fill:#171c22;fill-opacity:1;stroke-width:1.16502;stroke-linecap:round;stroke-miterlimit:16"
+       id="path1-3-9"
+       d="M 15.08125,11.1125 H 8.7312506 L 11.906251,4.7624993 Z" />
   </g>
 </svg>
