@@ -35,6 +35,7 @@
     --border-width: 2px;
     --padding: 5px;
     --padding-big: 10px;
+    --easing: cubic-bezier(0.2, 0.0, 0, 1.0);
 }
 
 body {

@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <!-- Meta Tags -->
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta property="og:title" content="{{ title }}" />
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="http://delta.twoexem.com" />
+        <meta property="og:description" content="{{ description }}" />
+        <meta name="theme-color" content="#ecb256" />
+        <title>prismite - darkuss' website</title>
+
+        <!-- Favicon -->
+        <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png" />
+        <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png" />
+        <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/favicon-16x16.png" />
+
+        <!-- Stylesheets -->
+        {{ styles }}
+
+        <!-- Scripts -->
+        {{ scripts }}
+    </head>
+
+    <body>
+        <div id="deco" aria-hidden=true>
+            <div id="rainbow"></div>
+            <div id="triangles"></div>
+        </div>
+        <div id="upper">
+            <nav>
+                <ul>
+                    {{ generate_nav }}
+                </ul>
+            </nav>
+            <div>
+                <main>
+                    <div>
+                        <div id="logo" aria-label="prismite">
+                            <span aria-hidden=true style="color: var(--blue)">    ___       ___       ___       ___       ___       ___       ___       ___   </span>
+                            <span aria-hidden=true style="color: var(--green)">   /\  \     /\  \     /\  \     /\  \     /\__\     /\  \     /\  \     /\  \  </span>
+                            <span aria-hidden=true style="color: var(--yellow)">  /::\  \   /::\  \   _\:\  \   /::\  \   /::L_L_   _\:\  \    \:\  \   /::\  \ </span>
+                            <span aria-hidden=true style="color: var(--orange)"> /::\:\__\ /::\:\__\ /\/::\__\ /\:\:\__\ /:/L:\__\ /\/::\__\   /::\__\ /::\:\__\</span>
+                            <span aria-hidden=true style="color: var(--red)"> \/\::/  / \;:::/  / \::/\/__/ \:\:\/__/ \/_/:/  / \::/\/__/  /:/\/__/ \:\:\/  /</span>
+                            <span aria-hidden=true style="color: var(--pink)">    \/__/   |:\/__/   \:\__\    \::/  /    /:/  /   \:\__\    \/__/     \:\/  / </span>
+                            <span aria-hidden=true style="color: var(--purple)">             \|__|     \/__/     \/__/     \/__/     \/__/               \/__/  </span>
+                        </div>
+                        <h2>prismite - a colourful and comfy theme</h2>
+                        <div id="color_showcase">
+                            {{ generate_colors }}
+                        </div>
+                    </div>
+                </main>
+                <footer class="subtle">
+                    <span>made with <span style="color: var(--red)">&lt;3</span> by darkuss</span><span><a href="/credits.html">credits</a></span
+                    ><span>last modified: <time datetime="{{ current_date }}">{{ current_date }}</time></span>
+                </footer>
+            </div>
+        </div>
+    </body>
+</html>
