@@ -5,9 +5,9 @@ set -e
 JS=""
 
 # Load live.js for non-production builds for faster development
-if [ -z "$ZS_PRODUCTION" ]; then
-  JS="$JS live"
-fi
+# if [ -z "$ZS_PRODUCTION" ]; then
+#   JS="$JS live"
+# fi
 
 for js in $JS; do
   printf "<script type=\"application/javascript\" src=\"/assets/js/%s.js\"></script>\n" "$js"

@@ -2,8 +2,6 @@
 title: Projects
 ---
 
-- [dots](https://git.twoexem.com/delta/dots.git) - my awesomewm config
-- [prismite](https://delta.twoexem.com/prismite.html) - my very own colourscheme
-- [libmusi](https://git.twoexem.com/delta/libmusi.git) - a library for exposing apis of different music services under a single, unified interface
-- [tufumo](https://git.twoexem.com/delta/tufumo.git) - a music player oriented at power users, powered by [libmusa](https://git.twoexem.com/libmusa.git) and inspired by [symfonium](https://www.symfonium.app/)
-- [website](https://git.twoexem.com/delta/website.git) - the very website that you're reading right now
+- [dots](https://git.twoexem.com/dots) - my awesomewm config
+- [prismite](/prismite.html) ([git](https://git.twoexem.com/prismite.nvim)) - my very own colourscheme
+- [website](https://git.twoexem.com/website) - the very website that you're reading right now

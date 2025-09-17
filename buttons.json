@@ -1,0 +1,24 @@
+[
+    {
+        "link": "https://sdomi.pl",
+        "image": "https://sdomi.pl/img/button.bmp",
+        "alt": "Witch hat on the left, text 'sdomi' on the right. The background is procedurally generated every 30 or so seconds.",
+        "title": "sdomi's webpage"
+    },
+    {
+        "link": "https://milobit.net",
+        "image": "https://milobit.net/badge.gif",
+        "alt": "Large text 'milobit' and small text '.net' undearneath it.",
+        "title": "milobit's webpage"
+    },
+    {
+        "link": "https://famfo.xyz",
+        "image": "https://famfo.xyz/banner/famfo_anim.gif",
+        "alt": "Text saying 'famfo' on the left. Underneath it is a commandline prompt. To the right are lines scrolling downwards and a symbol representing mesh networks"
+    },
+    {
+        "link": "https://twoexem.com",
+        "image": "https://twoexem.com/resources/88x31/twoexem.gif",
+        "alt": "A landscape with windmills is visible on the button. The sky is cloudy, with one cloud spelling out '2xm'"
+    }
+]

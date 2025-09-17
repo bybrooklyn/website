@@ -10,3 +10,6 @@ Thus, with my cat ears and thigh highs on, off I went in search of resources on 
 We spent about an hour discussing a solution to my predicament, and in the end we came to the conclusion that while a cubic easing function could be approximated by tweaking the intro and outro durations and altering the easing function, I should simply use another library that doesn't use derivatives for specifying the easing function. This stemmed from the fact that for every well-defined cubic Bézier curve (i.e., `A = (0,0)`, `D = (1,1)`, and `B` and `C` are both in the range `[0–1]`), both the start and the end of the function would be at `y = 0`, making it incompatible with rubato's model (except when intro = 1, which would defeat the purpose of using rubato as an interrupt-friendly interpolator in the first place).
 
 The moral of the story? Don’t rice, kids.
+<aside>
+17/09/25: Goodness gracious, my writing was (and still, probably, is) *horrible*. I'd rather delete this, but alas, my principles don't allow me to. The real moral of the story is that you will always sound cringe when you start writing
+</aside>
