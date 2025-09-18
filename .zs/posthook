@@ -9,7 +9,7 @@ cat > $ZS_OUTDIR/rss.xml <<EOF
 <generator>cobbled together bash:tm:</generator>
 <language>en-gb</language>
 <lastBuildDate>$(date -R)</lastBuildDate>
-<atom:link href="https://zserge.com/rss.xml" rel="self" type="application/rss+xml"/>
+<atom:link href="https://darkuss.twoexem.com/rss.xml" rel="self" type="application/rss+xml"/>
 EOF
 
 ./.zs/rss >> $ZS_OUTDIR/rss.xml
