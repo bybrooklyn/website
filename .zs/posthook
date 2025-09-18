@@ -1,19 +1,16 @@
 #!/bin/sh
 
-set -e
+cat > $ZS_OUTDIR/rss.xml <<EOF
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+<channel>
+<title>darkuss' website</title>
+<link>https://darkuss.twoexem.com/</link>
+<description>silly posts for silly people</description>
+<generator>cobbled together bash:tm:</generator>
+<language>en-gb</language>
+<lastBuildDate>$(date -R)</lastBuildDate>
+<atom:link href="https://zserge.com/rss.xml" rel="self" type="application/rss+xml"/>
+EOF
 
-minify_assets() {
-  p="$1"
-  t="$2"
-
-  find "$p" -type f -name "*.$t" | while read -r file; do
-    name="${file#"$p"}"
-    name="${name#"/"}"
-    minify -o "${p}/${name}" "$file"
-  done
-}
-
-if command -v minify > /dev/null; then
-  minify_assets "$ZS_OUTDIR" "css"
-  minify_assets "$ZS_OUTDIR" "js"
-fi
+./.zs/rss >> $ZS_OUTDIR/rss.xml
+echo "</channel></rss>" >> $ZS_OUTDIR/rss.xml

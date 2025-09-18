@@ -1,0 +1,19 @@
+#!/bin/sh
+
+for f in ./blog/*.md ; do
+	d="$(zs var "$f" date)"
+	if [ ! -z $d ] ; then
+		timestamp="$(date --date "$(echo "$d" | awk -F- '{print $3"-"$2"-"$1}')" +%s)"
+		url="$(zs var "$f" url)"
+		title="$(zs var "$f" title)"
+		desc="$(zs var "$f" description)"
+		echo $timestamp \
+			"<item>" \
+			"<title>$title</title>" \
+			"<link>http://darkuss.twoexem.com/$url</link>" \
+			"<description>$desc</description>" \
+			"<pubDate>$(date --date @$timestamp -R)</pubDate>" \
+			"<guid>http://darkuss.twoexem.com/$url</guid>" \
+		"</item>"
+	fi
+done | sort -r -n | cut -d' ' -f2-

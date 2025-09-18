@@ -24,4 +24,5 @@ function normalize(file) {
         printf "<li><a href=\"%s\">%s</a></li>", file, name
         if (i<NF) print ""
     }
+    printf "<li><a href=\"/rss.xml\">[rss]</a></li>", file, name
 }'
