@@ -1,2 +1,0 @@
-#!/bin/sh
-cat buttons.json | jq -r -f .zs/buttons.jq

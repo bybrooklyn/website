@@ -1,0 +1,45 @@
+#!/usr/bin/env lua
+
+-- local yah_bin = io.open("yah/target/release/yah", "r")
+-- if yah_bin then
+--     yah_bin:close()
+-- else
+--     os.execute("cd yah && cargo build --release")
+-- end
+--
+-- local _handle = assert(io.popen("find '" .. os.getenv("ZS_OUTDIR") .. "' -type f -name '*.html' -print0"))
+-- ---@type string
+-- local _files = _handle:read("*a")
+-- _handle:close()
+--
+-- local tmp = os.tmpname()
+-- for file in _files:gmatch("(.-)\0") do
+--     local handle = assert(io.open(file, "r+"))
+--     ---@type string
+--     local content = handle:read("*a")
+--     content:gsub([[<pre><code class="language%-(.-)">(.-)</code></pre>]], function(lang, code)
+--
+--         local tmp_handle = assert(io.open(tmp, "w+"))
+--         tmp_handle:write(code):close()
+--
+--         local yah, err = io.popen([[yah/target/release/yah "]] .. lang .. [[" "]]  .. tmp .. [["]], "r")
+--         if err then
+--             return [[<div class="yah_error">FAILED TO PARSE FILE, (ERR: ]] .. err .. [[)</div>]]
+--         end
+--         assert(yah)
+--
+--         ---@type string
+--         local out = yah:read("*a")
+--         print(lang, tmp)
+--         print(out)
+--
+--         yah:close()
+--
+--         return [[<pre><code data-lang="]] .. lang .. [[">]] .. out .. [[</code></pre>]]
+--     end)
+--     -- print(content)
+--     handle:close()
+--     -- handle:seek("set")
+--     -- handle:write(content):close()
+-- end
+-- -- os.remove(tmp)

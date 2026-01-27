@@ -1,2 +1,0 @@
-#!/bin/sh
-cat .zs/palette.json | jq -r -f .zs/generate_colors.jq

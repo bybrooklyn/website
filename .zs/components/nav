@@ -1,0 +1,63 @@
+#!/usr/bin/lua
+
+package.path = ".zs/?.lua;" .. package.path
+local html = require "components.html"
+
+---@class Link
+---@field url string
+---@field title string
+---@field index boolean?
+
+---@type Link[]
+local links = {
+    {
+        url = "/",
+        title = "home",
+    },
+    {
+        url = "/projects.html",
+        title = "projects"
+    },
+    {
+        url = "/posts.html",
+        title = "ramblings"
+    },
+    {
+        url = "/rss.xml",
+        title = "rss"
+    }
+}
+
+local function get_file_stem(path)
+    return path
+        :gsub(".[^.]*$", "") -- get rid of ext
+        :gsub(".*/", "") -- get rid of prefix
+end
+
+local current_file = get_file_stem(os.getenv("ZS_FILE"))
+
+local acc = {}
+
+for _, link in ipairs(links) do
+    local title = link.title
+    if current_file == get_file_stem(link.url) or current_file == "index" and link.url == "/" then
+        title = "[" .. title .. "]"
+    end
+
+    table.insert(acc, {
+        tag = "li",
+        {
+            tag = "a",
+            href = link.url,
+            title
+        }
+    })
+end
+
+print(html {
+    tag = "nav",
+    {
+        tag = "ul",
+        acc
+    }
+})

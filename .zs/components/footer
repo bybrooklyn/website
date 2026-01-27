@@ -1,0 +1,91 @@
+#!/usr/bin/lua
+
+package.path = ".zs/?.lua;" .. package.path
+local html = require "components.html"
+
+local date = os.date("!%Y-%m-%dT%H:%M:%S%Z")
+
+print(html {
+    tag = "footer",
+    {
+        tag = "div",
+        {
+            tag = "span",
+            {
+                tag = "a",
+                class = "volatile",
+                href = "https://ring.acab.dev/prev/C1NMCp8IXr",
+                title = "go to the previous page in the webring",
+                "[<<]"
+            }
+        },
+        {
+            tag = "span",
+            {
+                tag = "a",
+                class = "volatile",
+                href = "https://ring.acab.dev/prev/C1NMCp8IXr",
+                title = "go to a random page in the webring",
+                "[<<]"
+            }
+        },
+        {
+            tag = "span",
+            {
+                tag = "a",
+                class = "volatile",
+                href = "https://ring.acab.dev",
+                title = "hacker webring",
+                "[⠠⠵ ]"
+            }
+        },
+        {
+            tag = "span",
+            {
+                tag = "a",
+                class = "volatile",
+                href = "https://ring.acab.dev/next/C1NMCp8IXr",
+                title = "go to the next page in the webring",
+                "[>>]"
+            }
+        },
+    },
+    {
+        tag = "div",
+        {
+            tag = "span",
+            "made with ",
+            {
+                tag = "span",
+                style = "color: var(--red)",
+                "<3"
+            },
+            " by darkuss"
+        },
+        {
+            tag = "span",
+            {
+                tag = "a",
+                href = "/credits.html",
+                "credits"
+            }
+        },
+        {
+            tag = "span",
+            {
+                tag = "a",
+                href = "/privacy.html",
+                "privacy"
+            }
+        },
+        {
+            tag = "span",
+            "last modified: ",
+            {
+                tag = "time",
+                datetime = date,
+                date
+            }
+        }
+    }
+})

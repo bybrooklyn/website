@@ -34,25 +34,29 @@
     grid-template-columns: repeat(auto-fill, minmax(20vw, 1fr));
 }
 
-#color_showcase > div > div {
+#color_showcase > div > ol {
     border-radius: var(--border-radius);
     overflow: hidden;
-}
-
-#color_showcase > div > div {
+    padding-top: 0;
+    padding-inline-start: 0;
+    margin-block: 0;
+    flex-direction: row;
+    margin: 0;
     display: flex;
     gap: var(--padding);
 }
 
-#color_showcase > div > div > div {
+#color_showcase > div > ol > li {
     padding: var(--padding);
     font-size: 0.75em;
     transition: color 0.3s var(--easing);
     font-family: "Aporetic Mono", monospace;
     flex: 1;
+    margin: 0;
+    list-style-type: none;
 }
 
-#color_showcase > div:last-child > div {
+#color_showcase > div:last-child > ol {
     flex-direction: column;
 }
 

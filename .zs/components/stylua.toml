@@ -1,0 +1,5 @@
+call_parentheses = "None"
+indent_type = "Spaces"
+
+[sort_requires]
+enabled = true

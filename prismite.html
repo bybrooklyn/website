@@ -28,16 +28,16 @@
             <div id="rainbow"></div>
             <div id="triangles"></div>
         </div>
-        <div id="upper">
+        <div id="upper" role="presentation">
             <nav>
                 <ul>
-                    {{ generate_nav }}
+                    {{ .zs/components/nav }}
                 </ul>
             </nav>
             <div>
                 <main>
                     <div>
-                        <div id="logo" aria-label="prismite">
+                        <div id="logo" aria-label="Prismite">
                             <span aria-hidden=true style="color: var(--blue)">    ___       ___       ___       ___       ___       ___       ___       ___   </span>
                             <span aria-hidden=true style="color: var(--green)">   /\  \     /\  \     /\  \     /\  \     /\__\     /\  \     /\  \     /\  \  </span>
                             <span aria-hidden=true style="color: var(--yellow)">  /::\  \   /::\  \   _\:\  \   /::\  \   /::L_L_   _\:\  \    \:\  \   /::\  \ </span>
@@ -48,19 +48,11 @@
                         </div>
                         <h2>prismite - a colourful and comfy theme</h2>
                         <div id="color_showcase">
-                            {{ generate_colors }}
+                            {{ .zs/components/colors }}
                         </div>
                     </div>
                 </main>
-                <footer class="subtle">
-                    <div>
-                        <span><a class="volatile" href="https://ring.acab.dev/prev/C1NMCp8IXr">[<<]</a></span><span><a class="volatile" href="https://ring.acab.dev/rand/C1NMCp8IXr">[random]</a></span><span><a href="https://ring.acab.dev">[⠠⠵ ]</a></span><span><a class="volatile" href="https://ring.acab.dev/next/C1NMCp8IXr">[>>]</a></span>
-                    </div>
-                    <div>
-                        <span>made with <span style="color: var(--red)">&lt;3</span> by darkuss</span><span><a href="/credits.html">credits</a></span
-                        ><span>last modified: <time datetime="{{ current_date }}">{{ current_date }}</time></span>
-                    </div>
-                </footer>
+                {{ .zs/components/footer }}
             </div>
         </div>
     </body>
