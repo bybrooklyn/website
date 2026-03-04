@@ -24,9 +24,9 @@ print(html {
             {
                 tag = "a",
                 class = "volatile",
-                href = "https://ring.acab.dev/prev/C1NMCp8IXr",
+                href = "https://ring.acab.dev/rand/C1NMCp8IXr",
                 title = "go to a random page in the webring",
-                "[<<]"
+                "[?]"
             }
         },
         {
