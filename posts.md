@@ -1,5 +1,0 @@
----
-title: Ramblings
----
-
-{{ list blog }}

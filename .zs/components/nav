@@ -1,4 +1,4 @@
-#!/usr/bin/lua
+#!/usr/bin/env lua
 
 package.path = ".zs/?.lua;" .. package.path
 local html = require "components.html"
@@ -17,14 +17,6 @@ local links = {
     {
         url = "/projects.html",
         title = "projects"
-    },
-    {
-        url = "/posts.html",
-        title = "ramblings"
-    },
-    {
-        url = "/rss.xml",
-        title = "rss"
     }
 }
 

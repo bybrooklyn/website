@@ -1,4 +1,4 @@
-#!/usr/bin/lua
+#!/usr/bin/env lua
 
 package.path = ".zs/?.lua;" .. package.path
 local html = require "components.html"
@@ -54,13 +54,7 @@ print(html {
         tag = "div",
         {
             tag = "span",
-            "made with ",
-            {
-                tag = "span",
-                style = "color: var(--red)",
-                "<3"
-            },
-            " by darkuss"
+            "website forked from darkuss"
         },
         {
             tag = "span",
