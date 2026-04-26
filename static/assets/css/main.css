@@ -35,7 +35,7 @@
     --border-width: 1px;
     --padding: 5px;
     --padding-big: 10px;
-    --easing: cubic-bezier(0.2, 0.0, 0, 1.0);
+    --easing: cubic-bezier(0.2, 0, 0, 1);
     --arrow-size: 1em;
 }
 
@@ -75,7 +75,7 @@ body {
     animation: scroll 16s linear infinite;
 }
 
-@media screen and (prefers-reduced-motion: reduce) { 
+@media screen and (prefers-reduced-motion: reduce) {
     #triangles {
         animation: none;
     }
@@ -83,7 +83,7 @@ body {
 
 @keyframes scroll {
     to {
-       background-position: -96px 0; /* svg size */
+        background-position: -96px 0; /* svg size */
     }
 }
 
@@ -217,7 +217,8 @@ a:active {
     text-decoration: none;
 }
 
-a.anchor:link, a.anchor:visited {
+a.anchor:link,
+a.anchor:visited {
     color: var(--fg-low);
 }
 
@@ -235,7 +236,8 @@ a.anchor:active {
     font-size: 0.8em;
 }
 
-h1, h2 {
+h1,
+h2 {
     line-height: 1;
     display: flex;
     align-items: center;
@@ -248,7 +250,8 @@ h1, h2 {
     background-color: var(--border);
 }
 
-h1::after, h2::after {
+h1::after,
+h2::after {
     content: "";
     height: var(--border-width);
     background-color: var(--border);
@@ -283,8 +286,8 @@ main ul {
 
 p,
 pre,
-h1, h2
-{
+h1,
+h2 {
     margin-top: 0.8em;
 }
 
@@ -352,10 +355,10 @@ pre > code[data-lang]:hover::after {
     aside::before {
         content: "";
         border-right: var(--arrow-size) solid transparent;
-        border-left: var(--arrow-size) solid transparent; 
+        border-left: var(--arrow-size) solid transparent;
         position: absolute;
-        width: 0; 
-        height: 0; 
+        width: 0;
+        height: 0;
         left: 50%;
         transform: translateX(-50%);
     }
@@ -389,10 +392,10 @@ pre > code[data-lang]:hover::after {
     aside::before {
         content: "";
         border-top: var(--arrow-size) solid transparent;
-        border-bottom: var(--arrow-size) solid transparent; 
+        border-bottom: var(--arrow-size) solid transparent;
         position: absolute;
-        width: 0; 
-        height: 0; 
+        width: 0;
+        height: 0;
         top: 50%;
         transform: translateY(-50%);
     }

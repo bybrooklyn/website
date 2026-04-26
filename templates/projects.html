@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+
+{% block content %}
+    {% set source = load_data(path="data/projects.toml") %}
+    <ul>
+        {% for project in source.projects %}
+            <li><a href="{{ project.url | safe }}">{{ project.name }} &ndash; {{ project.license }}</a> - {{ project.description }}</li>
+        {% endfor %}
+    </ul>
+{% endblock content %}

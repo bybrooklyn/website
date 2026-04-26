@@ -44,7 +44,7 @@
 
 @font-face {
     font-family: "Aporetic Mono";
-    src: local("Aporetitalicic Mono"), url("/assets/fonts/aporetic-sans-mono-normalregularitalic.woff2");
+    src: local("Aporetic Mono"), url("/assets/fonts/aporetic-sans-mono-normalregularitalic.woff2");
     font-style: italic;
     font-weight: normal;
 }

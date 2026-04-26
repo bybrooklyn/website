@@ -1,0 +1,35 @@
+base_url = "https://bybrooklyn.dev"
+title = "bybrooklyn.dev"
+description = "Brook's personal website about coding, projects, and the occasional bit of hosting."
+
+compile_sass = false
+minify_html = false
+build_search_index = false
+generate_feeds = false
+output_dir = "public"
+
+[markdown]
+smart_punctuation = true
+external_links_target_blank = false
+external_links_no_follow = false
+external_links_no_referrer = false
+external_links_external = false
+
+[slugify]
+paths = "off"
+anchors = "on"
+
+[extra]
+title_suffix = "Brook's website"
+
+[[extra.nav]]
+id = "home"
+title = "home"
+url = "/"
+match_path = "/"
+
+[[extra.nav]]
+id = "projects"
+title = "projects"
+url = "/projects/"
+match_path = "/projects/"

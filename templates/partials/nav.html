@@ -1,0 +1,11 @@
+{% set active_path = current_path | default(value="") %}
+
+<nav>
+    <ul>
+        {% for item in config.extra.nav %}
+            <li>
+                <a href="{{ item.url | safe }}">{% if active_path == item.url or active_path == item.match_path %}[{{ item.title }}]{% else %}{{ item.title }}{% endif %}</a>
+            </li>
+        {% endfor %}
+    </ul>
+</nav>

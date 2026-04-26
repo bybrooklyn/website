@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta property="og:title" content="{% block og_title %}{% if page is defined %}{{ page.title }}{% elif section is defined %}{{ section.title }}{% else %}{{ config.title }}{% endif %}{% endblock og_title %}" />
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="{% block og_url %}{% if current_url is defined %}{{ current_url | safe }}{% else %}{{ config.base_url | safe }}{% endif %}{% endblock og_url %}" />
+        <meta
+            property="og:description"
+            content="{% block og_description %}{% if page is defined and page.description %}{{ page.description }}{% elif section is defined and section.description %}{{ section.description }}{% else %}{{ config.description }}{% endif %}{% endblock og_description %}" />
+        <meta name="theme-color" content="#ecb256" />
+        <title>{% block title %}{% if page is defined %}{{ page.title }}{% elif section is defined %}{{ section.title }}{% else %}{{ config.title }}{% endif %}{% endblock title %} - {{ config.extra.title_suffix }}</title>
+
+        <link rel="stylesheet" href="/assets/css/reset.css" />
+        <link rel="stylesheet" href="/assets/css/main.css" />
+        {% if page is defined %}
+            {% for stylesheet in page.extra.stylesheets | default(value=[]) %}
+                <link rel="stylesheet" href="{{ stylesheet }}" />
+            {% endfor %}
+        {% endif %}
+        {% block extra_head %}{% endblock extra_head %}
+
+        <script>
+            let FOUC_FIX;
+        </script>
+    </head>
+
+    <body>
+        <div id="deco" aria-hidden="true">
+            <div id="rainbow"></div>
+            <div id="triangles"></div>
+        </div>
+        <div id="upper" role="presentation">
+            {% include "partials/nav.html" %}
+            <div>
+                <main><div>{% block content %}{% endblock content %}</div></main>
+                {% include "partials/footer.html" %}
+            </div>
+        </div>
+    </body>
+</html>

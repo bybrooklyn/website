@@ -1,11 +1,23 @@
-why tf did i not write a readme??
+## why tf did i not write a readme?? anyway this is my website forked from darkuss
 
-## Bybrooklyn.dev
+#### Yes i used ai to refactor the website from that old ass zs framework
 
-### i stole(forked) a website from Darkuss
+### Tooling
 
-## the tooling for this website using zs to handle building of the static webpages for actual proper use of the website
+This site is built with [Zola](https://www.getzola.org/). Content lives in `content/`, templates live in `templates/`, project data lives in
+`data/projects.toml`, and static assets are copied from `static/`.
 
+Tooling:
 
+```sh
+just serve
+just check
+just build
+```
 
-it did not come with a license so i just decided to add the Creative Commons Attribution-ShareAlike 4.0 International
+Install Zola and `just` with your system package manager.
+
+## License
+
+This site is licensed under the Creative Commons Attribution-ShareAlike 4.0 International license. The original design was forked from Darkuss/twoexem; see
+`content/credits.md`.

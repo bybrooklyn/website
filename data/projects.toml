@@ -1,0 +1,35 @@
+[[projects]]
+name = "OpenBitDo"
+license = "BSD 3"
+url = "https://github.com/bybrooklyn/openbitdo"
+description = "8BitDo controller and keyboard utility for GNU/Linux and macOS"
+
+[[projects]]
+name = "Wavry"
+license = "AGPL 3"
+url = "https://github.com/bybrooklyn/wavry"
+description = "Open source low-latency remote desktop designed with Linux and Wayland in mind"
+
+[[projects]]
+name = "Oopsies"
+license = "Apache 2.0"
+url = "https://github.com/bybrooklyn/Oopsies"
+description = "TypeScript/TOML web framework for backend developers to build frontends without writing HTML or CSS"
+
+[[projects]]
+name = "Alchemist"
+license = "GPL 3"
+url = "https://github.com/bybrooklyn/alchemist"
+description = "Open-source video transcoding system"
+
+[[projects]]
+name = "Bybrooklyn.dev"
+license = "CC-BY-SA 4"
+url = "https://github.com/bybrooklyn/website"
+description = "The website you're reading right now"
+
+[[projects]]
+name = "Breeze"
+license = "MIT"
+url = "https://github.com/bybrooklyn/breeze"
+description = "Lightweight interpreted, strongly typed, statically typed, strictly typed programming language"

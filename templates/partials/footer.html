@@ -1,0 +1,16 @@
+{% set build_time = now() | date(format="%Y-%m-%dT%H:%M:%SZ", timezone="UTC") %}
+
+<footer>
+    <div>
+        <span><a class="volatile" href="https://ring.acab.dev/prev/C1NMCp8IXr" title="go to the previous page in the webring">[&lt;&lt;]</a></span>
+        <span><a class="volatile" href="https://ring.acab.dev/rand/C1NMCp8IXr" title="go to a random page in the webring">[?]</a></span>
+        <span><a class="volatile" href="https://ring.acab.dev" title="hacker webring">[&#10272;&#10357; ]</a></span>
+        <span><a class="volatile" href="https://ring.acab.dev/next/C1NMCp8IXr" title="go to the next page in the webring">[&gt;&gt;]</a></span>
+    </div>
+    <div>
+        <span>website forked from darkuss</span>
+        <span><a href="/credits/">credits</a></span>
+        <span><a href="/privacy/">privacy</a></span>
+        <span>last modified: <time datetime="{{ build_time }}">{{ build_time }}</time></span>
+    </div>
+</footer>
