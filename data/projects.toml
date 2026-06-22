@@ -26,10 +26,23 @@ description = "Open-source video transcoding system"
 name = "Bybrooklyn.dev"
 license = "CC-BY-SA 4"
 url = "https://github.com/bybrooklyn/website"
-description = "The website you're reading right now"
+description = "The website you're reading right now!"
 
 [[projects]]
 name = "Breeze"
 license = "MIT"
 url = "https://github.com/bybrooklyn/breeze"
-description = "Lightweight interpreted, strongly typed, statically typed, strictly typed programming language"
+description = "Incredibly lightweight strictly typed and compiled programming language"
+
+[[projects]]
+name = "Nx86"
+license = "GPL 3+"
+url = "https://github.com/nx86-emu/nx86"
+description = "The wet dream of Switch emulators, compiling software ahead of time"
+
+[[projects]]
+name = "ExtraStimulantsPlus"
+license = "MIT"
+url = "https://github.com/bybrooklyn/ExtraStimulantsPlus"
+description = "Modloader, level editor, and optimizations for the game Sensory Overload. Development temporarily stopped until full release"
+
