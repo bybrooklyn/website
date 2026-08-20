@@ -87,14 +87,45 @@ uvx --from "fonttools[woff]" pyftsubset FONT.woff2 \
 
 ## Deploying
 
-Static output, so any host works. Cloudflare Pages:
+Cloudflare Pages. The build is static, so no Astro adapter is needed
+(`@astrojs/cloudflare` is only for SSR).
 
-- **Build command:** `bun run build`
-- **Output directory:** `dist`
-- **Environment:** set `BUN_VERSION` if you want to pin it
+### First-time setup
 
-`public/_headers` sets long cache lifetimes on fonts and hashed assets; Netlify uses the same
-format. `dist/404.html` is picked up automatically as the not-found page on both.
+1. In the Cloudflare dashboard, create a Pages project and **connect this repo**
+   (Workers & Pages -> Create -> Pages -> Connect to Git):
+   - Build command: `bun run build`
+   - Output directory: `dist`
+   - Production branch: whichever branch actually holds the Astro site
+
+   Connect Git *first*. A Git-connected project can still take manual `wrangler`
+   deploys (disable automatic deployments per branch and deploy by hand), but going
+   the other way — Direct Upload first, Git later — is not reliably supported.
+
+2. Authenticate the CLI for manual deploys:
+
+   ```sh
+   just login          # browser flow
+   # or: export CLOUDFLARE_API_TOKEN=...
+   just whoami         # confirm
+   ```
+
+### Day to day
+
+```sh
+just deploy           # check + build + deploy to production
+just deploy-preview   # same, to a preview URL named after the current branch
+just deployments      # list what's live
+```
+
+Pushing to the production branch also triggers a build on Cloudflare's side, so the
+site redeploys itself whether or not you run the command.
+
+`public/_headers` sets long cache lifetimes on fonts and hashed assets; Pages reads it
+as-is. `dist/404.html` is picked up automatically as the not-found page.
+
+Cloudflare detects Bun from `bun.lock`. If the default version drifts, pin it with a
+`BUN_VERSION` environment variable in the project's build settings.
 
 ## License
 

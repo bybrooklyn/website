@@ -5,3 +5,8 @@ dist
 .astro
 /.playwright-mcp
 /.claude
+
+# wrangler local state and secrets
+.wrangler
+.dev.vars
+.dev.vars.*

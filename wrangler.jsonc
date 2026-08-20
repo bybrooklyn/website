@@ -1,0 +1,7 @@
+{
+    "$schema": "node_modules/wrangler/config-schema.json",
+    "name": "bybrooklyn-dev",
+    // Astro writes the static build here. With this set, `wrangler pages deploy`
+    // needs no path argument.
+    "pages_build_output_dir": "./dist"
+}
