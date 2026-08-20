@@ -1,0 +1,28 @@
+---
+import { site } from "../data/site";
+
+interface Props {
+    /** Real last-modified date for this page, when the page has one. */
+    updated?: Date;
+}
+
+const { updated } = Astro.props;
+const ring = `https://ring.acab.dev`;
+const iso = updated?.toISOString().slice(0, 10);
+---
+
+<footer>
+    <div>
+        <span><a class="volatile" href={`${ring}/prev/${site.webringId}`} title="go to the previous page in the webring">[&lt;&lt;]</a></span>
+        <span><a class="volatile" href={`${ring}/rand/${site.webringId}`} title="go to a random page in the webring">[?]</a></span>
+        <span><a class="volatile" href={ring} title="hacker webring">[&#10272;&#10357; ]</a></span>
+        <span><a class="volatile" href={`${ring}/next/${site.webringId}`} title="go to the next page in the webring">[&gt;&gt;]</a></span>
+    </div>
+    <div>
+        <span>website forked from darkuss</span>
+        <span><a href="/credits/">credits</a></span>
+        <span><a href="/privacy/">privacy</a></span>
+        <span><a href="/rss.xml">rss</a></span>
+        {iso && <span>last modified: <time datetime={iso}>{iso}</time></span>}
+    </div>
+</footer>

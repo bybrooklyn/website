@@ -1,0 +1,69 @@
+---
+import { ClientRouter } from "astro:transitions";
+import Nav from "../components/Nav.astro";
+import Footer from "../components/Footer.astro";
+import { site } from "../data/site";
+import "../styles/reset.css";
+import "../styles/main.css";
+
+interface PageMeta {
+    title: string;
+    description?: string;
+    /** Real last-modified date, shown in the footer when present. */
+    updated?: Date | string;
+}
+
+/**
+ * .astro pages pass these directly; .md pages using `layout:` get them nested
+ * under `frontmatter`, so accept both.
+ */
+type Props = Partial<PageMeta> & { frontmatter?: PageMeta };
+
+const meta = Astro.props.frontmatter ?? (Astro.props as PageMeta);
+const title = meta.title ?? site.title;
+const description = meta.description ?? site.description;
+const updated = meta.updated ? new Date(meta.updated) : undefined;
+const canonical = new URL(Astro.url.pathname, Astro.site);
+---
+
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>{title} - {site.titleSuffix}</title>
+        <meta name="description" content={description} />
+        <link rel="canonical" href={canonical} />
+
+        <meta property="og:title" content={title} />
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content={canonical} />
+        <meta property="og:description" content={description} />
+        <meta name="theme-color" content={site.themeColor} />
+
+        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+        <link rel="alternate" type="application/rss+xml" title={site.title} href="/rss.xml" />
+
+        <ClientRouter />
+
+        <slot name="head" />
+    </head>
+
+    <body>
+        <!--
+            The decorations live on <html> (see main.css), not here. ClientRouter swaps
+            <head> and <body> on navigation, and re-parenting an element restarts its CSS
+            animations — which is what made the triangle field jump back to frame zero on
+            every click. <html> is never replaced, so its animation just keeps running.
+        -->
+        <div id="upper" role="presentation">
+            <Nav />
+            <div>
+                <main>
+                    <div class="page"><slot /></div>
+                </main>
+                <Footer updated={updated} />
+            </div>
+        </div>
+    </body>
+</html>

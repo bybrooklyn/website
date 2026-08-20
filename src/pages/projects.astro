@@ -1,0 +1,28 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import { projects } from "../data/projects";
+---
+
+<BaseLayout title="Projects" description="Selected projects by Brook." updated={new Date("2026-08-20")}>
+    <h1>projects</h1>
+
+    <ul class="entries">
+        {
+            projects.map((project) => (
+                <li class="entry">
+                    <div class="entry-meta">
+                        <span>{project.license}</span>
+                        {project.language && <span>{project.language}</span>}
+                        {project.status && <span class:list={[`status-${project.status}`]}>{project.status}</span>}
+                    </div>
+                    <div class="entry-body">
+                        <a class="entry-name" href={project.url}>
+                            {project.name}
+                        </a>
+                        <div class="entry-desc">{project.description}</div>
+                    </div>
+                </li>
+            ))
+        }
+    </ul>
+</BaseLayout>

@@ -1,16 +1,21 @@
 set shell := ["sh", "-eu", "-c"]
 
+# dev server with hot reload
 serve:
-    zola serve --interface 127.0.0.1 --port 1111
+    bun run dev
 
 build:
-    zola build
+    bun run build
 
-zola-check:
-    zola check
-
+# type-check .astro/.ts and validate content frontmatter
 check:
-    zola check
+    bun run check
+
+preview: build
+    bun run preview
+
+install:
+    bun install
 
 clean:
-    rm -rf public
+    rm -rf dist .astro

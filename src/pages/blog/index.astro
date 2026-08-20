@@ -1,0 +1,35 @@
+---
+import { getCollection } from "astro:content";
+import BaseLayout from "../../layouts/BaseLayout.astro";
+
+const posts = (await getCollection("blog", ({ data }) => import.meta.env.PROD === false || !data.draft)).sort(
+    (a, b) => b.data.published.valueOf() - a.data.published.valueOf(),
+);
+
+const day = (d: Date) => d.toISOString().slice(0, 10);
+---
+
+<BaseLayout title="Blog" description="Posts by Brook.">
+    <h1>blog</h1>
+    {
+        posts.length === 0 ? (
+            <p class="subtle">nothing here yet.</p>
+        ) : (
+            <ul class="entries">
+                {posts.map((post) => (
+                    <li class="entry">
+                        <div class="entry-meta">
+                            <time datetime={day(post.data.published)}>{day(post.data.published)}</time>
+                        </div>
+                        <div class="entry-body">
+                            <a class="entry-name" href={`/blog/${post.id}/`}>
+                                {post.data.title}
+                            </a>
+                            <div class="entry-desc">{post.data.description}</div>
+                        </div>
+                    </li>
+                ))}
+            </ul>
+        )
+    }
+</BaseLayout>

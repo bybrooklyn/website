@@ -1,0 +1,567 @@
+@import url("./fonts.css");
+
+/* ==========================================================================
+   tokens
+   ========================================================================== */
+
+:root {
+    --fg-low: oklch(70% 0.01368 253.09);
+    --fg: oklch(80% 0.01368 253.09);
+
+    --bg: oklch(20% 0.01368 253.09);
+    --bg-high: oklch(22.5% 0.01368 253.09);
+
+    --border: oklch(35% 0.023 253.09);
+
+    --red: oklch(80% 0.15765 24.728);
+    --orange: oklch(80% 0.139 45.216);
+    --yellow: oklch(80% 0.12758 76.402);
+    --yellow-bright: oklch(90% 0.12758 76.402);
+    --green: oklch(80% 0.11211 147.63);
+    --blue: oklch(80% 0.09994 249.58);
+    --pink: oklch(80% 0.06662 9.2146);
+
+    --border-radius: 5px;
+    --border-width: 1px;
+    --padding: 5px;
+    --padding-big: 10px;
+    --nav-easing: cubic-bezier(0.2, 0, 0, 1);
+
+    /* type */
+    --font-prose: "Aporetic", "Open Sans", sans-serif;
+    --font-mono: "Aporetic Mono", ui-monospace, monospace;
+    --size-base: clamp(1rem, 0.86rem + 0.42vw, 1.375rem);
+    --size-meta: 0.8em;
+    --size-h2: 1.3em;
+    --size-h1: 1.7em;
+    --leading-prose: 1.6;
+    --leading-tight: 1.25;
+
+    /*
+     * the page grid: a narrow mono margin column for metadata and sidenotes,
+     * then the prose column held to a readable measure.
+     */
+    --margin-col: 16ch;
+    --gutter: 2.5ch;
+    --measure: 68ch;
+    --page-width: calc(var(--margin-col) + var(--gutter) + var(--measure));
+    --page-offset: 4rem;
+}
+
+/* ==========================================================================
+   base
+   ========================================================================== */
+
+body {
+    font-family: var(--font-prose);
+    font-size: var(--size-base);
+    background-color: var(--bg);
+    color: var(--fg);
+    display: flex;
+    gap: var(--padding-big);
+    padding: var(--padding-big);
+    box-sizing: border-box;
+    position: relative;
+}
+
+/* ==========================================================================
+   decoration
+   ==========================================================================
+   These live on <html> rather than on an element inside <body>. ClientRouter
+   replaces <body> on navigation, and re-parenting an element restarts its CSS
+   animations, so a triangle field inside <body> jumps back to frame zero on
+   every click. <html> is never replaced, so the animation runs continuously.
+*/
+
+html {
+    /*
+     * Reserve the scrollbar gutter on every page so the layout doesn't reflow
+     * between a short page (no scrollbar) and a tall one (scrollbar).
+     * scrollbar-gutter alone is inert here: it only applies to scroll
+     * containers, and the root's overflow is `visible` by default.
+     */
+    overflow-y: scroll;
+    scrollbar-gutter: stable;
+}
+
+/* the scrolling triangle field */
+html::before {
+    content: "";
+    position: fixed;
+    width: 200%;
+    height: 200%;
+    background-image: url("/assets/triangle.svg");
+    transform: translate(-50%, -50%) rotate(22.5deg);
+    left: 50%;
+    top: 50%;
+    z-index: -2;
+    pointer-events: none;
+    animation: scroll 16s linear infinite;
+}
+
+@media screen and (prefers-reduced-motion: reduce) {
+    html::before {
+        animation: none;
+    }
+}
+
+@keyframes scroll {
+    to {
+        background-position: -96px 0; /* svg size */
+    }
+}
+
+/* the rainbow corner */
+html::after {
+    --bar-size: 0.3em;
+    content: "";
+    position: fixed;
+    z-index: -1;
+    bottom: 0;
+    right: 0;
+    aspect-ratio: 1 / 1;
+    height: calc(var(--bar-size) * 14); /* magic number */
+    pointer-events: none;
+    background-image: linear-gradient(
+        -45deg,
+        transparent,
+        transparent var(--bar-size),
+        var(--blue) var(--bar-size),
+        var(--blue) calc(var(--bar-size) * 2),
+        transparent calc(var(--bar-size) * 2),
+        transparent calc(var(--bar-size) * 3),
+        var(--green) calc(var(--bar-size) * 3),
+        var(--green) calc(var(--bar-size) * 4),
+        transparent calc(var(--bar-size) * 4),
+        transparent calc(var(--bar-size) * 5),
+        var(--yellow) calc(var(--bar-size) * 5),
+        var(--yellow) calc(var(--bar-size) * 6),
+        transparent calc(var(--bar-size) * 6),
+        transparent calc(var(--bar-size) * 7),
+        var(--orange) calc(var(--bar-size) * 7),
+        var(--orange) calc(var(--bar-size) * 8),
+        transparent calc(var(--bar-size) * 8),
+        transparent calc(var(--bar-size) * 9),
+        var(--red) calc(var(--bar-size) * 9),
+        var(--red) calc(var(--bar-size) * 10),
+        transparent calc(var(--bar-size) * 10)
+    );
+}
+
+/*
+ * failsafe for when the viewport is too small and the rainbow overlaps the text
+ */
+.page,
+footer,
+nav > ul {
+    background-color: var(--bg);
+    box-shadow: var(--bg) 0 0 32px 8px;
+    border-radius: var(--border-radius);
+}
+
+/* ==========================================================================
+   shell
+   ========================================================================== */
+
+#upper {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+}
+
+#upper > div {
+    display: flex;
+    flex-direction: column;
+    gap: var(--padding-big);
+    align-items: flex-start;
+}
+
+main {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* chrome is mono; prose is not. that split is the whole typographic idea. */
+nav,
+footer {
+    font-family: var(--font-mono);
+    z-index: 999;
+}
+
+nav {
+    width: 100%;
+    max-width: calc(var(--page-width) + var(--page-offset));
+    padding: var(--padding-big);
+    padding-left: calc(var(--page-offset) + var(--padding-big));
+    box-sizing: border-box;
+}
+
+/* keep the failsafe backdrop hugging the links, not the whole bar */
+nav > ul {
+    width: fit-content;
+    padding: var(--padding) var(--padding-big);
+}
+
+nav > ul > li {
+    display: inline;
+}
+
+nav li:not(:last-of-type)::after,
+footer > div > span:not(:last-of-type)::after {
+    content: "";
+    border-left: calc(var(--border-width) * 1) solid var(--border);
+    margin-left: var(--padding);
+    margin-right: var(--padding);
+    display: inline-block;
+    vertical-align: baseline;
+    height: 1cap;
+}
+
+footer {
+    /* sits on the same left axis as the nav and the content */
+    text-align: left;
+    padding: var(--padding);
+    padding-left: calc(var(--page-offset) + var(--padding-big));
+    font-size: var(--size-meta);
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--padding);
+    margin-top: calc(var(--padding-big) * 2);
+}
+
+footer > div {
+    line-height: 1.5;
+}
+
+/* ==========================================================================
+   page grid
+   ========================================================================== */
+
+.page {
+    /*
+     * a block, not a grid: sidenotes float into the left gutter so each one
+     * aligns with the prose that follows it. floats don't apply to grid items,
+     * which is why this isn't grid-template-columns.
+     */
+    width: 100%;
+    max-width: calc(var(--page-width) + var(--page-offset));
+    padding: var(--padding-big);
+    padding-left: calc(var(--page-offset) + var(--margin-col) + var(--gutter) + var(--padding-big));
+    line-height: var(--leading-prose);
+    box-sizing: border-box;
+}
+
+/*
+ * sidenotes: pulled into the margin column, right-aligned so the gutter reads
+ * as one clean edge against the prose.
+ */
+.page > aside,
+.page > .margin {
+    float: left;
+    clear: left;
+    width: var(--margin-col);
+    margin-left: calc(-1 * (var(--margin-col) + var(--gutter)));
+    font-family: var(--font-mono);
+    font-size: var(--size-meta);
+    line-height: var(--leading-tight);
+    color: var(--fg-low);
+    text-align: right;
+    text-wrap: balance;
+    margin-bottom: 1.2em;
+}
+
+@media (max-width: 78ch) {
+    :root {
+        --page-offset: 0px;
+    }
+
+    .page {
+        padding-left: var(--padding-big);
+    }
+
+    nav,
+    footer {
+        padding-left: var(--padding-big);
+    }
+
+    .page > aside,
+    .page > .margin {
+        float: none;
+        width: auto;
+        margin-left: 0;
+        text-align: left;
+    }
+}
+
+/* ==========================================================================
+   typography
+   ========================================================================== */
+
+h1,
+h2 {
+    line-height: var(--leading-tight);
+    display: flex;
+    align-items: center;
+    gap: var(--padding-big);
+}
+
+h1 {
+    font-size: var(--size-h1);
+}
+
+h2 {
+    font-size: var(--size-h2);
+}
+
+h1::after,
+h2::after {
+    content: "";
+    height: var(--border-width);
+    background-color: var(--border);
+    flex-grow: 1;
+}
+
+p,
+pre,
+h1,
+h2 {
+    margin-top: 0.8em;
+}
+
+.page > :last-child {
+    margin-bottom: 0;
+}
+
+strong {
+    font-weight: bold;
+}
+
+.subtle {
+    color: var(--fg-low);
+}
+
+a,
+a:link {
+    color: var(--yellow);
+}
+
+a:not(.volatile):visited {
+    color: var(--pink);
+}
+
+a:focus,
+a:hover {
+    color: var(--yellow-bright);
+}
+
+a:active {
+    color: var(--yellow);
+}
+
+.anchor {
+    order: -1;
+    text-decoration: none;
+}
+
+a.anchor:link,
+a.anchor:visited {
+    color: var(--fg-low);
+}
+
+a.anchor:focus,
+a.anchor:hover {
+    color: var(--yellow-bright);
+}
+
+a.anchor:active {
+    color: var(--yellow);
+}
+
+.anchor::after {
+    content: "#";
+    font-size: 0.8em;
+}
+
+.anchor::before {
+    content: "";
+    height: var(--border-width);
+    background-color: var(--border);
+}
+
+/*
+ * plain prose lists keep the original dash markers. these must exclude
+ * .entries — `.page > ul` outranks `.entries` on specificity and would
+ * otherwise override its grid with flex.
+ */
+.page > ol,
+.page > ul:not(.entries) {
+    padding-top: var(--padding);
+    gap: var(--padding);
+    display: flex;
+    flex-direction: column;
+}
+
+.page > ol li,
+.page > ul:not(.entries) li {
+    margin-left: var(--padding-big);
+    list-style-type: "- ";
+    list-style-position: inside;
+}
+
+.page > ol li::marker,
+.page > ul:not(.entries) li::marker {
+    color: var(--border);
+}
+
+/* ==========================================================================
+   code
+   ========================================================================== */
+
+code {
+    border-radius: var(--border-radius);
+    padding-inline: calc(var(--padding) / 2);
+    font-family: var(--font-mono);
+    border: var(--border-width) solid var(--border);
+    overflow-wrap: anywhere;
+}
+
+pre {
+    overflow: hidden;
+}
+
+/* shiki inlines its own background; keep the site's chrome instead */
+pre.astro-code {
+    background-color: var(--bg-high) !important;
+    border: var(--border-width) solid var(--border);
+    border-radius: var(--border-radius);
+}
+
+pre > code {
+    display: block;
+    padding: calc(var(--padding) * 2);
+    line-height: 1.3;
+    background: transparent;
+    border: 0;
+    overflow-x: auto;
+}
+
+/* ==========================================================================
+   entry listings (projects, posts)
+   ========================================================================== */
+
+.entries {
+    clear: both;
+    display: grid;
+    grid-template-columns: var(--margin-col) minmax(0, 1fr);
+    column-gap: var(--gutter);
+    row-gap: 1.9em;
+    margin-top: 1.6em;
+    margin-left: calc(-1 * (var(--margin-col) + var(--gutter)));
+}
+
+.entry {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: subgrid;
+    align-items: baseline;
+}
+
+/* the h1 rule should still span the prose column only */
+.page > h1,
+.page > h2 {
+    clear: none;
+}
+
+.entry-meta {
+    grid-column: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.15em;
+    font-family: var(--font-mono);
+    font-size: var(--size-meta);
+    line-height: var(--leading-tight);
+    color: var(--fg-low);
+}
+
+.entry-body {
+    grid-column: 2;
+}
+
+.entry-name {
+    font-size: 1rem;
+}
+
+.entry-desc {
+    color: var(--fg-low);
+    line-height: var(--leading-prose);
+}
+
+.status-paused {
+    color: var(--orange);
+}
+
+.status-archived {
+    color: var(--red);
+}
+
+@media (max-width: 78ch) {
+    .entries {
+        margin-left: 0;
+    }
+
+    .entries,
+    .entry {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .entry-meta {
+        grid-column: 1;
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 0 0.75em;
+        order: 2;
+    }
+
+    .entry-body {
+        grid-column: 1;
+        order: 1;
+    }
+}
+
+/* ==========================================================================
+   cross-page navigation
+   ==========================================================================
+   The decorations live on <html>, which ClientRouter never replaces, so the
+   triangle scroll runs continuously across navigations. Only the text swaps,
+   so a short crossfade suits it better than a directional slide.
+*/
+
+@keyframes nav-fade-in {
+    from {
+        opacity: 0;
+    }
+}
+
+@keyframes nav-fade-out {
+    to {
+        opacity: 0;
+    }
+}
+
+::view-transition-old(root) {
+    animation: nav-fade-out 0.12s var(--nav-easing) both;
+}
+
+::view-transition-new(root) {
+    animation: nav-fade-in 0.12s var(--nav-easing) both;
+}
+
+@media screen and (prefers-reduced-motion: reduce) {
+    ::view-transition-old(root),
+    ::view-transition-new(root) {
+        animation: none;
+    }
+}

@@ -1,0 +1,10 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import { site } from "../data/site";
+import "../styles/404.css";
+---
+
+<BaseLayout title="404" description="There is nothing to be found here.">
+    <h1>alas, there is nothing to be found here</h1>
+    <div>if you got here via a link, be it external or from this site, please <a href={`mailto:${site.email}`}>notify</a> me asap</div>
+</BaseLayout>

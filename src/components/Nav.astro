@@ -1,0 +1,19 @@
+---
+import { nav } from "../data/site";
+
+const { pathname } = Astro.url;
+---
+
+<nav>
+    <ul>
+        {
+            nav.map((item) => (
+                <li>
+                    <a href={item.url} aria-current={pathname === item.url ? "page" : undefined}>
+                        {pathname === item.url ? `[${item.title}]` : item.title}
+                    </a>
+                </li>
+            ))
+        }
+    </ul>
+</nav>
