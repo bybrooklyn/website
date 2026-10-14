@@ -1,133 +1,38 @@
 # bybrooklyn.dev
 
-My personal website. Originally forked from [darkuss/twoexem](https://darkuss.twoexem.com); the design is still theirs, the plumbing is not.
+Charlotte's personal homepage: a short introduction, a Playmatter section with one gameplay image, and contact links.
+Built with Astro and Bun. Static HTML and CSS, with no client-side JavaScript or analytics.
 
-Built with [Astro](https://astro.build) and [Bun](https://bun.sh).
-
-## Running it
+## Development
 
 ```sh
 bun install
-bun run dev      # http://localhost:4321
-bun run build    # -> dist/
-bun run check    # type-check + validate post frontmatter
-bun run preview  # serve the built site
+bun run dev
+bun run check
+bun run build
+bun run preview
 ```
 
-There's a `justfile` wrapping the same commands (`just serve`, `just build`, `just check`) if you prefer.
+TypeScript stays on the latest 6.x release because `astro check` does not support TypeScript 7.0.
 
-## Layout
+The homepage is in `src/pages/index.astro`, contact details in `src/data/site.ts`,
+and shared styles in `src/styles/main.css`. The gameplay still is stored locally
+at `public/assets/playmatter.webp`; it came from the Playmatter site's `02-tower` poster.
 
-| path                  | what's in it                                                        |
-| --------------------- | ------------------------------------------------------------------- |
-| `src/pages/`          | routes — `.md` for prose pages, `.astro` for pages with logic        |
-| `src/content/blog/`   | blog posts (`.md`), schema enforced by `src/content.config.ts`       |
-| `src/layouts/`        | `BaseLayout.astro`, the page shell                                   |
-| `src/components/`     | `Nav.astro`, `Footer.astro`                                          |
-| `src/data/`           | `site.ts` (title, email, nav) and `projects.ts` (the projects list)   |
-| `src/styles/`         | CSS, bundled by Astro                                                |
-| `public/`             | copied verbatim — fonts, favicon, `_headers`                         |
+The homepage and custom 404 page share the same layout. The former projects,
+blog, credits, and privacy URLs redirect home through Cloudflare Pages' `public/_redirects` file.
+The starter blog and RSS feed have been removed.
 
-### Adding a project
+## Hosting
 
-Append to the `projects` array in `src/data/projects.ts`. It's typed, so `bun run check`
-catches a bad `status` or a missing field.
+The existing Cloudflare Pages setup uses `bun run build` and the `dist` output directory.
+`just deploy` checks, builds, and deploys; `just deploy-preview` deploys to a preview branch.
+Neither is needed to work on the site locally. Redirects are applied by Cloudflare Pages,
+not Astro's local preview server.
 
-### Adding a post
+## Credits
 
-Drop a `.md` file in `src/content/blog/`. See `hello-world.md` for the frontmatter —
-`title`, `description` and `published` are required. Posts with `draft: true` show up in
-`bun run dev` but are excluded from the build and the RSS feed.
-
-The blog isn't linked from the nav yet. Add `{ title: "blog", url: "/blog/" }` to the `nav`
-array in `src/data/site.ts` once you've published a real post.
-
-## Layout system
-
-Pages are built on a two-column axis: a narrow mono **margin column** for metadata and
-sidenotes, and a **prose column** held to a readable measure. The tokens live at the top of
-`src/styles/main.css`:
-
-```css
---margin-col: 16ch;   /* the margin gutter */
---gutter: 2.5ch;      /* space between margin and prose */
---measure: 68ch;      /* prose line length */
-```
-
-Put a sidenote in the margin from any markdown page with a plain `<aside>`:
-
-```md
-<aside>elsewhere</aside>
-
-- email — [...](mailto:...)
-```
-
-It floats into the gutter and aligns with the block that follows it. Below `78ch` the whole
-thing collapses to one column and asides become normal blocks.
-
-Listings (projects, posts) use `.entries` / `.entry` / `.entry-meta` / `.entry-body`, which
-pull back across the gutter so metadata sits in the margin column. Note that `.entries` is
-deliberately excluded from the plain-prose list rules via `:not(.entries)` — `.page > ul`
-outranks `.entries` on specificity and would otherwise override the grid with flex.
-
-Chrome (nav, footer, metadata) is set in Aporetic Mono; prose is Aporetic sans. That split is
-the core of the typographic idea — keep it.
-
-## Fonts
-
-The Aporetic `.woff2` files in `public/assets/fonts/` are **subset** to Latin plus punctuation,
-arrows, box drawing and braille (~68 KB each, down from ~1.4 MB). If you need glyphs outside
-that range, re-subset from the upstream release rather than dropping the full files back in:
-
-```sh
-uvx --from "fonttools[woff]" pyftsubset FONT.woff2 \
-  --unicodes="U+0000-00FF,U+0100-017F,U+2000-206F,U+20A0-20BF,U+2100-214F,U+2190-21FF,U+2200-22FF,U+2500-257F,U+2580-259F,U+25A0-25FF,U+2600-26FF,U+2800-28FF" \
-  --flavor=woff2 --output-file=FONT.woff2
-```
-
-## Deploying
-
-Cloudflare Pages. The build is static, so no Astro adapter is needed
-(`@astrojs/cloudflare` is only for SSR).
-
-### First-time setup
-
-1. In the Cloudflare dashboard, create a Pages project and **connect this repo**
-   (Workers & Pages -> Create -> Pages -> Connect to Git):
-   - Build command: `bun run build`
-   - Output directory: `dist`
-   - Production branch: whichever branch actually holds the Astro site
-
-   Connect Git *first*. A Git-connected project can still take manual `wrangler`
-   deploys (disable automatic deployments per branch and deploy by hand), but going
-   the other way — Direct Upload first, Git later — is not reliably supported.
-
-2. Authenticate the CLI for manual deploys:
-
-   ```sh
-   just login          # browser flow
-   # or: export CLOUDFLARE_API_TOKEN=...
-   just whoami         # confirm
-   ```
-
-### Day to day
-
-```sh
-just deploy           # check + build + deploy to production
-just deploy-preview   # same, to a preview URL named after the current branch
-just deployments      # list what's live
-```
-
-Pushing to the production branch also triggers a build on Cloudflare's side, so the
-site redeploys itself whether or not you run the command.
-
-`public/_headers` sets long cache lifetimes on fonts and hashed assets; Pages reads it
-as-is. `dist/404.html` is picked up automatically as the not-found page.
-
-Cloudflare detects Bun from `bun.lock`. If the default version drifts, pin it with a
-`BUN_VERSION` environment variable in the project's build settings.
-
-## License
-
-Content and design are under CC-BY-SA 4.0. The original design was forked from Darkuss/twoexem —
-see [/credits](https://bybrooklyn.dev/credits/).
+Originally forked from [Darkuss/twoexem](https://darkuss.twoexem.com), credited under
+[CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/). See `LICENSE` for the
+existing license. The current layout is inspired by Charlotte's [Playmatter site](https://playmatter.io);
+the gameplay image is from Playmatter.

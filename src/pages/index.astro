@@ -1,0 +1,21 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import { site } from "../data/site";
+---
+
+<BaseLayout title="Charlotte">
+    <h1>I'm Charlotte.</h1>
+    <p>Most of my time lately has gone into Playmatter.</p>
+    <section aria-labelledby="playmatter">
+        <h2 id="playmatter">Playmatter</h2>
+        <p>A 2D physics sandbox I'm making. Spawn ragdolls, build things, wire machines together, and see what happens.</p>
+        <a class="game-image" href="https://playmatter.io" aria-label="Visit Playmatter">
+            <img src="/assets/playmatter.webp" width="960" height="490" alt="A car beside a tower of wood, glass, and bricks in Playmatter." fetchpriority="high" />
+        </a>
+        <p><a href="https://playmatter.io">More about Playmatter →</a></p>
+    </section>
+    <div class="contact">
+        <a href={`mailto:${site.email}`}>email</a>
+        <a href={site.github}>github</a>
+    </div>
+</BaseLayout>

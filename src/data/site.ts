@@ -1,14 +1,6 @@
 export const site = {
-    title: "bybrooklyn.dev",
-    titleSuffix: "Brook's website",
-    description: "Brook's personal website about coding, projects, and the occasional bit of hosting.",
+    description: "I'm Charlotte. I'm making Playmatter, a 2D physics sandbox.",
     email: "brooklyn.halmstad@proton.me",
     github: "https://github.com/bybrooklyn",
-    themeColor: "#ecb256",
-    webringId: "C1NMCp8IXr",
+    themeColor: "#17181b",
 } as const;
-
-export const nav = [
-    { title: "home", url: "/" },
-    { title: "projects", url: "/projects/" },
-] as const;

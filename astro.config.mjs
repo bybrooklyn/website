@@ -9,11 +9,6 @@ export default defineConfig({
     build: {
         format: "directory",
     },
-    // hovering a nav link warms the page before the click lands
-    prefetch: {
-        prefetchAll: true,
-        defaultStrategy: "hover",
-    },
     integrations: [sitemap()],
     markdown: {
         // Sätteri is Astro's default processor; smart punctuation is off unless asked for.
