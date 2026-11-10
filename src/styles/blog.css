@@ -180,6 +180,13 @@
     color: var(--muted);
 }
 
+/* The page's title. Folded away on a narrow screen it is only the label that opens the list. */
+.contents summary a {
+    color: inherit;
+    text-decoration: none;
+    pointer-events: none;
+}
+
 .contents ol {
     margin: calc(var(--line) * 0.4) 0 0;
     padding: 0;
@@ -246,6 +253,15 @@
 
     .contents summary::-webkit-details-marker {
         display: none;
+    }
+
+    /* In the margin the list is always open, and the title leads back to the top. */
+    .contents summary a {
+        pointer-events: auto;
+    }
+
+    .contents summary a:hover {
+        color: var(--ink);
     }
 }
 

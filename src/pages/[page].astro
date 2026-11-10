@@ -38,7 +38,7 @@ const { Content, headings } = await render(entry);
             <p class="lede">{summary}</p>
         </header>
         <div class="post-body">
-            <Contents {headings} />
+            <Contents {title} {headings} />
             <div class="prose">
                 <Content />
             </div>

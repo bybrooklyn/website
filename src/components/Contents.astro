@@ -4,16 +4,21 @@
 import type { MarkdownHeading } from "astro";
 
 interface Props {
+    /** The page's title: heads the list and leads back to the top. */
+    title: string;
     headings: MarkdownHeading[];
 }
 
+const { title } = Astro.props;
 const headings = Astro.props.headings.filter((heading) => heading.depth === 2 || heading.depth === 3);
 ---
 
 {
     headings.length > 1 && (
         <details class="contents" open>
-            <summary>on this page</summary>
+            <summary>
+                <a href="#main">{title}</a>
+            </summary>
             <ol>
                 {headings.map((heading) => (
                     <li class:list={{ sub: heading.depth === 3 }}>
@@ -36,7 +41,7 @@ const headings = Astro.props.headings.filter((heading) => heading.depth === 2 ||
         fold();
 
         const links = new Map<Element, HTMLAnchorElement>();
-        for (const link of contents.querySelectorAll<HTMLAnchorElement>("a")) {
+        for (const link of contents.querySelectorAll<HTMLAnchorElement>("ol a")) {
             const heading = document.getElementById(decodeURIComponent(link.hash.slice(1)));
             if (heading) links.set(heading, link);
         }

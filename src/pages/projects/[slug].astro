@@ -62,7 +62,7 @@ if (facts) rows.push(["last updated", formatDate(new Date(facts.updated))]);
         }
 
         <div class="post-body">
-            <Contents {headings} />
+            <Contents title={name} {headings} />
             <div class="prose">
                 <dl class="facts">
                     {

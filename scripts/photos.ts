@@ -15,8 +15,8 @@
 // To take a photo off the site, delete its file from src/assets/photos/.
 // To change a caption, put a text file with the photo's name in photos/.
 //
-// Pictures for the setup page go in photos/setup/, named desk, server or
-// desktop. They get the same treatment and land in src/assets/setup/.
+// A screenshot for the setup page goes in photos/setup/, named desktop. It
+// gets the same treatment and lands in src/assets/setup/.
 
 import { mkdir, readdir, rename } from "node:fs/promises";
 import { homedir } from "node:os";

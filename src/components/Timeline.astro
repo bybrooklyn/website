@@ -57,15 +57,43 @@ import "../styles/timeline.css";
             count.textContent = `${index + 1} / ${moments.length}`;
         };
 
-        /** The stage is as tall as its tallest moment, so nothing below it moves as they change. */
-        const measure = () => timeline.style.setProperty("--tallest", `${Math.max(...moments.map((moment) => moment.scrollHeight))}px`);
+        // While the page rests on the timeline, the text above and below it is
+        // blurred, more with distance. Each veil is a few layers of blur, the
+        // stronger ones masked to begin further away.
+        const veil = (side: string) => {
+            const element = document.createElement("div");
+            element.className = `timeline-veil ${side}`;
+            element.setAttribute("aria-hidden", "true");
+            element.append(document.createElement("span"), document.createElement("span"), document.createElement("span"));
+            timeline.append(element);
+        };
+        veil("above");
+        veil("below");
+
+        /** The stage is as tall as its tallest moment (and at least half the window), so nothing below it moves as they change. */
+        const measure = () => {
+            const heights = moments.map((moment) => {
+                const first = moment.firstElementChild?.getBoundingClientRect();
+                const end = moment.lastElementChild?.getBoundingClientRect();
+                return first && end ? end.bottom - first.top : 0;
+            });
+            timeline.style.setProperty("--tallest", `${Math.max(...heights, Math.min(innerHeight * 0.5, 480))}px`);
+            // The veil above begins above the heading that introduces the timeline, which stays sharp.
+            const heading = timeline.previousElementSibling;
+            const gap = heading && /^H[1-6]$/.test(heading.tagName) ? timeline.getBoundingClientRect().top - heading.getBoundingClientRect().top + 8 : 0;
+            timeline.style.setProperty("--above", `${gap}px`);
+        };
 
         // The page holds still, with the stage resting on a line a little way
         // down the window, for as long as there are moments left in the
         // direction of travel. Past the last (or back past the first) it scrolls on.
-        const line = () => Math.max(16, Math.min(innerHeight * 0.2, (innerHeight - stage.offsetHeight) / 2));
+        const line = () => Math.max(16, (innerHeight - stage.offsetHeight) / 2);
         const top = () => stage.getBoundingClientRect().top;
-        const rest = () => scrollTo({ top: top() + scrollY - line(), behavior: "instant" });
+        const focus = () => timeline.classList.toggle("focused", Math.abs(top() - line()) <= 3);
+        const rest = () => {
+            scrollTo({ top: top() + scrollY - line(), behavior: "instant" });
+            focus();
+        };
         const holds = (direction: number): boolean => {
             if (direction > 0 ? current >= last : current <= 0) return false;
             const offset = top() - line();
@@ -115,6 +143,7 @@ import "../styles/timeline.css";
             () => {
                 const direction = Math.sign(scrollY - before);
                 before = scrollY;
+                focus();
                 // Only for scrolling the visitor is doing by wheel, touch or keys; the scrollbar and links pass freely.
                 // A finger still on the screen is left alone: the page cannot be taken from under it.
                 if (direction === 0 || touching || performance.now() - inputAt > 1200 || !holds(direction)) return;
