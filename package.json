@@ -14,7 +14,9 @@
         "cf:whoami": "wrangler whoami",
         "langs": "bun scripts/languages.ts",
         "resume:pdf": "bun scripts/resume-pdf.ts",
-        "projects": "bun scripts/projects.ts"
+        "projects": "bun scripts/projects.ts",
+        "blog": "bun scripts/write.ts blog",
+        "edit": "bun scripts/write.ts edit"
     },
     "dependencies": {
         "@astrojs/check": "0.9.12",

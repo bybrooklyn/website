@@ -337,118 +337,209 @@
     padding-left: 1.5em;
 }
 
-/* ---- a timeline read by scrolling (Timeline.astro) ---- */
+/* ---- a timeline stepped through by scrolling (Timeline.astro) ---- */
 
-.prose .timeline {
-    --line-x: 0.45rem;
-    position: relative;
+/* As a plain list: what you get without scripts, or with reduced motion. */
+.timeline {
     margin: calc(var(--line) * 1.5) 0 calc(var(--line) * 2);
-    padding: 0 0 0 2.5rem;
-    list-style: none;
 }
 
-.timeline-track {
-    position: absolute;
-    inset: 0.4rem auto 0.4rem var(--line-x);
-    width: 0.125rem;
-    margin: 0;
-    background: var(--rule);
-    border-radius: 1rem;
-}
-
-/* The part of the line already travelled, and the dot at its end. */
-.timeline-fill,
-.timeline-dot {
+.timeline-rail,
+.timeline-count {
     display: none;
 }
 
-.timeline.live .timeline-fill {
-    display: block;
-    position: absolute;
-    inset: 0 0 auto 0;
-    height: var(--reach, 0);
-    background: var(--accent);
-    border-radius: 1rem;
-}
-
-.timeline.live .timeline-dot {
-    display: block;
-    position: absolute;
-    top: var(--reach, 0);
-    left: 50%;
-    width: 1rem;
-    height: 1rem;
-    translate: -50% -50%;
-    border-radius: 50%;
-    background: var(--accent);
-    box-shadow: 0 0 0 0.3rem color-mix(in oklch, var(--accent) 25%, transparent);
+.prose .timeline-moments {
+    margin: 0;
+    padding: 0 0 0 1.5rem;
+    list-style: none;
+    border-left: 0.125rem solid var(--rule);
 }
 
 .prose .moment {
-    position: relative;
-    margin: 0;
-    padding-bottom: calc(var(--line) * 1.4);
-}
-
-.prose .moment:last-child {
-    padding-bottom: 0;
-}
-
-.moment-mark {
-    position: absolute;
-    top: 0.5rem;
-    left: calc(var(--line-x) - 2.5rem + 0.0625rem);
-    width: 0.7rem;
-    height: 0.7rem;
-    translate: -50% 0;
-    border-radius: 50%;
-    background: var(--accent);
-    border: 0.125rem solid var(--ground);
-    transition: background-color 0.3s ease;
-}
-
-.moment.chapter .moment-mark {
-    top: 0.65rem;
-    width: 1rem;
-    height: 1rem;
+    margin: 0 0 calc(var(--line) * 1.25);
 }
 
 .prose .moment h3 {
-    margin: 0 0 calc(var(--line) * 0.25);
+    margin: 0;
     font-size: 1.5rem;
 }
 
 .moment-when {
-    margin: 0 0 0.1rem;
+    margin: 0;
+    font-family: var(--font-head);
+    font-weight: var(--head-weight);
     color: var(--accent);
-    font-size: 0.9em;
 }
 
 .moment-text > :last-child {
     margin-bottom: 0;
 }
 
-.moment-when,
-.moment-text,
-.prose .moment h3 {
-    transition:
-        opacity 0.4s ease,
-        translate 0.4s ease;
+/*
+ * Stepped through: the section is as tall as the scrolling it should take,
+ * and the stage inside it stays fixed in the window while that happens.
+ */
+.timeline.live {
+    position: relative;
+    height: calc(100svh + var(--steps) * 75vh);
+    margin-block: calc(var(--line) * 2);
 }
 
-/* While the dot is travelling, the moments it has not reached wait, dimmed. */
-.timeline.live .moment:not(.lit) .moment-mark {
+/* The page settles on each of these as it scrolls past. */
+html:has(.timeline.live) {
+    scroll-snap-type: y proximity;
+}
+
+.timeline-stop {
+    position: absolute;
+    left: 0;
+    width: 1px;
+    height: 1px;
+    scroll-snap-align: start;
+}
+
+.timeline.live .timeline-stage {
+    position: sticky;
+    top: 0;
+    height: 100svh;
+    display: grid;
+    grid-template-columns: 1.5rem minmax(0, 1fr);
+    grid-template-rows: 1fr auto;
+    column-gap: clamp(1.25rem, 4vw, 2.5rem);
+    align-items: center;
+    padding-block: calc(var(--line) * 2);
+}
+
+.timeline.live .timeline-rail {
+    display: block;
+    position: relative;
+    grid-row: 1;
+    justify-self: center;
+    width: 0.125rem;
+    height: min(60svh, 30rem);
     background: var(--rule);
 }
 
-.timeline.live .moment:not(.lit) :is(.moment-when, .moment-text, h3) {
-    opacity: 0.35;
-    translate: 0.4rem 0;
+.timeline-tick {
+    position: absolute;
+    left: 50%;
+    width: 0.6rem;
+    height: 0.125rem;
+    translate: -50% -50%;
+    background: var(--muted);
+    transition:
+        background-color 0.2s ease,
+        width 0.2s ease;
+}
+
+.timeline-tick.passed {
+    width: 0.9rem;
+    background: var(--accent);
+}
+
+.timeline-marker {
+    position: absolute;
+    top: calc(var(--progress, 0) * 100%);
+    left: 50%;
+    width: 0.8rem;
+    height: 0.8rem;
+    translate: -50% -50%;
+    border-radius: 50%;
+    background: var(--accent);
+}
+
+.timeline.live .timeline-moments {
+    position: relative;
+    grid-row: 1;
+    height: min(60svh, 30rem);
+    padding: 0;
+    border: 0;
+}
+
+/* Every moment sits in the same place; only the current one shows. */
+.timeline.live .moment {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    margin: 0;
+    opacity: 0;
+    translate: 0 1.25rem;
+    pointer-events: none;
+    transition:
+        opacity 0.3s ease,
+        translate 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.timeline.live .moment.current {
+    opacity: 1;
+    translate: 0 0;
+    pointer-events: auto;
+}
+
+.timeline.live .moment-when {
+    font-size: clamp(2.5rem, 1.5rem + 4.5vw, 4.5rem);
+    line-height: 1;
+    letter-spacing: -0.02em;
+}
+
+.timeline.live .moment-text {
+    max-width: 34rem;
+    margin-top: var(--line);
+    font-size: clamp(1.25rem, 1rem + 1vw, 1.6rem);
+    line-height: 1.4;
+}
+
+.timeline.live .moment-text p {
+    margin-bottom: 0.6em;
+}
+
+.timeline.live .moment.chapter h3 {
+    font-size: clamp(2.5rem, 1.5rem + 4.5vw, 4.5rem);
+    line-height: 1;
+    letter-spacing: -0.02em;
+}
+
+.timeline.live .moment.chapter .moment-text {
+    color: var(--muted);
+}
+
+.timeline.live .timeline-count {
+    display: block;
+    grid-column: 2;
+    grid-row: 2;
+    margin: 0;
+    font-family: var(--font-code);
+    font-size: 0.8rem;
+    color: var(--muted);
 }
 
 @media print {
-    .timeline-fill,
-    .timeline-dot {
+    .timeline.live {
+        height: auto;
+    }
+
+    .timeline.live .timeline-stage {
+        position: static;
+        height: auto;
+        display: block;
+    }
+
+    .timeline.live .timeline-moments {
+        height: auto;
+    }
+
+    .timeline.live .moment {
+        position: static;
+        opacity: 1;
+        translate: none;
+        margin-bottom: 1em;
+    }
+
+    .timeline-rail,
+    .timeline-count {
         display: none !important;
     }
 }

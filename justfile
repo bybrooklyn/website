@@ -29,3 +29,11 @@ deploy: check build
 # publish a preview named after the current branch
 deploy-preview: check build
     bunx wrangler pages deploy --branch "$(git rev-parse --abbrev-ref HEAD)"
+
+# write a post and publish it
+blog:
+    bun run blog
+
+# change any text on the site, then publish
+edit:
+    bun run edit

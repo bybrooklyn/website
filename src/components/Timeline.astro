@@ -1,51 +1,73 @@
 ---
-// A timeline you read by scrolling: a line down the left with a moment at each
-// stop, and a dot that travels down the line as the page moves, lighting each
-// moment as it reaches it. Without scripts, or for anyone who has asked for
-// reduced motion, it is simply a list with every moment lit.
+// A timeline you step through by scrolling. It takes over the window: one
+// moment is shown large at a time, the page settles on each one as you
+// scroll, and a marker moves down a rail at the side to show how far along
+// you are.
+//
+// That behaviour is added by the script below. Without scripts, or for anyone
+// who has asked for reduced motion, it is an ordinary list of every moment.
 ---
 
-<ol class="timeline">
-    <li class="timeline-track" aria-hidden="true">
-        <span class="timeline-fill"></span>
-        <span class="timeline-dot"></span>
-    </li>
-    <slot />
-</ol>
+<section class="timeline">
+    <div class="timeline-stage">
+        <div class="timeline-rail" aria-hidden="true"><span class="timeline-marker"></span></div>
+        <ol class="timeline-moments">
+            <slot />
+        </ol>
+        <p class="timeline-count" aria-hidden="true"></p>
+    </div>
+</section>
 
 <script>
     const still = matchMedia("(prefers-reduced-motion: reduce)");
 
+    /** How much scrolling one moment takes, as a share of the window's height. */
+    const STEP = 0.75;
+
     for (const timeline of document.querySelectorAll<HTMLElement>(".timeline")) {
         const moments = [...timeline.querySelectorAll<HTMLElement>(".moment")];
-        let waiting = false;
+        const rail = timeline.querySelector<HTMLElement>(".timeline-rail");
+        const count = timeline.querySelector<HTMLElement>(".timeline-count");
+        if (moments.length < 2 || !rail || !count || still.matches) continue;
 
+        // A tick on the rail for every moment, and a place for the page to settle on each.
+        const last = moments.length - 1;
+        moments.forEach((_, index) => {
+            const tick = document.createElement("span");
+            tick.className = "timeline-tick";
+            tick.style.top = `${(index / last) * 100}%`;
+            rail.append(tick);
+
+            const stop = document.createElement("span");
+            stop.className = "timeline-stop";
+            stop.style.top = `${index * STEP * 100}vh`;
+            timeline.append(stop);
+        });
+        const ticks = [...rail.querySelectorAll<HTMLElement>(".timeline-tick")];
+
+        timeline.style.setProperty("--steps", String(last));
+        timeline.classList.add("live");
+
+        let waiting = false;
         const place = () => {
             waiting = false;
-            if (still.matches) {
-                timeline.classList.remove("live");
-                return;
-            }
-            timeline.classList.add("live");
             const box = timeline.getBoundingClientRect();
-            // The dot sits where a line a little above the middle of the window crosses the timeline.
-            const reach = Math.min(Math.max(innerHeight * 0.45 - box.top, 0), box.height);
-            timeline.style.setProperty("--reach", `${reach}px`);
-            for (const moment of moments) {
-                moment.classList.toggle("lit", moment.offsetTop <= reach + 4);
-            }
+            const travel = box.height - innerHeight;
+            const progress = travel > 0 ? Math.min(Math.max(-box.top / travel, 0), 1) : 0;
+            const current = Math.round(progress * last);
+            timeline.style.setProperty("--progress", String(progress));
+            moments.forEach((moment, index) => moment.classList.toggle("current", index === current));
+            ticks.forEach((tick, index) => tick.classList.toggle("passed", index <= current));
+            count.textContent = `${current + 1} / ${moments.length}`;
         };
-
         const ask = () => {
             if (!waiting) {
                 waiting = true;
                 requestAnimationFrame(place);
             }
         };
-
         addEventListener("scroll", ask, { passive: true });
         addEventListener("resize", ask);
-        still.addEventListener("change", ask);
         place();
     }
 </script>

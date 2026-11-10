@@ -13,9 +13,20 @@ bun run preview
 bun run langs      # recount the language bar (needs a logged-in `gh`)
 bun run resume:pdf # print the resume to PDF
 bun run projects   # refresh project facts from GitHub
+bun run blog       # write a post and publish it
+bun run edit       # edit any text on the site
 ```
 
 TypeScript stays on 6.x: `astro check` does not accept TypeScript 7 yet.
+
+## Writing and editing from the terminal
+
+```sh
+bun run blog   # start a post or carry on with a draft, then publish
+bun run edit   # change any text: the intro, about, setup, resume, a project, a post
+```
+
+Both open the file in your editor (`$VISUAL`, then `$EDITOR`, then Neovim, VS Code or nano). When you close it, the script checks the site still builds, shows what would go live and what is still a draft, and asks before it commits, pushes and deploys to Cloudflare Pages. Add `--dry-run` to stop before the commit and the deploy.
 
 ## Writing a post
 
