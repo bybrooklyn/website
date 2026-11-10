@@ -31,6 +31,6 @@ Anything marked `draft: true` is left out of production builds.
 
 ## License
 
-The code is MIT; see `LICENSE.md`. My writing, resume, name, pictures and the Playmatter media are not part of that and are not licensed for reuse.
+The code is under an MIT-style license with three added conditions; see `LICENSE.md`. My writing, resume, name, pictures and the Playmatter media are not part of that and are not licensed for reuse.
 
 Headings are in Torrens Serif, my cut of [Fraunces](https://github.com/undercasetype/Fraunces) by Undercase Type; text is Fraunces; code is Drafting* Mono by Owen Earl. All three are under the SIL Open Font License (`src/assets/fonts/OFL-*.txt`).

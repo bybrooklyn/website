@@ -1,12 +1,35 @@
 Copyright (c) 2026 Charlotte Halmstad
 
-Code: [MIT](https://opensource.org/license/mit)
-Fonts: [OFL](https://openfontlicense.org)
-Everything else (writing, resume, photos, Playmatter media): all rights reserved
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
-I ask, though the license doesn't require it:
+1. The above copyright notice and this permission notice shall be included in
+   all copies or substantial portions of the Software.
 
-- don't pretend to be me
-- don't say I endorse what you make
-- don't put my name on words I didn't write
-- don't use this to hurt people, trans and queer people least of all
+2. You may not present yourself, or a copy of the Software, as Charlotte
+   Halmstad or as bybrooklyn.dev.
+
+3. You may not use the name of Charlotte Halmstad or of bybrooklyn.dev to
+   endorse or promote anything made from the Software.
+
+4. You may not attribute to Charlotte Halmstad words she did not write.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+"The Software" is this site's code. The writing, resume, photos and Playmatter
+media are not part of it; all rights reserved. The fonts are under the
+[SIL Open Font License](https://openfontlicense.org).
+
+A request, not a condition: don't use this to hurt people.
