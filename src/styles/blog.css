@@ -377,38 +377,30 @@
 }
 
 /*
- * Stepped through: the section is as tall as the scrolling it should take,
- * and the stage inside it stays fixed in the window while that happens.
+ * Stepped through: the stage holds still in the window while the script
+ * moves it from one moment to the next. The space under it is only there to
+ * give the scrollbar something to travel through.
  */
 .timeline.live {
     position: relative;
-    height: calc(100svh + var(--steps) * 75vh);
-    margin-block: calc(var(--line) * 2);
+    margin-block: calc(var(--line) * 1.5) var(--line);
 }
 
-/* The page settles on each of these as it scrolls past. */
-html:has(.timeline.live) {
-    scroll-snap-type: y proximity;
-}
-
-.timeline-stop {
-    position: absolute;
-    left: 0;
-    width: 1px;
-    height: 1px;
-    scroll-snap-align: start;
+.timeline.live::after {
+    content: "";
+    display: block;
+    height: calc(var(--steps) * 30vh);
 }
 
 .timeline.live .timeline-stage {
     position: sticky;
-    top: 0;
-    height: 100svh;
+    top: var(--pin, 10svh);
     display: grid;
     grid-template-columns: 1.5rem minmax(0, 1fr);
-    grid-template-rows: 1fr auto;
+    grid-template-rows: auto auto;
     column-gap: clamp(1.25rem, 4vw, 2.5rem);
-    align-items: center;
-    padding-block: calc(var(--line) * 2);
+    row-gap: var(--line);
+    padding-block: var(--line);
 }
 
 .timeline.live .timeline-rail {
@@ -417,7 +409,7 @@ html:has(.timeline.live) {
     grid-row: 1;
     justify-self: center;
     width: 0.125rem;
-    height: min(60svh, 30rem);
+    height: var(--tallest, 20rem);
     background: var(--rule);
 }
 
@@ -447,30 +439,36 @@ html:has(.timeline.live) {
     translate: -50% -50%;
     border-radius: 50%;
     background: var(--accent);
+    transition: top 0.5s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .timeline.live .timeline-moments {
     position: relative;
     grid-row: 1;
-    height: min(60svh, 30rem);
+    height: var(--tallest, 20rem);
     padding: 0;
     border: 0;
 }
 
-/* Every moment sits in the same place; only the current one shows. */
+/*
+ * Every moment sits in the same place; only the current one shows. Those
+ * still to come wait a little below it and those already seen a little
+ * above, so a step forward lifts one away as the next rises into place.
+ */
 .timeline.live .moment {
     position: absolute;
-    inset: 0;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
+    inset: 0 0 auto;
     margin: 0;
     opacity: 0;
-    translate: 0 1.25rem;
+    translate: 0 2.5rem;
     pointer-events: none;
     transition:
-        opacity 0.3s ease,
-        translate 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+        opacity 0.35s ease,
+        translate 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.timeline.live .moment.before {
+    translate: 0 -2.5rem;
 }
 
 .timeline.live .moment.current {
@@ -517,8 +515,8 @@ html:has(.timeline.live) {
 }
 
 @media print {
-    .timeline.live {
-        height: auto;
+    .timeline.live::after {
+        display: none;
     }
 
     .timeline.live .timeline-stage {

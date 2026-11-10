@@ -112,7 +112,7 @@
 
 /* Room to breathe between the parts of a post. */
 .prose h2 {
-    margin-top: calc(var(--line) * 2.75);
+    margin-top: calc(var(--line) * 2);
     margin-bottom: calc(var(--line) * 0.75);
     font-size: 2rem;
     line-height: calc(var(--line) * 1.5);
@@ -120,7 +120,7 @@
 }
 
 .prose h3 {
-    margin-top: calc(var(--line) * 2);
+    margin-top: calc(var(--line) * 1.5);
     margin-bottom: calc(var(--line) * 0.5);
     font-size: 1.35rem;
     scroll-margin-top: var(--line);

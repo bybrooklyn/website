@@ -1,8 +1,9 @@
 ---
-// A timeline you step through by scrolling. It takes over the window: one
-// moment is shown large at a time, the page settles on each one as you
-// scroll, and a marker moves down a rail at the side to show how far along
-// you are.
+// A timeline you step through. It holds still in the window and shows one
+// moment at a time; each scroll action moves it on by exactly one: a notch of
+// the wheel, a swipe on a touchpad or a touch screen, an arrow key. A marker
+// moves down a rail at the side to show how far along you are. Past the last
+// moment the page scrolls on as usual.
 //
 // That behaviour is added by the script below. Without scripts, or for anyone
 // who has asked for reduced motion, it is an ordinary list of every moment.
@@ -21,53 +22,166 @@
 <script>
     const still = matchMedia("(prefers-reduced-motion: reduce)");
 
-    /** How much scrolling one moment takes, as a share of the window's height. */
-    const STEP = 0.75;
+    /** How long one move takes; further input waits for it. Matches the transition in blog.css. */
+    const MOVE = 520;
+    /** How much of the page's height stands for one moment, for the scrollbar's sake. */
+    const STEP = 0.3;
 
     for (const timeline of document.querySelectorAll<HTMLElement>(".timeline")) {
         const moments = [...timeline.querySelectorAll<HTMLElement>(".moment")];
+        const stage = timeline.querySelector<HTMLElement>(".timeline-stage");
         const rail = timeline.querySelector<HTMLElement>(".timeline-rail");
         const count = timeline.querySelector<HTMLElement>(".timeline-count");
-        if (moments.length < 2 || !rail || !count || still.matches) continue;
+        if (moments.length < 2 || !stage || !rail || !count || still.matches) continue;
 
-        // A tick on the rail for every moment, and a place for the page to settle on each.
         const last = moments.length - 1;
         moments.forEach((_, index) => {
             const tick = document.createElement("span");
             tick.className = "timeline-tick";
             tick.style.top = `${(index / last) * 100}%`;
             rail.append(tick);
-
-            const stop = document.createElement("span");
-            stop.className = "timeline-stop";
-            stop.style.top = `${index * STEP * 100}vh`;
-            timeline.append(stop);
         });
         const ticks = [...rail.querySelectorAll<HTMLElement>(".timeline-tick")];
-
         timeline.style.setProperty("--steps", String(last));
         timeline.classList.add("live");
 
-        let waiting = false;
-        const place = () => {
-            waiting = false;
-            const box = timeline.getBoundingClientRect();
-            const travel = box.height - innerHeight;
-            const progress = travel > 0 ? Math.min(Math.max(-box.top / travel, 0), 1) : 0;
-            const current = Math.round(progress * last);
-            timeline.style.setProperty("--progress", String(progress));
-            moments.forEach((moment, index) => moment.classList.toggle("current", index === current));
-            ticks.forEach((tick, index) => tick.classList.toggle("passed", index <= current));
-            count.textContent = `${current + 1} / ${moments.length}`;
+        let pin = 0;
+        let travel = 1;
+        let current = -1;
+        let busyUntil = 0;
+
+        /** Size the stage to its tallest moment and hold it in the middle of the window. */
+        const measure = () => {
+            const tallest = Math.max(...moments.map((moment) => moment.scrollHeight));
+            timeline.style.setProperty("--tallest", `${tallest}px`);
+            pin = Math.max(16, (innerHeight - stage.offsetHeight) / 2);
+            timeline.style.setProperty("--pin", `${pin}px`);
+            travel = last * STEP * innerHeight;
         };
-        const ask = () => {
-            if (!waiting) {
-                waiting = true;
-                requestAnimationFrame(place);
-            }
+
+        /** Where the timeline starts holding still, as a scroll position. */
+        const start = () => timeline.getBoundingClientRect().top + scrollY - pin;
+        const pinned = () => scrollY >= start() - 1 && scrollY <= start() + travel + 1;
+        const nearest = () => Math.round(Math.min(Math.max((scrollY - start()) / travel, 0), 1) * last);
+        const stop = (index: number) => start() + (index / last) * travel;
+
+        const show = (index: number) => {
+            if (index === current) return;
+            current = index;
+            timeline.style.setProperty("--progress", String(index / last));
+            moments.forEach((moment, at) => {
+                moment.classList.toggle("current", at === index);
+                moment.classList.toggle("before", at < index);
+            });
+            ticks.forEach((tick, at) => tick.classList.toggle("passed", at <= index));
+            count.textContent = `${index + 1} / ${moments.length}`;
         };
-        addEventListener("scroll", ask, { passive: true });
-        addEventListener("resize", ask);
-        place();
+
+        const go = (index: number) => {
+            busyUntil = performance.now() + MOVE;
+            scrollTo({ top: stop(index), behavior: "instant" });
+            show(index);
+        };
+
+        /** Move one moment in a direction. False if there is none that way, so the page should scroll on. */
+        const step = (direction: number): boolean => {
+            const target = current + direction;
+            if (target < 0 || target > last) return false;
+            if (performance.now() >= busyUntil) go(target);
+            return true;
+        };
+
+        // However the page got here (scrollbar, a link, coasting in), rest on a moment.
+        let settle = 0;
+        let lastTouch = 0;
+        let inside = pinned();
+        window.addEventListener(
+            "scroll",
+            () => {
+                const now = pinned();
+                if (now && !inside && performance.now() - lastTouch < 1500) {
+                    // A flick on a touch screen would coast straight through. Stop it at the door.
+                    const root = document.documentElement;
+                    root.style.overflow = "hidden";
+                    requestAnimationFrame(() => (root.style.overflow = ""));
+                }
+                inside = now;
+                show(nearest());
+                clearTimeout(settle);
+                settle = window.setTimeout(() => {
+                    if (pinned() && Math.abs(scrollY - stop(current)) > 2) scrollTo({ top: stop(current), behavior: "instant" });
+                }, 140);
+            },
+            { passive: true },
+        );
+
+        // Wheel and touchpad: the first event of a gesture moves one moment and
+        // the rest of it, coasting included, is swallowed. A gesture is new after
+        // a pause, or when the speed picks up again instead of dying away.
+        let wheelAt = 0;
+        let wheelSize = 0;
+        window.addEventListener(
+            "wheel",
+            (event) => {
+                const size = Math.abs(event.deltaY);
+                const fresh = event.timeStamp - wheelAt > 180 || (size >= 50 && size >= wheelSize && performance.now() >= busyUntil);
+                wheelAt = event.timeStamp;
+                wheelSize = size;
+                if (event.ctrlKey || size === 0 || !pinned()) return;
+                if (!fresh) event.preventDefault();
+                else if (step(Math.sign(event.deltaY))) event.preventDefault();
+            },
+            { passive: false },
+        );
+
+        // Touch: a swipe moves one moment when the finger lifts.
+        let touchY = 0;
+        let held = false;
+        let free = false;
+        window.addEventListener(
+            "touchstart",
+            (event) => {
+                touchY = event.touches[0]?.clientY ?? 0;
+                held = pinned();
+                free = false;
+                lastTouch = performance.now();
+            },
+            { passive: true },
+        );
+        window.addEventListener(
+            "touchmove",
+            (event) => {
+                lastTouch = performance.now();
+                if (!held || free || !event.cancelable) return;
+                const direction = Math.sign(touchY - (event.touches[0]?.clientY ?? touchY));
+                const target = current + direction;
+                // Swiping off either end hands the page back to ordinary scrolling.
+                if (direction !== 0 && (target < 0 || target > last)) free = true;
+                else event.preventDefault();
+            },
+            { passive: false },
+        );
+        window.addEventListener("touchend", (event) => {
+            lastTouch = performance.now();
+            const moved = touchY - (event.changedTouches[0]?.clientY ?? touchY);
+            if (held && !free && Math.abs(moved) > 24) step(Math.sign(moved));
+            held = false;
+        });
+
+        window.addEventListener("keydown", (event) => {
+            if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || !pinned()) return;
+            if (event.target instanceof HTMLElement && event.target.closest("input, textarea, select, [contenteditable]")) return;
+            const forward = ["ArrowDown", "PageDown"].includes(event.key) || (event.key === " " && !event.shiftKey);
+            const back = ["ArrowUp", "PageUp"].includes(event.key) || (event.key === " " && event.shiftKey);
+            if ((forward || back) && step(forward ? 1 : -1)) event.preventDefault();
+        });
+
+        window.addEventListener("resize", () => {
+            measure();
+            if (pinned()) scrollTo({ top: stop(current), behavior: "instant" });
+        });
+        void document.fonts.ready.then(measure);
+        measure();
+        show(nearest());
     }
 </script>
