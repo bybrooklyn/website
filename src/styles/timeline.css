@@ -137,7 +137,12 @@
     background: var(--muted);
     transition:
         background-color 0.2s ease,
-        width 0.2s ease;
+        width 0.2s ease,
+        opacity 0.15s ease;
+}
+
+.timeline-tick.here {
+    opacity: 0;
 }
 
 .timeline-tick.passed {
@@ -154,7 +159,7 @@
     translate: -50% -50%;
     border-radius: 50%;
     background: var(--accent);
-    transition: top 0.5s var(--ease);
+    transition: top 0.3s var(--ease);
 }
 
 .timeline.live .timeline-moments {
@@ -177,8 +182,8 @@
     translate: 0 2.5rem;
     pointer-events: none;
     transition:
-        opacity 0.35s ease,
-        translate 0.5s var(--ease);
+        opacity 0.22s ease,
+        translate 0.3s var(--ease);
 }
 
 .timeline.live .moment.before {

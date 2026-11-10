@@ -23,8 +23,8 @@ import "../styles/timeline.css";
 <script>
     const still = matchMedia("(prefers-reduced-motion: reduce)");
 
-    /** Further input waits this long: a little more than the 0.5s transition in timeline.css. */
-    const MOVE = 520;
+    /** Further input waits this long, most of the 0.3s transition in timeline.css, so stepping can be brisk. */
+    const MOVE = 220;
 
     for (const timeline of document.querySelectorAll<HTMLElement>(".timeline")) {
         const moments = [...timeline.querySelectorAll<HTMLElement>(".moment")];
@@ -53,7 +53,11 @@ import "../styles/timeline.css";
                 moment.classList.toggle("current", at === index);
                 moment.classList.toggle("before", at < index);
             });
-            ticks.forEach((tick, at) => tick.classList.toggle("passed", at <= index));
+            ticks.forEach((tick, at) => {
+                tick.classList.toggle("passed", at < index);
+                // the marker sits here, so its tick steps aside
+                tick.classList.toggle("here", at === index);
+            });
             count.textContent = `${index + 1} / ${moments.length}`;
         };
 
@@ -119,7 +123,7 @@ import "../styles/timeline.css";
             "wheel",
             (event) => {
                 const size = Math.abs(event.deltaY);
-                const fresh = event.timeStamp - wheelAt > 180 || (size >= 50 && size >= wheelSize && performance.now() >= busyUntil);
+                const fresh = event.timeStamp - wheelAt > 120 || (size >= 50 && size >= wheelSize && performance.now() >= busyUntil);
                 wheelAt = event.timeStamp;
                 wheelSize = size;
                 inputAt = performance.now();
