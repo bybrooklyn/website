@@ -28,6 +28,10 @@ bun run edit   # change any text: the intro, about, setup, resume, a project, a 
 
 Both open the file in your editor (`$VISUAL`, then `$EDITOR`, then Neovim, VS Code or nano). When you close it, the script checks the site still builds, shows what would go live and what is still a draft, and asks before it commits, pushes and deploys to Cloudflare Pages. Add `--dry-run` to stop before the commit and the deploy.
 
+## Version control
+
+The repo is a git repo with [jujutsu](https://jj-vcs.github.io/jj/) set up alongside it (`jj git init --colocate`), so either tool works. With jj: `jj st`, `jj commit -m "..."`, `jj bookmark set main -r @-`, `jj git push`. Deleting the `.jj` folder goes back to plain git.
+
 ## Writing a post
 
 Add an `.mdx` (or `.md`) file to `src/content/blog/`. The file name is the URL.

@@ -205,9 +205,17 @@ async function publish(path: string): Promise<void> {
 
     if (changed) {
         const message = ask("Commit message:", mode === "blog" ? `Publish ${path.split("/").pop()?.replace(/\.mdx?$/, "")}` : `Edit ${path.split("/").pop()}`);
-        await $`git add -A`.cwd(root);
-        await $`git commit -m ${message}`.cwd(root);
-        await $`git push`.cwd(root);
+        if (await exists(".jj/repo")) {
+            // The repo is managed with jujutsu alongside git: commit the working
+            // copy, move main onto it, and push that.
+            await $`jj commit -m ${message}`.cwd(root);
+            await $`jj bookmark set main -r @-`.cwd(root);
+            await $`jj git push --bookmark main`.cwd(root);
+        } else {
+            await $`git add -A`.cwd(root);
+            await $`git commit -m ${message}`.cwd(root);
+            await $`git push`.cwd(root);
+        }
     }
     await $`bunx wrangler pages deploy`.cwd(root);
     console.log("\nDeployed.");
