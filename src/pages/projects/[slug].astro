@@ -28,12 +28,12 @@ const { name, summary, language, status, repo, link, cover, coverAlt, pixel, gal
 const { Content, headings } = await render(project);
 const facts = projectFacts(project);
 
-const rows: [string, string][] = [["Language", language]];
-if (status) rows.push(["Status", status]);
-if (facts?.license) rows.push(["License", facts.license]);
-if (facts?.release) rows.push(["Latest release", facts.release]);
-if (facts && facts.stars > 0) rows.push(["Stars", String(facts.stars)]);
-if (facts) rows.push(["Last updated", formatDate(new Date(facts.updated))]);
+const rows: [string, string][] = [["language", language]];
+if (status) rows.push(["status", status]);
+if (facts?.license) rows.push(["license", facts.license]);
+if (facts?.release) rows.push(["latest release", facts.release]);
+if (facts && facts.stars > 0) rows.push(["stars", String(facts.stars)]);
+if (facts) rows.push(["last updated", formatDate(new Date(facts.updated))]);
 ---
 
 <Opened title={name} description={summary} image={cover} back={{ href: "/projects/", label: "projects" }}>
@@ -73,7 +73,7 @@ if (facts) rows.push(["Last updated", formatDate(new Date(facts.updated))]);
                         ))
                     }
                     <div>
-                        <dt>Source</dt>
+                        <dt>source</dt>
                         <dd>
                             <a href={`https://github.com/${repo}`}>github.com/{repo}</a>
                             {facts && !facts.public && <span class="note"> (not public yet)</span>}
@@ -82,7 +82,7 @@ if (facts) rows.push(["Last updated", formatDate(new Date(facts.updated))]);
                     {
                         link && (
                             <div>
-                                <dt>Link</dt>
+                                <dt>link</dt>
                                 <dd>
                                     <a href={link.href}>{link.label}</a>
                                 </dd>
@@ -117,7 +117,7 @@ if (facts) rows.push(["Last updated", formatDate(new Date(facts.updated))]);
             {
                 previous ? (
                     <a href={`/projects/${previous.id}/`}>
-                        <span class="note">Previous </span>
+                        <span class="note">previous </span>
                         {previous.data.name}
                     </a>
                 ) : (
@@ -127,13 +127,13 @@ if (facts) rows.push(["Last updated", formatDate(new Date(facts.updated))]);
             {
                 next ? (
                     <a class="next" href={`/projects/${next.id}/`}>
-                        <span class="note">Next </span>
+                        <span class="note">next </span>
                         {next.data.name}
                     </a>
                 ) : (
                     <a class="next" href="/projects/">
-                        <span class="note">That's all of them. </span>
-                        All projects
+                        <span class="note">that's all of them. </span>
+                        all projects
                     </a>
                 )
             }

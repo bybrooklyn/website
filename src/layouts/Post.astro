@@ -51,7 +51,7 @@ const { title, summary, date, accent, draft, cover, coverAlt, tags } = post.data
             {
                 older ? (
                     <a href={`/blog/${older.id}/`}>
-                        <span class="note">Older </span>
+                        <span class="note">older </span>
                         {older.data.title}
                     </a>
                 ) : (
@@ -61,13 +61,13 @@ const { title, summary, date, accent, draft, cover, coverAlt, tags } = post.data
             {
                 newer ? (
                     <a class="next" href={`/blog/${newer.id}/`}>
-                        <span class="note">Newer </span>
+                        <span class="note">newer </span>
                         {newer.data.title}
                     </a>
                 ) : (
                     <a class="next" href="/blog/">
-                        <span class="note">That's the latest. </span>
-                        All posts
+                        <span class="note">that's the latest. </span>
+                        all posts
                     </a>
                 )
             }

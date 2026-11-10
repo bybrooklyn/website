@@ -1,0 +1,180 @@
+---
+summary: I'm a programmer who builds games and systems software, mostly in Rust. My main project is Playmatter, a 2D physics sandbox, and around it I make tools I want to exist and run the server they live on. I'm looking for game development and systems work, and I'm open to internships and junior roles while I finish school.
+draft: true
+---
+
+import Column from "../../components/ResumeColumn.astro";
+import Entry from "../../components/ResumeEntry.astro";
+import Skills from "../../components/ResumeSkills.astro";
+import Web from "../../components/WebOnly.astro";
+
+<Column>
+
+## Experience
+
+<Entry title="Best Buy" when="Oct. 2026 – Present" role="Sales Advisor" where="New Jersey">
+
+- Help customers choose the right tech by finding out what they need, and work toward sales and membership goals.
+
+<Web>
+
+- Run the register, online order pickups, returns and exchanges.
+- Keep the floor stocked and the displays set, and open and close the store.
+
+</Web>
+
+</Entry>
+
+<Entry title="QuickChek" when="Mar. 2026 – Jul. 2026" role="Deli Associate" where="New Jersey">
+
+<Web>
+
+- Prepared foods and drinks to order.
+- Supported front-of-store service, kept shelves faced and stocked, and helped with daily operations.
+
+</Web>
+
+</Entry>
+
+<Entry title="Tops Friendly Markets" when="Nov. 2023 – Oct. 2025" role="Store Associate" where="Buffalo, NY">
+
+<Web>
+
+- Stocked shelves and helped customers across the store.
+- Quickly and efficiently cashed out customers and had them leave wanting to come back (to see me).
+- Trained new employees and supported inventory.
+- Supported nonprofit fundraising campaigns totaling over $3,000.
+
+</Web>
+
+</Entry>
+
+## Projects
+
+<Entry title="Playmatter" when="Alpha 0.4, in development" role="2D physics sandbox game for Windows and Linux, in Rust" where="playmatter.io" href="https://playmatter.io">
+
+- Building a sandbox with a catalog of a few hundred things on Bevy and avian2d, over a headless simulation of joints, people, combat, heat, fire and electricity.
+- Wrote the tools around it and ship regular alpha playtest builds: a level editor, a Luau mod host, and a test harness that plays scripted sessions and runs physics checks on every build.
+
+<Web>
+
+- Split the simulation into its own crates so it runs without the game, which is what lets the checks and benchmarks run headless.
+
+</Web>
+
+</Entry>
+
+<Entry title="Flummox" when="Released" role="Game library compression for Linux and Windows, macOS in progress, in Rust" where="github.com/bybrooklyn/flummox" href="https://github.com/bybrooklyn/flummox">
+
+- Compresses installed games in place through the filesystem; shipped as a Windows installer, AUR package and Homebrew cask.
+
+<Web>
+
+- Desktop app with a games view, a job queue that can pause and resume, and per-location settings.
+
+</Web>
+
+</Entry>
+
+<Entry title="mFetchy" when="In development" role="Music library downloader, one Go binary for Linux, macOS and Windows" where="github.com/bybrooklyn/mFetchy-Core (not public yet)" href="https://github.com/bybrooklyn/mFetchy-Core">
+
+- Downloads a library as tagged files from YouTube Music, Apple Music, Bandcamp and more, picking the best source per song.
+
+<Web>
+
+- Lookups and downloads overlap, albums are matched as a unit, and a failed song falls back through the other sources before it is reported missing.
+- Packaged for the AUR, as `.deb` and `.rpm`, and with install scripts for Linux, macOS and Windows, ready for when it goes public.
+
+</Web>
+
+</Entry>
+
+<Entry title="yqt" when="In development" role="Native YouTube Music client in Rust, Qt 6 and Kirigami" where="github.com/bybrooklyn/ytm-qt (not public yet)" href="https://github.com/bybrooklyn/ytm-qt">
+
+- No browser engine or Electron; an optional pure-Rust audio engine adds gapless playback and a 10-band equalizer.
+
+<Web>
+
+- Synced lyrics from three providers asked in parallel, downloads within a storage limit, a mini-player, system tray and MPRIS media keys.
+
+</Web>
+
+</Entry>
+
+<Entry title="laude" when="In development" role="3D game engine and visual editor in Rust" where="github.com/bybrooklyn/laude (not public yet)" href="https://github.com/bybrooklyn/laude">
+
+- A PSX-style renderer on wgpu with fixed 60 Hz logic and physics; games are ordinary Rust crates, with no scripting layer.
+
+<Web>
+
+- Desktop editor with a scene hierarchy, 3D viewport, inspector, undo and glTF import, and optional host-authoritative multiplayer over iroh.
+
+</Web>
+
+</Entry>
+
+<Entry title="SwiftyV" when="In development" role="YouTube for the Mac in the style of the TV app, in SwiftUI" where="github.com/bybrooklyn/SwiftyV (not public yet)" href="https://github.com/bybrooklyn/SwiftyV">
+
+<Web>
+
+- Full screen and driven by a remote, controller or keyboard, with SponsorBlock, synced lyrics for YouTube Music, and sign-in by a code approved in the browser.
+
+</Web>
+
+</Entry>
+
+<Entry title="OpenBitDo" when="v0.0.3" role="8BitDo controller and keyboard utility with a terminal UI, in Go" where="github.com/bybrooklyn/openbitdo" href="https://github.com/bybrooklyn/openbitdo">
+
+<Web>
+
+- Clean-room and diagnostics-first: it says what each device can and can't do yet, and blocks writes that aren't confirmed on real hardware.
+- I directed a team of coding agents through the Go rewrite and reviewed their work, as the README says.
+
+</Web>
+
+</Entry>
+
+</Column>
+
+<Column side>
+
+## Skills
+
+<Skills
+    rows={[
+        ["Languages", "Rust, Go, Swift, TypeScript, Lua, Bash"],
+        ["Games", "Bevy, avian2d, wgpu, Luau scripting, Godot (GDScript)"],
+        ["Apps", "Qt 6 and Kirigami (cxx-qt), SwiftUI, Astro, Vue"],
+        ["Infrastructure", "Linux, Docker, Cloudflare, Tailscale, GitHub Actions, Gitea"],
+        ["Shipping", "AUR, Homebrew, Windows installers, .deb and .rpm"],
+        ["With people", "Customer service, sales, training new staff, peer support"],
+    ]}
+/>
+
+## How I work
+
+- **I run my own infrastructure.** A server at home holds my git, builds, media and sites, behind Cloudflare and Tailscale.
+- **I work with AI coding agents, openly.** I direct them, review what they produce, and say so in my READMEs.
+
+## Volunteering
+
+<Entry title="Pride Center of New Jersey" when="Nov. 2025 – Present" role="Youth Peer Support / Welcome Committee Leader" where="20+ documented hours">
+
+<Web>
+
+- Welcome attendees and help keep youth drop-in programming a supportive place to be.
+- Designed slideshow materials for youth programming and took part with the organization at Asbury Park Pride 2026.
+
+</Web>
+
+</Entry>
+
+## Education
+
+<Entry title="High School Diploma Candidate" when="Expected 2028" role="Homeschooled" where="New Jersey" />
+
+## Interests
+
+Type design: the headings on my site are set in Torrens Serif, my own cut of Fraunces. Queer community work.
+
+</Column>

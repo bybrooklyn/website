@@ -13,7 +13,7 @@ const headings = Astro.props.headings.filter((heading) => heading.depth === 2 ||
 {
     headings.length > 1 && (
         <details class="contents" open>
-            <summary>On this page</summary>
+            <summary>on this page</summary>
             <ol>
                 {headings.map((heading) => (
                     <li class:list={{ sub: heading.depth === 3 }}>

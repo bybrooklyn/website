@@ -32,7 +32,7 @@ const percent = (value: number) => (value >= 0.1 ? `${Math.round(value * 100)}%`
 ---
 
 <section aria-labelledby="languages-title">
-    <h2 class="label" id="languages-title">Languages</h2>
+    <h2 class="label" id="languages-title">languages</h2>
     <div class="languages-bar" aria-hidden="true">
         {rows.map((row) => <span style={`--share:${(row.share * 100).toFixed(2)};--color:${row.color}`} />)}
     </div>

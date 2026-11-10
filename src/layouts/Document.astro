@@ -29,7 +29,7 @@ interface Props {
 
 const { title, description = site.description, accent, type = "website", unlisted = false, bodyClass, image } = Astro.props;
 
-const pageTitle = title ? `${title} · ${site.name}` : site.name;
+const pageTitle = title ? `${title} · ${site.name.toLowerCase()}` : site.name.toLowerCase();
 const canonical = new URL(Astro.url.pathname, Astro.site);
 const shared = image
     ? await getImage({ src: image, width: 1200, format: "png" })

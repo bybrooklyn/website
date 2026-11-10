@@ -14,7 +14,3 @@ dist
 # resume PDFs of drafts, and the build they are printed from
 resume-preview
 .resume-build
-
-# mine, and not ready to be public: the resume and the about page
-src/content/resume/resume.mdx
-src/content/pages/about.mdx

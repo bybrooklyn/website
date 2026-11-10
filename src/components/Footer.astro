@@ -24,7 +24,7 @@ const hasPosts = (await getPosts()).length > 0;
         <li><a href={site.source}>source</a></li>
     </ul>
     <p class="note">
-        Built <time datetime={build.iso}>{build.time}</time>{build.commit && <> from <code>{build.commit}</code></>}
+        built <time datetime={build.iso}>{build.time}</time>{build.commit && <> from <code>{build.commit}</code></>}
     </p>
 </footer>
 

@@ -14,7 +14,7 @@ const { Content } = await render(resume);
 const plain = (url: string) => url.replace(/^https?:\/\//, "");
 ---
 
-<Base title="Resume" description={resume.data.summary} unlisted={resume.data.draft}>
+<Base title="resume" description={resume.data.summary} unlisted={resume.data.draft}>
     <article class="resume">
         <header class="resume-head">
             <div>
@@ -27,7 +27,7 @@ const plain = (url: string) => url.replace(/^https?:\/\//, "");
                     <a href={Astro.site}>{Astro.site?.host}</a>
                 </p>
             </div>
-            <a class="resume-pdf" href={resumePdf} download>Download PDF</a>
+            <a class="resume-pdf" href={resumePdf} download>download pdf</a>
         </header>
         <p class="resume-summary">{resume.data.summary}</p>
         <div class="resume-columns">
