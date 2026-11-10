@@ -245,6 +245,8 @@ export class World {
     #anchor = ball(0, 0, 1, { fixed: true });
     /** How hard the grab can pull, in multiples of the held body's weight. */
     grip = 40;
+    /** How much of the gap to the pointer a held body closes each step: 1 snaps to it, lower trails behind. */
+    follow = 0.35;
 
     add(...bodies: Body[]): this {
         for (const b of bodies) {
@@ -361,7 +363,7 @@ export class World {
             const [hx, hy] = turn(held.b, held.at);
             const most = (this.grip * this.gravity * dt) / held.b.im;
             for (const [nx, ny, error] of [[1, 0, held.to[0] - hx], [0, 1, held.to[1] - hy]] as const) {
-                const t = tie(this.#anchor, held.b, hx, hy, nx, ny, (0.35 / dt) * error, -most, most);
+                const t = tie(this.#anchor, held.b, hx, hy, nx, ny, (this.follow / dt) * error, -most, most);
                 [t.ax, t.ay] = [0, 0];
             }
             held.b.w *= 0.9;

@@ -14,7 +14,9 @@ const TICK = 1 / 120;
 
 class DropBox extends HTMLElement {
     #canvas = document.createElement("canvas");
-    #world = new World();
+    // Tuned to feel like blocks with some weight: slower to fall than the
+    // engine's default, and trailing the pointer a little when carried.
+    #world = Object.assign(new World(), { gravity: 1300, grip: 16, follow: 0.1 });
     #blocks: Body[] = [];
     #walls: Body[] = [];
     #near = false;
@@ -108,6 +110,7 @@ class DropBox extends HTMLElement {
             rect(width / 2, height - FLOOR + thick / 2, width + thick * 2, thick, { fixed: true }),
             rect(-thick / 2, height / 2, thick, height * 6, { fixed: true }),
             rect(width + thick / 2, height / 2, thick, height * 6, { fixed: true }),
+            rect(width / 2, -thick / 2, width + thick * 2, thick, { fixed: true }),
         ];
         this.#world.add(...this.#walls);
         for (const block of this.#blocks) wake(block);
@@ -151,10 +154,15 @@ class DropBox extends HTMLElement {
         const floor = this.#canvas.clientHeight - FLOOR;
         for (const block of this.#blocks) {
             const xs = block.r ? [block.x - block.r, block.x + block.r] : block.wp.map((corner) => corner[0]);
-            const ys = block.r ? [block.y + block.r] : block.wp.map((corner) => corner[1]);
+            const ys = block.r ? [block.y - block.r, block.y + block.r] : block.wp.map((corner) => corner[1]);
             const low = Math.max(...ys) - floor - 2;
             const left = -2 - Math.min(...xs);
             const right = Math.max(...xs) - width - 2;
+            const high = -2 - Math.min(...ys);
+            if (high > 0) {
+                block.y += high;
+                block.vy = Math.max(block.vy, 0);
+            }
             if (low > 0) {
                 block.y -= low;
                 block.vy = Math.min(block.vy, 0);

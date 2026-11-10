@@ -3,8 +3,9 @@ name: Playmatter
 summary: A 2D physics sandbox about people, machines, and what one does to the other.
 language: Rust
 status: alpha, in development
-repo: bybrooklyn/playmatter
-link: { href: "https://playmatter.io", label: "playmatter.io" }
+get:
+    - { href: "https://bybrooklyn.itch.io/playmatter", label: "get it on itch.io" }
+    - { href: "https://playmatter.io", label: "playmatter.io" }
 cover: ../../assets/projects/playmatter/tower.webp
 coverAlt: A car beside a tower of wood, glass, and bricks in Playmatter.
 pixel: true
@@ -17,11 +18,23 @@ gallery:
 order: 1
 ---
 
+import Figure from "../../components/Figure.astro";
+
 ## What it is
 
-You get an empty room and a catalog of a few hundred things. You put them in, join them up, and see what happens. Spawn ragdolls, build things, wire machines together.
+You get an empty room and a catalog of a few hundred things. You put them in, join them up, and see what happens.
 
-It is in development for Windows and Linux, and goes out as alpha playtest builds.
+<Figure src="/assets/playmatter.webp" video="/assets/playmatter.mp4" alt="A car beside a tower of wood, glass, and bricks in Playmatter." width={960} height={488} pixel />
+
+## What you can do
+
+- **Spawn ragdolls** and find out what they survive.
+- **Build things** out of wood, glass and brick, and join them with hinges.
+- **Wire machines together**: coil guns, Tesla coils, whatever you can make work.
+- **Set things on fire**, heat them up, or run a current through them.
+- **Mod it.** There is a level editor, and mods are written in Luau.
+
+It is in development for Windows and Linux, and goes out as alpha playtest builds. You can get it on [itch.io](https://bybrooklyn.itch.io/playmatter), and everything else about the game is on [playmatter.io](https://playmatter.io).
 
 ## How it's built
 
@@ -32,7 +45,3 @@ The simulation runs on its own, without the game around it: physics setup, a hin
 ## How it's tested
 
 A developer harness plays scripted sessions, runs headless benchmark scenes, and runs gameplay checks. A build has to pass four physics checks before anyone plays it.
-
-## Where to find it
-
-Everything about the game itself is on [playmatter.io](https://playmatter.io). The source is not public.

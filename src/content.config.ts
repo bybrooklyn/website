@@ -43,10 +43,12 @@ const projects = defineCollection({
                 summary: z.string(),
                 language: z.string(),
                 status: z.string().optional(),
-                /** owner/name on GitHub. Linked even while the repository is private. */
-                repo: z.string(),
+                /** owner/name on GitHub. Linked even while the repository is private. Left out if there is no source to point at. */
+                repo: z.string().optional(),
                 /** Somewhere else worth sending people: a site, a beta, a download. */
                 link: z.object({ href: z.url(), label: z.string() }).optional(),
+                /** Where to get it. Shown as buttons at the top of the page. */
+                get: z.array(z.object({ href: z.url(), label: z.string() })).default([]),
                 cover: image().optional(),
                 coverAlt: z.string().optional(),
                 /** Pixel art: scale the cover without smoothing. */

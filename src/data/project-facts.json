@@ -27,13 +27,6 @@
         "updated": "2026-10-16",
         "public": true
     },
-    "playmatter": {
-        "license": null,
-        "stars": 1,
-        "release": null,
-        "updated": "2026-11-10",
-        "public": false
-    },
     "smoothceleste": {
         "license": "MIT",
         "stars": 0,

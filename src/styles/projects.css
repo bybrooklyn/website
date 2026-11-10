@@ -136,3 +136,28 @@
 .gallery a:hover img {
     border-color: var(--accent);
 }
+
+/* Where to get a project: the first is the main one. */
+.get {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    margin: 0 0 var(--line);
+}
+
+.prose .get a {
+    padding: 0.45rem 1.1rem;
+    border: 0.0625rem solid var(--accent);
+    border-radius: 999px;
+    color: var(--accent);
+    text-decoration: none;
+    transition:
+        background-color 0.15s ease,
+        color 0.15s ease;
+}
+
+.prose .get a:first-child,
+.prose .get a:hover {
+    background: var(--accent);
+    color: var(--ground);
+}

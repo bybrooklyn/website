@@ -25,7 +25,7 @@ interface Props {
 }
 
 const { project, previous, next } = Astro.props;
-const { name, summary, language, status, repo, link, cover, coverAlt, pixel, gallery } = project.data;
+const { name, summary, language, status, repo, link, get, cover, coverAlt, pixel, gallery } = project.data;
 const { Content, headings } = await render(project);
 const facts = projectFacts(project);
 
@@ -64,6 +64,15 @@ if (facts) rows.push(["last updated", formatDate(new Date(facts.updated))]);
         <div class="post-body">
             <Contents title={name} {headings} />
             <div class="prose">
+                {
+                    get.length > 0 && (
+                        <p class="get">
+                            {get.map((place) => (
+                                <a href={place.href}>{place.label}</a>
+                            ))}
+                        </p>
+                    )
+                }
                 <dl class="facts">
                     {
                         rows.map(([label, value]) => (
@@ -73,13 +82,17 @@ if (facts) rows.push(["last updated", formatDate(new Date(facts.updated))]);
                             </div>
                         ))
                     }
-                    <div>
-                        <dt>source</dt>
-                        <dd>
-                            <a href={`https://github.com/${repo}`}>github.com/{repo}</a>
-                            {facts && !facts.public && <span class="note"> (not public yet)</span>}
-                        </dd>
-                    </div>
+                    {
+                        repo && (
+                            <div>
+                                <dt>source</dt>
+                                <dd>
+                                    <a href={`https://github.com/${repo}`}>github.com/{repo}</a>
+                                    {facts && !facts.public && <span class="note"> (not public yet)</span>}
+                                </dd>
+                            </div>
+                        )
+                    }
                     {
                         link && (
                             <div>
