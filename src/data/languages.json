@@ -1,90 +1,90 @@
 {
     "updated": "2026-11-10",
-    "repos": 59,
+    "repos": 60,
     "languages": [
         {
             "name": "Rust",
             "bytes": 54596548,
             "repos": 19,
-            "share": 0.4751
+            "share": 0.4715
         },
         {
             "name": "TypeScript",
-            "bytes": 11439505,
-            "repos": 9,
-            "share": 0.146
+            "bytes": 11498278,
+            "repos": 10,
+            "share": 0.1538
         },
         {
             "name": "Swift",
             "bytes": 7844351,
             "repos": 3,
-            "share": 0.0708
+            "share": 0.0702
         },
         {
             "name": "JavaScript",
             "bytes": 2615236,
             "repos": 5,
-            "share": 0.0606
+            "share": 0.0598
         },
         {
             "name": "Python",
-            "bytes": 6453741,
+            "bytes": 6455603,
             "repos": 2,
-            "share": 0.0539
+            "share": 0.0535
         },
         {
             "name": "Go",
             "bytes": 4244696,
             "repos": 3,
-            "share": 0.051
+            "share": 0.0505
         },
         {
             "name": "Astro",
-            "bytes": 267215,
+            "bytes": 314658,
             "repos": 4,
-            "share": 0.0385
+            "share": 0.0381
         },
         {
             "name": "Shell",
             "bytes": 990196,
             "repos": 2,
-            "share": 0.0239
+            "share": 0.0236
         },
         {
             "name": "Ruby",
             "bytes": 420272,
             "repos": 2,
-            "share": 0.0208
+            "share": 0.0205
         },
         {
             "name": "C#",
             "bytes": 558460,
             "repos": 1,
-            "share": 0.0123
+            "share": 0.0121
         },
         {
             "name": "GDScript",
             "bytes": 406554,
             "repos": 1,
-            "share": 0.0115
+            "share": 0.0113
         },
         {
             "name": "Java",
             "bytes": 37940,
             "repos": 1,
-            "share": 0.0095
+            "share": 0.0093
         },
         {
             "name": "C",
             "bytes": 32198,
             "repos": 1,
-            "share": 0.0094
+            "share": 0.0093
         },
         {
             "name": "DTrace",
             "bytes": 4777,
             "repos": 1,
-            "share": 0.0093
+            "share": 0.0091
         },
         {
             "name": "Svelte",
@@ -129,14 +129,14 @@
             "share": 0.0007
         },
         {
-            "name": "PowerShell",
-            "bytes": 30487,
+            "name": "MDX",
+            "bytes": 66690,
             "repos": 0,
-            "share": 0.0002
+            "share": 0.0004
         },
         {
-            "name": "MDX",
-            "bytes": 29992,
+            "name": "PowerShell",
+            "bytes": 30487,
             "repos": 0,
             "share": 0.0002
         },
