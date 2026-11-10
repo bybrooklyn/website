@@ -1,5 +1,4 @@
 ---
-import Picture from "./Picture.astro";
 import "../styles/blog.css";
 import { accents } from "../data/theme";
 import { css } from "../lib/color";
@@ -15,7 +14,7 @@ interface Props {
 
 const { post, level = 2, compact = false } = Astro.props;
 const Heading = `h${level}` as const;
-const { title, summary, date, draft, cover, tags, accent } = post.data;
+const { title, summary, date, draft, tags, accent } = post.data;
 ---
 
 {
@@ -35,17 +34,11 @@ const { title, summary, date, draft, cover, tags, accent } = post.data;
     ) : (
         <li class="post-row" style={accent && `--accent:${css(accents[accent])}`}>
             <a href={`/blog/${post.id}/`}>
-                {cover ? (
-                    <Picture class="post-thumb" src={cover} alt="" width={448} height={280} fit="cover" />
-                ) : (
-                    // No cover: the title's first letter stands in, so every row has the same shape.
-                    <span class="post-thumb post-letter" aria-hidden="true">{title.trim().charAt(0)}</span>
-                )}
+                <time datetime={date.toISOString().slice(0, 10)}>{formatDate(date)}</time>
                 <div>
                     <Heading>{title}</Heading>
                     <p>{summary}</p>
                     <p class="post-meta">
-                        <time datetime={date.toISOString().slice(0, 10)}>{formatDate(date)}</time>
                         <span>{readingTime(post)}</span>
                         {tags.map((tag) => (
                             <span>{tag}</span>

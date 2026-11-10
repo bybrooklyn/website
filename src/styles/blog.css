@@ -21,6 +21,7 @@
 /* ---- the list ---- */
 
 .post-list {
+    max-width: 52rem;
     margin: 0;
     padding: 0;
     list-style: none;
@@ -64,40 +65,16 @@
     margin-top: calc(var(--line) * 0.5);
 }
 
-.post-thumb {
-    width: 100%;
-    height: auto;
-    aspect-ratio: 16 / 10;
-    object-fit: cover;
-    border-radius: var(--radius);
-    border: 0.0625rem solid var(--rule);
-}
-
-/* Stands in for a cover: the first letter of the title, in the post's accent. */
-.post-letter {
-    display: grid;
-    place-items: center;
-    background: var(--surface);
+.post-row:not(.compact) time {
     color: var(--accent);
-    font-family: var(--font-head);
-    font-weight: var(--head-weight);
-    font-size: 3.5rem;
-    line-height: 1;
-    text-transform: lowercase;
+    font-size: 0.9em;
 }
 
 @media (min-width: 40rem) {
-    /* Picture on the left, at one width, so the rows line up down the page. */
+    /* The date stands in a column of its own, so the titles line up down the page. */
     .post-row:not(.compact) a {
-        grid-template-columns: 14rem minmax(0, 1fr);
-        align-items: center;
-    }
-}
-
-@media (max-width: 39.99rem) {
-    /* On a phone the letter block would only push the title down. */
-    .post-letter {
-        display: none;
+        grid-template-columns: 9.5rem minmax(0, 1fr);
+        align-items: baseline;
     }
 }
 
