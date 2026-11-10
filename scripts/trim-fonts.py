@@ -1,7 +1,7 @@
 """Cut the site's fonts down to what its pages use.
 
 The complete fonts live in src/assets/fonts/full/. Every page needs three of
-them, and they were most of what a visitor downloaded, so this writes smaller
+them, and fonts are most of a page's weight, so this writes smaller
 copies next to that folder: Latin characters only, with every weight kept
 (the text font also drops the display sizes above 72 that nothing uses). The
 pages load these; the Torrens Serif page also loads the complete font for its

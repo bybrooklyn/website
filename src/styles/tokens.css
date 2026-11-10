@@ -12,6 +12,15 @@
     --gutter: clamp(1.25rem, 4vw, 3rem);
     --radius: 0.625rem;
 
+    /* The panel a post or project opens in: one step up from the ground. */
+    --panel: oklch(0.19 0.042 300);
+    --panel-rule: oklch(0.33 0.06 300);
+    --panel-raised: oklch(0.245 0.052 300);
+    --panel-edge: oklch(0.36 0.07 300);
+
+    /* Starts quickly and settles slowly, without overshoot. */
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+
     --astro-code-foreground: var(--ink);
     --astro-code-background: var(--surface);
     --astro-code-token-comment: var(--muted);

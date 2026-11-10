@@ -20,9 +20,11 @@
 
 import { mkdir, readdir, rename } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import sharp from "sharp";
+import type { Entry as Photo } from "../src/lib/photos";
 import { readExif } from "./exif";
+import { root, slug as words, stem } from "./lib";
 
 /** The headings photos are sorted under, and how each is described to the model. Edit freely. */
 const GROUPS: Record<string, string> = {
@@ -35,20 +37,12 @@ const GROUPS: Record<string, string> = {
     indoors: "a photo taken indoors, of a room or objects",
 };
 
-const root = resolve(new URL("..", import.meta.url).pathname);
 const INBOX = join(root, "photos");
 const ADDED = join(INBOX, "added");
 const OUT = join(root, "src/assets/photos");
 const DATA = join(root, "src/data/photos.json");
 
-interface Photo {
-    file: string;
-    group?: string;
-    taken?: string;
-    caption?: string;
-}
-
-const slug = (name: string) => name.toLowerCase().replace(/\.\w+$/, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "photo";
+const slug = (name: string) => words(stem(name)) || "photo";
 const names = async (folder: string) => (await readdir(folder, { withFileTypes: true }).catch(() => [])).filter((entry) => entry.isFile()).map((entry) => entry.name);
 
 let photos = ((await Bun.file(DATA).json()) as { photos: Photo[] }).photos;

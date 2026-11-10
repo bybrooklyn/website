@@ -1,0 +1,185 @@
+/* The timeline in Timeline.astro. */
+
+/* As a plain list: what you get without scripts, or with reduced motion. */
+.timeline {
+    margin: calc(var(--line) * 1.5) 0 calc(var(--line) * 2);
+}
+
+.timeline-rail,
+.timeline-count {
+    display: none;
+}
+
+.prose .timeline-moments {
+    margin: 0;
+    padding: 0 0 0 1.5rem;
+    list-style: none;
+    border-left: 0.125rem solid var(--rule);
+}
+
+.prose .moment {
+    margin: 0 0 calc(var(--line) * 1.25);
+}
+
+.prose .moment h3 {
+    margin: 0;
+    font-size: 1.5rem;
+}
+
+.moment-when {
+    margin: 0;
+    font-family: var(--font-head);
+    font-weight: var(--head-weight);
+    color: var(--accent);
+}
+
+.moment-text > :last-child {
+    margin-bottom: 0;
+}
+
+/*
+ * Stepped through: one moment shows at a time and the script moves between
+ * them. The section is no taller than the stage, so the text before and
+ * after it stays where it is.
+ */
+.timeline.live {
+    margin-block: 0 var(--line);
+}
+
+.timeline.live .timeline-stage {
+    display: grid;
+    grid-template-columns: 1.5rem minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    column-gap: clamp(1.25rem, 4vw, 2.5rem);
+    row-gap: calc(var(--line) * 0.75);
+    padding-block: calc(var(--line) * 0.5);
+}
+
+.timeline.live .timeline-rail {
+    display: block;
+    position: relative;
+    grid-row: 1;
+    justify-self: center;
+    width: 0.125rem;
+    height: var(--tallest, 20rem);
+    background: var(--rule);
+}
+
+.timeline-tick {
+    position: absolute;
+    left: 50%;
+    width: 0.6rem;
+    height: 0.125rem;
+    translate: -50% -50%;
+    background: var(--muted);
+    transition:
+        background-color 0.2s ease,
+        width 0.2s ease;
+}
+
+.timeline-tick.passed {
+    width: 0.9rem;
+    background: var(--accent);
+}
+
+.timeline-marker {
+    position: absolute;
+    top: calc(var(--progress, 0) * 100%);
+    left: 50%;
+    width: 0.8rem;
+    height: 0.8rem;
+    translate: -50% -50%;
+    border-radius: 50%;
+    background: var(--accent);
+    transition: top 0.5s var(--ease);
+}
+
+.timeline.live .timeline-moments {
+    position: relative;
+    grid-row: 1;
+    height: var(--tallest, 20rem);
+    padding: 0;
+    border: 0;
+}
+
+/* All moments are stacked and only the current one shows. Later ones wait 2.5rem below, earlier ones above. */
+.timeline.live .moment {
+    position: absolute;
+    inset: 0 0 auto;
+    margin: 0;
+    opacity: 0;
+    translate: 0 2.5rem;
+    pointer-events: none;
+    transition:
+        opacity 0.35s ease,
+        translate 0.5s var(--ease);
+}
+
+.timeline.live .moment.before {
+    translate: 0 -2.5rem;
+}
+
+.timeline.live .moment.current {
+    opacity: 1;
+    translate: 0 0;
+    pointer-events: auto;
+}
+
+.timeline.live .moment-when {
+    font-size: clamp(2.5rem, 1.5rem + 4.5vw, 4.5rem);
+    line-height: 1;
+    letter-spacing: -0.02em;
+}
+
+.timeline.live .moment-text {
+    max-width: 34rem;
+    margin-top: var(--line);
+    font-size: clamp(1.25rem, 1rem + 1vw, 1.6rem);
+    line-height: 1.4;
+}
+
+.timeline.live .moment-text p {
+    margin-bottom: 0.6em;
+}
+
+.timeline.live .moment.chapter h3 {
+    font-size: clamp(2.5rem, 1.5rem + 4.5vw, 4.5rem);
+    line-height: 1;
+    letter-spacing: -0.02em;
+}
+
+.timeline.live .moment.chapter .moment-text {
+    color: var(--muted);
+}
+
+.timeline.live .timeline-count {
+    display: block;
+    grid-column: 2;
+    grid-row: 2;
+    margin: 0;
+    font-family: var(--font-code);
+    font-size: 0.8rem;
+    color: var(--muted);
+}
+
+@media print {
+    .timeline.live .timeline-stage {
+        display: block;
+    }
+
+    .timeline.live .timeline-moments {
+        height: auto;
+    }
+
+    .timeline.live .moment {
+        position: static;
+        opacity: 1;
+        translate: none;
+        margin-bottom: 1em;
+    }
+
+    .timeline-rail,
+    .timeline-count {
+        display: none !important;
+    }
+}

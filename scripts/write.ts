@@ -16,44 +16,22 @@
 // The page itself is scripts/editor/.
 
 import { $ } from "bun";
-import { mkdir, readdir } from "node:fs/promises";
-import { dirname, extname, join, relative, resolve } from "node:path";
+import { mkdir } from "node:fs/promises";
+import { dirname, extname, relative, resolve } from "node:path";
 import { themeStyle } from "../src/lib/color";
+import { at, frontmatter, isDraft, listMdx, root, slug, stem } from "./lib";
 
-const root = resolve(new URL("..", import.meta.url).pathname);
 const args = process.argv.slice(2);
 const dryRun = args.includes("--dry-run");
 const port = Number(args[args.indexOf("--port") + 1]) || 4400;
 const key = crypto.randomUUID().replace(/-/g, "");
 const DEV = "http://localhost:4321";
 
-const at = (path: string) => join(root, path);
 const exists = (path: string) => Bun.file(at(path)).exists();
 const hash = (content: string) => Bun.hash(content).toString(36);
 
 /** The only files the editor may read or write. */
 const editable = (path: string) => path === "src/data/site.ts" || /^src\/content\/(blog|pages|projects|resume)\/[\w.-]+\.mdx?$/.test(path);
-
-function frontmatter(source: string, name: string): string | undefined {
-    return new RegExp(`^${name}:\\s*(.*)$`, "m").exec(source)?.[1]?.trim().replace(/^"|"$/g, "");
-}
-
-async function listMdx(folder: string): Promise<string[]> {
-    const names = await readdir(at(folder)).catch(() => []);
-    return names.filter((name) => /\.mdx?$/.test(name)).sort();
-}
-
-async function isDraft(path: string): Promise<boolean> {
-    return frontmatter(await Bun.file(at(path)).text(), "draft") === "true";
-}
-
-function slug(title: string): string {
-    return title
-        .toLowerCase()
-        .normalize("NFKD")
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-|-$/g, "");
-}
 
 // ---- what there is to edit ----
 
@@ -63,7 +41,7 @@ async function files() {
         const source = await Bun.file(at(path)).text();
         return {
             path,
-            label: frontmatter(source, "title") ?? frontmatter(source, "name") ?? name.replace(/\.mdx?$/, ""),
+            label: frontmatter(source, "title") ?? frontmatter(source, "name") ?? stem(name),
             draft: frontmatter(source, "draft") === "true",
             route: route(path),
         };

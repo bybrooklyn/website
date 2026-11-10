@@ -1,6 +1,6 @@
 import { getCollection, type CollectionEntry } from "astro:content";
 import facts from "../data/project-facts.json";
-import { showDrafts } from "./drafts";
+import { visible } from "./drafts";
 
 export type Project = CollectionEntry<"projects">;
 
@@ -14,7 +14,7 @@ export interface ProjectFacts {
 
 /** In the order set by each project's `order`. Drafts are left out of production builds. */
 export async function getProjects(): Promise<Project[]> {
-    const projects = await getCollection("projects", ({ data }) => showDrafts || !data.draft);
+    const projects = await getCollection("projects", visible);
     return projects.sort((a, b) => a.data.order - b.data.order);
 }
 

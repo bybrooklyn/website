@@ -19,7 +19,7 @@ const blog = defineCollection({
                 coverAlt: z.string().optional(),
                 /** Short lowercase words, such as rust or self-hosting. */
                 tags: z.array(z.string()).default([]),
-                /** Drafts show up in `bun run dev` only. */
+                /** Left out of production builds. */
                 draft: z.boolean().default(false),
             })
             .refine((post) => !post.cover || post.coverAlt, { message: "A post with a cover needs coverAlt." }),

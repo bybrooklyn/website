@@ -1,4 +1,5 @@
 ---
+import PrevNext from "../../components/PrevNext.astro";
 import Picture from "../../components/Picture.astro";
 import type { GetStaticPaths } from "astro";
 import { render } from "astro:content";
@@ -112,30 +113,10 @@ if (facts) rows.push(["last updated", formatDate(new Date(facts.updated))]);
             )
         }
 
-        <nav class="post-nav" aria-label="More projects">
-            {
-                previous ? (
-                    <a href={`/projects/${previous.id}/`}>
-                        <span class="note">previous </span>
-                        {previous.data.name}
-                    </a>
-                ) : (
-                    <span />
-                )
-            }
-            {
-                next ? (
-                    <a class="next" href={`/projects/${next.id}/`}>
-                        <span class="note">next </span>
-                        {next.data.name}
-                    </a>
-                ) : (
-                    <a class="next" href="/projects/">
-                        <span class="note">that's all of them. </span>
-                        all projects
-                    </a>
-                )
-            }
-        </nav>
+        <PrevNext
+            label="More projects"
+            previous={previous && { href: `/projects/${previous.id}/`, note: "previous", title: previous.data.name }}
+            next={next ? { href: `/projects/${next.id}/`, note: "next", title: next.data.name } : { href: "/projects/", note: "that's all of them.", title: "all projects" }}
+        />
     </article>
 </Opened>

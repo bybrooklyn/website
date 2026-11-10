@@ -1,16 +1,7 @@
-// Reads the few things the photo page shows (date taken and exposure) out of
-// a picture's EXIF block. Nothing else is read, and the block itself is thrown
-// away when the picture is saved, so no location or camera details survive.
+// Reads the date a picture was taken from its EXIF block. The block itself is
+// dropped when the picture is saved, so no location or camera details survive.
 
-export interface Shot {
-    taken?: string;
-    focal?: number;
-    aperture?: number;
-    shutter?: string;
-    iso?: number;
-}
-
-export function readExif(block: Uint8Array | undefined): Shot {
+export function readExif(block: Uint8Array | undefined): { taken?: string } {
     try {
         if (!block) return {};
         let bytes = Buffer.from(block);
@@ -30,40 +21,14 @@ export function readExif(block: Uint8Array | undefined): Shot {
             return entries;
         };
 
+        // 0x8769 points at the EXIF directory; 0x9003 in it is the original date, "2026:05:03 19:42:10".
         const pointer = directory(u32(4)).get(0x8769);
-        if (!pointer) return {};
-        const exif = directory(u32(pointer.at));
-
-        const fraction = (tag: number): [number, number] | undefined => {
-            const entry = exif.get(tag);
-            if (!entry || entry.type !== 5) return undefined;
-            const at = u32(entry.at);
-            const bottom = u32(at + 4);
-            return bottom ? [u32(at), bottom] : undefined;
-        };
-        const whole = (tag: number): number | undefined => {
-            const entry = exif.get(tag);
-            if (!entry) return undefined;
-            return entry.type === 3 ? u16(entry.at) : entry.type === 4 ? u32(entry.at) : undefined;
-        };
-
-        const shot: Shot = {};
-        const date = exif.get(0x9003);
-        if (date && date.type === 2 && date.count >= 10) {
-            const written = bytes.toString("latin1", u32(date.at), u32(date.at) + 10);
-            if (/^\d{4}:\d\d:\d\d$/.test(written)) shot.taken = written.replace(/:/g, "-");
-        }
-        const time = fraction(0x829a);
-        if (time && time[0] > 0) shot.shutter = time[0] >= time[1] ? String(Math.round((time[0] / time[1]) * 10) / 10) : `1/${Math.round(time[1] / time[0])}`;
-        const stop = fraction(0x829d);
-        if (stop) shot.aperture = Math.round((stop[0] / stop[1]) * 10) / 10;
-        const length = fraction(0x920a);
-        if (length) shot.focal = Math.round(length[0] / length[1]);
-        const iso = whole(0x8827);
-        if (iso) shot.iso = iso;
-        return shot;
+        const date = pointer && directory(u32(pointer.at)).get(0x9003);
+        if (!date || date.type !== 2 || date.count < 10) return {};
+        const written = bytes.toString("latin1", u32(date.at), u32(date.at) + 10);
+        return /^\d{4}:\d\d:\d\d$/.test(written) ? { taken: written.replace(/:/g, "-") } : {};
     } catch {
-        // A damaged or unusual block just means no details.
+        // A damaged or unusual block just means no date.
         return {};
     }
 }

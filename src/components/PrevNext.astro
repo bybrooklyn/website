@@ -1,0 +1,35 @@
+---
+// The links at the foot of a post or project: the one before, and the one
+// after or, at the end, the way back to the whole list.
+
+interface Link {
+    href: string;
+    note: string;
+    title: string;
+}
+
+interface Props {
+    label: string;
+    previous?: Link;
+    next: Link;
+}
+
+const { label, previous, next } = Astro.props;
+---
+
+<nav class="post-nav" aria-label={label}>
+    {
+        previous ? (
+            <a href={previous.href}>
+                <span class="note">{previous.note} </span>
+                {previous.title}
+            </a>
+        ) : (
+            <span />
+        )
+    }
+    <a class="next" href={next.href}>
+        <span class="note">{next.note} </span>
+        {next.title}
+    </a>
+</nav>

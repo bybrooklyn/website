@@ -1,6 +1,4 @@
 /*
- * The typefaces are named here and nowhere else.
- *
  * Torrens Serif is my own cut of Fraunces (by Undercase Type, SIL Open Font
  * License): softness at its maximum and fixed at the size meant for headings.
  * That makes it tight at small sizes, so paragraphs are set in Fraunces
@@ -9,8 +7,6 @@
  * "Fraunces Soft" is Fraunces with its softness fixed at 100 and its wonky
  * alternates off, cut down to Latin, so the browser fetches about half as
  * much. scripts/fraunces-soft.py is how those two files are made.
- * To try Torrens Serif for everything, point --font-text at it too.
- *
  * The files named here are trimmed copies: Latin only, every weight kept.
  * The complete fonts are in assets/fonts/full/, and scripts/trim-fonts.py
  * makes these from them. "Torrens Serif Complete" is the whole of the

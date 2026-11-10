@@ -5,7 +5,7 @@
 import type { ImageMetadata } from "astro";
 import data from "../data/photos.json";
 
-interface Entry {
+export interface Entry {
     file: string;
     /** The heading the sorting model put it under. */
     group?: string;

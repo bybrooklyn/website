@@ -126,8 +126,7 @@ main {
     flex-direction: column;
     height: 100vh;
     min-width: 0;
-    /* the same lighter panel a post or project opens in */
-    background: oklch(0.19 0.042 300);
+    background: var(--panel);
     border-left: 1px solid var(--rule);
     border-radius: 0.9rem 0 0 0.9rem;
 }
@@ -407,7 +406,7 @@ dialog h2 {
     color: var(--muted);
 }
 
-/* Too narrow for two panes: the preview steps aside. */
+/* Too narrow for two panes: hide the preview. */
 @media (max-width: 64rem) {
     #panes {
         grid-template-columns: minmax(0, 1fr);

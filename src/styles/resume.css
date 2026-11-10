@@ -153,14 +153,8 @@
 }
 
 @media print {
-    /* Paper is white whatever the site looks like on screen. */
-    :root {
-        color-scheme: light;
-    }
-
     html {
         font-size: 9.3pt;
-        background: #fff !important;
     }
 
     .resume-pdf,
@@ -180,10 +174,6 @@
     .resume-side .resume-skills dd {
         margin: 0;
         color: inherit;
-    }
-
-    main {
-        display: block;
     }
 
     .resume {

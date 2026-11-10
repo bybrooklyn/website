@@ -1,7 +1,6 @@
 // <drop-box>: a small pile of blocks with real physics. Click or tap an empty
 // spot to drop something (a block, now and then a ball or a wedge); pick one
-// up and throw it. They stack, tumble and come to rest. It is drawn in the
-// page's own colors.
+// up and throw it. It is drawn in the page's own colors.
 //
 // The physics is the site's own small engine, physics.ts.
 

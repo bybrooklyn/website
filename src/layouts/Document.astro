@@ -14,7 +14,7 @@ import textFont from "../assets/fonts/fraunces-soft.woff2?url";
 import { site } from "../data/site";
 import { theme, type AccentName } from "../data/theme";
 import { hex, themeStyle } from "../lib/color";
-import { getPosts } from "../lib/posts";
+import { hasPosts } from "../lib/posts";
 
 interface Props {
     title?: string;
@@ -37,7 +37,7 @@ const shared = image
     ? await getImage({ src: image, width: 1200, format: "png" })
     : { src: "/assets/playmatter-share.png", attributes: { width: 1200, height: 610 } };
 const sharedUrl = new URL(shared.src, Astro.site);
-const hasPosts = (await getPosts()).length > 0;
+const posts = await hasPosts();
 ---
 
 <!doctype html>
@@ -56,7 +56,7 @@ const hasPosts = (await getPosts()).length > 0;
         {/* There is no icon; this stops browsers asking for one and logging a miss. */}
         <link rel="icon" href="data:," />
         <meta name="theme-color" content={hex(theme.ground)} />
-        {hasPosts && <link rel="alternate" type="application/rss+xml" title={`${site.name}'s blog`} href="/rss.xml" />}
+        {posts && <link rel="alternate" type="application/rss+xml" title={`${site.name}'s blog`} href="/rss.xml" />}
         <meta property="og:title" content={title ?? site.name} />
         <meta property="og:description" content={description} />
         <meta property="og:type" content={type} />
@@ -99,6 +99,7 @@ const hasPosts = (await getPosts()).length > 0;
         <slot name="head" />
     </head>
     <body class={bodyClass}>
+        <a class="skip" href="#main">Skip to the page</a>
         <slot />
     </body>
 </html>

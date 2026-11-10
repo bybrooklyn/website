@@ -1,9 +1,7 @@
 ---
-// A post or a project, opened over the site. The site itself is reduced to a
-// strip down the left edge that leads back to the list it came from, and the
-// page sits beside it in a panel a shade lighter. On phones there is no
-// strip: the panel takes the whole screen and the way back floats in the
-// corner.
+// A post or project. A strip on the left links back to its list, and the
+// page scrolls in a panel beside it. On phones the strip becomes a floating
+// back button.
 import Document from "./Document.astro";
 import Flags from "../components/Flags.astro";
 import { site } from "../data/site";
@@ -26,7 +24,6 @@ const { back, title, ...document } = Astro.props;
 
 <Document {title} {...document} bodyClass="opened">
     <slot name="head" slot="head" />
-    <a class="skip" href="#main">Skip to the page</a>
     <a class="strip" href={back.href} aria-label={`Back to ${back.label}`}>
         <span class="strip-button" aria-hidden="true">
             <svg viewBox="0 0 16 26" fill="none" stroke="currentColor" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round">

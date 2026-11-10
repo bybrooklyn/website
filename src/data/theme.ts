@@ -1,4 +1,4 @@
-// The site's colors, in one place. Dark only.
+// Theme colors. Dark only.
 // Each color is OKLCH: lightness, chroma, hue.
 
 export type Oklch = readonly [number, number, number];

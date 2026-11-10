@@ -2,20 +2,20 @@
 import Flags from "./Flags.astro";
 import { nav, site } from "../data/site";
 import { getCollection } from "astro:content";
-import { showDrafts } from "../lib/drafts";
+import { visible } from "../lib/drafts";
 import { photos } from "../lib/photos";
-import { getPosts } from "../lib/posts";
+import { hasPosts } from "../lib/posts";
 import { getResume } from "../lib/resume";
 
 const here = Astro.url.pathname;
-// Links to pages that are still drafts wait until they are published.
+// Links to pages that are not built are left out.
 const hasResume = (await getResume()) !== undefined;
-const hasAbout = (await getCollection("pages", ({ id, data }) => id === "about" && (showDrafts || !data.draft))).length > 0;
-const hasPosts = (await getPosts()).length > 0;
+const hasAbout = (await getCollection("pages", (page) => page.id === "about" && visible(page))).length > 0;
+const posts = await hasPosts();
 const hidden = new Set([
     ...(hasResume ? [] : ["/resume/"]),
     ...(hasAbout ? [] : ["/about/"]),
-    ...(hasPosts ? [] : ["/blog/"]),
+    ...(posts ? [] : ["/blog/"]),
     ...(photos.length > 0 ? [] : ["/photos/"]),
 ]);
 const links = nav.filter((item) => !hidden.has(item.href));

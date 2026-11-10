@@ -1,0 +1,37 @@
+// What the scripts in this folder share: where the repo is, and how to read
+// the content files.
+
+import { readdir } from "node:fs/promises";
+import { join, resolve } from "node:path";
+
+export const root = resolve(new URL("..", import.meta.url).pathname);
+
+/** A path inside the repo. */
+export const at = (...parts: string[]) => join(root, ...parts);
+
+/** One `key: value` line from a file's frontmatter, without quotes. */
+export function frontmatter(source: string, key: string): string | undefined {
+    return new RegExp(`^${key}:\\s*(.*)$`, "m").exec(source)?.[1]?.trim().replace(/^"|"$/g, "");
+}
+
+export async function isDraft(path: string): Promise<boolean> {
+    return frontmatter(await Bun.file(at(path)).text(), "draft") === "true";
+}
+
+/** The Markdown files in a folder, by name. */
+export async function listMdx(folder: string): Promise<string[]> {
+    const names = await readdir(at(folder)).catch(() => []);
+    return names.filter((name) => /\.mdx?$/.test(name)).sort();
+}
+
+/** A file name without its extension. */
+export const stem = (name: string) => name.replace(/\.\w+$/, "");
+
+/** Text as it can appear in an address or a file name. */
+export function slug(text: string): string {
+    return text
+        .toLowerCase()
+        .normalize("NFKD")
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "");
+}

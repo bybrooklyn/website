@@ -41,7 +41,7 @@ async function api<T>(path: string, body?: unknown, raw?: Blob): Promise<T> {
     return data;
 }
 
-/** Small choices remembered between visits. They are conveniences; nothing depends on them. */
+/** Small choices remembered between visits. */
 const memory = {
     get(name: string): string | null {
         try {
@@ -84,6 +84,10 @@ function grow(area: HTMLTextAreaElement): void {
     area.style.height = "auto";
     area.style.height = `${area.scrollHeight + 2}px`;
     write.scrollTop = top;
+}
+
+function growAll(): void {
+    for (const area of write.querySelectorAll("textarea")) if (area.offsetParent) grow(area);
 }
 
 /** A block the rich view shows as itself: code, a picture, or source it leaves alone. */
@@ -143,7 +147,6 @@ function render(): void {
     const formatted = richNow();
     text.hidden = formatted;
     richBox.hidden = !formatted;
-    document.body.classList.toggle("is-rich", formatted);
     $("mode").hidden = !file.markdown;
     $("tools").hidden = !file.markdown;
     $("mode-markdown").setAttribute("aria-pressed", String(!formatted));
@@ -206,14 +209,14 @@ async function showList(): Promise<void> {
 function inlineOf(node: Node): Inline[] {
     const out: Inline[] = [];
     node.childNodes.forEach((child, index) => {
-        if (child instanceof Text) out.push({ t: "text", v: child.data.replace(/[\s ]+/g, " ") });
+        if (child instanceof Text) out.push({ t: "text", v: child.data.replace(/\s+/g, " ") });
         if (!(child instanceof HTMLElement)) return;
         const tag = child.tagName;
         if (tag === "BR") {
             if (index < node.childNodes.length - 1) out.push({ t: "text", v: " " });
-        } else if (tag === "B" || tag === "STRONG") out.push({ t: "strong", m: "**", c: inlineOf(child) });
-        else if (tag === "I" || tag === "EM") out.push({ t: "em", m: "*", c: inlineOf(child) });
-        else if (tag === "S" || tag === "DEL" || tag === "STRIKE") out.push({ t: "del", m: "~~", c: inlineOf(child) });
+        } else if (tag === "B" || tag === "STRONG") out.push({ t: "strong", c: inlineOf(child) });
+        else if (tag === "I" || tag === "EM") out.push({ t: "em", c: inlineOf(child) });
+        else if (tag === "S" || tag === "DEL" || tag === "STRIKE") out.push({ t: "del", c: inlineOf(child) });
         else if (tag === "CODE") out.push({ t: "code", v: child.textContent ?? "" });
         else if (tag === "A") out.push({ t: "link", href: child.getAttribute("href") ?? "", c: inlineOf(child) });
         else if (tag !== "UL" && tag !== "OL") out.push(...inlineOf(child));
@@ -602,13 +605,13 @@ $<HTMLInputElement>("picture").addEventListener("change", async (event) => {
 
 command("defaultParagraphSeparator", "p");
 
-/** Markdown typed at the start of a line in the rich view turns into the thing it means. */
+/** Markdown shorthand typed at the start of a line in the rich view. */
 const SHORTHAND: Record<string, string> = { "##": "h2", "###": "h3", "-": "ul", "*": "ul", "1.": "ol", ">": "quote", "```": "codeblock", "---": "rule" };
 
 body.addEventListener("input", (event) => {
     const block = here();
     if ((event as InputEvent).data === " " && block?.tagName === "P") {
-        const typed = (block.textContent ?? "").replace(/[\s ]+$/, "");
+        const typed = (block.textContent ?? "").replace(/\s+$/, "");
         const tool = SHORTHAND[typed];
         if (tool && (block.textContent ?? "").length === typed.length + 1) {
             block.innerHTML = "<br>";
@@ -682,7 +685,7 @@ function setPreview(on: boolean): void {
     document.body.classList.toggle("no-preview", !on);
     $("toggle-preview").setAttribute("aria-pressed", String(on));
     memory.set("preview", on ? "1" : "0");
-    for (const area of write.querySelectorAll("textarea")) if (area.offsetParent) grow(area);
+    growAll();
 }
 $("toggle-preview").addEventListener("click", () => setPreview(document.body.classList.contains("no-preview")));
 setPreview(memory.get("preview") !== "0");
@@ -698,9 +701,7 @@ document.addEventListener("keydown", (event) => {
 window.addEventListener("beforeunload", (event) => {
     if (dirty) event.preventDefault();
 });
-window.addEventListener("resize", () => {
-    for (const area of write.querySelectorAll("textarea")) if (area.offsetParent) grow(area);
-});
+window.addEventListener("resize", growAll);
 
 // ---- a new post ----
 

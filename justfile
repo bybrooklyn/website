@@ -1,3 +1,4 @@
+# Every recipe is the package.json script of the same name.
 set shell := ["sh", "-eu", "-c"]
 
 default:
@@ -12,28 +13,36 @@ check:
 build:
     bun run build
 
-preview: build
+preview:
     bun run preview
+
+# write and edit in the browser, then publish
+edit:
+    bun run edit
+
+# add the pictures waiting in photos/
+photos:
+    bun run photos
 
 # recount the language bar from GitHub
 langs:
     bun run langs
 
-clean:
-    rm -rf dist .astro
+# refresh project facts from GitHub
+projects:
+    bun run projects
+
+# print the resume to PDF
+resume-pdf:
+    bun run resume:pdf
 
 # check, build and publish to production
-deploy: check build
-    bunx wrangler pages deploy
+deploy:
+    bun run deploy
 
-# publish a preview named after the current branch
-deploy-preview: check build
-    bunx wrangler pages deploy --branch "$(git rev-parse --abbrev-ref HEAD)"
+# publish to the preview branch
+deploy-preview:
+    bun run deploy:preview
 
-# write a post and publish it
-blog:
-    bun run blog
-
-# change any text on the site, then publish
-edit:
-    bun run edit
+clean:
+    rm -rf dist .astro

@@ -8,13 +8,8 @@
  *   move   one main page to another: the content shifts a short way
  *   swap   one opened page to another: the same short shift, inside the panel
  *
- * One easing for all of it: quick to start, long and soft to finish, and it
- * never overshoots. Nothing moves for anyone who has asked for reduced motion.
+ * Nothing moves for anyone who has asked for reduced motion.
  */
-
-:root {
-    --ease: cubic-bezier(0.22, 1, 0.36, 1);
-}
 
 /* The header belongs to the site, so it slides away with it but holds still between main pages. */
 .site-header {

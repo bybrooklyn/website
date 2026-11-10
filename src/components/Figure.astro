@@ -47,10 +47,8 @@ const fetchpriority = eager ? "high" : undefined;
 </figure>
 
 <script>
-    // A clip starts as its poster and costs nothing. It is fetched and played
-    // once it is on screen, unless the visitor has asked for less motion or
-    // less data, or the connection is slow: then it stays a picture with a
-    // play button, and the choice is theirs.
+    // A clip loads and plays only once on screen. With reduced motion, reduced
+    // data or a slow connection it stays a poster with controls.
     const connection = (navigator as Navigator & { connection?: { saveData?: boolean; effectiveType?: string } }).connection;
     const sparing =
         matchMedia("(prefers-reduced-motion: reduce)").matches ||

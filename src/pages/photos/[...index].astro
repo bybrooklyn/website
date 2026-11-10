@@ -2,12 +2,17 @@
 // /photos/: photographs, sorted under headings by what is in them, newest
 // first. Clicking one opens it large. They come from the photos/ folder; see
 // scripts/photos.ts.
-import Picture from "../components/Picture.astro";
+import Picture from "../../components/Picture.astro";
 import { getImage } from "astro:assets";
-import "../styles/photos.css";
-import Base from "../layouts/Base.astro";
-import { formatDate } from "../lib/posts";
-import { groups, photos } from "../lib/photos";
+import type { GetStaticPaths } from "astro";
+import "../../styles/photos.css";
+import Base from "../../layouts/Base.astro";
+import { formatDate } from "../../lib/posts";
+import { groups, photos } from "../../lib/photos";
+
+// A rest route with one fixed path (/photos/), so that the page is not built
+// at all until there is a photo to show.
+export const getStaticPaths = (() => (photos.length > 0 ? [{ params: { index: undefined } }] : [])) satisfies GetStaticPaths;
 
 const shown = await Promise.all(
     groups.map(async (group) => ({
@@ -16,14 +21,14 @@ const shown = await Promise.all(
             group.photos.map(async (photo) => ({
                 photo,
                 large: await getImage({ src: photo.image, width: Math.min(photo.image.width, 2000), format: "avif" }),
-                taken: photo.taken ? formatDate(new Date(`${photo.taken}T12:00:00`)) : "",
+                taken: photo.taken ? formatDate(new Date(photo.taken)) : "",
             })),
         ),
     })),
 );
 ---
 
-<Base title="photos" description="Photographs by Charlotte." unlisted={photos.length === 0}>
+<Base title="photos" description="Photographs by Charlotte.">
     <div class="page-head">
         <h1>photos</h1>
     </div>
@@ -49,7 +54,6 @@ const shown = await Promise.all(
             </section>
         ))
     }
-    {shown.length === 0 && <p class="lede">Nothing here yet.</p>}
 
     <dialog class="photo-view" aria-label="Photo">
         <img alt="" />
@@ -87,7 +91,7 @@ const shown = await Promise.all(
         const step = { ArrowRight: 1, ArrowLeft: -1 }[event.key];
         if (step) show(links[open + step]);
     });
-    // A click on the dark surround, outside the picture, closes it.
+    // A click on the backdrop closes it.
     view?.addEventListener("click", (event) => {
         if (event.target === view) view.close();
     });

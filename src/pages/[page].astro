@@ -7,10 +7,10 @@ import { getCollection, render, type CollectionEntry } from "astro:content";
 import "../styles/blog.css";
 import Contents from "../components/Contents.astro";
 import Base from "../layouts/Base.astro";
-import { showDrafts } from "../lib/drafts";
+import { visible } from "../lib/drafts";
 
 export const getStaticPaths = (async () => {
-    const pages = await getCollection("pages", ({ data }) => showDrafts || !data.draft);
+    const pages = await getCollection("pages", visible);
     return pages.map((page) => ({ params: { page: page.id }, props: { entry: page } }));
 }) satisfies GetStaticPaths;
 

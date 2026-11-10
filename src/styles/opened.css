@@ -3,11 +3,6 @@
 :root {
     /* How much of the site stays visible on the left while something is open. */
     --strip: 6.5rem;
-    /* One step up from the site's ground: enough to see its edge. */
-    --panel: oklch(0.19 0.042 300);
-    --panel-rule: oklch(0.33 0.06 300);
-    --panel-raised: oklch(0.245 0.052 300);
-    --panel-edge: oklch(0.36 0.07 300);
 }
 
 /* The panel has its own scrollbar; the page must not reserve room for a second one. */
@@ -32,7 +27,7 @@ body.opened {
     text-decoration: none;
 }
 
-/* The way back: a thick chevron in the site's gray, no box around it. */
+/* The back chevron. */
 .strip-button {
     display: block;
     width: 1.6rem;
@@ -40,7 +35,7 @@ body.opened {
     color: color-mix(in oklch, var(--muted) 70%, var(--ground));
     transition:
         color 0.2s ease,
-        translate 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+        translate 0.35s var(--ease);
 }
 
 .strip-button svg {
@@ -78,7 +73,7 @@ body.opened {
     border-right: 0;
     border-radius: 2rem 0 0 2rem;
     scroll-behavior: smooth;
-    transition: translate 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+    transition: translate 0.35s var(--ease);
 
     /* Inside the panel the raised and ruled colors step up with it. */
     --surface: var(--panel-raised);
@@ -86,7 +81,7 @@ body.opened {
     --astro-code-background: var(--panel-raised);
 }
 
-/* Reaching for the way back pulls the panel aside a little. */
+/* Hovering the strip nudges the panel. */
 body.opened:has(.strip:hover, .strip:focus-visible) .opened-panel {
     translate: 1.5rem 0;
 }

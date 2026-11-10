@@ -1,20 +1,11 @@
 // How the editor reads and writes a Markdown or MDX file.
 //
-// The rule that keeps it honest: a file is cut into blocks, every block
-// remembers its exact source, and a block nobody touched is written back
-// exactly as it was. Only what the editor can show faithfully (headings,
+// Invariant: a file is cut into blocks, every block remembers its exact
+// source, and a block nobody touched is written back exactly as it was. Only what the editor can show faithfully (headings,
 // paragraphs, simple lists, quotes, tables, code, pictures) becomes formatted
 // text; everything else (imports, components) is shown as its source.
 
 // ---- frontmatter ----
-
-export interface Field {
-    key: string;
-    value: string;
-    /** Written as a quoted string in the file. */
-    quoted: boolean;
-    line: number;
-}
 
 export function splitFile(source: string): { front: string[] | null; body: string } {
     if (!source.startsWith("---\n")) return { front: null, body: source };
@@ -28,37 +19,12 @@ export function joinFile(front: string[] | null, body: string): string {
     return front ? `---\n${front.join("\n")}\n---\n${body}` : body;
 }
 
-/** The one-line `key: value` entries. Lists, nested values and comments are left alone. */
-export function fields(front: string[]): Field[] {
-    const found: Field[] = [];
-    front.forEach((text, line) => {
-        const match = /^([A-Za-z_][\w-]*):[ \t]*(.*?)\s*$/.exec(text);
-        if (!match || match[2] === "" || /^[|>&*!]/.test(match[2]!) || /^\s+\S/.test(front[line + 1] ?? "")) return;
-        const [, key, raw] = match as unknown as [string, string, string];
-        if (/^".*"$/.test(raw)) {
-            try {
-                found.push({ key, value: JSON.parse(raw) as string, quoted: true, line });
-                return;
-            } catch {
-                // not a plain quoted string; show it as written
-            }
-        }
-        found.push({ key, value: raw, quoted: false, line });
-    });
-    return found;
-}
-
-export function fieldLine(key: string, value: string, quoted: boolean): string {
-    const bare = !quoted && (/^[[{]/.test(value) || (/^[\w ./,-]+$/.test(value) && value.trim() === value));
-    return `${key}: ${bare ? value : JSON.stringify(value)}`;
-}
-
 // ---- text inside a block ----
 
 export type Inline =
     | { t: "text"; v: string }
     | { t: "code"; v: string }
-    | { t: "strong" | "em" | "del"; m: string; c: Inline[] }
+    | { t: "strong" | "em" | "del"; c: Inline[] }
     | { t: "link"; href: string; c: Inline[] };
 
 const PUNCTUATION = /[!-/:-@[-`{-~]/;
@@ -87,7 +53,7 @@ function closing(s: string, from: number, mark: string): number {
             const end = s.indexOf(mark + mark, k + 2);
             if (end < 0) return -1;
             k = end + 1;
-        } else if (s.startsWith(mark, k) && k > from - 1 && !/\s/.test(s[k - 1]!)) {
+        } else if (s.startsWith(mark, k) && !/\s/.test(s[k - 1]!)) {
             if (mark[0] === "_" && /\w/.test(s[k + mark.length] ?? "")) continue;
             return k;
         }
@@ -134,7 +100,7 @@ export function parseInline(s: string): Inline[] {
             const end = closing(s, i + mark.length + 1, mark);
             if (end < 0) break;
             flush();
-            out.push({ t, m: mark, c: parseInline(s.slice(i + mark.length, end)) });
+            out.push({ t, c: parseInline(s.slice(i + mark.length, end)) });
             i = end + mark.length;
             continue scan;
         }
@@ -163,15 +129,14 @@ function escapeText(v: string): string {
     return out;
 }
 
-/** Back to Markdown. `keep` reuses the marks the source used, to test that nothing is lost. */
-export function toMarkdown(nodes: Inline[], keep = false): string {
+export function toMarkdown(nodes: Inline[]): string {
     return nodes
         .map((node) => {
             if (node.t === "text") return escapeText(node.v);
             if (node.t === "code") return `\`${node.v}\``;
-            if (node.t === "link") return `[${toMarkdown(node.c, keep)}](${node.href})`;
-            const mark = keep ? node.m : { strong: "**", em: "*", del: "~~" }[node.t];
-            return mark + toMarkdown(node.c, keep) + mark;
+            if (node.t === "link") return `[${toMarkdown(node.c)}](${node.href})`;
+            const mark = { strong: "**", em: "*", del: "~~" }[node.t];
+            return mark + toMarkdown(node.c) + mark;
         })
         .join("");
 }
@@ -362,8 +327,6 @@ export function parseBody(body: string): Body {
     }
     return { lead, blocks };
 }
-
-export const writeBody = ({ lead, blocks }: Body): string => lead + blocks.map((block) => block.src + block.gap).join("");
 
 /** A line of running text that would be read as something else at the start of a block. */
 export const guard = (markdown: string): string => (/^(#{1,6}\s|[-+*]\s|\d+[.)]\s|>|`{3}|~{3}|[-_]{3,}$)/.test(markdown) ? `\\${markdown}` : markdown);

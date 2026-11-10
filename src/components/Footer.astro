@@ -1,9 +1,9 @@
 ---
 import { site } from "../data/site";
 import { build } from "../lib/build";
-import { getPosts } from "../lib/posts";
+import { hasPosts } from "../lib/posts";
 
-const hasPosts = (await getPosts()).length > 0;
+const posts = await hasPosts();
 ---
 
 <footer class="site-footer">
@@ -16,7 +16,7 @@ const hasPosts = (await getPosts()).length > 0;
         </li>
         <li><a href={site.github} rel="me">github</a></li>
         <li><a href={site.discord} rel="me">discord</a></li>
-        {hasPosts && (
+        {posts && (
             <li>
                 <a href="/rss.xml">rss</a>
             </li>

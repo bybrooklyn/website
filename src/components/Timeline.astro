@@ -7,6 +7,7 @@
 //
 // That behaviour is added by the script below. Without scripts, or for anyone
 // who has asked for reduced motion, it is an ordinary list of every moment.
+import "../styles/timeline.css";
 ---
 
 <section class="timeline">
@@ -22,7 +23,7 @@
 <script>
     const still = matchMedia("(prefers-reduced-motion: reduce)");
 
-    /** How long one move takes; further input waits for it. Matches the transition in blog.css. */
+    /** Further input waits this long: a little more than the 0.5s transition in timeline.css. */
     const MOVE = 520;
 
     for (const timeline of document.querySelectorAll<HTMLElement>(".timeline")) {

@@ -16,7 +16,7 @@ const OWNER = "bybrooklyn";
 /** Repos whose bytes would mislead (vendored code, generated output, not really mine). */
 const IGNORE_REPOS: readonly string[] = ["resume", ".github", "swiftly"];
 
-/** Things linguist counts that are not languages I "use" in any meaningful sense. */
+/** Things linguist counts that are not languages I use. */
 const IGNORE_LANGUAGES: readonly string[] = [
     "HTML",
     "CSS",
@@ -71,7 +71,6 @@ const languages = [...totals.entries()]
         name,
         bytes,
         repos: mains.get(name) ?? 0,
-        // Half by code, half by projects. Shares add up to 1.
         share: Number((0.5 * (bytes / allBytes) + 0.5 * ((mains.get(name) ?? 0) / allMains)).toFixed(4)),
     }))
     .sort((a, b) => b.share - a.share);

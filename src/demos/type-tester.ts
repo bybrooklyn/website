@@ -7,7 +7,7 @@
 class TypeTester extends HTMLElement {
     connectedCallback(): void {
         const family = this.getAttribute("family") ?? "serif";
-        const sample = this.getAttribute("sample") ?? "Type something here";
+        const sample = this.getAttribute("sample") ?? "";
 
         this.innerHTML = `
             <div class="tester-controls">

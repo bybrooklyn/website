@@ -111,15 +111,6 @@ pre {
     font-weight: 400;
 }
 
-.visually-hidden {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-}
-
 .skip {
     position: absolute;
     left: var(--gutter);
@@ -140,7 +131,7 @@ pre {
     font-size: 0.875em;
 }
 
-/* A small heading over a block of the homepage. */
+/* A small heading over a section. */
 .label {
     margin: 0 0 calc(var(--line) * 0.75);
     font-family: var(--font-text);
@@ -217,11 +208,8 @@ h1 + .lede {
 }
 
 /*
- * A link that says one thing and, when reached for, opens out into another:
- * "email" becomes the address. The two texts are stacked in one cell. A few
- * lines of script in Footer.astro measure each, so the link's width can ease
- * from exactly one to exactly the other while the texts cross-fade. Until
- * that has run, or without scripts, it is an ordinary link reading "email".
+ * "email" widens into the address on hover. Footer.astro measures both texts
+ * so the width can animate. Without scripts it is a plain link.
  */
 .reveal {
     display: inline-grid;
@@ -350,7 +338,6 @@ h1 + .about {
     margin-bottom: 0;
 }
 
-/* Two small flags beside the site name. Rest on one for a moment to see what it is. */
 .site-id {
     display: flex;
     align-items: center;

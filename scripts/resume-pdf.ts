@@ -8,18 +8,14 @@
 import { $ } from "bun";
 import { mkdir, readdir, rm } from "node:fs/promises";
 import { join } from "node:path";
+import { at, isDraft, root } from "./lib";
 
-const root = new URL("..", import.meta.url).pathname;
-const built = join(root, ".resume-build");
-const versions = ["resume"] as const;
+const built = at(".resume-build");
+/** The same name the site links to (resumePdf in src/lib/resume.ts). */
+const NAME = "charlotte-resume.pdf";
 
 const chromium = Bun.which("chromium") ?? Bun.which("chromium-browser") ?? Bun.which("google-chrome-stable");
 if (!chromium) throw new Error("No Chromium or Chrome found on PATH.");
-
-async function isDraft(version: string): Promise<boolean> {
-    const source = await Bun.file(join(root, `src/content/resume/${version}.mdx`)).text();
-    return /^draft:\s*true\s*$/m.test(source);
-}
 
 // Build once into a folder of its own, with drafts included.
 await $`bunx astro build --outDir ${built}`.cwd(root).env({ ...process.env, SHOW_DRAFTS: "1" }).quiet();
@@ -33,27 +29,22 @@ const server = Bun.serve({
     },
 });
 
+const draft = await isDraft("src/content/resume/resume.mdx");
 try {
-    for (const version of versions) {
-        const draft = await isDraft(version);
-        const folder = join(root, draft ? "resume-preview" : "public/resume");
-        await mkdir(folder, { recursive: true });
-        const output = join(folder, `charlotte-${version}.pdf`);
-        const page = "/resume/";
+    const folder = at(draft ? "resume-preview" : "public/resume");
+    await mkdir(folder, { recursive: true });
+    const output = join(folder, NAME);
 
-        await $`${chromium} --headless --disable-gpu --no-pdf-header-footer --print-to-pdf=${output} ${server.url.origin}${page}`.quiet();
+    await $`${chromium} --headless --disable-gpu --no-pdf-header-footer --print-to-pdf=${output} ${server.url.origin}/resume/`.quiet();
 
-        const pages = ((await Bun.file(output).text()).match(/\/Type\s*\/Page\b(?!s)/g) ?? []).length;
-        console.log(`${draft ? "draft    " : "published"} ${output.replace(root, "")}  ${pages} page${pages === 1 ? "" : "s"}`);
-        if (pages !== 1) throw new Error(`The ${version} resume is ${pages} pages; it has to fit on one.`);
-    }
+    const pages = ((await Bun.file(output).text()).match(/\/Type\s*\/Page\b(?!s)/g) ?? []).length;
+    console.log(`${draft ? "draft    " : "published"} ${output.replace(root, "")}  ${pages} page${pages === 1 ? "" : "s"}`);
+    if (pages !== 1) throw new Error(`The resume is ${pages} pages; it has to fit on one.`);
 } finally {
     server.stop(true);
     await rm(built, { recursive: true, force: true });
 }
 
 // A published PDF must not outlive a resume that went back to draft.
-for (const version of versions) {
-    if (await isDraft(version)) await rm(join(root, `public/resume/charlotte-${version}.pdf`), { force: true });
-}
-if ((await readdir(join(root, "public/resume")).catch(() => ["x"])).length === 0) await rm(join(root, "public/resume"), { recursive: true });
+if (draft) await rm(at("public/resume", NAME), { force: true });
+if ((await readdir(at("public/resume")).catch(() => ["x"])).length === 0) await rm(at("public/resume"), { recursive: true });

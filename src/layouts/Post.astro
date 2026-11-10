@@ -1,4 +1,5 @@
 ---
+import PrevNext from "../components/PrevNext.astro";
 import Picture from "../components/Picture.astro";
 import type { MarkdownHeading } from "astro";
 import "../styles/blog.css";
@@ -47,30 +48,10 @@ const { title, summary, date, accent, draft, cover, coverAlt, tags } = post.data
             </div>
         </div>
 
-        <nav class="post-nav" aria-label="More posts">
-            {
-                older ? (
-                    <a href={`/blog/${older.id}/`}>
-                        <span class="note">older </span>
-                        {older.data.title}
-                    </a>
-                ) : (
-                    <span />
-                )
-            }
-            {
-                newer ? (
-                    <a class="next" href={`/blog/${newer.id}/`}>
-                        <span class="note">newer </span>
-                        {newer.data.title}
-                    </a>
-                ) : (
-                    <a class="next" href="/blog/">
-                        <span class="note">that's the latest. </span>
-                        all posts
-                    </a>
-                )
-            }
-        </nav>
+        <PrevNext
+            label="More posts"
+            previous={older && { href: `/blog/${older.id}/`, note: "older", title: older.data.title }}
+            next={newer ? { href: `/blog/${newer.id}/`, note: "newer", title: newer.data.title } : { href: "/blog/", note: "that's the latest.", title: "all posts" }}
+        />
     </article>
 </Opened>
