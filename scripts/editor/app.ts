@@ -139,6 +139,7 @@ const emptyLine = () => el("p", { innerHTML: "<br>" });
 
 /** Put the open file on the page, in whichever of the two views is chosen. */
 function render(): void {
+    photosBox.hidden = true;
     if (!file) return;
     const formatted = richNow();
     text.hidden = formatted;
@@ -168,12 +169,9 @@ function render(): void {
     body.append(emptyLine());
 }
 
-async function open(path: string): Promise<void> {
-    await save();
-    const loaded = await api<{ content: string; hash: string }>(`/api/file?path=${encodeURIComponent(path)}`);
-    const route = files.find((entry) => entry.path === path)?.route ?? "/";
-    file = { path, hash: loaded.hash, content: loaded.content, markdown: /\.mdx?$/.test(path), route };
-    render();
+const PHOTOS = "src/data/photos.json";
+
+function point(path: string, route: string): void {
     for (const link of list.querySelectorAll("button")) link.classList.toggle("here", link.dataset.path === path);
     if (frame.dataset.route !== route) {
         frame.dataset.route = route;
@@ -183,6 +181,16 @@ async function open(path: string): Promise<void> {
     memory.set("last", path);
     say("");
     write.scrollTop = 0;
+}
+
+async function open(path: string): Promise<void> {
+    await save();
+    if (path === PHOTOS) return openPhotos();
+    const loaded = await api<{ content: string; hash: string }>(`/api/file?path=${encodeURIComponent(path)}`);
+    const route = files.find((entry) => entry.path === path)?.route ?? "/";
+    file = { path, hash: loaded.hash, content: loaded.content, markdown: /\.mdx?$/.test(path), route };
+    render();
+    point(path, route);
 }
 
 async function showList(): Promise<void> {
@@ -664,6 +672,143 @@ body.addEventListener("keydown", (event) => {
 frontText.addEventListener("input", () => {
     grow(frontText);
     changed();
+});
+
+// ---- photographs ----
+
+interface PhotoEntry {
+    file: string;
+    caption?: string;
+    album?: string;
+    tags?: string[];
+    taken?: string;
+    focal?: number;
+    aperture?: number;
+    shutter?: string;
+    iso?: number;
+}
+
+const photosBox = $("photos");
+const photoList = $("photo-list");
+let photos: PhotoEntry[] = [];
+let photoTimer = 0;
+
+function savePhotos(): void {
+    say("not saved yet");
+    clearTimeout(photoTimer);
+    photoTimer = window.setTimeout(() => {
+        api("/api/photos", { photos }).then(() => say("saved"), fail);
+    }, 500);
+}
+
+/** Take the order from the page after a photo has been moved. */
+function reorder(): void {
+    const order = [...photoList.children].map((item) => (item as HTMLElement).dataset.file);
+    photos.sort((a, b) => order.indexOf(a.file) - order.indexOf(b.file));
+    savePhotos();
+}
+
+function showPhotos(): void {
+    $("albums").replaceChildren(...[...new Set(photos.map((photo) => photo.album).filter(Boolean))].map((album) => el("option", { value: album })));
+    photoList.replaceChildren(
+        ...photos.map((photo) => {
+            const item = el("li");
+            item.dataset.file = photo.file;
+            const picture = el("img", { src: `/api/asset?file=${PHOTOS}&src=../assets/photos/${photo.file}&w=320&k=${key}`, alt: "", draggable: true, title: "drag to move" });
+            picture.addEventListener("dragstart", () => item.classList.add("moving"));
+            picture.addEventListener("dragend", () => {
+                item.classList.remove("moving");
+                reorder();
+            });
+            const field = (name: "caption" | "album", placeholder: string) => {
+                const input = el("input", { value: photo[name] ?? "", placeholder });
+                if (name === "album") input.setAttribute("list", "albums");
+                input.addEventListener("input", () => {
+                    photo[name] = input.value;
+                    savePhotos();
+                });
+                return input;
+            };
+            const tags = el("input", { value: (photo.tags ?? []).join(", "), placeholder: "tags, with commas between" });
+            tags.addEventListener("input", () => {
+                photo.tags = tags.value.split(",").map((tag) => tag.trim()).filter(Boolean);
+                savePhotos();
+            });
+            const details = [photo.taken, photo.focal && `${photo.focal} mm`, photo.aperture && `f/${photo.aperture}`, photo.shutter && `${photo.shutter} s`, photo.iso && `ISO ${photo.iso}`].filter(Boolean).join(" · ");
+            const move = (by: number, label: string) => {
+                const button = el("button", { type: "button", textContent: label });
+                button.addEventListener("click", () => {
+                    const other = by < 0 ? item.previousElementSibling : item.nextElementSibling;
+                    if (!other) return;
+                    if (by < 0) other.before(item);
+                    else other.after(item);
+                    reorder();
+                });
+                return button;
+            };
+            const remove = el("button", { type: "button", textContent: "remove" });
+            remove.addEventListener("click", async () => {
+                // Removing deletes the picture's file, so it takes a second press.
+                if (remove.textContent === "remove") {
+                    remove.textContent = "delete this picture?";
+                    return;
+                }
+                try {
+                    await api("/api/photos/remove", { file: photo.file });
+                    photos = photos.filter((other) => other !== photo);
+                    item.remove();
+                    say("removed");
+                } catch (error) {
+                    fail(error);
+                }
+            });
+            item.append(
+                picture,
+                el("div", { className: "photo-fields" }, field("caption", "caption"), field("album", "album"), tags, el("small", {}, details || "no date or exposure in this file")),
+                el("div", { className: "photo-buttons" }, move(-1, "earlier"), move(1, "later"), remove),
+            );
+            return item;
+        }),
+    );
+}
+
+photoList.addEventListener("dragover", (event) => {
+    const moving = photoList.querySelector(".moving");
+    const over = (event.target as Element).closest("li");
+    if (!moving || !over || over === moving || over.parentElement !== photoList) return;
+    event.preventDefault();
+    const box = over.getBoundingClientRect();
+    if (event.clientY < box.top + box.height / 2) over.before(moving);
+    else over.after(moving);
+});
+
+async function openPhotos(): Promise<void> {
+    file = undefined;
+    text.hidden = richBox.hidden = $("mode").hidden = $("tools").hidden = true;
+    photosBox.hidden = false;
+    document.body.classList.remove("is-rich");
+    photos = (await api<{ photos: PhotoEntry[] }>("/api/photos")).photos;
+    showPhotos();
+    point(PHOTOS, "/photos/");
+}
+
+$("add-photos").addEventListener("click", () => $<HTMLInputElement>("photo-files").click());
+$<HTMLInputElement>("photo-files").addEventListener("change", async (event) => {
+    const input = event.target as HTMLInputElement;
+    const picked = [...(input.files ?? [])];
+    input.value = "";
+    let done = 0;
+    for (const picture of picked) {
+        say(`adding ${++done} of ${picked.length}`);
+        try {
+            photos.push(await api<PhotoEntry>(`/api/photos/upload?name=${encodeURIComponent(picture.name)}`, undefined, picture));
+        } catch (error) {
+            fail(error);
+            break;
+        }
+    }
+    showPhotos();
+    if (done === picked.length) say("saved");
 });
 
 // ---- switching views ----

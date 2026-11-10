@@ -1,0 +1,114 @@
+/* /photos/ */
+
+.photo-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 1.1rem;
+    margin: 0 0 var(--line);
+}
+
+.photo-tags button {
+    border: 0;
+    padding: 0;
+    background: none;
+    font: inherit;
+    color: var(--muted);
+    cursor: pointer;
+}
+
+.photo-tags button:hover {
+    color: var(--ink);
+}
+
+.photo-tags button[aria-pressed="true"] {
+    color: var(--ink);
+    text-decoration: underline;
+    text-decoration-color: var(--accent);
+    text-decoration-thickness: 0.125rem;
+    text-underline-offset: 0.3em;
+}
+
+.album + .album {
+    margin-top: calc(var(--line) * 2);
+}
+
+.album h2 {
+    margin-top: 0;
+}
+
+/* Columns, so each picture keeps its own shape. */
+.photo-grid {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    columns: 3 18rem;
+    column-gap: 0.75rem;
+}
+
+.photo-grid li {
+    break-inside: avoid;
+    margin: 0 0 0.75rem;
+}
+
+.photo-grid a {
+    display: block;
+    border-radius: var(--radius);
+    overflow: hidden;
+    background: var(--surface);
+}
+
+.photo-grid img {
+    display: block;
+    width: 100%;
+    height: auto;
+    transition: scale 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.photo-grid a:hover img {
+    scale: 1.02;
+}
+
+.photo-view {
+    max-width: min(96vw, 110rem);
+    max-height: 96vh;
+    border: 0;
+    padding: 0;
+    background: none;
+    color: var(--ink);
+    text-align: center;
+}
+
+.photo-view::backdrop {
+    background: oklch(0.1 0.02 300 / 0.92);
+}
+
+.photo-view img {
+    display: block;
+    max-width: 100%;
+    max-height: 84vh;
+    margin: 0 auto;
+    border-radius: var(--radius);
+}
+
+.photo-view p {
+    margin: 0.6rem 0 0;
+}
+
+.photo-view p:empty {
+    display: none;
+}
+
+.photo-view button {
+    margin-top: 0.6rem;
+    border: 0;
+    background: none;
+    font: inherit;
+    color: var(--muted);
+    cursor: pointer;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .photo-grid img {
+        transition: none;
+    }
+}

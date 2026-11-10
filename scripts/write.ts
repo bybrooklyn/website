@@ -16,9 +16,11 @@
 // The page itself is scripts/editor/.
 
 import { $ } from "bun";
-import { mkdir, readdir } from "node:fs/promises";
+import { mkdir, readdir, unlink } from "node:fs/promises";
 import { dirname, extname, join, relative, resolve } from "node:path";
+import sharp from "sharp";
 import { themeStyle } from "../src/lib/color";
+import { readExif } from "./editor/exif";
 
 const root = resolve(new URL("..", import.meta.url).pathname);
 const args = process.argv.slice(2);
@@ -73,6 +75,7 @@ async function files() {
         files: await Promise.all((await listMdx(where)).map((name) => entry(where, name))),
     });
     return [
+        { label: "photos", files: [{ path: PHOTOS, label: "all photos", draft: false, route: "/photos/" }] },
         await folder("posts", "src/content/blog"),
         {
             label: "pages",
@@ -84,6 +87,67 @@ async function files() {
         },
         await folder("projects", "src/content/projects"),
     ];
+}
+
+// ---- photographs ----
+
+const PHOTOS = "src/data/photos.json";
+const PHOTO_FOLDER = "src/assets/photos";
+
+interface PhotoEntry {
+    file: string;
+    caption?: string;
+    album?: string;
+    tags?: string[];
+    taken?: string;
+    focal?: number;
+    aperture?: number;
+    shutter?: string;
+    iso?: number;
+}
+
+const readPhotos = async (): Promise<PhotoEntry[]> => ((await Bun.file(at(PHOTOS)).json()) as { photos: PhotoEntry[] }).photos;
+const writePhotos = (photos: PhotoEntry[]) => Bun.write(at(PHOTOS), `${JSON.stringify({ photos }, null, 4)}\n`);
+
+/**
+ * Take an uploaded picture: note the date and exposure it carries, then save
+ * it upright, at most 3000 px on its long edge, with nothing embedded in it.
+ */
+async function addPhoto(name: string, bytes: ArrayBuffer): Promise<PhotoEntry> {
+    const picture = sharp(bytes, { failOn: "none" });
+    const shot = readExif((await picture.metadata()).exif);
+    const base = name.toLowerCase().replace(/\.\w+$/, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "photo";
+    await mkdir(at(PHOTO_FOLDER), { recursive: true });
+    let file = `${base}.jpg`;
+    for (let copy = 2; await exists(`${PHOTO_FOLDER}/${file}`); copy++) file = `${base}-${copy}.jpg`;
+    await picture
+        .rotate()
+        .resize({ width: 3000, height: 3000, fit: "inside", withoutEnlargement: true })
+        .jpeg({ quality: 88, mozjpeg: true })
+        .toFile(at(`${PHOTO_FOLDER}/${file}`));
+    const entry: PhotoEntry = { file, ...shot };
+    await writePhotos([...(await readPhotos()), entry]);
+    return entry;
+}
+
+/** Keep only the fields a photo may have, for photos that are really there. */
+async function savePhotos(wanted: PhotoEntry[]): Promise<void> {
+    const present = new Map((await readPhotos()).map((photo) => [photo.file, photo]));
+    const text = (value: unknown) => (typeof value === "string" && value.trim() ? value.trim() : undefined);
+    const kept = wanted.flatMap((photo) => {
+        const original = present.get(photo.file);
+        if (!original || !present.delete(photo.file)) return [];
+        const tags = Array.isArray(photo.tags) ? [...new Set(photo.tags.map((tag) => String(tag).trim().toLowerCase()).filter(Boolean))] : [];
+        return [{ ...original, caption: text(photo.caption), album: text(photo.album), tags: tags.length > 0 ? tags : undefined }];
+    });
+    // Anything the page left out stays, at the end, so a photo is only ever removed on purpose.
+    await writePhotos([...kept, ...present.values()]);
+}
+
+async function removePhoto(file: string): Promise<void> {
+    if (!/^[\w.-]+$/.test(file)) throw new Error("That is not a photo.");
+    await writePhotos((await readPhotos()).filter((photo) => photo.file !== file));
+    await unlink(at(`${PHOTO_FOLDER}/${file}`)).catch(() => undefined);
 }
 
 async function newPost(title: string): Promise<string> {
@@ -254,6 +318,15 @@ const page = `<!doctype html>
     <div id="panes">
         <div id="write">
             <textarea id="text" spellcheck="true" aria-label="The file"></textarea>
+            <div id="photos" hidden>
+                <p class="photos-bar">
+                    <button type="button" id="add-photos">add photos</button>
+                    <input id="photo-files" type="file" accept="image/*" multiple hidden>
+                    <span>drag a picture to move it</span>
+                </p>
+                <datalist id="albums"></datalist>
+                <ol id="photo-list"></ol>
+            </div>
             <div id="rich" hidden>
                 <textarea id="front" spellcheck="false" rows="1" aria-label="Frontmatter"></textarea>
                 <div id="body" class="prose" contenteditable="true" spellcheck="true" aria-label="The page's text"></div>
@@ -307,9 +380,15 @@ async function handle(request: Request): Promise<Response> {
         const file = src.startsWith("/") ? resolve(at("public"), `.${src}`) : resolve(dirname(at(query("file"))), src);
         const inside = [at("src"), at("public")].some((folder) => !relative(folder, file).startsWith(".."));
         const type = TYPES[extname(file).toLowerCase()];
+        if (inside && type && query("w")) {
+            // a small copy, for lists of pictures
+            const small = await sharp(file).resize({ width: Number(query("w")) || 400, withoutEnlargement: true }).webp({ quality: 70 }).toBuffer();
+            return new Response(small, { headers: { "content-type": "image/webp", "cache-control": "max-age=3600" } });
+        }
         return inside && type && (await Bun.file(file).exists()) ? new Response(Bun.file(file), { headers: { "content-type": type } }) : json({ error: "No such picture." }, 404);
     }
     if (url.pathname === "/api/files") return json(await files());
+    if (url.pathname === "/api/photos" && request.method === "GET") return json({ photos: await readPhotos() });
     if (url.pathname === "/api/file") {
         const path = query("path");
         if (!editable(path) || !(await exists(path))) return json({ error: "That file is not one the editor opens." }, 404);
@@ -330,7 +409,23 @@ async function handle(request: Request): Promise<Response> {
         return json({ url: relative(dirname(at(path)), at(target)) });
     }
 
+    if (url.pathname === "/api/photos/upload") {
+        try {
+            return json(await addPhoto(query("name"), await request.arrayBuffer()));
+        } catch {
+            return json({ error: `${query("name")} could not be read as a picture. JPEG, PNG, WebP and AVIF work; HEIC and camera RAW files need exporting first.` }, 400);
+        }
+    }
+    if (url.pathname === "/api/photos") {
+        await savePhotos(((await request.json()) as { photos: PhotoEntry[] }).photos ?? []);
+        return json({ ok: true });
+    }
+
     const body = (await request.json()) as Record<string, string>;
+    if (url.pathname === "/api/photos/remove") {
+        await removePhoto(body.file ?? "");
+        return json({ ok: true });
+    }
     if (url.pathname === "/api/save") {
         const { path = "", content = "" } = body;
         if (!editable(path) || !(await exists(path))) return json({ error: "That file is not one the editor opens." }, 404);

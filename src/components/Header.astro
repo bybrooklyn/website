@@ -3,6 +3,7 @@ import Flags from "./Flags.astro";
 import { nav, site } from "../data/site";
 import { getCollection } from "astro:content";
 import { showDrafts } from "../lib/drafts";
+import { photos } from "../lib/photos";
 import { getPosts } from "../lib/posts";
 import { getResume } from "../lib/resume";
 
@@ -15,6 +16,7 @@ const hidden = new Set([
     ...(hasResume ? [] : ["/resume/"]),
     ...(hasAbout ? [] : ["/about/"]),
     ...(hasPosts ? [] : ["/blog/"]),
+    ...(photos.length > 0 ? [] : ["/photos/"]),
 ]);
 const links = nav.filter((item) => !hidden.has(item.href));
 ---

@@ -21,6 +21,7 @@ Other scripts: `langs` (language bar), `projects` (facts from GitHub), `resume:p
 | Projects | `src/content/projects/` |
 | About, setup | `src/content/pages/` |
 | Resume | `src/content/resume/resume.mdx` |
+| Photos | `src/data/photos.json` and `src/assets/photos/`, arranged in the editor |
 | Intro, contact, nav | `src/data/site.ts` |
 | Colors | `src/data/theme.ts` |
 | Typefaces | `src/styles/fonts.css` |

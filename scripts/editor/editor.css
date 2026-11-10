@@ -362,6 +362,85 @@ main {
     color: var(--muted);
 }
 
+/* ---- photographs ---- */
+
+#photos {
+    max-width: 46rem;
+    margin: 0 auto;
+}
+
+.photos-bar {
+    display: flex;
+    align-items: baseline;
+    gap: 1.25rem;
+    margin: 0 0 1.5rem;
+    font-size: 0.9rem;
+    color: var(--muted);
+}
+
+#add-photos {
+    color: var(--accent);
+}
+
+#photo-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+#photo-list li {
+    display: grid;
+    grid-template-columns: 9rem minmax(0, 1fr) auto;
+    gap: 1rem;
+    align-items: start;
+    padding: 0.75rem 0;
+    border-top: 1px solid var(--rule);
+}
+
+#photo-list li.moving {
+    opacity: 0.4;
+}
+
+#photo-list img {
+    display: block;
+    width: 100%;
+    height: auto;
+    border-radius: 0.4rem;
+    cursor: grab;
+}
+
+.photo-fields {
+    display: grid;
+    gap: 0.2rem;
+}
+
+.photo-fields input {
+    width: 100%;
+    border-bottom: 1px solid transparent;
+}
+
+.photo-fields input:hover,
+.photo-fields input:focus {
+    border-bottom-color: var(--rule);
+}
+
+.photo-fields small {
+    font: 0.72rem var(--font-code);
+    color: var(--muted);
+}
+
+.photo-buttons {
+    display: grid;
+    gap: 0.2rem;
+    justify-items: end;
+    font-size: 0.85rem;
+    color: var(--muted);
+}
+
+.photo-buttons button:hover {
+    color: var(--ink);
+}
+
 /* ---- publishing ---- */
 
 dialog {
