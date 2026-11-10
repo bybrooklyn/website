@@ -55,6 +55,13 @@
         "updated": "2026-09-09",
         "public": true
     },
+    "torrens-serif": {
+        "license": "OFL-1.1",
+        "stars": 0,
+        "release": "v1.0",
+        "updated": "2026-11-10",
+        "public": true
+    },
     "yqt": {
         "license": "GPL-3.0",
         "stars": 0,
