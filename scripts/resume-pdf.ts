@@ -21,9 +21,8 @@ async function isDraft(version: string): Promise<boolean> {
     return /^draft:\s*true\s*$/m.test(source);
 }
 
-// Build once into a folder of its own, with drafts included and the last name
-// written out (on the site it stays hidden until clicked; see LastName.astro).
-await $`bunx astro build --outDir ${built}`.cwd(root).env({ ...process.env, SHOW_DRAFTS: "1", PRINT_NAME: "1" }).quiet();
+// Build once into a folder of its own, with drafts included.
+await $`bunx astro build --outDir ${built}`.cwd(root).env({ ...process.env, SHOW_DRAFTS: "1" }).quiet();
 
 const server = Bun.serve({
     port: 0,

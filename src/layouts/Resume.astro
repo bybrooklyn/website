@@ -2,7 +2,6 @@
 import "../styles/resume.css";
 import Base from "./Base.astro";
 import { render } from "astro:content";
-import LastName from "../components/LastName.astro";
 import { site } from "../data/site";
 import { resumePdf, type Resume } from "../lib/resume";
 
@@ -19,7 +18,7 @@ const plain = (url: string) => url.replace(/^https?:\/\//, "");
     <article class="resume">
         <header class="resume-head">
             <div>
-                <h1>{site.name} <LastName /></h1>
+                <h1>{site.name} {site.lastName}</h1>
                 <p class="resume-contact">
                     <span>{site.pronouns}</span>
                     <span>{site.location}</span>

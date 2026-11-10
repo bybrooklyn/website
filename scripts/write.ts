@@ -204,16 +204,6 @@ async function publish(path: string): Promise<void> {
     }
 
     if (changed) {
-        // The repository is public and must not carry my last name, which a
-        // commit would if git is set up with an email address that contains it.
-        const email = (await $`git config user.email`.cwd(root).nothrow().text()).trim().toLowerCase();
-        const secret = /lastName\s*=\s*"([^"]+)"/.exec(await Bun.file(at("src/data/private.ts")).text().catch(() => ""))?.[1];
-        if (secret && email.includes(secret.toLowerCase())) {
-            console.log(`\nNot committing: git would sign this commit as ${email}, which has your last name in it.`);
-            console.log("Set a different address for this repository first, for example:");
-            console.log("  git config user.email 211590674+bybrooklyn@users.noreply.github.com");
-            return;
-        }
         const message = ask("Commit message:", mode === "blog" ? `Publish ${path.split("/").pop()?.replace(/\.mdx?$/, "")}` : `Edit ${path.split("/").pop()}`);
         await $`git add -A`.cwd(root);
         await $`git commit -m ${message}`.cwd(root);

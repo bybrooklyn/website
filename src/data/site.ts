@@ -1,5 +1,7 @@
 export const site = {
     name: "Charlotte",
+    /** Shown on the resume. */
+    lastName: "Halmstad",
     pronouns: "she/her",
     location: "New Jersey, USA",
     description: "Charlotte's website: Playmatter, other projects, and a blog.",

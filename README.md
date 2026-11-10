@@ -1,6 +1,6 @@
 # bybrooklyn.dev
 
-Charlotte's website: a homepage, a blog and a list of projects. Built with Astro and Bun, hosted on Cloudflare Pages. No analytics, and very little JavaScript: the direction of the page transition, the place marker in a page's contents, the email link in the footer, the last name on the resume, and any demo a post brings with it.
+Charlotte's website: a homepage, a blog and a list of projects. Built with Astro and Bun, hosted on Cloudflare Pages. No analytics, and very little JavaScript: the direction of the page transition, the place marker in a page's contents, the email link in the footer, and any demo a post brings with it.
 
 ## Working on it
 
@@ -71,7 +71,7 @@ Each project is an `.mdx` file in `src/content/projects/`: `name`, `summary`, `l
 
 ## Resume
 
-One resume, written in `src/content/resume/resume.mdx` and served at `/resume/`. The name and contact line come from `src/data/site.ts`. The last name is kept out of the web page until a visitor clicks it (`src/components/LastName.astro`); the PDF shows it in full.
+One resume, written in `src/content/resume/resume.mdx` and served at `/resume/`. The name and contact line come from `src/data/site.ts`.
 
 The web page is the full resume. Anything inside `<Web>...</Web>` is left out of the PDF.
 

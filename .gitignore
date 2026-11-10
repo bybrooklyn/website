@@ -15,7 +15,6 @@ dist
 resume-preview
 .resume-build
 
-# mine, and not ready to be public: the resume, the about page, my last name
+# mine, and not ready to be public: the resume and the about page
 src/content/resume/resume.mdx
 src/content/pages/about.mdx
-src/data/private.ts

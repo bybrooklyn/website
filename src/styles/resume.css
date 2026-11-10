@@ -55,51 +55,6 @@
     color: var(--muted);
 }
 
-/* The last name, until it is asked for. See LastName.astro. */
-.last-name {
-    display: inline-block;
-    padding: 0;
-    border: 0;
-    background: none;
-    font: inherit;
-    letter-spacing: inherit;
-    color: inherit;
-    cursor: pointer;
-    filter: blur(0.2em);
-    opacity: 0.75;
-    transition:
-        filter 0.08s linear,
-        opacity 0.08s linear;
-    user-select: none;
-}
-
-.last-name:hover,
-.last-name:focus-visible {
-    filter: blur(0.11em);
-    opacity: 0.9;
-}
-
-.last-name:focus-visible {
-    outline: 0.125rem solid var(--accent);
-    outline-offset: 0.15em;
-    border-radius: 0.2em;
-}
-
-/* Clicked: the real name is in place and comes into focus. */
-.last-name.shown:focus {
-    outline: none;
-}
-
-.last-name.shown {
-    filter: none;
-    opacity: 1;
-    cursor: auto;
-    user-select: auto;
-    transition:
-        filter 0.25s ease-out,
-        opacity 0.25s ease-out;
-}
-
 .resume-summary {
     max-width: 56rem;
     margin: calc(var(--line) * 1.25) 0 0;
