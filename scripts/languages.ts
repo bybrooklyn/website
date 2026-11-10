@@ -1,5 +1,9 @@
-// Sums GitHub's per-language byte counts across my own (non-fork) repos and
-// writes src/data/languages.json. Run by hand with `bun run langs`; the site
+// Works out how much I use each language across my own (non-fork) repos and
+// writes src/data/languages.json.
+//
+// Bytes alone let one enormous project decide the answer, so a language's
+// share is half "how much of the code is in it" and half "how many of the
+// projects are mainly written in it". Run by hand with `bun run langs`; the site
 // build only reads the committed JSON and never touches the network.
 //
 // Needs the GitHub CLI (`gh`) to be logged in. Pass --public-only to leave
@@ -46,18 +50,31 @@ const wanted = repos.filter(
 );
 
 const totals = new Map<string, number>();
+/** How many repos have each language as their main one. */
+const mains = new Map<string, number>();
 
 for (const repo of wanted) {
     const bytes = (await $`gh api repos/${OWNER}/${repo.name}/languages`.json()) as Record<string, number>;
-    for (const [language, count] of Object.entries(bytes)) {
-        if (IGNORE_LANGUAGES.includes(language)) continue;
+    const counted = Object.entries(bytes).filter(([language]) => !IGNORE_LANGUAGES.includes(language));
+    for (const [language, count] of counted) {
         totals.set(language, (totals.get(language) ?? 0) + count);
     }
+    const main = counted.sort((a, b) => b[1] - a[1])[0]?.[0];
+    if (main) mains.set(main, (mains.get(main) ?? 0) + 1);
 }
 
+const allBytes = [...totals.values()].reduce((sum, count) => sum + count, 0);
+const allMains = [...mains.values()].reduce((sum, count) => sum + count, 0);
+
 const languages = [...totals.entries()]
-    .map(([name, bytes]) => ({ name, bytes }))
-    .sort((a, b) => b.bytes - a.bytes);
+    .map(([name, bytes]) => ({
+        name,
+        bytes,
+        repos: mains.get(name) ?? 0,
+        // Half by code, half by projects. Shares add up to 1.
+        share: Number((0.5 * (bytes / allBytes) + 0.5 * ((mains.get(name) ?? 0) / allMains)).toFixed(4)),
+    }))
+    .sort((a, b) => b.share - a.share);
 
 const output = {
     updated: new Date().toISOString().slice(0, 10),
@@ -67,8 +84,8 @@ const output = {
 
 await Bun.write(new URL("../src/data/languages.json", import.meta.url), `${JSON.stringify(output, null, 4)}\n`);
 
-const total = languages.reduce((sum, language) => sum + language.bytes, 0);
 console.log(`${wanted.length} repos, ${languages.length} languages`);
 for (const language of languages.slice(0, 12)) {
-    console.log(`${((language.bytes / total) * 100).toFixed(1).padStart(5)}%  ${language.name}`);
+    const byBytes = ((language.bytes / allBytes) * 100).toFixed(1);
+    console.log(`${(language.share * 100).toFixed(1).padStart(5)}%  ${language.name}  (${byBytes}% of bytes, main language of ${language.repos})`);
 }

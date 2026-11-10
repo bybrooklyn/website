@@ -352,24 +352,27 @@ h1 + .about {
     margin-bottom: 0;
 }
 
-/* Two small flags beside the site name. Rest on one for a moment to see what it is. */
+/* The small flag beside the site name. Rest on it for a moment to see what it is. */
 .site-id {
     display: flex;
     align-items: center;
     gap: 0.75rem;
 }
 
-.flags {
-    display: flex;
-    gap: 0.35rem;
-}
-
 .flag {
     position: relative;
     display: block;
-    width: 1.5rem;
-    height: 0.95rem;
-    border-radius: 0.15rem;
+    width: 2rem;
+    height: 1.2rem;
+    border-radius: 0.2rem;
+    /* five stripes, each fading from the trans flag's color to the lesbian flag's */
+    background:
+        linear-gradient(90deg, #5bcefa, #d52d00) 0 0 / 100% 20%,
+        linear-gradient(90deg, #f5a9b8, #ff9a56) 0 25% / 100% 20%,
+        linear-gradient(90deg, #fff, #fff) 0 50% / 100% 20%,
+        linear-gradient(90deg, #f5a9b8, #d362a4) 0 75% / 100% 20%,
+        linear-gradient(90deg, #5bcefa, #a30262) 0 100% / 100% 20%;
+    background-repeat: no-repeat;
 }
 
 .flag:focus-visible {
@@ -406,13 +409,6 @@ h1 + .about {
     transition-delay: 0.5s;
 }
 
-.flag.trans {
-    background: linear-gradient(#5bcefa 0 20%, #f5a9b8 20% 40%, #fff 40% 60%, #f5a9b8 60% 80%, #5bcefa 80%);
-}
-
-.flag.lesbian {
-    background: linear-gradient(#d52d00 0 20%, #ff9a56 20% 40%, #fff 40% 60%, #d362a4 60% 80%, #a30262 80%);
-}
 
 /* ---- language bar ---- */
 

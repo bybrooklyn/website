@@ -1,6 +1,7 @@
 ---
 // The languages I write, as one horizontal bar: a flat-colored segment per
-// language, as wide as its share of the bytes, with a key underneath.
+// language, as wide as its share (see scripts/languages.ts), with a key
+// underneath.
 
 import data from "../data/languages.json";
 import { languageColors, otherLanguageColor } from "../data/theme";
@@ -9,21 +10,18 @@ import { css } from "../lib/color";
 /** Anything smaller than this is swept into "other". */
 const SMALLEST = 0.02;
 
-const total = data.languages.reduce((sum, language) => sum + language.bytes, 0);
-const share = (bytes: number) => bytes / total;
-
-const named = data.languages.filter((language) => share(language.bytes) >= SMALLEST && language.name in languageColors);
+const named = data.languages.filter((language) => language.share >= SMALLEST && language.name in languageColors);
 const rest = data.languages.filter((language) => !named.includes(language));
 
 const rows = named.map((language) => ({
     name: language.name,
-    share: share(language.bytes),
+    share: language.share,
     color: css(languageColors[language.name]!),
 }));
 if (rest.length > 0) {
     rows.push({
         name: "other",
-        share: rest.reduce((sum, language) => sum + share(language.bytes), 0),
+        share: rest.reduce((sum, language) => sum + language.share, 0),
         color: css(otherLanguageColor),
     });
 }
