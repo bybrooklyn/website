@@ -11,7 +11,7 @@
  * much. scripts/fraunces-soft.py is how those two files are made.
  * To try Torrens Serif for everything, point --font-text at it too.
  *
- * The files named here are trimmed copies: Latin only, weights 400 to 700.
+ * The files named here are trimmed copies: Latin only, every weight kept.
  * The complete fonts are in assets/fonts/full/, and scripts/trim-fonts.py
  * makes these from them. "Torrens Serif Complete" is the whole of the
  * headline font, fetched only by the page that shows it off.
@@ -36,7 +36,7 @@
 @font-face {
     font-family: "Torrens Serif";
     src: url("../assets/fonts/torrens-serif.woff2") format("woff2");
-    font-weight: 400 700;
+    font-weight: 100 900;
     font-style: normal;
     font-display: swap;
 }
@@ -44,7 +44,7 @@
 @font-face {
     font-family: "Torrens Serif";
     src: url("../assets/fonts/torrens-serif-italic.woff2") format("woff2");
-    font-weight: 400 700;
+    font-weight: 100 900;
     font-style: italic;
     font-display: swap;
 }
@@ -52,7 +52,7 @@
 @font-face {
     font-family: "Fraunces Soft";
     src: url("../assets/fonts/fraunces-soft.woff2") format("woff2");
-    font-weight: 400 700;
+    font-weight: 100 900;
     font-style: normal;
     font-display: swap;
 }
@@ -60,7 +60,7 @@
 @font-face {
     font-family: "Fraunces Soft";
     src: url("../assets/fonts/fraunces-soft-italic.woff2") format("woff2");
-    font-weight: 400 700;
+    font-weight: 100 900;
     font-style: italic;
     font-display: swap;
 }
@@ -68,7 +68,7 @@
 @font-face {
     font-family: "Drafting Mono";
     src: url("../assets/fonts/drafting-mono.woff2") format("woff2");
-    font-weight: 400 700;
+    font-weight: 100 700;
     font-style: normal;
     font-display: swap;
 }
