@@ -104,6 +104,13 @@ import "../styles/timeline.css";
             return direction > 0 ? offset <= 2 && offset > -stage.offsetHeight * 0.6 : offset >= -2 && offset < innerHeight * 0.5;
         };
 
+        /** True if scrolling this far would carry the stage across the line while there are moments left that way. */
+        const arriving = (direction: number, distance: number): boolean => {
+            if (direction > 0 ? current >= last : current <= 0) return false;
+            const offset = (top() - line()) * direction;
+            return offset > 2 && offset <= distance;
+        };
+
         /** Move one moment, unless the last move is still finishing. */
         const step = (direction: number) => {
             if (Math.abs(top() - line()) > 1) rest();
@@ -132,6 +139,11 @@ import "../styles/timeline.css";
                 if (holds(Math.sign(event.deltaY))) {
                     event.preventDefault();
                     if (fresh) step(Math.sign(event.deltaY));
+                    swallowing = true;
+                } else if (arriving(Math.sign(event.deltaY), size + 8)) {
+                    // Stop on the line, not past it: letting the page overshoot and pulling it back shows.
+                    event.preventDefault();
+                    rest();
                     swallowing = true;
                 } else if (swallowing) event.preventDefault();
             },
@@ -207,9 +219,13 @@ import "../styles/timeline.css";
             const forward = ["ArrowDown", "PageDown"].includes(event.key) || (event.key === " " && !event.shiftKey);
             const back = ["ArrowUp", "PageUp"].includes(event.key) || (event.key === " " && event.shiftKey);
             if (!forward && !back) return;
+            const reach = event.key.startsWith("Arrow") ? 60 : innerHeight;
             if (holds(forward ? 1 : -1)) {
                 event.preventDefault();
                 step(forward ? 1 : -1);
+            } else if (arriving(forward ? 1 : -1, reach)) {
+                event.preventDefault();
+                rest();
             }
         });
 
