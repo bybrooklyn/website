@@ -377,30 +377,21 @@
 }
 
 /*
- * Stepped through: the stage holds still in the window while the script
- * moves it from one moment to the next. The space under it is only there to
- * give the scrollbar something to travel through.
+ * Stepped through: one moment shows at a time and the script moves between
+ * them. The section is no taller than the stage, so the text before and
+ * after it stays where it is.
  */
 .timeline.live {
-    position: relative;
-    margin-block: calc(var(--line) * 1.5) var(--line);
-}
-
-.timeline.live::after {
-    content: "";
-    display: block;
-    height: calc(var(--steps) * 30vh);
+    margin-block: 0 var(--line);
 }
 
 .timeline.live .timeline-stage {
-    position: sticky;
-    top: var(--pin, 10svh);
     display: grid;
     grid-template-columns: 1.5rem minmax(0, 1fr);
     grid-template-rows: auto auto;
     column-gap: clamp(1.25rem, 4vw, 2.5rem);
-    row-gap: var(--line);
-    padding-block: var(--line);
+    row-gap: calc(var(--line) * 0.75);
+    padding-block: calc(var(--line) * 0.5);
 }
 
 .timeline.live .timeline-rail {
@@ -515,13 +506,7 @@
 }
 
 @media print {
-    .timeline.live::after {
-        display: none;
-    }
-
     .timeline.live .timeline-stage {
-        position: static;
-        height: auto;
         display: block;
     }
 
