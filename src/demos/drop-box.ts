@@ -6,20 +6,23 @@
 
 import Matter from "matter-js";
 
-const { Bodies, Body, Composite, Engine, Mouse, MouseConstraint, Query, Runner, Sleeping } = Matter;
+const { Bodies, Body, Composite, Engine, Events, Mouse, MouseConstraint, Query, Runner, Sleeping } = Matter;
 
 const SIZE = 34;
 const MOST = 60;
 
 class DropBox extends HTMLElement {
     #canvas = document.createElement("canvas");
-    #engine = Engine.create({ enableSleeping: true });
+    // Extra solver passes keep stacked and dragged blocks from sinking into each other or the floor.
+    #engine = Engine.create({ enableSleeping: true, positionIterations: 14, velocityIterations: 10 });
+    #mouse?: Matter.Mouse;
     #runner = Runner.create();
     #walls: Matter.Body[] = [];
     #frame = 0;
     #visible = false;
     #allowed = !matchMedia("(prefers-reduced-motion: reduce)").matches;
     #holding = false;
+    #near = false;
     #palette?: { floor: string; fill: string; edge: string };
     #watcher?: IntersectionObserver;
     #resizer?: ResizeObserver;
@@ -30,11 +33,36 @@ class DropBox extends HTMLElement {
         this.append(this.#canvas);
 
         const mouse = Mouse.create(this.#canvas);
+        this.#mouse = mouse;
         // Let the page scroll when the pointer is over the demo.
         const wheel = (mouse as unknown as { mousewheel: EventListener }).mousewheel;
         this.#canvas.removeEventListener("wheel", wheel);
-        const grab = MouseConstraint.create(this.#engine, { mouse, constraint: { stiffness: 0.2 } });
+        // A soft hold: firm enough to carry a block, not so firm it can be forced through the floor.
+        const grab = MouseConstraint.create(this.#engine, { mouse, constraint: { stiffness: 0.08, damping: 0.15 } });
         Composite.add(this.#engine.world, grab);
+
+        // However hard something is pushed, it stays inside the box.
+        Events.on(this.#engine, "afterUpdate", () => {
+            const width = this.#canvas.clientWidth;
+            const floor = this.#canvas.clientHeight - 6;
+            for (const body of Composite.allBodies(this.#engine.world)) {
+                if (body.isStatic) continue;
+                const { min, max } = body.bounds;
+                const lift = max.y - floor;
+                const left = -min.x;
+                const right = max.x - width;
+                if (lift > 0.5 || left > 0.5 || right > 0.5) {
+                    Body.setPosition(body, {
+                        x: body.position.x + Math.max(left, 0) - Math.max(right, 0),
+                        y: body.position.y - Math.max(lift, 0),
+                    });
+                    Body.setVelocity(body, {
+                        x: left > 0.5 || right > 0.5 ? 0 : body.velocity.x,
+                        y: lift > 0.5 ? Math.min(body.velocity.y, 0) : body.velocity.y,
+                    });
+                }
+            }
+        });
 
         // A press that lands on nothing drops a new block there. This listens to
         // the canvas directly: the physics library only reports presses while it
@@ -43,8 +71,20 @@ class DropBox extends HTMLElement {
             const blocks = Composite.allBodies(this.#engine.world).filter((body) => !body.isStatic);
             const point = { x: event.offsetX, y: event.offsetY };
             if (Query.point(blocks, point).length === 0) this.#drop(point.x, point.y);
+            // Keep hearing about this pointer even if it leaves the box, so a
+            // block being carried is not left hanging there.
+            this.#canvas.setPointerCapture(event.pointerId);
             this.#holding = true;
             this.#start();
+        });
+        // The library only notices a press while it is running, so have it
+        // running by the time the pointer is over the box.
+        this.#canvas.addEventListener("pointerenter", () => {
+            this.#near = true;
+            this.#start();
+        });
+        this.#canvas.addEventListener("pointerleave", () => {
+            this.#near = false;
         });
         addEventListener("pointerup", this.#release);
         addEventListener("pointercancel", this.#release);
@@ -70,6 +110,8 @@ class DropBox extends HTMLElement {
 
     #release = (): void => {
         this.#holding = false;
+        // Let go, wherever the pointer was when the button came up.
+        if (this.#mouse) this.#mouse.button = -1;
     };
 
     disconnectedCallback(): void {
@@ -97,6 +139,9 @@ class DropBox extends HTMLElement {
         const scale = window.devicePixelRatio || 1;
         this.#canvas.width = Math.round(width * scale);
         this.#canvas.height = Math.round(height * scale);
+        // The canvas has more pixels than its size on screen; the library has
+        // to be told, or it looks for the pointer in the wrong place.
+        if (this.#mouse) Mouse.setScale(this.#mouse, { x: 1 / scale, y: 1 / scale });
 
         Composite.remove(this.#engine.world, this.#walls);
         const thick = 80;
@@ -118,7 +163,7 @@ class DropBox extends HTMLElement {
             this.#draw();
             // Once every block has come to rest there is nothing left to animate.
             const blocks = Composite.allBodies(this.#engine.world).filter((body) => !body.isStatic);
-            if (blocks.every((body) => body.isSleeping) && !this.#holding) {
+            if (blocks.every((body) => body.isSleeping) && !this.#holding && !this.#near) {
                 this.#stop();
                 return;
             }
