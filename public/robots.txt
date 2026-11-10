@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://bybrooklyn.dev/sitemap-index.xml

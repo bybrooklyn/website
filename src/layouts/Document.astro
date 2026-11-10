@@ -9,6 +9,8 @@ import "../styles/opened.css";
 import "../styles/motion.css";
 
 import { getImage } from "astro:assets";
+import headFont from "../assets/fonts/torrens-serif.woff2?url";
+import textFont from "../assets/fonts/fraunces-soft.woff2?url";
 import { site } from "../data/site";
 import { theme, type AccentName } from "../data/theme";
 import { hex, themeStyle } from "../lib/color";
@@ -48,6 +50,11 @@ const hasPosts = (await getPosts()).length > 0;
         <link rel="canonical" href={canonical} />
         {unlisted && <meta name="robots" content="noindex" />}
         <meta name="color-scheme" content="dark" />
+        {/* The two typefaces every page needs, fetched before the stylesheet asks for them. */}
+        <link rel="preload" href={headFont} as="font" type="font/woff2" crossorigin />
+        <link rel="preload" href={textFont} as="font" type="font/woff2" crossorigin />
+        {/* There is no icon; this stops browsers asking for one and logging a miss. */}
+        <link rel="icon" href="data:," />
         <meta name="theme-color" content={hex(theme.ground)} />
         {hasPosts && <link rel="alternate" type="application/rss+xml" title={`${site.name}'s blog`} href="/rss.xml" />}
         <meta property="og:title" content={title ?? site.name} />

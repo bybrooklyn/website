@@ -3,9 +3,21 @@
 // language, as wide as its share (see scripts/languages.ts), with a key
 // underneath.
 
+import { siAstro, siGo, siJavascript, siPython, siRust, siSwift, siTypescript } from "simple-icons";
 import data from "../data/languages.json";
 import { languageColors, otherLanguageColor } from "../data/theme";
 import { css } from "../lib/color";
+
+/** Each language's own mark, drawn in the key instead of a dot. */
+const logos: Record<string, string> = {
+    Rust: siRust.path,
+    TypeScript: siTypescript.path,
+    Swift: siSwift.path,
+    JavaScript: siJavascript.path,
+    Python: siPython.path,
+    Go: siGo.path,
+    Astro: siAstro.path,
+};
 
 /** Anything smaller than this is swept into "other". */
 const SMALLEST = 0.02;
@@ -37,7 +49,12 @@ const percent = (value: number) => (value >= 0.1 ? `${Math.round(value * 100)}%`
     <ul class="languages-key">
         {
             rows.map((row) => (
-                <li style={`--color:${row.color}`}>
+                <li class:list={{ plain: !logos[row.name] }} style={`--color:${row.color}`}>
+                    {logos[row.name] && (
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d={logos[row.name]} />
+                        </svg>
+                    )}
                     {row.name}
                     <span class="note">{percent(row.share)}</span>
                 </li>

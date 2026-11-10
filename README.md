@@ -55,13 +55,29 @@ draft: true
 - `draft: true` keeps a post out of production builds and the feed.
 - `##` and `###` headings become the post's table of contents.
 - `Figure` is in `src/components/`. Import it at the top of the post.
-- A post can embed a script-driven demo: write a custom element in `src/demos/` with an `.astro` wrapper like `DropBox.astro`, and import the wrapper. Only posts that use it load it.
+- A post can hold demos and embeds; see "Demos and embeds" below.
 
 `src/content/blog/kitchen-sink.mdx` is a draft that uses everything.
 
 ## How pages open
 
 Home, about, blog, projects, setup and resume are main pages (`src/layouts/Base.astro`). A single post or project opens over the site (`src/layouts/Opened.astro`): the site slides away to a strip on the left that leads back, and the page sits in a lighter panel beside it. The movement is in `src/styles/motion.css`; a few lines of script in `src/layouts/Document.astro` tell it which way to go.
+
+## Demos and embeds
+
+A post or project page can hold interactive things.
+
+- **A frame from elsewhere** (a game on itch.io, a pen, a page of your own):
+
+  ```mdx
+  import Embed from "../../components/Embed.astro";
+
+  <Embed src="https://example.com/thing" title="What it is" ratio="4 / 3" caption="Optional line underneath." />
+  ```
+
+  It loads lazily and is sandboxed: it can run its own scripts and nothing else unless you pass `allow` (for example `allow="fullscreen"`) or extra `sandbox` tokens.
+
+- **A demo of your own**: write a custom element in `src/demos/` and an `.astro` wrapper that imports it in a `<script>`, as `DropBox.astro` and `drop-box.ts` do. Only pages that use the wrapper load its script. `DropBox` is a pile of blocks with real physics (matter-js) and `TypeTester` lets visitors try a typeface.
 
 ## Setup and about
 
@@ -97,8 +113,12 @@ Cloudflare Pages runs `bun run build` and serves `dist/`. `just deploy` checks, 
 
 ## License
 
-The code is MIT licensed; see `LICENSE`. The writing in `src/content/` and the Playmatter images are © Charlotte, all rights reserved.
+The code is under the MIT license; see `LICENSE`. That covers the site's layouts, components, styles and scripts.
+
+My writing, the about page, the resume, my name, pictures of me and the Playmatter media are not part of it and are not licensed for reuse. If you fork this, replace them with your own.
+
+The `LICENSE` file ends with a few requests: don't pretend to be me, don't suggest I endorse what you make, don't put words in my mouth, and don't use this to hurt people. They are requests, not conditions.
 
 Headings are set in Torrens Serif, my cut of [Fraunces](https://github.com/undercasetype/Fraunces) by Undercase Type (Phaedra Charles and Flavia Zimbardi), and text in Fraunces itself; code is in Drafting* Mono by Owen Earl. All three are under the SIL Open Font License (`src/assets/fonts/OFL-*.txt`).
 
-This repository began as a fork of another site and was later rewritten from scratch. Commits before the rewrite remain under the license they were published with (CC BY-SA 4.0).
+This repository began as a fork of another site and was later rewritten from scratch.

@@ -10,6 +10,7 @@ draft: true
 ---
 
 import Figure from "../../components/Figure.astro";
+import Embed from "../../components/Embed.astro";
 import DropBox from "../../demos/DropBox.astro";
 
 The first paragraph runs long enough to wrap, so there is something to judge the spacing by. Here is *emphasis*, **strong text**, a [link](https://playmatter.io), and some `inline code`.
@@ -52,3 +53,7 @@ fn main() {
 <DropBox />
 
 The text carries on after the demo.
+
+## An embed
+
+<Embed src="https://example.com" title="An example page" ratio="16 / 6" caption="Any page can be framed like this. It loads when you scroll near it." />

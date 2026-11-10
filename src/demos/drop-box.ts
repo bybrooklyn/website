@@ -1,64 +1,137 @@
-// <drop-box>: click or tap to drop a block; it falls to the floor and stops.
-// A deliberately small example of a demo a post can embed.
+// <drop-box>: a small pile of blocks with real physics. Click or tap an empty
+// spot to drop another; pick one up and throw it. Blocks stack, tumble and
+// come to rest. It is drawn in the page's own colors.
+//
+// The physics is matter-js, which is only loaded by pages that use this demo.
 
-const GRAVITY = 2400; // px per second squared
-const SIZE = 28;
+import Matter from "matter-js";
 
-interface Box {
-    x: number;
-    y: number;
-    speed: number;
-    resting: boolean;
-}
+const { Bodies, Body, Composite, Engine, Mouse, MouseConstraint, Query, Runner, Sleeping } = Matter;
+
+const SIZE = 34;
+const MOST = 60;
 
 class DropBox extends HTMLElement {
     #canvas = document.createElement("canvas");
-    #boxes: Box[] = [];
+    #engine = Engine.create({ enableSleeping: true });
+    #runner = Runner.create();
+    #walls: Matter.Body[] = [];
     #frame = 0;
-    #last = 0;
+    #visible = false;
+    #allowed = !matchMedia("(prefers-reduced-motion: reduce)").matches;
+    #holding = false;
+    #palette?: { floor: string; fill: string; edge: string };
+    #watcher?: IntersectionObserver;
+    #resizer?: ResizeObserver;
 
     connectedCallback(): void {
-        this.#canvas.style.cssText = "display:block;width:100%;height:14rem;touch-action:manipulation;cursor:pointer";
         this.#canvas.setAttribute("role", "img");
-        this.#canvas.setAttribute("aria-label", "An empty floor. Click to drop a block onto it.");
+        this.#canvas.setAttribute("aria-label", "A pile of blocks. Click to drop another, or drag one to throw it.");
         this.append(this.#canvas);
-        this.#canvas.addEventListener("pointerdown", this.#drop);
+
+        const mouse = Mouse.create(this.#canvas);
+        // Let the page scroll when the pointer is over the demo.
+        const wheel = (mouse as unknown as { mousewheel: EventListener }).mousewheel;
+        this.#canvas.removeEventListener("wheel", wheel);
+        const grab = MouseConstraint.create(this.#engine, { mouse, constraint: { stiffness: 0.2 } });
+        Composite.add(this.#engine.world, grab);
+
+        // A press that lands on nothing drops a new block there. This listens to
+        // the canvas directly: the physics library only reports presses while it
+        // is running, and it stops whenever the pile is at rest.
+        this.#canvas.addEventListener("pointerdown", (event) => {
+            const blocks = Composite.allBodies(this.#engine.world).filter((body) => !body.isStatic);
+            const point = { x: event.offsetX, y: event.offsetY };
+            if (Query.point(blocks, point).length === 0) this.#drop(point.x, point.y);
+            this.#holding = true;
+            this.#start();
+        });
+        addEventListener("pointerup", this.#release);
+        addEventListener("pointercancel", this.#release);
+
+        this.#resizer = new ResizeObserver(() => this.#fit());
+        this.#resizer.observe(this);
+        // Only run while it can be seen.
+        this.#watcher = new IntersectionObserver(([entry]) => {
+            this.#visible = Boolean(entry?.isIntersecting);
+            if (this.#visible && this.#allowed) this.#start();
+            else this.#stop();
+        });
+        this.#watcher.observe(this);
+
+        this.#fit();
+        const middle = this.#canvas.clientWidth / 2;
+        const floor = this.#canvas.clientHeight - 6;
+        for (const [column, row] of [[-1, 0], [0, 0], [1, 0], [-0.5, 1], [0.5, 1], [0, 2]] as const) {
+            this.#drop(middle + column * SIZE, floor - SIZE / 2 - row * SIZE, false);
+        }
         this.#draw();
     }
+
+    #release = (): void => {
+        this.#holding = false;
+    };
 
     disconnectedCallback(): void {
-        cancelAnimationFrame(this.#frame);
-        this.#canvas.removeEventListener("pointerdown", this.#drop);
+        removeEventListener("pointerup", this.#release);
+        removeEventListener("pointercancel", this.#release);
+        this.#stop();
+        this.#watcher?.disconnect();
+        this.#resizer?.disconnect();
     }
 
-    #drop = (event: PointerEvent): void => {
-        const bounds = this.#canvas.getBoundingClientRect();
-        this.#boxes.push({ x: event.clientX - bounds.left - SIZE / 2, y: -SIZE, speed: 0, resting: false });
-        if (this.#boxes.length > 40) this.#boxes.shift();
-        if (!this.#frame) {
-            this.#last = performance.now();
-            this.#frame = requestAnimationFrame(this.#step);
-        }
-    };
+    #drop(x: number, y: number, awake = true): void {
+        const block = Bodies.rectangle(x, y, SIZE, SIZE, { restitution: 0.15, friction: 0.6, density: 0.002 });
+        if (awake) Body.setAngularVelocity(block, (Math.random() - 0.5) * 0.12);
+        else Sleeping.set(block, true);
+        Composite.add(this.#engine.world, block);
 
-    #step = (now: number): void => {
-        const seconds = Math.min((now - this.#last) / 1000, 0.05);
-        this.#last = now;
-        const floor = this.#canvas.clientHeight - 6 - SIZE;
+        const blocks = Composite.allBodies(this.#engine.world).filter((body) => !body.isStatic);
+        if (blocks.length > MOST && blocks[0]) Composite.remove(this.#engine.world, blocks[0]);
+    }
 
-        for (const box of this.#boxes) {
-            if (box.resting) continue;
-            box.speed += GRAVITY * seconds;
-            box.y += box.speed * seconds;
-            if (box.y >= floor) {
-                box.y = floor;
-                box.resting = true;
-            }
-        }
+    /** Match the canvas to its box, and rebuild the floor and walls around it. */
+    #fit(): void {
+        const width = this.clientWidth;
+        const height = this.#canvas.clientHeight || 260;
+        const scale = window.devicePixelRatio || 1;
+        this.#canvas.width = Math.round(width * scale);
+        this.#canvas.height = Math.round(height * scale);
 
+        Composite.remove(this.#engine.world, this.#walls);
+        const thick = 80;
+        this.#walls = [
+            Bodies.rectangle(width / 2, height - 6 + thick / 2, width + thick * 2, thick, { isStatic: true }),
+            Bodies.rectangle(-thick / 2, height / 2, thick, height * 4, { isStatic: true }),
+            Bodies.rectangle(width + thick / 2, height / 2, thick, height * 4, { isStatic: true }),
+        ];
+        Composite.add(this.#engine.world, this.#walls);
         this.#draw();
-        this.#frame = this.#boxes.every((box) => box.resting) ? 0 : requestAnimationFrame(this.#step);
-    };
+    }
+
+    #start(): void {
+        this.#allowed = true;
+        if (this.#frame || !this.#visible) return;
+        this.#palette = undefined;
+        Runner.run(this.#runner, this.#engine);
+        const loop = () => {
+            this.#draw();
+            // Once every block has come to rest there is nothing left to animate.
+            const blocks = Composite.allBodies(this.#engine.world).filter((body) => !body.isStatic);
+            if (blocks.every((body) => body.isSleeping) && !this.#holding) {
+                this.#stop();
+                return;
+            }
+            this.#frame = requestAnimationFrame(loop);
+        };
+        this.#frame = requestAnimationFrame(loop);
+    }
+
+    #stop(): void {
+        Runner.stop(this.#runner);
+        cancelAnimationFrame(this.#frame);
+        this.#frame = 0;
+    }
 
     /** Reads one of the page's color properties as a value a canvas accepts. */
     #color(property: string): string {
@@ -69,25 +142,33 @@ class DropBox extends HTMLElement {
     }
 
     #draw(): void {
-        const canvas = this.#canvas;
-        const scale = window.devicePixelRatio || 1;
-        const width = canvas.clientWidth;
-        const height = canvas.clientHeight;
-        if (canvas.width !== width * scale || canvas.height !== height * scale) {
-            canvas.width = width * scale;
-            canvas.height = height * scale;
-        }
-
-        const context = canvas.getContext("2d");
+        const context = this.#canvas.getContext("2d");
         if (!context) return;
+        const scale = window.devicePixelRatio || 1;
+        const width = this.#canvas.width / scale;
+        const height = this.#canvas.height / scale;
         context.setTransform(scale, 0, 0, scale, 0, 0);
         context.clearRect(0, 0, width, height);
 
-        context.fillStyle = this.#color("--ink");
+        // Looking the colors up means restyling the element, so do it once per run.
+        this.#palette ??= { floor: this.#color("--rule"), fill: this.#color("--accent"), edge: this.#color("--ground") };
+        const { floor, fill, edge } = this.#palette;
+
+        context.fillStyle = floor;
         context.fillRect(0, height - 6, width, 6);
 
-        context.fillStyle = this.#color("--accent");
-        for (const box of this.#boxes) context.fillRect(Math.round(box.x), Math.round(box.y), SIZE, SIZE);
+        for (const body of Composite.allBodies(this.#engine.world)) {
+            if (body.isStatic) continue;
+            context.save();
+            context.translate(body.position.x, body.position.y);
+            context.rotate(body.angle);
+            context.fillStyle = fill;
+            context.fillRect(-SIZE / 2, -SIZE / 2, SIZE, SIZE);
+            context.strokeStyle = edge;
+            context.lineWidth = 2;
+            context.strokeRect(-SIZE / 2 + 1, -SIZE / 2 + 1, SIZE - 2, SIZE - 2);
+            context.restore();
+        }
     }
 }
 

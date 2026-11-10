@@ -32,6 +32,7 @@ export const languageColors: Record<string, Oklch> = {
     Python: [0.86, 0.14, 95],
     Go: [0.8, 0.11, 205],
     JavaScript: [0.84, 0.15, 130],
+    Astro: [0.74, 0.17, 330],
 };
 
 export const otherLanguageColor: Oklch = [0.56, 0.06, 300];

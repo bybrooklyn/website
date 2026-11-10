@@ -54,8 +54,9 @@ if (facts) rows.push(["last updated", formatDate(new Date(facts.updated))]);
                     src={cover}
                     alt={coverAlt ?? ""}
                     widths={[640, 960, 1440]}
-                    sizes="(min-width: 60rem) 46rem, 100vw"
+                    sizes="(min-width: 60rem) 44rem, 100vw"
                     loading="eager"
+                    fetchpriority="high"
                 />
             )
         }

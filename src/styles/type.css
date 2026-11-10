@@ -42,7 +42,6 @@
     min-height: 8rem;
     line-height: 1.12;
     color: var(--ink);
-    font-variation-settings: normal;
     overflow-wrap: anywhere;
     outline: none;
 }
@@ -55,7 +54,6 @@
 
 .specimen {
     font-family: "Torrens Serif", serif;
-    font-variation-settings: normal;
 }
 
 .prose .specimen h3 {
@@ -108,8 +106,8 @@
 }
 
 .specimen-glyphs.fraunces {
-    font-family: "Fraunces Variable", serif;
-    font-variation-settings: "SOFT" 100, "WONK" 0, "opsz" 72;
+    font-family: "Fraunces Soft", serif;
+    font-variation-settings: "opsz" 72;
 }
 
 @media (max-width: 34rem) {

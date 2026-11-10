@@ -1,0 +1,48 @@
+---
+// Something from elsewhere, framed in a post: a game on itch.io, a pen, a
+// video, or a page of your own. It loads only when scrolled near, and is
+// sandboxed: by default the frame can run its own scripts and nothing more.
+// Pass `allow` to grant more, for example allow="fullscreen" for a game.
+
+interface Props {
+    src: string;
+    /** Says what the frame is, for people who cannot see it. Required. */
+    title: string;
+    /** Width over height, for example "16 / 9" or "4 / 3". */
+    ratio?: string;
+    /** A line of text under the frame. */
+    caption?: string;
+    /** Extra permissions, as for an iframe's `allow` attribute. */
+    allow?: string;
+    /** Extra sandbox tokens, such as "allow-same-origin" or "allow-popups". */
+    sandbox?: string;
+}
+
+const { src, title, ratio = "16 / 9", caption, allow, sandbox = "" } = Astro.props;
+---
+
+<figure class="demo embed">
+    <iframe
+        {src}
+        {title}
+        {allow}
+        loading="lazy"
+        referrerpolicy="no-referrer"
+        sandbox={`allow-scripts ${sandbox}`.trim()}
+        style={`aspect-ratio:${ratio}`}></iframe>
+    {caption && <figcaption class="note">{caption}</figcaption>}
+</figure>
+
+<style>
+    .embed {
+        margin-inline: 0;
+    }
+
+    iframe {
+        display: block;
+        width: 100%;
+        height: auto;
+        border: 0;
+        background: var(--surface);
+    }
+</style>
