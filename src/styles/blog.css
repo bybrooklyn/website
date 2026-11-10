@@ -33,8 +33,8 @@
 
 .post-row a {
     display: grid;
-    gap: var(--line) clamp(1.5rem, 3vw, 2.5rem);
-    padding: calc(var(--line) * 1.5) 0;
+    gap: calc(var(--line) * 0.6) clamp(1.25rem, 3vw, 2rem);
+    padding: var(--line) 0;
     border-bottom: 0.0625rem solid var(--rule);
     color: var(--ink);
     text-decoration: none;
@@ -43,7 +43,7 @@
 .post-row h2,
 .post-row h3 {
     margin: 0;
-    font-size: clamp(1.75rem, 1.3rem + 1.6vw, 2.5rem);
+    font-size: clamp(1.6rem, 1.3rem + 1.2vw, 2.1rem);
     line-height: 1.1;
     letter-spacing: -0.015em;
     transition: color 0.15s ease;
@@ -55,13 +55,13 @@
 }
 
 .post-row p {
-    max-width: 44rem;
-    margin: calc(var(--line) * 0.5) 0 0;
+    max-width: 38rem;
+    margin: calc(var(--line) * 0.35) 0 0;
     color: var(--muted);
 }
 
 .post-row .post-meta {
-    margin-top: calc(var(--line) * 0.6);
+    margin-top: calc(var(--line) * 0.5);
 }
 
 .post-thumb {
@@ -73,15 +73,31 @@
     border: 0.0625rem solid var(--rule);
 }
 
-@media (min-width: 44rem) {
-    /* The picture goes on the right, so every title starts at the same edge. */
-    .post-row a:has(.post-thumb) {
-        grid-template-columns: 1fr 14rem;
+/* Stands in for a cover: the first letter of the title, in the post's accent. */
+.post-letter {
+    display: grid;
+    place-items: center;
+    background: var(--surface);
+    color: var(--accent);
+    font-family: var(--font-head);
+    font-weight: var(--head-weight);
+    font-size: 3.5rem;
+    line-height: 1;
+    text-transform: lowercase;
+}
+
+@media (min-width: 40rem) {
+    /* Picture on the left, at one width, so the rows line up down the page. */
+    .post-row:not(.compact) a {
+        grid-template-columns: 14rem minmax(0, 1fr);
         align-items: center;
     }
+}
 
-    .post-row .post-thumb {
-        order: 2;
+@media (max-width: 39.99rem) {
+    /* On a phone the letter block would only push the title down. */
+    .post-letter {
+        display: none;
     }
 }
 

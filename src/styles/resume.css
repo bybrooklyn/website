@@ -258,3 +258,14 @@
         border: 0;
     }
 }
+
+/* A project's title leads to its page; it keeps the look of a title. */
+.resume-line strong a {
+    color: inherit;
+    text-decoration-color: var(--rule);
+    text-underline-offset: 0.2em;
+}
+
+.resume-line strong a:hover {
+    text-decoration-color: var(--accent);
+}

@@ -13,15 +13,19 @@ interface Props {
     where?: string;
     /** Makes the right side of the second line a link. */
     href?: string;
+    /** The project's page on this site; makes the title a link to it. */
+    page?: string;
     web?: boolean;
 }
 
-const { title, when, role, where, href, web = false } = Astro.props;
+const { title, when, role, where, href, page, web = false } = Astro.props;
+// The printed PDF is made from a production build, where the address has to be a full one.
+const own = page && (import.meta.env.DEV ? `/projects/${page}/` : new URL(`/projects/${page}/`, Astro.site).href);
 ---
 
 <div class:list={["resume-entry", { "web-only": web }]}>
     <div class="resume-line">
-        <strong>{title}</strong>
+        <strong>{own ? <a href={own}>{title}</a> : title}</strong>
         {when && <span>{when}</span>}
     </div>
     {
