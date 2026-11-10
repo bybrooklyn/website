@@ -77,7 +77,7 @@ A post or project page can hold interactive things.
 
   It loads lazily and is sandboxed: it can run its own scripts and nothing else unless you pass `allow` (for example `allow="fullscreen"`) or extra `sandbox` tokens.
 
-- **A demo of your own**: write a custom element in `src/demos/` and an `.astro` wrapper that imports it in a `<script>`, as `DropBox.astro` and `drop-box.ts` do. Only pages that use the wrapper load its script. `DropBox` is a pile of blocks with real physics (matter-js) and `TypeTester` lets visitors try a typeface.
+- **A demo of your own**: write a custom element in `src/demos/` and an `.astro` wrapper that imports it in a `<script>`, as `DropBox.astro` and `drop-box.ts` do. Only pages that use the wrapper load its script. `DropBox` is a pile of blocks you can stack and throw, running on `physics.ts`, a small engine written for this site, and `TypeTester` lets visitors try a typeface.
 
 ## Setup and about
 
