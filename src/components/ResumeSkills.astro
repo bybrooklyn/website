@@ -1,0 +1,19 @@
+---
+interface Props {
+    /** Label and what goes beside it, in order. */
+    rows: readonly (readonly [string, string])[];
+}
+
+const { rows } = Astro.props;
+---
+
+<dl class="resume-skills">
+    {
+        rows.map(([label, value]) => (
+            <>
+                <dt>{label}</dt>
+                <dd>{value}</dd>
+            </>
+        ))
+    }
+</dl>

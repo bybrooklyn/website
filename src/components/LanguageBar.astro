@@ -1,0 +1,49 @@
+---
+// The languages I write, as one horizontal bar: a flat-colored segment per
+// language, as wide as its share of the bytes, with a key underneath.
+
+import data from "../data/languages.json";
+import { languageColors, otherLanguageColor } from "../data/theme";
+import { css } from "../lib/color";
+
+/** Anything smaller than this is swept into "other". */
+const SMALLEST = 0.02;
+
+const total = data.languages.reduce((sum, language) => sum + language.bytes, 0);
+const share = (bytes: number) => bytes / total;
+
+const named = data.languages.filter((language) => share(language.bytes) >= SMALLEST && language.name in languageColors);
+const rest = data.languages.filter((language) => !named.includes(language));
+
+const rows = named.map((language) => ({
+    name: language.name,
+    share: share(language.bytes),
+    color: css(languageColors[language.name]!),
+}));
+if (rest.length > 0) {
+    rows.push({
+        name: "other",
+        share: rest.reduce((sum, language) => sum + share(language.bytes), 0),
+        color: css(otherLanguageColor),
+    });
+}
+
+const percent = (value: number) => (value >= 0.1 ? `${Math.round(value * 100)}%` : `${(value * 100).toFixed(1)}%`);
+---
+
+<section aria-labelledby="languages-title">
+    <h2 class="label" id="languages-title">Languages</h2>
+    <div class="languages-bar" aria-hidden="true">
+        {rows.map((row) => <span style={`--share:${(row.share * 100).toFixed(2)};--color:${row.color}`} />)}
+    </div>
+    <ul class="languages-key">
+        {
+            rows.map((row) => (
+                <li style={`--color:${row.color}`}>
+                    {row.name}
+                    <span class="note">{percent(row.share)}</span>
+                </li>
+            ))
+        }
+    </ul>
+</section>

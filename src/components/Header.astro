@@ -1,0 +1,40 @@
+---
+import Flags from "./Flags.astro";
+import { nav, site } from "../data/site";
+import { getCollection } from "astro:content";
+import { showDrafts } from "../lib/drafts";
+import { getPosts } from "../lib/posts";
+import { getResume } from "../lib/resume";
+
+const here = Astro.url.pathname;
+// Links to pages that are still drafts wait until they are published.
+const hasResume = (await getResume()) !== undefined;
+const hasAbout = (await getCollection("pages", ({ id, data }) => id === "about" && (showDrafts || !data.draft))).length > 0;
+const hasPosts = (await getPosts()).length > 0;
+const hidden = new Set([
+    ...(hasResume ? [] : ["/resume/"]),
+    ...(hasAbout ? [] : ["/about/"]),
+    ...(hasPosts ? [] : ["/blog/"]),
+]);
+const links = nav.filter((item) => !hidden.has(item.href));
+---
+
+<header class="site-header">
+    <div class="site-id">
+        <a class="site-name" href="/">{site.name.toLowerCase()}</a>
+        <Flags />
+    </div>
+    <nav aria-label="Site">
+        <ul>
+            {
+                links.map((item) => (
+                    <li>
+                        <a href={item.href} aria-current={here.startsWith(item.href) ? "page" : undefined}>
+                            {item.label}
+                        </a>
+                    </li>
+                ))
+            }
+        </ul>
+    </nav>
+</header>

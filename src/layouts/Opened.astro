@@ -1,0 +1,58 @@
+---
+// A post or a project, opened over the site. The site itself is reduced to a
+// strip down the left edge that leads back to the list it came from, and the
+// page sits beside it in a panel a shade lighter. On phones there is no
+// strip: the panel takes the whole screen and the way back floats in the
+// corner.
+import Document from "./Document.astro";
+import Flags from "../components/Flags.astro";
+import { site } from "../data/site";
+import type { AccentName } from "../data/theme";
+
+interface Props {
+    title: string;
+    description: string;
+    accent?: AccentName;
+    type?: "website" | "article";
+    /** The picture used when the page is shared. */
+    image?: ImageMetadata;
+    unlisted?: boolean;
+    /** The list this was opened from. */
+    back: { href: string; label: string };
+}
+
+const { back, title, ...document } = Astro.props;
+---
+
+<Document {title} {...document} bodyClass="opened">
+    <slot name="head" slot="head" />
+    <a class="skip" href="#main">Skip to the page</a>
+    <a class="strip" href={back.href} aria-label={`Back to ${back.label}`}>
+        <span class="strip-button" aria-hidden="true">
+            <svg viewBox="0 0 16 26" fill="none" stroke="currentColor" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12.5 3 3.5 13l9 10"></path>
+            </svg>
+        </span>
+    </a>
+    <div class="opened-panel" tabindex="-1">
+        <header class="opened-top">
+            <div class="site-id">
+                <a class="site-name" href="/">{site.name.toLowerCase()}</a>
+                <Flags />
+            </div>
+            <nav class="trail" aria-label="Where you are">
+                <a href={back.href}>{back.label}</a>
+                <span aria-hidden="true">/</span>
+                <span aria-current="page">{title}</span>
+            </nav>
+        </header>
+        <main id="main">
+            <slot />
+        </main>
+    </div>
+    <script is:inline>
+        // The panel scrolls, not the page, so give it the keyboard: without
+        // this, Page Down, Space and the arrow keys do nothing until a click.
+        document.querySelector(".opened-panel").focus({ preventScroll: true });
+    </script>
+</Document>

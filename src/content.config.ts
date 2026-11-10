@@ -1,0 +1,76 @@
+import { defineCollection } from "astro:content";
+import { glob } from "astro/loaders";
+import { z } from "astro/zod";
+import { accentNames } from "./data/theme";
+
+const blog = defineCollection({
+    loader: glob({ base: "./src/content/blog", pattern: "**/*.{md,mdx}" }),
+    schema: ({ image }) =>
+        z
+            .object({
+                title: z.string(),
+                date: z.coerce.date(),
+                summary: z.string(),
+                /** The color of links and marks on this post. Violet if left out. */
+                accent: z.enum(accentNames).optional(),
+                /** A picture for the top of the post and the blog list, as a path to a file in src/assets. */
+                cover: image().optional(),
+                /** What the cover shows, for people who cannot see it. */
+                coverAlt: z.string().optional(),
+                /** Short lowercase words, such as rust or self-hosting. */
+                tags: z.array(z.string()).default([]),
+                /** Drafts show up in `bun run dev` only. */
+                draft: z.boolean().default(false),
+            })
+            .refine((post) => !post.cover || post.coverAlt, { message: "A post with a cover needs coverAlt." }),
+});
+
+const resume = defineCollection({
+    loader: glob({ base: "./src/content/resume", pattern: "*.mdx" }),
+    schema: z.object({
+        summary: z.string(),
+        draft: z.boolean().default(false),
+    }),
+});
+
+const projects = defineCollection({
+    loader: glob({ base: "./src/content/projects", pattern: "*.mdx" }),
+    schema: ({ image }) =>
+        z
+            .object({
+                name: z.string(),
+                /** One sentence, for the list and the top of the page. */
+                summary: z.string(),
+                language: z.string(),
+                status: z.string().optional(),
+                /** owner/name on GitHub. Linked even while the repository is private. */
+                repo: z.string(),
+                /** Somewhere else worth sending people: a site, a beta, a download. */
+                link: z.object({ href: z.url(), label: z.string() }).optional(),
+                cover: image().optional(),
+                coverAlt: z.string().optional(),
+                /** Pixel art: scale the cover without smoothing. */
+                pixel: z.boolean().default(false),
+                gallery: z.array(z.object({ src: image(), alt: z.string() })).default([]),
+                /** Position in the list, lowest first. */
+                order: z.number(),
+                draft: z.boolean().default(false),
+            })
+            .refine((project) => !project.cover || project.coverAlt, { message: "A project with a cover needs coverAlt." }),
+});
+
+/** Standalone long-form pages: /setup/, /about/. The file name is the address. */
+const pages = defineCollection({
+    loader: glob({ base: "./src/content/pages", pattern: "*.mdx" }),
+    schema: z.object({
+        title: z.string(),
+        summary: z.string(),
+        /** Small text above the title. */
+        kicker: z.string().optional(),
+        /** Number the chapters, like a manual. */
+        numbered: z.boolean().default(false),
+        draft: z.boolean().default(false),
+    }),
+});
+
+export const collections = { blog, pages, projects, resume };

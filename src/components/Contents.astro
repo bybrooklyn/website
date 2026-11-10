@@ -1,0 +1,65 @@
+---
+// A post's table of contents. In the margin on a wide screen, where it stays
+// in view and marks the section being read; a fold-out block on a narrow one.
+import type { MarkdownHeading } from "astro";
+
+interface Props {
+    headings: MarkdownHeading[];
+}
+
+const headings = Astro.props.headings.filter((heading) => heading.depth === 2 || heading.depth === 3);
+---
+
+{
+    headings.length > 1 && (
+        <details class="contents" open>
+            <summary>On this page</summary>
+            <ol>
+                {headings.map((heading) => (
+                    <li class:list={{ sub: heading.depth === 3 }}>
+                        <a href={`#${heading.slug}`}>{heading.text}</a>
+                    </li>
+                ))}
+            </ol>
+        </details>
+    )
+}
+
+<script>
+    // Mark the link for the section nearest the top of the view.
+    const contents = document.querySelector<HTMLElement>(".contents");
+    if (contents) {
+        // In the margin it is always open; folded away it starts closed.
+        const beside = matchMedia("(min-width: 72rem)");
+        const fold = () => contents.toggleAttribute("open", beside.matches);
+        beside.addEventListener("change", fold);
+        fold();
+
+        const links = new Map<Element, HTMLAnchorElement>();
+        for (const link of contents.querySelectorAll<HTMLAnchorElement>("a")) {
+            const heading = document.getElementById(decodeURIComponent(link.hash.slice(1)));
+            if (heading) links.set(heading, link);
+        }
+
+        const seen = new Set<Element>();
+        const observer = new IntersectionObserver(
+            (entries) => {
+                for (const entry of entries) {
+                    if (entry.isIntersecting) seen.add(entry.target);
+                    else seen.delete(entry.target);
+                }
+                // The first heading in view, or failing that the last one scrolled past.
+                const headings = [...links.keys()];
+                const current =
+                    headings.find((heading) => seen.has(heading)) ??
+                    headings.filter((heading) => heading.getBoundingClientRect().top < 0).at(-1);
+                for (const [heading, link] of links) {
+                    if (heading === current) link.setAttribute("aria-current", "true");
+                    else link.removeAttribute("aria-current");
+                }
+            },
+            { rootMargin: "0px 0px -60% 0px" },
+        );
+        for (const heading of links.keys()) observer.observe(heading);
+    }
+</script>

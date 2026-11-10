@@ -1,0 +1,122 @@
+{
+    "updated": "2026-11-10",
+    "repos": 59,
+    "languages": [
+        {
+            "name": "Rust",
+            "bytes": 54596548
+        },
+        {
+            "name": "TypeScript",
+            "bytes": 11439505
+        },
+        {
+            "name": "Swift",
+            "bytes": 7844351
+        },
+        {
+            "name": "Python",
+            "bytes": 6453741
+        },
+        {
+            "name": "Go",
+            "bytes": 4244696
+        },
+        {
+            "name": "JavaScript",
+            "bytes": 2615236
+        },
+        {
+            "name": "Shell",
+            "bytes": 990196
+        },
+        {
+            "name": "C#",
+            "bytes": 558460
+        },
+        {
+            "name": "Ruby",
+            "bytes": 420272
+        },
+        {
+            "name": "GDScript",
+            "bytes": 406554
+        },
+        {
+            "name": "Astro",
+            "bytes": 267215
+        },
+        {
+            "name": "Vue",
+            "bytes": 217888
+        },
+        {
+            "name": "Svelte",
+            "bytes": 216076
+        },
+        {
+            "name": "Luau",
+            "bytes": 189879
+        },
+        {
+            "name": "Lua",
+            "bytes": 184918
+        },
+        {
+            "name": "WGSL",
+            "bytes": 130991
+        },
+        {
+            "name": "Kotlin",
+            "bytes": 128718
+        },
+        {
+            "name": "QML",
+            "bytes": 125224
+        },
+        {
+            "name": "Java",
+            "bytes": 37940
+        },
+        {
+            "name": "C",
+            "bytes": 32198
+        },
+        {
+            "name": "PowerShell",
+            "bytes": 30487
+        },
+        {
+            "name": "MDX",
+            "bytes": 29992
+        },
+        {
+            "name": "HLSL",
+            "bytes": 23251
+        },
+        {
+            "name": "Zig",
+            "bytes": 17586
+        },
+        {
+            "name": "GLSL",
+            "bytes": 15011
+        },
+        {
+            "name": "Go Template",
+            "bytes": 5929
+        },
+        {
+            "name": "C++",
+            "bytes": 5333
+        },
+        {
+            "name": "DTrace",
+            "bytes": 4777
+        },
+        {
+            "name": "CMake",
+            "bytes": 917
+        }
+    ]
+}

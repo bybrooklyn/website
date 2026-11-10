@@ -1,0 +1,51 @@
+---
+// A timeline you read by scrolling: a line down the left with a moment at each
+// stop, and a dot that travels down the line as the page moves, lighting each
+// moment as it reaches it. Without scripts, or for anyone who has asked for
+// reduced motion, it is simply a list with every moment lit.
+---
+
+<ol class="timeline">
+    <li class="timeline-track" aria-hidden="true">
+        <span class="timeline-fill"></span>
+        <span class="timeline-dot"></span>
+    </li>
+    <slot />
+</ol>
+
+<script>
+    const still = matchMedia("(prefers-reduced-motion: reduce)");
+
+    for (const timeline of document.querySelectorAll<HTMLElement>(".timeline")) {
+        const moments = [...timeline.querySelectorAll<HTMLElement>(".moment")];
+        let waiting = false;
+
+        const place = () => {
+            waiting = false;
+            if (still.matches) {
+                timeline.classList.remove("live");
+                return;
+            }
+            timeline.classList.add("live");
+            const box = timeline.getBoundingClientRect();
+            // The dot sits where a line a little above the middle of the window crosses the timeline.
+            const reach = Math.min(Math.max(innerHeight * 0.45 - box.top, 0), box.height);
+            timeline.style.setProperty("--reach", `${reach}px`);
+            for (const moment of moments) {
+                moment.classList.toggle("lit", moment.offsetTop <= reach + 4);
+            }
+        };
+
+        const ask = () => {
+            if (!waiting) {
+                waiting = true;
+                requestAnimationFrame(place);
+            }
+        };
+
+        addEventListener("scroll", ask, { passive: true });
+        addEventListener("resize", ask);
+        still.addEventListener("change", ask);
+        place();
+    }
+</script>

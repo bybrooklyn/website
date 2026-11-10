@@ -1,0 +1,30 @@
+---
+name: SmoothCeleste
+summary: A single-download mod for playing Celeste smoothly on a high-refresh-rate display.
+language: C#
+status: released
+repo: bybrooklyn/SmoothCeleste
+order: 12
+---
+
+## What it is
+
+SmoothCeleste is a single-download Everest mod for high-refresh-rate Celeste. It matches the display the game is on, keeps the real gameplay at 60 Hz, and uses its included Motion Smoothing renderer to show 120, 144, 165, 240 or 360 Hz motion. You don't install Motion Smoothing separately.
+
+## Installing it
+
+1. Install Everest with Olympus.
+2. Download a `SmoothCeleste.zip` release.
+3. Install the zip with Olympus, or put it in Celeste's `Mods` folder.
+4. Launch Celeste and leave the profile on Automatic.
+
+## Profiles
+
+- **Automatic:** motion matched to your display.
+- **Maximum Compatibility:** only multiples of 60 Hz, for difficult mod packs.
+- **Strict:** interpolation only, safe for TAS, and chosen automatically while CelesteTAS is active.
+- **Safe Presentation Mode:** for a map with visual problems.
+
+## What it doesn't do
+
+It keeps Celeste's 60 Hz simulation and normal input sampling. It does not run physics at 240 Hz, add inputs between ticks, or upload telemetry.

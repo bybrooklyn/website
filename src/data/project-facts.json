@@ -1,0 +1,65 @@
+{
+    "flummox": {
+        "license": "AGPL-3.0",
+        "stars": 6,
+        "release": "v0.0.1",
+        "updated": "2026-10-09",
+        "public": true
+    },
+    "laude": {
+        "license": "MIT",
+        "stars": 0,
+        "release": null,
+        "updated": "2026-10-12",
+        "public": false
+    },
+    "mfetchy": {
+        "license": "MIT",
+        "stars": 0,
+        "release": "v0.1.0",
+        "updated": "2026-11-09",
+        "public": false
+    },
+    "openbitdo": {
+        "license": "GPL-3.0",
+        "stars": 29,
+        "release": "v0.0.3",
+        "updated": "2026-10-16",
+        "public": true
+    },
+    "playmatter": {
+        "license": null,
+        "stars": 1,
+        "release": null,
+        "updated": "2026-11-10",
+        "public": false
+    },
+    "smoothceleste": {
+        "license": "MIT",
+        "stars": 0,
+        "release": "v1",
+        "updated": "2026-08-04",
+        "public": true
+    },
+    "swiftyv": {
+        "license": null,
+        "stars": 0,
+        "release": null,
+        "updated": "2026-11-03",
+        "public": false
+    },
+    "terrustia": {
+        "license": "AGPL-3.0",
+        "stars": 4,
+        "release": null,
+        "updated": "2026-09-09",
+        "public": true
+    },
+    "yqt": {
+        "license": "GPL-3.0",
+        "stars": 0,
+        "release": null,
+        "updated": "2026-11-04",
+        "public": false
+    }
+}

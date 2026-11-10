@@ -1,0 +1,48 @@
+---
+import { Image } from "astro:assets";
+import "../../styles/blog.css";
+import "../../styles/projects.css";
+import Base from "../../layouts/Base.astro";
+import { site } from "../../data/site";
+import { getProjects } from "../../lib/projects";
+
+const projects = await getProjects();
+---
+
+<Base title="Projects" description="Things Charlotte has made.">
+    <div class="page-head">
+        <h1>Projects</h1>
+        <p class="lede">Things I've made. The rest is on <a href={site.github}>GitHub</a>.</p>
+    </div>
+
+    <ul class="project-list">
+        {
+            projects.map((project) => (
+                <li>
+                    <a href={`/projects/${project.id}/`}>
+                        {project.data.cover ? (
+                            <Image
+                                class:list={["project-thumb", { pixel: project.data.pixel }]}
+                                src={project.data.cover}
+                                alt=""
+                                width={480}
+                            />
+                        ) : (
+                            <span class="project-thumb empty" aria-hidden="true">
+                                {project.data.name.slice(0, 1)}
+                            </span>
+                        )}
+                        <div>
+                            <h2>{project.data.name}</h2>
+                            <p>{project.data.summary}</p>
+                            <p class="post-meta">
+                                <span>{project.data.language}</span>
+                                {project.data.status && <span>{project.data.status}</span>}
+                            </p>
+                        </div>
+                    </a>
+                </li>
+            ))
+        }
+    </ul>
+</Base>

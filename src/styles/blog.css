@@ -1,0 +1,454 @@
+/* The blog list and an opened post. */
+
+.post-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 0.5rem;
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.9em;
+}
+
+.post-meta > * + *::before {
+    content: "·";
+    margin-right: 0.5rem;
+}
+
+.post-meta time {
+    color: var(--accent);
+}
+
+/* ---- the list ---- */
+
+.post-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    border-top: 0.0625rem solid var(--rule);
+}
+
+.post-year + .post-year {
+    margin-top: calc(var(--line) * 2);
+}
+
+.post-row a {
+    display: grid;
+    gap: var(--line) clamp(1.5rem, 3vw, 2.5rem);
+    padding: calc(var(--line) * 1.5) 0;
+    border-bottom: 0.0625rem solid var(--rule);
+    color: var(--ink);
+    text-decoration: none;
+}
+
+.post-row h2,
+.post-row h3 {
+    margin: 0;
+    font-size: clamp(1.75rem, 1.3rem + 1.6vw, 2.5rem);
+    line-height: 1.1;
+    letter-spacing: -0.015em;
+    transition: color 0.15s ease;
+}
+
+.post-row a:hover h2,
+.post-row a:hover h3 {
+    color: var(--accent);
+}
+
+.post-row p {
+    max-width: 44rem;
+    margin: calc(var(--line) * 0.5) 0 0;
+    color: var(--muted);
+}
+
+.post-row .post-meta {
+    margin-top: calc(var(--line) * 0.6);
+}
+
+.post-thumb {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 16 / 10;
+    object-fit: cover;
+    border-radius: var(--radius);
+    border: 0.0625rem solid var(--rule);
+}
+
+@media (min-width: 44rem) {
+    /* The picture goes on the right, so every title starts at the same edge. */
+    .post-row a:has(.post-thumb) {
+        grid-template-columns: 1fr 14rem;
+        align-items: center;
+    }
+
+    .post-row .post-thumb {
+        order: 2;
+    }
+}
+
+/* The homepage's rows: one line of title and date, the summary beneath. */
+.post-row.compact a {
+    display: block;
+    padding: calc(var(--line) * 0.7) 0;
+}
+
+.post-row-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0 1.5rem;
+}
+
+.post-row.compact h2,
+.post-row.compact h3 {
+    font-size: 1.5rem;
+    line-height: 1.25;
+    letter-spacing: -0.005em;
+}
+
+.post-row.compact time {
+    color: var(--muted);
+    font-size: 0.9em;
+}
+
+.post-row.compact p {
+    margin-top: 0.15rem;
+    font-size: 0.95em;
+}
+
+.post-draft {
+    color: var(--accent);
+}
+
+/* ---- a post ---- */
+
+.post {
+    /* the text, and the contents beside it */
+    --measure: 44rem;
+    --toc: 15rem;
+    --gap: clamp(2.5rem, 5vw, 5rem);
+    max-width: calc(var(--measure) + var(--toc) + var(--gap));
+    margin-inline: auto;
+}
+
+.post-header {
+    max-width: 52rem;
+    margin-bottom: calc(var(--line) * 1.5);
+}
+
+.post-header h1 {
+    margin-top: calc(var(--line) * 0.75);
+    font-size: clamp(2.75rem, 1.6rem + 5vw, 5.25rem);
+}
+
+.post-header .lede {
+    margin: var(--line) 0 0;
+}
+
+.tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin: var(--line) 0 0;
+    padding: 0;
+    list-style: none;
+    font-size: 0.85em;
+}
+
+.tags li {
+    padding: 0.05rem 0.7rem;
+    border: 0.0625rem solid var(--rule);
+    border-radius: 2rem;
+    color: var(--muted);
+}
+
+.post-cover {
+    display: block;
+    width: 100%;
+    max-width: var(--measure);
+    height: auto;
+    margin-bottom: calc(var(--line) * 1.75);
+    border-radius: 1.25rem;
+    border: 0.0625rem solid var(--rule);
+}
+
+/* Narrow: contents fold away above the text. */
+.contents {
+    max-width: var(--measure);
+    margin-bottom: calc(var(--line) * 1.5);
+    padding: calc(var(--line) * 0.5) 1rem;
+    border: 0.0625rem solid var(--rule);
+    border-radius: var(--radius);
+    font-size: 0.95em;
+}
+
+.contents summary {
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--muted);
+}
+
+.contents ol {
+    margin: calc(var(--line) * 0.4) 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+/* A section, then its smaller headings indented beneath it. */
+.contents li {
+    margin-top: 0.7rem;
+}
+
+.contents li.sub {
+    margin-top: 0.15rem;
+    padding-left: 1rem;
+    font-size: 0.93em;
+}
+
+.contents a {
+    display: block;
+    padding: 0.2rem 0;
+    color: var(--muted);
+    text-decoration: none;
+    line-height: 1.4;
+}
+
+.contents a:hover {
+    color: var(--ink);
+}
+
+.contents a[aria-current] {
+    color: var(--accent);
+}
+
+/* Wide: the text on the left, contents on the right where it stays in view. */
+@media (min-width: 72rem) {
+    .post-body {
+        display: grid;
+        grid-template-columns: minmax(0, var(--measure)) var(--toc);
+        gap: var(--gap);
+        align-items: start;
+    }
+
+    .post-body .prose {
+        grid-column: 1;
+        grid-row: 1;
+    }
+
+    .contents {
+        grid-column: 2;
+        grid-row: 1;
+        position: sticky;
+        top: calc(var(--line) * 1.5);
+        margin: 0;
+        padding: 0;
+        border: 0;
+        border-radius: 0;
+    }
+
+    .contents summary {
+        list-style: none;
+        cursor: default;
+        pointer-events: none;
+    }
+
+    .contents summary::-webkit-details-marker {
+        display: none;
+    }
+}
+
+.post-nav {
+    max-width: var(--measure);
+    margin-top: calc(var(--line) * 3.5);
+    padding-top: calc(var(--line) * 1.25);
+    border-top: 0.0625rem solid var(--rule);
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+}
+
+.post-nav a {
+    display: grid;
+    gap: 0.15rem;
+    font-family: var(--font-head);
+    font-weight: var(--head-weight);
+    font-size: 1.35rem;
+    line-height: 1.25;
+    color: var(--ink);
+    text-decoration: none;
+}
+
+.post-nav a:hover {
+    color: var(--accent);
+}
+
+.post-nav .note {
+    font-family: var(--font-text);
+    font-weight: var(--text-weight);
+    font-size: 0.875rem;
+}
+
+.post-nav .next {
+    text-align: right;
+}
+
+@media print {
+    .contents,
+    .post-nav {
+        display: none;
+    }
+}
+
+/* ---- a manual: chapters are numbered, in the page and in its contents ---- */
+
+.manual .prose {
+    counter-reset: chapter;
+}
+
+.manual .prose h2 {
+    counter-increment: chapter;
+}
+
+.manual .prose h2::before {
+    content: counter(chapter) ". ";
+    color: var(--accent);
+}
+
+.manual .contents ol {
+    counter-reset: entry;
+}
+
+.manual .contents li:not(.sub) {
+    counter-increment: entry;
+}
+
+.manual .contents li:not(.sub) a {
+    /* a wrapped title lines up under its first word, not under the number */
+    padding-left: 1.5em;
+    text-indent: -1.5em;
+}
+
+.manual .contents li:not(.sub) a::before {
+    content: counter(entry) ". ";
+    color: var(--accent);
+}
+
+.manual .contents li.sub {
+    padding-left: 1.5em;
+}
+
+/* ---- a timeline read by scrolling (Timeline.astro) ---- */
+
+.prose .timeline {
+    --line-x: 0.45rem;
+    position: relative;
+    margin: calc(var(--line) * 1.5) 0 calc(var(--line) * 2);
+    padding: 0 0 0 2.5rem;
+    list-style: none;
+}
+
+.timeline-track {
+    position: absolute;
+    inset: 0.4rem auto 0.4rem var(--line-x);
+    width: 0.125rem;
+    margin: 0;
+    background: var(--rule);
+    border-radius: 1rem;
+}
+
+/* The part of the line already travelled, and the dot at its end. */
+.timeline-fill,
+.timeline-dot {
+    display: none;
+}
+
+.timeline.live .timeline-fill {
+    display: block;
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: var(--reach, 0);
+    background: var(--accent);
+    border-radius: 1rem;
+}
+
+.timeline.live .timeline-dot {
+    display: block;
+    position: absolute;
+    top: var(--reach, 0);
+    left: 50%;
+    width: 1rem;
+    height: 1rem;
+    translate: -50% -50%;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 0.3rem color-mix(in oklch, var(--accent) 25%, transparent);
+}
+
+.prose .moment {
+    position: relative;
+    margin: 0;
+    padding-bottom: calc(var(--line) * 1.4);
+}
+
+.prose .moment:last-child {
+    padding-bottom: 0;
+}
+
+.moment-mark {
+    position: absolute;
+    top: 0.5rem;
+    left: calc(var(--line-x) - 2.5rem + 0.0625rem);
+    width: 0.7rem;
+    height: 0.7rem;
+    translate: -50% 0;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 0.125rem solid var(--ground);
+    transition: background-color 0.3s ease;
+}
+
+.moment.chapter .moment-mark {
+    top: 0.65rem;
+    width: 1rem;
+    height: 1rem;
+}
+
+.prose .moment h3 {
+    margin: 0 0 calc(var(--line) * 0.25);
+    font-size: 1.5rem;
+}
+
+.moment-when {
+    margin: 0 0 0.1rem;
+    color: var(--accent);
+    font-size: 0.9em;
+}
+
+.moment-text > :last-child {
+    margin-bottom: 0;
+}
+
+.moment-when,
+.moment-text,
+.prose .moment h3 {
+    transition:
+        opacity 0.4s ease,
+        translate 0.4s ease;
+}
+
+/* While the dot is travelling, the moments it has not reached wait, dimmed. */
+.timeline.live .moment:not(.lit) .moment-mark {
+    background: var(--rule);
+}
+
+.timeline.live .moment:not(.lit) :is(.moment-when, .moment-text, h3) {
+    opacity: 0.35;
+    translate: 0.4rem 0;
+}
+
+@media print {
+    .timeline-fill,
+    .timeline-dot {
+        display: none !important;
+    }
+}

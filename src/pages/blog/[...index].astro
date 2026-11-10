@@ -1,0 +1,53 @@
+---
+import type { GetStaticPaths } from "astro";
+import "../../styles/blog.css";
+import PostRow from "../../components/PostRow.astro";
+import Base from "../../layouts/Base.astro";
+import { getPosts, type Post } from "../../lib/posts";
+
+// A rest route with one fixed path (/blog/), so that the page is not built at
+// all until there is a post to list.
+export const getStaticPaths = (async () => {
+    const posts = await getPosts();
+    return posts.length > 0 ? [{ params: { index: undefined }, props: { posts } }] : [];
+}) satisfies GetStaticPaths;
+
+interface Props {
+    posts: Post[];
+}
+
+const { posts } = Astro.props;
+
+// Newest year first. The year headings only appear once there is more than one.
+const years = new Map<number, Post[]>();
+for (const post of posts) {
+    const year = post.data.date.getUTCFullYear();
+    years.set(year, [...(years.get(year) ?? []), post]);
+}
+---
+
+<Base title="Blog" description="Everything Charlotte has written here.">
+    <div class="page-head">
+        <h1>Blog</h1>
+    </div>
+    {
+        years.size === 1 ? (
+            <ul class="post-list">
+                {posts.map((post) => (
+                    <PostRow post={post} />
+                ))}
+            </ul>
+        ) : (
+            [...years].map(([year, inYear]) => (
+                <section class="post-year">
+                    <h2 class="label">{year}</h2>
+                    <ul class="post-list">
+                        {inYear.map((post) => (
+                            <PostRow post={post} level={3} />
+                        ))}
+                    </ul>
+                </section>
+            ))
+        )
+    }
+</Base>

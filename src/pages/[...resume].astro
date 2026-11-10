@@ -1,0 +1,20 @@
+---
+// /resume/. A rest route with one fixed path, so that nothing at all is built
+// while the resume is still a draft.
+import type { GetStaticPaths } from "astro";
+import Resume from "../layouts/Resume.astro";
+import { getResume, type Resume as Entry } from "../lib/resume";
+
+export const getStaticPaths = (async () => {
+    const resume = await getResume();
+    return resume ? [{ params: { resume: "resume" }, props: { resume } }] : [];
+}) satisfies GetStaticPaths;
+
+interface Props {
+    resume: Entry;
+}
+
+const { resume } = Astro.props;
+---
+
+<Resume {resume} />

@@ -1,0 +1,26 @@
+/* Colors arrive as custom properties on <html>, from src/data/theme.ts. */
+
+:root {
+    color-scheme: dark;
+
+    /* One line of body text. Vertical spacing is counted in these. */
+    --line: 1.7rem;
+    --text: 1.125rem;
+
+    --page: 72rem;
+    --measure: 38rem;
+    --gutter: clamp(1.25rem, 4vw, 3rem);
+    --radius: 0.625rem;
+
+    --astro-code-foreground: var(--ink);
+    --astro-code-background: var(--surface);
+    --astro-code-token-comment: var(--muted);
+    --astro-code-token-keyword: var(--accent);
+    --astro-code-token-function: var(--ink);
+    --astro-code-token-string: var(--accent);
+    --astro-code-token-string-expression: var(--accent);
+    --astro-code-token-constant: var(--accent);
+    --astro-code-token-parameter: var(--ink);
+    --astro-code-token-punctuation: var(--muted);
+    --astro-code-token-link: var(--accent);
+}

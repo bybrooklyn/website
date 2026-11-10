@@ -1,0 +1,32 @@
+---
+name: OpenBitDo
+summary: A terminal tool for 8BitDo controllers and keyboards on Linux and macOS.
+language: Go
+status: not finished
+repo: bybrooklyn/openbitdo
+cover: ../../assets/projects/openbitdo/devices.png
+coverAlt: OpenBitDo running in mock mode, listing three devices on the left and one device's status and actions on the right.
+order: 8
+---
+
+## What it is
+
+A terminal tool for 8BitDo controllers and keyboards on Linux and macOS. It shows what each device supports, and won't write to one unless that's known to be safe.
+
+It is unofficial and not affiliated with 8BitDo.
+
+## What it does today
+
+- Detects connected 8BitDo devices and gives each a plain verdict: working, limited, can't connect, or no access.
+- Says for every device what you can do with it now, and what you can't do yet and why.
+- **Retro 108 keyboard:** assign any of its 111 keys and buttons to a key with an optional modifier, a media key or a mouse action.
+- **Ultimate 2 controller:** a full profile editor runs against a simulated controller. On a real controller it stays blocked until the button map is confirmed on hardware.
+- Firmware updates are switched off for now.
+
+## How it was made
+
+AI models were used to assist in development. The Go rewrite was completed by a team of four agents, and I did my due diligence on its security. The README says the same.
+
+## Getting it
+
+Homebrew (`brew tap bybrooklyn/openbitdo && brew install openbitdo`), the AUR (`paru -S openbitdo-bin`), or a release tarball. `openbitdo --mock` previews the interface without any hardware attached.

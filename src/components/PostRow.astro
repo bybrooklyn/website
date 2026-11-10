@@ -1,0 +1,52 @@
+---
+import { Image } from "astro:assets";
+import "../styles/blog.css";
+import { formatDate, readingTime, type Post } from "../lib/posts";
+
+interface Props {
+    post: Post;
+    /** Heading level, so the row fits the outline of the page it is on. */
+    level?: 2 | 3;
+    /** A shorter row for the homepage: title, date and summary only. */
+    compact?: boolean;
+}
+
+const { post, level = 2, compact = false } = Astro.props;
+const Heading = `h${level}` as const;
+const { title, summary, date, draft, cover, tags } = post.data;
+---
+
+{
+    compact ? (
+        <li class="post-row compact">
+            <a href={`/blog/${post.id}/`}>
+                <div class="post-row-head">
+                    <Heading>{title}</Heading>
+                    <time datetime={date.toISOString().slice(0, 10)}>{formatDate(date)}</time>
+                </div>
+                <p>
+                    {summary}
+                    {draft && <span class="post-draft"> Draft.</span>}
+                </p>
+            </a>
+        </li>
+    ) : (
+        <li class="post-row">
+            <a href={`/blog/${post.id}/`}>
+                {cover && <Image class="post-thumb" src={cover} alt="" width={320} height={200} fit="cover" />}
+                <div>
+                    <Heading>{title}</Heading>
+                    <p>{summary}</p>
+                    <p class="post-meta">
+                        <time datetime={date.toISOString().slice(0, 10)}>{formatDate(date)}</time>
+                        <span>{readingTime(post)}</span>
+                        {tags.map((tag) => (
+                            <span>{tag}</span>
+                        ))}
+                        {draft && <span>draft</span>}
+                    </p>
+                </div>
+            </a>
+        </li>
+    )
+}

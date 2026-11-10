@@ -1,0 +1,38 @@
+---
+name: Playmatter
+summary: A 2D physics sandbox about people, machines, and what one does to the other.
+language: Rust
+status: alpha, in development
+repo: bybrooklyn/playmatter
+link: { href: "https://playmatter.io", label: "playmatter.io" }
+cover: ../../assets/projects/playmatter/tower.webp
+coverAlt: A car beside a tower of wood, glass, and bricks in Playmatter.
+pixel: true
+gallery:
+    - { src: ../../assets/projects/playmatter/slam.webp, alt: "A ragdoll falling through an empty room." }
+    - { src: ../../assets/projects/playmatter/coil.webp, alt: "A coil gun firing a bolt of lightning through three ragdolls." }
+    - { src: ../../assets/projects/playmatter/crates.webp, alt: "A rock flying toward a stack of wooden crates." }
+    - { src: ../../assets/projects/playmatter/pillars.webp, alt: "A row of wooden planks standing on end, the first two tipping over like dominoes." }
+    - { src: ../../assets/projects/playmatter/tesla.webp, alt: "A Tesla coil arcing into a ragdoll's head." }
+order: 1
+---
+
+## What it is
+
+You get an empty room and a catalog of a few hundred things. You put them in, join them up, and see what happens. Spawn ragdolls, build things, wire machines together.
+
+It is in development for Windows and Linux, and goes out as alpha playtest builds.
+
+## How it's built
+
+Playmatter is written in Rust with Bevy and avian2d.
+
+The simulation runs on its own, without the game around it: physics setup, a hinge solver, people and biology, combat, items, heat, fire and electricity. The game is a layer on top: generated pixel art, the interface, tools, an editor, saves, sound, and a Luau mod host.
+
+## How it's tested
+
+A developer harness plays scripted sessions, runs headless benchmark scenes, and runs gameplay checks. A build has to pass four physics checks before anyone plays it.
+
+## Where to find it
+
+Everything about the game itself is on [playmatter.io](https://playmatter.io). The source is not public.

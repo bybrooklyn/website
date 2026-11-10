@@ -1,0 +1,47 @@
+---
+// A standalone long-form page from src/content/pages: /setup/, /about/.
+// It gets the same treatment as a post (contents beside the text)
+// but stays a main page, with the site's navigation.
+import type { GetStaticPaths } from "astro";
+import { getCollection, render, type CollectionEntry } from "astro:content";
+import "../styles/blog.css";
+import Contents from "../components/Contents.astro";
+import Base from "../layouts/Base.astro";
+import { showDrafts } from "../lib/drafts";
+
+export const getStaticPaths = (async () => {
+    const pages = await getCollection("pages", ({ data }) => showDrafts || !data.draft);
+    return pages.map((page) => ({ params: { page: page.id }, props: { entry: page } }));
+}) satisfies GetStaticPaths;
+
+interface Props {
+    entry: CollectionEntry<"pages">;
+}
+
+const { entry } = Astro.props;
+const { title, summary, kicker, numbered, draft } = entry.data;
+const { Content, headings } = await render(entry);
+---
+
+<Base {title} description={summary} unlisted={draft}>
+    <article class:list={["post", { manual: numbered }]}>
+        <header class="post-header">
+            {
+                (kicker || draft) && (
+                    <p class="post-meta">
+                        {kicker && <span>{kicker}</span>}
+                        {draft && <span>draft</span>}
+                    </p>
+                )
+            }
+            <h1>{title}</h1>
+            <p class="lede">{summary}</p>
+        </header>
+        <div class="post-body">
+            <Contents {headings} />
+            <div class="prose">
+                <Content />
+            </div>
+        </div>
+    </article>
+</Base>

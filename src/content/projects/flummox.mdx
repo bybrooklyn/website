@@ -1,0 +1,35 @@
+---
+name: Flummox
+summary: Compress your game library and keep playing it.
+language: Rust
+status: released
+repo: bybrooklyn/flummox
+link: { href: "https://github.com/bybrooklyn/flummox/releases", label: "Downloads" }
+cover: ../../assets/projects/flummox/games.png
+coverAlt: Flummox's games view with one game opened, showing its compression setting and storage options.
+gallery:
+    - { src: ../../assets/projects/flummox/jobs.png, alt: "The jobs view in settings, with one compression job running and one waiting." }
+    - { src: ../../assets/projects/flummox/games-light.png, alt: "The games view in the light theme." }
+order: 2
+---
+
+## What it is
+
+Your games take up less space and they still work after. Flummox is named for the reaction to how much storage you end up saving.
+
+## How it works
+
+Flummox gets your filesystem to compress your game files, or whatever else you add. The files are not moved. They are just stored in a different way.
+
+How much you get back depends on what is being compressed. Things that are already squeezed, like music and video, can't really be compressed again, so the gains there are small and not worth the CPU.
+
+## Getting it
+
+- **Windows:** an installer on the releases page.
+- **Arch and CachyOS:** `paru -S flummox-bin`.
+- **Other Linux:** archives on the releases page.
+- **macOS:** `brew tap bybrooklyn/flummox`, then `brew install --cask flummox`. The macOS build is a shell right now and needs more work.
+
+## Building it
+
+On Arch-based distros, clone the repo and run `makepkg -si` in `packaging/`. Elsewhere, with Rust and the FUSE development files installed, `cargo build --release --features gui,pack-mount`.

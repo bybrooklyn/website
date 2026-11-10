@@ -1,0 +1,534 @@
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+html {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--font-text);
+    font-variation-settings: var(--font-settings);
+    /* Everything is sized in rem, so the whole page grows a little on big screens. */
+    font-size: clamp(100%, 0.7rem + 0.4vw, 118%);
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    scrollbar-gutter: stable;
+    scroll-behavior: smooth;
+    scrollbar-color: var(--rule) transparent;
+    accent-color: var(--accent);
+}
+
+body {
+    max-width: calc(var(--page) + var(--gutter) * 2);
+    min-height: 100svh;
+    margin: 0 auto;
+    padding: calc(var(--line) * 1.25) var(--gutter) calc(var(--line) * 1.5);
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    row-gap: calc(var(--line) * 2.5);
+    font-size: var(--text);
+    line-height: var(--line);
+    font-weight: var(--text-weight);
+}
+
+::selection {
+    background: var(--accent);
+    color: var(--ground);
+}
+
+h1,
+h2,
+h3 {
+    margin: 0;
+    font-family: var(--font-head);
+    font-weight: var(--head-weight);
+    text-wrap: balance;
+}
+
+h1 {
+    font-size: clamp(2.75rem, 1.5rem + 5.5vw, 5.5rem);
+    line-height: 1;
+    letter-spacing: -0.02em;
+}
+
+h2 {
+    margin-top: calc(var(--line) * 2);
+    margin-bottom: calc(var(--line) * 0.5);
+    font-size: 1.75rem;
+    line-height: calc(var(--line) * 1.25);
+    letter-spacing: -0.01em;
+}
+
+h3 {
+    margin-top: var(--line);
+    font-size: 1.25rem;
+    line-height: var(--line);
+}
+
+p,
+ul,
+ol,
+figure,
+pre,
+blockquote {
+    margin: 0 0 var(--line);
+}
+
+p {
+    text-wrap: pretty;
+}
+
+a {
+    color: var(--accent);
+    text-decoration-line: underline;
+    text-decoration-thickness: 0.06em;
+    text-underline-offset: 0.2em;
+    text-decoration-color: color-mix(in oklch, var(--accent) 45%, transparent);
+}
+
+a:hover {
+    text-decoration-color: var(--accent);
+}
+
+a:focus-visible {
+    outline: 0.125rem solid var(--accent);
+    outline-offset: 0.2em;
+    border-radius: 0.2em;
+}
+
+img {
+    max-width: 100%;
+    height: auto;
+}
+
+code,
+kbd,
+pre {
+    font-family: var(--font-code);
+    font-variation-settings: normal;
+    font-size: 0.86em;
+    font-weight: 400;
+}
+
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+.skip {
+    position: absolute;
+    left: var(--gutter);
+    top: 0;
+    padding: 0.25em 0.75em;
+    background: var(--ink);
+    color: var(--ground);
+    translate: 0 -120%;
+}
+
+.skip:focus {
+    translate: 0 0;
+}
+
+/* Small supporting text: dates, captions, counts. */
+.note {
+    color: var(--muted);
+    font-size: 0.875em;
+}
+
+/* A small heading over a block of the homepage. */
+.label {
+    margin: 0 0 calc(var(--line) * 0.75);
+    font-family: var(--font-text);
+    font-size: 1rem;
+    font-weight: 600;
+    letter-spacing: 0;
+    line-height: var(--line);
+    color: var(--muted);
+}
+
+.lede {
+    max-width: 44rem;
+    font-size: 1.3em;
+    line-height: calc(var(--line) * 1.3);
+    color: var(--muted);
+}
+
+h1 + .lede {
+    margin-top: var(--line);
+}
+
+/* ---- header and footer ---- */
+
+.site-header,
+.site-footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.5rem 2rem;
+}
+
+.site-name {
+    font-family: var(--font-head);
+    font-weight: var(--head-weight);
+    font-size: 1.3em;
+    color: var(--ink);
+    text-decoration: none;
+}
+
+.site-header ul,
+.site-footer ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 1.5rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+@media (max-width: 28rem) {
+    .site-header ul {
+        column-gap: 1rem;
+    }
+}
+
+.site-header ul a {
+    color: var(--muted);
+    text-decoration: none;
+}
+
+.site-header ul a:hover,
+.site-header ul a[aria-current="page"] {
+    color: var(--accent);
+}
+
+.site-footer {
+    padding-top: var(--line);
+    border-top: 0.0625rem solid var(--rule);
+}
+
+.site-footer p {
+    margin: 0;
+}
+
+/*
+ * A link that says one thing and, when reached for, opens out into another:
+ * "email" becomes the address. The two texts are stacked in one cell. A few
+ * lines of script in Footer.astro measure each, so the link's width can ease
+ * from exactly one to exactly the other while the texts cross-fade. Until
+ * that has run, or without scripts, it is an ordinary link reading "email".
+ */
+.reveal {
+    display: inline-grid;
+    vertical-align: bottom;
+    white-space: nowrap;
+}
+
+.reveal > span {
+    grid-area: 1 / 1;
+    justify-self: start;
+    text-decoration: inherit;
+}
+
+.reveal:not(.ready) .reveal-full {
+    display: none;
+}
+
+.reveal.ready {
+    width: var(--short);
+    overflow: hidden;
+    /* room for the underline inside the clip */
+    padding-bottom: 0.3em;
+    margin-bottom: -0.3em;
+    transition: width 0.6s cubic-bezier(0.45, 0, 0.2, 1);
+}
+
+.reveal.ready > span {
+    transition: opacity 0.3s ease;
+}
+
+.reveal.ready .reveal-full {
+    opacity: 0;
+}
+
+.reveal.ready:hover,
+.reveal.ready:focus-visible {
+    width: var(--full);
+}
+
+/* The short word leaves first; the address arrives as the space opens. */
+.reveal.ready:hover .reveal-short,
+.reveal.ready:focus-visible .reveal-short {
+    opacity: 0;
+    transition-duration: 0.18s;
+}
+
+.reveal.ready:hover .reveal-full,
+.reveal.ready:focus-visible .reveal-full {
+    opacity: 1;
+    transition-delay: 0.2s;
+    transition-duration: 0.4s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .reveal.ready,
+    .reveal.ready > span {
+        transition: none;
+    }
+}
+
+/* ---- home ---- */
+
+.home {
+    display: grid;
+    gap: calc(var(--line) * 2.5);
+}
+
+.split {
+    display: grid;
+    gap: calc(var(--line) * 2.5) clamp(2.5rem, 5vw, 5rem);
+    align-items: start;
+}
+
+.split > * {
+    min-width: 0;
+}
+
+@media (min-width: 54rem) {
+    .split {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    /* Playmatter: the clip takes the larger share, the words sit beside it. */
+    .feature {
+        grid-template-columns: 3fr 2fr;
+        align-items: center;
+    }
+}
+
+.feature .figure {
+    margin: 0;
+}
+
+.about {
+    max-width: 46rem;
+    font-size: 1.2em;
+    line-height: calc(var(--line) * 1.2);
+}
+
+h1 + .about {
+    margin-top: var(--line);
+}
+
+.home h2 {
+    margin-top: 0;
+}
+
+/* The top of the homepage: who I am, and beside it what I write in. */
+.hero {
+    display: grid;
+    gap: calc(var(--line) * 1.5) clamp(2.5rem, 5vw, 5rem);
+}
+
+.hero > * {
+    min-width: 0;
+}
+
+@media (min-width: 54rem) {
+    .hero {
+        grid-template-columns: 3fr 2fr;
+        align-items: end;
+    }
+}
+
+.hero .about {
+    margin-bottom: 0;
+}
+
+/* Two small flags beside the site name. Rest on one for a moment to see what it is. */
+.site-id {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.flags {
+    display: flex;
+    gap: 0.35rem;
+}
+
+.flag {
+    position: relative;
+    display: block;
+    width: 1.5rem;
+    height: 0.95rem;
+    border-radius: 0.15rem;
+}
+
+.flag:focus-visible {
+    outline: 0.125rem solid var(--accent);
+    outline-offset: 0.2rem;
+}
+
+.flag .tip {
+    position: absolute;
+    top: calc(100% + 0.5rem);
+    left: 50%;
+    z-index: 3;
+    padding: 0.2rem 0.55rem;
+    translate: -50% 0;
+    border: 0.0625rem solid var(--rule);
+    border-radius: 0.4rem;
+    background: var(--surface);
+    color: var(--ink);
+    font-size: 0.8125rem;
+    line-height: 1.4;
+    white-space: nowrap;
+    opacity: 0;
+    visibility: hidden;
+    transition:
+        opacity 0.12s ease,
+        visibility 0.12s;
+}
+
+/* Only after the pointer has stayed half a second. Leaving hides it at once. */
+.flag:hover .tip,
+.flag:focus-visible .tip {
+    opacity: 1;
+    visibility: visible;
+    transition-delay: 0.5s;
+}
+
+.flag.trans {
+    background: linear-gradient(#5bcefa 0 20%, #f5a9b8 20% 40%, #fff 40% 60%, #f5a9b8 60% 80%, #5bcefa 80%);
+}
+
+.flag.lesbian {
+    background: linear-gradient(#d52d00 0 20%, #ff9a56 20% 40%, #fff 40% 60%, #d362a4 60% 80%, #a30262 80%);
+}
+
+/* ---- language bar ---- */
+
+.languages-bar {
+    display: flex;
+    gap: 0.1875rem;
+    height: 1.125rem;
+    border-radius: var(--radius);
+    overflow: hidden;
+}
+
+.languages-bar span {
+    flex: var(--share) 1 0;
+    min-width: 0.25rem;
+    background: var(--color);
+}
+
+.languages-key {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
+    gap: 0.1rem 1.5rem;
+    margin: calc(var(--line) * 0.5) 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+.languages-key li {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+}
+
+.languages-key li::before {
+    content: "";
+    width: 0.7rem;
+    height: 0.7rem;
+    border-radius: 50%;
+    background: var(--color);
+}
+
+.languages-key .note {
+    font-variant-numeric: tabular-nums;
+}
+
+/* ---- shared page pieces ---- */
+
+.more {
+    margin: calc(var(--line) * 0.75) 0 0;
+}
+
+.page-head {
+    margin-bottom: calc(var(--line) * 2);
+}
+
+/* ---- figures ---- */
+
+.figure {
+    margin-block: var(--line);
+}
+
+.figure a {
+    display: block;
+}
+
+.figure img,
+.figure video {
+    display: block;
+    height: auto;
+    width: 100%;
+    border-radius: var(--radius);
+    border: 0.0625rem solid var(--rule);
+}
+
+/* Playmatter is pixel art; keep its pixels square at any size. */
+.figure.pixel img,
+.figure.pixel video {
+    image-rendering: pixelated;
+}
+
+.figure figcaption {
+    margin-top: calc(var(--line) * 0.4);
+}
+
+@media print {
+    body {
+        display: block;
+        max-width: none;
+        padding: 0;
+    }
+
+    :root {
+        color-scheme: light;
+    }
+
+    /* The screen colors are set inline on <html>, so these need the extra weight. */
+    html {
+        background: #fff !important;
+        color: #000;
+        --ink: #000 !important;
+        --muted: #444 !important;
+        --accent: #000 !important;
+        --rule: #999 !important;
+        --surface: #f2f2f2 !important;
+    }
+
+    .site-header,
+    .site-footer,
+    .post-nav,
+    .skip {
+        display: none;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    html,
+    .opened-panel {
+        scroll-behavior: auto;
+    }
+}

@@ -1,0 +1,305 @@
+/* The resume on screen, and as the one-page PDF it prints to. */
+
+.resume-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    justify-content: space-between;
+    gap: var(--line) 2rem;
+    padding-bottom: var(--line);
+    border-bottom: 0.0625rem solid var(--rule);
+}
+
+.resume h1 {
+    font-size: clamp(2rem, 1.5rem + 2vw, 3rem);
+    letter-spacing: -0.01em;
+}
+
+.resume-contact {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.1rem 1.5rem;
+    margin: 0.5rem 0 0;
+    color: var(--muted);
+}
+
+.resume-pdf {
+    white-space: nowrap;
+}
+
+/* A wide column for experience and projects, a narrower one beside it. */
+.resume-columns {
+    display: grid;
+    gap: 0 clamp(2.5rem, 5vw, 5rem);
+    align-items: start;
+}
+
+@media (min-width: 62rem) {
+    .resume-columns {
+        grid-template-columns: minmax(0, 1.9fr) minmax(0, 1fr);
+    }
+
+    .resume-side {
+        position: sticky;
+        top: var(--line);
+    }
+}
+
+.resume-side .resume-skills {
+    grid-template-columns: 1fr;
+    gap: 0;
+}
+
+.resume-side .resume-skills dd {
+    margin-bottom: 0.5rem;
+    color: var(--muted);
+}
+
+/* The last name, until it is asked for. See LastName.astro. */
+.last-name {
+    display: inline-block;
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    letter-spacing: inherit;
+    color: inherit;
+    cursor: pointer;
+    filter: blur(0.2em);
+    opacity: 0.75;
+    transition:
+        filter 0.08s linear,
+        opacity 0.08s linear;
+    user-select: none;
+}
+
+.last-name:hover,
+.last-name:focus-visible {
+    filter: blur(0.11em);
+    opacity: 0.9;
+}
+
+.last-name:focus-visible {
+    outline: 0.125rem solid var(--accent);
+    outline-offset: 0.15em;
+    border-radius: 0.2em;
+}
+
+/* Clicked: the real name is in place and comes into focus. */
+.last-name.shown:focus {
+    outline: none;
+}
+
+.last-name.shown {
+    filter: none;
+    opacity: 1;
+    cursor: auto;
+    user-select: auto;
+    transition:
+        filter 0.25s ease-out,
+        opacity 0.25s ease-out;
+}
+
+.resume-summary {
+    max-width: 56rem;
+    margin: calc(var(--line) * 1.25) 0 0;
+    font-size: 1.2em;
+    line-height: calc(var(--line) * 1.2);
+}
+
+.resume h2 {
+    margin: calc(var(--line) * 2) 0 calc(var(--line) * 0.6);
+    font-family: var(--font-text);
+    font-size: 1rem;
+    font-weight: 600;
+    letter-spacing: 0;
+    line-height: var(--line);
+    color: var(--accent);
+    padding-bottom: calc(var(--line) * 0.4);
+    border-bottom: 0.0625rem solid var(--rule);
+}
+
+.resume h2 + .resume-entry,
+.resume h2 + .resume-skills {
+    border-top: 0;
+}
+
+.resume > p {
+    max-width: 56rem;
+}
+
+.resume-entry {
+    padding: calc(var(--line) * 0.6) 0;
+    border-top: 0.0625rem solid var(--rule);
+}
+
+.resume-line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0 1.5rem;
+}
+
+.resume-line strong {
+    font-family: var(--font-head);
+    font-weight: var(--head-weight);
+    font-size: 1.35rem;
+}
+
+.resume-line.small {
+    color: var(--muted);
+}
+
+.resume ul {
+    max-width: 60rem;
+    margin: 0.35rem 0 0;
+    padding-left: 1.1em;
+}
+
+.resume .web-only > ul {
+    margin-top: 0;
+}
+
+.resume li::marker {
+    color: var(--muted);
+}
+
+.resume-skills {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 0.25rem 2rem;
+    margin: 0;
+    padding-top: calc(var(--line) * 0.6);
+    border-top: 0.0625rem solid var(--rule);
+}
+
+.resume-skills dt {
+    font-weight: 600;
+}
+
+.resume-skills dd {
+    margin: 0;
+}
+
+@media (max-width: 34rem) {
+    .resume-skills {
+        grid-template-columns: 1fr;
+    }
+
+    .resume-skills dd {
+        margin-bottom: 0.4rem;
+    }
+}
+
+@page {
+    size: letter;
+    margin: 0.38in 0.5in;
+}
+
+@media print {
+    /* Paper is white whatever the site looks like on screen. */
+    :root {
+        color-scheme: light;
+    }
+
+    html {
+        font-size: 9.3pt;
+        background: #fff !important;
+    }
+
+    .resume-pdf,
+    .web-only {
+        display: none;
+    }
+
+    .resume-columns {
+        display: block;
+    }
+
+    .resume-side .resume-skills {
+        grid-template-columns: max-content 1fr;
+        gap: 0 12pt;
+    }
+
+    .resume-side .resume-skills dd {
+        margin: 0;
+        color: inherit;
+    }
+
+    main {
+        display: block;
+    }
+
+    .resume {
+        font-size: 9.3pt;
+        line-height: 1.15;
+        color: #222;
+    }
+
+    .resume-head {
+        padding-bottom: 0;
+        border: 0;
+    }
+
+    .resume h1 {
+        font-size: 19pt;
+    }
+
+    .resume h2 {
+        margin: 3.5pt 0 1.5pt;
+        padding-bottom: 1pt;
+        border-bottom: 0.75pt solid #005f73;
+        font-size: 11pt;
+        font-weight: 700;
+        line-height: 1.2;
+        color: #005f73;
+    }
+
+    .resume a {
+        color: #005f73;
+        text-decoration: none;
+    }
+
+    .resume-contact,
+    .resume-line.small {
+        color: #333;
+    }
+
+    .resume-contact {
+        margin-top: 2pt;
+        gap: 0 14pt;
+    }
+
+    .resume-summary {
+        margin-top: 5pt;
+        font-size: 1em;
+        line-height: inherit;
+    }
+
+    .resume > p {
+        margin: 0;
+        max-width: none;
+    }
+
+    .resume-entry {
+        padding: 1.5pt 0;
+        border: 0;
+    }
+
+    .resume-line strong {
+        font-size: 1em;
+        font-weight: 700;
+    }
+
+    .resume ul {
+        margin-top: 1pt;
+        max-width: none;
+    }
+
+    .resume-skills {
+        gap: 0 12pt;
+        padding: 0;
+        border: 0;
+    }
+}

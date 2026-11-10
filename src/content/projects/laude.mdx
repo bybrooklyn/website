@@ -1,0 +1,33 @@
+---
+name: laude
+summary: A 3D game engine and visual editor with a PSX look, where games are plain Rust.
+language: Rust
+status: in development
+repo: bybrooklyn/laude
+cover: ../../assets/projects/laude/hello.png
+coverAlt: laude's hello example, a checkered cube on a checkered floor, with the warped textures of a PlayStation 1 game.
+pixel: true
+order: 5
+---
+
+## What it is
+
+A host-first 3D game engine and visual editor. The runtime is Rust, built on wgpu, winit and kira, with a pure-Rust port of Box3D for physics.
+
+Games are ordinary Rust crates that implement `laude::Game`. There is no scripting layer.
+
+## The look
+
+A software-PSX look on wgpu: affine texture mapping, vertex lighting, fog, dithering and 15-bit color, with optional vertex snapping. Any internal resolution, scaled up with nearest-neighbor to any window size.
+
+## What's in it
+
+- Fixed 60 Hz logic and physics, decoupled from the render rate.
+- A desktop editor with project creation, a scene hierarchy, a 3D viewport, snapping, an inspector, undo and redo, glTF import, and reusable prefabs.
+- Play and Build from the editor. Both compile the project crate with Cargo.
+- Optional host-authoritative multiplayer over iroh, with invite links and rooms of up to twelve.
+- Positional 2D and 3D audio, and an immediate-mode HUD.
+
+## Status
+
+The current target is Linux. It is MIT licensed, and games built with it can use any license. The repository is not public yet.

@@ -1,0 +1,59 @@
+---
+interface Props {
+    src: string;
+    alt: string;
+    width: number;
+    height: number;
+    caption?: string;
+    /** Wrap the image in a link. */
+    href?: string;
+    /** A short silent clip to play in place of the image, which becomes its poster. */
+    video?: string;
+    /** Pixel art: scale without smoothing. */
+    pixel?: boolean;
+    /** Above the fold: load first. */
+    eager?: boolean;
+}
+
+const { src, alt, width, height, caption, href, video, pixel = false, eager = false } = Astro.props;
+const loading = eager ? "eager" : "lazy";
+const fetchpriority = eager ? "high" : undefined;
+---
+
+<figure class:list={["figure", { pixel }]}>
+    {
+        video ? (
+            <video
+                src={video}
+                poster={src}
+                {width}
+                {height}
+                aria-label={alt}
+                autoplay
+                muted
+                loop
+                playsinline
+                preload={eager ? "auto" : "metadata"}
+            />
+        ) : href ? (
+            <a {href}>
+                <img {src} {alt} {width} {height} {loading} {fetchpriority} decoding="async" />
+            </a>
+        ) : (
+            <img {src} {alt} {width} {height} {loading} {fetchpriority} decoding="async" />
+        )
+    }
+    {caption && <figcaption class="note">{caption}</figcaption>}
+</figure>
+
+<script>
+    // A looping clip should not play for someone who has asked for less motion:
+    // stop it on its poster and hand over the controls.
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        for (const video of document.querySelectorAll<HTMLVideoElement>(".figure video")) {
+            video.removeAttribute("autoplay");
+            video.pause();
+            video.controls = true;
+        }
+    }
+</script>

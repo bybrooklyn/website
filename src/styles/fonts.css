@@ -1,0 +1,47 @@
+/*
+ * The typefaces are named here and nowhere else.
+ *
+ * Torrens Serif is my own cut of Fraunces (by Undercase Type, SIL Open Font
+ * License): softness at its maximum and fixed at the size meant for headings.
+ * That makes it tight at small sizes, so paragraphs are set in Fraunces
+ * itself, at the same softness, which adjusts to the size it is used at.
+ * To try Torrens Serif for everything, point --font-text at it too.
+ */
+
+@import "@fontsource-variable/fraunces/full.css";
+@import "@fontsource-variable/fraunces/full-italic.css";
+
+@font-face {
+    font-family: "Torrens Serif";
+    src: url("../assets/fonts/torrens-serif.woff2") format("woff2");
+    font-weight: 100 900;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "Torrens Serif";
+    src: url("../assets/fonts/torrens-serif-italic.woff2") format("woff2");
+    font-weight: 100 900;
+    font-style: italic;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "Drafting Mono";
+    src: url("../assets/fonts/drafting-mono.woff2") format("woff2");
+    font-weight: 100 700;
+    font-style: normal;
+    font-display: swap;
+}
+
+:root {
+    --font-head: "Torrens Serif", "Fraunces Variable", Georgia, serif;
+    --font-text: "Fraunces Variable", Georgia, serif;
+    --font-code: "Drafting Mono", ui-monospace, "Courier New", monospace;
+
+    --head-weight: 520;
+    --text-weight: 400;
+    /* Fraunces' softness axis at its roundest, without the wonky alternates. */
+    --font-settings: "SOFT" 100, "WONK" 0;
+}

@@ -1,0 +1,54 @@
+---
+title: Kitchen sink
+date: 2026-11-09
+summary: A draft that uses every piece a post can use, for checking the design. It is never published.
+accent: pink
+cover: ../../assets/covers/kitchen-sink.png
+coverAlt: A car beside a tower of wood, glass, and bricks in Playmatter.
+tags: [design, test]
+draft: true
+---
+
+import Figure from "../../components/Figure.astro";
+import DropBox from "../../demos/DropBox.astro";
+
+The first paragraph runs long enough to wrap, so there is something to judge the spacing by. Here is *emphasis*, **strong text**, a [link](https://playmatter.io), and some `inline code`.
+
+## A heading
+
+- A list item
+- Another, with `code`
+- A third
+
+1. First
+2. Second
+3. Third
+
+> A quotation, in italics, with a bar in the accent color.
+
+### A smaller heading
+
+```rust
+fn main() {
+    let blocks = vec!["brick", "glass", "wood"];
+    for block in &blocks {
+        println!("spawned {block}"); // a comment
+    }
+}
+```
+
+| Accent | Hue |
+| ------ | --- |
+| violet | 300 |
+| pink   | 350 |
+| mint   | 165 |
+
+---
+
+<Figure src="/assets/playmatter.webp" alt="A car beside a tower of wood, glass, and bricks in Playmatter." width={960} height={488} caption="A figure with a caption. Pixel art stays sharp." pixel />
+
+## A demo
+
+<DropBox />
+
+The text carries on after the demo.

@@ -1,0 +1,37 @@
+---
+name: yqt
+summary: A native YouTube Music client in Rust, Qt 6 and Kirigami.
+language: Rust
+status: in development
+repo: bybrooklyn/ytm-qt
+cover: ../../assets/projects/yqt/home.png
+coverAlt: yqt's home screen, with rows of top artists and chart playlists.
+gallery:
+    - { src: ../../assets/projects/yqt/artist.png, alt: "An artist page with a photo, a short bio from Wikipedia and a list of top songs." }
+    - { src: ../../assets/projects/yqt/lyrics.png, alt: "The now-playing view with synced lyrics, the current line highlighted." }
+    - { src: ../../assets/projects/yqt/queue.png, alt: "The now-playing view with the Up next queue." }
+    - { src: ../../assets/projects/yqt/album.png, alt: "An album page with its description and track list." }
+    - { src: ../../assets/projects/yqt/settings.png, alt: "Settings, showing the 10-band equalizer and the download options." }
+order: 4
+---
+
+## What it is
+
+A native YouTube Music client written in Rust, Qt 6 (through cxx-qt) and Kirigami. No browser engine, no Electron, no FFmpeg, no system OpenSSL.
+
+It looks and behaves like a normal KDE application: standard Kirigami and Breeze controls, nothing hand-drawn.
+
+## What it does
+
+- **Browse and play.** Home and Explore as shelves of cards; album, playlist and artist pages; library, search, queue, shuffle, repeat and radio.
+- **Lyrics.** Three providers are asked in parallel and line-synced lyrics always win. The current line is tinted with the cover's color and filled as it is sung.
+- **Downloads.** Per song, album or playlist, plus opt-in smart downloads within a storage limit. Downloaded songs play from disk.
+- **Mini-player and system tray**, MPRIS media keys, and configurable keyboard shortcuts.
+
+## The audio engine
+
+Qt Multimedia plays audio by default. You can switch to the built-in engine, which is pure Rust, for gapless playback, crossfade, loudness normalization and a 10-band equalizer with presets.
+
+## Building it
+
+You need `just`, Rust, Qt 6 and Kirigami. Then `just run` builds and runs it, and `just install` puts it in `~/.local/bin` with a desktop entry. The repository is not public yet.

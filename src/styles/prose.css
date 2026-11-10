@@ -1,0 +1,146 @@
+/* Everything a post's Markdown can produce. */
+
+.prose {
+    max-width: var(--measure);
+}
+
+.prose > :first-child {
+    margin-top: 0;
+}
+
+.prose h2 a,
+.prose h3 a {
+    color: inherit;
+    text-decoration: none;
+}
+
+.prose ul,
+.prose ol {
+    padding-left: 1.25em;
+}
+
+.prose li::marker {
+    color: var(--accent);
+}
+
+.prose li + li {
+    margin-top: calc(var(--line) * 0.25);
+}
+
+.prose strong {
+    font-weight: 650;
+}
+
+.prose blockquote {
+    margin-inline: 0;
+    padding-left: 1.25rem;
+    border-left: 0.1875rem solid var(--accent);
+    font-style: italic;
+    color: var(--muted);
+}
+
+.prose blockquote > :last-child {
+    margin-bottom: 0;
+}
+
+.prose hr {
+    margin: calc(var(--line) * 2) 0;
+    border: 0;
+    border-top: 0.0625rem solid var(--rule);
+}
+
+.prose :not(pre) > code {
+    padding: 0.05em 0.35em;
+    border-radius: 0.3em;
+    background: var(--surface);
+    /* when it wraps, each piece keeps its own rounded ends */
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
+}
+
+/* The block already sets the size; the code inside must not shrink again. */
+.prose pre code {
+    font-size: inherit;
+}
+
+.prose pre {
+    padding: calc(var(--line) * 0.75) 1.25rem;
+    overflow-x: auto;
+    border-radius: var(--radius);
+    border: 0.0625rem solid var(--rule);
+    line-height: 1.6;
+    tab-size: 4;
+}
+
+.prose table {
+    width: 100%;
+    margin-bottom: var(--line);
+    border-collapse: collapse;
+    font-variant-numeric: tabular-nums;
+}
+
+.prose th,
+.prose td {
+    padding: calc(var(--line) * 0.25) 0.75rem calc(var(--line) * 0.25) 0;
+    border-bottom: 0.0625rem solid var(--rule);
+    text-align: left;
+    vertical-align: top;
+}
+
+.prose th {
+    font-weight: 650;
+    color: var(--muted);
+}
+
+.prose img {
+    border-radius: var(--radius);
+}
+
+/* Demos are small machines embedded in a post. */
+.demo {
+    margin-block: var(--line);
+    border: 0.0625rem solid var(--rule);
+    border-radius: var(--radius);
+    overflow: hidden;
+}
+
+.demo .note {
+    margin: 0;
+    padding: 0.4rem 1rem;
+    border-top: 0.0625rem solid var(--rule);
+}
+
+/* Room to breathe between the parts of a post. */
+.prose h2 {
+    margin-top: calc(var(--line) * 2.75);
+    margin-bottom: calc(var(--line) * 0.75);
+    font-size: 2rem;
+    line-height: calc(var(--line) * 1.5);
+    scroll-margin-top: var(--line);
+}
+
+.prose h3 {
+    margin-top: calc(var(--line) * 2);
+    margin-bottom: calc(var(--line) * 0.5);
+    font-size: 1.35rem;
+    scroll-margin-top: var(--line);
+}
+
+.prose pre,
+.prose table,
+.prose blockquote,
+.prose .figure,
+.prose .demo {
+    margin-block: calc(var(--line) * 1.5);
+}
+
+.prose > p:first-child {
+    font-size: 1.12em;
+    line-height: calc(var(--line) * 1.12);
+}
+
+/* A table straight after its heading sits as close as a paragraph would. */
+.prose h2 + table,
+.prose h3 + table {
+    margin-top: calc(var(--line) * 0.5);
+}

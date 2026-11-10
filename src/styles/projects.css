@@ -1,0 +1,138 @@
+/* The projects list and an opened project. An opened project borrows the
+   post's layout from blog.css; this file adds what is its own. */
+
+.project-list {
+    display: grid;
+    gap: 0 clamp(2rem, 4vw, 4rem);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+@media (min-width: 62rem) {
+    .project-list {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+.project-list a {
+    display: grid;
+    grid-template-columns: clamp(6rem, 22vw, 11rem) 1fr;
+    gap: clamp(1rem, 2.5vw, 1.75rem);
+    align-items: start;
+    height: 100%;
+    padding: calc(var(--line) * 1.1) 0;
+    border-top: 0.0625rem solid var(--rule);
+    color: var(--ink);
+    text-decoration: none;
+}
+
+.project-list h2 {
+    margin: 0;
+    font-size: clamp(1.5rem, 1.2rem + 1vw, 2rem);
+    line-height: 1.15;
+    transition: color 0.15s ease;
+}
+
+.project-list a:hover h2 {
+    color: var(--accent);
+}
+
+.project-list p {
+    margin: 0.3rem 0 0;
+    color: var(--muted);
+    line-height: 1.4;
+}
+
+.project-list .post-meta {
+    margin-top: 0.5rem;
+}
+
+.project-thumb {
+    display: block;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 16 / 10;
+    /* The whole picture, never a crop: a wide banner keeps all its letters. */
+    object-fit: contain;
+    border-radius: var(--radius);
+    border: 0.0625rem solid var(--rule);
+    background: var(--surface);
+    transition: border-color 0.15s ease;
+}
+
+.project-list a:hover .project-thumb {
+    border-color: var(--accent);
+}
+
+/* No picture yet: the project's initial stands in. */
+.project-thumb.empty {
+    display: grid;
+    place-items: center;
+    font-family: var(--font-head);
+    font-size: 2.5rem;
+    color: var(--muted);
+}
+
+.pixel {
+    image-rendering: pixelated;
+}
+
+/* ---- an opened project ---- */
+
+.facts {
+    margin: 0 0 calc(var(--line) * 2);
+    border-top: 0.0625rem solid var(--rule);
+    font-size: 0.95em;
+}
+
+.facts div {
+    display: grid;
+    grid-template-columns: minmax(5.5rem, 8.5rem) 1fr;
+    gap: 0 1rem;
+    padding: calc(var(--line) * 0.3) 0;
+    border-bottom: 0.0625rem solid var(--rule);
+}
+
+.facts dt {
+    color: var(--muted);
+}
+
+.facts dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+.prose .facts + h2 {
+    margin-top: 0;
+}
+
+.gallery {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 13rem), 1fr));
+    gap: 1rem;
+    align-items: start;
+    max-width: var(--measure);
+    margin-top: calc(var(--line) * 2);
+}
+
+.gallery a {
+    display: block;
+}
+
+.gallery img {
+    display: block;
+    width: 100%;
+    height: auto;
+    /* A tall phone screenshot should not take a screen to itself. */
+    max-height: 24rem;
+    object-fit: contain;
+    background: var(--surface);
+    border-radius: var(--radius);
+    border: 0.0625rem solid var(--rule);
+    transition: border-color 0.15s ease;
+}
+
+.gallery a:hover img {
+    border-color: var(--accent);
+}

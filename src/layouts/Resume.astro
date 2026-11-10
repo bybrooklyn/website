@@ -1,0 +1,38 @@
+---
+import "../styles/resume.css";
+import Base from "./Base.astro";
+import { render } from "astro:content";
+import LastName from "../components/LastName.astro";
+import { site } from "../data/site";
+import { resumePdf, type Resume } from "../lib/resume";
+
+interface Props {
+    resume: Resume;
+}
+
+const { resume } = Astro.props;
+const { Content } = await render(resume);
+const plain = (url: string) => url.replace(/^https?:\/\//, "");
+---
+
+<Base title="Resume" description={resume.data.summary} unlisted={resume.data.draft}>
+    <article class="resume">
+        <header class="resume-head">
+            <div>
+                <h1>{site.name} <LastName /></h1>
+                <p class="resume-contact">
+                    <span>{site.pronouns}</span>
+                    <span>{site.location}</span>
+                    <a href={`mailto:${site.email}`}>{site.email}</a>
+                    <a href={site.github}>{plain(site.github)}</a>
+                    <a href={Astro.site}>{Astro.site?.host}</a>
+                </p>
+            </div>
+            <a class="resume-pdf" href={resumePdf} download>Download PDF</a>
+        </header>
+        <p class="resume-summary">{resume.data.summary}</p>
+        <div class="resume-columns">
+            <Content />
+        </div>
+    </article>
+</Base>

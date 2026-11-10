@@ -1,0 +1,49 @@
+---
+import { site } from "../data/site";
+import { build } from "../lib/build";
+import { getPosts } from "../lib/posts";
+
+const hasPosts = (await getPosts()).length > 0;
+---
+
+<footer class="site-footer">
+    <ul>
+        <li>
+            <a class="reveal" href={`mailto:${site.email}`}>
+                <span class="reveal-short">email</span>
+                <span class="reveal-full" aria-hidden="true">{site.email}</span>
+            </a>
+        </li>
+        <li><a href={site.github} rel="me">github</a></li>
+        <li><a href={site.discord} rel="me">discord</a></li>
+        {hasPosts && (
+            <li>
+                <a href="/rss.xml">rss</a>
+            </li>
+        )}
+        <li><a href={site.source}>source</a></li>
+    </ul>
+    <p class="note">
+        Built <time datetime={build.iso}>{build.time}</time>{build.commit && <> from <code>{build.commit}</code></>}
+    </p>
+</footer>
+
+<script>
+    // Measure both texts of a revealing link so its width can ease between them.
+    function measure() {
+        for (const link of document.querySelectorAll<HTMLElement>(".reveal")) {
+            const short = link.querySelector<HTMLElement>(".reveal-short");
+            const full = link.querySelector<HTMLElement>(".reveal-full");
+            if (!short || !full) continue;
+            link.classList.remove("ready");
+            full.style.display = "inline";
+            link.style.setProperty("--short", `${short.getBoundingClientRect().width}px`);
+            link.style.setProperty("--full", `${full.getBoundingClientRect().width}px`);
+            full.style.display = "";
+            link.classList.add("ready");
+        }
+    }
+    measure();
+    // The widths change once the real typeface has arrived.
+    document.fonts.ready.then(measure);
+</script>

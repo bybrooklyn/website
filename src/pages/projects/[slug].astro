@@ -1,0 +1,142 @@
+---
+import type { GetStaticPaths } from "astro";
+import { Image } from "astro:assets";
+import { render } from "astro:content";
+import "../../styles/blog.css";
+import "../../styles/projects.css";
+import Contents from "../../components/Contents.astro";
+import Opened from "../../layouts/Opened.astro";
+import { formatDate } from "../../lib/posts";
+import { getProjects, projectFacts, type Project } from "../../lib/projects";
+
+export const getStaticPaths = (async () => {
+    const projects = await getProjects();
+    return projects.map((project, index) => ({
+        params: { slug: project.id },
+        props: { project, previous: projects[index - 1], next: projects[index + 1] },
+    }));
+}) satisfies GetStaticPaths;
+
+interface Props {
+    project: Project;
+    previous?: Project;
+    next?: Project;
+}
+
+const { project, previous, next } = Astro.props;
+const { name, summary, language, status, repo, link, cover, coverAlt, pixel, gallery } = project.data;
+const { Content, headings } = await render(project);
+const facts = projectFacts(project);
+
+const rows: [string, string][] = [["Language", language]];
+if (status) rows.push(["Status", status]);
+if (facts?.license) rows.push(["License", facts.license]);
+if (facts?.release) rows.push(["Latest release", facts.release]);
+if (facts && facts.stars > 0) rows.push(["Stars", String(facts.stars)]);
+if (facts) rows.push(["Last updated", formatDate(new Date(facts.updated))]);
+---
+
+<Opened title={name} description={summary} image={cover} back={{ href: "/projects/", label: "projects" }}>
+    <article class="post">
+        <header class="post-header">
+            <p class="post-meta">
+                <span>{language}</span>
+                {status && <span>{status}</span>}
+            </p>
+            <h1>{name}</h1>
+            <p class="lede">{summary}</p>
+        </header>
+
+        {
+            cover && (
+                <Image
+                    class:list={["post-cover", { pixel }]}
+                    src={cover}
+                    alt={coverAlt ?? ""}
+                    widths={[640, 960, 1440]}
+                    sizes="(min-width: 60rem) 46rem, 100vw"
+                    loading="eager"
+                />
+            )
+        }
+
+        <div class="post-body">
+            <Contents {headings} />
+            <div class="prose">
+                <dl class="facts">
+                    {
+                        rows.map(([label, value]) => (
+                            <div>
+                                <dt>{label}</dt>
+                                <dd>{value}</dd>
+                            </div>
+                        ))
+                    }
+                    <div>
+                        <dt>Source</dt>
+                        <dd>
+                            <a href={`https://github.com/${repo}`}>github.com/{repo}</a>
+                            {facts && !facts.public && <span class="note"> (not public yet)</span>}
+                        </dd>
+                    </div>
+                    {
+                        link && (
+                            <div>
+                                <dt>Link</dt>
+                                <dd>
+                                    <a href={link.href}>{link.label}</a>
+                                </dd>
+                            </div>
+                        )
+                    }
+                </dl>
+
+                <Content />
+            </div>
+        </div>
+
+        {
+            gallery.length > 0 && (
+                <section class="gallery" aria-label="Screenshots">
+                    {gallery.map((picture) => (
+                        <a href={picture.src.src}>
+                            <Image
+                                class:list={{ pixel }}
+                                src={picture.src}
+                                alt={picture.alt}
+                                widths={[480, 960]}
+                                sizes="(min-width: 60rem) 24rem, 50vw"
+                            />
+                        </a>
+                    ))}
+                </section>
+            )
+        }
+
+        <nav class="post-nav" aria-label="More projects">
+            {
+                previous ? (
+                    <a href={`/projects/${previous.id}/`}>
+                        <span class="note">Previous </span>
+                        {previous.data.name}
+                    </a>
+                ) : (
+                    <span />
+                )
+            }
+            {
+                next ? (
+                    <a class="next" href={`/projects/${next.id}/`}>
+                        <span class="note">Next </span>
+                        {next.data.name}
+                    </a>
+                ) : (
+                    <a class="next" href="/projects/">
+                        <span class="note">That's all of them. </span>
+                        All projects
+                    </a>
+                )
+            }
+        </nav>
+    </article>
+</Opened>

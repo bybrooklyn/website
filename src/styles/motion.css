@@ -1,0 +1,149 @@
+/*
+ * How the site moves between pages. Document.astro labels each change of page
+ * with one of four kinds:
+ *
+ *   open   a main page to a post or project: the site slides off to the left,
+ *          leaving the strip, and the panel follows it in from the right
+ *   close  the reverse: the panel leaves to the right and the site returns
+ *   move   one main page to another: the content shifts a short way
+ *   swap   one opened page to another: the same short shift, inside the panel
+ *
+ * One easing for all of it: quick to start, long and soft to finish, and it
+ * never overshoots. Nothing moves for anyone who has asked for reduced motion.
+ */
+
+:root {
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* The header belongs to the site, so it slides away with it but holds still between main pages. */
+.site-header {
+    view-transition-name: site-header;
+}
+
+.opened-panel {
+    view-transition-name: panel;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    @view-transition {
+        navigation: auto;
+    }
+
+    ::view-transition-group(*) {
+        animation-duration: 0.5s;
+        animation-timing-function: var(--ease);
+    }
+
+    ::view-transition-old(*),
+    ::view-transition-new(*) {
+        mix-blend-mode: normal;
+        animation-duration: 0.5s;
+        animation-timing-function: var(--ease);
+        animation-fill-mode: both;
+    }
+
+    /* ---- open ---- */
+
+    html:active-view-transition-type(open)::view-transition-old(root),
+    html:active-view-transition-type(open)::view-transition-old(site-header) {
+        z-index: 1;
+        animation-name: site-leave;
+    }
+
+    html:active-view-transition-type(open)::view-transition-new(root) {
+        animation: none;
+    }
+
+    html:active-view-transition-type(open)::view-transition-new(panel) {
+        animation-name: panel-arrive;
+    }
+
+    /* ---- close ---- */
+
+    html:active-view-transition-type(close)::view-transition-old(root) {
+        animation: none;
+    }
+
+    html:active-view-transition-type(close)::view-transition-new(root),
+    html:active-view-transition-type(close)::view-transition-new(site-header) {
+        animation-name: site-return;
+    }
+
+    html:active-view-transition-type(close)::view-transition-old(panel) {
+        animation-name: panel-leave;
+    }
+
+    /* ---- move, swap ---- */
+
+    html:active-view-transition-type(move)::view-transition-old(root),
+    html:active-view-transition-type(swap)::view-transition-old(panel) {
+        animation-name: shift-out;
+        animation-duration: 0.22s;
+        animation-timing-function: ease-in;
+    }
+
+    html:active-view-transition-type(move)::view-transition-new(root),
+    html:active-view-transition-type(swap)::view-transition-new(panel) {
+        animation-name: shift-in;
+        animation-duration: 0.45s;
+    }
+
+    html:active-view-transition-type(swap)::view-transition-old(root),
+    html:active-view-transition-type(swap)::view-transition-new(root) {
+        animation: none;
+    }
+
+    /* The site travels the width of the window, less the strip it leaves behind. */
+    @keyframes site-leave {
+        60% {
+            opacity: 1;
+        }
+        to {
+            translate: calc(var(--strip) - 100vw) 0;
+            opacity: 0;
+        }
+    }
+
+    @keyframes site-return {
+        from {
+            translate: calc(var(--strip) - 100vw) 0;
+            opacity: 0;
+        }
+        40% {
+            opacity: 1;
+        }
+    }
+
+    @keyframes panel-arrive {
+        from {
+            translate: calc(100vw - var(--strip)) 0;
+        }
+    }
+
+    @keyframes panel-leave {
+        to {
+            translate: calc(100vw - var(--strip)) 0;
+        }
+    }
+
+    @keyframes shift-out {
+        to {
+            translate: -1.5rem 0;
+            opacity: 0;
+        }
+    }
+
+    @keyframes shift-in {
+        from {
+            translate: 1.5rem 0;
+            opacity: 0;
+        }
+    }
+
+    a {
+        transition:
+            color 0.15s ease,
+            text-decoration-color 0.15s ease;
+    }
+}

@@ -1,0 +1,36 @@
+---
+// One item on a resume: a title with something on the right (dates, status),
+// an optional second line, and bullets in the slot. `web` keeps an entry on
+// the website only, out of the one-page PDF.
+
+interface Props {
+    title: string;
+    /** Right of the title: dates or status. */
+    when?: string;
+    /** Second line, left. */
+    role?: string;
+    /** Second line, right. */
+    where?: string;
+    /** Makes the right side of the second line a link. */
+    href?: string;
+    web?: boolean;
+}
+
+const { title, when, role, where, href, web = false } = Astro.props;
+---
+
+<div class:list={["resume-entry", { "web-only": web }]}>
+    <div class="resume-line">
+        <strong>{title}</strong>
+        {when && <span>{when}</span>}
+    </div>
+    {
+        (role || where) && (
+            <div class="resume-line small">
+                <span>{role}</span>
+                {where && (href ? <a {href}>{where}</a> : <span>{where}</span>)}
+            </div>
+        )
+    }
+    <slot />
+</div>

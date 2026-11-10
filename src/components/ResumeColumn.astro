@@ -1,0 +1,12 @@
+---
+// One of the resume's two columns: the wide one for experience and projects,
+// or the narrow one beside it.
+
+interface Props {
+    side?: boolean;
+}
+
+const { side = false } = Astro.props;
+---
+
+<div class:list={side ? "resume-side" : "resume-main"}><slot /></div>

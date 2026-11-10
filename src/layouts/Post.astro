@@ -1,0 +1,76 @@
+---
+import { Image } from "astro:assets";
+import type { MarkdownHeading } from "astro";
+import "../styles/blog.css";
+import Opened from "./Opened.astro";
+import Contents from "../components/Contents.astro";
+import { formatDate, readingTime, type Post } from "../lib/posts";
+
+interface Props {
+    post: Post;
+    headings: MarkdownHeading[];
+    newer?: Post;
+    older?: Post;
+}
+
+const { post, headings, newer, older } = Astro.props;
+const { title, summary, date, accent, draft, cover, coverAlt, tags } = post.data;
+---
+
+<Opened {title} description={summary} {accent} type="article" unlisted={draft} image={cover} back={{ href: "/blog/", label: "blog" }}>
+    <article class="post">
+        <header class="post-header">
+            <p class="post-meta">
+                <time datetime={date.toISOString().slice(0, 10)}>{formatDate(date)}</time>
+                <span>{readingTime(post)}</span>
+                {draft && <span>draft</span>}
+            </p>
+            <h1>{title}</h1>
+            <p class="lede">{summary}</p>
+            {
+                tags.length > 0 && (
+                    <ul class="tags" aria-label="Tags">
+                        {tags.map((tag) => (
+                            <li>{tag}</li>
+                        ))}
+                    </ul>
+                )
+            }
+        </header>
+
+        {cover && <Image class="post-cover" src={cover} alt={coverAlt ?? ""} widths={[640, 960, 1440]} sizes="(min-width: 60rem) 56rem, 100vw" loading="eager" />}
+
+        <div class="post-body">
+            <Contents {headings} />
+            <div class="prose">
+                <slot />
+            </div>
+        </div>
+
+        <nav class="post-nav" aria-label="More posts">
+            {
+                older ? (
+                    <a href={`/blog/${older.id}/`}>
+                        <span class="note">Older </span>
+                        {older.data.title}
+                    </a>
+                ) : (
+                    <span />
+                )
+            }
+            {
+                newer ? (
+                    <a class="next" href={`/blog/${newer.id}/`}>
+                        <span class="note">Newer </span>
+                        {newer.data.title}
+                    </a>
+                ) : (
+                    <a class="next" href="/blog/">
+                        <span class="note">That's the latest. </span>
+                        All posts
+                    </a>
+                )
+            }
+        </nav>
+    </article>
+</Opened>

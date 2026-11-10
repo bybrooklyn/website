@@ -1,0 +1,16 @@
+---
+// One stop on a Timeline. `chapter` makes it a heading for the stops after it.
+
+interface Props {
+    when?: string;
+    chapter?: string;
+}
+
+const { when, chapter } = Astro.props;
+---
+
+<li class:list={["moment", { chapter: Boolean(chapter) }]}>
+    <span class="moment-mark" aria-hidden="true"></span>
+    {chapter ? <h3>{chapter}</h3> : when && <p class="moment-when">{when}</p>}
+    <div class="moment-text"><slot /></div>
+</li>

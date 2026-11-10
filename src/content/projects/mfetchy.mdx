@@ -1,0 +1,38 @@
+---
+name: mFetchy
+summary: Download your music library as tagged audio files, from the best source for each song.
+language: Go
+status: in development
+repo: bybrooklyn/mFetchy-Core
+cover: ../../assets/projects/mfetchy/menu.png
+coverAlt: mFetchy's menu in a terminal, with options to download a YouTube Music library, download from all accounts, or download a link or file.
+order: 3
+---
+
+## What it is
+
+mFetchy downloads music as tagged audio files. It reads YouTube Music, Apple Music, Spotify, Tidal, Deezer, SoundCloud and Bandcamp, and takes each song from the best source that has it. It is one binary for Linux, macOS and Windows.
+
+```sh
+mfy                              # the menu
+mfy "https://youtu.be/..."       # download a link (keep the quotes)
+```
+
+## What it does
+
+- **Your library from every account.** It reads your YouTube Music library and your Apple Music and Bandcamp purchases, merges them, and downloads what your folder is missing.
+- **Best source per song.** Original files from Bandcamp purchases first, then lossless sources, then the rest. A copy from a worse source is upgraded and the old file is kept aside.
+- **Whole albums.** A song link brings its album.
+- **Tags and art.** Title, artists, album, track and disc numbers, date, genre, and square cover art.
+- **Lyrics, `.nfo` and `folder.jpg`** for Plex, Jellyfin, Kodi and Navidrome.
+- **Safe to re-run.** Finished songs are skipped, failures are retried, and songs that are gone are remembered.
+
+## How a run works
+
+Lookups and downloads overlap: downloads start as soon as the first songs are decided, not after the last. Songs of one album are matched together, so an album upgrades as a unit.
+
+When a song can't be downloaded, it tries the next way, and what is still missing at the end is listed once, with the reason.
+
+## Getting it
+
+It is not out yet. An install script for Linux, macOS and Windows, AUR packages (`mfetchy-bin` and `mfetchy`), and `.deb` and `.rpm` files are ready for when the repository goes public.

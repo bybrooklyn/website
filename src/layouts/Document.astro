@@ -1,0 +1,97 @@
+---
+// The <html> and <head> every page shares. Base.astro (main pages) and
+// Opened.astro (a post or project, opened over the site) fill in the body.
+import "../styles/fonts.css";
+import "../styles/tokens.css";
+import "../styles/base.css";
+import "../styles/prose.css";
+import "../styles/opened.css";
+import "../styles/motion.css";
+
+import { getImage } from "astro:assets";
+import { site } from "../data/site";
+import { theme, type AccentName } from "../data/theme";
+import { hex, themeStyle } from "../lib/color";
+import { getPosts } from "../lib/posts";
+
+interface Props {
+    title?: string;
+    description?: string;
+    accent?: AccentName;
+    /** Open Graph type; posts are articles. */
+    type?: "website" | "article";
+    /** Keep the page out of search results. */
+    unlisted?: boolean;
+    bodyClass?: string;
+    /** The picture used when the page is shared. The Playmatter one if left out. */
+    image?: ImageMetadata;
+}
+
+const { title, description = site.description, accent, type = "website", unlisted = false, bodyClass, image } = Astro.props;
+
+const pageTitle = title ? `${title} · ${site.name}` : site.name;
+const canonical = new URL(Astro.url.pathname, Astro.site);
+const shared = image
+    ? await getImage({ src: image, width: 1200, format: "png" })
+    : { src: "/assets/playmatter-share.png", attributes: { width: 1200, height: 610 } };
+const sharedUrl = new URL(shared.src, Astro.site);
+const hasPosts = (await getPosts()).length > 0;
+---
+
+<!doctype html>
+<html lang="en" style={themeStyle(accent)}>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>{pageTitle}</title>
+        <meta name="description" content={description} />
+        <link rel="canonical" href={canonical} />
+        {unlisted && <meta name="robots" content="noindex" />}
+        <meta name="color-scheme" content="dark" />
+        <meta name="theme-color" content={hex(theme.ground)} />
+        {hasPosts && <link rel="alternate" type="application/rss+xml" title={`${site.name}'s blog`} href="/rss.xml" />}
+        <meta property="og:title" content={title ?? site.name} />
+        <meta property="og:description" content={description} />
+        <meta property="og:type" content={type} />
+        <meta property="og:url" content={canonical} />
+        <meta property="og:image" content={sharedUrl} />
+        <meta property="og:image:width" content={String(shared.attributes.width)} />
+        <meta property="og:image:height" content={String(shared.attributes.height)} />
+        <meta name="twitter:card" content="summary_large_image" />
+        <script is:inline>
+            // Tells the page transition which way it is going, so motion.css can
+            // slide the site aside when something opens and bring it back on close.
+            // A post or a project is "opened"; every other page is a main page.
+            (() => {
+                const opened = (url) => /^\/(blog|projects)\/[^/]+\/$/.test(new URL(url).pathname);
+                const kind = (from, to) => (opened(to) ? (opened(from) ? "swap" : "open") : opened(from) ? "close" : "move");
+                addEventListener("pageswap", (event) => {
+                    // Remembered for browsers that cannot say where a page was reached from.
+                    try {
+                        sessionStorage.setItem("left", location.href);
+                    } catch {}
+                    if (event.viewTransition && event.activation) {
+                        event.viewTransition.types.add(kind(location.href, event.activation.entry.url));
+                    }
+                });
+                addEventListener("pagereveal", (event) => {
+                    if (!event.viewTransition) return;
+                    const activation = window.navigation && navigation.activation;
+                    let from = activation && activation.from ? activation.from.url : null;
+                    if (!from) {
+                        try {
+                            from = sessionStorage.getItem("left");
+                        } catch {}
+                    }
+                    if (from && new URL(from).origin === location.origin) {
+                        event.viewTransition.types.add(kind(from, location.href));
+                    }
+                });
+            })();
+        </script>
+        <slot name="head" />
+    </head>
+    <body class={bodyClass}>
+        <slot />
+    </body>
+</html>

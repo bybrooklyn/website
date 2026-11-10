@@ -1,0 +1,39 @@
+---
+name: Terrustia
+summary: A Terraria 1.4.5.8 dedicated server, written from scratch in Rust.
+language: Rust
+status: work in progress
+repo: bybrooklyn/terrustia
+cover: ../../assets/projects/terrustia/banner.png
+coverAlt: The Terrustia logo in blocky blue letters, above the words 'an async Terraria server, written from scratch in Rust'.
+order: 9
+---
+
+## What it is
+
+A Terraria 1.4.5.8 dedicated server, written from scratch in Rust. Real clients connect to it, and the worlds they play are ordinary Terraria worlds.
+
+It is an independent reimplementation of the dedicated server, not affiliated with Re-Logic. You need a copy of the game to play. This replaces the server, not the game.
+
+## What it does best today
+
+It serves a world you already have:
+
+```sh
+terrustia --world path/to/World.wld
+```
+
+Point it at nothing and it generates a fresh world, saves it into a `worlds/` directory, and serves that.
+
+## Against the official server
+
+Measured on the same world with nobody connected:
+
+|                          | vanilla 1.4.5.8 | terrustia |
+| ------------------------ | --------------- | --------- |
+| Startup                  | 2.93 s          | 0.45 s    |
+| CPU, idle                | 8.42% of a core | 2.30%     |
+| RAM, idle                | 849.8 MB        | 284.8 MB  |
+| Bandwidth over 5 minutes | 17,360 B        | 0 B       |
+
+The numbers come from a script in the repository that runs both servers on one world and prints this table.
