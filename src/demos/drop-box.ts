@@ -1,10 +1,11 @@
 // <drop-box>: a small pile of blocks with real physics. Click or tap an empty
-// spot to drop another; pick one up and throw it. Blocks stack, tumble and
-// come to rest. It is drawn in the page's own colors.
+// spot to drop something (a block, now and then a ball or a wedge); pick one
+// up and throw it. They stack, tumble and come to rest. It is drawn in the
+// page's own colors.
 //
 // The physics is the site's own small engine, physics.ts.
 
-import { box, contains, step, wake, type Box, type Hold } from "./physics";
+import { World, ball, rect, shape, wake, type Body } from "./physics";
 
 const SIZE = 34;
 const MOST = 60;
@@ -14,9 +15,9 @@ const TICK = 1 / 120;
 
 class DropBox extends HTMLElement {
     #canvas = document.createElement("canvas");
-    #blocks: Box[] = [];
-    #walls: Box[] = [];
-    #hold?: Hold;
+    #world = new World();
+    #blocks: Body[] = [];
+    #walls: Body[] = [];
     #near = false;
     #visible = false;
     #allowed = !matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -34,28 +35,16 @@ class DropBox extends HTMLElement {
         this.append(canvas);
 
         canvas.addEventListener("pointerdown", (event) => {
-            const point = { x: event.offsetX, y: event.offsetY };
-            // The topmost block under the pointer is picked up; empty space gets a new block.
-            const picked = [...this.#blocks].reverse().find((block) => contains(block, point));
-            if (picked) {
-                const cos = Math.cos(picked.angle);
-                const sin = Math.sin(picked.angle);
-                const dx = point.x - picked.x;
-                const dy = point.y - picked.y;
-                this.#hold = { body: picked, lx: dx * cos + dy * sin, ly: -dx * sin + dy * cos, target: point };
-            } else {
-                this.#drop(point.x, point.y);
-            }
+            // Whatever is under the pointer is picked up; empty space gets something new.
+            if (!this.#world.grab([event.offsetX, event.offsetY])) this.#drop(event.offsetX, event.offsetY);
             // Keep hearing about this pointer even if it leaves the box.
             canvas.setPointerCapture(event.pointerId);
             this.#start();
         });
         canvas.addEventListener("pointermove", (event) => {
-            if (this.#hold) this.#hold.target = { x: event.offsetX, y: event.offsetY };
+            this.#world.drag([event.offsetX, event.offsetY]);
         });
-        const release = () => {
-            this.#hold = undefined;
-        };
+        const release = () => this.#world.release();
         canvas.addEventListener("pointerup", release);
         canvas.addEventListener("pointercancel", release);
         canvas.addEventListener("pointerenter", () => {
@@ -79,9 +68,10 @@ class DropBox extends HTMLElement {
         const middle = canvas.clientWidth / 2;
         const floor = canvas.clientHeight - FLOOR;
         for (const [column, row] of [[-1, 0], [0, 0], [1, 0], [-0.5, 1], [0.5, 1], [0, 2]] as const) {
-            const block = box(middle + column * SIZE, floor - SIZE / 2 - row * SIZE, SIZE, SIZE);
+            const block = rect(middle + column * SIZE, floor - SIZE / 2 - row * SIZE, SIZE, SIZE);
             block.asleep = true;
             this.#blocks.push(block);
+            this.#world.add(block);
         }
         this.#draw();
     }
@@ -93,10 +83,16 @@ class DropBox extends HTMLElement {
     }
 
     #drop(x: number, y: number): void {
-        const block = box(x, y, SIZE, SIZE);
-        block.spin = (Math.random() - 0.5) * 3;
+        const pick = Math.random();
+        const half = SIZE / 2;
+        const block =
+            pick < 0.7 ? rect(x, y, SIZE, SIZE)
+            : pick < 0.85 ? ball(x, y, half, { bounce: 0.4 })
+            : shape(x, y, [[0, -half], [half * 1.15, half], [-half * 1.15, half]]);
+        block.w = (Math.random() - 0.5) * 3;
         this.#blocks.push(block);
-        if (this.#blocks.length > MOST) this.#blocks.shift();
+        this.#world.add(block);
+        if (this.#blocks.length > MOST) this.#world.remove(this.#blocks.shift()!);
     }
 
     /** Match the canvas to its box, and put the floor and walls around it. */
@@ -108,11 +104,13 @@ class DropBox extends HTMLElement {
         this.#canvas.height = Math.round(height * scale);
 
         const thick = 200;
+        for (const wall of this.#walls) this.#world.remove(wall);
         this.#walls = [
-            box(width / 2, height - FLOOR + thick / 2, width + thick * 2, thick, true),
-            box(-thick / 2, height / 2, thick, height * 6, true),
-            box(width + thick / 2, height / 2, thick, height * 6, true),
+            rect(width / 2, height - FLOOR + thick / 2, width + thick * 2, thick, { fixed: true }),
+            rect(-thick / 2, height / 2, thick, height * 6, { fixed: true }),
+            rect(width + thick / 2, height / 2, thick, height * 6, { fixed: true }),
         ];
+        this.#world.add(...this.#walls);
         for (const block of this.#blocks) wake(block);
         this.#draw();
     }
@@ -127,15 +125,14 @@ class DropBox extends HTMLElement {
             // Catch up in fixed steps, but never try to make up a long pause.
             this.#owed = Math.min(this.#owed + (now - this.#last) / 1000, 0.05);
             this.#last = now;
-            const bodies = [...this.#walls, ...this.#blocks];
             while (this.#owed >= TICK) {
-                step(bodies, TICK, this.#hold);
+                this.#world.step(TICK);
                 this.#contain();
                 this.#owed -= TICK;
             }
             this.#draw();
             // Once every block has come to rest there is nothing left to animate.
-            if (this.#blocks.every((block) => block.asleep) && !this.#hold && !this.#near) {
+            if (this.#blocks.every((block) => block.asleep) && !this.#world.holding && !this.#near) {
                 this.#stop();
                 return;
             }
@@ -154,18 +151,21 @@ class DropBox extends HTMLElement {
         const width = this.#canvas.clientWidth;
         const floor = this.#canvas.clientHeight - FLOOR;
         for (const block of this.#blocks) {
-            const reach = Math.abs(Math.cos(block.angle)) * block.hw + Math.abs(Math.sin(block.angle)) * block.hh;
-            const tall = Math.abs(Math.sin(block.angle)) * block.hw + Math.abs(Math.cos(block.angle)) * block.hh;
-            if (block.y + tall > floor + 2) {
-                block.y = floor + 2 - tall;
+            const xs = block.r ? [block.x - block.r, block.x + block.r] : block.wp.map((corner) => corner[0]);
+            const ys = block.r ? [block.y + block.r] : block.wp.map((corner) => corner[1]);
+            const low = Math.max(...ys) - floor - 2;
+            const left = -2 - Math.min(...xs);
+            const right = Math.max(...xs) - width - 2;
+            if (low > 0) {
+                block.y -= low;
                 block.vy = Math.min(block.vy, 0);
             }
-            if (block.x - reach < -2) {
-                block.x = reach - 2;
+            if (left > 0) {
+                block.x += left;
                 block.vx = Math.max(block.vx, 0);
             }
-            if (block.x + reach > width + 2) {
-                block.x = width + 2 - reach;
+            if (right > 0) {
+                block.x -= right;
                 block.vx = Math.min(block.vx, 0);
             }
         }
@@ -198,12 +198,22 @@ class DropBox extends HTMLElement {
         for (const block of this.#blocks) {
             context.save();
             context.translate(block.x, block.y);
-            context.rotate(block.angle);
+            context.rotate(block.a);
+            context.beginPath();
+            if (block.r) {
+                context.arc(0, 0, block.r, 0, Math.PI * 2);
+                // a spoke, so a rolling ball can be seen to roll
+                context.moveTo(0, 0);
+                context.lineTo(block.r, 0);
+            } else {
+                block.p.forEach(([x, y], index) => (index ? context.lineTo(x, y) : context.moveTo(x, y)));
+                context.closePath();
+            }
             context.fillStyle = fill;
-            context.fillRect(-block.hw, -block.hh, block.hw * 2, block.hh * 2);
+            context.fill();
             context.strokeStyle = edge;
             context.lineWidth = 2;
-            context.strokeRect(-block.hw + 1, -block.hh + 1, block.hw * 2 - 2, block.hh * 2 - 2);
+            context.stroke();
             context.restore();
         }
     }
