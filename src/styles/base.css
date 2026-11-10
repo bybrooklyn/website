@@ -365,15 +365,25 @@ h1 + .about {
     width: 2rem;
     height: 1.2rem;
     border-radius: 0.2rem;
-    /* The top of the trans flag over the bottom of the lesbian flag, sharing the white stripe. */
-    background: linear-gradient(
-        #5bcefa 0 16.67%,
-        #f5a9b8 16.67% 33.33%,
-        #fff 33.33% 50%,
-        #ff9a56 50% 66.67%,
-        #d362a4 66.67% 83.33%,
-        #a30262 83.33%
-    );
+    /*
+     * The trans flag on the left melting into the lesbian flag on the right,
+     * stripe by stripe. Blended around the color wheel (in oklch), so blue
+     * reaches orange by way of violet and pink and never passes through gray.
+     * The first declaration is for browsers that do not know that syntax.
+     */
+    background:
+        linear-gradient(90deg, #5bcefa, #d52d00) 0 0% / 100% 20.5%,
+        linear-gradient(90deg, #f5a9b8, #ff9a56) 0 25% / 100% 20.5%,
+        linear-gradient(90deg, #fff, #fff) 0 50% / 100% 20.5%,
+        linear-gradient(90deg, #f5a9b8, #d362a4) 0 75% / 100% 20.5%,
+        linear-gradient(90deg, #5bcefa, #a30262) 0 100% / 100% 20.5%;
+    background:
+        linear-gradient(90deg in oklch, #5bcefa, #d52d00) 0 0% / 100% 20.5%,
+        linear-gradient(90deg in oklch, #f5a9b8, #ff9a56) 0 25% / 100% 20.5%,
+        linear-gradient(90deg in oklch, #fff, #fff) 0 50% / 100% 20.5%,
+        linear-gradient(90deg in oklch, #f5a9b8, #d362a4) 0 75% / 100% 20.5%,
+        linear-gradient(90deg in oklch, #5bcefa, #a30262) 0 100% / 100% 20.5%;
+    background-repeat: no-repeat;
 }
 
 .flag:focus-visible {
