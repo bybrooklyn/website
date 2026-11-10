@@ -49,7 +49,7 @@ if (facts) rows.push(["last updated", formatDate(new Date(facts.updated))]);
 
         {
             cover && (
-                <Image
+                <Image format="avif"
                     class:list={["post-cover", { pixel }]}
                     src={cover}
                     alt={coverAlt ?? ""}
@@ -101,7 +101,7 @@ if (facts) rows.push(["last updated", formatDate(new Date(facts.updated))]);
                 <section class="gallery" aria-label="Screenshots">
                     {gallery.map((picture) => (
                         <a href={picture.src.src}>
-                            <Image
+                            <Image format="avif"
                                 class:list={{ pixel }}
                                 src={picture.src}
                                 alt={picture.alt}

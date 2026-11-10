@@ -38,7 +38,7 @@ const { title, summary, date, accent, draft, cover, coverAlt, tags } = post.data
             }
         </header>
 
-        {cover && <Image class="post-cover" src={cover} alt={coverAlt ?? ""} widths={[640, 960, 1440]} sizes="(min-width: 60rem) 44rem, 100vw" loading="eager" fetchpriority="high" />}
+        {cover && <Image format="avif" class="post-cover" src={cover} alt={coverAlt ?? ""} widths={[640, 960, 1440]} sizes="(min-width: 60rem) 44rem, 100vw" loading="eager" fetchpriority="high" />}
 
         <div class="post-body">
             <Contents {headings} />

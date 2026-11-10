@@ -29,11 +29,11 @@ const fetchpriority = eager ? "high" : undefined;
                 {width}
                 {height}
                 aria-label={alt}
-                autoplay
                 muted
                 loop
                 playsinline
-                preload={eager ? "auto" : "metadata"}
+                preload="none"
+                data-clip
             />
         ) : href ? (
             <a {href}>
@@ -47,13 +47,27 @@ const fetchpriority = eager ? "high" : undefined;
 </figure>
 
 <script>
-    // A looping clip should not play for someone who has asked for less motion:
-    // stop it on its poster and hand over the controls.
-    if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
-        for (const video of document.querySelectorAll<HTMLVideoElement>(".figure video")) {
-            video.removeAttribute("autoplay");
-            video.pause();
-            video.controls = true;
-        }
+    // A clip starts as its poster and costs nothing. It is fetched and played
+    // once it is on screen, unless the visitor has asked for less motion or
+    // less data, or the connection is slow: then it stays a picture with a
+    // play button, and the choice is theirs.
+    const connection = (navigator as Navigator & { connection?: { saveData?: boolean; effectiveType?: string } }).connection;
+    const sparing =
+        matchMedia("(prefers-reduced-motion: reduce)").matches ||
+        matchMedia("(prefers-reduced-data: reduce)").matches ||
+        Boolean(connection?.saveData) ||
+        /2g|3g/.test(connection?.effectiveType ?? "");
+    const clips = document.querySelectorAll<HTMLVideoElement>("video[data-clip]");
+    if (sparing) {
+        for (const clip of clips) clip.controls = true;
+    } else {
+        const watcher = new IntersectionObserver((entries) => {
+            for (const { target, isIntersecting } of entries) {
+                const clip = target as HTMLVideoElement;
+                if (isIntersecting) void clip.play().catch(() => (clip.controls = true));
+                else clip.pause();
+            }
+        });
+        for (const clip of clips) watcher.observe(clip);
     }
 </script>

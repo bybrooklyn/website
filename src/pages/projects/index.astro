@@ -21,7 +21,7 @@ const projects = await getProjects();
                 <li>
                     <a href={`/projects/${project.id}/`}>
                         {project.data.cover ? (
-                            <Image
+                            <Image format="avif"
                                 class:list={["project-thumb", { pixel: project.data.pixel }]}
                                 src={project.data.cover}
                                 alt=""

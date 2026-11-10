@@ -33,7 +33,7 @@ const { title, summary, date, draft, cover, tags } = post.data;
     ) : (
         <li class="post-row">
             <a href={`/blog/${post.id}/`}>
-                {cover && <Image class="post-thumb" src={cover} alt="" width={320} height={200} fit="cover" />}
+                {cover && <Image format="avif" class="post-thumb" src={cover} alt="" width={320} height={200} fit="cover" />}
                 <div>
                     <Heading>{title}</Heading>
                     <p>{summary}</p>

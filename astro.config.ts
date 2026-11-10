@@ -8,6 +8,9 @@ export default defineConfig({
     trailingSlash: "always",
     build: {
         format: "directory",
+        // The stylesheets are small, and a page that carries its own styles
+        // can be drawn after one round trip instead of three.
+        inlineStylesheets: "always",
     },
     integrations: [
         mdx(),

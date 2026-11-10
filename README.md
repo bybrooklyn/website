@@ -119,6 +119,6 @@ My writing, the about page, the resume, my name, pictures of me and the Playmatt
 
 The `LICENSE` file ends with a few requests: don't pretend to be me, don't suggest I endorse what you make, don't put words in my mouth, and don't use this to hurt people. They are requests, not conditions.
 
-Headings are set in Torrens Serif, my cut of [Fraunces](https://github.com/undercasetype/Fraunces) by Undercase Type (Phaedra Charles and Flavia Zimbardi), and text in Fraunces itself; code is in Drafting* Mono by Owen Earl. All three are under the SIL Open Font License (`src/assets/fonts/OFL-*.txt`).
+Headings are set in Torrens Serif, my cut of [Fraunces](https://github.com/undercasetype/Fraunces) by Undercase Type (Phaedra Charles and Flavia Zimbardi), and text in Fraunces itself; code is in Drafting* Mono by Owen Earl. All three are under the SIL Open Font License (`src/assets/fonts/OFL-*.txt`). The complete fonts are in `src/assets/fonts/full/`; pages load trimmed copies (Latin, weights 400 to 700) that `scripts/trim-fonts.py` makes from them.
 
 This repository began as a fork of another site and was later rewritten from scratch.
