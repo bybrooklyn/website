@@ -14,6 +14,9 @@
 //
 // To take a photo off the site, delete its file from src/assets/photos/.
 // To change a caption, put a text file with the photo's name in photos/.
+//
+// Pictures for the setup page go in photos/setup/, named desk, server or
+// desktop. They get the same treatment and land in src/assets/setup/.
 
 import { mkdir, readdir, rename } from "node:fs/promises";
 import { homedir } from "node:os";
@@ -113,6 +116,24 @@ for (const name of pictures) {
         console.log(`added    ${file}  ${group ?? "(unsorted)"}${taken ? `  ${taken}` : "  (no date in the file)"}${caption ? "  with caption" : ""}`);
     } catch {
         console.log(`skipped  ${name}: it could not be read as a picture. HEIC and camera RAW files need exporting to JPEG first.`);
+    }
+}
+
+// Pictures for the setup page: cleaned the same way, kept under their own names, never sorted.
+for (const name of (await names(join(INBOX, "setup"))).filter((file) => /\.(jpe?g|png|webp|avif|tiff?)$/i.test(file))) {
+    const source = join(INBOX, "setup", name);
+    try {
+        await mkdir(join(root, "src/assets/setup"), { recursive: true });
+        await sharp(source, { failOn: "none" })
+            .rotate()
+            .resize({ width: 3000, height: 3000, fit: "inside", withoutEnlargement: true })
+            .jpeg({ quality: 88, mozjpeg: true })
+            .toFile(join(root, "src/assets/setup", `${slug(name)}.jpg`));
+        await mkdir(join(ADDED, "setup"), { recursive: true });
+        await rename(source, join(ADDED, "setup", name));
+        console.log(`setup    ${slug(name)}.jpg`);
+    } catch {
+        console.log(`skipped  setup/${name}: it could not be read as a picture.`);
     }
 }
 

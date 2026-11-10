@@ -1,0 +1,26 @@
+---
+// A photo on the setup page that is only there once it has been supplied:
+// drop desk.jpg, server.jpg or desktop.png into photos/setup/ and run
+// `bun run photos`.
+import { Image } from "astro:assets";
+import type { ImageMetadata } from "astro";
+
+interface Props {
+    name: string;
+    alt: string;
+    caption?: string;
+}
+
+const { name, alt, caption } = Astro.props;
+const pictures = import.meta.glob<ImageMetadata>("../assets/setup/*.{jpg,png,webp,avif}", { eager: true, import: "default" });
+const picture = Object.entries(pictures).find(([path]) => path.split("/").pop()?.replace(/\.\w+$/, "") === name)?.[1];
+---
+
+{
+    picture && (
+        <figure class="figure">
+            <Image format="avif" src={picture} {alt} widths={[640, 960, 1440]} sizes="(min-width: 60rem) 44rem, 100vw" />
+            {caption && <figcaption class="note">{caption}</figcaption>}
+        </figure>
+    )
+}

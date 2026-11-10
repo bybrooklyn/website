@@ -5,8 +5,12 @@ kicker: setup
 numbered: true
 ---
 
+import Flow from "../../components/Flow.astro";
+import Network from "../../components/Network.astro";
+import SetupPhoto from "../../components/SetupPhoto.astro";
 
-I have two machines that matter: the desktop I work on, and a server that sits at home and runs everything that should stay on. This is how both are put together, and why.
+
+I have two machines that matter: the desktop I work on, and a server that sits at home and runs everything that should stay on. Here is how both are set up, and why.
 
 ## The machines
 
@@ -18,11 +22,13 @@ I have two machines that matter: the desktop I work on, and a server that sits a
 | Storage | one 2 TB SSD               | 2 TB NVMe, 22 TB hard drive for media |
 | System  | CachyOS                    | Fedora Server                         |
 
-The desktop is where everything gets written, built and played. The server is where it goes to live.
+I write, build and play on the desktop. The server hosts what needs to stay up.
+
+<Network />
 
 ## How I got here
 
-The desktop went Ubuntu, then Debian, then Bazzite, then CachyOS, and CachyOS is the one that stuck. It's Arch underneath without the chores: the AUR is right there, the packages and kernel are built for speed, and games just work.
+The desktop went Ubuntu, then Debian, then Bazzite, then CachyOS, and CachyOS is the one I kept. It's Arch with less upkeep: it has the AUR, its packages and kernel are built for speed, and games work.
 
 The server started on Ubuntu Server 24 and is now on Fedora Server.
 
@@ -30,7 +36,7 @@ I really hate Ubuntu and its stability and random issues.
 
 ## Why I self-host
 
-- **I like owning my stuff.** My media, my code and my data, on hardware I can put my hand on.
+- **I like owning my stuff.** My media, my code and my data, on hardware I own.
 - **It's fun, and I learn from it.** Most of what I know about networks I learned by breaking this one.
 - **It's cheaper.** Subscriptions add up. A server pays for itself.
 - **I don't trust big platforms** to keep things around or keep them good.
@@ -39,13 +45,15 @@ Also, I pirate, and I'm proud of it.
 
 ## The desktop
 
+<SetupPhoto name="desk" alt="My desk." />
+
 ### What boots
 
 Limine is the boot loader. Plasma's login screen comes up, and then KDE Plasma on Wayland.
 
 ### Where things live
 
-One Btrfs filesystem, split into subvolumes for the system, home, logs and caches. Snapper takes snapshots, and they show up in the boot menu, so a bad update is one reboot away from being undone.
+One Btrfs filesystem, split into subvolumes for the system, home, logs and caches. Snapper takes snapshots, and they show up in the boot menu, so I can undo a bad update by booting into the one before it.
 
 ### What I use
 
@@ -58,13 +66,15 @@ One Btrfs filesystem, split into subvolumes for the system, home, logs and cache
 | Every repo | a `justfile`, so the commands are always `just something` |
 | Languages  | Rust first, then Go, Swift and TypeScript    |
 
+<SetupPhoto name="desktop" alt="A screenshot of my desktop." />
+
 ### Games
 
-NVIDIA's driver, Proton from CachyOS, gamescope and MangoHud. gamescope earns its place twice, because Playmatter's off-screen checks run inside it.
+NVIDIA's driver, Proton from CachyOS, gamescope and MangoHud. I also need gamescope for Playmatter, because its off-screen checks run inside it.
 
 ### Keys
 
-Mostly Plasma's defaults, and I've stopped pretending I'll customize them.
+Mostly Plasma's defaults. I haven't customized them.
 
 | Keys              | Does                    |
 | ----------------- | ----------------------- |
@@ -75,28 +85,32 @@ Mostly Plasma's defaults, and I've stopped pretending I'll customize them.
 
 ## The server
 
+<SetupPhoto name="server" alt="The server." />
+
 Everything on it runs in Docker. Each service is a stack, which is a compose file, and I manage them in Portainer. Watchtower pulls new images so I don't have to.
 
-Thirty-odd containers at last count.
+About thirty containers.
 
 ## Getting in from outside
 
 Anything public takes the same path:
 
-| Step | Where                   | What happens                  |
-| ---- | ----------------------- | ----------------------------- |
-| 1    | A visitor               | asks for one of my sites      |
-| 2    | Cloudflare              | answers DNS, proxies, does TLS |
-| 3    | Nginx Proxy Manager     | picks the right service       |
-| 4    | The container           | does the actual work          |
+<Flow
+    steps={[
+        { name: "A visitor", note: "asks for one of my sites" },
+        { name: "Cloudflare", note: "answers DNS, proxies, does TLS" },
+        { name: "Nginx Proxy Manager", note: "picks the right service" },
+        { name: "The container", note: "serves it" },
+    ]}
+/>
 
-Anything private never touches the open internet. I reach it over Tailscale, so my devices see the server as if it were on the same network wherever they are.
+Anything private isn't exposed to the internet. I reach it over Tailscale, which puts my devices on the same network as the server wherever they are.
 
 ### The annoying part
 
-My ISP blocks inbound connections on ports 80 and 443, which are the two a web server needs. Two things follow.
+My ISP blocks inbound connections on ports 80 and 443, which are the two a web server needs. So:
 
-- Cloudflare is told, with an origin rule, to connect on a different port that *is* allowed in. Visitors still use the normal address and never see it.
+- Cloudflare is told, with an origin rule, to connect on a different port, one that is allowed in. Visitors use the normal address.
 - Certificates can't be issued the usual way, because that check arrives on port 80. So the proxy proves ownership through DNS instead, and gets one wildcard certificate per domain.
 
 ## What runs on it
@@ -119,13 +133,13 @@ Sonarr for shows, Radarr for films, Lidarr for music, LazyLibrarian for books, P
 
 Setting this up was a repetitive pain in the ass. Every one of these apps wants the same things typed into it again: the same folders, the same download client, the same API keys copied out of one tab and pasted into another, and then its own quality profiles on top. Do it for one and you get to do it again for all the others.
 
-It doesn't stay set up, either. An indexer dies, a path changes, an update moves a setting, and you're back clicking through settings pages that all look almost the same. It works, and I'd still do it, but nobody should pretend it's a one-evening job.
+It doesn't stay set up, either. An indexer dies, a path changes, an update moves a setting, and you're back clicking through settings pages that all look almost the same. It works, and I'd still do it, but it is not a one-evening job.
 
 ## If you want to do this
 
 1. Start with one service you will actually use. Jellyfin is a good first one.
 2. Put a reverse proxy in front from day one. Adding it later means changing every address you've already given out.
 3. Use Tailscale, or something like it, for anything only you need. Not everything has to be public.
-4. Keep your compose files somewhere you can find them again. The day you rebuild, they are the whole server.
+4. Keep your compose files somewhere you can find them again. When you rebuild, they are what you rebuild from.
 5. Check whether your ISP blocks ports before you plan around them.
 6. Don't use Ubuntu.

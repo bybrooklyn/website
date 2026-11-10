@@ -1,0 +1,26 @@
+---
+// A row of steps with arrows between them: how something gets from one place
+// to another. Read out as an ordered list.
+
+interface Props {
+    steps: { name: string; note?: string }[];
+    /** What the diagram shows, for the caption underneath. */
+    caption?: string;
+}
+
+const { steps, caption } = Astro.props;
+---
+
+<figure class="diagram">
+    <ol class="flow">
+        {
+            steps.map((step) => (
+                <li>
+                    <strong>{step.name}</strong>
+                    {step.note && <span>{step.note}</span>}
+                </li>
+            ))
+        }
+    </ol>
+    {caption && <figcaption class="note">{caption}</figcaption>}
+</figure>

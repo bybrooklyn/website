@@ -1,0 +1,19 @@
+---
+// The two ways into the server: the public one through Cloudflare, and the
+// private one over Tailscale.
+---
+
+<figure class="diagram">
+    <div class="network" role="img" aria-label="Visitors reach the server through Cloudflare. My own devices reach it over Tailscale.">
+        <div class="network-row" aria-hidden="true">
+            <span class="node">visitors</span>
+            <span class="wire">Cloudflare</span>
+        </div>
+        <div class="network-row" aria-hidden="true">
+            <span class="node">my devices</span>
+            <span class="wire private">Tailscale</span>
+        </div>
+        <span class="node server" aria-hidden="true">the server</span>
+    </div>
+    <figcaption class="note">Public things come in through Cloudflare. Everything else only over Tailscale.</figcaption>
+</figure>
