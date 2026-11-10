@@ -22,7 +22,13 @@ for (const file of (await readdir(folder)).sort()) {
     const repo = /^repo:\s*(\S+)\s*$/m.exec(source)?.[1];
     if (!repo) continue;
 
-    const info = (await $`gh api repos/${repo}`.json()) as {
+    // A project can be written up before its repository exists.
+    const found = await $`gh api repos/${repo}`.nothrow().quiet();
+    if (found.exitCode !== 0) {
+        console.log(file, "(no repository yet)");
+        continue;
+    }
+    const info = found.json() as {
         license: { spdx_id: string } | null;
         stargazers_count: number;
         pushed_at: string;

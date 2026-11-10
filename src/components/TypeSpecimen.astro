@@ -1,0 +1,71 @@
+---
+// A specimen of Torrens Serif: its weights, its characters, and the letters
+// that differ from the typeface it is built on.
+import "../styles/type.css";
+
+const weights = [
+    [100, "Thin"],
+    [300, "Light"],
+    [400, "Regular"],
+    [500, "Medium"],
+    [600, "SemiBold"],
+    [700, "Bold"],
+    [900, "Black"],
+] as const;
+
+const characters = [
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+    "abcdefghijklmnopqrstuvwxyz",
+    "0123456789",
+    "& @ ? ! # % * ( ) [ ] { } . , : ; ’ “ ” — – / + =",
+];
+---
+
+<div class="specimen">
+    <h3>Weights</h3>
+    <ul class="specimen-weights">
+        {
+            weights.map(([weight, name]) => (
+                <li>
+                    <span class="note">
+                        {weight} {name}
+                    </span>
+                    <span class="specimen-line" style={`font-weight:${weight}`}>
+                        Soft serifs, <em>round terminals</em>
+                    </span>
+                </li>
+            ))
+        }
+    </ul>
+
+    <h3>Characters</h3>
+    <div class="specimen-characters">{characters.map((line) => <p>{line}</p>)}</div>
+
+    <h3>Alternates</h3>
+    <table class="specimen-alternates">
+        <thead>
+            <tr>
+                <th></th>
+                <th>Default</th>
+                <th>Alternate</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td class="note">Wonky letters (<code>ss01</code>)</td>
+                <td class="specimen-glyphs">hmns</td>
+                <td class="specimen-glyphs" style="font-feature-settings:'ss01'">hmns</td>
+            </tr>
+            <tr>
+                <td class="note">Swash ampersand (<code>ss02</code>)</td>
+                <td class="specimen-glyphs">&amp;</td>
+                <td class="specimen-glyphs" style="font-feature-settings:'ss02'">&amp;</td>
+            </tr>
+            <tr>
+                <td class="note">Capital J, against Fraunces</td>
+                <td class="specimen-glyphs">J</td>
+                <td class="specimen-glyphs fraunces">J</td>
+            </tr>
+        </tbody>
+    </table>
+</div>

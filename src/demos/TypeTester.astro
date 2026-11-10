@@ -1,0 +1,23 @@
+---
+// Import this in a page to let people try a typeface on their own words.
+// Only pages that use it load the script.
+import "../styles/type.css";
+
+interface Props {
+    family: string;
+    sample?: string;
+}
+
+const { family, sample = "Type something here" } = Astro.props;
+---
+
+<div class="demo tester">
+    <type-tester {family} {sample}>
+        {/* Before the script runs, or without it: the sample, set in the typeface. */}
+        <p class="tester-text" style={`font-family:"${family}",serif;font-size:72px`}>{sample}</p>
+    </type-tester>
+</div>
+
+<script>
+    import "./type-tester.ts";
+</script>
