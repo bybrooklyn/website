@@ -14,3 +14,7 @@ dist
 # resume PDFs of drafts, and the build they are printed from
 resume-preview
 .resume-build
+
+# pictures waiting to go on the photos page, and the originals of those that have:
+# they carry location and camera details, so they stay on this computer
+/photos

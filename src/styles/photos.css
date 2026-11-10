@@ -1,33 +1,5 @@
 /* /photos/ */
 
-.photo-tags {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.4rem 1.1rem;
-    margin: 0 0 var(--line);
-}
-
-.photo-tags button {
-    border: 0;
-    padding: 0;
-    background: none;
-    font: inherit;
-    color: var(--muted);
-    cursor: pointer;
-}
-
-.photo-tags button:hover {
-    color: var(--ink);
-}
-
-.photo-tags button[aria-pressed="true"] {
-    color: var(--ink);
-    text-decoration: underline;
-    text-decoration-color: var(--accent);
-    text-decoration-thickness: 0.125rem;
-    text-underline-offset: 0.3em;
-}
-
 .album + .album {
     margin-top: calc(var(--line) * 2);
 }
@@ -85,7 +57,7 @@
 .photo-view img {
     display: block;
     max-width: 100%;
-    max-height: 84vh;
+    max-height: 78vh;
     margin: 0 auto;
     border-radius: var(--radius);
 }

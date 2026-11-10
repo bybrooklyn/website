@@ -3,18 +3,19 @@
     "type": "module",
     "private": true,
     "scripts": {
-        "dev": "astro dev",
-        "build": "astro build",
+        "dev": "bun scripts/photos.ts && astro dev",
+        "build": "bun scripts/photos.ts && astro build",
         "preview": "astro preview",
         "check": "astro check",
-        "deploy": "astro check && astro build && wrangler pages deploy",
-        "deploy:preview": "astro check && astro build && wrangler pages deploy --branch preview",
+        "deploy": "astro check && bun run build && wrangler pages deploy",
+        "deploy:preview": "astro check && bun run build && wrangler pages deploy --branch preview",
         "cf:login": "wrangler login",
         "cf:whoami": "wrangler whoami",
         "langs": "bun scripts/languages.ts",
         "resume:pdf": "bun scripts/resume-pdf.ts",
         "projects": "bun scripts/projects.ts",
-        "edit": "bun scripts/write.ts"
+        "edit": "bun scripts/write.ts",
+        "photos": "bun scripts/photos.ts"
     },
     "dependencies": {
         "@astrojs/check": "0.9.12",
@@ -27,6 +28,7 @@
         "typescript": "6"
     },
     "devDependencies": {
+        "@huggingface/transformers": "^4.3.2",
         "@types/bun": "^1.4.4",
         "simple-icons": "^16.37.0",
         "wrangler": "4.160.0"

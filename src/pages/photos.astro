@@ -1,20 +1,21 @@
 ---
-// /photos/: photographs, grouped into albums, with tags to filter by.
-// Clicking one opens it large. The list is arranged in the editor.
+// /photos/: photographs, sorted under headings by what is in them, newest
+// first. Clicking one opens it large. They come from the photos/ folder; see
+// scripts/photos.ts.
 import { getImage, Image } from "astro:assets";
 import "../styles/photos.css";
 import Base from "../layouts/Base.astro";
 import { formatDate } from "../lib/posts";
-import { albums, exposure, photos, tags } from "../lib/photos";
+import { groups, photos } from "../lib/photos";
 
 const shown = await Promise.all(
-    albums.map(async (album) => ({
-        title: album.title,
+    groups.map(async (group) => ({
+        title: group.title,
         photos: await Promise.all(
-            album.photos.map(async (photo) => ({
+            group.photos.map(async (photo) => ({
                 photo,
                 large: await getImage({ src: photo.image, width: Math.min(photo.image.width, 2000), format: "avif" }),
-                details: [photo.taken && formatDate(new Date(`${photo.taken}T12:00:00`)), exposure(photo)].filter(Boolean).join(" · "),
+                taken: photo.taken ? formatDate(new Date(`${photo.taken}T12:00:00`)) : "",
             })),
         ),
     })),
@@ -27,22 +28,13 @@ const shown = await Promise.all(
     </div>
 
     {
-        tags.length > 0 && (
-            <p class="photo-tags" hidden>
-                <button type="button" data-tag="" aria-pressed="true">all</button>
-                {tags.map((tag) => <button type="button" data-tag={tag} aria-pressed="false">{tag}</button>)}
-            </p>
-        )
-    }
-
-    {
-        shown.map((album) => (
+        shown.map((group) => (
             <section class="album">
-                {album.title && <h2>{album.title}</h2>}
+                {group.title && <h2>{group.title}</h2>}
                 <ul class="photo-grid">
-                    {album.photos.map(({ photo, large, details }) => (
-                        <li data-tags={photo.tags.join("|")}>
-                            <a href={large.src} data-caption={photo.caption ?? ""} data-details={details}>
+                    {group.photos.map(({ photo, large, taken }) => (
+                        <li>
+                            <a href={large.src} data-caption={photo.caption ?? ""} data-taken={taken}>
                                 <Image
                                     format="avif"
                                     src={photo.image}
@@ -62,7 +54,7 @@ const shown = await Promise.all(
     <dialog class="photo-view" aria-label="Photo">
         <img alt="" />
         <p class="photo-caption"></p>
-        <p class="photo-details note"></p>
+        <p class="photo-taken note"></p>
         <form method="dialog"><button aria-label="Close">close</button></form>
     </dialog>
 </Base>
@@ -73,16 +65,13 @@ const shown = await Promise.all(
     const image = view?.querySelector("img");
     let open = -1;
 
-    /** The photos a visitor can currently see, so stepping skips filtered ones. */
-    const visible = () => links.filter((link) => !link.closest("li")?.hidden);
-
     function show(link: HTMLAnchorElement | undefined): void {
         if (!view || !image || !link) return;
         open = links.indexOf(link);
         image.src = link.href;
         image.alt = link.dataset.caption ?? "";
         view.querySelector(".photo-caption")!.textContent = link.dataset.caption ?? "";
-        view.querySelector(".photo-details")!.textContent = link.dataset.details ?? "";
+        view.querySelector(".photo-taken")!.textContent = link.dataset.taken ?? "";
         if (!view.open) view.showModal();
     }
 
@@ -96,29 +85,10 @@ const shown = await Promise.all(
 
     view?.addEventListener("keydown", (event) => {
         const step = { ArrowRight: 1, ArrowLeft: -1 }[event.key];
-        if (!step) return;
-        const around = visible();
-        show(around[around.indexOf(links[open]!) + step]);
+        if (step) show(links[open + step]);
     });
     // A click on the dark surround, outside the picture, closes it.
     view?.addEventListener("click", (event) => {
         if (event.target === view) view.close();
     });
-
-    const tagBar = document.querySelector<HTMLElement>(".photo-tags");
-    if (tagBar) {
-        tagBar.hidden = false;
-        tagBar.addEventListener("click", (event) => {
-            const button = (event.target as Element).closest<HTMLButtonElement>("button[data-tag]");
-            if (!button) return;
-            const tag = button.dataset.tag ?? "";
-            for (const other of tagBar.querySelectorAll("button")) other.setAttribute("aria-pressed", String(other === button));
-            for (const item of document.querySelectorAll<HTMLElement>(".photo-grid li")) {
-                item.hidden = tag !== "" && !(item.dataset.tags ?? "").split("|").includes(tag);
-            }
-            for (const album of document.querySelectorAll<HTMLElement>(".album")) {
-                album.hidden = !album.querySelector(".photo-grid li:not([hidden])");
-            }
-        });
-    }
 </script>

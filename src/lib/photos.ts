@@ -1,56 +1,39 @@
-// The photographs on /photos/. The list (order, captions, albums, tags, and
-// what the camera recorded) is src/data/photos.json; the pictures are in
-// src/assets/photos/. Both are written by the editor (`bun run edit`).
+// The photographs on /photos/. scripts/photos.ts writes the list
+// (src/data/photos.json) and the pictures (src/assets/photos/) from whatever
+// is dropped into the photos/ folder.
 
 import type { ImageMetadata } from "astro";
 import data from "../data/photos.json";
 
-export interface PhotoEntry {
+interface Entry {
     file: string;
-    caption?: string;
-    album?: string;
-    tags?: string[];
-    /** Read from the picture when it was added: date taken and exposure. */
+    /** The heading the sorting model put it under. */
+    group?: string;
+    /** The date it was taken, if the picture said. */
     taken?: string;
-    focal?: number;
-    aperture?: number;
-    shutter?: string;
-    iso?: number;
+    caption?: string;
 }
 
-export interface Photo extends PhotoEntry {
+export interface Photo extends Entry {
     image: ImageMetadata;
-    tags: string[];
 }
 
 const images = import.meta.glob<ImageMetadata>("../assets/photos/*.{jpg,jpeg,png,webp,avif}", { eager: true, import: "default" });
 
-/** Every photo that has its picture, in the order they were arranged. */
-export const photos: Photo[] = (data.photos as PhotoEntry[]).flatMap((entry) => {
-    const image = images[`../assets/photos/${entry.file}`];
-    return image ? [{ ...entry, tags: entry.tags ?? [], image }] : [];
-});
+/** Every photo that has its picture, newest first; those without a date last. */
+export const photos: Photo[] = (data.photos as Entry[])
+    .flatMap((entry) => {
+        const image = images[`../assets/photos/${entry.file}`];
+        return image ? [{ ...entry, image }] : [];
+    })
+    .sort((a, b) => (b.taken ?? "").localeCompare(a.taken ?? ""));
 
-/** Albums in the order their first photo appears. Photos without one come first, untitled. */
-export const albums: { title: string; photos: Photo[] }[] = [];
+/** Photos under their headings, the fullest heading first; unsorted ones last. */
+export const groups: { title: string; photos: Photo[] }[] = [];
 for (const photo of photos) {
-    const title = photo.album ?? "";
-    let album = albums.find((candidate) => candidate.title === title);
-    if (!album) albums.push((album = { title, photos: [] }));
-    album.photos.push(photo);
+    const title = photo.group ?? "";
+    let group = groups.find((candidate) => candidate.title === title);
+    if (!group) groups.push((group = { title, photos: [] }));
+    group.photos.push(photo);
 }
-albums.sort((a, b) => Number(b.title === "") - Number(a.title === ""));
-
-export const tags: string[] = [...new Set(photos.flatMap((photo) => photo.tags))].sort();
-
-/** "35 mm · f/2.8 · 1/250 s · ISO 400", from whatever the camera recorded. */
-export function exposure(photo: PhotoEntry): string {
-    return [
-        photo.focal && `${photo.focal} mm`,
-        photo.aperture && `f/${photo.aperture}`,
-        photo.shutter && `${photo.shutter} s`,
-        photo.iso && `ISO ${photo.iso}`,
-    ]
-        .filter(Boolean)
-        .join(" · ");
-}
+groups.sort((a, b) => Number(a.title === "") - Number(b.title === "") || b.photos.length - a.photos.length);
