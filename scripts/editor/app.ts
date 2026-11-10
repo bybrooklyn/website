@@ -1,13 +1,17 @@
-// The editor page that `bun run edit` and `bun run blog` open. It shows a
-// file from the site as formatted text, saves as you type, and can publish.
+// The editor page that `bun run edit` opens.
+//
+// A file is edited as what it is: its Markdown, frontmatter and all, in one
+// plain text area, with the real page beside it. Rich text is a switch for
+// when formatted text is nicer to write in. Either way it saves as you type.
 // Reading and writing Markdown is in markdown.ts; the server is ../write.ts.
 
-import { fieldLine, fields, guard, joinFile, parseBody, parseInline, splitFile, toHtml, toMarkdown, type Block, type Inline } from "./markdown";
+import { guard, joinFile, parseBody, parseInline, splitFile, tableMarkdown, toHtml, toMarkdown, type Block, type Inline } from "./markdown";
 
 interface FileEntry {
     path: string;
     label: string;
     draft: boolean;
+    route: string;
 }
 interface Group {
     label: string;
@@ -16,7 +20,9 @@ interface Group {
 
 const meta = (name: string) => document.querySelector<HTMLMetaElement>(`meta[name="${name}"]`)?.content ?? "";
 const key = meta("edit-key");
+const site = meta("edit-site");
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, props: object = {}, ...children: (Node | string)[]): HTMLElementTagNameMap[K] {
     const node = document.createElement(tag);
     Object.assign(node, props);
@@ -35,59 +41,85 @@ async function api<T>(path: string, body?: unknown, raw?: Blob): Promise<T> {
     return data;
 }
 
-const list = $("list");
-const front = $("front");
-const body = $("body");
-const source = $<HTMLTextAreaElement>("source");
-const status = $("status");
+/** Small choices remembered between visits. They are conveniences; nothing depends on them. */
+const memory = {
+    get(name: string): string | null {
+        try {
+            return localStorage.getItem(`edit-${name}`);
+        } catch {
+            return null;
+        }
+    },
+    set(name: string, value: string): void {
+        try {
+            localStorage.setItem(`edit-${name}`, value);
+        } catch {
+            // private windows may refuse; carry on without
+        }
+    },
+};
 
-let current: { path: string; hash: string; front: string[] | null; lead: string; markdown: boolean } | undefined;
+const list = $("list");
+const write = $("write");
+const text = $<HTMLTextAreaElement>("text");
+const richBox = $("rich");
+const frontText = $<HTMLTextAreaElement>("front");
+const body = $("body");
+const status = $("status");
+const frame = $<HTMLIFrameElement>("preview");
+
+let file: { path: string; hash: string; content: string; markdown: boolean; route: string } | undefined;
+let rich = memory.get("rich") === "1";
+let files: FileEntry[] = [];
 /** What each block on the page came from, and what it looked like then. */
 const known = new WeakMap<Element, { block: Block; was: string }>();
 
+const richNow = () => rich && Boolean(file?.markdown);
+
 // ---- showing a file ----
 
-const grow = (area: HTMLTextAreaElement) => {
+/** Make a text area as tall as what is in it, without the page jumping. */
+function grow(area: HTMLTextAreaElement): void {
+    const top = write.scrollTop;
     area.style.height = "auto";
     area.style.height = `${area.scrollHeight + 2}px`;
-};
+    write.scrollTop = top;
+}
 
+/** A block the rich view shows as itself: code, a picture, or source it leaves alone. */
 function island(kind: "code" | "raw" | "image", block: Partial<Block>): HTMLElement {
     const box = el("div", { className: `island ${kind}`, contentEditable: "false" });
-    box.dataset.kind = kind;
-    const remove = el("button", { className: "island-remove", type: "button", title: "remove this block", textContent: "remove" });
-    remove.addEventListener("click", () => {
-        box.remove();
-        changed();
-    });
     if (kind === "image") {
         const url = block.url ?? "";
-        const shown = /^https?:/.test(url) ? url : `/api/asset?file=${encodeURIComponent(current?.path ?? "")}&src=${encodeURIComponent(url)}&k=${key}`;
+        const shown = /^https?:/.test(url) ? url : `/api/asset?file=${encodeURIComponent(file?.path ?? "")}&src=${encodeURIComponent(url)}&k=${key}`;
         box.dataset.url = url;
-        box.append(el("img", { src: shown, alt: "" }), el("input", { value: block.alt ?? "", placeholder: "describe the picture (alt text)" }), remove);
+        box.append(el("img", { src: shown, alt: "" }), el("input", { value: block.alt ?? "", placeholder: "describe the picture" }));
         return box;
     }
+    if (kind === "code") box.append(el("input", { value: block.lang ?? "", placeholder: "language", className: "lang" }));
     const area = el("textarea", { value: kind === "code" ? (block.code ?? "") : (block.src ?? ""), spellcheck: false, rows: 1 });
-    const head = el("div", { className: "island-head" });
-    if (kind === "code") head.append(el("input", { value: block.lang ?? "", placeholder: "language", className: "lang" }));
-    else head.append(el("span", {}, "source"));
-    head.append(remove);
-    box.append(head, area);
+    box.append(area);
     queueMicrotask(() => grow(area));
     return box;
 }
 
 function show(block: Block): Element {
-    const inline = (text: string) => toHtml(parseInline(text)) || "<br>";
+    const inline = (source: string) => toHtml(parseInline(source)) || "<br>";
     switch (block.type) {
         case "heading":
-            return el(`h${Math.max(block.level!, 1)}` as "h2", { innerHTML: inline(block.text!) });
+            return el(`h${block.level!}` as "h2", { innerHTML: inline(block.text!) });
         case "paragraph":
             return el("p", { innerHTML: inline(block.text!) });
         case "list":
             return el(block.ordered ? "ol" : "ul", { innerHTML: block.items!.map((item) => `<li>${inline(item)}</li>`).join("") });
         case "quote":
             return el("blockquote", { innerHTML: block.paragraphs!.map((paragraph) => `<p>${inline(paragraph)}</p>`).join("") });
+        case "table": {
+            const row = (cells: string[], tag: string) => `<tr>${cells.map((cell) => `<${tag}>${inline(cell)}</${tag}>`).join("")}</tr>`;
+            const table = el("table", { innerHTML: `<thead>${row(block.head!, "th")}</thead><tbody>${block.rows!.map((cells) => row(cells, "td")).join("")}</tbody>` });
+            table.dataset.align = block.align!.join(" ");
+            return table;
+        }
         case "rule":
             return el("hr");
         case "code":
@@ -103,111 +135,73 @@ function look(node: Element): string {
     return JSON.stringify([...node.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>("input, textarea")].map((field) => field.value));
 }
 
-function showBody(markdown: string): void {
-    const { lead, blocks } = parseBody(markdown);
-    current!.lead = lead;
+const emptyLine = () => el("p", { innerHTML: "<br>" });
+
+/** Put the open file on the page, in whichever of the two views is chosen. */
+function render(): void {
+    if (!file) return;
+    const formatted = richNow();
+    text.hidden = formatted;
+    richBox.hidden = !formatted;
+    document.body.classList.toggle("is-rich", formatted);
+    $("mode").hidden = !file.markdown;
+    $("tools").hidden = !file.markdown;
+    $("mode-markdown").setAttribute("aria-pressed", String(!formatted));
+    $("mode-rich").setAttribute("aria-pressed", String(formatted));
+    if (!formatted) {
+        text.value = file.content;
+        grow(text);
+        return;
+    }
+    const parts = splitFile(file.content);
+    frontText.hidden = parts.front === null;
+    frontText.value = parts.front?.join("\n") ?? "";
+    grow(frontText);
+    const { lead, blocks } = parseBody(parts.body);
+    body.dataset.lead = lead;
     body.replaceChildren();
     for (const block of blocks) {
         const node = show(block);
         body.append(node);
         known.set(node, { block, was: look(node) });
     }
-    body.append(el("p", { innerHTML: "<br>" }));
-}
-
-function showFront(): void {
-    front.replaceChildren();
-    const lines = current?.front;
-    if (!lines) return;
-    const all = fields(lines);
-    const set = (line: number, name: string, value: string, quoted: boolean) => {
-        lines[line] = fieldLine(name, value, quoted);
-        changed();
-    };
-    const title = all.find((field) => field.key === "title" || field.key === "name");
-    const summary = all.find((field) => field.key === "summary");
-    if (title) {
-        const input = el("textarea", { className: "title", value: title.value, rows: 1, placeholder: "Title" });
-        input.addEventListener("input", () => (grow(input), set(title.line, title.key, input.value.replace(/\n/g, " "), true)));
-        front.append(input);
-        queueMicrotask(() => grow(input));
-    }
-    if (summary) {
-        const input = el("textarea", { className: "summary", value: summary.value, rows: 1, placeholder: "One sentence about this." });
-        input.addEventListener("input", () => (grow(input), set(summary.line, "summary", input.value.replace(/\n/g, " "), true)));
-        front.append(input);
-        queueMicrotask(() => grow(input));
-    }
-    const details = el("div", { className: "details" });
-    for (const field of all) {
-        if (field === title || field === summary) continue;
-        const flag = !field.quoted && /^(true|false)$/.test(field.value);
-        const input = el("input", flag ? { type: "checkbox", checked: field.value === "true" } : { value: field.value });
-        input.addEventListener("input", () => set(field.line, field.key, flag ? String(input.checked) : input.value, field.quoted));
-        details.append(el("label", { className: flag ? "flag" : "" }, el("span", {}, field.key), input));
-    }
-    const text = el("textarea", { className: "front-text", value: lines.join("\n"), spellcheck: false, hidden: true });
-    text.addEventListener("input", () => {
-        grow(text);
-        current!.front = text.value.split("\n");
-        changed();
-    });
-    const toggle = el("button", { type: "button", className: "quiet", textContent: "everything, as text" });
-    toggle.addEventListener("click", () => {
-        if (text.hidden) {
-            text.value = current!.front!.join("\n");
-            text.hidden = false;
-            details.hidden = true;
-            toggle.textContent = "back to fields";
-            grow(text);
-        } else showFront();
-    });
-    front.append(details, toggle, text);
+    body.append(emptyLine());
 }
 
 async function open(path: string): Promise<void> {
     await save();
-    const file = await api<{ content: string; hash: string }>(`/api/file?path=${encodeURIComponent(path)}`);
-    const markdown = /\.mdx?$/.test(path);
-    const parts = markdown ? splitFile(file.content) : { front: null, body: file.content };
-    current = { path, hash: file.hash, front: parts.front, lead: "", markdown };
-    body.hidden = !markdown;
-    source.hidden = markdown;
-    $("tools").hidden = !markdown;
-    showFront();
-    if (markdown) showBody(parts.body);
-    else {
-        source.value = file.content;
-        queueMicrotask(() => grow(source));
-    }
+    const loaded = await api<{ content: string; hash: string }>(`/api/file?path=${encodeURIComponent(path)}`);
+    const route = files.find((entry) => entry.path === path)?.route ?? "/";
+    file = { path, hash: loaded.hash, content: loaded.content, markdown: /\.mdx?$/.test(path), route };
+    render();
     for (const link of list.querySelectorAll("button")) link.classList.toggle("here", link.dataset.path === path);
-    $<HTMLAnchorElement>("view").href = `/view?path=${encodeURIComponent(path)}&k=${key}`;
-    try {
-        localStorage.setItem("edit-last", path);
-    } catch {
-        // remembering the last file is only a convenience
+    if (frame.dataset.route !== route) {
+        frame.dataset.route = route;
+        frame.src = site + route;
     }
+    $<HTMLAnchorElement>("view").href = site + route;
+    memory.set("last", path);
     say("");
-    window.scrollTo(0, 0);
+    write.scrollTop = 0;
 }
 
-async function showList(): Promise<Group[]> {
+async function showList(): Promise<void> {
     const groups = await api<Group[]>("/api/files");
+    files = groups.flatMap((group) => group.files);
     list.replaceChildren();
     for (const group of groups) {
         list.append(el("h2", {}, group.label));
-        for (const file of group.files) {
-            const link = el("button", { type: "button", className: file.path === current?.path ? "here" : "" }, file.label);
-            if (file.draft) link.append(el("small", {}, "draft"));
-            link.dataset.path = file.path;
-            link.addEventListener("click", () => void open(file.path).catch(fail));
+        for (const entry of group.files) {
+            const link = el("button", { type: "button", className: entry.path === file?.path ? "here" : "" }, entry.label);
+            if (entry.draft) link.append(el("small", {}, "draft"));
+            link.dataset.path = entry.path;
+            link.addEventListener("click", () => void open(entry.path).catch(fail));
             list.append(link);
         }
     }
-    return groups;
 }
 
-// ---- reading the page back into Markdown ----
+// ---- reading the rich view back into Markdown ----
 
 function inlineOf(node: Node): Inline[] {
     const out: Inline[] = [];
@@ -230,14 +224,14 @@ function inlineOf(node: Node): Inline[] {
 /** Tidy what a browser leaves behind: empty marks, and spaces inside the ends of a mark. */
 function tidy(nodes: Inline[]): Inline[] {
     const out: Inline[] = [];
-    const text = (v: string) => {
+    const add = (v: string) => {
         const last = out[out.length - 1];
         if (!v) return;
         if (last?.t === "text") last.v += v;
         else out.push({ t: "text", v });
     };
     for (const node of nodes) {
-        if (node.t === "text") text(node.v);
+        if (node.t === "text") add(node.v);
         else if (node.t === "code") node.v && out.push(node);
         else {
             const inner = tidy(node.c);
@@ -248,9 +242,9 @@ function tidy(nodes: Inline[]): Inline[] {
             if (first?.t === "text") [before, first.v] = [/^\s*/.exec(first.v)![0], first.v.trimStart()];
             if (last?.t === "text") [after, last.v] = [/\s*$/.exec(last.v)![0], last.v.trimEnd()];
             const kept = inner.filter((part) => part.t !== "text" || part.v);
-            text(before);
+            add(before);
             if (kept.length > 0) out.push({ ...node, c: kept });
-            text(after);
+            add(after);
         }
     }
     return out;
@@ -287,9 +281,14 @@ function blockOf(node: Element): string {
     const tag = node.tagName;
     if (tag === "HR") return "---";
     if (tag === "UL" || tag === "OL") return listOf(node, "");
+    if (tag === "TABLE") {
+        const rows = [...node.querySelectorAll("tr")].map((row) => [...row.children].map((cell) => lineOf(cell).replace(/\|/g, "\\|")));
+        const [head, ...rest] = rows;
+        return head ? tableMarkdown(head, ((node as HTMLElement).dataset.align ?? "").split(" "), rest) : "";
+    }
     if (/^H[1-6]$/.test(tag)) {
-        const text = lineOf(node);
-        return text ? `${"#".repeat(Number(tag[1]))} ${text}` : "";
+        const line = lineOf(node);
+        return line ? `${"#".repeat(Number(tag[1]))} ${line}` : "";
     }
     if (tag === "BLOCKQUOTE") {
         const parts = [...node.children].some((child) => /^(P|DIV|UL|OL|H[1-6]|BLOCKQUOTE)$/.test(child.tagName))
@@ -301,7 +300,7 @@ function blockOf(node: Element): string {
     return guard(lineOf(node));
 }
 
-const BLOCK = /^(P|DIV|UL|OL|BLOCKQUOTE|H[1-6]|HR|PRE)$/;
+const BLOCK = /^(P|DIV|UL|OL|BLOCKQUOTE|H[1-6]|HR|PRE|TABLE)$/;
 
 /**
  * Browsers sometimes put a list or a quote inside the paragraph it was made
@@ -331,6 +330,7 @@ function flatten(): void {
     if (moved && cursor?.node && body.contains(cursor.node)) selection?.collapse(cursor.node, cursor.offset);
 }
 
+/** The rich view as Markdown. A block nobody touched comes back exactly as the file had it. */
 function read(): string {
     flatten();
     const parts: { text: string; gap: string }[] = [];
@@ -343,14 +343,18 @@ function read(): string {
         const origin = known.get(node);
         if (origin && origin.was === look(node)) parts.push({ text: origin.block.src, gap: origin.block.gap });
         else {
-            const text = blockOf(node);
-            if (text) parts.push({ text, gap: "\n\n" });
+            const markdown = blockOf(node);
+            if (markdown) parts.push({ text: markdown, gap: "\n\n" });
         }
     }
-    return (
-        current!.lead +
-        parts.map((part, index) => part.text + (index === parts.length - 1 ? "\n" : part.gap.length > 1 ? part.gap : "\n\n")).join("")
-    );
+    const written = parts.map((part, index) => part.text + (index === parts.length - 1 ? "\n" : part.gap.length > 1 ? part.gap : "\n\n")).join("");
+    return (body.dataset.lead ?? "") + written;
+}
+
+/** The file as it stands on the page right now. */
+function contentNow(): string {
+    if (!richNow()) return text.value;
+    return joinFile(frontText.hidden ? null : frontText.value.split("\n"), read());
 }
 
 // ---- saving ----
@@ -359,8 +363,8 @@ let timer = 0;
 let dirty = false;
 let saving: Promise<void> = Promise.resolve();
 
-function say(text: string, bad = false): void {
-    status.textContent = text;
+function say(message: string, bad = false): void {
+    status.textContent = message;
     status.classList.toggle("bad", bad);
 }
 const fail = (error: unknown) => say(error instanceof Error ? error.message : String(error), true);
@@ -369,19 +373,19 @@ function changed(): void {
     dirty = true;
     say("not saved yet");
     clearTimeout(timer);
-    timer = window.setTimeout(() => void save(), 700);
+    timer = window.setTimeout(() => void save(), 600);
 }
 
 function save(): Promise<void> {
     clearTimeout(timer);
     saving = saving.then(async () => {
-        if (!dirty || !current) return;
+        if (!dirty || !file) return;
         dirty = false;
-        const file = current;
-        const content = file.markdown ? joinFile(file.front, read()) : source.value;
+        const open = file;
+        open.content = contentNow();
         try {
-            const result = await api<{ hash: string }>("/api/save", { path: file.path, content, hash: file.hash });
-            file.hash = result.hash;
+            const result = await api<{ hash: string }>("/api/save", { path: open.path, content: open.content, hash: open.hash });
+            open.hash = result.hash;
             if (!dirty) say("saved");
         } catch (error) {
             dirty = true;
@@ -391,12 +395,98 @@ function save(): Promise<void> {
     return saving;
 }
 
-// ---- the toolbar ----
+// ---- tools for Markdown ----
 
 // execCommand is marked as deprecated, but nothing has replaced it for
-// formatting editable text, and every browser still does it.
+// editing text in a way that keeps undo working, and every browser still does it.
 const editing = document as unknown as { execCommand(name: string, ui: boolean, value?: string): boolean };
 const command = (name: string, value?: string) => editing.execCommand(name, false, value);
+
+const type = (inserted: string) => {
+    text.focus();
+    command("insertText", inserted);
+};
+
+/** Put marks around the selection, or around a placeholder if nothing is selected. */
+function wrap(before: string, after = before, placeholder = "text"): void {
+    const start = text.selectionStart;
+    const chosen = text.value.slice(start, text.selectionEnd) || placeholder;
+    type(before + chosen + after);
+    text.setSelectionRange(start + before.length, start + before.length + chosen.length);
+}
+
+/** Change the start of every selected line. */
+function lines(change: (line: string, index: number) => string): void {
+    const start = text.value.lastIndexOf("\n", text.selectionStart - 1) + 1;
+    const found = text.value.indexOf("\n", text.selectionEnd);
+    const end = found < 0 ? text.value.length : found;
+    text.setSelectionRange(start, end);
+    type(text.value.slice(start, end).split("\n").map(change).join("\n"));
+}
+
+/** Something that stands on its own lines, with a blank line either side. */
+function standalone(markdown: string, cursor = markdown.length): void {
+    const before = text.value.slice(0, text.selectionStart);
+    const lead = before === "" || before.endsWith("\n\n") ? "" : before.endsWith("\n") ? "\n" : "\n\n";
+    const start = text.selectionStart + lead.length;
+    type(`${lead}${markdown}\n`);
+    text.setSelectionRange(start + cursor, start + cursor);
+}
+
+const heading = (marks: string) => lines((line) => (line.startsWith(`${marks} `) ? line.slice(marks.length + 1) : `${marks} ${line.replace(/^#+\s*/, "")}`));
+
+const markdownTools: Record<string, () => void> = {
+    bold: () => wrap("**"),
+    italic: () => wrap("*"),
+    strike: () => wrap("~~"),
+    code: () => wrap("`", "`", "code"),
+    link() {
+        const start = text.selectionStart;
+        const chosen = text.value.slice(start, text.selectionEnd) || "text";
+        type(`[${chosen}](https://)`);
+        text.setSelectionRange(start + chosen.length + 3, start + chosen.length + 11);
+    },
+    h2: () => heading("##"),
+    h3: () => heading("###"),
+    ul: () => lines((line) => `- ${line}`),
+    ol: () => lines((line, index) => `${index + 1}. ${line}`),
+    quote: () => lines((line) => `> ${line}`),
+    rule: () => standalone("---"),
+    codeblock: () => standalone("```\n\n```", 4),
+    image: () => $<HTMLInputElement>("picture").click(),
+};
+
+text.addEventListener("keydown", (event) => {
+    const modifier = event.ctrlKey || event.metaKey;
+    const shortcut = modifier && { b: "bold", i: "italic", k: "link" }[event.key];
+    if (shortcut) {
+        event.preventDefault();
+        markdownTools[shortcut]?.();
+    } else if (event.key === "Tab") {
+        event.preventDefault();
+        if (text.selectionStart === text.selectionEnd && !event.shiftKey) type("    ");
+        else lines((line) => (event.shiftKey ? line.replace(/^( {1,4}|\t)/, "") : `    ${line}`));
+    } else if (event.key === "Enter" && !modifier && !event.shiftKey && text.selectionStart === text.selectionEnd) {
+        // Carry a list or a quote on to the next line; an empty item ends it.
+        const start = text.value.lastIndexOf("\n", text.selectionStart - 1) + 1;
+        const line = text.value.slice(start, text.selectionStart);
+        const item = /^(\s*)(?:([-*+>])|(\d+)([.)]))(\s+)(.*)$/.exec(line);
+        if (!item) return;
+        event.preventDefault();
+        const [, indent = "", bullet, number, dot = "", space = " ", rest = ""] = item;
+        if (rest.trim() === "") {
+            text.setSelectionRange(start, text.selectionStart);
+            command("delete");
+        } else type(`\n${indent}${bullet ?? `${Number(number) + 1}${dot}`}${space}`);
+    }
+});
+
+text.addEventListener("input", () => {
+    grow(text);
+    changed();
+});
+
+// ---- tools for rich text ----
 
 /** The top-level block the cursor is in. */
 function here(): Element | undefined {
@@ -409,7 +499,7 @@ function place(node: Element): void {
     const at = here() ?? body.lastElementChild;
     if (at) at.after(node);
     else body.append(node);
-    if (!node.nextElementSibling) body.append(el("p", { innerHTML: "<br>" }));
+    if (!node.nextElementSibling) body.append(emptyLine());
     changed();
 }
 
@@ -422,7 +512,7 @@ function inside(tag: string): HTMLElement | null {
 
 let linkRange: Range | undefined;
 
-const tools: Record<string, () => void> = {
+const richTools: Record<string, () => void> = {
     bold: () => command("bold"),
     italic: () => command("italic"),
     strike: () => command("strikeThrough"),
@@ -462,11 +552,6 @@ const tools: Record<string, () => void> = {
         place(box);
         box.querySelector("textarea")?.focus();
     },
-    raw() {
-        const box = island("raw", { src: "" });
-        place(box);
-        box.querySelector("textarea")?.focus();
-    },
     image: () => $<HTMLInputElement>("picture").click(),
 };
 
@@ -477,9 +562,11 @@ $("tools").addEventListener("mousedown", (event) => {
 $("tools").addEventListener("click", (event) => {
     const name = (event.target as Element).closest<HTMLElement>("button[data-tool]")?.dataset.tool;
     if (!name) return;
-    tools[name]?.();
-    flatten();
-    changed();
+    if (richNow()) {
+        richTools[name]?.();
+        flatten();
+        changed();
+    } else markdownTools[name]?.();
 });
 
 $<HTMLInputElement>("link").addEventListener("keydown", (event) => {
@@ -501,22 +588,21 @@ $<HTMLInputElement>("link").addEventListener("keydown", (event) => {
 
 $<HTMLInputElement>("picture").addEventListener("change", async (event) => {
     const input = event.target as HTMLInputElement;
-    const file = input.files?.[0];
+    const picked = input.files?.[0];
     input.value = "";
-    if (!file || !current) return;
+    if (!picked || !file) return;
     try {
-        const { url } = await api<{ url: string }>(`/api/upload?file=${encodeURIComponent(current.path)}&name=${encodeURIComponent(file.name)}`, undefined, file);
-        place(island("image", { url, alt: "" }));
+        const { url } = await api<{ url: string }>(`/api/upload?file=${encodeURIComponent(file.path)}&name=${encodeURIComponent(picked.name)}`, undefined, picked);
+        if (richNow()) place(island("image", { url, alt: "" }));
+        else standalone(`![](${url})`, 2);
     } catch (error) {
         fail(error);
     }
 });
 
-// ---- typing ----
-
 command("defaultParagraphSeparator", "p");
 
-/** Markdown typed at the start of a line turns into the thing it means. */
+/** Markdown typed at the start of a line in the rich view turns into the thing it means. */
 const SHORTHAND: Record<string, string> = { "##": "h2", "###": "h3", "-": "ul", "*": "ul", "1.": "ol", ">": "quote", "```": "codeblock", "---": "rule" };
 
 body.addEventListener("input", (event) => {
@@ -527,13 +613,12 @@ body.addEventListener("input", (event) => {
         if (tool && (block.textContent ?? "").length === typed.length + 1) {
             block.innerHTML = "<br>";
             getSelection()?.collapse(block, 0);
-            tools[tool]?.();
+            richTools[tool]?.();
         }
     }
     flatten();
-    const target = event.target;
-    if (target instanceof HTMLTextAreaElement) grow(target);
-    if (!body.lastElementChild || body.lastElementChild.classList.contains("island")) body.append(el("p", { innerHTML: "<br>" }));
+    if (event.target instanceof HTMLTextAreaElement) grow(event.target);
+    if (!body.lastElementChild || !/^(P|H[1-6])$/.test(body.lastElementChild.tagName)) body.append(emptyLine());
     changed();
 });
 
@@ -544,27 +629,77 @@ body.addEventListener("paste", (event) => {
 });
 
 body.addEventListener("keydown", (event) => {
-    if (event.key === "Tab" && inside("li") && !(event.target instanceof HTMLTextAreaElement)) {
+    const target = event.target;
+    if (target instanceof HTMLTextAreaElement || target instanceof HTMLInputElement) {
+        // Backspace in an emptied code, picture or source block takes the block away.
+        const box = target.closest(".island");
+        const empty = [...(box?.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>("input, textarea") ?? [])].every((field) => !field.value);
+        if (event.key === "Backspace" && box && empty) {
+            event.preventDefault();
+            box.remove();
+            changed();
+        }
+        return;
+    }
+    const cell = inside("td") ?? inside("th");
+    if (cell && (event.key === "Enter" || event.key === "Tab")) {
+        // In a table, Tab and Enter move between cells; past the last one, a new row begins.
+        event.preventDefault();
+        const table = cell.closest("table")!;
+        const all = [...table.querySelectorAll<HTMLElement>("th, td")];
+        let next = all[all.indexOf(cell) + (event.shiftKey ? -1 : 1)];
+        if (!next && !event.shiftKey) {
+            const row = el("tr", { innerHTML: "<td><br></td>".repeat(cell.parentElement!.children.length) });
+            (table.tBodies[0] ?? table).append(row);
+            next = row.firstElementChild as HTMLElement;
+            changed();
+        }
+        if (next) getSelection()?.selectAllChildren(next);
+    } else if (event.key === "Tab" && inside("li")) {
         event.preventDefault();
         command(event.shiftKey ? "outdent" : "indent");
     }
 });
 
-source.addEventListener("input", () => {
-    grow(source);
+frontText.addEventListener("input", () => {
+    grow(frontText);
     changed();
 });
+
+// ---- switching views ----
+
+async function setRich(on: boolean): Promise<void> {
+    if (on === rich) return;
+    await save();
+    rich = on;
+    memory.set("rich", on ? "1" : "0");
+    render();
+}
+$("mode-markdown").addEventListener("click", () => void setRich(false));
+$("mode-rich").addEventListener("click", () => void setRich(true));
+
+function setPreview(on: boolean): void {
+    document.body.classList.toggle("no-preview", !on);
+    $("toggle-preview").setAttribute("aria-pressed", String(on));
+    memory.set("preview", on ? "1" : "0");
+    for (const area of write.querySelectorAll("textarea")) if (area.offsetParent) grow(area);
+}
+$("toggle-preview").addEventListener("click", () => setPreview(document.body.classList.contains("no-preview")));
+setPreview(memory.get("preview") !== "0");
 
 document.addEventListener("keydown", (event) => {
     if ((event.ctrlKey || event.metaKey) && event.key === "s") {
         event.preventDefault();
-        dirty = dirty || Boolean(current);
+        dirty = dirty || Boolean(file);
         void save();
     }
 });
 
 window.addEventListener("beforeunload", (event) => {
     if (dirty) event.preventDefault();
+});
+window.addEventListener("resize", () => {
+    for (const area of write.querySelectorAll("textarea")) if (area.offsetParent) grow(area);
 });
 
 // ---- a new post ----
@@ -581,9 +716,9 @@ newTitle.addEventListener("keydown", async (event) => {
         const { path } = await api<{ path: string }>("/api/new", { title: newTitle.value.trim() });
         newTitle.value = "";
         newTitle.hidden = true;
-        await open(path);
         await showList();
-        body.focus();
+        await open(path);
+        (richNow() ? body : text).focus();
     } catch (error) {
         fail(error);
     }
@@ -612,7 +747,7 @@ $("publish").addEventListener("click", async () => {
     message.hidden = deploy.hidden = true;
     dialog.showModal();
     try {
-        const plan = await api<Plan>("/api/plan", { path: current?.path ?? "" });
+        const plan = await api<Plan>("/api/plan", { path: file?.path ?? "" });
         if (!plan.ok) {
             report.textContent = `The check failed, so nothing can be published yet.\n\n${plan.log}`;
             return;
@@ -652,17 +787,5 @@ $("close").addEventListener("click", () => dialog.close());
 // ---- start ----
 
 void showList()
-    .then((groups) => {
-        const all = groups.flatMap((group) => group.files);
-        let last: string | null = null;
-        try {
-            last = localStorage.getItem("edit-last");
-        } catch {
-            // no memory of the last file; start from the first
-        }
-        const posts = all.filter((file) => file.path.includes("/blog/"));
-        const first = meta("edit-mode") === "blog" ? (posts.find((file) => file.draft) ?? posts[0]) : all.find((file) => file.path === last);
-        if (meta("edit-mode") === "blog" && !first) $("new").click();
-        return open((first ?? all[0])!.path);
-    })
+    .then(() => open((files.find((entry) => entry.path === memory.get("last")) ?? files[0])!.path))
     .catch(fail);

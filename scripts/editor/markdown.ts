@@ -3,8 +3,8 @@
 // The rule that keeps it honest: a file is cut into blocks, every block
 // remembers its exact source, and a block nobody touched is written back
 // exactly as it was. Only what the editor can show faithfully (headings,
-// paragraphs, simple lists, quotes, code, pictures) becomes formatted text;
-// everything else (imports, components, tables) is shown as its source.
+// paragraphs, simple lists, quotes, tables, code, pictures) becomes formatted
+// text; everything else (imports, components) is shown as its source.
 
 // ---- frontmatter ----
 
@@ -196,7 +196,7 @@ const faithful = (text: string) => !/[<{}]|!\[|\[\^|``|&#?\w+;|\\(?![!-/:-@[-`{-
 // ---- blocks ----
 
 export interface Block {
-    type: "heading" | "paragraph" | "list" | "quote" | "code" | "rule" | "image" | "raw";
+    type: "heading" | "paragraph" | "list" | "quote" | "table" | "code" | "rule" | "image" | "raw";
     /** Exactly what the file says, and the blank lines after it. */
     src: string;
     gap: string;
@@ -209,6 +209,10 @@ export interface Block {
     code?: string;
     alt?: string;
     url?: string;
+    /** A table: its heading cells, each column's alignment mark, and its rows. */
+    head?: string[];
+    align?: string[];
+    rows?: string[][];
 }
 
 export interface Body {
@@ -247,6 +251,24 @@ function componentEnd(lines: string[], from: number): number {
     return untilBlank(lines, from);
 }
 
+const cells = (row: string): string[] =>
+    row
+        .trim()
+        .replace(/^\||\|$/g, "")
+        .split("|")
+        .map((cell) => cell.trim());
+
+/** A table as Markdown, its columns padded to line up. */
+export function tableMarkdown(head: string[], align: string[], rows: string[][]): string {
+    const widths = head.map((cell, column) => Math.max(3, cell.length, ...rows.map((row) => (row[column] ?? "").length)));
+    const line = (row: string[]) => `| ${widths.map((width, column) => (row[column] ?? "").padEnd(width)).join(" | ")} |`;
+    const rule = widths.map((width, column) => {
+        const mark = align[column] ?? "---";
+        return (mark.startsWith(":") ? ":" : "-") + "-".repeat(width - 2) + (mark.endsWith(":") ? ":" : "-");
+    });
+    return [line(head), `| ${rule.join(" | ")} |`, ...rows.map(line)].join("\n");
+}
+
 function read(lines: string[], at: number): [Omit<Block, "src" | "gap">, number] {
     const line = lines[at]!;
     const raw = (end: number): [Omit<Block, "src" | "gap">, number] => [{ type: "raw" }, end];
@@ -259,7 +281,22 @@ function read(lines: string[], at: number): [Omit<Block, "src" | "gap">, number]
         return [{ type: "code", lang: fence[2]!.trim(), code: lines.slice(at + 1, end).join("\n") }, closed ? end + 1 : end];
     }
     if (line.startsWith("<")) return raw(componentEnd(lines, at));
-    if (/^(import|export)\s|^[{|]|^\s/.test(line)) return raw(untilBlank(lines, at));
+    if (line.startsWith("|")) {
+        // A plain pipe table: a heading row, a row of dashes, then rows of the same width.
+        const end = untilBlank(lines, at);
+        const table = lines.slice(at, end);
+        const [head, align, ...rows] = table.map(cells);
+        const plain =
+            head !== undefined &&
+            align !== undefined &&
+            align.length === head.length &&
+            align.every((mark) => /^:?-+:?$/.test(mark)) &&
+            table.every((row) => /^\|.*\|\s*$/.test(row) && !/\\\||`/.test(row)) &&
+            rows.every((row) => row.length === head.length) &&
+            [head, ...rows].flat().every(faithful);
+        return plain ? [{ type: "table", head, align, rows }, end] : raw(end);
+    }
+    if (/^(import|export)\s|^[{]|^\s/.test(line)) return raw(untilBlank(lines, at));
 
     const heading = HEADING.exec(line);
     if (heading) {

@@ -1,14 +1,13 @@
 // Write for the site in the browser.
 //
-//   bun run blog    start a new post, or carry on with a draft
-//   bun run edit    change any text on the site: the intro, the about page,
-//                   the setup page, the resume, a project, a post
+//   bun run edit
 //
-// Either one starts a small server on this computer only and opens an editor
-// in the browser. It shows the file as formatted text, saves as you type, and
-// has a publish button: build, commit and push what changed, and deploy to
-// Cloudflare Pages. Publishing always shows what is about to go live and asks
-// first. Press Ctrl+C here to stop.
+// Starts a small server on this computer only and opens an editor in the
+// browser: every post, page and project, the resume, and the homepage's
+// intro. A file is edited as its Markdown, with the real page beside it;
+// rich text is a switch. It saves as you type, and a publish button builds,
+// commits and pushes what changed, and deploys to Cloudflare Pages, after
+// showing what is about to go live and asking. Press Ctrl+C here to stop.
 //
 //   --dry-run    go through publishing without committing or deploying
 //   --no-open    do not open the browser
@@ -24,7 +23,6 @@ import { themeStyle } from "../src/lib/color";
 const root = resolve(new URL("..", import.meta.url).pathname);
 const args = process.argv.slice(2);
 const dryRun = args.includes("--dry-run");
-const mode = args[0] === "edit" ? "edit" : "blog";
 const port = Number(args[args.indexOf("--port") + 1]) || 4400;
 const key = crypto.randomUUID().replace(/-/g, "");
 const DEV = "http://localhost:4321";
@@ -67,25 +65,25 @@ async function files() {
             path,
             label: frontmatter(source, "title") ?? frontmatter(source, "name") ?? name.replace(/\.mdx?$/, ""),
             draft: frontmatter(source, "draft") === "true",
+            route: route(path),
         };
     };
     const folder = async (label: string, where: string) => ({
         label,
         files: await Promise.all((await listMdx(where)).map((name) => entry(where, name))),
     });
-    const groups = [
+    return [
         await folder("posts", "src/content/blog"),
         {
             label: "pages",
             files: [
-                { path: "src/data/site.ts", label: "Intro, contact, nav", draft: false },
+                { path: "src/data/site.ts", label: "intro, contact, nav", draft: false, route: "/" },
                 ...(await folder("", "src/content/pages")).files,
-                ...(await folder("", "src/content/resume")).files.map((file) => ({ ...file, label: "Resume" })),
+                ...(await folder("", "src/content/resume")).files.map((file) => ({ ...file, label: "resume" })),
             ],
         },
         await folder("projects", "src/content/projects"),
     ];
-    return mode === "blog" ? groups : [groups[1]!, groups[2]!, groups[0]!];
 }
 
 async function newPost(title: string): Promise<string> {
@@ -213,7 +211,7 @@ const page = `<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="edit-key" content="${key}">
-<meta name="edit-mode" content="${mode}">
+<meta name="edit-site" content="${DEV}">
 <title>editing bybrooklyn.dev</title>
 <link rel="icon" href="data:,">
 <link rel="stylesheet" href="/style.css">
@@ -222,38 +220,47 @@ const page = `<!doctype html>
 <aside id="files">
     <p class="name">charlotte</p>
     <button type="button" id="new">new post</button>
-    <input id="new-title" hidden placeholder="Title, then Enter" aria-label="Title of the new post">
+    <input id="new-title" hidden placeholder="title, then Enter" aria-label="Title of the new post">
     <nav id="list" aria-label="Files"></nav>
 </aside>
 <main>
     <div id="bar">
         <div id="tools">
-            ${tool("bold", "<b>B</b>", "bold (Ctrl+B)")}
-            ${tool("italic", "<i>I</i>", "italic (Ctrl+I)")}
-            ${tool("strike", "<s>S</s>", "strike through")}
-            ${tool("code", "&lt;&gt;", "code")}
-            ${tool("link", "link", "link: select text first")}
-            ${tool("h2", "H2", "heading")}
-            ${tool("h3", "H3", "smaller heading")}
+            ${tool("bold", "bold", "bold (Ctrl+B)")}
+            ${tool("italic", "italic", "italic (Ctrl+I)")}
+            ${tool("strike", "strike", "strike through")}
+            ${tool("code", "code", "code")}
+            ${tool("link", "link", "link (Ctrl+K)")}
+            ${tool("h2", "h2", "heading")}
+            ${tool("h3", "h3", "smaller heading")}
             ${tool("ul", "list", "bulleted list")}
             ${tool("ol", "1. list", "numbered list")}
             ${tool("quote", "quote", "quote")}
             ${tool("codeblock", "code block", "a block of code")}
             ${tool("image", "picture", "add a picture")}
             ${tool("rule", "line", "a dividing line")}
-            ${tool("raw", "source", "a block of raw Markdown or a component")}
         </div>
         <input id="link" hidden placeholder="https://… then Enter (empty removes the link)" aria-label="Link address">
         <input id="picture" type="file" accept="image/*" hidden>
-        <span id="status" role="status"></span>
-        <a id="view" target="_blank" rel="noopener">view page</a>
+        <span id="status" class="push" role="status"></span>
+        <span id="mode">
+            <button type="button" id="mode-markdown" aria-pressed="true">markdown</button>
+            <button type="button" id="mode-rich" aria-pressed="false">rich text</button>
+        </span>
+        <button type="button" id="toggle-preview" aria-pressed="true">preview</button>
+        <a id="view" target="_blank" rel="noopener" title="open the page in its own tab">open</a>
         <button type="button" id="publish">publish</button>
     </div>
-    <article id="doc">
-        <header id="front"></header>
-        <div id="body" class="prose" contenteditable="true" spellcheck="true" aria-label="The page's text"></div>
-        <textarea id="source" hidden spellcheck="false" aria-label="The file's source"></textarea>
-    </article>
+    <div id="panes">
+        <div id="write">
+            <textarea id="text" spellcheck="true" aria-label="The file"></textarea>
+            <div id="rich" hidden>
+                <textarea id="front" spellcheck="false" rows="1" aria-label="Frontmatter"></textarea>
+                <div id="body" class="prose" contenteditable="true" spellcheck="true" aria-label="The page's text"></div>
+            </div>
+        </div>
+        <iframe id="preview" title="The page as it will look"></iframe>
+    </div>
 </main>
 <dialog id="dialog">
     <h2>publish</h2>
@@ -294,10 +301,6 @@ async function handle(request: Request): Promise<Response> {
 
     if (url.pathname === "/") return new Response(page, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
 
-    if (url.pathname === "/view") {
-        await devServer();
-        return Response.redirect(DEV + route(query("path")), 302);
-    }
     if (url.pathname === "/api/asset") {
         // A picture named in a file: from public/ if it starts with a slash, else beside the file.
         const src = query("src");
@@ -349,6 +352,9 @@ const server = Bun.serve({
     idleTimeout: 255,
     fetch: (request) => handle(request).catch((error: unknown) => json({ error: error instanceof Error ? error.message : String(error) }, 500)),
 });
+
+// The preview beside the text is the site's own dev server.
+await devServer();
 
 const address = `http://127.0.0.1:${server.port}/?k=${key}`;
 console.log(`\nThe editor is at:\n\n  ${address}\n\n${dryRun ? "Dry run: publishing will stop before the commit and the deploy.\n" : ""}Press Ctrl+C to stop.`);
