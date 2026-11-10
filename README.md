@@ -7,8 +7,8 @@ bun install
 bun run dev      # http://localhost:4321, drafts included
 bun run check
 bun run build    # writes dist/
-bun run blog     # write a post, then publish it
-bun run edit     # change any text on the site, then publish it
+bun run blog     # write a post in the browser, then publish it
+bun run edit     # change any text on the site in the browser, then publish it
 bun run deploy   # check, build, deploy
 ```
 
