@@ -1,5 +1,5 @@
 ---
-import { Image } from "astro:assets";
+import Picture from "./Picture.astro";
 import "../styles/blog.css";
 import { formatDate, readingTime, type Post } from "../lib/posts";
 
@@ -33,7 +33,7 @@ const { title, summary, date, draft, cover, tags } = post.data;
     ) : (
         <li class="post-row">
             <a href={`/blog/${post.id}/`}>
-                {cover && <Image format="avif" class="post-thumb" src={cover} alt="" width={320} height={200} fit="cover" />}
+                {cover && <Picture class="post-thumb" src={cover} alt="" width={320} height={200} fit="cover" />}
                 <div>
                     <Heading>{title}</Heading>
                     <p>{summary}</p>

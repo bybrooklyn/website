@@ -1,5 +1,5 @@
 ---
-import { Image } from "astro:assets";
+import Picture from "../components/Picture.astro";
 import type { MarkdownHeading } from "astro";
 import "../styles/blog.css";
 import Opened from "./Opened.astro";
@@ -38,7 +38,7 @@ const { title, summary, date, accent, draft, cover, coverAlt, tags } = post.data
             }
         </header>
 
-        {cover && <Image format="avif" class="post-cover" src={cover} alt={coverAlt ?? ""} widths={[640, 960, 1440]} sizes="(min-width: 60rem) 44rem, 100vw" loading="eager" fetchpriority="high" />}
+        {cover && <Picture class="post-cover" src={cover} alt={coverAlt ?? ""} widths={[640, 960, 1440]} sizes="(min-width: 60rem) 44rem, 100vw" loading="eager" fetchpriority="high" />}
 
         <div class="post-body">
             <Contents {headings} />

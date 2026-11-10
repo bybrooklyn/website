@@ -12,6 +12,12 @@ export default defineConfig({
         // can be drawn after one round trip instead of three.
         inlineStylesheets: "always",
     },
+    // Start fetching a page as soon as a link to it is hovered, focused or
+    // touched. Astro holds back by itself on data-saving or very slow connections.
+    prefetch: {
+        prefetchAll: true,
+        defaultStrategy: "hover",
+    },
     integrations: [
         mdx(),
         sitemap(),

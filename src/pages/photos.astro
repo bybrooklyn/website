@@ -2,7 +2,8 @@
 // /photos/: photographs, sorted under headings by what is in them, newest
 // first. Clicking one opens it large. They come from the photos/ folder; see
 // scripts/photos.ts.
-import { getImage, Image } from "astro:assets";
+import Picture from "../components/Picture.astro";
+import { getImage } from "astro:assets";
 import "../styles/photos.css";
 import Base from "../layouts/Base.astro";
 import { formatDate } from "../lib/posts";
@@ -35,8 +36,7 @@ const shown = await Promise.all(
                     {group.photos.map(({ photo, large, taken }) => (
                         <li>
                             <a href={large.src} data-caption={photo.caption ?? ""} data-taken={taken}>
-                                <Image
-                                    format="avif"
+                                <Picture
                                     src={photo.image}
                                     alt={photo.caption ?? ""}
                                     widths={[480, 960]}

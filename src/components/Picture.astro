@@ -1,0 +1,14 @@
+---
+// Every generated picture on the site: AVIF at the sizes asked for, with a
+// blurred preview behind it until it arrives.
+import { Image } from "astro:assets";
+import type { ComponentProps } from "astro/types";
+import { preview } from "../lib/preview";
+
+type Props = ComponentProps<typeof Image>;
+
+const props = Astro.props;
+const behind = typeof props.src === "object" && "src" in props.src ? await preview(props.src) : "";
+---
+
+<Image format="avif" {...props} style={behind ? `background:${behind}` : undefined} />

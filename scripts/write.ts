@@ -119,11 +119,14 @@ function route(path: string): string {
     return "/";
 }
 
+let startedDev = false;
+
 async function devServer(): Promise<void> {
     const up = () => fetch(DEV).then(() => true, () => false);
     if (await up()) return;
-    // Astro's dev server carries on in the background by itself.
-    await $`bunx astro dev`.cwd(root).nothrow().quiet();
+    // --background returns once the server is up; without it this would never come back.
+    await $`bunx astro dev --background`.cwd(root).nothrow().quiet();
+    startedDev = true;
     for (let tries = 0; tries < 40 && !(await up()); tries++) await Bun.sleep(250);
 }
 
@@ -358,6 +361,12 @@ await devServer();
 
 const address = `http://127.0.0.1:${server.port}/?k=${key}`;
 console.log(`\nThe editor is at:\n\n  ${address}\n\n${dryRun ? "Dry run: publishing will stop before the commit and the deploy.\n" : ""}Press Ctrl+C to stop.`);
+// Stopping the editor also stops the preview server, if this is what started it.
+process.on("SIGINT", async () => {
+    if (startedDev) await $`bunx astro dev stop`.cwd(root).nothrow().quiet();
+    process.exit(0);
+});
+
 if (!args.includes("--no-open")) {
     const opener = process.platform === "darwin" ? "open" : "xdg-open";
     if (Bun.which(opener)) Bun.spawn([opener, address], { stdio: ["ignore", "ignore", "ignore"] });

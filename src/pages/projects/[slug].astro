@@ -1,6 +1,6 @@
 ---
+import Picture from "../../components/Picture.astro";
 import type { GetStaticPaths } from "astro";
-import { Image } from "astro:assets";
 import { render } from "astro:content";
 import "../../styles/blog.css";
 import "../../styles/projects.css";
@@ -49,8 +49,7 @@ if (facts) rows.push(["last updated", formatDate(new Date(facts.updated))]);
 
         {
             cover && (
-                <Image format="avif"
-                    class:list={["post-cover", { pixel }]}
+                <Picture class:list={["post-cover", { pixel }]}
                     src={cover}
                     alt={coverAlt ?? ""}
                     widths={[640, 960, 1440]}
@@ -101,8 +100,7 @@ if (facts) rows.push(["last updated", formatDate(new Date(facts.updated))]);
                 <section class="gallery" aria-label="Screenshots">
                     {gallery.map((picture) => (
                         <a href={picture.src.src}>
-                            <Image format="avif"
-                                class:list={{ pixel }}
+                            <Picture class:list={{ pixel }}
                                 src={picture.src}
                                 alt={picture.alt}
                                 widths={[480, 960]}
