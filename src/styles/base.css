@@ -339,9 +339,23 @@ h1 + .about {
 }
 
 .site-id {
+    position: relative;
     display: flex;
     align-items: center;
     gap: 0.75rem;
+}
+
+/* The name's link reaches around the name and the flags, so a click near them goes home too. */
+.site-name::after {
+    content: "";
+    position: absolute;
+    inset: -0.6rem -0.8rem;
+}
+
+/* The flags stay on top of that, for their own tooltips. */
+.flags {
+    position: relative;
+    z-index: 1;
 }
 
 .flags {
