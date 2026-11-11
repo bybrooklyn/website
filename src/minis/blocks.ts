@@ -3,7 +3,7 @@
 // spot or press Space: a single click on nothing does nothing, so reaching
 // for a block and missing does not add one.
 
-import { World, ball, rect, shape, wake, type Body, type Mote, type Scene } from "../mote";
+import { Flat, radius, send, trace, where, type Body, type Mote, type P, type Scene } from "../mote";
 
 const MOST = 60;
 const FLOOR = 6;
@@ -15,110 +15,61 @@ const pastel = (hue: number) => `oklch(0.86 0.085 ${Math.round(hue % 360)})`;
 export const label = "A pile of blocks. Drag one to throw it. Double-click an empty spot, or press Space, to drop another.";
 
 export default function blocks(m: Mote): Scene {
-    // Carried, a block trails the pointer a little, as something with weight would.
-    const world = Object.assign(new World(), { gravity: 2600, grip: 17, follow: 0.115 });
-    // The box's corners are rounded, and its walls follow them: how round is read from the page.
-    const round = Number.parseFloat(getComputedStyle(m.canvas.parentElement ?? m.canvas).borderTopLeftRadius) || 0;
-    const most = m.preview ? 14 : MOST;
-    let dropped = 0;
+    const flat = new Flat(2600);
     const pile: Body[] = [];
     const colors = new Map<Body, string>();
     let hue = Math.random() * 360;
-    let walls: Body[] = [];
+    let walls: Body | undefined;
+    const most = m.preview ? 14 : MOST;
+    let dropped = 0;
+    // The box's corners are rounded, and its walls follow them: how round is read from the page.
+    const round = Number.parseFloat(getComputedStyle(m.canvas.parentElement ?? m.canvas).borderTopLeftRadius) || 0;
 
     const add = (block: Body) => {
         // A random hue, but never close to the one before it.
         hue += 70 + Math.random() * 220;
         colors.set(block, pastel(hue));
         pile.push(block);
-        world.add(block);
     };
 
     const drop = (x: number, y: number) => {
         const pick = Math.random();
         const half = SIZE / 2;
         const block =
-            pick < 0.7 ? rect(x, y, SIZE, SIZE)
-            : pick < 0.85 ? ball(x, y, half, { bounce: 0.4 })
-            : shape(x, y, [[0, -half], [half * 1.15, half], [-half * 1.15, half]]);
-        block.w = (Math.random() - 0.5) * 1.2;
+            pick < 0.7 ? flat.box(x, y, SIZE, SIZE, { quick: true })
+            : pick < 0.85 ? flat.ball(x, y, half, { bounce: 0.35, quick: true })
+            : flat.shape(x, y, [[0, -half], [half * 1.15, half], [-half * 1.15, half]], { quick: true });
+        send(block, 0, 0, (Math.random() - 0.5) * 1.2);
         add(block);
         if (pile.length > most) {
             const oldest = pile.shift()!;
-            world.remove(oldest);
+            flat.remove(oldest);
             colors.delete(oldest);
         }
     };
 
-    /** The floor, walls and roof around the box as it now is. */
+    /** The inside of the box as one closed wall: the floor, the sides and the top, with the four corners as the curves they are. */
     const enclose = () => {
-        const { width, height } = m;
-        const thick = 200;
-        for (const wall of walls) world.remove(wall);
-        walls = [
-            rect(width / 2, height - FLOOR + thick / 2, width + thick * 2, thick, { fixed: true }),
-            rect(-thick / 2, height / 2, thick, height * 6, { fixed: true }),
-            rect(width + thick / 2, height / 2, thick, height * 6, { fixed: true }),
-            rect(width / 2, -thick / 2, width + thick * 2, thick, { fixed: true }),
-            // Each corner: the part of the square that the curve cuts off, as three slivers along the arc.
-            ...[[0, 0, 1, 1], [width, 0, -1, 1], [0, height - FLOOR, 1, -1], [width, height - FLOOR, -1, -1]].flatMap(([cx, cy, sx, sy]) =>
-                round < 2 ? [] : [0, 1, 2].map((part) => {
-                    const on = (step: number): [number, number] => {
-                        const angle = (step / 3) * (Math.PI / 2);
-                        return [cx! + sx! * round * (1 - Math.sin(angle)), cy! + sy! * round * (1 - Math.cos(angle))];
-                    };
-                    const [a, b] = [on(part), on(part + 1)];
-                    const middle: [number, number] = [(cx! + a[0] + b[0]) / 3, (cy! + a[1] + b[1]) / 3];
-                    return shape(middle[0], middle[1], [[cx! - middle[0], cy! - middle[1]], [a[0] - middle[0], a[1] - middle[1]], [b[0] - middle[0], b[1] - middle[1]]], { fixed: true });
-                }),
-            ),
-        ];
-        world.add(...walls);
-        for (const block of pile) wake(block);
-    };
-
-    /** However hard something is pushed or thrown, it stays inside the box. */
-    const contain = () => {
-        const floor = m.height - FLOOR;
-        for (const block of pile) {
-            const xs = block.r ? [block.x - block.r, block.x + block.r] : block.wp.map((corner) => corner[0]);
-            const ys = block.r ? [block.y - block.r, block.y + block.r] : block.wp.map((corner) => corner[1]);
-            const low = Math.max(...ys) - floor;
-            const left = -Math.min(...xs);
-            const right = Math.max(...xs) - m.width;
-            const high = -Math.min(...ys);
-            if (high > 0) {
-                block.y += high;
-                block.vy = Math.max(block.vy, 0);
-            }
-            if (low > 0) {
-                block.y -= low;
-                block.vy = Math.min(block.vy, 0);
-            }
-            if (left > 0) {
-                block.x += left;
-                block.vx = Math.max(block.vx, 0);
-            }
-            if (right > 0) {
-                block.x -= right;
-                block.vx = Math.min(block.vx, 0);
-            }
-        }
+        if (walls) flat.remove(walls);
+        const [w, h] = [m.width, m.height - FLOOR];
+        const r = Math.min(round, w / 4, h / 4);
+        const arc = (cx: number, cy: number, from: number): P[] => Array.from({ length: 7 }, (_, step): P => {
+            const angle = from + (step / 6) * (Math.PI / 2);
+            return [cx + Math.cos(angle) * r, cy + Math.sin(angle) * r];
+        });
+        // clockwise from the top left: each corner's curve, a quarter turn at a time
+        walls = flat.wall(r < 2 ? [[0, 0], [w, 0], [w, h], [0, h]] : [...arc(r, r, Math.PI), ...arc(w - r, r, -Math.PI / 2), ...arc(w - r, h - r, 0), ...arc(r, h - r, Math.PI / 2)], true);
+        for (const block of pile) block.setAwake(true);
     };
 
     enclose();
     const middle = m.width / 2;
     const floor = m.height - FLOOR;
-    for (const [column, row] of [[-1, 0], [0, 0], [1, 0], [-0.5, 1], [0.5, 1], [0, 2]] as const) {
-        const block = rect(middle + column * SIZE, floor - SIZE / 2 - row * SIZE, SIZE, SIZE);
-        block.asleep = true;
-        add(block);
-    }
+    for (const [column, row] of [[-1, 0], [0, 0], [1, 0], [-0.5, 1], [0.5, 1], [0, 2]] as const) add(flat.box(middle + column * SIZE, floor - SIZE / 2 - row * SIZE, SIZE, SIZE, { quick: true }));
 
     return {
         step(dt) {
-            world.step(dt);
-            contain();
+            flat.step(dt);
             // Shown small in a list, it drops a piece by itself every couple of seconds.
             if (m.preview && m.time - dropped > 2.2) {
                 dropped = m.time;
@@ -127,50 +78,38 @@ export default function blocks(m: Mote): Scene {
         },
         resize: enclose,
         // Whatever is under the pointer is picked up.
-        press(x, y) {
-            world.grab([x, y]);
-        },
+        press: (x, y) => void flat.hand.take(x, y),
         // Pressed twice on an empty spot: a new piece there.
         double(x, y) {
-            if (!world.holding && !world.at([x, y])) drop(x, y);
+            if (!flat.hand.held && !flat.at(x, y)) drop(x, y);
         },
         // Space: a new piece under the pointer, or at the top if the pointer is elsewhere.
         keydown(name) {
             if (name === "action") drop(m.pointer.inside ? m.pointer.x : m.width / 2, m.pointer.inside ? m.pointer.y : SIZE);
         },
-        move: (x, y) => world.drag([x, y]),
-        release: () => world.release(),
+        move: (x, y) => flat.hand.move(x, y),
+        release: () => flat.hand.drop(),
         // Once every block has come to rest there is nothing left to animate.
-        resting: () => !m.preview && pile.every((block) => block.asleep) && !world.holding && !m.pointer.inside,
+        resting: () => !m.preview && flat.still && !flat.hand.held && !m.pointer.inside,
         draw() {
             const { ctx } = m;
             ctx.fillStyle = m.color("--rule");
             ctx.fillRect(0, m.height - FLOOR, m.width, FLOOR);
             for (const block of pile) {
-                // Drawn exactly where it is and exactly its size, asleep or awake, so nothing
-                // shifts when a pile is woken and nothing looks sunk into its neighbor.
-                const fill = colors.get(block) ?? pastel(0);
-                ctx.save();
-                ctx.translate(block.x, block.y);
-                ctx.rotate(block.a);
-                ctx.beginPath();
-                if (block.r) ctx.arc(0, 0, block.r, 0, Math.PI * 2);
-                else {
-                    block.p.forEach(([x, y], index) => (index ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
-                    ctx.closePath();
-                }
-                ctx.fillStyle = fill;
+                trace(ctx, block);
+                ctx.fillStyle = colors.get(block) ?? pastel(0);
                 ctx.fill();
-                if (block.r) {
+                const r = radius(block);
+                if (r) {
                     // a spoke, so a rolling ball can be seen to roll
+                    const { x, y, a } = where(block);
                     ctx.beginPath();
-                    ctx.moveTo(0, 0);
-                    ctx.lineTo(block.r, 0);
+                    ctx.moveTo(x, y);
+                    ctx.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r);
                     ctx.strokeStyle = m.color("--ground");
                     ctx.lineWidth = 2;
                     ctx.stroke();
                 }
-                ctx.restore();
             }
         },
     };

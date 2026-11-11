@@ -1,92 +1,90 @@
 // Chain: links hung from a nail, with a weight on the end. Drag any part of
-// it and let go. Each link is a fixed length, so the chain bends at every
-// joint and never stretches or goes slack, and pulled past its reach it goes
-// straight and holds.
+// it and let go. Each link is a real one, a short bar pinned to the next, so
+// the chain bends at every joint and never stretches or goes slack, and
+// pulled past its reach it goes straight and holds.
 
-import { World, ball, type Body, type Mote, type Scene } from "../mote";
+import { Flat, radius, send, speed, trace, where, type Body, type Mote, type Scene } from "../mote";
 
-const BEADS = 14;
-const GAP = 15;
-/** The last rope is longer, to clear the weight. */
-const LAST = GAP + 16;
+const LINKS = 13;
+const LONG = 17;
+const THICK = 6;
 
-export const label = "A chain of beads with a weight on the end. Drag it and let go.";
+export const label = "A chain with a weight on the end. Drag it and let go.";
 
 export default function chain(m: Mote): Scene {
-    // Something jointed wants more work per step than a pile does, a hand that
-    // cannot out-pull the rope, and enough air to bring it to rest.
-    const world = Object.assign(new World(), { gravity: 1400, grip: 12, follow: 0.3, passes: 20, parts: 4, air: 0.8 });
-    const nail = ball(m.width / 2, 26, 3, { fixed: true });
-    world.add(nail);
-    const beads: Body[] = [];
-    let above = nail;
-    for (let index = 0; index < BEADS; index++) {
-        const last = index === BEADS - 1;
-        // Laid out to one side, so it swings as soon as it is seen. The beads are
-        // dense: a chain of featherweights with a heavy end pulls itself apart.
-        const bead = ball(nail.x + (index + 1) * GAP * 0.8, nail.y + (index + 1) * GAP * 0.6, last ? 20 : 4.5, { friction: 0.3, density: last ? 1 : 8 });
-        world.add(bead);
-        world.join(above, bead, [0, 0], [0, 0], last ? LAST : GAP);
-        beads.push(bead);
-        above = bead;
+    const flat = new Flat(2200);
+    // A long line of joints wants more care each step than a pile does, and a hand that cannot out-pull it.
+    flat.care = [20, 8];
+    flat.hand.strength = 12;
+    const nail: [number, number] = [m.width / 2, 26];
+    const links: Body[] = [];
+    let above = flat.ground;
+    // Hung out to one side, so it swings as soon as it is seen.
+    const lean = 0.9;
+    const along = (count: number): [number, number] => [nail[0] + Math.sin(lean) * count * LONG, nail[1] + Math.cos(lean) * count * LONG];
+    for (let index = 0; index < LINKS; index++) {
+        const [x, y] = along(index + 0.5);
+        const link = flat.box(x, y, THICK, LONG, { angle: -lean, density: 12, friction: 0.3 });
+        link.setAngularDamping(0.6);
+        const [px, py] = along(index);
+        flat.pin(above, link, px, py);
+        links.push(link);
+        above = link;
     }
-    const weight = beads.at(-1)!;
-    let held = -1;
+    const [wx, wy] = along(LINKS);
+    const weight = flat.ball(wx + Math.sin(lean) * 14, wy + Math.cos(lean) * 14, 20, { density: 1.2, friction: 0.4 });
+    weight.setLinearDamping(0.6);
+    flat.pin(above, weight, wx, wy);
+    const parts = [...links, weight];
     let pushed = 0;
 
     return {
         step(dt) {
-            world.step(dt);
+            flat.step(dt);
             // Shown small in a list, it is given a push whenever it has nearly stopped.
-            if (m.preview && m.time - pushed > 5 && Math.hypot(weight.vx, weight.vy) < 60) {
+            if (m.preview && m.time - pushed > 5 && speed(weight) < 60) {
                 pushed = m.time;
-                weight.asleep = false;
-                weight.vx = (Math.random() < 0.5 ? -1 : 1) * 700;
+                send(weight, (Math.random() < 0.5 ? -1 : 1) * 700, 0);
             }
-        },
-        resize() {
-            nail.x = m.width / 2;
         },
         press(x, y) {
-            // A bead is small, so the nearest one within reach of the pointer is taken, by its middle.
-            const near = beads.toSorted((a, b) => Math.hypot(a.x - x, a.y - y) - Math.hypot(b.x - x, b.y - y))[0]!;
-            if (Math.hypot(near.x - x, near.y - y) > Math.max(near.r, 14) + 10) return;
-            held = beads.indexOf(near);
-            world.grab([near.x, near.y]);
-            world.drag([x, y]);
+            // A link is thin, so the nearest part within reach of the pointer is taken.
+            const near = parts.toSorted((a, b) => Math.hypot(where(a).x - x, where(a).y - y) - Math.hypot(where(b).x - x, where(b).y - y))[0]!;
+            const { x: nx, y: ny } = where(near);
+            if (Math.hypot(nx - x, ny - y) < Math.max(radius(near), 14) + 12) flat.hand.take(nx, ny, near);
+            flat.hand.move(x, y);
         },
-        move(x, y) {
-            if (held >= 0) world.drag([x, y]);
-        },
-        release() {
-            held = -1;
-            world.release();
-        },
-        resting: () => !m.preview && beads.every((bead) => bead.asleep) && !world.holding && !m.pointer.inside,
+        move: (x, y) => flat.hand.move(x, y),
+        release: () => flat.hand.drop(),
+        resting: () => !m.preview && flat.still && !flat.hand.held && !m.pointer.inside,
         draw() {
             const { ctx } = m;
-            ctx.lineWidth = 2;
-            ctx.lineJoin = "round";
-            ctx.strokeStyle = m.color("--muted");
-            ctx.beginPath();
-            ctx.moveTo(nail.x, nail.y);
-            for (const bead of beads) ctx.lineTo(bead.x, bead.y);
-            ctx.stroke();
             ctx.fillStyle = m.color("--ink");
             ctx.beginPath();
-            ctx.arc(nail.x, nail.y, 4, 0, Math.PI * 2);
+            ctx.arc(nail[0], nail[1], 4.5, 0, Math.PI * 2);
             ctx.fill();
-            for (const bead of beads) {
+            // each link as a rounded bar, alternately light and dim, as a chain's links catch the light
+            links.forEach((link, index) => {
+                const { x, y, a } = where(link);
+                ctx.save();
+                ctx.translate(x, y);
+                ctx.rotate(a);
+                ctx.fillStyle = index % 2 ? m.color("--muted") : m.color("--ink");
                 ctx.beginPath();
-                ctx.arc(bead.x, bead.y, bead.r, 0, Math.PI * 2);
-                ctx.fillStyle = bead === weight ? m.color("--accent") : m.color("--ink");
+                ctx.roundRect(-THICK / 2, -LONG / 2 - 2, THICK, LONG + 4, THICK / 2);
                 ctx.fill();
-            }
+                ctx.restore();
+            });
+            trace(ctx, weight);
+            ctx.fillStyle = m.color("--accent");
+            ctx.fill();
             // a mark on the weight, so it can be seen to turn
+            const { x, y, a } = where(weight);
             ctx.beginPath();
-            ctx.moveTo(weight.x, weight.y);
-            ctx.lineTo(weight.x + Math.cos(weight.a) * weight.r, weight.y + Math.sin(weight.a) * weight.r);
+            ctx.moveTo(x, y);
+            ctx.lineTo(x + Math.cos(a) * 20, y + Math.sin(a) * 20);
             ctx.strokeStyle = m.color("--ground");
+            ctx.lineWidth = 2;
             ctx.stroke();
         },
     };

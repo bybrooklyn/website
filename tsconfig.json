@@ -1,9 +1,17 @@
 {
     "extends": "astro/tsconfigs/strict",
     "compilerOptions": {
-        "types": ["bun"],
+        "types": [
+            "bun"
+        ],
         "resolveJsonModule": true
     },
-    "include": [".astro/types.d.ts", "**/*"],
-    "exclude": ["dist"]
+    "include": [
+        ".astro/types.d.ts",
+        "**/*"
+    ],
+    "exclude": [
+        "dist",
+        "src/mote/forks/**/*.js"
+    ]
 }
