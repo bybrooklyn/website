@@ -9,8 +9,23 @@
     background: var(--ground);
 }
 
+/* The box is its full height before the mini has been fetched, so the page does not jump when it arrives. */
 .mote {
     position: relative;
+    min-height: 16rem;
+}
+
+.mini-stage {
+    min-height: clamp(18rem, 62svh, 34rem);
+}
+
+.mini-preview {
+    min-height: clamp(11rem, 22vw, 15rem);
+}
+
+/* A mini that puts controls under itself has room kept for them as well. */
+.mini-stage.with-panel {
+    min-height: calc(clamp(18rem, 62svh, 34rem) + 30rem);
 }
 
 /* A mini drawn in 3D has a second canvas for it, under the one that takes the mouse. */
@@ -181,7 +196,7 @@
     flex: 1;
 }
 
-.mote-panel h3 {
+.mote-panel h2 {
     margin: var(--line) 0 0.4rem;
     font-size: 1rem;
     color: var(--muted);

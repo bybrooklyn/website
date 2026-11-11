@@ -247,7 +247,7 @@ export default function table(m: Mote): Scene {
             rollForm,
             el("div", { class: "table-tabs" }, ...tabs),
             board,
-            el("h3", { textContent: "rolls" }),
+            el("h2", { textContent: "rolls" }),
             history,
         );
 
@@ -325,7 +325,7 @@ export default function table(m: Mote): Scene {
                     el("div", { class: "table-saves" }, el("strong", { textContent: "death saves " }), saves("passed"), saves("failed"),
                         el("button", { type: "button", class: "quiet", textContent: "roll one", onclick: () => send("d20", "death save", (sum) => { if (sum >= 10) me.passed = Math.min(3, me.passed + 1); else me.failed = Math.min(3, me.failed + 1); }) })),
                     conditions(me.conditions),
-                    el("h3", { textContent: "my rolls" }),
+                    el("h2", { textContent: "my rolls" }),
                     el("ul", { class: "table-saved" }, ...me.rolls.map((saved) => el("li", {},
                         el("button", { type: "button", textContent: saved.label, onclick: () => send(saved.roll, saved.label) }), ` ${saved.roll} `,
                         el("button", { type: "button", class: "quiet", textContent: "remove", onclick: () => { me.rolls = me.rolls.filter((other) => other !== saved); keep(); render(); } })))),

@@ -8,9 +8,9 @@ import { Flat, trace, where, type Body, type Mote, type Scene } from "../mote";
 
 export const label = "A game: a block with a hammer climbs a tall pile of rocks. The hammer follows the mouse.";
 
-/** How far the hammer's head can be from the middle of the block, and how long its handle is. */
+/** How far the hammer's head can be from the middle of the block, and how much handle shows behind the hands. */
 const REACH = 120;
-const HANDLE = 150;
+const BEHIND = 30;
 const SIZE = 36;
 /** The course is this wide; it is scaled down to fit a narrower box. */
 const WIDE = 680;
@@ -140,14 +140,15 @@ interface At {
 
 /**
  * The climber: one of the blocks, with a triangle for a head, two arms and its hammer.
- * Change this to change how it looks. The hammer's handle is one length: when the head is
- * close in, the rest of the handle sticks out behind the hands, as a real one would.
+ * Change this to change how it looks. The hands slide along the handle, so a little of it
+ * always shows behind them, however far out the head is.
  */
 function drawClimber(ctx: CanvasRenderingContext2D, body: At, head: At, ink: string, accent: string, dim: string): void {
     const [dx, dy] = [head.x - body.x, head.y - body.y];
     const far = Math.hypot(dx, dy) || 1;
     const [ux, uy] = [dx / far, dy / far];
-    const butt: At = { x: head.x - ux * HANDLE, y: head.y - uy * HANDLE };
+    const long = far + BEHIND;
+    const butt: At = { x: head.x - ux * long, y: head.y - uy * long };
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
 
@@ -184,10 +185,10 @@ function drawClimber(ctx: CanvasRenderingContext2D, body: At, head: At, ink: str
     // two arms, each from a shoulder to a hand on the handle, bent at the elbow
     const UPPER = 30;
     const FORE = 30;
-    for (const [side, grip] of [[-1, 0.42], [1, 0.62]] as const) {
+    for (const [side, grip] of [[-1, 0.3], [1, 0.55]] as const) {
         const shoulder: At = { x: body.x + side * (SIZE / 2 - 3), y: body.y - SIZE / 2 + 9 };
         // where this hand is: part of the way from the butt to the head, but never further than the arm can reach
-        let hand: At = { x: butt.x + ux * HANDLE * grip, y: butt.y + uy * HANDLE * grip };
+        let hand: At = { x: butt.x + ux * long * grip, y: butt.y + uy * long * grip };
         const [hx, hy] = [hand.x - shoulder.x, hand.y - shoulder.y];
         const span = Math.hypot(hx, hy) || 1;
         const reach = Math.min(span, UPPER + FORE - 1);

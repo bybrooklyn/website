@@ -24,7 +24,7 @@ interface Props {
 }
 
 const { mini, previous, next } = Astro.props;
-const { name, summary, kind, space, controls } = mini.data;
+const { name, summary, kind, space, controls, panel } = mini.data;
 const { Content } = await render(mini);
 ---
 
@@ -39,7 +39,7 @@ const { Content } = await render(mini);
             <p class="lede">{summary}</p>
         </header>
 
-        <div class="mote mini-stage" data-mini={mini.id}></div>
+        <div class:list={["mote", "mini-stage", { "with-panel": panel }]} data-mini={mini.id}></div>
         <p class="mini-controls">{controls}</p>
 
         <div class="prose">

@@ -91,6 +91,8 @@ const minis = defineCollection({
         space: z.enum(["2D", "3D"]).default("2D"),
         /** How to play it, in a sentence. Shown under it. */
         controls: z.string(),
+        /** It puts buttons and text under itself, so room is kept for them while it loads. */
+        panel: z.boolean().default(false),
         /** Position in the list, lowest first. */
         order: z.number(),
         draft: z.boolean().default(false),
