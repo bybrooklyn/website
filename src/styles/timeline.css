@@ -54,7 +54,8 @@
  */
 .timeline-veil {
     position: absolute;
-    inset-inline: -1.5rem;
+    /* As far out as the page's own margin, and no further, so it never widens the page. */
+    inset-inline: calc(-1 * min(1.5rem, var(--gutter)));
     z-index: 1;
     height: 100vh;
     pointer-events: none;

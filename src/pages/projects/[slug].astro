@@ -95,8 +95,15 @@ if (facts) rows.push(["last updated", formatDate(new Date(facts.updated))]);
                             <div>
                                 <dt>source</dt>
                                 <dd>
-                                    <a href={`https://github.com/${repo}`}>github.com/{repo}</a>
-                                    {facts && !facts.public && <span class="note"> (not public yet)</span>}
+                                    {/* A repository that is still private is named, not linked: the link would be a dead end. */}
+                                    {facts && !facts.public ? (
+                                        <>
+                                            github.com/{repo}
+                                            <span class="note"> (not public yet)</span>
+                                        </>
+                                    ) : (
+                                        <a href={`https://github.com/${repo}`}>github.com/{repo}</a>
+                                    )}
                                 </dd>
                             </div>
                         )

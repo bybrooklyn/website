@@ -574,6 +574,16 @@ h1 + .about {
     }
 }
 
+/* On a touch screen the nav and footer links are tall enough to hit. */
+@media (pointer: coarse) {
+    .site-header ul a,
+    .site-footer ul a,
+    .site-name {
+        display: inline-block;
+        padding-block: 0.3rem;
+    }
+}
+
 /* The commit the site was built from: quiet until pointed at. */
 .site-footer .commit {
     color: inherit;

@@ -5,6 +5,7 @@ import { satteri } from "@astrojs/markdown-satteri";
 import mdx from "@astrojs/mdx";
 import sitemap from "@astrojs/sitemap";
 import cspCheck from "./integrations/csp-check";
+import privateLinks from "./integrations/private-links";
 import resumePdf from "./integrations/resume-pdf";
 
 // Astro hashes the scripts it processes, but not one written inline as is. The
@@ -84,6 +85,7 @@ export default defineConfig({
         sitemap(),
         resumePdf(),
         cspCheck(),
+        privateLinks(),
     ],
     markdown: {
         processor: satteri({
