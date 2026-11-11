@@ -13,14 +13,15 @@ How to add one is in `src/mote/README.md`.
 
 ## Built
 
-- Blocks (toy): the pile of blocks. Also what posts embed.
-- Balance (game): keep a ball on a tilting beam against the wind. Keeps a best time.
-- Chain (toy): beads on a rope with a weight.
-- Solid (toy, 3D): a shape to spin; click for the next one.
-- A project page for Mote at `/projects/mote/`.
-- Tests for the physics (`bun run test`): friction angles, toppling, a pendulum's period, a standing
-  tower, a rolling ball that stops, a chain that holds, and no energy from nowhere.
+- **Blocks** (toy): a pile of blocks. Double-click an empty spot, or press Space, for a new piece. Also what posts embed.
+- **Balance** (game): roll a ball along a tilting beam onto marks, against a clock and the wind.
+- **Climb** (game): a block with a hammer and a long way up. The hammer follows the mouse, which the game holds inside its box.
+- **Chain** (toy): beads on a rope with a weight.
+- **Solid** (toy, 3D): a shape to spin; click for the next one.
+- **Table** (toy, 3D): a dice tower with real tumbling dice, typed rolls and a history, and a D&D helper with a fight view and a character view.
+- Mote has a project page at `/projects/mote/`, a logo (a speck in a beam of light) and tests (`bun run test`).
 - The list on `/minis/` shows each mini running, small.
+- A terminal player (`src/components/Terminal.astro`) for command-line projects. It is not part of Mote.
 
 ## Ideas, not built
 
@@ -44,8 +45,15 @@ From the conversation on 10 and 11 Nov:
    - touch with two fingers
    - text input
 7. Its own repository, if anyone else wants to use it.
-8. A logo for Mote. Four were drawn on 11 Nov: a speck in a beam of light, the word with the o as the
-   mote, a falling block, a dot with its orbit. One to be chosen.
+8. For the 3D side: smooth shading across faces, a shadow under each solid, pictures drawn onto faces,
+   loading a simple model from a file, a wireframe view, dice that hit each other corner to corner
+   and not as balls, a camera you can move.
+9. More minis: a marble run you draw, a ragdoll, a seesaw, a tower to knock down, something for two
+   people on one keyboard, a daily puzzle with the same layout for everyone that day.
+10. For the Table: sharing a fight between two browsers, a spell-slot tracker, saving more than one
+    character, loud dice.
+11. For Climb: more of the mountain, a clock, a ghost of your best run.
+12. For the terminal: recordings of the full-screen menus, made with asciinema.
 
 ## Not doing
 

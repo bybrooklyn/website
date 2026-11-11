@@ -1,6 +1,6 @@
 # Mote
 
-A very small engine for tiny demos and games in the browser. TypeScript, no dependencies, about 1,200
+A small engine for tiny demos and games in the browser. TypeScript, no dependencies, about 1,200
 lines. The minis on bybrooklyn.dev run on it.
 
 Free to use under the MIT license in this folder, which is plainer than the license on the rest of the site.
@@ -12,6 +12,7 @@ Free to use under the MIT license in this folder, which is plainer than the lice
 | `stage.ts` | A canvas that fits its box and stays sharp, a loop in fixed steps of 1/120 s, the pointer, the arrow keys and WASD, Space and Enter, the page's colors, and a number kept between visits. It only runs while it can be seen and stops when the scene is at rest. |
 | `physics.ts` | 2D rigid bodies: balls and convex shapes, friction and bounce, pins and ropes, picking things up and throwing them, sleeping. |
 | `three.ts` | 3D solids made of flat faces, turned, shaded and drawn on the same 2D canvas. No WebGL. |
+| `solid.ts` | 3D solids that fall and tumble: corners against flat surfaces, with bounce and rub. Enough for dice. |
 
 ## A mini
 
@@ -36,8 +37,15 @@ export default function falling(m: Mote): Scene {
 }
 ```
 
-A scene can also have `press`, `move`, `release`, `keydown`, `resize`, and `resting` (return true when
-nothing is moving and the loop stops until something wakes it).
+A scene can also have `press`, `double`, `move`, `release`, `keydown`, `resize`, and `resting` (return
+true when nothing is moving and the loop stops until something wakes it). `confines: true` holds the
+mouse inside the box once it is clicked, until Escape. `m.panel()` gives a place under the canvas for
+ordinary buttons and text. `m.preview` is true when the mini is being shown small in the list.
+
+`physics.ts` also has `world.drive(a, b, force)`: a motor that pushes `b` toward a place beside `a` and
+pushes `a` back as hard.
+
+Run the tests with `bun run test`.
 
 ## Adding one to the site
 
