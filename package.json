@@ -12,7 +12,6 @@
         "cf:login": "wrangler login",
         "cf:whoami": "wrangler whoami",
         "langs": "bun scripts/languages.ts",
-        "resume:pdf": "bun scripts/resume-pdf.ts",
         "projects": "bun scripts/projects.ts",
         "edit": "bun scripts/write.ts",
         "photos": "bun scripts/photos.ts"

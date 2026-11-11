@@ -11,7 +11,7 @@ bun run edit     # write and edit in the browser, then publish
 bun run deploy   # check, build, deploy
 ```
 
-Other scripts: `langs` (language bar), `projects` (facts from GitHub), `resume:pdf`, and `python3 scripts/trim-fonts.py` after changing a font. TypeScript stays on 6.x until `astro check` accepts 7.
+Other scripts: `langs` (language bar), `projects` (facts from GitHub), and `python3 scripts/trim-fonts.py` after changing a font. TypeScript stays on 6.x until `astro check` accepts 7.
 
 ## Where things are
 
@@ -20,7 +20,7 @@ Other scripts: `langs` (language bar), `projects` (facts from GitHub), `resume:p
 | Posts | `src/content/blog/` (`kitchen-sink.mdx` uses everything a post can) |
 | Projects | `src/content/projects/` |
 | About, setup | `src/content/pages/` |
-| Resume | `src/content/resume/resume.mdx` |
+| Resume | `src/content/resume/resume.mdx`; its PDF is printed from the page at build time |
 | Photos | drop pictures in `photos/` and run `bun run photos`; see `scripts/photos.ts` |
 | Intro, contact, nav | `src/data/site.ts` |
 | Colors | `src/data/theme.ts` |

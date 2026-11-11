@@ -125,10 +125,6 @@ async function plan(path: string) {
     const failed = (log: string) => ({ ok: false, log: log.split("\n").slice(-30).join("\n"), pages: 0, drafts: [], changed: "", message: "", dryRun });
     const check = await $`bun run check`.cwd(root).nothrow().quiet();
     if (check.exitCode !== 0) return failed(check.stdout.toString() + check.stderr.toString());
-    if (path.includes("content/resume/") && !(await isDraft(path))) {
-        const pdf = await $`bun run resume:pdf`.cwd(root).nothrow().quiet();
-        if (pdf.exitCode !== 0) return failed(pdf.stdout.toString() + pdf.stderr.toString());
-    }
     const build = await $`bun run build`.cwd(root).nothrow().quiet();
     if (build.exitCode !== 0) return failed(build.stdout.toString() + build.stderr.toString());
     const name = path.split("/").pop()?.replace(/\.mdx?$/, "") ?? "the site";

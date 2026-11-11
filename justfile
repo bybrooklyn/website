@@ -32,10 +32,6 @@ langs:
 projects:
     bun run projects
 
-# print the resume to PDF
-resume-pdf:
-    bun run resume:pdf
-
 # check, build and publish to production
 deploy:
     bun run deploy

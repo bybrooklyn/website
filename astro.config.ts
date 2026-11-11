@@ -2,6 +2,7 @@ import { defineConfig } from "astro/config";
 import { satteri } from "@astrojs/markdown-satteri";
 import mdx from "@astrojs/mdx";
 import sitemap from "@astrojs/sitemap";
+import resumePdf from "./integrations/resume-pdf";
 
 export default defineConfig({
     site: "https://bybrooklyn.dev",
@@ -21,6 +22,7 @@ export default defineConfig({
     integrations: [
         mdx(),
         sitemap(),
+        resumePdf(),
     ],
     markdown: {
         processor: satteri({
