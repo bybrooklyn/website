@@ -47,21 +47,27 @@
     color: var(--accent);
 }
 
+/*
+ * Three columns: who is asking, what carries them, and the server. The two
+ * boxes on the left are one width, so both lines start, end and are named at
+ * the same places.
+ */
 .network {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: auto minmax(0, 1fr) auto;
     gap: 0.75rem 0;
     align-items: stretch;
     font-size: 0.95rem;
 }
 
 .network-row {
-    grid-column: 1;
-    display: flex;
-    align-items: center;
+    display: contents;
 }
 
 .network .node {
+    grid-column: 1;
+    display: grid;
+    place-items: center;
     padding: 0.6rem 0.85rem;
     border: 0.0625rem solid var(--rule);
     border-radius: var(--radius);
@@ -69,13 +75,12 @@
     white-space: nowrap;
 }
 
-/* a line from a node to the server, named for what carries it */
+/* a line from a node to the server, touching both, named in its middle for what carries it */
 .network .wire {
-    flex: 1;
+    grid-column: 2;
     display: flex;
     align-items: center;
     gap: 0.6rem;
-    padding: 0 0.6rem;
     color: var(--muted);
     font-family: var(--font-code);
     font-size: 0.75rem;
@@ -96,11 +101,8 @@
 }
 
 .network .server {
-    grid-column: 2;
+    grid-column: 3;
     grid-row: 1 / span 2;
-    display: grid;
-    place-items: center;
-    border-color: var(--accent);
 }
 
 @media (max-width: 36rem) {
