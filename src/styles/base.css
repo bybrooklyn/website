@@ -208,7 +208,7 @@ h1 + .lede {
 }
 
 /*
- * "email" widens into the address on hover, and © into the license line. Footer.astro measures both texts
+ * "email" widens into the address on hover, and "copyright" into the license line. Footer.astro measures both texts
  * so the width can animate. Without scripts it is a plain link.
  */
 .reveal {
