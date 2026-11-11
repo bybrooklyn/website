@@ -1,51 +1,32 @@
-/* /photos/: one photograph, as large as the window allows. */
+/* /photos/: one picture in a frame of fixed height, so nothing under it moves. */
 
 .photo {
     margin: 0;
 }
 
-.photo img {
+.photo-frame {
+    display: flex;
+    align-items: flex-start;
+    height: clamp(16rem, calc(100svh - 25rem), 48rem);
+}
+
+.photo-frame img {
     display: block;
     width: auto;
     max-width: 100%;
     height: auto;
-    max-height: max(16rem, calc(100svh - 26rem));
+    max-height: 100%;
     border-radius: var(--radius);
 }
 
+/* Room for a heading, a caption and a date, taken or not, so the buttons hold their place. */
 .photo figcaption {
-    min-height: calc(var(--line) * 3);
-    margin-top: calc(var(--line) * 0.5);
+    min-height: calc(var(--line) * 3.5);
+    margin-top: calc(var(--line) * 0.6);
 }
 
 .photo p {
     margin: 0;
-}
-
-.photo-buttons {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: 0.25rem 1.5rem;
-    margin: calc(var(--line) * 0.5) 0 0;
-}
-
-.photo-buttons button {
-    border: 0;
-    padding: 0;
-    background: none;
-    font: inherit;
-    color: var(--accent);
-    text-decoration: underline;
-    text-decoration-thickness: 0.0625rem;
-    text-underline-offset: 0.2em;
-    cursor: pointer;
-}
-
-.photo-buttons button:disabled {
-    color: var(--muted);
-    text-decoration: none;
-    cursor: default;
 }
 
 .photo .photo-title {
@@ -54,25 +35,47 @@
     line-height: var(--line);
 }
 
+.photo-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.25rem 1.5rem;
+    margin: 0;
+}
+
+.photo-buttons button {
+    border: 0;
+    padding: 0;
+    background: none;
+    font: inherit;
+    cursor: pointer;
+}
+
+.photo-buttons [data-step] {
+    color: var(--accent);
+    text-decoration: underline;
+    text-decoration-thickness: 0.0625rem;
+    text-underline-offset: 0.2em;
+}
+
 .photo-sets {
     display: flex;
     gap: 1rem;
-    margin-left: auto;
 }
 
-.photo-buttons .photo-sets button {
+.photo-sets button {
     color: var(--muted);
-    text-decoration: none;
 }
 
-.photo-buttons .photo-sets button[aria-pressed="true"] {
+.photo-sets button:hover {
+    color: var(--ink);
+}
+
+.photo-sets button[aria-pressed="true"] {
     color: var(--ink);
     text-decoration: underline;
     text-decoration-color: var(--accent);
     text-decoration-thickness: 0.125rem;
     text-underline-offset: 0.3em;
-}
-
-.photo-license {
-    margin: calc(var(--line) * 0.75) 0 0;
 }

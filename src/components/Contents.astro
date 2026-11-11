@@ -1,36 +1,80 @@
 ---
-// A post's table of contents. In the margin on a wide screen, where it stays
-// in view and marks the section being read; a fold-out block on a narrow one.
+// What sits beside a post or long page: its table of contents, then, for a
+// post, its sources and how to cite it. In the margin on a wide screen, where
+// it stays in view and marks the section being read. On a narrow one the
+// contents fold away above the text and the rest goes to the end.
 import type { MarkdownHeading } from "astro";
 
 interface Props {
     /** The page's title: heads the list and leads back to the top. */
     title: string;
     headings: MarkdownHeading[];
+    sources?: { title: string; href: string }[];
+    /** The line to quote when citing this page. Shown with a button that copies it. */
+    cite?: string;
 }
 
-const { title } = Astro.props;
+const { title, sources = [], cite } = Astro.props;
 const headings = Astro.props.headings.filter((heading) => heading.depth === 2 || heading.depth === 3);
 ---
 
-{
-    headings.length > 1 && (
-        <details class="contents" open>
-            <summary>
-                <a href="#main">{title}</a>
-            </summary>
-            <ol>
-                {headings.map((heading) => (
-                    <li class:list={{ sub: heading.depth === 3 }}>
-                        <a href={`#${heading.slug}`}>{heading.text}</a>
-                    </li>
-                ))}
-            </ol>
-        </details>
-    )
-}
+<aside class="post-side">
+    {
+        headings.length > 1 && (
+            <details class="contents" open>
+                <summary>
+                    <a href="#main">{title}</a>
+                </summary>
+                <ol>
+                    {headings.map((heading) => (
+                        <li class:list={{ sub: heading.depth === 3 }}>
+                            <a href={`#${heading.slug}`}>{heading.text}</a>
+                        </li>
+                    ))}
+                </ol>
+            </details>
+        )
+    }
+    {
+        (sources.length > 0 || cite) && (
+            <div class="post-extra">
+                {sources.length > 0 && (
+                    <section aria-labelledby="sources-title">
+                        <h2 class="label" id="sources-title">sources</h2>
+                        <ul>
+                            {sources.map((source) => (
+                                <li>
+                                    <a href={source.href}>{source.title}</a>
+                                </li>
+                            ))}
+                        </ul>
+                    </section>
+                )}
+                {cite && (
+                    <details class="cite">
+                        <summary>cite this</summary>
+                        <p class="cite-text">{cite}</p>
+                        <p class="note">
+                            Free to quote and reuse with credit, not commercially (<a href="https://creativecommons.org/licenses/by-nc/4.0/">CC BY-NC 4.0</a>).
+                        </p>
+                        <button type="button" class="cite-copy" hidden>copy</button>
+                    </details>
+                )}
+            </div>
+        )
+    }
+</aside>
 
 <script>
+    // The copy button only appears where copying works.
+    const copy = document.querySelector<HTMLButtonElement>(".cite-copy");
+    if (copy && navigator.clipboard) {
+        copy.hidden = false;
+        copy.addEventListener("click", () => {
+            void navigator.clipboard.writeText(document.querySelector(".cite-text")?.textContent ?? "").then(() => (copy.textContent = "copied"));
+        });
+    }
+
     // Mark the link for the section nearest the top of the view.
     const contents = document.querySelector<HTMLElement>(".contents");
     if (contents) {

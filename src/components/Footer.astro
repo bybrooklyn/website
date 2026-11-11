@@ -23,6 +23,9 @@ const posts = await hasPosts();
         )}
         <li><a href={site.source}>source</a></li>
     </ul>
+    <p class="note rights">
+        Some rights reserved. All page content is under <a href="https://creativecommons.org/licenses/by-nc/4.0/">CC BY-NC</a>.
+    </p>
     <p class="note">
         built <time datetime={build.iso}>{build.time}</time>{build.commit && <> from <a class="commit" href={`${site.source}/commit/${build.commit}`}><code>{build.commit}</code></a></>}
     </p>

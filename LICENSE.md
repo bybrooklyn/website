@@ -28,13 +28,12 @@ SOFTWARE.
 
 ---
 
-"The Software" is this site's code. The writing, resume and Playmatter media
-are not part of it; all rights reserved. The fonts are under the
-[SIL Open Font License](https://openfontlicense.org).
+"The Software" is this site's code.
 
-My photographs (the pictures on /photos/, in `public/photos/`) are under
+Everything on its pages (my writing, photographs, resume and pictures) is under
 [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/): share and
-adapt them with credit, not for commercial use. The shitposts beside them are
-not mine to license.
+adapt it with credit, not for commercial use. That does not cover what is not
+mine to license: the shitposts on the photos page, and the fonts, which are
+under the [SIL Open Font License](https://openfontlicense.org).
 
 A request, not a condition: don't use this to hurt people.

@@ -220,6 +220,80 @@
     color: var(--accent);
 }
 
+/* Sources and how to cite: under the contents in the margin, at the end of the page otherwise. */
+.post-extra {
+    max-width: var(--measure);
+    font-size: 0.95em;
+}
+
+.post-extra ul {
+    margin: 0 0 var(--line);
+    padding: 0;
+    list-style: none;
+}
+
+.post-extra li + li {
+    margin-top: calc(var(--line) * 0.3);
+}
+
+.post-extra a {
+    color: var(--muted);
+    text-decoration: none;
+}
+
+.post-extra a:hover {
+    color: var(--ink);
+}
+
+.cite summary {
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--muted);
+}
+
+.cite p {
+    margin: calc(var(--line) * 0.4) 0 0;
+}
+
+.cite .note a {
+    text-decoration: underline;
+}
+
+.cite-copy {
+    margin-top: calc(var(--line) * 0.4);
+    border: 0;
+    padding: 0;
+    background: none;
+    font: inherit;
+    color: var(--accent);
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+/* Narrow: the side column dissolves, the contents stay on top and the rest goes last. */
+@media (max-width: 71.99rem) {
+    .post {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .post-body,
+    .post-side {
+        display: contents;
+    }
+
+    .post-extra {
+        order: 2;
+        margin-top: calc(var(--line) * 2);
+        padding-top: var(--line);
+        border-top: 0.0625rem solid var(--rule);
+    }
+
+    .post-nav {
+        order: 3;
+    }
+}
+
 /*
  * Wide: everything in one column on the left, and the contents in a second
  * column that runs the whole height of the page, so it starts level with the
@@ -243,15 +317,26 @@
         display: contents;
     }
 
-    .contents {
+    .post-side {
         grid-column: 2;
         grid-row: 1 / span 12;
         position: sticky;
         top: calc(var(--line) * 1.5);
+        max-height: calc(100vh - var(--line) * 3);
+        overflow-y: auto;
+    }
+
+    .contents {
         margin: 0;
         padding: 0;
         border: 0;
         border-radius: 0;
+    }
+
+    .post-extra {
+        margin-top: calc(var(--line) * 1.5);
+        padding-top: var(--line);
+        border-top: 0.0625rem solid var(--rule);
     }
 
     .contents summary {

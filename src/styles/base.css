@@ -207,6 +207,16 @@ h1 + .lede {
     margin: 0;
 }
 
+/* The license line takes a row of its own, under the links. */
+.site-footer .rights {
+    order: 1;
+    flex-basis: 100%;
+}
+
+.site-footer .rights a {
+    color: inherit;
+}
+
 /*
  * "email" widens into the address on hover. Footer.astro measures both texts
  * so the width can animate. Without scripts it is a plain link.

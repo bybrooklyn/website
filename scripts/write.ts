@@ -99,8 +99,9 @@ async function newPost(title: string): Promise<string> {
         [
             "---",
             `title: ${JSON.stringify(title)}`,
-            // The time as the clock here shows it, with no zone: it only orders posts within a day.
-            `date: ${new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)}`,
+            // The time as the clock here shows it, written as if it were UTC: it only orders posts
+            // within a day, and this keeps the date shown the same as the date it was written.
+            `date: ${new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)}Z`,
             'summary: "TODO: one sentence about this post."',
             "# accent: pink          # violet (default), pink, blue, mint or amber",
             "# cover: ../../assets/covers/picture.png",
