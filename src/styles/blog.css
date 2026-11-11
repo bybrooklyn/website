@@ -236,37 +236,74 @@
     margin-top: calc(var(--line) * 0.3);
 }
 
-/* The sources: numbered to match the small numbers in the text, and set close. */
+/*
+ * The sources: numbered to match the small numbers in the text. One line
+ * each, the name and then where it is, cut short where the column ends.
+ */
+.post-extra .label .count {
+    margin-left: 0.35em;
+    font-weight: 400;
+    font-size: 0.85em;
+    font-variant-numeric: tabular-nums;
+    opacity: 0.7;
+}
+
+.post-extra .label {
+    margin-bottom: calc(var(--line) * 0.3);
+}
+
 .post-extra .sources {
     counter-reset: source;
-    font-size: 0.9em;
-    line-height: 1.3;
+    margin: 0 0 var(--line) -0.4em;
+    padding: 0;
+    list-style: none;
+    font-size: 0.85em;
+    line-height: 1.5;
 }
 
 .post-extra .sources li {
     counter-increment: source;
     display: grid;
-    grid-template-columns: 1.6em 1fr;
+    grid-template-columns: 1.7em minmax(0, 1fr) auto;
+    align-items: baseline;
+    column-gap: 0.5em;
     margin-top: 0;
-    padding: 0.18em 0.3em 0.18em 0;
-    border-radius: var(--radius);
+    padding: 0.1em 0.4em;
+    border-radius: calc(var(--radius) * 0.6);
     transition: background-color 0.2s ease;
 }
 
 .post-extra .sources li::before {
     content: counter(source);
     color: var(--accent);
-    font-size: 0.85em;
+    font-size: 0.9em;
     font-variant-numeric: tabular-nums;
     text-align: right;
-    padding-right: 0.55em;
 }
 
+.post-extra .sources a {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.post-extra .sources .where {
+    max-width: 9em;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-size: 0.85em;
+    color: var(--muted);
+    opacity: 0.65;
+}
+
+.post-extra .sources li:hover,
 .post-extra .sources li.pointed,
 .post-extra .sources li.flash {
-    background-color: color-mix(in oklab, var(--accent) 18%, transparent);
+    background-color: color-mix(in oklab, var(--accent) 16%, transparent);
 }
 
+.post-extra .sources li:hover a,
 .post-extra .sources li.pointed a,
 .post-extra .sources li.flash a {
     color: var(--ink);
@@ -280,6 +317,12 @@
     from {
         background-color: color-mix(in oklab, var(--accent) 40%, transparent);
     }
+}
+
+/* The margin column scrolls when it has to, with a quiet bar. */
+.post-side {
+    scrollbar-width: thin;
+    scrollbar-color: var(--panel-rule) transparent;
 }
 
 /* The small number after a cited link. */
@@ -298,6 +341,44 @@
 
 .prose .ref a:hover {
     text-decoration: underline;
+}
+
+/* Pointing at a number names its source, right there. */
+.prose .ref {
+    position: relative;
+}
+
+.prose .ref a[data-source]::after {
+    content: attr(data-source);
+    position: absolute;
+    z-index: 5;
+    bottom: 1.4em;
+    left: 50%;
+    width: max-content;
+    max-width: min(22rem, 70vw);
+    padding: 0.35em 0.7em;
+    border: 0.0625rem solid var(--panel-edge);
+    border-radius: calc(var(--radius) * 0.6);
+    background: var(--panel-raised);
+    color: var(--ink);
+    font-family: var(--font-text);
+    font-size: 0.8rem;
+    font-weight: 400;
+    line-height: 1.4;
+    white-space: normal;
+    text-decoration: none;
+    pointer-events: none;
+    opacity: 0;
+    transform: translate(-50%, 0.3em);
+    transition:
+        opacity 0.15s ease,
+        transform 0.2s var(--ease);
+}
+
+.prose .ref a[data-source]:hover::after,
+.prose .ref a[data-source]:focus-visible::after {
+    opacity: 1;
+    transform: translate(-50%, 0);
 }
 
 @media print {
@@ -407,6 +488,11 @@
         margin-top: calc(var(--line) * 1.5);
         padding-top: var(--line);
         border-top: 0.0625rem solid var(--rule);
+    }
+
+    /* The margin is too narrow for the name and the site: the name wins. */
+    .post-extra .sources .where {
+        display: none;
     }
 
     .contents summary {

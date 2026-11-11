@@ -40,11 +40,16 @@ const headings = Astro.props.headings.filter((heading) => heading.depth === 2 ||
             <div class="post-extra">
                 {sources.length > 0 && (
                     <section aria-labelledby="sources-title">
-                        <h2 class="label" id="sources-title">sources</h2>
+                        <h2 class="label" id="sources-title">
+                            sources <span class="count">{sources.length}</span>
+                        </h2>
                         <ol class="sources">
                             {sources.map((source, index) => (
                                 <li id={`source-${index + 1}`}>
-                                    <a href={source.href}>{source.title}</a>
+                                    <a href={source.href} title={source.title}>
+                                        {source.title}
+                                    </a>
+                                    <span class="where">{new URL(source.href).host.replace(/^www\./, "")}</span>
                                 </li>
                             ))}
                         </ol>
@@ -89,7 +94,10 @@ const headings = Astro.props.headings.filter((heading) => heading.depth === 2 ||
         const jump = document.createElement("a");
         jump.href = `#${source.id}`;
         jump.textContent = String(number);
-        jump.setAttribute("aria-label", `Source ${number}: ${source.textContent?.trim() ?? ""}`);
+        const name = source.querySelector("a")?.textContent?.trim() ?? "";
+        jump.setAttribute("aria-label", `Source ${number}: ${name}`);
+        // Shown in a small box over the number when it is pointed at.
+        jump.dataset.source = name;
         const point = (on: boolean) => source.classList.toggle("pointed", on);
         jump.addEventListener("pointerenter", () => point(true));
         jump.addEventListener("pointerleave", () => point(false));
