@@ -147,7 +147,7 @@
     line-height: 1.4;
 }
 
-/* ---- controls under a mini (the Table mini's dice, fight and character) ---- */
+/* ---- controls under a mini (the Dice mini's dice to pick, typed roll and history) ---- */
 
 .mote-panel {
     padding: calc(var(--line) * 0.7) 1.1rem var(--line);
@@ -187,10 +187,6 @@
     background: color-mix(in oklab, var(--accent) 22%, var(--ground));
 }
 
-.mote-panel input[type="number"] {
-    width: 4.2rem;
-}
-
 .mote-panel input[type="text"] {
     min-width: 0;
     flex: 1;
@@ -215,16 +211,8 @@
     line-height: 1.25;
 }
 
-.table-dice,
 .table-go,
-.table-typed,
-.table-tabs,
-.table-add,
-.table-round,
-.table-who,
-.table-points,
-.table-saves,
-.table-conditions {
+.table-typed {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
@@ -232,54 +220,73 @@
     margin-bottom: 0.6rem;
 }
 
-.table-hand {
-    min-width: 6rem;
-    color: var(--accent);
-    font-variant-numeric: tabular-nums;
+/* The dice to pick from: each one as it looks from above, its highest number up. */
+.dice-picks {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 0.7rem;
 }
 
-.table-tabs {
-    margin-top: var(--line);
-    padding-top: 0.8rem;
-    border-top: 0.0625rem solid var(--rule);
-}
-
-.table-fighters li {
-    padding: 0.7rem 0.8rem;
-    margin-bottom: 0.5rem;
-    border: 0.0625rem solid var(--rule);
+.mote-panel .dice-pick {
+    position: relative;
+    display: grid;
+    justify-items: center;
+    gap: 0.1rem;
+    padding: 0.4rem 0.5rem 0.3rem;
     border-radius: var(--radius);
 }
 
-.table-fighters li[aria-current] {
-    border-color: var(--accent);
+/* Said this firmly, because every other canvas in a mini is stretched to fill its box. */
+.mote .mote-panel canvas.dice-picture {
+    position: static;
+    display: block;
+    width: 3.375rem;
+    height: 3.375rem;
+    border-radius: 0;
+    cursor: inherit;
+    transition: transform 0.15s ease;
 }
 
-.table-who strong {
-    font-size: 1.15rem;
-    margin-right: auto;
+.dice-pick:hover .dice-picture {
+    transform: translateY(-0.125rem) rotate(-6deg);
 }
 
-.table-conditions {
-    gap: 0.25rem;
-    margin-bottom: 0;
-}
-
-.table-conditions button {
-    padding: 0.05rem 0.5rem;
+.dice-name {
     font-size: 0.85em;
     color: var(--muted);
 }
 
-.table-conditions button[aria-pressed="true"] {
-    color: var(--ink);
+/* How many of that die are in the hand. */
+.dice-count {
+    position: absolute;
+    top: -0.4rem;
+    right: -0.4rem;
+    min-width: 1.4rem;
+    padding: 0 0.3rem;
+    border-radius: 1rem;
+    background: var(--accent);
+    color: var(--ground);
+    font-size: 0.8rem;
+    font-weight: 600;
+    line-height: 1.4rem;
+    text-align: center;
 }
 
-.mote-panel .pip {
-    width: 1.1rem;
-    height: 1.1rem;
-    padding: 0;
-    border-radius: 50%;
+.mote-panel .dice-go {
+    padding: 0.35rem 1.4rem;
+    border-color: var(--accent);
+}
+
+.mote-panel button:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .dice-pick:hover .dice-picture {
+        transform: none;
+    }
 }
 
 .table-history li {
@@ -296,10 +303,6 @@
 .table-history span {
     font-size: 0.9em;
     opacity: 0.75;
-}
-
-.table-saved li {
-    margin-bottom: 0.35rem;
 }
 
 /* Mote's mark, beside the title of the minis page. */

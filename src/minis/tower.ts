@@ -1,4 +1,4 @@
-// The dice tower that the Table mini rolls in: the dice, the tower and the
+// The dice tower that the Dice mini rolls in: the dice, the tower and the
 // tray as solid things, and a roll run to its end, on Mote's own 3D physics
 // (space.ts). Kept apart from the drawing so that a roll can be run, and
 // tested, without a screen.
@@ -10,9 +10,19 @@ export type Sides = 4 | 6 | 8 | 10 | 12 | 20;
 export const SIDES: Sides[] = [4, 6, 8, 10, 12, 20];
 
 /** How big a die is beside the tower. */
-const SCALE = 0.42;
-const small = (mesh: Mesh): Mesh => ({ faces: mesh.faces, points: mesh.points.map(([x, y, z]): V3 => [x * SCALE, y * SCALE, z * SCALE]) });
-export const SHAPES: Record<Sides, Mesh> = { 4: small(pyramid()), 6: small(cube()), 8: small(diamond()), 10: small(ten()), 12: small(twelve()), 20: small(twenty()) };
+/**
+ * How big each die is: the distance from its middle to a corner, in millimetres, as in an ordinary set
+ * (a 16 mm cube, a twenty-sided die 20 mm from face to face, and the rest to match), and how many of
+ * the tower's units a millimetre is.
+ */
+const CORNER: Record<Sides, number> = { 4: 11, 6: 13.9, 8: 11, 10: 11.5, 12: 11.6, 20: 12.6 };
+const UNIT = 0.034;
+const sized = (mesh: Mesh, sides: Sides): Mesh => {
+    const now = Math.max(...mesh.points.map((point) => Math.hypot(...point)));
+    const by = (CORNER[sides] * UNIT) / now;
+    return { faces: mesh.faces, points: mesh.points.map(([x, y, z]): V3 => [x * by, y * by, z * by]) };
+};
+export const SHAPES: Record<Sides, Mesh> = { 4: sized(pyramid(), 4), 6: sized(cube(), 6), 8: sized(diamond(), 8), 10: sized(ten(), 10), 12: sized(twelve(), 12), 20: sized(twenty(), 20) };
 const OUT: Record<Sides, V3[]> = Object.fromEntries(SIDES.map((sides) => [sides, normals(SHAPES[sides])])) as Record<Sides, V3[]>;
 
 /** The tower stands at the left of the tray. These are its edges, in units. */
@@ -35,6 +45,14 @@ export interface Slab {
 const ramp = (highX: number, highY: number, lowX: number, drop: number): Slab => {
     const [dx, dy] = [lowX - highX, -drop * Math.abs(lowX - highX)];
     return { at: [(highX + lowX) / 2, highY + dy / 2, 0], half: [Math.hypot(dx, dy) / 2, THICK / 2, TOWER.deep], tip: Math.atan2(dy, dx), kind: "ramp" };
+};
+/** Half the width of a ridge. Higher, and a die can come to rest against one. */
+const RIDGE = 0.045;
+/** A low ridge across a ramp, at `x` along it: a square bar lying corner up on the ramp's face. */
+const ridge = (highX: number, highY: number, drop: number, x: number): Slab => {
+    const tip = Math.atan2(-drop * Math.abs(x - highX), x - highX);
+    const y = highY - drop * Math.abs(x - highX);
+    return { at: [x - Math.sin(tip) * (THICK / 2), y + Math.cos(tip) * (THICK / 2), 0], half: [RIDGE, RIDGE, TOWER.deep], tip: tip + Math.PI / 4, kind: "ramp" };
 };
 const tall = TOWER.top + 2.4;
 
@@ -59,6 +77,10 @@ export const SLABS: Slab[] = [
     // for one die riding on another, so that a handful cannot jam.
     ramp(TOWER.right, 7.7, -3.7, 0.7),
     ramp(TOWER.left, 4.1, TOWER.right + 0.6, 0.62),
+    // Ridges across the ramps: a die that is sliding trips on one and goes over, so no die gets down on one face.
+    ridge(TOWER.right, 7.7, 0.7, -2.3),
+    ridge(TOWER.left, 4.1, 0.62, -4.1),
+    ridge(TOWER.left, 4.1, 0.62, -2.5),
 ];
 
 export interface Die {
@@ -78,28 +100,34 @@ export interface Throw {
 }
 
 /** How much the dice and the tower rub, and how much of its speed a die keeps when it hits something. */
-const RUB = 0.35;
-const BOUNCE = 0.3;
+/**
+ * How a throw goes. `rub` is how much the dice and the tower grip each other and `floor` how much the
+ * tray's felt does; `bounce` is how much of its speed a die keeps when it hits something; `spin` is the
+ * most a die is turning when it is dropped in, in radians a second about each axis, and `damp` how
+ * quickly that dies away. With these a die makes about eight whole turns on its way to rest, and never
+ * fewer than three.
+ */
+export const TUNE = { rub: 0.4, bounce: 0.5, spin: 30, damp: 0.03, floor: 2, apart: 1.4, push: 1 };
 
 /** Drops these dice in at the top of the tower, one above another, each turned and spun its own way. `random` gives numbers from 0 to 1. */
 export function throwDice(kinds: Sides[], random: () => number = Math.random): Throw {
     const between = (low: number, high: number) => low + random() * (high - low);
     const space = new Space();
     // the floor of the tray, and under the tower: felt, which a die grips and tumbles on and does not skate across
-    space.slab([0, -1, 0], [30, 1, 30], undefined, { friction: 1.1 });
-    for (const slab of SLABS) space.slab(slab.at, slab.half, angled(0, 0, slab.tip), { friction: RUB });
+    space.slab([0, -1, 0], [30, 1, 30], undefined, { friction: TUNE.floor });
+    for (const slab of SLABS) space.slab(slab.at, slab.half, angled(0, 0, slab.tip), { friction: TUNE.rub });
 
     const dice = kinds.map((sides, index): Die => {
         const body = space.solid(
             SHAPES[sides],
-            [between(-2.9, -1.9), TOWER.top + 0.6 + index * 1.4, between(-0.5, 0.5)],
-            { friction: RUB, bounce: BOUNCE },
+            [between(-2.9, -1.9), TOWER.top + 0.6 + index * TUNE.apart, between(-0.5, 0.5)],
+            { friction: TUNE.rub, bounce: TUNE.bounce },
             angled(between(0, 6.28), between(0, 6.28), between(0, 6.28)),
         );
-        body.v = [between(-1, 1), 0, between(-0.6, 0.6)];
-        body.w = [between(-9, 9), between(-9, 9), between(-9, 9)];
+        body.v = [between(-1, 1) * TUNE.push, 0, between(-0.6, 0.6) * TUNE.push];
+        body.w = [between(-1, 1) * TUNE.spin, between(-1, 1) * TUNE.spin, between(-1, 1) * TUNE.spin];
         body.damping = 0.03;
-        body.spinDamping = 0.25;
+        body.spinDamping = TUNE.damp;
         return { sides, body };
     });
 
@@ -112,15 +140,19 @@ export function throwDice(kinds: Sides[], random: () => number = Math.random): T
             space.step(dt);
         },
         // A die that will not lie still is not waited on for ever.
-        done: () => waited > 20 || space.still(),
+        done: () => waited > 9 || space.still(),
         values: () => dice.map(shown),
     };
 }
 
-/** The number a die shows. A four-sided die is read from the face it rests on; the rest from the face on top. */
+/**
+ * The number a die shows: the face on top. A four-sided die has no face on top, so it is read as real
+ * ones are, from the corner on top: its corners are numbered 1 to 4, and each face carries the numbers
+ * of its three corners.
+ */
 export function shown(die: Die): number {
     const turned = turn(die.body);
-    const ups = OUT[die.sides].map((normal) => apply(turned, normal)[1] * (die.sides === 4 ? -1 : 1));
+    const ups = (die.sides === 4 ? SHAPES[4].points : OUT[die.sides]).map((direction) => apply(turned, direction)[1]);
     return ups.indexOf(Math.max(...ups)) + 1;
 }
 

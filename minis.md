@@ -16,7 +16,7 @@ How to add one is in `src/mote/README.md`.
 ## Built
 
 - **Blocks** (toy): a pile of blocks. Double-click an empty spot, or press Space, for a new piece. Also what posts embed.
-- **Table** (toy, 3D): a dice tower with real tumbling dice (Mote's own 3D physics and drawing), typed rolls and a history, and a D&D helper with a fight view and a character view.
+- **Dice** (toy, 3D; was Table): a dice tower with real tumbling dice (Mote's own 3D physics and drawing). Dice are picked from pictures of each seen from above, or typed. When they land the eye goes up over the tray and each die's number lights. The D&D helper (fight and character views) was taken out on 11 Nov.
 - **Archived on 11 Nov** (in `src/minis/archive/`, off the site, still building): Chain, Climb, Balance, Solid. Two that feel right were wanted over six that are fine. How to put one back is in the README there.
 - Mote has a project page at `/projects/mote/`, a logo (a speck in a beam of light) and tests (`bun run test`).
 - The list on `/minis/` shows each mini running, small.

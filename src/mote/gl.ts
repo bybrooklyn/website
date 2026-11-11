@@ -19,15 +19,29 @@ export interface Look {
     /** Casts a shadow, and has shadows fall on it. Both true unless said. */
     casts?: boolean;
     shaded?: boolean;
-    /** What to write on a face, if anything. */
-    marks?(face: number): string;
+    /**
+     * What to write on a face, if anything: one word in its middle, or several, each toward one of the
+     * face's corners (as a four-sided die has a number at every corner). Each has a group, a number
+     * that `lit` on the part can name to light it up; a single word's group is the face's number.
+     */
+    marks?(face: number): string | Mark[] | undefined;
     ink?: Color;
+}
+
+export interface Mark {
+    word: string;
+    group: number;
+    /** Which of the face's corners it sits toward, and reads upright toward. Left out, it is in the middle. */
+    corner?: number;
 }
 
 export interface Part {
     at: V3;
     turn: Turn;
     hidden: boolean;
+    /** The group of marks to light up, and how far it is lit, from 0 to 1. */
+    lit: number;
+    shine: number;
 }
 
 interface Drawn extends Part {
@@ -58,15 +72,18 @@ const VERTEX = `#version 300 es
 layout(location = 0) in vec3 position;
 layout(location = 1) in vec3 normal;
 layout(location = 2) in vec2 uv;
+layout(location = 3) in float group;
 uniform mat4 model, eye, sun;
 out vec3 facing;
 out vec4 lit;
 out vec2 at;
+out float which;
 void main() {
     vec4 world = model * vec4(position, 1.0);
     facing = mat3(model) * normal;
     lit = sun * world;
     at = uv;
+    which = group;
     gl_Position = eye * world;
 }`;
 
@@ -76,9 +93,11 @@ precision highp sampler2DShadow;
 in vec3 facing;
 in vec4 lit;
 in vec2 at;
+in float which;
 uniform vec4 color;
 uniform vec3 toSun, levels;
 uniform bool marked, shaded;
+uniform float glow, shine;
 uniform sampler2DShadow shadow;
 uniform sampler2D marks;
 out vec4 result;
@@ -103,7 +122,10 @@ void main() {
     }
     // the sun, by how squarely the face meets it, and light from the sky above and the ground below
     float bright = levels.x * max(dot(n, toSun), 0.0) * open + mix(levels.z, levels.y, n.y * 0.5 + 0.5);
-    result = vec4(pow(pow(base.rgb, vec3(2.2)) * bright, vec3(1.0 / 2.2)), base.a);
+    vec3 seen = pow(pow(base.rgb, vec3(2.2)) * bright, vec3(1.0 / 2.2));
+    // a mark that is lit shows white, and by its own light
+    if (marked && abs(which - glow) < 0.5) seen = mix(seen, vec3(1.0), shine);
+    result = vec4(seen, base.a);
 }`;
 
 const DEPTH_VERTEX = `#version 300 es
@@ -173,7 +195,8 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
     try {
         main = program(VERTEX, FRAGMENT);
         depth = program(DEPTH_VERTEX, DEPTH_FRAGMENT);
-    } catch {
+    } catch (problem) {
+        console.error("Mote could not set up 3D drawing:", problem);
         return undefined;
     }
 
@@ -245,22 +268,8 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
                 const n = unit(cross(minus(corners[1]!, corners[0]!), minus(corners[2]!, corners[0]!)));
                 // each face as a fan of triangles, all facing the way the face does
                 for (let i = 1; i + 1 < corners.length; i++) for (const corner of [corners[0]!, corners[i]!, corners[i + 1]!]) faces.push(...corner, ...n, 0, 0);
-                const word = look.marks?.(number);
-                if (!word) return;
-                let cell = written.get(word);
-                if (cell === undefined) {
-                    cell = written.size;
-                    written.set(word, cell);
-                    const [x, y] = [(cell % ACROSS) * CELL, Math.floor(cell / ACROSS) * CELL];
-                    pen.font = `700 ${word.length > 1 ? 74 : 88}px ${view.font}`;
-                    pen.textAlign = "center";
-                    pen.textBaseline = "middle";
-                    pen.fillStyle = "#fff";
-                    pen.fillText(word, x + CELL / 2, y + CELL / 2 + 6);
-                    // a line under 6 and 9, so that they can be told apart
-                    if (word === "6" || word === "9") pen.fillRect(x + 40, y + 108, 48, 7);
-                    stale = true;
-                }
+                const asked = look.marks?.(number);
+                if (!asked) return;
                 const middle = corners.reduce((sum, corner): V3 => [sum[0] + corner[0] / corners.length, sum[1] + corner[1] / corners.length, sum[2] + corner[2] / corners.length], [0, 0, 0] as V3);
                 // as big as the face allows: a little under the distance from its middle to its nearest edge
                 const room = Math.min(...corners.map((corner, i) => {
@@ -268,20 +277,39 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
                     const to = minus(middle, corner);
                     return Math.hypot(...minus(to, along.map((value) => value * dot(to, along)) as V3));
                 })) * 0.78;
-                // upright toward the face's first corner, and a hair above the face
-                const up = unit(minus(corners[0]!, middle));
-                const right = cross(up, n);
-                const [u, v] = [(cell % ACROSS) / ACROSS, Math.floor(cell / ACROSS) / ACROSS];
-                const corner = (x: number, y: number) => [
-                    ...([0, 1, 2].map((axis) => middle[axis]! + right[axis]! * x * room + up[axis]! * y * room + n[axis]! * 0.002)),
-                    ...n, u + ((x + 1) / 2) / ACROSS, v + ((1 - y) / 2) / ACROSS,
-                ];
-                words.push(...corner(-1, -1), ...corner(1, -1), ...corner(1, 1), ...corner(-1, -1), ...corner(1, 1), ...corner(-1, 1));
+                for (const mark of typeof asked === "string" ? [{ word: asked, group: number } as Mark] : asked) {
+                    let cell = written.get(mark.word);
+                    if (cell === undefined) {
+                        cell = written.size;
+                        written.set(mark.word, cell);
+                        const [x, y] = [(cell % ACROSS) * CELL, Math.floor(cell / ACROSS) * CELL];
+                        pen.font = `700 ${mark.word.length > 1 ? 74 : 88}px ${view.font}`;
+                        pen.textAlign = "center";
+                        pen.textBaseline = "middle";
+                        pen.fillStyle = "#fff";
+                        pen.fillText(mark.word, x + CELL / 2, y + CELL / 2 + 6);
+                        // a line under 6 and 9, so that they can be told apart
+                        if (mark.word === "6" || mark.word === "9") pen.fillRect(x + 40, y + 108, 48, 7);
+                        stale = true;
+                    }
+                    // upright toward a corner of the face (its first, unless one is named), and a hair above the face;
+                    // one that sits toward a corner is smaller, and part of the way out to it
+                    const toward = minus(corners[mark.corner ?? 0]!, middle);
+                    const up = unit(toward);
+                    const right = cross(up, n);
+                    const [size, out] = mark.corner === undefined ? [room, 0] : [room * 0.5, 0.42];
+                    const [u, v] = [(cell % ACROSS) / ACROSS, Math.floor(cell / ACROSS) / ACROSS];
+                    const corner = (x: number, y: number) => [
+                        ...([0, 1, 2].map((axis) => middle[axis]! + toward[axis]! * out + right[axis]! * x * size + up[axis]! * y * size + n[axis]! * 0.002)),
+                        ...n, u + ((x + 1) / 2) / ACROSS, v + ((1 - y) / 2) / ACROSS, mark.group,
+                    ];
+                    words.push(...corner(-1, -1), ...corner(1, -1), ...corner(1, 1), ...corner(-1, -1), ...corner(1, 1), ...corner(-1, 1));
+                }
             });
             const part: Drawn = {
-                at: [0, 0, 0], turn: upright(), hidden: false, look,
+                at: [0, 0, 0], turn: upright(), hidden: false, lit: -1, shine: 0, look,
                 faces: filled(faces, [3, 3, 2]), count: faces.length / 8,
-                marks: words.length ? filled(words, [3, 3, 2]) : undefined, markCount: words.length / 8,
+                marks: words.length ? filled(words, [3, 3, 2, 1]) : undefined, markCount: words.length / 9,
             };
             parts.push(part);
             return part;
@@ -362,6 +390,8 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
                 g.uniformMatrix4fv(main.at("model"), false, models.get(part)!);
                 g.uniform4f(main.at("color"), ...(marked ? (part.look.ink ?? [0.1, 0.06, 0.14]) : part.look.color), marked ? 1 : (part.look.alpha ?? 1));
                 g.uniform1i(main.at("marked"), marked ? 1 : 0);
+                g.uniform1f(main.at("glow"), part.lit);
+                g.uniform1f(main.at("shine"), part.shine);
                 g.uniform1i(main.at("shaded"), part.look.shaded === false ? 0 : 1);
                 g.bindVertexArray(marked ? part.marks! : part.faces);
                 g.drawArrays(g.TRIANGLES, 0, marked ? part.markCount : part.count);
