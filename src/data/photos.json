@@ -6,15 +6,18 @@
             "height": 1126,
             "color": "#687888",
             "taken": "2025-10-02",
-            "title": "A scrap of rainbow in the clouds"
+            "title": "A scrap of rainbow in the clouds",
+            "note": "i dont remember where i took this, but it was really pretty. it may have been on a beach",
+            "caption": "I don't remember where I took this. It may have been on a beach. It was really pretty."
         },
         {
             "file": "20251010-152449.avif",
             "width": 2000,
             "height": 1126,
             "color": "#a89888",
-            "taken": "2025-10-10",
-            "title": "Tug of war in the gym"
+            "title": "Tug of war in the gym",
+            "note": "at my school years ago, it was a fun day.",
+            "caption": "At my school, years ago. It was a fun day."
         },
         {
             "file": "20251020-170031.avif",
@@ -22,7 +25,9 @@
             "height": 1126,
             "color": "#181818",
             "taken": "2025-10-20",
-            "title": "Clouds over the marsh"
+            "title": "Clouds over the marsh",
+            "note": "in land from a rock beach in a state park in NJ",
+            "caption": "Inland from a rock beach in a state park in New Jersey."
         },
         {
             "file": "20251103-094748.avif",
@@ -30,15 +35,18 @@
             "height": 1536,
             "color": "#181818",
             "taken": "2025-11-03",
-            "title": "Whatever, just wash your hands"
+            "title": "Whatever, just wash your hands",
+            "note": "took in buffalo, incredibly funny",
+            "caption": "Taken in Buffalo. Incredibly funny."
         },
         {
             "file": "20251020-170122.avif",
             "width": 2000,
             "height": 1126,
             "color": "#181818",
-            "taken": "2025-10-20",
-            "title": "Reeds under a broken sky"
+            "title": "Reeds under a broken sky",
+            "note": "very goddamn beautiful picture from a while ago",
+            "caption": "A very goddamn beautiful picture from a while ago."
         },
         {
             "file": "20251026-164035.avif",
@@ -46,7 +54,9 @@
             "height": 1126,
             "color": "#181818",
             "taken": "2025-10-26",
-            "title": "Between the old factory buildings"
+            "title": "Between the old factory buildings",
+            "note": "Industry city, from the center of it",
+            "caption": "Industry City, from the center of it."
         },
         {
             "file": "20251030-154348.avif",
@@ -54,15 +64,18 @@
             "height": 1126,
             "color": "#784828",
             "taken": "2025-10-30",
-            "title": "The round ceiling"
+            "title": "The round ceiling",
+            "note": "a cara-something in downtown buffalo i think",
+            "caption": "Somewhere in downtown Buffalo, I think."
         },
         {
             "file": "20251007-072912.avif",
             "width": 1125,
             "height": 2000,
             "color": "#482818",
-            "taken": "2025-10-07",
-            "title": "Red tree, old truck"
+            "title": "Red tree, old truck",
+            "note": "dust storm from canada 3 years ago and it was dusk",
+            "caption": "A dust storm from Canada, three years ago, at dusk."
         },
         {
             "file": "20251109-135135.avif",
@@ -70,7 +83,9 @@
             "height": 1126,
             "color": "#989898",
             "taken": "2025-11-09",
-            "title": "Silver in a case"
+            "title": "Silver in a case",
+            "note": "metal of some sort",
+            "caption": "Metal of some sort."
         },
         {
             "file": "20251109-140131.avif",
@@ -78,7 +93,8 @@
             "height": 1126,
             "color": "#282828",
             "taken": "2025-11-09",
-            "title": "Malachite"
+            "title": "Stibnite",
+            "note": "definitely not malachite, Stibnite"
         },
         {
             "file": "20251109-133143.avif",
@@ -86,7 +102,9 @@
             "height": 1126,
             "color": "#080808",
             "taken": "2025-11-09",
-            "title": "Birches in yellow light"
+            "title": "Birches in yellow light",
+            "note": "that one display in the museum in NYC",
+            "caption": "That one display in the museum in New York."
         },
         {
             "file": "20251109-140144.avif",
@@ -94,7 +112,8 @@
             "height": 1126,
             "color": "#282828",
             "taken": "2025-11-09",
-            "title": "A fuzzy mineral"
+            "title": "A fuzzy mineral",
+            "note": "as the title says"
         },
         {
             "file": "20251109-121721.avif",
@@ -102,7 +121,9 @@
             "height": 1126,
             "color": "#383838",
             "taken": "2025-11-09",
-            "title": "Tree on the rock"
+            "title": "Tree on the rock",
+            "note": "central park",
+            "caption": "Central Park."
         },
         {
             "file": "20251212-072541.avif",
@@ -110,7 +131,9 @@
             "height": 1126,
             "color": "#181818",
             "taken": "2025-12-12",
-            "title": "Sunset through bare trees"
+            "title": "Sunset through bare trees",
+            "note": "road trip",
+            "caption": "From a road trip."
         },
         {
             "file": "20251227-172737.avif",
@@ -118,7 +141,9 @@
             "height": 1126,
             "color": "#282828",
             "taken": "2025-12-27",
-            "title": "Skating at night"
+            "title": "Skating at night",
+            "note": "canal side in buffalo, skate night.\nwith my best friend. was an incredible night.",
+            "caption": "Skate night at Canalside in Buffalo, with my best friend. It was an incredible night."
         },
         {
             "file": "20251214-101836.avif",
@@ -126,7 +151,9 @@
             "height": 1126,
             "color": "#c8d8e8",
             "taken": "2025-12-14",
-            "title": "Snow on everything"
+            "title": "Snow on everything",
+            "note": "it snowed at my old house!",
+            "caption": "It snowed at my old house."
         },
         {
             "file": "20251227-203625.avif",
@@ -134,7 +161,8 @@
             "height": 1126,
             "color": "#282828",
             "taken": "2025-12-27",
-            "title": "Wet branches"
+            "title": "Frozen grass",
+            "note": "frozen grass"
         },
         {
             "file": "20260103-162659.avif",
@@ -142,7 +170,9 @@
             "height": 2000,
             "color": "#080818",
             "taken": "2026-01-03",
-            "title": "Mirror cube in the dark"
+            "title": "Mirror cube in the dark",
+            "note": "funny thing i built out of magnetic blocks",
+            "caption": "A funny thing I built out of magnetic blocks."
         },
         {
             "file": "20260319-183925.avif",
@@ -150,7 +180,9 @@
             "height": 1126,
             "color": "#383838",
             "taken": "2026-03-19",
-            "title": "Small dog, held"
+            "title": "Izzy",
+            "note": "izzy my dog",
+            "caption": "My dog."
         },
         {
             "file": "20260117-115044.avif",
