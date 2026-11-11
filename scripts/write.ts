@@ -178,19 +178,12 @@ async function publish(message: string): Promise<{ ok: boolean; log: string }> {
     try {
         if ((await $`git status --short`.cwd(root).text()).trim()) {
             const text = message.trim() || "Edit the site";
-            if (await exists(".jj/repo")) {
-                // The repo is managed with jujutsu alongside git: commit the working
-                // copy, move main onto it, and push that.
-                await run("jj commit", $`jj commit -m ${text}`);
-                await run("jj bookmark set main", $`jj bookmark set main -r @-`);
-                await run("jj git push", $`jj git push --bookmark main`);
-            } else {
-                await run("git add", $`git add -A`);
-                await run("git commit", $`git commit -m ${text}`);
-                await run("git push", $`git push`);
-            }
+            await run("git add", $`git add -A`);
+            await run("git commit", $`git commit -m ${text}`);
+            await run("git push", $`git push`);
         }
-        await run("wrangler pages deploy", $`bunx wrangler pages deploy`);
+        // Named, so that it goes to production whatever git says the branch is.
+        await run("wrangler pages deploy", $`bunx wrangler pages deploy --branch main`);
         return { ok: true, log: `${log.join("\n")}\n\nDeployed.` };
     } catch (error) {
         return { ok: false, log: `${error instanceof Error ? error.message : String(error)}\n\nStopped: this step failed.` };
