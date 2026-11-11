@@ -51,5 +51,23 @@ const { back, title, ...document } = Astro.props;
         // The panel scrolls, not the page, so give it the keyboard: without
         // this, Page Down, Space and the arrow keys do nothing until a click.
         document.querySelector<HTMLElement>(".opened-panel")?.focus({ preventScroll: true });
+
+        // Back goes to wherever this was opened from. A post opened from the home
+        // page goes back to the home page, not to the blog's list. Moving between
+        // opened pages keeps the place first come from.
+        const strip = document.querySelector<HTMLAnchorElement>(".strip");
+        try {
+            const from = document.referrer ? new URL(document.referrer) : undefined;
+            const opened = (path: string) => /^\/(blog|projects|minis)\/[^/]+\/$/.test(path);
+            if (from && from.origin === location.origin && !opened(from.pathname)) sessionStorage.setItem("opened-from", from.pathname);
+            else if (!from || from.origin !== location.origin) sessionStorage.removeItem("opened-from");
+            const place = sessionStorage.getItem("opened-from");
+            if (strip && place && place !== new URL(strip.href).pathname) {
+                strip.href = place;
+                strip.setAttribute("aria-label", "Back");
+            }
+        } catch {
+            // No storage: back goes to the list, as written.
+        }
     </script>
 </Document>

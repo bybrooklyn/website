@@ -106,7 +106,7 @@ test("a pendulum swings at the rate its length says it should", () => {
 
 test("a chain dragged far past its reach stays a chain", () => {
     // Set up as the Chain mini is: a gentler hand and more work per step than the defaults, as anything jointed wants.
-    const world = Object.assign(new World(), { gravity: 1400, grip: 10, passes: 16, parts: 4, air: 0.5 });
+    const world = Object.assign(new World(), { gravity: 1400, grip: 12, passes: 20, parts: 4, air: 0.8 });
     const nail = ball(0, 0, 3, { fixed: true });
     world.add(nail);
     const beads: Body[] = [];
@@ -115,25 +115,28 @@ test("a chain dragged far past its reach stays a chain", () => {
         const last = index === 13;
         const bead = ball(0, (index + 1) * 15, last ? 20 : 4.5, { density: last ? 1 : 8 });
         world.add(bead);
-        world.join(above, bead, [0, 0], [0, 0], last ? 31 : 15, true);
+        world.join(above, bead, [0, 0], [0, 0], last ? 31 : 15);
         beads.push(bead);
         above = bead;
     }
     const weight = beads.at(-1)!;
     run(world, 1);
     world.grab([weight.x, weight.y]);
-    let stretched = 0, fastest = 0;
+    let stretched = 0, fastest = 0, slackest = 1;
     run(world, 3, (time) => {
         // swept round and well out of reach
         world.drag([900 * Math.cos(time * 3), 900 * Math.sin(time * 3)]);
         let from = nail;
         beads.forEach((bead, index) => {
             stretched = Math.max(stretched, Math.hypot(bead.x - from.x, bead.y - from.y) / (index === 13 ? 31 : 15));
+            slackest = Math.min(slackest, Math.hypot(bead.x - from.x, bead.y - from.y) / (index === 13 ? 31 : 15));
             fastest = Math.max(fastest, speed(bead));
             from = bead;
         });
     });
     expect(stretched).toBeLessThan(1.2);
+    // and it never goes slack either: every link stays its length
+    expect(slackest).toBeGreaterThan(0.85);
     expect(fastest).toBeLessThan(4000);
     world.release();
     run(world, 12);
