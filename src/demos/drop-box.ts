@@ -9,6 +9,10 @@ import { World, ball, rect, shape, wake, type Body } from "./physics";
 const SIZE = 34;
 const MOST = 60;
 const FLOOR = 6;
+/** The box's top corners are rounded; a slope this size across each keeps blocks out of the part that is cut off. */
+const CORNER = 14;
+/** Soft colors for the blocks, taken in turn. */
+const PASTELS = [350, 25, 70, 130, 190, 250, 300].map((hue) => `oklch(0.86 0.085 ${hue})`);
 /** The simulation moves in steps of this many seconds, whatever the screen's refresh rate. */
 const TICK = 1 / 120;
 
@@ -16,8 +20,10 @@ class DropBox extends HTMLElement {
     #canvas = document.createElement("canvas");
     // Tuned to feel like blocks with some weight: slower to fall than the
     // engine's default, and trailing the pointer a little when carried.
-    #world = Object.assign(new World(), { gravity: 1300, grip: 16, follow: 0.1 });
+    #world = Object.assign(new World(), { gravity: 1300, grip: 17, follow: 0.115 });
     #blocks: Body[] = [];
+    #colors = new Map<Body, string>();
+    #made = 0;
     #walls: Body[] = [];
     #near = false;
     #visible = false;
@@ -25,7 +31,7 @@ class DropBox extends HTMLElement {
     #frame = 0;
     #last = 0;
     #owed = 0;
-    #palette?: { floor: string; fill: string; edge: string };
+    #palette?: { floor: string; edge: string };
     #watcher?: IntersectionObserver;
     #resizer?: ResizeObserver;
 
@@ -71,8 +77,7 @@ class DropBox extends HTMLElement {
         for (const [column, row] of [[-1, 0], [0, 0], [1, 0], [-0.5, 1], [0.5, 1], [0, 2]] as const) {
             const block = rect(middle + column * SIZE, floor - SIZE / 2 - row * SIZE, SIZE, SIZE);
             block.asleep = true;
-            this.#blocks.push(block);
-            this.#world.add(block);
+            this.#add(block);
         }
         this.#draw();
     }
@@ -91,9 +96,18 @@ class DropBox extends HTMLElement {
             : pick < 0.85 ? ball(x, y, half, { bounce: 0.4 })
             : shape(x, y, [[0, -half], [half * 1.15, half], [-half * 1.15, half]]);
         block.w = (Math.random() - 0.5) * 3;
+        this.#add(block);
+        if (this.#blocks.length > MOST) {
+            const oldest = this.#blocks.shift()!;
+            this.#world.remove(oldest);
+            this.#colors.delete(oldest);
+        }
+    }
+
+    #add(block: Body): void {
+        this.#colors.set(block, PASTELS[this.#made++ % PASTELS.length]!);
         this.#blocks.push(block);
         this.#world.add(block);
-        if (this.#blocks.length > MOST) this.#world.remove(this.#blocks.shift()!);
     }
 
     /** Match the canvas to its box, and put the floor and walls around it. */
@@ -111,6 +125,9 @@ class DropBox extends HTMLElement {
             rect(-thick / 2, height / 2, thick, height * 6, { fixed: true }),
             rect(width + thick / 2, height / 2, thick, height * 6, { fixed: true }),
             rect(width / 2, -thick / 2, width + thick * 2, thick, { fixed: true }),
+            // slopes across the two rounded corners at the top
+            shape(CORNER / 3, CORNER / 3, [[0, 0], [CORNER, 0], [0, CORNER]], { fixed: true }),
+            shape(width - CORNER / 3, CORNER / 3, [[0, 0], [0, CORNER], [-CORNER, 0]], { fixed: true }),
         ];
         this.#world.add(...this.#walls);
         for (const block of this.#blocks) wake(block);
@@ -155,10 +172,10 @@ class DropBox extends HTMLElement {
         for (const block of this.#blocks) {
             const xs = block.r ? [block.x - block.r, block.x + block.r] : block.wp.map((corner) => corner[0]);
             const ys = block.r ? [block.y - block.r, block.y + block.r] : block.wp.map((corner) => corner[1]);
-            const low = Math.max(...ys) - floor - 2;
-            const left = -2 - Math.min(...xs);
-            const right = Math.max(...xs) - width - 2;
-            const high = -2 - Math.min(...ys);
+            const low = Math.max(...ys) - floor;
+            const left = -Math.min(...xs);
+            const right = Math.max(...xs) - width;
+            const high = -Math.min(...ys);
             if (high > 0) {
                 block.y += high;
                 block.vy = Math.max(block.vy, 0);
@@ -196,8 +213,8 @@ class DropBox extends HTMLElement {
         context.clearRect(0, 0, width, height);
 
         // Looking the colors up means restyling the element, so do it once per run.
-        this.#palette ??= { floor: this.#color("--rule"), fill: this.#color("--accent"), edge: this.#color("--ground") };
-        const { floor, fill, edge } = this.#palette;
+        this.#palette ??= { floor: this.#color("--rule"), edge: this.#color("--ground") };
+        const { floor, edge } = this.#palette;
 
         context.fillStyle = floor;
         context.fillRect(0, height - FLOOR, width, FLOOR);
@@ -207,20 +224,22 @@ class DropBox extends HTMLElement {
             context.translate(block.x, block.y);
             context.rotate(block.a);
             context.beginPath();
-            if (block.r) {
-                context.arc(0, 0, block.r, 0, Math.PI * 2);
-                // a spoke, so a rolling ball can be seen to roll
-                context.moveTo(0, 0);
-                context.lineTo(block.r, 0);
-            } else {
+            if (block.r) context.arc(0, 0, block.r, 0, Math.PI * 2);
+            else {
                 block.p.forEach(([x, y], index) => (index ? context.lineTo(x, y) : context.moveTo(x, y)));
                 context.closePath();
             }
-            context.fillStyle = fill;
+            context.fillStyle = this.#colors.get(block) ?? PASTELS[0]!;
             context.fill();
-            context.strokeStyle = edge;
-            context.lineWidth = 2;
-            context.stroke();
+            if (block.r) {
+                // a spoke, so a rolling ball can be seen to roll
+                context.beginPath();
+                context.moveTo(0, 0);
+                context.lineTo(block.r, 0);
+                context.strokeStyle = edge;
+                context.lineWidth = 2;
+                context.stroke();
+            }
             context.restore();
         }
     }

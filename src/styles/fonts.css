@@ -71,7 +71,7 @@
 
 :root {
     --font-head: "Torrens Serif", "Fraunces Soft", Georgia, serif;
-    --font-text: "Fraunces Soft", Georgia, serif;
+    --font-text: "Torrens Serif", Georgia, serif;
     --font-code: "Drafting Mono", ui-monospace, "Courier New", monospace;
 
     --head-weight: 520;
