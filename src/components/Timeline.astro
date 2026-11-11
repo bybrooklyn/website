@@ -94,9 +94,31 @@ import "../styles/timeline.css";
         const line = () => Math.max(16, (innerHeight - stage.offsetHeight) / 2);
         const top = () => stage.getBoundingClientRect().top;
         const focus = () => timeline.classList.toggle("focused", Math.abs(top() - line()) <= 3);
+        // Coming to rest is a short glide that slows into place, not a jump: the
+        // page is already moving when it arrives, and a sudden stop reads as a snag.
+        let gliding = 0;
         const rest = () => {
-            scrollTo({ top: top() + scrollY - line(), behavior: "instant" });
-            focus();
+            cancelAnimationFrame(gliding);
+            gliding = 0;
+            const from = scrollY;
+            const distance = top() - line();
+            if (Math.abs(distance) < 6) {
+                scrollTo({ top: from + distance, behavior: "instant" });
+                focus();
+                return;
+            }
+            const began = performance.now();
+            const length = Math.min(480, 260 + Math.abs(distance) * 1.5);
+            const frame = (now: number) => {
+                const along = Math.min((now - began) / length, 1);
+                scrollTo({ top: from + distance * (1 - (1 - along) ** 3), behavior: "instant" });
+                if (along < 1) gliding = requestAnimationFrame(frame);
+                else {
+                    gliding = 0;
+                    focus();
+                }
+            };
+            gliding = requestAnimationFrame(frame);
         };
         const holds = (direction: number): boolean => {
             if (direction > 0 ? current >= last : current <= 0) return false;
@@ -135,6 +157,12 @@ import "../styles/timeline.css";
                 wheelSize = size;
                 inputAt = performance.now();
                 if (event.ctrlKey || size === 0) return;
+                if (gliding) {
+                    // still settling onto the line: this input is part of arriving
+                    event.preventDefault();
+                    swallowing = true;
+                    return;
+                }
                 if (fresh) swallowing = false;
                 if (holds(Math.sign(event.deltaY))) {
                     event.preventDefault();
@@ -160,6 +188,7 @@ import "../styles/timeline.css";
                 const direction = Math.sign(scrollY - before);
                 before = scrollY;
                 focus();
+                if (gliding) return;
                 // Only for scrolling the visitor is doing by wheel, touch or keys; the scrollbar and links pass freely.
                 // A finger still on the screen is left alone: the page cannot be taken from under it.
                 if (direction === 0 || touching || performance.now() - inputAt > 1200 || !holds(direction)) return;
@@ -219,6 +248,10 @@ import "../styles/timeline.css";
             const forward = ["ArrowDown", "PageDown"].includes(event.key) || (event.key === " " && !event.shiftKey);
             const back = ["ArrowUp", "PageUp"].includes(event.key) || (event.key === " " && event.shiftKey);
             if (!forward && !back) return;
+            if (gliding) {
+                event.preventDefault();
+                return;
+            }
             const reach = event.key.startsWith("Arrow") ? 60 : innerHeight;
             if (holds(forward ? 1 : -1)) {
                 event.preventDefault();
