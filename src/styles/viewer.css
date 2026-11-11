@@ -1,0 +1,42 @@
+/* The picture viewer in src/scripts/viewer.ts: a picture lifted out of the page to the middle of the window. */
+
+[data-zoom] {
+    cursor: zoom-in;
+}
+
+[data-zoom]:focus-visible {
+    outline: 0.125rem solid var(--accent);
+    outline-offset: 0.25rem;
+}
+
+.viewer {
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    cursor: zoom-out;
+}
+
+.viewer:focus {
+    outline: none;
+}
+
+.viewer-shade {
+    position: absolute;
+    inset: 0;
+    background: oklch(0.1 0.03 300 / 0.88);
+}
+
+.viewer-picture {
+    position: absolute;
+    max-width: none;
+    margin: 0;
+    border-radius: var(--radius);
+    object-fit: contain;
+    transform-origin: 0 0;
+    will-change: transform;
+    box-shadow: 0 1.5rem 4rem oklch(0 0 0 / 0.5);
+}
+
+.viewer-picture.pixel {
+    image-rendering: pixelated;
+}
