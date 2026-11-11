@@ -21,8 +21,6 @@ export interface Pointer {
     down: boolean;
     /** Over the canvas. */
     inside: boolean;
-    /** Confined to the canvas: it cannot leave until Escape is pressed. The scene draws it, since the browser's own is hidden. */
-    held: boolean;
 }
 
 export type Key = "left" | "right" | "up" | "down" | "action";
@@ -38,12 +36,8 @@ export interface Mote {
     /** Shown small in a list, not to be played: no pointer, no keys. A scene can use this to leave out its words and move by itself. */
     readonly preview: boolean;
     pointer: Pointer;
-    /** Whether a key is held: the arrows or WASD, and Space or Enter for "action". */
-    key(name: Key): boolean;
     /** One of the page's colors, such as "--accent", as a value a canvas accepts. */
     color(property: string): string;
-    /** The page's text face, for writing on the canvas. */
-    font(size: number, weight?: number): string;
     /** Start the loop again after the scene came to rest. */
     wake(): void;
     /** A place under the canvas for ordinary buttons and text, for a mini that needs them. Made the first time it is asked for. */
@@ -67,8 +61,6 @@ export interface Scene {
     keydown?(name: Key): void;
     /** True when nothing is moving, so the loop can stop until something wakes it. */
     resting?(): boolean;
-    /** Pressing on this mini confines the pointer to it, and the box grows, until Escape. For a game steered by the mouse alone. */
-    confines?: boolean;
 }
 
 /** The loop moves in steps of this many seconds, whatever the screen's refresh rate. */
@@ -112,8 +104,7 @@ export function mote(host: HTMLElement, make: (m: Mote) => Scene, { label = "An 
         height: 0,
         time: 0,
         preview,
-        pointer: { x: 0, y: 0, down: false, inside: false, held: false },
-        key: (name) => held.has(name),
+        pointer: { x: 0, y: 0, down: false, inside: false },
         color(property) {
             // Looking a color up means restyling the element, so each is looked up once.
             let found = colors.get(property);
@@ -125,7 +116,6 @@ export function mote(host: HTMLElement, make: (m: Mote) => Scene, { label = "An 
             }
             return found;
         },
-        font: (size, weight = 400) => `${weight} ${size}px ${getComputedStyle(host).fontFamily}`,
         wake: () => start(),
         panel() {
             let panel = host.querySelector<HTMLElement>(".mote-panel");
@@ -201,27 +191,13 @@ export function mote(host: HTMLElement, make: (m: Mote) => Scene, { label = "An 
     /** When and where the last press was, to tell a double one. */
     let pressed = { at: -1000, x: 0, y: 0 };
     const place = (event: PointerEvent) => {
-        if (m.pointer.held) {
-            // Confined, the browser reports only how far the mouse moved: the pointer is moved by that, and stopped at the edges.
-            m.pointer.x = Math.max(0, Math.min(m.width, m.pointer.x + event.movementX));
-            m.pointer.y = Math.max(0, Math.min(m.height, m.pointer.y + event.movementY));
-        } else {
-            m.pointer.x = event.offsetX;
-            m.pointer.y = event.offsetY;
-        }
+        [m.pointer.x, m.pointer.y] = [event.offsetX, event.offsetY];
     };
-    const confined = () => {
-        m.pointer.held = document.pointerLockElement === canvas;
-        host.classList.toggle("mote-held", m.pointer.held);
-        if (m.pointer.held) start();
-    };
-    document.addEventListener("pointerlockchange", confined);
     canvas.addEventListener("pointerdown", (event) => {
         place(event);
         m.pointer.down = true;
         // Keep hearing about this pointer even if it leaves the canvas.
-        if (!m.pointer.held) canvas.setPointerCapture(event.pointerId);
-        if (scene.confines && !m.pointer.held && !preview) void Promise.resolve(canvas.requestPointerLock()).catch(() => {});
+        canvas.setPointerCapture(event.pointerId);
         // It takes the keyboard too, but a ring around it is only for someone who got here by keyboard.
         canvas.dataset.touched = "";
         canvas.focus({ preventScroll: true });
@@ -290,7 +266,6 @@ export function mote(host: HTMLElement, make: (m: Mote) => Scene, { label = "An 
         resizer.disconnect();
         watcher.disconnect();
         document.removeEventListener("visibilitychange", shown);
-        document.removeEventListener("pointerlockchange", confined);
         canvas.remove();
     };
 }

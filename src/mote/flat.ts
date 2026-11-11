@@ -936,9 +936,6 @@ const turn = (b: Body, [x, y]: P): P => [x * Math.cos(b.a) - y * Math.sin(b.a), 
 const world = (b: Body, on: P): P => [b.x + turn(b, on)[0], b.y + turn(b, on)[1]];
 const local = (b: Body, x: number, y: number): P => [(x - b.x) * Math.cos(b.a) + (y - b.y) * Math.sin(b.a), -(x - b.x) * Math.sin(b.a) + (y - b.y) * Math.cos(b.a)];
 
-/** Where a body is, in pixels, and how far it has turned. */
-export const where = (body: Body): { x: number; y: number; a: number } => body;
-
 /** How fast a body is going, in pixels a second. */
 export const speed = (body: Body): number => Math.hypot(body.vx, body.vy);
 

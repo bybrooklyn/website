@@ -8,7 +8,7 @@
 //   die.at = [0, 1, 0]; die.turn = turn;
 //   view.draw();
 
-import { upright, type Mesh, type Turn, type V3 } from "./solids";
+import { cross, dot3 as dot, minus, upright, type Mesh, type Turn, type V3 } from "./solids";
 
 export type Color = [r: number, g: number, b: number];
 
@@ -145,9 +145,6 @@ function times(a: M4, b: M4): M4 {
     return out;
 }
 
-const minus = (a: V3, b: V3): V3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
-const cross = (a: V3, b: V3): V3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
-const dot = (a: V3, b: V3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const unit = (a: V3): V3 => {
     const long = Math.hypot(a[0], a[1], a[2]) || 1;
     return [a[0] / long, a[1] / long, a[2] / long];

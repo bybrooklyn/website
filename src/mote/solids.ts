@@ -82,8 +82,6 @@ export interface Look {
     /** Where the solid's middle is, in units, and how the whole scene is turned to be looked at. */
     at?: V3;
     view?: Turn;
-    /** Draw faces that point away too: for a flat piece seen from either side. */
-    both?: boolean;
     /** What to write on a face, and in what color and face. */
     label?(face: number): string;
     ink?: string;
@@ -108,7 +106,7 @@ export function paint(ctx: CanvasRenderingContext2D, mesh: Mesh, turn: Turn, loo
             const toward = normal[0] * -a[0] + normal[1] * -a[1] + normal[2] * (distance - a[2]);
             return { corners, number, normal, middle, toward };
         })
-        .filter((face) => look.both || face.toward > 0)
+        .filter((face) => face.toward > 0)
         .sort((a, b) => a.middle - b.middle);
     ctx.lineJoin = "round";
     for (const face of faces) {
@@ -163,8 +161,6 @@ export const block = ([x, y, z]: V3): Mesh => ({
     faces: [[0, 3, 2, 1], [4, 5, 6, 7], [0, 1, 5, 4], [2, 3, 7, 6], [1, 2, 6, 5], [0, 4, 7, 3]],
 });
 
-/** A flat four-cornered piece, for a floor, a wall or a ramp. */
-export const sheet = (a: V3, b: V3, c: V3, d: V3): Mesh => ({ points: [a, b, c, d], faces: [[0, 1, 2, 3]] });
 
 /** Makes every face wind counter-clockwise seen from outside, for a solid that bulges everywhere and sits around the origin. */
 function outward(mesh: Mesh): Mesh {

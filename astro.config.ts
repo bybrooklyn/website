@@ -17,7 +17,6 @@ export default defineConfig({
     site: "https://bybrooklyn.dev",
     trailingSlash: "always",
     build: {
-        format: "directory",
         // The stylesheets are small, and a page that carries its own styles
         // can be drawn after one round trip instead of three.
         inlineStylesheets: "always",
@@ -81,7 +80,6 @@ export default defineConfig({
     // touched. Astro holds back by itself on data-saving or very slow connections.
     prefetch: {
         prefetchAll: true,
-        defaultStrategy: "hover",
     },
     integrations: [
         mdx(),
@@ -98,7 +96,6 @@ export default defineConfig({
         shikiConfig: {
             // Code takes its colors from the theme; see tokens.css.
             theme: "css-variables",
-            wrap: false,
         },
     },
 });

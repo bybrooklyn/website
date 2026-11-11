@@ -408,11 +408,6 @@ export class Space {
         }
     }
 
-    /** Where things touched in the last step, how far apart they were and how hard they pressed: for looking at what the solver sees. */
-    get touches(): { a: Solid; b: Solid; n: V3; spots: { at: V3; gap: number; push: number }[] }[] {
-        return this.#was.map((m) => ({ a: m.a, b: m.b, n: m.n, spots: m.spots.map((spot) => ({ at: add(m.a.p, spot.ra), gap: spot.gap, push: spot.push })) }));
-    }
-
     /** Whether everything that can move has been all but still for `seconds`. */
     still(seconds = 0.4): boolean {
         return this.solids.every((solid) => !solid.im || solid.quiet >= seconds);

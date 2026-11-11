@@ -72,11 +72,6 @@
     transition: height 0.35s var(--ease);
 }
 
-/* While a game holds the mouse, its box is bigger. */
-.mini-stage.mote-held canvas {
-    height: clamp(24rem, 84svh, 48rem);
-}
-
 .mini-controls {
     max-width: var(--measure);
     margin: 0 0 calc(var(--line) * 1.5);
