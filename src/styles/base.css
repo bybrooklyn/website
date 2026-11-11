@@ -104,7 +104,6 @@ img {
 }
 
 code,
-kbd,
 pre {
     font-family: var(--font-code);
     font-size: 0.86em;
@@ -351,9 +350,6 @@ h1 + .about {
 .flags {
     position: relative;
     z-index: 1;
-}
-
-.flags {
     display: flex;
     gap: 0.35rem;
 }
@@ -407,7 +403,6 @@ h1 + .about {
     visibility: visible;
     transition-delay: 0.5s;
 }
-
 
 /* ---- language bar ---- */
 
@@ -575,10 +570,6 @@ h1 + .about {
 
 .figure {
     margin-block: var(--line);
-}
-
-.figure a {
-    display: block;
 }
 
 .figure img,

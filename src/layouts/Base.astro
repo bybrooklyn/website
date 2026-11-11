@@ -2,16 +2,9 @@
 import Document from "./Document.astro";
 import Header from "../components/Header.astro";
 import Footer from "../components/Footer.astro";
-import type { AccentName } from "../data/theme";
+import type { ComponentProps } from "astro/types";
 
-interface Props {
-    title?: string;
-    description?: string;
-    accent?: AccentName;
-    type?: "website" | "article";
-    unlisted?: boolean;
-    image?: ImageMetadata;
-}
+type Props = Omit<ComponentProps<typeof Document>, "bodyClass">;
 ---
 
 <Document {...Astro.props}>

@@ -7,20 +7,23 @@
     border-radius: var(--radius);
     overflow: hidden;
     background: var(--ground);
-}
-
-/* The box is its full height before the mini has been fetched, so the page does not jump when it arrives. */
-.mote {
+    /* The box is its full height before the mini has been fetched, so the page does not jump when it arrives. */
     position: relative;
     min-height: 16rem;
 }
 
 .mini-stage {
     min-height: clamp(18rem, 62svh, 34rem);
+    /* On its own page a mini gets most of the window. */
+    max-width: 56rem;
+    margin-bottom: var(--line);
 }
 
 .mini-preview {
     min-height: clamp(11rem, 22vw, 15rem);
+    transition:
+        border-color 0.15s ease,
+        translate 0.25s var(--ease);
 }
 
 /* A mini that puts controls under itself has room kept for them as well. */
@@ -56,19 +59,10 @@
     outline-offset: -0.125rem;
 }
 
-/* On its own page a mini gets most of the window. */
-.mini-stage {
-    max-width: 56rem;
-    margin-bottom: var(--line);
-}
-
 .mini-stage canvas {
     height: clamp(18rem, 62svh, 34rem);
     /* A game is steered by dragging sideways and up and down, so the page does not scroll from it. */
     touch-action: none;
-}
-
-.mini-stage canvas {
     transition: height 0.35s var(--ease);
 }
 
@@ -92,12 +86,6 @@
     display: block;
     color: var(--ink);
     text-decoration: none;
-}
-
-.mini-preview {
-    transition:
-        border-color 0.15s ease,
-        translate 0.25s var(--ease);
 }
 
 .mini-preview canvas {
@@ -175,11 +163,6 @@
     border-color: transparent;
     background: none;
     color: var(--muted);
-}
-
-.mote-panel button[aria-pressed="true"] {
-    border-color: var(--accent);
-    background: color-mix(in oklab, var(--accent) 22%, var(--ground));
 }
 
 .mote-panel input[type="text"] {

@@ -79,6 +79,7 @@ body.opened {
     --surface: var(--panel-raised);
     --rule: var(--panel-rule);
     --astro-code-background: var(--panel-raised);
+    --panel-gutter: clamp(1.25rem, 5vw, 4rem);
 }
 
 /* Hovering the strip nudges the panel. */
@@ -96,10 +97,6 @@ body.opened:has(.strip:hover, .strip:focus-visible) .opened-panel {
     align-items: center;
     gap: 0.25rem 1.5rem;
     padding: calc(var(--line) * 0.8) var(--panel-gutter) 0;
-}
-
-.opened-panel {
-    --panel-gutter: clamp(1.25rem, 5vw, 4rem);
 }
 
 .opened-panel main {

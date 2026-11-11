@@ -5,19 +5,14 @@
 import Document from "./Document.astro";
 import Flags from "../components/Flags.astro";
 import { site } from "../data/site";
-import type { AccentName } from "../data/theme";
+import type { ComponentProps } from "astro/types";
 
-interface Props {
+type Props = Omit<ComponentProps<typeof Document>, "bodyClass"> & {
     title: string;
     description: string;
-    accent?: AccentName;
-    type?: "website" | "article";
-    /** The picture used when the page is shared. */
-    image?: ImageMetadata;
-    unlisted?: boolean;
     /** The list this was opened from. */
     back: { href: string; label: string };
-}
+};
 
 const { back, title, ...document } = Astro.props;
 ---

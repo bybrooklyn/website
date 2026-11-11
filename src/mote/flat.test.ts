@@ -279,7 +279,7 @@ test("a pendulum swings at the rate its length says it should, and stays on its 
     expect(Math.abs(Math.atan2(bob.x, bob.y)) + Math.abs(bob.w)).toBeGreaterThan(0.05);
 });
 
-/** The Chain mini's chain: thirteen links pinned end to end from a nail, and a weight. */
+/** A chain: thirteen links pinned end to end from a nail, and a weight. */
 function chain(): { flat: Flat; links: Body[]; weight: Body; gap: () => number; reach: () => number } {
     const flat = new Flat(2200);
     flat.parts = 8;

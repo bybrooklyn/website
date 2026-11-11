@@ -2,14 +2,7 @@
 // A standalone long-form page from src/content/pages: /setup/, /about/.
 // It gets the same treatment as a post (contents beside the text)
 // but stays a main page, with the site's navigation.
-// Styles for what written content can contain. They are loaded here, by the page, and not only by
-// the components themselves: Astro's content security policy does not see styles that arrive from
-// inside rendered Markdown, and would block them.
-import "../styles/timeline.css";
-import "../styles/diagram.css";
-import "../styles/type.css";
-import "../styles/minis.css";
-import "../styles/terminal.css";
+import "../styles/content";
 import type { GetStaticPaths } from "astro";
 import { getCollection, render, type CollectionEntry } from "astro:content";
 import "../styles/blog.css";

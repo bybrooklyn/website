@@ -178,9 +178,6 @@
     cursor: pointer;
     font-weight: 600;
     color: var(--muted);
-}
-
-.contents summary {
     list-style: none;
 }
 
@@ -366,6 +363,8 @@
     font-size: 0.68em;
     line-height: 0;
     font-variant-numeric: tabular-nums;
+    /* Pointing at a number names its source, right there. */
+    position: relative;
 }
 
 .prose .ref a {
@@ -376,11 +375,6 @@
 
 .prose .ref a:hover {
     text-decoration: underline;
-}
-
-/* Pointing at a number names its source, right there. */
-.prose .ref {
-    position: relative;
 }
 
 .prose .ref a[data-source]::after {

@@ -15,7 +15,7 @@
 //
 // What it is held to is in space.test.ts.
 
-import { block, type Mesh, type Turn, type V3 } from "./solids";
+import { block, cross, dot3 as dot, minus as sub, plus as add, scaled as mul, type Mesh, type Turn, type V3 } from "./solids";
 
 export type Quat = [x: number, y: number, z: number, w: number];
 
@@ -101,11 +101,6 @@ interface Manifold {
     stiff: boolean;
 }
 
-const dot = (a: V3, b: V3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-const cross = (a: V3, b: V3): V3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
-const add = (a: V3, b: V3): V3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
-const sub = (a: V3, b: V3): V3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
-const mul = (a: V3, by: number): V3 => [a[0] * by, a[1] * by, a[2] * by];
 const size = (a: V3) => Math.hypot(a[0], a[1], a[2]);
 const unit = (a: V3): V3 => mul(a, 1 / (size(a) || 1));
 
@@ -486,26 +481,18 @@ export class Space {
         const contact = soft(Math.min(HERTZ, 0.25 / h), DAMPED, h);
         const firm = soft(Math.min(HERTZ * 2, 0.25 / h), DAMPED, h);
 
+        /** An impulse `j` along `d` on one solid, at `r` from its middle. */
+        const push = (solid: Solid, r: V3, d: V3, j: number) => {
+            if (!solid.im) return;
+            const x = cross(r, d);
+            for (let axis = 0; axis < 3; axis++) {
+                solid.v[axis]! += solid.im * d[axis]! * j;
+                solid.w[axis]! += solid.ii * x[axis]! * j;
+            }
+        };
         const shove = (m: Manifold, s: Spot, d: V3, j: number) => {
-            const { a, b } = m;
-            if (a.im) {
-                a.v[0] -= a.im * d[0] * j;
-                a.v[1] -= a.im * d[1] * j;
-                a.v[2] -= a.im * d[2] * j;
-                const x = cross(s.ra, d);
-                a.w[0] -= a.ii * x[0] * j;
-                a.w[1] -= a.ii * x[1] * j;
-                a.w[2] -= a.ii * x[2] * j;
-            }
-            if (b.im) {
-                b.v[0] += b.im * d[0] * j;
-                b.v[1] += b.im * d[1] * j;
-                b.v[2] += b.im * d[2] * j;
-                const x = cross(s.rb, d);
-                b.w[0] += b.ii * x[0] * j;
-                b.w[1] += b.ii * x[1] * j;
-                b.w[2] += b.ii * x[2] * j;
-            }
+            push(m.a, s.ra, d, -j);
+            push(m.b, s.rb, d, j);
         };
         /** How fast b is leaving a at a point, along a direction. */
         const leaving = (m: Manifold, s: Spot, d: V3) => {
