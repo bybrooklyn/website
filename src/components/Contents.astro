@@ -2,7 +2,9 @@
 // What sits beside a post or long page: its table of contents, then, for a
 // post, its sources and how to cite it. In the margin on a wide screen, where
 // it stays in view and marks the section being read. On a narrow one the
-// contents fold away above the text and the rest goes to the end.
+// contents fold away above the text and the rest goes to the end. The fold is
+// done with a class, not by closing the <details>, so that the page is already
+// in its final shape when it is first drawn.
 import type { MarkdownHeading } from "astro";
 
 interface Props {
@@ -118,11 +120,13 @@ const headings = Astro.props.headings.filter((heading) => heading.depth === 2 ||
     // Mark the link for the section nearest the top of the view.
     const contents = document.querySelector<HTMLElement>(".contents");
     if (contents) {
-        // In the margin it is always open; folded away it starts closed.
+        // In the margin the list always shows. On a narrow screen it is folded away
+        // by the stylesheet, so nothing moves as the page loads, and the title opens it.
         const beside = matchMedia("(min-width: 72rem)");
-        const fold = () => contents.toggleAttribute("open", beside.matches);
-        beside.addEventListener("change", fold);
-        fold();
+        contents.querySelector("summary")?.addEventListener("click", (event) => {
+            event.preventDefault();
+            if (!beside.matches) contents.classList.toggle("unfolded");
+        });
 
         const links = new Map<Element, HTMLAnchorElement>();
         for (const link of contents.querySelectorAll<HTMLAnchorElement>("ol a")) {

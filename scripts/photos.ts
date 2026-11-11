@@ -8,7 +8,8 @@
 // Each new picture is saved into public/photos/ as an AVIF, upright and at
 // most 2000 px on its long edge, with nothing embedded in it: the date it was
 // taken is noted first, and everything else the camera wrote (location,
-// camera, serial number) is thrown away. The original moves to photos/added/.
+// camera, serial number) is thrown away. A second, smaller copy goes in
+// public/photos/s/ for small screens. The original moves to photos/added/.
 // Nothing in photos/ is ever committed.
 //
 // Pictures that are not photographs of mine (memes, screenshots, shitposts)
@@ -33,6 +34,9 @@ import { root, slug as words, stem } from "./lib";
 const INBOX = join(root, "photos");
 const ADDED = join(INBOX, "added");
 const OUT = join(root, "public/photos");
+// A smaller copy of each picture, for phones: 1200 px on its long edge.
+const SMALL = join(OUT, "s");
+const SMALL_EDGE = 1200;
 const DATA = join(root, "src/data/photos.json");
 const PICTURE = /\.(jpe?g|png|webp|avif|gif|tiff?|heic|heif|dng)$/i;
 
@@ -61,7 +65,10 @@ const before = JSON.stringify(photos);
 
 // A photo whose picture has been deleted is off the site.
 const present = new Set(await names(OUT));
-for (const photo of photos.filter((candidate) => !present.has(candidate.file))) console.log(`removed  ${photo.file}`);
+for (const photo of photos.filter((candidate) => !present.has(candidate.file))) {
+    await rm(join(SMALL, photo.file), { force: true });
+    console.log(`removed  ${photo.file}`);
+}
 photos = photos.filter((photo) => present.has(photo.file));
 
 const waiting = await names(INBOX);
@@ -69,6 +76,7 @@ const pictures = waiting.filter((name) => PICTURE.test(name));
 const notes = new Map(waiting.filter((name) => /\.txt$/i.test(name)).map((name) => [slug(name), name]));
 if (pictures.length + notes.size > 0) await mkdir(ADDED, { recursive: true });
 if (pictures.length > 0) await mkdir(OUT, { recursive: true });
+await mkdir(SMALL, { recursive: true });
 
 async function add(name: string, shitpost: boolean): Promise<void> {
     const folder = shitpost ? join(INBOX, "shitposts") : INBOX;
@@ -82,6 +90,7 @@ async function add(name: string, shitpost: boolean): Promise<void> {
         const upright = picture.rotate().resize({ width: 2000, height: 2000, fit: "inside", withoutEnlargement: true });
         // Effort 2: a little larger than the slowest setting would give, and several times quicker to make.
         const { width, height } = await upright.clone().avif({ quality: 58, effort: 2 }).toFile(join(OUT, file));
+        await upright.clone().resize({ width: SMALL_EDGE, height: SMALL_EDGE, fit: "inside", withoutEnlargement: true }).avif({ quality: 58, effort: 2 }).toFile(join(SMALL, file));
         // One color, shown where the picture will be until it arrives.
         const { dominant } = await upright.clone().resize(32).stats();
         const color = `#${[dominant.r, dominant.g, dominant.b].map((part) => part.toString(16).padStart(2, "0")).join("")}`;
@@ -111,6 +120,18 @@ const queue: [string, boolean][] = [...pictures.map((name): [string, boolean] =>
 await Promise.all(
     Array.from({ length: 6 }, async () => {
         for (let next = queue.shift(); next; next = queue.shift()) await add(...next);
+    }),
+);
+
+// Any picture already on the site that has no smaller copy yet gets one, made from the full one.
+const small = new Set(await names(SMALL));
+const lacking = photos.filter((photo) => !small.has(photo.file));
+await Promise.all(
+    Array.from({ length: 6 }, async () => {
+        for (let photo = lacking.shift(); photo; photo = lacking.shift()) {
+            await sharp(join(OUT, photo.file)).resize({ width: SMALL_EDGE, height: SMALL_EDGE, fit: "inside", withoutEnlargement: true }).avif({ quality: 58, effort: 2 }).toFile(join(SMALL, photo.file));
+            console.log(`smaller  ${photo.file}`);
+        }
     }),
 );
 

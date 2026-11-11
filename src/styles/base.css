@@ -578,6 +578,7 @@ h1 + .about {
 @media (pointer: coarse) {
     .site-header ul a,
     .site-footer ul a,
+    .site-footer .commit,
     .site-name {
         display: inline-block;
         padding-block: 0.3rem;

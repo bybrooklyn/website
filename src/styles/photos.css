@@ -22,6 +22,12 @@
     border-radius: var(--radius);
 }
 
+/* Standing in for a picture still on its way: its shape, in its main color. */
+.photo-frame img.waiting {
+    height: 100%;
+    aspect-ratio: var(--shape);
+}
+
 /* Before the first picture is chosen there is nothing to show. */
 .photo-frame img:not([src]) {
     visibility: hidden;

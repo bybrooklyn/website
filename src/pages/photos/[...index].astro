@@ -14,8 +14,12 @@ import { photos } from "../../lib/photos";
 // at all until there is a photo to show.
 export const getStaticPaths = (() => (photos.length > 0 ? [{ params: { index: undefined } }] : [])) satisfies GetStaticPaths;
 
+// Two sizes of each picture: the browser takes the smaller one on a small screen.
+const SMALL_EDGE = 1200;
+const sizes = "(max-width: 40rem) 100vw, 80vw";
 const all = photos.map((photo) => ({
     src: `/photos/${photo.file}`,
+    srcset: `/photos/s/${photo.file} ${Math.min(photo.width, Math.round((photo.width * SMALL_EDGE) / Math.max(photo.width, photo.height)))}w, /photos/${photo.file} ${photo.width}w`,
     width: photo.width,
     height: photo.height,
     color: photo.color,
@@ -34,11 +38,11 @@ const count = (set: string) => all.filter((photo) => photo.set === set).length;
         <h1>photos</h1>
     </div>
 
-    <figure class="photo">
+    <figure class="photo" data-sizes={sizes}>
         <div class="photo-frame">
             <img alt="" />
             <noscript>
-                <img src={first.src} width={first.width} height={first.height} alt={first.title} style={`background-color:${first.color}`} />
+                <img src={first.src} srcset={first.srcset} {sizes} width={first.width} height={first.height} alt={first.title} style={`background-color:${first.color}`} />
             </noscript>
         </div>
         <figcaption>
@@ -66,6 +70,7 @@ const count = (set: string) => all.filter((photo) => photo.set === set).length;
 <script>
     interface Shown {
         src: string;
+        srcset: string;
         width: number;
         height: number;
         color: string;
@@ -81,6 +86,8 @@ const count = (set: string) => all.filter((photo) => photo.set === set).length;
     const buttons = document.querySelector<HTMLElement>(".photo-buttons");
     const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
     const LEAVE = 240;
+    // One clear pixel, standing in for a picture that has not arrived.
+    const BLANK = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
 
     if (figure && image && buttons && all.length > 0) {
         let set = "photos";
@@ -101,9 +108,13 @@ const count = (set: string) => all.filter((photo) => photo.set === set).length;
         };
 
         // Resolves once the picture is fetched and decoded, so it can be shown whole.
-        const ready = async (src: string) => {
+        // It asks for the same size the page will, so the two share one download.
+        const sizes = figure.dataset.sizes ?? "100vw";
+        const ready = async (photo: Shown) => {
             const loading = new Image();
-            loading.src = src;
+            loading.sizes = sizes;
+            loading.srcset = photo.srcset;
+            loading.src = photo.src;
             try {
                 await loading.decode();
             } catch {
@@ -118,18 +129,35 @@ const count = (set: string) => all.filter((photo) => photo.set === set).length;
             if (busy) return;
             busy = true;
             const photo = all[index]!;
-            const loaded = ready(photo.src);
+            const loaded = ready(photo).then(() => true);
             if (image.src && !still) {
                 figure.dataset.state = "leaving";
                 await pause(LEAVE);
             }
-            await loaded;
+            // A picture that is slow to arrive is not waited for: its place is shown at
+            // once, in its shape and main color, and the picture fills it when it comes.
+            const here = await Promise.race([loaded, pause(image.src ? 150 : 0).then(() => false)]);
             figure.dataset.state = "arriving";
             image.style.backgroundColor = photo.color;
+            image.style.setProperty("--shape", `${photo.width} / ${photo.height}`);
             image.width = photo.width;
             image.height = photo.height;
             image.alt = photo.title;
-            image.src = photo.src;
+            const put = () => {
+                image.classList.remove("waiting");
+                image.sizes = sizes;
+                image.srcset = photo.srcset;
+                image.src = photo.src;
+            };
+            if (here) put();
+            else {
+                image.classList.add("waiting");
+                image.removeAttribute("srcset");
+                image.src = BLANK;
+                void loaded.then(() => {
+                    if (image.alt === photo.title && image.classList.contains("waiting")) put();
+                });
+            }
             document.querySelector(".photo-title")!.textContent = photo.title;
             document.querySelector(".photo-caption")!.textContent = photo.caption;
             document.querySelector(".photo-taken")!.textContent = photo.taken;
@@ -138,7 +166,7 @@ const count = (set: string) => all.filter((photo) => photo.set === set).length;
             delete figure.dataset.state;
             // Fetch the one after it now, so "another" never waits on the network.
             next = draw(index);
-            void ready(all[next]!.src);
+            void ready(all[next]!);
             busy = false;
         };
 

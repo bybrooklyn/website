@@ -180,6 +180,41 @@
     color: var(--muted);
 }
 
+.contents summary {
+    list-style: none;
+}
+
+.contents summary::-webkit-details-marker {
+    display: none;
+}
+
+/* Narrow: the list is folded until the title is pressed. Without scripts it is simply shown. */
+@media (max-width: 71.99rem) {
+    .contents summary::before {
+        content: "▸";
+        display: inline-block;
+        width: 1.1em;
+    }
+
+    .contents.unfolded summary::before {
+        content: "▾";
+    }
+
+    .contents:not(.unfolded) > ol {
+        display: none;
+    }
+
+    @media (scripting: none) {
+        .contents:not(.unfolded) > ol {
+            display: block;
+        }
+
+        .contents summary::before {
+            content: none;
+        }
+    }
+}
+
 /* The page's title. Folded away on a narrow screen it is only the label that opens the list. */
 .contents summary a {
     color: inherit;
