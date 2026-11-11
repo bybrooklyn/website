@@ -19,5 +19,9 @@
 /assets/*
   Cache-Control: public, max-age=86400, stale-while-revalidate=604800
 
+# Photographs keep their name for good, so a week is safe.
+/photos/*
+  Cache-Control: public, max-age=604800
+
 /resume/*.pdf
   Cache-Control: public, max-age=3600

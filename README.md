@@ -22,7 +22,7 @@ Other scripts: `langs` (language bar), `projects` (facts from GitHub), and `pyth
 | Projects | `src/content/projects/` |
 | About, setup | `src/content/pages/` |
 | Resume | `src/content/resume/resume.mdx`; its PDF is printed from the page at build time |
-| Photos | drop pictures in `photos/` and run `bun run photos`; see `scripts/photos.ts` |
+| Photos | drop pictures in `photos/` and run `bun run photos`; they land in `public/photos/` (see `scripts/photos.ts`) |
 | Intro, contact, nav | `src/data/site.ts` |
 | Colors | `src/data/theme.ts` |
 | Typefaces | `src/styles/fonts.css` |

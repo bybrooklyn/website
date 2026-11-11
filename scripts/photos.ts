@@ -5,98 +5,82 @@
 //      pier.txt.
 //   2. bun run photos   (also runs by itself before dev and build)
 //
-// Each new picture is saved into src/assets/photos/ upright, at most 3000 px
-// on its long edge, with nothing embedded in it: the date it was taken is
-// noted first, and everything else the camera wrote (location, camera, serial
-// number) is thrown away. A small image model that runs on this computer then
-// sorts it under one of the headings below. The original moves to
-// photos/added/. Nothing in photos/ is ever committed.
+// Each new picture is saved into public/photos/ as an AVIF, upright and at
+// most 2000 px on its long edge, with nothing embedded in it: the date it was
+// taken is noted first, and everything else the camera wrote (location,
+// camera, serial number) is thrown away. The original moves to photos/added/.
+// Nothing in photos/ is ever committed.
 //
-// To take a photo off the site, delete its file from src/assets/photos/.
+// To take a photo off the site, delete its file from public/photos/.
 // To change a caption, put a text file with the photo's name in photos/.
 //
 // A screenshot for the setup page goes in photos/setup/, named desktop. It
-// gets the same treatment and lands in src/assets/setup/.
+// gets the same cleaning and lands in src/assets/setup/.
 
-import { mkdir, readdir, rename } from "node:fs/promises";
-import { homedir } from "node:os";
+import { $ } from "bun";
+import { mkdir, readdir, rename, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
-import sharp from "sharp";
-import type { Entry as Photo } from "../src/lib/photos";
+import sharp, { type Sharp } from "sharp";
+import type { Photo } from "../src/lib/photos";
 import { readExif } from "./exif";
 import { root, slug as words, stem } from "./lib";
 
-/** The headings photos are sorted under, and how each is described to the model. Edit freely. */
-const GROUPS: Record<string, string> = {
-    nature: "a photo of nature, plants, trees or a landscape",
-    city: "a photo of a city, a street or buildings",
-    people: "a photo of a person or people",
-    animals: "a photo of an animal",
-    sky: "a photo of the sky, clouds, the sun or the moon",
-    water: "a photo of the sea, a lake or a river",
-    indoors: "a photo taken indoors, of a room or objects",
-};
-
 const INBOX = join(root, "photos");
 const ADDED = join(INBOX, "added");
-const OUT = join(root, "src/assets/photos");
+const OUT = join(root, "public/photos");
 const DATA = join(root, "src/data/photos.json");
+const PICTURE = /\.(jpe?g|png|webp|avif|gif|tiff?|heic|heif|dng)$/i;
 
 const slug = (name: string) => words(stem(name)) || "photo";
 const names = async (folder: string) => (await readdir(folder, { withFileTypes: true }).catch(() => [])).filter((entry) => entry.isFile()).map((entry) => entry.name);
+
+/**
+ * Open a picture. What sharp cannot read itself (iPhone HEIC, camera DNG) is
+ * first turned into a JPEG by ImageMagick, which keeps the date it was taken.
+ */
+async function open(source: string): Promise<{ picture: Sharp; exif?: Buffer; clean: () => Promise<void> }> {
+    try {
+        if (/\.(heic|heif|dng)$/i.test(source)) throw new Error("not for sharp");
+        const picture = sharp(source, { failOn: "none" });
+        return { picture, exif: (await picture.metadata()).exif, clean: async () => {} };
+    } catch {
+        const converted = join(tmpdir(), `photo-${process.pid}-${crypto.randomUUID()}.jpg`);
+        await $`magick ${source} -quality 95 ${converted}`.quiet();
+        const picture = sharp(converted, { failOn: "none" });
+        return { picture, exif: (await picture.metadata()).exif, clean: () => rm(converted, { force: true }) };
+    }
+}
 
 let photos = ((await Bun.file(DATA).json()) as { photos: Photo[] }).photos;
 const before = JSON.stringify(photos);
 
 // A photo whose picture has been deleted is off the site.
 const present = new Set(await names(OUT));
-const gone = photos.filter((photo) => !present.has(photo.file));
+for (const photo of photos.filter((candidate) => !present.has(candidate.file))) console.log(`removed  ${photo.file}`);
 photos = photos.filter((photo) => present.has(photo.file));
-for (const photo of gone) console.log(`removed  ${photo.file}`);
 
 const waiting = await names(INBOX);
-const pictures = waiting.filter((name) => /\.(jpe?g|png|webp|avif|tiff?|heic|heif)$/i.test(name));
+const pictures = waiting.filter((name) => PICTURE.test(name));
 const notes = new Map(waiting.filter((name) => /\.txt$/i.test(name)).map((name) => [slug(name), name]));
 if (pictures.length + notes.size > 0) await mkdir(ADDED, { recursive: true });
+if (pictures.length > 0) await mkdir(OUT, { recursive: true });
 
-/** Ask the model which heading a picture belongs under. Loaded only when there is something new. */
-let sorter: ((path: string) => Promise<string | undefined>) | undefined;
-async function sort(path: string): Promise<string | undefined> {
-    if (!sorter) {
-        try {
-            const { env, pipeline } = await import("@huggingface/transformers");
-            // Kept outside node_modules so reinstalling packages does not fetch it again (about 290 MB, once).
-            env.cacheDir = join(homedir(), ".cache", "bybrooklyn-photos");
-            const classify = await pipeline("zero-shot-image-classification", "Xenova/clip-vit-base-patch32", { dtype: "fp16" });
-            const labels = Object.values(GROUPS);
-            sorter = async (picture) => {
-                const scores = (await classify(picture, labels)) as { label: string; score: number }[];
-                const best = scores.sort((a, b) => b.score - a.score)[0];
-                return Object.keys(GROUPS).find((group) => GROUPS[group] === best?.label);
-            };
-        } catch (error) {
-            console.log(`The sorting model could not be loaded (${error instanceof Error ? error.message.split("\n")[0] : error}).`);
-            console.log("Photos are still added, under no heading. Run this again when online to sort them.");
-            sorter = async () => undefined;
-        }
-    }
-    return sorter(path);
-}
-
-for (const name of pictures) {
+async function add(name: string): Promise<void> {
     const source = join(INBOX, name);
     try {
-        const picture = sharp(source, { failOn: "none" });
-        const { taken } = readExif((await picture.metadata()).exif);
-        let file = `${slug(name)}.jpg`;
-        for (let copy = 2; present.has(file); copy++) file = `${slug(name)}-${copy}.jpg`;
-        await mkdir(OUT, { recursive: true });
-        await picture
-            .rotate()
-            .resize({ width: 3000, height: 3000, fit: "inside", withoutEnlargement: true })
-            .jpeg({ quality: 88, mozjpeg: true })
-            .toFile(join(OUT, file));
+        const { picture, exif, clean } = await open(source);
+        const { taken } = readExif(exif);
+        let file = `${slug(name)}.avif`;
+        for (let copy = 2; present.has(file); copy++) file = `${slug(name)}-${copy}.avif`;
         present.add(file);
+        const upright = picture.rotate().resize({ width: 2000, height: 2000, fit: "inside", withoutEnlargement: true });
+        // Effort 2: a little larger than the slowest setting would give, and several times quicker to make.
+        const { width, height } = await upright.clone().avif({ quality: 58, effort: 2 }).toFile(join(OUT, file));
+        // One color, shown where the picture will be until it arrives.
+        const { dominant } = await upright.clone().resize(32).stats();
+        const color = `#${[dominant.r, dominant.g, dominant.b].map((part) => part.toString(16).padStart(2, "0")).join("")}`;
+        await clean();
 
         const note = notes.get(slug(name));
         const caption = note ? (await Bun.file(join(INBOX, note)).text()).trim() : "";
@@ -104,36 +88,25 @@ for (const name of pictures) {
             await rename(join(INBOX, note), join(ADDED, note));
             notes.delete(slug(name));
         }
-        const group = await sort(join(OUT, file));
-        photos.push({ file, group, taken, caption: caption || undefined });
+        photos.push({ file, width, height, color, taken, caption: caption || undefined });
         await rename(source, join(ADDED, name));
-        console.log(`added    ${file}  ${group ?? "(unsorted)"}${taken ? `  ${taken}` : "  (no date in the file)"}${caption ? "  with caption" : ""}`);
-    } catch {
-        console.log(`skipped  ${name}: it could not be read as a picture. HEIC and camera RAW files need exporting to JPEG first.`);
+        console.log(`added    ${file}${taken ? `  ${taken}` : "  (no date in the file)"}${caption ? "  with caption" : ""}`);
+    } catch (error) {
+        console.log(`skipped  ${name}: it could not be read as a picture (${error instanceof Error ? error.message.split("\n")[0] : error}).`);
     }
 }
 
-// Pictures for the setup page: cleaned the same way, kept under their own names, never sorted.
-for (const name of (await names(join(INBOX, "setup"))).filter((file) => /\.(jpe?g|png|webp|avif|tiff?)$/i.test(file))) {
-    const source = join(INBOX, "setup", name);
-    try {
-        await mkdir(join(root, "src/assets/setup"), { recursive: true });
-        await sharp(source, { failOn: "none" })
-            .rotate()
-            .resize({ width: 3000, height: 3000, fit: "inside", withoutEnlargement: true })
-            .jpeg({ quality: 88, mozjpeg: true })
-            .toFile(join(root, "src/assets/setup", `${slug(name)}.jpg`));
-        await mkdir(join(ADDED, "setup"), { recursive: true });
-        await rename(source, join(ADDED, "setup", name));
-        console.log(`setup    ${slug(name)}.jpg`);
-    } catch {
-        console.log(`skipped  setup/${name}: it could not be read as a picture.`);
-    }
-}
+// Several at a time: encoding is the slow part and each one mostly uses a single core.
+const queue = [...pictures];
+await Promise.all(
+    Array.from({ length: 6 }, async () => {
+        for (let name = queue.shift(); name; name = queue.shift()) await add(name);
+    }),
+);
 
 // A text file on its own changes the caption of a photo already on the site.
 for (const [key, note] of notes) {
-    const photo = photos.find((candidate) => candidate.file === `${key}.jpg`);
+    const photo = photos.find((candidate) => candidate.file === `${key}.avif`);
     if (!photo) {
         console.log(`waiting  ${note}: no photo with that name yet.`);
         continue;
@@ -143,9 +116,20 @@ for (const [key, note] of notes) {
     console.log(`caption  ${photo.file}`);
 }
 
-// Photos added while the model was unavailable get sorted once it is.
-if (pictures.length > 0) {
-    for (const photo of photos) if (!photo.group) photo.group = await sort(join(OUT, photo.file));
+// The screenshot for the setup page: cleaned the same way, kept under its own name.
+for (const name of (await names(join(INBOX, "setup"))).filter((file) => PICTURE.test(file))) {
+    const source = join(INBOX, "setup", name);
+    try {
+        const { picture, clean } = await open(source);
+        await mkdir(join(root, "src/assets/setup"), { recursive: true });
+        await picture.rotate().resize({ width: 3000, height: 3000, fit: "inside", withoutEnlargement: true }).jpeg({ quality: 88, mozjpeg: true }).toFile(join(root, "src/assets/setup", `${slug(name)}.jpg`));
+        await clean();
+        await mkdir(join(ADDED, "setup"), { recursive: true });
+        await rename(source, join(ADDED, "setup", name));
+        console.log(`setup    ${slug(name)}.jpg`);
+    } catch {
+        console.log(`skipped  setup/${name}: it could not be read as a picture.`);
+    }
 }
 
 if (JSON.stringify(photos) !== before) await Bun.write(DATA, `${JSON.stringify({ photos }, null, 4)}\n`);

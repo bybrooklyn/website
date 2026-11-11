@@ -28,7 +28,6 @@
         "typescript": "6"
     },
     "devDependencies": {
-        "@huggingface/transformers": "^4.3.2",
         "@types/bun": "^1.4.4",
         "simple-icons": "^16.37.0",
         "wrangler": "4.160.0"

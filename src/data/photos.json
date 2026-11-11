@@ -1,3 +1,955 @@
 {
-    "photos": []
+    "photos": [
+        {
+            "file": "20251002-081031.avif",
+            "width": 2000,
+            "height": 1126,
+            "color": "#687888",
+            "taken": "2025-10-02"
+        },
+        {
+            "file": "20251010-152449.avif",
+            "width": 2000,
+            "height": 1126,
+            "color": "#a89888",
+            "taken": "2025-10-10"
+        },
+        {
+            "file": "20251020-170031.avif",
+            "width": 2000,
+            "height": 1126,
+            "color": "#181818",
+            "taken": "2025-10-20"
+        },
+        {
+            "file": "20251103-094748.avif",
+            "width": 1024,
+            "height": 1536,
+            "color": "#181818",
+            "taken": "2025-11-03"
+        },
+        {
+            "file": "20251020-170122.avif",
+            "width": 2000,
+            "height": 1126,
+            "color": "#181818",
+            "taken": "2025-10-20"
+        },
+        {
+            "file": "20251026-164035.avif",
+            "width": 2000,
+            "height": 1126,
+            "color": "#181818",
+            "taken": "2025-10-26"
+        },
+        {
+            "file": "20251030-154348.avif",
+            "width": 2000,
+            "height": 1126,
+            "color": "#784828",
+            "taken": "2025-10-30"
+        },
+        {
+            "file": "20251007-072912.avif",
+            "width": 1125,
+            "height": 2000,
+            "color": "#482818",
+            "taken": "2025-10-07"
+        },
+        {
+            "file": "20251109-135135.avif",
+            "width": 2000,
+            "height": 1126,
+            "color": "#989898",
+            "taken": "2025-11-09"
+        },
+        {
+            "file": "20251109-140131.avif",
+            "width": 2000,
+            "height": 1126,
+            "color": "#282828",
+            "taken": "2025-11-09"
+        },
+        {
+            "file": "20251109-133143.avif",
+            "width": 2000,
+            "height": 1126,
+            "color": "#080808",
+            "taken": "2025-11-09"
+        },
+        {
+            "file": "20251109-140144.avif",
+            "width": 2000,
+            "height": 1126,
+            "color": "#282828",
+            "taken": "2025-11-09"
+        },
+        {
+            "file": "20251109-121721.avif",
+            "width": 2000,
+            "height": 1126,
+            "color": "#383838",
+            "taken": "2025-11-09"
+        },
+        {
+            "file": "20251212-072541.avif",
+            "width": 2000,
+            "height": 1126,
+            "color": "#181818",
+            "taken": "2025-12-12"
+        },
+        {
+            "file": "20251227-172737.avif",
+            "width": 2000,
+            "height": 1126,
+            "color": "#282828",
+            "taken": "2025-12-27"
+        },
+        {
+            "file": "20251214-101836.avif",
+            "width": 2000,
+            "height": 1126,
+            "color": "#c8d8e8",
+            "taken": "2025-12-14"
+        },
+        {
+            "file": "20251227-203625.avif",
+            "width": 2000,
+            "height": 1126,
+            "color": "#282828",
+            "taken": "2025-12-27"
+        },
+        {
+            "file": "20260103-162659.avif",
+            "width": 1126,
+            "height": 2000,
+            "color": "#080818",
+            "taken": "2026-01-03"
+        },
+        {
+            "file": "20260319-183925.avif",
+            "width": 2000,
+            "height": 1126,
+            "color": "#383838",
+            "taken": "2026-03-19"
+        },
+        {
+            "file": "20260117-115044.avif",
+            "width": 1126,
+            "height": 2000,
+            "color": "#888888",
+            "taken": "2026-01-17"
+        },
+        {
+            "file": "20260104-155603.avif",
+            "width": 2000,
+            "height": 1126,
+            "color": "#282818",
+            "taken": "2026-01-04"
+        },
+        {
+            "file": "20260411-110217.avif",
+            "width": 2000,
+            "height": 1126,
+            "color": "#4888d8",
+            "taken": "2026-04-11"
+        },
+        {
+            "file": "20260414-130621.avif",
+            "width": 1126,
+            "height": 2000,
+            "color": "#a8a8a8",
+            "taken": "2026-04-14"
+        },
+        {
+            "file": "20260408-143238.avif",
+            "width": 1126,
+            "height": 2000,
+            "color": "#686868",
+            "taken": "2026-04-08"
+        },
+        {
+            "file": "20260408-142241.avif",
+            "width": 2000,
+            "height": 1126,
+            "color": "#080808",
+            "taken": "2026-04-08"
+        },
+        {
+            "file": "20260331-185528.avif",
+            "width": 2000,
+            "height": 1125,
+            "color": "#8898b8",
+            "taken": "2026-03-31"
+        },
+        {
+            "file": "20260331-185523.avif",
+            "width": 2000,
+            "height": 1125,
+            "color": "#282828",
+            "taken": "2026-03-31"
+        },
+        {
+            "file": "20260502-191008.avif",
+            "width": 2000,
+            "height": 1126,
+            "color": "#080808",
+            "taken": "2026-05-02"
+        },
+        {
+            "file": "20260422-201231.avif",
+            "width": 2000,
+            "height": 1126,
+            "color": "#080808",
+            "taken": "2026-04-22"
+        },
+        {
+            "file": "20260417-142506.avif",
+            "width": 1126,
+            "height": 2000,
+            "color": "#382828",
+            "taken": "2026-04-17"
+        },
+        {
+            "file": "20260423-142328.avif",
+            "width": 2000,
+            "height": 1126,
+            "color": "#88a8d8",
+            "taken": "2026-04-23"
+        },
+        {
+            "file": "20260503-135922.avif",
+            "width": 2000,
+            "height": 1126,
+            "color": "#98a8b8",
+            "taken": "2026-05-03"
+        },
+        {
+            "file": "20260503-135702.avif",
+            "width": 2000,
+            "height": 1126,
+            "color": "#b8c8d8",
+            "taken": "2026-05-03"
+        },
+        {
+            "file": "20260510-122413.avif",
+            "width": 2000,
+            "height": 1126,
+            "color": "#a8b8c8",
+            "taken": "2026-05-10"
+        },
+        {
+            "file": "20260509-173542.avif",
+            "width": 2000,
+            "height": 1126,
+            "color": "#c8c8d8",
+            "taken": "2026-05-09"
+        },
+        {
+            "file": "20260510-130124.avif",
+            "width": 2000,
+            "height": 1126,
+            "color": "#7888a8",
+            "taken": "2026-05-10"
+        },
+        {
+            "file": "20260516-194627.avif",
+            "width": 2000,
+            "height": 1126,
+            "color": "#8898a8",
+            "taken": "2026-05-16"
+        },
+        {
+            "file": "20260629-212800.avif",
+            "width": 2000,
+            "height": 1126,
+            "color": "#080808",
+            "taken": "2026-06-29"
+        },
+        {
+            "file": "20260516-161037.avif",
+            "width": 2000,
+            "height": 1126,
+            "color": "#282818",
+            "taken": "2026-05-16"
+        },
+        {
+            "file": "20260516-162755.avif",
+            "width": 1126,
+            "height": 2000,
+            "color": "#282818",
+            "taken": "2026-05-16"
+        },
+        {
+            "file": "20260607-054029.avif",
+            "width": 2000,
+            "height": 1126,
+            "color": "#383838",
+            "taken": "2026-06-07"
+        },
+        {
+            "file": "20260702-125308.avif",
+            "width": 2000,
+            "height": 1126,
+            "color": "#688868",
+            "taken": "2026-07-02"
+        },
+        {
+            "file": "39c7524b-f2d8-4aee-b368-894c7cea3265.avif",
+            "width": 1125,
+            "height": 2000,
+            "color": "#786838",
+            "taken": "2026-10-03"
+        },
+        {
+            "file": "20260711-194551.avif",
+            "width": 2000,
+            "height": 1126,
+            "color": "#383828",
+            "taken": "2026-07-11"
+        },
+        {
+            "file": "9b3c6c5c-4d7b-4406-a19a-01b62a676b66.avif",
+            "width": 1125,
+            "height": 2000,
+            "color": "#98a898",
+            "taken": "2026-10-17"
+        },
+        {
+            "file": "3e83f448-5c85-4477-bafb-c0d8f52f220a.avif",
+            "width": 1125,
+            "height": 2000,
+            "color": "#585858",
+            "taken": "2026-09-19"
+        },
+        {
+            "file": "9d494781-8dee-40bb-b183-99d2114a3690.avif",
+            "width": 1125,
+            "height": 2000,
+            "color": "#282828",
+            "taken": "2026-10-11"
+        },
+        {
+            "file": "bed9a768-5e2b-47a5-8825-e08ac7d26274.avif",
+            "width": 1125,
+            "height": 2000,
+            "color": "#685858",
+            "taken": "2026-10-11"
+        },
+        {
+            "file": "bb6ffc2c-3c77-483a-ad75-b3513cdfb4ba.avif",
+            "width": 1125,
+            "height": 2000,
+            "color": "#283848",
+            "taken": "2026-10-18"
+        },
+        {
+            "file": "be286ef6-a96e-437c-873b-8a8ffbda632e.avif",
+            "width": 1125,
+            "height": 2000,
+            "color": "#989898",
+            "taken": "2026-10-17"
+        },
+        {
+            "file": "d8f668ee-2edf-46e3-bf42-d47f43072aef.avif",
+            "width": 1125,
+            "height": 2000,
+            "color": "#586838",
+            "taken": "2026-10-17"
+        },
+        {
+            "file": "d5ee67f3-64dd-4509-b47b-83d0b07ca6bc.avif",
+            "width": 1125,
+            "height": 2000,
+            "color": "#283828",
+            "taken": "2026-10-03"
+        },
+        {
+            "file": "e16255a1-32f9-4c08-af9a-ec4cbd76224b.avif",
+            "width": 1125,
+            "height": 2000,
+            "color": "#586818",
+            "taken": "2026-10-17"
+        },
+        {
+            "file": "e29efd5c-62e6-4caf-a230-c363c681cc81.avif",
+            "width": 1125,
+            "height": 2000,
+            "color": "#484848",
+            "taken": "2026-10-03"
+        },
+        {
+            "file": "e17a8d66-3c30-462d-8edd-85a758d497dd.avif",
+            "width": 1500,
+            "height": 2000,
+            "color": "#e8f808",
+            "taken": "2026-03-22"
+        },
+        {
+            "file": "e71c25aa-4282-4a72-9668-d8f1f2c8ea93.avif",
+            "width": 1125,
+            "height": 2000,
+            "color": "#485838",
+            "taken": "2026-09-19"
+        },
+        {
+            "file": "img-0172.avif",
+            "width": 2000,
+            "height": 1500,
+            "color": "#c8b8a8",
+            "taken": "2026-07-18"
+        },
+        {
+            "file": "img-0542.avif",
+            "width": 2000,
+            "height": 1500,
+            "color": "#7898d8",
+            "taken": "2026-07-26"
+        },
+        {
+            "file": "img-0564.avif",
+            "width": 2000,
+            "height": 1500,
+            "color": "#080808",
+            "taken": "2026-07-26"
+        },
+        {
+            "file": "img-0128.avif",
+            "width": 1500,
+            "height": 2000,
+            "color": "#282838",
+            "taken": "2026-07-17"
+        },
+        {
+            "file": "img-0561.avif",
+            "width": 2000,
+            "height": 1500,
+            "color": "#b8b8b8",
+            "taken": "2026-07-26"
+        },
+        {
+            "file": "img-0860.avif",
+            "width": 2000,
+            "height": 1500,
+            "color": "#98b8e8",
+            "taken": "2026-08-07"
+        },
+        {
+            "file": "img-0913.avif",
+            "width": 2000,
+            "height": 1500,
+            "color": "#989898",
+            "taken": "2026-08-09"
+        },
+        {
+            "file": "img-0903.avif",
+            "width": 2000,
+            "height": 1500,
+            "color": "#8898b8",
+            "taken": "2026-08-09"
+        },
+        {
+            "file": "img-0901.avif",
+            "width": 2000,
+            "height": 1500,
+            "color": "#a8b8c8",
+            "taken": "2026-08-09"
+        },
+        {
+            "file": "img-0998.avif",
+            "width": 2000,
+            "height": 1500,
+            "color": "#a8c8d8",
+            "taken": "2026-08-09"
+        },
+        {
+            "file": "img-1068.avif",
+            "width": 1500,
+            "height": 2000,
+            "color": "#f8f8f8",
+            "taken": "2026-08-11"
+        },
+        {
+            "file": "img-1011.avif",
+            "width": 2000,
+            "height": 1125,
+            "color": "#b8c8d8",
+            "taken": "2026-08-09"
+        },
+        {
+            "file": "img-1215.avif",
+            "width": 2000,
+            "height": 1500,
+            "color": "#482818",
+            "taken": "2026-08-14"
+        },
+        {
+            "file": "img-1507.avif",
+            "width": 2000,
+            "height": 1500,
+            "color": "#282828",
+            "taken": "2026-08-23"
+        },
+        {
+            "file": "img-1083.avif",
+            "width": 2000,
+            "height": 1500,
+            "color": "#e8e8e8",
+            "taken": "2026-08-11"
+        },
+        {
+            "file": "img-1226.avif",
+            "width": 2000,
+            "height": 1500,
+            "color": "#582818",
+            "taken": "2026-08-14"
+        },
+        {
+            "file": "img-1476.avif",
+            "width": 1500,
+            "height": 2000,
+            "color": "#080808",
+            "taken": "2026-08-23"
+        },
+        {
+            "file": "img-1512.avif",
+            "width": 1500,
+            "height": 2000,
+            "color": "#484848",
+            "taken": "2026-08-23"
+        },
+        {
+            "file": "img-1519.avif",
+            "width": 2000,
+            "height": 1500,
+            "color": "#687848",
+            "taken": "2026-08-23"
+        },
+        {
+            "file": "img-1567.avif",
+            "width": 2000,
+            "height": 1500,
+            "color": "#687848",
+            "taken": "2026-08-23"
+        },
+        {
+            "file": "img-1524.avif",
+            "width": 1500,
+            "height": 2000,
+            "color": "#484828",
+            "taken": "2026-08-23"
+        },
+        {
+            "file": "img-1527.avif",
+            "width": 2000,
+            "height": 1500,
+            "color": "#383828",
+            "taken": "2026-08-23"
+        },
+        {
+            "file": "img-1682.avif",
+            "width": 2000,
+            "height": 1500,
+            "color": "#283858",
+            "taken": "2026-08-25"
+        },
+        {
+            "file": "img-1563.avif",
+            "width": 2000,
+            "height": 1500,
+            "color": "#9898a8",
+            "taken": "2026-08-23"
+        },
+        {
+            "file": "img-1721.avif",
+            "width": 1500,
+            "height": 2000,
+            "color": "#b8c8d8"
+        },
+        {
+            "file": "img-1697.avif",
+            "width": 1500,
+            "height": 2000,
+            "color": "#684838",
+            "taken": "2026-08-25"
+        },
+        {
+            "file": "img-1707.avif",
+            "width": 2000,
+            "height": 1500,
+            "color": "#888888",
+            "taken": "2026-08-25"
+        },
+        {
+            "file": "img-1708.avif",
+            "width": 2000,
+            "height": 1500,
+            "color": "#080808",
+            "taken": "2026-08-25"
+        },
+        {
+            "file": "img-1857.avif",
+            "width": 1500,
+            "height": 2000,
+            "color": "#383828",
+            "taken": "2026-08-29"
+        },
+        {
+            "file": "img-1962.avif",
+            "width": 1500,
+            "height": 2000,
+            "color": "#e8d8d8",
+            "taken": "2026-08-31"
+        },
+        {
+            "file": "img-2012.avif",
+            "width": 2000,
+            "height": 1500,
+            "color": "#a8a8a8",
+            "taken": "2026-09-01"
+        },
+        {
+            "file": "img-2037.avif",
+            "width": 1500,
+            "height": 2000,
+            "color": "#080808",
+            "taken": "2026-09-02"
+        },
+        {
+            "file": "img-2020.avif",
+            "width": 2000,
+            "height": 1500,
+            "color": "#8898b8",
+            "taken": "2026-09-01"
+        },
+        {
+            "file": "img-2122.avif",
+            "width": 2000,
+            "height": 1500,
+            "color": "#484838",
+            "taken": "2026-09-05"
+        },
+        {
+            "file": "img-2119.avif",
+            "width": 2000,
+            "height": 1500,
+            "color": "#6888c8",
+            "taken": "2026-09-05"
+        },
+        {
+            "file": "img-2079.avif",
+            "width": 2000,
+            "height": 1500,
+            "color": "#383838",
+            "taken": "2026-09-04"
+        },
+        {
+            "file": "img-2331.avif",
+            "width": 2000,
+            "height": 1500,
+            "color": "#e8e8e8",
+            "taken": "2026-09-13"
+        },
+        {
+            "file": "img-2145.avif",
+            "width": 2000,
+            "height": 1500,
+            "color": "#181808",
+            "taken": "2026-09-06"
+        },
+        {
+            "file": "img-2502.avif",
+            "width": 2000,
+            "height": 1500,
+            "color": "#281818",
+            "taken": "2026-09-19"
+        },
+        {
+            "file": "img-2518.avif",
+            "width": 2000,
+            "height": 1500,
+            "color": "#383838",
+            "taken": "2026-09-19"
+        },
+        {
+            "file": "img-2155.avif",
+            "width": 2000,
+            "height": 1500,
+            "color": "#181808",
+            "taken": "2026-09-06"
+        },
+        {
+            "file": "img-2532.avif",
+            "width": 2000,
+            "height": 1500,
+            "color": "#584848",
+            "taken": "2026-09-19"
+        },
+        {
+            "file": "img-2428.avif",
+            "width": 2000,
+            "height": 1500,
+            "color": "#080808",
+            "taken": "2026-09-17"
+        },
+        {
+            "file": "img-2663.avif",
+            "width": 2000,
+            "height": 1500,
+            "color": "#483828",
+            "taken": "2026-09-24"
+        },
+        {
+            "file": "img-2674.avif",
+            "width": 2000,
+            "height": 1500,
+            "color": "#383838",
+            "taken": "2026-09-25"
+        },
+        {
+            "file": "img-2833.avif",
+            "width": 2000,
+            "height": 1500,
+            "color": "#282818",
+            "taken": "2026-09-29"
+        },
+        {
+            "file": "img-2835.avif",
+            "width": 2000,
+            "height": 1500,
+            "color": "#080808",
+            "taken": "2026-09-29"
+        },
+        {
+            "file": "img-2823.avif",
+            "width": 2000,
+            "height": 1500,
+            "color": "#d8d8d8",
+            "taken": "2026-09-29"
+        },
+        {
+            "file": "img-2600.avif",
+            "width": 2000,
+            "height": 1500,
+            "color": "#485838",
+            "taken": "2026-09-22"
+        },
+        {
+            "file": "img-2847.avif",
+            "width": 2000,
+            "height": 1500,
+            "color": "#080808",
+            "taken": "2026-09-30"
+        },
+        {
+            "file": "img-3021.avif",
+            "width": 2000,
+            "height": 1500,
+            "color": "#383828",
+            "taken": "2026-10-03"
+        },
+        {
+            "file": "img-3049.avif",
+            "width": 2000,
+            "height": 1500,
+            "color": "#080808",
+            "taken": "2026-10-03"
+        },
+        {
+            "file": "img-2980.avif",
+            "width": 2000,
+            "height": 1500,
+            "color": "#283848",
+            "taken": "2026-10-03"
+        },
+        {
+            "file": "img-2856.avif",
+            "width": 2000,
+            "height": 1500,
+            "color": "#685848",
+            "taken": "2026-09-30"
+        },
+        {
+            "file": "img-3018.avif",
+            "width": 2000,
+            "height": 1500,
+            "color": "#080808",
+            "taken": "2026-10-03"
+        },
+        {
+            "file": "img-3060.avif",
+            "width": 2000,
+            "height": 1500,
+            "color": "#080808",
+            "taken": "2026-10-03"
+        },
+        {
+            "file": "img-3222.avif",
+            "width": 1500,
+            "height": 2000,
+            "color": "#989898",
+            "taken": "2026-10-06"
+        },
+        {
+            "file": "img-3056.avif",
+            "width": 2000,
+            "height": 1500,
+            "color": "#181808",
+            "taken": "2026-10-03"
+        },
+        {
+            "file": "img-3572.avif",
+            "width": 1500,
+            "height": 2000,
+            "color": "#782828",
+            "taken": "2026-10-12"
+        },
+        {
+            "file": "img-3224.avif",
+            "width": 2000,
+            "height": 1500,
+            "color": "#888888",
+            "taken": "2026-10-06"
+        },
+        {
+            "file": "img-3257.avif",
+            "width": 2000,
+            "height": 1500,
+            "color": "#382818",
+            "taken": "2026-10-06"
+        },
+        {
+            "file": "img-3715.avif",
+            "width": 2000,
+            "height": 1500,
+            "color": "#080808",
+            "taken": "2026-10-14"
+        },
+        {
+            "file": "img-3875.avif",
+            "width": 2000,
+            "height": 1500,
+            "color": "#080808",
+            "taken": "2026-10-17"
+        },
+        {
+            "file": "img-3970.avif",
+            "width": 2000,
+            "height": 1500,
+            "color": "#989888",
+            "taken": "2026-10-17"
+        },
+        {
+            "file": "img-3579.avif",
+            "width": 2000,
+            "height": 1500,
+            "color": "#98a8e8",
+            "taken": "2026-10-12"
+        },
+        {
+            "file": "img-3903.avif",
+            "width": 2000,
+            "height": 1500,
+            "color": "#e8e8e8",
+            "taken": "2026-10-17"
+        },
+        {
+            "file": "img-3880.avif",
+            "width": 2000,
+            "height": 1500,
+            "color": "#080808",
+            "taken": "2026-10-17"
+        },
+        {
+            "file": "img-3912.avif",
+            "width": 2000,
+            "height": 1500,
+            "color": "#e8e8e8",
+            "taken": "2026-10-17"
+        },
+        {
+            "file": "img-3979.avif",
+            "width": 2000,
+            "height": 1500,
+            "color": "#080808",
+            "taken": "2026-10-17"
+        },
+        {
+            "file": "img-4519.avif",
+            "width": 1500,
+            "height": 2000,
+            "color": "#685858",
+            "taken": "2026-10-26"
+        },
+        {
+            "file": "img-4331.avif",
+            "width": 2000,
+            "height": 1500,
+            "color": "#284878",
+            "taken": "2026-10-24"
+        },
+        {
+            "file": "img-4018.avif",
+            "width": 2000,
+            "height": 1500,
+            "color": "#b8d8f8",
+            "taken": "2026-10-18"
+        },
+        {
+            "file": "img-4019.avif",
+            "width": 2000,
+            "height": 1500,
+            "color": "#383828",
+            "taken": "2026-10-18"
+        },
+        {
+            "file": "img-4977.avif",
+            "width": 2000,
+            "height": 1125,
+            "color": "#080808",
+            "taken": "2026-11-06"
+        },
+        {
+            "file": "img-4947.avif",
+            "width": 2000,
+            "height": 1500,
+            "color": "#080808",
+            "taken": "2026-11-06"
+        },
+        {
+            "file": "img-4969.avif",
+            "width": 2000,
+            "height": 1500,
+            "color": "#080808",
+            "taken": "2026-11-06"
+        },
+        {
+            "file": "img-4981.avif",
+            "width": 2000,
+            "height": 1500,
+            "color": "#d8c8c8",
+            "taken": "2026-11-06"
+        },
+        {
+            "file": "20250825-090035.avif",
+            "width": 2000,
+            "height": 1126,
+            "color": "#181818",
+            "taken": "2025-08-25"
+        },
+        {
+            "file": "20250830-224142.avif",
+            "width": 2000,
+            "height": 1126,
+            "color": "#080808",
+            "taken": "2025-08-30"
+        },
+        {
+            "file": "20250902-182920.avif",
+            "width": 1126,
+            "height": 2000,
+            "color": "#587838",
+            "taken": "2025-09-02"
+        }
+    ]
 }

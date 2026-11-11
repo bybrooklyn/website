@@ -1,31 +1,26 @@
 ---
-// /photos/: photographs, sorted under headings by what is in them, newest
-// first. Clicking one opens it large. They come from the photos/ folder; see
-// scripts/photos.ts.
-import Picture from "../../components/Picture.astro";
-import { getImage } from "astro:assets";
+// /photos/: one photograph at a time, with a button for another at random.
+// They come from the photos/ folder; see scripts/photos.ts.
 import type { GetStaticPaths } from "astro";
 import "../../styles/photos.css";
 import Base from "../../layouts/Base.astro";
 import { formatDate } from "../../lib/posts";
-import { groups, photos } from "../../lib/photos";
+import { photos } from "../../lib/photos";
 
 // A rest route with one fixed path (/photos/), so that the page is not built
 // at all until there is a photo to show.
 export const getStaticPaths = (() => (photos.length > 0 ? [{ params: { index: undefined } }] : [])) satisfies GetStaticPaths;
 
-const shown = await Promise.all(
-    groups.map(async (group) => ({
-        title: group.title,
-        photos: await Promise.all(
-            group.photos.map(async (photo) => ({
-                photo,
-                large: await getImage({ src: photo.image, width: Math.min(photo.image.width, 2000), format: "avif" }),
-                taken: photo.taken ? formatDate(new Date(photo.taken)) : "",
-            })),
-        ),
-    })),
-);
+const all = photos.map((photo) => ({
+    src: `/photos/${photo.file}`,
+    width: photo.width,
+    height: photo.height,
+    color: photo.color,
+    caption: photo.caption ?? "",
+    taken: photo.taken ? formatDate(new Date(photo.taken)) : "",
+}));
+// Without scripts the page shows this one: the newest.
+const first = all[0]!;
 ---
 
 <Base title="photos" description="Photographs by Charlotte.">
@@ -33,66 +28,92 @@ const shown = await Promise.all(
         <h1>photos</h1>
     </div>
 
-    {
-        shown.map((group) => (
-            <section class="album">
-                {group.title && <h2>{group.title}</h2>}
-                <ul class="photo-grid">
-                    {group.photos.map(({ photo, large, taken }) => (
-                        <li>
-                            <a href={large.src} data-caption={photo.caption ?? ""} data-taken={taken}>
-                                <Picture
-                                    src={photo.image}
-                                    alt={photo.caption ?? ""}
-                                    widths={[480, 960]}
-                                    sizes="(min-width: 60rem) 22rem, (min-width: 36rem) 50vw, 100vw"
-                                />
-                            </a>
-                        </li>
-                    ))}
-                </ul>
-            </section>
-        ))
-    }
+    <figure class="photo">
+        <img src={first.src} width={first.width} height={first.height} alt={first.caption} style={`background-color:${first.color}`} fetchpriority="high" />
+        <figcaption>
+            <p class="photo-caption">{first.caption}</p>
+            <p class="photo-taken note">{first.taken}</p>
+        </figcaption>
+    </figure>
 
-    <dialog class="photo-view" aria-label="Photo">
-        <img alt="" />
-        <p class="photo-caption"></p>
-        <p class="photo-taken note"></p>
-        <form method="dialog"><button aria-label="Close">close</button></form>
-    </dialog>
+    <p class="photo-buttons" hidden>
+        <button type="button" data-step="back" disabled>back</button>
+        <button type="button" data-step="another">another</button>
+        <span class="note">{all.length} photos</span>
+    </p>
+
+    <script type="application/json" id="photo-list" set:html={JSON.stringify(all)} />
 </Base>
 
 <script>
-    const view = document.querySelector<HTMLDialogElement>(".photo-view");
-    const links = [...document.querySelectorAll<HTMLAnchorElement>(".photo-grid a")];
-    const image = view?.querySelector("img");
-    let open = -1;
-
-    function show(link: HTMLAnchorElement | undefined): void {
-        if (!view || !image || !link) return;
-        open = links.indexOf(link);
-        image.src = link.href;
-        image.alt = link.dataset.caption ?? "";
-        view.querySelector(".photo-caption")!.textContent = link.dataset.caption ?? "";
-        view.querySelector(".photo-taken")!.textContent = link.dataset.taken ?? "";
-        if (!view.open) view.showModal();
+    interface Shown {
+        src: string;
+        width: number;
+        height: number;
+        color: string;
+        caption: string;
+        taken: string;
     }
 
-    for (const link of links) {
-        link.addEventListener("click", (event) => {
-            if (event.ctrlKey || event.metaKey || event.shiftKey) return;
-            event.preventDefault();
-            show(link);
+    const all = JSON.parse(document.getElementById("photo-list")?.textContent ?? "[]") as Shown[];
+    const image = document.querySelector<HTMLImageElement>(".photo img");
+    const buttons = document.querySelector<HTMLElement>(".photo-buttons");
+    const back = buttons?.querySelector<HTMLButtonElement>('[data-step="back"]');
+
+    if (image && buttons && back && all.length > 1) {
+        buttons.hidden = false;
+
+        // Every photo comes up once, in a shuffled order, before any repeats.
+        let waiting: number[] = [];
+        const draw = (not: number): number => {
+            if (waiting.length === 0) {
+                waiting = all.map((_, index) => index).filter((index) => index !== not);
+                for (let index = waiting.length - 1; index > 0; index--) {
+                    const other = Math.floor(Math.random() * (index + 1));
+                    [waiting[index], waiting[other]] = [waiting[other]!, waiting[index]!];
+                }
+            }
+            return waiting.pop()!;
+        };
+
+        const seen = [0];
+        let next = draw(0);
+        // Fetch the one that will come next, so "another" is instant.
+        const warm = () => (new Image().src = all[next]!.src);
+
+        const show = (index: number) => {
+            const photo = all[index]!;
+            image.style.backgroundColor = photo.color;
+            image.width = photo.width;
+            image.height = photo.height;
+            image.alt = photo.caption;
+            image.src = photo.src;
+            document.querySelector(".photo-caption")!.textContent = photo.caption;
+            document.querySelector(".photo-taken")!.textContent = photo.taken;
+            back.disabled = seen.length < 2;
+        };
+
+        const step = (kind: string) => {
+            if (kind === "back") {
+                if (seen.length < 2) return;
+                seen.pop();
+            } else {
+                seen.push(next);
+                next = draw(next);
+                warm();
+            }
+            show(seen[seen.length - 1]!);
+        };
+
+        buttons.addEventListener("click", (event) => {
+            const kind = (event.target as Element).closest<HTMLElement>("button[data-step]")?.dataset.step;
+            if (kind) step(kind);
         });
+        document.addEventListener("keydown", (event) => {
+            if (event.ctrlKey || event.metaKey || event.altKey) return;
+            if (event.key === "ArrowRight") step("another");
+            if (event.key === "ArrowLeft") step("back");
+        });
+        warm();
     }
-
-    view?.addEventListener("keydown", (event) => {
-        const step = { ArrowRight: 1, ArrowLeft: -1 }[event.key];
-        if (step) show(links[open + step]);
-    });
-    // A click on the backdrop closes it.
-    view?.addEventListener("click", (event) => {
-        if (event.target === view) view.close();
-    });
 </script>
