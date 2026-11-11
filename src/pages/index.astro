@@ -21,9 +21,9 @@ const posts = (await getPosts()).slice(0, 4);
         </div>
 
         <section aria-labelledby="playmatter-title">
-            <h2 class="label" id="playmatter-title">playmatter</h2>
-            <div class="split feature">
-                <PlayHere src="https://itch.io/embed-upload/19697599?color=10091a" title="Playmatter, playable" ratio="16 / 9" label="play the demo here" from="itch.io">
+            <h2 class="feature-title" id="playmatter-title">Playmatter</h2>
+            <div class="feature">
+                <PlayHere src="https://itch.io/embed-upload/19697599?color=10091a" title="Playmatter, playable" ratio="16 / 9" label="play the demo" from="itch.io">
                 <Figure
                     src="/assets/playmatter.webp"
                     video="/assets/playmatter.mp4"
@@ -34,7 +34,7 @@ const posts = (await getPosts()).slice(0, 4);
                     eager
                 />
                 </PlayHere>
-                <div>
+                <div class="feature-words">
                     <p>
                         A 2D physics sandbox I'm making. Spawn ragdolls, build things, wire machines together, and see
                         what happens.

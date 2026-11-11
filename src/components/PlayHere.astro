@@ -1,7 +1,7 @@
 ---
-// A game from somewhere else that can be played in place, but only once the
-// visitor asks: until "play" is pressed there is just the still (or clip)
-// given in the slot, and nothing is fetched from the other site.
+// A game from somewhere else that can be played in place, once the visitor
+// asks: until the button is pressed there is the still (or clip) given in
+// the slot with a large button on it, and nothing is fetched from the other site.
 
 interface Props {
     /** The address of the game's frame. */
@@ -20,11 +20,11 @@ const { src, title, ratio = "16 / 9", label = "play it here", from } = Astro.pro
 ---
 
 <div class="play-here" data-play-src={src} data-play-title={title} style={`--ratio:${ratio}`}>
-    <div class="play-still"><slot /></div>
-    <p class="play-line">
-        <button type="button" class="play-button">{label} →</button>
-        <span class="note">Loads the game from {from} when you press it, and not before.</span>
-    </p>
+    <div class="play-stage">
+        <div class="play-still"><slot /></div>
+        <button type="button" class="play-button">{label}</button>
+    </div>
+    <p class="note play-note">Loads the game from {from} when you press it.</p>
 </div>
 
 <script>
