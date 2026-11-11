@@ -81,6 +81,14 @@ interface Tie {
     key?: string;
 }
 
+export interface Drive {
+    a: Body;
+    b: Body;
+    /** Where `b` should be, measured from `a`'s middle. */
+    to: V;
+    force: number;
+}
+
 interface Joint {
     a: Body;
     b: Body;
@@ -261,6 +269,7 @@ export class World {
     /** What each tie settled on last step. */
     #was = new Map<string, number>();
     #held?: { b: Body; at: V; to: V };
+    #drives: Drive[] = [];
     /** Stands in for "the world" on the far side of the grab. */
     #anchor = ball(0, 0, 1, { fixed: true });
     /** How hard the grab can pull, in multiples of the held body's weight. */
@@ -286,6 +295,18 @@ export class World {
     join(a: Body, b: Body, pa: V = [0, 0], pb: V = [0, 0], length = 0, rope = false): void {
         this.#joints.push({ a, b, pa, pb, length, rope });
         this.#joined.add(`${a.id}:${b.id}`).add(`${b.id}:${a.id}`);
+    }
+
+    /**
+     * A motor: pushes `b` toward a place measured from `a`'s middle, as hard as `force` allows, and
+     * pushes `a` back just as hard. Set `to` on what is returned to say where. The two pass through
+     * each other. This is an arm holding a tool: press the tool against something and the body moves.
+     */
+    drive(a: Body, b: Body, force: number): Drive {
+        const made: Drive = { a, b, to: [0, 0], force };
+        this.#drives.push(made);
+        this.#joined.add(`${a.id}:${b.id}`).add(`${b.id}:${a.id}`);
+        return made;
     }
 
     /** The topmost body under a point. */
@@ -389,6 +410,17 @@ export class World {
                 fix(-dx / gapNow, -dy / gapNow, length - gapNow, rope ? 0 : -Infinity);
             }
         });
+
+        // motors: one body is sent toward its place beside another
+        for (const { a, b, to, force } of this.#drives) {
+            wake(a);
+            wake(b);
+            for (const [nx, ny, error] of [[1, 0, a.x + to[0] - b.x], [0, 1, a.y + to[1] - b.y]] as const) {
+                const t = tie(a, b, b.x, b.y, nx, ny, (0.35 / (dt * this.parts)) * error, -force * dt, force * dt);
+                // It pushes through the middle of each, so neither is spun by it.
+                [t.ax, t.ay, t.bx, t.by] = [0, 0, 0, 0];
+            }
+        }
 
         // the grab: the held point goes to the pointer, as hard as a firm hand could move it
         if (held) {

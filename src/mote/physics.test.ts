@@ -241,3 +241,22 @@ test("a block pushed into a rounded corner rests against the curve", () => {
     expect(Math.abs(pushed.x - ideal)).toBeLessThan(2.5);
     expect(Math.abs(pushed.y - ideal)).toBeLessThan(2.5);
 });
+
+test("pressing a tool down on the ground lifts the body that holds it", () => {
+    const world = new World();
+    world.add(rect(0, 520, 2000, 40, { fixed: true }));
+    const body = rect(0, 483, 34, 34);
+    body.ii = 0;
+    const tool = ball(60, 440, 10, { density: 2.5 });
+    world.add(body, tool);
+    const arm = world.drive(body, tool, (2.6 * world.gravity) / body.im);
+    // held out to the side: nothing moves
+    arm.to = [60, -40];
+    run(world, 1);
+    expect(Math.abs(body.y - 483)).toBeLessThan(1);
+    expect(Math.abs(tool.x - body.x - 60)).toBeLessThan(6);
+    // pushed straight down past the floor: the body goes up instead
+    arm.to = [0, 110];
+    run(world, 1.5);
+    expect(body.y).toBeLessThan(440);
+});
