@@ -157,6 +157,12 @@ export function faced(points: V3[], directions: V3[], each: number): Mesh {
     });
 }
 
+/** A box, by half its size each way: a floor, a wall or a ramp. */
+export const block = ([x, y, z]: V3): Mesh => ({
+    points: [[-x, -y, -z], [x, -y, -z], [x, y, -z], [-x, y, -z], [-x, -y, z], [x, -y, z], [x, y, z], [-x, y, z]],
+    faces: [[0, 3, 2, 1], [4, 5, 6, 7], [0, 1, 5, 4], [2, 3, 7, 6], [1, 2, 6, 5], [0, 4, 7, 3]],
+});
+
 /** A flat four-cornered piece, for a floor, a wall or a ramp. */
 export const sheet = (a: V3, b: V3, c: V3, d: V3): Mesh => ({ points: [a, b, c, d], faces: [[0, 1, 2, 3]] });
 

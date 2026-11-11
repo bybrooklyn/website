@@ -4,7 +4,7 @@
 // tested, without a screen.
 
 import { Space, angled, turn, type Solid } from "../mote/space";
-import { apply, cube, diamond, normals, pyramid, ten, twelve, twenty, type Mesh, type V3 } from "../mote/three";
+import { apply, cube, diamond, normals, pyramid, ten, twelve, twenty, type Mesh, type V3 } from "../mote/solids";
 
 export type Sides = 4 | 6 | 8 | 10 | 12 | 20;
 export const SIDES: Sides[] = [4, 6, 8, 10, 12, 20];
@@ -17,7 +17,7 @@ const OUT: Record<Sides, V3[]> = Object.fromEntries(SIDES.map((sides) => [sides,
 
 /** The tower stands at the left of the tray. These are its edges, in units. */
 export const TOWER = { left: -5.6, right: -1, deep: 1.25, top: 8.6 };
-export const TRAY = { left: -5.6, right: 4.6, deep: 3, rim: 0.8 };
+export const TRAY = { left: -5.6, right: 6.4, deep: 3, rim: 0.8 };
 /** How high the opening at the foot of the tower is. */
 export const OPENING = 4.2;
 /** How thick a wall or a ramp is. */
@@ -78,15 +78,15 @@ export interface Throw {
 }
 
 /** How much the dice and the tower rub, and how much of its speed a die keeps when it hits something. */
-const RUB = 0.25;
+const RUB = 0.35;
 const BOUNCE = 0.3;
 
 /** Drops these dice in at the top of the tower, one above another, each turned and spun its own way. `random` gives numbers from 0 to 1. */
 export function throwDice(kinds: Sides[], random: () => number = Math.random): Throw {
     const between = (low: number, high: number) => low + random() * (high - low);
     const space = new Space();
-    // the floor of the tray, and under the tower
-    space.slab([0, -1, 0], [30, 1, 30], undefined, { friction: RUB });
+    // the floor of the tray, and under the tower: felt, which a die grips and tumbles on and does not skate across
+    space.slab([0, -1, 0], [30, 1, 30], undefined, { friction: 1.1 });
     for (const slab of SLABS) space.slab(slab.at, slab.half, angled(0, 0, slab.tip), { friction: RUB });
 
     const dice = kinds.map((sides, index): Die => {

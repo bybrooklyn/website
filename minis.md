@@ -5,8 +5,9 @@ Written 11 Nov 2026.
 ## What this is
 
 - **Mote** (`src/mote/`): a small engine so that small demos and games do not each rewrite the loop, the
-  canvas and the input. A stage, 2D physics and 3D. Since 11 Nov it stands on three libraries forked
-  into `src/mote/forks/` (planck, cannon, three) and changed there. MIT, free to copy.
+  canvas and the input. A stage, 2D physics, 3D physics and 3D drawing, all its own: no dependencies.
+  (For the night of 10 Nov it stood on forks of planck, cannon and three. They were taken out on
+  11 Nov and what was needed was written into Mote.) MIT, free to copy.
 - **Minis** (`/minis/`): tiny things to play with, each opened in the same kind of panel as a post or a
   project. Each is one file in `src/minis/` and a few lines in `src/content/minis/`.
 

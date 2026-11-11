@@ -15,7 +15,7 @@
 //
 // What it is held to is in space.test.ts.
 
-import type { Mesh, Turn, V3 } from "./three";
+import { block, type Mesh, type Turn, type V3 } from "./solids";
 
 export type Quat = [x: number, y: number, z: number, w: number];
 
@@ -213,11 +213,6 @@ function place(s: Solid): void {
     s.offsets = s.wn.map((n, i) => dot(n, s.wp[s.faces[i]![0]!]!));
 }
 
-const BOX: Mesh = {
-    points: [[-1, -1, -1], [1, -1, -1], [1, 1, -1], [-1, 1, -1], [-1, -1, 1], [1, -1, 1], [1, 1, 1], [-1, 1, 1]],
-    faces: [[0, 3, 2, 1], [4, 5, 6, 7], [0, 1, 5, 4], [2, 3, 7, 6], [1, 2, 6, 5], [0, 4, 7, 3]],
-};
-
 // ---- where two solids touch ----
 
 /** The least and most of a solid's corners along a direction. */
@@ -398,7 +393,7 @@ export class Space {
 
     /** A box that does not move: where its middle is, half its size each way, and how it is turned. */
     slab(at: V3, half: V3, q: Quat = [0, 0, 0, 1], stuff: Stuff = {}): Solid {
-        const made = make({ points: BOX.points.map(([x, y, z]): V3 => [x * half[0], y * half[1], z * half[2]]), faces: BOX.faces }, at, q, true, stuff);
+        const made = make(block(half), at, q, true, stuff);
         this.solids.push(made);
         return made;
     }

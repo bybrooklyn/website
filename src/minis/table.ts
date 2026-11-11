@@ -1,14 +1,15 @@
 // Table: a dice tower and what a game of D&D needs beside it. Dice go in at
 // the top, tumble down the ramps as real solids and roll out into the tray;
 // what they show is the roll. The tumbling is in tower.ts; here it is drawn,
-// with depth, light and shadow, by Mote's fork of three. Under it: typed rolls with a history, and two
+// with depth, light and shadow, by Mote's own 3D drawing (gl.ts). Under it: typed rolls with a history, and two
 // views, one for whoever runs the fight and one for a single character.
 
 import type { Mote, Scene } from "../mote/stage";
-import { normals, type Mesh } from "../mote/three";
-import * as THREE from "../mote/forks/three/three.module.js";
+import { gl, type Part } from "../mote/gl";
+import { block, nearness, paint, turned, upright, type Turn } from "../mote/solids";
+import { turn } from "../mote/space";
 import { read, total, type Roll } from "./rolls";
-import { SHAPES, SLABS, TRAY, throwDice, type Sides, type Throw } from "./tower";
+import { SHAPES, SLABS, TOWER, TRAY, throwDice, type Sides, type Slab, type Throw } from "./tower";
 
 export const label = "A dice tower. Dice dropped in at the top tumble down its ramps into a tray.";
 
@@ -61,114 +62,39 @@ export default function table(m: Mote): Scene {
     let auto = 0;
 
     // ---- the tower, drawn ----
-    const host = m.canvas.parentElement!;
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.shadowMap.enabled = true;
-    renderer.domElement.className = "mote-gl";
-    host.insertBefore(renderer.domElement, m.canvas);
-    /** One of the page's colors, as three wants it: the page gives it in a form three cannot read, so a canvas reads it first. */
-    const probe = document.createElement("canvas").getContext("2d", { willReadFrequently: true })!;
-    const color = (css: string) => {
-        probe.clearRect(0, 0, 1, 1);
-        probe.fillStyle = css;
-        probe.fillRect(0, 0, 1, 1);
-        const [r, g, b] = probe.getImageData(0, 0, 1, 1).data;
-        return new THREE.Color(`rgb(${r}, ${g}, ${b})`);
-    };
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 100);
-    camera.position.set(8.5, 10.5, 19);
-    camera.lookAt(-0.6, 3.9, 0);
-    scene.add(new THREE.HemisphereLight(0xffffff, color(m.color("--ground")), 1.5));
-    const sun = new THREE.DirectionalLight(0xffffff, 2.4);
-    sun.position.set(6, 16, 9);
-    sun.castShadow = true;
-    sun.shadow.mapSize.set(1024, 1024);
-    Object.assign(sun.shadow.camera, { left: -9, right: 9, top: 13, bottom: -3, near: 1, far: 40 });
-    sun.shadow.bias = -0.0015;
-    scene.add(sun);
-
-    const paints = {
-        tray: new THREE.MeshStandardMaterial({ color: color(m.color("--surface")), roughness: 0.9 }),
-        wall: new THREE.MeshStandardMaterial({ color: color(m.color("--rule")), roughness: 0.85 }),
-        ramp: new THREE.MeshStandardMaterial({ color: color(m.color("--muted")), roughness: 0.7 }),
-        glass: new THREE.MeshStandardMaterial({ color: color(m.color("--ink")), transparent: true, opacity: 0.07, depthWrite: false }),
-    };
-    const floor = new THREE.Mesh(new THREE.BoxGeometry(TRAY.right - TRAY.left, 0.2, TRAY.deep * 2), paints.tray);
-    floor.position.set((TRAY.left + TRAY.right) / 2, -0.1, 0);
-    floor.receiveShadow = true;
-    scene.add(floor);
-    for (const slab of SLABS) {
-        if (slab.kind === "unseen") continue;
-        const piece = new THREE.Mesh(new THREE.BoxGeometry(slab.half[0] * 2, slab.half[1] * 2, slab.half[2] * 2), paints[slab.kind]);
-        piece.position.set(...slab.at);
-        piece.rotation.z = slab.tip;
-        piece.receiveShadow = slab.kind !== "glass";
-        piece.castShadow = slab.kind === "ramp" || slab.kind === "tray";
-        scene.add(piece);
-    }
-
-    /** A number, as a picture to put on a die's face. Each is made once. */
-    const numbers = new Map<string, THREE.CanvasTexture>();
-    const number = (text: string) => {
-        let made = numbers.get(text);
-        if (!made) {
-            const pad = document.createElement("canvas");
-            pad.width = pad.height = 128;
-            const pen = pad.getContext("2d")!;
-            pen.font = m.font(text.length > 1 ? 74 : 88, 700);
-            pen.textAlign = "center";
-            pen.textBaseline = "middle";
-            pen.fillStyle = "#1a1024";
-            pen.fillText(text, 64, 70);
-            // a line under 6 and 9, so that they can be told apart
-            if (text === "6" || text === "9") pen.fillRect(40, 108, 48, 7);
-            made = new THREE.CanvasTexture(pad);
-            made.colorSpace = THREE.SRGBColorSpace;
-            numbers.set(text, made);
+    // Mote's own 3D drawing, on a second canvas under the one that takes the mouse. Where the browser
+    // cannot do that, the same things are drawn flat on the first canvas, back to front.
+    const under = document.createElement("canvas");
+    under.className = "mote-gl";
+    const view = gl(under);
+    if (view) m.canvas.parentElement!.insertBefore(under, m.canvas);
+    const tipped = (tip: number): Turn => [[Math.cos(tip), -Math.sin(tip), 0], [Math.sin(tip), Math.cos(tip), 0], [0, 0, 1]];
+    const SEEN = { tray: "--surface", wall: "--rule", ramp: "--muted", glass: "--ink" } as const;
+    const ground: Slab = { at: [(TRAY.left + TRAY.right) / 2, -0.1, 0], half: [(TRAY.right - TRAY.left) / 2, 0.1, TRAY.deep], tip: 0, kind: "tray" };
+    const pieces = [ground, ...SLABS].filter((slab) => slab.kind !== "unseen");
+    const hue = (sides: Sides) => `oklch(0.8 0.12 ${HUES[sides]})`;
+    let models: Part[] = [];
+    if (view) {
+        view.font = getComputedStyle(m.canvas).fontFamily;
+        for (const slab of pieces) {
+            const kind = slab.kind as keyof typeof SEEN;
+            const piece = view.add(block(slab.half), { color: view.color(m.color(SEEN[kind])), alpha: kind === "glass" ? 0.035 : 1, casts: kind === "ramp" || kind === "tray" });
+            piece.at = slab.at;
+            piece.turn = tipped(slab.tip);
         }
-        return made;
-    };
-    /** A die to look at: its faces, flat-shaded in its own color, with a number on each. */
-    const model = (sides: Sides): THREE.Mesh => {
-        const mesh: Mesh = SHAPES[sides];
-        const corners: number[] = [];
-        for (const face of mesh.faces) for (let index = 1; index < face.length - 1; index++) for (const corner of [face[0]!, face[index]!, face[index + 1]!]) corners.push(...mesh.points[corner]!);
-        const shape = new THREE.BufferGeometry();
-        shape.setAttribute("position", new THREE.Float32BufferAttribute(corners, 3));
-        shape.computeVertexNormals();
-        const die = new THREE.Mesh(shape, new THREE.MeshStandardMaterial({ color: color(`oklch(0.8 0.12 ${HUES[sides]})`), roughness: 0.45, flatShading: true }));
-        die.castShadow = true;
-        die.receiveShadow = true;
-        normals(mesh).forEach((out, index) => {
-            const face = mesh.faces[index]!;
-            const middle = face.reduce((sum, corner) => sum.add(new THREE.Vector3(...mesh.points[corner]!)), new THREE.Vector3()).divideScalar(face.length);
-            // as big as the face allows: a little under the distance from its middle to its nearest edge
-            const room = Math.min(...face.map((corner, at) => {
-                const [a, b] = [new THREE.Vector3(...mesh.points[corner]!), new THREE.Vector3(...mesh.points[face[(at + 1) % face.length]!]!)];
-                return new THREE.Line3(a, b).closestPointToPoint(middle, true, new THREE.Vector3()).distanceTo(middle);
-            }));
-            const mark = new THREE.Mesh(new THREE.PlaneGeometry(room * 1.5, room * 1.5), new THREE.MeshBasicMaterial({ map: number(String(index + 1)), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }));
-            mark.position.copy(middle).addScaledVector(new THREE.Vector3(...out), 0.004);
-            mark.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), new THREE.Vector3(...out));
-            die.add(mark);
-        });
-        return die;
-    };
-    let models: THREE.Mesh[] = [];
+        view.light([7, 17, 10], [TRAY.left - 0.5, -0.5, -TRAY.deep - 0.5], [TRAY.right + 0.5, TOWER.top + 3, TRAY.deep + 0.5]);
+    }
     const show = (next: Throw) => {
-        for (const old of models) scene.remove(old);
+        for (const old of models) view?.remove(old);
         thrown = next;
-        models = next.dice.map((die) => model(die.sides));
-        scene.add(...models);
+        models = view ? next.dice.map((die) => view.add(SHAPES[die.sides], { color: view.color(hue(die.sides)), marks: (face) => String(face + 1), ink: [0.1, 0.06, 0.14] })) : [];
     };
     const fit = () => {
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-        renderer.setSize(m.width, m.height, false);
-        camera.aspect = m.width / Math.max(1, m.height);
-        // On a tall, narrow box the camera steps back so that the whole tower still fits.
-        camera.fov = camera.aspect < 1.1 ? 30 / Math.max(0.55, camera.aspect / 1.1) : 30;
-        camera.updateProjectionMatrix();
+        if (!view) return;
+        view.size(m.width, m.height);
+        // On a tall, narrow box the eye steps back so that the whole tower still fits.
+        const aspect = m.width / Math.max(1, m.height);
+        view.look([9.5, 12, 22.5], [0.3, 4.9, 0], aspect < 1.1 ? 30 / Math.max(0.55, aspect / 1.1) : 30);
     };
     fit();
 
@@ -359,11 +285,31 @@ export default function table(m: Mote): Scene {
         },
         resting: () => !m.preview && (!thrown || thrown.done()),
         draw() {
-            thrown?.dice.forEach((die, index) => {
-                models[index]!.position.set(...die.body.p);
-                models[index]!.quaternion.set(...die.body.q);
-            });
-            renderer.render(scene, camera);
+            if (view) {
+                thrown?.dice.forEach((die, index) => {
+                    models[index]!.at = die.body.p;
+                    models[index]!.turn = turn(die.body);
+                });
+                view.draw();
+                return;
+            }
+            // Flat, without the graphics card: everything back to front, each shaded by how it faces the light.
+            const eye = turned(upright(), -0.42, 0.38);
+            const look = { x: m.width * 0.52, y: m.height * 0.78, size: Math.min(m.width / 13, m.height / 12), distance: 40, view: eye };
+            const things = [
+                ...pieces.filter((slab) => slab.kind !== "glass").map((slab) => ({ mesh: block(slab.half), at: slab.at, turn: tipped(slab.tip), css: m.color(SEEN[slab.kind as keyof typeof SEEN]), sides: 0 })),
+                ...(thrown?.dice ?? []).map((die) => ({ mesh: SHAPES[die.sides], at: die.body.p, turn: turn(die.body), css: hue(die.sides), sides: die.sides })),
+            ].sort((a, b) => nearness(a.at, eye) - nearness(b.at, eye));
+            for (const thing of things) {
+                paint(m.ctx, thing.mesh, thing.turn, {
+                    ...look,
+                    at: thing.at,
+                    fill: (light) => `color-mix(in oklab, ${thing.css}, black ${Math.round((1 - light) * 45)}%)`,
+                    label: thing.sides ? (face) => String(face + 1) : undefined,
+                    ink: "#1a1024",
+                    font: getComputedStyle(m.canvas).fontFamily,
+                });
+            }
         },
     };
 }

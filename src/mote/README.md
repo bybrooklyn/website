@@ -3,17 +3,22 @@
 A small engine for tiny demos and games in the browser, in TypeScript. The minis on bybrooklyn.dev run on it.
 
 Free to use under the MIT license in this folder, which is plainer than the license on the rest of the
-site. The three libraries in `forks/` are under the MIT license too, each with its own notice.
+site. It has no dependencies: nothing here uses anything outside this folder.
 
 ## What is in it
 
 | File | What it gives you |
 |---|---|
 | `stage.ts` | A canvas that fits its box and stays sharp, a loop in fixed steps of 1/120 s, the mouse (which a game can hold inside the box), the arrow keys and WASD, Space and Enter, the page's colors, a place for ordinary buttons, and a number kept between visits. It only runs while it can be seen and stops when the scene is at rest. |
-| `flat.ts` | 2D physics: boxes, balls, shapes and walls; pins, rods and ropes; a motor; a hand to grab with. It stands on `forks/planck`. |
-| `three.ts` | Simple 3D solids (the dice shapes) and a way to draw them on a 2D canvas with no WebGL. The Solid mini uses the drawing; the dice use the shapes. |
-| `forks/` | planck (2D bodies), cannon (3D bodies) and three (3D drawing), copied in and changed here. See `forks/README.md`. |
-| `physics.ts` | The first 2D physics written for this site, kept with its tests. The minis no longer use it. |
+| `flat.ts` | 2D physics: boxes, balls, bars and shapes, with rounded corners if wanted; walls; pins, rods and ropes; a motor; a hand to grab with. Friction, bounce, sleep. |
+| `solids.ts` | The shapes of the dice and other solids of flat faces, and a way to draw one on a 2D canvas with no WebGL. The Solid mini uses the drawing. |
+| `space.ts` | 3D physics: solids that fall, tumble and hit each other and fixed slabs, corner to corner and edge to edge. The dice tower runs on it. |
+| `gl.ts` | 3D drawing on WebGL 2: real depth, one sun with shadows, light from the sky, and numbers on faces. |
+
+`flat.ts` and `space.ts` solve a step the same way, after the soft step method Erin Catto described for
+Box2D 3 (https://box2d.org/posts/2024/02/solver2d/): where things touch is found once, and the step is
+then taken in a few small parts, each solving every contact and joint as a stiff, damped spring. The
+code is Mote's own. `flat.test.ts` and `space.test.ts` say what each is held to, in numbers.
 
 ## A mini
 

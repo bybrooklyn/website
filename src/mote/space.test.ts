@@ -2,7 +2,7 @@
 
 import { expect, test } from "bun:test";
 import { Space, angled, inside } from "./space";
-import { cube, twenty, type Mesh, type V3 } from "./three";
+import { cube, twenty, type Mesh, type V3 } from "./solids";
 
 const TICK = 1 / 120;
 const run = (space: Space, seconds: number, each?: (time: number) => void) => {
