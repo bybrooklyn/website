@@ -101,10 +101,14 @@ const count = (set: string) => all.filter((photo) => photo.set === set).length;
         };
 
         // Resolves once the picture is fetched and decoded, so it can be shown whole.
-        const ready = (src: string) => {
+        const ready = async (src: string) => {
             const loading = new Image();
             loading.src = src;
-            return loading.decode().catch(() => {});
+            try {
+                await loading.decode();
+            } catch {
+                // A picture that will not decode is shown as it is.
+            }
         };
         const pause = (ms: number) => new Promise((done) => setTimeout(done, ms));
 
