@@ -1,7 +1,7 @@
 // What "correct" means for Mote's physics, measured. Run with `bun test`.
 
 import { expect, test } from "bun:test";
-import { World, ball, rect, type Body } from "./physics";
+import { SLACK, World, ball, rect, shape, wake, type Body } from "./physics";
 
 const TICK = 1 / 120;
 const run = (world: World, seconds: number, each?: (time: number) => void) => {
@@ -176,4 +176,68 @@ test("a dropped block comes to rest and sleeps", () => {
     run(world, 4);
     expect(block.asleep).toBe(true);
     expect(block.y).toBeGreaterThan(480);
+});
+
+/** The six-block pile the Blocks mini starts with, on a floor, already at rest. */
+function pile(): { world: World; blocks: Body[] } {
+    const world = Object.assign(new World(), { gravity: 2600 });
+    world.add(rect(0, 520, 2000, 40, { fixed: true }));
+    const blocks = ([[-1, 0], [0, 0], [1, 0], [-0.5, 1], [0.5, 1], [0, 2]] as const).map(([column, row]) => {
+        const block = rect(column * 40, 480 - row * 40, 40, 40);
+        block.asleep = true;
+        return block;
+    });
+    world.add(...blocks);
+    return { world, blocks };
+}
+
+test("waking a settled pile does not move it", () => {
+    const { world, blocks } = pile();
+    const before = blocks.map((block) => [block.x, block.y, block.a] as const);
+    for (const block of blocks) wake(block);
+    let furthest = 0;
+    run(world, 4, () => {
+        blocks.forEach((block, index) => {
+            furthest = Math.max(furthest, Math.hypot(block.x - before[index]![0], block.y - before[index]![1]), Math.abs(block.a - before[index]![2]) * 20);
+        });
+    });
+    expect(furthest).toBeLessThan(0.3);
+    expect(blocks.every((block) => block.asleep)).toBe(true);
+});
+
+test("blocks at rest overlap by no more than the slack", () => {
+    const world = Object.assign(new World(), { gravity: 2600 });
+    world.add(rect(0, 520, 2000, 40, { fixed: true }));
+    // dropped one after another from a little above where each will land
+    const stack = Array.from({ length: 6 }, (_, index) => rect(0, 440 - index * 60, 40, 40));
+    world.add(...stack);
+    run(world, 6);
+    const sorted = stack.toSorted((a, b) => b.y - a.y);
+    // the lowest sits on the floor, whose top is at 500; each of the others on the one below
+    expect(500 - (sorted[0]!.y + 20)).toBeGreaterThan(-SLACK - 0.05);
+    for (let index = 1; index < sorted.length; index++) expect(sorted[index - 1]!.y - sorted[index]!.y).toBeGreaterThan(40 - SLACK - 0.05);
+});
+
+test("a block pushed into a rounded corner rests against the curve", () => {
+    const world = Object.assign(new World(), { gravity: 0, air: 3 });
+    const round = 30;
+    // two walls meeting at the origin, and the corner's curve as three slivers, as the Blocks mini builds it
+    world.add(rect(-100, 300, 200, 1000, { fixed: true }), rect(300, -100, 1000, 200, { fixed: true }));
+    for (const part of [0, 1, 2]) {
+        const on = (step: number): [number, number] => [round * (1 - Math.sin((step / 3) * (Math.PI / 2))), round * (1 - Math.cos((step / 3) * (Math.PI / 2)))];
+        const [a, b] = [on(part), on(part + 1)];
+        const middle = [(a[0] + b[0]) / 3, (a[1] + b[1]) / 3] as const;
+        world.add(shape(middle[0], middle[1], [[-middle[0], -middle[1]], [a[0] - middle[0], a[1] - middle[1]], [b[0] - middle[0], b[1] - middle[1]]], { fixed: true }));
+    }
+    const pushed = ball(120, 120, 20);
+    world.add(pushed);
+    run(world, 3, () => {
+        // shoved steadily toward the corner
+        pushed.vx -= 30;
+        pushed.vy -= 30;
+    });
+    // A ball of 20 in a corner rounded to 30 sits with its middle on the diagonal, 30 - (30 - 20) / sqrt(2) from each wall.
+    const ideal = round - (round - 20) / Math.SQRT2;
+    expect(Math.abs(pushed.x - ideal)).toBeLessThan(2.5);
+    expect(Math.abs(pushed.y - ideal)).toBeLessThan(2.5);
 });

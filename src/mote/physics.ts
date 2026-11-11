@@ -100,6 +100,9 @@ const turn = (b: Body, [x, y]: V): V => {
 
 let count = 0;
 
+/** How far two bodies may overlap, in pixels, before they are moved apart. */
+export const SLACK = 0.25;
+
 function body(x: number, y: number, r: number, p: V[], area: number, spread: number, o: Options): Body {
     const mass = area * 0.001 * (o.density ?? 1);
     return {
@@ -352,8 +355,8 @@ export class World {
                     }
                     touching.add(a).add(b);
                     const press = tie(a, b, px, py, nx, ny, 0, 0, Infinity);
-                    // Half a pixel of overlap is left alone, so resting contacts do not flicker on and off.
-                    press.fix = Math.min(most, (-0.2 / dt) * Math.min(0, depth + 0.5));
+                    // A quarter of a pixel of overlap is left alone, so resting contacts do not flicker on and off.
+                    press.fix = Math.min(most, (-0.2 / dt) * Math.min(0, depth + SLACK));
                     const speed = this.#closing(press);
                     if (speed < -120) press.bias -= Math.max(a.bounce, b.bounce) * speed;
                     press.grip = tie(a, b, px, py, ny, -nx, 0, 0, 0);

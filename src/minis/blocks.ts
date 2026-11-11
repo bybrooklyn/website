@@ -7,19 +7,18 @@ import { World, ball, rect, shape, wake, type Body, type Mote, type Scene } from
 
 const MOST = 60;
 const FLOOR = 6;
-/** The box's top corners are rounded; a slope this size across each keeps blocks out of the part that is cut off. */
-const CORNER = 14;
+/** Every piece is this big, wherever the pile is shown. */
+const SIZE = 40;
 /** A soft color at a hue. */
 const pastel = (hue: number) => `oklch(0.86 0.085 ${Math.round(hue % 360)})`;
 
 export const label = "A pile of blocks. Drag one to throw it. Double-click an empty spot, or press Space, to drop another.";
 
 export default function blocks(m: Mote): Scene {
-    // The blocks are sized to the box, and gravity to the blocks, so a fall across
-    // a big box takes as long as one across a small box and nothing looks slow.
-    const SIZE = Math.round(Math.max(34, Math.min(52, Math.min(m.width, m.height) / 11)));
     // Carried, a block trails the pointer a little, as something with weight would.
-    const world = Object.assign(new World(), { gravity: SIZE * 62, grip: 17, follow: 0.115 });
+    const world = Object.assign(new World(), { gravity: 2600, grip: 17, follow: 0.115 });
+    // The box's corners are rounded, and its walls follow them: how round is read from the page.
+    const round = Number.parseFloat(getComputedStyle(m.canvas.parentElement ?? m.canvas).borderTopLeftRadius) || 0;
     const most = m.preview ? 14 : MOST;
     let dropped = 0;
     const pile: Body[] = [];
@@ -61,9 +60,18 @@ export default function blocks(m: Mote): Scene {
             rect(-thick / 2, height / 2, thick, height * 6, { fixed: true }),
             rect(width + thick / 2, height / 2, thick, height * 6, { fixed: true }),
             rect(width / 2, -thick / 2, width + thick * 2, thick, { fixed: true }),
-            // slopes across the two rounded corners at the top
-            shape(CORNER / 3, CORNER / 3, [[0, 0], [CORNER, 0], [0, CORNER]], { fixed: true }),
-            shape(width - CORNER / 3, CORNER / 3, [[0, 0], [0, CORNER], [-CORNER, 0]], { fixed: true }),
+            // Each corner: the part of the square that the curve cuts off, as three slivers along the arc.
+            ...[[0, 0, 1, 1], [width, 0, -1, 1], [0, height - FLOOR, 1, -1], [width, height - FLOOR, -1, -1]].flatMap(([cx, cy, sx, sy]) =>
+                round < 2 ? [] : [0, 1, 2].map((part) => {
+                    const on = (step: number): [number, number] => {
+                        const angle = (step / 3) * (Math.PI / 2);
+                        return [cx! + sx! * round * (1 - Math.sin(angle)), cy! + sy! * round * (1 - Math.cos(angle))];
+                    };
+                    const [a, b] = [on(part), on(part + 1)];
+                    const middle: [number, number] = [(cx! + a[0] + b[0]) / 3, (cy! + a[1] + b[1]) / 3];
+                    return shape(middle[0], middle[1], [[cx! - middle[0], cy! - middle[1]], [a[0] - middle[0], a[1] - middle[1]], [b[0] - middle[0], b[1] - middle[1]]], { fixed: true });
+                }),
+            ),
         ];
         world.add(...walls);
         for (const block of pile) wake(block);
@@ -136,18 +144,15 @@ export default function blocks(m: Mote): Scene {
         resting: () => !m.preview && pile.every((block) => block.asleep) && !world.holding && !m.pointer.inside,
         draw() {
             const { ctx } = m;
-            const scale = window.devicePixelRatio || 1;
             ctx.fillStyle = m.color("--rule");
             ctx.fillRect(0, m.height - FLOOR, m.width, FLOOR);
             for (const block of pile) {
-                // A block at rest is drawn on whole pixels, and square to the box if it is
-                // within a couple of degrees of it, so a settled pile has no slivers between blocks.
-                const square = Math.round(block.a / (Math.PI / 2)) * (Math.PI / 2);
-                const settled = block.asleep && !block.r && Math.abs(block.a - square) < 0.04;
+                // Drawn exactly where it is and exactly its size, asleep or awake, so nothing
+                // shifts when a pile is woken and nothing looks sunk into its neighbor.
                 const fill = colors.get(block) ?? pastel(0);
                 ctx.save();
-                ctx.translate(block.asleep ? Math.round(block.x * scale) / scale : block.x, block.asleep ? Math.round(block.y * scale) / scale : block.y);
-                ctx.rotate(settled ? square : block.a);
+                ctx.translate(block.x, block.y);
+                ctx.rotate(block.a);
                 ctx.beginPath();
                 if (block.r) ctx.arc(0, 0, block.r, 0, Math.PI * 2);
                 else {
@@ -156,12 +161,6 @@ export default function blocks(m: Mote): Scene {
                 }
                 ctx.fillStyle = fill;
                 ctx.fill();
-                // Each block is drawn a little past its edge in its own color, which closes the
-                // small gaps blocks come to rest with. Whole pixels, so a resting edge stays crisp.
-                ctx.strokeStyle = fill;
-                ctx.lineWidth = block.asleep ? 4 : 2;
-                ctx.lineJoin = "miter";
-                ctx.stroke();
                 if (block.r) {
                     // a spoke, so a rolling ball can be seen to roll
                     ctx.beginPath();
