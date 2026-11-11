@@ -33,16 +33,38 @@ export function turned(turn: Turn, across: number, over: number): Turn {
     return times(about, turn);
 }
 
-const apply = (turn: Turn, [x, y, z]: V3): V3 => [
+export const apply = (turn: Turn, [x, y, z]: V3): V3 => [
     turn[0][0] * x + turn[0][1] * y + turn[0][2] * z,
     turn[1][0] * x + turn[1][1] * y + turn[1][2] * z,
     turn[2][0] * x + turn[2][1] * y + turn[2][2] * z,
 ];
 
-const minus = (a: V3, b: V3): V3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
-const cross = (a: V3, b: V3): V3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+export const plus = (a: V3, b: V3): V3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+export const minus = (a: V3, b: V3): V3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+export const scaled = (a: V3, by: number): V3 => [a[0] * by, a[1] * by, a[2] * by];
+export const dot3 = (a: V3, b: V3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+export const cross = (a: V3, b: V3): V3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 const length = (a: V3) => Math.hypot(a[0], a[1], a[2]) || 1;
-const unit = (a: V3): V3 => [a[0] / length(a), a[1] / length(a), a[2] / length(a)];
+export const unit = (a: V3): V3 => [a[0] / length(a), a[1] / length(a), a[2] / length(a)];
+
+/** `turn`, turned further by a small rotation given as an axis whose length is the angle. */
+export function spun(turn: Turn, [x, y, z]: V3): Turn {
+    const angle = Math.hypot(x, y, z);
+    if (angle < 1e-9) return turn;
+    const [ux, uy, uz] = [x / angle, y / angle, z / angle];
+    const [c, s, k] = [Math.cos(angle), Math.sin(angle), 1 - Math.cos(angle)];
+    return times(
+        [
+            [c + ux * ux * k, ux * uy * k - uz * s, ux * uz * k + uy * s],
+            [uy * ux * k + uz * s, c + uy * uy * k, uy * uz * k - ux * s],
+            [uz * ux * k - uy * s, uz * uy * k + ux * s, c + uz * uz * k],
+        ],
+        turn,
+    );
+}
+
+/** The outward direction of each face of a solid, before it is turned. */
+export const normals = (mesh: Mesh): V3[] => mesh.faces.map((face) => unit(cross(minus(mesh.points[face[1]!]!, mesh.points[face[0]!]!), minus(mesh.points[face[2]!]!, mesh.points[face[0]!]!))));
 
 /** Where the light comes from: up, to the left, and from the viewer's side. */
 const LIGHT = unit([-0.5, 0.8, 0.9]);
@@ -57,12 +79,22 @@ export interface Look {
     /** The fill for a face, given how brightly it is lit from 0 to 1. */
     fill(light: number, face: number): string;
     edge?: string;
+    /** Where the solid's middle is, in units, and how the whole scene is turned to be looked at. */
+    at?: V3;
+    view?: Turn;
+    /** Draw faces that point away too: for a flat piece seen from either side. */
+    both?: boolean;
+    /** What to write on a face, and in what color and face. */
+    label?(face: number): string;
+    ink?: string;
+    font?: string;
 }
 
 /** Draws a solid, turned by `turn`. */
 export function paint(ctx: CanvasRenderingContext2D, mesh: Mesh, turn: Turn, look: Look): void {
     const distance = look.distance ?? 5;
-    const points = mesh.points.map((point) => apply(turn, point));
+    const placed = mesh.points.map((point) => plus(apply(turn, point), look.at ?? [0, 0, 0]));
+    const points = look.view ? placed.map((point) => apply(look.view!, point)) : placed;
     const flat = points.map(([x, y, z]): [number, number] => {
         const near = distance / (distance - z);
         return [look.x + x * near * look.size, look.y - y * near * look.size];
@@ -76,7 +108,7 @@ export function paint(ctx: CanvasRenderingContext2D, mesh: Mesh, turn: Turn, loo
             const toward = normal[0] * -a[0] + normal[1] * -a[1] + normal[2] * (distance - a[2]);
             return { corners, number, normal, middle, toward };
         })
-        .filter((face) => face.toward > 0)
+        .filter((face) => look.both || face.toward > 0)
         .sort((a, b) => a.middle - b.middle);
     ctx.lineJoin = "round";
     for (const face of faces) {
@@ -91,8 +123,42 @@ export function paint(ctx: CanvasRenderingContext2D, mesh: Mesh, turn: Turn, loo
             ctx.lineWidth = 1.5;
             ctx.stroke();
         }
+        const words = face.toward > 0 ? look.label?.(face.number) : undefined;
+        if (words) {
+            // Written at the middle of the face, smaller the more the face is turned away.
+            const middle = face.corners.reduce((sum, corner) => [sum[0] + flat[corner]![0], sum[1] + flat[corner]![1]], [0, 0]).map((sum) => sum / face.corners.length);
+            const facing = Math.min(1, face.toward / (distance * 1.02));
+            ctx.font = `600 ${Math.max(6, look.size * 0.5 * (0.45 + 0.55 * facing))}px ${look.font ?? "serif"}`;
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillStyle = look.ink ?? "#000";
+            ctx.globalAlpha = Math.max(0.15, facing);
+            ctx.fillText(words, middle[0]!, middle[1]!);
+            ctx.globalAlpha = 1;
+        }
     }
 }
+
+/** How far from the eye a solid's middle is once the scene is turned: larger is nearer. For drawing several back to front. */
+export const nearness = (at: V3, view?: Turn) => (view ? apply(view, at) : at)[2];
+
+/** A solid from its corners and the outward direction of each face: each face is the corners furthest that way, in order round it. */
+export function faced(points: V3[], directions: V3[], each: number): Mesh {
+    return outward({
+        points,
+        faces: directions.map((direction) => {
+            const out = unit(direction);
+            const corners = points.map((_, index) => index).sort((a, b) => dot3(points[b]!, out) - dot3(points[a]!, out)).slice(0, each);
+            const middle = scaled(corners.reduce((sum, corner) => plus(sum, points[corner]!), [0, 0, 0] as V3), 1 / each);
+            const across = unit(minus(points[corners[0]!]!, middle));
+            const up = cross(out, across);
+            return corners.sort((a, b) => Math.atan2(dot3(minus(points[a]!, middle), up), dot3(minus(points[a]!, middle), across)) - Math.atan2(dot3(minus(points[b]!, middle), up), dot3(minus(points[b]!, middle), across)));
+        }),
+    });
+}
+
+/** A flat four-cornered piece, for a floor, a wall or a ramp. */
+export const sheet = (a: V3, b: V3, c: V3, d: V3): Mesh => ({ points: [a, b, c, d], faces: [[0, 1, 2, 3]] });
 
 /** Makes every face wind counter-clockwise seen from outside, for a solid that bulges everywhere and sits around the origin. */
 function outward(mesh: Mesh): Mesh {
@@ -145,5 +211,35 @@ export const twenty = (): Mesh => {
             [0, 11, 5], [0, 5, 1], [0, 1, 7], [0, 7, 10], [0, 10, 11], [1, 5, 9], [5, 11, 4], [11, 10, 2], [10, 7, 6], [7, 1, 8],
             [3, 9, 4], [3, 4, 2], [3, 2, 6], [3, 6, 8], [3, 8, 9], [4, 9, 5], [2, 4, 11], [6, 2, 10], [8, 6, 7], [9, 8, 1],
         ],
+    });
+};
+
+/** Twelve five-sided faces. */
+export const twelve = (): Mesh => {
+    const g = (1 + Math.sqrt(5)) / 2;
+    const s = 0.82;
+    const points: V3[] = [];
+    for (const x of [-1, 1]) for (const y of [-1, 1]) for (const z of [-1, 1]) points.push([x * s, y * s, z * s]);
+    for (const a of [-1, 1]) for (const b of [-1, 1]) points.push([0, (a / g) * s, b * g * s], [(a / g) * s, b * g * s, 0], [a * g * s, 0, (b / g) * s]);
+    const directions: V3[] = [];
+    for (const a of [-1, 1]) for (const b of [-1, 1]) directions.push([0, a * g, b], [a, 0, b * g], [a * g, b, 0]);
+    return faced(points, directions, 5);
+};
+
+/** Ten kite-shaped faces: the ten-sided die. */
+export const ten = (): Mesh => {
+    const tall = 1.35;
+    const c = Math.cos(Math.PI / 5);
+    // How far the ring of corners zigzags, chosen so that each kite is flat.
+    const zig = (tall * (1 - c)) / (1 + c);
+    const ring = Array.from({ length: 10 }, (_, index): V3 => [Math.cos((index * Math.PI) / 5), index % 2 ? -zig : zig, Math.sin((index * Math.PI) / 5)]);
+    const points: V3[] = [[0, tall, 0], [0, -tall, 0], ...ring];
+    const at = (index: number) => 2 + (index % 10);
+    return outward({
+        points,
+        faces: [0, 1, 2, 3, 4].flatMap((kite) => [
+            [0, at(kite * 2), at(kite * 2 + 1), at(kite * 2 + 2)],
+            [1, at(kite * 2 + 1), at(kite * 2 + 2), at(kite * 2 + 3)],
+        ]),
     });
 };
