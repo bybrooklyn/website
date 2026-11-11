@@ -37,12 +37,24 @@ const get = project.data.get ?? [];
 const { Content, headings } = await render(project);
 const facts = projectFacts(project);
 
-const rows: [string, string][] = [["language", language]];
-if (status) rows.push(["status", status]);
-if (facts?.license) rows.push(["license", facts.license]);
-if (facts?.release) rows.push(["latest release", facts.release]);
-if (facts && facts.stars > 0) rows.push(["stars", String(facts.stars)]);
-if (facts) rows.push(["last updated", formatDate(new Date(facts.updated))]);
+// A row with a name is one GitHub can bring up to date in the browser. Those
+// rows are always written for a public repository, and hidden while they
+// have nothing to say (no release yet, no stars), so the script only has to
+// fill them in.
+interface Row {
+    label: string;
+    value: string;
+    fact?: "release" | "stars" | "forks" | "updated";
+    hidden?: boolean;
+}
+const live = facts?.public === true;
+const count = (label: string, fact: "stars" | "forks", value: number): Row[] => (value > 0 || live ? [{ label, value: String(value), fact, hidden: value === 0 }] : []);
+const rows: Row[] = [{ label: "language", value: language }];
+if (status) rows.push({ label: "status", value: status });
+if (facts?.license) rows.push({ label: "license", value: facts.license });
+if (facts?.release || live) rows.push({ label: "latest release", value: facts?.release ?? "", fact: "release", hidden: !facts?.release });
+if (facts) rows.push(...count("stars", "stars", facts.stars), ...count("forks", "forks", facts.forks ?? 0));
+if (facts) rows.push({ label: "last updated", value: formatDate(new Date(facts.updated)), fact: "updated" });
 ---
 
 <Opened title={name} description={summary} image={cover} back={{ href: "/projects/", label: "projects" }}>
@@ -81,12 +93,12 @@ if (facts) rows.push(["last updated", formatDate(new Date(facts.updated))]);
                         </p>
                     )
                 }
-                <dl class="facts">
+                <dl class="facts" data-repo={live ? repo : undefined}>
                     {
-                        rows.map(([label, value]) => (
-                            <div>
-                                <dt>{label}</dt>
-                                <dd>{value}</dd>
+                        rows.map((row) => (
+                            <div hidden={row.hidden}>
+                                <dt>{row.label}</dt>
+                                <dd data-fact={row.fact}>{row.value}</dd>
                             </div>
                         ))
                     }
@@ -148,3 +160,73 @@ if (facts) rows.push(["last updated", formatDate(new Date(facts.updated))]);
         />
     </article>
 </Opened>
+
+<script>
+    // On a public project's page, ask GitHub for today's numbers and put them
+    // in place of the ones the site was built with. If GitHub does not answer
+    // (offline, blocked, or more than its sixty questions an hour), the built
+    // numbers stay. Answers are kept for an hour so that moving between
+    // projects does not ask again.
+    const list = document.querySelector<HTMLElement>(".facts[data-repo]");
+    const repo = list?.dataset.repo;
+
+    interface Answer {
+        at: number;
+        stars: number;
+        forks: number;
+        updated: string;
+        release: string | null;
+    }
+
+    if (list && repo) {
+        const key = `github:${repo}`;
+        const date = new Intl.DateTimeFormat("en-US", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+
+        const show = (answer: Answer) => {
+            const set = (fact: string, value: string | null) => {
+                const cell = list.querySelector<HTMLElement>(`[data-fact="${fact}"]`);
+                if (!cell?.parentElement) return;
+                if (value) cell.textContent = value;
+                cell.parentElement.hidden = !value;
+            };
+            set("stars", answer.stars > 0 ? String(answer.stars) : null);
+            set("forks", answer.forks > 0 ? String(answer.forks) : null);
+            set("release", answer.release);
+            set("updated", date.format(new Date(answer.updated)));
+        };
+
+        const ask = async (): Promise<Answer | undefined> => {
+            const headers = { Accept: "application/vnd.github+json" };
+            const found = await fetch(`https://api.github.com/repos/${repo}`, { headers });
+            if (!found.ok) return undefined;
+            const info = (await found.json()) as { stargazers_count: number; forks_count: number; pushed_at: string };
+            // The list of releases, not "the latest one": with no release that answers
+            // with an empty list where the other answers "not found", an error in the console.
+            const releases = await fetch(`https://api.github.com/repos/${repo}/releases?per_page=5`, { headers });
+            const published = releases.ok ? ((await releases.json()) as { tag_name: string; draft: boolean; prerelease: boolean }[]) : [];
+            const release = published.find((item) => !item.draft && !item.prerelease)?.tag_name ?? null;
+            return { at: Date.now(), stars: info.stargazers_count, forks: info.forks_count, updated: info.pushed_at, release };
+        };
+
+        void (async () => {
+            try {
+                const kept = JSON.parse(sessionStorage.getItem(key) ?? "null") as Answer | null;
+                if (kept && Date.now() - kept.at < 3_600_000) return show(kept);
+            } catch {
+                // Nothing kept, or storage is off: ask.
+            }
+            try {
+                const answer = await ask();
+                if (!answer) return;
+                show(answer);
+                try {
+                    sessionStorage.setItem(key, JSON.stringify(answer));
+                } catch {
+                    // Shown all the same.
+                }
+            } catch {
+                // GitHub could not be reached: the built numbers stay.
+            }
+        })();
+    }
+</script>

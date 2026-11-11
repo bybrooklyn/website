@@ -1,6 +1,8 @@
 // Reads a few facts about each project's repository from GitHub and writes
 // src/data/project-facts.json. Run by hand with `bun run projects`; the site
-// build only reads the committed JSON. Needs a logged-in `gh`.
+// build only reads the committed JSON. Needs a logged-in `gh`. On the page of a
+// public project the numbers are then brought up to date in the visitor's
+// browser (see the script in src/pages/projects/[slug].astro).
 
 import { $ } from "bun";
 import type { ProjectFacts } from "../src/lib/projects";
@@ -22,6 +24,7 @@ for (const file of await listMdx(folder)) {
     const info = found.json() as {
         license: { spdx_id: string } | null;
         stargazers_count: number;
+        forks_count: number;
         pushed_at: string;
         private: boolean;
     };
@@ -31,6 +34,7 @@ for (const file of await listMdx(folder)) {
     facts[stem(file)] = {
         license: license && license !== "NOASSERTION" ? license : null,
         stars: info.stargazers_count,
+        forks: info.forks_count,
         release: release.exitCode === 0 ? release.text().trim() || null : null,
         updated: info.pushed_at.slice(0, 10),
         public: !info.private,

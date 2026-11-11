@@ -59,6 +59,8 @@ export default defineConfig({
                 "img-src 'self' data:",
                 "media-src 'self'",
                 "font-src 'self'",
+                // Project pages ask GitHub for a repository's current stars, forks and last push.
+                "connect-src 'self' https://api.github.com",
                 "frame-src https:",
                 "object-src 'none'",
                 "base-uri 'self'",

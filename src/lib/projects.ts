@@ -7,6 +7,7 @@ export type Project = CollectionEntry<"projects">;
 export interface ProjectFacts {
     license: string | null;
     stars: number;
+    forks: number;
     release: string | null;
     updated: string;
     public: boolean;
