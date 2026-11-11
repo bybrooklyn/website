@@ -40,5 +40,29 @@
         }
         if (from && new URL(from).origin === location.origin) label(event.viewTransition, from, location.href);
     });
+
+    // A browser that cannot carry a transition from one page to the next
+    // (Firefox) gets the second half of it: the page it leaves is noted, and
+    // the page it arrives on is marked with the kind of change, which
+    // motion.css turns into the panel sliding in or the content shifting.
+    if (!("onpagereveal" in window)) {
+        addEventListener("pagehide", () => {
+            try {
+                sessionStorage.setItem("left", location.href);
+            } catch {}
+        });
+        let from = null;
+        try {
+            from = sessionStorage.getItem("left");
+            sessionStorage.removeItem("left");
+        } catch {}
+        // Only when this page was reached from that one, not when it was reopened later.
+        const came = document.referrer && new URL(document.referrer).origin === location.origin;
+        if (from && came && new URL(from).origin === location.origin && path(from) !== path(location.href)) {
+            const root = document.documentElement;
+            root.dataset.arrive = kinds(from, location.href).join(" ");
+            addEventListener("DOMContentLoaded", () => setTimeout(() => delete root.dataset.arrive, 800));
+        }
+    }
 })();
 

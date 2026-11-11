@@ -10,6 +10,9 @@
  *   swap   one opened page to another: the same short shift, inside the panel
  *
  * Nothing moves for anyone who has asked for reduced motion.
+ *
+ * Chrome and Safari carry the movement across the change of page. Firefox
+ * cannot yet, and gets the arrival half of each one (see the end of this file).
  */
 
 /* The header belongs to the site, so it slides away with it but holds still between main pages. */
@@ -158,6 +161,31 @@
             translate: -1.5rem 0;
             opacity: 0;
         }
+    }
+
+    /*
+     * Without transitions between pages (Firefox): transition.js marks the page
+     * being arrived at, and the same movements are played on it as it appears.
+     * The page being left cannot move, so this is the arrival only.
+     */
+    html[data-arrive~="open"] .opened-panel {
+        animation: panel-arrive 0.5s var(--ease) backwards;
+    }
+
+    html[data-arrive~="close"] body > * {
+        animation: site-return 0.5s var(--ease) backwards;
+    }
+
+    html[data-arrive~="move"] body > main {
+        animation: shift-in 0.45s var(--ease) backwards;
+    }
+
+    html[data-arrive~="move"][data-arrive~="back"] body > main {
+        animation-name: shift-in-back;
+    }
+
+    html[data-arrive~="swap"] .opened-panel main {
+        animation: shift-in 0.45s var(--ease) backwards;
     }
 
     a {
