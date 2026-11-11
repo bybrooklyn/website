@@ -161,7 +161,7 @@ if (facts) rows.push({ label: "last updated", value: formatDate(new Date(facts.u
         <PrevNext
             label="More projects"
             previous={previous && { href: `/projects/${previous.id}/`, note: "previous", title: previous.data.name }}
-            next={next ? { href: `/projects/${next.id}/`, note: "next", title: next.data.name } : { href: "/projects/", note: "that's all of them.", title: "all projects" }}
+            next={next ? { href: `/projects/${next.id}/`, note: "next", title: next.data.name } : { href: "/projects/", note: "back to the list", title: "all projects" }}
         />
     </article>
 </Opened>

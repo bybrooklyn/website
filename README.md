@@ -26,7 +26,7 @@ Other scripts: `langs` (language bar), `projects` (facts from GitHub), and `pyth
 | Intro, contact, nav | `src/data/site.ts` |
 | Colors | `src/data/theme.ts` |
 | Typefaces | `src/styles/fonts.css` |
-| Demos | `src/demos/` (`physics.ts` is the site's own physics engine) |
+| Demos | `src/demos/`; the engine they run on is `src/mote/` |
 
 Anything marked `draft: true` is left out of production builds.
 

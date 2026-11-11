@@ -50,7 +50,7 @@ const { Content } = await render(mini);
         <PrevNext
             label="More minis"
             previous={previous && { href: `/minis/${previous.id}/`, note: "previous", title: previous.data.name }}
-            next={next ? { href: `/minis/${next.id}/`, note: "next", title: next.data.name } : { href: "/minis/", note: "that's all of them.", title: "all minis" }}
+            next={next ? { href: `/minis/${next.id}/`, note: "next", title: next.data.name } : { href: "/minis/", note: "back to the list", title: "all minis" }}
         />
     </article>
 </Opened>

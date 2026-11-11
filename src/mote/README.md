@@ -3,7 +3,7 @@
 A small engine for tiny demos and games in the browser, in TypeScript. The minis on bybrooklyn.dev run on it.
 
 Free to use under the MIT license in this folder, which is plainer than the license on the rest of the
-site. It has no dependencies: nothing here uses anything outside this folder.
+site. It has no dependencies.
 
 ## What is in it
 
@@ -17,8 +17,7 @@ site. It has no dependencies: nothing here uses anything outside this folder.
 
 `flat.ts` and `space.ts` solve a step the same way, after the soft step method Erin Catto described for
 Box2D 3 (https://box2d.org/posts/2024/02/solver2d/): where things touch is found once, and the step is
-then taken in a few small parts, each solving every contact and joint as a stiff, damped spring. The
-code is Mote's own. `flat.test.ts` and `space.test.ts` say what each is held to, in numbers.
+then taken in a few small parts, each solving every contact and joint as a stiff, damped spring. `flat.test.ts` and `space.test.ts` say what each is held to, in numbers.
 
 ## A mini
 

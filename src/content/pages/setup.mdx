@@ -9,7 +9,7 @@ import Network from "../../components/Network.astro";
 import SetupPhoto from "../../components/SetupPhoto.astro";
 
 
-I have two machines that matter: the desktop I work on, and a server that sits at home and runs everything that should stay on. Here is how both are set up, and why.
+I have two machines: the desktop I work on, and a server that sits at home and runs everything that should stay on.
 
 ## The machines
 
@@ -27,7 +27,7 @@ I write, build and play on the desktop. The server hosts what needs to stay up.
 
 ## How I got here
 
-The desktop went Ubuntu, then Debian, then Bazzite, then CachyOS, and CachyOS is the one I kept. It's Arch with less upkeep: it has the AUR, its packages and kernel are built for speed, and games work.
+The desktop went Ubuntu, then Debian, then Bazzite, then CachyOS, and CachyOS is the one I kept. It's Arch with less upkeep. It has the AUR, its packages and kernel are built for speed, and games work.
 
 The server started on Ubuntu Server 24 and is now on Fedora Server.
 
@@ -104,7 +104,7 @@ Anything private isn't exposed to the internet. I reach it over Tailscale, which
 
 ### The annoying part
 
-My ISP blocks inbound connections on ports 80 and 443, which are the two a web server needs. So:
+My ISP blocks inbound connections on ports 80 and 443, which are the two a web server needs.
 
 - Cloudflare is told, with an origin rule, to connect on a different port, one that is allowed in. Visitors use the normal address.
 - Certificates can't be issued the usual way, because that check arrives on port 80. So the proxy proves ownership through DNS instead, and gets one wildcard certificate per domain.
@@ -126,15 +126,15 @@ My ISP blocks inbound connections on ports 80 and 443, which are the two a web s
 
 Sonarr for shows, Radarr for films, Lidarr for music, LazyLibrarian for books, Prowlarr feeding all of them indexers, SABnzbd doing the downloading, and Seerr on top so people can ask for things.
 
-Setting this up was a repetitive pain in the ass. Every one of these apps wants the same things typed into it again: the same folders, the same download client, the same API keys copied out of one tab and pasted into another, and then its own quality profiles on top. Do it for one and you get to do it again for all the others.
+Setting this up was a repetitive pain in the ass. Every one of these apps wants the same things typed into it again: the same folders, the same download client, the same API keys copied out of one tab and pasted into another, and then its own quality profiles on top.
 
-It doesn't stay set up, either. An indexer dies, a path changes, an update moves a setting, and you're back clicking through settings pages that all look almost the same. It works, and I'd still do it, but it is not a one-evening job.
+It breaks again later, when an indexer dies or an update moves a setting, and you're back clicking through settings pages that all look almost the same. It takes a lot more than an evening.
 
 ## If you want to do this
 
 1. Start with one service you will actually use. Jellyfin is a good first one.
 2. Put a reverse proxy in front from day one. Adding it later means changing every address you've already given out.
-3. Use Tailscale, or something like it, for anything only you need. Not everything has to be public.
-4. Keep your compose files somewhere you can find them again. When you rebuild, they are what you rebuild from.
+3. Use Tailscale, or something like it, for anything only you need.
+4. Keep your compose files somewhere you can find them again. You rebuild from them.
 5. Check whether your ISP blocks ports before you plan around them.
 6. Don't use Ubuntu.
