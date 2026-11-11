@@ -13,10 +13,10 @@ import { Flat, trace, type Body, type Mote, type Scene } from "../mote";
 export const label = "A game: a block with a hammer climbs a tall pile of rocks. The hammer follows the mouse.";
 
 /** How far the hammer's head can be from the middle of the block, and how near. */
-export const REACH = 120;
-const NEAR = 34;
-/** How much handle shows behind the hands. */
-const BEHIND = 26;
+export const REACH = 170;
+const NEAR = 64;
+/** How long the hammer's handle is, from its end to the head. One hand holds the very end. */
+const HANDLE = 100;
 export const SIZE = 36;
 const HEAD = 11;
 /** The course is this wide; it is scaled down to fit a narrower box. */
@@ -194,25 +194,17 @@ interface At {
 
 /**
  * The climber: one of the blocks, with a triangle for a head, two arms and its hammer.
- * Change this to change how it looks. The handle is one length; the hands slide along it,
- * so that more of it shows behind them the nearer the head is held.
+ * Change this to change how it looks. The handle is one length. One hand holds its very end
+ * and the other holds it a little further along, so reaching out is the arms going out and
+ * drawing the head in is the hands going back past the block.
  */
 function drawClimber(ctx: CanvasRenderingContext2D, body: At, head: At, ink: string, accent: string, dim: string): void {
     const [dx, dy] = [head.x - body.x, head.y - body.y];
     const far = Math.hypot(dx, dy) || 1;
     const [ux, uy] = [dx / far, dy / far];
-    const long = REACH + BEHIND;
-    const butt: At = { x: head.x - ux * long, y: head.y - uy * long };
+    const butt: At = { x: head.x - ux * HANDLE, y: head.y - uy * HANDLE };
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
-
-    // the part of the handle behind the block
-    ctx.strokeStyle = dim;
-    ctx.lineWidth = 6;
-    ctx.beginPath();
-    ctx.moveTo(butt.x, butt.y);
-    ctx.lineTo(head.x, head.y);
-    ctx.stroke();
 
     // the block
     ctx.fillStyle = "oklch(0.86 0.085 300)";
@@ -227,10 +219,11 @@ function drawClimber(ctx: CanvasRenderingContext2D, body: At, head: At, ink: str
     ctx.lineTo(body.x + 11, body.y - SIZE / 2 + 2);
     ctx.fill();
 
-    // the handle in front of the block, from the hands to the head, and the head, square to it
+    // the handle, from its end to the head, and the head, square to it
     ctx.strokeStyle = dim;
+    ctx.lineWidth = 6;
     ctx.beginPath();
-    ctx.moveTo(body.x, body.y - 4);
+    ctx.moveTo(butt.x, butt.y);
     ctx.lineTo(head.x, head.y);
     ctx.stroke();
     ctx.save();
@@ -242,21 +235,16 @@ function drawClimber(ctx: CanvasRenderingContext2D, body: At, head: At, ink: str
     ctx.fill();
     ctx.restore();
 
-    // two arms, each from a shoulder to a hand on the handle, bent at the elbow
-    const UPPER = 22;
-    const FORE = 22;
-    for (const [side, grip] of [[-1, 6], [1, 26]] as const) {
+    // two arms, each from a shoulder to a hand on the handle, bent at the elbow: one hand on the very end, one a little along
+    for (const [side, along] of [[-1, 0], [1, 30]] as const) {
         const shoulder: At = { x: body.x + side * (SIZE / 2 - 2), y: body.y - 6 };
-        // where this hand is: a little way along the handle from the middle of the block, but never further than the arm can reach
-        let hand: At = { x: body.x + ux * grip, y: body.y - 4 + uy * grip };
+        const hand: At = { x: butt.x + ux * along, y: butt.y + uy * along };
         const [hx, hy] = [hand.x - shoulder.x, hand.y - shoulder.y];
         const span = Math.hypot(hx, hy) || 1;
-        const reach = Math.min(span, UPPER + FORE - 1);
-        hand = { x: shoulder.x + (hx / span) * reach, y: shoulder.y + (hy / span) * reach };
-        // the elbow: off to the side of the line from shoulder to hand, by as much as the arm's two lengths leave over
-        const along = (UPPER * UPPER - FORE * FORE + reach * reach) / (2 * reach);
-        const out = Math.sqrt(Math.max(0, UPPER * UPPER - along * along)) * side;
-        const elbow: At = { x: shoulder.x + (hx / span) * along - (hy / span) * out, y: shoulder.y + (hy / span) * along + (hx / span) * out };
+        // The elbow: half way, and off to the side a little. The arms are as long as they need to be,
+        // so a hand is always on the handle, and they bend less the further they reach.
+        const out = Math.max(4, 16 - span * 0.12) * side;
+        const elbow: At = { x: shoulder.x + hx / 2 - (hy / span) * out, y: shoulder.y + hy / 2 + (hx / span) * out };
         ctx.strokeStyle = ink;
         ctx.lineWidth = 5;
         ctx.beginPath();

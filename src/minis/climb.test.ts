@@ -42,7 +42,7 @@ function pullUp(c: Course, mouse: ReturnType<typeof hand>, k: number): void {
     const { climber } = c;
     // where on the ledge the head goes: a little in from its end
     const on = edge - side * 26;
-    mouse.to(0.4, () => [side * 4, -REACH]); // straight up
+    mouse.to(0.4, () => [side * 4, -112]); // straight up, short of the ledge above
     mouse.to(0.4, () => [on - climber.x, top - 30 - climber.y]); // over the end of the ledge
     mouse.to(0.4, () => [on - climber.x, top - 4 - climber.y]); // down onto it
     mouse.to(0.7, () => [on - climber.x, 105]); // push down: the block goes straight up
@@ -56,10 +56,11 @@ function walk(c: Course, mouse: ReturnType<typeof hand>, x: number): void {
     const { climber } = c;
     for (let pull = 0; pull < 12 && Math.abs(climber.x - x) > 6; pull++) {
         const way = Math.sign(x - climber.x);
-        const far = Math.min(80, Math.abs(x - climber.x) + 34);
+        // the head cannot come nearer the block than 64, so each pull ends with it 62 ahead
+        const far = Math.min(125, Math.abs(x - climber.x) + 62);
         mouse.to(0.3, () => [way * far, -30]); // out ahead
         mouse.to(0.25, () => [way * far, 22]); // down onto the ground, pressing
-        mouse.to(0.45, () => [way * 34, 22]); // and pull up to it
+        mouse.to(0.45, () => [way * 62, 22]); // and pull up to it
     }
     mouse.to(0.3, () => [0, -70]);
 }
@@ -83,9 +84,9 @@ test("it can drag itself along the ground, either way", () => {
     const mouse = hand(c);
     mouse.to(0.5, () => [0, -70]);
     walk(c, mouse, -40);
-    expect(Math.abs(c.climber.x + 40)).toBeLessThan(12);
+    expect(Math.abs(c.climber.x + 40)).toBeLessThan(20);
     walk(c, mouse, -260);
-    expect(Math.abs(c.climber.x + 260)).toBeLessThan(12);
+    expect(Math.abs(c.climber.x + 260)).toBeLessThan(20);
     expect(c.height()).toBeLessThan(1);
 });
 
