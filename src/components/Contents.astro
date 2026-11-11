@@ -41,13 +41,13 @@ const headings = Astro.props.headings.filter((heading) => heading.depth === 2 ||
                 {sources.length > 0 && (
                     <section aria-labelledby="sources-title">
                         <h2 class="label" id="sources-title">sources</h2>
-                        <ul>
-                            {sources.map((source) => (
-                                <li>
+                        <ol class="sources">
+                            {sources.map((source, index) => (
+                                <li id={`source-${index + 1}`}>
                                     <a href={source.href}>{source.title}</a>
                                 </li>
                             ))}
-                        </ul>
+                        </ol>
                     </section>
                 )}
                 {cite && (
@@ -73,6 +73,38 @@ const headings = Astro.props.headings.filter((heading) => heading.depth === 2 ||
         copy.addEventListener("click", () => {
             void navigator.clipboard.writeText(document.querySelector(".cite-text")?.textContent ?? "").then(() => (copy.textContent = "copied"));
         });
+    }
+
+    // A link in the text that goes to one of the sources gets that source's
+    // number after it. Pointing at the number, or clicking it, shows which source it is.
+    const sources = [...document.querySelectorAll<HTMLElement>(".sources li")];
+    const page = (href: string) => href.split("#")[0]!.replace(/\/$/, "");
+    const numbers = new Map(sources.map((item, index) => [page(item.querySelector("a")?.href ?? ""), index + 1]));
+    for (const link of document.querySelectorAll<HTMLAnchorElement>(".post-body .prose a[href^='http']")) {
+        const number = numbers.get(page(link.href));
+        if (!number) continue;
+        const source = sources[number - 1]!;
+        const mark = document.createElement("sup");
+        mark.className = "ref";
+        const jump = document.createElement("a");
+        jump.href = `#${source.id}`;
+        jump.textContent = String(number);
+        jump.setAttribute("aria-label", `Source ${number}: ${source.textContent?.trim() ?? ""}`);
+        const point = (on: boolean) => source.classList.toggle("pointed", on);
+        jump.addEventListener("pointerenter", () => point(true));
+        jump.addEventListener("pointerleave", () => point(false));
+        jump.addEventListener("focus", () => point(true));
+        jump.addEventListener("blur", () => point(false));
+        jump.addEventListener("click", (event) => {
+            // Bring the source into view without throwing the page to it.
+            event.preventDefault();
+            source.scrollIntoView({ block: "nearest", behavior: "smooth" });
+            source.classList.remove("flash");
+            void source.offsetWidth;
+            source.classList.add("flash");
+        });
+        mark.append(jump);
+        link.after(mark);
     }
 
     // Mark the link for the section nearest the top of the view.
