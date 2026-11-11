@@ -529,3 +529,13 @@ h1 + .about {
         scroll-behavior: auto;
     }
 }
+
+/* The commit the site was built from: quiet until pointed at. */
+.site-footer .commit {
+    color: inherit;
+    text-decoration: none;
+}
+
+.site-footer .commit:hover {
+    color: var(--accent);
+}

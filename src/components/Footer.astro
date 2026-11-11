@@ -24,7 +24,7 @@ const posts = await hasPosts();
         <li><a href={site.source}>source</a></li>
     </ul>
     <p class="note">
-        built <time datetime={build.iso}>{build.time}</time>{build.commit && <> from <code>{build.commit}</code></>}
+        built <time datetime={build.iso}>{build.time}</time>{build.commit && <> from <a class="commit" href={`${site.source}/commit/${build.commit}`}><code>{build.commit}</code></a></>}
     </p>
 </footer>
 
