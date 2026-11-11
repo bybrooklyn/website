@@ -111,3 +111,158 @@
     color: var(--muted);
     line-height: 1.4;
 }
+
+/* ---- controls under a mini (the Table mini's dice, fight and character) ---- */
+
+.mote-panel {
+    padding: calc(var(--line) * 0.7) 1.1rem var(--line);
+    border-top: 0.0625rem solid var(--rule);
+    background: var(--surface);
+    font-size: 0.95rem;
+}
+
+.mote-panel :is(button, input) {
+    font: inherit;
+    color: var(--ink);
+    border: 0.0625rem solid var(--rule);
+    border-radius: calc(var(--radius) * 0.6);
+    background: var(--ground);
+    padding: 0.25rem 0.65rem;
+}
+
+.mote-panel button {
+    cursor: pointer;
+    transition:
+        border-color 0.15s ease,
+        background-color 0.15s ease;
+}
+
+.mote-panel button:hover {
+    border-color: var(--accent);
+}
+
+.mote-panel button.quiet {
+    border-color: transparent;
+    background: none;
+    color: var(--muted);
+}
+
+.mote-panel button[aria-pressed="true"] {
+    border-color: var(--accent);
+    background: color-mix(in oklab, var(--accent) 22%, var(--ground));
+}
+
+.mote-panel input[type="number"] {
+    width: 4.2rem;
+}
+
+.mote-panel input[type="text"] {
+    min-width: 0;
+    flex: 1;
+}
+
+.mote-panel h3 {
+    margin: var(--line) 0 0.4rem;
+    font-size: 1rem;
+    color: var(--muted);
+}
+
+.mote-panel :is(ol, ul) {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.table-said {
+    margin: 0 0 0.7rem;
+    font-family: var(--font-head);
+    font-size: 1.35rem;
+    line-height: 1.25;
+}
+
+.table-dice,
+.table-go,
+.table-typed,
+.table-tabs,
+.table-add,
+.table-round,
+.table-who,
+.table-points,
+.table-saves,
+.table-conditions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+    margin-bottom: 0.6rem;
+}
+
+.table-hand {
+    min-width: 6rem;
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+}
+
+.table-tabs {
+    margin-top: var(--line);
+    padding-top: 0.8rem;
+    border-top: 0.0625rem solid var(--rule);
+}
+
+.table-fighters li {
+    padding: 0.7rem 0.8rem;
+    margin-bottom: 0.5rem;
+    border: 0.0625rem solid var(--rule);
+    border-radius: var(--radius);
+}
+
+.table-fighters li[aria-current] {
+    border-color: var(--accent);
+}
+
+.table-who strong {
+    font-size: 1.15rem;
+    margin-right: auto;
+}
+
+.table-conditions {
+    gap: 0.25rem;
+    margin-bottom: 0;
+}
+
+.table-conditions button {
+    padding: 0.05rem 0.5rem;
+    font-size: 0.85em;
+    color: var(--muted);
+}
+
+.table-conditions button[aria-pressed="true"] {
+    color: var(--ink);
+}
+
+.mote-panel .pip {
+    width: 1.1rem;
+    height: 1.1rem;
+    padding: 0;
+    border-radius: 50%;
+}
+
+.table-history li {
+    padding: 0.15rem 0;
+    color: var(--muted);
+}
+
+.table-history strong {
+    display: inline-block;
+    min-width: 2.2rem;
+    color: var(--ink);
+}
+
+.table-history span {
+    font-size: 0.9em;
+    opacity: 0.75;
+}
+
+.table-saved li {
+    margin-bottom: 0.35rem;
+}

@@ -62,6 +62,11 @@ export function drop(kinds: Sides[], random: () => number = Math.random): Die[] 
     });
 }
 
+/** Moves the dice on by `dt` seconds, in two parts so that nothing passes through a ramp. */
+export function move(dice: Die[], dt: number): void {
+    for (let part = 0; part < 2; part++) tumble(dice, surfaces, dt / 2);
+}
+
 /** One sixtieth of a second, in four parts so that nothing passes through a ramp. */
 export function advance(dice: Die[]): void {
     for (let part = 0; part < 4; part++) tumble(dice, surfaces, 1 / 240);

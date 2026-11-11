@@ -44,6 +44,8 @@ export interface Mote {
     font(size: number, weight?: number): string;
     /** Start the loop again after the scene came to rest. */
     wake(): void;
+    /** A place under the canvas for ordinary buttons and text, for a mini that needs them. Made the first time it is asked for. */
+    panel(): HTMLElement;
     /** A number kept in the browser between visits, such as a best score. */
     recall(name: string): number;
     keep(name: string, value: number): void;
@@ -121,6 +123,15 @@ export function mote(host: HTMLElement, make: (m: Mote) => Scene, { label = "An 
         },
         font: (size, weight = 400) => `${weight} ${size}px ${getComputedStyle(host).fontFamily}`,
         wake: () => start(),
+        panel() {
+            let panel = host.querySelector<HTMLElement>(".mote-panel");
+            if (!panel) {
+                panel = document.createElement("div");
+                panel.className = "mote-panel";
+                host.append(panel);
+            }
+            return panel;
+        },
         recall(name) {
             try {
                 return Number(localStorage.getItem(`mote:${name}`)) || 0;
