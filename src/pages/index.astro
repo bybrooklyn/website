@@ -1,5 +1,6 @@
 ---
 import Figure from "../components/Figure.astro";
+import PlayHere from "../components/PlayHere.astro";
 import LanguageBar from "../components/LanguageBar.astro";
 import PostRow from "../components/PostRow.astro";
 import Base from "../layouts/Base.astro";
@@ -22,6 +23,7 @@ const posts = (await getPosts()).slice(0, 4);
         <section aria-labelledby="playmatter-title">
             <h2 class="label" id="playmatter-title">playmatter</h2>
             <div class="split feature">
+                <PlayHere src="https://itch.io/embed-upload/19697599?color=10091a" title="Playmatter, playable" ratio="16 / 9" label="play the demo here" from="itch.io">
                 <Figure
                     src="/assets/playmatter.webp"
                     video="/assets/playmatter.mp4"
@@ -31,6 +33,7 @@ const posts = (await getPosts()).slice(0, 4);
                     pixel
                     eager
                 />
+                </PlayHere>
                 <div>
                     <p>
                         A 2D physics sandbox I'm making. Spawn ragdolls, build things, wire machines together, and see

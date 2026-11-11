@@ -4,12 +4,14 @@ summary: A very small engine for tiny demos and games in the browser. The minis 
 language: TypeScript
 status: in use on this site
 link: { href: "https://github.com/bybrooklyn/website/tree/main/src/mote", label: "Source and how to use it" }
+cover: ../../assets/projects/mote/cover.png
+coverAlt: The word Mote under a beam of light with one speck of dust caught in it.
 order: 8
 ---
 
 import DropBox from "../../demos/DropBox.astro";
 
-Mote is about 800 lines of TypeScript with no dependencies. It exists so that each small thing I make for this site is the thing itself and not the same loop, canvas and mouse code written again.
+Mote is about 1,200 lines of TypeScript with no dependencies. It exists so that each small thing I make for this site is the thing itself and not the same loop, canvas and mouse code written again.
 
 <DropBox />
 
@@ -17,11 +19,13 @@ Mote is about 800 lines of TypeScript with no dependencies. It exists so that ea
 
 - **A stage.** A canvas that fits its box and stays sharp, a loop that moves in fixed steps of 1/120 of a second, the pointer, a few keys, and the page's own colors. It only runs while you can see it, and stops when nothing is moving.
 - **2D physics.** Balls and convex shapes with weight, friction and bounce. Pins and ropes between them. You can pick a body up and throw it. Things that come to rest go to sleep.
-- **3D on a flat canvas.** Solids made of flat faces, turned and shaded, with no WebGL.
+- **3D on a flat canvas.** Solids made of flat faces, turned and shaded, with no WebGL. Dice that fall and tumble as real solids.
+- **A motor.** One body driven toward a place beside another, pushing back as hard: an arm holding a tool.
+- **Tests.** Friction angles, toppling, a pendulum's period, a chain that holds, dice that land fairly.
 
 ## What runs on it
 
-Everything on the [minis](/minis/) page: a pile of blocks, a chain, a game about keeping a ball on a beam, and a solid you can spin. Each one is a single file of 60 to 160 lines.
+Everything on the [minis](/minis/) page: a pile of blocks, a chain, a game about rolling a ball along a beam, a climb with a hammer, a solid you can spin, and a dice tower with a D&D helper under it.
 
 ## Using it
 

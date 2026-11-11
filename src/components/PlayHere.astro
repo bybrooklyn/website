@@ -1,0 +1,46 @@
+---
+// A game from somewhere else that can be played in place, but only once the
+// visitor asks: until "play" is pressed there is just the still (or clip)
+// given in the slot, and nothing is fetched from the other site.
+
+interface Props {
+    /** The address of the game's frame. */
+    src: string;
+    /** Says what the frame is, for people who cannot see it. */
+    title: string;
+    /** Width over height of the game, for example "16 / 9". */
+    ratio?: string;
+    /** The words on the button. */
+    label?: string;
+    /** Where the game comes from, for the line under it. */
+    from: string;
+}
+
+const { src, title, ratio = "16 / 9", label = "play it here", from } = Astro.props;
+---
+
+<div class="play-here" data-play-src={src} data-play-title={title} style={`--ratio:${ratio}`}>
+    <div class="play-still"><slot /></div>
+    <p class="play-line">
+        <button type="button" class="play-button">{label} →</button>
+        <span class="note">Loads the game from {from} when you press it, and not before.</span>
+    </p>
+</div>
+
+<script>
+    for (const place of document.querySelectorAll<HTMLElement>(".play-here")) {
+        const button = place.querySelector<HTMLButtonElement>(".play-button");
+        const still = place.querySelector<HTMLElement>(".play-still");
+        if (!button || !still) continue;
+        button.addEventListener("click", () => {
+            const frame = document.createElement("iframe");
+            frame.src = place.dataset.playSrc ?? "";
+            frame.title = place.dataset.playTitle ?? "";
+            frame.allow = "fullscreen; gamepad; autoplay";
+            frame.referrerPolicy = "no-referrer";
+            still.replaceChildren(frame);
+            place.classList.add("playing");
+            button.hidden = true;
+        });
+    }
+</script>

@@ -1,6 +1,6 @@
 # Mote
 
-A very small engine for tiny demos and games in the browser. TypeScript, no dependencies, about 800
+A very small engine for tiny demos and games in the browser. TypeScript, no dependencies, about 1,200
 lines. The minis on bybrooklyn.dev run on it.
 
 Free to use under the MIT license in this folder, which is plainer than the license on the rest of the site.
