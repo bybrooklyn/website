@@ -17,10 +17,10 @@ How to add one is in `src/mote/README.md`.
 
 - **Blocks** (toy): a pile of blocks. Double-click an empty spot, or press Space, for a new piece. Also what posts embed.
 - **Balance** (game): roll a ball along a tilting beam onto marks, against a clock and the wind.
-- **Climb** (game): a block with a hammer and a long way up. The hammer follows the mouse, which the game holds inside its box.
-- **Chain** (toy): beads on a rope with a weight.
+- **Climb** (game): a block with a hammer and eleven ledges up. The hammer follows the mouse, which the game holds inside its box. Rewritten on 11 Nov; a scripted hand climbs it to the top in the tests.
+- **Chain** (toy): thirteen pinned links with a weight.
 - **Solid** (toy, 3D): a shape to spin; click for the next one.
-- **Table** (toy, 3D): a dice tower with real tumbling dice, typed rolls and a history, and a D&D helper with a fight view and a character view.
+- **Table** (toy, 3D): a dice tower with real tumbling dice (Mote's own 3D physics and drawing), typed rolls and a history, and a D&D helper with a fight view and a character view.
 - Mote has a project page at `/projects/mote/`, a logo (a speck in a beam of light) and tests (`bun run test`).
 - The list on `/minis/` shows each mini running, small.
 - A terminal player (`src/components/Terminal.astro`) for command-line projects. It is not part of Mote.
