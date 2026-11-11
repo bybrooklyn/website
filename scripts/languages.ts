@@ -10,6 +10,7 @@
 // private repos out of the totals. Only totals are written, never repo names.
 
 import { $ } from "bun";
+import { writeJson } from "./lib";
 
 const OWNER = "bybrooklyn";
 
@@ -81,7 +82,7 @@ const output = {
     languages,
 };
 
-await Bun.write(new URL("../src/data/languages.json", import.meta.url), `${JSON.stringify(output, null, 4)}\n`);
+await writeJson(new URL("../src/data/languages.json", import.meta.url), output);
 
 console.log(`${wanted.length} repos, ${languages.length} languages`);
 for (const language of languages.slice(0, 12)) {

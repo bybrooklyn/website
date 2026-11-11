@@ -6,7 +6,7 @@
 
 import { $ } from "bun";
 import type { ProjectFacts } from "../src/lib/projects";
-import { at, frontmatter, listMdx, stem } from "./lib";
+import { at, frontmatter, listMdx, stem, writeJson } from "./lib";
 
 const folder = "src/content/projects";
 const facts: Record<string, ProjectFacts> = {};
@@ -42,4 +42,4 @@ for (const file of await listMdx(folder)) {
     console.log(file, facts[stem(file)]);
 }
 
-await Bun.write(at("src/data/project-facts.json"), `${JSON.stringify(facts, null, 4)}\n`);
+await writeJson(at("src/data/project-facts.json"), facts);

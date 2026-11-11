@@ -19,7 +19,7 @@ import { $ } from "bun";
 import { mkdir } from "node:fs/promises";
 import { dirname, extname, relative, resolve } from "node:path";
 import { themeStyle } from "../src/lib/color";
-import { at, frontmatter, isDraft, listMdx, root, slug, stem } from "./lib";
+import { at, frontmatter, isDraft, listMdx, root, slug, stem, writeJson } from "./lib";
 
 const args = process.argv.slice(2);
 const dryRun = args.includes("--dry-run");
@@ -87,7 +87,7 @@ async function notePhoto(file: string, title: string, note: string): Promise<voi
     if (!photo) throw new Error("That picture is not on the site.");
     photo.title = title.trim() || undefined;
     photo.note = note.trim() || undefined;
-    await Bun.write(at(PHOTOS), `${JSON.stringify({ photos }, null, 4)}\n`);
+    await writeJson(at(PHOTOS), { photos });
 }
 
 async function newPost(title: string): Promise<string> {

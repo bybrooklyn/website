@@ -18,6 +18,15 @@ export async function isDraft(path: string): Promise<boolean> {
     return frontmatter(await Bun.file(at(path)).text(), "draft") === "true";
 }
 
+/**
+ * Writes a data file with one record to a line: each top-level entry on its own line, and each item
+ * of a top-level list on its own. A change to one photo is then one changed line.
+ */
+export function writeJson(path: string | URL, value: object): Promise<number> {
+    const entry = (item: unknown) => (Array.isArray(item) ? `[\n${item.map((one) => `        ${JSON.stringify(one)}`).join(",\n")}\n    ]` : JSON.stringify(item));
+    return Bun.write(path, `{\n${Object.entries(value).map(([key, item]) => `    ${JSON.stringify(key)}: ${entry(item)}`).join(",\n")}\n}\n`);
+}
+
 /** The Markdown files in a folder, by name. */
 export async function listMdx(folder: string): Promise<string[]> {
     const names = await readdir(at(folder)).catch(() => []);

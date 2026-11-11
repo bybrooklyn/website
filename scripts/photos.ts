@@ -29,7 +29,7 @@ import { join } from "node:path";
 import sharp, { type Sharp } from "sharp";
 import type { Photo } from "../src/lib/photos";
 import { readExif } from "./exif";
-import { root, slug as words, stem } from "./lib";
+import { root, slug as words, stem, writeJson } from "./lib";
 
 const INBOX = join(root, "photos");
 const ADDED = join(INBOX, "added");
@@ -163,4 +163,4 @@ for (const name of (await names(join(INBOX, "setup"))).filter((file) => PICTURE.
     }
 }
 
-if (JSON.stringify(photos) !== before) await Bun.write(DATA, `${JSON.stringify({ photos }, null, 4)}\n`);
+if (JSON.stringify(photos) !== before) await writeJson(DATA, { photos });

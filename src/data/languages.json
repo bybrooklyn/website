@@ -2,179 +2,34 @@
     "updated": "2026-11-10",
     "repos": 60,
     "languages": [
-        {
-            "name": "Rust",
-            "bytes": 54596548,
-            "repos": 19,
-            "share": 0.4715
-        },
-        {
-            "name": "TypeScript",
-            "bytes": 11498278,
-            "repos": 10,
-            "share": 0.1538
-        },
-        {
-            "name": "Swift",
-            "bytes": 7844351,
-            "repos": 3,
-            "share": 0.0702
-        },
-        {
-            "name": "JavaScript",
-            "bytes": 2615236,
-            "repos": 5,
-            "share": 0.0598
-        },
-        {
-            "name": "Python",
-            "bytes": 6455603,
-            "repos": 2,
-            "share": 0.0535
-        },
-        {
-            "name": "Go",
-            "bytes": 4244696,
-            "repos": 3,
-            "share": 0.0505
-        },
-        {
-            "name": "Astro",
-            "bytes": 314658,
-            "repos": 4,
-            "share": 0.0381
-        },
-        {
-            "name": "Shell",
-            "bytes": 990196,
-            "repos": 2,
-            "share": 0.0236
-        },
-        {
-            "name": "Ruby",
-            "bytes": 420272,
-            "repos": 2,
-            "share": 0.0205
-        },
-        {
-            "name": "C#",
-            "bytes": 558460,
-            "repos": 1,
-            "share": 0.0121
-        },
-        {
-            "name": "GDScript",
-            "bytes": 406554,
-            "repos": 1,
-            "share": 0.0113
-        },
-        {
-            "name": "Java",
-            "bytes": 37940,
-            "repos": 1,
-            "share": 0.0093
-        },
-        {
-            "name": "C",
-            "bytes": 32198,
-            "repos": 1,
-            "share": 0.0093
-        },
-        {
-            "name": "DTrace",
-            "bytes": 4777,
-            "repos": 1,
-            "share": 0.0091
-        },
-        {
-            "name": "Svelte",
-            "bytes": 216076,
-            "repos": 0,
-            "share": 0.0012
-        },
-        {
-            "name": "Vue",
-            "bytes": 217888,
-            "repos": 0,
-            "share": 0.0012
-        },
-        {
-            "name": "Luau",
-            "bytes": 189879,
-            "repos": 0,
-            "share": 0.001
-        },
-        {
-            "name": "Lua",
-            "bytes": 184918,
-            "repos": 0,
-            "share": 0.001
-        },
-        {
-            "name": "WGSL",
-            "bytes": 130991,
-            "repos": 0,
-            "share": 0.0007
-        },
-        {
-            "name": "QML",
-            "bytes": 125224,
-            "repos": 0,
-            "share": 0.0007
-        },
-        {
-            "name": "Kotlin",
-            "bytes": 128718,
-            "repos": 0,
-            "share": 0.0007
-        },
-        {
-            "name": "MDX",
-            "bytes": 66690,
-            "repos": 0,
-            "share": 0.0004
-        },
-        {
-            "name": "PowerShell",
-            "bytes": 30487,
-            "repos": 0,
-            "share": 0.0002
-        },
-        {
-            "name": "HLSL",
-            "bytes": 23251,
-            "repos": 0,
-            "share": 0.0001
-        },
-        {
-            "name": "GLSL",
-            "bytes": 15011,
-            "repos": 0,
-            "share": 0.0001
-        },
-        {
-            "name": "Zig",
-            "bytes": 17586,
-            "repos": 0,
-            "share": 0.0001
-        },
-        {
-            "name": "Go Template",
-            "bytes": 5929,
-            "repos": 0,
-            "share": 0
-        },
-        {
-            "name": "C++",
-            "bytes": 5333,
-            "repos": 0,
-            "share": 0
-        },
-        {
-            "name": "CMake",
-            "bytes": 917,
-            "repos": 0,
-            "share": 0
-        }
+        {"name":"Rust","bytes":54596548,"repos":19,"share":0.4715},
+        {"name":"TypeScript","bytes":11498278,"repos":10,"share":0.1538},
+        {"name":"Swift","bytes":7844351,"repos":3,"share":0.0702},
+        {"name":"JavaScript","bytes":2615236,"repos":5,"share":0.0598},
+        {"name":"Python","bytes":6455603,"repos":2,"share":0.0535},
+        {"name":"Go","bytes":4244696,"repos":3,"share":0.0505},
+        {"name":"Astro","bytes":314658,"repos":4,"share":0.0381},
+        {"name":"Shell","bytes":990196,"repos":2,"share":0.0236},
+        {"name":"Ruby","bytes":420272,"repos":2,"share":0.0205},
+        {"name":"C#","bytes":558460,"repos":1,"share":0.0121},
+        {"name":"GDScript","bytes":406554,"repos":1,"share":0.0113},
+        {"name":"Java","bytes":37940,"repos":1,"share":0.0093},
+        {"name":"C","bytes":32198,"repos":1,"share":0.0093},
+        {"name":"DTrace","bytes":4777,"repos":1,"share":0.0091},
+        {"name":"Svelte","bytes":216076,"repos":0,"share":0.0012},
+        {"name":"Vue","bytes":217888,"repos":0,"share":0.0012},
+        {"name":"Luau","bytes":189879,"repos":0,"share":0.001},
+        {"name":"Lua","bytes":184918,"repos":0,"share":0.001},
+        {"name":"WGSL","bytes":130991,"repos":0,"share":0.0007},
+        {"name":"QML","bytes":125224,"repos":0,"share":0.0007},
+        {"name":"Kotlin","bytes":128718,"repos":0,"share":0.0007},
+        {"name":"MDX","bytes":66690,"repos":0,"share":0.0004},
+        {"name":"PowerShell","bytes":30487,"repos":0,"share":0.0002},
+        {"name":"HLSL","bytes":23251,"repos":0,"share":0.0001},
+        {"name":"GLSL","bytes":15011,"repos":0,"share":0.0001},
+        {"name":"Zig","bytes":17586,"repos":0,"share":0.0001},
+        {"name":"Go Template","bytes":5929,"repos":0,"share":0},
+        {"name":"C++","bytes":5333,"repos":0,"share":0},
+        {"name":"CMake","bytes":917,"repos":0,"share":0}
     ]
 }
