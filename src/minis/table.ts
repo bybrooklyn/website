@@ -360,8 +360,8 @@ export default function table(m: Mote): Scene {
         resting: () => !m.preview && (!thrown || thrown.done()),
         draw() {
             thrown?.dice.forEach((die, index) => {
-                models[index]!.position.set(die.body.position.x, die.body.position.y, die.body.position.z);
-                models[index]!.quaternion.set(die.body.quaternion.x, die.body.quaternion.y, die.body.quaternion.z, die.body.quaternion.w);
+                models[index]!.position.set(...die.body.p);
+                models[index]!.quaternion.set(...die.body.q);
             });
             renderer.render(scene, camera);
         },

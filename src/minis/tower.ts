@@ -1,10 +1,10 @@
 // The dice tower that the Table mini rolls in: the dice, the tower and the
-// tray as solid things, and a roll run to its end. The solving is Mote's fork
-// of cannon (forks/cannon). Kept apart from the drawing so that a roll can be
-// run, and tested, without a screen.
+// tray as solid things, and a roll run to its end, on Mote's own 3D physics
+// (space.ts). Kept apart from the drawing so that a roll can be run, and
+// tested, without a screen.
 
-import { Body, Box, ConvexPolyhedron, Plane, Quaternion, Vec3, World } from "../mote/forks/cannon/cannon.js";
-import { cube, diamond, normals, pyramid, ten, twelve, twenty, type Mesh, type V3 } from "../mote/three";
+import { Space, angled, turn, type Solid } from "../mote/space";
+import { apply, cube, diamond, normals, pyramid, ten, twelve, twenty, type Mesh, type V3 } from "../mote/three";
 
 export type Sides = 4 | 6 | 8 | 10 | 12 | 20;
 export const SIDES: Sides[] = [4, 6, 8, 10, 12, 20];
@@ -16,10 +16,10 @@ export const SHAPES: Record<Sides, Mesh> = { 4: small(pyramid()), 6: small(cube(
 const OUT: Record<Sides, V3[]> = Object.fromEntries(SIDES.map((sides) => [sides, normals(SHAPES[sides])])) as Record<Sides, V3[]>;
 
 /** The tower stands at the left of the tray. These are its edges, in units. */
-export const TOWER = { left: -5.6, right: -1, deep: 1.25, top: 9 };
+export const TOWER = { left: -5.6, right: -1, deep: 1.25, top: 8.6 };
 export const TRAY = { left: -5.6, right: 4.6, deep: 3, rim: 0.8 };
 /** How high the opening at the foot of the tower is. */
-export const OPENING = 3.4;
+export const OPENING = 4.2;
 /** How thick a wall or a ramp is. */
 export const THICK = 0.16;
 
@@ -54,20 +54,21 @@ export const SLABS: Slab[] = [
     { at: [TOWER.left, tall / 2, 0], half: [THICK / 2, tall / 2, TOWER.deep], tip: 0, kind: "wall" },
     { at: [TOWER.right, (tall + OPENING) / 2, 0], half: [THICK / 2, (tall - OPENING) / 2, TOWER.deep], tip: 0, kind: "wall" },
     { at: [(TOWER.left + TOWER.right) / 2, tall / 2, TOWER.deep], half: [(TOWER.right - TOWER.left) / 2, tall / 2, THICK / 2], tip: 0, kind: "glass" },
-    // three ramps, each with a gap at its low end: down to the right, to the left, and out of the opening
-    // The gaps are wide enough for two dice at once, so a handful cannot jam.
-    ramp(TOWER.left, 8.3, -3.1, 0.7),
-    ramp(TOWER.right, 6.2, -3.5, 0.7),
+    // Two ramps: one down to the left from the right wall, and under its end one down to the right and
+    // out of the opening. Under the end of the first, and under the top of the opening, there is room
+    // for one die riding on another, so that a handful cannot jam.
+    ramp(TOWER.right, 7.7, -3.7, 0.7),
     ramp(TOWER.left, 4.1, TOWER.right + 0.6, 0.62),
 ];
 
 export interface Die {
     sides: Sides;
-    body: Body;
+    body: Solid;
 }
 
 export interface Throw {
     dice: Die[];
+    space: Space;
     /** Moves the dice on by `dt` seconds. */
     step(dt: number): void;
     /** Whether every die has come to rest. */
@@ -76,85 +77,56 @@ export interface Throw {
     values(): number[];
 }
 
+/** How much the dice and the tower rub, and how much of its speed a die keeps when it hits something. */
+const RUB = 0.25;
+const BOUNCE = 0.3;
+
 /** Drops these dice in at the top of the tower, one above another, each turned and spun its own way. `random` gives numbers from 0 to 1. */
 export function throwDice(kinds: Sides[], random: () => number = Math.random): Throw {
     const between = (low: number, high: number) => low + random() * (high - low);
-    const world = new World({ gravity: new Vec3(0, -34, 0), allowSleep: true });
-    world.defaultContactMaterial.friction = 0.28;
-    // One rub for each pair of things that touch, not one for every corner that does.
-    (world as unknown as { narrowphase: { enableFrictionReduction: boolean } }).narrowphase.enableFrictionReduction = true;
-    (world.solver as unknown as { iterations: number }).iterations = 14;
-
-    const floor = new Body({ mass: 0, shape: new Plane() });
-    floor.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
-    world.addBody(floor);
-    for (const slab of SLABS) {
-        const body = new Body({ mass: 0, shape: new Box(new Vec3(...slab.half)), position: new Vec3(...slab.at) });
-        body.quaternion.setFromEuler(0, 0, slab.tip);
-        world.addBody(body);
-    }
+    const space = new Space();
+    // the floor of the tray, and under the tower
+    space.slab([0, -1, 0], [30, 1, 30], undefined, { friction: RUB });
+    for (const slab of SLABS) space.slab(slab.at, slab.half, angled(0, 0, slab.tip), { friction: RUB });
 
     const dice = kinds.map((sides, index): Die => {
-        const mesh = SHAPES[sides];
-        const body = new Body({
-            mass: 1,
-            shape: new ConvexPolyhedron({ vertices: mesh.points.map((point) => new Vec3(...point)), faces: mesh.faces }),
-            position: new Vec3(between(-5, -4), TOWER.top + 0.6 + index * 1.4, between(-0.5, 0.5)),
-            angularDamping: 0.1,
-            linearDamping: 0.03,
-            sleepSpeedLimit: 0.5,
-            sleepTimeLimit: 0.4,
-        });
-        body.quaternion.setFromEuler(between(0, 6.28), between(0, 6.28), between(0, 6.28));
-        body.velocity.set(between(-1, 1), 0, between(-0.6, 0.6));
-        body.angularVelocity.set(between(-9, 9), between(-9, 9), between(-9, 9));
-        world.addBody(body);
+        const body = space.solid(
+            SHAPES[sides],
+            [between(-2.9, -1.9), TOWER.top + 0.6 + index * 1.4, between(-0.5, 0.5)],
+            { friction: RUB, bounce: BOUNCE },
+            angled(between(0, 6.28), between(0, 6.28), between(0, 6.28)),
+        );
+        body.v = [between(-1, 1), 0, between(-0.6, 0.6)];
+        body.w = [between(-9, 9), between(-9, 9), between(-9, 9)];
+        body.damping = 0.03;
+        body.spinDamping = 0.25;
         return { sides, body };
     });
 
     let waited = 0;
     return {
         dice,
+        space,
         step(dt) {
             waited += dt;
-            // in two parts, so that nothing passes through a ramp
-            world.step(dt / 2);
-            world.step(dt / 2);
-            // A die that comes to a stop inside the tower, caught in a corner or against another, is not left
-            // there: it is kept awake and given a tap, as you would tap a tower that a die had stuck in.
-            for (const { body } of dice) {
-                if (body.position.x > TOWER.right + 0.3) {
-                    // Out in the tray and nearly stopped, a die is settled the rest of the way: this solver would
-                    // otherwise leave one rocking on an edge for a long time.
-                    if (body.position.y < 1 && body.velocity.length() < 1.5 && body.angularVelocity.length() < 3) {
-                        body.velocity.scale(0.9, body.velocity);
-                        body.angularVelocity.scale(0.9, body.angularVelocity);
-                    }
-                    continue;
-                }
-                body.wakeUp();
-                if (body.velocity.length() < 0.4) {
-                    body.velocity.set(between(1.5, 3) * (body.position.y > 5 && body.position.y < 7 ? -1 : 1), between(1, 2.5), between(-1, 1));
-                    body.angularVelocity.set(between(-6, 6), between(-6, 6), between(-6, 6));
-                }
-            }
+            space.step(dt);
         },
         // A die that will not lie still is not waited on for ever.
-        done: () => waited > 20 || dice.every((die) => die.body.sleepState === Body.SLEEPING),
+        done: () => waited > 20 || space.still(),
         values: () => dice.map(shown),
     };
 }
 
 /** The number a die shows. A four-sided die is read from the face it rests on; the rest from the face on top. */
 export function shown(die: Die): number {
-    const turn = die.body.quaternion as Quaternion;
-    const ups = OUT[die.sides].map((normal) => turn.vmult(new Vec3(...normal)).y * (die.sides === 4 ? -1 : 1));
+    const turned = turn(die.body);
+    const ups = OUT[die.sides].map((normal) => apply(turned, normal)[1] * (die.sides === 4 ? -1 : 1));
     return ups.indexOf(Math.max(...ups)) + 1;
 }
 
 /** Rolls to the end without drawing anything, and returns what each die shows. */
 export function roll(kinds: Sides[], random: () => number = Math.random): number[] {
     const thrown = throwDice(kinds, random);
-    while (!thrown.done()) thrown.step(1 / 60);
+    while (!thrown.done()) thrown.step(1 / 120);
     return thrown.values();
 }
