@@ -1,7 +1,7 @@
 ---
-// /photos/: one picture at a time, with a button for another at random.
-// The picture sits in a frame of fixed height, so the heading and the buttons
-// under it stay where they are whatever shape the picture is.
+// /photos/: one picture at a time, picked at random, with a button for another.
+// The picture sits in the middle of a frame of fixed height, so the heading and
+// the buttons under it stay where they are whatever shape the picture is.
 // There are two sets, my photographs and the shitposts, and a switch between
 // them. They come from the photos/ folder; see scripts/photos.ts.
 import type { GetStaticPaths } from "astro";
@@ -24,7 +24,7 @@ const all = photos.map((photo) => ({
     caption: photo.caption ?? "",
     taken: photo.taken ? formatDate(new Date(photo.taken)) : "",
 }));
-// Without scripts the page shows this one: the newest photograph.
+// With scripts the page opens on a picture picked at random. Without them it shows this one.
 const first = all.find((photo) => photo.set === "photos") ?? all[0]!;
 const count = (set: string) => all.filter((photo) => photo.set === set).length;
 ---
@@ -36,12 +36,15 @@ const count = (set: string) => all.filter((photo) => photo.set === set).length;
 
     <figure class="photo">
         <div class="photo-frame">
-            <img src={first.src} width={first.width} height={first.height} alt={first.title} style={`background-color:${first.color}`} fetchpriority="high" />
+            <img alt="" />
+            <noscript>
+                <img src={first.src} width={first.width} height={first.height} alt={first.title} style={`background-color:${first.color}`} />
+            </noscript>
         </div>
         <figcaption>
-            <h2 class="photo-title">{first.title}</h2>
-            <p class="photo-caption">{first.caption}</p>
-            <p class="photo-taken note">{first.taken}</p>
+            <h2 class="photo-title"><noscript>{first.title}</noscript></h2>
+            <p class="photo-caption"><noscript>{first.caption}</noscript></p>
+            <p class="photo-taken note"><noscript>{first.taken}</noscript></p>
         </figcaption>
     </figure>
 
@@ -73,15 +76,17 @@ const count = (set: string) => all.filter((photo) => photo.set === set).length;
     }
 
     const all = JSON.parse(document.getElementById("photo-list")?.textContent ?? "[]") as Shown[];
-    const image = document.querySelector<HTMLImageElement>(".photo img");
+    const figure = document.querySelector<HTMLElement>(".photo");
+    const image = document.querySelector<HTMLImageElement>(".photo-frame > img");
     const buttons = document.querySelector<HTMLElement>(".photo-buttons");
+    const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const LEAVE = 240;
 
-    if (image && buttons && all.length > 1) {
-        buttons.hidden = false;
-
+    if (figure && image && buttons && all.length > 0) {
         let set = "photos";
         let waiting: number[] = [];
         let next = -1;
+        let busy = false;
 
         // Every picture in the set comes up once, in a shuffled order, before any repeats.
         const draw = (not: number): number => {
@@ -95,8 +100,27 @@ const count = (set: string) => all.filter((photo) => photo.set === set).length;
             return waiting.pop() ?? not;
         };
 
-        const show = (index: number) => {
+        // Resolves once the picture is fetched and decoded, so it can be shown whole.
+        const ready = (src: string) => {
+            const loading = new Image();
+            loading.src = src;
+            return loading.decode().catch(() => {});
+        };
+        const pause = (ms: number) => new Promise((done) => setTimeout(done, ms));
+
+        // The old picture fades and drifts out, the new one is put in while nothing
+        // shows, and then it fades and settles in with its heading just behind it.
+        const show = async (index: number) => {
+            if (busy) return;
+            busy = true;
             const photo = all[index]!;
+            const loaded = ready(photo.src);
+            if (image.src && !still) {
+                figure.dataset.state = "leaving";
+                await pause(LEAVE);
+            }
+            await loaded;
+            figure.dataset.state = "arriving";
             image.style.backgroundColor = photo.color;
             image.width = photo.width;
             image.height = photo.height;
@@ -105,28 +129,32 @@ const count = (set: string) => all.filter((photo) => photo.set === set).length;
             document.querySelector(".photo-title")!.textContent = photo.title;
             document.querySelector(".photo-caption")!.textContent = photo.caption;
             document.querySelector(".photo-taken")!.textContent = photo.taken;
-            // Fetch the one after it now, so "another" is instant.
+            // Let the starting position take before easing out of it.
+            void figure.offsetWidth;
+            delete figure.dataset.state;
+            // Fetch the one after it now, so "another" never waits on the network.
             next = draw(index);
-            new Image().src = all[next]!.src;
+            void ready(all[next]!.src);
+            busy = false;
         };
 
+        buttons.hidden = all.length < 2;
         buttons.addEventListener("click", (event) => {
             const button = (event.target as Element).closest<HTMLElement>("button");
-            if (button?.dataset.step) show(next);
-            else if (button?.dataset.set && button.dataset.set !== set) {
+            if (button?.dataset.step) void show(next);
+            else if (button?.dataset.set && button.dataset.set !== set && !busy) {
                 set = button.dataset.set;
                 waiting = [];
                 for (const other of buttons.querySelectorAll<HTMLElement>("[data-set]")) other.setAttribute("aria-pressed", String(other.dataset.set === set));
-                show(draw(-1));
+                void show(draw(-1));
             }
         });
         document.addEventListener("keydown", (event) => {
-            if (event.key === "ArrowRight" && !event.ctrlKey && !event.metaKey && !event.altKey) show(next);
+            if (event.key === "ArrowRight" && !event.ctrlKey && !event.metaKey && !event.altKey) void show(next);
         });
 
-        // The picture already on the page stays; only the one after it is lined up.
-        const first = all.findIndex((photo) => photo.set === "photos");
-        next = draw(first);
-        new Image().src = all[next]!.src;
+        // A different picture every visit.
+        figure.dataset.state = "arriving";
+        void show(draw(-1));
     }
 </script>

@@ -1,13 +1,15 @@
-/* /photos/: one picture in a frame of fixed height, so nothing under it moves. */
+/* /photos/: one picture in the middle of a frame of fixed height, so nothing under it moves. */
 
 .photo {
     margin: 0;
+    text-align: center;
 }
 
 .photo-frame {
-    display: flex;
-    align-items: flex-start;
-    height: clamp(16rem, calc(100svh - 25rem), 48rem);
+    display: grid;
+    place-items: center;
+    /* On a narrow screen the frame is no taller than a picture can fill. */
+    height: min(clamp(16rem, calc(100svh - 25rem), 48rem), 75vw);
 }
 
 .photo-frame img {
@@ -16,7 +18,13 @@
     max-width: 100%;
     height: auto;
     max-height: 100%;
+    min-height: 0;
     border-radius: var(--radius);
+}
+
+/* Before the first picture is chosen there is nothing to show. */
+.photo-frame img:not([src]) {
+    visibility: hidden;
 }
 
 /* Room for a heading, a caption and a date, taken or not, so the buttons hold their place. */
@@ -35,12 +43,65 @@
     line-height: var(--line);
 }
 
+/*
+ * Changing pictures. The one on show drifts up and blurs away, and the next
+ * comes up from just below with its heading a moment behind it.
+ */
+.photo-frame img,
+.photo figcaption {
+    transition:
+        opacity 0.6s cubic-bezier(0.2, 0.7, 0.2, 1),
+        transform 0.7s cubic-bezier(0.2, 0.7, 0.2, 1),
+        filter 0.6s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.photo figcaption {
+    transition-delay: 0.12s;
+}
+
+.photo[data-state] .photo-frame img,
+.photo[data-state] figcaption {
+    opacity: 0;
+    transition-delay: 0s;
+}
+
+.photo[data-state="leaving"] .photo-frame img,
+.photo[data-state="leaving"] figcaption {
+    transition-duration: 0.24s;
+    transition-timing-function: cubic-bezier(0.5, 0, 0.8, 0.4);
+}
+
+.photo[data-state="leaving"] .photo-frame img {
+    transform: translateY(-0.6rem) scale(0.985);
+    filter: blur(0.5rem);
+}
+
+.photo[data-state="arriving"] .photo-frame img,
+.photo[data-state="arriving"] figcaption {
+    transition: none;
+}
+
+.photo[data-state="arriving"] .photo-frame img {
+    transform: translateY(0.9rem) scale(0.975);
+    filter: blur(0.6rem);
+}
+
+.photo[data-state="arriving"] figcaption {
+    transform: translateY(0.4rem);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .photo-frame img,
+    .photo figcaption {
+        transition: none;
+    }
+}
+
 .photo-buttons {
     display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 0.25rem 1.5rem;
+    flex-direction: column;
+    align-items: center;
+    gap: calc(var(--line) * 0.4);
     margin: 0;
 }
 

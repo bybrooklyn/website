@@ -207,18 +207,8 @@ h1 + .lede {
     margin: 0;
 }
 
-/* The license line takes a row of its own, under the links. */
-.site-footer .rights {
-    order: 1;
-    flex-basis: 100%;
-}
-
-.site-footer .rights a {
-    color: inherit;
-}
-
 /*
- * "email" widens into the address on hover. Footer.astro measures both texts
+ * "email" widens into the address on hover, and © into the license line. Footer.astro measures both texts
  * so the width can animate. Without scripts it is a plain link.
  */
 .reveal {
@@ -537,6 +527,36 @@ h1 + .about {
     html,
     .opened-panel {
         scroll-behavior: auto;
+    }
+}
+
+/*
+ * The license line is too long to open out on a narrow screen, and there is
+ * no pointer to open it with, so there it is written out on a row of its own.
+ */
+@media (max-width: 40rem), (hover: none) {
+    .site-footer .rights-item {
+        flex-basis: 100%;
+    }
+
+    .reveal.rights,
+    .reveal.rights.ready {
+        display: inline;
+        width: auto;
+        overflow: visible;
+        white-space: normal;
+        color: var(--muted);
+        font-size: var(--small, 0.85em);
+    }
+
+    .reveal.rights .reveal-short {
+        display: none;
+    }
+
+    .reveal.rights .reveal-full,
+    .reveal.rights.ready .reveal-full {
+        display: inline;
+        opacity: 1;
     }
 }
 

@@ -4,6 +4,7 @@ import { build } from "../lib/build";
 import { hasPosts } from "../lib/posts";
 
 const posts = await hasPosts();
+const rights = "Some rights reserved. All page content is under CC BY-NC.";
 ---
 
 <footer class="site-footer">
@@ -22,10 +23,13 @@ const posts = await hasPosts();
             </li>
         )}
         <li><a href={site.source}>source</a></li>
+        <li class="rights-item">
+            <a class="reveal rights" href="https://creativecommons.org/licenses/by-nc/4.0/" rel="license" aria-label={rights}>
+                <span class="reveal-short" aria-hidden="true">©</span>
+                <span class="reveal-full" aria-hidden="true">{rights}</span>
+            </a>
+        </li>
     </ul>
-    <p class="note rights">
-        Some rights reserved. All page content is under <a href="https://creativecommons.org/licenses/by-nc/4.0/">CC BY-NC</a>.
-    </p>
     <p class="note">
         built <time datetime={build.iso}>{build.time}</time>{build.commit && <> from <a class="commit" href={`${site.source}/commit/${build.commit}`}><code>{build.commit}</code></a></>}
     </p>
