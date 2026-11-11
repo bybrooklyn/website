@@ -47,9 +47,9 @@ const { back, title, ...document } = Astro.props;
             <slot />
         </main>
     </div>
-    <script is:inline>
+    <script>
         // The panel scrolls, not the page, so give it the keyboard: without
         // this, Page Down, Space and the arrow keys do nothing until a click.
-        document.querySelector(".opened-panel").focus({ preventScroll: true });
+        document.querySelector<HTMLElement>(".opened-panel")?.focus({ preventScroll: true });
     </script>
 </Document>

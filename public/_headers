@@ -1,11 +1,15 @@
 # Cloudflare Pages response headers.
+#
+# The content security policy for scripts, styles and everything else is in a
+# <meta> on each page, written by Astro at build time (astro.config.ts). Only
+# frame-ancestors is here, because a <meta> cannot set it.
 
 /*
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()
   X-Frame-Options: DENY
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self'; font-src 'self'; frame-src https:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
+  Content-Security-Policy: frame-ancestors 'none'
 
 # Built files carry a hash in their name, so they never change.
 /_astro/*

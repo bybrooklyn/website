@@ -1,8 +1,15 @@
-import { defineConfig } from "astro/config";
+import { defineConfig, fontProviders } from "astro/config";
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { satteri } from "@astrojs/markdown-satteri";
 import mdx from "@astrojs/mdx";
 import sitemap from "@astrojs/sitemap";
+import cspCheck from "./integrations/csp-check";
 import resumePdf from "./integrations/resume-pdf";
+
+// Astro hashes the scripts it processes, but not one written inline as is. The
+// page-transition script has to be inline, so its hash is worked out here from the same file.
+const transition = createHash("sha256").update(readFileSync(new URL("./src/scripts/transition.js", import.meta.url))).digest("base64");
 
 export default defineConfig({
     site: "https://bybrooklyn.dev",
@@ -12,6 +19,59 @@ export default defineConfig({
         // The stylesheets are small, and a page that carries its own styles
         // can be drawn after one round trip instead of three.
         inlineStylesheets: "always",
+    },
+    // The site's two typefaces. Astro writes their @font-face rules and a
+    // fallback matched to each one's proportions, so text moves less when the
+    // real font arrives. Document.astro puts them in every page's head. The
+    // files are the trimmed copies scripts/trim-fonts.py makes.
+    fonts: [
+        {
+            provider: fontProviders.local(),
+            name: "Torrens Serif",
+            cssVariable: "--font-torrens",
+            fallbacks: ["Georgia", "serif"],
+            options: {
+                variants: [
+                    { src: ["./src/assets/fonts/torrens-serif.woff2"], weight: "100 900", style: "normal" },
+                    { src: ["./src/assets/fonts/torrens-serif-italic.woff2"], weight: "100 900", style: "italic" },
+                ],
+            },
+        },
+        {
+            provider: fontProviders.local(),
+            name: "Drafting Mono",
+            cssVariable: "--font-mono",
+            fallbacks: ["ui-monospace", "Courier New", "monospace"],
+            options: {
+                variants: [{ src: ["./src/assets/fonts/drafting-mono.woff2"], weight: "100 700", style: "normal" }],
+            },
+        },
+    ],
+    security: {
+        // Every inline script and style is hashed at build time and only those may run,
+        // in a <meta> on each page. Inline style attributes (the theme's colors, the
+        // blurred previews) are allowed as attributes only.
+        csp: {
+            directives: [
+                "default-src 'self'",
+                "img-src 'self' data:",
+                "media-src 'self'",
+                "font-src 'self'",
+                "frame-src https:",
+                "object-src 'none'",
+                "base-uri 'self'",
+                "form-action 'self'",
+            ],
+            scriptDirective: {
+                hashes: [`sha256-${transition}`],
+            },
+            styleDirective: {
+                resources: [
+                    { resource: "'self'", kind: "element" },
+                    { resource: "'unsafe-inline'", kind: "attribute" },
+                ],
+            },
+        },
     },
     // Start fetching a page as soon as a link to it is hovered, focused or
     // touched. Astro holds back by itself on data-saving or very slow connections.
@@ -23,6 +83,7 @@ export default defineConfig({
         mdx(),
         sitemap(),
         resumePdf(),
+        cspCheck(),
     ],
     markdown: {
         processor: satteri({

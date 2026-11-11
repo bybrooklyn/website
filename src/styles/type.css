@@ -1,5 +1,38 @@
 /* The type tester and specimen on the Torrens Serif page. */
 
+/* The whole of Torrens Serif, and the Fraunces it is compared with: fetched only here. */
+@font-face {
+    font-family: "Torrens Serif Complete";
+    src: url("../assets/fonts/full/torrens-serif.woff2") format("woff2");
+    font-weight: 100 900;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "Torrens Serif Complete";
+    src: url("../assets/fonts/full/torrens-serif-italic.woff2") format("woff2");
+    font-weight: 100 900;
+    font-style: italic;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "Fraunces Soft";
+    src: url("../assets/fonts/fraunces-soft.woff2") format("woff2");
+    font-weight: 100 900;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "Fraunces Soft";
+    src: url("../assets/fonts/fraunces-soft-italic.woff2") format("woff2");
+    font-weight: 100 900;
+    font-style: italic;
+    font-display: swap;
+}
+
 .prose .tester {
     max-width: none;
 }
@@ -53,7 +86,7 @@
 /* ---- specimen ---- */
 
 .specimen {
-    font-family: "Torrens Serif Complete", "Torrens Serif", serif;
+    font-family: "Torrens Serif Complete", var(--font-torrens);
 }
 
 .prose .specimen h3 {

@@ -1,78 +1,18 @@
 /*
+ * The typefaces. Their @font-face rules come from the `fonts` setting in
+ * astro.config.ts, which also defines --font-torrens and --font-mono.
+ *
  * Torrens Serif is my own cut of Fraunces (by Undercase Type, SIL Open Font
  * License): softness at its maximum and fixed at the size meant for headings.
- * That makes it tight at small sizes, so paragraphs are set in Fraunces
- * itself, which adjusts its shapes to the size it is used at.
- *
- * "Fraunces Soft" is Fraunces with its softness fixed at 100 and its wonky
- * alternates off, cut down to Latin, so the browser fetches about half as
- * much. scripts/fraunces-soft.py is how those two files are made.
- * The files named here are trimmed copies: Latin only, every weight kept.
- * The complete fonts are in assets/fonts/full/, and scripts/trim-fonts.py
- * makes these from them. "Torrens Serif Complete" is the whole of the
- * headline font, fetched only by the page that shows it off.
+ * The files are trimmed copies, Latin only with every weight kept; the
+ * complete fonts are in assets/fonts/full/ and scripts/trim-fonts.py makes
+ * these from them.
  */
 
-@font-face {
-    font-family: "Torrens Serif Complete";
-    src: url("../assets/fonts/full/torrens-serif.woff2") format("woff2");
-    font-weight: 100 900;
-    font-style: normal;
-    font-display: swap;
-}
-
-@font-face {
-    font-family: "Torrens Serif Complete";
-    src: url("../assets/fonts/full/torrens-serif-italic.woff2") format("woff2");
-    font-weight: 100 900;
-    font-style: italic;
-    font-display: swap;
-}
-
-@font-face {
-    font-family: "Torrens Serif";
-    src: url("../assets/fonts/torrens-serif.woff2") format("woff2");
-    font-weight: 100 900;
-    font-style: normal;
-    font-display: swap;
-}
-
-@font-face {
-    font-family: "Torrens Serif";
-    src: url("../assets/fonts/torrens-serif-italic.woff2") format("woff2");
-    font-weight: 100 900;
-    font-style: italic;
-    font-display: swap;
-}
-
-@font-face {
-    font-family: "Fraunces Soft";
-    src: url("../assets/fonts/fraunces-soft.woff2") format("woff2");
-    font-weight: 100 900;
-    font-style: normal;
-    font-display: swap;
-}
-
-@font-face {
-    font-family: "Fraunces Soft";
-    src: url("../assets/fonts/fraunces-soft-italic.woff2") format("woff2");
-    font-weight: 100 900;
-    font-style: italic;
-    font-display: swap;
-}
-
-@font-face {
-    font-family: "Drafting Mono";
-    src: url("../assets/fonts/drafting-mono.woff2") format("woff2");
-    font-weight: 100 700;
-    font-style: normal;
-    font-display: swap;
-}
-
 :root {
-    --font-head: "Torrens Serif", "Fraunces Soft", Georgia, serif;
-    --font-text: "Torrens Serif", Georgia, serif;
-    --font-code: "Drafting Mono", ui-monospace, "Courier New", monospace;
+    --font-head: var(--font-torrens);
+    --font-text: var(--font-torrens);
+    --font-code: var(--font-mono);
 
     --head-weight: 520;
     --text-weight: 400;

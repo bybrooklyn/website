@@ -177,7 +177,16 @@ const script = await bundle.outputs[0]!.text();
 
 async function styles(): Promise<string> {
     const sheet = (name: string) => Bun.file(at(`src/styles/${name}`)).text();
-    const fonts = (await sheet("fonts.css")).replace(/url\("\.\.\/assets\/fonts\//g, 'url("/fonts/');
+    // The site gets its @font-face rules from Astro; the editor is not built by Astro, so it has its own.
+    const face = (family: string, file: string, style = "normal") =>
+        `@font-face{font-family:"${family}";src:url("/fonts/${file}") format("woff2");font-weight:100 900;font-style:${style};font-display:swap}`;
+    const fonts = [
+        face("Torrens Serif", "torrens-serif.woff2"),
+        face("Torrens Serif", "torrens-serif-italic.woff2", "italic"),
+        face("Drafting Mono", "drafting-mono.woff2"),
+        ':root{--font-torrens:"Torrens Serif",Georgia,serif;--font-mono:"Drafting Mono",ui-monospace,monospace}',
+        await sheet("fonts.css"),
+    ].join("\n");
     return [`:root{${themeStyle()}}`, fonts, await sheet("tokens.css"), await sheet("prose.css"), await Bun.file(at("scripts/editor/editor.css")).text()].join("\n");
 }
 

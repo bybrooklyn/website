@@ -32,17 +32,3 @@ const { src, title, ratio = "16 / 9", caption, allow, sandbox = "" } = Astro.pro
         style={`aspect-ratio:${ratio}`}></iframe>
     {caption && <figcaption class="note">{caption}</figcaption>}
 </figure>
-
-<style>
-    .embed {
-        margin-inline: 0;
-    }
-
-    iframe {
-        display: block;
-        width: 100%;
-        height: auto;
-        border: 0;
-        background: var(--surface);
-    }
-</style>

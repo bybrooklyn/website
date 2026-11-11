@@ -1,4 +1,10 @@
 ---
+// Styles for what written content can contain. They are loaded here, by the page, and not only by
+// the components themselves: Astro's content security policy does not see styles that arrive from
+// inside rendered Markdown, and would block them.
+import "../styles/timeline.css";
+import "../styles/diagram.css";
+import "../styles/type.css";
 import PrevNext from "../components/PrevNext.astro";
 import Picture from "../components/Picture.astro";
 import type { MarkdownHeading } from "astro";
