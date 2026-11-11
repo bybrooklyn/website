@@ -32,7 +32,6 @@
         "@types/bun": "^1.4.4",
         "@types/three": "^0.187.0",
         "cannon-es": "0.20.0",
-        "planck": "1.5.1",
         "simple-icons": "^16.37.0",
         "three": "0.187.0",
         "wrangler": "4.160.0"

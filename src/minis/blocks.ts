@@ -3,7 +3,7 @@
 // spot or press Space: a single click on nothing does nothing, so reaching
 // for a block and missing does not add one.
 
-import { Flat, radius, send, trace, where, type Body, type Mote, type P, type Scene } from "../mote";
+import { Flat, radius, send, trace, wake, type Body, type Mote, type P, type Scene, type Wall } from "../mote";
 
 const MOST = 60;
 const FLOOR = 6;
@@ -19,7 +19,7 @@ export default function blocks(m: Mote): Scene {
     const pile: Body[] = [];
     const colors = new Map<Body, string>();
     let hue = Math.random() * 360;
-    let walls: Body | undefined;
+    let walls: Wall | undefined;
     const most = m.preview ? 14 : MOST;
     let dropped = 0;
     // The box's corners are rounded, and its walls follow them: how round is read from the page.
@@ -36,9 +36,9 @@ export default function blocks(m: Mote): Scene {
         const pick = Math.random();
         const half = SIZE / 2;
         const block =
-            pick < 0.7 ? flat.box(x, y, SIZE, SIZE, { quick: true })
-            : pick < 0.85 ? flat.ball(x, y, half, { bounce: 0.35, quick: true })
-            : flat.shape(x, y, [[0, -half], [half * 1.15, half], [-half * 1.15, half]], { quick: true });
+            pick < 0.7 ? flat.box(x, y, SIZE, SIZE)
+            : pick < 0.85 ? flat.ball(x, y, half, { bounce: 0.35 })
+            : flat.shape(x, y, [[0, -half], [half * 1.15, half], [-half * 1.15, half]]);
         send(block, 0, 0, (Math.random() - 0.5) * 1.2);
         add(block);
         if (pile.length > most) {
@@ -59,13 +59,13 @@ export default function blocks(m: Mote): Scene {
         });
         // clockwise from the top left: each corner's curve, a quarter turn at a time
         walls = flat.wall(r < 2 ? [[0, 0], [w, 0], [w, h], [0, h]] : [...arc(r, r, Math.PI), ...arc(w - r, r, -Math.PI / 2), ...arc(w - r, h - r, 0), ...arc(r, h - r, Math.PI / 2)], true);
-        for (const block of pile) block.setAwake(true);
+        for (const block of pile) wake(block);
     };
 
     enclose();
     const middle = m.width / 2;
     const floor = m.height - FLOOR;
-    for (const [column, row] of [[-1, 0], [0, 0], [1, 0], [-0.5, 1], [0.5, 1], [0, 2]] as const) add(flat.box(middle + column * SIZE, floor - SIZE / 2 - row * SIZE, SIZE, SIZE, { quick: true }));
+    for (const [column, row] of [[-1, 0], [0, 0], [1, 0], [-0.5, 1], [0.5, 1], [0, 2]] as const) add(flat.box(middle + column * SIZE, floor - SIZE / 2 - row * SIZE, SIZE, SIZE));
 
     return {
         step(dt) {
@@ -102,7 +102,7 @@ export default function blocks(m: Mote): Scene {
                 const r = radius(block);
                 if (r) {
                     // a spoke, so a rolling ball can be seen to roll
-                    const { x, y, a } = where(block);
+                    const { x, y, a } = block;
                     ctx.beginPath();
                     ctx.moveTo(x, y);
                     ctx.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r);

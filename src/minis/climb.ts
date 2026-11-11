@@ -19,7 +19,6 @@ const TOP = -1275;
 
 export default function climb(m: Mote): Scene {
     const flat = new Flat(2000);
-    flat.care = [12, 6];
     const rock = { fixed: true, friction: 0.9 };
     const rocks: Body[] = [
         flat.box(0, 40, 1400, 80, rock),
@@ -40,8 +39,8 @@ export default function climb(m: Mote): Scene {
     ];
     // It stays upright: the game is the hammer, not keeping your balance.
     const climber = flat.box(0, -SIZE / 2, SIZE, SIZE, { friction: 0.6, upright: true, density: 1.2 });
-    climber.setLinearDamping(0.15);
-    const head = flat.ball(0, -SIZE / 2 - 70, 11, { friction: 1.4, density: 2.5, quick: true });
+    climber.damping = 0.15;
+    const head = flat.ball(0, -SIZE / 2 - 70, 11, { friction: 1.4, density: 2.5 });
     // The arms: strong enough to lift the block, with something to spare.
     const arms = flat.motor(climber, head, 3.4);
     arms.to(0, -70);
