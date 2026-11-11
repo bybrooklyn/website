@@ -5,40 +5,69 @@ import { World, ball, type Body, type Mote, type Scene } from "../mote";
 
 const BEADS = 14;
 const GAP = 15;
+/** The last rope is longer, to clear the weight. */
+const LAST = GAP + 16;
 
 export const label = "A chain of beads with a weight on the end. Drag it and let go.";
 
 export default function chain(m: Mote): Scene {
-    const world = Object.assign(new World(), { gravity: 1400, grip: 30, follow: 0.2 });
+    // Something jointed wants more work per step than a pile does, a hand that
+    // cannot out-pull the rope, and enough air to bring it to rest.
+    const world = Object.assign(new World(), { gravity: 1400, grip: 10, follow: 0.25, passes: 16, parts: 4, air: 0.8 });
     const nail = ball(m.width / 2, 26, 3, { fixed: true });
     world.add(nail);
     const beads: Body[] = [];
     let above = nail;
     for (let index = 0; index < BEADS; index++) {
         const last = index === BEADS - 1;
-        // Laid out to one side, so it swings as soon as it is seen.
-        const bead = ball(nail.x + (index + 1) * GAP * 0.8, nail.y + (index + 1) * GAP * 0.6, last ? 20 : 4.5, { friction: 0.3 });
+        // Laid out to one side, so it swings as soon as it is seen. The beads are
+        // dense: a chain of featherweights with a heavy end pulls itself apart.
+        const bead = ball(nail.x + (index + 1) * GAP * 0.8, nail.y + (index + 1) * GAP * 0.6, last ? 20 : 4.5, { friction: 0.3, density: last ? 1 : 8 });
         world.add(bead);
-        world.join(above, bead, [0, 0], [0, 0], last ? GAP + 16 : GAP, true);
+        world.join(above, bead, [0, 0], [0, 0], last ? LAST : GAP, true);
         beads.push(bead);
         above = bead;
     }
     const weight = beads.at(-1)!;
+    let held = -1;
+    let pushed = 0;
+
+    /** The pointer, pulled back to where the held bead can actually reach. */
+    const within = (x: number, y: number): [number, number] => {
+        const reach = ((held + 1) * GAP + (held === BEADS - 1 ? LAST - GAP : 0)) * 0.98;
+        const away = Math.hypot(x - nail.x, y - nail.y);
+        return away > reach ? [nail.x + ((x - nail.x) * reach) / away, nail.y + ((y - nail.y) * reach) / away] : [x, y];
+    };
 
     return {
-        step: (dt) => world.step(dt),
+        step(dt) {
+            world.step(dt);
+            // Shown small in a list, it is given a push whenever it has nearly stopped.
+            if (m.preview && m.time - pushed > 5 && Math.hypot(weight.vx, weight.vy) < 60) {
+                pushed = m.time;
+                weight.asleep = false;
+                weight.vx = (Math.random() < 0.5 ? -1 : 1) * 700;
+            }
+        },
         resize() {
             nail.x = m.width / 2;
         },
-        press: (x, y) => {
-            // A bead is small, so the nearest one within reach is taken.
+        press(x, y) {
+            // A bead is small, so the nearest one within reach of the pointer is taken, by its middle.
             const near = beads.toSorted((a, b) => Math.hypot(a.x - x, a.y - y) - Math.hypot(b.x - x, b.y - y))[0]!;
-            if (Math.hypot(near.x - x, near.y - y) < Math.max(near.r, 14) + 10) world.grab([near.x, near.y]);
-            world.drag([x, y]);
+            if (Math.hypot(near.x - x, near.y - y) > Math.max(near.r, 14) + 10) return;
+            held = beads.indexOf(near);
+            world.grab([near.x, near.y]);
+            world.drag(within(x, y));
         },
-        move: (x, y) => world.drag([x, y]),
-        release: () => world.release(),
-        resting: () => beads.every((bead) => bead.asleep) && !world.holding && !m.pointer.inside,
+        move(x, y) {
+            if (held >= 0) world.drag(within(x, y));
+        },
+        release() {
+            held = -1;
+            world.release();
+        },
+        resting: () => !m.preview && beads.every((bead) => bead.asleep) && !world.holding && !m.pointer.inside,
         draw() {
             const { ctx } = m;
             ctx.lineWidth = 2;

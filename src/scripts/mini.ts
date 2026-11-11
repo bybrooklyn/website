@@ -8,5 +8,5 @@ const minis = import.meta.glob<{ default: (m: Mote) => Scene; label?: string }>(
 
 for (const host of document.querySelectorAll<HTMLElement>("[data-mini]")) {
     const load = minis[`../minis/${host.dataset.mini}.ts`];
-    if (load) void load().then((mini) => mote(host, mini.default, mini.label));
+    if (load) void load().then((mini) => mote(host, mini.default, { label: mini.label, preview: host.hasAttribute("data-preview") }));
 }

@@ -33,6 +33,8 @@ export interface Mote {
     height: number;
     /** Seconds stepped so far. */
     time: number;
+    /** Shown small in a list, not to be played: no pointer, no keys. A scene can use this to leave out its words and move by itself. */
+    readonly preview: boolean;
     pointer: Pointer;
     /** Whether a key is held: the arrows or WASD, and Space or Enter for "action". */
     key(name: Key): boolean;
@@ -53,6 +55,8 @@ export interface Scene {
     /** The canvas changed size. */
     resize?(): void;
     press?(x: number, y: number): void;
+    /** Pressed twice quickly in one place. `press` has already been called for each. */
+    double?(x: number, y: number): void;
     move?(x: number, y: number): void;
     release?(x: number, y: number): void;
     /** A key went down. */
@@ -78,9 +82,9 @@ const KEYS: Record<string, Key> = {
 };
 
 /** Puts a mini in `host` and returns a function that takes it away again. */
-export function mote(host: HTMLElement, make: (m: Mote) => Scene, label = "An interactive demo."): () => void {
+export function mote(host: HTMLElement, make: (m: Mote) => Scene, { label = "An interactive demo.", preview = false } = {}): () => void {
     const canvas = document.createElement("canvas");
-    canvas.tabIndex = 0;
+    if (!preview) canvas.tabIndex = 0;
     canvas.setAttribute("role", "img");
     canvas.setAttribute("aria-label", label);
     host.append(canvas);
@@ -101,6 +105,7 @@ export function mote(host: HTMLElement, make: (m: Mote) => Scene, label = "An in
         width: 0,
         height: 0,
         time: 0,
+        preview,
         pointer: { x: 0, y: 0, down: false, inside: false },
         key: (name) => held.has(name),
         color(property) {
@@ -178,6 +183,8 @@ export function mote(host: HTMLElement, make: (m: Mote) => Scene, label = "An in
         frame = requestAnimationFrame(loop);
     }
 
+    /** When and where the last press was, to tell a double one. */
+    let pressed = { at: -1000, x: 0, y: 0 };
     const place = (event: PointerEvent) => {
         m.pointer.x = event.offsetX;
         m.pointer.y = event.offsetY;
@@ -191,6 +198,9 @@ export function mote(host: HTMLElement, make: (m: Mote) => Scene, label = "An in
         canvas.dataset.touched = "";
         canvas.focus({ preventScroll: true });
         scene.press?.(m.pointer.x, m.pointer.y);
+        const twice = event.timeStamp - pressed.at < 350 && Math.hypot(m.pointer.x - pressed.x, m.pointer.y - pressed.y) < 24;
+        pressed = { at: twice ? -1000 : event.timeStamp, x: m.pointer.x, y: m.pointer.y };
+        if (twice) scene.double?.(m.pointer.x, m.pointer.y);
         start();
     });
     canvas.addEventListener("pointermove", (event) => {

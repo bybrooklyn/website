@@ -9,8 +9,13 @@
 //
 // Bodies are circles or convex shapes. Each step finds where bodies touch,
 // then nudges velocities a little at a time, several passes over, until
-// contacts, joints and the grabbed point all agree. Units are pixels and
-// seconds; y points down.
+// contacts, joints and the grabbed point all agree. Bodies that have ended up
+// overlapping, or joints that have come apart, are then put right by moving
+// them, separately from their velocities, so that fixing a mistake never
+// throws anything. Units are pixels and seconds; y points down.
+//
+// physics.test.ts says what it is held to: friction angles, a standing tower,
+// a pendulum's period, no energy from nowhere.
 
 export type V = [number, number];
 
@@ -44,6 +49,8 @@ export interface Options {
     friction?: number;
     bounce?: number;
     angle?: number;
+    /** How heavy for its size, against the usual 1. */
+    density?: number;
 }
 
 /** One thing the solver has to satisfy: a contact, one axis of a joint, or the grab. */
@@ -58,8 +65,12 @@ interface Tie {
     nx: number;
     ny: number;
     mass: number;
+    /** The speed the solver aims for along the direction: a bounce, or the grab's pull. */
     bias: number;
     sum: number;
+    /** How fast to move the two apart (or together) to undo an overlap or a stretched joint. Positions only. */
+    fix: number;
+    moved: number;
     /** Limits on the total push: a contact only pushes, a rope only pulls. */
     lo: number;
     hi: number;
@@ -90,7 +101,7 @@ const turn = (b: Body, [x, y]: V): V => {
 let count = 0;
 
 function body(x: number, y: number, r: number, p: V[], area: number, spread: number, o: Options): Body {
-    const mass = area * 0.001;
+    const mass = area * 0.001 * (o.density ?? 1);
     return {
         id: ++count,
         far: r || Math.max(...p.map(([px, py]) => Math.hypot(px, py))),
@@ -233,8 +244,14 @@ function touch(a: Body, b: Body): Touch[] {
 export class World {
     bodies: Body[] = [];
     gravity = 1800;
-    /** How many times the solver goes over everything each step. More is stiffer and slower. */
-    passes = 12;
+    /** How quickly anything moving through the air slows, per second. */
+    air = 0.03;
+    /** How quickly something touching something else stops spinning, per second: what makes a rolling ball come to a stop. */
+    roll = 0.7;
+    /** Each step is taken as this many smaller ones. More holds stacks and chains together better. */
+    parts = 2;
+    /** How many times the solver goes over everything in each of those. More is stiffer and slower. */
+    passes = 8;
     #joints: Joint[] = [];
     /** Pairs that are joined, which pass through each other. */
     #joined = new Set<string>();
@@ -296,6 +313,10 @@ export class World {
     }
 
     step(dt: number): void {
+        for (let part = 0; part < this.parts; part++) this.#advance(dt / this.parts);
+    }
+
+    #advance(dt: number): void {
         const { bodies } = this;
         const live = (b: Body) => b.im > 0 && !b.asleep;
         const held = this.#held;
@@ -308,10 +329,14 @@ export class World {
 
         const ties: Tie[] = [];
         const tie = (a: Body, b: Body, px: number, py: number, nx: number, ny: number, bias: number, lo: number, hi: number): Tie => {
-            const t: Tie = { a, b, ax: px - a.x, ay: py - a.y, bx: px - b.x, by: py - b.y, nx, ny, mass: 0, bias, sum: 0, lo, hi };
+            const t: Tie = { a, b, ax: px - a.x, ay: py - a.y, bx: px - b.x, by: py - b.y, nx, ny, mass: 0, bias, sum: 0, lo, hi, fix: 0, moved: 0 };
             ties.push(t);
             return t;
         };
+
+        // The fastest any overlap or stretched joint is undone. Without a limit a deep overlap is a launch.
+        const most = 240;
+        const touching = new Set<Body>();
 
         // contacts
         for (let i = 0; i < bodies.length; i++) {
@@ -325,7 +350,10 @@ export class World {
                     for (const [sleeper, mover] of [[a, b], [b, a]] as const) {
                         if (sleeper.asleep && live(mover) && (mover === held?.b || Math.hypot(mover.vx, mover.vy) + Math.abs(mover.w) * 20 > 25)) wake(sleeper);
                     }
-                    const press = tie(a, b, px, py, nx, ny, (-0.2 / dt) * Math.min(0, depth + 0.5), 0, Infinity);
+                    touching.add(a).add(b);
+                    const press = tie(a, b, px, py, nx, ny, 0, 0, Infinity);
+                    // Half a pixel of overlap is left alone, so resting contacts do not flicker on and off.
+                    press.fix = Math.min(most, (-0.2 / dt) * Math.min(0, depth + 0.5));
                     const speed = this.#closing(press);
                     if (speed < -120) press.bias -= Math.max(a.bounce, b.bounce) * speed;
                     press.grip = tie(a, b, px, py, ny, -nx, 0, 0, 0);
@@ -345,7 +373,8 @@ export class World {
             const dx = bx - ax, dy = by - ay, gapNow = Math.hypot(dx, dy);
             const mx = (ax + bx) / 2, my = (ay + by) / 2;
             const fix = (nx: number, ny: number, error: number, lo: number) => {
-                const t = tie(a, b, mx, my, nx, ny, (-0.3 / dt) * error, lo, Infinity);
+                const t = tie(a, b, mx, my, nx, ny, 0, lo, Infinity);
+                t.fix = Math.max(-most * 4, Math.min(most * 4, (-0.3 / dt) * error));
                 [t.ax, t.ay, t.bx, t.by] = [ax - a.x, ay - a.y, bx - b.x, by - b.y];
                 t.key = `j${index}${nx === 1 ? "x" : ""}`;
             };
@@ -361,9 +390,11 @@ export class World {
         // the grab: the held point goes to the pointer, as hard as a firm hand could move it
         if (held) {
             const [hx, hy] = turn(held.b, held.at);
-            const most = (this.grip * this.gravity * dt) / held.b.im;
+            const pull = (this.grip * this.gravity * dt) / held.b.im;
+            // It follows in whole steps, however many parts a step is taken in.
+            const rate = this.follow / (dt * this.parts);
             for (const [nx, ny, error] of [[1, 0, held.to[0] - hx], [0, 1, held.to[1] - hy]] as const) {
-                const t = tie(this.#anchor, held.b, hx, hy, nx, ny, (this.follow / dt) * error, -most, most);
+                const t = tie(this.#anchor, held.b, hx, hy, nx, ny, rate * error, -pull, pull);
                 [t.ax, t.ay] = [0, 0];
             }
             held.b.w *= 0.9;
@@ -391,7 +422,9 @@ export class World {
         }
 
         for (let pass = 0; pass < this.passes; pass++) {
-            for (const t of ties) {
+            // Forward then backward, so a push travels along a chain or up a stack in both directions.
+            const order = pass % 2 ? ties.toReversed() : ties;
+            for (const t of order) {
                 if (t.grip) [t.grip.lo, t.grip.hi] = [-t.mu! * t.sum, t.mu! * t.sum];
                 const sum = Math.max(t.lo, Math.min(t.sum + t.mass * (t.bias - this.#closing(t)), t.hi));
                 push(t, sum - t.sum);
@@ -401,11 +434,41 @@ export class World {
         this.#was.clear();
         for (const t of ties) if (t.key) this.#was.set(t.key, t.sum);
 
+        // Putting right what has overlapped or come apart. The same sums, done on a
+        // second set of velocities that only ever move things and are then thrown away.
+        const shift = new Map<Body, [number, number, number]>();
+        const of = (b: Body) => shift.get(b) ?? (shift.set(b, [0, 0, 0]), shift.get(b)!);
+        const mending = ties.filter((t) => t.fix !== 0);
+        for (let pass = 0; pass < 4 && mending.length > 0; pass++) {
+            for (const t of pass % 2 ? mending.toReversed() : mending) {
+                const sa = of(t.a), sb = of(t.b);
+                const closing = dot(sb[0] - sb[2] * t.by - (sa[0] - sa[2] * t.ay), sb[1] + sb[2] * t.bx - (sa[1] + sa[2] * t.ax), t.nx, t.ny);
+                const moved = Math.max(t.lo, Math.min(t.moved + t.mass * (t.fix - closing), t.hi));
+                const j = moved - t.moved, jx = t.nx * j, jy = t.ny * j;
+                t.moved = moved;
+                sa[0] -= im(t.a) * jx;
+                sa[1] -= im(t.a) * jy;
+                sa[2] -= ii(t.a) * cross(t.ax, t.ay, jx, jy);
+                sb[0] += im(t.b) * jx;
+                sb[1] += im(t.b) * jy;
+                sb[2] += ii(t.b) * cross(t.bx, t.by, jx, jy);
+            }
+        }
+
         for (const b of bodies) {
             if (!live(b)) continue;
-            b.x += b.vx * dt;
-            b.y += b.vy * dt;
-            b.a += b.w * dt;
+            const slow = 1 - this.air * dt;
+            b.vx *= slow;
+            b.vy *= slow;
+            if (touching.has(b)) {
+                // Rolling costs a little at any speed, as well as more the faster it goes, so a ball rolls to a stop.
+                const least = ((0.03 * this.gravity) / b.far) * dt;
+                b.w = Math.abs(b.w) <= least ? 0 : (b.w - Math.sign(b.w) * least) * (1 - this.roll * dt);
+            }
+            const mend = shift.get(b) ?? [0, 0, 0];
+            b.x += (b.vx + mend[0]) * dt;
+            b.y += (b.vy + mend[1]) * dt;
+            b.a += (b.w + mend[2]) * dt;
             // still for long enough, it goes to sleep until something disturbs it
             const still = Math.hypot(b.vx, b.vy) < 5 && Math.abs(b.w) < 0.15 && held?.b !== b;
             b.quiet = still ? b.quiet + dt : 0;

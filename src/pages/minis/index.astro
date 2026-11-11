@@ -19,15 +19,23 @@ const minis = await getMinis();
             minis.map((mini) => (
                 <li>
                     <a href={`/minis/${mini.id}/`}>
-                        <p class="post-meta">
-                            <span>{mini.data.kind}</span>
-                            <span>{mini.data.space}</span>
-                        </p>
-                        <h2>{mini.data.name}</h2>
-                        <p>{mini.data.summary}</p>
+                        {/* The mini itself, running small. It cannot be touched here: the whole card is the link. */}
+                        <div class="mote mini-preview" data-mini={mini.id} data-preview aria-hidden="true" />
+                        <div class="mini-about">
+                            <h2>{mini.data.name}</h2>
+                            <p class="post-meta">
+                                <span>{mini.data.kind}</span>
+                                <span>{mini.data.space}</span>
+                            </p>
+                            <p>{mini.data.summary}</p>
+                        </div>
                     </a>
                 </li>
             ))
         }
     </ul>
 </Base>
+
+<script>
+    import "../../scripts/mini";
+</script>

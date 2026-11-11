@@ -82,10 +82,17 @@
         animation-timing-function: ease-in;
     }
 
+    /* The new page waits until the old one has gone: out, then in, not both at once. */
     html:active-view-transition-type(move)::view-transition-new(root),
     html:active-view-transition-type(swap)::view-transition-new(panel) {
         animation-name: shift-in;
-        animation-duration: 0.45s;
+        animation-duration: 0.4s;
+        animation-delay: 0.2s;
+    }
+
+    html:active-view-transition-type(move)::view-transition-old(root),
+    html:active-view-transition-type(swap)::view-transition-old(panel) {
+        animation-duration: 0.2s;
     }
 
     html:active-view-transition-type(swap)::view-transition-old(root),

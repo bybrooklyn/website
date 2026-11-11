@@ -1,9 +1,10 @@
-// Blocks: a small pile with real physics. Click or tap an empty spot to drop
-// something (a block, now and then a ball or a wedge); pick one up and throw it.
+// Blocks: a small pile with real physics. Pick one up and throw it. To drop a
+// new piece (a block, now and then a ball or a wedge), double-click an empty
+// spot or press Space: a single click on nothing does nothing, so reaching
+// for a block and missing does not add one.
 
 import { World, ball, rect, shape, wake, type Body, type Mote, type Scene } from "../mote";
 
-const SIZE = 34;
 const MOST = 60;
 const FLOOR = 6;
 /** The box's top corners are rounded; a slope this size across each keeps blocks out of the part that is cut off. */
@@ -11,12 +12,16 @@ const CORNER = 14;
 /** A soft color at a hue. */
 const pastel = (hue: number) => `oklch(0.86 0.085 ${Math.round(hue % 360)})`;
 
-export const label = "A pile of blocks. Click to drop another, or drag one to throw it.";
+export const label = "A pile of blocks. Drag one to throw it. Double-click an empty spot, or press Space, to drop another.";
 
 export default function blocks(m: Mote): Scene {
-    // Tuned to feel like blocks with some weight: slower to fall than the
-    // engine's default, and trailing the pointer a little when carried.
-    const world = Object.assign(new World(), { gravity: 1300, grip: 17, follow: 0.115 });
+    // The blocks are sized to the box, and gravity to the blocks, so a fall across
+    // a big box takes as long as one across a small box and nothing looks slow.
+    const SIZE = Math.round(Math.max(34, Math.min(52, Math.min(m.width, m.height) / 11)));
+    // Carried, a block trails the pointer a little, as something with weight would.
+    const world = Object.assign(new World(), { gravity: SIZE * 62, grip: 17, follow: 0.115 });
+    const most = m.preview ? 14 : MOST;
+    let dropped = 0;
     const pile: Body[] = [];
     const colors = new Map<Body, string>();
     let hue = Math.random() * 360;
@@ -34,12 +39,12 @@ export default function blocks(m: Mote): Scene {
         const pick = Math.random();
         const half = SIZE / 2;
         const block =
-            pick < 0.7 ? rect(x, y, SIZE, SIZE, { friction: 0.42 })
+            pick < 0.7 ? rect(x, y, SIZE, SIZE)
             : pick < 0.85 ? ball(x, y, half, { bounce: 0.4 })
             : shape(x, y, [[0, -half], [half * 1.15, half], [-half * 1.15, half]]);
         block.w = (Math.random() - 0.5) * 1.2;
         add(block);
-        if (pile.length > MOST) {
+        if (pile.length > most) {
             const oldest = pile.shift()!;
             world.remove(oldest);
             colors.delete(oldest);
@@ -97,7 +102,7 @@ export default function blocks(m: Mote): Scene {
     const middle = m.width / 2;
     const floor = m.height - FLOOR;
     for (const [column, row] of [[-1, 0], [0, 0], [1, 0], [-0.5, 1], [0.5, 1], [0, 2]] as const) {
-        const block = rect(middle + column * SIZE, floor - SIZE / 2 - row * SIZE, SIZE, SIZE, { friction: 0.42 });
+        const block = rect(middle + column * SIZE, floor - SIZE / 2 - row * SIZE, SIZE, SIZE);
         block.asleep = true;
         add(block);
     }
@@ -106,16 +111,29 @@ export default function blocks(m: Mote): Scene {
         step(dt) {
             world.step(dt);
             contain();
+            // Shown small in a list, it drops a piece by itself every couple of seconds.
+            if (m.preview && m.time - dropped > 2.2) {
+                dropped = m.time;
+                drop(m.width * (0.25 + Math.random() * 0.5), SIZE);
+            }
         },
         resize: enclose,
-        // Whatever is under the pointer is picked up; empty space gets something new.
+        // Whatever is under the pointer is picked up.
         press(x, y) {
-            if (!world.grab([x, y])) drop(x, y);
+            world.grab([x, y]);
+        },
+        // Pressed twice on an empty spot: a new piece there.
+        double(x, y) {
+            if (!world.holding && !world.at([x, y])) drop(x, y);
+        },
+        // Space: a new piece under the pointer, or at the top if the pointer is elsewhere.
+        keydown(name) {
+            if (name === "action") drop(m.pointer.inside ? m.pointer.x : m.width / 2, m.pointer.inside ? m.pointer.y : SIZE);
         },
         move: (x, y) => world.drag([x, y]),
         release: () => world.release(),
         // Once every block has come to rest there is nothing left to animate.
-        resting: () => pile.every((block) => block.asleep) && !world.holding && !m.pointer.inside,
+        resting: () => !m.preview && pile.every((block) => block.asleep) && !world.holding && !m.pointer.inside,
         draw() {
             const { ctx } = m;
             const scale = window.devicePixelRatio || 1;
