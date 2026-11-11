@@ -21,3 +21,7 @@ resume-preview
 # pictures waiting to go on the photos page, and the originals of those that have:
 # they carry location and camera details, so they stay on this computer
 /photos
+
+# posts being held back: written here, shown on the dev server, never committed.
+# To publish one, take ".hold" out of its file name.
+src/content/blog/*.hold.mdx
