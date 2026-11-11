@@ -3,7 +3,7 @@
 // the chain bends at every joint and keeps its length, and pulled past its
 // reach it goes straight and holds.
 
-import { Flat, send, speed, trace, type Body, type Mote, type Scene } from "../mote";
+import { Flat, send, speed, trace, type Body, type Mote, type Scene } from "../../mote";
 
 const LINKS = 13;
 const LONG = 17;

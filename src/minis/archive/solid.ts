@@ -1,7 +1,7 @@
 // Solid: a shape in three dimensions that turns by itself. Drag to spin it,
 // click to change it.
 
-import { cube, diamond, paint, pyramid, turned, twenty, upright, type Mote, type Scene } from "../mote";
+import { cube, diamond, paint, pyramid, turned, twenty, upright, type Mote, type Scene } from "../../mote";
 
 export const label = "A solid shape turning in three dimensions. Drag to spin it, click to change it.";
 

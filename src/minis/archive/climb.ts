@@ -8,7 +8,7 @@
 // `course()`, apart from the drawing, so that a climb can be run and tested
 // without a screen.
 
-import { Flat, trace, type Body, type Mote, type Scene } from "../mote";
+import { Flat, trace, type Body, type Mote, type Scene } from "../../mote";
 
 export const label = "A game: a block with a hammer climbs a tall pile of rocks. The hammer follows the mouse.";
 

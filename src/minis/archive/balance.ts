@@ -3,7 +3,7 @@
 // the wind gets stronger and the beam gets shorter. Falling off, or running
 // out of time, ends it.
 
-import type { Mote, Scene } from "../mote";
+import type { Mote, Scene } from "../../mote";
 
 const RADIUS = 12;
 /** How far the beam can tip, in radians, and how fast it gets there. */

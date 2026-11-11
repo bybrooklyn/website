@@ -11,7 +11,7 @@ site. It has no dependencies: nothing here uses anything outside this folder.
 |---|---|
 | `stage.ts` | A canvas that fits its box and stays sharp, a loop in fixed steps of 1/120 s, the mouse (which a game can hold inside the box), the arrow keys and WASD, Space and Enter, the page's colors, a place for ordinary buttons, and a number kept between visits. It only runs while it can be seen and stops when the scene is at rest. |
 | `flat.ts` | 2D physics: boxes, balls, bars and shapes, with rounded corners if wanted; walls; pins, rods and ropes; a motor; a hand to grab with. Friction, bounce, sleep. |
-| `solids.ts` | The shapes of the dice and other solids of flat faces, and a way to draw one on a 2D canvas with no WebGL. The Solid mini uses the drawing. |
+| `solids.ts` | The shapes of the dice and other solids of flat faces, and a way to draw one on a 2D canvas with no WebGL. The dice tower falls back to it where WebGL 2 is missing. |
 | `space.ts` | 3D physics: solids that fall, tumble and hit each other and fixed slabs, corner to corner and edge to edge. The dice tower runs on it. |
 | `gl.ts` | 3D drawing on WebGL 2: real depth, one sun with shadows, light from the sky, and numbers on faces. |
 
