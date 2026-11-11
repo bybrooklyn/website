@@ -27,6 +27,19 @@
     white-space: nowrap;
 }
 
+/* While there is no PDF to download it is a button that prints the page; it looks like the link it stands in for. */
+button.resume-pdf {
+    border: 0;
+    padding: 0;
+    background: none;
+    font: inherit;
+    color: var(--accent);
+    text-decoration: underline;
+    text-decoration-thickness: 0.0625rem;
+    text-underline-offset: 0.2em;
+    cursor: pointer;
+}
+
 /* A wide column for experience and projects, a narrower one beside it. */
 .resume-columns {
     display: grid;

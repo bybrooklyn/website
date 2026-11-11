@@ -3,6 +3,7 @@ import "../styles/resume.css";
 import Base from "./Base.astro";
 import { render } from "astro:content";
 import { site } from "../data/site";
+import { existsSync } from "node:fs";
 import { resumePdf, type Resume } from "../lib/resume";
 
 interface Props {
@@ -12,6 +13,11 @@ interface Props {
 const { resume } = Astro.props;
 const { Content } = await render(resume);
 const plain = (url: string) => url.replace(/^https?:\/\//, "");
+
+// The PDF is only on the site once the resume is published and printed
+// (`bun run resume:pdf`). Until then the button prints this page, which the
+// print styles lay out as the same single sheet.
+const hasPdf = existsSync(new URL(`../../public${resumePdf}`, import.meta.url));
 ---
 
 <Base title="resume" description={resume.data.summary} unlisted={resume.data.draft}>
@@ -27,7 +33,13 @@ const plain = (url: string) => url.replace(/^https?:\/\//, "");
                     <a href={Astro.site}>{Astro.site?.host}</a>
                 </p>
             </div>
-            <a class="resume-pdf" href={resumePdf} download>download pdf</a>
+            {
+                hasPdf ? (
+                    <a class="resume-pdf" href={resumePdf} download>download pdf</a>
+                ) : (
+                    <button class="resume-pdf" type="button" data-print>save as pdf</button>
+                )
+            }
         </header>
         <p class="resume-summary">{resume.data.summary}</p>
         <div class="resume-columns">
@@ -35,3 +47,7 @@ const plain = (url: string) => url.replace(/^https?:\/\//, "");
         </div>
     </article>
 </Base>
+
+<script>
+    document.querySelector("[data-print]")?.addEventListener("click", () => window.print());
+</script>
