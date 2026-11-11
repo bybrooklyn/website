@@ -1,6 +1,7 @@
 ---
-// /photos/: one photograph at a time, with a button for another at random.
-// They come from the photos/ folder; see scripts/photos.ts.
+// /photos/: one picture at a time, with a button for another at random.
+// There are two sets, my photographs and the shitposts, and a switch between
+// them. They come from the photos/ folder; see scripts/photos.ts.
 import type { GetStaticPaths } from "astro";
 import "../../styles/photos.css";
 import Base from "../../layouts/Base.astro";
@@ -16,11 +17,14 @@ const all = photos.map((photo) => ({
     width: photo.width,
     height: photo.height,
     color: photo.color,
+    set: photo.kind === "shitpost" ? "shitposts" : "photos",
+    title: photo.title ?? "",
     caption: photo.caption ?? "",
     taken: photo.taken ? formatDate(new Date(photo.taken)) : "",
 }));
-// Without scripts the page shows this one: the newest.
-const first = all[0]!;
+// Without scripts the page shows this one: the newest photograph.
+const first = all.find((photo) => photo.set === "photos") ?? all[0]!;
+const count = (set: string) => all.filter((photo) => photo.set === set).length;
 ---
 
 <Base title="photos" description="Photographs by Charlotte.">
@@ -29,8 +33,9 @@ const first = all[0]!;
     </div>
 
     <figure class="photo">
-        <img src={first.src} width={first.width} height={first.height} alt={first.caption} style={`background-color:${first.color}`} fetchpriority="high" />
+        <img src={first.src} width={first.width} height={first.height} alt={first.title} style={`background-color:${first.color}`} fetchpriority="high" />
         <figcaption>
+            <h2 class="photo-title">{first.title}</h2>
             <p class="photo-caption">{first.caption}</p>
             <p class="photo-taken note">{first.taken}</p>
         </figcaption>
@@ -39,7 +44,17 @@ const first = all[0]!;
     <p class="photo-buttons" hidden>
         <button type="button" data-step="back" disabled>back</button>
         <button type="button" data-step="another">another</button>
-        <span class="note">{all.length} photos</span>
+        {
+            count("shitposts") > 0 && count("photos") > 0 && (
+                <span class="photo-sets">
+                    <button type="button" data-set="photos" aria-pressed="true">photos ({count("photos")})</button>
+                    <button type="button" data-set="shitposts" aria-pressed="false">shitposts ({count("shitposts")})</button>
+                </span>
+            )
+        }
+    </p>
+    <p class="note photo-license">
+        Photos are mine, under <a href="https://creativecommons.org/licenses/by-nc/4.0/">CC BY-NC 4.0</a>. The shitposts are not.
     </p>
 
     <script type="application/json" id="photo-list" set:html={JSON.stringify(all)} />
@@ -51,6 +66,8 @@ const first = all[0]!;
         width: number;
         height: number;
         color: string;
+        set: string;
+        title: string;
         caption: string;
         taken: string;
     }
@@ -63,21 +80,22 @@ const first = all[0]!;
     if (image && buttons && back && all.length > 1) {
         buttons.hidden = false;
 
-        // Every photo comes up once, in a shuffled order, before any repeats.
+        let set = "photos";
         let waiting: number[] = [];
+        let seen: number[] = [];
+        let next = -1;
+
+        // Every picture in the set comes up once, in a shuffled order, before any repeats.
         const draw = (not: number): number => {
             if (waiting.length === 0) {
-                waiting = all.map((_, index) => index).filter((index) => index !== not);
+                waiting = all.map((_, index) => index).filter((index) => all[index]!.set === set && index !== not);
                 for (let index = waiting.length - 1; index > 0; index--) {
                     const other = Math.floor(Math.random() * (index + 1));
                     [waiting[index], waiting[other]] = [waiting[other]!, waiting[index]!];
                 }
             }
-            return waiting.pop()!;
+            return waiting.pop() ?? not;
         };
-
-        const seen = [0];
-        let next = draw(0);
         // Fetch the one that will come next, so "another" is instant.
         const warm = () => (new Image().src = all[next]!.src);
 
@@ -86,11 +104,24 @@ const first = all[0]!;
             image.style.backgroundColor = photo.color;
             image.width = photo.width;
             image.height = photo.height;
-            image.alt = photo.caption;
+            image.alt = photo.title;
             image.src = photo.src;
+            document.querySelector(".photo-title")!.textContent = photo.title;
             document.querySelector(".photo-caption")!.textContent = photo.caption;
             document.querySelector(".photo-taken")!.textContent = photo.taken;
             back.disabled = seen.length < 2;
+        };
+
+        /** Start a set: at the picture already on the page for photos, at a random one otherwise. */
+        const begin = (name: string, at?: number) => {
+            set = name;
+            waiting = [];
+            const start = at ?? draw(-1);
+            seen = [start];
+            next = draw(start);
+            warm();
+            show(start);
+            for (const button of buttons.querySelectorAll("[data-set]")) button.setAttribute("aria-pressed", String((button as HTMLElement).dataset.set === name));
         };
 
         const step = (kind: string) => {
@@ -106,14 +137,15 @@ const first = all[0]!;
         };
 
         buttons.addEventListener("click", (event) => {
-            const kind = (event.target as Element).closest<HTMLElement>("button[data-step]")?.dataset.step;
-            if (kind) step(kind);
+            const button = (event.target as Element).closest<HTMLElement>("button");
+            if (button?.dataset.step) step(button.dataset.step);
+            else if (button?.dataset.set && button.dataset.set !== set) begin(button.dataset.set);
         });
         document.addEventListener("keydown", (event) => {
             if (event.ctrlKey || event.metaKey || event.altKey) return;
             if (event.key === "ArrowRight") step("another");
             if (event.key === "ArrowLeft") step("back");
         });
-        warm();
+        begin("photos", all.findIndex((photo) => photo.set === "photos"));
     }
 </script>

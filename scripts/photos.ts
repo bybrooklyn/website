@@ -11,6 +11,10 @@
 // camera, serial number) is thrown away. The original moves to photos/added/.
 // Nothing in photos/ is ever committed.
 //
+// Pictures that are not photographs of mine (memes, screenshots, shitposts)
+// go in photos/shitposts/ instead. They are prepared the same way and shown
+// on the same page under their own heading.
+//
 // To take a photo off the site, delete its file from public/photos/.
 // To change a caption, put a text file with the photo's name in photos/.
 //
@@ -66,8 +70,9 @@ const notes = new Map(waiting.filter((name) => /\.txt$/i.test(name)).map((name) 
 if (pictures.length + notes.size > 0) await mkdir(ADDED, { recursive: true });
 if (pictures.length > 0) await mkdir(OUT, { recursive: true });
 
-async function add(name: string): Promise<void> {
-    const source = join(INBOX, name);
+async function add(name: string, shitpost: boolean): Promise<void> {
+    const folder = shitpost ? join(INBOX, "shitposts") : INBOX;
+    const source = join(folder, name);
     try {
         const { picture, exif, clean } = await open(source);
         const { taken } = readExif(exif);
@@ -88,7 +93,7 @@ async function add(name: string): Promise<void> {
             await rename(join(INBOX, note), join(ADDED, note));
             notes.delete(slug(name));
         }
-        photos.push({ file, width, height, color, taken, caption: caption || undefined });
+        photos.push({ file, width, height, color, taken, caption: caption || undefined, kind: shitpost ? "shitpost" : undefined });
         await rename(source, join(ADDED, name));
         console.log(`added    ${file}${taken ? `  ${taken}` : "  (no date in the file)"}${caption ? "  with caption" : ""}`);
     } catch (error) {
@@ -97,10 +102,15 @@ async function add(name: string): Promise<void> {
 }
 
 // Several at a time: encoding is the slow part and each one mostly uses a single core.
-const queue = [...pictures];
+const shitposts = (await names(join(INBOX, "shitposts"))).filter((name) => PICTURE.test(name));
+if (shitposts.length > 0) {
+    await mkdir(ADDED, { recursive: true });
+    await mkdir(OUT, { recursive: true });
+}
+const queue: [string, boolean][] = [...pictures.map((name): [string, boolean] => [name, false]), ...shitposts.map((name): [string, boolean] => [name, true])];
 await Promise.all(
     Array.from({ length: 6 }, async () => {
-        for (let name = queue.shift(); name; name = queue.shift()) await add(name);
+        for (let next = queue.shift(); next; next = queue.shift()) await add(...next);
     }),
 );
 

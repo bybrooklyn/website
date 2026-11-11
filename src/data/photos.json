@@ -5,951 +5,1336 @@
             "width": 2000,
             "height": 1126,
             "color": "#687888",
-            "taken": "2025-10-02"
+            "taken": "2025-10-02",
+            "title": "A scrap of rainbow in the clouds"
         },
         {
             "file": "20251010-152449.avif",
             "width": 2000,
             "height": 1126,
             "color": "#a89888",
-            "taken": "2025-10-10"
+            "taken": "2025-10-10",
+            "title": "Tug of war in the gym"
         },
         {
             "file": "20251020-170031.avif",
             "width": 2000,
             "height": 1126,
             "color": "#181818",
-            "taken": "2025-10-20"
+            "taken": "2025-10-20",
+            "title": "Clouds over the marsh"
         },
         {
             "file": "20251103-094748.avif",
             "width": 1024,
             "height": 1536,
             "color": "#181818",
-            "taken": "2025-11-03"
+            "taken": "2025-11-03",
+            "title": "Whatever, just wash your hands"
         },
         {
             "file": "20251020-170122.avif",
             "width": 2000,
             "height": 1126,
             "color": "#181818",
-            "taken": "2025-10-20"
+            "taken": "2025-10-20",
+            "title": "Reeds under a broken sky"
         },
         {
             "file": "20251026-164035.avif",
             "width": 2000,
             "height": 1126,
             "color": "#181818",
-            "taken": "2025-10-26"
+            "taken": "2025-10-26",
+            "title": "Between the old factory buildings"
         },
         {
             "file": "20251030-154348.avif",
             "width": 2000,
             "height": 1126,
             "color": "#784828",
-            "taken": "2025-10-30"
+            "taken": "2025-10-30",
+            "title": "The round ceiling"
         },
         {
             "file": "20251007-072912.avif",
             "width": 1125,
             "height": 2000,
             "color": "#482818",
-            "taken": "2025-10-07"
+            "taken": "2025-10-07",
+            "title": "Red tree, old truck"
         },
         {
             "file": "20251109-135135.avif",
             "width": 2000,
             "height": 1126,
             "color": "#989898",
-            "taken": "2025-11-09"
+            "taken": "2025-11-09",
+            "title": "Silver in a case"
         },
         {
             "file": "20251109-140131.avif",
             "width": 2000,
             "height": 1126,
             "color": "#282828",
-            "taken": "2025-11-09"
+            "taken": "2025-11-09",
+            "title": "Malachite"
         },
         {
             "file": "20251109-133143.avif",
             "width": 2000,
             "height": 1126,
             "color": "#080808",
-            "taken": "2025-11-09"
+            "taken": "2025-11-09",
+            "title": "Birches in yellow light"
         },
         {
             "file": "20251109-140144.avif",
             "width": 2000,
             "height": 1126,
             "color": "#282828",
-            "taken": "2025-11-09"
+            "taken": "2025-11-09",
+            "title": "A fuzzy mineral"
         },
         {
             "file": "20251109-121721.avif",
             "width": 2000,
             "height": 1126,
             "color": "#383838",
-            "taken": "2025-11-09"
+            "taken": "2025-11-09",
+            "title": "Tree on the rock"
         },
         {
             "file": "20251212-072541.avif",
             "width": 2000,
             "height": 1126,
             "color": "#181818",
-            "taken": "2025-12-12"
+            "taken": "2025-12-12",
+            "title": "Sunset through bare trees"
         },
         {
             "file": "20251227-172737.avif",
             "width": 2000,
             "height": 1126,
             "color": "#282828",
-            "taken": "2025-12-27"
+            "taken": "2025-12-27",
+            "title": "Skating at night"
         },
         {
             "file": "20251214-101836.avif",
             "width": 2000,
             "height": 1126,
             "color": "#c8d8e8",
-            "taken": "2025-12-14"
+            "taken": "2025-12-14",
+            "title": "Snow on everything"
         },
         {
             "file": "20251227-203625.avif",
             "width": 2000,
             "height": 1126,
             "color": "#282828",
-            "taken": "2025-12-27"
+            "taken": "2025-12-27",
+            "title": "Wet branches"
         },
         {
             "file": "20260103-162659.avif",
             "width": 1126,
             "height": 2000,
             "color": "#080818",
-            "taken": "2026-01-03"
+            "taken": "2026-01-03",
+            "title": "Mirror cube in the dark"
         },
         {
             "file": "20260319-183925.avif",
             "width": 2000,
             "height": 1126,
             "color": "#383838",
-            "taken": "2026-03-19"
+            "taken": "2026-03-19",
+            "title": "Small dog, held"
         },
         {
             "file": "20260117-115044.avif",
             "width": 1126,
             "height": 2000,
             "color": "#888888",
-            "taken": "2026-01-17"
+            "taken": "2026-01-17",
+            "title": "Truck in the fog"
         },
         {
             "file": "20260104-155603.avif",
             "width": 2000,
             "height": 1126,
             "color": "#282818",
-            "taken": "2026-01-04"
+            "taken": "2026-01-04",
+            "title": "Pines and a bit of snow"
         },
         {
             "file": "20260411-110217.avif",
             "width": 2000,
             "height": 1126,
             "color": "#4888d8",
-            "taken": "2026-04-11"
+            "taken": "2026-04-11",
+            "title": "The Verrazzano from the road"
         },
         {
             "file": "20260414-130621.avif",
             "width": 1126,
             "height": 2000,
             "color": "#a8a8a8",
-            "taken": "2026-04-14"
+            "taken": "2026-04-14",
+            "title": "This is Jeff"
         },
         {
             "file": "20260408-143238.avif",
             "width": 1126,
             "height": 2000,
             "color": "#686868",
-            "taken": "2026-04-08"
+            "taken": "2026-04-08",
+            "title": "White blossoms, close"
         },
         {
             "file": "20260408-142241.avif",
             "width": 2000,
             "height": 1126,
             "color": "#080808",
-            "taken": "2026-04-08"
+            "taken": "2026-04-08",
+            "title": "The whole tree in bloom"
         },
         {
             "file": "20260331-185528.avif",
             "width": 2000,
             "height": 1125,
             "color": "#8898b8",
-            "taken": "2026-03-31"
+            "taken": "2026-03-31",
+            "title": "Bare trees, evening"
         },
         {
             "file": "20260331-185523.avif",
             "width": 2000,
             "height": 1125,
             "color": "#282828",
-            "taken": "2026-03-31"
+            "taken": "2026-03-31",
+            "title": "Bare trees, a minute later"
         },
         {
             "file": "20260502-191008.avif",
             "width": 2000,
             "height": 1126,
             "color": "#080808",
-            "taken": "2026-05-02"
+            "taken": "2026-05-02",
+            "title": "Dark clouds at dusk"
         },
         {
             "file": "20260422-201231.avif",
             "width": 2000,
             "height": 1126,
             "color": "#080808",
-            "taken": "2026-04-22"
+            "taken": "2026-04-22",
+            "title": "One tree against the sky"
         },
         {
             "file": "20260417-142506.avif",
             "width": 1126,
             "height": 2000,
             "color": "#382828",
-            "taken": "2026-04-17"
+            "taken": "2026-04-17",
+            "title": "Under the pink tree"
         },
         {
             "file": "20260423-142328.avif",
             "width": 2000,
             "height": 1126,
             "color": "#88a8d8",
-            "taken": "2026-04-23"
+            "taken": "2026-04-23",
+            "title": "Dogwood in bloom"
         },
         {
             "file": "20260503-135922.avif",
             "width": 2000,
             "height": 1126,
             "color": "#98a8b8",
-            "taken": "2026-05-03"
+            "taken": "2026-05-03",
+            "title": "Sun through the clouds"
         },
         {
             "file": "20260503-135702.avif",
             "width": 2000,
             "height": 1126,
             "color": "#b8c8d8",
-            "taken": "2026-05-03"
+            "taken": "2026-05-03",
+            "title": "Rocks and surf"
         },
         {
             "file": "20260510-122413.avif",
             "width": 2000,
             "height": 1126,
             "color": "#a8b8c8",
-            "taken": "2026-05-10"
+            "taken": "2026-05-10",
+            "title": "Gray sea"
         },
         {
             "file": "20260509-173542.avif",
             "width": 2000,
             "height": 1126,
             "color": "#c8c8d8",
-            "taken": "2026-05-09"
+            "taken": "2026-05-09",
+            "title": "A field, framed by leaves"
         },
         {
             "file": "20260510-130124.avif",
             "width": 2000,
             "height": 1126,
             "color": "#7888a8",
-            "taken": "2026-05-10"
+            "taken": "2026-05-10",
+            "title": "The beach, curving away"
         },
         {
             "file": "20260516-194627.avif",
             "width": 2000,
             "height": 1126,
             "color": "#8898a8",
-            "taken": "2026-05-16"
+            "taken": "2026-05-16",
+            "title": "Mackerel sky"
         },
         {
             "file": "20260629-212800.avif",
             "width": 2000,
             "height": 1126,
             "color": "#080808",
-            "taken": "2026-06-29"
+            "taken": "2026-06-29",
+            "title": "Moon through the trees"
         },
         {
             "file": "20260516-161037.avif",
             "width": 2000,
             "height": 1126,
             "color": "#282818",
-            "taken": "2026-05-16"
+            "taken": "2026-05-16",
+            "title": "Green woods"
         },
         {
             "file": "20260516-162755.avif",
             "width": 1126,
             "height": 2000,
             "color": "#282818",
-            "taken": "2026-05-16"
+            "taken": "2026-05-16",
+            "title": "The bent tree"
         },
         {
             "file": "20260607-054029.avif",
             "width": 2000,
             "height": 1126,
             "color": "#383838",
-            "taken": "2026-06-07"
+            "taken": "2026-06-07",
+            "title": "Empty road at dusk"
         },
         {
             "file": "20260702-125308.avif",
             "width": 2000,
             "height": 1126,
             "color": "#688868",
-            "taken": "2026-07-02"
+            "taken": "2026-07-02",
+            "title": "Billboard in the trees"
         },
         {
             "file": "39c7524b-f2d8-4aee-b368-894c7cea3265.avif",
             "width": 1125,
             "height": 2000,
             "color": "#786838",
-            "taken": "2026-10-03"
+            "taken": "2026-10-03",
+            "title": "Cattails"
         },
         {
             "file": "20260711-194551.avif",
             "width": 2000,
             "height": 1126,
             "color": "#383828",
-            "taken": "2026-07-11"
+            "taken": "2026-07-11",
+            "title": "Deeper in the woods"
         },
         {
             "file": "9b3c6c5c-4d7b-4406-a19a-01b62a676b66.avif",
             "width": 1125,
             "height": 2000,
             "color": "#98a898",
-            "taken": "2026-10-17"
+            "taken": "2026-10-17",
+            "title": "Leaf"
         },
         {
             "file": "3e83f448-5c85-4477-bafb-c0d8f52f220a.avif",
             "width": 1125,
             "height": 2000,
             "color": "#585858",
-            "taken": "2026-09-19"
+            "taken": "2026-09-19",
+            "title": "Weeds in the wall"
         },
         {
             "file": "9d494781-8dee-40bb-b183-99d2114a3690.avif",
             "width": 1125,
             "height": 2000,
             "color": "#282828",
-            "taken": "2026-10-11"
+            "taken": "2026-10-11",
+            "title": "Succulent"
         },
         {
             "file": "bed9a768-5e2b-47a5-8825-e08ac7d26274.avif",
             "width": 1125,
             "height": 2000,
             "color": "#685858",
-            "taken": "2026-10-11"
+            "taken": "2026-10-11",
+            "title": "Pink and green leaves"
         },
         {
             "file": "bb6ffc2c-3c77-483a-ad75-b3513cdfb4ba.avif",
             "width": 1125,
             "height": 2000,
             "color": "#283848",
-            "taken": "2026-10-18"
+            "taken": "2026-10-18",
+            "title": "Leaves turning"
         },
         {
             "file": "be286ef6-a96e-437c-873b-8a8ffbda632e.avif",
             "width": 1125,
             "height": 2000,
             "color": "#989898",
-            "taken": "2026-10-17"
+            "taken": "2026-10-17",
+            "title": "White flowers by the bench"
         },
         {
             "file": "d8f668ee-2edf-46e3-bf42-d47f43072aef.avif",
             "width": 1125,
             "height": 2000,
             "color": "#586838",
-            "taken": "2026-10-17"
+            "taken": "2026-10-17",
+            "title": "Ivy"
         },
         {
             "file": "d5ee67f3-64dd-4509-b47b-83d0b07ca6bc.avif",
             "width": 1125,
             "height": 2000,
             "color": "#283828",
-            "taken": "2026-10-03"
+            "taken": "2026-10-03",
+            "title": "Blue flowers"
         },
         {
             "file": "e16255a1-32f9-4c08-af9a-ec4cbd76224b.avif",
             "width": 1125,
             "height": 2000,
             "color": "#586818",
-            "taken": "2026-10-17"
+            "taken": "2026-10-17",
+            "title": "Leaf over grass"
         },
         {
             "file": "e29efd5c-62e6-4caf-a230-c363c681cc81.avif",
             "width": 1125,
             "height": 2000,
             "color": "#484848",
-            "taken": "2026-10-03"
+            "taken": "2026-10-03",
+            "title": "Oak leaves"
         },
         {
             "file": "e17a8d66-3c30-462d-8edd-85a758d497dd.avif",
             "width": 1500,
             "height": 2000,
             "color": "#e8f808",
-            "taken": "2026-03-22"
+            "taken": "2026-03-22",
+            "title": "A solved cube"
         },
         {
             "file": "e71c25aa-4282-4a72-9668-d8f1f2c8ea93.avif",
             "width": 1125,
             "height": 2000,
             "color": "#485838",
-            "taken": "2026-09-19"
+            "taken": "2026-09-19",
+            "title": "Yellowing bush"
         },
         {
             "file": "img-0172.avif",
             "width": 2000,
             "height": 1500,
             "color": "#c8b8a8",
-            "taken": "2026-07-18"
+            "taken": "2026-07-18",
+            "title": "Waveboard on a box"
         },
         {
             "file": "img-0542.avif",
             "width": 2000,
             "height": 1500,
             "color": "#7898d8",
-            "taken": "2026-07-26"
+            "taken": "2026-07-26",
+            "title": "The Vessel"
         },
         {
             "file": "img-0564.avif",
             "width": 2000,
             "height": 1500,
             "color": "#080808",
-            "taken": "2026-07-26"
+            "taken": "2026-07-26",
+            "title": "Coleus in a planter"
         },
         {
             "file": "img-0128.avif",
             "width": 1500,
             "height": 2000,
             "color": "#282838",
-            "taken": "2026-07-17"
+            "taken": "2026-07-17",
+            "title": "Looking up a tree"
         },
         {
             "file": "img-0561.avif",
             "width": 2000,
             "height": 1500,
             "color": "#b8b8b8",
-            "taken": "2026-07-26"
+            "taken": "2026-07-26",
+            "title": "Chelsea Waterside Park"
         },
         {
             "file": "img-0860.avif",
             "width": 2000,
             "height": 1500,
             "color": "#98b8e8",
-            "taken": "2026-08-07"
+            "taken": "2026-08-07",
+            "title": "Treetop, blue sky"
         },
         {
             "file": "img-0913.avif",
             "width": 2000,
             "height": 1500,
             "color": "#989898",
-            "taken": "2026-08-09"
+            "taken": "2026-08-09",
+            "title": "Inside the Oculus"
         },
         {
             "file": "img-0903.avif",
             "width": 2000,
             "height": 1500,
             "color": "#8898b8",
-            "taken": "2026-08-09"
+            "taken": "2026-08-09",
+            "title": "Through the bridge cables"
         },
         {
             "file": "img-0901.avif",
             "width": 2000,
             "height": 1500,
             "color": "#a8b8c8",
-            "taken": "2026-08-09"
+            "taken": "2026-08-09",
+            "title": "Brooklyn Bridge"
         },
         {
             "file": "img-0998.avif",
             "width": 2000,
             "height": 1500,
             "color": "#a8c8d8",
-            "taken": "2026-08-09"
+            "taken": "2026-08-09",
+            "title": "Manhattan from above"
         },
         {
             "file": "img-1068.avif",
             "width": 1500,
             "height": 2000,
             "color": "#f8f8f8",
-            "taken": "2026-08-11"
+            "taken": "2026-08-11",
+            "title": "Leaf, very close"
         },
         {
             "file": "img-1011.avif",
             "width": 2000,
             "height": 1125,
             "color": "#b8c8d8",
-            "taken": "2026-08-09"
+            "taken": "2026-08-09",
+            "title": "Manhattan from above, again"
         },
         {
             "file": "img-1215.avif",
             "width": 2000,
             "height": 1500,
             "color": "#482818",
-            "taken": "2026-08-14"
+            "taken": "2026-08-14",
+            "title": "Domino tower"
         },
         {
             "file": "img-1507.avif",
             "width": 2000,
             "height": 1500,
             "color": "#282828",
-            "taken": "2026-08-23"
+            "taken": "2026-08-23",
+            "title": "The memorial pool"
         },
         {
             "file": "img-1083.avif",
             "width": 2000,
             "height": 1500,
             "color": "#e8e8e8",
-            "taken": "2026-08-11"
+            "taken": "2026-08-11",
+            "title": "Tall grass"
         },
         {
             "file": "img-1226.avif",
             "width": 2000,
             "height": 1500,
             "color": "#582818",
-            "taken": "2026-08-14"
+            "taken": "2026-08-14",
+            "title": "Dominoes"
         },
         {
             "file": "img-1476.avif",
             "width": 1500,
             "height": 2000,
             "color": "#080808",
-            "taken": "2026-08-23"
+            "taken": "2026-08-23",
+            "title": "Goodbye COBOL"
         },
         {
             "file": "img-1512.avif",
             "width": 1500,
             "height": 2000,
             "color": "#484848",
-            "taken": "2026-08-23"
+            "taken": "2026-08-23",
+            "title": "A rose at the memorial"
         },
         {
             "file": "img-1519.avif",
             "width": 2000,
             "height": 1500,
             "color": "#687848",
-            "taken": "2026-08-23"
+            "taken": "2026-08-23",
+            "title": "Squirrel"
         },
         {
             "file": "img-1567.avif",
             "width": 2000,
             "height": 1500,
             "color": "#687848",
-            "taken": "2026-08-23"
+            "taken": "2026-08-23",
+            "title": "Green pod"
         },
         {
             "file": "img-1524.avif",
             "width": 1500,
             "height": 2000,
             "color": "#484828",
-            "taken": "2026-08-23"
+            "taken": "2026-08-23",
+            "title": "Lantana"
         },
         {
             "file": "img-1527.avif",
             "width": 2000,
             "height": 1500,
             "color": "#383828",
-            "taken": "2026-08-23"
+            "taken": "2026-08-23",
+            "title": "More lantana"
         },
         {
             "file": "img-1682.avif",
             "width": 2000,
             "height": 1500,
             "color": "#283858",
-            "taken": "2026-08-25"
+            "taken": "2026-08-25",
+            "title": "Clouds"
         },
         {
             "file": "img-1563.avif",
             "width": 2000,
             "height": 1500,
             "color": "#9898a8",
-            "taken": "2026-08-23"
+            "taken": "2026-08-23",
+            "title": "On the pavement"
         },
         {
             "file": "img-1721.avif",
             "width": 1500,
             "height": 2000,
-            "color": "#b8c8d8"
+            "color": "#b8c8d8",
+            "title": "Outboard motor"
         },
         {
             "file": "img-1697.avif",
             "width": 1500,
             "height": 2000,
             "color": "#684838",
-            "taken": "2026-08-25"
+            "taken": "2026-08-25",
+            "title": "Lego pirate"
         },
         {
             "file": "img-1707.avif",
             "width": 2000,
             "height": 1500,
             "color": "#888888",
-            "taken": "2026-08-25"
+            "taken": "2026-08-25",
+            "title": "The park, under clouds"
         },
         {
             "file": "img-1708.avif",
             "width": 2000,
             "height": 1500,
             "color": "#080808",
-            "taken": "2026-08-25"
+            "taken": "2026-08-25",
+            "title": "The park, the other way"
         },
         {
             "file": "img-1857.avif",
             "width": 1500,
             "height": 2000,
             "color": "#383828",
-            "taken": "2026-08-29"
+            "taken": "2026-08-29",
+            "title": "One red leaf"
         },
         {
             "file": "img-1962.avif",
             "width": 1500,
             "height": 2000,
             "color": "#e8d8d8",
-            "taken": "2026-08-31"
+            "taken": "2026-08-31",
+            "title": "Rock slide"
         },
         {
             "file": "img-2012.avif",
             "width": 2000,
             "height": 1500,
             "color": "#a8a8a8",
-            "taken": "2026-09-01"
+            "taken": "2026-09-01",
+            "title": "Hills from the highway"
         },
         {
             "file": "img-2037.avif",
             "width": 1500,
             "height": 2000,
             "color": "#080808",
-            "taken": "2026-09-02"
+            "taken": "2026-09-02",
+            "title": "Fern in the flash"
         },
         {
             "file": "img-2020.avif",
             "width": 2000,
             "height": 1500,
             "color": "#8898b8",
-            "taken": "2026-09-01"
+            "taken": "2026-09-01",
+            "title": "Road at dusk"
         },
         {
             "file": "img-2122.avif",
             "width": 2000,
             "height": 1500,
             "color": "#484838",
-            "taken": "2026-09-05"
+            "taken": "2026-09-05",
+            "title": "V.I.M."
         },
         {
             "file": "img-2119.avif",
             "width": 2000,
             "height": 1500,
             "color": "#6888c8",
-            "taken": "2026-09-05"
+            "taken": "2026-09-05",
+            "title": "Factory windows"
         },
         {
             "file": "img-2079.avif",
             "width": 2000,
             "height": 1500,
             "color": "#383838",
-            "taken": "2026-09-04"
+            "taken": "2026-09-04",
+            "title": "Roots"
         },
         {
             "file": "img-2331.avif",
             "width": 2000,
             "height": 1500,
             "color": "#e8e8e8",
-            "taken": "2026-09-13"
+            "taken": "2026-09-13",
+            "title": "A row of trucks"
         },
         {
             "file": "img-2145.avif",
             "width": 2000,
             "height": 1500,
             "color": "#181808",
-            "taken": "2026-09-06"
+            "taken": "2026-09-06",
+            "title": "Looking up in the woods"
         },
         {
             "file": "img-2502.avif",
             "width": 2000,
             "height": 1500,
             "color": "#281818",
-            "taken": "2026-09-19"
+            "taken": "2026-09-19",
+            "title": "Cinema hallway"
         },
         {
             "file": "img-2518.avif",
             "width": 2000,
             "height": 1500,
             "color": "#383838",
-            "taken": "2026-09-19"
+            "taken": "2026-09-19",
+            "title": "Empty lot at night"
         },
         {
             "file": "img-2155.avif",
             "width": 2000,
             "height": 1500,
             "color": "#181808",
-            "taken": "2026-09-06"
+            "taken": "2026-09-06",
+            "title": "Tall trees"
         },
         {
             "file": "img-2532.avif",
             "width": 2000,
             "height": 1500,
             "color": "#584848",
-            "taken": "2026-09-19"
+            "taken": "2026-09-19",
+            "title": "My shadow on the road"
         },
         {
             "file": "img-2428.avif",
             "width": 2000,
             "height": 1500,
             "color": "#080808",
-            "taken": "2026-09-17"
+            "taken": "2026-09-17",
+            "title": "Headlights in the grass"
         },
         {
             "file": "img-2663.avif",
             "width": 2000,
             "height": 1500,
             "color": "#483828",
-            "taken": "2026-09-24"
+            "taken": "2026-09-24",
+            "title": "Pavement, low"
         },
         {
             "file": "img-2674.avif",
             "width": 2000,
             "height": 1500,
             "color": "#383838",
-            "taken": "2026-09-25"
+            "taken": "2026-09-25",
+            "title": "Cheesecake"
         },
         {
             "file": "img-2833.avif",
             "width": 2000,
             "height": 1500,
             "color": "#282818",
-            "taken": "2026-09-29"
+            "taken": "2026-09-29",
+            "title": "Pole 34"
         },
         {
             "file": "img-2835.avif",
             "width": 2000,
             "height": 1500,
             "color": "#080808",
-            "taken": "2026-09-29"
+            "taken": "2026-09-29",
+            "title": "Small pine at night"
         },
         {
             "file": "img-2823.avif",
             "width": 2000,
             "height": 1500,
             "color": "#d8d8d8",
-            "taken": "2026-09-29"
+            "taken": "2026-09-29",
+            "title": "Bare tree, gray sky"
         },
         {
             "file": "img-2600.avif",
             "width": 2000,
             "height": 1500,
             "color": "#485838",
-            "taken": "2026-09-22"
+            "taken": "2026-09-22",
+            "title": "Edge of the woods"
         },
         {
             "file": "img-2847.avif",
             "width": 2000,
             "height": 1500,
             "color": "#080808",
-            "taken": "2026-09-30"
+            "taken": "2026-09-30",
+            "title": "The mall"
         },
         {
             "file": "img-3021.avif",
             "width": 2000,
             "height": 1500,
             "color": "#383828",
-            "taken": "2026-10-03"
+            "taken": "2026-10-03",
+            "title": "Fall undergrowth"
         },
         {
             "file": "img-3049.avif",
             "width": 2000,
             "height": 1500,
             "color": "#080808",
-            "taken": "2026-10-03"
+            "taken": "2026-10-03",
+            "title": "Leaves and a rock"
         },
         {
             "file": "img-2980.avif",
             "width": 2000,
             "height": 1500,
             "color": "#283848",
-            "taken": "2026-10-03"
+            "taken": "2026-10-03",
+            "title": "The lake"
         },
         {
             "file": "img-2856.avif",
             "width": 2000,
             "height": 1500,
             "color": "#685848",
-            "taken": "2026-09-30"
+            "taken": "2026-09-30",
+            "title": "Dirt path"
         },
         {
             "file": "img-3018.avif",
             "width": 2000,
             "height": 1500,
             "color": "#080808",
-            "taken": "2026-10-03"
+            "taken": "2026-10-03",
+            "title": "The gorge"
         },
         {
             "file": "img-3060.avif",
             "width": 2000,
             "height": 1500,
             "color": "#080808",
-            "taken": "2026-10-03"
+            "taken": "2026-10-03",
+            "title": "Two ghosts"
         },
         {
             "file": "img-3222.avif",
             "width": 1500,
             "height": 2000,
             "color": "#989898",
-            "taken": "2026-10-06"
+            "taken": "2026-10-06",
+            "title": "Geese in the parking lot"
         },
         {
             "file": "img-3056.avif",
             "width": 2000,
             "height": 1500,
             "color": "#181808",
-            "taken": "2026-10-03"
+            "taken": "2026-10-03",
+            "title": "Fern shadows"
         },
         {
             "file": "img-3572.avif",
             "width": 1500,
             "height": 2000,
             "color": "#782828",
-            "taken": "2026-10-12"
+            "taken": "2026-10-12",
+            "title": "Red leaf, held up"
         },
         {
             "file": "img-3224.avif",
             "width": 2000,
             "height": 1500,
             "color": "#888888",
-            "taken": "2026-10-06"
+            "taken": "2026-10-06",
+            "title": "More geese"
         },
         {
             "file": "img-3257.avif",
             "width": 2000,
             "height": 1500,
             "color": "#382818",
-            "taken": "2026-10-06"
+            "taken": "2026-10-06",
+            "title": "Empty room"
         },
         {
             "file": "img-3715.avif",
             "width": 2000,
             "height": 1500,
             "color": "#080808",
-            "taken": "2026-10-14"
+            "taken": "2026-10-14",
+            "title": "Rippled sky"
         },
         {
             "file": "img-3875.avif",
             "width": 2000,
             "height": 1500,
             "color": "#080808",
-            "taken": "2026-10-17"
+            "taken": "2026-10-17",
+            "title": "Halloween on the patio"
         },
         {
             "file": "img-3970.avif",
             "width": 2000,
             "height": 1500,
             "color": "#989888",
-            "taken": "2026-10-17"
+            "taken": "2026-10-17",
+            "title": "Sunset behind the bridge"
         },
         {
             "file": "img-3579.avif",
             "width": 2000,
             "height": 1500,
             "color": "#98a8e8",
-            "taken": "2026-10-12"
+            "taken": "2026-10-12",
+            "title": "Leaves and sky"
         },
         {
             "file": "img-3903.avif",
             "width": 2000,
             "height": 1500,
             "color": "#e8e8e8",
-            "taken": "2026-10-17"
+            "taken": "2026-10-17",
+            "title": "Planter between the towers"
         },
         {
             "file": "img-3880.avif",
             "width": 2000,
             "height": 1500,
             "color": "#080808",
-            "taken": "2026-10-17"
+            "taken": "2026-10-17",
+            "title": "Things hanging in a tree"
         },
         {
             "file": "img-3912.avif",
             "width": 2000,
             "height": 1500,
             "color": "#e8e8e8",
-            "taken": "2026-10-17"
+            "taken": "2026-10-17",
+            "title": "The tower"
         },
         {
             "file": "img-3979.avif",
             "width": 2000,
             "height": 1500,
             "color": "#080808",
-            "taken": "2026-10-17"
+            "taken": "2026-10-17",
+            "title": "Refinery at sunset"
         },
         {
             "file": "img-4519.avif",
             "width": 1500,
             "height": 2000,
             "color": "#685858",
-            "taken": "2026-10-26"
+            "taken": "2026-10-26",
+            "title": "The hallway"
         },
         {
             "file": "img-4331.avif",
             "width": 2000,
             "height": 1500,
             "color": "#284878",
-            "taken": "2026-10-24"
+            "taken": "2026-10-24",
+            "title": "Wisps"
         },
         {
             "file": "img-4018.avif",
             "width": 2000,
             "height": 1500,
             "color": "#b8d8f8",
-            "taken": "2026-10-18"
+            "taken": "2026-10-18",
+            "title": "The bend in fall"
         },
         {
             "file": "img-4019.avif",
             "width": 2000,
             "height": 1500,
             "color": "#383828",
-            "taken": "2026-10-18"
+            "taken": "2026-10-18",
+            "title": "Yellow leaves by the road"
         },
         {
             "file": "img-4977.avif",
             "width": 2000,
             "height": 1125,
             "color": "#080808",
-            "taken": "2026-11-06"
+            "taken": "2026-11-06",
+            "title": "Sunset on the glass building"
         },
         {
             "file": "img-4947.avif",
             "width": 2000,
             "height": 1500,
             "color": "#080808",
-            "taken": "2026-11-06"
+            "taken": "2026-11-06",
+            "title": "Parking lot sunset"
         },
         {
             "file": "img-4969.avif",
             "width": 2000,
             "height": 1500,
             "color": "#080808",
-            "taken": "2026-11-06"
+            "taken": "2026-11-06",
+            "title": "Dusk on the road"
         },
         {
             "file": "img-4981.avif",
             "width": 2000,
             "height": 1500,
             "color": "#d8c8c8",
-            "taken": "2026-11-06"
+            "taken": "2026-11-06",
+            "title": "Apartments at dusk"
         },
         {
             "file": "20250825-090035.avif",
             "width": 2000,
             "height": 1126,
             "color": "#181818",
-            "taken": "2025-08-25"
+            "taken": "2025-08-25",
+            "title": "Empty classroom"
         },
         {
             "file": "20250830-224142.avif",
             "width": 2000,
             "height": 1126,
             "color": "#080808",
-            "taken": "2025-08-30"
+            "taken": "2025-08-30",
+            "title": "String lights in the dark"
         },
         {
             "file": "20250902-182920.avif",
             "width": 1126,
             "height": 2000,
             "color": "#587838",
-            "taken": "2025-09-02"
+            "taken": "2025-09-02",
+            "title": "Chicken"
+        },
+        {
+            "file": "4d4689a5fd8b031fd5ca424221491335.avif",
+            "width": 537,
+            "height": 509,
+            "color": "#080808",
+            "kind": "shitpost",
+            "title": "Cereal in a pepper"
+        },
+        {
+            "file": "0b2e269c-5b2c-4eec-b2d2-20a783fe78a7.avif",
+            "width": 384,
+            "height": 474,
+            "color": "#080818",
+            "kind": "shitpost",
+            "title": "Thigh-highs, Curse of Binding"
+        },
+        {
+            "file": "82659a7e1a493eab43861d7b7d365fd9.avif",
+            "width": 724,
+            "height": 575,
+            "color": "#a8a8a8",
+            "kind": "shitpost",
+            "title": "Hot dog cake"
+        },
+        {
+            "file": "92f9773fea7606dcb3cae1458731cf20.avif",
+            "width": 720,
+            "height": 831,
+            "color": "#f8d8c8",
+            "kind": "shitpost",
+            "title": "Cursed lunch"
+        },
+        {
+            "file": "2024-10-17-19-05-09.avif",
+            "width": 1920,
+            "height": 1080,
+            "color": "#686878",
+            "kind": "shitpost",
+            "title": "Minecraft sunset, with tank"
+        },
+        {
+            "file": "e496c330a600a45329f32675d1d9a169.avif",
+            "width": 1158,
+            "height": 1292,
+            "color": "#d8c8a8",
+            "kind": "shitpost",
+            "title": "Nothing really mattress"
+        },
+        {
+            "file": "rdt-20250919-1606187803486713028915940.avif",
+            "width": 640,
+            "height": 460,
+            "color": "#e8e8e8",
+            "kind": "shitpost",
+            "title": "Notice of seizure of meme"
+        },
+        {
+            "file": "9906425119b8ef99f531d4262bbd7922.avif",
+            "width": 1440,
+            "height": 1920,
+            "color": "#c8c8b8",
+            "kind": "shitpost",
+            "title": "Two men, drawn"
+        },
+        {
+            "file": "1fce03740845409c30974ced46d1e665.avif",
+            "width": 1440,
+            "height": 1920,
+            "color": "#d8d8c8",
+            "kind": "shitpost",
+            "title": "The haircut"
+        },
+        {
+            "file": "rdt-20251001-0027428061347176158485515.avif",
+            "width": 1079,
+            "height": 976,
+            "color": "#d8b848",
+            "kind": "shitpost",
+            "title": "Imagine 2 onions"
+        },
+        {
+            "file": "screenshot-2025-08-23-091731.avif",
+            "width": 602,
+            "height": 267,
+            "color": "#f8f8e8",
+            "kind": "shitpost",
+            "title": "Celeste, on a map"
+        },
+        {
+            "file": "rdt-20251105-1410031122740097810599904.avif",
+            "width": 1170,
+            "height": 1097,
+            "color": "#6888d8",
+            "kind": "shitpost",
+            "title": "I love my country"
+        },
+        {
+            "file": "rdt-20251007-2246088158531099564857286.avif",
+            "width": 1131,
+            "height": 1650,
+            "color": "#b8a8a8",
+            "kind": "shitpost",
+            "title": "Friends are like snowflakes"
+        },
+        {
+            "file": "rdt-20260412-085143127864567649269150.avif",
+            "width": 1080,
+            "height": 1440,
+            "color": "#989888",
+            "kind": "shitpost",
+            "title": "Bathroom wall poetry"
+        },
+        {
+            "file": "screenshot-2025-09-18-213431.avif",
+            "width": 984,
+            "height": 661,
+            "color": "#181818",
+            "kind": "shitpost",
+            "title": "Master Sword"
+        },
+        {
+            "file": "screenshot-20251013-114425-reddit.avif",
+            "width": 1080,
+            "height": 808,
+            "color": "#282828",
+            "taken": "2025-10-13",
+            "kind": "shitpost",
+            "title": "Address me"
+        },
+        {
+            "file": "screenshot-20250925-071957-tiktok.avif",
+            "width": 1079,
+            "height": 907,
+            "color": "#083838",
+            "taken": "2025-09-25",
+            "kind": "shitpost",
+            "title": "Mr. Penis"
+        },
+        {
+            "file": "screenshot-20251020-153705-tiktok.avif",
+            "width": 1077,
+            "height": 1071,
+            "color": "#f8f8f8",
+            "taken": "2025-10-20",
+            "kind": "shitpost",
+            "title": "Did this happen?"
+        },
+        {
+            "file": "screenshot-20251126-181624-tiktok.avif",
+            "width": 1078,
+            "height": 742,
+            "color": "#181808",
+            "taken": "2025-11-26",
+            "kind": "shitpost",
+            "title": "It's time to bounce"
+        },
+        {
+            "file": "rdt-20250831-0021052015977191402221603.avif",
+            "width": 1125,
+            "height": 2000,
+            "color": "#483838",
+            "kind": "shitpost",
+            "title": "On the PC case"
+        },
+        {
+            "file": "screenshot-20251122-083128-tiktok.avif",
+            "width": 1079,
+            "height": 844,
+            "color": "#484848",
+            "taken": "2025-11-22",
+            "kind": "shitpost",
+            "title": "Dork ass"
+        },
+        {
+            "file": "screenshot-20260115-213655-tiktok.avif",
+            "width": 1079,
+            "height": 831,
+            "color": "#f8f8f8",
+            "taken": "2026-01-15",
+            "kind": "shitpost",
+            "title": "8000 nerve endings"
+        },
+        {
+            "file": "screenshot-20260121-141802-tiktok.avif",
+            "width": 1079,
+            "height": 1067,
+            "color": "#c85888",
+            "taken": "2026-01-21",
+            "kind": "shitpost",
+            "title": "The F in Fuck ICE"
+        },
+        {
+            "file": "screenshot-20260124-092456-tiktok.avif",
+            "width": 1079,
+            "height": 783,
+            "color": "#887858",
+            "taken": "2026-01-24",
+            "kind": "shitpost",
+            "title": "Falling in love was never an option"
+        },
+        {
+            "file": "screenshot-20260125-104233-tiktok.avif",
+            "width": 1079,
+            "height": 582,
+            "color": "#f8e8f8",
+            "taken": "2026-01-25",
+            "kind": "shitpost",
+            "title": "You insignificant fuck"
+        },
+        {
+            "file": "signal-2025-10-08-20-05-39-779.avif",
+            "width": 1079,
+            "height": 1019,
+            "color": "#e8e8e8",
+            "kind": "shitpost",
+            "title": "Biblically accurate lesbians"
+        },
+        {
+            "file": "signal-2025-11-01-21-54-33-927.avif",
+            "width": 1125,
+            "height": 2000,
+            "color": "#988878",
+            "kind": "shitpost",
+            "title": "Little man on the wall"
+        },
+        {
+            "file": "signal-2026-04-15-12-17-21-725.avif",
+            "width": 1520,
+            "height": 1569,
+            "color": "#c8a898",
+            "kind": "shitpost",
+            "title": "Circles"
+        },
+        {
+            "file": "signal-2026-05-13-14-24-20-839.avif",
+            "width": 1125,
+            "height": 2000,
+            "color": "#989868",
+            "kind": "shitpost",
+            "title": "Green branch"
+        },
+        {
+            "file": "signal-2026-04-29-14-23-42-441.avif",
+            "width": 2000,
+            "height": 1125,
+            "color": "#a8c8e8",
+            "kind": "shitpost",
+            "title": "Pink tree"
         }
     ]
 }

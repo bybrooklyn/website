@@ -143,6 +143,7 @@ const emptyLine = () => el("p", { innerHTML: "<br>" });
 
 /** Put the open file on the page, in whichever of the two views is chosen. */
 function render(): void {
+    notesBox.hidden = true;
     if (!file) return;
     const formatted = richNow();
     text.hidden = formatted;
@@ -173,10 +174,16 @@ function render(): void {
 
 async function open(path: string): Promise<void> {
     await save();
+    if (path === PHOTOS) return openNotes();
     const loaded = await api<{ content: string; hash: string }>(`/api/file?path=${encodeURIComponent(path)}`);
     const route = files.find((entry) => entry.path === path)?.route ?? "/";
     file = { path, hash: loaded.hash, content: loaded.content, markdown: /\.mdx?$/.test(path), route };
     render();
+    point(path, route);
+}
+
+/** Mark what is open in the list and show its page in the preview. */
+function point(path: string, route: string): void {
     for (const link of list.querySelectorAll("button")) link.classList.toggle("here", link.dataset.path === path);
     if (frame.dataset.route !== route) {
         frame.dataset.route = route;
@@ -667,6 +674,88 @@ body.addEventListener("keydown", (event) => {
 frontText.addEventListener("input", () => {
     grow(frontText);
     changed();
+});
+
+// ---- notes on photographs ----
+//
+// One picture at a time, with its heading and a box for rough notes. The notes
+// are kept beside the picture and never shown on the site; its caption is
+// written from them later.
+
+interface PhotoNote {
+    file: string;
+    title?: string;
+    note?: string;
+    kind?: string;
+    taken?: string;
+}
+
+const PHOTOS = "src/data/photos.json";
+const notesBox = $("notes");
+const noteImage = $<HTMLImageElement>("note-image");
+const noteTitle = $<HTMLInputElement>("note-title");
+const noteText = $<HTMLTextAreaElement>("note-text");
+let notes: PhotoNote[] = [];
+let noteAt = 0;
+let noteTimer = 0;
+
+function showNote(): void {
+    const photo = notes[noteAt];
+    if (!photo) return;
+    noteImage.src = `/api/asset?file=${PHOTOS}&src=/photos/${photo.file}&k=${key}`;
+    noteTitle.value = photo.title ?? "";
+    noteText.value = photo.note ?? "";
+    grow(noteText);
+    const done = notes.filter((entry) => entry.note).length;
+    $("note-count").textContent = `${noteAt + 1} of ${notes.length}${photo.kind ? " · shitpost" : ""}${photo.taken ? ` · ${photo.taken}` : ""} · ${done} with notes`;
+    memory.set("note-at", photo.file);
+}
+
+function saveNote(): Promise<void> {
+    clearTimeout(noteTimer);
+    const photo = notes[noteAt];
+    if (!photo || (photo.title ?? "") + "\n" + (photo.note ?? "") === noteTitle.value + "\n" + noteText.value) return Promise.resolve();
+    photo.title = noteTitle.value;
+    photo.note = noteText.value;
+    return api("/api/photos/note", { file: photo.file, title: photo.title, note: photo.note }).then(() => say("saved"), fail);
+}
+
+function noteChanged(): void {
+    say("not saved yet");
+    clearTimeout(noteTimer);
+    noteTimer = window.setTimeout(() => void saveNote(), 600);
+}
+
+async function stepNote(by: number): Promise<void> {
+    await saveNote();
+    noteAt = (noteAt + by + notes.length) % notes.length;
+    showNote();
+    noteText.focus();
+}
+
+async function openNotes(): Promise<void> {
+    file = undefined;
+    text.hidden = richBox.hidden = $("mode").hidden = $("tools").hidden = true;
+    notesBox.hidden = false;
+    notes = (await api<{ photos: PhotoNote[] }>("/api/photos")).photos;
+    noteAt = Math.max(0, notes.findIndex((photo) => photo.file === memory.get("note-at")));
+    showNote();
+    point(PHOTOS, "/photos/");
+}
+
+noteTitle.addEventListener("input", noteChanged);
+noteText.addEventListener("input", () => {
+    grow(noteText);
+    noteChanged();
+});
+$("note-back").addEventListener("click", () => void stepNote(-1));
+$("note-next").addEventListener("click", () => void stepNote(1));
+// Ctrl+Enter in the notes moves on to the next picture.
+notesBox.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+        event.preventDefault();
+        void stepNote(1);
+    }
 });
 
 // ---- switching views ----

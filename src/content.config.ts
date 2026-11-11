@@ -9,6 +9,7 @@ const blog = defineCollection({
         z
             .object({
                 title: z.string(),
+                /** A date, or a date and time (2026-11-10T19:55) so posts from one day keep their order. Only the date is shown. */
                 date: z.coerce.date(),
                 summary: z.string(),
                 /** The color of links and marks on this post. Violet if left out. */

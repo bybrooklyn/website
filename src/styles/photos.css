@@ -9,12 +9,12 @@
     width: auto;
     max-width: 100%;
     height: auto;
-    max-height: max(16rem, calc(100svh - 22rem));
+    max-height: max(16rem, calc(100svh - 26rem));
     border-radius: var(--radius);
 }
 
 .photo figcaption {
-    min-height: calc(var(--line) * 2);
+    min-height: calc(var(--line) * 3);
     margin-top: calc(var(--line) * 0.5);
 }
 
@@ -46,4 +46,33 @@
     color: var(--muted);
     text-decoration: none;
     cursor: default;
+}
+
+.photo .photo-title {
+    margin: 0;
+    font-size: 1.35rem;
+    line-height: var(--line);
+}
+
+.photo-sets {
+    display: flex;
+    gap: 1rem;
+    margin-left: auto;
+}
+
+.photo-buttons .photo-sets button {
+    color: var(--muted);
+    text-decoration: none;
+}
+
+.photo-buttons .photo-sets button[aria-pressed="true"] {
+    color: var(--ink);
+    text-decoration: underline;
+    text-decoration-color: var(--accent);
+    text-decoration-thickness: 0.125rem;
+    text-underline-offset: 0.3em;
+}
+
+.photo-license {
+    margin: calc(var(--line) * 0.75) 0 0;
 }

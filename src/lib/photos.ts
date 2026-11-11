@@ -13,7 +13,14 @@ export interface Photo {
     color: string;
     /** The date it was taken, if the picture said. */
     taken?: string;
+    /** A few words naming it, shown as its heading. */
+    title?: string;
+    /** What is said about it, shown under it. */
     caption?: string;
+    /** My rough notes on it, written in the editor and not shown: the caption is made from these. */
+    note?: string;
+    /** Set for a picture that is not a photograph of mine. */
+    kind?: "shitpost";
 }
 
 /** Newest first; those without a date last. */

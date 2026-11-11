@@ -51,6 +51,7 @@ async function files() {
         files: await Promise.all((await listMdx(where)).map((name) => entry(where, name))),
     });
     return [
+        { label: "photos", files: [{ path: PHOTOS, label: "photo notes", draft: false, route: "/photos/" }] },
         await folder("posts", "src/content/blog"),
         {
             label: "pages",
@@ -64,6 +65,31 @@ async function files() {
     ];
 }
 
+// ---- notes on photographs ----
+
+const PHOTOS = "src/data/photos.json";
+
+interface PhotoNote {
+    file: string;
+    title?: string;
+    note?: string;
+    caption?: string;
+    kind?: string;
+    taken?: string;
+}
+
+const readPhotos = async () => ((await Bun.file(at(PHOTOS)).json()) as { photos: PhotoNote[] }).photos;
+
+/** Keep a picture's heading and the rough notes written about it. Nothing else about it changes. */
+async function notePhoto(file: string, title: string, note: string): Promise<void> {
+    const photos = await readPhotos();
+    const photo = photos.find((candidate) => candidate.file === file);
+    if (!photo) throw new Error("That picture is not on the site.");
+    photo.title = title.trim() || undefined;
+    photo.note = note.trim() || undefined;
+    await Bun.write(at(PHOTOS), `${JSON.stringify({ photos }, null, 4)}\n`);
+}
+
 async function newPost(title: string): Promise<string> {
     const path = `src/content/blog/${slug(title)}.mdx`;
     if (!slug(title)) throw new Error("That title has no letters or numbers in it.");
@@ -73,7 +99,8 @@ async function newPost(title: string): Promise<string> {
         [
             "---",
             `title: ${JSON.stringify(title)}`,
-            `date: ${new Date().toISOString().slice(0, 10)}`,
+            // The time as the clock here shows it, with no zone: it only orders posts within a day.
+            `date: ${new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)}`,
             'summary: "TODO: one sentence about this post."',
             "# accent: pink          # violet (default), pink, blue, mint or amber",
             "# cover: ../../assets/covers/picture.png",
@@ -240,6 +267,16 @@ const page = `<!doctype html>
     <div id="panes">
         <div id="write">
             <textarea id="text" spellcheck="true" aria-label="The file"></textarea>
+            <div id="notes" hidden>
+                <p class="notes-bar">
+                    <button type="button" id="note-back">back</button>
+                    <button type="button" id="note-next">next</button>
+                    <span id="note-count"></span>
+                </p>
+                <img id="note-image" alt="">
+                <input id="note-title" placeholder="a few words naming it" aria-label="Heading">
+                <textarea id="note-text" rows="4" placeholder="notes about this one, as rough as you like" aria-label="Notes"></textarea>
+            </div>
             <div id="rich" hidden>
                 <textarea id="front" spellcheck="false" rows="1" aria-label="Frontmatter"></textarea>
                 <div id="body" class="prose" contenteditable="true" spellcheck="true" aria-label="The page's text"></div>
@@ -296,6 +333,7 @@ async function handle(request: Request): Promise<Response> {
         return inside && type && (await Bun.file(file).exists()) ? new Response(Bun.file(file), { headers: { "content-type": type } }) : json({ error: "No such picture." }, 404);
     }
     if (url.pathname === "/api/files") return json(await files());
+    if (url.pathname === "/api/photos" && request.method === "GET") return json({ photos: await readPhotos() });
     if (url.pathname === "/api/file") {
         const path = query("path");
         if (!editable(path) || !(await exists(path))) return json({ error: "That file is not one the editor opens." }, 404);
@@ -327,6 +365,10 @@ async function handle(request: Request): Promise<Response> {
         return json({ hash: hash(content) });
     }
     if (url.pathname === "/api/new") return json({ path: await newPost(body.title ?? "") });
+    if (url.pathname === "/api/photos/note") {
+        await notePhoto(body.file ?? "", body.title ?? "", body.note ?? "");
+        return json({ ok: true });
+    }
     if (url.pathname === "/api/plan") return json(await plan(body.path ?? ""));
     if (url.pathname === "/api/publish") return json(await publish(body.message ?? ""));
     return json({ error: "Nothing here." }, 404);
