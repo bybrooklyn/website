@@ -1,11 +1,14 @@
 // Table: a dice tower and what a game of D&D needs beside it. Dice go in at
 // the top, tumble down the ramps as real solids and roll out into the tray;
-// what they show is the roll. Under it: typed rolls with a history, and two
+// what they show is the roll. The tumbling is in tower.ts; here it is drawn,
+// with depth, light and shadow, by Mote's fork of three. Under it: typed rolls with a history, and two
 // views, one for whoever runs the fight and one for a single character.
 
-import { paint, nearness, sheet, turned, upright, type Mesh, type Mote, type Scene, type V3 } from "../mote";
+import type { Mote, Scene } from "../mote/stage";
+import { normals, type Mesh } from "../mote/three";
+import * as THREE from "../mote/forks/three/three.module.js";
 import { read, total, type Roll } from "./rolls";
-import { OPENING, RAMPS, TOWER, TRAY, done, drop, move, shown, written, type Die, type Sides } from "./tower";
+import { SHAPES, SLABS, TRAY, throwDice, type Sides, type Throw } from "./tower";
 
 export const label = "A dice tower. Dice dropped in at the top tumble down its ramps into a tray.";
 
@@ -53,30 +56,121 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, set: Partial<HTMLElem
 }
 
 export default function table(m: Mote): Scene {
-    let dice: Die[] = [];
+    let thrown: Throw | undefined;
     let waiting: { roll: Roll; what: string; then?: (sum: number) => void } | undefined;
     let auto = 0;
 
     // ---- the tower, drawn ----
-    const view = turned(upright(), -0.62, 0.38);
-    const middle: V3 = [0.4, 4.3, 0];
-    const from = ([x, y, z]: V3): V3 => [x - middle[0], y - middle[1], z - middle[2]];
-    const flat = (a: V3, b: V3, c: V3, d: V3) => sheet(from(a), from(b), from(c), from(d));
-    const { left, right, deep, top } = TOWER;
-    const high = top + 0.6;
-    const behind: Mesh[] = [
-        flat([TRAY.left, 0, -TRAY.deep], [TRAY.right, 0, -TRAY.deep], [TRAY.right, 0, TRAY.deep], [TRAY.left, 0, TRAY.deep]),
-        flat([TRAY.left, 0, -TRAY.deep], [TRAY.right, 0, -TRAY.deep], [TRAY.right, 0.7, -TRAY.deep], [TRAY.left, 0.7, -TRAY.deep]),
-        flat([TRAY.left, 0, -TRAY.deep], [TRAY.left, 0, TRAY.deep], [TRAY.left, 0.7, TRAY.deep], [TRAY.left, 0.7, -TRAY.deep]),
-        flat([left, 0, -deep], [right, 0, -deep], [right, high, -deep], [left, high, -deep]),
-        flat([left, 0, -deep], [left, 0, deep], [left, high, deep], [left, high, -deep]),
-    ];
-    const ramps = RAMPS.map(([a, b]) => flat([a[0], a[1], -deep], [b[0], b[1], -deep], [b[0], b[1], deep], [a[0], a[1], deep]));
-    const front = [
-        flat([right, OPENING, -deep], [right, OPENING, deep], [right, high, deep], [right, high, -deep]),
-        flat([TRAY.right, 0, -TRAY.deep], [TRAY.right, 0, TRAY.deep], [TRAY.right, 0.7, TRAY.deep], [TRAY.right, 0.7, -TRAY.deep]),
-        flat([TRAY.left, 0, TRAY.deep], [TRAY.right, 0, TRAY.deep], [TRAY.right, 0.7, TRAY.deep], [TRAY.left, 0.7, TRAY.deep]),
-    ];
+    const host = m.canvas.parentElement!;
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.shadowMap.enabled = true;
+    renderer.domElement.className = "mote-gl";
+    host.insertBefore(renderer.domElement, m.canvas);
+    /** One of the page's colors, as three wants it: the page gives it in a form three cannot read, so a canvas reads it first. */
+    const probe = document.createElement("canvas").getContext("2d", { willReadFrequently: true })!;
+    const color = (css: string) => {
+        probe.clearRect(0, 0, 1, 1);
+        probe.fillStyle = css;
+        probe.fillRect(0, 0, 1, 1);
+        const [r, g, b] = probe.getImageData(0, 0, 1, 1).data;
+        return new THREE.Color(`rgb(${r}, ${g}, ${b})`);
+    };
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 100);
+    camera.position.set(8.5, 10.5, 19);
+    camera.lookAt(-0.6, 3.9, 0);
+    scene.add(new THREE.HemisphereLight(0xffffff, color(m.color("--ground")), 1.5));
+    const sun = new THREE.DirectionalLight(0xffffff, 2.4);
+    sun.position.set(6, 16, 9);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(1024, 1024);
+    Object.assign(sun.shadow.camera, { left: -9, right: 9, top: 13, bottom: -3, near: 1, far: 40 });
+    sun.shadow.bias = -0.0015;
+    scene.add(sun);
+
+    const paints = {
+        tray: new THREE.MeshStandardMaterial({ color: color(m.color("--surface")), roughness: 0.9 }),
+        wall: new THREE.MeshStandardMaterial({ color: color(m.color("--rule")), roughness: 0.85 }),
+        ramp: new THREE.MeshStandardMaterial({ color: color(m.color("--muted")), roughness: 0.7 }),
+        glass: new THREE.MeshStandardMaterial({ color: color(m.color("--ink")), transparent: true, opacity: 0.07, depthWrite: false }),
+    };
+    const floor = new THREE.Mesh(new THREE.BoxGeometry(TRAY.right - TRAY.left, 0.2, TRAY.deep * 2), paints.tray);
+    floor.position.set((TRAY.left + TRAY.right) / 2, -0.1, 0);
+    floor.receiveShadow = true;
+    scene.add(floor);
+    for (const slab of SLABS) {
+        if (slab.kind === "unseen") continue;
+        const piece = new THREE.Mesh(new THREE.BoxGeometry(slab.half[0] * 2, slab.half[1] * 2, slab.half[2] * 2), paints[slab.kind]);
+        piece.position.set(...slab.at);
+        piece.rotation.z = slab.tip;
+        piece.receiveShadow = slab.kind !== "glass";
+        piece.castShadow = slab.kind === "ramp" || slab.kind === "tray";
+        scene.add(piece);
+    }
+
+    /** A number, as a picture to put on a die's face. Each is made once. */
+    const numbers = new Map<string, THREE.CanvasTexture>();
+    const number = (text: string) => {
+        let made = numbers.get(text);
+        if (!made) {
+            const pad = document.createElement("canvas");
+            pad.width = pad.height = 128;
+            const pen = pad.getContext("2d")!;
+            pen.font = m.font(text.length > 1 ? 74 : 88, 700);
+            pen.textAlign = "center";
+            pen.textBaseline = "middle";
+            pen.fillStyle = "#1a1024";
+            pen.fillText(text, 64, 70);
+            // a line under 6 and 9, so that they can be told apart
+            if (text === "6" || text === "9") pen.fillRect(40, 108, 48, 7);
+            made = new THREE.CanvasTexture(pad);
+            made.colorSpace = THREE.SRGBColorSpace;
+            numbers.set(text, made);
+        }
+        return made;
+    };
+    /** A die to look at: its faces, flat-shaded in its own color, with a number on each. */
+    const model = (sides: Sides): THREE.Mesh => {
+        const mesh: Mesh = SHAPES[sides];
+        const corners: number[] = [];
+        for (const face of mesh.faces) for (let index = 1; index < face.length - 1; index++) for (const corner of [face[0]!, face[index]!, face[index + 1]!]) corners.push(...mesh.points[corner]!);
+        const shape = new THREE.BufferGeometry();
+        shape.setAttribute("position", new THREE.Float32BufferAttribute(corners, 3));
+        shape.computeVertexNormals();
+        const die = new THREE.Mesh(shape, new THREE.MeshStandardMaterial({ color: color(`oklch(0.8 0.12 ${HUES[sides]})`), roughness: 0.45, flatShading: true }));
+        die.castShadow = true;
+        die.receiveShadow = true;
+        normals(mesh).forEach((out, index) => {
+            const face = mesh.faces[index]!;
+            const middle = face.reduce((sum, corner) => sum.add(new THREE.Vector3(...mesh.points[corner]!)), new THREE.Vector3()).divideScalar(face.length);
+            // as big as the face allows: a little under the distance from its middle to its nearest edge
+            const room = Math.min(...face.map((corner, at) => {
+                const [a, b] = [new THREE.Vector3(...mesh.points[corner]!), new THREE.Vector3(...mesh.points[face[(at + 1) % face.length]!]!)];
+                return new THREE.Line3(a, b).closestPointToPoint(middle, true, new THREE.Vector3()).distanceTo(middle);
+            }));
+            const mark = new THREE.Mesh(new THREE.PlaneGeometry(room * 1.5, room * 1.5), new THREE.MeshBasicMaterial({ map: number(String(index + 1)), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }));
+            mark.position.copy(middle).addScaledVector(new THREE.Vector3(...out), 0.004);
+            mark.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), new THREE.Vector3(...out));
+            die.add(mark);
+        });
+        return die;
+    };
+    let models: THREE.Mesh[] = [];
+    const show = (next: Throw) => {
+        for (const old of models) scene.remove(old);
+        thrown = next;
+        models = next.dice.map((die) => model(die.sides));
+        scene.add(...models);
+    };
+    const fit = () => {
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+        renderer.setSize(m.width, m.height, false);
+        camera.aspect = m.width / Math.max(1, m.height);
+        // On a tall, narrow box the camera steps back so that the whole tower still fits.
+        camera.fov = camera.aspect < 1.1 ? 30 / Math.max(0.55, camera.aspect / 1.1) : 30;
+        camera.updateProjectionMatrix();
+    };
+    fit();
 
     // ---- what is kept between visits ----
     let state = fresh();
@@ -98,10 +192,10 @@ export default function table(m: Mote): Scene {
     const say = (text: string) => {
         if (said) said.textContent = text;
     };
-    const throwDice = (text: string, what = text, then?: (sum: number) => void) => {
+    const send = (text: string, what = text, then?: (sum: number) => void) => {
         const roll = read(text);
         if (typeof roll === "string") return say(roll);
-        dice = drop(roll.dice, chance);
+        show(throwDice(roll.dice, chance));
         waiting = { roll, what, then };
         say("Rolling…");
         m.wake();
@@ -110,7 +204,7 @@ export default function table(m: Mote): Scene {
         if (!waiting) return;
         const { roll, what, then } = waiting;
         waiting = undefined;
-        const result = total(roll, dice.map(shown));
+        const result = total(roll, thrown!.values());
         state.history = [{ what, said: result.said, total: result.total }, ...state.history].slice(0, 30);
         then?.(result.total);
         keep();
@@ -136,7 +230,7 @@ export default function table(m: Mote): Scene {
             el("button", { type: "button", class: "quiet", textContent: text, onclick: () => { twenty = twenty === word ? "" : word; if (!hand[20]) hand[20] = 1; inHand.textContent = handText(); } });
         const typed = el("input", { type: "text", placeholder: "2d6+3, 4d6 drop lowest, d20 adv", spellcheck: false });
         typed.setAttribute("aria-label", "A roll to make");
-        const rollForm = el("form", { class: "table-typed", onsubmit: (event) => { event.preventDefault(); if (typed.value.trim()) throwDice(typed.value.trim()); } }, typed, el("button", { type: "submit", textContent: "roll" }));
+        const rollForm = el("form", { class: "table-typed", onsubmit: (event) => { event.preventDefault(); if (typed.value.trim()) send(typed.value.trim()); } }, typed, el("button", { type: "submit", textContent: "roll" }));
         const history = el("ol", { class: "table-history" });
         const board = el("div", { class: "table-board" });
         const tabs = (["fight", "character"] as const).map((view) =>
@@ -147,7 +241,7 @@ export default function table(m: Mote): Scene {
             said,
             el("div", { class: "table-dice" }, ...dieButtons, mode(" adv", "advantage"), mode(" dis", "disadvantage")),
             el("div", { class: "table-go" }, inHand,
-                el("button", { type: "button", textContent: "roll these", onclick: () => { const text = handText(); if (text) throwDice(text); } }),
+                el("button", { type: "button", textContent: "roll these", onclick: () => { const text = handText(); if (text) send(text); } }),
                 el("button", { type: "button", class: "quiet", textContent: "clear", onclick: () => { for (const key of Object.keys(hand)) delete hand[key as unknown as Sides]; twenty = ""; inHand.textContent = ""; } }),
             ),
             rollForm,
@@ -203,7 +297,7 @@ export default function table(m: Mote): Scene {
                             el("div", { class: "table-who" },
                                 el("strong", { textContent: fighter.name }),
                                 el("label", {}, "initiative ", number(fighter.init, (value) => { fighter.init = value; }, `${fighter.name}'s initiative`)),
-                                el("button", { type: "button", class: "quiet", textContent: "roll it", onclick: () => throwDice("d20", `${fighter.name}'s initiative`, (sum) => { fighter.init = sum; }) }),
+                                el("button", { type: "button", class: "quiet", textContent: "roll it", onclick: () => send("d20", `${fighter.name}'s initiative`, (sum) => { fighter.init = sum; }) }),
                                 el("button", { type: "button", class: "quiet", textContent: "remove", onclick: () => { state.fighters = state.fighters.filter((other) => other !== fighter); keep(); render(); } })),
                             points(fighter), conditions(fighter.conditions));
                         if (fighter === now) row.setAttribute("aria-current", "true");
@@ -229,11 +323,11 @@ export default function table(m: Mote): Scene {
                     called, points(me),
                     el("label", { class: "table-temp" }, "temporary ", number(me.temp, (value) => { me.temp = Math.max(0, value); }, "Temporary hit points")),
                     el("div", { class: "table-saves" }, el("strong", { textContent: "death saves " }), saves("passed"), saves("failed"),
-                        el("button", { type: "button", class: "quiet", textContent: "roll one", onclick: () => throwDice("d20", "death save", (sum) => { if (sum >= 10) me.passed = Math.min(3, me.passed + 1); else me.failed = Math.min(3, me.failed + 1); }) })),
+                        el("button", { type: "button", class: "quiet", textContent: "roll one", onclick: () => send("d20", "death save", (sum) => { if (sum >= 10) me.passed = Math.min(3, me.passed + 1); else me.failed = Math.min(3, me.failed + 1); }) })),
                     conditions(me.conditions),
                     el("h3", { textContent: "my rolls" }),
                     el("ul", { class: "table-saved" }, ...me.rolls.map((saved) => el("li", {},
-                        el("button", { type: "button", textContent: saved.label, onclick: () => throwDice(saved.roll, saved.label) }), ` ${saved.roll} `,
+                        el("button", { type: "button", textContent: saved.label, onclick: () => send(saved.roll, saved.label) }), ` ${saved.roll} `,
                         el("button", { type: "button", class: "quiet", textContent: "remove", onclick: () => { me.rolls = me.rolls.filter((other) => other !== saved); keep(); render(); } })))),
                     el("form", { class: "table-add", onsubmit: (event) => {
                         event.preventDefault();
@@ -250,41 +344,26 @@ export default function table(m: Mote): Scene {
     return {
         step(dt) {
             // Shown small in a list, it rolls a few dice by itself now and then.
-            if (m.preview && m.time - auto > 6) {
+            if (m.preview && m.time - auto > 7) {
                 auto = m.time;
-                dice = drop([20, 6, 8], chance);
+                show(throwDice([20, 6, 8], chance));
             }
-            if (dice.length === 0 || done(dice)) return;
-            move(dice, dt);
-            if (done(dice)) land();
+            if (!thrown || thrown.done()) return;
+            thrown.step(dt);
+            if (thrown.done()) land();
         },
+        resize: fit,
         // Clicking the tower sends a d20 down it.
         press() {
-            if (!waiting) throwDice("d20");
+            if (!waiting) send("d20");
         },
-        resting: () => !m.preview && (dice.length === 0 || done(dice)),
+        resting: () => !m.preview && (!thrown || thrown.done()),
         draw() {
-            const { ctx } = m;
-            const size = Math.min(m.width / 12.5, m.height / 11.5);
-            const look = { x: m.width / 2, y: m.height / 2, size, distance: 34, view, both: true, edge: m.color("--rule") };
-            const wall = m.color("--surface");
-            for (const piece of behind) paint(ctx, piece, upright(), { ...look, fill: () => wall });
-            // ramps and dice together, the furthest first
-            const things = [
-                ...ramps.map((mesh, index) => ({ depth: nearness(from([(RAMPS[index]![0][0] + RAMPS[index]![1][0]) / 2, (RAMPS[index]![0][1] + RAMPS[index]![1][1]) / 2 - 0.4, 0]), view), draw: () => paint(ctx, mesh, upright(), { ...look, fill: () => m.color("--rule") }) })),
-                ...dice.map((die) => ({
-                    depth: nearness(from(die.at), view),
-                    draw: () => paint(ctx, die.mesh, die.turn, {
-                        ...look, both: false, at: from(die.at), edge: m.color("--ground"),
-                        fill: (light) => `oklch(${(0.42 + light * 0.46).toFixed(3)} 0.13 ${HUES[die.sides]})`,
-                        label: written, ink: m.color("--ground"), font: m.font(10).split("px ")[1],
-                    }),
-                })),
-            ].sort((a, b) => a.depth - b.depth);
-            for (const thing of things) thing.draw();
-            ctx.globalAlpha = 0.28;
-            for (const piece of front) paint(ctx, piece, upright(), { ...look, fill: () => wall });
-            ctx.globalAlpha = 1;
+            thrown?.dice.forEach((die, index) => {
+                models[index]!.position.set(die.body.position.x, die.body.position.y, die.body.position.z);
+                models[index]!.quaternion.set(die.body.quaternion.x, die.body.quaternion.y, die.body.quaternion.z, die.body.quaternion.w);
+            });
+            renderer.render(scene, camera);
         },
     };
 }

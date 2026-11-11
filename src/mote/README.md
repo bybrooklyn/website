@@ -1,36 +1,36 @@
 # Mote
 
-A small engine for tiny demos and games in the browser. TypeScript, no dependencies, about 1,200
-lines. The minis on bybrooklyn.dev run on it.
+A small engine for tiny demos and games in the browser, in TypeScript. The minis on bybrooklyn.dev run on it.
 
-Free to use under the MIT license in this folder, which is plainer than the license on the rest of the site.
+Free to use under the MIT license in this folder, which is plainer than the license on the rest of the
+site. The three libraries in `forks/` are under the MIT license too, each with its own notice.
 
 ## What is in it
 
 | File | What it gives you |
 |---|---|
-| `stage.ts` | A canvas that fits its box and stays sharp, a loop in fixed steps of 1/120 s, the pointer, the arrow keys and WASD, Space and Enter, the page's colors, and a number kept between visits. It only runs while it can be seen and stops when the scene is at rest. |
-| `physics.ts` | 2D rigid bodies: balls and convex shapes, friction and bounce, pins and ropes, picking things up and throwing them, sleeping. |
-| `three.ts` | 3D solids made of flat faces, turned, shaded and drawn on the same 2D canvas. No WebGL. |
-| `solid.ts` | 3D solids that fall and tumble: corners against flat surfaces, with bounce and rub. Enough for dice. |
+| `stage.ts` | A canvas that fits its box and stays sharp, a loop in fixed steps of 1/120 s, the mouse (which a game can hold inside the box), the arrow keys and WASD, Space and Enter, the page's colors, a place for ordinary buttons, and a number kept between visits. It only runs while it can be seen and stops when the scene is at rest. |
+| `flat.ts` | 2D physics: boxes, balls, shapes and walls; pins, rods and ropes; a motor; a hand to grab with. It stands on `forks/planck`. |
+| `three.ts` | Simple 3D solids (the dice shapes) and a way to draw them on a 2D canvas with no WebGL. The Solid mini uses the drawing; the dice use the shapes. |
+| `forks/` | planck (2D bodies), cannon (3D bodies) and three (3D drawing), copied in and changed here. See `forks/README.md`. |
+| `physics.ts` | The first 2D physics written for this site, kept with its tests. The minis no longer use it. |
 
 ## A mini
 
 ```ts
-import { World, ball, type Mote, type Scene } from "../mote";
+import { Flat, trace, type Mote, type Scene } from "../mote";
 
 export const label = "A ball that falls.";
 
 export default function falling(m: Mote): Scene {
-    const world = new World();
-    const one = ball(m.width / 2, 20, 12);
-    world.add(one);
+    const flat = new Flat();
+    flat.wall([[0, m.height], [m.width, m.height]]);
+    const one = flat.ball(m.width / 2, 20, 12, { bounce: 0.5 });
     return {
-        step: (dt) => world.step(dt),
+        step: (dt) => flat.step(dt),
         draw() {
+            trace(m.ctx, one);
             m.ctx.fillStyle = m.color("--accent");
-            m.ctx.beginPath();
-            m.ctx.arc(one.x, one.y, one.r, 0, Math.PI * 2);
             m.ctx.fill();
         },
     };
@@ -42,7 +42,7 @@ true when nothing is moving and the loop stops until something wakes it). `confi
 mouse inside the box once it is clicked, until Escape. `m.panel()` gives a place under the canvas for
 ordinary buttons and text. `m.preview` is true when the mini is being shown small in the list.
 
-`physics.ts` also has `world.drive(a, b, force)`: a motor that pushes `b` toward a place beside `a` and
+`flat.ts` also has `flat.motor(a, b, strength)`: a motor that pushes `b` toward a place beside `a` and
 pushes `a` back as hard.
 
 Run the tests with `bun run test`.

@@ -1,4 +1,7 @@
-// A small 2D physics engine written for this site. No dependencies.
+// The first 2D physics written for this site, in about 500 lines with no dependencies.
+// The minis have since moved to flat.ts, which stands on Mote's fork of planck, because
+// jointed things (a chain, an arm with a hammer) asked more than this could give. It is
+// kept, with its tests, as it was.
 //
 //   const world = new World();
 //   world.add(rect(x, y, w, h), ball(x, y, r), shape(x, y, points), rect(..., { fixed: true }));

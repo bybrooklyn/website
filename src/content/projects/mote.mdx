@@ -11,17 +11,20 @@ order: 8
 
 import DropBox from "../../demos/DropBox.astro";
 
-Mote is about 1,200 lines of TypeScript with no dependencies. It exists so that each small thing I make for this site is the thing itself and not the same loop, canvas and mouse code written again.
+Mote is the small engine under every mini on this site. It exists so that each small thing I make is the thing itself and not the same loop, canvas and mouse code written again.
 
 <DropBox />
 
 ## What it does
 
-- **A stage.** A canvas that fits its box and stays sharp, a loop that moves in fixed steps of 1/120 of a second, the pointer, a few keys, and the page's own colors. It only runs while you can see it, and stops when nothing is moving.
-- **2D physics.** Balls and convex shapes with weight, friction and bounce. Pins and ropes between them. You can pick a body up and throw it. Things that come to rest go to sleep.
-- **3D on a flat canvas.** Solids made of flat faces, turned and shaded, with no WebGL. Dice that fall and tumble as real solids.
-- **A motor.** One body driven toward a place beside another, pushing back as hard: an arm holding a tool.
-- **Tests.** Friction angles, toppling, a pendulum's period, a chain that holds, dice that land fairly.
+- **A stage.** A canvas that fits its box and stays sharp, a loop that moves in fixed steps of 1/120 of a second, the mouse, a few keys, and the page's own colors. It only runs while you can see it, and stops when nothing is moving. It can hold the mouse inside the box for a game that is all mouse.
+- **2D physics.** Boxes, balls and shapes with weight, friction and bounce; walls; pins, rods and ropes; a motor; a hand to pick things up and throw them.
+- **3D.** Solids that fall, tumble and hit each other, drawn with depth, light and shadow.
+- **Tests.** A pile that stays still, a chain that holds, an arm that lifts, dice that land fairly.
+
+## What it stands on
+
+Three libraries, forked into Mote's own source and changed there as it needs: planck (a port of Box2D) for 2D, cannon for 3D bodies, and three for drawing in 3D. The first change was to cannon, whose friction held a hundred times harder than the number given: nothing would slide down a ramp. Each keeps its license, and the changes are written down beside them.
 
 ## What runs on it
 
@@ -29,4 +32,4 @@ Everything on the [minis](/minis/) page: a pile of blocks, a chain, a game about
 
 ## Using it
 
-It is free, under the MIT license. The folder is self-contained, so copy it. A mini is one function that sets a scene up and returns how to step it and how to draw it.
+It is free, under the MIT license, as are the three libraries inside it. The folder is self-contained, so copy it. A mini is one function that sets a scene up and returns how to step it and how to draw it.

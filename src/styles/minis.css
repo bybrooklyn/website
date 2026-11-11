@@ -9,6 +9,17 @@
     background: var(--ground);
 }
 
+.mote {
+    position: relative;
+}
+
+/* A mini drawn in 3D has a second canvas for it, under the one that takes the mouse. */
+.mote canvas.mote-gl {
+    position: absolute;
+    inset: 0 auto auto 0;
+    pointer-events: none;
+}
+
 .mote canvas {
     display: block;
     width: 100%;

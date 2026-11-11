@@ -10456,7 +10456,10 @@ class Narrowphase {
     if (friction > 0) {
       // Create 2 tangent equations
       // Users may provide a force different from global gravity to use when computing contact friction.
-      const mug = friction * (world.frictionGravity || world.gravity).length();
+      // Mote: the limit below is applied to each step's push, so it has to be the rub over one step
+      // (force times the step's length). Without this a friction of 0.3 held like one of 30:
+      // nothing slid down a ramp. See forks/README.md.
+      const mug = friction * (world.frictionGravity || world.gravity).length() * (world.dt > 0 ? world.dt : 1 / 60);
       let reducedMass = bodyA.invMass + bodyB.invMass;
 
       if (reducedMass > 0) {
