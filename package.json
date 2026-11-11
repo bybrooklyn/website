@@ -9,6 +9,7 @@
         "check": "astro check",
         "deploy": "astro check && bun run build && wrangler pages deploy",
         "deploy:preview": "astro check && bun run build && wrangler pages deploy --branch preview",
+        "deploy:drafts": "astro check && bun scripts/photos.ts && SHOW_DRAFTS=1 astro build --outDir .drafts-build && wrangler pages deploy .drafts-build --branch drafts",
         "cf:login": "wrangler login",
         "cf:whoami": "wrangler whoami",
         "langs": "bun scripts/languages.ts",

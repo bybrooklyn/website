@@ -40,5 +40,9 @@ deploy:
 deploy-preview:
     bun run deploy:preview
 
+# publish everything, drafts included, to its own preview address
+deploy-drafts:
+    bun run deploy:drafts
+
 clean:
     rm -rf dist .astro

@@ -9,6 +9,7 @@ bun run check
 bun run build    # writes dist/
 bun run edit     # write and edit in the browser, then publish
 bun run deploy   # check, build, deploy
+bun run deploy:drafts   # the whole site with drafts shown, to a preview address only
 ```
 
 Other scripts: `langs` (language bar), `projects` (facts from GitHub), and `python3 scripts/trim-fonts.py` after changing a font. TypeScript stays on 6.x until `astro check` accepts 7.

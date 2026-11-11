@@ -15,6 +15,9 @@ dist
 resume-preview
 .resume-build
 
+# the whole site with drafts shown, for the drafts preview only
+.drafts-build
+
 # pictures waiting to go on the photos page, and the originals of those that have:
 # they carry location and camera details, so they stay on this computer
 /photos
