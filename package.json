@@ -16,7 +16,8 @@
         "projects": "bun scripts/projects.ts",
         "test": "bun test src",
         "edit": "bun scripts/write.ts",
-        "photos": "bun scripts/photos.ts"
+        "photos": "bun scripts/photos.ts",
+        "clean": "rm -rf dist .astro"
     },
     "dependencies": {
         "@astrojs/check": "0.9.12",
