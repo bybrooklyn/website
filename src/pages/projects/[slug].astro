@@ -7,6 +7,7 @@ import "../../styles/diagram.css";
 import "../../styles/type.css";
 import "../../styles/minis.css";
 import PrevNext from "../../components/PrevNext.astro";
+import DrawnCover from "../../components/DrawnCover.astro";
 import Picture from "../../components/Picture.astro";
 import type { GetStaticPaths } from "astro";
 import { render } from "astro:content";
@@ -70,6 +71,7 @@ if (facts) rows.push({ label: "last updated", value: formatDate(new Date(facts.u
             <p class="lede">{summary}</p>
         </header>
 
+        {!cover && <DrawnCover class="post-cover" {name} {language} />}
         {
             cover && (
                 <Picture class:list={["post-cover", { pixel }]}

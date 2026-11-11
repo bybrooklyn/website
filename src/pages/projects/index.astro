@@ -1,4 +1,5 @@
 ---
+import DrawnCover from "../../components/DrawnCover.astro";
 import Picture from "../../components/Picture.astro";
 import "../../styles/blog.css";
 import "../../styles/projects.css";
@@ -27,9 +28,7 @@ const projects = await getProjects();
                                 width={480}
                             />
                         ) : (
-                            <span class="project-thumb empty" aria-hidden="true">
-                                {project.data.name.slice(0, 1)}
-                            </span>
+                            <DrawnCover class="project-thumb" name={project.data.name} language={project.data.language} />
                         )}
                         <div>
                             <h2>{project.data.name}</h2>

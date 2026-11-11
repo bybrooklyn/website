@@ -1,0 +1,40 @@
+---
+// A cover for a project that has no picture, drawn from the project itself:
+// its name, on a ground tinted with its language's color, under a pattern of
+// squares that is worked out from the letters of the name, so each project
+// gets its own and always the same one.
+import { languageColors, otherLanguageColor } from "../data/theme";
+import { css } from "../lib/color";
+
+interface Props {
+    name: string;
+    language: string;
+    class?: string;
+}
+
+const { name, language, class: className } = Astro.props;
+const tint = css((languageColors as Record<string, [number, number, number]>)[language] ?? otherLanguageColor);
+
+// A run of numbers that depends only on the name.
+let seed = 7;
+for (const letter of name) seed = (Math.imul(seed, 31) + letter.codePointAt(0)!) >>> 0;
+const next = () => (seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 2 ** 32;
+
+const COLUMNS = 18;
+const ROWS = 6;
+const cells: { x: number; y: number; strength: number }[] = [];
+for (let row = 0; row < ROWS; row++) {
+    for (let column = 0; column < COLUMNS; column++) {
+        // Fewer toward the bottom, where the name is.
+        if (next() < 0.5 - row * 0.06) cells.push({ x: 16 + column * 16, y: 16 + row * 16, strength: 0.2 + next() * 0.8 });
+    }
+}
+// The name is as large as fits the width.
+const size = Math.min(46, 286 / (name.length * 0.55));
+---
+
+<svg class:list={["drawn-cover", className]} viewBox="0 0 320 200" role="img" aria-label={`${name}: a ${language} project.`} style={`--tint:${tint}`}>
+    <rect class="drawn-ground" width="320" height="200"></rect>
+    {cells.map((cell) => <rect class="drawn-cell" x={cell.x} y={cell.y} width="12" height="12" rx="2.5" opacity={cell.strength.toFixed(2)} />)}
+    <text class="drawn-name" x="17" y="180" font-size={size.toFixed(1)}>{name}</text>
+</svg>

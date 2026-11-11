@@ -65,13 +65,36 @@
     border-color: var(--accent);
 }
 
-/* No picture yet: the project's initial stands in. */
-.project-thumb.empty {
-    display: grid;
-    place-items: center;
+/* No picture: a cover drawn from the project's name and its language's color (DrawnCover.astro). */
+.drawn-cover {
+    display: block;
+    width: 100%;
+    height: auto;
+    border-radius: var(--radius);
+    border: 0.0625rem solid var(--rule);
+}
+
+.drawn-ground {
+    fill: color-mix(in oklab, var(--tint) 13%, var(--surface));
+}
+
+.drawn-cell {
+    fill: var(--tint);
+}
+
+.drawn-name {
+    fill: var(--ink);
     font-family: var(--font-head);
-    font-size: 2.5rem;
-    color: var(--muted);
+    font-weight: var(--head-weight);
+    letter-spacing: -0.01em;
+}
+
+/* On the project's own page it is a wide band, not a tall card. */
+.post-cover.drawn-cover {
+    aspect-ratio: 320 / 200;
+    max-height: 20rem;
+    width: auto;
+    max-width: 100%;
 }
 
 .pixel {
