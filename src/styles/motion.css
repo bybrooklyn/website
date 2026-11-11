@@ -164,28 +164,53 @@
     }
 
     /*
-     * Without transitions between pages (Firefox): transition.js marks the page
-     * being arrived at, and the same movements are played on it as it appears.
-     * The page being left cannot move, so this is the arrival only.
+     * Without transitions between pages (Firefox), transition.js plays the two
+     * halves itself: the page being left is marked `data-leave` and moves away
+     * before the link is followed, and the page arrived at is marked
+     * `data-arrive` and moves in, held still (`data-hold`) until it is laid out.
+     * The movements are the ones above.
      */
+    html[data-leave~="open"] body > * {
+        animation: site-leave 0.22s ease-in forwards;
+    }
+
+    html[data-leave~="close"] .opened-panel {
+        animation: panel-leave 0.22s ease-in forwards;
+    }
+
+    html[data-leave~="move"] body > main,
+    html[data-leave~="swap"] .opened-panel main {
+        animation: shift-out 0.2s ease-in forwards;
+    }
+
+    html[data-leave~="move"][data-leave~="back"] body > main {
+        animation-name: shift-out-back;
+    }
+
     html[data-arrive~="open"] .opened-panel {
-        animation: panel-arrive 0.5s var(--ease) backwards;
+        animation: panel-arrive 0.45s var(--ease) backwards;
     }
 
     html[data-arrive~="close"] body > * {
-        animation: site-return 0.5s var(--ease) backwards;
+        animation: site-return 0.45s var(--ease) backwards;
     }
 
-    html[data-arrive~="move"] body > main {
-        animation: shift-in 0.45s var(--ease) backwards;
+    html[data-arrive~="move"] body > main,
+    html[data-arrive~="swap"] .opened-panel main {
+        animation: shift-in 0.4s var(--ease) backwards;
     }
 
     html[data-arrive~="move"][data-arrive~="back"] body > main {
         animation-name: shift-in-back;
     }
 
-    html[data-arrive~="swap"] .opened-panel main {
-        animation: shift-in 0.45s var(--ease) backwards;
+    html[data-arrive] :is(.opened-panel, body > *, main),
+    html[data-leave] :is(.opened-panel, body > *, main) {
+        will-change: translate, opacity;
+    }
+
+    html[data-hold] :is(.opened-panel, body > *, main) {
+        animation-play-state: paused;
     }
 
     a {
