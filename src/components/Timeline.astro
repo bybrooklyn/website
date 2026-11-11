@@ -147,6 +147,8 @@ import "../styles/timeline.css";
         let wheelAt = 0;
         let wheelSize = 0;
         let swallowing = false;
+        let aim = scrollY;
+        let aimedAt = 0;
         let inputAt = 0;
         window.addEventListener(
             "wheel",
@@ -168,11 +170,22 @@ import "../styles/timeline.css";
                     event.preventDefault();
                     if (fresh) step(Math.sign(event.deltaY));
                     swallowing = true;
-                } else if (arriving(Math.sign(event.deltaY), size + 8)) {
-                    // Stop on the line, not past it: letting the page overshoot and pulling it back shows.
+                    return;
+                }
+                // Browsers animate a wheel's scrolling, so the page is usually still on its way
+                // somewhere when the next notch comes. Keep count of where that is: if it lies past
+                // the line, stop on the line now, since overshooting and coming back shows.
+                const direction = Math.sign(event.deltaY);
+                const now = performance.now();
+                aim = (now - aimedAt < 400 && Math.sign(aim - scrollY) === direction ? aim : scrollY) + event.deltaY;
+                aimedAt = now;
+                const target = top() + scrollY - line();
+                const crosses = direction > 0 ? scrollY < target - 2 && aim >= target - 8 : scrollY > target + 2 && aim <= target + 8;
+                if (crosses && (direction > 0 ? current < last : current > 0)) {
                     event.preventDefault();
                     rest();
                     swallowing = true;
+                    aim = target;
                 } else if (swallowing) event.preventDefault();
             },
             { passive: false },
