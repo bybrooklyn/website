@@ -9,11 +9,15 @@ coverAlt: The Terrustia logo in blocky blue letters, above the words 'an async T
 order: 10
 ---
 
+import Terminal from "../../components/Terminal.astro";
+
 ## What it is
 
 A Terraria 1.4.5.8 dedicated server, written from scratch in Rust. Real clients connect to it, and the worlds they play are ordinary Terraria worlds.
 
 It is an independent reimplementation of the dedicated server, not affiliated with Re-Logic. You need a copy of the game to play. This replaces the server, not the game.
+
+<Terminal session="terrustia" title="terrustia --new Demo" caption="A real start of the server, generating a world and waiting for players, played back." />
 
 ## What it does best today
 

@@ -1,0 +1,18 @@
+{
+ "cols": 96,
+ "rows": 34,
+ "steps": [
+  [
+   "type",
+   "mfy --help"
+  ],
+  [
+   "out",
+   "mfetchy - download music from YouTube Music, Apple Music, Spotify, Tidal, Deezer,\nSoundCloud, Bandcamp, Qobuz/Amazon through Lucida, and direct file links\n\n  mfy                     open mfetchy: downloads, your library, settings and tools in one place\n  mfy <link or file>...   download right away: YouTube, Apple Music, Spotify, Tidal, Deezer,\n                          SoundCloud, Bandcamp, Qobuz or Amazon Music links (songs, albums,\n                          playlists), a direct file link, a Takeout .zip, folder or .csv, or a\n                          text file of links. Songs come from YouTube (the fastest); Apple\n                          Music, Tidal and the others give what YouTube can't, and the songs\n                          of a link from them. Settings > Download from changes it.\n\nOptions for one run (your defaults are in mfetchy's Settings):\n  -o DIR       music folder          -f FORMAT   mp3, m4a, opus, flac\n  --no-vpn     skip the VPN this run -j N        max parallel downloads\n  --connections N   VPN exits to use this run\n  --dry-run    show what would happen, download nothing\n  --retry=false  leave out the songs that were unavailable before (they are tried\n               again unless Settings > Retry unavailable is off)\n  --song       just the songs given: a song link normally brings its whole album, and a\n               playlist or library the rest of every album it has a song from\n               (--albums=false turns that off too; --albums-min N: only albums with N\n               or more of your songs; the default is in Settings)\n  --source youtube  YouTube only: no Apple Music, Tidal, Deezer or Lucida at all\n  --source best     look every song up on Apple Music, Tidal and Deezer first (best quality)\n                    (--maybe: also take less certain Apple matches)\n  --premium-upgrade   re-download songs at YouTube Premium quality (experimental,\n                      slow, uses your account: turn it on in Settings first)\n  -y           assume yes\n  --completion SHELL  print tab completion for bash, zsh, fish or powershell\n  --version, --help\n"
+  ],
+  [
+   "wait",
+   1200
+  ]
+ ]
+}

@@ -1,0 +1,223 @@
+/* The terminal in Terminal.astro: a bar, and a grid of cells in the code face. */
+
+.terminal {
+    margin-block: var(--line);
+    border: 0.0625rem solid var(--rule);
+    border-radius: var(--radius);
+    overflow: hidden;
+    background: oklch(0.13 0.03 300);
+    /* The sixteen colors programs ask for by number, tuned to sit on this ground. */
+    --c0: oklch(0.3 0.03 300);
+    --c1: oklch(0.72 0.17 20);
+    --c2: oklch(0.8 0.15 150);
+    --c3: oklch(0.85 0.13 90);
+    --c4: oklch(0.72 0.13 255);
+    --c5: oklch(0.77 0.16 300);
+    --c6: oklch(0.82 0.1 200);
+    --c7: oklch(0.86 0.02 300);
+    --c8: oklch(0.55 0.04 300);
+    --c9: oklch(0.8 0.15 20);
+    --c10: oklch(0.87 0.14 150);
+    --c11: oklch(0.9 0.12 90);
+    --c12: oklch(0.8 0.11 255);
+    --c13: oklch(0.84 0.13 300);
+    --c14: oklch(0.88 0.08 200);
+    --c15: oklch(0.96 0.01 300);
+}
+
+.terminal-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.35rem 0.9rem;
+    border-bottom: 0.0625rem solid var(--rule);
+    color: var(--muted);
+    font-family: var(--font-code);
+    font-size: 0.8rem;
+}
+
+.terminal-again {
+    border: 0;
+    padding: 0;
+    background: none;
+    font: inherit;
+    color: var(--accent);
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+/* The grid keeps its number of columns: on a narrow screen it scrolls sideways, it does not wrap. */
+.terminal-fit {
+    overflow-x: auto;
+    padding: 0.7rem 0.9rem 0.9rem;
+}
+
+.terminal-screen {
+    width: calc(var(--cols) * 1ch);
+    min-height: calc(var(--rows) * 1.35em);
+    font-family: var(--font-code);
+    font-size: clamp(0.62rem, 1.55vw, 0.82rem);
+    line-height: 1.35;
+    color: var(--c7);
+    white-space: pre;
+}
+
+.terminal-screen > div {
+    height: 1.35em;
+}
+
+.terminal-screen .bold {
+    font-weight: 700;
+    color: var(--c15);
+}
+
+.terminal-screen .dim {
+    opacity: 0.6;
+}
+
+.terminal-screen .fg-ink {
+    color: var(--c7);
+}
+
+.terminal-screen .fg-ground {
+    color: oklch(0.13 0.03 300);
+}
+
+.terminal-screen .bg-ink {
+    background: var(--c7);
+}
+
+.terminal .note {
+    margin: 0;
+    padding: 0.4rem 0.9rem;
+    border-top: 0.0625rem solid var(--rule);
+}
+
+.terminal-screen .fg-c0 {
+    color: var(--c0);
+}
+
+.terminal-screen .bg-c0 {
+    background: var(--c0);
+}
+
+.terminal-screen .fg-c1 {
+    color: var(--c1);
+}
+
+.terminal-screen .bg-c1 {
+    background: var(--c1);
+}
+
+.terminal-screen .fg-c2 {
+    color: var(--c2);
+}
+
+.terminal-screen .bg-c2 {
+    background: var(--c2);
+}
+
+.terminal-screen .fg-c3 {
+    color: var(--c3);
+}
+
+.terminal-screen .bg-c3 {
+    background: var(--c3);
+}
+
+.terminal-screen .fg-c4 {
+    color: var(--c4);
+}
+
+.terminal-screen .bg-c4 {
+    background: var(--c4);
+}
+
+.terminal-screen .fg-c5 {
+    color: var(--c5);
+}
+
+.terminal-screen .bg-c5 {
+    background: var(--c5);
+}
+
+.terminal-screen .fg-c6 {
+    color: var(--c6);
+}
+
+.terminal-screen .bg-c6 {
+    background: var(--c6);
+}
+
+.terminal-screen .fg-c7 {
+    color: var(--c7);
+}
+
+.terminal-screen .bg-c7 {
+    background: var(--c7);
+}
+
+.terminal-screen .fg-c8 {
+    color: var(--c8);
+}
+
+.terminal-screen .bg-c8 {
+    background: var(--c8);
+}
+
+.terminal-screen .fg-c9 {
+    color: var(--c9);
+}
+
+.terminal-screen .bg-c9 {
+    background: var(--c9);
+}
+
+.terminal-screen .fg-c10 {
+    color: var(--c10);
+}
+
+.terminal-screen .bg-c10 {
+    background: var(--c10);
+}
+
+.terminal-screen .fg-c11 {
+    color: var(--c11);
+}
+
+.terminal-screen .bg-c11 {
+    background: var(--c11);
+}
+
+.terminal-screen .fg-c12 {
+    color: var(--c12);
+}
+
+.terminal-screen .bg-c12 {
+    background: var(--c12);
+}
+
+.terminal-screen .fg-c13 {
+    color: var(--c13);
+}
+
+.terminal-screen .bg-c13 {
+    background: var(--c13);
+}
+
+.terminal-screen .fg-c14 {
+    color: var(--c14);
+}
+
+.terminal-screen .bg-c14 {
+    background: var(--c14);
+}
+
+.terminal-screen .fg-c15 {
+    color: var(--c15);
+}
+
+.terminal-screen .bg-c15 {
+    background: var(--c15);
+}

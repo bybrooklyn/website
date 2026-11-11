@@ -1,0 +1,66 @@
+{
+ "cols": 84,
+ "rows": 24,
+ "steps": [
+  [
+   "type",
+   "terrustia --new Demo --listen 127.0.0.1:17777"
+  ],
+  [
+   "out",
+   "\n  \u001b[38;5;51m█████ █████ ████  ████  █   █ █████ █████ █████ █████\u001b[0m\n  \u001b[38;5;45m  █   █     █   █ █   █ █   █ █       █     █   █   █\u001b[0m\n  \u001b[38;5;39m  █   ████  ████  ████  █   █ █████   █     █   █████\u001b[0m\n  \u001b[38;5;33m  █   █     █  █  █  █  █   █     █   █     █   █   █\u001b[0m\n  \u001b[38;5;27m  █   █████ █   █ █   █ █████ █████   █   █████ █   █\u001b[0m\n  \u001b[3man async Terraria server\u001b[0m   \u001b[1mv0.0.1\u001b[0m   \u001b[2mTerraria 1.4.5.8 · protocol 326\u001b[0m\n\n"
+  ],
+  [
+   "out",
+   "  \u001b[96m⠋\u001b[0m generating world\u001b[2m …\u001b[0m"
+  ],
+  [
+   "wait",
+   1800
+  ],
+  [
+   "out",
+   "\r\u001b[2K    \u001b[2mlistening\u001b[0m   127.0.0.1:17777 · up to 8 players\n    \u001b[2msaves to \u001b[0m   worlds/Demo.wld\n    \u001b[2mautosave \u001b[0m   every 300s\n    \u001b[2mweb panel\u001b[0m   off · start it with --panel\n\n  \u001b[92m✓\u001b[0m \u001b[1mready\u001b[0m in \u001b[96m1.84s\u001b[0m\n\u001b[2m00:00:01.877\u001b[0m   \u001b[92m\u001b[1mINFO \u001b[0m \u001b[2mnet::listener     \u001b[0m accepting connections \u001b[2maddr=\u001b[0m\u001b[96m127.0.0.1:17777\u001b[0m\n"
+  ],
+  [
+   "wait",
+   600
+  ],
+  [
+   "out",
+   "\u001b[1A\u001b[0J\u001b[2m─\u001b[0m\n  \u001b[2m●\u001b[0m \u001b[1m0\u001b[0m online   \u001b[2mup 00:00:01\u001b[0m   \u001b[2mtick 29-455µs\u001b[0m"
+  ],
+  [
+   "wait",
+   1000
+  ],
+  [
+   "out",
+   "\r\u001b[2K  \u001b[2m●\u001b[0m \u001b[1m0\u001b[0m online   \u001b[2mup 00:00:02\u001b[0m   \u001b[2mtick 30-68µs\u001b[0m"
+  ],
+  [
+   "wait",
+   1000
+  ],
+  [
+   "out",
+   "\r\u001b[2K  \u001b[2m●\u001b[0m \u001b[1m0\u001b[0m online   \u001b[2mup 00:00:03\u001b[0m   \u001b[2mtick 29-62µs\u001b[0m"
+  ],
+  [
+   "wait",
+   1000
+  ],
+  [
+   "out",
+   "\r\u001b[2K  \u001b[2m●\u001b[0m \u001b[1m0\u001b[0m online   \u001b[2mup 00:00:04\u001b[0m   \u001b[2mtick 29-77µs\u001b[0m"
+  ],
+  [
+   "wait",
+   1500
+  ],
+  [
+   "out",
+   "\n"
+  ]
+ ]
+}

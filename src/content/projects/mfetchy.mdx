@@ -9,6 +9,8 @@ coverAlt: mFetchy's menu in a terminal, with options to download a YouTube Music
 order: 4
 ---
 
+import Terminal from "../../components/Terminal.astro";
+
 ## What it is
 
 mFetchy downloads music as tagged audio files. It reads YouTube Music, Apple Music, Spotify, Tidal, Deezer, SoundCloud and Bandcamp, and takes each song from the best source that has it. It is one binary for Linux, macOS and Windows.
@@ -17,6 +19,8 @@ mFetchy downloads music as tagged audio files. It reads YouTube Music, Apple Mus
 mfy                              # the menu
 mfy "https://youtu.be/..."       # download a link (keep the quotes)
 ```
+
+<Terminal session="mfetchy" title="mfy --help" caption="What mfy --help prints, played back. Nothing is running." />
 
 ## What it does
 
