@@ -1,7 +1,5 @@
 ---
 import "../styles/blog.css";
-import { accents } from "../data/theme";
-import { css } from "../lib/color";
 import { formatDate, readingTime, type Post } from "../lib/posts";
 
 interface Props {
@@ -14,7 +12,7 @@ interface Props {
 
 const { post, level = 2, compact = false } = Astro.props;
 const Heading = `h${level}` as const;
-const { title, summary, date, draft, tags, accent } = post.data;
+const { title, summary, date, draft, tags } = post.data;
 ---
 
 {
@@ -32,7 +30,7 @@ const { title, summary, date, draft, tags, accent } = post.data;
             </a>
         </li>
     ) : (
-        <li class="post-row" style={accent && `--accent:${css(accents[accent])}`}>
+        <li class="post-row">
             <a href={`/blog/${post.id}/`}>
                 <time datetime={date.toISOString().slice(0, 10)}>{formatDate(date)}</time>
                 <div>

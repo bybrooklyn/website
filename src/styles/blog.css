@@ -220,23 +220,32 @@
     color: var(--accent);
 }
 
-/* Wide: the text on the left, contents on the right where it stays in view. */
+/*
+ * Wide: everything in one column on the left, and the contents in a second
+ * column that runs the whole height of the page, so it starts level with the
+ * title and stays in view from there down.
+ */
 @media (min-width: 72rem) {
-    .post-body {
+    .post {
         display: grid;
         grid-template-columns: minmax(0, var(--measure)) var(--toc);
-        gap: var(--gap);
+        column-gap: var(--gap);
         align-items: start;
     }
 
+    .post > *,
     .post-body .prose {
         grid-column: 1;
-        grid-row: 1;
+    }
+
+    /* The wrapper steps aside, so the text and the contents are placed in the page's own grid. */
+    .post-body {
+        display: contents;
     }
 
     .contents {
         grid-column: 2;
-        grid-row: 1;
+        grid-row: 1 / span 12;
         position: sticky;
         top: calc(var(--line) * 1.5);
         margin: 0;

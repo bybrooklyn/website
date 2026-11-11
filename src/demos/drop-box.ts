@@ -11,8 +11,8 @@ const MOST = 60;
 const FLOOR = 6;
 /** The box's top corners are rounded; a slope this size across each keeps blocks out of the part that is cut off. */
 const CORNER = 14;
-/** Soft colors for the blocks, taken in turn. */
-const PASTELS = [350, 25, 70, 130, 190, 250, 300].map((hue) => `oklch(0.86 0.085 ${hue})`);
+/** A soft color at a hue. */
+const pastel = (hue: number) => `oklch(0.86 0.085 ${Math.round(hue % 360)})`;
 /** The simulation moves in steps of this many seconds, whatever the screen's refresh rate. */
 const TICK = 1 / 120;
 
@@ -23,7 +23,7 @@ class DropBox extends HTMLElement {
     #world = Object.assign(new World(), { gravity: 1300, grip: 17, follow: 0.115 });
     #blocks: Body[] = [];
     #colors = new Map<Body, string>();
-    #made = 0;
+    #hue = Math.random() * 360;
     #walls: Body[] = [];
     #near = false;
     #visible = false;
@@ -75,7 +75,7 @@ class DropBox extends HTMLElement {
         const middle = canvas.clientWidth / 2;
         const floor = canvas.clientHeight - FLOOR;
         for (const [column, row] of [[-1, 0], [0, 0], [1, 0], [-0.5, 1], [0.5, 1], [0, 2]] as const) {
-            const block = rect(middle + column * SIZE, floor - SIZE / 2 - row * SIZE, SIZE, SIZE);
+            const block = rect(middle + column * SIZE, floor - SIZE / 2 - row * SIZE, SIZE, SIZE, { friction: 0.42 });
             block.asleep = true;
             this.#add(block);
         }
@@ -92,10 +92,10 @@ class DropBox extends HTMLElement {
         const pick = Math.random();
         const half = SIZE / 2;
         const block =
-            pick < 0.7 ? rect(x, y, SIZE, SIZE)
+            pick < 0.7 ? rect(x, y, SIZE, SIZE, { friction: 0.42 })
             : pick < 0.85 ? ball(x, y, half, { bounce: 0.4 })
             : shape(x, y, [[0, -half], [half * 1.15, half], [-half * 1.15, half]]);
-        block.w = (Math.random() - 0.5) * 3;
+        block.w = (Math.random() - 0.5) * 1.2;
         this.#add(block);
         if (this.#blocks.length > MOST) {
             const oldest = this.#blocks.shift()!;
@@ -105,7 +105,9 @@ class DropBox extends HTMLElement {
     }
 
     #add(block: Body): void {
-        this.#colors.set(block, PASTELS[this.#made++ % PASTELS.length]!);
+        // A random hue, but never close to the one before it.
+        this.#hue += 70 + Math.random() * 220;
+        this.#colors.set(block, pastel(this.#hue));
         this.#blocks.push(block);
         this.#world.add(block);
     }
@@ -220,17 +222,28 @@ class DropBox extends HTMLElement {
         context.fillRect(0, height - FLOOR, width, FLOOR);
 
         for (const block of this.#blocks) {
+            // A block at rest is drawn on whole pixels, and square to the box if it is
+            // within a couple of degrees of it, so a settled pile has no slivers between blocks.
+            const square = Math.round(block.a / (Math.PI / 2)) * (Math.PI / 2);
+            const settled = block.asleep && !block.r && Math.abs(block.a - square) < 0.04;
+            const fill = this.#colors.get(block) ?? pastel(0);
             context.save();
-            context.translate(block.x, block.y);
-            context.rotate(block.a);
+            context.translate(block.asleep ? Math.round(block.x * scale) / scale : block.x, block.asleep ? Math.round(block.y * scale) / scale : block.y);
+            context.rotate(settled ? square : block.a);
             context.beginPath();
             if (block.r) context.arc(0, 0, block.r, 0, Math.PI * 2);
             else {
                 block.p.forEach(([x, y], index) => (index ? context.lineTo(x, y) : context.moveTo(x, y)));
                 context.closePath();
             }
-            context.fillStyle = this.#colors.get(block) ?? PASTELS[0]!;
+            context.fillStyle = fill;
             context.fill();
+            // Each block is drawn a little past its edge in its own color, which closes the
+            // small gaps blocks come to rest with. Whole pixels, so a resting edge stays crisp.
+            context.strokeStyle = fill;
+            context.lineWidth = block.asleep ? 4 : 2;
+            context.lineJoin = "miter";
+            context.stroke();
             if (block.r) {
                 // a spoke, so a rolling ball can be seen to roll
                 context.beginPath();

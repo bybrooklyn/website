@@ -25,7 +25,9 @@ interface Props {
 }
 
 const { project, previous, next } = Astro.props;
-const { name, summary, language, status, repo, link, get, cover, coverAlt, pixel, gallery } = project.data;
+const { name, summary, language, status, repo, link, cover, coverAlt, pixel, gallery } = project.data;
+// Entries cached by the dev server from before `get` existed arrive without it.
+const get = project.data.get ?? [];
 const { Content, headings } = await render(project);
 const facts = projectFacts(project);
 
