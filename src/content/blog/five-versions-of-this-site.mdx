@@ -1,0 +1,84 @@
+---
+title: "Five versions of this site"
+date: 2026-11-10
+summary: "From a fork of someone else's homepage to a site I rewrote from nothing in a day."
+tags: [site]
+draft: true
+---
+
+This site has been five different sites. The first one wasn't even mine.
+
+## 1. A fork (March 2026)
+
+**[YOURS: how you found darkuss's site, and why you forked it instead of starting from nothing.]**
+
+The original was [darkuss](https://darkuss.twoexem.com)'s homepage, which they started in February 2025. It was built with [zs](https://git.mills.io/prologic/zs), a tiny static site generator where the components are shell scripts. It had a blog, a webring, a row of 88x31 buttons for friends, and triangles drifting in the background.
+
+My first commit, on March 8, was called "Sitewide refactor for my website". It deleted 462 lines and added 29. The blog went, the webring went, the buttons went. What was left said "hello! I'm Brook, welcome to this little corner of the internet" and listed four projects. The footer said "website forked from darkuss", and it stayed there for the next two versions.
+
+![The top of the first version: a bracketed nav, the word hello, and two lines of monospace text on a dark page.](../../assets/blog/versions/2026-03-zs.png)
+
+## 2. Zola (April 2026)
+
+zs hadn't been updated in a long time. On April 26 I committed "ai refactor because zs is old and not updated", which moved everything to [Zola](https://www.getzola.org). The README I wrote that day:
+
+> why tf did i not write a readme?? anyway this is my website forked from darkuss
+>
+> Yes i used ai to refactor the website from that old ass zs framework
+
+**[YOURS: which AI did that refactor, and what you thought of the result.]**
+
+It looked the same. The point was to be on something maintained.
+
+In June I committed "Update website to be even cooler :P". It added two projects. It also added 1,454 lines by accident, because I committed a folder of old build output, including eight font files of about 1.4 MB each. The site was shipping 11 MB of fonts to show four paragraphs.
+
+## 3. Astro and Bun (August 2026)
+
+Zola was awkward to install the same way on every machine, and the repo had drifted. On August 20 I moved to Astro and Bun and redid the layout, keeping the dark palette, the triangles, the rainbow corner and the bracketed nav.
+
+This is the version where the site started being looked after:
+
+- The fonts went from 11 MB to 600 KB, by keeping only the characters a site in English needs.
+- The text stopped running 2,000 pixels wide on a big monitor.
+- The projects list grew to fifteen, with a license and a language beside each.
+- It deployed to Cloudflare Pages. Before that it ran on my own server.
+
+![The top of the August version: the same hello, now with notes in a margin column and triangles in the background.](../../assets/blog/versions/2026-08-astro.png)
+
+## 4. One page (October 2026)
+
+**[YOURS: why you cut it down to a single page.]**
+
+On October 14 I deleted almost all of it. Projects, blog, credits, the triangles, the fonts: 1,566 lines out, 279 in. What was left was one page that said "I'm Charlotte", a paragraph about Playmatter, one screenshot, and two links.
+
+It was also the first version that used my name.
+
+![The October version: a heading that says I'm Charlotte, a short paragraph, one screenshot of Playmatter and two links.](../../assets/blog/versions/2026-10-one-page.png)
+
+## 5. Today (November 2026)
+
+This morning I opened that one page and wrote:
+
+> this site is mine. it is incredibly boring and doesnt look good. any ideas to liven it up, make it more unique, not become generic AI slop.
+
+About eight hours and fifty-some commits later, it is this. I started a new repository for it, so none of the old history came along.
+
+What's in it now:
+
+- **A typeface of my own.** Headings and text are set in [Torrens Serif](/projects/torrens-serif/), my cut of Fraunces with its softness all the way up and a straightened J, j and f.
+- **Pages that open.** A post or a project slides in as a panel, and the site moves aside to a strip you click to go back.
+- **A physics engine.** The block demo in posts runs on about 400 lines I own, not a library, and it is a few kilobytes.
+- **A timeline you step through**, on the [about page](/about/).
+- **An editor.** `bun run edit` opens the site in a browser editor with the real page beside it, and can publish.
+- **A resume that prints itself.** The PDF is made from the page every time the site is built.
+- **80 KB of fonts on a page.** Down from 11 MB.
+
+![Today's homepage: a large serif heading that says i'm charlotte, a bar of the languages I use, and a clip of Playmatter.](../../assets/blog/versions/2026-11-today.png)
+
+I built it with an AI coding agent, and I say so, the same way my READMEs do. I decided what it should be and said no a lot. The first thing it showed me got "just out of the gate this looks horrible".
+
+**[YOURS: what you're proudest of, and what you'd tell someone about building a site this way.]**
+
+## What stayed
+
+Not much. The dark background, and the reason for having a site at all, which was in darkuss's first line and in mine: a little corner of the internet.
