@@ -21,6 +21,8 @@ export interface Photo {
     note?: string;
     /** Set for a picture that is not a photograph of mine. */
     kind?: "shitpost";
+    /** Who took it, when it was not me. */
+    by?: string;
 }
 
 /** Newest first; those without a date last. */

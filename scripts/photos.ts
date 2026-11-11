@@ -16,6 +16,9 @@
 // go in photos/shitposts/ instead. They are prepared the same way and shown
 // on the same page under their own heading.
 //
+// A friend's photographs go in photos/by-<name>/ (photos/by-dylan/). They are
+// shown with the photographs, each credited to that name.
+//
 // To take a photo off the site, delete its file from public/photos/.
 // To change a caption, put a text file with the photo's name in photos/.
 //
@@ -78,9 +81,10 @@ if (pictures.length + notes.size > 0) await mkdir(ADDED, { recursive: true });
 if (pictures.length > 0) await mkdir(OUT, { recursive: true });
 await mkdir(SMALL, { recursive: true });
 
-async function add(name: string, shitpost: boolean): Promise<void> {
-    const folder = shitpost ? join(INBOX, "shitposts") : INBOX;
-    const source = join(folder, name);
+/** `sub` is the folder inside photos/ it came from: none, "shitposts", or "by-" and a name for someone else's photographs. */
+async function add(name: string, sub: string): Promise<void> {
+    const source = join(INBOX, sub, name);
+    const by = sub.startsWith("by-") ? sub[3]!.toUpperCase() + sub.slice(4) : undefined;
     try {
         const { picture, exif, clean } = await open(source);
         const { taken } = readExif(exif);
@@ -102,7 +106,7 @@ async function add(name: string, shitpost: boolean): Promise<void> {
             await rename(join(INBOX, note), join(ADDED, note));
             notes.delete(slug(name));
         }
-        photos.push({ file, width, height, color, taken, caption: caption || undefined, kind: shitpost ? "shitpost" : undefined });
+        photos.push({ file, width, height, color, taken, caption: caption || undefined, kind: sub === "shitposts" ? "shitpost" : undefined, by });
         await rename(source, join(ADDED, name));
         console.log(`added    ${file}${taken ? `  ${taken}` : "  (no date in the file)"}${caption ? "  with caption" : ""}`);
     } catch (error) {
@@ -111,12 +115,15 @@ async function add(name: string, shitpost: boolean): Promise<void> {
 }
 
 // Several at a time: encoding is the slow part and each one mostly uses a single core.
-const shitposts = (await names(join(INBOX, "shitposts"))).filter((name) => PICTURE.test(name));
-if (shitposts.length > 0) {
+const queue: [string, string][] = pictures.map((name): [string, string] => [name, ""]);
+const friends = (await readdir(INBOX, { withFileTypes: true }).catch(() => [])).filter((entry) => entry.isDirectory() && entry.name.startsWith("by-")).map((entry) => entry.name);
+for (const sub of ["shitposts", ...friends]) {
+    for (const name of await names(join(INBOX, sub))) if (PICTURE.test(name)) queue.push([name, sub]);
+}
+if (queue.length > 0) {
     await mkdir(ADDED, { recursive: true });
     await mkdir(OUT, { recursive: true });
 }
-const queue: [string, boolean][] = [...pictures.map((name): [string, boolean] => [name, false]), ...shitposts.map((name): [string, boolean] => [name, true])];
 await Promise.all(
     Array.from({ length: 6 }, async () => {
         for (let next = queue.shift(); next; next = queue.shift()) await add(...next);

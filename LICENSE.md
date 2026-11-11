@@ -32,8 +32,9 @@ SOFTWARE.
 
 Everything on its pages (my writing, photographs, resume and pictures) is under
 [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/): share and
-adapt it with credit, not for commercial use. That does not cover what is not
-mine to license: the shitposts on the photos page, and the fonts, which are
-under the [SIL Open Font License](https://openfontlicense.org).
+adapt it with credit, not for commercial use. Photographs credited to Dylan are
+his, under the same license. It does not cover the shitposts on the photos
+page, which are not mine, or the fonts, which are under the
+[SIL Open Font License](https://openfontlicense.org).
 
-A request, not a condition: don't use this to hurt people.
+Please don't use this to hurt people.

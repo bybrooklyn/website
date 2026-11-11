@@ -26,7 +26,8 @@ const all = photos.map((photo) => ({
     set: photo.kind === "shitpost" ? "shitposts" : "photos",
     title: photo.title ?? "",
     caption: photo.caption ?? "",
-    taken: photo.taken ? formatDate(new Date(photo.taken)) : "",
+    // under a friend's photograph: who took it, then when
+    taken: [photo.by && `by ${photo.by}`, photo.taken && formatDate(new Date(photo.taken))].filter(Boolean).join(" · "),
 }));
 // With scripts the page opens on a picture picked at random. Without them it shows this one.
 const first = all.find((photo) => photo.set === "photos") ?? all[0]!;
