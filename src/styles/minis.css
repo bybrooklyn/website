@@ -1,0 +1,93 @@
+/* The minis: the list on /minis/, an opened mini, and one embedded in a post. */
+
+/* Where a mini is drawn. Its height is set here; Mote fits the canvas to it. */
+.mote {
+    display: block;
+    border: 0.0625rem solid var(--rule);
+    border-radius: var(--radius);
+    overflow: hidden;
+    background: var(--ground);
+}
+
+.mote canvas {
+    display: block;
+    width: 100%;
+    height: 16rem;
+    touch-action: pan-y;
+    cursor: grab;
+}
+
+.mote canvas:active {
+    cursor: grabbing;
+}
+
+.mote canvas:focus {
+    outline: none;
+}
+
+.mote canvas:focus-visible:not([data-touched]) {
+    outline: 0.125rem solid var(--accent);
+    outline-offset: -0.125rem;
+}
+
+/* On its own page a mini gets most of the window. */
+.mini-stage {
+    max-width: 56rem;
+    margin-bottom: var(--line);
+}
+
+.mini-stage canvas {
+    height: clamp(18rem, 62svh, 34rem);
+    /* A game is steered by dragging sideways and up and down, so the page does not scroll from it. */
+    touch-action: none;
+}
+
+.mini-controls {
+    max-width: var(--measure);
+    margin: 0 0 calc(var(--line) * 1.5);
+    color: var(--muted);
+}
+
+.mini-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr));
+    gap: clamp(1rem, 2.5vw, 2rem);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.mini-list a {
+    display: block;
+    height: 100%;
+    padding: calc(var(--line) * 0.8) 1.25rem calc(var(--line) * 0.9);
+    border: 0.0625rem solid var(--rule);
+    border-radius: var(--radius);
+    background: var(--surface);
+    color: var(--ink);
+    text-decoration: none;
+    transition:
+        border-color 0.15s ease,
+        translate 0.2s var(--ease);
+}
+
+.mini-list a:hover {
+    border-color: var(--accent);
+    translate: 0 -0.15rem;
+}
+
+.mini-list h2 {
+    margin: 0;
+    font-size: 1.6rem;
+    line-height: 1.15;
+}
+
+.mini-list p {
+    margin: 0.35rem 0 0;
+    color: var(--muted);
+    line-height: 1.4;
+}
+
+.mini-list .post-meta {
+    margin: 0 0 0.5rem;
+}

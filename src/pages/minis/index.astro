@@ -1,0 +1,33 @@
+---
+// /minis/: tiny demos and games, each opened on its own page. They all run on Mote (src/mote/).
+import "../../styles/blog.css";
+import "../../styles/minis.css";
+import Base from "../../layouts/Base.astro";
+import { getMinis } from "../../lib/minis";
+
+const minis = await getMinis();
+---
+
+<Base title="minis" description="Tiny demos and games by Charlotte, running on her own small engine.">
+    <div class="page-head">
+        <h1>minis</h1>
+        <p class="lede">Tiny things to play with. They all run on <a href="/projects/mote/">Mote</a>, a very small engine I own.</p>
+    </div>
+
+    <ul class="mini-list">
+        {
+            minis.map((mini) => (
+                <li>
+                    <a href={`/minis/${mini.id}/`}>
+                        <p class="post-meta">
+                            <span>{mini.data.kind}</span>
+                            <span>{mini.data.space}</span>
+                        </p>
+                        <h2>{mini.data.name}</h2>
+                        <p>{mini.data.summary}</p>
+                    </a>
+                </li>
+            ))
+        }
+    </ul>
+</Base>

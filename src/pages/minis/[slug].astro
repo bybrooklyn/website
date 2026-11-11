@@ -1,0 +1,60 @@
+---
+// One mini, opened like a post or a project: the thing itself at the top, how
+// to play it under that, then a few words about it.
+import type { GetStaticPaths } from "astro";
+import { render } from "astro:content";
+import "../../styles/blog.css";
+import "../../styles/minis.css";
+import PrevNext from "../../components/PrevNext.astro";
+import Opened from "../../layouts/Opened.astro";
+import { getMinis, type Mini } from "../../lib/minis";
+
+export const getStaticPaths = (async () => {
+    const minis = await getMinis();
+    return minis.map((mini, index) => ({
+        params: { slug: mini.id },
+        props: { mini, previous: minis[index - 1], next: minis[index + 1] },
+    }));
+}) satisfies GetStaticPaths;
+
+interface Props {
+    mini: Mini;
+    previous?: Mini;
+    next?: Mini;
+}
+
+const { mini, previous, next } = Astro.props;
+const { name, summary, kind, space, controls } = mini.data;
+const { Content } = await render(mini);
+---
+
+<Opened title={name} description={summary} back={{ href: "/minis/", label: "minis" }}>
+    <article class="post">
+        <header class="post-header">
+            <p class="post-meta">
+                <span>{kind}</span>
+                <span>{space}</span>
+            </p>
+            <h1>{name}</h1>
+            <p class="lede">{summary}</p>
+        </header>
+
+        <div class="mote mini-stage" data-mini={mini.id}></div>
+        <p class="mini-controls">{controls}</p>
+
+        <div class="prose">
+            <Content />
+            <p class="note">Runs on <a href="/projects/mote/">Mote</a>.</p>
+        </div>
+
+        <PrevNext
+            label="More minis"
+            previous={previous && { href: `/minis/${previous.id}/`, note: "previous", title: previous.data.name }}
+            next={next ? { href: `/minis/${next.id}/`, note: "next", title: next.data.name } : { href: "/minis/", note: "that's all of them.", title: "all minis" }}
+        />
+    </article>
+</Opened>
+
+<script>
+    import "../../scripts/mini";
+</script>

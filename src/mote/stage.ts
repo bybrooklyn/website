@@ -1,0 +1,257 @@
+// The part of Mote every mini shares: a canvas that fits its box and stays
+// sharp, a loop that moves in fixed steps, the pointer and a few keys, and
+// the page's own colors.
+//
+//   const stop = mote(element, (m) => {
+//       // set the scene up here, with m.width and m.height
+//       return {
+//           step(dt) {},   // move things on by dt seconds (always 1/120)
+//           draw() {},     // draw with m.ctx
+//       };
+//   });
+//
+// A mini only runs while it can be seen, stops when the scene says it has
+// come to rest, and for someone who has asked for reduced motion does not
+// start moving until they touch it.
+
+export interface Pointer {
+    x: number;
+    y: number;
+    /** Held down. */
+    down: boolean;
+    /** Over the canvas. */
+    inside: boolean;
+}
+
+export type Key = "left" | "right" | "up" | "down" | "action";
+
+export interface Mote {
+    readonly canvas: HTMLCanvasElement;
+    readonly ctx: CanvasRenderingContext2D;
+    /** The size of the drawing area in CSS pixels. */
+    width: number;
+    height: number;
+    /** Seconds stepped so far. */
+    time: number;
+    pointer: Pointer;
+    /** Whether a key is held: the arrows or WASD, and Space or Enter for "action". */
+    key(name: Key): boolean;
+    /** One of the page's colors, such as "--accent", as a value a canvas accepts. */
+    color(property: string): string;
+    /** The page's text face, for writing on the canvas. */
+    font(size: number, weight?: number): string;
+    /** Start the loop again after the scene came to rest. */
+    wake(): void;
+    /** A number kept in the browser between visits, such as a best score. */
+    recall(name: string): number;
+    keep(name: string, value: number): void;
+}
+
+export interface Scene {
+    step?(dt: number): void;
+    draw(): void;
+    /** The canvas changed size. */
+    resize?(): void;
+    press?(x: number, y: number): void;
+    move?(x: number, y: number): void;
+    release?(x: number, y: number): void;
+    /** A key went down. */
+    keydown?(name: Key): void;
+    /** True when nothing is moving, so the loop can stop until something wakes it. */
+    resting?(): boolean;
+}
+
+/** The loop moves in steps of this many seconds, whatever the screen's refresh rate. */
+export const TICK = 1 / 120;
+
+const KEYS: Record<string, Key> = {
+    ArrowLeft: "left",
+    ArrowRight: "right",
+    ArrowUp: "up",
+    ArrowDown: "down",
+    a: "left",
+    d: "right",
+    w: "up",
+    s: "down",
+    " ": "action",
+    Enter: "action",
+};
+
+/** Puts a mini in `host` and returns a function that takes it away again. */
+export function mote(host: HTMLElement, make: (m: Mote) => Scene, label = "An interactive demo."): () => void {
+    const canvas = document.createElement("canvas");
+    canvas.tabIndex = 0;
+    canvas.setAttribute("role", "img");
+    canvas.setAttribute("aria-label", label);
+    host.append(canvas);
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return () => canvas.remove();
+
+    const held = new Set<Key>();
+    const colors = new Map<string, string>();
+    let frame = 0;
+    let last = 0;
+    let owed = 0;
+    let visible = false;
+    let allowed = !matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    const m: Mote = {
+        canvas,
+        ctx,
+        width: 0,
+        height: 0,
+        time: 0,
+        pointer: { x: 0, y: 0, down: false, inside: false },
+        key: (name) => held.has(name),
+        color(property) {
+            // Looking a color up means restyling the element, so each is looked up once.
+            let found = colors.get(property);
+            if (!found) {
+                host.style.color = `var(${property})`;
+                found = getComputedStyle(host).color;
+                host.style.color = "";
+                colors.set(property, found);
+            }
+            return found;
+        },
+        font: (size, weight = 400) => `${weight} ${size}px ${getComputedStyle(host).fontFamily}`,
+        wake: () => start(),
+        recall(name) {
+            try {
+                return Number(localStorage.getItem(`mote:${name}`)) || 0;
+            } catch {
+                return 0;
+            }
+        },
+        keep(name, value) {
+            try {
+                localStorage.setItem(`mote:${name}`, String(value));
+            } catch {
+                // Not kept: private browsing, or storage is off.
+            }
+        },
+    };
+
+    const fit = () => {
+        const scale = window.devicePixelRatio || 1;
+        m.width = canvas.clientWidth;
+        m.height = canvas.clientHeight;
+        canvas.width = Math.round(m.width * scale);
+        canvas.height = Math.round(m.height * scale);
+    };
+    fit();
+    const scene = make(m);
+
+    const draw = () => {
+        const scale = window.devicePixelRatio || 1;
+        ctx.setTransform(scale, 0, 0, scale, 0, 0);
+        ctx.clearRect(0, 0, m.width, m.height);
+        scene.draw();
+    };
+
+    const stop = () => {
+        cancelAnimationFrame(frame);
+        frame = 0;
+    };
+
+    function start(): void {
+        allowed = true;
+        if (frame || !visible || document.hidden) return;
+        last = performance.now();
+        owed = 0;
+        const loop = (now: number) => {
+            // Catch up in fixed steps, but never try to make up a long pause.
+            owed = Math.min(owed + (now - last) / 1000, 0.05);
+            last = now;
+            while (owed >= TICK) {
+                scene.step?.(TICK);
+                m.time += TICK;
+                owed -= TICK;
+            }
+            draw();
+            if (scene.resting?.()) {
+                frame = 0;
+                return;
+            }
+            frame = requestAnimationFrame(loop);
+        };
+        frame = requestAnimationFrame(loop);
+    }
+
+    const place = (event: PointerEvent) => {
+        m.pointer.x = event.offsetX;
+        m.pointer.y = event.offsetY;
+    };
+    canvas.addEventListener("pointerdown", (event) => {
+        place(event);
+        m.pointer.down = true;
+        // Keep hearing about this pointer even if it leaves the canvas.
+        canvas.setPointerCapture(event.pointerId);
+        // It takes the keyboard too, but a ring around it is only for someone who got here by keyboard.
+        canvas.dataset.touched = "";
+        canvas.focus({ preventScroll: true });
+        scene.press?.(m.pointer.x, m.pointer.y);
+        start();
+    });
+    canvas.addEventListener("pointermove", (event) => {
+        place(event);
+        scene.move?.(m.pointer.x, m.pointer.y);
+    });
+    const up = (event: PointerEvent) => {
+        place(event);
+        if (m.pointer.down) scene.release?.(m.pointer.x, m.pointer.y);
+        m.pointer.down = false;
+    };
+    canvas.addEventListener("pointerup", up);
+    canvas.addEventListener("pointercancel", up);
+    canvas.addEventListener("pointerenter", () => {
+        m.pointer.inside = true;
+        if (allowed) start();
+    });
+    canvas.addEventListener("pointerleave", () => {
+        m.pointer.inside = false;
+    });
+    // Keys only count while the mini has the keyboard, so the page still scrolls otherwise.
+    canvas.addEventListener("keydown", (event) => {
+        const name = KEYS[event.key.length === 1 ? event.key.toLowerCase() : event.key];
+        if (event.key === "Tab") delete canvas.dataset.touched;
+        if (!name || event.metaKey || event.ctrlKey || event.altKey) return;
+        event.preventDefault();
+        if (!held.has(name)) scene.keydown?.(name);
+        held.add(name);
+        start();
+    });
+    canvas.addEventListener("keyup", (event) => {
+        const name = KEYS[event.key.length === 1 ? event.key.toLowerCase() : event.key];
+        if (name) held.delete(name);
+    });
+    canvas.addEventListener("blur", () => {
+        held.clear();
+        delete canvas.dataset.touched;
+    });
+
+    const resizer = new ResizeObserver(() => {
+        fit();
+        scene.resize?.();
+        draw();
+    });
+    resizer.observe(canvas);
+    // Only run while it can be seen.
+    const watcher = new IntersectionObserver(([entry]) => {
+        visible = Boolean(entry?.isIntersecting);
+        if (visible && allowed) start();
+        else stop();
+    });
+    watcher.observe(canvas);
+    const shown = () => (document.hidden ? stop() : allowed && start());
+    document.addEventListener("visibilitychange", shown);
+
+    draw();
+    return () => {
+        stop();
+        resizer.disconnect();
+        watcher.disconnect();
+        document.removeEventListener("visibilitychange", shown);
+        canvas.remove();
+    };
+}

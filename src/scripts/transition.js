@@ -11,7 +11,7 @@
     // The main pages in nav order, home first, from the <html> element.
     const order = (document.documentElement.dataset.order || "/").split(" ");
     const path = (url) => new URL(url).pathname;
-    const opened = (url) => /^\/(blog|projects)\/[^/]+\/$/.test(path(url));
+    const opened = (url) => /^\/(blog|projects|minis)\/[^/]+\/$/.test(path(url));
     const place = (url) => order.findLastIndex((href) => (href === "/" ? path(url) === "/" : path(url).startsWith(href)));
     const kinds = (from, to) => {
         const kind = opened(to) ? (opened(from) ? "swap" : "open") : opened(from) ? "close" : "move";

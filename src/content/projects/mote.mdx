@@ -1,0 +1,28 @@
+---
+name: Mote
+summary: A very small engine for tiny demos and games in the browser. The minis on this site run on it.
+language: TypeScript
+status: in use on this site
+link: { href: "https://github.com/bybrooklyn/website/tree/main/src/mote", label: "Source and how to use it" }
+order: 8
+---
+
+import DropBox from "../../demos/DropBox.astro";
+
+Mote is about 800 lines of TypeScript with no dependencies. It exists so that each small thing I make for this site is the thing itself and not the same loop, canvas and mouse code written again.
+
+<DropBox />
+
+## What it does
+
+- **A stage.** A canvas that fits its box and stays sharp, a loop that moves in fixed steps of 1/120 of a second, the pointer, a few keys, and the page's own colors. It only runs while you can see it, and stops when nothing is moving.
+- **2D physics.** Balls and convex shapes with weight, friction and bounce. Pins and ropes between them. You can pick a body up and throw it. Things that come to rest go to sleep.
+- **3D on a flat canvas.** Solids made of flat faces, turned and shaded, with no WebGL.
+
+## What runs on it
+
+Everything on the [minis](/minis/) page: a pile of blocks, a chain, a game about keeping a ball on a beam, and a solid you can spin. Each one is a single file of 60 to 160 lines.
+
+## Using it
+
+It is free, under the MIT license. The folder is self-contained, so copy it. A mini is one function that sets a scene up and returns how to step it and how to draw it.

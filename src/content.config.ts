@@ -78,4 +78,23 @@ const pages = defineCollection({
     }),
 });
 
-export const collections = { blog, pages, projects, resume };
+/** The tiny demos and games on /minis/. The file name is the address, and names the script in src/minis/ that runs it. */
+const minis = defineCollection({
+    loader: glob({ base: "./src/content/minis", pattern: "*.mdx" }),
+    schema: z.object({
+        name: z.string(),
+        /** One sentence, for the list and the top of the page. */
+        summary: z.string(),
+        /** A toy has no goal; a game does. */
+        kind: z.enum(["toy", "game"]),
+        /** "2D" or "3D". */
+        space: z.enum(["2D", "3D"]).default("2D"),
+        /** How to play it, in a sentence. Shown under it. */
+        controls: z.string(),
+        /** Position in the list, lowest first. */
+        order: z.number(),
+        draft: z.boolean().default(false),
+    }),
+});
+
+export const collections = { blog, minis, pages, projects, resume };
