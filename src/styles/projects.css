@@ -137,27 +137,15 @@
     border-color: var(--accent);
 }
 
-/* Where to get a project: the first is the main one. */
+/* Where to get a project: ordinary links, a little larger than the text, the first with an arrow. */
 .get {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.6rem;
+    gap: 0.25rem 1.75rem;
     margin: 0 0 var(--line);
+    font-size: 1.1em;
 }
 
-.prose .get a {
-    padding: 0.45rem 1.1rem;
-    border: 0.0625rem solid var(--accent);
-    border-radius: 999px;
-    color: var(--accent);
-    text-decoration: none;
-    transition:
-        background-color 0.15s ease,
-        color 0.15s ease;
-}
-
-.prose .get a:first-child,
-.prose .get a:hover {
-    background: var(--accent);
-    color: var(--ground);
+.get a:first-child::after {
+    content: " →";
 }
