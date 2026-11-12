@@ -5,11 +5,11 @@
 // It trains only while the page is drawing the mini: the page says so about once a second, and when
 // it falls quiet (the tab hidden, the mini scrolled away) training waits.
 
-import { ENGINE, POPULATION, SECONDS, read, start, write, type Engine } from "../minis/walking";
+import { ENGINE, POPULATION, read, start, write, type Engine } from "../minis/walking";
 
 /** What the page sends. */
 export type Order =
-    | { kind: "begin"; setup: number; legs: number; ground: number[]; seed: number; brain?: Float32Array }
+    | { kind: "begin"; setup: number; legs: number; goal: number; hidden: number; layers: number; ground: number[]; seed: number; brain?: Float32Array }
     | { kind: "pause" }
     | { kind: "resume" }
     | { kind: "beat" };
@@ -72,7 +72,7 @@ onmessage = async (event: MessageEvent<Order>) => {
         await loading;
         if (!engine) return;
         heard = performance.now();
-        engine.create(order.legs, POPULATION, SECONDS, order.seed, 12, 1, 0);
+        engine.create(order.legs, POPULATION, 0, order.seed, order.hidden, order.layers, order.goal);
         write(engine, engine.ground_room(order.ground.length / 4), order.ground);
         engine.ground_set(order.ground.length / 4);
         if (order.brain && order.brain.length === engine.weights_length()) {

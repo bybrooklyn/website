@@ -4,7 +4,7 @@
 // link exactly, and each kind of ground is what it says. `bun run wasm` builds it; `bun test` runs this.
 
 import { expect, test } from "bun:test";
-import { KINDS, decode, encode, heightAt, pieces, type Engine } from "./walking";
+import { DEFAULT_SETUP, KINDS, decode, encode, fromLink, heightAt, linkParts, pieces, valid, type Engine, type Setup } from "./walking";
 
 const path = new URL("../../public/wasm/walker.wasm", import.meta.url);
 
@@ -198,6 +198,22 @@ test("a generation trained in one module runs as the crowd in another, as the pa
     page.show_step(0.1);
     expect(page.show_seconds()).toBeCloseTo(0.1, 1);
     expect([0, 1]).toContain(page.show_fallen());
+});
+
+test("a whole walker, its setup and its brain, goes through a link and back unchanged", () => {
+    const setup: Setup = { legs: 4, goal: 3, hidden: 24, layers: 2, ground: { kind: "gaps", rough: 65 } };
+    const brain = Float32Array.from({ length: 1600 }, (_, i) => Math.sin(i * 1.7) * 3.1);
+    const address = new URL("https://example.org/minis/walker/");
+    for (const [name, value] of linkParts(setup, brain)) address.searchParams.set(name, value);
+    const back = fromLink((name) => address.searchParams.get(name))!;
+    expect(back.setup).toEqual(setup);
+    expect(Array.from(new Uint32Array(back.brain.buffer))).toEqual(Array.from(new Uint32Array(brain.buffer)));
+    // a link missing a part, or with a part out of range, is not a walker
+    address.searchParams.set("neurons", "13");
+    expect(fromLink((name) => address.searchParams.get(name))).toBeNull();
+    expect(fromLink(() => null)).toBeNull();
+    expect(valid(DEFAULT_SETUP)).toBe(true);
+    expect(valid({ ...DEFAULT_SETUP, ground: { kind: "lava", rough: 10 } })).toBe(false);
 });
 
 test("the show plays the best brain's run exactly as it was scored, and stops where it stopped", async () => {
