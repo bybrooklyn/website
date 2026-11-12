@@ -489,6 +489,75 @@ greyscale pixels from 80 degrees down to 60 degrees up, each lit by what its ray
 brightest, then a box, a moving thing, ground, an edge) and dimmer the further off. It is tested and
 not yet given to any brain; it is where the picture experiment will start.
 
+### Many creatures for a learner
+
+`generalist::envs::Envs` steps N creatures in N worlds together, for the gradient learner to come:
+each step takes every creature's actions, moves them all on in lockstep (`World::step_together`), and
+writes into the caller's lists what each senses (the layout above), its reward, and 1 if its run
+ended (it has started again at once from its start), else 0. Creature i lives in the world of the
+recipe's seed plus i, or all in the recipe's own world; what happens to it depends on that seed and
+its actions alone, never on how many are stepped beside it, which a test holds to the bit.
+
+The actions, each -1 to 1: for each joint, hip then knee, leg by leg, the three numbers that shape its
+swing to the legs' rhythm (where it is centred, how wide, how far shifted in the stride), as the
+Walker's; then the hop, which starts when it goes above 0.5. So 13 for two legs and 25 for four.
+
+The reward: each metre further than the creature has been before earns 1, so a run's rewards add up
+to the furthest it got; touching a hazard or falling into a gap costs 3 and ends the run; each change
+in the actions from one step to the next costs 0.002 for its size, as twitching costs the Walker. A
+run also ends after its time (30 s unless asked), after its body has been down for a second, or once
+it has got no further than 0.2 m in five seconds.
+
+Natively, 64 two-legged creatures step about 340,000 times a second together on one core, seeing as
+they go (the Walker's, which see nothing, about 790,000). The page's module in Bun's JavaScriptCore
+steps them about 250,000 times a second.
+
+`generalist::evolve::Evolution` is the Walker's evolution, unchanged in its rules (32 brains, the best
+4 kept, children of the better of three, a weight nudged by about 0.3 one time in ten), scored by the
+sum of a run's rewards, its runs going four at a time through `Envs`. A generation's runs can be
+handed out and their scores handed back in any order, as the Walker's are.
+
+### The generalist's functions
+
+In `public/wasm/generalist.wasm` (`src/generalist/api.rs`, the work in `src/generalist/page.rs`). One
+creature and its learning per module instance. A function that gives a list gives a pointer, and
+`length()` then gives how many f32 it holds; read them as with the Walker's.
+
+- `create(legs, seed, difficulty, ground, hazards, boxes, moving, population, hidden, layers, memory, seconds, brain_seed) -> u32`
+  Two or four legs, in the world of the recipe (seed, a difficulty and four amounts from 0 to 1),
+  learning by evolution with `population` brains of `layers` hidden layers of `hidden` neurons and
+  `memory` memories, runs of `seconds` (30 if 0), first brains drawn from `brain_seed`. Returns the
+  number of weights in a brain, or 0.
+- Learning, as the Walker's: `train(runs)`, `generation()`, `generation_runs()`, `best_score()`,
+  `best_distance()`, `weights_length()`, `population_length()`, `best_weights()`,
+  `population_weights()`, `history_best()`, `history_mean()`, `history_distance()` (the furthest of
+  each generation), `evaluate_room(count)`, `evaluate(count)`, `evaluated()`, `member_scored(i)`,
+  `record(i, score, distance)`, `weights_room()`, `weights_load()`.
+- The show, the best brain so far walking the world from the start, playing the very run it was
+  scored on unless it is touched: `show_reset()`, `show_step(seconds) -> steps`, `show_over()`,
+  `show_end()` (how it ended: 0 going, 1 time, 2 down, 3 stalled, 4 hazard, 5 fell),
+  `show_distance()`, `show_furthest()`, `show_score()`, `show_seconds()`, `show_hop()` (1 mid-hop),
+  `legs_length()`, `show_bodies()` (six f32 a body as the Walker's: the torso, then each leg's upper
+  and lower part), `show_things()` (six f32 for each box, moving platform and see-saw plank made: 0, 1
+  or 2 for which, x, y, angle, half width, half height), `show_rays()` (the eye's x and y, then for
+  each ray its distance and what it saw: 0 nothing, 1 ground, 2 an edge, 3 a box, 4 a hazard, 5 a
+  moving thing, 6 food), `ray_angles()`, `show_push(x, y, impulse_x, impulse_y)`, `show_hold(x, y)`
+  (carries the body toward the point until `show_drop()`; its run is not judged while held).
+  Positions are in metres from the start.
+- The world to draw: `land_ground(until, from)` (the world made at least to `until` metres; four f32
+  for each piece of ground from number `from` on), `land_blocks(from)` (four f32 for each floating
+  platform), `land_hazards(from)` (five: the box, then 0 water or 1 spikes), `picture(count)` (what
+  the show's creature would see, `count` greyscale pixels).
+- For a learner: `envs_create(count, alike)`, `envs_actions()`, `envs_step(steps)`,
+  `envs_observations()`, `envs_rewards()`, `envs_done()`, `senses_length()`, `actions_length()`,
+  `rays_length()`.
+
+The module is 190 KiB with SIMD (the Walker's is 127 KiB, the physics alone 37 KiB; what the
+generalist added to the Walker's own module is 1.3 KiB of physics it does not use, which the
+compiler mostly leaves out). `src/minis/generalist.test.ts` holds it to the native engine's
+fingerprint of three creatures' 600 steps and three generations of evolution, to the bit, with SIMD
+and without.
+
 ### What the physics gained for it
 
 Only what the world needs, none of it used by the Walker, which learns to the same bit as before:

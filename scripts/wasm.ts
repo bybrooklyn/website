@@ -1,13 +1,14 @@
-// Builds the walking mini's engine, the Rust crate in walker/, into public/wasm/walker.wasm, and says
-// how big it is. Run by hand with `bun run wasm` after changing the Rust; the built files are
+// Builds the walking mini's engine, the Rust crate in walker/, into public/wasm/walker.wasm, and the
+// generalist's, from the same crate, into public/wasm/generalist.wasm, and says
+// how big each is. Run by hand with `bun run wasm` after changing the Rust; the built files are
 // committed, so the site builds without Rust.
 //
-// It is built twice: with WebAssembly SIMD, which every current browser has, and without, as
+// Each is built twice: with WebAssembly SIMD, which every current browser has, and without, as
 // public/wasm/walker-scalar.wasm for a browser too old for SIMD (Safari before 16.4). The page picks
 // one when it loads (`engineAddress` in src/minis/walking.ts). The two give the same numbers to the
 // bit; src/minis/walker.test.ts holds them to it.
 //
-// It fails if either module is over 512 KiB, or if the physics built alone (without the walker
+// It fails if any module is over 512 KiB, or if the physics built alone (without either
 // feature) is over 80 KiB.
 
 import { $ } from "bun";
@@ -39,8 +40,14 @@ await build("the physics alone", ["--no-default-features"], SIMD, "target/physic
 const WALKER = ["--no-default-features", "--features", "walker"];
 await build("walker.wasm", WALKER, SIMD, "target", 512 * KIB);
 await build("walker-scalar.wasm", WALKER, SCALAR, "target/scalar", 512 * KIB);
+// the generalist alone, a second mini on the same engine
+const GENERALIST = ["--no-default-features", "--features", "generalist"];
+await build("generalist.wasm", GENERALIST, SIMD, "target/generalist", 512 * KIB);
+await build("generalist-scalar.wasm", GENERALIST, SCALAR, "target/generalist-scalar", 512 * KIB);
 
 await mkdir(at("public/wasm"), { recursive: true });
 await Bun.write(at("public/wasm/walker.wasm"), Bun.file(built("target")));
 await Bun.write(at("public/wasm/walker-scalar.wasm"), Bun.file(built("target/scalar")));
-console.log("copied to public/wasm/walker.wasm and public/wasm/walker-scalar.wasm");
+await Bun.write(at("public/wasm/generalist.wasm"), Bun.file(built("target/generalist")));
+await Bun.write(at("public/wasm/generalist-scalar.wasm"), Bun.file(built("target/generalist-scalar")));
+console.log("copied to public/wasm/: walker.wasm, walker-scalar.wasm, generalist.wasm, generalist-scalar.wasm");
