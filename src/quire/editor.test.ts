@@ -20,15 +20,22 @@ import { read } from "${here}/read.ts";
 import { write } from "${here}/write.ts";
 import { closeOthers } from "${here}/ui.ts";
 import { memoryStorage } from "${here}/versions.ts";
+import { browserStore, indexedTables } from "${here}/store-browser.ts";
 const host = document.querySelector("#host");
 const storage = memoryStorage();
-const editor = createEditor(host, read(""), { name: "Test", colors: [{ name: "Pink", value: "salmon" }], onImage: async () => "/picture.png", storage });
+const editor = createEditor(host, read(""), { name: "Test", colors: [{ name: "Pink", value: "salmon" }], onImage: async () => "/picture.png", versions: storage });
 const surface = editor.surface;
 window.q = {
     editor,
     reset(markdown, mdx) { closeOthers(); surface.setDocument(read(markdown, { mdx })); surface.focus(); },
     select(anchor, from, focus = anchor, to = from) { surface.setSelection({ anchor: { path: anchor, offset: from }, focus: { path: focus, offset: to } }); },
     md: () => write(surface.getDocument()),
+    /** The browser store, over a database of the test's own. */
+    async useBrowser() { window.q.store = browserStore(await indexedTables("quire-test")); return true; },
+    async openIn(name, text) { const made = await window.q.store.create(name, text); await editor.open(window.q.store, { id: made.id, name }); surface.focus(); return made.id; },
+    async kept(id) { return (await window.q.store.open(id)).text; },
+    async saveElsewhere(id, text) { const opened = await window.q.store.open(id); return window.q.store.save(id, text, opened.mark); },
+    status: () => document.querySelector(".quire-status").getAttribute("aria-label"),
     caret: () => surface.getSelection().focus,
     /** The middle of the first element matching, whose text includes the words if given. */
     at(selector, words) {
@@ -599,6 +606,70 @@ used("typing in the Markdown of a long document reaches the text once typing pau
     expect(await tab.run("document.querySelector('.quire p').textContent")).toBe("LineXY 0 of a long document.");
     await choose("More", "Hide the Markdown");
     await tab.wait(400);
+});
+
+used("the browser store: a document is saved as it is typed, the status says so, and it is there after a reload", async () => {
+    await tab.run("q.useBrowser()");
+    const id = await tab.run<string>(`q.openIn("Draft", "Hello\\n")`);
+    expect(await tab.run("q.status()")).toBe("Saved");
+    await tab.run("q.select([0], 5)");
+    await tab.type(" there");
+    expect(await tab.run("q.status()")).toBe("Not saved yet");
+    await tab.wait(1400);
+    expect(await tab.run("q.status()")).toBe("Saved");
+    expect(await tab.run(`q.kept(${JSON.stringify(id)})`)).toBe("Hello there\n");
+    // the status words change in place: the slot keeps its width whatever it says
+    const widths = await tab.run<number[]>("(() => [...new Set([document.querySelector('.quire-status').getBoundingClientRect().width])])()");
+    expect(widths.length).toBe(1);
+
+    // a picture is kept as a blob beside the document and shown from it
+    await tab.files([`${folder}/tiny.png`]);
+    await choose("Add a block", "Picture");
+    await tab.wait(400);
+    expect(await md()).toBe("Hello there\n\n![tiny](pictures/tiny.png)\n");
+    expect(await tab.run("document.querySelector('.quire-image img').src.startsWith('blob:')")).toBe(true);
+
+    // once saved (leaving with words unsaved would make the browser ask first), a reload finds it still there
+    await tab.wait(1400);
+    expect(await tab.run("q.status()")).toBe("Saved");
+    await tab.open(`file://${folder}/page.html`, 300);
+    await tab.run("q.useBrowser()");
+    expect(await tab.run("q.store.list().then((list) => list.map((entry) => entry.name))")).toContain("Draft");
+    expect(await tab.run(`q.kept(${JSON.stringify(id)})`)).toBe("Hello there\n\n![tiny](pictures/tiny.png)\n");
+});
+
+used("a document changed elsewhere is not written over: the conflict is shown, and each choice keeps what was typed", async () => {
+    await tab.run("q.useBrowser()");
+    const id = await tab.run<string>(`q.openIn("Shared", "Original\\n")`);
+    await tab.run(`q.saveElsewhere(${JSON.stringify(id)}, "Theirs\\n")`);
+    await tab.run("q.select([0], 8)");
+    await tab.type(" mine");
+    await tab.wait(1400);
+    expect(await tab.run("q.status()")).toBe("Changed elsewhere");
+    expect(await tab.run(`q.kept(${JSON.stringify(id)})`)).toBe("Theirs\n");
+    await tab.wait(400);
+    expect(await tab.run("getComputedStyle(document.querySelector('.quire-conflict')).visibility")).toBe("visible");
+    // see both, side by side
+    await press(".quire-conflict button", "See both");
+    await tab.wait(400);
+    expect(await tab.run("[...document.querySelectorAll('.quire-conflict-side pre')].map((pre) => pre.textContent.trim())")).toEqual(["Original mine", "Theirs"]);
+    // take theirs: theirs is shown, and mine is in the version history
+    await press(".quire-conflict button", "Take theirs");
+    await tab.wait(200);
+    expect(await md()).toBe("Theirs\n");
+    expect(await tab.run("q.status()")).toBe("Saved");
+
+    // again, and keep mine this time
+    await tab.run(`q.saveElsewhere(${JSON.stringify(id)}, "Theirs again\\n")`);
+    await tab.run("q.select([0], 6)");
+    await tab.type(" and mine");
+    await tab.wait(1400);
+    expect(await tab.run("q.status()")).toBe("Changed elsewhere");
+    await tab.wait(400);
+    await press(".quire-conflict button", "Keep mine");
+    await tab.wait(300);
+    expect(await tab.run(`q.kept(${JSON.stringify(id)})`)).toBe("Theirs and mine\n");
+    expect(await tab.run("q.status()")).toBe("Saved");
 });
 
 if (!live) console.warn("editor.test.ts: no Chromium on this machine, so the editor was not used.");

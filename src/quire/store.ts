@@ -106,7 +106,10 @@ export function createSaver(
             return () => clearTimeout(timer);
         });
     let status: Status = { state: "saved" };
-    let pending: string | undefined;
+    // what is waiting to be saved: the text, or a way to write it, so that a long document is
+    // written out once when it is saved rather than on every key
+    let pending: string | (() => string) | undefined;
+    const text = (waiting: string | (() => string)) => (typeof waiting === "string" ? waiting : waiting());
     let cancel: (() => void) | undefined;
     let running: Promise<void> = Promise.resolve();
     const listeners = new Set<(status: Status) => void>();
@@ -117,18 +120,18 @@ export function createSaver(
 
     async function save(over?: string) {
         if (pending === undefined || !store.can.save) return;
-        const text = pending;
+        const taken = pending;
         set({ state: "saving" });
         let result: Saved;
         try {
-            result = await store.save(id, text, over ?? mark);
+            result = await store.save(id, text(taken), over ?? mark);
         } catch (error) {
             result = { ok: false, message: error instanceof Error ? error.message : String(error) };
         }
         if (result.ok) {
             mark = result.mark;
             // what was typed while this save was on its way is still to be saved
-            if (pending === text) {
+            if (pending === taken) {
                 pending = undefined;
                 set({ state: "saved" });
             } else {
@@ -149,8 +152,8 @@ export function createSaver(
 
     return {
         /** Says the text changed: it is saved once typing pauses, unless the store has refused and is waiting for a choice. */
-        changed(text: string) {
-            pending = text;
+        changed(next: string | (() => string)) {
+            pending = next;
             if (status.state === "changed") return;
             if (status.state !== "saving") set({ state: "waiting" });
             schedule();
@@ -177,7 +180,7 @@ export function createSaver(
             return theirs;
         },
         /** What was typed and not yet saved, if anything. */
-        unsaved: () => pending,
+        unsaved: () => (pending === undefined ? undefined : text(pending)),
         status: () => status,
         mark: () => mark,
         on(listener: (status: Status) => void) {

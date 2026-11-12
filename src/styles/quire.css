@@ -1245,6 +1245,177 @@
     }
 }
 
+/* how saving stands: a fixed slot, its words fading one into the next */
+.quire-status {
+    display: inline-grid;
+    width: 5.6rem;
+    color: var(--muted);
+    font-size: 0.82rem;
+    text-align: right;
+}
+
+.quire-status.warn {
+    color: var(--accent);
+}
+
+.quire-status-words {
+    grid-area: 1 / 1;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.quire-status-words.here {
+    opacity: 1;
+}
+
+@media (max-width: 40rem) {
+    .quire-status {
+        width: 4.4rem;
+    }
+}
+
+/* ---- changed elsewhere: a panel that flows in from the right, wider when both are shown ---- */
+
+.quire-conflict {
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    z-index: 67;
+    display: flex;
+    flex-direction: column;
+    width: min(26rem, 100vw - 2rem);
+    max-height: calc(100vh - 2rem);
+    padding: 0.8rem 1rem 1rem;
+    border: 0.0625rem solid color-mix(in oklch, var(--accent) 55%, var(--rule));
+    border-radius: calc(var(--radius) * 2);
+    background: var(--surface);
+    overflow: hidden;
+    font-family: var(--font-text);
+    opacity: 0;
+    translate: calc(100% + 2rem) 0;
+    visibility: hidden;
+    transition:
+        translate 0.35s var(--ease),
+        opacity 0.2s ease,
+        width 0.45s var(--ease),
+        visibility 0s linear 0.35s;
+}
+
+.quire-conflict.open {
+    opacity: 1;
+    translate: 0 0;
+    visibility: visible;
+    transition:
+        translate 0.5s cubic-bezier(0.3, 1.25, 0.4, 1),
+        opacity 0.15s ease,
+        width 0.45s var(--ease),
+        visibility 0s;
+}
+
+.quire-conflict.both {
+    width: min(60rem, 100vw - 2rem);
+}
+
+.quire-conflict-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.quire-conflict-title {
+    margin: 0;
+    font-family: var(--font-head);
+    font-size: 1.15rem;
+    font-weight: var(--head-weight);
+}
+
+.quire-conflict-said,
+.quire-conflict-note {
+    margin: 0.4rem 0 0.8rem;
+    color: var(--muted);
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
+.quire-conflict-note {
+    margin: 0.6rem 0 0;
+    font-size: 0.82rem;
+}
+
+.quire-conflict-choices {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+.quire-choice {
+    padding-inline: 0.9rem;
+    border: 0.0625rem solid var(--rule);
+}
+
+.quire-choice:first-child {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+/* both texts side by side, grown open under the choices */
+.quire-conflict-both {
+    display: grid;
+    grid-template-rows: 0fr;
+    min-height: 0;
+    opacity: 0;
+    transition:
+        grid-template-rows 0.45s var(--ease),
+        opacity 0.3s ease;
+}
+
+.quire-conflict.both .quire-conflict-both {
+    grid-template-rows: 1fr;
+    margin-top: 0.8rem;
+    opacity: 1;
+}
+
+.quire-conflict-columns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+    min-height: 0;
+    overflow: auto;
+}
+
+.quire-conflict-side pre {
+    margin: 0.3rem 0 0;
+    padding: 0.7rem 0.8rem;
+    border: 0.0625rem solid var(--panel-rule);
+    border-radius: var(--radius);
+    background: var(--panel);
+    font-family: var(--font-code);
+    font-size: 0.78rem;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.quire-conflict-side .changed {
+    background: color-mix(in oklch, var(--accent) 18%, transparent);
+}
+
+.quire-conflict-side .gap {
+    display: inline-block;
+    width: 100%;
+    background: color-mix(in oklch, var(--ink) 5%, transparent);
+}
+
+@media (max-width: 40rem) {
+    .quire-conflict-columns {
+        grid-template-columns: 1fr;
+    }
+}
+
 /* With less motion asked for, nothing of the editor moves: what opens is simply there, and what
    closes is simply gone. It is stated for all of it at once, so that no state slips through by
    being more particular than this rule. */
@@ -1258,7 +1429,9 @@
     .quire-table-tools,
     .quire-table-tools *,
     .quire-history,
-    .quire-history * {
+    .quire-history *,
+    .quire-conflict,
+    .quire-conflict * {
         transition-duration: 0s !important;
         transition-delay: 0s !important;
     }

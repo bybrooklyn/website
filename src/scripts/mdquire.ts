@@ -1,10 +1,11 @@
-// The try-out page for mdQuire (src/pages/mdquire.astro): the whole editor on a sample document
-// that holds every kind of block. Pictures are kept in memory; storage comes with the next layer.
+// The page for mdQuire (src/pages/mdquire.astro): the whole editor, writing to documents kept in
+// this browser. The first time, it opens a sample document that holds every kind of block.
 
 import { accents } from "../data/theme";
 import { css } from "../lib/color";
 import { createEditor } from "../quire/editor";
 import { read } from "../quire/read";
+import { browserStore, indexedTables } from "../quire/store-browser";
 
 const SAMPLE = `---
 title: Every kind of block
@@ -55,18 +56,19 @@ A footnote reference.[^1]
 `;
 
 const host = document.querySelector<HTMLElement>("#quire");
+const names: Record<string, string> = { violet: "Violet", pink: "Pink", blue: "Blue", mint: "Mint", amber: "Amber" };
+const colors = Object.entries(accents).map(([key, value]) => ({ name: names[key] ?? key, value: css(value) }));
 
-if (host) {
-    const names: Record<string, string> = { violet: "Violet", pink: "Pink", blue: "Blue", mint: "Mint", amber: "Amber" };
-    const editor = createEditor(host, read(SAMPLE, { mdx: true }), {
-        name: "Every kind of block",
-        colors: Object.entries(accents).map(([key, value]) => ({ name: names[key] ?? key, value: css(value) })),
-        onImage: (file) =>
-            new Promise((done) => {
-                const reader = new FileReader();
-                reader.onload = () => done(String(reader.result));
-                reader.readAsDataURL(file);
-            }),
-    });
+async function start(place: HTMLElement) {
+    const store = browserStore(await indexedTables());
+    let entry = (await store.list())[0];
+    if (!entry) {
+        const made = await store.create("Every kind of block", SAMPLE);
+        entry = { id: made.id, name: "Every kind of block" };
+    }
+    const opened = await store.open(entry.id);
+    const editor = createEditor(place, read(opened.text, { mdx: true }), { name: entry.name, store, id: entry.id, mark: opened.mark, versions: store.versions, colors });
     editor.surface.focus();
 }
+
+if (host) void start(host);

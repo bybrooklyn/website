@@ -3,9 +3,9 @@
 // knows how many lines it added and removed since the one before. A panel lists them by time,
 // shows a chosen one as it read, and restores it as a new step that can be undone.
 //
-// The snapshots are kept through VersionStorage, an interface the next layer will give a real
-// home; for now memoryStorage and browserStorage (the browser's localStorage) stand in. Thinning,
-// the summary of changes and when snapshots are taken are pure and tested; the panel is DOM.
+// The snapshots are kept through VersionStorage: in the browser's own database for every store
+// (tableVersions in store-browser.ts), or in memory (memoryStorage). Thinning, the summary of
+// changes and when snapshots are taken are pure and tested; the panel is DOM.
 
 import { read } from "./read";
 import { createSurface, type Surface } from "./surface";
@@ -101,54 +101,6 @@ export function memoryStorage(): VersionStorage {
         },
         async remove(id) {
             all.delete(id);
-        },
-    };
-}
-
-/** Snapshots kept in the browser's localStorage, so that they outlast the page; in memory if the browser will not keep them. */
-export function browserStorage(prefix = "quire-versions"): VersionStorage {
-    const memory = memoryStorage();
-    const box = (): Storage | undefined => {
-        try {
-            return globalThis.localStorage;
-        } catch {
-            return undefined;
-        }
-    };
-    const index = (name: string): VersionInfo[] => {
-        try {
-            return JSON.parse(box()?.getItem(`${prefix}:${name}`) ?? "[]") as VersionInfo[];
-        } catch {
-            return [];
-        }
-    };
-    const owner = (id: string) => id.slice(0, id.lastIndexOf(":", id.lastIndexOf(":") - 1));
-    return {
-        async save(name, text, info) {
-            const saved: VersionInfo = { ...info, id: `${name}:${Math.random().toString(36).slice(2, 8)}:${info.time}` };
-            try {
-                box()!.setItem(`${prefix}:${saved.id}`, text);
-                box()!.setItem(`${prefix}:${name}`, JSON.stringify([saved, ...index(name)]));
-                return saved;
-            } catch {
-                return memory.save(name, text, info);
-            }
-        },
-        async list(name) {
-            return [...index(name), ...(await memory.list(name))].sort((a, b) => b.time - a.time);
-        },
-        async load(id) {
-            return box()?.getItem(`${prefix}:${id}`) ?? memory.load(id);
-        },
-        async remove(id) {
-            try {
-                const name = owner(id);
-                box()?.removeItem(`${prefix}:${id}`);
-                box()?.setItem(`${prefix}:${name}`, JSON.stringify(index(name).filter((each) => each.id !== id)));
-            } catch {
-                // nothing more can be done for a store that will not change
-            }
-            await memory.remove(id);
         },
     };
 }

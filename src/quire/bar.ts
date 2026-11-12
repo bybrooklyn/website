@@ -296,7 +296,7 @@ const SIZES: [string, string | null][] = [
 ];
 
 /** Builds the bar for a surface. */
-export function createBar(surface: Surface, options: BarOptions): { element: HTMLElement; setName(name: string): void; menus: Menu[]; layout(): void; pickImage(): void } {
+export function createBar(surface: Surface, options: BarOptions): { element: HTMLElement; setName(name: string): void; menus: Menu[]; layout(): void; pickImage(): void; setStatus(short: string, full: string, tone?: "quiet" | "warn"): void; name: HTMLElement } {
     const bar = make("div", "quire-bar");
     bar.setAttribute("role", "toolbar");
     bar.setAttribute("aria-label", "Formatting");
@@ -502,7 +502,12 @@ export function createBar(surface: Surface, options: BarOptions): { element: HTM
         more.open(moreButton, [...counted, ...folded.flatMap((each) => each.lines()), ...own], document.activeElement === moreButton);
     });
     moreButton.setAttribute("aria-haspopup", "menu");
-    const end = group(0, none, count, moreButton);
+    // how saving stands, in a word or two; the full words are its tooltip, and are read out
+    const status = make("span", "quire-status");
+    status.setAttribute("role", "status");
+    let words = make("span", "quire-status-words here");
+    status.append(words);
+    const end = group(0, none, status, count, moreButton);
     end.classList.add("quire-bar-end");
 
     // ---- folding what does not fit ----
@@ -583,6 +588,20 @@ export function createBar(surface: Surface, options: BarOptions): { element: HTM
         menus,
         layout,
         pickImage: () => chooser.click(),
+        setStatus(short, full, tone = "quiet") {
+            status.title = full;
+            status.setAttribute("aria-label", full);
+            status.classList.toggle("warn", tone === "warn");
+            if (words.textContent === short) return;
+            // the new words fade in where the old ones fade out, so that nothing beside them moves
+            const leaving = words;
+            words = make("span", "quire-status-words", short);
+            status.append(words);
+            leaving.classList.remove("here");
+            requestAnimationFrame(() => words.classList.add("here"));
+            setTimeout(() => leaving.remove(), 400);
+        },
+        name,
     };
 }
 

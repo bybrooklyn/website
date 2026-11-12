@@ -43,6 +43,8 @@ import { write } from "./write";
 /** What the host gives the surface. `onImage` stores a pasted or dropped picture and gives back its address. */
 export interface SurfaceOptions {
     onImage?: (file: File) => Promise<string>;
+    /** Where a picture written in the document can be shown from, when that is not its address (a picture kept in the browser, say). */
+    picture?: (address: string) => Promise<string | undefined>;
 }
 
 /** Where the cursor is and what is there, sent with "select". */
@@ -352,6 +354,7 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
             let element = drawn.get(block);
             if (!element) {
                 element = draw(block, []);
+                showPictures(element);
                 drawn.set(block, element);
             }
             return element;
@@ -367,6 +370,17 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
             const next = child.nextSibling;
             child.remove();
             child = next;
+        }
+    }
+
+    /** Gives each picture drawn in an element the address it can be shown from, once that is known. */
+    function showPictures(element: HTMLElement) {
+        if (!options.picture) return;
+        for (const picture of element.querySelectorAll("img")) {
+            const address = picture.getAttribute("src") ?? "";
+            void options.picture(address).then((shown) => {
+                if (shown && picture.getAttribute("src") === address) picture.src = shown;
+            });
         }
     }
 
