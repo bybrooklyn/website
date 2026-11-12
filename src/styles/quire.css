@@ -158,6 +158,8 @@
     font-family: var(--font-text);
     font-size: 0.95rem;
     line-height: 1;
+    /* what is pinned at its end, background and fade, stays inside its rounded shape */
+    overflow: clip;
 }
 
 .quire-bar-strip {

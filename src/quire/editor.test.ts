@@ -715,4 +715,23 @@ used("a 5,000-line document opens in under a second, and a key typed in its midd
     expect(worst).toBeLessThan(16);
 });
 
+used("the bar's end is cleanly rounded at every width: nothing pinned there shows past its shape", async () => {
+    for (const [wide, high] of [[2560, 1300], [1300, 900], [390, 844]] as const) {
+        await tab.resize(wide, high);
+        await tab.wait(300);
+        const seen = await tab.run<{ corner: boolean; end: boolean }>(`(() => {
+            const bar = document.querySelector('.quire-bar');
+            const box = bar.getBoundingClientRect();
+            const radius = parseFloat(getComputedStyle(bar).borderTopRightRadius);
+            // a point just inside the box but outside the rounded corner is not the bar or anything in it
+            const corner = document.elementFromPoint(box.right - 2, box.top + 2);
+            const end = document.querySelector('.quire-bar-end').getBoundingClientRect();
+            return { corner: radius > 0 ? !bar.contains(corner) : true, end: end.right <= box.right + 0.5 && end.top >= box.top - 0.5 && end.bottom <= box.bottom + 0.5 };
+        })()`);
+        expect({ wide, ...seen }).toEqual({ wide, corner: true, end: true });
+    }
+    await tab.resize(1300, 900);
+    await tab.wait(200);
+});
+
 if (!live) console.warn("editor.test.ts: no Chromium on this machine, so the editor was not used.");
