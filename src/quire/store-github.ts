@@ -11,7 +11,7 @@
 // of the network. Tested against a mock of the API.
 
 import { freeName, relative, StoreError, type Saved, type Store } from "./store";
-import { openable } from "./store-files";
+import { markdownFile } from "./store-files";
 
 /** What the repository store is told once, and keeps in this browser. */
 export interface GithubSettings {
@@ -141,7 +141,7 @@ export function githubStore(settings: GithubSettings, fetcher: Fetcher = (url, i
             if (answer.status === 404) throw new StoreError(`there is no folder ${folder || "at the top"} on ${branch}`);
             if (!answer.ok) throw new StoreError(`GitHub answered ${answer.status}`);
             const listed = (await answer.json()) as { type: string; name: string; path: string }[];
-            return listed.filter((entry) => entry.type === "file" && openable(entry.name)).map((entry) => ({ id: entry.path, name: entry.name }));
+            return listed.filter((entry) => entry.type === "file" && markdownFile(entry.name)).map((entry) => ({ id: entry.path, name: entry.name }));
         },
         async open(id) {
             const file = await read(id);

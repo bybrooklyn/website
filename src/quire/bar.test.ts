@@ -3,7 +3,9 @@
 // Run with `bun test src/quire`.
 
 import { expect, test } from "bun:test";
-import { addCode, addDivider, addFootnote, addImage, addTable, center, color, currentStyle, link, linkAt, pressedAt, setStyleOf, size, toggle, toggleList, wordAt, type Action } from "./bar";
+import { addCode, addDivider, addFootnote, addImage, addTable, center, color, currentStyle, FLAGS, font, FONTS, highlight, link, linkAt, pressedAt, setStyleOf, size, toggle, toggleList, wordAt, type Action } from "./bar";
+import { collect } from "./styling";
+import { markdownOnly, type Paragraph, type TextRun } from "./document";
 import type { Selection } from "./document";
 import type { State } from "./history";
 import { caret } from "./keys";
@@ -14,6 +16,30 @@ const at = (source: string, selection: Selection): State => ({ doc: read(source)
 const span = (path: number[], from: number, to: number): Selection => ({ anchor: { path, offset: from }, focus: { path, offset: to } });
 const run = (action: Action, state: State) => action(state);
 const md = (state: State) => write(state.doc);
+
+test("a typeface and a highlight go on the selection of a .quire document, kept in its style and not in its Markdown", () => {
+    const state = { ...at("a word here\n", span([0], 2, 6)), doc: { ...read("a word here\n"), quire: { page: { size: "A4" as const, orientation: "portrait" as const, margins: 25 }, notes: null } } };
+    const styled = run(highlight("#ff9a56"), run(font("serif"), state));
+    expect((styled.doc.blocks[0] as Paragraph).runs[1]).toEqual({ kind: "text", text: "word", marks: [], font: "serif", highlight: "#ff9a56" });
+    const { markdown, style } = collect(styled.doc);
+    expect(markdown).toBe("a word here\n");
+    expect(style.runs[0]).toMatchObject({ quote: "word", font: "serif", highlight: "#ff9a56" });
+    expect(((run(font(null), styled).doc.blocks[0] as Paragraph).runs as TextRun[]).some((each) => each.font)).toBe(false);
+});
+
+test("the typefaces offered are the site's two and the system's three, and the palette has both flags", () => {
+    expect(FONTS.map(([, value]) => value)).toEqual([null, "torrens", "drafting", "serif", "sans", "mono"]);
+    expect(FLAGS.map((each) => each.value)).toEqual(["#5bcefa", "#f5a9b8", "#ffffff", "#d52d00", "#ff9a56", "#d362a4", "#a30262"]);
+});
+
+test("what only a .quire document keeps is taken off blocks going into a Markdown file, and the rest stays", () => {
+    const styled = run(font("mono"), run(color("red"), at("a word here\n", span([0], 2, 6))));
+    const blocks = markdownOnly([{ ...(styled.doc.blocks[0] as Paragraph), align: "justify", spacing: 2 }]);
+    expect(blocks[0]).toMatchObject({ kind: "paragraph", runs: [{ text: "a " }, { text: "word", color: "red" }, { text: " here" }] });
+    expect((blocks[0] as Paragraph).align).toBeUndefined();
+    expect((blocks[0] as Paragraph).spacing).toBeUndefined();
+    expect(((blocks[0] as Paragraph).runs as TextRun[]).some((each) => each.font)).toBe(false);
+});
 
 test("the mark buttons mark the selection, and with nothing selected wait for the next words", () => {
     expect(md(run(toggle("bold"), at("a word here\n", span([0], 2, 6))))).toBe("a **word** here\n");

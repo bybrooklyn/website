@@ -4,6 +4,7 @@
 // Run with `bun test src/quire`.
 
 import { expect, test } from "bun:test";
+import { packQuire, unpackQuire } from "./quire-file";
 import { canOpen, folderStore, memoryFolder, oneFileStore, type FileHandle } from "./store-folder";
 
 /** A clock that moves on a millisecond each time it is read, as a disk's would between writes. */
@@ -68,6 +69,39 @@ test("one file on its own can be written, and says plainly what it cannot do", a
     expect((await store.save("only.md", "two", opened.mark)).ok).toBe(true);
     expect(store.can.pictures).toBe(false);
     expect(await store.create("x", "").then(() => "", (error) => String(error))).toContain("open a folder");
+});
+
+test("a .quire file in a folder is listed, opened, and written back in place as a zip with its pictures inside", async () => {
+    const bytes = await packQuire({ markdown: "Old.\n", parts: { style: '{"quire":1}', notes: "{}" }, pictures: new Map([["a.png", new Blob(["a"])]]) });
+    const root = memoryFolder("site", { "letters/to-sam.quire": new Blob([bytes as BlobPart]) }, ticking());
+    const store = folderStore(root);
+    expect((await store.list()).map((entry) => entry.id)).toEqual(["letters/to-sam.quire"]);
+    const opened = await store.open("letters/to-sam.quire");
+    expect(opened).toMatchObject({ text: "Old.\n", quire: { style: '{"quire":1}' } });
+    expect(await store.savePicture("letters/to-sam.quire", new Blob(["b"]), "b.png")).toBe("pictures/b.png");
+    const saved = await store.save("letters/to-sam.quire", "New.\n\n![b](pictures/b.png)\n", opened.mark, { style: '{"quire":1,"count":2}', notes: "{}" });
+    expect(saved.ok).toBe(true);
+    const file = await (await (await root.getDirectoryHandle("letters")).getFileHandle("to-sam.quire")).getFile();
+    const back = await unpackQuire(new Uint8Array(await file.arrayBuffer()));
+    expect(back.markdown).toBe("New.\n\n![b](pictures/b.png)\n");
+    expect(back.parts.style).toBe('{"quire":1,"count":2}');
+    expect([...back.pictures.keys()]).toEqual(["a.png", "b.png"]);
+    // nothing was written beside it
+    expect((await store.list()).length).toBe(1);
+    expect(await store.rename("letters/to-sam.quire", "To Alex.md")).toBe("letters/to-alex.quire");
+    expect(await store.create("Fresh", "x", { style: "", notes: "" }).then((made) => made.id)).toBe("fresh.quire");
+});
+
+test("one .quire file on its own keeps its pictures inside it", async () => {
+    const bytes = await packQuire({ markdown: "Hi.\n", parts: { style: "", notes: "" }, pictures: new Map() });
+    const folder = memoryFolder("x", { "only.quire": new Blob([bytes as BlobPart]) }, ticking());
+    const store = oneFileStore((await folder.getFileHandle("only.quire")) as FileHandle);
+    const opened = await store.open("only.quire");
+    expect(store.can.pictures).toBe(true);
+    await store.savePicture("only.quire", new Blob(["c"]), "c.png");
+    expect((await store.save("only.quire", "Hi.\n", opened.mark)).ok).toBe(true);
+    const file = await ((await folder.getFileHandle("only.quire")) as FileHandle).getFile();
+    expect([...(await unpackQuire(new Uint8Array(await file.arrayBuffer()))).pictures.keys()]).toEqual(["c.png"]);
 });
 
 test("without the API in this place, neither choice is offered", () => {

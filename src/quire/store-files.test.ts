@@ -2,6 +2,7 @@
 // saved on its mark, and its name stays a plain file name. Run with `bun test src/quire`.
 
 import { expect, test } from "bun:test";
+import { packQuire } from "./quire-file";
 import { filesStore, openable } from "./store-files";
 
 const file = (name: string, text: string) => new File([text], name, { type: "text/markdown" });
@@ -23,8 +24,21 @@ test("an opened file is saved on its mark, and the status says to download it", 
     expect(await store.save(entry.id, "two", "1")).toEqual({ ok: true, mark: "2" });
     expect((await store.save(entry.id, "stale", "1")).ok).toBe(false);
     expect(store.note).toContain("Download");
-    expect(store.can.pictures).toBe(false);
     expect(await store.savePicture(entry.id, new Blob(["x"]), "x.png").then(() => "", (error) => String(error))).toContain("cannot keep pictures");
+});
+
+test("a .quire file opens with its Markdown, its parts and its pictures, and keeps new pictures inside it", async () => {
+    const store = filesStore();
+    const bytes = await packQuire({ markdown: "# Hi\n\n![a](pictures/a.png)\n", parts: { style: '{"quire":1}', notes: "{}" }, pictures: new Map([["a.png", new Blob(["png"])]]) });
+    const entry = await store.add(new File([bytes as BlobPart], "Letter.quire"));
+    expect(entry.name).toBe("Letter.quire");
+    expect(await store.open(entry.id)).toMatchObject({ text: "# Hi\n\n![a](pictures/a.png)\n", quire: { style: '{"quire":1}', notes: "{}" } });
+    expect(await store.savePicture(entry.id, new Blob(["b"]), "b.png")).toBe("pictures/b.png");
+    expect([...(await store.pictures!(entry.id)).keys()]).toEqual(["a.png", "b.png"]);
+    await store.rename(entry.id, "Note to Sam");
+    expect((await store.list())[0]!.name).toBe("note-to-sam.quire");
+    const made = await store.create("Copy", "Words.\n", { style: "", notes: "" });
+    expect((await store.list()).find((each) => each.id === made.id)?.name).toBe("copy.quire");
 });
 
 test("a new or renamed file keeps a plain name, never the same as another open one", async () => {

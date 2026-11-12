@@ -12,17 +12,30 @@
 /** A way text can be marked. Underline is not Markdown and is written as `<u>`. */
 export type Mark = "bold" | "italic" | "strike" | "code" | "underline";
 
-/** How a paragraph, heading or picture sits across the page. Written as `<div align="...">`. */
-export type Align = "left" | "center" | "right";
+/** How a paragraph, heading or picture sits across the page. Written as `<div align="...">`; justified is for `.quire` documents alone. */
+export type Align = "left" | "center" | "right" | "justify";
 
-/** Text with its marks. Color and size are not Markdown, and are written as a `<span style>`. */
+/** Text with its marks. Color and size are not Markdown, and are written as a `<span style>`. Font and highlight are kept only by a `.quire` document. */
 export interface TextRun {
     kind: "text";
     text: string;
     marks: Mark[];
     color?: string;
     size?: string;
+    font?: string;
+    highlight?: string;
 }
+
+/** How text looks beyond its marks: what setStyle changes, and what a `.quire` document keeps in its style.json. */
+export interface Look {
+    color?: string;
+    size?: string;
+    font?: string;
+    highlight?: string;
+}
+
+/** The parts of a look, in the order they are kept. */
+export const LOOKS = ["color", "size", "font", "highlight"] as const;
 
 /** A picture inside a line of text. */
 export interface ImageRun {
@@ -82,6 +95,8 @@ export interface Paragraph extends Kept {
     kind: "paragraph";
     runs: Run[];
     align?: Align;
+    /** Line spacing, as a multiple of the usual; kept only by a `.quire` document. */
+    spacing?: number;
 }
 
 /** A heading, `#` to `######`. */
@@ -90,6 +105,7 @@ export interface Heading extends Kept {
     level: Level;
     runs: Run[];
     align?: Align;
+    spacing?: number;
 }
 
 /** The three kinds of list. A task list is a bulleted list whose items have boxes. */
@@ -173,6 +189,21 @@ export interface Document {
     blocks: Block[];
     eol: "\n" | "\r\n";
     mdx: boolean;
+    /** Present when the document is a `.quire` one: what it keeps beyond Markdown that is not on its blocks and runs. */
+    quire?: QuireExtras;
+}
+
+/** A page's paper, as page setup chooses it. Margins are in millimetres. */
+export interface Page {
+    size: "A4" | "Letter" | "A5";
+    orientation: "portrait" | "landscape";
+    margins: number;
+}
+
+/** What a `.quire` document holds besides its blocks: page setup, and its notes kept as they were read. */
+export interface QuireExtras {
+    page: Page;
+    notes: unknown;
 }
 
 /** A place in the text: the path to a block (through list items, quotes and table cells), then an offset into its text. */
@@ -279,7 +310,7 @@ function pieces(runs: Run[]): Piece[] {
 
 const sameLink = (a?: LinkInfo, b?: LinkInfo) => a === b || (!!a && !!b && a.href === b.href && a.title === b.title && a.ref === b.ref);
 const sameMarks = (a: Mark[], b: Mark[]) => a.length === b.length && a.every((mark) => b.includes(mark));
-const sameFormat = (a: TextRun, b: TextRun) => sameMarks(a.marks, b.marks) && a.color === b.color && a.size === b.size;
+const sameFormat = (a: TextRun, b: TextRun) => sameMarks(a.marks, b.marks) && LOOKS.every((key) => a[key] === b[key]);
 
 /** Pieces back into runs: neighbouring text with the same marks joins, and neighbours in the same link are grouped into one. */
 function fromPieces(list: Piece[]): Run[] {
@@ -340,8 +371,7 @@ function insertRuns(runs: Run[], offset: number, value: string | Leaf, marks?: M
     const link = last?.link && sameLink(last.link, next?.link) ? last.link : undefined;
     if (typeof value !== "string") return fromPieces([...before, { leaf: value, link }, ...after]);
     const leaf: TextRun = { kind: "text", text: value, marks: marks ? ORDER.filter((mark) => marks.includes(mark)) : look ? [...look.marks] : [] };
-    if (look?.color) leaf.color = look.color;
-    if (look?.size) leaf.size = look.size;
+    for (const key of LOOKS) if (look?.[key]) leaf[key] = look[key];
     return fromPieces([...before, { leaf, link }, ...after]);
 }
 
@@ -362,6 +392,49 @@ function mapRuns(runs: Run[], from: number, to: number, change: (piece: Piece) =
     const [before, rest] = splitPieces(pieces(runs), from);
     const [middle, after] = splitPieces(rest, to - from);
     return fromPieces([...before, ...middle.map(change), ...after]);
+}
+
+/** Blocks with what only a `.quire` document keeps taken off them (font, highlight, line spacing, justified), as they go into a Markdown file. */
+export function markdownOnly(blocks: Block[]): Block[] {
+    const plain = (runs: Run[]) => restyleRuns(runs, 0, Infinity, { font: null, highlight: null });
+    return blocks.map((block): Block => {
+        switch (block.kind) {
+            case "paragraph":
+            case "heading": {
+                const { spacing: _spacing, ...rest } = block;
+                const next = { ...rest, runs: plain(block.runs) };
+                if (next.align === "justify") delete next.align;
+                return next;
+            }
+            case "image":
+                return block.align === "justify" ? { ...block, align: undefined } : block;
+            case "table":
+                return { ...block, header: block.header.map(plain), rows: block.rows.map((row) => row.map(plain)) };
+            case "list":
+                return { ...block, items: block.items.map((item) => ({ ...item, blocks: markdownOnly(item.blocks) })) };
+            case "quote":
+            case "footnote":
+                return { ...block, blocks: markdownOnly(block.blocks) };
+            default:
+                return block;
+        }
+    });
+}
+
+/** Gives the text between two offsets a look, or takes parts of one away with null. Values cannot hold quotes or semicolons. */
+export function restyleRuns(runs: Run[], from: number, to: number, look: { [key in keyof Look]?: string | null }): Run[] {
+    const clean = (value: string) => value.replace(/["';<>]/g, "").trim();
+    return mapRuns(runs, from, to, (piece) => {
+        if (piece.leaf.kind !== "text") return piece;
+        const leaf: TextRun = { ...piece.leaf };
+        for (const key of LOOKS) {
+            const value = look[key];
+            if (value === undefined) continue;
+            if (value === null || clean(value) === "") delete leaf[key];
+            else leaf[key] = clean(value);
+        }
+        return { ...piece, leaf };
+    });
 }
 
 function middlePieces(runs: Run[], from: number, to: number): Piece[] {
@@ -732,26 +805,11 @@ export function toggleMark(doc: Document, range: Range, mark: Mark, force?: bool
     return doc;
 }
 
-/** Sets or clears (with null) the color and size of the text in a range. Values cannot hold quotes or semicolons. */
-export function setStyle(doc: Document, range: Range, style: { color?: string | null; size?: string | null }): Document {
-    const clean = (value: string) => value.replace(/["';<>]/g, "").trim();
+/** Sets or clears (with null) the color, size, font or highlight of the text in a range. Values cannot hold quotes or semicolons. */
+export function setStyle(doc: Document, range: Range, style: { [key in keyof Look]?: string | null }): Document {
     for (const part of covered(doc, range)) {
         if (!runsAt(doc, part.path) || part.to <= part.from) continue;
-        doc = editRuns(doc, part.path, (runs) =>
-            mapRuns(runs, part.from, part.to, (piece) => {
-                if (piece.leaf.kind !== "text") return piece;
-                const leaf: TextRun = { ...piece.leaf };
-                if (style.color !== undefined) {
-                    if (style.color === null || clean(style.color) === "") delete leaf.color;
-                    else leaf.color = clean(style.color);
-                }
-                if (style.size !== undefined) {
-                    if (style.size === null || clean(style.size) === "") delete leaf.size;
-                    else leaf.size = clean(style.size);
-                }
-                return { ...piece, leaf };
-            }),
-        );
+        doc = editRuns(doc, part.path, (runs) => restyleRuns(runs, part.from, part.to, style));
     }
     return doc;
 }

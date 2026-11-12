@@ -42,6 +42,9 @@ const PATHS: Record<string, string> = {
     trash: '<path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12"/>',
     close: '<path d="m7 7 10 10M17 7 7 17"/>',
     outline: '<path d="M5 6h14M8 10h11M8 14h11M5 18h14"/>',
+    highlight: '<path d="m14.5 4.5 5 5L11 18H6v-5z"/><path d="M4 21h16" opacity=".55"/>',
+    justify: '<path d="M5 6h14M5 10h14M5 14h14M5 18h14"/>',
+    file: '<path d="M7 3.5h7l4 4V20a.5.5 0 0 1-.5.5h-10.5A.5.5 0 0 1 6.5 20V4a.5.5 0 0 1 .5-.5z"/><path d="M14 3.5V8h4"/>',
 };
 
 /** One of mdQuire's small line icons, drawn in the color of the text around it. */
@@ -93,6 +96,19 @@ export function moveIndex(index: number, key: string, count: number, vertical = 
     if (key === back) return (index - 1 + count) % count;
     if (key === "Home") return 0;
     if (key === "End") return count - 1;
+    return undefined;
+}
+
+/** The line a typed letter goes to in a menu: the next one after `index` whose words start with what has been typed, round again from the top. */
+export function typeAhead(labels: string[], index: number, typed: string): number | undefined {
+    const wanted = typed.toLowerCase();
+    if (!wanted) return undefined;
+    // a letter typed again steps through the lines that start with it
+    const start = wanted.length === 1 ? index + 1 : index;
+    for (let step = 0; step < labels.length; step++) {
+        const at = (((start + step) % labels.length) + labels.length) % labels.length;
+        if (labels[at]!.trim().toLowerCase().startsWith(wanted)) return at;
+    }
     return undefined;
 }
 
@@ -176,7 +192,7 @@ export function closeOthers(keep?: Menu) {
  * Makes a menu. It is one box, fixed to the window: it starts at the size of the control pressed,
  * just under it, and its width and height ease out to the size of what is in it.
  */
-export function flowMenu(label: string, options: { align?: "left" | "right"; className?: string; onClose?: () => void } = {}): Menu {
+export function flowMenu(label: string, options: { align?: "left" | "right"; className?: string; onClose?: () => void; onSide?: (by: -1 | 1) => void } = {}): Menu {
     const box = make("div", `quire-menu ${options.className ?? ""}`.trim());
     const items = make("div", "quire-menu-items");
     box.append(items);
@@ -215,6 +231,8 @@ export function flowMenu(label: string, options: { align?: "left" | "right"; cla
         box.style.bottom = below ? "" : `${window.innerHeight - rect.top + 6}px`;
     }
 
+    let typed = "";
+    let typedTimer: ReturnType<typeof setTimeout> | undefined;
     function onKey(event: KeyboardEvent) {
         const all = lines();
         const at = all.indexOf(document.activeElement as HTMLElement);
@@ -229,6 +247,24 @@ export function flowMenu(label: string, options: { align?: "left" | "right"; cla
             return;
         }
         if (document.activeElement instanceof HTMLInputElement && (event.key === "ArrowLeft" || event.key === "ArrowRight" || event.key === "Home" || event.key === "End")) return;
+        // a menu in a row of them goes on to its neighbour with the side arrows
+        if (options.onSide && (event.key === "ArrowLeft" || event.key === "ArrowRight")) {
+            event.preventDefault();
+            options.onSide(event.key === "ArrowLeft" ? -1 : 1);
+            return;
+        }
+        // a letter goes to the next line that starts with it; letters typed quickly one after another spell out more of it
+        if (event.key.length === 1 && /\S/.test(event.key) && !event.ctrlKey && !event.metaKey && !event.altKey && !(document.activeElement instanceof HTMLInputElement)) {
+            clearTimeout(typedTimer);
+            typed += event.key;
+            typedTimer = setTimeout(() => (typed = ""), 700);
+            const found = typeAhead(all.map((line) => line.querySelector(".quire-menu-label")?.textContent ?? line.textContent ?? ""), at, typed);
+            if (found !== undefined) {
+                event.preventDefault();
+                all[found]?.focus();
+            }
+            return;
+        }
         const next = moveIndex(at, event.key, all.length, true);
         if (next !== undefined) {
             event.preventDefault();
@@ -256,6 +292,11 @@ export function flowMenu(label: string, options: { align?: "left" | "right"; cla
         open(from, content, focusFirst = false) {
             if (!box.isConnected) document.body.append(box);
             closeOthers(menu);
+            // opened again from another control while open, the one it leaves is no longer shown as open
+            if (opened && trigger && trigger !== from) {
+                trigger.setAttribute("aria-expanded", "false");
+                trigger.classList.remove("open");
+            }
             trigger = from;
             items.replaceChildren();
             if (content instanceof HTMLElement) items.append(content);

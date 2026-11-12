@@ -33,7 +33,7 @@
 // `quire-task` on a task item and `quire-box` on its box (`data-checked`),
 // `quire-atom` on an inline HTML span or footnote reference.
 
-import { blockAt, blockPaths, documentOf, image as imageBlock, paragraph, setImageAlt, toggleTask, type Block, type Document, type Leaf, type Mark, type Run, type Selection } from "./document";
+import { blockAt, blockPaths, documentOf, image as imageBlock, markdownOnly, paragraph, setImageAlt, toggleTask, type Block, type Document, type Leaf, type Mark, type Run, type Selection } from "./document";
 import { createHistory, redo as redoStep, undo as undoStep, type ChangeKind, type State } from "./history";
 import { readHtml, writeHtml } from "./html";
 import { activeBlock, activeMarks, apply, caret, collapsed, fragment, paste, step, type Editor, type Input, type Outcome } from "./keys";
@@ -121,10 +121,17 @@ function drawLeaf(leaf: Leaf): Node {
         wrap.append(node);
         node = wrap;
     }
-    if (leaf.color || leaf.size) {
+    if (leaf.color || leaf.size || leaf.font || leaf.highlight) {
         const span = document.createElement("span");
         if (leaf.color) span.style.color = leaf.color;
         if (leaf.size) span.style.fontSize = leaf.size;
+        // a font is a name the stylesheet turns into a typeface, so only the site's own can be chosen
+        if (leaf.font) span.dataset.font = leaf.font;
+        if (leaf.highlight) {
+            // the color is laid behind the words half seen, so that text of any color stays readable on it
+            span.style.backgroundColor = `color-mix(in oklch, ${leaf.highlight} 45%, transparent)`;
+            span.classList.add("quire-highlight");
+        }
         span.append(node);
         node = span;
     }
@@ -171,6 +178,7 @@ function draw(block: Block, inner: number[]): HTMLElement {
         case "heading": {
             const element = holderOf(document.createElement(block.kind === "paragraph" ? "p" : `h${block.level}`), inner);
             if (block.align) element.style.textAlign = block.align;
+            if (block.spacing) element.style.setProperty("--spacing", String(block.spacing));
             fillRuns(element, block.runs);
             return element;
         }
@@ -686,7 +694,8 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
 
     function insertBlocks(blocks: Block[]) {
         if (blocks.length === 0) return;
-        commit(apply(editor, { state: paste(editor.state, blocks), kind: "paste" }, Date.now()));
+        // a Markdown file cannot keep a typeface or a highlight, so what is pasted into one comes without them
+        commit(apply(editor, { state: paste(editor.state, editor.state.doc.quire ? blocks : markdownOnly(blocks)), kind: "paste" }, Date.now()));
     }
 
     function onPaste(event: ClipboardEvent) {

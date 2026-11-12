@@ -11,7 +11,9 @@
 //
 // Without a store the editor writes nowhere, as in the tests of its parts.
 
-import { createBar, link as linkAction, linkAt } from "./bar";
+import { addCode, addDivider, addFootnote, addTable, center, createBar, link as linkAction, linkAt, setStyleOf, toggle, toggleList, type Action } from "./bar";
+import { createMenuRow, headings } from "./menu-row";
+import { blockPaths, countWords, lengthOf } from "./document";
 import { createConflict } from "./conflict";
 import { createDictation } from "./dictation/dictation";
 import { type Document } from "./document";
@@ -27,6 +29,8 @@ import { createTableTools } from "./tables";
 import { flowMenu, linkForm, make, type MenuItem } from "./ui";
 import { changes, createHistoryPanel, createKeeper, memoryStorage, type VersionStorage } from "./versions";
 import { write } from "./write";
+import { emptyParts, opened, packQuire, written, type Parts } from "./quire-file";
+import { PAGE } from "./styling";
 import { createCaret } from "./caret";
 import { createTitle, nameFor, shownName, type OwnTitle } from "./title";
 
@@ -47,12 +51,16 @@ export interface EditorOptions {
     onOpen?: (store: Store, entry: Entry) => void;
     /** Opens the documents list from the name in the bar. */
     onName?: (from: HTMLElement) => void;
+    /** The page's own lines at the head of the File menu: new documents, opening files and folders. */
+    fileItems?: () => MenuItem[];
     /** More lines for the three-dot menu, from the page. */
     more?: () => MenuItem[];
     /** Where the page wants the bar: in its own top row, beside the site's name. Above the editor if not given. */
     barHome?: HTMLElement;
     /** Takes a picture file when there is no store to keep it. */
     onImage?: (file: File) => Promise<string>;
+    /** Where a Markdown document turned into a `.quire` one is made when its own store keeps no `.quire` documents; downloaded if not given. */
+    richHome?: Store;
     /** Where the title is kept when it is the document's own (a post's frontmatter title) rather than its name. */
     title?: OwnTitle;
 }
@@ -63,7 +71,8 @@ export interface Editor {
     getName(): string;
     current(): { store?: Store; id?: string; name: string };
     open(store: Store, entry: Entry): Promise<void>;
-    create(store: Store, name: string, text?: string): Promise<void>;
+    /** Makes a new document there and opens it; given parts, it is made as a `.quire` document. */
+    create(store: Store, name: string, text?: string, quire?: Parts): Promise<void>;
     flush(): Promise<void>;
     status(): Status | undefined;
     /** The bar's name, from which the documents list grows. */
@@ -206,22 +215,50 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     };
 
     // ---- the three-dot menu ----
-    const download = () => {
-        const written = write(surface.getDocument());
-        const file = new Blob([written], { type: "text/markdown" });
+    const give = (file: Blob, fileName: string) => {
         const anchor = make("a");
         anchor.href = URL.createObjectURL(file);
-        const ending = surface.getDocument().mdx ? ".mdx" : ".md";
-        anchor.download = /\.(md|mdx|markdown|txt)$/i.test(name) ? name : `${name}${ending}`;
+        anchor.download = fileName;
         anchor.click();
         setTimeout(() => URL.revokeObjectURL(anchor.href), 1000);
     };
+    /** The document's name without its folder or ending, for a download's name. */
+    const stem = () => name.replace(/^.*\//, "").replace(/\.(md|mdx|markdown|txt|quire)$/i, "") || "Untitled";
+    const download = () => {
+        const doc = surface.getDocument();
+        // a .quire document's Markdown is downloaded with its color, size and centring as small HTML, as a Markdown file keeps them
+        const ending = doc.mdx ? ".mdx" : ".md";
+        give(new Blob([write(doc)], { type: "text/markdown" }), /\.(md|mdx|markdown|txt)$/i.test(name) ? name.replace(/^.*\//, "") : `${stem()}${ending}`);
+    };
+    const downloadQuire = async () => {
+        const { text: markdown, quire } = written(surface.getDocument(), write);
+        const pictures = (store && id && (await store.pictures?.(id).catch(() => undefined))) || new Map<string, Blob>();
+        give(new Blob([(await packQuire({ markdown, parts: quire ?? emptyParts(), pictures })) as BlobPart], { type: "application/zip" }), `${stem()}.quire`);
+    };
+    /** Makes a `.quire` copy of a Markdown document and opens it: in the same place if it can keep one, in the browser if not, or as a download. */
+    const makeRich = async () => {
+        const doc = surface.getDocument();
+        if (doc.quire) return;
+        const copy = written({ ...doc, mdx: false, quire: { page: PAGE, notes: null } }, write);
+        const target = store?.quire && store.can.create ? store : options.richHome;
+        if (!target) {
+            const pictures = new Map<string, Blob>();
+            give(new Blob([(await packQuire({ markdown: copy.text, parts: copy.quire ?? emptyParts(), pictures })) as BlobPart], { type: "application/zip" }), `${stem()}.quire`);
+            return;
+        }
+        await create(target, stem(), copy.text, copy.quire);
+        surface.focus();
+    };
     const more = (): MenuItem[] => [
+        // on a narrow window the menu row is here, a line for each of its words
+        ...(rowFolded() ? row.words.map((word, index) => ({ label: word.textContent ?? "", hint: "›", run: () => row.openFrom(bar.element.querySelector<HTMLElement>(".quire-dots")!, index) })) : []),
+        ...(surface.getDocument().quire ? [] : [{ label: "Turn into a .quire document", icon: "file", run: () => void makeRich() }]),
         { label: host.classList.contains("markdown") ? "Hide the Markdown" : "Show the Markdown", run: () => showMarkdown(!host.classList.contains("markdown")) },
         { label: "Version history", run: () => void history.open() },
         ...(options.more?.() ?? []),
         ...dictation.items(dictation.more),
-        { label: "Download", hint: surface.getDocument().mdx ? ".mdx" : ".md", run: download },
+        ...(surface.getDocument().quire ? [{ label: "Download", hint: ".quire", run: () => void downloadQuire() }] : []),
+        { label: surface.getDocument().quire ? "Download as Markdown" : "Download", hint: surface.getDocument().mdx ? ".mdx" : ".md", run: download },
         { label: "Print", run: () => print() },
     ];
 
@@ -271,6 +308,68 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     const slash = createSlash(surface, bar.pickImage);
     const tableTools = createTableTools(surface);
 
+    // ---- the menu row: every command by name, above the bar ----
+    const doing = (action: Action) => () => {
+        surface.run((doc, selection) => action({ doc, selection }));
+        surface.focus();
+    };
+    const format = () => row.words[4]!;
+    const row = createMenuRow(() =>
+        headings(
+            { rich: !!surface.getDocument().quire, outline: outlineView.isOpen(), markdown: host.classList.contains("markdown"), words: countWords(surface.getDocument()) },
+            {
+                file: options.fileItems,
+                turnRich: () => void makeRich(),
+                download,
+                downloadQuire: () => void downloadQuire(),
+                history: () => void history.open(),
+                print: () => print(),
+                undo: () => (surface.undo(), surface.focus()),
+                redo: () => (surface.redo(), surface.focus()),
+                selectAll: () => {
+                    const paths = blockPaths(surface.getDocument());
+                    const last = paths[paths.length - 1] ?? [0];
+                    surface.setSelection({ anchor: { path: paths[0] ?? [0], offset: 0 }, focus: { path: last, offset: lengthOf(surface.getDocument(), last) } });
+                    surface.focus();
+                },
+                link: () => openLink(bar.element.querySelector<HTMLElement>('[aria-label^="Link"]') ?? format()),
+                outline: () => (outlineView.isOpen() ? outlineView.close() : outlineView.open()),
+                markdown: () => showMarkdown(!host.classList.contains("markdown")),
+                table: doing(addTable),
+                picture: () => bar.pickImage(),
+                divider: doing(addDivider),
+                code: doing(addCode),
+                footnote: doing(addFootnote),
+                bullet: doing(toggleList("bullet")),
+                number: doing(toggleList("number")),
+                task: doing(toggleList("task")),
+                bold: doing(toggle("bold")),
+                italic: doing(toggle("italic")),
+                underline: doing(toggle("underline")),
+                strike: doing(toggle("strike")),
+                inline: doing(toggle("code")),
+                paragraph: doing(setStyleOf("paragraph")),
+                heading1: doing(setStyleOf("heading1")),
+                heading2: doing(setStyleOf("heading2")),
+                heading3: doing(setStyleOf("heading3")),
+                quote: doing(setStyleOf("quote")),
+                center: doing(center),
+                color: () => bar.pickers.color(format()),
+                size: () => bar.pickers.size(format()),
+                font: () => bar.pickers.font(format()),
+                highlight: () => bar.pickers.highlight(format()),
+            },
+        ),
+    );
+    // in the site's top row the words sit above the bar; anywhere else they are the bar's own first line
+    (options.barHome ?? bar.element).prepend(row.element);
+    if (options.barHome) options.barHome.classList.add("has-menu-row");
+    /** True when the window is too narrow for the row, which has then folded into the three dots. */
+    const rowFolded = () => typeof matchMedia !== "undefined" && matchMedia("(max-width: 40rem)").matches;
+    const syncRow = () => (row.element.inert = rowFolded());
+    syncRow();
+    if (typeof matchMedia !== "undefined") matchMedia("(max-width: 40rem)").addEventListener("change", syncRow);
+
     // ---- version history: a snapshot on opening and after each pause in editing, kept by store and document ----
     const historyKey = () => (store && id ? `${store.label}:${id}` : name);
     let keeper = createKeeper(versions, historyKey(), () => write(surface.getDocument()));
@@ -295,7 +394,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         if (!theirs) return;
         await versions.save(historyKey(), mine, { time: Date.now(), ...changes(theirs.text, mine) });
         quiet = true;
-        surface.run(() => read(theirs.text, { mdx: surface.getDocument().mdx }));
+        surface.run(() => opened(theirs.text, theirs.quire ?? (surface.getDocument().quire ? emptyParts() : undefined), { mdx: surface.getDocument().mdx }));
         quiet = false;
     }, () => surface.focus());
     const showStatus = (status: Status) => {
@@ -306,6 +405,14 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     if (saver) showStatus(saver.status());
     else bar.setStatus("", "This document is not being saved anywhere");
 
+    // what only a .quire document can keep folds away from the bar while the document is Markdown
+    const richNow = () => {
+        const on = !!surface.getDocument().quire;
+        bar.setRich(on);
+        host.classList.toggle("rich", on);
+    };
+    surface.on("change", richNow);
+    richNow();
     showTitle();
     hint();
     // a title kept in the document follows a change from elsewhere (undo, the Markdown, a form)
@@ -314,7 +421,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     });
     surface.on("change", ({ doc: now }) => {
         keeper.edited();
-        if (!quiet) saver?.changed(() => write(now));
+        if (!quiet) saver?.changed(() => written(now, write));
     });
 
     // leaving the page with words not yet saved: they are saved if there is time, and the browser asks
@@ -348,22 +455,28 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         }
     }
 
+    async function create(next: Store, wanted: string, body = "", quire?: Parts) {
+        const made = await next.create(wanted, body, quire);
+        const entry = (await next.list().catch(() => [])).find((each) => each.id === made.id) ?? { id: made.id, name: wanted };
+        await open(next, entry);
+    }
+
     /** Moves to a document: saves what is waiting in the old one, opens the new, and starts its saver and history. */
     async function open(next: Store, entry: Entry) {
         await saver?.flush();
         saver?.stop();
         stopListening?.();
         keeper.stop();
-        const opened = await next.open(entry.id);
+        const found = await next.open(entry.id);
         store = next;
         id = entry.id;
         name = entry.name;
         bar.setName(name);
         quiet = true;
-        surface.setDocument(read(opened.text, { mdx: /\.mdx$/i.test(entry.id) || /\.mdx$/i.test(entry.name) }));
+        surface.setDocument(opened(found.text, found.quire, { mdx: /\.mdx$/i.test(entry.id) || /\.mdx$/i.test(entry.name) }));
         quiet = false;
         showTitle();
-        saver = createSaver(next, entry.id, opened.mark);
+        saver = createSaver(next, entry.id, found.mark);
         stopListening = saver.on(showStatus);
         showStatus(saver.status());
         keeper = createKeeper(versions, historyKey(), () => write(surface.getDocument()));
@@ -376,11 +489,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         getName: () => name,
         current: () => ({ store, id, name }),
         open,
-        async create(next, wanted, body = "") {
-            const made = await next.create(wanted, body);
-            const entry = (await next.list().catch(() => [])).find((each) => each.id === made.id) ?? { id: made.id, name: wanted };
-            await open(next, entry);
-        },
+        create,
         flush: async () => {
             await saver?.flush();
         },
@@ -396,7 +505,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
             caret.destroy();
             dictation.destroy();
             surface.destroy();
-            for (const menu of [...bar.menus, links]) menu.box.remove();
+            for (const menu of [...bar.menus, links, row.menu]) menu.box.remove();
             selectBar.element.remove();
             slash.close();
             tableTools.element.remove();

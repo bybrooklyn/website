@@ -12,6 +12,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { withoutSpeech } from "../../scripts/dictation-stubs";
 import { browser, chromium, type Browser } from "../../scripts/browser";
+import { packQuire, unpackQuire } from "./quire-file";
+import { hash } from "./styling";
+
+/** The smallest PNG: one pixel. */
+const DOT = Uint8Array.from(atob("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="), (c) => c.charCodeAt(0));
 
 const here = import.meta.dir;
 const styles = `${here}/../styles`;
@@ -19,7 +24,9 @@ const styles = `${here}/../styles`;
 const page = (database: string) => `
 import { startApp } from "${here}/app.ts";
 import { write } from "${here}/write.ts";
-import { folderStore } from "${here}/store-folder.ts";
+import { folderStore, oneFileStore } from "${here}/store-folder.ts";
+import { setStyle } from "${here}/document.ts";
+import { packQuire, unpackQuire } from "${here}/quire-file.ts";
 
 // GitHub's contents API, as far as the store uses it, over files kept in the page
 const repo = new Map([["posts/hello.md", { text: "# Hello\\n\\nFrom the repository.\\n", sha: "sha1" }]]);
@@ -54,11 +61,17 @@ async function fetcher(url, init = {}) {
 
 // a download is caught rather than saved, so that its name and text can be read
 const downloads = [];
+const bytes = {};
 HTMLAnchorElement.prototype.click = function () {
-    if (this.download) fetch(this.href).then((answer) => answer.text()).then((text) => downloads.push({ name: this.download, text }));
+    if (!this.download) return;
+    const name = this.download;
+    fetch(this.href).then((answer) => answer.arrayBuffer()).then((buffer) => {
+        bytes[name] = new Uint8Array(buffer);
+        downloads.push({ name, text: new TextDecoder().decode(buffer) });
+    });
 };
 
-window.q = { repo, calls, downloads, write, folderStore };
+window.q = { repo, calls, downloads, bytes, write, folderStore, oneFileStore, setStyle, packQuire, unpackQuire };
 startApp(document.querySelector("#host"), { database: ${JSON.stringify(database)}, fetcher, sample: "# A sample\\n" }).then((app) => {
     window.q.app = app;
     window.q.md = () => write(app.editor.surface.getDocument());
@@ -79,6 +92,9 @@ beforeAll(async () => {
     const css = (await Promise.all(["tokens.css", "base.css", "prose.css", "quire.css"].map((name) => Bun.file(`${styles}/${name}`).text()))).join("\n");
     await Bun.write(`${folder}/page.html`, `<!doctype html><meta charset="utf-8"><style>${css}${theme}</style><body class="quire-app"><header class="quire-top"><a class="site-name" href="/">site</a></header><main id="main"><div id="host"></div></main><script type="module">${await built.outputs[0]!.text()}</script></body>`);
     await Bun.write(`${folder}/post.md`, "# A post\n\nFrom a file.\n");
+    // a .quire file with a styled word, its style addressed as styling.ts says
+    const style = { quire: 1, page: { size: "A5", orientation: "portrait", margins: 20 }, count: 2, blocks: [{ block: 0, hash: hash("A letter"), align: "center" }], runs: [{ block: 1, hash: hash("Dear Sam, hello."), from: 10, to: 15, quote: "hello", before: "Dear Sam, ", color: "#d52d00", font: "serif" }] };
+    await Bun.write(`${folder}/letter.quire`, await packQuire({ markdown: "# A letter\n\nDear Sam, hello.\n", parts: { style: JSON.stringify(style), notes: "{}" }, pictures: new Map([["dot.png", new Blob([DOT])]]) }));
     tab = await browser({ width: 1300, height: 900 });
     // the page is served over http, as the site is, so that its database and storage are its own
     await load();
@@ -189,6 +205,34 @@ used("a file is opened from the computer, and downloaded again with its own name
     expect(await tab.run("q.downloads.at(-1)")).toEqual({ name: "post.md", text: "# A post\n\nFrom a file. Edited.\n" });
 });
 
+used("in a Markdown file the tools it cannot keep are folded away, and turning it into a .quire document makes a copy that has them", async () => {
+    // post.md is open from the test before
+    expect(await tab.run("document.querySelector('.quire-name-text').textContent")).toBe("post.md");
+    const rich = () => tab.run<{ folded: boolean; inert: boolean; width: number }>("(() => { const group = document.querySelector('.quire-bar .quire-rich'); return { folded: group.classList.contains('folded'), inert: group.inert, width: Math.round(group.getBoundingClientRect().width) }; })()");
+    // folded to nothing but its hairline of border, which is transparent
+    expect(await rich()).toMatchObject({ folded: true, inert: true });
+    expect((await rich()).width).toBeLessThanOrEqual(1);
+    await press(".quire-dots");
+    await tab.wait(700);
+    const lines = await tab.run<string[]>("[...document.querySelectorAll('.quire-menu.open .quire-menu-line')].map((line) => line.textContent)");
+    expect(lines).toContain("Turn into a .quire document");
+    expect(lines.some((line) => line.startsWith("Typeface") || line.startsWith("Highlight"))).toBe(false);
+    await press(".quire-menu.open .quire-menu-line", "Turn into a .quire document");
+    await tab.wait(900);
+    expect(await tab.run("document.querySelector('.quire-name-text').textContent")).toBe("post.quire");
+    expect(await md()).toBe("# A post\n\nFrom a file. Edited.\n");
+    expect((await rich()).folded).toBe(false);
+    expect((await rich()).width).toBeGreaterThan(40);
+    // a typeface chosen from its control goes on the selection
+    await tab.run("q.app.editor.surface.setSelection({ anchor: { path: [1], offset: 0 }, focus: { path: [1], offset: 4 } })");
+    await press(".quire-bar button", "Typeface");
+    await tab.wait(500);
+    await press(".quire-menu.open .quire-menu-line", "System mono");
+    await tab.wait(200);
+    expect(await tab.run("document.querySelector('.quire [data-font=mono]')?.textContent")).toBe("From");
+    expect(await md()).toBe("# A post\n\nFrom a file. Edited.\n");
+});
+
 used("a repository is connected once, its documents listed, opened and saved as commits, and it can be forgotten", async () => {
     await documents();
     await press(".quire-documents-menu button[data-place='github']");
@@ -230,6 +274,66 @@ used("a repository is connected once, its documents listed, opened and saved as 
     await tab.press("Escape");
 });
 
+used("a .quire file opens with its look, is written in, and downloads as a .quire that holds the change, its style and its picture", async () => {
+    await tab.files([`${folder}/letter.quire`]);
+    await documents();
+    await press(".quire-documents-menu button[data-place='file']");
+    await tab.wait(400);
+    expect(await tab.run("document.querySelector('.quire-name-text').textContent")).toBe("letter.quire");
+    const seen = await tab.run<{ align: string; font: string; color: string }>(`(() => {
+        const word = document.querySelector('.quire [data-font]');
+        return { align: getComputedStyle(document.querySelector('.quire h1')).textAlign, font: word.textContent, color: getComputedStyle(word).color };
+    })()`);
+    expect(seen).toEqual({ align: "center", font: "hello", color: "rgb(213, 45, 0)" });
+    await tab.run("q.app.editor.surface.setSelection({ anchor: { path: [0], offset: 0 }, focus: { path: [0], offset: 0 } })");
+    await tab.type("Old. ");
+    await tab.wait(1300);
+    await press(".quire-dots");
+    await tab.wait(700);
+    expect(await tab.run("[...document.querySelectorAll('.quire-menu.open .quire-menu-line')].map((line) => line.textContent).filter((text) => text.startsWith('Download'))")).toEqual(["Download.quire", "Download as Markdown.md"]);
+    await press(".quire-menu.open .quire-menu-line", "Download.quire");
+    await tab.wait(400);
+    const bundle = await unpackQuire(new Uint8Array(Object.values(await tab.run<Record<string, number>>("q.bytes['letter.quire']"))));
+    expect(bundle.markdown).toBe("# Old. A letter\n\nDear Sam, hello.\n");
+    const style = JSON.parse(bundle.parts.style);
+    expect(style.page).toEqual({ size: "A5", orientation: "portrait", margins: 20 });
+    expect(style.runs[0]).toMatchObject({ quote: "hello", color: "#d52d00", font: "serif" });
+    expect(style.blocks[0]).toMatchObject({ align: "center", hash: hash("Old. A letter") });
+    expect([...bundle.pictures.keys()]).toEqual(["dot.png"]);
+});
+
+used("a document kept in the browser is a .quire one: its look is kept through a reload", async () => {
+    await documents();
+    await press(".quire-documents-menu button[data-place='browser']");
+    await tab.wait(400);
+    await press(".quire-documents-new");
+    await tab.wait(400);
+    await tab.type("Styled words.");
+    await tab.run("q.app.editor.surface.run((doc) => q.setStyle(doc, { start: { path: [0], offset: 0 }, end: { path: [0], offset: 6 } }, { font: 'mono', highlight: '#ff9a56' }))");
+    await tab.wait(1300);
+    await load();
+    expect(await tab.run("document.querySelector('.quire [data-font=mono]')?.textContent")).toBe("Styled");
+    expect(await md()).toBe("Styled words.\n");
+});
+
+used("a .quire file written in place through file handles keeps its look and pictures inside it", async () => {
+    const result = await tab.run<{ markdown: string; style: string; pictures: string[] }>(`(async () => {
+        const root = await navigator.storage.getDirectory();
+        const handle = await root.getFileHandle("in-place.quire", { create: true });
+        const writable = await handle.createWritable();
+        await writable.write(new Blob([await q.packQuire({ markdown: "Hi.\\n", parts: { style: "", notes: "" }, pictures: new Map() })]));
+        await writable.close();
+        const store = q.oneFileStore(handle);
+        const opened = await store.open("in-place.quire");
+        await store.savePicture("in-place.quire", new Blob(["x"], { type: "image/png" }), "x.png");
+        await store.save("in-place.quire", "Hi there.\\n", opened.mark, { style: '{"quire":1}', notes: "{}" });
+        const back = await q.unpackQuire(new Uint8Array(await (await handle.getFile()).arrayBuffer()));
+        await root.removeEntry("in-place.quire");
+        return { markdown: back.markdown, style: back.parts.style, pictures: [...back.pictures.keys()] };
+    })()`);
+    expect(result).toEqual({ markdown: "Hi there.\n", style: '{"quire":1}', pictures: ["x.png"] });
+});
+
 used("the folder store writes real file handles, here the browser's private file system", async () => {
     const result = await tab.run<{ listed: string[]; text: string; refused: boolean; trash: boolean }>(`(async () => {
         const root = await navigator.storage.getDirectory();
@@ -245,6 +349,63 @@ used("the folder store writes real file handles, here the browser's private file
         return { listed, text, refused: !refused.ok && refused.changed === true && saved.ok, trash };
     })()`);
     expect(result).toEqual({ listed: ["a-note.md"], text: "two", refused: true, trash: true });
+});
+
+used("the menu row: a menu flows from its word, slides to the next as the pointer moves along, and is worked with the keys", async () => {
+    await load();
+    const open = () => tab.run<{ word: string | null; lines: string[]; sliding: boolean; left: number }>(`(() => {
+        const box = document.querySelector('.quire-row-menu');
+        return { word: document.querySelector('.quire-row-word.open')?.textContent ?? null, lines: box.classList.contains('open') ? [...box.querySelectorAll('.quire-menu-line')].map((line) => line.textContent) : [], sliding: box.classList.contains('sliding'), left: Math.round(box.getBoundingClientRect().left) };
+    })()`);
+    await press(".quire-row-word", "Format");
+    await tab.wait(600);
+    const format = await open();
+    expect(format.word).toBe("Format");
+    expect(format.lines).toContain("BoldCtrl+B");
+    expect(format.lines).toContain("Heading 2Ctrl+Alt+2");
+    // the pointer moving onto Insert takes the open menu there, sliding
+    await tab.run("document.querySelectorAll('.quire-row-word')[3].dispatchEvent(new PointerEvent('pointerenter'))");
+    await tab.wait(500);
+    const insert = await open();
+    expect(insert.word).toBe("Insert");
+    expect(insert.sliding).toBe(true);
+    expect(insert.left).toBeLessThan(format.left);
+    expect(insert.lines).toContain("Table");
+    expect(await tab.run("document.querySelectorAll('.quire-row-word.open').length")).toBe(1);
+    await tab.press("Escape");
+    await tab.wait(300);
+    expect((await open()).lines).toEqual([]);
+    // with the keys: File opened from its word, the right arrow to Edit, a letter to its line, Enter to do it
+    await tab.run("document.querySelector('.quire-row-word').focus()");
+    await tab.press("Enter");
+    await tab.wait(400);
+    expect((await open()).word).toBe("File");
+    await tab.press("ArrowRight");
+    await tab.wait(400);
+    expect((await open()).word).toBe("Edit");
+    await tab.press("s");
+    expect(await tab.run("document.activeElement.textContent")).toBe("Select allCtrl+A");
+    await tab.press("Enter");
+    await tab.wait(200);
+    expect(await tab.run("String(getSelection())")).toBe(await tab.run("document.querySelector('.quire').innerText.trim()"));
+});
+
+used("on a narrow window the menu row folds into the three dots, each word a line there that opens its menu", async () => {
+    await tab.resize(390, 800);
+    try {
+        await tab.wait(600);
+        expect(await tab.run("(() => { const row = document.querySelector('.quire-menu-row'); return [row.inert, getComputedStyle(row).opacity, Math.round(row.getBoundingClientRect().height)]; })()")).toEqual([true, "0", 0]);
+        await press(".quire-dots");
+        await tab.wait(700);
+        const lines = await tab.run<string[]>("[...document.querySelectorAll('.quire-menu.open .quire-menu-line')].map((line) => line.textContent)");
+        expect(lines.filter((line) => line.endsWith("›"))).toEqual(["File›", "Edit›", "View›", "Insert›", "Format›", "Tools›"]);
+        await press(".quire-menu.open .quire-menu-line", "Format");
+        await tab.wait(600);
+        expect(await tab.run("[...document.querySelectorAll('.quire-row-menu.open .quire-menu-line')].map((line) => line.textContent)[0]")).toBe("BoldCtrl+B");
+        await tab.press("Escape");
+    } finally {
+        await tab.resize(1300, 900);
+    }
 });
 
 used("printed, the page is the document alone, dark on white, with none of the editor around it", async () => {
