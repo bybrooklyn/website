@@ -147,6 +147,27 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         if (own !== null && own !== undefined) title.show(own);
         else title.show(shownName(name) === "Untitled" ? "" : shownName(name), !options.title && (!store || !id || store.can.rename));
     };
+    // ---- a faint "Type / for blocks" on the empty line the cursor is on, and on an empty document ----
+    let hinted: HTMLElement | undefined;
+    const hint = () => {
+        const blocks = surface.getDocument().blocks;
+        const focused = surface.element.contains(document.activeElement) || document.activeElement === surface.element;
+        const empty = (element: HTMLElement | undefined) => !!element && element.tagName === "P" && element.textContent === "";
+        const line = focused ? surface.elementAt(surface.getSelection().focus.path.slice(0, 1)) : blocks.length === 1 ? surface.elementAt([0]) : undefined;
+        const next = empty(line) && surface.getSelection().anchor.path[0] === surface.getSelection().focus.path[0] ? line : undefined;
+        if (next === hinted) return;
+        hinted?.classList.remove("quire-hinted");
+        hinted = next;
+        if (!next) return;
+        next.dataset.hint = "Type / for blocks";
+        // the words are there first and seen a frame later, so they fade in
+        requestAnimationFrame(() => next === hinted && next.classList.add("quire-hinted"));
+    };
+    surface.on("select", hint);
+    surface.on("change", hint);
+    surface.element.addEventListener("focus", hint);
+    surface.element.addEventListener("blur", () => setTimeout(hint));
+
     // ArrowUp at the very start of the writing goes up to the title
     surface.element.addEventListener("keydown", (event) => {
         if (event.key !== "ArrowUp" || event.shiftKey) return;
@@ -275,6 +296,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     else bar.setStatus("", "This document is not being saved anywhere");
 
     showTitle();
+    hint();
     // a title kept in the document follows a change from elsewhere (undo, the Markdown, a form)
     surface.on("change", () => {
         if (options.title && document.activeElement !== title.element) showTitle();

@@ -64,12 +64,17 @@
     flex-direction: column;
 }
 
-.quire-paper > .quire {
-    flex: 1 0 auto;
+/* everything on the sheet keeps to the text's line: the title, the welcome, a post's fields */
+.quire-paper > :not(.quire-caret) {
+    box-sizing: border-box;
     width: 100%;
     max-width: 44rem;
-    min-height: 0;
     margin-inline: auto;
+}
+
+.quire-paper > .quire {
+    flex: 1 0 auto;
+    min-height: 0;
 }
 
 /* the title, the first line on the sheet: set as a published post's title, and faint "Untitled" when empty */
@@ -103,6 +108,28 @@
 
 .quire-title[readonly] {
     cursor: default;
+}
+
+/* "Type / for blocks", faint on the empty line the cursor is on; it fades in and out */
+.quire > [data-hint] {
+    position: relative;
+}
+
+.quire > [data-hint]::before {
+    content: attr(data-hint);
+    position: absolute;
+    inset: 0 auto auto 0;
+    color: color-mix(in oklch, var(--muted), transparent 40%);
+    white-space: nowrap;
+    pointer-events: none;
+    user-select: none;
+    opacity: 0;
+    transition: opacity 0.25s ease;
+}
+
+.quire > .quire-hinted::before {
+    opacity: 1;
+    transition: opacity 0.4s ease 0.1s;
 }
 
 /* the caret, drawn (caret.ts): a bar of the line's height in the accent, the browser's own made clear */
@@ -1799,6 +1826,10 @@ body.quire-app {
         display: none !important;
     }
 
+    .quire > [data-hint]::before {
+        content: none;
+    }
+
     .quire-editor,
     .quire-editor.markdown {
         display: block;
@@ -1890,6 +1921,7 @@ body.quire-app {
 @media (prefers-reduced-motion: reduce) {
     .quire-editor,
     .quire-editor *,
+    .quire-editor *::before,
     .quire-menu,
     .quire-menu *,
     .quire-select-bar,

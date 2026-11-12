@@ -929,4 +929,27 @@ used("the text is set as a published post's: its size, line, measure and the gap
     expect(Math.abs(seen.hp - 0.75 * seen.line)).toBeLessThan(1);
 });
 
+used("a faint \"Type / for blocks\" fades in on the empty line the cursor is on, goes when typing starts, and an empty document is never blank", async () => {
+    // how much of the hint is seen on a line: none when the line has no hint at all
+    const shown = (index: number) => tab.run<number>(`(() => { const style = getComputedStyle(document.querySelectorAll('.quire > *')[${index}], '::before'); return style.content === 'none' ? 0 : parseFloat(style.opacity) || 0; })()`);
+    const words = (index: number) => tab.run<string>(`getComputedStyle(document.querySelectorAll('.quire > *')[${index}], '::before').content`);
+    await reset("Some text.\n", [0], 10);
+    await tab.press("Enter");
+    const fading = await tab.run<number[]>(`(() => new Promise((done) => { const seen = []; const start = performance.now(); const look = () => { seen.push(parseFloat(getComputedStyle(document.querySelectorAll('.quire > *')[1], '::before').opacity) || 0); if (performance.now() - start < 700) requestAnimationFrame(look); else done(seen); }; requestAnimationFrame(look); }))()`);
+    expect(fading[fading.length - 1]).toBe(1);
+    expect(fading.some((value) => value > 0 && value < 1)).toBe(true);
+    expect(await words(1)).toBe('"Type / for blocks"');
+    // it is not in the text, and the line with words has none
+    expect(await md()).toBe("Some text.\n");
+    expect(await words(0)).toBe("none");
+    await tab.type("W");
+    await tab.wait(400);
+    expect(await shown(1)).toBe(0);
+    // an empty document shows it even before the cursor is in it
+    await tab.run("q.reset('')");
+    await tab.run("document.activeElement.blur()");
+    await tab.wait(600);
+    expect(await shown(0)).toBe(1);
+});
+
 if (!live) console.warn("editor.test.ts: no Chromium on this machine, so the editor was not used.");
