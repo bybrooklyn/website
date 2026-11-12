@@ -8,6 +8,7 @@
 //! - `land`: the pieces built into ground, blocks, hazards and the things that move.
 //! - `check`: proof that a body of the creature's reach can get from the start to the end.
 //! - `body`: the Walker's creature with a hop, and arms held out for balance.
+//! - `eyes`: a fan of rays from its eye, and a picture from the same world for later.
 //! - `stage`: a land put into the physics around one creature, laid ahead and dropped behind as it
 //!   goes, its boxes, moving platforms and see-saws made as it comes near.
 //!
@@ -15,12 +16,15 @@
 
 pub mod body;
 pub mod check;
+pub mod eyes;
 pub mod land;
 pub mod recipe;
 pub mod stage;
 
 #[cfg(test)]
 mod body_tests;
+#[cfg(test)]
+mod eyes_tests;
 #[cfg(test)]
 mod stage_tests;
 #[cfg(test)]

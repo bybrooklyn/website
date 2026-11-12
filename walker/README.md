@@ -456,6 +456,39 @@ walks with its arms out, so it gets up steps by hopping); four legs walk up 0.24
 from a walk. The checker's reach is a little under the lesser of each, and the tests hold both bodies
 to doing at least that much.
 
+### What it senses
+
+Rays first, a picture later. Sixteen rays from its eye (at the front of its body, a little above the
+middle), held level with the world whatever the body does, as an animal holds its head steady. Eleven
+look down ahead, aimed to land every 0.35 m from 0.3 m to 3.8 m in front of an eye a metre up, so a
+gap or a pool as narrow as the narrowest falls between two of them by the time it is a hop away; five
+look level and up at 15, 35, 60 and 90 degrees, for walls, ledges, boxes and platforms overhead. Each
+sees 6 m. A ray is cast through the physics (`World::cast` in `src/physics/cast.rs`): the ground and
+the blocks are sorted by where they start, so a binary search finds the few the ray can cross;
+bodies are passed over unless the ray crosses their box. Hazards, which are not solid, are found
+along the ray as far as it got. A creature in a busy world sees about 930,000 times a second
+natively, sixteen rays each, on one core (where casting past everything in its stretch of world would
+allow 535,000), and a test holds the quick cast to the slow one's answer, to the bit, over 40,000
+rays.
+
+The senses, in the order the brain takes them:
+
+| | numbers | what |
+|---|---|---|
+| rays | 16 times 6 | for each ray, from straight down ahead turning up: how near what it meets is (1 touching, 0 nothing within 6 m), then 1 or 0 for whether it is the edge of a drop (ground or a platform within 0.3 m of where it ends over a gap or something more than 0.12 m lower), a box, a hazard, a moving thing (a moving platform or a see-saw), food (always 0 for now). Ground is what is near with none of these. |
+| body | 4 | its angle (0 upright), its spin times 0.2, its speed forward and up, each times 0.25 |
+| joints | 2 for each | hip then knee, leg by leg: the angle, and the speed times 0.1 |
+| feet | 1 for each | 1 if on something, else 0 |
+| rhythm | 2 | the sine and cosine of the legs' rhythm |
+| hop | 2 | 1 while it hops, else 0; 1 when it can hop, else 0 |
+
+So two legs sense 96 + 18 = 114 numbers and four legs 96 + 28 = 124.
+
+`eyes::picture` makes, from the same world, the picture the creature would see instead: a strip of
+greyscale pixels from 80 degrees down to 60 degrees up, each lit by what its ray meets (a hazard
+brightest, then a box, a moving thing, ground, an edge) and dimmer the further off. It is tested and
+not yet given to any brain; it is where the picture experiment will start.
+
 ### What the physics gained for it
 
 Only what the world needs, none of it used by the Walker, which learns to the same bit as before:

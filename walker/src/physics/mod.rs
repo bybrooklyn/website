@@ -11,6 +11,7 @@
 //!
 //! Units are metres, kilograms and seconds, with y up and angles anticlockwise in radians.
 
+pub mod cast;
 pub mod collide;
 pub mod contact;
 pub mod joint;
