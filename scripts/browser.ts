@@ -2,6 +2,7 @@
 // script in it, click, photograph. `bun run pictures` and the drawing test use it. No dependency.
 
 import { spawn } from "node:child_process";
+import { rmSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -45,6 +46,22 @@ export async function browser({ width = 1200, height = 800, scale = 1, port = 94
     // SwiftShader draws WebGL without a graphics card, the same on every machine.
     const chrome = spawn(program, ["--headless=new", `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`, "--enable-unsafe-swiftshader", "--hide-scrollbars", ...args, "about:blank"], { stdio: "ignore" });
     const wait = (ms: number) => new Promise<void>((done) => setTimeout(done, ms));
+    // However the script ends (finished, thrown out of, timed out or interrupted), the browser is
+    // stopped and its profile folder taken away. Left to themselves they pile up in /tmp, which on
+    // many machines is kept in memory.
+    const tidy = () => {
+        chrome.kill("SIGKILL");
+        // its helpers write to the profile for a moment after it is gone, so the folder is taken away twice, a breath apart
+        rmSync(profile, { recursive: true, force: true });
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 250);
+        rmSync(profile, { recursive: true, force: true });
+    };
+    const ended = (signal: NodeJS.Signals) => {
+        tidy();
+        process.exit(signal === "SIGINT" ? 130 : 143);
+    };
+    process.once("exit", tidy);
+    for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"] as const) process.once(signal, ended);
 
     let page: { webSocketDebuggerUrl: string } | undefined;
     for (let tries = 0; tries < 50 && !page; tries++) {
@@ -148,8 +165,12 @@ export async function browser({ width = 1200, height = 800, scale = 1, port = 94
             return Buffer.from(shot.data, "base64");
         },
         async close() {
+            process.off("exit", tidy);
             chrome.kill();
-            await rm(profile, { recursive: true, force: true });
+            // the browser may still be writing to its profile as it goes; a second sweep takes what the first missed
+            await rm(profile, { recursive: true, force: true }).catch(() => {});
+            await wait(150);
+            await rm(profile, { recursive: true, force: true }).catch(() => {});
         },
     };
 }
