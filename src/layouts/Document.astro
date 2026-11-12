@@ -11,9 +11,10 @@ import "../styles/motion.css";
 import { Font, getImage } from "astro:assets";
 import { nav, site } from "../data/site";
 import transition from "../scripts/transition.js?raw";
-import { theme, type AccentName } from "../data/theme";
+import { accents, theme, type AccentName } from "../data/theme";
 import { hex, themeStyle } from "../lib/color";
 import { hasPosts } from "../lib/posts";
+import { sharePicture, type Fact } from "../lib/share";
 
 interface Props {
     title?: string;
@@ -24,18 +25,25 @@ interface Props {
     /** Keep the page out of search results. */
     unlisted?: boolean;
     bodyClass?: string;
-    /** The picture used when the page is shared. The Playmatter one if left out. */
+    /** The picture used when the page is shared. The card with the site's name if left out. */
     image?: ImageMetadata;
+    imageAlt?: string;
+    /** Up to two facts for the link preview, such as a project's language and status. */
+    facts?: Fact[];
+    /** When a post was published, and its tags. */
+    published?: Date;
+    tags?: string[];
 }
 
-const { title, description = site.description, accent, type = "website", unlisted = false, bodyClass, image } = Astro.props;
+const { title, description = site.description, accent, type = "website", unlisted = false, bodyClass, image, imageAlt, facts = [], published, tags = [] } = Astro.props;
 
 const pageTitle = title ? `${title} · ${site.name.toLowerCase()}` : site.name.toLowerCase();
 const canonical = new URL(Astro.url.pathname, Astro.site);
-const shared = image
-    ? await getImage({ src: image, width: 1200, format: "png" })
-    : { src: "/assets/playmatter-share.png", attributes: { width: 1200, height: 610 } };
-const sharedUrl = new URL(shared.src, Astro.site);
+const picture = image ?? sharePicture("site");
+const shared = picture ? await getImage({ src: picture, width: 1200, format: "png" }) : undefined;
+const sharedAlt = imageAlt ?? (image ? `${title}, on ${site.name}'s website.` : `${site.name.toLowerCase()}.`);
+// The file Discord reads for the line above the title: this page's own when it has facts.
+const oembed = new URL(`/oembed/${facts.length > 0 ? Astro.url.pathname.replace(/^\/|\/$/g, "") : "site"}.json`, Astro.site);
 const posts = await hasPosts();
 /** The main pages in nav order, home first: the page transition moves along this. */
 const order = ["/", ...nav.map((item) => item.href)];
@@ -56,16 +64,38 @@ const order = ["/", ...nav.map((item) => item.href)];
         <Font cssVariable="--font-mono" />
         {/* There is no icon; this stops browsers asking for one and logging a miss. */}
         <link rel="icon" href="data:," />
-        <meta name="theme-color" content={hex(theme.ground)} />
+        {/* A browser takes the first that fits, so its own bars stay the page's color. The last, plain one is for a link preview's stripe. */}
+        <meta name="theme-color" media="(prefers-color-scheme: dark)" content={hex(theme.ground)} />
+        <meta name="theme-color" media="(prefers-color-scheme: light)" content={hex(theme.ground)} />
+        <meta name="theme-color" content={hex(accents[accent ?? "violet"])} />
         {posts && <link rel="alternate" type="application/rss+xml" title={`${site.name}'s blog`} href="/rss.xml" />}
         <meta property="og:title" content={title ?? site.name} />
         <meta property="og:description" content={description} />
         <meta property="og:type" content={type} />
         <meta property="og:url" content={canonical} />
-        <meta property="og:image" content={sharedUrl} />
-        <meta property="og:image:width" content={String(shared.attributes.width)} />
-        <meta property="og:image:height" content={String(shared.attributes.height)} />
-        <meta name="twitter:card" content="summary_large_image" />
+        <meta property="og:site_name" content={site.name.toLowerCase()} />
+        {
+            shared && (
+                <>
+                    <meta property="og:image" content={new URL(shared.src, Astro.site)} />
+                    <meta property="og:image:width" content={String(shared.attributes.width)} />
+                    <meta property="og:image:height" content={String(shared.attributes.height)} />
+                    <meta property="og:image:alt" content={sharedAlt} />
+                    <meta name="twitter:card" content="summary_large_image" />
+                </>
+            )
+        }
+        {published && <meta property="article:published_time" content={published.toISOString()} />}
+        {tags.map((tag) => <meta property="article:tag" content={tag} />)}
+        {
+            facts.slice(0, 2).map(([label, value], index) => (
+                <>
+                    <meta name={`twitter:label${index + 1}`} content={label} />
+                    <meta name={`twitter:data${index + 1}`} content={value} />
+                </>
+            ))
+        }
+        <link rel="alternate" type="application/json+oembed" href={oembed} title={title ?? site.name} />
         <script is:inline set:html={transition} />
         <slot name="head" />
     </head>

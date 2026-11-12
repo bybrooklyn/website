@@ -12,6 +12,7 @@ import Contents from "../../components/Contents.astro";
 import Opened from "../../layouts/Opened.astro";
 import { formatDate } from "../../lib/posts";
 import { getProjects, projectFacts, type Project } from "../../lib/projects";
+import { projectShare, sharePicture } from "../../lib/share";
 
 export const getStaticPaths = (async () => {
     const projects = await getProjects();
@@ -54,7 +55,7 @@ if (facts) rows.push(...count("stars", "stars", facts.stars), ...count("forks", 
 if (facts) rows.push({ label: "last updated", value: formatDate(new Date(facts.updated)), fact: "updated" });
 ---
 
-<Opened title={name} description={summary} image={cover} back={{ href: "/projects/", label: "projects" }}>
+<Opened title={name} description={summary} image={cover ?? sharePicture(`project-${project.id}`)} imageAlt={cover && coverAlt} facts={projectShare(project)} back={{ href: "/projects/", label: "projects" }}>
     <article class="post">
         <header class="post-header">
             <p class="post-meta">
