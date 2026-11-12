@@ -99,7 +99,7 @@ export function createCaret(root: HTMLElement, frame: HTMLElement, colours: read
     };
 
     /** Puts the caret where the cursor is now; true when it is shown. */
-    const move = () => {
+    const move = (atOnce = false) => {
         const box = document.activeElement === root || root.contains(document.activeElement) ? caretBox(root, frame) : null;
         const was = element.classList.contains("shown");
         element.classList.toggle("shown", !!box);
@@ -109,7 +109,7 @@ export function createCaret(root: HTMLElement, frame: HTMLElement, colours: read
         const top = box.top + (box.height - tall) / 2;
         // a long way (another line, a click elsewhere, or its first showing) is gone to at once; a letter's width is slid
         const [x = 0, y = 0] = element.style.translate.split(" ").map(parseFloat);
-        const far = !was || Math.abs(top - y) > 1 || Math.abs(box.left - x) > 40;
+        const far = atOnce || !was || Math.abs(top - y) > 1 || Math.abs(box.left - x) > 40;
         if (far) element.style.transition = "none";
         element.style.translate = `${box.left}px ${top}px`;
         element.style.height = `${tall}px`;
@@ -122,8 +122,10 @@ export function createCaret(root: HTMLElement, frame: HTMLElement, colours: read
     const place = () => {
         clearTimeout(rest);
         clearInterval(ticking);
+        // blinked off when a key is pressed, it is back at once and whole, not faded in
+        const blinkedOff = element.classList.contains("off");
         element.classList.remove("off");
-        if (!move()) return;
+        if (!move(blinkedOff)) return;
         colour();
         if (still()) return;
         // still for a moment, it starts to blink: off, then on in the next colour

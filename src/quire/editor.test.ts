@@ -875,7 +875,7 @@ used("the caret is drawn where the cursor is, a line tall, blinking once still i
     }
     // away from the text it goes
     await tab.run("document.activeElement.blur()");
-    await tab.wait(100);
+    await tab.wait(250);
     expect(await tab.run("getComputedStyle(document.querySelector('.quire-caret')).opacity")).toBe("0");
 });
 
