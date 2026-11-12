@@ -12,7 +12,8 @@
 // ranks spelling suggestions, and because they say which words are American and which British.
 // Words of size up to 60 are taken from the English, American and British (both -ise and -ize)
 // lists: words, words with capitals, names, abbreviations and contractions. Possessives are not
-// listed; the speller takes "dog's" from "dog".
+// listed; the speller takes "dog's" from "dog". A short list of words of computing and of identity
+// that SCOWL's size 60 leaves out, and that her writing uses, is added at the largest size (EXTRA).
 //
 // The file is gzip of lines in sorted order (by UTF-16 code units, as JavaScript compares strings).
 // Each line is one letter for the word's size and country (src/quire/check/dictionary.ts reads it),
@@ -27,6 +28,9 @@ const SIZES = [10, 20, 35, 40, 50, 55, 60];
 const KINDS = ["words", "upper", "proper-names", "abbreviations", "contractions"];
 /** Each list's country: 0 for both, 1 for American only, 2 for British only. */
 const CLASSES: [string, "us" | "gb" | "both"][] = [["english", "both"], ["american", "us"], ["british", "gb"], ["british_z", "gb"]];
+
+/** Words SCOWL's size 60 does not have that are ordinary in writing about computers, games and identity. */
+const EXTRA = "agender async backend backends codebase codebases config configs Ctrl changelog changelogs crossfade dev devs distro distros dropdown dropdowns filesystem filesystems frontend frontends frontmatter gameplay gapless homeschooled hostname hostnames keybinding keybindings localhost lookup lookups metadata namespace namespaces nonbinary ok playtest playtests playtesting plugin plugins readme readmes refactor refactored refactoring reimplementation renderer renderers repo repos runtime runtimes sapphic screenshot screenshots sitewide subvolume subvolumes tarball tarballs toolchain toolchains trackpad trackpads transfeminine uptime username usernames viewport viewports webring webrings workflow workflows".split(" ");
 
 const folder = process.argv[2];
 if (!folder) throw new Error("Give the SCOWL release's final folder.");
@@ -48,6 +52,7 @@ for (const [name, country] of CLASSES) {
         }
     }
 }
+for (const word of EXTRA) if (!found.has(word)) found.set(word, { size: SIZES.length - 1, us: true, gb: true });
 const sorted = [...found.keys()].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
 let last = "";
 const lines: string[] = [];

@@ -54,6 +54,8 @@ export interface Unit {
     /** True when the unit is a cell of a table, or inside a list item. */
     cell: boolean;
     listed: boolean;
+    /** True inside a quotation block: someone else's words, whose capitals are theirs. */
+    quoted: boolean;
     words: Word[];
     sentences: Span[];
 }
@@ -137,16 +139,17 @@ interface Place {
     runs?: Run[];
     cell: boolean;
     listed: boolean;
+    quoted: boolean;
 }
 
-function places(blocks: Block[], prefix: number[], out: Place[], listed = false) {
+function places(blocks: Block[], prefix: number[], out: Place[], listed = false, quoted = false) {
     blocks.forEach((block, index) => {
         const path = [...prefix, index];
-        if (block.kind === "list") block.items.forEach((item, k) => places(item.blocks, [...path, k], out, true));
-        else if (block.kind === "quote" || block.kind === "footnote") places(block.blocks, path, out, listed);
-        else if (block.kind === "table") [block.header, ...block.rows].forEach((row, r) => row.forEach((cell, c) => out.push({ path: [...path, r, c], block, key: cell, runs: cell, cell: true, listed })));
-        else if (block.kind === "paragraph" || block.kind === "heading") out.push({ path, block, key: block, runs: block.runs, cell: false, listed });
-        else if (block.kind === "code" || block.kind === "raw" || block.kind === "image") out.push({ path, block, key: block, cell: false, listed });
+        if (block.kind === "list") block.items.forEach((item, k) => places(item.blocks, [...path, k], out, true, quoted));
+        else if (block.kind === "quote" || block.kind === "footnote") places(block.blocks, path, out, listed, quoted || block.kind === "quote");
+        else if (block.kind === "table") [block.header, ...block.rows].forEach((row, r) => row.forEach((cell, c) => out.push({ path: [...path, r, c], block, key: cell, runs: cell, cell: true, listed, quoted })));
+        else if (block.kind === "paragraph" || block.kind === "heading") out.push({ path, block, key: block, runs: block.runs, cell: false, listed, quoted });
+        else if (block.kind === "code" || block.kind === "raw" || block.kind === "image") out.push({ path, block, key: block, cell: false, listed, quoted });
     });
 }
 
@@ -154,13 +157,13 @@ function makeUnit(place: Place): Unit {
     const { block } = place;
     const read = place.runs ? readRuns(place.runs) : readText(block.kind === "code" ? block.code : block.kind === "raw" ? block.text : "");
     const code = !place.runs;
-    return { path: place.path, block, runs: place.runs, read, code, heading: block.kind === "heading" ? block.level : undefined, cell: place.cell, listed: place.listed, words: code ? [] : words(read), sentences: code ? [] : sentences(read) };
+    return { path: place.path, block, runs: place.runs, read, code, heading: block.kind === "heading" ? block.level : undefined, cell: place.cell, listed: place.listed, quoted: place.quoted, words: code ? [] : words(read), sentences: code ? [] : sentences(read) };
 }
 
 /** A unit's text and what it is, as one string: equal strings check the same. */
 function hashOf(place: Place): string {
     const { block } = place;
-    const what = `${place.cell ? "cell" : block.kind === "heading" ? `h${block.level}` : block.kind}${place.listed ? "-listed" : ""}`;
+    const what = `${place.cell ? "cell" : block.kind === "heading" ? `h${block.level}` : block.kind}${place.listed ? "-listed" : ""}${place.quoted ? "-quoted" : ""}`;
     if (place.runs) return `${what}\u0000${JSON.stringify(place.runs)}`;
     return `${what}\u0000${block.kind === "code" ? block.code : block.kind === "raw" ? block.text : JSON.stringify(block)}`;
 }
