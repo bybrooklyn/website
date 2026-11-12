@@ -33,8 +33,8 @@
 // `quire-task` on a task item and `quire-box` on its box (`data-checked`),
 // `quire-atom` on an inline HTML span or footnote reference.
 
-import { blockAt, blockPaths, documentOf, image as imageBlock, paragraph, toggleTask, type Block, type Document, type Leaf, type Mark, type Run, type Selection } from "./document";
-import { createHistory, redo as redoStep, undo as undoStep, type State } from "./history";
+import { blockAt, blockPaths, documentOf, image as imageBlock, paragraph, setImageAlt, toggleTask, type Block, type Document, type Leaf, type Mark, type Run, type Selection } from "./document";
+import { createHistory, redo as redoStep, undo as undoStep, type ChangeKind, type State } from "./history";
 import { readHtml, writeHtml } from "./html";
 import { activeBlock, activeMarks, apply, caret, collapsed, fragment, paste, step, type Editor, type Input, type Outcome } from "./keys";
 import { read } from "./read";
@@ -70,7 +70,12 @@ export interface Surface {
     setDocument(doc: Document): void;
     getSelection(): Selection;
     setSelection(selection: Selection): void;
-    run(operation: Operation): void;
+    /** Makes a change from outside, as one undo step; `kind` "type" lets a run of them gather into one. */
+    run(operation: Operation, kind?: ChangeKind): void;
+    /** The element the surface draws into. */
+    element: HTMLElement;
+    /** The drawn element of the block (or table cell) at a path. */
+    elementAt(path: number[]): HTMLElement | undefined;
     undo(): void;
     redo(): void;
     focus(): void;
@@ -238,7 +243,14 @@ function draw(block: Block, inner: number[]): HTMLElement {
             const picture = document.createElement("img");
             picture.src = block.src;
             picture.alt = block.alt;
-            figure.append(picture);
+            // the alt text sits under the picture, written in place; it is kept when the field is left
+            const alt = document.createElement("input");
+            alt.className = "quire-alt";
+            alt.value = block.alt;
+            alt.placeholder = "Describe the picture";
+            alt.setAttribute("aria-label", "What the picture shows");
+            alt.dataset.alt = inner.join(",");
+            figure.append(picture, alt);
             return figure;
         }
         case "divider": {
@@ -484,7 +496,11 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
 
     // ---- events ----
 
+    /** True for an event from a field inside the document, such as a picture's alt text, which is the field's own. */
+    const fromField = (event: Event) => event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement;
+
     function onKeyDown(event: KeyboardEvent) {
+        if (fromField(event)) return;
         // Safari sends key 229 for keys that belong to a composition
         if (composing || event.isComposing || (event as { keyCode?: number }).keyCode === 229) return;
         const mod = MAC ? event.metaKey : event.ctrlKey;
@@ -507,6 +523,7 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
     }
 
     function onBeforeInput(event: InputEvent) {
+        if (fromField(event)) return;
         if (composing || event.isComposing || event.inputType === "insertCompositionText" || event.inputType === "deleteCompositionText" || event.inputType === "insertFromComposition") return;
         event.preventDefault();
         syncSelection();
@@ -590,8 +607,8 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
         else commit(editor);
     }
 
-    function onInput() {
-        if (composing) return;
+    function onInput(event: Event) {
+        if (composing || fromField(event)) return;
         // the browser changed the page by some way not cancelled: everything is drawn again from the model
         drawn = new WeakMap();
         root.replaceChildren();
@@ -600,7 +617,7 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
     }
 
     function onSelectionChange() {
-        if (composing) return;
+        if (composing || document.activeElement instanceof HTMLInputElement || document.activeElement instanceof HTMLTextAreaElement) return;
         syncSelection();
     }
 
@@ -649,6 +666,7 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
     }
 
     function onPaste(event: ClipboardEvent) {
+        if (fromField(event)) return;
         event.preventDefault();
         syncSelection();
         void takeData(event.clipboardData);
@@ -705,16 +723,25 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
         [root, "dragover", onDragOver as EventListener],
         [root, "drop", onDrop as EventListener],
         [root, "dragstart", onDragStart as EventListener],
+        [root, "change", onAltChange],
         [document, "selectionchange", onSelectionChange],
     ];
     for (const [target, name, handler] of handlers) target.addEventListener(name, handler);
 
     // ---- the interface ----
 
-    function run(operation: Operation) {
+    function run(operation: Operation, kind: ChangeKind = "format") {
         const result = operation(editor.state.doc, editor.state.selection);
         const state: State = "blocks" in result ? { doc: result, selection: fit(result, editor.state.selection) } : result;
-        commit(apply(editor, { state, kind: "format" }, Date.now()));
+        commit(apply(editor, { state, kind }, Date.now()));
+    }
+
+    function onAltChange(event: Event) {
+        const field = event.target as HTMLInputElement;
+        if (!field.matches?.("[data-alt]")) return;
+        const top = topOf(field);
+        const path = [[...root.children].indexOf(top!), ...(field.dataset.alt ? field.dataset.alt.split(",").map(Number) : [])];
+        run((doc) => setImageAlt(doc, path, field.value));
     }
 
     /** Keeps a selection where it is if it still points somewhere, or moves it to the first text. */
@@ -745,8 +772,13 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
             render();
             placeSelection();
             emit("change", { doc: next });
+            announce();
         },
         getSelection: () => editor.state.selection,
+        element: root,
+        elementAt(path) {
+            return holderAt(path) ?? (root.children[path[0]!] as HTMLElement | undefined);
+        },
         setSelection(selection) {
             commit(apply(editor, { state: { doc: editor.state.doc, selection: fit(editor.state.doc, selection) }, kind: "move" }, Date.now()));
         },
@@ -756,6 +788,8 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
         focus() {
             root.focus({ preventScroll: true });
             placeSelection();
+            // the bars learn where the cursor is as soon as there is one
+            announce();
         },
         on(name, listener) {
             const set = listeners.get(name) ?? new Set();

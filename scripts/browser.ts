@@ -18,6 +18,12 @@ export interface Browser {
     type(text: string): Promise<void>;
     /** Composes text through an input method, as for Japanese: each of `steps` shown in turn, then `text` committed. */
     compose(steps: string[], text: string): Promise<void>;
+    /** Makes the page see media features as given, such as `{ "prefers-reduced-motion": "reduce" }`; empty puts them back. */
+    media(features: Record<string, string>): Promise<void>;
+    /** Changes the window's size. */
+    resize(width: number, height: number): Promise<void>;
+    /** Answers every file chooser the page opens from now on with these files, instead of a dialog nobody can close. */
+    files(paths: string[]): Promise<void>;
     wait(ms: number): Promise<void>;
     /** A PNG of the window, or of one rectangle of the page. */
     picture(clip?: { x: number; y: number; width: number; height: number }): Promise<Buffer>;
@@ -50,11 +56,13 @@ export async function browser({ width = 1200, height = 800, scale = 1, port = 94
     const errors: string[] = [];
     const waiting = new Map<number, (answer: any) => void>();
     let loaded = () => {};
+    let chosen: string[] = [];
     let sent = 0;
     socket.onmessage = (message) => {
         const said = JSON.parse(String(message.data));
         if (said.id) waiting.get(said.id)?.(said.result ?? {});
         if (said.method === "Page.loadEventFired") loaded();
+        if (said.method === "Page.fileChooserOpened" && said.params.backendNodeId) void send("DOM.setFileInputFiles", { files: chosen, backendNodeId: said.params.backendNodeId });
         if (said.method === "Runtime.exceptionThrown") errors.push(said.params.exceptionDetails.exception?.description ?? said.params.exceptionDetails.text);
         if (said.method === "Runtime.consoleAPICalled" && said.params.type === "error") errors.push(said.params.args.map((arg: any) => arg.value ?? arg.description).join(" "));
     };
@@ -111,6 +119,16 @@ export async function browser({ width = 1200, height = 800, scale = 1, port = 94
         async compose(steps, text) {
             for (const shown of steps) await send("Input.imeSetComposition", { text: shown, selectionStart: shown.length, selectionEnd: shown.length });
             await send("Input.insertText", { text });
+        },
+        async media(features) {
+            await send("Emulation.setEmulatedMedia", { features: Object.entries(features).map(([name, value]) => ({ name, value })) });
+        },
+        async files(paths) {
+            chosen = paths;
+            await send("Page.setInterceptFileChooserDialog", { enabled: true });
+        },
+        async resize(wide, high) {
+            await send("Emulation.setDeviceMetricsOverride", { width: wide, height: high, deviceScaleFactor: scale, mobile: false });
         },
         async picture(clip) {
             const shot = await send("Page.captureScreenshot", { format: "png", ...(clip && { clip: { ...clip, scale: 1 } }) });

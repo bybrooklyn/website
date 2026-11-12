@@ -67,7 +67,7 @@ export const rangeOf = (selection: Selection): Range => ordered({ start: selecti
 const samePath = (a: number[], b: number[]) => a.length === b.length && a.every((step, index) => step === b[index]);
 
 /** The table a cell path points into, or undefined if the path is not a cell's. */
-function tableOf(doc: Document, path: number[]): number[] | undefined {
+export function tableOf(doc: Document, path: number[]): number[] | undefined {
     if (path.length < 3 || blockAt(doc, path)) return undefined;
     const table = path.slice(0, -2);
     return blockAt(doc, table)?.kind === "table" ? table : undefined;
@@ -136,7 +136,7 @@ function clear(state: State): { doc: Document; at: Position } {
 const done = (doc: Document, selection: Selection, kind: ChangeKind | "move", marks?: Mark[]): Outcome => ({ state: marks ? { doc, selection, marks } : { doc, selection }, kind });
 
 /** Where the cursor goes when the block it was in moved: the same place in reading order. */
-function sameLeaf(before: Document, path: number[], after: Document, shift = 0): number[] {
+export function sameLeaf(before: Document, path: number[], after: Document, shift = 0): number[] {
     const index = indexOf(before, path);
     return blockPaths(after)[Math.max(0, index + shift)] ?? path;
 }
@@ -405,7 +405,8 @@ function tab(state: State, back: boolean): Outcome {
 
 const MARK_KEYS: Record<string, Mark> = { b: "bold", i: "italic", u: "underline", e: "code" };
 
-function mark(state: State, which: Mark): Outcome {
+/** Turns a mark on or off over the selection; with nothing selected, for the text typed next. */
+export function mark(state: State, which: Mark): Outcome {
     if (collapsed(state.selection)) {
         const now = activeMarks(state);
         const marks = now.includes(which) ? now.filter((each) => each !== which) : [...now, which];
