@@ -114,7 +114,7 @@
 }
 
 /*
- * The track: a thin rail with faint marks at the original's nine positions, and a round thumb on it.
+ * The track: a thin rail with a faint mark at each of its seventeen positions, and a round thumb on it.
  * The range input lies over it unseen and takes no pointer; the script reads the pointer on the
  * track. Sideways the finger is the slider's; up and down it scrolls the page.
  */
@@ -169,14 +169,14 @@
     height: var(--thumb);
     margin-top: calc(var(--thumb) / -2);
     margin-inline-start: calc(var(--thumb) / -2);
-    border: 0.1875rem solid var(--ground);
+    /* one plain dot */
+    border: 0.125rem solid var(--accent);
     border-radius: 50%;
     background: var(--accent);
-    box-shadow: 0 0 0 0.0625rem var(--accent);
     transition:
         scale 0.25s var(--ease),
         background-color 0.2s ease,
-        box-shadow 0.2s ease;
+        border-color 0.2s ease;
 }
 
 .spectrum-track.held .spectrum-thumb,
@@ -192,8 +192,8 @@
 
 /* Unset, the thumb is hollow and the words under it fade. */
 .spectrum-axis.unset .spectrum-thumb {
-    background: var(--ground);
-    box-shadow: 0 0 0 0.0625rem var(--muted);
+    border-color: var(--muted);
+    background: var(--panel);
 }
 
 .spectrum-ends {

@@ -5,6 +5,8 @@ export const site = {
     lastName: "Halmstad",
     pronouns: "she/her",
     location: "New Jersey, USA",
+    /** The languages she speaks, in her words (12 Nov 2026: "i speak english only, and i have plans to learn another language"). */
+    speaks: "English only. I plan to learn another.",
     /** The clock she keeps, for the about page. */
     time: "Eastern Time (New York)",
     description: "Charlotte's website: Playmatter, other projects, and a blog.",
