@@ -220,6 +220,24 @@ see and learn and walk and do things on its own"; "all of this from scratch in o
   before adding them for this page.)
 - **Window:** "A much bigger mini": it takes the page's full width and most of its height.
 
+**After the literature search (design/generalist/LITERATURE.md), her choices on 12 Nov 2026:**
+
+- **The risky bet:** "Both, the first then the second". First: a brain of a fixed number of neurons that
+  adds and cuts connections while it lives, each paid for in energy from the food it finds, the rule for
+  adding and cutting having three or four numbers found by evolution while practice trains the weights
+  (nothing was found that charges a creature for its own wiring). Then, if that works: neurons whose whole
+  rule is an evolved program with practice inside (new, and very slow to search in a tab).
+- **The safe base, all four parts:** memory, rhythm and mood neurons; self-adjusting connections and the
+  broken leg; curiosity, food and energy; the teacher that evolves worlds.
+- **Culture** (each new creature watching the last one's best runs, then practising) stays in. It was
+  published by Cook, Lu, Hughes, Leibo and Foerster (NeurIPS 2024). Her words: "if we independently found it
+  ourselves(we did), that doesnt mean they own the research". So the article says both things: that she
+  came to it herself, and that it is in print, with the paper named.
+- **Claims:** "Narrow and honest": each claim says what was searched; everything else is known methods
+  rebuilt from scratch, compared fairly, playable in a tab.
+- Corrections to earlier notes: hard 2D parkour "was reported open" in 2021; training walkers in a browser
+  is not new (rlsim, rl-forge, both on TensorFlow.js); comparing evolution with RL in general is well-trodden.
+
 Order: speed, then the world and the rays, then PPO, then the teacher, then curiosity and needs, then
 the small vision encoder and the picture experiment.
 
