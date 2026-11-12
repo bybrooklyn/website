@@ -1,0 +1,236 @@
+# How the speech models are run
+
+`runtime.ts` loads a Parakeet model's two files into ONNX Runtime Web (ORT) and runs the encoder.
+This page is what was measured to make it, and what to do next. Everything marked **untested** was
+written from ORT's documentation and was not run here.
+
+Measured on one machine (16 threads, RTX 3070 Ti, and an AMD Radeon 610M integrated GPU), Chromium
+156, onnxruntime-web 1.24.1, spoken test sentences made by `espeak-ng` (11 s and 25 s of audio).
+Speed is encoder time over sound time. "Warm" is a second load in the same page.
+
+## 1. The runtime's size
+
+`onnxruntime-web` 1.24.1 holds these builds (raw bytes, then brotli as a visitor downloads it):
+
+| Build | Raw | Brotli | What it is |
+| --- | --- | --- | --- |
+| `ort-wasm-simd-threaded.wasm` | 12,297,086 | 1,966,354 | CPU only |
+| `ort-wasm-simd-threaded.jsep.wasm` | 24,911,187 | 3,284,689 | CPU and WebGPU (JSEP: GPU kernels written in JavaScript) |
+| `ort-wasm-simd-threaded.jspi.wasm` | 16,796,269 | 2,456,704 | native WebGPU EP, Chrome with JSPI only |
+| `ort-wasm-simd-threaded.asyncify.wasm` | 27,084,114 | 3,625,703 | native WebGPU EP, any browser (over Cloudflare's 25 MiB limit) |
+
+Each is loaded by a JavaScript entry: `ort.wasm.min.mjs` (50 kB, 14 kB brotli), `ort.min.mjs`
+(358 kB, 80 kB; this is the JSEP one), and the glue `ort-wasm-simd-threaded[.jsep].mjs` (24 kB and 47 kB).
+
+**Before.** The page imported `onnxruntime-web` whole: the 403 kB bundle (92 kB brotli) and the 24.9 MB JSEP
+file (3.28 MB brotli) for every visitor, 3.38 MB brotli.
+**After.** A browser without WebGPU downloads `ort.wasm.min.mjs`, its glue and the 12.3 MB file: 12.37 MB
+raw, **1.99 MB brotli**. A browser with a card downloads the JSEP set, 25.3 MB raw, 3.38 MB brotli, the same
+as before, because WebGPU needs that file. `astro.config.ts` (the `ort-files` integration) copies the six files
+into `/ort/`, unhashed, and `RUNTIME = "/ort/"` in `runtime.ts` is where they are fetched from. Nothing is
+bundled; `onnxruntime-web` is read only at build time. The old `?url` import in `engine-worker.ts` still makes
+the build emit the 24.9 MB file into `_astro/` until the engine stops using it.
+
+The native WebGPU builds (jspi, asyncify) are not shipped: they loaded and ran, but gave **wrong output** for
+every quantized encoder here (empty transcript; with the default output location, "Buffer used in submit while
+destroyed"), while the fp32 Moonshine encoder was right on all of them. Only JSEP is correct.
+
+### Files `/ort/*` need cache headers
+
+Not changed (`public/_headers` is not mine). They keep their names, so something like the `/wasm/*` rule
+(a day, then check again) fits. They are not hashed, so do not make them `immutable`.
+
+## 2. A smaller runtime of her own (untested)
+
+ORT's own docs give no wasm size for a reduced build, so there is no figure to quote. Reducing the operator
+set removes most CPU kernels (we use 37 of several hundred), so a few megabytes is plausible, but that is an
+estimate, not a measurement.
+
+### Operators our models use
+
+Read straight out of the `.onnx` files by a small protobuf reader (counts are nodes). The reader is not in the
+repo; it walks `ModelProto.graph.node`, including `If` subgraphs.
+
+- Parakeet encoders (int8 Ultra, w2a8 Redux, w4a8): `ai.onnx` opset 17: Add 204, Cast 18, Concat 68, Conv 29,
+  Cos, Div 27, Equal 18, Expand 18, Flatten, Gather 96, GreaterOrEqual, LayerNormalization 120, Less 4,
+  MatMul 72, Mul 156, Neg, Range 7, Relu 3, Reshape 145, Shape 61, Sigmoid 96, Sin, Softmax 24, Split 24,
+  Sub 6, Transpose 291, Unsqueeze 92, Where 42; `com.microsoft` `MatMulNBits` 265 (8-bit in Ultra, 2-bit in
+  Redux, 4-bit in w4a8). The fp16 encoder is the same graph with Cast and no MatMulNBits.
+- Parakeet decoder_joint int8: Add, Cast, Concat, Constant, DequantizeLinear, DynamicQuantizeLinear, Gather,
+  Identity, MatMulInteger, Mul, ReduceLogSumExp, Relu, Slice, Squeeze, TopK, Transpose, Unsqueeze, and
+  `com.microsoft` `DynamicQuantizeLSTM` 2.
+- Moonshine tiny, fp32 encoder, opset 14: Add, Cast, Concat, Conv, Cos, Div, Erf, Gather, InstanceNormalization,
+  MatMul, Mul, Neg, Pow, Range, ReduceMean, Reshape, Shape, Sigmoid, Sin, Slice, Softmax, Sqrt, Sub, Tanh,
+  Transpose, Unsqueeze.
+- Moonshine tiny int8 decoder, opset 14: the above plus Constant, ConstantOfShape, DequantizeLinear,
+  DynamicQuantizeLinear, Equal, Expand, Greater, If, MatMulInteger, Trilu, Where.
+
+This is the ONNX-level list. Converting to ORT format fuses nodes (it can add `FusedMatMul`, `NhwcConv`,
+`QLinear*` and similar), so **generate the real config from the converted files**, as step 2 below does, and
+treat the following as a check on it:
+
+```
+#domain;opset;ops
+ai.onnx;17;Add,Cast,Concat,Constant,Conv,Cos,DequantizeLinear,Div,DynamicQuantizeLinear,Equal,Expand,Flatten,Gather,GreaterOrEqual,Identity,LayerNormalization,Less,MatMul,MatMulInteger,Mul,Neg,Range,ReduceLogSumExp,Relu,Reshape,Shape,Sigmoid,Sin,Slice,Softmax,Split,Squeeze,Sub,TopK,Transpose,Unsqueeze,Where
+ai.onnx;14;Add,Cast,Concat,Constant,ConstantOfShape,Conv,Cos,DequantizeLinear,Div,DynamicQuantizeLinear,Equal,Erf,Expand,Gather,Greater,If,InstanceNormalization,MatMul,MatMulInteger,Mul,Neg,Pow,Range,ReduceMean,Reshape,Shape,Sigmoid,Sin,Slice,Softmax,Sqrt,Sub,Tanh,Transpose,Trilu,Unsqueeze,Where
+com.microsoft;1;DynamicQuantizeLSTM,MatMulNBits
+```
+
+### Recipe (untested)
+
+1. Convert the models to ORT format (a minimal build cannot read `.onnx`), with type reduction so the config
+   records types, from a folder holding every model of every tier:
+   ```sh
+   pip install onnxruntime
+   python -m onnxruntime.tools.convert_onnx_models_to_ort ./models --optimization_style Fixed --enable_type_reduction
+   ```
+   This writes `.ort` files and `required_operators_and_types.config` (and a `.with_runtime_opt` variant). Use
+   `--optimization_style Fixed` for a minimal build, which cannot optimize at load. Files larger than the
+   2 GB flatbuffer limit cannot be converted; ours are under it. The `.ort` encoders replace the `.onnx` ones in
+   the model table (`path`, `bytes`), and `runtime.ts` passes them to `InferenceSession.create` unchanged.
+2. Check out `onnxruntime` at tag `v1.24.1` with submodules (`git clone --recursive`, `git checkout v1.24.1`,
+   `git submodule update --init --recursive`). The emsdk version is whatever that tag pins; read it from
+   `tools/ci_build/github/azure-pipelines/templates/linux-wasm-ci.yml` there (the docs only say `latest`, which
+   may not build). Needs CMake 3.26+, Node 18+, Python 3.9+, `pip install ninja`.
+3. CPU build, SIMD and threads, reduced:
+   ```sh
+   ./build.sh --config MinSizeRel --build_wasm --enable_wasm_simd --enable_wasm_threads --skip_tests \
+     --disable_wasm_exception_catching --disable_rtti --minimal_build \
+     --include_ops_by_config ./required_operators_and_types.config --enable_reduced_operator_type_support
+   ```
+   Without threads (no cross-origin isolation needed, slightly smaller): the same without `--enable_wasm_threads`.
+   Whether ORT's JavaScript for 1.24 accepts a file named differently from `ort-wasm-simd-threaded.wasm` was not
+   checked; keep that name.
+4. With WebGPU: add `--use_jsep`. The JSEP kernels are JavaScript in the glue, so only the CPU half of the
+   wasm shrinks. Whether `--minimal_build` works together with `--use_jsep` was not checked; if it does not,
+   leave `--minimal_build` off and keep `--include_ops_by_config`, which reduces the kernels without the ORT
+   format. Our JSEP needs MatMulNBits for 4 bits only (see 3 below).
+5. Build the package: in `js/`, `js/common/`, `js/web/` run `npm ci`; copy the `.wasm` and `.mjs` into
+   `js/web/dist/`; `npm run build` in `js/web`.
+6. Put the new `ort-wasm-simd-threaded.{mjs,wasm}` (and `.jsep.` pair) in `/ort/`: copy them over the ones named
+   in `ORT` in `astro.config.ts`, or point that list's folder at your build. If the folder is elsewhere on the
+   site or on a CDN, change `RUNTIME` in `runtime.ts`: **that one line** is the whole switch.
+
+## 3. The graphics card
+
+Real WebGPU worked here (Chromium flags `--enable-unsafe-webgpu --enable-features=Vulkan --use-angle=vulkan`;
+setting `VK_ICD_FILENAMES` to the Radeon's file picks the integrated GPU). SwiftShader
+(`--use-webgpu-adapter=swiftshader`) gave the same checksums and text, 34 s for 3.4 s of audio, and reports
+`isFallbackAdapter`, so `detect()` turns it down.
+
+| Encoder | On JSEP WebGPU | Download |
+| --- | --- | --- |
+| int8 Ultra (MatMulNBits, 8 bits) | **cannot**: session creation fails, "Only 4b quantization is supported for MatMulNBits" | 649 MB |
+| w2a8 Redux (2 bits) | cannot, same | 190 MB |
+| **w4a8** (`Olicorne/parakeet-tdt-0.6b-v3-ultra-onnx`, `w4a8/encoder-model.w4a8.onnx`, 383,355,483 bytes) | **works, text exact** | 383 MB |
+| fp16 (`fp16/encoder-model.fp16.onnx`, 1,218,170,745 bytes) | works, text exact | 1.2 GB |
+
+Encoder time for the 24.6 s sample, warm (decoder on WASM, int8):
+
+| Arrangement | Encoder | Whole transcription | Speed |
+| --- | --- | --- | --- |
+| int8 Ultra, WASM 1 thread | about 11.5 s (5.2 s measured for 11 s of audio) | | 0.47 |
+| w4a8 on RTX 3070 Ti | 0.40 s | 0.52 to 0.70 s | 0.016 |
+| fp16 on RTX 3070 Ti | 0.17 s | 0.35 s | 0.007 |
+| w4a8 on Radeon 610M (2 compute units) | 5.1 s | 5.3 s | 0.21 |
+
+So **the arrangement to use is the w4a8 encoder on WebGPU with the int8 decoder on WASM**: it is smaller
+than the int8 file the main tier ships (383 MB against 649 MB), identical in text on every sample here, and
+on WASM it is no slower (4.9 s against 5.2 s for 11 s of audio, same words). Even the weakest card measured
+beats one WASM thread by 2.3 times. fp16 is 2.4 times faster again but three times the download, and
+needs a second 1.2 GB copy in memory while loading. Not yet done: a word error rate for w4a8 over more than
+the 43 words of the standing test; the three sentences here came out exact.
+
+Session options, by measurement (w4a8, 24.6 s, encoder ms over five runs):
+
+| Option | Result |
+| --- | --- |
+| `graphOptimizationLevel` all, extended, basic, disabled | 402 to 428: no difference. `all` kept. |
+| `executionMode: "parallel"` | 418 to 436: no gain |
+| `preferredOutputLocation: "gpu-buffer"` | 417 to 433: no gain, since the decoder is on the CPU and the output has to be downloaded anyway. Needed for the native builds only. |
+| `enableGraphCapture: true` | **23 times slower** (9.6 s): the frame count changes, so the capture never replays. Not used. |
+| `preferredLayout: "NHWC"` | 386 to 455: noise |
+| IO binding | not tried: it only pays when the output stays on the card |
+
+Profiling (`env.webgpu.profiling`) shows 1,270 kernels a run on the card, MatMulNBits 87 % of the 191 ms of
+GPU time, LayerNormalization 15 ms, everything else under 5 ms each. The minimal web build does not report
+which nodes went to the CPU ("Rerunning with verbose output on a non-minimal build will show node
+assignments"); the shape arithmetic (Shape, Unsqueeze, Equal, Less, Reshape) does, and the run takes 213 ms
+wall against 191 ms on the card, so the CPU side costs about 20 ms. The first run on a card compiles its
+programs and took 0.6 to 0.9 s; `load()` makes one run over silence so that cost is in the load, not in the
+first words.
+
+### Making an fp16 or int4 encoder yourself
+
+fp16 exists already (above). **Untested**: for a checkpoint with no fp16 export, with `onnxconverter-common`:
+`from onnxconverter_common import float16; m = float16.convert_float_to_float16(onnx.load("encoder-model.onnx", load_external_data=True), keep_io_types=True); onnx.save(m, "encoder-model.fp16.onnx")`. The Olicorne repository has `scripts/quantize-fp16.py` and `scripts/build-from-nemo-export.sh` that do this
+properly for these models. The 4-bit file is made by the same scripts (`w4a8`). `ryusei-46/parakeet-ultra-ONNX-WebGPU`
+has an int4 encoder in `encoder.onnx` plus `encoder.onnx.data` (not tried on a card; it needs
+`externalData`, which `load()` does not take, so use the single-file w4a8).
+
+## 4. Threads
+
+`/mdquire*` can be isolated alone. The lines for `public/_headers` (not changed):
+
+```
+/mdquire/*
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: require-corp
+
+/mdquire-dictation/*
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: require-corp
+
+# A worker's script must carry the same embedder policy as the page that starts it, or the browser refuses it.
+/_astro/*
+  Cross-Origin-Embedder-Policy: require-corp
+/ort/*
+  Cross-Origin-Embedder-Policy: require-corp
+```
+
+The last two are not optional: with the policy on the pages only, the threaded run **hung with no result for
+200 s**, because ORT's thread workers (`/ort/*.mjs`) and the engine worker (`/_astro/`) were refused. (Add
+`! Permissions-Policy` rules as they are now; these lines go beside them.)
+
+**Speed** (Ultra int8 encoder, 11.15 s of audio, ms, three runs): 1 thread 5,200; 2 threads 2,700;
+**4 threads 1,300**; 8 threads 1,070; 16 threads 1,500 (more threads than cores that were free). Redux:
+4,900 / 1,470 (4) / 1,085 (8). So four threads are a 4 times speed-up and 8 buy 20 % more; `runtime.ts`
+uses up to four. On the card the threads speed up only the decoder: 24.6 s took 683 ms with one and 517 ms
+with four. That would take the int8 main tier from 0.47 to about 0.12, under the live-words limit.
+
+**What it costs.** Fetches to `huggingface.co` (with `Range`, and the redirect to its content hosts) and to
+`api.github.com` both worked under `require-corp` and `credentialless`, because both answer CORS. Same-origin
+pictures, fonts and scripts are untouched. What breaks under `require-corp` is any cross-origin resource
+without CORS or `Cross-Origin-Resource-Policy: cross-origin`: an `<img>` from `httpbin.org` was blocked, a
+`no-cors` fetch failed; and a cross-origin iframe needs its own COEP (not tested, the editor has none, and
+`frame-src https:` is allowed in the page policy). `credentialless` lets those load without credentials,
+but Safari does not support it as far as I know, so `require-corp` is the portable one. `COOP: same-origin`
+cuts `window.opener` to any page opened from or opening these ones (none do). Both pages loaded, drew and
+showed their editor with no errors under each mode. A reload keeps the isolation; links from the rest of the
+site into `/mdquire/` are ordinary navigations. The site's Pages `Content-Security-Policy` needs no change.
+
+## 5. Load times
+
+Session creation (both sessions, and for a card the first compile run), after the files are in memory:
+
+| | Cold (first load in a page) | Warm (second load in the same page) |
+| --- | --- | --- |
+| Ultra int8, WASM | 0.8 to 0.9 s | |
+| Redux w2a8, WASM | 0.45 to 0.55 s | |
+| w4a8, WASM | 0.77 s | 0.56 s |
+| w4a8, RTX 3070 Ti | 2.1 s | 1.2 s |
+| fp16, RTX 3070 Ti | 2.0 s | |
+
+Cold includes compiling the wasm; the browser keeps compiled code for a page reload, so a real warm start
+(the files already in storage) should be near the warm column; this machine's test server turned caching
+off, so that was not measured. Fetching the model bytes from the local server took 0.1 to 0.7 s.
+
+`release()` releases both sessions; memory comes back once the runtime frees its heap and the card its
+buffers. Not measured separately from the dictation check.
+
+## Not confirmed
+
+- A real warm start with the browser's code cache; memory after `release()` on the card.
+- w4a8's word error over a large sample; accuracy of a person's voice rather than `espeak-ng`.
+- Anything in section 2, and the native WebGPU builds on other browsers or GPUs than the two used here.
+- Phones and Safari: WebGPU there was not available to test; `detect()` falls back to WASM when it is not.
