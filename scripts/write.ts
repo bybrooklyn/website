@@ -277,6 +277,8 @@ async function handle(request: Request): Promise<Response> {
         const file = Bun.file(`${ORT}/${url.pathname.slice(5)}`);
         return (await file.exists()) ? new Response(file, { headers: { "content-type": url.pathname.endsWith(".wasm") ? "application/wasm" : "text/javascript" } }) : json({ error: "No such file." }, 404);
     }
+    // the spelling check's dictionary, which the site serves from public/
+    if (url.pathname === "/quire/words-en.dat") return new Response(Bun.file(at("public/quire/words-en.dat")), { headers: { "content-type": "application/octet-stream" } });
     if (url.pathname.startsWith("/fonts/")) {
         const file = Bun.file(resolve(at("src/assets/fonts"), `.${url.pathname.slice(6)}`));
         return /^\/fonts\/(full\/)?[\w-]+\.woff2$/.test(url.pathname) && (await file.exists()) ? new Response(file) : json({ error: "No such font." }, 404);

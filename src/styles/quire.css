@@ -2393,3 +2393,243 @@ body.quire-app {
         visibility: hidden;
     }
 }
+
+/* ---- checking (src/quire/check/) ----
+   Faint underlines under what was found, by the browser's highlights: wavy for spelling, dotted for
+   the rest, in the muted ink or a little of the accent, never a glow. The count at the bar's end
+   grows in when checking is switched on; the popover, the list and the settings are menus that flow
+   out of what opened them (ui.ts), and these rules only lay out what is inside them. */
+
+::highlight(quire-check-spelling) {
+    text-decoration: underline wavy color-mix(in oklch, var(--accent) 75%, transparent);
+    text-decoration-skip-ink: none;
+    text-underline-offset: 0.22em;
+}
+
+::highlight(quire-check-markdown),
+::highlight(quire-check-link) {
+    text-decoration: underline dotted color-mix(in oklch, var(--accent) 65%, transparent);
+    text-decoration-thickness: 0.12em;
+    text-underline-offset: 0.24em;
+}
+
+::highlight(quire-check-prose) {
+    text-decoration: underline dotted color-mix(in oklch, var(--muted) 75%, transparent);
+    text-decoration-thickness: 0.1em;
+    text-underline-offset: 0.24em;
+}
+
+.quire-check-count {
+    max-width: 0;
+    min-width: 0;
+    padding-inline: 0;
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 0.82rem;
+    font-variant-numeric: tabular-nums;
+    opacity: 0;
+    transition:
+        max-width 0.4s var(--ease),
+        padding 0.4s var(--ease),
+        opacity 0.25s ease;
+}
+
+.quire-check-count.shown {
+    max-width: 4rem;
+    min-width: 2rem;
+    padding-inline: 0.5rem;
+    opacity: 1;
+}
+
+/* a short dotted line before the number, the look of the underlines it counts */
+.quire-check-count .quire-check-number::before {
+    display: inline-block;
+    width: 0.55rem;
+    height: 0.55rem;
+    margin-right: 0.35rem;
+    border-bottom: 0.12rem dotted currentColor;
+    content: "";
+    translate: 0 -0.1rem;
+}
+
+.quire-check-count.shown:not(.clear) {
+    color: var(--ink);
+}
+
+.quire-check-anchor {
+    position: fixed;
+    z-index: -1;
+    pointer-events: none;
+}
+
+.quire-check-card,
+.quire-check-all,
+.quire-check-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    width: min(19rem, 100vw - 4.5rem);
+    padding: 0.3rem 0.35rem;
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
+
+.quire-check-all {
+    width: min(21rem, 100vw - 4.5rem);
+}
+
+/* the keys are for a keyboard, which a narrow window seldom has */
+@media (max-width: 40rem) {
+    .quire-check-keys {
+        display: none;
+    }
+}
+
+.quire-check-card p,
+.quire-check-all p,
+.quire-check-all h3 {
+    margin: 0;
+}
+
+.quire-check-kind {
+    color: var(--muted);
+    font-size: 0.75rem;
+    font-weight: 400;
+    letter-spacing: 0.02em;
+}
+
+.quire-check-message,
+.quire-check-title {
+    color: var(--ink);
+}
+
+.quire-check-fixes,
+.quire-check-more,
+.quire-check-foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.quire-check-more,
+.quire-check-foot {
+    padding-top: 0.4rem;
+    border-top: 0.0625rem solid var(--rule);
+}
+
+.quire-check-foot {
+    justify-content: space-between;
+}
+
+.quire-check-fix {
+    border: 0.0625rem solid color-mix(in oklch, var(--accent) 45%, var(--rule));
+    color: var(--ink);
+}
+
+.quire-check-action {
+    color: var(--muted);
+    font-size: 0.82rem;
+}
+
+.quire-check-fix:hover,
+.quire-check-action:hover,
+.quire-check-line:hover,
+.quire-check-fix:focus-visible,
+.quire-check-action:focus-visible,
+.quire-check-line:focus-visible {
+    background: var(--panel-raised);
+    color: var(--ink);
+}
+
+.quire-check-none,
+.quire-check-score,
+.quire-check-keys {
+    color: var(--muted);
+    font-size: 0.8rem;
+}
+
+.quire-check-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+}
+
+.quire-check-line {
+    display: grid;
+    gap: 0.1rem;
+    padding: 0.35rem 0.5rem;
+    border: 0;
+    border-radius: 0.6rem;
+    background: none;
+    color: var(--ink);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.quire-check-words {
+    overflow: hidden;
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.quire-check-said {
+    color: var(--muted);
+    font-size: 0.82rem;
+}
+
+.quire-check-set {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    margin: 0;
+    padding: 0.4rem 0 0;
+    border: 0;
+    border-top: 0.0625rem solid var(--rule);
+}
+
+.quire-check-set legend {
+    padding: 0 0 0.2rem;
+    color: var(--muted);
+    font-size: 0.75rem;
+}
+
+.quire-check-switch,
+.quire-check-number-line {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.15rem 0.25rem;
+    color: var(--ink);
+    cursor: pointer;
+}
+
+.quire-check-switch input {
+    accent-color: var(--accent);
+}
+
+.quire-check-number-line {
+    justify-content: space-between;
+}
+
+.quire-check-number-line input,
+.quire-check-number-line select {
+    width: 6rem;
+    padding: 0.2rem 0.4rem;
+    border: 0.0625rem solid var(--rule);
+    border-radius: 0.5rem;
+    background: var(--ground);
+    color: var(--ink);
+    font: inherit;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .quire-check-count {
+        transition: none;
+    }
+}
+
+/* ---- end of checking ---- */
