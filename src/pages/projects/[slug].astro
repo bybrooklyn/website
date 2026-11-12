@@ -7,7 +7,6 @@ import type { GetStaticPaths } from "astro";
 import { render } from "astro:content";
 import "../../styles/blog.css";
 import "../../styles/projects.css";
-import "../../styles/viewer.css";
 import Contents from "../../components/Contents.astro";
 import Opened from "../../layouts/Opened.astro";
 import { formatDate } from "../../lib/posts";
@@ -159,10 +158,6 @@ if (facts) rows.push({ label: "last updated", value: formatDate(new Date(facts.u
         />
     </article>
 </Opened>
-
-<script>
-    import "../../scripts/viewer";
-</script>
 
 <script>
     // On a public project's page, ask GitHub for today's numbers and put them

@@ -7,6 +7,7 @@ import "../styles/base.css";
 import "../styles/prose.css";
 import "../styles/opened.css";
 import "../styles/motion.css";
+import "../styles/viewer.css";
 
 import { Font, getImage } from "astro:assets";
 import { nav, site } from "../data/site";
@@ -102,5 +103,8 @@ const order = ["/", ...nav.map((item) => item.href)];
     <body class={bodyClass}>
         <a class="skip" href="#main">Skip to the page</a>
         <slot />
+        <script>
+            import "../scripts/viewer";
+        </script>
     </body>
 </html>

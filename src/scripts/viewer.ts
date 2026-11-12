@@ -1,6 +1,12 @@
-// Clicking a picture in a post or a project lifts it out of the page, moves
-// it to the middle of the window at full size, and puts it back where it was
-// when it is clicked again, Escape is pressed or the page is scrolled.
+// Clicking a picture anywhere on the site lifts it out of the page, moves it
+// to the middle of the window at full size, and puts it back where it was
+// when it is clicked again, Escape is pressed or the page is scrolled. Three
+// dots in the corner flow out into a small menu: what the picture is, opening
+// it in a new tab, downloading it, and what may be done with it.
+//
+// Every page has it (Document.astro). Which pictures it takes is in WHICH,
+// below; a picture can ask to be left alone with `data-no-view`, and another
+// script can open one with `view(picture)`.
 //
 // It is one picture moving, not a second one fading in: a copy is laid over
 // the original at its final place and size, then transformed back onto the
@@ -51,9 +57,76 @@ function centered(shape: number, limit: number): Box {
 /** The transform that makes something at `to` appear to be at `from`. */
 const over = (from: Box, to: Box) => `translate(${from.left - to.left}px, ${from.top - to.top}px) scale(${from.width / to.width}, ${from.height / to.height})`;
 
+/** What is known about a picture from the page around it: what it is called, and who made it or when. */
+function about(picture: HTMLImageElement): { title: string; more: string } {
+    const figure = picture.closest("figure");
+    const title = figure?.querySelector(".photo-title")?.textContent?.trim() || picture.alt || figure?.querySelector("figcaption")?.textContent?.trim() || "Picture";
+    const more = figure?.querySelector(".photo-taken")?.textContent?.trim();
+    return { title, more: more ?? "" };
+}
+
+/** The three dots, and the menu they flow out into. `address` gives the picture's largest copy. */
+function menu(picture: HTMLImageElement, address: () => string): { box: HTMLElement; shut(): boolean; sized(width: number, height: number): void } {
+    const make = <K extends keyof HTMLElementTagNameMap>(tag: K, name: string, text = ""): HTMLElementTagNameMap[K] => {
+        const made = document.createElement(tag);
+        made.className = name;
+        made.textContent = text;
+        return made;
+    };
+    const box = make("div", "viewer-menu");
+    const dots = make("button", "viewer-dots");
+    dots.type = "button";
+    dots.setAttribute("aria-label", "More about this picture");
+    dots.setAttribute("aria-expanded", "false");
+    dots.append(make("i", ""), make("i", ""), make("i", ""));
+    const items = make("div", "viewer-items");
+    items.inert = true;
+    const { title, more } = about(picture);
+    const note = make("p", "viewer-note note");
+    /** The picture's size is said once its largest copy has arrived, since that is the one opened and downloaded. */
+    const sized = (width: number, height: number) => (note.textContent = [`${width} × ${height}`, more].filter(Boolean).join(" · "));
+    sized(picture.naturalWidth, picture.naturalHeight);
+    const link = (text: string, set: (a: HTMLAnchorElement) => void) => {
+        const a = make("a", "", text);
+        set(a);
+        return a;
+    };
+    items.append(
+        make("p", "viewer-title", title),
+        note,
+        link("Open in a new tab", (a) => Object.assign(a, { href: address(), target: "_blank", rel: "noopener" })),
+        link("Download", (a) => Object.assign(a, { href: address(), download: "" })),
+        link("What you may do with it", (a) => (a.href = "/license/")),
+    );
+    box.append(dots, items);
+
+    const set = (open: boolean) => {
+        // the box is given the menu's own size to grow to, and flows there from a circle
+        box.style.setProperty("--wide", `${items.offsetWidth}px`);
+        box.style.setProperty("--high", `${items.offsetHeight}px`);
+        box.classList.toggle("open", open);
+        dots.setAttribute("aria-expanded", String(open));
+        items.inert = !open;
+        if (open) (items.querySelector("a") as HTMLElement).focus({ preventScroll: true });
+    };
+    dots.addEventListener("click", () => set(!box.classList.contains("open")));
+    // nothing done in the menu closes the picture
+    for (const kind of ["click", "wheel", "touchmove"]) box.addEventListener(kind, (event) => event.stopPropagation());
+    return {
+        box,
+        sized,
+        shut() {
+            const was = box.classList.contains("open");
+            if (was) set(false);
+            return was;
+        },
+    };
+}
+
 let closeOpen: (() => void) | undefined;
 
-function open(picture: HTMLImageElement, link?: HTMLAnchorElement | null): void {
+/** Opens a picture in the viewer. `link`, if the picture is one, is where its full size is. */
+export function view(picture: HTMLImageElement, link?: HTMLAnchorElement | null): void {
     if (closeOpen || !picture.naturalWidth) return;
     const pixel = Boolean(picture.closest(".pixel")) || picture.classList.contains("pixel");
     const shape = picture.naturalWidth / picture.naturalHeight;
@@ -75,18 +148,21 @@ function open(picture: HTMLImageElement, link?: HTMLAnchorElement | null): void 
     copy.alt = picture.alt;
     copy.src = picture.currentSrc || picture.src;
     Object.assign(copy.style, { left: `${to.left}px`, top: `${to.top}px`, width: `${to.width}px`, height: `${to.height}px` });
-    viewer.append(shade, copy);
+    const large = largest(picture, link);
+    const more = menu(picture, () => large);
+    viewer.append(shade, copy, more.box);
     document.body.append(viewer);
 
     // The sharper copy takes over once it has arrived; until then the one already on the page is stretched.
-    const large = largest(picture, link);
     if (large !== copy.src) {
         const loading = new Image();
         loading.src = large;
         void loading
             .decode()
             .then(() => {
-                if (copy.isConnected) copy.src = large;
+                if (!copy.isConnected) return;
+                copy.src = large;
+                more.sized(loading.naturalWidth, loading.naturalHeight);
             })
             .catch(() => {});
     }
@@ -135,12 +211,17 @@ function open(picture: HTMLImageElement, link?: HTMLAnchorElement | null): void 
         ).finished.then(done, done);
     };
     const key = (event: KeyboardEvent) => {
-        if (event.key !== "Escape" && event.key !== "Enter" && event.key !== " ") return;
-        event.preventDefault();
+        // while a picture is open the page under it hears no keys; Tab still moves between the menu's lines
+        if (event.key === "Tab") return;
         event.stopPropagation();
+        const inMenu = more.box.contains(document.activeElement);
+        if (event.key === "Escape" && more.shut()) return void viewer.focus({ preventScroll: true });
+        if (event.key !== "Escape" && (inMenu || (event.key !== "Enter" && event.key !== " "))) return;
+        event.preventDefault();
         shut();
     };
-    viewer.addEventListener("click", shut);
+    // a click outside the menu closes the menu if it is open, and otherwise the picture
+    viewer.addEventListener("click", () => more.shut() || shut());
     viewer.addEventListener("wheel", shut, { passive: true });
     viewer.addEventListener("touchmove", shut, { passive: true });
     addEventListener("keydown", key, true);
@@ -148,30 +229,33 @@ function open(picture: HTMLImageElement, link?: HTMLAnchorElement | null): void 
     closeOpen = shut;
 }
 
-// Pictures in the text and the cover open on a click or with the keyboard.
-for (const picture of document.querySelectorAll<HTMLImageElement>(".post .prose img, .post img.post-cover")) {
-    if (picture.closest("a, .specimen, .timeline, .photo")) continue;
+/**
+ * Which pictures open: those in the text of a page, covers, figures, and the one on the photos page.
+ * Not one inside a link (it goes where the link goes, except in a gallery, whose links are to the
+ * picture itself), nor the type specimen, the timeline, or a game's still.
+ */
+const WHICH = ".prose img, img.post-cover, .figure img, .gallery a img, .photo-frame > img[src]";
+const taken = (picture: HTMLImageElement) => picture.matches(WHICH) && !picture.closest("[data-no-view], .specimen, .timeline, .play-here") && (!picture.closest("a") || Boolean(picture.closest(".gallery a")));
+
+// One listener for the whole page, so that a picture put there later (the photos page changes its own) opens too.
+document.addEventListener("click", (event) => {
+    const picture = event.target instanceof HTMLImageElement ? event.target : undefined;
+    // (one that has not arrived yet is left to whatever it would have done anyway)
+    if (!picture || !picture.naturalWidth || !taken(picture) || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
+    event.preventDefault();
+    view(picture, picture.closest<HTMLAnchorElement>(".gallery a"));
+});
+// Each can also be reached and opened with the keyboard, unless it is in a link, which already can be.
+for (const picture of document.querySelectorAll<HTMLImageElement>(WHICH)) {
+    if (!taken(picture)) continue;
     picture.dataset.zoom = "";
+    if (picture.closest("a")) continue;
     picture.tabIndex = 0;
     picture.setAttribute("role", "button");
     picture.setAttribute("aria-label", picture.alt ? `View larger: ${picture.alt}` : "View larger");
-    picture.addEventListener("click", () => open(picture));
     picture.addEventListener("keydown", (event) => {
         if (event.key !== "Enter" && event.key !== " ") return;
         event.preventDefault();
-        open(picture);
+        view(picture);
     });
 }
-
-// A gallery picture is already a link to its full size. With scripts the link opens the viewer instead.
-for (const link of document.querySelectorAll<HTMLAnchorElement>(".gallery a")) {
-    const picture = link.querySelector("img");
-    if (!picture) continue;
-    picture.dataset.zoom = "";
-    link.addEventListener("click", (event) => {
-        if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
-        event.preventDefault();
-        open(picture, link);
-    });
-}
-export {};

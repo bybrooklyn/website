@@ -4,7 +4,6 @@ import PrevNext from "../components/PrevNext.astro";
 import Picture from "../components/Picture.astro";
 import type { MarkdownHeading } from "astro";
 import "../styles/blog.css";
-import "../styles/viewer.css";
 import { site } from "../data/site";
 import Opened from "./Opened.astro";
 import Contents from "../components/Contents.astro";
@@ -61,7 +60,3 @@ const cite = `${site.name} ${site.lastName}, "${post.data.title}", ${new URL(Ast
         />
     </article>
 </Opened>
-
-<script>
-    import "../scripts/viewer";
-</script>
