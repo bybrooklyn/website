@@ -3,7 +3,8 @@
 // page scrolls in a panel beside it. On phones and narrow windows there is no
 // strip: the trail at the top of the panel is the way back.
 import Document from "./Document.astro";
-import Header from "../components/Header.astro";
+import Flags from "../components/Flags.astro";
+import { site } from "../data/site";
 import type { ComponentProps } from "astro/types";
 
 type Props = Omit<ComponentProps<typeof Document>, "bodyClass"> & {
@@ -26,16 +27,18 @@ const { back, title, ...document } = Astro.props;
         </span>
     </a>
     <div class="opened-panel" tabindex="-1">
-        {/* the site's own top row, where it is on every other page, so that nothing in it moves */}
-        <div class="opened-top">
-            <Header />
-        </div>
-        <main id="main">
+        <header class="opened-top">
+            <div class="site-id">
+                <a class="site-name" href="/">{site.name.toLowerCase()}</a>
+                <Flags />
+            </div>
             <nav class="trail" aria-label="Where you are">
                 <a href={back.href}>{back.label}</a>
                 <span aria-hidden="true">/</span>
                 <span aria-current="page">{title}</span>
             </nav>
+        </header>
+        <main id="main">
             <slot />
         </main>
     </div>
