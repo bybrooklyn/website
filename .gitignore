@@ -25,3 +25,6 @@ resume-preview
 # posts being held back: written here, shown on the dev server, never committed.
 # To publish one, take ".hold" out of its file name.
 src/content/blog/*.hold.mdx
+
+# what cargo builds of the walking mini's engine; the module itself is copied to public/wasm
+walker/target/

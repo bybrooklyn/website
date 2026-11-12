@@ -1,0 +1,334 @@
+//! What the page calls. Every function takes and gives plain numbers. Lists, such as the bodies to
+//! draw or a brain's weights, stay in the module's memory: a function gives a pointer to the first
+//! f32, another gives the length, and the page reads them through a Float32Array over
+//! `memory.buffer`. Memory can grow during any call, which replaces that buffer, so the page makes
+//! its view again after each call rather than keeping one. README.md lists each function.
+//!
+//! There is one walker per module. A page wanting two instantiates the module twice.
+
+use alloc::vec;
+use alloc::vec::Vec;
+
+use crate::Shared;
+use crate::body::Description;
+use crate::learn::{Settings, Trainer, flat_ground};
+use crate::math::Vec2;
+use crate::physics::Segment;
+use crate::show::{Crowd, Show};
+
+struct Walker {
+    trainer: Trainer,
+    show: Show,
+    crowd: Option<Crowd>,
+    /// Room the page writes into: ground pieces as four f32 each, and a brain's weights.
+    ground_room: Vec<f32>,
+    weights_room: Vec<f32>,
+    crowd_room: Vec<f32>,
+}
+
+static WALKER: Shared<Option<Walker>> = Shared::new(None);
+
+fn walker() -> Option<&'static mut Walker> {
+    WALKER.get().as_mut()
+}
+
+/// A pointer for the page, or 0 when there is no walker yet.
+fn pointer(list: Option<&[f32]>) -> *const f32 {
+    list.map_or(core::ptr::null(), |list| list.as_ptr())
+}
+
+/// Makes a new walker with `legs` legs (1, 2 or 4) on flat ground, with a population of `population`
+/// brains, each run for `seconds` when training, and random numbers from `seed`. Returns the number
+/// of weights in one brain, or 0 if the description is not one the engine builds.
+#[unsafe(no_mangle)]
+pub extern "C" fn create(legs: u32, population: u32, seconds: f32, seed: u32) -> u32 {
+    let description = Description { legs };
+    let settings = Settings { population: population.clamp(2, 1000) as usize, seconds: if seconds > 0.0 { seconds.min(120.0) } else { 10.0 }, ..Settings::default() };
+    let Some(trainer) = Trainer::new(description, settings, &flat_ground(), seed as u64) else {
+        *WALKER.get() = None;
+        return 0;
+    };
+    let count = trainer.layout.weights();
+    let show = Show::new(&trainer.start, &trainer.creature, trainer.layout, trainer.weights(0));
+    *WALKER.get() = Some(Walker { trainer, show, crowd: None, ground_room: Vec::new(), weights_room: vec![0.0; count], crowd_room: Vec::new() });
+    count as u32
+}
+
+/// Room for `pieces` pieces of ground, each four f32: x1, y1, x2, y2. The page writes them there
+/// and then calls `ground_set`.
+#[unsafe(no_mangle)]
+pub extern "C" fn ground_room(pieces: u32) -> *mut f32 {
+    match walker() {
+        Some(walker) => {
+            walker.ground_room.clear();
+            walker.ground_room.resize(4 * pieces.min(100_000) as usize, 0.0);
+            walker.ground_room.as_mut_ptr()
+        }
+        None => core::ptr::null_mut(),
+    }
+}
+
+/// Puts the walker on the ground written into `ground_room`, `pieces` pieces of it. Training goes on
+/// from where it was, scoring on the new ground; the show and the crowd start again on it. With
+/// zero pieces the ground is flat again. Returns 1 if it worked.
+#[unsafe(no_mangle)]
+pub extern "C" fn ground_set(pieces: u32) -> u32 {
+    let Some(walker) = walker() else { return 0 };
+    let pieces = (pieces as usize).min(walker.ground_room.len() / 4);
+    let ground: Vec<Segment> = if pieces == 0 {
+        flat_ground()
+    } else {
+        walker.ground_room.chunks_exact(4).take(pieces).map(|p| Segment { a: Vec2::new(p[0], p[1]), b: Vec2::new(p[2], p[3]) }).collect()
+    };
+    walker.trainer.set_ground(&ground);
+    show_reset();
+    if walker.crowd.is_some() {
+        crowd_reset();
+    }
+    1
+}
+
+/// Trains for up to `runs` runs of one brain each, then returns the number of generations finished.
+#[unsafe(no_mangle)]
+pub extern "C" fn train(runs: u32) -> u32 {
+    walker().map_or(0, |walker| walker.trainer.train(runs))
+}
+
+/// The number of generations finished.
+#[unsafe(no_mangle)]
+pub extern "C" fn generation() -> u32 {
+    walker().map_or(0, |walker| walker.trainer.generation)
+}
+
+/// How many brains of the current generation have been run.
+#[unsafe(no_mangle)]
+pub extern "C" fn generation_runs() -> u32 {
+    walker().map_or(0, |walker| walker.trainer.scored.iter().filter(|scored| **scored).count() as u32)
+}
+
+/// The best score so far, in metres; minus infinity before the first generation is finished.
+#[unsafe(no_mangle)]
+pub extern "C" fn best_score() -> f32 {
+    walker().map_or(f32::NEG_INFINITY, |walker| walker.trainer.best_score)
+}
+
+/// How far the best brain so far took the torso forward in its run, in metres.
+#[unsafe(no_mangle)]
+pub extern "C" fn best_distance() -> f32 {
+    walker().map_or(0.0, |walker| walker.trainer.best_distance)
+}
+
+/// The number of brains in a generation.
+#[unsafe(no_mangle)]
+pub extern "C" fn population_length() -> u32 {
+    walker().map_or(0, |walker| walker.trainer.settings.population as u32)
+}
+
+/// Every brain of the current generation, one after another, `population_length` times
+/// `weights_length` f32. A page training in a worker sends these to the page's own module for the
+/// crowd (`crowd_room`, `crowd_start`).
+#[unsafe(no_mangle)]
+pub extern "C" fn population_weights() -> *const f32 {
+    pointer(walker().map(|walker| &walker.trainer.population[..]))
+}
+
+/// The number of finished generations in the history.
+#[unsafe(no_mangle)]
+pub extern "C" fn history_length() -> u32 {
+    walker().map_or(0, |walker| walker.trainer.history_best.len() as u32)
+}
+
+/// The best score of each finished generation, `history_length` f32.
+#[unsafe(no_mangle)]
+pub extern "C" fn history_best() -> *const f32 {
+    pointer(walker().map(|walker| &walker.trainer.history_best[..]))
+}
+
+/// The average score of each finished generation, `history_length` f32.
+#[unsafe(no_mangle)]
+pub extern "C" fn history_mean() -> *const f32 {
+    pointer(walker().map(|walker| &walker.trainer.history_mean[..]))
+}
+
+/// The number of weights in one brain.
+#[unsafe(no_mangle)]
+pub extern "C" fn weights_length() -> u32 {
+    walker().map_or(0, |walker| walker.trainer.layout.weights() as u32)
+}
+
+/// The best brain's weights so far, `weights_length` f32.
+#[unsafe(no_mangle)]
+pub extern "C" fn best_weights() -> *const f32 {
+    pointer(walker().map(|walker| &walker.trainer.best[..]))
+}
+
+/// Room for one brain's weights, `weights_length` f32, for the page to write a shared brain into
+/// before calling `weights_load`.
+#[unsafe(no_mangle)]
+pub extern "C" fn weights_room() -> *mut f32 {
+    walker().map_or(core::ptr::null_mut(), |walker| walker.weights_room.as_mut_ptr())
+}
+
+/// Takes in the brain written into `weights_room`: it becomes the best so far, joins the population,
+/// and the show starts again with it. Returns 1 if it worked, 0 if any weight was not a number.
+#[unsafe(no_mangle)]
+pub extern "C" fn weights_load() -> u32 {
+    let Some(walker) = walker() else { return 0 };
+    let weights = walker.weights_room.clone();
+    if !walker.trainer.load(&weights) {
+        return 0;
+    }
+    show_reset();
+    1
+}
+
+/// Starts the show again from the start, with the best brain so far (or a random one before the
+/// first generation is finished).
+#[unsafe(no_mangle)]
+pub extern "C" fn show_reset() {
+    let Some(walker) = walker() else { return };
+    let trainer = &walker.trainer;
+    let weights = if trainer.best_score > f32::NEG_INFINITY { &trainer.best[..] } else { trainer.weights(0) };
+    walker.show = Show::new(&trainer.start, &trainer.creature, trainer.layout, weights);
+}
+
+/// How long the show has been running, in seconds.
+#[unsafe(no_mangle)]
+pub extern "C" fn show_seconds() -> f32 {
+    walker().map_or(0.0, |walker| walker.show.world.steps as f32 * crate::physics::STEP)
+}
+
+/// 1 if the show's walker has its torso on the ground, else 0.
+#[unsafe(no_mangle)]
+pub extern "C" fn show_fallen() -> u32 {
+    walker().map_or(0, |walker| walker.show.creature.fallen(&walker.show.world) as u32)
+}
+
+/// Moves the show on by `seconds`, in whole steps of 1/60 s, and returns how many were taken.
+#[unsafe(no_mangle)]
+pub extern "C" fn show_step(seconds: f32) -> u32 {
+    walker().map_or(0, |walker| walker.show.step(seconds))
+}
+
+/// Pushes the show's walker at the point (x, y) with an impulse in newton seconds, on whichever of
+/// its bodies is nearest. Returns that body's number, or -1 with no walker.
+#[unsafe(no_mangle)]
+pub extern "C" fn show_push(x: f32, y: f32, impulse_x: f32, impulse_y: f32) -> i32 {
+    walker().and_then(|walker| walker.show.push(Vec2::new(x, y), Vec2::new(impulse_x, impulse_y))).map_or(-1, |body| body as i32)
+}
+
+/// The number of bodies in one walker.
+#[unsafe(no_mangle)]
+pub extern "C" fn body_count() -> u32 {
+    walker().map_or(0, |walker| walker.show.world.bodies.len() as u32)
+}
+
+/// The show's bodies, six f32 each: x, y, angle, kind (0 circle, 1 capsule, 2 box), and two sizes
+/// (a circle's radius and 0, a capsule's half length and radius, a box's half width and half height).
+#[unsafe(no_mangle)]
+pub extern "C" fn show_bodies() -> *const f32 {
+    pointer(walker().map(|walker| &walker.show.drawn[..]))
+}
+
+/// How far the show's walker has gone forward, in metres.
+#[unsafe(no_mangle)]
+pub extern "C" fn show_distance() -> f32 {
+    walker().map_or(0.0, |walker| walker.show.creature.distance(&walker.show.world))
+}
+
+/// The number of senses, hidden neurons and outputs in a brain.
+#[unsafe(no_mangle)]
+pub extern "C" fn senses_length() -> u32 {
+    walker().map_or(0, |walker| walker.trainer.layout.inputs as u32)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn hidden_length() -> u32 {
+    walker().map_or(0, |walker| walker.trainer.layout.hidden as u32)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn outputs_length() -> u32 {
+    walker().map_or(0, |walker| walker.trainer.layout.outputs as u32)
+}
+
+/// What the show's walker sensed last, `senses_length` f32, in the order `Creature::sense` gives.
+#[unsafe(no_mangle)]
+pub extern "C" fn show_senses() -> *const f32 {
+    pointer(walker().map(|walker| &walker.show.senses[..]))
+}
+
+/// What its hidden neurons gave last, `hidden_length` f32, each from -1 to 1.
+#[unsafe(no_mangle)]
+pub extern "C" fn show_hidden() -> *const f32 {
+    pointer(walker().map(|walker| &walker.show.brain.hidden[..]))
+}
+
+/// What its outputs gave last, `outputs_length` f32, each from -1 to 1, one for each joint.
+#[unsafe(no_mangle)]
+pub extern "C" fn show_outputs() -> *const f32 {
+    pointer(walker().map(|walker| &walker.show.brain.outputs[..]))
+}
+
+/// The weights the show's walker runs on, `weights_length` f32, to draw the brain's connections.
+#[unsafe(no_mangle)]
+pub extern "C" fn show_weights() -> *const f32 {
+    pointer(walker().map(|walker| &walker.show.weights[..]))
+}
+
+/// Starts the crowd: every brain of the current generation, each walking in its own world from the
+/// start. Returns how many walkers there are.
+#[unsafe(no_mangle)]
+pub extern "C" fn crowd_reset() -> u32 {
+    let Some(walker) = walker() else { return 0 };
+    let trainer = &walker.trainer;
+    let crowd = Crowd::new(&trainer.start, &trainer.creature, trainer.layout, &trainer.population);
+    let count = crowd.worlds.len() as u32;
+    walker.crowd = Some(crowd);
+    count
+}
+
+/// Room for `count` brains, one after another, for the page to write a generation into before
+/// calling `crowd_start`.
+#[unsafe(no_mangle)]
+pub extern "C" fn crowd_room(count: u32) -> *mut f32 {
+    let Some(walker) = walker() else { return core::ptr::null_mut() };
+    let length = walker.trainer.layout.weights() * count.min(1000) as usize;
+    walker.crowd_room.clear();
+    walker.crowd_room.resize(length, 0.0);
+    walker.crowd_room.as_mut_ptr()
+}
+
+/// Starts the crowd with the `count` brains written into `crowd_room` in place of this module's
+/// own generation. Returns how many walkers there are.
+#[unsafe(no_mangle)]
+pub extern "C" fn crowd_start(count: u32) -> u32 {
+    let Some(walker) = walker() else { return 0 };
+    let length = (walker.trainer.layout.weights() * count as usize).min(walker.crowd_room.len());
+    let trainer = &walker.trainer;
+    let crowd = Crowd::new(&trainer.start, &trainer.creature, trainer.layout, &walker.crowd_room[..length]);
+    let count = crowd.worlds.len() as u32;
+    walker.crowd = Some(crowd);
+    count
+}
+
+/// Moves the crowd on by `seconds`, in whole steps, and returns how many were taken.
+#[unsafe(no_mangle)]
+pub extern "C" fn crowd_step(seconds: f32) -> u32 {
+    walker().and_then(|walker| walker.crowd.as_mut()).map_or(0, |crowd| crowd.step(seconds))
+}
+
+/// Where every body of every walker in the crowd is: walker after walker, `body_count` bodies each,
+/// three f32 per body (x, y, angle). Shapes and sizes are the show's.
+#[unsafe(no_mangle)]
+pub extern "C" fn crowd_bodies() -> *const f32 {
+    pointer(walker().and_then(|walker| walker.crowd.as_ref()).map(|crowd| &crowd.drawn[..]))
+}
+
+/// Stops the crowd and frees its worlds.
+#[unsafe(no_mangle)]
+pub extern "C" fn crowd_stop() {
+    if let Some(walker) = walker() {
+        walker.crowd = None;
+    }
+}

@@ -19,6 +19,7 @@
         "edit": "bun scripts/write.ts",
         "photos": "bun scripts/photos.ts",
         "pictures": "bun scripts/pictures.ts",
+        "wasm": "bun scripts/wasm.ts",
         "clean": "rm -rf dist .astro"
     },
     "dependencies": {

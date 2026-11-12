@@ -64,8 +64,13 @@ export default defineConfig({
                 "object-src 'none'",
                 "base-uri 'self'",
                 "form-action 'self'",
+                // The Walker mini trains in a worker, a script of the site's own.
+                "worker-src 'self'",
             ],
             scriptDirective: {
+                // 'wasm-unsafe-eval' lets a page compile WebAssembly (the Walker mini's engine) and
+                // nothing else: eval and new Function stay blocked.
+                resources: ["'self'", "'wasm-unsafe-eval'"],
                 hashes: [`sha256-${transition}`],
             },
             styleDirective: {

@@ -1,0 +1,31 @@
+# The walking mini's engine: a creature that learns to walk, and the small physics it walks in.
+# Built for the browser as a plain WebAssembly module with `bun run wasm`; see README.md.
+
+[package]
+name = "walker"
+version = "0.1.0"
+edition = "2024"
+publish = false
+license = "MIT"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+# Without this feature the module holds the physics alone, to keep it small enough to use elsewhere.
+default = ["walker"]
+walker = []
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+[profile.dev]
+panic = "abort"
+
+# Tests run the physics for many seconds, which is slow without optimising.
+[profile.test]
+opt-level = 3
