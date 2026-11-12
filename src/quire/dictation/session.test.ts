@@ -7,7 +7,7 @@ import { documentOf, paragraph, textAt, type Document, type Selection } from "..
 import type { ChangeKind, State } from "../history";
 import { caret } from "../keys";
 import { write as markdown } from "../write";
-import { startSession, type Reason, type Recognizer, type Session, type Target } from "./session";
+import { startSession, type Live, type LiveUpdate, type Reason, type Recognizer, type Session, type Target } from "./session";
 import { nothing, type Custom } from "./words";
 
 const RATE = 16000;
@@ -206,5 +206,83 @@ describe("a long unbroken stretch", () => {
         expect(heard.calls).toBeGreaterThan(1);
         expect(editor.steps).toBeGreaterThanOrEqual(1);
         expect(textAt(editor.getDocument(), [0]).length).toBeGreaterThan(0);
+    });
+});
+
+/** A recognizer with a live stream: each second of sound given is a word, and `behind` is what the test says it is. */
+function streaming(behind = 0, finishing = 0) {
+    const made = {
+        backend: "fake",
+        dispose() {},
+        calls: 0,
+        async transcribe(_samples: Float32Array) {
+            made.calls++;
+            return { text: "hello there", ms: 10 };
+        },
+        opened: 0,
+        /** Samples in the first piece of sound each stream was given. */
+        first: [] as number[],
+        cancelled: 0,
+        boost(_words: string[]) {},
+        stream(): Live {
+            made.opened++;
+            let listener: (update: LiveUpdate) => void = () => {};
+            let heard = 0;
+            let pieces = 0;
+            const words = ["hello", "there", "my", "dear", "friend"];
+            const said = () => words.slice(0, Math.min(words.length, Math.floor(heard / RATE))).map((text, at) => ({ text, start: at, end: at + 1 }));
+            return {
+                push(samples) {
+                    if (pieces++ === 0) made.first.push(samples.length);
+                    heard += samples.length;
+                    listener({ words: said(), tentative: [], ms: 100, seconds: 1, behind });
+                },
+                onUpdate: (next) => void (listener = next),
+                finish: async () => {
+                    await new Promise((done) => setTimeout(done, finishing));
+                    return said();
+                },
+                cancel: () => void made.cancelled++,
+            };
+        },
+    };
+    return made;
+}
+
+describe("a recognizer with a live stream", () => {
+    function setup(heard: ReturnType<typeof streaming>) {
+        const editor = target();
+        const shown: string[] = [];
+        const notes: string[] = [];
+        const session = startSession({ target: editor, recognizer: heard, commands: () => true, custom: () => nothing(), onProvisional: (text) => shown.push(text), onNote: (note) => notes.push(note) });
+        return { editor, shown, notes, session, heard };
+    }
+    test("shows the stream's words while speaking and writes the finished phrase at the pause without asking the recognizer again", async () => {
+        const { editor, shown, session, heard } = setup(streaming());
+        await drive(session, [...quiet(500), ...frames(3000, 0.2), ...quiet(1200)]);
+        expect(shown.some((text) => /hello there/i.test(text))).toBe(true);
+        expect(editor.text().startsWith("Hello there")).toBe(true);
+        expect(editor.steps).toBe(1);
+        expect(heard.opened).toBe(1);
+        expect(heard.calls).toBe(0);
+    });
+    test("a phrase that begins while the one before is still being finished does not carry the sound of the one before", async () => {
+        const { editor, session, heard } = setup(streaming(0, 200));
+        await drive(session, [...quiet(300), ...frames(2000, 0.2), ...quiet(700), ...frames(2000, 0.2), ...quiet(1200)]);
+        await new Promise((done) => setTimeout(done, 700));
+        expect(heard.opened).toBe(2);
+        // a second and a half at the most: the pre-roll, not the whole of what was in the buffer
+        expect(heard.first[1]!).toBeLessThanOrEqual(1.6 * RATE);
+        expect(editor.text().split(/\s+/).filter((word) => /hello/i.test(word)).length).toBe(2);
+    });
+    test("falls back to writing at the pause when the stream is far behind, and says so", async () => {
+        const { editor, notes, session, heard } = setup(streaming(9));
+        await drive(session, [...quiet(300), ...frames(3000, 0.2), ...quiet(1200)]);
+        expect(session.mode()).toBe("pause");
+        expect(heard.cancelled).toBe(1);
+        expect(notes.join(" ")).toContain("cannot keep up");
+        // the phrase is still written, by asking the recognizer about the whole of it
+        expect(heard.calls).toBeGreaterThan(0);
+        expect(editor.text().length).toBeGreaterThan(0);
     });
 });

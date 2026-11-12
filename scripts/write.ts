@@ -20,7 +20,7 @@ import { $ } from "bun";
 import { mkdir } from "node:fs/promises";
 import { dirname, extname, relative, resolve } from "node:path";
 import { themeStyle } from "../src/lib/color";
-import { withoutSpeech } from "./dictation-stubs";
+import { forEditor } from "./dictation-stubs";
 import { at, frontmatter, isDraft, listMdx, root, slug, stem, writeJson } from "./lib";
 
 const args = process.argv.slice(2);
@@ -195,9 +195,15 @@ async function publish(message: string): Promise<{ ok: boolean; log: string }> {
 
 // ---- the page ----
 
-const bundle = await Bun.build({ entrypoints: [at("scripts/editor/main.ts")], target: "browser", plugins: [withoutSpeech] });
+// The editor page, the speech engine's worker and the microphone's worklet are built together; the
+// page asks for the last two by the names below. ONNX Runtime's files are served from node_modules.
+const bundle = await Bun.build({ entrypoints: [at("scripts/editor/main.ts"), at("src/quire/dictation/engine-worker.ts"), at("src/quire/dictation/capture-worklet.ts")], target: "browser", naming: "[name].js", plugins: [forEditor] });
 if (!bundle.success) throw new AggregateError(bundle.logs, "The editor's script did not build.");
-const script = await bundle.outputs[0]!.text();
+const built = async (name: string) => bundle.outputs.find((output) => output.path.endsWith(`/${name}.js`))!.text();
+const script = await built("main");
+const worker = await built("engine-worker");
+const worklet = await built("capture-worklet");
+const ORT = at("node_modules/onnxruntime-web/dist");
 
 async function styles(): Promise<string> {
     const sheet = (name: string) => Bun.file(at(`src/styles/${name}`)).text();
@@ -211,7 +217,7 @@ async function styles(): Promise<string> {
         ':root{--font-torrens:"Torrens Serif",Georgia,serif;--font-mono:"Drafting Mono",ui-monospace,monospace}',
         await sheet("fonts.css"),
     ].join("\n");
-    return [`:root{${themeStyle()}}`, fonts, await sheet("tokens.css"), await sheet("base.css"), await sheet("prose.css"), await sheet("quire.css"), await Bun.file(at("scripts/editor/editor.css")).text()].join("\n");
+    return [`:root{${themeStyle()}}`, fonts, await sheet("tokens.css"), await sheet("base.css"), await sheet("prose.css"), await sheet("quire.css"), await Bun.file(at("src/quire/dictation/dictation.css")).text(), await Bun.file(at("scripts/editor/editor.css")).text()].join("\n");
 }
 
 const page = `<!doctype html>
@@ -253,6 +259,12 @@ async function handle(request: Request): Promise<Response> {
 
     if (url.pathname === "/style.css") return new Response(await styles(), { headers: { "content-type": "text/css" } });
     if (url.pathname === "/app.js") return new Response(script, { headers: { "content-type": "text/javascript" } });
+    if (url.pathname === "/engine-worker.ts") return new Response(worker, { headers: { "content-type": "text/javascript" } });
+    if (url.pathname === "/capture-worklet.js") return new Response(worklet, { headers: { "content-type": "text/javascript" } });
+    if (/^\/ort\/[\w.-]+\.(mjs|wasm)$/.test(url.pathname)) {
+        const file = Bun.file(`${ORT}/${url.pathname.slice(5)}`);
+        return (await file.exists()) ? new Response(file, { headers: { "content-type": url.pathname.endsWith(".wasm") ? "application/wasm" : "text/javascript" } }) : json({ error: "No such file." }, 404);
+    }
     if (url.pathname.startsWith("/fonts/")) {
         const file = Bun.file(resolve(at("src/assets/fonts"), `.${url.pathname.slice(6)}`));
         return /^\/fonts\/(full\/)?[\w-]+\.woff2$/.test(url.pathname) && (await file.exists()) ? new Response(file) : json({ error: "No such font." }, 404);

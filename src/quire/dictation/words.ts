@@ -3,8 +3,8 @@
 // out as an address). They are applied to every settled phrase as corrections: whole words only,
 // whatever the case, and for a sounds-like form a small number of wrong letters is forgiven.
 //
-// Parakeet's decoder, as parakeet.js exposes it, takes no phrase list to lean toward, so this
-// correction after the fact is the whole of the feature. The list is kept in localStorage, wrapped
+// The recognizer also leans toward these words while it decodes (parakeet/boost.ts); this correction
+// after the fact catches what it still hears wrong, and does the sounds-like forms. The list is kept in localStorage, wrapped
 // in try/catch because it can be missing or refuse.
 
 import { same } from "./merge";

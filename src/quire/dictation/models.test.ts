@@ -2,7 +2,7 @@
 // default tier follows the device.
 
 import { describe, expect, test } from "bun:test";
-import { addressOf, defaultTier, megabytes, sizeOf, tierOf, TIERS } from "./models";
+import { addressOf, defaultTier, megabytes, placeOf, sizeOf, tierOf, TIERS } from "./models";
 
 describe("the tiers", () => {
     test("each has an encoder and a decoder, and the vocabulary its engine reads", () => {
@@ -19,12 +19,18 @@ describe("the tiers", () => {
             expect(tier.credit.length).toBeGreaterThan(0);
         }
     });
+    test("the Accurate tier uses the 4-bit encoder, the only kind the graphics card can run, and the Light one the 2-bit encoder", () => {
+        expect(tierOf("main").files.find((file) => file.role === "encoder")!.path).toContain("w4a8");
+        expect(tierOf("main").card).toBe(true);
+        expect(tierOf("light").files.find((file) => file.role === "encoder")!.path).toContain("w2a8");
+        expect(tierOf("light").card).toBeFalsy();
+    });
     test("get smaller from main to tiny", () => {
         expect(sizeOf(tierOf("main"))).toBeGreaterThan(sizeOf(tierOf("light")));
         expect(sizeOf(tierOf("light"))).toBeGreaterThan(sizeOf(tierOf("tiny")));
     });
-    test("an unknown id gives the first tier", () => {
-        expect(tierOf("nope").id).toBe("main");
+    test("an unknown id gives the light tier", () => {
+        expect(tierOf("nope").id).toBe("light");
     });
 });
 
@@ -41,14 +47,20 @@ test("megabytes says a size the way the panel does", () => {
 
 describe("the default tier", () => {
     const strong = { mobile: false, slow: false, gpu: true, memory: 8 };
-    test("is the main one on a capable desktop", () => {
-        expect(defaultTier(strong)).toBe("main");
-        expect(defaultTier({ ...strong, memory: undefined })).toBe("main");
+    test("is the light one on a desktop or laptop, with or without a graphics card", () => {
+        expect(defaultTier(strong)).toBe("light");
+        expect(defaultTier({ ...strong, memory: undefined })).toBe("light");
+        expect(defaultTier({ ...strong, gpu: false })).toBe("light");
     });
-    test("is the tiny one on a phone, a slow connection, little memory, or without WebGPU", () => {
+    test("is the tiny one on a phone, a slow connection or little memory", () => {
         expect(defaultTier({ ...strong, mobile: true })).toBe("tiny");
         expect(defaultTier({ ...strong, slow: true })).toBe("tiny");
         expect(defaultTier({ ...strong, memory: 2 })).toBe("tiny");
-        expect(defaultTier({ ...strong, gpu: false })).toBe("tiny");
+    });
+    test("says graphics card only where the tier can use one and there is one", () => {
+        expect(placeOf(tierOf("main"), { gpu: true })).toBe("graphics card");
+        expect(placeOf(tierOf("main"), { gpu: false })).toBe("processor");
+        expect(placeOf(tierOf("light"), { gpu: true })).toBe("processor");
+        expect(placeOf(tierOf("tiny"), { gpu: true })).toBe("processor");
     });
 });

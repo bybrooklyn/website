@@ -3,11 +3,15 @@
 // each file in it. How a model is made and what the engine needs of it is in MODELS.md.
 //
 // Three tiers, a different kind of model in each:
-//   main   Parakeet Ultra, a 0.6 billion parameter transducer, the most accurate
-//   light  Parakeet Redux, the same network with a ternary encoder, a third of the size
+//   light  Parakeet Redux, a 0.6 billion parameter transducer with a ternary encoder, for desktops and laptops
+//   main   Parakeet Ultra, the same network trained further, the most accurate (the panel calls it "Accurate")
 //   tiny   Moonshine tiny, 27 million parameters, for phones and slow connections
+//
+// A Parakeet encoder runs on the graphics card only if it is a 4-bit one (w4a8), and only Ultra has
+// such a file. So Ultra uses it on the card and on the processor alike: it is as fast and as accurate
+// on the processor as the 8-bit file and 270 MB smaller. Redux's 2-bit encoder runs on the processor.
 
-/** The engine that runs a tier's files: parakeet.js, or our own decoding for Moonshine. */
+/** The engine that runs a tier's files: parakeet/ (our own) or moonshine.ts. */
 export type Engine = "parakeet" | "moonshine";
 
 /** What a file is for. */
@@ -35,6 +39,8 @@ export interface Tier {
     credit: string;
     /** Mel bands the model listens with (Parakeet only). */
     mels?: number;
+    /** Whether the encoder can run on the graphics card when there is one (Parakeet only). */
+    card?: boolean;
 }
 
 /** Where the files are fetched from. */
@@ -44,12 +50,14 @@ export const HOST = "https://huggingface.co";
 export const TIERS: Tier[] = [
     {
         id: "main",
-        name: "Main",
-        note: "The most accurate. Parakeet Ultra.",
+        name: "Accurate",
+        note: "The most accurate, and quick on a graphics card. Parakeet Ultra.",
         engine: "parakeet",
+        mels: 128,
+        card: true,
         repo: "Olicorne/parakeet-tdt-0.6b-v3-ultra-onnx",
         files: [
-            { role: "encoder", path: "int8/encoder-model.int8.onnx", bytes: 649431593 },
+            { role: "encoder", path: "w4a8/encoder-model.w4a8.onnx", bytes: 383355483 },
             { role: "decoder", path: "int8/decoder_joint-model.int8.onnx", bytes: 18203490 },
             { role: "vocab", path: "vocab.txt", bytes: 93939 },
         ],
@@ -59,8 +67,9 @@ export const TIERS: Tier[] = [
     {
         id: "light",
         name: "Light",
-        note: "A third of the size, nearly as accurate. Parakeet Redux.",
+        note: "Half the size, nearly as accurate. Parakeet Redux.",
         engine: "parakeet",
+        mels: 128,
         repo: "Olicorne/parakeet-tdt-0.6b-v3-redux-onnx",
         files: [
             { role: "encoder", path: "w2a8/encoder-model.w2a8.onnx", bytes: 189893007 },
@@ -87,7 +96,7 @@ export const TIERS: Tier[] = [
 ];
 
 /** The tier with this id. */
-export const tierOf = (id: string): Tier => TIERS.find((tier) => tier.id === id) ?? TIERS[0]!;
+export const tierOf = (id: string): Tier => TIERS.find((tier) => tier.id === id) ?? TIERS.find((tier) => tier.id === "light")!;
 
 /** Where one file is fetched from. */
 export const addressOf = (tier: Tier, file: ModelFile): string => `${HOST}/${tier.repo}/resolve/main/${file.path.split("/").map(encodeURIComponent).join("/")}`;
@@ -113,11 +122,14 @@ export interface Device {
     memory?: number;
 }
 
-/** The tier to start on: tiny for a phone, a slow connection, little memory, or no graphics card; the main one otherwise. The visitor can always change it. */
+/** The tier to start on: tiny for a phone, a slow connection or little memory; light otherwise. The visitor can always change it. */
 export function defaultTier(device: Device): Tier["id"] {
-    if (device.mobile || device.slow || !device.gpu || (device.memory !== undefined && device.memory < 4)) return "tiny";
-    return "main";
+    if (device.mobile || device.slow || (device.memory !== undefined && device.memory < 4)) return "tiny";
+    return "light";
 }
+
+/** Where a tier runs on this machine, in the words the panel uses. */
+export const placeOf = (tier: Tier, device: Pick<Device, "gpu">): "graphics card" | "processor" => (tier.card && device.gpu ? "graphics card" : "processor");
 
 /** Reads the device from the browser. */
 export function deviceNow(): Device {

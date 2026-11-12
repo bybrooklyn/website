@@ -29,7 +29,7 @@ test("cancelling a made-up download rejects it, keeping nothing", async () => {
 test("the made-up recognizer says the phrase of the loudness, one more word for each half second", async () => {
     const { provider, controls } = createFake();
     controls.delay = 1;
-    const { recognizer } = await provider.load(tierOf("tiny"));
+    const { recognizer } = await provider.load(tierOf("tiny"), []);
     const loud = (seconds: number) => Float32Array.from({ length: seconds * 16000 }, (_, i) => 0.2 * Math.sin(i / 10));
     expect((await recognizer.transcribe(loud(1))).text).toBe("hello there");
     expect((await recognizer.transcribe(loud(4))).text).toBe(PHRASES["20"]!);

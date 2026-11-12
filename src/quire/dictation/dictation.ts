@@ -17,7 +17,8 @@ import type { Surface } from "../surface";
 import "./dictation.css";
 import { canListen, MicrophoneError, openMicrophone, type Microphone } from "./capture";
 import { canStore, createProvider, type Provider } from "./engine";
-import { defaultTier, deviceNow, megabytes, sizeOf, tierOf, TIERS, type Tier } from "./models";
+import { defaultTier, deviceNow, megabytes, placeOf, sizeOf, tierOf, TIERS, type Tier } from "./models";
+import { detect } from "./parakeet/runtime";
 import { startSession, type Recognizer, type Session } from "./session";
 import { correct, load as loadWords, save as saveWords, type Custom } from "./words";
 
@@ -132,6 +133,11 @@ export function createDictation(surface: Surface, options: DictationOptions = {}
         let view: "main" | "words" = "main";
         let starting = 0;
         let lastSpeed = 0;
+        /** Whether the browser has a graphics card the models can use, found when the panel is first opened. */
+        let card = false;
+        let probed = false;
+        /** The visitor's own words, which the recognizer leans toward as well as the corrections made afterwards. */
+        const wordsToLean = () => custom.words.map((entry) => entry.word.trim()).filter(Boolean);
 
         const tier = (): Tier => tierOf(tierId);
         const panel = make("div", "quire-dictation");
@@ -236,7 +242,7 @@ export function createDictation(surface: Surface, options: DictationOptions = {}
                 }
                 cached.set(wanted.id, true);
                 setState("loading");
-                const loaded = await provider.load(wanted).then(
+                const loaded = await provider.load(wanted, wordsToLean()).then(
                     (made) => made,
                     (error: Error) => {
                         say(`The model could not be loaded: ${error.message}`);
@@ -255,6 +261,7 @@ export function createDictation(surface: Surface, options: DictationOptions = {}
                 return void setState("off");
             }
             if (mine !== starting) return void mic.close();
+            recognizer.boost?.(wordsToLean());
             session = startSession({
                 target: surface,
                 recognizer,
@@ -375,7 +382,7 @@ export function createDictation(surface: Surface, options: DictationOptions = {}
                 choice.setAttribute("role", "radio");
                 choice.setAttribute("aria-checked", String(each.id === tierId));
                 choice.disabled = state === "downloading" || state === "loading" || state === "listening";
-                choice.append(make("span", "quire-dictation-tier-name", each.name), make("span", "quire-dictation-tier-size", cached.get(each.id) ? "on this device" : megabytes(sizeOf(each))), make("span", "quire-dictation-tier-note", each.note));
+                choice.append(make("span", "quire-dictation-tier-name", each.name), make("span", "quire-dictation-tier-size", cached.get(each.id) ? "on this device" : megabytes(sizeOf(each))), make("span", "quire-dictation-tier-note", `${each.note} Runs on the ${placeOf(each, { gpu: card })}.`));
                 choice.addEventListener("click", () => {
                     tierId = each.id;
                     remember(KEPT.tier, tierId);
@@ -442,7 +449,7 @@ export function createDictation(surface: Surface, options: DictationOptions = {}
             }
             parts.push(row);
             if (used > 0) parts.push(line("quire-dictation-hint", `Models in this browser take ${megabytes(used)}.`));
-            parts.push(line("quire-dictation-credit", `${wanted.credit}. Licensed ${wanted.license}. Runs here with ONNX Runtime Web and parakeet.js.`));
+            parts.push(line("quire-dictation-credit", `${wanted.credit}. Licensed ${wanted.license}. Runs here with ONNX Runtime Web.`));
             panel.replaceChildren(...parts);
         }
 
@@ -527,6 +534,13 @@ export function createDictation(surface: Surface, options: DictationOptions = {}
             view = "main";
             render();
             void refresh();
+            if (!probed) {
+                probed = true;
+                void detect().then((found) => {
+                    card = found.kind === "webgpu";
+                    render();
+                });
+            }
             box.open(from, panel);
         }
 

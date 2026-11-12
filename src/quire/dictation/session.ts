@@ -30,9 +30,37 @@ export interface Recognized {
     ms: number;
 }
 
+/** What a live stream tells the session each time it has looked at more sound. */
+export interface LiveUpdate {
+    /** Words settled so far in the phrase. */
+    words: Word[];
+    /** The words after them as they stand, which may change. */
+    tentative: Word[];
+    /** Milliseconds of work and seconds of new sound the step covered. */
+    ms: number;
+    seconds: number;
+    /** Seconds of sound that have arrived and are not in this update yet. */
+    behind: number;
+}
+
+/** A phrase recognized as it is spoken, by a recognizer that can keep its place between pieces of sound. */
+export interface Live {
+    /** Gives the next piece of sound; the answer comes through `onUpdate`. */
+    push(samples: Float32Array): void;
+    onUpdate(listener: (update: LiveUpdate) => void): void;
+    /** Ends the phrase and gives all its words. */
+    finish(): Promise<Word[]>;
+    /** Ends the phrase and forgets it. */
+    cancel(): void;
+}
+
 /** Anything that turns sound into text. */
 export interface Recognizer {
     transcribe(samples: Float32Array): Promise<Recognized>;
+    /** Starts a live phrase, if the recognizer can. Without it, provisional words come from asking again over a window of the sound. */
+    stream?(): Live;
+    /** The visitor's words to lean toward, if the recognizer can. */
+    boost?(words: string[]): void;
     /** Which kind of computing it runs on, for the panel. */
     backend: string;
     dispose(): void;
@@ -82,6 +110,8 @@ const RATE = 16000;
 export const WINDOW = 10;
 /** Provisional words need the machine to recognize faster than this many seconds per second of sound. */
 export const LIVE_LIMIT = 0.45;
+/** A live stream whose newest words are more than this many seconds old when they are shown (sound waiting plus the step), twice running, cannot keep up. */
+export const BEHIND_LIMIT = 5;
 /** Sound kept before speech starts, so that the first word is not clipped, in seconds. */
 const PRE_ROLL = 0.8;
 
@@ -109,6 +139,11 @@ export function startSession(options: SessionOptions): Session {
     let pending: Pending = {};
     let last: { text: string; after: Document } | undefined;
     let shown = "";
+    /** The live stream of the phrase being spoken, when the recognizer has one and the machine keeps up. */
+    let live: Live | undefined;
+    let late = 0;
+    /** Samples given to the stream since it last answered. */
+    let unanswered = 0;
 
     const show = (text: string) => {
         if (text !== shown) options.onProvisional?.((shown = text));
@@ -159,7 +194,7 @@ export function startSession(options: SessionOptions): Session {
                 const rate = heard.ms / 1000 / seconds;
                 speed = measured === 0 ? rate : speed * 0.6 + rate * 0.4;
                 measured++;
-                if (mode === "live" && measured >= 2 && speed > LIVE_LIMIT) {
+                if (mode === "live" && !recognizer.stream && measured >= 2 && speed > LIVE_LIMIT) {
                     mode = "pause";
                     show("");
                     note("This machine cannot keep up with live words, so dictation writes each phrase when you pause.");
@@ -172,6 +207,37 @@ export function startSession(options: SessionOptions): Session {
             void finish("error");
             return undefined;
         }
+    }
+
+    /** The words would come too late to be of use: this machine writes at the pause instead. */
+    function giveUp(why: string) {
+        live?.cancel();
+        live = undefined;
+        mode = "pause";
+        show("");
+        note(`This machine cannot keep up with live words (${why}), so dictation writes each phrase when you pause.`);
+    }
+
+    /** Opens a live stream for the phrase that has just begun, starting it with the sound kept from before the speech. */
+    function openLive() {
+        if (!recognizer.stream || mode !== "live") return;
+        const stream = recognizer.stream();
+        live = stream;
+        late = 0;
+        unanswered = 0;
+        stream.onUpdate((update) => {
+            if (live !== stream || finished) return;
+            unanswered = 0;
+            const rate = update.ms / 1000 / Math.max(0.001, update.seconds);
+            speed = measured === 0 ? rate : speed * 0.6 + rate * 0.4;
+            measured++;
+            late = update.behind + update.ms / 1000 > BEHIND_LIMIT ? late + 1 : 0;
+            if (late >= 2) return giveUp(`they were ${(update.behind + update.ms / 1000).toFixed(0)} seconds late`);
+            show(correct([...update.words, ...update.tentative].map((word) => word.text).join(" "), options.custom()));
+        });
+        // Only the last stretch before the speech is the new phrase's. The buffer can still hold the end
+        // of the one before, while that one is being finished, and giving it again would write it twice.
+        stream.push(buffer.slice(Math.max(0, length - Math.round((PRE_ROLL + 0.4) * RATE)), length));
     }
 
     /** Writes settled text at the cursor as one undoable step and carries out the commands in it. */
@@ -218,9 +284,18 @@ export function startSession(options: SessionOptions): Session {
     /** Settles the first `count` samples: asks, writes what is said, and drops that sound from the window. */
     function settleFirst(count: number): Promise<void> {
         generation++;
+        // The phrase's live stream is taken out of the session now, not when the job runs: the next phrase may begin first and make a stream of its own.
+        const stream = live;
+        live = undefined;
         const job = queue.then(async () => {
             busy = true;
-            const heard = count >= 1600 ? await recognize(count) : undefined;
+            // a live phrase already holds everything said, so it is only asked to finish
+            let said: string | undefined;
+            if (stream) {
+                said = await stream.finish().then((words) => words.map((word) => word.text).join(" "), () => undefined);
+            }
+            const heard = said === undefined && count >= 1600 ? await recognize(count) : undefined;
+            if (said?.trim()) settle(said);
             if (heard) {
                 const merged = merger.update(heard.words, { final: true });
                 if (merged.settled.length > 0) settle(merged.settled.map((word) => word.text).join(" "));
@@ -273,7 +348,14 @@ export function startSession(options: SessionOptions): Session {
             append(frame);
             const heard = voice.feed(frame);
             options.onLevel?.(heard.level, heard.speaking);
-            if (heard.event === "start") active = true;
+            if (heard.event === "start") {
+                active = true;
+                openLive();
+            } else if (live) {
+                live.push(frame.slice());
+                unanswered += frame.length;
+                if (unanswered > 2 * BEHIND_LIMIT * RATE) giveUp("no word has come for 10 seconds");
+            }
             // before anyone speaks only a little sound is kept
             if (!active && !busy && length > PRE_ROLL * RATE) drop(length - Math.round(PRE_ROLL * RATE));
             if (heard.event === "pause" && active) {
@@ -281,10 +363,10 @@ export function startSession(options: SessionOptions): Session {
                 void settleFirst(length);
             } else if (heard.event === "silence" || heard.event === "nothing") {
                 void finish(heard.event === "silence" ? "silence" : "nothing");
-            } else if (active && length > WINDOW * RATE && !busy && !waiting) {
+            } else if (active && length > WINDOW * RATE && !busy && !waiting && !live) {
                 // the window has grown too long: the first part is settled at its quietest moment
                 void settleFirst(quietest());
-            } else if (active && mode === "live" && length - lastRun >= Math.max(0.8, Math.min(2.5, speed * 1.6)) * RATE) provisional();
+            } else if (active && mode === "live" && !recognizer.stream && length - lastRun >= Math.max(0.8, Math.min(2.5, speed * 1.6)) * RATE) provisional();
         },
     };
 }

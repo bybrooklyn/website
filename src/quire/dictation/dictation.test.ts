@@ -82,7 +82,7 @@ test.skipIf(!ready)("the three models are offered with their sizes, and the choi
     await press(button("Dictation settings"));
     await until("document.querySelectorAll('.quire-dictation-tier').length === 3", "three tiers");
     const sizes = await run<string[]>("[...document.querySelectorAll('.quire-dictation-tier-size')].map((each) => each.textContent)");
-    expect(sizes).toEqual(["668 MB", "208 MB", "55 MB"]);
+    expect(sizes).toEqual(["402 MB", "208 MB", "55 MB"]);
     await press('.quire-dictation-tier:nth-child(2)');
     expect(await run("localStorage.getItem('mdquire-dictation-tier')")).toBe("light");
     expect(await run<string>("document.querySelector('.quire-dictation-tier[aria-checked=true] .quire-dictation-tier-name').textContent")).toBe("Light");
