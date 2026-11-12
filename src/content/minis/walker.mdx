@@ -1,15 +1,17 @@
 ---
 name: Walker
-summary: A creature that learns to walk, in your browser.
+summary: A little creature that learns to walk, in your browser.
 kind: toy
 space: 2D
-controls: Drag on the walker to push it, or use the arrow keys. The ground is set along the bottom; legs, the crowd and the brain at the side.
+controls: Drag on the walker to push it, or use the arrow keys. The ground is set along the bottom; the body, the goal, the brain and learning at the side.
 panel: true
 order: 8
 ---
 
-It starts knowing nothing. Each generation is thirty-two brains, and each one is given the same body on the same ground for ten seconds. It is scored by how far its body got, less a little for every second it lay on the ground and for the effort its muscles spent. The best four go on to the next generation unchanged, and the rest are their children, mixed and changed a little at random.
+It starts knowing nothing. Each generation is thirty-two brains, and each one is given the same body on the same ground and scored on how well it meets its goal. The best four go on to the next generation unchanged, and the rest are their children, mixed and changed a little at random.
 
-All of it runs in your browser. The learning happens in the background, and the page shows the best walker so far, with the whole generation faintly behind it, most of them falling over. In the corner is its brain: senses on the left, joints on the right, the lines lit by what passes along them as it walks.
+The walker on the screen is the best brain so far, playing back the very run it was scored on, from the start each time. When a better one turns up it takes over at the next start, and the flag marks how far it got. The rest of its generation are the small marks along the ground, one for each, where each one got to.
 
-The body and its physics are written in Rust and run as WebAssembly. Change the legs or the ground and it starts learning again from nothing. "Copy link to this walker" puts its brain in the link, so whoever opens it gets the same walker, already trained.
+It can have one leg, two or four. It can be rewarded for going far, going fast, standing tall, or jumping, which is best tried on the ground with gaps or steps. Its brain can be bigger, with more neurons in a layer or a second layer; the brain at the side lights up with what passes through it as it walks. Changing any of these starts the learning again from nothing.
+
+All of it runs in your browser. The body and its physics are written in Rust and run as WebAssembly, and the learning goes on in the background while the page draws. "Copy link to this walker" puts its brain in the link, so whoever opens it gets the same walker, already trained.
