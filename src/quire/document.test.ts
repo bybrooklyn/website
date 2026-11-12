@@ -372,3 +372,10 @@ test("an edit to one paragraph of a real post leaves every other block of it byt
     const text = kept(doc, edited, doc.blocks.length - 1);
     expect(text.length).toBe(source.length + "Edited. ".length);
 });
+
+test("a frontmatter value can be written exactly as given, for a list, a date or true", () => {
+    const doc = read("---\ndraft: false\ntags: [a]\n---\nBody\n");
+    expect(write(setField(doc, "draft", "true", true))).toBe("---\ndraft: true\ntags: [a]\n---\nBody\n");
+    expect(write(setField(doc, "draft", "true"))).toBe('---\ndraft: "true"\ntags: [a]\n---\nBody\n');
+    expect(write(setField(doc, "tags", "[a, b]", true))).toBe("---\ndraft: false\ntags: [a, b]\n---\nBody\n");
+});

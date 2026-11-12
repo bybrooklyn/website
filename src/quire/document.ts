@@ -1091,9 +1091,13 @@ export function getField(doc: Document, key: string): string | undefined {
     return fields(doc).find(([name]) => name === key)?.[1];
 }
 
-/** Sets a frontmatter value, adding the line (or the frontmatter) if it is not there. Every other line is kept as it was. */
-export function setField(doc: Document, key: string, value: string): Document {
-    const plain = value !== "" && !/^[\s\-?:,[\]{}#&*!|>'"%@`]|: | #|\s$|^(true|false|null|yes|no|~)$|^[\d.+-]+$/i.test(value);
+/**
+ * Sets a frontmatter value, adding the line (or the frontmatter) if it is not there. Every other
+ * line is kept as it was. The value is quoted when YAML would read it as something else, unless
+ * `raw` says it is to be written exactly as given (a date, a list, `true`).
+ */
+export function setField(doc: Document, key: string, value: string, raw = false): Document {
+    const plain = raw || (value !== "" && !/^[\s\-?:,[\]{}#&*!|>'"%@`]|: | #|\s$|^(true|false|null|yes|no|~)$|^[\d.+-]+$/i.test(value));
     const written = `${key}: ${plain ? value : JSON.stringify(value)}`;
     const eol = doc.eol;
     if (!doc.frontmatter) return { ...doc, frontmatter: `---${eol}${written}${eol}---${eol}` };

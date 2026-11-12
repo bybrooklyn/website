@@ -1720,6 +1720,21 @@ body.quire-app {
     }
 }
 
+/* a file that is not Markdown is written as its text alone, the Markdown view across the column */
+.quire-editor.plain .quire-panes {
+    grid-template-columns: minmax(0, 0fr) minmax(0, 1fr);
+    column-gap: 0;
+}
+
+.quire-editor.plain .quire-paper {
+    visibility: hidden;
+}
+
+.quire-editor.plain .quire-source {
+    position: static;
+    max-height: none;
+}
+
 /* With less motion asked for, nothing of the editor moves: what opens is simply there, and what
    closes is simply gone. It is stated for all of it at once, so that no state slips through by
    being more particular than this rule. */

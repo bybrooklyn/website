@@ -1,487 +1,295 @@
-/* The editor's own layout. The site's fonts, colors and prose styles are loaded before this. */
+/* The page `bun run edit` opens, around mdQuire. The site's fonts, colors, base, prose and mdQuire
+   styles are loaded before this; these are the parts only this page has: the real page beside the
+   text, a post's frontmatter as a form, the notes on photographs, and publishing. */
 
-* {
-    box-sizing: border-box;
+.edit-where {
+    color: var(--muted);
+    font-size: 0.85rem;
 }
 
-html,
-body {
-    height: 100%;
-}
-
-body {
-    margin: 0;
+.edit-app main {
     display: grid;
-    grid-template-columns: 13rem minmax(0, 1fr);
-    background: var(--ground);
-    color: var(--ink);
-    font-family: var(--font-text);
-    font-size: 1rem;
-    line-height: 1.6;
-    overflow: hidden;
 }
 
-button,
-input,
-textarea {
-    font: inherit;
-    color: inherit;
-}
-
-button {
-    cursor: pointer;
-    border: 0;
-    background: none;
-    padding: 0;
-}
-
-textarea,
-input {
-    border: 0;
-    background: none;
-    outline: none;
-}
-
-button:focus-visible,
-a:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 3px;
-    border-radius: 0.2rem;
-}
-
-[hidden] {
-    display: none !important;
-}
-
-/* ---- the list of files ---- */
-
-#files {
-    height: 100vh;
-    overflow-y: auto;
-    padding: 1.1rem 0.75rem 2rem;
-    font-size: 0.95rem;
-}
-
-#files .name {
-    margin: 0 0.5rem 1.25rem;
-    font-family: var(--font-head);
-    font-weight: var(--head-weight);
-    font-size: 1.35rem;
-}
-
-#new {
-    margin: 0 0.5rem;
-    color: var(--accent);
-}
-
-#new:hover,
-#bar button:hover,
-#view:hover {
-    color: var(--ink);
-}
-
-#new-title {
-    display: block;
-    width: calc(100% - 1rem);
-    margin: 0.4rem 0.5rem 0;
-    border-bottom: 1px solid var(--accent);
-}
-
-#list h2 {
-    margin: 1.4rem 0.5rem 0.25rem;
-    font: 400 0.72rem var(--font-code);
-    color: var(--muted);
-}
-
-#list button {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    gap: 0.5rem;
-    width: 100%;
-    padding: 0.08rem 0.5rem;
-    border-radius: 0.35rem;
-    text-align: left;
-    color: var(--muted);
-}
-
-#list button:hover {
-    color: var(--ink);
-}
-
-#list button.here {
-    color: var(--ink);
-    background: var(--surface);
-}
-
-#list small {
-    font: 0.66rem var(--font-code);
-    color: var(--accent);
-}
-
-/* ---- the bar, and the two panes under it ---- */
-
-main {
-    display: flex;
-    flex-direction: column;
-    height: 100vh;
+.edit-app main > * {
+    grid-area: 1 / 1;
     min-width: 0;
-    background: var(--panel);
-    border-left: 1px solid var(--rule);
-    border-radius: 0.9rem 0 0 0.9rem;
 }
 
-#bar {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: 0.2rem 1.1rem;
-    padding: 0.7rem 1.5rem 0.6rem;
-    border-bottom: 1px solid var(--rule);
-    font-size: 0.9rem;
-    color: var(--muted);
-}
-
-#tools {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.2rem 0.9rem;
-}
-
-#bar button[aria-pressed="true"] {
-    color: var(--ink);
-    text-decoration: underline;
-    text-decoration-color: var(--accent);
-    text-underline-offset: 0.3em;
-    text-decoration-thickness: 2px;
-}
-
-#link {
-    flex: 1 1 14rem;
-    border-bottom: 1px solid var(--accent);
-    color: var(--ink);
-}
-
-.push {
-    margin-left: auto;
-}
-
-#mode {
-    display: flex;
-    gap: 0.6rem;
-}
-
-#status {
-    font: 0.75rem var(--font-code);
-}
-
-#status.bad {
-    color: oklch(0.75 0.17 25);
-}
-
-#view {
-    color: inherit;
-    text-decoration: none;
-}
-
-#publish,
-#deploy {
-    color: var(--accent);
-}
-
-#panes {
-    flex: 1;
-    min-height: 0;
+/* the text and the real page side by side; hidden, the page's column flows shut */
+.edit-panes {
     display: grid;
-    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 0.8fr);
+    gap: 1.25rem;
+    align-items: start;
+    transition:
+        grid-template-columns 0.45s var(--ease),
+        gap 0.45s var(--ease),
+        opacity 0.3s ease;
 }
 
-.no-preview #panes {
-    grid-template-columns: minmax(0, 1fr);
+body.no-preview .edit-panes {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 0fr);
+    gap: 0;
 }
 
-.no-preview #preview {
-    display: none;
+.edit-app .quire-editor {
+    max-width: 60rem;
 }
 
 #preview {
+    position: sticky;
+    top: 0.75rem;
     width: 100%;
-    height: 100%;
-    border: 0;
-    border-left: 1px solid var(--rule);
+    height: calc(100vh - 1.5rem);
+    border: 0.0625rem solid var(--rule);
+    border-radius: calc(var(--radius) * 2);
     background: var(--ground);
+    transition:
+        opacity 0.3s ease,
+        visibility 0s;
 }
 
-/* ---- the file being written ---- */
-
-#write {
-    overflow-y: auto;
-    padding: 2rem 1.25rem 45vh;
+body.no-preview #preview {
+    opacity: 0;
+    visibility: hidden;
+    transition:
+        opacity 0.2s ease,
+        visibility 0s linear 0.3s;
 }
 
-#text,
-#rich {
-    display: block;
-    width: 100%;
-    max-width: 46rem;
-    margin: 0 auto;
-}
-
-#text,
-#front,
-.island textarea {
-    resize: none;
-    overflow: hidden;
-    font: 0.86rem/1.7 var(--font-code);
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
-    tab-size: 4;
-}
-
-#front {
-    display: block;
-    width: 100%;
-    margin-bottom: 1.5rem;
-    padding-bottom: 1.25rem;
-    border-bottom: 1px solid var(--rule);
-    color: var(--muted);
-}
-
-#body {
-    min-height: 40vh;
-    max-width: none;
-    font-size: var(--text);
-    line-height: var(--line);
-    outline: none;
-}
-
-#body h2,
-#body h3 {
-    font-family: var(--font-head);
-    font-weight: var(--head-weight);
-    line-height: 1.2;
-    margin: 2.2rem 0 0.6rem;
-}
-
-#body h2 {
-    font-size: 1.7rem;
-}
-
-#body h3 {
-    font-size: 1.3rem;
-}
-
-#body a {
-    color: var(--accent);
-}
-
-#body code {
-    font: 0.88em var(--font-code);
-    padding: 0.08em 0.3em;
-    border-radius: 0.3rem;
-    background: var(--surface);
-}
-
-#body hr {
-    border: 0;
-    border-top: 1px solid var(--rule);
-    margin: 2rem 0;
-}
-
-#body table {
-    width: 100%;
-    border-collapse: collapse;
-    margin: 1.4rem 0;
-    font-size: 0.95rem;
-    line-height: 1.5;
-}
-
-#body th,
-#body td {
-    padding: 0.35rem 0.75rem 0.35rem 0;
-    border-bottom: 1px solid var(--rule);
-    text-align: left;
-    vertical-align: top;
-}
-
-#body th {
-    font: 400 0.75rem var(--font-code);
-    color: var(--muted);
-}
-
-/* Code, a picture, or source the rich view leaves as it is. */
-.island {
-    margin: 1.2rem 0;
-}
-
-.island textarea {
-    display: block;
-    width: 100%;
-}
-
-.island.raw textarea {
-    padding-left: 0.9rem;
-    border-left: 2px solid var(--rule);
-    color: var(--muted);
-}
-
-.island.code {
-    position: relative;
-    border-radius: var(--radius);
-    background: var(--surface);
-}
-
-.island.code textarea {
-    padding: 0.8rem 1rem;
-    white-space: pre;
-    overflow-x: auto;
-}
-
-.island.code .lang {
-    position: absolute;
-    top: 0.35rem;
-    right: 0.75rem;
-    width: 7rem;
-    text-align: right;
-    font: 0.7rem var(--font-code);
-    color: var(--muted);
-}
-
-.island.image img {
-    display: block;
-    max-width: 100%;
-    height: auto;
-    border-radius: var(--radius);
-}
-
-.island.image input {
-    width: 100%;
-    margin-top: 0.3rem;
-    font-size: 0.85rem;
-    color: var(--muted);
-}
-
-/* ---- notes on photographs ---- */
-
-#notes {
-    max-width: 46rem;
-    margin: 0 auto;
-}
-
-.notes-bar {
-    display: flex;
-    align-items: baseline;
-    gap: 1.25rem;
-    margin: 0 0 1rem;
-    font-size: 0.9rem;
-    color: var(--muted);
-}
-
-.notes-bar button {
-    color: var(--accent);
-}
-
-#note-count {
-    margin-left: auto;
-    font: 0.75rem var(--font-code);
-}
-
-#note-image {
-    display: block;
-    max-width: 100%;
-    max-height: 52vh;
-    border-radius: var(--radius);
-}
-
-#note-title {
-    display: block;
-    width: 100%;
-    margin-top: 1rem;
-    font-family: var(--font-head);
-    font-weight: var(--head-weight);
-    font-size: 1.5rem;
-}
-
-#note-text {
-    display: block;
-    width: 100%;
-    margin-top: 0.5rem;
-    resize: none;
-    overflow: hidden;
-    font-size: 1.05rem;
-    line-height: 1.6;
-}
-
-/* ---- publishing ---- */
-
-dialog {
-    width: min(40rem, calc(100vw - 2rem));
-    border: 1px solid var(--rule);
-    border-radius: var(--radius);
-    background: var(--ground);
-    color: var(--ink);
-    padding: 1.5rem;
-}
-
-dialog::backdrop {
-    background: oklch(0 0 0 / 0.6);
-}
-
-dialog h2 {
-    margin: 0 0 1rem;
-    font-family: var(--font-head);
-    font-weight: var(--head-weight);
-}
-
-#report {
-    margin: 0;
-    max-height: 50vh;
-    overflow: auto;
-    white-space: pre-wrap;
-    font: 0.82rem/1.5 var(--font-code);
-    color: var(--muted);
-}
-
-#message {
-    width: 100%;
-    margin-top: 1rem;
-    padding-bottom: 0.2rem;
-    border-bottom: 1px solid var(--rule);
-}
-
-.dialog-buttons {
-    display: flex;
-    justify-content: flex-end;
-    gap: 1.25rem;
-    margin-top: 1.25rem;
-    color: var(--muted);
-}
-
-/* Too narrow for two panes: hide the preview. */
-@media (max-width: 64rem) {
-    #panes {
+@media (max-width: 70rem) {
+    .edit-panes,
+    body.no-preview .edit-panes {
         grid-template-columns: minmax(0, 1fr);
     }
 
-    #preview,
-    #toggle-preview {
-        display: none;
+    #preview {
+        position: static;
+        height: 70vh;
     }
 }
 
-@media (max-width: 40rem) {
-    body {
-        display: block;
-        overflow: auto;
-    }
+/* ---- a post's frontmatter: a form of its fields, or its lines as they are written ---- */
 
-    #files,
-    main {
-        height: auto;
-    }
+.edit-front {
+    display: grid;
+    grid-template-rows: 1fr;
+    margin-bottom: calc(var(--line) * 1.25);
+    padding-bottom: calc(var(--line) * 0.75);
+    border-bottom: 0.0625rem solid var(--panel-rule);
+    font-family: var(--font-text);
+    transition:
+        grid-template-rows 0.4s var(--ease),
+        opacity 0.25s ease,
+        margin 0.4s var(--ease),
+        padding 0.4s var(--ease);
+}
 
-    main {
-        border-radius: 0;
-        border-left: 0;
+.edit-front.absent {
+    grid-template-rows: 0fr;
+    margin-bottom: 0;
+    padding-bottom: 0;
+    border-bottom-color: transparent;
+    opacity: 0;
+    overflow: hidden;
+}
+
+.edit-front > * {
+    grid-area: 1 / 1;
+    min-height: 0;
+}
+
+.edit-front-fields,
+.edit-front-raw {
+    transition:
+        opacity 0.25s ease,
+        visibility 0s;
+}
+
+.edit-front-fields {
+    display: grid;
+    gap: 0.35rem;
+}
+
+.edit-front-row {
+    display: grid;
+    grid-template-columns: 7.5rem minmax(0, 1fr);
+    gap: 0.75rem;
+    align-items: center;
+}
+
+.edit-front-name {
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 0.85rem;
+    text-overflow: ellipsis;
+}
+
+.edit-front-row .quire-link-field {
+    width: 100%;
+    height: 1.9rem;
+    border-radius: 0.6rem;
+    font-size: 0.92rem;
+}
+
+.edit-front-raw {
+    width: 100%;
+    min-height: 8rem;
+    padding: 0.6rem 0.75rem;
+    border: 0.0625rem solid var(--rule);
+    border-radius: var(--radius);
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--font-code);
+    font-size: 0.82rem;
+    line-height: 1.6;
+    resize: vertical;
+    opacity: 0;
+    visibility: hidden;
+}
+
+.edit-front.as-text .edit-front-fields {
+    opacity: 0;
+    visibility: hidden;
+}
+
+.edit-front.as-text .edit-front-raw {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* the switch sits in the form's corner, over the sheet's own margin */
+.edit-front-swap {
+    justify-self: end;
+    align-self: start;
+    margin-top: -2.6rem;
+    color: var(--muted);
+    font-size: 0.8rem;
+}
+
+/* ---- notes on photographs: in the text's place while they are open ---- */
+
+.edit-notes {
+    display: grid;
+    gap: 0.6rem;
+    max-width: 44rem;
+    margin-inline: auto;
+    font-family: var(--font-text);
+    opacity: 0;
+    translate: 0 0.75rem;
+    visibility: hidden;
+    transition:
+        opacity 0.25s ease,
+        translate 0.4s var(--ease),
+        visibility 0s linear 0.4s;
+}
+
+body.notes .edit-notes {
+    opacity: 1;
+    translate: 0 0;
+    visibility: visible;
+    transition:
+        opacity 0.3s ease 0.1s,
+        translate 0.45s var(--ease) 0.05s,
+        visibility 0s;
+}
+
+body.notes .edit-panes {
+    opacity: 0;
+    visibility: hidden;
+}
+
+.edit-notes-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin: 0;
+}
+
+.edit-notes-count {
+    flex: 1;
+    color: var(--muted);
+    font-size: 0.85rem;
+}
+
+.edit-notes-picture {
+    width: 100%;
+    max-height: 60vh;
+    object-fit: contain;
+    border-radius: var(--radius);
+    background: var(--surface);
+}
+
+.edit-notes .quire-link-field {
+    width: 100%;
+}
+
+.edit-notes-text {
+    height: auto;
+    padding-block: 0.5rem;
+    border-radius: var(--radius);
+    resize: vertical;
+}
+
+.edit-notes-said {
+    min-height: 1.2em;
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.85rem;
+}
+
+/* ---- publishing, in a panel like the one for a conflict ---- */
+
+.edit-publish-report {
+    max-height: 50vh;
+    margin: 0.6rem 0;
+    padding: 0.7rem 0.8rem;
+    overflow: auto;
+    border: 0.0625rem solid var(--panel-rule);
+    border-radius: var(--radius);
+    background: var(--panel);
+    font-family: var(--font-code);
+    font-size: 0.78rem;
+    line-height: 1.6;
+    white-space: pre-wrap;
+}
+
+/* the commit message grows in only when there is something to commit */
+.edit-publish-message {
+    width: 100%;
+    max-height: 0;
+    margin: 0;
+    padding-block: 0;
+    border-width: 0;
+    opacity: 0;
+    transition:
+        max-height 0.35s var(--ease),
+        opacity 0.25s ease,
+        margin 0.35s var(--ease);
+}
+
+.edit-publish.with-message .edit-publish-message {
+    max-height: 2.2rem;
+    margin-bottom: 0.6rem;
+    border-width: 0.0625rem;
+    opacity: 1;
+}
+
+.edit-publish:not(.ready) .quire-choice:first-child {
+    opacity: 0.4;
+    pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .edit-panes,
+    #preview,
+    .edit-front,
+    .edit-front-fields,
+    .edit-front-raw,
+    .edit-notes,
+    .edit-publish-message {
+        transition-duration: 0s !important;
+        transition-delay: 0s !important;
     }
 }

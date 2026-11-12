@@ -63,6 +63,8 @@ export interface Editor {
     nameElement(): HTMLElement;
     /** Renames the document where it lives. */
     rename(name: string): Promise<void>;
+    /** Shows or hides the outline and the Markdown; `plain` shows the text alone, for a file that is not Markdown. */
+    view(options: { outline?: boolean; markdown?: boolean; plain?: boolean }): void;
     destroy(): void;
 }
 
@@ -279,6 +281,11 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         status: () => saver?.status(),
         nameElement: () => bar.name,
         rename,
+        view({ outline, markdown: shown, plain }) {
+            if (outline !== undefined) (outline ? outlineView.open() : outlineView.close());
+            if (plain !== undefined) host.classList.toggle("plain", plain);
+            if (shown !== undefined || plain) showMarkdown(plain || !!shown);
+        },
         destroy() {
             surface.destroy();
             for (const menu of [...bar.menus, links]) menu.box.remove();

@@ -4,16 +4,17 @@
 //
 // Starts a small server on this computer only and opens an editor in the
 // browser: every post, page and project, the resume, and the homepage's
-// intro. A file is edited as its Markdown, with the real page beside it;
-// rich text is a switch. It saves as you type, and a publish button builds,
-// commits and pushes what changed, and deploys to Cloudflare Pages, after
-// showing what is about to go live and asking. Press Ctrl+C here to stop.
+// intro. The editor is mdQuire (src/quire/), with the real page beside the
+// text. It saves as you type, and a publish button builds, commits and pushes
+// what changed, and deploys to Cloudflare Pages, after showing what is about
+// to go live and asking. Press Ctrl+C here to stop.
 //
-//   --dry-run    go through publishing without committing or deploying
-//   --no-open    do not open the browser
-//   --port N     listen on port N (default 4400)
+//   --dry-run     go through publishing without committing or deploying
+//   --no-open     do not open the browser
+//   --no-preview  do not start the site's dev server for the page beside the text
+//   --port N      listen on port N (default 4400)
 //
-// The page itself is scripts/editor/.
+// The page itself is scripts/editor/main.ts, its styles scripts/editor/editor.css.
 
 import { $ } from "bun";
 import { mkdir } from "node:fs/promises";
@@ -193,7 +194,7 @@ async function publish(message: string): Promise<{ ok: boolean; log: string }> {
 
 // ---- the page ----
 
-const bundle = await Bun.build({ entrypoints: [at("scripts/editor/app.ts")], target: "browser" });
+const bundle = await Bun.build({ entrypoints: [at("scripts/editor/main.ts")], target: "browser" });
 if (!bundle.success) throw new AggregateError(bundle.logs, "The editor's script did not build.");
 const script = await bundle.outputs[0]!.text();
 
@@ -209,10 +210,9 @@ async function styles(): Promise<string> {
         ':root{--font-torrens:"Torrens Serif",Georgia,serif;--font-mono:"Drafting Mono",ui-monospace,monospace}',
         await sheet("fonts.css"),
     ].join("\n");
-    return [`:root{${themeStyle()}}`, fonts, await sheet("tokens.css"), await sheet("prose.css"), await Bun.file(at("scripts/editor/editor.css")).text()].join("\n");
+    return [`:root{${themeStyle()}}`, fonts, await sheet("tokens.css"), await sheet("base.css"), await sheet("prose.css"), await sheet("quire.css"), await Bun.file(at("scripts/editor/editor.css")).text()].join("\n");
 }
 
-const tool = (name: string, label: string, title: string) => `<button type="button" data-tool="${name}" title="${title}">${label}</button>`;
 const page = `<!doctype html>
 <html lang="en">
 <head>
@@ -224,71 +224,14 @@ const page = `<!doctype html>
 <link rel="icon" href="data:,">
 <link rel="stylesheet" href="/style.css">
 </head>
-<body>
-<aside id="files">
-    <p class="name">charlotte</p>
-    <button type="button" id="new">new post</button>
-    <input id="new-title" hidden placeholder="title, then Enter" aria-label="Title of the new post">
-    <nav id="list" aria-label="Files"></nav>
-</aside>
-<main>
-    <div id="bar">
-        <div id="tools">
-            ${tool("bold", "bold", "bold (Ctrl+B)")}
-            ${tool("italic", "italic", "italic (Ctrl+I)")}
-            ${tool("strike", "strike", "strike through")}
-            ${tool("code", "code", "code")}
-            ${tool("link", "link", "link (Ctrl+K)")}
-            ${tool("h2", "h2", "heading")}
-            ${tool("h3", "h3", "smaller heading")}
-            ${tool("ul", "list", "bulleted list")}
-            ${tool("ol", "1. list", "numbered list")}
-            ${tool("quote", "quote", "quote")}
-            ${tool("codeblock", "code block", "a block of code")}
-            ${tool("image", "picture", "add a picture")}
-            ${tool("rule", "line", "a dividing line")}
-        </div>
-        <input id="link" hidden placeholder="https://… then Enter (empty removes the link)" aria-label="Link address">
-        <input id="picture" type="file" accept="image/*" hidden>
-        <span id="status" class="push" role="status"></span>
-        <span id="mode">
-            <button type="button" id="mode-markdown" aria-pressed="true">markdown</button>
-            <button type="button" id="mode-rich" aria-pressed="false">rich text</button>
-        </span>
-        <button type="button" id="toggle-preview" aria-pressed="true">preview</button>
-        <a id="view" target="_blank" rel="noopener" title="open the page in its own tab">open</a>
-        <button type="button" id="publish">publish</button>
-    </div>
-    <div id="panes">
-        <div id="write">
-            <textarea id="text" spellcheck="true" aria-label="The file"></textarea>
-            <div id="notes" hidden>
-                <p class="notes-bar">
-                    <button type="button" id="note-back">back</button>
-                    <button type="button" id="note-next">next</button>
-                    <span id="note-count"></span>
-                </p>
-                <img id="note-image" alt="">
-                <input id="note-title" placeholder="a few words naming it" aria-label="Heading">
-                <textarea id="note-text" rows="4" placeholder="notes about this one, as rough as you like" aria-label="Notes"></textarea>
-            </div>
-            <div id="rich" hidden>
-                <textarea id="front" spellcheck="false" rows="1" aria-label="Frontmatter"></textarea>
-                <div id="body" class="prose" contenteditable="true" spellcheck="true" aria-label="The page's text"></div>
-            </div>
-        </div>
+<body class="quire-app edit-app">
+<header class="quire-top"><p class="site-name">charlotte</p><span class="edit-where">editing on this computer</span></header>
+<main id="main">
+    <div class="edit-panes">
+        <div id="quire" class="quire-host"></div>
         <iframe id="preview" title="The page as it will look"></iframe>
     </div>
 </main>
-<dialog id="dialog">
-    <h2>publish</h2>
-    <pre id="report"></pre>
-    <input id="message" hidden aria-label="Commit message">
-    <div class="dialog-buttons">
-        <button type="button" id="close">close</button>
-        <button type="button" id="deploy" hidden>deploy to bybrooklyn.dev</button>
-    </div>
-</dialog>
 <script type="module" src="/app.js"></script>
 </body>
 </html>`;
@@ -377,7 +320,7 @@ const server = Bun.serve({
 });
 
 // The preview beside the text is the site's own dev server.
-await devServer();
+if (!args.includes("--no-preview")) await devServer();
 
 const address = `http://127.0.0.1:${server.port}/?k=${key}`;
 console.log(`\nThe editor is at:\n\n  ${address}\n\n${dryRun ? "Dry run: publishing will stop before the commit and the deploy.\n" : ""}Press Ctrl+C to stop.`);
