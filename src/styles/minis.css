@@ -351,3 +351,222 @@
     border: 0;
     accent-color: var(--accent);
 }
+
+/* ---- the Walker mini: the ground's controls in a strip under the canvas, the rest in a column beside it ---- */
+
+.mini-stage[data-mini="walker"] {
+    --panel-room: 4.5rem;
+    max-width: 64rem;
+}
+
+.mini-stage[data-mini="walker"]:has(.walker-side) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 14rem;
+    grid-template-areas:
+        "canvas side"
+        "ground side";
+    min-height: 0;
+}
+
+.mini-stage[data-mini="walker"] > canvas {
+    grid-area: canvas;
+}
+
+.walker-ground {
+    grid-area: ground;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.6rem 1.6rem;
+    padding-block: 0.7rem;
+}
+
+.mote-panel.walker-side {
+    grid-area: side;
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+    border-top: 0;
+    border-left: 0.0625rem solid var(--rule);
+    padding: 1rem;
+}
+
+.walker-said {
+    margin: 0;
+    min-height: 3.6em;
+    color: var(--muted);
+    font-size: 0.9rem;
+    line-height: 1.35;
+}
+
+.walker-generations {
+    margin: -0.3rem 0 0;
+    color: var(--muted);
+}
+
+.walker-count {
+    font-family: var(--font-head);
+    font-size: 1.9rem;
+    line-height: 1;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+}
+
+.mote-panel fieldset {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    min-width: 0;
+}
+
+.mote-panel legend {
+    padding: 0;
+    margin-bottom: 0.3rem;
+    color: var(--muted);
+    font-size: 0.85rem;
+}
+
+.walker-ground legend {
+    float: left;
+    margin: 0 0.7rem 0 0;
+    line-height: 2rem;
+}
+
+/* A row of choices: radio inputs, hidden, whose labels look like buttons that join up. */
+.walker-choices {
+    display: flex;
+    flex-wrap: wrap;
+}
+
+.walker-side .walker-choices legend {
+    width: 100%;
+}
+
+.walker-choices label {
+    position: relative;
+    display: inline-flex;
+}
+
+.walker-choices input {
+    position: absolute;
+    opacity: 0;
+    inset: 0;
+    margin: 0;
+    cursor: pointer;
+}
+
+.walker-choices span {
+    padding: 0.25rem 0.8rem;
+    border: 0.0625rem solid var(--rule);
+    margin-left: -0.0625rem;
+    background: var(--ground);
+    line-height: 1.45rem;
+    transition:
+        border-color 0.2s var(--ease),
+        background-color 0.2s var(--ease),
+        color 0.2s var(--ease);
+}
+
+.walker-choices label:first-of-type span {
+    margin-left: 0;
+    border-radius: calc(var(--radius) * 0.6) 0 0 calc(var(--radius) * 0.6);
+}
+
+.walker-choices label:last-of-type span {
+    border-radius: 0 calc(var(--radius) * 0.6) calc(var(--radius) * 0.6) 0;
+}
+
+.walker-choices label:hover span {
+    border-color: var(--accent);
+}
+
+.walker-choices input:checked + span {
+    position: relative;
+    border-color: var(--accent);
+    background: var(--accent);
+    color: var(--ground);
+}
+
+.walker-choices input:focus-visible + span {
+    outline: 0.125rem solid var(--accent);
+    outline-offset: 0.125rem;
+}
+
+.walker-side .walker-choices label {
+    flex: 1;
+}
+
+.walker-side .walker-choices span {
+    flex: 1;
+    text-align: center;
+}
+
+.walker-rough {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    flex: 1;
+    min-width: min(100%, 13rem);
+    color: var(--muted);
+    font-size: 0.85rem;
+}
+
+.walker-rough input[type="range"] {
+    flex: 1;
+    min-width: 0;
+}
+
+.walker-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+.walker-buttons button {
+    flex: 1 1 auto;
+}
+
+.walker-show label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.1rem 0;
+}
+
+.mote-panel .walker-share {
+    margin-top: auto;
+    border-color: var(--accent);
+}
+
+/* On a narrow screen the column goes under the canvas, after the ground. */
+@media (max-width: 46rem) {
+    .mini-stage[data-mini="walker"] {
+        --panel-room: 24rem;
+    }
+
+    .mini-stage[data-mini="walker"]:has(.walker-side) {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-areas:
+            "canvas"
+            "ground"
+            "side";
+    }
+
+    .mote-panel.walker-side {
+        border-left: 0;
+        border-top: 0.0625rem solid var(--rule);
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        align-items: start;
+    }
+
+    .walker-side > :is(.walker-said, .walker-buttons, .walker-share) {
+        grid-column: 1 / -1;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .walker-choices span {
+        transition: none;
+    }
+}

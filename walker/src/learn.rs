@@ -94,11 +94,15 @@ pub struct Trainer {
     /// Every brain's weights, one after another.
     pub population: Vec<f32>,
     pub scores: Vec<f32>,
+    /// How far each one went, alongside its score.
+    pub distances: Vec<f32>,
     pub scored: Vec<bool>,
     /// Generations finished.
     pub generation: u32,
     pub best: Vec<f32>,
     pub best_score: f32,
+    /// How far the best so far went.
+    pub best_distance: f32,
     /// The best and the average score of each finished generation.
     pub history_best: Vec<f32>,
     pub history_mean: Vec<f32>,
@@ -134,10 +138,12 @@ impl Trainer {
             creature,
             population,
             scores: vec![0.0; settings.population],
+            distances: vec![0.0; settings.population],
             scored: vec![false; settings.population],
             generation: 0,
             best: vec![0.0; count],
             best_score: f32::NEG_INFINITY,
+            best_distance: 0.0,
             history_best: Vec::new(),
             history_mean: Vec::new(),
             random,
@@ -176,7 +182,9 @@ impl Trainer {
 
     fn run_member(&mut self, index: usize) {
         let weights = self.weights(index).to_vec();
-        self.scores[index] = self.run(&weights).score;
+        let outcome = self.run(&weights);
+        self.scores[index] = outcome.score;
+        self.distances[index] = outcome.distance;
         self.scored[index] = true;
     }
 
@@ -231,15 +239,18 @@ impl Trainer {
         self.history_mean.push(mean);
         if self.scores[top] > self.best_score {
             self.best_score = self.scores[top];
+            self.best_distance = self.distances[top];
             self.best.copy_from_slice(&self.population[top * count..(top + 1) * count]);
         }
 
         let mut next = Vec::with_capacity(self.population.len());
         let mut scores = vec![0.0; self.settings.population];
+        let mut distances = vec![0.0; self.settings.population];
         let mut scored = vec![false; self.settings.population];
         for (rank, &index) in order.iter().take(self.settings.keep).enumerate() {
             next.extend_from_slice(self.weights(index));
             scores[rank] = self.scores[index];
+            distances[rank] = self.distances[index];
             scored[rank] = true;
         }
         for _ in self.settings.keep..self.settings.population {
@@ -259,6 +270,7 @@ impl Trainer {
         }
         self.population = next;
         self.scores = scores;
+        self.distances = distances;
         self.scored = scored;
         self.generation += 1;
     }
@@ -275,7 +287,9 @@ impl Trainer {
         self.scored.iter_mut().for_each(|scored| *scored = false);
         if self.best_score > f32::NEG_INFINITY {
             let best = self.best.clone();
-            self.best_score = self.run(&best).score;
+            let outcome = self.run(&best);
+            self.best_score = outcome.score;
+            self.best_distance = outcome.distance;
         }
     }
 
@@ -287,7 +301,9 @@ impl Trainer {
             return false;
         }
         self.best.copy_from_slice(weights);
-        self.best_score = self.run(weights).score;
+        let outcome = self.run(weights);
+        self.best_score = outcome.score;
+        self.best_distance = outcome.distance;
         self.population[..count].copy_from_slice(weights);
         self.scored[0] = false;
         true

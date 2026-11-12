@@ -64,6 +64,8 @@ const shots: Record<string, { query?: string; script?: string; wait?: number; ac
     blocks: { across: 0.45, from: "bottom" },
     // part of the way through a password
     plinko: { script: `document.querySelector(".dice-go").click();`, wait: 7000 },
+    // some generations in, with the crowd and the brain showing
+    walker: { wait: 14000, from: "bottom" },
 };
 
 function mini(id: string): Wanted["make"] {

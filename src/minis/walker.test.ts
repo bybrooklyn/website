@@ -1,45 +1,14 @@
-// What the walking mini's built engine, public/wasm/walker.wasm, is held to from the page's side: it
+// What the Walker mini's built engine, public/wasm/walker.wasm, is held to from the page's side: it
 // loads with nothing given to it, stays small, trains, hands out and takes back a brain, and runs a
-// show and a crowd that move and can be pushed. `bun run wasm` builds it; `bun test` runs this.
+// show and a crowd that move and can be pushed. Also what walking.ts is held to: a brain survives a
+// link exactly, and each kind of ground is what it says. `bun run wasm` builds it; `bun test` runs this.
 
 import { expect, test } from "bun:test";
+import { KINDS, decode, encode, heightAt, pieces, type Engine } from "./walking";
 
 const path = new URL("../../public/wasm/walker.wasm", import.meta.url);
 
-interface Walker {
-    memory: WebAssembly.Memory;
-    create(legs: number, population: number, seconds: number, seed: number): number;
-    ground_room(pieces: number): number;
-    ground_set(pieces: number): number;
-    train(runs: number): number;
-    generation(): number;
-    generation_runs(): number;
-    best_score(): number;
-    history_length(): number;
-    history_best(): number;
-    history_mean(): number;
-    weights_length(): number;
-    best_weights(): number;
-    weights_room(): number;
-    weights_load(): number;
-    show_reset(): void;
-    show_step(seconds: number): number;
-    show_push(x: number, y: number, impulseX: number, impulseY: number): number;
-    body_count(): number;
-    show_bodies(): number;
-    show_distance(): number;
-    senses_length(): number;
-    hidden_length(): number;
-    outputs_length(): number;
-    show_senses(): number;
-    show_hidden(): number;
-    show_outputs(): number;
-    show_weights(): number;
-    crowd_reset(): number;
-    crowd_step(seconds: number): number;
-    crowd_bodies(): number;
-    crowd_stop(): void;
-}
+type Walker = Engine;
 
 async function load(): Promise<Walker> {
     const { instance } = await WebAssembly.instantiate(await Bun.file(path).arrayBuffer(), {});
@@ -138,8 +107,8 @@ test("new ground takes the walker up onto it, and the crowd runs a whole generat
     const walker = await load();
     walker.create(2, 6, 3, 3);
     // a step up of half a metre right under the start
-    const pieces = [-20, 0.5, 5, 0.5, 5, 0.5, 5, 0, 5, 0, 40, 0];
-    new Float32Array(walker.memory.buffer, walker.ground_room(3), 12).set(pieces);
+    const step = [-20, 0.5, 5, 0.5, 5, 0.5, 5, 0, 5, 0, 40, 0];
+    new Float32Array(walker.memory.buffer, walker.ground_room(3), 12).set(step);
     expect(walker.ground_set(3)).toBe(1);
     const torso = floats(walker, walker.show_bodies(), 2);
     expect(torso[1]!).toBeGreaterThan(1.3);
@@ -153,4 +122,80 @@ test("new ground takes the walker up onto it, and the crowd runs a whole generat
     expect(new Set(torsos).size).toBeGreaterThan(1);
     walker.crowd_stop();
     expect(walker.crowd_step(1)).toBe(0);
+});
+
+test("a brain written into a link reads back exactly, and text that is not one reads as nothing", async () => {
+    const odd = [0, -0, 1, -1, Math.PI, 1e-40, -3.4e38, 1.17549435e-38, 0.1, 123456.789];
+    const weights = Float32Array.from({ length: 268 }, (_, i) => odd[i % odd.length]! * (i % 3 === 0 ? 1 : -0.37) + i * 1e-3);
+    const text = encode(weights);
+    expect(text).toMatch(/^[A-Za-z0-9_-]+$/);
+    const back = decode(text)!;
+    expect(back.length).toBe(weights.length);
+    expect(Array.from(new Uint32Array(back.buffer))).toEqual(Array.from(new Uint32Array(weights.buffer)));
+    expect(decode(new URLSearchParams(`brain=${text}`).get("brain")!)).toEqual(weights);
+    for (const wrong of ["", "abc", "a+b/", "%%%", encode(Float32Array.of(Number.NaN, 1))]) expect(decode(wrong)).toBeNull();
+
+    // a trained brain taken out of the engine goes through a link and back in unchanged
+    const walker = await load();
+    const count = walker.create(2, 6, 2, 4);
+    walker.train(6);
+    const best = new Float32Array(walker.memory.buffer, walker.best_weights(), count).slice();
+    const score = walker.best_score();
+    new Float32Array(walker.memory.buffer, walker.weights_room(), count).set(decode(encode(best))!);
+    expect(walker.weights_load()).toBe(1);
+    expect(walker.best_score()).toBe(score);
+});
+
+test("every kind of ground is level at the start, made the same each time, rougher when asked, and walkable by the engine", async () => {
+    const walker = await load();
+    const heights = (list: number[]) => list.filter((_, i) => i % 2 === 1);
+    for (const kind of KINDS) {
+        const smooth = pieces({ kind, rough: 0 });
+        const rough = pieces({ kind, rough: 100 });
+        expect(smooth.length % 4).toBe(0);
+        expect(pieces({ kind, rough: 0 })).toEqual(smooth);
+        expect(smooth.every(Number.isFinite)).toBe(true);
+        for (const x of [-10, -2, 0, 1, 2.9]) expect(heightAt(smooth, x)).toBe(0);
+        // the ground reaches far ahead, so a good walker never walks off the end
+        expect(Math.max(...smooth.filter((_, i) => i % 2 === 0))).toBeGreaterThanOrEqual(400);
+        const spread = (list: number[]) => Math.max(...heights(list)) - Math.min(...heights(list));
+        if (kind !== "gaps") expect(spread(rough)).toBeGreaterThan(spread(smooth));
+
+        walker.create(2, 4, 2, 1);
+        new Float32Array(walker.memory.buffer, walker.ground_room(rough.length / 4), rough.length).set(rough);
+        expect(walker.ground_set(rough.length / 4)).toBe(1);
+        walker.show_step(0.5);
+        const [x, y] = floats(walker, walker.show_bodies(), 2);
+        expect(Number.isFinite(x!) && y! > 0.5).toBe(true);
+    }
+    // gaps leave places with no ground under them, steps have risers, and hills rise and fall
+    const gaps = pieces({ kind: "gaps", rough: 60 });
+    expect([...Array(200).keys()].some((x) => heightAt(gaps, x + 3.5) === undefined)).toBe(true);
+    const steps = pieces({ kind: "steps", rough: 60 });
+    expect(steps.some((_, i) => i % 4 === 0 && steps[i] === steps[i + 2] && steps[i + 1] !== steps[i + 3])).toBe(true);
+    const hills = [...Array(100).keys()].map((x) => heightAt(pieces({ kind: "hills", rough: 60 }), x + 10)!);
+    expect(Math.max(...hills) - Math.min(...hills)).toBeGreaterThan(0.6);
+});
+
+test("a generation trained in one module runs as the crowd in another, as the page and its worker do", async () => {
+    const worker = await load();
+    const page = await load();
+    const count = worker.create(2, 6, 2, 8);
+    page.create(2, 6, 2, 8);
+    while (worker.generation() < 2) worker.train(6);
+    expect(Number.isFinite(worker.best_distance())).toBe(true);
+    expect(worker.population_length()).toBe(6);
+    const generation = floats(worker, worker.population_weights(), 6 * count);
+    page.crowd_reset();
+    const before = floats(page, page.crowd_bodies(), 6 * 5 * 3);
+    new Float32Array(page.memory.buffer, page.crowd_room(6), 6 * count).set(generation);
+    expect(page.crowd_start(6)).toBe(6);
+    page.crowd_step(1);
+    const after = floats(page, page.crowd_bodies(), 6 * 5 * 3);
+    expect(after.every(Number.isFinite)).toBe(true);
+    expect(after).not.toEqual(before);
+    expect(page.show_seconds()).toBe(0);
+    page.show_step(0.1);
+    expect(page.show_seconds()).toBeCloseTo(0.1, 1);
+    expect([0, 1]).toContain(page.show_fallen());
 });

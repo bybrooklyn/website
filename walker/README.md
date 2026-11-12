@@ -72,6 +72,11 @@ All numbers are metres, kilograms, seconds and radians, with y up and angles ant
   A score is the distance the torso went forward, less 1 for each second the torso lay on the
   ground and 0.00005 for each joule of work the motors did. A run ends early once the torso has lain
   down for a second.
+- `best_distance() -> f32` How far the best brain so far took the torso in its run, in metres.
+- `population_length() -> u32` The number of brains in a generation.
+- `population_weights() -> *const f32` Every brain of the current generation, one after another,
+  `population_length` times `weights_length` f32. A page training in a worker sends these to its own
+  module for the crowd.
 - `history_length() -> u32` The number of finished generations.
 - `history_best() -> *const f32` The best score of each finished generation, `history_length` f32.
 - `history_mean() -> *const f32` The average score of each, `history_length` f32.
@@ -100,6 +105,8 @@ biases, then for each output its weight for every hidden neuron, then the output
   the first generation is finished.
 - `show_step(seconds: f32) -> u32` Moves on by `seconds` in whole steps of 1/60 s, the brain
   deciding before each, and keeps the remainder for next time. Returns the steps taken, at most 8.
+- `show_seconds() -> f32` How long the show has been running.
+- `show_fallen() -> u32` 1 if the show's walker has its torso on the ground, else 0.
 - `show_push(x: f32, y: f32, impulse_x: f32, impulse_y: f32) -> i32` Pushes the body nearest the
   point (x, y), at that point, with an impulse in newton seconds (the walker weighs about 10 kg, so
   20 is a firm shove). Returns the body's number.
@@ -126,6 +133,9 @@ biases, then for each output its weight for every hidden neuron, then the output
 
 - `crowd_reset() -> u32` Starts every brain of the current generation walking from the start, each
   in a world of its own. Returns how many walkers there are.
+- `crowd_room(count: u32) -> *mut f32` Room for `count` brains, one after another, to start the crowd
+  with a generation from elsewhere (a worker).
+- `crowd_start(count: u32) -> u32` Starts the crowd with the brains written into `crowd_room`.
 - `crowd_step(seconds: f32) -> u32` Moves them all on, as `show_step` does.
 - `crowd_bodies() -> *const f32` Walker after walker, `body_count` bodies each, three f32 for each
   body: x, y and angle. The shapes and sizes are the show's.

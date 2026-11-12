@@ -23,5 +23,9 @@
 /photos/*
   Cache-Control: public, max-age=604800
 
+# The Walker mini's engine keeps its name when it is rebuilt: a day, then check again.
+/wasm/*
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+
 /resume/*.pdf
   Cache-Control: public, max-age=3600

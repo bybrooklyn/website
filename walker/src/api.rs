@@ -23,6 +23,7 @@ struct Walker {
     /// Room the page writes into: ground pieces as four f32 each, and a brain's weights.
     ground_room: Vec<f32>,
     weights_room: Vec<f32>,
+    crowd_room: Vec<f32>,
 }
 
 static WALKER: Shared<Option<Walker>> = Shared::new(None);
@@ -49,7 +50,7 @@ pub extern "C" fn create(legs: u32, population: u32, seconds: f32, seed: u32) ->
     };
     let count = trainer.layout.weights();
     let show = Show::new(&trainer.start, &trainer.creature, trainer.layout, trainer.weights(0));
-    *WALKER.get() = Some(Walker { trainer, show, crowd: None, ground_room: Vec::new(), weights_room: vec![0.0; count] });
+    *WALKER.get() = Some(Walker { trainer, show, crowd: None, ground_room: Vec::new(), weights_room: vec![0.0; count], crowd_room: Vec::new() });
     count as u32
 }
 
@@ -111,6 +112,26 @@ pub extern "C" fn best_score() -> f32 {
     walker().map_or(f32::NEG_INFINITY, |walker| walker.trainer.best_score)
 }
 
+/// How far the best brain so far took the torso forward in its run, in metres.
+#[unsafe(no_mangle)]
+pub extern "C" fn best_distance() -> f32 {
+    walker().map_or(0.0, |walker| walker.trainer.best_distance)
+}
+
+/// The number of brains in a generation.
+#[unsafe(no_mangle)]
+pub extern "C" fn population_length() -> u32 {
+    walker().map_or(0, |walker| walker.trainer.settings.population as u32)
+}
+
+/// Every brain of the current generation, one after another, `population_length` times
+/// `weights_length` f32. A page training in a worker sends these to the page's own module for the
+/// crowd (`crowd_room`, `crowd_start`).
+#[unsafe(no_mangle)]
+pub extern "C" fn population_weights() -> *const f32 {
+    pointer(walker().map(|walker| &walker.trainer.population[..]))
+}
+
 /// The number of finished generations in the history.
 #[unsafe(no_mangle)]
 pub extern "C" fn history_length() -> u32 {
@@ -169,6 +190,18 @@ pub extern "C" fn show_reset() {
     let trainer = &walker.trainer;
     let weights = if trainer.best_score > f32::NEG_INFINITY { &trainer.best[..] } else { trainer.weights(0) };
     walker.show = Show::new(&trainer.start, &trainer.creature, trainer.layout, weights);
+}
+
+/// How long the show has been running, in seconds.
+#[unsafe(no_mangle)]
+pub extern "C" fn show_seconds() -> f32 {
+    walker().map_or(0.0, |walker| walker.show.world.steps as f32 * crate::physics::STEP)
+}
+
+/// 1 if the show's walker has its torso on the ground, else 0.
+#[unsafe(no_mangle)]
+pub extern "C" fn show_fallen() -> u32 {
+    walker().map_or(0, |walker| walker.show.creature.fallen(&walker.show.world) as u32)
 }
 
 /// Moves the show on by `seconds`, in whole steps of 1/60 s, and returns how many were taken.
@@ -250,6 +283,30 @@ pub extern "C" fn crowd_reset() -> u32 {
     let Some(walker) = walker() else { return 0 };
     let trainer = &walker.trainer;
     let crowd = Crowd::new(&trainer.start, &trainer.creature, trainer.layout, &trainer.population);
+    let count = crowd.worlds.len() as u32;
+    walker.crowd = Some(crowd);
+    count
+}
+
+/// Room for `count` brains, one after another, for the page to write a generation into before
+/// calling `crowd_start`.
+#[unsafe(no_mangle)]
+pub extern "C" fn crowd_room(count: u32) -> *mut f32 {
+    let Some(walker) = walker() else { return core::ptr::null_mut() };
+    let length = walker.trainer.layout.weights() * count.min(1000) as usize;
+    walker.crowd_room.clear();
+    walker.crowd_room.resize(length, 0.0);
+    walker.crowd_room.as_mut_ptr()
+}
+
+/// Starts the crowd with the `count` brains written into `crowd_room` in place of this module's
+/// own generation. Returns how many walkers there are.
+#[unsafe(no_mangle)]
+pub extern "C" fn crowd_start(count: u32) -> u32 {
+    let Some(walker) = walker() else { return 0 };
+    let length = (walker.trainer.layout.weights() * count as usize).min(walker.crowd_room.len());
+    let trainer = &walker.trainer;
+    let crowd = Crowd::new(&trainer.start, &trainer.creature, trainer.layout, &walker.crowd_room[..length]);
     let count = crowd.worlds.len() as u32;
     walker.crowd = Some(crowd);
     count
