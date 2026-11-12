@@ -486,6 +486,19 @@
     background: color-mix(in oklch, var(--ink) 9%, transparent);
 }
 
+/* the line the slash menu's arrow keys are on */
+.quire-menu-line.active {
+    background: color-mix(in oklch, var(--accent) 18%, transparent);
+}
+
+/* where the slash menu grows from: the cursor's place, never itself seen */
+.quire-anchor {
+    position: fixed;
+    width: 0.125rem;
+    visibility: hidden;
+    pointer-events: none;
+}
+
 .quire-menu-line.pressed {
     color: var(--accent);
 }

@@ -296,7 +296,7 @@ const SIZES: [string, string | null][] = [
 ];
 
 /** Builds the bar for a surface. */
-export function createBar(surface: Surface, options: BarOptions): { element: HTMLElement; setName(name: string): void; menus: Menu[]; layout(): void } {
+export function createBar(surface: Surface, options: BarOptions): { element: HTMLElement; setName(name: string): void; menus: Menu[]; layout(): void; pickImage(): void } {
     const bar = make("div", "quire-bar");
     bar.setAttribute("role", "toolbar");
     bar.setAttribute("aria-label", "Formatting");
@@ -568,6 +568,7 @@ export function createBar(surface: Surface, options: BarOptions): { element: HTM
         },
         menus,
         layout,
+        pickImage: () => chooser.click(),
     };
 }
 

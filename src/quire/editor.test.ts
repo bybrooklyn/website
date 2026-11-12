@@ -249,4 +249,41 @@ used("the selection bar grows out of a selection over time, marks it, and its li
     expect(await md()).toBe("Some words\n");
 });
 
+used("the slash menu grows at the cursor, narrows as you type, and makes a heading and a table", async () => {
+    await reset("Above\n", [0], 5);
+    await tab.press("Enter");
+    const watching = tab.run<number[]>("q.watch('.quire-slash.open', 'height', 600)");
+    await tab.type("/");
+    const heights = (await watching).filter((value) => !Number.isNaN(value));
+    expect(new Set(heights.map(Math.round)).size).toBeGreaterThan(4);
+    expect(await tab.run("document.querySelectorAll('.quire-slash.open .quire-menu-line').length")).toBe(11);
+    // it opens at the cursor
+    const near = await tab.run<{ menu: number; caret: number }>("(() => ({ menu: document.querySelector('.quire-slash').getBoundingClientRect().top, caret: getSelection().getRangeAt(0).getBoundingClientRect().bottom }))()");
+    expect(Math.abs(near.menu - near.caret)).toBeLessThan(30);
+    await tab.type("head");
+    await tab.wait(50);
+    expect(await tab.run("[...document.querySelectorAll('.quire-slash.open .quire-menu-line')].map((line) => line.textContent)")).toEqual(["Heading 1H1", "Heading 2H2", "Heading 3H3"]);
+    await tab.press("ArrowDown");
+    await tab.press("Enter");
+    await tab.type("Made");
+    expect(await md()).toBe("Above\n\n## Made\n");
+
+    // Escape closes it and leaves the slash as typed
+    await tab.press("Enter");
+    await tab.type("/ta");
+    await tab.press("Escape");
+    await tab.wait(50);
+    expect(await md()).toBe("Above\n\n## Made\n\n/ta\n");
+    expect(await tab.run("!!document.querySelector('.quire-slash.open')")).toBe(false);
+
+    // a table, chosen with the mouse
+    await reset("Above\n", [0], 5);
+    await tab.press("Enter");
+    await tab.type("/tab");
+    await tab.wait(650);
+    await press(".quire-slash.open .quire-menu-line", "Table");
+    await tab.type("x");
+    expect(await md()).toBe("Above\n\n| x   |     |     |\n| --- | --- | --- |\n|     |     |     |\n|     |     |     |\n");
+});
+
 if (!live) console.warn("editor.test.ts: no Chromium on this machine, so the editor was not used.");
