@@ -171,7 +171,8 @@ has an int4 encoder in `encoder.onnx` plus `encoder.onnx.data` (not tried on a c
 
 ## 4. Threads
 
-`/mdquire*` can be isolated alone. The lines for `public/_headers` (not changed):
+Done, by the owner's decision ("yes, on mdQuire's pages only"). `public/_headers` has these lines and no others for
+isolation:
 
 ```
 /mdquire/*
@@ -182,33 +183,48 @@ has an int4 encoder in `encoder.onnx` plus `encoder.onnx.data` (not tried on a c
   Cross-Origin-Opener-Policy: same-origin
   Cross-Origin-Embedder-Policy: require-corp
 
-# A worker's script must carry the same embedder policy as the page that starts it, or the browser refuses it.
 /_astro/*
-  Cross-Origin-Embedder-Policy: require-corp
+  Cross-Origin-Embedder-Policy: require-corp      (beside its Cache-Control)
+
 /ort/*
-  Cross-Origin-Embedder-Policy: require-corp
+  Cross-Origin-Embedder-Policy: require-corp      (beside its new Cache-Control)
 ```
 
-The last two are not optional: with the policy on the pages only, the threaded run **hung with no result for
-200 s**, because ORT's thread workers (`/ort/*.mjs`) and the engine worker (`/_astro/`) were refused. (Add
-`! Permissions-Policy` rules as they are now; these lines go beside them.)
+The last two are needed, and a `Cross-Origin-Resource-Policy` header cannot stand in for them: a worker's script must
+carry an embedder policy at least as strict as the page that starts it, which is a rule about the worker's own
+response, not about whether the page may embed it. The engine worker is in `/_astro/` and ONNX Runtime's thread
+workers are `/ort/*.mjs`; without them the threaded run hung (200 s, no result). On a script or a stylesheet the
+header changes nothing for another page that uses the file.
 
-**Speed** (Ultra int8 encoder, 11.15 s of audio, ms, three runs): 1 thread 5,200; 2 threads 2,700;
-**4 threads 1,300**; 8 threads 1,070; 16 threads 1,500 (more threads than cores that were free). Redux:
-4,900 / 1,470 (4) / 1,085 (8). So four threads are a 4 times speed-up and 8 buy 20 % more; `runtime.ts`
-uses up to four. On the card the threads speed up only the decoder: 24.6 s took 683 ms with one and 517 ms
-with four. That would take the int8 main tier from 0.47 to about 0.12, under the live-words limit.
+`require-corp` and not `credentialless`: both keep the downloads from `huggingface.co` (a ranged fetch, 206) and the
+GitHub store (`api.github.com`, 200) working, since both answer CORS; the test was made with each. Safari does not
+know `credentialless`, and its pages would have stayed on one thread. `require-corp` costs these pages nothing that
+the page policy did not already take: its `<meta>` allows images, scripts, styles and fonts only from the site itself
+(`img-src 'self' data:`), so a picture from another site never loaded there. What the headers stop on `/mdquire/*`
+that was possible before: **a cross-origin frame** (the policy allows `frame-src https:`) now loads only if the frame
+sends `Cross-Origin-Resource-Policy: cross-origin` (tested: a page on another origin loaded in an iframe without
+the headers, and did not with them, with or without its own COEP); and **a cross-origin `no-cors` fetch**. `COOP:
+same-origin` cuts `window.opener` to any page that opens or is opened from these two (none do). mdQuire draws no frames: its reader drops
+`iframe` from a document. (`bun run edit` does not send these headers, since its preview is a frame.)
 
-**What it costs.** Fetches to `huggingface.co` (with `Range`, and the redirect to its content hosts) and to
-`api.github.com` both worked under `require-corp` and `credentialless`, because both answer CORS. Same-origin
-pictures, fonts and scripts are untouched. What breaks under `require-corp` is any cross-origin resource
-without CORS or `Cross-Origin-Resource-Policy: cross-origin`: an `<img>` from `httpbin.org` was blocked, a
-`no-cors` fetch failed; and a cross-origin iframe needs its own COEP (not tested, the editor has none, and
-`frame-src https:` is allowed in the page policy). `credentialless` lets those load without credentials,
-but Safari does not support it as far as I know, so `require-corp` is the portable one. `COOP: same-origin`
-cuts `window.opener` to any page opened from or opening these ones (none do). Both pages loaded, drew and
-showed their editor with no errors under each mode. A reload keeps the isolation; links from the rest of the
-site into `/mdquire/` are ordinary navigations. The site's Pages `Content-Security-Policy` needs no change.
+Checked with a small server that applies `_headers` (python's does not), on a build: `/`, `/photos/`, a post with
+pictures, `/minis/walker/` (its worker and wasm come from `/_astro/` and `/wasm/`), `/minis/plinko/`, `/spectrum/`
+all load with no errors and are **not** isolated (`crossOriginIsolated` false); `/mdquire/` and `/mdquire-dictation/`
+are isolated and show their editor with no errors.
+
+The runtime uses half of `navigator.hardwareConcurrency`, from 1 to 8 threads, and one thread where
+`crossOriginIsolated` is false. **Speed** (Chromium 156, 16 threads of this machine, the 24.6 s sample, real-time
+factor = recognizing time over sound time, three runs each):
+
+| Threads | Ultra w4a8 (processor) | Redux w2a8 (processor) |
+| --- | --- | --- |
+| 1 | 0.38 | 0.38 |
+| 2 | 0.20 | 0.19 |
+| 4 | 0.11 | 0.11 |
+| 8 | 0.077 | 0.085 |
+
+Four threads are a 3.5 times speed-up, eight 5 times. On the card, Ultra w4a8 is 0.023 with one thread and 0.020 with
+eight (the threads speed up only the decoder), and 0.22 on the Radeon 610M.
 
 ## 5. Load times
 

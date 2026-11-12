@@ -50,26 +50,26 @@ Other candidates that were tried:
 | the same with the fp32 encoder and the int8 decoder | 7.0 % in the first test. Used as **tiny**. |
 | `moonshine-ai/moonshine-streaming-tiny` | Only a `model.safetensors` (176 MB) and a tokenizer; no ONNX files. Not run. |
 
-## What parakeet.js needs of a Parakeet export
+## What the recognizer needs of a Parakeet export
 
-It runs `ParakeetModel.fromUrls`, which wants three things (a fourth, `nemo*.onnx`, is only for the
-ONNX preprocessor, and dictation uses the JavaScript one, `preprocessorBackend: "js"`):
+`parakeet/index.ts` opens a model from three things (the mel filterbank is computed in `features.ts`, so there is
+no `nemo*.onnx` to ship):
 
 1. **The encoder**, an ONNX file. Input `audio_signal` float32 `[batch, mels, frames]` (mels is 128 for
    the 0.6b models, 80 for the 110m) and `length` int64 `[batch]`. Output `outputs` float32
    `[batch, hidden, frames / 8]` (hidden 1024 for the 0.6b, 512 for the 110m) and `encoded_lengths`.
    The subsampling is 8. A model larger than 2 GB keeps its weights in a second file (`.onnx.data`);
-   dictation does not support that, so the encoder must be a single file.
+   dictation does not support that, so the encoder must be a single file. To run on the graphics card it
+   must be a 4-bit `MatMulNBits` encoder (`w4a8`); the 8-bit and 2-bit ones run on the processor only.
 2. **The decoder and joiner in one file**, `decoder_joint`. Inputs `encoder_outputs` float32
    `[batch, hidden, 1]` (one encoder frame at a time), `targets` int32 `[batch, 1]`, `target_length`
    int32 `[batch]`, `input_states_1` and `input_states_2` float32 `[layers, batch, 640]`. Outputs
    `outputs` float32 `[batch, 1, 1, vocabulary + durations]`, `prednet_lengths`, `output_states_1` and
    `output_states_2`. Extra outputs (the Olicorne files add `lse_token`, `topk_logits` and others) are
-   ignored. **`layers` must be 2**; that is fixed in parakeet.js.
+   ignored. The number of layers and the hidden size are read from the file, so a one-layer prediction
+   network (the 110m) runs; parakeet.js had two fixed.
 3. **The vocabulary**, `vocab.txt`: one line per token, `token id`, with the blank written `<blk>`.
    Tokens begin a word with the SentencePiece mark (`▁`).
-4. **The preprocessor** is in JavaScript (`mel.js` in parakeet.js): 128 mel bands (80 for the 110m),
-   no file to ship.
 
 The decoder is the TDT one: the joiner's output is the token logits followed by the duration logits.
 
@@ -133,11 +133,8 @@ Then put the files in a Hugging Face repository (or any host that sends CORS hea
 ### Parakeet TDT-CTC 110m (a smaller Parakeet)
 
 `nvidia/parakeet-tdt_ctc-110m` exports the same way, to `encoder-model.onnx` and
-`decoder_joint-model.onnx`, with 80 mel bands and a one-layer prediction network. parakeet.js cannot
-run it as it is (see above). The two ways to make it run are to patch parakeet.js so that the number
-of layers is read from the decoder's `input_states_1` shape instead of being 2, or to export the
-decoder with a second, zero-filled layer, which changes the model and was not tried. Whichever is
-done, measure it against Moonshine tiny before using it.
+`decoder_joint-model.onnx`, with 80 mel bands and a one-layer prediction network. Our recognizer runs it
+(`bins: 80`); it scored 16 % word error, worse than Moonshine tiny, so it is not offered.
 
 ### Moonshine tiny
 

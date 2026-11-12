@@ -235,7 +235,9 @@ export function startSession(options: SessionOptions): Session {
             if (late >= 2) return giveUp(`they were ${(update.behind + update.ms / 1000).toFixed(0)} seconds late`);
             show(correct([...update.words, ...update.tentative].map((word) => word.text).join(" "), options.custom()));
         });
-        stream.push(buffer.slice(0, length));
+        // Only the last stretch before the speech is the new phrase's. The buffer can still hold the end
+        // of the one before, while that one is being finished, and giving it again would write it twice.
+        stream.push(buffer.slice(Math.max(0, length - Math.round((PRE_ROLL + 0.4) * RATE)), length));
     }
 
     /** Writes settled text at the cursor as one undoable step and carries out the commands in it. */
@@ -282,13 +284,14 @@ export function startSession(options: SessionOptions): Session {
     /** Settles the first `count` samples: asks, writes what is said, and drops that sound from the window. */
     function settleFirst(count: number): Promise<void> {
         generation++;
+        // The phrase's live stream is taken out of the session now, not when the job runs: the next phrase may begin first and make a stream of its own.
+        const stream = live;
+        live = undefined;
         const job = queue.then(async () => {
             busy = true;
             // a live phrase already holds everything said, so it is only asked to finish
             let said: string | undefined;
-            if (live) {
-                const stream = live;
-                live = undefined;
+            if (stream) {
                 said = await stream.finish().then((words) => words.map((word) => word.text).join(" "), () => undefined);
             }
             const heard = said === undefined && count >= 1600 ? await recognize(count) : undefined;
