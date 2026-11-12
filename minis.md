@@ -238,6 +238,23 @@ see and learn and walk and do things on its own"; "all of this from scratch in o
 - Corrections to earlier notes: hard 2D parkour "was reported open" in 2021; training walkers in a browser
   is not new (rlsim, rl-forge, both on TensorFlow.js); comparing evolution with RL in general is well-trodden.
 
+**More of her answers, 12 Nov 2026:**
+
+- **Out of energy:** "It gets tired, then recovers": muscles weaken, it slows, connections it cannot pay
+  for go quiet until it eats. It never dies of hunger. It rests to recover, without a sleep in which it
+  dreams; instead, in her words, "it also dreams constantly(it has to evolve that but we give it the
+  bones)": the world model and the means to practise in imagination are there from the start, and whether
+  and how it uses them is left to it to find.
+- **No hurting it:** "Nothing cruel". No broken legs, no blinding. Adaptation is shown by changing the
+  world while it lives: the ground (slippery, sticky, bouncy, soft), gravity and wind, day and night (it
+  sees less far in the dark), and dropping things in front of it (a box, a wall, food, a gap).
+- **Saving:** "A file I can keep": a creature downloads as a small file and loads again.
+- **Two creatures:** "between #2 and #4, what ever their brains develop": rivals for the same food and
+  helpers with things one cannot do alone, with no rule about which. They can communicate, both ways she
+  was offered: a voice of a few tones the other hears, fainter with distance, and seeing each other's
+  bodies. The page draws the calls, plays them as soft sounds, and writes a plain guess at what a call
+  tends to mean, marked as a guess.
+
 Order: speed, then the world and the rays, then PPO, then the teacher, then curiosity and needs, then
 the small vision encoder and the picture experiment.
 
