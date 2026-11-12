@@ -1,6 +1,7 @@
 import { defineConfig, fontProviders } from "astro/config";
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { satteri } from "@astrojs/markdown-satteri";
 import mdx from "@astrojs/mdx";
 import sitemap from "@astrojs/sitemap";
@@ -12,6 +13,33 @@ import resumePdf from "./integrations/resume-pdf";
 // Astro hashes the scripts it processes, but not one written inline as is. The
 // page-transition script has to be inline, so its hash is worked out here from the same file.
 const transition = createHash("sha256").update(readFileSync(new URL("./src/scripts/transition.js", import.meta.url))).digest("base64");
+
+// The files of ONNX Runtime that dictation fetches, copied as they are (no hash in the name) into /ort/.
+// The two JavaScript entries are the WebAssembly-only one (ort.wasm.min.mjs) and the one with WebGPU (ort.min.mjs); each is paired with the
+// .wasm file and glue it loads, so a browser downloads only the pair it can use. To ship a smaller
+// build made by hand, replace the files in this list (src/quire/dictation/parakeet/RUNTIME.md).
+const ORT = ["ort.wasm.min.mjs", "ort-wasm-simd-threaded.mjs", "ort-wasm-simd-threaded.wasm", "ort.min.mjs", "ort-wasm-simd-threaded.jsep.mjs", "ort-wasm-simd-threaded.jsep.wasm"];
+const ortFolder = fileURLToPath(new URL("./node_modules/onnxruntime-web/dist/", import.meta.url));
+type Answer = { setHeader(name: string, value: string): void; end(body: Buffer): void };
+const ortFiles = {
+    name: "ort-files",
+    hooks: {
+        "astro:build:done": ({ dir }: { dir: URL }) => {
+            const out = `${fileURLToPath(dir)}ort`;
+            mkdirSync(out, { recursive: true });
+            for (const file of ORT) copyFileSync(`${ortFolder}${file}`, `${out}/${file}`);
+        },
+        // in `astro dev` the same files are answered from where they are
+        "astro:server:setup": ({ server }: { server: { middlewares: { use(path: string, handler: (request: { url?: string }, response: Answer, next: () => void) => void): void } } }) => {
+            server.middlewares.use("/ort/", (request, response, next) => {
+                const name = (request.url ?? "").slice(1).split("?")[0] ?? "";
+                if (!ORT.includes(name)) return next();
+                response.setHeader("Content-Type", name.endsWith(".wasm") ? "application/wasm" : "text/javascript");
+                response.end(readFileSync(`${ortFolder}${name}`));
+            });
+        },
+    },
+};
 
 export default defineConfig({
     site: "https://bybrooklyn.dev",
@@ -97,6 +125,7 @@ export default defineConfig({
         cspCheck(),
         privateLinks(),
         pruneAssets(),
+        ortFiles,
     ],
     // Workers are built as modules, because the dictation worker loads ONNX Runtime and parakeet.js
     // with import(), which a single-file worker cannot do.
