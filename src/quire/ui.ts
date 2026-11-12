@@ -194,8 +194,11 @@ export function flowMenu(label: string, options: { align?: "left" | "right"; cla
         items.style.maxHeight = "";
         const wide = items.offsetWidth;
         const natural = items.offsetHeight;
-        const right = options.align === "right" || rect.left + wide > window.innerWidth - 8;
-        box.style.left = right ? "" : `${Math.max(8, rect.left)}px`;
+        // it grows from the control's left edge, or its right one when there is no room to the right;
+        // and when there is room on neither side it is slid along to stay inside the window
+        let right = options.align === "right" || rect.left + wide > window.innerWidth - 8;
+        if (right && rect.right - wide < 8) right = false;
+        box.style.left = right ? "" : `${Math.max(8, Math.min(rect.left, window.innerWidth - 8 - wide))}px`;
         box.style.right = right ? `${Math.max(8, window.innerWidth - rect.right)}px` : "";
         box.classList.toggle("from-right", right);
         // under the control if it fits, over it if not, and on whichever side has more room if neither

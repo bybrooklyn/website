@@ -1637,6 +1637,10 @@ body.quire-app {
 /* ---- printing: the document alone, in the site's typefaces, dark on white ---- */
 
 @media print {
+    @page {
+        margin: 2cm 2.2cm;
+    }
+
     html:has(body.quire-app),
     body.quire-app {
         background: white;
