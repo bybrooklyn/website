@@ -240,4 +240,34 @@ mod tests {
             assert!(steps > 0);
         }
     }
+
+    #[test]
+    fn an_endless_walk_far_from_the_start_is_moved_back_without_a_jolt_and_keeps_its_distance() {
+        let ground = [crate::physics::Segment { a: Vec2::new(-20.0, 0.0), b: Vec2::new(2000.0, 0.0) }];
+        let trainer = Trainer::new(Description { legs: 4, carry: false }, Settings::default(), &ground, 1).unwrap();
+        let mut judge = trainer.judge();
+        judge.endless = true;
+        // the same calm brain twice, once carried 600 m along, as if it had walked there
+        let calm = alloc::vec![0.0; trainer.layout.weights()];
+        let mut near = Show::new(&trainer.start, &trainer.creature, trainer.layout, &calm, judge);
+        let mut show = Show::new(&trainer.start, &trainer.creature, trainer.layout, &calm, judge);
+        for body in &mut show.world.bodies {
+            body.position.x += 600.0;
+        }
+        let before = show.creature.distance(&show.world);
+        show.step(1.0 / 60.0);
+        near.step(1.0 / 60.0);
+        assert_eq!(show.origin, 512.0, "moved back once it passed 512 m");
+        let torso = show.world.bodies[show.creature.torso as usize];
+        assert!(torso.position.x < 100.0);
+        assert!((show.creature.distance(&show.world) - before).abs() < 0.05, "the distance carried on across the move");
+        // after the move it walks as the one that never went anywhere does, give or take what an f32 at
+        // 600 m rounds away before the move
+        for _ in 0..120 {
+            show.step(1.0 / 60.0);
+            near.step(1.0 / 60.0);
+        }
+        let apart = (show.creature.distance(&show.world) - 600.0) - near.creature.distance(&near.world);
+        assert!(apart.abs() < 0.05, "no jolt: {apart} m apart");
+    }
 }

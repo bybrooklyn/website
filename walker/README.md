@@ -223,8 +223,10 @@ and 110 to 150 ms for four, at each size. A large brain has more to learn and ge
 
 ### One walker, live
 
-- `live_begin() -> u32` Starts learning one walker at a time, from a brain of the first
-  generation, with no generations in the background: the show is each attempt.
+- `live_begin() -> u32` Starts learning one walker at a time, with no generations in the
+  background: the show is each attempt. The first attempt is a calm brain, every weight zero, whose
+  legs keep the rhythm and no more; the second a random one. Measured over 150 attempts, each start
+  was the better one for some bodies, so both are tried, in plain view.
 - `live_step(seconds: f32) -> u32` Moves the attempt on. When it ends (a fall, or the end of its run)
   it is kept if it scored better than the best so far, and the next attempt, a child of the best
   (each weight nudged as in a generation, and at least one), starts at once. Returns the attempt's

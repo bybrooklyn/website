@@ -109,11 +109,19 @@ pub struct Judge {
     pub finished: bool,
     /// A run with no end but a fall, as the page shows an endless walk.
     pub endless: bool,
+    /// Where the body was at the last look, for a run that has stopped getting anywhere.
+    checked: f32,
+    pub stalled: bool,
+    /// Whether a run that stops getting anywhere ends, as a live attempt does.
+    pub impatient: bool,
     pub over: bool,
 }
 
 /// The slowest pace a run of a set length allows, in metres a second: a run of 10 m may take 25 s.
 const SLOWEST: f32 = 0.4;
+/// A run ends if the body has gone less than this far in the last this many steps (four seconds).
+const STALL_DISTANCE: f32 = 0.2;
+const STALL_STEPS: u32 = 240;
 /// What each second left over earns a run that reached its length, in metres of score.
 const EARLY_REWARD: f32 = 1.0;
 
@@ -141,6 +149,9 @@ impl Judge {
             length,
             finished: false,
             endless: false,
+            checked: 0.0,
+            stalled: false,
+            impatient: false,
             over: false,
         }
     }
@@ -183,7 +194,14 @@ impl Judge {
         if creature.distance(world) >= self.length {
             self.finished = true;
         }
-        let fell = self.seconds_down >= DOWN_LIMIT || self.in_gap || self.dropped;
+        // live, every few seconds: an attempt that has gone almost nowhere since the last look is over,
+        // so a walker standing still does not take a long run's time while someone watches
+        if self.impatient && self.steps % STALL_STEPS == 0 {
+            let at = creature.distance(world);
+            self.stalled = at - self.checked < STALL_DISTANCE;
+            self.checked = at;
+        }
+        let fell = self.seconds_down >= DOWN_LIMIT || self.in_gap || self.dropped || self.stalled;
         self.over = fell || !self.endless && (self.steps >= self.most_steps || self.finished);
         self.over
     }

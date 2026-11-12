@@ -34,6 +34,8 @@ struct Live {
     best_score: f32,
     best_distance: f32,
     attempt: u32,
+    /// A brain to try next before the children begin.
+    next: Option<Vec<f32>>,
 }
 
 static WALKER: Shared<Option<Walker>> = Shared::new(None);
@@ -43,6 +45,13 @@ fn show_of(trainer: &Trainer, weights: &[f32]) -> Show {
     let mut judge = trainer.judge();
     judge.endless = !trainer.settings.length.is_finite();
     Show::new(&trainer.start, &trainer.creature, trainer.layout, weights, judge)
+}
+
+/// A live attempt: as a show, but over once it stops getting anywhere.
+fn attempt_of(trainer: &Trainer, weights: &[f32]) -> Show {
+    let mut show = show_of(trainer, weights);
+    show.judge.impatient = true;
+    show
 }
 
 fn walker() -> Option<&'static mut Walker> {
@@ -254,14 +263,17 @@ pub extern "C" fn show_endless() -> u32 {
     walker().map_or(0, |walker| walker.show.judge.endless as u32)
 }
 
-/// Starts learning one walker at a time, live, from a brain of the first generation: the show is
-/// each attempt. Returns 1 if it worked.
+/// Starts learning one walker at a time, live: the show is each attempt, the first a calm brain and
+/// the second a random one. Returns 1 if it worked.
 #[unsafe(no_mangle)]
 pub extern "C" fn live_begin() -> u32 {
     let Some(walker) = walker() else { return 0 };
-    let first = walker.trainer.weights(0).to_vec();
-    walker.show = show_of(&walker.trainer, &first);
-    walker.live = Some(Live { best: first, best_score: f32::NEG_INFINITY, best_distance: 0.0, attempt: 1 });
+    // the first attempt is a calm brain, every weight zero, whose legs keep the rhythm and no more;
+    // the second a random one; whichever does better is the first parent. Measured, each start is
+    // the better one for some bodies, so both are tried, in plain view
+    let calm = alloc::vec![0.0; walker.trainer.layout.weights()];
+    walker.show = attempt_of(&walker.trainer, &calm);
+    walker.live = Some(Live { best: calm, best_score: f32::NEG_INFINITY, best_distance: 0.0, attempt: 1, next: Some(walker.trainer.weights(0).to_vec()) });
     1
 }
 
@@ -281,8 +293,8 @@ pub extern "C" fn live_step(seconds: f32) -> u32 {
             live.best_distance = outcome.distance;
         }
         live.attempt += 1;
-        let child = walker.trainer.mutate(&live.best);
-        walker.show = show_of(&walker.trainer, &child);
+        let child = live.next.take().unwrap_or_else(|| walker.trainer.mutate(&live.best));
+        walker.show = attempt_of(&walker.trainer, &child);
     }
     live.attempt
 }
