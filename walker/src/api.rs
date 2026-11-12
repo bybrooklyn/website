@@ -26,6 +26,9 @@ struct Walker {
     ground_room: Vec<f32>,
     weights_room: Vec<f32>,
     crowd_room: Vec<f32>,
+    /// Brains to run for another trainer (`evaluate`), and how each went, a score and a distance.
+    evaluate_room: Vec<f32>,
+    evaluated: Vec<f32>,
 }
 
 static WALKER: Shared<Option<Walker>> = Shared::new(None);
@@ -71,7 +74,7 @@ pub extern "C" fn create(legs: u32, population: u32, seconds: f32, seed: u32, hi
     };
     let count = trainer.layout.weights();
     let show = show_of(&trainer, trainer.weights(0));
-    *WALKER.get() = Some(Walker { trainer, show, crowd: None, live: None, ground_room: Vec::new(), weights_room: vec![0.0; count], crowd_room: Vec::new() });
+    *WALKER.get() = Some(Walker { trainer, show, crowd: None, live: None, ground_room: Vec::new(), weights_room: vec![0.0; count], crowd_room: Vec::new(), evaluate_room: Vec::new(), evaluated: Vec::new() });
     count as u32
 }
 
@@ -113,6 +116,53 @@ pub extern "C" fn ground_set(pieces: u32) -> u32 {
 #[unsafe(no_mangle)]
 pub extern "C" fn train(runs: u32) -> u32 {
     walker().map_or(0, |walker| walker.trainer.train(runs))
+}
+
+/// Room for `count` brains, one after another, to run for another trainer with `evaluate`.
+#[unsafe(no_mangle)]
+pub extern "C" fn evaluate_room(count: u32) -> *mut f32 {
+    let Some(walker) = walker() else { return core::ptr::null_mut() };
+    let length = walker.trainer.layout.weights() * count.min(1000) as usize;
+    walker.evaluate_room.clear();
+    walker.evaluate_room.resize(length, 0.0);
+    walker.evaluate_room.as_mut_ptr()
+}
+
+/// Runs the `count` brains written into `evaluate_room` from this walker's start, as training runs
+/// them, for a trainer elsewhere that hands out shares of its generation. Each one's score and
+/// distance are then in `evaluated`. Returns how many were run.
+#[unsafe(no_mangle)]
+pub extern "C" fn evaluate(count: u32) -> u32 {
+    let Some(walker) = walker() else { return 0 };
+    let length = (walker.trainer.layout.weights() * count as usize).min(walker.evaluate_room.len());
+    let brains = length / walker.trainer.layout.weights();
+    walker.evaluated.clear();
+    walker.evaluated.resize(2 * brains, 0.0);
+    walker.trainer.evaluate(&walker.evaluate_room[..length], &mut walker.evaluated);
+    brains as u32
+}
+
+/// The score and distance of each brain the last `evaluate` ran, two f32 a brain.
+#[unsafe(no_mangle)]
+pub extern "C" fn evaluated() -> *const f32 {
+    pointer(walker().map(|walker| &walker.evaluated[..]))
+}
+
+/// 1 if member `index` of the current generation has been scored (or is one of the best few carried
+/// over), else 0.
+#[unsafe(no_mangle)]
+pub extern "C" fn member_scored(index: u32) -> u32 {
+    walker().map_or(0, |walker| walker.trainer.scored.get(index as usize).is_some_and(|scored| *scored) as u32)
+}
+
+/// Takes in the score and distance of member `index` of the current generation, run elsewhere. Once
+/// every member is scored the next generation is bred, as `train` would. Returns the number of
+/// generations finished.
+#[unsafe(no_mangle)]
+pub extern "C" fn record(index: u32, score: f32, distance: f32) -> u32 {
+    let Some(walker) = walker() else { return 0 };
+    walker.trainer.record(index as usize, score, distance);
+    walker.trainer.generation
 }
 
 /// The number of generations finished.

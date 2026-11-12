@@ -606,6 +606,34 @@ impl Trainer {
         self.generation
     }
 
+    /// Runs brains given from outside, one after another in `brains`, from the start as training
+    /// runs them, and writes each one's score and distance into `into`, two numbers a brain. A
+    /// helper training alongside does a share of a generation this way and hands back what it found.
+    pub fn evaluate(&mut self, brains: &[f32], into: &mut [f32]) {
+        let count = self.layout.weights();
+        let judge = self.judge();
+        let Trainer { running, start, creature, layout, .. } = self;
+        self.steps += running.run(start, creature, *layout, judge, self.lanes, brains.len() / count, |k| &brains[k * count..(k + 1) * count], |k, outcome| {
+            into[2 * k] = outcome.score;
+            into[2 * k + 1] = outcome.distance;
+        });
+    }
+
+    /// Takes in how a member of the current generation went, scored elsewhere (`evaluate`). Once
+    /// every member is scored the next generation is bred, just as when this trainer ran them all, so
+    /// what is learned does not depend on who ran which run or in what order the answers came.
+    pub fn record(&mut self, index: usize, score: f32, distance: f32) {
+        if index >= self.settings.population || self.scored[index] {
+            return;
+        }
+        self.scores[index] = score;
+        self.distances[index] = distance;
+        self.scored[index] = true;
+        if self.scored.iter().all(|scored| *scored) {
+            self.breed();
+        }
+    }
+
     /// The order of the population from best to worst. Equal scores keep their places, so the order
     /// never depends on anything but the scores.
     fn ranking(&self) -> Vec<usize> {
@@ -778,6 +806,42 @@ mod tests {
             let one = learned(1, 1);
             assert_eq!(one, learned(8, 5), "{legs} legs");
             assert_eq!(one, learned(4, 60), "{legs} legs");
+        }
+    }
+
+    #[test]
+    fn a_generation_shared_among_one_or_eight_helpers_learns_exactly_as_one_trainer_alone() {
+        let settings = Settings { goal: Goal::Far, hidden: 16, layers: 2, memory: 4, ..Settings::default() };
+        let description = Description { legs: 2, carry: false, leap: false };
+        let mut alone = Trainer::new(description, settings, &flat_ground(), 5).unwrap();
+        while alone.generation < 6 {
+            alone.train(32);
+        }
+        for workers in [1, 3, 8] {
+            let mut lead = Trainer::new(description, settings, &flat_ground(), 5).unwrap();
+            // helpers from another seed: only their start matters, and that is the same
+            let mut helpers: Vec<Trainer> = (0..workers).map(|_| Trainer::new(description, settings, &flat_ground(), 99).unwrap()).collect();
+            let count = lead.layout.weights();
+            while lead.generation < 6 {
+                let todo: Vec<usize> = (0..lead.settings.population).filter(|&i| !lead.scored[i]).collect();
+                let mut answers = Vec::new();
+                // each helper takes every so many, as uneven shares as they come
+                for (w, helper) in helpers.iter_mut().enumerate() {
+                    let share: Vec<usize> = todo.iter().copied().skip(w).step_by(workers).collect();
+                    let brains: Vec<f32> = share.iter().flat_map(|&i| lead.weights(i).to_vec()).collect();
+                    let mut found = vec![0.0; 2 * share.len()];
+                    helper.evaluate(&brains, &mut found);
+                    answers.extend(share.iter().enumerate().map(|(k, &i)| (i, found[2 * k], found[2 * k + 1])));
+                }
+                assert_eq!(answers.len() * count, todo.len() * count);
+                // and the answers come back in another order than they went out
+                for &(i, score, distance) in answers.iter().rev() {
+                    lead.record(i, score, distance);
+                }
+            }
+            assert_eq!(lead.best.iter().map(|w| w.to_bits()).collect::<Vec<_>>(), alone.best.iter().map(|w| w.to_bits()).collect::<Vec<_>>(), "{workers} helpers");
+            assert_eq!(lead.history_best.iter().map(|s| s.to_bits()).collect::<Vec<_>>(), alone.history_best.iter().map(|s| s.to_bits()).collect::<Vec<_>>());
+            assert_eq!(lead.population.iter().map(|w| w.to_bits()).collect::<Vec<_>>(), alone.population.iter().map(|w| w.to_bits()).collect::<Vec<_>>());
         }
     }
 

@@ -24,6 +24,7 @@ import {
     LAYERS,
     LEGS,
     LENGTHS,
+    EFFORTS,
     LINK_NAMES,
     MEMORIES,
     NEURONS,
@@ -37,12 +38,15 @@ import {
     heightAt,
     lengthName,
     linkParts,
+    machine,
     oldLink,
     presetOf,
     read,
     start as startEngine,
     valid,
+    workersFor,
     write,
+    type Effort,
     type Engine,
     type Setup,
     type Way,
@@ -75,6 +79,12 @@ export default function walker(m: Mote): Scene {
 
     let engine: Engine | undefined;
     let worker: Worker | undefined;
+    /** Workers helping the first with each generation's runs, as many as the effort asks for. */
+    let helpers: Worker[] = [];
+    let effort: Effort = m.recall<Effort>("walker-effort", "normal");
+    if (!EFFORTS.some((each) => each.effort === effort)) effort = "normal";
+    /** What the workers were last told to make, for a helper that joins later. */
+    let made: Order | undefined;
     /** Training on this thread instead, where a worker could not be started. */
     let here = false;
     let id = 0;
@@ -142,7 +152,9 @@ export default function walker(m: Mote): Scene {
             }
             [camera.x, camera.y, last] = [0, 0, undefined];
         }
-        tell({ kind: "begin", setup: id, legs: setup.legs, goal: setup.goal, hidden: setup.hidden, layers: setup.layers, memory: setup.memory, length: setup.length, ground: beginning, seed, brain });
+        made = { kind: "begin", setup: id, legs: setup.legs, goal: setup.goal, hidden: setup.hidden, layers: setup.layers, memory: setup.memory, length: setup.length, ground: beginning, seed, brain };
+        tell(made);
+        for (const helper of helpers) helper.postMessage(made);
         // learning live needs no generations in the background
         tell({ kind: live() || paused ? "pause" : "resume" });
         changed();
@@ -174,8 +186,35 @@ export default function walker(m: Mote): Scene {
         changed();
     };
 
+    const hire = () => new Worker(new URL("../scripts/walker-worker.ts", import.meta.url), { type: "module" });
+
+    /**
+     * Gives the first worker `count` helpers, each joined to it by a channel of its own. Changing the
+     * effort changes only how fast learning goes, never what is learned.
+     */
+    const staff = (count: number) => {
+        for (const helper of helpers) helper.terminate();
+        helpers = [];
+        if (!worker) return;
+        const ports: MessagePort[] = [];
+        for (let i = 0; i < count; i++) {
+            const helper = hire();
+            // a helper that cannot run leaves the first worker to run everything
+            const fail = () => staff(0);
+            helper.onmessage = (event: MessageEvent<Report>) => event.data.kind === "failed" && fail();
+            helper.onerror = fail;
+            const channel = new MessageChannel();
+            helper.postMessage({ kind: "lead", port: channel.port2 } satisfies Order, [channel.port2]);
+            if (made) helper.postMessage(made);
+            ports.push(channel.port1);
+            helpers.push(helper);
+        }
+        worker.postMessage({ kind: "helpers", ports, gentle: effort === "gentle" } satisfies Order, ports);
+    };
+
     /** No worker: training goes on here, a run at a time between steps. */
     const trainHere = () => {
+        staff(0);
         worker?.terminate();
         worker = undefined;
         if (here) return;
@@ -184,9 +223,10 @@ export default function walker(m: Mote): Scene {
     };
 
     try {
-        worker = new Worker(new URL("../scripts/walker-worker.ts", import.meta.url), { type: "module" });
+        worker = hire();
         worker.onmessage = (event: MessageEvent<Report>) => hear(event.data);
         worker.onerror = () => trainHere();
+        staff(workersFor(effort, machine()) - 1);
     } catch {
         here = true;
     }
@@ -197,7 +237,7 @@ export default function walker(m: Mote): Scene {
         .then((made) => {
             engine = made;
             // with ?debug in the address, the engine can be reached from the console, to measure the walker on screen
-            if (m.debug) Object.assign(globalThis, { walkerEngine: made });
+            if (m.debug) Object.assign(globalThis, { walkerEngine: made, walkerWorkers: () => (worker ? helpers.length + 1 : 0) });
             begin(brainToLoad);
         });
 
@@ -350,6 +390,11 @@ export default function walker(m: Mote): Scene {
             changed();
             m.wake();
         } });
+        const efforts = choices<Effort>("effort", "how hard learning works the computer", EFFORTS.map((each) => ({ value: each.effort, text: each.text })), () => effort, (chosen) => {
+            effort = chosen;
+            m.keep("walker-effort", effort);
+            staff(workersFor(effort, machine()) - 1);
+        });
         const crowdBox = el("input", { type: "checkbox", checked: showCrowd, onchange: () => {
             showCrowd = crowdBox.checked;
             crowd();
@@ -380,6 +425,7 @@ export default function walker(m: Mote): Scene {
             group("how it learns"),
             ...row("way", ways),
             ...row("learning", pause, el("button", { type: "button", textContent: "start over", onclick: restart })),
+            ...row("effort", efforts),
             ...row("crowd", el("label", {}, crowdBox, "show the rest")),
             share,
         );
@@ -832,7 +878,7 @@ export default function walker(m: Mote): Scene {
             engine.show_push(x - origin, y + 0.05, push[0]!, push[1]!);
         },
         resting: () => !m.preview && paused && !!engine && (live() || engine.show_over() === 1),
-        debug: () => [`${live() ? "learning live" : here ? "training on the page" : "training in a worker"}, ${generation} generations, ${runs} runs, ${ground.length / 4} pieces of ground, moved back ${origin} m`],
+        debug: () => [`${live() ? "learning live" : here ? "training on the page" : `training in ${helpers.length + 1} worker${helpers.length ? "s" : ""}, ${effort}`}, ${generation} generations, ${runs} runs, ${ground.length / 4} pieces of ground, moved back ${origin} m`],
         draw() {
             scale = Math.max(40, Math.min(m.height / 2.9, m.width / 3.8));
             drawGround();

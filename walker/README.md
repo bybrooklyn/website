@@ -107,6 +107,25 @@ brains on runs of one length, and what is seen is where the best of them goes af
 - `history_best() -> *const f32` The best score of each finished generation, `history_length` f32.
 - `history_mean() -> *const f32` The average score of each, `history_length` f32.
 
+### Training on several threads
+
+A generation's runs share nothing but their start, so they can be run anywhere, by any number of
+helpers, so long as one walker breeds. The page's workers do this: one leads, and hands out shares
+of each generation to the others, each its own module made with the same `create` and ground. What
+is learned is the same, to the bit, however many helpers there are and whatever order their answers
+come in.
+
+- `evaluate_room(count: u32) -> *mut f32` Room for `count` brains, one after another.
+- `evaluate(count: u32) -> u32` Runs the brains written there from the start, as training runs
+  them, and returns how many it ran. It changes nothing in this walker's own training.
+- `evaluated() -> *const f32` Two f32 for each brain the last `evaluate` ran: its score, then how
+  far it went.
+- `member_scored(index: u32) -> u32` 1 if that member of the current generation has its score (the
+  best few carried over have theirs already), else 0.
+- `record(index: u32, score: f32, distance: f32) -> u32` Gives a member of the current generation
+  the score and distance a helper found for it. Once every member has one, the next generation is
+  bred, as `train` would. Returns the number of generations finished.
+
 ### Goals
 
 The body is down when it touches the ground, is tipped past sixty degrees, or is held lower than a

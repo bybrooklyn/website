@@ -26,6 +26,11 @@ export interface Engine {
     ground_room(pieces: number): number;
     ground_set(pieces: number): number;
     train(runs: number): number;
+    evaluate_room(count: number): number;
+    evaluate(count: number): number;
+    evaluated(): number;
+    member_scored(index: number): number;
+    record(index: number, score: number, distance: number): number;
     generation(): number;
     generation_runs(): number;
     best_score(): number;
@@ -101,6 +106,41 @@ export const write = (engine: Engine, pointer: number, values: ArrayLike<number>
 
 /** How many brains a generation has. */
 export const POPULATION = 32;
+
+/** How hard training works the visitor's machine: gently, normally, or with all it has. */
+export type Effort = "gentle" | "normal" | "all";
+export const EFFORTS: { effort: Effort; text: string }[] = [
+    { effort: "gentle", text: "gentle" },
+    { effort: "normal", text: "normal" },
+    { effort: "all", text: "all it has" },
+];
+
+/** What the browser says of the machine: its cores, its memory in gigabytes if it says, and whether it is a phone. */
+export interface Machine {
+    cores: number;
+    memory?: number;
+    phone: boolean;
+}
+
+/** This browser's machine. */
+export function machine(): Machine {
+    const about = navigator as Navigator & { deviceMemory?: number; userAgentData?: { mobile?: boolean } };
+    return { cores: about.hardwareConcurrency || 2, memory: about.deviceMemory, phone: about.userAgentData?.mobile ?? /Mobi|Android|iPhone|iPad/i.test(about.userAgent) };
+}
+
+/**
+ * How many workers train at an effort. Gentle is one, resting as long as it works. Normal is about
+ * half the cores, from one to eight, so the machine has room for everything else; all it has leaves
+ * one core free. A phone, or a machine with little memory, gets fewer.
+ */
+export function workersFor(effort: Effort, { cores, memory, phone }: Machine): number {
+    if (effort === "gentle") return 1;
+    const whole = Math.max(1, Math.floor(cores) || 1);
+    let most = effort === "all" ? Math.min(16, whole - 1) : Math.min(8, Math.floor(whole / 2));
+    if (phone) most = Math.min(most, effort === "all" ? 4 : 2);
+    if (memory !== undefined && memory < 4) most = Math.min(most, memory <= 1 ? 1 : 2);
+    return Math.max(1, most);
+}
 
 export type Legs = 1 | 2 | 4;
 export const LEGS: Legs[] = [1, 2, 4];

@@ -4,7 +4,7 @@
 // link exactly, and each kind of ground is what it says. `bun run wasm` builds it; `bun test` runs this.
 
 import { expect, test } from "bun:test";
-import { COURSE, DEFAULT_SETUP, KINDS, PRESETS, Terrain, courseAt, decode, encode, engineAddress, fromLink, hasSimd, heightAt, linkParts, oldLink, pieces, presetOf, valid, type Engine, type Setup } from "./walking";
+import { COURSE, DEFAULT_SETUP, KINDS, PRESETS, Terrain, courseAt, decode, encode, engineAddress, fromLink, hasSimd, heightAt, linkParts, oldLink, pieces, presetOf, valid, workersFor, type Engine, type Setup } from "./walking";
 
 const path = new URL("../../public/wasm/walker.wasm", import.meta.url);
 const scalarPath = new URL("../../public/wasm/walker-scalar.wasm", import.meta.url);
@@ -43,6 +43,51 @@ test("the build with SIMD and the build without learn exactly the same way, to t
         expect(bits(fast, fast.history_best(), 3)).toEqual(bits(plain, plain.history_best(), 3));
         expect(fast.best_score()).toBe(plain.best_score());
     }
+});
+
+test("a generation shared out among one or eight helpers, as the workers share it, learns exactly as one module alone", async () => {
+    const bits = (walker: Walker, pointer: number, length: number) => Array.from(new Uint32Array(walker.memory.buffer, pointer, length));
+    const alone = await load();
+    const count = alone.create(4, 32, 0, 13, 16, 2, 4, 1, 0);
+    while (alone.generation() < 4) alone.train(32);
+    for (const workers of [1, 8]) {
+        const lead = await load();
+        lead.create(4, 32, 0, 13, 16, 2, 4, 1, 0);
+        // helpers made from another seed: only the world each run starts from matters, and that is the same
+        const helpers = await Promise.all(Array.from({ length: workers }, () => load()));
+        for (const helper of helpers) helper.create(4, 32, 0, 77, 16, 2, 4, 1, 0);
+        while (lead.generation() < 4) {
+            const todo = [...Array(32).keys()].filter((member) => !lead.member_scored(member));
+            const population = floats(lead, lead.population_weights(), 32 * count);
+            const answers: [number, number, number][] = [];
+            helpers.forEach((helper, w) => {
+                const share = todo.filter((_, k) => k % workers === w);
+                new Float32Array(helper.memory.buffer, helper.evaluate_room(share.length), share.length * count).set(share.flatMap((member) => population.slice(member * count, (member + 1) * count)));
+                const ran = helper.evaluate(share.length);
+                const found = floats(helper, helper.evaluated(), 2 * ran);
+                share.forEach((member, k) => answers.push([member, found[2 * k]!, found[2 * k + 1]!]));
+            });
+            // the answers come back in their own order
+            for (const [member, score, distance] of answers.reverse()) lead.record(member, score, distance);
+        }
+        expect(bits(lead, lead.best_weights(), count)).toEqual(bits(alone, alone.best_weights(), count));
+        expect(bits(lead, lead.population_weights(), 32 * count)).toEqual(bits(alone, alone.population_weights(), 32 * count));
+        expect(bits(lead, lead.history_best(), 4)).toEqual(bits(alone, alone.history_best(), 4));
+    }
+});
+
+test("how many workers train is about half the cores, fewer on a phone or with little memory, and one when gentle", () => {
+    expect(workersFor("normal", { cores: 16, phone: false })).toBe(8);
+    expect(workersFor("normal", { cores: 32, phone: false })).toBe(8);
+    expect(workersFor("normal", { cores: 4, phone: false })).toBe(2);
+    expect(workersFor("normal", { cores: 1, phone: false })).toBe(1);
+    expect(workersFor("normal", { cores: 8, phone: true })).toBe(2);
+    expect(workersFor("normal", { cores: 16, memory: 2, phone: false })).toBe(2);
+    expect(workersFor("normal", { cores: 16, memory: 1, phone: false })).toBe(1);
+    expect(workersFor("gentle", { cores: 16, phone: false })).toBe(1);
+    expect(workersFor("all", { cores: 16, phone: false })).toBe(15);
+    expect(workersFor("all", { cores: 8, phone: true })).toBe(4);
+    expect(workersFor("all", { cores: 0, phone: false })).toBe(1);
 });
 
 test("a walker is made only from a description it can build", async () => {
