@@ -198,7 +198,7 @@ used("the bar is a toolbar: the arrow keys move along it and Escape closes a men
     expect(await tab.run("document.activeElement.textContent")).toContain("Paragraph");
     await tab.press("Escape");
     expect(await tab.run("document.activeElement.getAttribute('aria-label')")).toBe("Style");
-    expect(await tab.run("[...document.querySelectorAll('.quire-bar button')].filter((b) => b.tabIndex === 0).length")).toBe(1);
+    expect(await tab.run("[...document.querySelectorAll('.quire-bar-strip button')].filter((b) => b.tabIndex === 0).length")).toBe(1);
 });
 
 used("a menu grows open over time, past its size and back, and with less motion asked for it does not", async () => {

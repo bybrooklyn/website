@@ -350,6 +350,63 @@ used("the folder store writes real file handles, here the browser's private file
     expect(result).toEqual({ listed: ["a-note.md"], text: "two", refused: true, trash: true });
 });
 
+used("the menu row: a menu flows from its word, slides to the next as the pointer moves along, and is worked with the keys", async () => {
+    await load();
+    const open = () => tab.run<{ word: string | null; lines: string[]; sliding: boolean; left: number }>(`(() => {
+        const box = document.querySelector('.quire-row-menu');
+        return { word: document.querySelector('.quire-row-word.open')?.textContent ?? null, lines: box.classList.contains('open') ? [...box.querySelectorAll('.quire-menu-line')].map((line) => line.textContent) : [], sliding: box.classList.contains('sliding'), left: Math.round(box.getBoundingClientRect().left) };
+    })()`);
+    await press(".quire-row-word", "Format");
+    await tab.wait(600);
+    const format = await open();
+    expect(format.word).toBe("Format");
+    expect(format.lines).toContain("BoldCtrl+B");
+    expect(format.lines).toContain("Heading 2Ctrl+Alt+2");
+    // the pointer moving onto Insert takes the open menu there, sliding
+    await tab.run("document.querySelectorAll('.quire-row-word')[3].dispatchEvent(new PointerEvent('pointerenter'))");
+    await tab.wait(500);
+    const insert = await open();
+    expect(insert.word).toBe("Insert");
+    expect(insert.sliding).toBe(true);
+    expect(insert.left).toBeLessThan(format.left);
+    expect(insert.lines).toContain("Table");
+    expect(await tab.run("document.querySelectorAll('.quire-row-word.open').length")).toBe(1);
+    await tab.press("Escape");
+    await tab.wait(300);
+    expect((await open()).lines).toEqual([]);
+    // with the keys: File opened from its word, the right arrow to Edit, a letter to its line, Enter to do it
+    await tab.run("document.querySelector('.quire-row-word').focus()");
+    await tab.press("Enter");
+    await tab.wait(400);
+    expect((await open()).word).toBe("File");
+    await tab.press("ArrowRight");
+    await tab.wait(400);
+    expect((await open()).word).toBe("Edit");
+    await tab.press("s");
+    expect(await tab.run("document.activeElement.textContent")).toBe("Select allCtrl+A");
+    await tab.press("Enter");
+    await tab.wait(200);
+    expect(await tab.run("String(getSelection())")).toBe(await tab.run("document.querySelector('.quire').innerText.trim()"));
+});
+
+used("on a narrow window the menu row folds into the three dots, each word a line there that opens its menu", async () => {
+    await tab.resize(390, 800);
+    try {
+        await tab.wait(600);
+        expect(await tab.run("(() => { const row = document.querySelector('.quire-menu-row'); return [row.inert, getComputedStyle(row).opacity, Math.round(row.getBoundingClientRect().height)]; })()")).toEqual([true, "0", 0]);
+        await press(".quire-dots");
+        await tab.wait(700);
+        const lines = await tab.run<string[]>("[...document.querySelectorAll('.quire-menu.open .quire-menu-line')].map((line) => line.textContent)");
+        expect(lines.filter((line) => line.endsWith("›"))).toEqual(["File›", "Edit›", "View›", "Insert›", "Format›", "Tools›"]);
+        await press(".quire-menu.open .quire-menu-line", "Format");
+        await tab.wait(600);
+        expect(await tab.run("[...document.querySelectorAll('.quire-row-menu.open .quire-menu-line')].map((line) => line.textContent)[0]")).toBe("BoldCtrl+B");
+        await tab.press("Escape");
+    } finally {
+        await tab.resize(1300, 900);
+    }
+});
+
 used("printed, the page is the document alone, dark on white, with none of the editor around it", async () => {
     await tab.media({}, "print");
     try {

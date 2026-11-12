@@ -3,7 +3,17 @@
 // window's edges. Run with `bun test src/quire`.
 
 import { expect, test } from "bun:test";
-import { moveIndex, placeNear } from "./ui";
+import { moveIndex, placeNear, typeAhead } from "./ui";
+
+test("a letter typed in a menu goes to the next line starting with it, round again, and more letters spell more of it", () => {
+    const labels = ["Undo", "Redo", "Select all", "Show the Markdown", "Search"];
+    expect(typeAhead(labels, -1, "s")).toBe(2);
+    expect(typeAhead(labels, 2, "s")).toBe(3);
+    expect(typeAhead(labels, 4, "s")).toBe(2);
+    expect(typeAhead(labels, 2, "sh")).toBe(3);
+    expect(typeAhead(labels, 0, "x")).toBeUndefined();
+    expect(typeAhead(labels, 0, "")).toBeUndefined();
+});
 
 test("the arrow keys move along a toolbar and wrap at the ends, Home and End go to the ends", () => {
     expect(moveIndex(0, "ArrowRight", 4)).toBe(1);

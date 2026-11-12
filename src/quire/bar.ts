@@ -330,7 +330,7 @@ const SIZES: [string, string | null][] = [
 ];
 
 /** Builds the bar for a surface. */
-export function createBar(surface: Surface, options: BarOptions): { element: HTMLElement; setName(name: string): void; menus: Menu[]; layout(): void; pickImage(): void; setStatus(short: string, full: string, tone?: "quiet" | "warn"): void; name: HTMLElement; setOutline(open: boolean): void; setRich(on: boolean): void; rich(): boolean } {
+export function createBar(surface: Surface, options: BarOptions): { element: HTMLElement; setName(name: string): void; menus: Menu[]; layout(): void; pickImage(): void; setStatus(short: string, full: string, tone?: "quiet" | "warn"): void; name: HTMLElement; setOutline(open: boolean): void; setRich(on: boolean): void; rich(): boolean; pickers: Record<"color" | "size" | "font" | "highlight", (from: HTMLElement) => void> } {
     const bar = make("div", "quire-bar");
     bar.setAttribute("role", "toolbar");
     bar.setAttribute("aria-label", "Formatting");
@@ -705,6 +705,13 @@ export function createBar(surface: Surface, options: BarOptions): { element: HTM
             layout();
         },
         rich: () => richOn,
+        // the color, size, typeface and highlight menus, opened from somewhere else, as the menu row does
+        pickers: {
+            color: (from) => colors.open(from, colorLines(), true),
+            size: (from) => sizes.open(from, sizeLines(), true),
+            font: (from) => fonts.open(from, fontLines(), true),
+            highlight: (from) => highlights.open(from, highlightLines(), true),
+        },
         setOutline(open) {
             outlineButton.setAttribute("aria-pressed", String(open));
             outlineButton.classList.toggle("pressed", open);

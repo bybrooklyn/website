@@ -1982,6 +1982,94 @@ body.quire-app {
 .quire-swatch-mark { border-radius: 0.2rem; }
 .quire-font-sample { font-size: 1.05rem; line-height: 1; }
 
+/* The menu row: File, Edit, View, Insert, Format, Tools, in small words above the bar. In the
+   site's top row it sits in the room above the bar, so the name and the bar keep their places;
+   the top row then stays whole when it sticks, so the words stay in reach. On a narrow window the
+   row folds away into the three dots, shrinking as it goes. */
+.quire-menu-row {
+    display: flex;
+    align-items: center;
+    gap: 0.05rem;
+    max-height: 1.4rem;
+    overflow: hidden;
+    font-family: var(--font-text);
+    font-size: 0.85rem;
+    opacity: 1;
+    transition:
+        max-height 0.4s var(--ease),
+        opacity 0.25s ease;
+}
+
+.quire-bar-home.has-menu-row {
+    position: relative;
+}
+
+.quire-bar-home > .quire-menu-row {
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+}
+
+.quire-row-word {
+    height: 1.4rem;
+    padding: 0 0.55rem;
+    border: 0;
+    border-radius: 0.75rem;
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    cursor: pointer;
+    transition:
+        background 0.2s var(--ease),
+        color 0.2s var(--ease);
+}
+
+.quire-row-word:hover,
+.quire-row-word:focus-visible {
+    background: color-mix(in oklch, var(--ink) 9%, transparent);
+    color: var(--ink);
+    outline: none;
+}
+
+.quire-row-word.open {
+    background: color-mix(in oklch, var(--accent) 22%, transparent);
+    color: var(--accent);
+}
+
+/* in the row's menus every label starts at the same place, with an icon before it or not */
+.quire-row-menu .quire-menu-line > .quire-menu-label:first-child {
+    margin-left: 2rem;
+}
+
+/* moving along the row, the open menu slides over to the next word rather than closing and opening */
+.quire-menu.quire-row-menu.open.sliding {
+    transition:
+        left 0.35s var(--ease),
+        right 0.35s var(--ease),
+        width 0.4s var(--ease),
+        height 0.4s var(--ease),
+        border-color 0.2s ease,
+        opacity 0.12s ease,
+        visibility 0s;
+}
+
+@media (min-width: 40.01rem) {
+    .quire-app .quire-top:has(.has-menu-row) {
+        top: 0;
+    }
+
+    .quire-app:has(.has-menu-row) .quire-editor {
+        --stuck: calc(var(--bar-height) + 0.9rem + 0.0625rem + var(--line) * 1.25 - (var(--bar-height) - var(--line)) / 2 - 0.4rem);
+    }
+}
+
+@media (max-width: 40rem) {
+    .quire-menu-row {
+        max-height: 0;
+        opacity: 0;
+    }
+}
+
 /* With less motion asked for, nothing of the editor moves: what opens is simply there, and what
    closes is simply gone. It is stated for all of it at once, so that no state slips through by
    being more particular than this rule. */
@@ -1999,7 +2087,9 @@ body.quire-app {
     .quire-history *,
     .quire-conflict,
     .quire-conflict *,
-    .quire-welcome {
+    .quire-welcome,
+    .quire-menu-row,
+    .quire-menu-row * {
         transition-duration: 0s !important;
         transition-delay: 0s !important;
     }

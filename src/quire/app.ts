@@ -96,6 +96,15 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
         colors: options.colors,
         barHome: options.barHome,
         richHome: browser,
+        // the File menu's first lines: what the documents list and the welcome offer, by name
+        fileItems: () => [
+            { label: "New document", icon: "plus", run: () => void editor.create(browser, "Untitled", "", emptyParts()).then(() => (welcome?.go(), editor.surface.focus())) },
+            { label: "Documents", run: () => ((from = editor.nameElement()), (shown = editor.current().store ?? browser), void showDocuments()) },
+            { label: "Open a file", run: () => chooser.click() },
+            ...(able.file ? [{ label: "Open a file to write in place", run: () => void openInPlace() }] : []),
+            ...(able.folder ? [{ label: "Open a folder", run: () => ((from = editor.nameElement()), void openFolder()) }] : []),
+            { label: github ? "Repository settings" : "Connect a repository", run: () => ((from = editor.nameElement()), showRepository()) },
+        ],
         onOpen: remember,
         onName: (button) => {
             if (menu.isOpen()) return menu.close(true);

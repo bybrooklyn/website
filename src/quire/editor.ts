@@ -11,7 +11,9 @@
 //
 // Without a store the editor writes nowhere, as in the tests of its parts.
 
-import { createBar, link as linkAction, linkAt } from "./bar";
+import { addCode, addDivider, addFootnote, addTable, center, createBar, link as linkAction, linkAt, setStyleOf, toggle, toggleList, type Action } from "./bar";
+import { createMenuRow, headings } from "./menu-row";
+import { blockPaths, countWords, lengthOf } from "./document";
 import { createConflict } from "./conflict";
 import { type Document } from "./document";
 import { collapsed } from "./keys";
@@ -48,6 +50,8 @@ export interface EditorOptions {
     onOpen?: (store: Store, entry: Entry) => void;
     /** Opens the documents list from the name in the bar. */
     onName?: (from: HTMLElement) => void;
+    /** The page's own lines at the head of the File menu: new documents, opening files and folders. */
+    fileItems?: () => MenuItem[];
     /** More lines for the three-dot menu, from the page. */
     more?: () => MenuItem[];
     /** Where the page wants the bar: in its own top row, beside the site's name. Above the editor if not given. */
@@ -244,6 +248,8 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         surface.focus();
     };
     const more = (): MenuItem[] => [
+        // on a narrow window the menu row is here, a line for each of its words
+        ...(rowFolded() ? row.words.map((word, index) => ({ label: word.textContent ?? "", hint: "›", run: () => row.openFrom(bar.element.querySelector<HTMLElement>(".quire-dots")!, index) })) : []),
         ...(surface.getDocument().quire ? [] : [{ label: "Turn into a .quire document", icon: "file", run: () => void makeRich() }]),
         { label: host.classList.contains("markdown") ? "Hide the Markdown" : "Show the Markdown", run: () => showMarkdown(!host.classList.contains("markdown")) },
         { label: "Version history", run: () => void history.open() },
@@ -292,6 +298,68 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     host.insertBefore(outlineView.element, column);
     const slash = createSlash(surface, bar.pickImage);
     const tableTools = createTableTools(surface);
+
+    // ---- the menu row: every command by name, above the bar ----
+    const doing = (action: Action) => () => {
+        surface.run((doc, selection) => action({ doc, selection }));
+        surface.focus();
+    };
+    const format = () => row.words[4]!;
+    const row = createMenuRow(() =>
+        headings(
+            { rich: !!surface.getDocument().quire, outline: outlineView.isOpen(), markdown: host.classList.contains("markdown"), words: countWords(surface.getDocument()) },
+            {
+                file: options.fileItems,
+                turnRich: () => void makeRich(),
+                download,
+                downloadQuire: () => void downloadQuire(),
+                history: () => void history.open(),
+                print: () => print(),
+                undo: () => (surface.undo(), surface.focus()),
+                redo: () => (surface.redo(), surface.focus()),
+                selectAll: () => {
+                    const paths = blockPaths(surface.getDocument());
+                    const last = paths[paths.length - 1] ?? [0];
+                    surface.setSelection({ anchor: { path: paths[0] ?? [0], offset: 0 }, focus: { path: last, offset: lengthOf(surface.getDocument(), last) } });
+                    surface.focus();
+                },
+                link: () => openLink(bar.element.querySelector<HTMLElement>('[aria-label^="Link"]') ?? format()),
+                outline: () => (outlineView.isOpen() ? outlineView.close() : outlineView.open()),
+                markdown: () => showMarkdown(!host.classList.contains("markdown")),
+                table: doing(addTable),
+                picture: () => bar.pickImage(),
+                divider: doing(addDivider),
+                code: doing(addCode),
+                footnote: doing(addFootnote),
+                bullet: doing(toggleList("bullet")),
+                number: doing(toggleList("number")),
+                task: doing(toggleList("task")),
+                bold: doing(toggle("bold")),
+                italic: doing(toggle("italic")),
+                underline: doing(toggle("underline")),
+                strike: doing(toggle("strike")),
+                inline: doing(toggle("code")),
+                paragraph: doing(setStyleOf("paragraph")),
+                heading1: doing(setStyleOf("heading1")),
+                heading2: doing(setStyleOf("heading2")),
+                heading3: doing(setStyleOf("heading3")),
+                quote: doing(setStyleOf("quote")),
+                center: doing(center),
+                color: () => bar.pickers.color(format()),
+                size: () => bar.pickers.size(format()),
+                font: () => bar.pickers.font(format()),
+                highlight: () => bar.pickers.highlight(format()),
+            },
+        ),
+    );
+    // in the site's top row the words sit above the bar; anywhere else they are the bar's own first line
+    (options.barHome ?? bar.element).prepend(row.element);
+    if (options.barHome) options.barHome.classList.add("has-menu-row");
+    /** True when the window is too narrow for the row, which has then folded into the three dots. */
+    const rowFolded = () => typeof matchMedia !== "undefined" && matchMedia("(max-width: 40rem)").matches;
+    const syncRow = () => (row.element.inert = rowFolded());
+    syncRow();
+    if (typeof matchMedia !== "undefined") matchMedia("(max-width: 40rem)").addEventListener("change", syncRow);
 
     // ---- version history: a snapshot on opening and after each pause in editing, kept by store and document ----
     const historyKey = () => (store && id ? `${store.label}:${id}` : name);
@@ -427,7 +495,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         destroy() {
             caret.destroy();
             surface.destroy();
-            for (const menu of [...bar.menus, links]) menu.box.remove();
+            for (const menu of [...bar.menus, links, row.menu]) menu.box.remove();
             selectBar.element.remove();
             slash.close();
             tableTools.element.remove();
