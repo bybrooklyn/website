@@ -99,10 +99,10 @@ export function provide(flavor: Flavor, ort: Ort): void {
     modules.set(flavor + RUNTIME, Promise.resolve(ort));
 }
 
-/** Threads WebAssembly can use here: more than one only when the page is cross-origin isolated, which lets it share memory. */
+/** Threads WebAssembly can use here: more than one only when the page is cross-origin isolated, which lets it share memory. Half the processor's threads, between 1 and 8: measured, more than that buys little (RUNTIME.md). */
 function threadsHere(): number {
     if (!self.crossOriginIsolated || typeof SharedArrayBuffer === "undefined") return 1;
-    return Math.max(1, Math.min(4, navigator.hardwareConcurrency || 1));
+    return Math.max(1, Math.min(8, Math.floor((navigator.hardwareConcurrency || 2) / 2)));
 }
 
 /** Whether the browser gives a graphics adapter and a device from it, which is the only way to know WebGPU will work. */

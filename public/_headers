@@ -22,9 +22,31 @@
   ! Permissions-Policy
   Permissions-Policy: camera=(), microphone=(self), geolocation=(), payment=(), usb=(), interest-cohort=()
 
+# mdQuire's pages are cross-origin isolated, so that the speech model can run on several threads
+# (SharedArrayBuffer needs it). Only these two paths: nothing else on the site is isolated.
+# "credentialless" rather than "require-corp": a picture from another site, with no CORS header,
+# still loads in a document that is being edited, only without cookies; and a browser that does
+# not know the value (Safari) simply stays unisolated and runs on one thread.
+/mdquire/*
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: credentialless
+
+/mdquire-dictation/*
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: credentialless
+
+# A worker's script must carry the embedder policy of the page that starts it, or the browser
+# refuses it: the engine worker lives in /_astro/ and ONNX Runtime's thread workers in /ort/.
+# On a script this header changes nothing for any other page that uses the file.
 # Built files carry a hash in their name, so they never change.
 /_astro/*
   Cache-Control: public, max-age=31536000, immutable
+  Cross-Origin-Embedder-Policy: credentialless
+
+# ONNX Runtime's files for dictation keep their names when the library is updated: a day, then check again.
+/ort/*
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+  Cross-Origin-Embedder-Policy: credentialless
 
 # The clip, poster and share image: a day, then check again.
 /assets/*

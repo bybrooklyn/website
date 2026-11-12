@@ -85,13 +85,17 @@ describe("detect", () => {
         browser({ gpu: { requestAdapter: async () => ({ requestDevice: async () => Promise.reject(new Error("lost")) }) } });
         expect((await detect()).kind).toBe("wasm");
     });
-    test("a page that is not cross-origin isolated gets one thread, an isolated one up to four", async () => {
+    test("a page that is not cross-origin isolated gets one thread, an isolated one half the processor's threads, from one to eight", async () => {
         browser({ cores: 16 });
         expect((await detect()).threads).toBe(1);
         browser({ cores: 16, isolated: true });
-        expect((await detect()).threads).toBe(4);
+        expect((await detect()).threads).toBe(8);
         browser({ cores: 2, isolated: true });
-        expect((await detect()).threads).toBe(2);
+        expect((await detect()).threads).toBe(1);
+        browser({ cores: 12, isolated: true });
+        expect((await detect()).threads).toBe(6);
+        browser({ cores: 32, isolated: true });
+        expect((await detect()).threads).toBe(8);
     });
 });
 
