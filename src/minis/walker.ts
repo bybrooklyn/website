@@ -155,7 +155,8 @@ export default function walker(m: Mote): Scene {
         write(engine, engine.weights_room(), brain);
         engine.weights_load();
         fresh();
-        [shown, distance] = [true, engine.best_distance()];
+        // the furthest a best brain has gone, which never goes down while the setup stays the same
+        [shown, distance] = [true, Math.max(distance, engine.best_distance())];
     };
 
     const hear = (report: Report) => {
@@ -388,12 +389,12 @@ export default function walker(m: Mote): Scene {
             const now = !engine
                 ? "Loading the walker."
                 : live()
-                  ? `Attempt ${attempt}, ${doing()}, best ${distance.toFixed(1)} m`
+                  ? `Attempt ${attempt}, ${doing()}, furthest ${distance.toFixed(1)} m`
                   : !shown
                     ? `Generation 0, ${doing()}, ${runs} of ${POPULATION} tried`
                     : endless()
                       ? `Generation ${generation}, ${doing()}, walked ${distance.toFixed(1)} m`
-                      : `Generation ${generation}, ${doing()}, best ${distance.toFixed(1)} m`;
+                      : `Generation ${generation}, ${doing()}, furthest ${distance.toFixed(1)} m`;
             const text = m.time < notice.until && notice.text ? notice.text : `${now}${paused ? ", paused" : ""}`;
             if (status.textContent !== text) status.textContent = text;
         };
@@ -563,7 +564,7 @@ export default function walker(m: Mote): Scene {
         }
     };
 
-    /** The flag where the best run ended (or, live, the best attempt): the one distance the status gives. */
+    /** The flag at the furthest a best run has gone (or, live, a kept attempt): the one distance the status gives. */
     const drawFlag = () => {
         if (!shown || (endless() && !live())) return;
         const { ctx } = m;
@@ -743,7 +744,7 @@ export default function walker(m: Mote): Scene {
                     const now = engine.live_step(dt);
                     // a new attempt starts at the start, on fresh ground
                     if (now !== attempt) {
-                        [attempt, distance] = [now, Math.max(0, engine.live_best_distance())];
+                        [attempt, distance] = [now, Math.max(distance, engine.live_best_distance())];
                         fresh();
                         last = undefined;
                     }
@@ -756,7 +757,7 @@ export default function walker(m: Mote): Scene {
                     if (engine.best_score() > before) better = true;
                     if (better && !shown) {
                         engine.show_reset();
-                        [shown, distance, better] = [true, engine.best_distance(), false];
+                        [shown, distance, better] = [true, Math.max(distance, engine.best_distance()), false];
                         crowd();
                     }
                 }
@@ -779,7 +780,7 @@ export default function walker(m: Mote): Scene {
                         else {
                             engine.show_reset();
                             fresh();
-                            if (better) distance = engine.best_distance();
+                            if (better) distance = Math.max(distance, engine.best_distance());
                         }
                         [waiting, better] = [undefined, false];
                         crowd();
