@@ -20,9 +20,9 @@ const FOLDER = "mdquire-dictation";
 let stop: AbortController | undefined;
 let recognize: ((samples: Float32Array) => Promise<{ text: string; words: { text: string; start: number; end: number }[] }>) | undefined;
 let release: (() => Promise<void>) | undefined;
-/** The Parakeet recognizer, if that is what is loaded, and the phrase being heard live. */
+/** The Parakeet recognizer, if that is what is loaded, and the phrases being heard live (more than one while a finished phrase is still being worked out). */
 let parakeet: Recognizer | undefined;
-let live: Stream | undefined;
+const live = new Map<number, Stream>();
 
 /** The folder in the browser's private storage where a tier's files are kept. */
 async function folder(tier: Tier): Promise<FileSystemDirectoryHandle> {
@@ -112,21 +112,23 @@ self.onmessage = async (event: MessageEvent<Ask>) => {
         } else if (ask.type === "words") {
             parakeet?.boost(ask.words);
         } else if (ask.type === "stream-open") {
-            live = parakeet?.stream();
-        } else if (ask.type === "stream-push" && live) {
-            const mine = live;
+            const made = parakeet?.stream();
+            if (made) live.set(ask.stream, made);
+        } else if (ask.type === "stream-push" && live.has(ask.stream)) {
+            const mine = live.get(ask.stream)!;
             const update = await mine.push(ask.samples);
-            if (update && live === mine) say({ type: "stream-update", update: { words: update.words, tentative: update.tentative, ms: update.ms, seconds: update.seconds, behind: mine.behind() } });
+            if (update && live.get(ask.stream) === mine) say({ type: "stream-update", stream: ask.stream, update: { words: update.words, tentative: update.tentative, ms: update.ms, seconds: update.seconds, behind: mine.behind() } });
         } else if (ask.type === "stream-finish") {
-            const mine = live;
-            live = undefined;
+            const mine = live.get(ask.stream);
+            live.delete(ask.stream);
             say({ type: "stream-done", id: ask.id, words: mine ? await mine.finish() : [] });
         } else if (ask.type === "stream-cancel") {
-            live = undefined;
+            live.delete(ask.stream);
         } else if (ask.type === "release") {
             await release?.();
             recognize = undefined;
             parakeet = undefined;
+            live.clear();
             say({ type: "released" });
         }
     } catch (error) {

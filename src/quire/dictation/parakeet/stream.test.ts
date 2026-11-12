@@ -30,10 +30,14 @@ function fakeDecoder() {
 /** An encoder that gives one frame of width 2 for every 8 feature frames, and records the window it was given. */
 function fakeEncoder() {
     const windows: number[] = [];
+    /** The first number of each window as the encoder got it, normalized. */
+    const starts: number[] = [];
     return {
         windows,
-        encode: async (_data: Float32Array, _bins: number, frames: number) => {
+        starts,
+        encode: async (data: Float32Array, _bins: number, frames: number) => {
             windows.push(frames);
+            starts.push(data[0]!);
             const steps = Math.floor((frames - 1) / 8) + 1;
             return { data: new Float32Array(steps * 2), frames: steps, width: 2 };
         },
@@ -76,6 +80,16 @@ describe("a stream", () => {
         for (let s = 0; s < 12; s++) await stream.push(second());
         // 12 s of sound in all, but no window is longer than left + right + chunk and a little over
         expect(Math.max(...encoder.windows)).toBeLessThan(100 * 4 + 20);
+    });
+
+    test("a window that begins mid-phrase starts with silence, which the first window does not", async () => {
+        const { decoder } = fakeDecoder();
+        const encoder = fakeEncoder();
+        const stream = createStream({ bins: 80, encode: encoder.encode, decoder }, { chunk: 1, left: 1, right: 1 });
+        for (let s = 0; s < 6; s++) await stream.push(second());
+        expect(encoder.windows.length).toBeGreaterThan(3);
+        // silence is far below the sound, so after normalizing a window that starts with it begins lower than one that starts with sound
+        expect(encoder.starts.at(-1)!).toBeLessThan(encoder.starts[0]! - 1);
     });
 
     test("after a phrase is finished the next one starts from nothing", async () => {

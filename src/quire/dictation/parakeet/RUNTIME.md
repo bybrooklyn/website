@@ -278,19 +278,33 @@ chunks are fixed here, sound fed as fast as it can be processed):
 | 2 s | 2 s | 8 | 0 | 0 |
 | 2 s | 3 s | 16 | 0 | 0 |
 
-(Words that differ from the whole-file result; each whole-file result has no errors against the known text.) A right
-context of half a second is not enough: the last second of a window is not judged well, and what is settled from it
-is wrong in a fifth of the words. One second is enough, and a left context of one second is enough. A larger left or
-right context buys nothing in word error and costs encoder time in proportion, so `STREAM_DEFAULTS` is chunk 1 s,
-left 1 s, right 1 s: an encoder window of 3.2 s per step.
+(Words that differ from the whole-file result; each whole-file result has no errors against the known text. The sound
+is the phrases cut off tightly, with no silence before or after.) A right context of half a second is not enough:
+the last second of a window is not judged well, and what is settled from it is wrong in a fifth of the words. One
+second is enough, and a left context of one second is enough.
 
-The cost of a step is a fixed part and a part in proportion to the window, from the two measured ends: about 0.6 s
-and 0.35 s per second of window on one thread of this machine, for Ultra. At equilibrium the steps cover as much
-sound as the last step took, so on one thread a step takes about 2 s and covers 2 s, and a word is shown between
-about 2 and 4 s after it was spoken. The session measures how late the words are (`BEHIND_LIMIT`, `session.ts`:
-the sound waiting plus the time of the step, over 5 s twice running, or no answer for 10 s of sound) and, if the
-machine cannot keep up, stops asking and writes at each pause, with a line in the panel. See the numbers for the
-real engine in the table at the top of the commit that added them and in the report.
+**Real phrases have silence round them, and that changes the answer.** With the four short sentences each given
+1.2 s of silence before and 0.7 s after, as dictation hears them (word errors of the finished phrases, of 43 words):
+
+| left | right | Ultra w4a8 | Redux w2a8 |
+| --- | --- | --- | --- |
+| 1 s | 1 s | 1 | 4 |
+| 2 s | 1 s | 1 | 1 |
+| 3 s | 1 s | 1 | 1 |
+| 2 s | 1.5 s | | 0 |
+| 3 s | 1.5 s | | 0 |
+| 3 s | 2 s | | 0 |
+
+Redux, whose weights are ternary, is the more fragile of the two. So `STREAM_DEFAULTS` is chunk 1 s, left 2 s, right
+1.5 s: an encoder window of 4.7 s per step (with the 0.24 s lead), the smallest that gave no error for Redux. (The
+first browser run with 1 s and 1 s gave Redux 4 to 5 errors in 43 words, "a lazy nod" for "the lazy dog".)
+
+The cost of a step is a fixed part and a part in proportion to the window: about 0.6 s and 0.35 s per second of
+window on one thread of this machine, for Ultra. At equilibrium the steps cover as much sound as the last step took,
+so on one thread a step takes about 2 s and a word is shown between about 2 and 4 s after it was spoken. The session
+measures how late the words are (`BEHIND_LIMIT`, `session.ts`: the sound waiting plus the time of the step, over 5 s
+twice running, or no answer for 10 s of sound) and, if the machine cannot keep up, stops asking and writes at each
+pause, with a line in the panel. The delays of the real engine are in the report of the work.
 
 ## Not confirmed
 

@@ -16,10 +16,10 @@ export type Ask =
     | { type: "load"; tier: string; words: string[] }
     | { type: "recognize"; id: number; samples: Float32Array }
     | { type: "words"; words: string[] }
-    | { type: "stream-open" }
-    | { type: "stream-push"; samples: Float32Array }
-    | { type: "stream-finish"; id: number }
-    | { type: "stream-cancel" }
+    | { type: "stream-open"; stream: number }
+    | { type: "stream-push"; stream: number; samples: Float32Array }
+    | { type: "stream-finish"; stream: number; id: number }
+    | { type: "stream-cancel"; stream: number }
     | { type: "release" };
 
 /** A word with its time, as the worker sends it. */
@@ -30,7 +30,7 @@ export type Answer =
     | { type: "progress"; bytes: number }
     | { type: "downloaded" }
     | { type: "loaded"; ms: number; backend: string; threads: number; live: boolean }
-    | { type: "stream-update"; update: LiveUpdate }
+    | { type: "stream-update"; stream: number; update: LiveUpdate }
     | { type: "stream-done"; id: number; words: Sent[] }
     | { type: "heard"; id: number; text: string; words: { text: string; start: number; end: number }[]; ms: number }
     | { type: "released" }
@@ -114,22 +114,28 @@ export function createProvider(): Provider {
             return new Promise((resolve, reject) => {
                 const waiting = new Map<number, { done: (answer: Extract<Answer, { type: "heard" }>) => void; fail: (error: Error) => void }>();
                 const finishing = new Map<number, { done: (words: Sent[]) => void; fail: (error: Error) => void }>();
-                let updates: ((update: LiveUpdate) => void) | undefined;
+                // Phrases overlap: the next may begin while the last is still being finished, so each has a number of its own.
+                const updates = new Map<number, (update: LiveUpdate) => void>();
                 let sent = 0;
-                const live = (): Live => ({
-                    push: (samples) => ask({ type: "stream-push", samples }, [samples.buffer]),
-                    onUpdate: (next) => void (updates = next),
-                    finish: () =>
-                        new Promise((done, fail) => {
-                            const id = ++sent;
-                            finishing.set(id, { done, fail });
-                            ask({ type: "stream-finish", id });
-                        }),
-                    cancel: () => {
-                        updates = undefined;
-                        ask({ type: "stream-cancel" });
-                    },
-                });
+                let streams = 0;
+                const live = (): Live => {
+                    const stream = ++streams;
+                    ask({ type: "stream-open", stream });
+                    return {
+                        push: (samples) => ask({ type: "stream-push", stream, samples }, [samples.buffer]),
+                        onUpdate: (next) => void updates.set(stream, next),
+                        finish: () =>
+                            new Promise((done, fail) => {
+                                const id = ++sent;
+                                finishing.set(id, { done, fail });
+                                ask({ type: "stream-finish", stream, id });
+                            }).finally(() => updates.delete(stream)) as Promise<Sent[]>,
+                        cancel: () => {
+                            updates.delete(stream);
+                            ask({ type: "stream-cancel", stream });
+                        },
+                    };
+                };
                 listener = (answer) => {
                     if (answer.type === "loaded") {
                         resolve({
@@ -137,10 +143,7 @@ export function createProvider(): Provider {
                             recognizer: {
                                 ...(answer.live
                                     ? {
-                                          stream: () => {
-                                              ask({ type: "stream-open" });
-                                              return live();
-                                          },
+                                          stream: live,
                                           boost: (list: string[]) => ask({ type: "words", words: list }),
                                       }
                                     : {}),
@@ -163,7 +166,7 @@ export function createProvider(): Provider {
                         waiting.get(answer.id)?.done(answer);
                         waiting.delete(answer.id);
                     } else if (answer.type === "stream-update") {
-                        updates?.(answer.update);
+                        updates.get(answer.stream)?.(answer.update);
                     } else if (answer.type === "stream-done") {
                         finishing.get(answer.id)?.done(answer.words);
                         finishing.delete(answer.id);

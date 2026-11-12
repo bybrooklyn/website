@@ -89,7 +89,7 @@ export interface StreamParts {
 }
 
 /** The sizes used when none are given: measured on the two large models (RUNTIME.md). */
-export const STREAM_DEFAULTS = { chunk: 1, left: 1, right: 1 } as const;
+export const STREAM_DEFAULTS = { chunk: 1, left: 2, right: 1.5 } as const;
 
 /** Opens a stream. */
 export function createStream(parts: StreamParts, options: StreamOptions = {}): Stream {
