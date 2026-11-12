@@ -1,0 +1,19 @@
+---
+// Playmatter's demo, on a page of its own: the clip, and a line to press that loads the game from itch.io in its place.
+import Figure from "../../../components/Figure.astro";
+import PlayHere from "../../../components/PlayHere.astro";
+import "../../../styles/blog.css";
+import Opened from "../../../layouts/Opened.astro";
+---
+
+<Opened title="Playmatter demo" description="Play Playmatter's demo in the browser." back={{ href: "/projects/playmatter/", label: "Playmatter" }}>
+    <article class="post">
+        <header class="post-header">
+            <h1>Playmatter demo</h1>
+            <p class="lede">The demo, in your browser. It needs a keyboard and a mouse.</p>
+        </header>
+        <PlayHere src="https://itch.io/embed-upload/19697599?color=10091a" title="Playmatter, playable" ratio="16 / 9" label="play the demo" from="itch.io">
+            <Figure src="/assets/playmatter.webp" video="/assets/playmatter.mp4" alt="A car beside a tower of wood, glass, and bricks in Playmatter." width={960} height={488} pixel eager />
+        </PlayHere>
+    </article>
+</Opened>

@@ -18,6 +18,8 @@ For anyone adding to it, a person or an agent. `bun run lint` checks what can be
 - **Styles use the site's tokens** (`src/styles/tokens.css`, colors from `src/data/theme.ts`).
   Motion is quick to start and slow to settle (`--ease`), and is switched off under
   `prefers-reduced-motion`.
+- **Nothing simply appears.** A button or a menu that is not always there grows in and shrinks
+  away; it is never switched on and off with `hidden` or `display`.
 - **What moves, flows.** A thing that opens grows from where it was pressed and goes back there,
   as the picture viewer's menu does (`src/styles/viewer.css`).
 

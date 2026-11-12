@@ -106,8 +106,29 @@ const opened = await openedPages();
     <body class={bodyClass}>
         <a class="skip" href="#main">Skip to the page</a>
         <slot />
+        <button type="button" class="to-top" aria-label="Back to the top" tabindex="-1">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 10l5-5 5 5"></path></svg>
+        </button>
         <script>
             import "../scripts/viewer";
+
+            // Back to the top: shown once a long page has been scrolled about a screen, on whatever it is that scrolls.
+            const up = document.querySelector<HTMLButtonElement>(".to-top");
+            const panel = document.querySelector<HTMLElement>(".opened-panel");
+            const scroller = panel ?? document.documentElement;
+            if (up) {
+                const look = () => {
+                    const shown = scroller.scrollTop > innerHeight * 0.9;
+                    up.classList.toggle("shown", shown);
+                    up.tabIndex = shown ? 0 : -1;
+                };
+                (panel ?? window).addEventListener("scroll", look, { passive: true });
+                up.addEventListener("click", () => {
+                    scroller.scrollTo({ top: 0, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
+                    (panel ?? document.body).focus({ preventScroll: true });
+                });
+                look();
+            }
         </script>
     </body>
 </html>

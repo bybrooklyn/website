@@ -14,6 +14,8 @@ export const site = {
     source: "https://github.com/bybrooklyn/website",
     discord: "https://discord.com/users/909082197712068619",
     playmatter: "https://playmatter.io",
+    /** What she is working on now, for the homepage, in order: a project's file name, or "site" for this website. */
+    working: ["playmatter", "mfetchy", "site", "yqt", "laude"],
 } as const;
 
 export const nav = [
