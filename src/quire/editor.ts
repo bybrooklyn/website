@@ -11,7 +11,7 @@
 //
 // Without a store the editor writes nowhere, as in the tests of its parts.
 
-import { addCode, addDivider, addFootnote, addTable, center, createBar, link as linkAction, linkAt, setStyleOf, toggle, toggleList, type Action } from "./bar";
+import { addCode, addDivider, addFootnote, addTable, align, aligned, createBar, link as linkAction, linkAt, setStyleOf, toggle, toggleList, type Action } from "./bar";
 import { createMenuRow, headings } from "./menu-row";
 import { blockPaths, countWords, lengthOf } from "./document";
 import { createConflict } from "./conflict";
@@ -26,7 +26,7 @@ import { createSlash } from "./slash";
 import { createSaver, said, type Entry, type Status, type Store } from "./store";
 import { createSurface, type Surface } from "./surface";
 import { createTableTools } from "./tables";
-import { flowMenu, linkForm, make, type MenuItem } from "./ui";
+import { control, flowMenu, linkForm, make, type MenuItem } from "./ui";
 import { changes, createHistoryPanel, createKeeper, memoryStorage, snapshotParts, snapshotText, type VersionStorage } from "./versions";
 import { write } from "./write";
 import { emptyParts, opened, packQuire, written, type Parts } from "./quire-file";
@@ -34,6 +34,8 @@ import { PAGE } from "./styling";
 import { createCaret, FLAG } from "./caret";
 import { createFind } from "./find";
 import { createTitle, nameFor, shownName, type OwnTitle } from "./title";
+import { createZoom, pageRule, percent, setPage, setupItems } from "./paper";
+import type { Page } from "./document";
 
 /** What the editor is given by the page. */
 export interface EditorOptions {
@@ -314,6 +316,45 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     } else host.prepend(bar.element);
     bar.element.querySelector('[aria-label="Outline"]')?.setAttribute("data-outline-control", "");
     column.append(panes);
+
+    // ---- the paper and how near it is seen: a small control at the window's lower right, the View and File menus, and Ctrl with plus, minus and 0 ----
+    const pageNow = (): Page => surface.getDocument().quire?.page ?? PAGE;
+    /** The width the sheet may fill: its column of the panes, which is half of them while the Markdown is beside it. */
+    const space = () => parseFloat(getComputedStyle(panes).gridTemplateColumns) || panes.clientWidth;
+    const zoomButton = control("Zoom and page", "100%", (button) => {
+        if (zooms.isOpen()) return zooms.close(true);
+        zooms.open(button, zoomLines(() => button), document.activeElement === button);
+    }, "quire-button quire-zoom");
+    zoomButton.setAttribute("aria-haspopup", "menu");
+    const zooms = flowMenu("Zoom", { align: "right" });
+    const setups = flowMenu("Page setup", { align: "right" });
+    const zoom = createZoom(paper, column, space, pageNow, (now) => (zoomButton.firstElementChild!.textContent = percent(now)));
+    const openSetup = (from: HTMLElement) => setups.open(from, setupItems(pageNow(), (change) => surface.run((doc) => setPage(doc, { ...pageNow(), ...change }))), true);
+    /** The zoom's lines, and for a `.quire` document the page setup, which opens in its place. */
+    const zoomLines = (from: () => HTMLElement): MenuItem[] => [...zoom.items(), ...(surface.getDocument().quire ? [{ label: "Page setup", hint: "›", run: () => openSetup(from()) }] : [])];
+    column.append(zoomButton);
+    // as the Markdown opens beside the sheet, the sheet's column narrows and the sheet follows it
+    if (typeof ResizeObserver !== "undefined") new ResizeObserver(() => zoom.refresh(false)).observe(markdown.element);
+    // print is given the paper and margins of the page set up
+    const printing = make("style");
+    document.head.append(printing);
+    // looked at only when the page set up has changed, so that typing measures nothing
+    const showPage = () => {
+        const rule = `@media print { ${pageRule(pageNow())} }`;
+        if (printing.textContent === rule) return;
+        printing.textContent = rule;
+        zoom.refresh();
+    };
+    surface.on("change", showPage);
+    showPage();
+    host.addEventListener("keydown", (event) => {
+        if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
+        const by = event.key === "=" || event.key === "+" ? 1 : event.key === "-" ? -1 : event.key === "0" ? 0 : undefined;
+        if (by === undefined) return;
+        event.preventDefault();
+        if (by === 0) zoom.reset();
+        else zoom.step(by);
+    });
     surface.on("link", () => openLink(bar.element.querySelector<HTMLElement>('[aria-label^="Link"]')!));
     const selectBar = createSelectBar(surface, () => bar.element.getBoundingClientRect().bottom);
     const outlineView = createOutline(surface, () => bar.element.getBoundingClientRect().bottom, (open) => {
@@ -332,13 +373,15 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     const format = () => row.words[4]!;
     const row = createMenuRow(() =>
         headings(
-            { rich: !!surface.getDocument().quire, outline: outlineView.isOpen(), markdown: host.classList.contains("markdown"), words: countWords(surface.getDocument()) },
+            { rich: !!surface.getDocument().quire, outline: outlineView.isOpen(), markdown: host.classList.contains("markdown"), words: countWords(surface.getDocument()), align: aligned(surface.getDocument(), surface.getSelection().focus.path) },
             {
                 file: options.fileItems,
                 turnRich: () => void makeRich(),
                 download,
                 downloadQuire: () => void downloadQuire(),
                 history: () => void history.open(),
+                pageSetup: () => openSetup(row.words[0]!),
+                zoom: () => zooms.open(row.words[2]!, zoomLines(() => row.words[2]!), true),
                 print: () => print(),
                 undo: () => (surface.undo(), surface.focus()),
                 redo: () => (surface.redo(), surface.focus()),
@@ -371,7 +414,11 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
                 heading2: doing(setStyleOf("heading2")),
                 heading3: doing(setStyleOf("heading3")),
                 quote: doing(setStyleOf("quote")),
-                center: doing(center),
+                left: doing(align("left")),
+                center: doing(align("center")),
+                right: doing(align("right")),
+                justify: doing(align("justify")),
+                spacing: () => bar.pickers.spacing(format()),
                 color: () => bar.pickers.color(format()),
                 size: () => bar.pickers.size(format()),
                 font: () => bar.pickers.font(format()),
@@ -556,11 +603,12 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         },
         destroy() {
             caret.destroy();
+            printing.remove();
             find.destroy();
             rowSeen?.disconnect();
             dictation.destroy();
             surface.destroy();
-            for (const menu of [...bar.menus, links, row.menu]) menu.box.remove();
+            for (const menu of [...bar.menus, links, row.menu, zooms, setups]) menu.box.remove();
             selectBar.element.remove();
             slash.close();
             tableTools.element.remove();

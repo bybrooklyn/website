@@ -9,6 +9,7 @@
 // What is in each menu is built by `headings`, which is pure: the editor gives it how things
 // stand and what each command does.
 
+import type { Align } from "./document";
 import { flowMenu, make, moveIndex, type MenuItem } from "./ui";
 
 /** A word of the row, and the lines of its menu. */
@@ -24,6 +25,8 @@ export interface RowState {
     outline: boolean;
     markdown: boolean;
     words: number;
+    /** How the cursor's block sits across the page, shown as pressed in Format. */
+    align?: Align;
 }
 
 /** What each command does, given by the editor. A command not given is left out. */
@@ -31,12 +34,12 @@ export type RowActions = Partial<Record<Command, () => void>> & { file?: () => M
 
 /** Every command the row can hold. */
 export type Command =
-    | "turnRich" | "download" | "downloadQuire" | "print" | "history"
+    | "turnRich" | "download" | "downloadQuire" | "print" | "history" | "pageSetup" | "zoom"
     | "undo" | "redo" | "selectAll" | "link" | "find" | "replace"
     | "outline" | "markdown"
     | "table" | "picture" | "divider" | "code" | "footnote" | "bullet" | "number" | "task"
     | "bold" | "italic" | "underline" | "strike" | "inline" | "paragraph" | "heading1" | "heading2" | "heading3" | "quote"
-    | "color" | "size" | "center" | "font" | "highlight";
+    | "color" | "size" | "font" | "highlight" | "spacing" | "left" | "center" | "right" | "justify";
 
 /** The menus of the row, for a document as it stands. */
 export function headings(state: RowState, act: RowActions): Heading[] {
@@ -50,6 +53,7 @@ export function headings(state: RowState, act: RowActions): Heading[] {
                 ...(state.rich ? line("downloadQuire", "Download", { hint: ".quire" }) : []),
                 ...line("download", state.rich ? "Download as Markdown" : "Download", { hint: ".md" }),
                 ...line("history", "Version history"),
+                ...(state.rich ? line("pageSetup", "Page setup", { hint: "›" }) : []),
                 ...line("print", "Print", { hint: "Ctrl+P" }),
             ],
         },
@@ -69,6 +73,7 @@ export function headings(state: RowState, act: RowActions): Heading[] {
             items: () => [
                 ...line("outline", "Outline", { icon: "outline", pressed: state.outline }),
                 ...line("markdown", "The Markdown beside the page", { pressed: state.markdown }),
+                ...line("zoom", "Zoom", { hint: "›" }),
             ],
         },
         {
@@ -98,11 +103,14 @@ export function headings(state: RowState, act: RowActions): Heading[] {
                 ...line("heading2", "Heading 2", { hint: "Ctrl+Alt+2" }),
                 ...line("heading3", "Heading 3", { hint: "Ctrl+Alt+3" }),
                 ...line("quote", "Quote", { icon: "quote" }),
-                ...line("color", "Text color"),
-                ...line("size", "Text size"),
-                ...line("center", "Centre", { icon: "center" }),
+                ...line("color", "Text color", { hint: "›" }),
+                ...line("size", "Text size", { hint: "›" }),
                 // what a Markdown file cannot keep is not offered for one
-                ...(state.rich ? [...line("font", "Typeface"), ...line("highlight", "Highlight", { icon: "highlight" })] : []),
+                ...(state.rich ? [...line("font", "Typeface", { hint: "›" }), ...line("highlight", "Highlight", { icon: "highlight", hint: "›" }), ...line("spacing", "Line spacing", { icon: "spacing", hint: "›" })] : []),
+                ...line("left", "Align left", { icon: "left", pressed: (state.align ?? "left") === "left" }),
+                ...line("center", "Centre", { icon: "center", pressed: state.align === "center" }),
+                ...line("right", "Align right", { icon: "right", pressed: state.align === "right" }),
+                ...(state.rich ? line("justify", "Justify", { icon: "justify", pressed: state.align === "justify" }) : []),
             ],
         },
         {

@@ -840,6 +840,18 @@ export function setAlign(doc: Document, path: number[], align: Align | null): Do
     });
 }
 
+/** Sets a paragraph's or heading's line spacing, as a multiple of the usual; null or 1 puts back the usual. Kept only by a `.quire` document. */
+export function setSpacing(doc: Document, path: number[], spacing: number | null): Document {
+    return replace(doc, path, (block) => {
+        if (block.kind !== "paragraph" && block.kind !== "heading") return null;
+        if ((block.spacing ?? null) === (spacing === 1 ? null : spacing)) return null;
+        const next = { ...block, source: undefined };
+        if (spacing && spacing !== 1) next.spacing = spacing;
+        else delete next.spacing;
+        return [next];
+    });
+}
+
 // ---- changing what a block is ----
 
 /** What a block can be turned into. */

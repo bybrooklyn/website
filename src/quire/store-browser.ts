@@ -1,8 +1,9 @@
 // Documents kept in this browser, in IndexedDB: several documents with names, each with its version
 // history, and pictures kept as blobs beside them. A document taken away goes to a trash it can be
-// brought back from. Nothing leaves the browser. Every document kept here is a `.quire` one, its
-// style.json and notes.json kept beside its text, so it can be given every kind of styling; it is
-// written out as a `.quire` file, or as Markdown, when it is downloaded.
+// brought back from. Nothing leaves the browser. A document made here is a `.quire` one, its
+// style.json and notes.json kept beside its text, so it can be given every kind of styling, unless
+// it was made as plain Markdown (a blog post, which the site needs as Markdown); either is written
+// out as itself when it is downloaded.
 //
 // The store is written over Tables, three small tables of records by id, so that its workings are
 // tested with tables in memory; indexedTables gives the real ones.
@@ -79,6 +80,8 @@ interface Kept extends Row {
     modified: number;
     /** Its style.json and notes.json; a document kept before there were any has none yet. */
     quire?: Parts;
+    /** True for a document made as plain Markdown, which has no parts and is not given any. */
+    markdown?: boolean;
     /** When it was taken away, if it was: it is then in the trash. */
     gone?: number;
 }
@@ -116,6 +119,9 @@ export function tableVersions(tables: Tables): VersionStorage {
     };
 }
 
+/** A kept document's parts: none for one made as Markdown, empty ones for a `.quire` document kept before there were any. */
+const partsOf = (kept: Kept): Parts | undefined => (kept.markdown ? undefined : (kept.quire ?? emptyParts()));
+
 /** The browser store, over the given tables. Its extra powers: the trash, and putting a document back from it. */
 export function browserStore(tables: Tables, now: () => number = Date.now): Store & { trash(): Promise<Entry[]>; restore(id: string): Promise<void>; versions: VersionStorage } {
     let made = 0;
@@ -138,18 +144,19 @@ export function browserStore(tables: Tables, now: () => number = Date.now): Stor
         },
         async open(id) {
             const kept = await find(id);
-            return { text: kept.text, mark: String(kept.mark), quire: kept.quire ?? emptyParts() };
+            return { text: kept.text, mark: String(kept.mark), quire: partsOf(kept) };
         },
         async save(id, text, mark, quire) {
             const kept = await find(id);
-            if (String(kept.mark) !== mark) return { ok: false, changed: true, theirs: { text: kept.text, mark: String(kept.mark), quire: kept.quire ?? emptyParts() } };
-            const next = { ...kept, text, mark: kept.mark + 1, modified: now(), quire: quire ?? kept.quire };
+            if (String(kept.mark) !== mark) return { ok: false, changed: true, theirs: { text: kept.text, mark: String(kept.mark), quire: partsOf(kept) } };
+            const next = { ...kept, text, mark: kept.mark + 1, modified: now(), quire: kept.markdown ? undefined : (quire ?? kept.quire) };
             await tables.put("documents", next);
             return { ok: true, mark: String(next.mark) };
         },
+        // made without parts, a document is plain Markdown and stays so
         async create(name, text, quire) {
             const id = `${now().toString(36)}-${(++made).toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
-            await tables.put("documents", { id, name: freeName(name.trim() || "Untitled", await names()), text, mark: 1, modified: now(), quire: quire ?? emptyParts() } as Kept);
+            await tables.put("documents", { id, name: freeName(name.trim() || "Untitled", await names()), text, mark: 1, modified: now(), ...(quire ? { quire } : { markdown: true }) } as Kept);
             return { id, mark: "1" };
         },
         async rename(id, name) {

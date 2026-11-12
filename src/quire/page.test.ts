@@ -76,4 +76,19 @@ test.skipIf(!live)(
     60_000,
 );
 
+test.skipIf(!live)(
+    "at 1300 and 2560 wide every group of the bar is shown in a .quire document, none folded into the three dots and nothing scrolled out of sight",
+    async () => {
+        for (const [wide, high] of [[1300, 900], [2560, 1300]] as const) {
+            await tab.resize(wide, high);
+            await tab.open(`http://localhost:${server!.port}/mdquire/`, 800);
+            await tab.run("document.querySelector('.quire-shelf.shown .quire-card-open')?.click()");
+            await tab.wait(900);
+            const bar = await tab.run<{ folded: number; over: number; rich: boolean }>(`(() => { const strip = document.querySelector('.quire-bar-strip'); return { folded: document.querySelectorAll('.quire-bar-group.folded').length, over: strip.scrollWidth - strip.clientWidth, rich: document.querySelector('.quire-editor').classList.contains('rich') }; })()`);
+            expect({ wide, ...bar }).toEqual({ wide, folded: 0, over: 0, rich: true });
+        }
+    },
+    60_000,
+);
+
 if (!live) console.warn("page.test.ts: skipped, as there is no Chromium or no built site (bun run build)");

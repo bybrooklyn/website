@@ -55,7 +55,9 @@ export function caretBox(root: HTMLElement, frame: HTMLElement): { left: number;
         rect = new DOMRect(box.left + (parseFloat(style.paddingLeft) || 0), box.top + (parseFloat(style.paddingTop) || 0), 0, Math.min(line, box.height || line));
     }
     const origin = frame.getBoundingClientRect();
-    return { left: rect.left - origin.left - frame.clientLeft, top: rect.top - origin.top - frame.clientTop, height: rect.height };
+    // a sheet shown nearer or further (paper.ts) is measured on screen at its zoom, and placed inside at its own size
+    const zoom = origin.width / (frame.offsetWidth || origin.width) || 1;
+    return { left: (rect.left - origin.left) / zoom - frame.clientLeft, top: (rect.top - origin.top) / zoom - frame.clientTop, height: rect.height / zoom };
 }
 
 /** The colour shown after `index` blinks, going round the list. */

@@ -303,9 +303,11 @@ export function travel(page: HTMLElement, picture: Box, opening: boolean, time =
     if (still()) return Promise.resolve();
     const own = boxOf(page);
     const scale = picture.width / own.width;
-    const cut = Math.max(0, own.height - picture.height / scale);
+    // a sheet shown at a zoom (paper.ts) moves in its own pixels, which the zoom makes larger on screen
+    const zoom = own.width / (page.offsetWidth || own.width) || 1;
+    const cut = Math.max(0, own.height - picture.height / scale) / zoom;
     const radius = parseFloat(getComputedStyle(page).borderTopLeftRadius) || 0;
-    const small = { transform: `translate(${picture.left - own.left}px, ${picture.top - own.top}px) scale(${scale})`, clipPath: `inset(0 0 ${cut}px 0 round ${radius / scale}px)` };
+    const small = { transform: `translate(${(picture.left - own.left) / zoom}px, ${(picture.top - own.top) / zoom}px) scale(${scale})`, clipPath: `inset(0 0 ${cut}px 0 round ${radius / scale}px)` };
     const whole = { transform: "none", clipPath: `inset(0 0 0 0 round ${radius}px)` };
     const frames = opening ? [small, whole] : [whole, small];
     // on its way it passes over the home screen

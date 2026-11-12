@@ -105,6 +105,14 @@ export function relative(from: string, to: string): string {
     return up === 0 ? `./${path}` : path;
 }
 
+/** Makes a copy of a document in the same store under a new name: its text, its parts and, for a `.quire` document, its pictures, which keep their names so that the copy's text still finds them. */
+export async function copyDocument(store: Store, id: string, name: string): Promise<{ id: string; mark: string }> {
+    const found = await store.open(id);
+    const made = await store.create(name, found.text, found.quire);
+    if (found.quire && store.pictures) for (const [each, picture] of await store.pictures(id)) await store.savePicture(made.id, picture, each);
+    return made;
+}
+
 /** What is waiting to be saved: the text or the writing, or a way to make it once it is needed. */
 type Waiting = string | Writing | (() => string | Writing);
 

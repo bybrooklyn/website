@@ -12,7 +12,7 @@ import { documentsList, repositoryForm, type Place } from "./documents";
 import { blockPaths, lengthOf } from "./document";
 import { read } from "./read";
 import { emptyParts, opened, type Parts } from "./quire-file";
-import { fileName, type Entry, type Store } from "./store";
+import { copyDocument, fileName, type Entry, type Store } from "./store";
 import { browserStore, indexedTables } from "./store-browser";
 import { filesStore, OPENABLE } from "./store-files";
 import { canOpen, folderStore, oneFileStore, type FileHandle, type FolderHandle } from "./store-folder";
@@ -184,7 +184,7 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
             },
             create: async () => {
                 menu.close(false);
-                await editor.create(shown, shown === browser ? "Untitled" : fileName("Untitled"));
+                await (shown === browser ? editor.create(browser, "Untitled", "", emptyParts()) : editor.create(shown, fileName("Untitled")));
                 editor.surface.focus();
             },
             rename: async (name) => {
@@ -216,7 +216,7 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
                 if (editor.current().store === was) {
                     const newest = (await browser.list())[0];
                     if (newest) await editor.open(browser, newest);
-                    else await editor.create(browser, "Untitled");
+                    else await editor.create(browser, "Untitled", "", emptyParts());
                 }
                 shown = browser;
                 await placesChanged();
@@ -272,10 +272,7 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
                 picture: store.show ? (address) => store.show!(id, address) : undefined,
                 open: (from) => void enter(store, { id, name }, from),
                 rename: store.can.rename ? async (wanted) => void (await store.rename(id, wanted).catch(() => undefined), await shelf.refresh()) : undefined,
-                duplicate: store.can.create ? async () => {
-                    const found = await store.open(id);
-                    await store.create(copyName(name), found.text, found.quire);
-                } : undefined,
+                duplicate: store.can.create ? async () => void (await copyDocument(store, id, copyName(name))) : undefined,
                 remove: store.can.remove ? async () => void (await store.remove(id).catch(() => undefined)) : undefined,
             }));
         },

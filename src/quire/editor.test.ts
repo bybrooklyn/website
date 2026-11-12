@@ -130,7 +130,6 @@ used("each mark button on the bar marks the selection", async () => {
         ["Italic", "a *word* here\n"],
         ["Underline", "a <u>word</u> here\n"],
         ["Strikethrough", "a ~~word~~ here\n"],
-        ["Inline code", "a `word` here\n"],
     ];
     for (const [label, expected] of marks) {
         await reset("a word here\n", [0], 2, [0], 6);
@@ -140,17 +139,23 @@ used("each mark button on the bar marks the selection", async () => {
     }
 });
 
-used("the list buttons, centre, undo and redo do what they say", async () => {
-    for (const [label, expected] of [
-        ["Bulleted list", "- Line\n"],
-        ["Numbered list", "1. Line\n"],
-        ["Checklist", "- [ ] Line\n"],
-        ["Centre", '<div align="center">\n\nLine\n\n</div>\n'],
+used("the lists button's menu, the alignments, undo and redo do what they say", async () => {
+    for (const [menu, label, expected] of [
+        ["Lists", "Bulleted list", "- Line\n"],
+        ["Lists", "Numbered list", "1. Line\n"],
+        ["Lists", "Checklist", "- [ ] Line\n"],
+        ["Text", "Align right", '<div align="right">\n\nLine\n\n</div>\n'],
+        ["Text", "Centre", '<div align="center">\n\nLine\n\n</div>\n'],
     ]) {
         await reset("Line\n", [0], 2);
-        await button(label!);
+        await choose(menu!, label!);
         expect(await md()).toBe(expected!);
     }
+    // in a list the button is pressed and shows that list's kind
+    await reset("1. Line\n", [0, 0, 0], 2);
+    expect(await tab.run(`[document.querySelector('.quire-bar button[aria-label="Lists"]').getAttribute("aria-pressed"), document.querySelector('.quire-bar button[aria-label="Lists"]').dataset.kind]`)).toEqual(["true", "number"]);
+    await reset("Line\n", [0], 2);
+    await choose("Text", "Centre");
     await button("Undo");
     expect(await md()).toBe("Line\n");
     await button("Redo");
@@ -178,10 +183,14 @@ used("the style picker, + menu, color and size menus flow open and do what their
     expect(await md()).toBe("Above\n\n![tiny](/picture.png)\n");
 
     await reset("a word here\n", [0], 2, [0], 6);
-    await choose("Text color", "Pink");
+    await choose("Text", "Text color");
+    await tab.wait(650);
+    await press(".quire-menu.open .quire-menu-line", "Pink");
     expect(await md()).toBe('a <span style="color:salmon">word</span> here\n');
     await reset("a word here\n", [0], 2, [0], 6);
-    await choose("Text size", "Large");
+    await choose("Text", "Text size");
+    await tab.wait(650);
+    await press(".quire-menu.open .quire-menu-line", "Large");
     expect(await md()).toBe('a <span style="font-size:1.25em">word</span> here\n');
     expect(await tab.run("document.querySelector('.quire-count').textContent")).toBe("3 words");
 });
@@ -1037,5 +1046,67 @@ used("find grows from the sheet's top right with Ctrl+F, marks every match and t
     await tab.wait(450);
     expect(await tab.run("document.querySelector('.quire-find').classList.contains('replacing')")).toBe(true);
     await tab.press("Escape");
+    expect(tab.errors).toEqual([]);
+});
+
+used("zoom: Ctrl with plus, minus and 0 ease the sheet nearer and further about the middle of the window, held still under less motion", async () => {
+    await reset(Array.from({ length: 80 }, (_, index) => `Line ${index}.`).join("\n\n"), [0], 0);
+    const sheet = () => tab.run<number>("document.querySelector('.quire-editor .quire-paper').getBoundingClientRect().width");
+    const usual = await sheet();
+    // the line in the middle of the window
+    const middle = () => tab.run<string>(`(() => { const line = document.elementFromPoint(document.querySelector('.quire-editor .quire-paper').getBoundingClientRect().left + 140, innerHeight / 2)?.closest('p'); return line?.textContent ?? ''; })()`);
+    await tab.run("scrollTo({ top: 600, behavior: 'instant' })");
+    await tab.wait(100);
+    const before = await middle();
+    const widths = tab.run<number[]>("q.watch('.quire-editor .quire-paper', 'x', 400)");
+    await tab.press("=", { ctrl: true });
+    expect(new Set(await widths).size).toBeGreaterThan(4);
+    await tab.wait(100);
+    const zoom = await tab.run<number>("parseFloat(document.querySelector('.quire-editor .quire-paper').style.getPropertyValue('--zoom'))");
+    expect(zoom).toBeGreaterThan(0.5);
+    expect(await sheet()).toBeGreaterThan(usual);
+    expect(await tab.run("document.querySelector('.quire-zoom').textContent")).toBe(`${Math.round(zoom * 100)}%`);
+    expect(await middle()).toBe(before);
+    await tab.press("-", { ctrl: true });
+    await tab.press("-", { ctrl: true });
+    await tab.wait(450);
+    expect(await sheet()).toBeLessThan(usual);
+    await tab.press("0", { ctrl: true });
+    await tab.wait(450);
+    expect(await sheet()).toBeCloseTo(usual, 0);
+    await tab.media({ "prefers-reduced-motion": "reduce" });
+    try {
+        const still = tab.run<number[]>("q.watch('.quire-editor .quire-paper', 'x', 300)");
+        await tab.press("-", { ctrl: true });
+        expect(new Set(await still).size).toBeLessThanOrEqual(2);
+        await tab.press("0", { ctrl: true });
+    } finally {
+        await tab.media({});
+    }
+    expect(tab.errors).toEqual([]);
+});
+
+used("page setup, from the zoom control, gives a .quire document's sheet its paper, way up and margins, keeps them in its style, and gives them to print", async () => {
+    await reset("Words.\n");
+    await tab.run("q.editor.surface.setDocument({ ...q.editor.surface.getDocument(), quire: { page: { size: 'A4', orientation: 'portrait', margins: 25 }, notes: null } }); q.editor.surface.focus()");
+    const shape = () => tab.run<number>("(() => { const box = document.querySelector('.quire-editor .quire-paper').getBoundingClientRect(); return Math.round((box.width / box.height) * 100) / 100; })()");
+    expect(await shape()).toBeCloseTo(210 / 297, 1);
+    await press(".quire-zoom");
+    await tab.wait(650);
+    await press(".quire-menu.open .quire-menu-line", "Page setup");
+    await tab.wait(650);
+    await press(".quire-menu.open .quire-menu-line", "A5");
+    await tab.wait(100);
+    // the menu stays open for the next choice, pressed where it now is
+    await press(".quire-menu.open .quire-menu-line", "Landscape");
+    await tab.wait(700);
+    expect(await tab.run("[...document.querySelectorAll('.quire-menu.open .quire-menu-line.pressed')].map((line) => line.textContent)")).toEqual(["A5", "Landscape", "Normal"]);
+    expect(await tab.run("q.editor.surface.getDocument().quire.page")).toEqual({ size: "A5", orientation: "landscape", margins: 25 });
+    expect(await shape()).toBeCloseTo(210 / 148, 1);
+    expect(await tab.run("[...document.querySelectorAll('head style')].some((style) => style.textContent.includes('size: A5 landscape; margin: 25mm'))")).toBe(true);
+    await tab.press("Escape");
+    // each choice is one step back
+    await tab.run("q.editor.surface.undo(); q.editor.surface.undo()");
+    expect(await tab.run("q.editor.surface.getDocument().quire.page.size")).toBe("A4");
     expect(tab.errors).toEqual([]);
 });

@@ -1,6 +1,8 @@
 // The bar at the top of the editor: one rounded strip as wide as the writing column, holding the
-// document's name, the style picker, the marks, the lists, the "+" menu, color, size and centring,
-// undo and redo, the word count and a three-dot menu for the rest. Buttons show as pressed when
+// document's name, the style picker, the marks, one button for lists, the "+" menu, one button for
+// the look of the text (color, size, typeface, highlight, line spacing and alignment, each opening
+// its own menu from it), undo, redo and find, the word count and a three-dot menu for the rest.
+// What a Markdown file cannot keep is offered only for a `.quire` document. Buttons show as pressed when
 // what they do is true at the cursor. It is a toolbar: Tab reaches it once, the arrow keys move
 // along it. On a narrow screen it scrolls sideways rather than wrapping.
 //
@@ -23,9 +25,11 @@ import {
     runsLength,
     setAlign,
     setLink,
+    setSpacing,
     setStyle,
     table,
     textAt,
+    type Align,
     type Block,
     type Document,
     type Level,
@@ -231,6 +235,52 @@ export const center: Action = (state) => {
     return { ...state, doc: setAlign(state.doc, path, centred(state.doc, path) ? null : "center") };
 };
 
+/** How the cursor's block sits across the page: left unless it says otherwise. */
+export function aligned(doc: Document, path: number[]): Align {
+    const block = blockAt(doc, tableOf(doc, path) ?? path);
+    return (block && "align" in block && typeof block.align === "string" && block.align) || "left";
+}
+
+/** Sets how every touched paragraph, heading and picture sits across the page; left is the usual, and is written as nothing. */
+export function align(value: Align): Action {
+    return (state) => {
+        let doc = state.doc;
+        for (const index of touched(state.doc, state.selection)) doc = setAlign(doc, blockPaths(doc)[index]!, value === "left" ? null : value);
+        return { ...state, doc };
+    };
+}
+
+/** The cursor's block's line spacing, 1 being the usual. */
+export function spacedAt(doc: Document, path: number[]): number {
+    const block = blockAt(doc, path);
+    return (block && (block.kind === "paragraph" || block.kind === "heading") && block.spacing) || 1;
+}
+
+/** Sets the line spacing of every touched paragraph and heading; 1 puts back the usual. For `.quire` documents alone. */
+export function spacing(value: number): Action {
+    return (state) => {
+        let doc = state.doc;
+        for (const index of touched(state.doc, state.selection)) doc = setSpacing(doc, blockPaths(doc)[index]!, value);
+        return { ...state, doc };
+    };
+}
+
+/** The line spacings offered, by name. */
+export const SPACINGS: [string, number][] = [
+    ["Single", 1],
+    ["1.15", 1.15],
+    ["1.5", 1.5],
+    ["Double", 2],
+];
+
+/** The ways a block can sit across the page, by name, with their icons; justified is for `.quire` documents alone. */
+export const ALIGNS: [Align, string][] = [
+    ["left", "Align left"],
+    ["center", "Centre"],
+    ["right", "Align right"],
+    ["justify", "Justify"],
+];
+
 // ---- adding blocks ----
 
 /** Puts a block after the cursor's block, or in place of it if it is an empty paragraph, giving the document and where the new block is. */
@@ -331,10 +381,11 @@ const SIZES: [string, string | null][] = [
     ["Normal", null],
     ["Large", "1.25em"],
     ["Larger", "1.5em"],
+    ["Largest", "2em"],
 ];
 
 /** Builds the bar for a surface. */
-export function createBar(surface: Surface, options: BarOptions): { element: HTMLElement; setName(name: string): void; menus: Menu[]; layout(): void; pickImage(): void; setStatus(short: string, full: string, tone?: "quiet" | "warn"): void; name: HTMLElement; setOutline(open: boolean): void; setRich(on: boolean): void; rich(): boolean; pickers: Record<"color" | "size" | "font" | "highlight", (from: HTMLElement) => void> } {
+export function createBar(surface: Surface, options: BarOptions): { element: HTMLElement; setName(name: string): void; menus: Menu[]; layout(): void; pickImage(): void; setStatus(short: string, full: string, tone?: "quiet" | "warn"): void; name: HTMLElement; setOutline(open: boolean): void; setRich(on: boolean): void; rich(): boolean; pickers: Record<"color" | "size" | "font" | "highlight" | "spacing" | "lists", (from: HTMLElement) => void> } {
     const bar = make("div", "quire-bar");
     bar.setAttribute("role", "toolbar");
     bar.setAttribute("aria-label", "Formatting");
@@ -345,20 +396,13 @@ export function createBar(surface: Surface, options: BarOptions): { element: HTM
         surface.focus();
     };
     /** The groups of the bar, with how soon each folds into the three-dot menu when the bar is too narrow (0 never) and the lines it then adds there. */
-    // a rich group holds what only a .quire document can keep: it folds away, as a group with no room does, while the document is Markdown
-    const groups: { element: HTMLElement; fold: number; lines: () => MenuItem[]; width: number; rich?: boolean }[] = [];
+    const groups: { element: HTMLElement; fold: number; lines: () => MenuItem[]; width: number }[] = [];
     let richOn = false;
     const group = (fold: number, lines: () => MenuItem[], ...children: HTMLElement[]) => {
         const element = make("div", "quire-bar-group");
         element.append(...children);
         strip.append(element);
         groups.push({ element, fold, lines, width: 0 });
-        return element;
-    };
-    const richGroup = (fold: number, lines: () => MenuItem[], ...children: HTMLElement[]) => {
-        const element = group(fold, lines, ...children);
-        element.classList.add("quire-rich");
-        groups[groups.length - 1]!.rich = true;
         return element;
     };
     const none = () => [];
@@ -419,22 +463,28 @@ export function createBar(surface: Surface, options: BarOptions): { element: HTM
         press("italic", "Italic (Ctrl+I)", glyph("I", "italic"), doing(toggle("italic"))),
         press("underline", "Underline (Ctrl+U)", glyph("U", "underline"), doing(toggle("underline"))),
         press("strike", "Strikethrough (Ctrl+Shift+X)", glyph("S", "strike"), doing(toggle("strike"))),
-        press("code", "Inline code (Ctrl+E)", icon("code"), doing(toggle("code"))),
         linkButton,
     );
 
-    // lists
-    group(
-        4,
-        () => [
-            { label: "Bulleted list", icon: "bullet", run: doing(toggleList("bullet")) },
-            { label: "Numbered list", icon: "number", run: doing(toggleList("number")) },
-            { label: "Checklist", icon: "task", run: doing(toggleList("task")) },
-        ],
-        press("bullet", "Bulleted list", icon("bullet"), doing(toggleList("bullet"))),
-        press("number", "Numbered list", icon("number"), doing(toggleList("number"))),
-        press("task", "Checklist", icon("task"), doing(toggleList("task"))),
-    );
+    // lists: one button, showing the kind of list the cursor is in, and a menu of the three
+    const listKinds: [ListStyle, string][] = [
+        ["bullet", "Bulleted list"],
+        ["number", "Numbered list"],
+        ["task", "Checklist"],
+    ];
+    const listLines = (): MenuItem[] => {
+        const now = activeBlock(surface.getDocument(), surface.getSelection().focus.path).list;
+        return listKinds.map(([kind, label]) => ({ label, icon: kind, pressed: now === kind, run: doing(toggleList(kind)) }));
+    };
+    const lists = flowMenu("Lists");
+    const listButton = control("Lists", icon("bullet"), (button) => {
+        if (lists.isOpen()) return lists.close(true);
+        lists.open(button, listLines(), document.activeElement === button);
+    });
+    listButton.setAttribute("aria-haspopup", "menu");
+    listButton.setAttribute("aria-pressed", "false");
+    // folded, it is one line of the three dots that opens its menu from there
+    group(4, () => [{ label: "Lists", icon: "bullet", hint: "›", run: () => lists.open(moreButton, listLines(), true) }], listButton);
 
     // the "+" menu
     const chooser = make("input");
@@ -467,45 +517,21 @@ export function createBar(surface: Surface, options: BarOptions): { element: HTM
     addButton.setAttribute("aria-haspopup", "menu");
     group(3, () => [{ label: "Add a block", icon: "plus", run: () => adds.open(moreButton, additions(), true) }], addButton, chooser);
 
-    // color, size, centre
+    // the look of the text: one button, from which color, size, typeface, highlight and line spacing
+    // each open their own menu in its place, with the four alignments as lines of it
     const swatch = (value: string | null) => {
         const dot = make("span", "quire-swatch");
         if (value) dot.style.background = value;
         return dot;
     };
-    const colorLines = (): MenuItem[] => [{ label: "Default color", icon: swatch(null), run: doing(color(null)) }, ...(options.colors ?? []).map((each) => ({ label: each.name, icon: swatch(each.value), run: doing(color(each.value)) }))];
+    const palette = () => [...(options.colors ?? []), ...FLAGS];
+    const colorLines = (): MenuItem[] => [{ label: "Default color", icon: swatch(null), run: doing(color(null)) }, ...palette().map((each) => ({ label: each.name, icon: swatch(each.value), run: doing(color(each.value)) }))];
     const sizeLines = (): MenuItem[] =>
         SIZES.map(([label, value]) => {
             const shown = make("span", "quire-size-sample", "A");
             if (value) shown.style.fontSize = value;
             return { label, icon: shown, run: doing(size(value)) };
         });
-    const colors = flowMenu("Text color");
-    const colorButton = control("Text color", make("span", "quire-color-mark", "A"), (button) => {
-        if (colors.isOpen()) return colors.close(true);
-        colors.open(button, colorLines(), document.activeElement === button);
-    });
-    colorButton.setAttribute("aria-haspopup", "menu");
-    const sizes = flowMenu("Text size");
-    const sizeButton = control("Text size", "Aa", (button) => {
-        if (sizes.isOpen()) return sizes.close(true);
-        sizes.open(button, sizeLines(), document.activeElement === button);
-    });
-    sizeButton.setAttribute("aria-haspopup", "menu");
-    // folded, color and size are a line each that opens their menu from the three dots
-    group(
-        1,
-        () => [
-            { label: "Text color", icon: make("span", "quire-color-mark", "A"), run: () => colors.open(moreButton, colorLines(), true) },
-            { label: "Text size", icon: make("span", "quire-size-sample", "Aa"), run: () => sizes.open(moreButton, sizeLines(), true) },
-            { label: "Centre", icon: "center", run: doing(center) },
-        ],
-        colorButton,
-        sizeButton,
-        press("center", "Centre", icon("center"), doing(center)),
-    );
-
-    // the typeface and the highlight, which only a .quire document keeps
     const fontSample = (value: string | null) => {
         const shown = make("span", "quire-font-sample", "Ag");
         if (value) shown.dataset.font = value;
@@ -517,30 +543,47 @@ export function createBar(surface: Surface, options: BarOptions): { element: HTM
         if (value) dot.style.background = value;
         return dot;
     };
-    const palette = () => [...(options.colors ?? []), ...FLAGS];
     const highlightLines = (): MenuItem[] => [{ label: "No highlight", icon: marker(null), run: doing(highlight(null)) }, ...palette().map((each) => ({ label: each.name, icon: marker(each.value), run: doing(highlight(each.value)) }))];
+    const spacingLines = (): MenuItem[] => {
+        const now = spacedAt(surface.getDocument(), surface.getSelection().focus.path);
+        return SPACINGS.map(([label, value]) => ({ label, pressed: now === value, run: doing(spacing(value)) }));
+    };
+    const alignLines = (): MenuItem[] => {
+        const now = aligned(surface.getDocument(), surface.getSelection().focus.path);
+        return ALIGNS.filter(([value]) => richOn || value !== "justify").map(([value, label]) => ({ label, icon: value, pressed: now === value, run: doing(align(value)) }));
+    };
+    /** The underlined A of the text button, for a line of a menu: held in a sample's width so that its line's words start where the others' do. */
+    const colorMark = () => {
+        const held = make("span", "quire-size-sample");
+        held.append(make("span", "quire-color-mark", "A"));
+        return held;
+    };
+    const colors = flowMenu("Text color");
+    const sizes = flowMenu("Text size");
     const fonts = flowMenu("Typeface");
-    const fontButton = control("Typeface", fontSample(null), (button) => {
-        if (fonts.isOpen()) return fonts.close(true);
-        fonts.open(button, fontLines(), document.activeElement === button);
-    });
-    fontButton.setAttribute("aria-haspopup", "menu");
     const highlights = flowMenu("Highlight");
-    const highlightButton = control("Highlight", icon("highlight"), (button) => {
-        if (highlights.isOpen()) return highlights.close(true);
-        highlights.open(button, highlightLines(), document.activeElement === button);
+    const spacings = flowMenu("Line spacing");
+    const looks = flowMenu("Text");
+    /** The look menu's lines, each of the first opening its own menu from where this one was opened. */
+    const lookLines = (from: () => HTMLElement): MenuItem[] => [
+        { label: "Text color", icon: colorMark(), hint: "›", run: () => colors.open(from(), colorLines(), true) },
+        { label: "Text size", icon: make("span", "quire-size-sample", "Aa"), hint: "›", run: () => sizes.open(from(), sizeLines(), true) },
+        ...(richOn
+            ? [
+                  { label: "Typeface", icon: fontSample(null), hint: "›", run: () => fonts.open(from(), fontLines(), true) },
+                  { label: "Highlight", icon: "highlight", hint: "›", run: () => highlights.open(from(), highlightLines(), true) },
+                  { label: "Line spacing", icon: "spacing", hint: "›", run: () => spacings.open(from(), spacingLines(), true) },
+              ]
+            : []),
+        ...alignLines(),
+    ];
+    const lookButton = control("Text: color, size, alignment", make("span", "quire-color-mark", "A"), (button) => {
+        if (looks.isOpen()) return looks.close(true);
+        looks.open(button, lookLines(() => button), document.activeElement === button);
     });
-    highlightButton.setAttribute("aria-haspopup", "menu");
-    richGroup(
-        // it folds into the three dots before color and size do, which a Markdown file uses too
-        0.5,
-        () => [
-            { label: "Typeface", icon: fontSample(null), run: () => fonts.open(moreButton, fontLines(), true) },
-            { label: "Highlight", icon: "highlight", run: () => highlights.open(moreButton, highlightLines(), true) },
-        ],
-        fontButton,
-        highlightButton,
-    );
+    lookButton.setAttribute("aria-haspopup", "menu");
+    // folded, it is one line of the three dots, and its menu and theirs open from there
+    group(3.5, () => [{ label: "Text", icon: colorMark(), hint: "›", run: () => looks.open(moreButton, lookLines(() => moreButton), true) }], lookButton);
 
     // undo and redo
     const undo = () => {
@@ -569,7 +612,7 @@ export function createBar(surface: Surface, options: BarOptions): { element: HTM
     const more = flowMenu("More", { align: "right" });
     moreButton.addEventListener("click", () => {
         if (more.isOpen()) return more.close(true);
-        const folded = groups.filter((each) => each.element.classList.contains("folded") && (richOn || !each.rich)).sort((a, b) => a.fold - b.fold);
+        const folded = groups.filter((each) => each.element.classList.contains("folded")).sort((a, b) => a.fold - b.fold);
         const own = typeof options.more === "function" ? options.more() : (options.more ?? []);
         const counted: MenuItem[] = count.offsetWidth < 8 ? [{ label: count.textContent ?? "", note: true, run: () => {} }] : [];
         more.open(moreButton, [...counted, ...folded.flatMap((each) => each.lines()), ...own], document.activeElement === moreButton);
@@ -590,15 +633,9 @@ export function createBar(surface: Surface, options: BarOptions): { element: HTM
         // a group's whole width, even while it is still unfolding or folded away
         for (const each of groups) each.width = each.element.scrollWidth || each.width;
         const room = strip.clientWidth - 6;
-        const away = (each: (typeof groups)[number]) => !!each.rich && !richOn;
-        let needed = groups.reduce((sum, each) => sum + (away(each) ? 0 : each.width), 0);
+        let needed = groups.reduce((sum, each) => sum + each.width, 0);
         for (const each of [...groups].sort((a, b) => a.fold - b.fold)) {
             if (each.fold === 0) continue;
-            if (away(each)) {
-                each.element.classList.add("folded");
-                each.element.inert = true;
-                continue;
-            }
             const fold = needed > room;
             if (fold) needed -= each.width;
             each.element.classList.toggle("folded", fold);
@@ -642,6 +679,13 @@ export function createBar(surface: Surface, options: BarOptions): { element: HTM
             button.setAttribute("aria-pressed", String(on));
             button.classList.toggle("pressed", on);
         }
+        const list = activeBlock(doc, selection.focus.path).list;
+        listButton.setAttribute("aria-pressed", String(!!list));
+        listButton.classList.toggle("pressed", !!list);
+        if ((listButton.dataset.kind ?? "bullet") !== (list ?? "bullet")) {
+            listButton.dataset.kind = list ?? "bullet";
+            listButton.replaceChildren(icon(list ?? "bullet"));
+        }
         const style = currentStyle(doc, selection.focus.path);
         styleLabel.textContent = STYLES.find(([each]) => each === style)![1];
     });
@@ -671,7 +715,7 @@ export function createBar(surface: Surface, options: BarOptions): { element: HTM
         all[next]!.focus();
         all[next]!.scrollIntoView({ block: "nearest", inline: "nearest" });
     });
-    const menus = [styles, adds, colors, sizes, fonts, highlights, more];
+    const menus = [styles, lists, adds, looks, colors, sizes, fonts, highlights, spacings, more];
     // a menu drawn under a sticky bar keeps to its button as the page scrolls
     addEventListener("scroll", () => menus.forEach((menu) => menu.follow()), { passive: true });
     strip.addEventListener("scroll", () => closeOthers(), { passive: true });
@@ -705,11 +749,8 @@ export function createBar(surface: Surface, options: BarOptions): { element: HTM
         setRich(on) {
             if (on === richOn) return;
             richOn = on;
-            if (!on) {
-                fonts.close(false);
-                highlights.close(false);
-            }
-            layout();
+            // what a Markdown file cannot keep is not offered for one, and its menus close
+            if (!on) for (const menu of [fonts, highlights, spacings]) menu.close(false);
         },
         rich: () => richOn,
         // the color, size, typeface and highlight menus, opened from somewhere else, as the menu row does
@@ -718,6 +759,8 @@ export function createBar(surface: Surface, options: BarOptions): { element: HTM
             size: (from) => sizes.open(from, sizeLines(), true),
             font: (from) => fonts.open(from, fontLines(), true),
             highlight: (from) => highlights.open(from, highlightLines(), true),
+            spacing: (from) => spacings.open(from, spacingLines(), true),
+            lists: (from) => lists.open(from, listLines(), true),
         },
         setOutline(open) {
             outlineButton.setAttribute("aria-pressed", String(open));

@@ -6,7 +6,7 @@
 import { expect, test } from "bun:test";
 import { browserStore, memoryTables } from "./store-browser";
 
-test("every document kept in the browser is a .quire one, its style and notes saved beside its text, its pictures given back for a download", async () => {
+test("a document made in the browser with parts is a .quire one, its style and notes saved beside its text, its pictures given back for a download", async () => {
     const store = browserStore(memoryTables());
     const made = await store.create("Styled", "Words.\n", { style: '{"quire":1}', notes: "{}" });
     const saved = await store.save(made.id, "Words, more.\n", made.mark, { style: '{"quire":1,"count":1}', notes: "{}" });
@@ -25,12 +25,12 @@ test("documents are made, listed newest first, opened and saved on their mark", 
     const first = await store.create("First", "one");
     const second = await store.create("Second", "two");
     expect((await store.list()).map((entry) => entry.name)).toEqual(["Second", "First"]);
-    expect(await store.open(first.id)).toEqual({ text: "one", mark: "1", quire: { style: "", notes: "" } });
+    expect(await store.open(first.id)).toEqual({ text: "one", mark: "1", quire: undefined });
     const saved = await store.save(first.id, "one, changed", first.mark);
     expect(saved).toEqual({ ok: true, mark: "2" });
     expect((await store.list())[0]!.id).toBe(first.id);
     // saving again on the old mark is refused, with their text
-    expect(await store.save(first.id, "stale", first.mark)).toEqual({ ok: false, changed: true, theirs: { text: "one, changed", mark: "2", quire: { style: "", notes: "" } } });
+    expect(await store.save(first.id, "stale", first.mark)).toEqual({ ok: false, changed: true, theirs: { text: "one, changed", mark: "2", quire: undefined } });
     expect((await store.open(second.id)).text).toBe("two");
 });
 
@@ -74,4 +74,15 @@ test("version history is kept in the same tables, by document, newest first", as
     expect(await store.versions.load(second.id)).toBe("two");
     await store.versions.remove(second.id);
     expect((await store.versions.list("doc-a")).length).toBe(1);
+});
+
+test("a document made without parts is plain Markdown and stays so when saved; one kept before there were parts opens as a .quire document", async () => {
+    const tables = memoryTables();
+    const store = browserStore(tables);
+    const post = await store.create("A new post", "---\ntitle: A new post\n---\n");
+    const saved = await store.save(post.id, "---\ntitle: Changed\n---\n", post.mark, { style: "{}", notes: "{}" });
+    expect(saved.ok).toBe(true);
+    expect((await store.open(post.id)).quire).toBeUndefined();
+    await tables.put("documents", { id: "old", name: "Old", text: "x", mark: 1, modified: 1 });
+    expect((await store.open("old")).quire).toEqual({ style: "", notes: "" });
 });

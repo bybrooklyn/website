@@ -24,6 +24,7 @@ const PATHS: Record<string, string> = {
     number: '<path d="M4 5.5h1.5V10M4 10h3M4 14.5c0-1 .7-1.5 1.5-1.5s1.5.5 1.5 1.3c0 1.2-3 2.2-3 3.7h3"/><path d="M10.5 7h9M10.5 12h9M10.5 17h9"/>',
     task: '<rect x="3.5" y="4.5" width="5" height="5" rx="1.2"/><path d="m4.6 16 1.4 1.4 2.6-2.8"/><path d="M11.5 7h8M11.5 16h8"/>',
     plus: '<path d="M12 5v14M5 12h14"/>',
+    minus: '<path d="M5 12h14"/>',
     code: '<path d="m9 8-4 4 4 4M15 8l4 4-4 4"/>',
     center: '<path d="M5 6h14M8 10h8M5 14h14M8 18h8"/>',
     undo: '<path d="M9 7 5 11l4 4"/><path d="M5 11h9a5 5 0 0 1 0 10h-2"/>',
@@ -44,6 +45,7 @@ const PATHS: Record<string, string> = {
     outline: '<path d="M5 6h14M8 10h11M8 14h11M5 18h14"/>',
     highlight: '<path d="m14.5 4.5 5 5L11 18H6v-5z"/><path d="M4 21h16" opacity=".55"/>',
     justify: '<path d="M5 6h14M5 10h14M5 14h14M5 18h14"/>',
+    spacing: '<path d="M11 6h9M11 12h9M11 18h9"/><path d="m4 8 2-3 2 3M4 16l2 3 2-3M6 5v14"/>',
     shelf: '<rect x="4" y="4" width="6.5" height="8" rx="1.2"/><rect x="13.5" y="4" width="6.5" height="8" rx="1.2"/><path d="M4 16h16M4 20h10"/>',
     search: '<circle cx="10.5" cy="10.5" r="5.5"/><path d="m15 15 4.5 4.5"/>',
     file: '<path d="M7 3.5h7l4 4V20a.5.5 0 0 1-.5.5h-10.5A.5.5 0 0 1 6.5 20V4a.5.5 0 0 1 .5-.5z"/><path d="M14 3.5V8h4"/>',
@@ -170,6 +172,8 @@ export interface MenuItem {
     pressed?: boolean;
     /** A line that tells something and does nothing, such as the word count. */
     note?: boolean;
+    /** A choice among the lines of the same group: pressing it leaves the menu open, pressed in place of the one that was. */
+    group?: string;
     run: () => void;
 }
 
@@ -316,12 +320,14 @@ export function flowMenu(label: string, options: { align?: "left" | "right"; cla
                     line.setAttribute("role", "menuitem");
                     line.style.setProperty("--line-at", String(index));
                     if (item.pressed) line.classList.add("pressed");
+                    if (item.group) line.dataset.group = item.group;
                     if (item.icon) line.append(typeof item.icon === "string" ? icon(item.icon) : item.icon);
                     line.append(make("span", "quire-menu-label", item.label));
                     if (item.hint) line.append(make("span", "quire-menu-hint", item.hint));
                     line.addEventListener("mousedown", (event) => event.preventDefault());
                     line.addEventListener("click", () => {
-                        menu.close(false);
+                        if (item.group) for (const other of items.querySelectorAll<HTMLElement>(`[data-group="${item.group}"]`)) other.classList.toggle("pressed", other === line);
+                        else menu.close(false);
                         item.run();
                     });
                     items.append(line);
