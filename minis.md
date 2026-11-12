@@ -72,6 +72,14 @@ From the conversation on 11 Nov, later:
       a slash menu on an empty line. The pill and the menus move the way the picture viewer's three
       dots do, flowing from one shape to the next.
     - `bun run edit` stays for her own posts, on the same editor code, with its small local server.
+    - The bar at the top runs the full width of the document, as in Google Docs, and holds text
+      style (paragraph, headings, quote, code, bold, italic, underline, strike), lists and blocks
+      (lists, checklist, table, image, link, divider), and the document's name, word count, undo
+      and redo.
+    - A picture put in a document is saved beside the file and linked the usual Markdown way; for
+      a document kept in the browser it is kept in the browser with it.
+    - First version also has an outline of the headings and a version history kept in the browser.
+    - Name not settled. Hers: "motenote" or "motenoted".
 14. A mini where a person learns to walk in the browser, with the person to set up. In Rust
     compiled to WebAssembly, a couple of crates allowed, made as small as it can be and under
     512 KiB.
