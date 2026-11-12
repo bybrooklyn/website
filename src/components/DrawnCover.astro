@@ -1,44 +1,26 @@
 ---
-// A cover drawn from the project itself, in two forms.
-//
-// In the projects list it is an emblem: a few large squares, symmetrical, in a color of the
-// project's own (`hue`), with no name on it, since the name is beside it. Its shape and color are
-// what the eye finds a project by.
-//
-// At the top of a project that has no picture it is the older form: the name, on a ground tinted
-// with the project's main language, under a scatter of small squares in the colors of the languages
-// its repository is written in, as many of each as its share of the code.
+// A cover for a project that has no picture, drawn from the project itself:
+// its name, on a ground tinted with its language's color, under a pattern of
+// squares that is worked out from the letters of the name, so each project
+// gets its own and always the same one.
 import { languageColors, otherLanguageColor } from "../data/theme";
 import { css } from "../lib/color";
-import { cells, emblem, nameSize } from "../lib/drawn";
+import { cells, nameSize } from "../lib/drawn";
 
 interface Props {
     name: string;
     language: string;
-    /** The languages of its repository and each one's share, largest first. */
-    languages?: [name: string, share: number][];
-    /** Given, the cover is the list's emblem in this hue, from 0 to 360. */
-    hue?: number;
     class?: string;
 }
 
-const { name, language, languages = [], hue, class: className } = Astro.props;
-const color = (one: string) => css((languageColors as Record<string, [number, number, number]>)[one] ?? otherLanguageColor);
-const tint = hue === undefined ? color(languages[0]?.[0] ?? language) : css([0.78, 0.14, hue]);
+const { name, language, class: className } = Astro.props;
+const tint = css((languageColors as Record<string, [number, number, number]>)[language] ?? otherLanguageColor);
 
 const size = nameSize(name);
 ---
-{
-    hue === undefined ? (
-        <svg class:list={["drawn-cover", className]} viewBox="0 0 320 200" role="img" aria-label={`${name}: a ${language} project.`} style={`--tint:${tint}`}>
-            <rect class="drawn-ground" width="320" height="200" />
-            {cells(name, languages).map((cell) => <rect class="drawn-cell" x={cell.x} y={cell.y} width="12" height="12" rx="2.5" opacity={(cell.language ? 0.45 + cell.strength * 0.55 : cell.strength).toFixed(2)} style={cell.language && `fill:${color(cell.language)}`} />)}
-            <text class="drawn-name" x="17" y="180" font-size={size.toFixed(1)}>{name}</text>
-        </svg>
-    ) : (
-        <svg class:list={["drawn-cover", className]} viewBox="0 0 320 200" aria-hidden="true" style={`--tint:${tint}`}>
-            <rect class="drawn-ground" width="320" height="200" />
-            {emblem(name).map((cell) => <rect class="drawn-cell" x={cell.x} y={cell.y} width="28" height="28" rx="6" opacity={cell.strength.toFixed(2)} />)}
-        </svg>
-    )
-}
+
+<svg class:list={["drawn-cover", className]} viewBox="0 0 320 200" role="img" aria-label={`${name}: a ${language} project.`} style={`--tint:${tint}`}>
+    <rect class="drawn-ground" width="320" height="200"></rect>
+    {cells(name).map((cell) => <rect class="drawn-cell" x={cell.x} y={cell.y} width="12" height="12" rx="2.5" opacity={cell.strength.toFixed(2)} />)}
+    <text class="drawn-name" x="17" y="180" font-size={size.toFixed(1)}>{name}</text>
+</svg>

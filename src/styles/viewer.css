@@ -76,6 +76,8 @@
     position: absolute;
     top: 0;
     right: 0;
+    /* above the menu's lines, which lie over this corner: without it a press on the cross never arrived */
+    z-index: 1;
     display: grid;
     place-items: center;
     width: 2.5rem;
@@ -84,7 +86,14 @@
     padding: 0;
     background: none;
     cursor: pointer;
-    transition: scale 0.2s var(--ease);
+    transition:
+        scale 0.2s var(--ease),
+        translate 0.35s var(--ease);
+}
+
+/* open, the cross sits level with the first line of the menu and as far from the edge as the words are */
+.viewer-menu.open .viewer-dots {
+    translate: -0.3rem 0.35rem;
 }
 
 /* pressed, it gives a little, as a drop would */

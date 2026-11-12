@@ -1,10 +1,10 @@
 ---
 import DrawnCover from "../../components/DrawnCover.astro";
+import Picture from "../../components/Picture.astro";
 import "../../styles/blog.css";
 import "../../styles/projects.css";
 import Base from "../../layouts/Base.astro";
 import { site } from "../../data/site";
-import { ownHue } from "../../lib/drawn";
 import { getProjects, projectPage } from "../../lib/projects";
 
 const projects = await getProjects();
@@ -21,8 +21,15 @@ const projects = await getProjects();
             projects.map((project) => (
                 <li>
                     <a href={projectPage(project)}>
-                        {/* Every project has an emblem in the list, a shape and a color of its own to find it by. Its pictures are for when it is opened. */}
-                        <DrawnCover class="project-thumb" name={project.data.name} language={project.data.language} hue={ownHue(project.data.order)} />
+                        {project.data.cover ? (
+                            <Picture class:list={["project-thumb", { pixel: project.data.pixel }]}
+                                src={project.data.cover}
+                                alt=""
+                                width={480}
+                            />
+                        ) : (
+                            <DrawnCover class="project-thumb" name={project.data.name} language={project.data.language} />
+                        )}
                         <div>
                             <h2>{project.data.name}</h2>
                             <p>{project.data.summary}</p>

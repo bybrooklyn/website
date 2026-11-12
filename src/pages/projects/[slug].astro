@@ -65,7 +65,7 @@ if (facts) rows.push({ label: "last updated", value: formatDate(new Date(facts.u
             <p class="lede">{summary}</p>
         </header>
 
-        {!cover && <DrawnCover class="post-cover" {name} {language} languages={facts?.languages} />}
+        {!cover && <DrawnCover class="post-cover" {name} {language} />}
         {
             cover && (
                 <Picture class:list={["post-cover", { pixel }]}

@@ -1,11 +1,11 @@
 {
-    "flummox": {"license":"AGPL-3.0","stars":6,"forks":0,"release":"v0.0.1","updated":"2026-10-09","public":true,"languages":[["Rust",0.964],["Python",0.025]]},
-    "laude": {"license":"MIT","stars":0,"forks":0,"release":null,"updated":"2026-10-12","public":false,"languages":[["Rust",0.892],["Luau",0.07],["WGSL",0.038]]},
-    "mfetchy": {"license":"MIT","stars":0,"forks":0,"release":"v0.1.0","updated":"2026-11-09","public":false,"languages":[["Go",0.995]]},
-    "openbitdo": {"license":"GPL-3.0","stars":29,"forks":0,"release":"v0.0.3","updated":"2026-10-16","public":true,"languages":[["Go",0.951],["Shell",0.04]]},
-    "smoothceleste": {"license":"MIT","stars":0,"forks":0,"release":"v1","updated":"2026-08-04","public":true,"languages":[["C#",0.937],["Python",0.04]]},
-    "swiftyv": {"license":null,"stars":0,"forks":0,"release":null,"updated":"2026-11-03","public":false,"languages":[["Swift",0.992]]},
-    "terrustia": {"license":"AGPL-3.0","stars":4,"forks":2,"release":null,"updated":"2026-09-09","public":true,"languages":[["Rust",0.96],["Python",0.022]]},
-    "torrens-serif": {"license":"OFL-1.1","stars":0,"forks":0,"release":"v1.0","updated":"2026-11-10","public":true,"languages":[["Python",0.585],["Go Template",0.207],["HTML",0.187],["CSS",0.021]]},
-    "yqt": {"license":"GPL-3.0","stars":0,"forks":0,"release":null,"updated":"2026-11-11","public":true,"languages":[["Rust",0.894],["QML",0.106]]}
+    "flummox": {"license":"AGPL-3.0","stars":6,"forks":0,"release":"v0.0.1","updated":"2026-10-09","public":true},
+    "laude": {"license":"MIT","stars":0,"forks":0,"release":null,"updated":"2026-10-12","public":false},
+    "mfetchy": {"license":"MIT","stars":0,"forks":0,"release":"v0.1.0","updated":"2026-11-09","public":false},
+    "openbitdo": {"license":"GPL-3.0","stars":29,"forks":0,"release":"v0.0.3","updated":"2026-10-16","public":true},
+    "smoothceleste": {"license":"MIT","stars":0,"forks":0,"release":"v1","updated":"2026-08-04","public":true},
+    "swiftyv": {"license":null,"stars":0,"forks":0,"release":null,"updated":"2026-11-03","public":false},
+    "terrustia": {"license":"AGPL-3.0","stars":4,"forks":2,"release":null,"updated":"2026-09-09","public":true},
+    "torrens-serif": {"license":"OFL-1.1","stars":0,"forks":0,"release":"v1.0","updated":"2026-11-10","public":true},
+    "yqt": {"license":"GPL-3.0","stars":0,"forks":0,"release":null,"updated":"2026-11-11","public":true}
 }
