@@ -44,7 +44,8 @@ function slice(): void {
         return;
     }
     const began = performance.now();
-    while (performance.now() - began < 10) engine.train(1);
+    // four runs a call, which the engine runs side by side (its lanes)
+    while (performance.now() - began < 10) engine.train(4);
     const finished = engine.generation();
     const score = engine.best_score();
     const report: Report = { kind: "progress", setup, generation: finished, runs: engine.generation_runs(), distance: engine.best_distance() };

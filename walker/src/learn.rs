@@ -366,6 +366,84 @@ impl Climber {
     }
 }
 
+/// Runs many brains from the same start, several at once in lockstep (`World::step_together`), so the
+/// processor has more than one walker's sums to work on at a time. Each run is exactly the run it
+/// would be alone: its own world, brain and judge, sharing nothing with the others.
+#[derive(Clone, Debug, Default)]
+pub struct Lanes {
+    worlds: Vec<World>,
+    brains: Vec<Brain>,
+    judges: Vec<Judge>,
+    /// Which of the brains asked for each lane is running.
+    which: Vec<usize>,
+    senses: Vec<f32>,
+}
+
+/// How many walkers run in lockstep. Past four the processor gains little more.
+pub const LANES: usize = 4;
+
+impl Lanes {
+    /// Runs `count` brains from `start`, `weights(k)` giving the k-th, at most `wide` at a time, each
+    /// judged from `judge`, and tells `done` how each went as it ends. Returns the steps run in all.
+    pub fn run<'a>(&mut self, start: &World, creature: &Creature, layout: Layout, judge: Judge, wide: usize, count: usize, weights: impl Fn(usize) -> &'a [f32], mut done: impl FnMut(usize, Outcome)) -> u64 {
+        let wide = wide.clamp(1, count.max(1));
+        while self.worlds.len() < wide {
+            self.worlds.push(World::new());
+            self.brains.push(Brain::new(layout));
+            self.judges.push(judge);
+            self.which.push(0);
+        }
+        if self.brains.first().is_some_and(|brain| brain.layout != layout) {
+            self.brains.iter_mut().for_each(|brain| *brain = Brain::new(layout));
+        }
+        self.senses.resize(layout.inputs, 0.0);
+        let mut next = 0;
+        let mut running = 0;
+        let mut steps = 0;
+        let begin = |lanes: &mut Lanes, lane: usize, which: usize| {
+            lanes.worlds[lane].copy_from(start);
+            lanes.brains[lane].load(weights(which));
+            lanes.judges[lane] = judge;
+            lanes.which[lane] = which;
+        };
+        while running < wide && next < count {
+            begin(self, running, next);
+            running += 1;
+            next += 1;
+        }
+        while running > 0 {
+            for lane in 0..running {
+                creature.sense(&self.worlds[lane], &mut self.senses);
+                self.brains[lane].think(&self.senses);
+                creature.drive(&mut self.worlds[lane], &self.brains[lane].outputs);
+            }
+            World::step_together(&mut self.worlds[..running]);
+            let mut lane = 0;
+            while lane < running {
+                if !self.judges[lane].after_step(creature, &self.worlds[lane], &self.brains[lane].outputs) {
+                    lane += 1;
+                    continue;
+                }
+                steps += self.judges[lane].steps as u64;
+                done(self.which[lane], self.judges[lane].outcome(creature, &self.worlds[lane]));
+                if next < count {
+                    begin(self, lane, next);
+                    next += 1;
+                    lane += 1;
+                } else {
+                    // the last lane takes this one's place, so the lanes still running stay together
+                    running -= 1;
+                    self.worlds.swap(lane, running);
+                    self.brains.swap(lane, running);
+                    self.judges.swap(lane, running);
+                    self.which.swap(lane, running);
+                }
+            }
+        }
+        steps
+    }
+}
+
 pub struct Trainer {
     pub description: Description,
     pub settings: Settings,
@@ -390,10 +468,15 @@ pub struct Trainer {
     pub history_mean: Vec<f32>,
     /// Steps of physics run so far, in every run, to measure how fast training goes.
     pub steps: u64,
+    /// How many walkers run in lockstep in training.
+    pub lanes: usize,
     random: Random,
     world: World,
     brain: Brain,
     senses: Vec<f32>,
+    running: Lanes,
+    /// The members a slice of training runs, kept to save making the list each time.
+    todo: Vec<usize>,
 }
 
 /// Flat ground from far behind the start to far ahead of it.
@@ -438,9 +521,12 @@ impl Trainer {
             history_best: Vec::new(),
             history_mean: Vec::new(),
             steps: 0,
+            lanes: LANES,
             random,
             brain: Brain::new(layout),
             senses: vec![0.0; description.senses()],
+            running: Lanes::default(),
+            todo: Vec::new(),
         })
     }
 
@@ -454,61 +540,65 @@ impl Trainer {
         Judge::new(self.settings.goal, self.settings.seconds, self.settings.length)
     }
 
-    /// Runs one brain from the start and scores it.
-    pub fn run(&mut self, weights: &[f32]) -> Outcome {
+    /// Runs the brain that is loaded from the start under a judge, watching it with `watch` if given,
+    /// and gives back the judge at the end. Every run goes through here, so a run in training, in a
+    /// test and on the page is the same run.
+    fn go(&mut self, mut judge: Judge, mut watch: Option<&mut crate::gait::Watch>) -> Judge {
         self.world.copy_from(&self.start);
-        self.brain.forget();
         let creature = &self.creature;
-        let mut judge = self.judge();
         loop {
             creature.sense(&self.world, &mut self.senses);
-            self.brain.think(weights, &self.senses);
+            self.brain.think(&self.senses);
             creature.drive(&mut self.world, &self.brain.outputs);
             self.world.step();
+            if let Some(watch) = watch.as_deref_mut() {
+                watch.after_step(creature, &self.world);
+            }
             if judge.after_step(creature, &self.world, &self.brain.outputs) {
                 break;
             }
         }
         self.steps += judge.steps as u64;
-        judge.outcome(creature, &self.world)
+        judge
+    }
+
+    /// Runs one brain from the start and scores it.
+    pub fn run(&mut self, weights: &[f32]) -> Outcome {
+        self.brain.load(weights);
+        let judge = self.go(self.judge(), None);
+        judge.outcome(&self.creature, &self.world)
     }
 
     /// Runs one brain from the start, as `run` does, and says how natural its run looked.
     pub fn watch(&mut self, weights: &[f32]) -> crate::gait::Gait {
-        self.world.copy_from(&self.start);
-        self.brain.forget();
-        let creature = &self.creature;
-        let mut judge = self.judge();
+        self.brain.load(weights);
         let mut watch = crate::gait::Watch::default();
-        loop {
-            creature.sense(&self.world, &mut self.senses);
-            self.brain.think(weights, &self.senses);
-            creature.drive(&mut self.world, &self.brain.outputs);
-            self.world.step();
-            watch.after_step(creature, &self.world);
-            if judge.after_step(creature, &self.world, &self.brain.outputs) {
-                break;
-            }
-        }
-        watch.gait(creature, &self.world)
-    }
-
-    fn run_member(&mut self, index: usize) {
-        let weights = self.weights(index).to_vec();
-        let outcome = self.run(&weights);
-        self.scores[index] = outcome.score;
-        self.distances[index] = outcome.distance;
-        self.scored[index] = true;
+        self.go(self.judge(), Some(&mut watch));
+        watch.gait(&self.creature, &self.world)
     }
 
     /// Does up to `runs` runs of training and returns the number of generations finished. A finished
-    /// generation breeds the next straight away.
+    /// generation breeds the next straight away. The runs of a slice go several at a time, in lanes,
+    /// which changes nothing about any of them.
     pub fn train(&mut self, runs: u32) -> u32 {
-        for _ in 0..runs {
-            match self.scored.iter().position(|scored| !scored) {
-                Some(index) => self.run_member(index),
-                None => self.breed(),
+        let mut left = runs as usize;
+        while left > 0 {
+            self.todo.clear();
+            self.todo.extend(self.scored.iter().enumerate().filter(|(_, scored)| !**scored).map(|(index, _)| index).take(left));
+            if self.todo.is_empty() {
+                self.breed();
+                left -= 1;
+                continue;
             }
+            left -= self.todo.len();
+            let count = self.layout.weights();
+            let Trainer { running, todo, population, scores, distances, scored, start, creature, layout, .. } = self;
+            let judge = Judge::new(self.settings.goal, self.settings.seconds, self.settings.length);
+            self.steps += running.run(start, creature, *layout, judge, self.lanes, todo.len(), |k| &population[todo[k] * count..(todo[k] + 1) * count], |k, outcome| {
+                scores[todo[k]] = outcome.score;
+                distances[todo[k]] = outcome.distance;
+                scored[todo[k]] = true;
+            });
             if self.scored.iter().all(|scored| *scored) {
                 self.breed();
             }
@@ -545,37 +635,15 @@ impl Trainer {
     /// Runs one brain from the start as `run` does and gives back the judge that watched it, for what it
     /// counted along the way.
     pub fn judge_of(&mut self, weights: &[f32]) -> Judge {
-        self.world.copy_from(&self.start);
-        self.brain.forget();
-        let creature = &self.creature;
-        let mut judge = self.judge();
-        loop {
-            creature.sense(&self.world, &mut self.senses);
-            self.brain.think(weights, &self.senses);
-            creature.drive(&mut self.world, &self.brain.outputs);
-            self.world.step();
-            if judge.after_step(creature, &self.world, &self.brain.outputs) {
-                break;
-            }
-        }
-        judge
+        self.brain.load(weights);
+        self.go(self.judge(), None)
     }
 
     /// Runs one brain from the start under a judge of the caller's, as a live attempt is judged.
-    pub fn run_judged(&mut self, weights: &[f32], mut judge: Judge) -> Outcome {
-        self.world.copy_from(&self.start);
-        self.brain.forget();
-        let creature = &self.creature;
-        loop {
-            creature.sense(&self.world, &mut self.senses);
-            self.brain.think(weights, &self.senses);
-            creature.drive(&mut self.world, &self.brain.outputs);
-            self.world.step();
-            if judge.after_step(creature, &self.world, &self.brain.outputs) {
-                break;
-            }
-        }
-        judge.outcome(creature, &self.world)
+    pub fn run_judged(&mut self, weights: &[f32], judge: Judge) -> Outcome {
+        self.brain.load(weights);
+        let judge = self.go(judge, None);
+        judge.outcome(&self.creature, &self.world)
     }
 
     /// A child of one brain: each weight nudged at random with the usual chance, and at least one.
@@ -692,6 +760,49 @@ mod tests {
         assert_eq!(one.generation, 8);
         assert_eq!(one.best.iter().map(|w| w.to_bits()).collect::<Vec<_>>(), two.best.iter().map(|w| w.to_bits()).collect::<Vec<_>>());
         assert_eq!(one.history_best, two.history_best);
+    }
+
+    #[test]
+    fn how_many_walkers_run_in_lockstep_never_changes_what_is_learned() {
+        for (legs, goal, hidden, layers, memory) in [(2, Goal::Far, 16, 2, 4), (4, Goal::Fast, 32, 3, 8), (1, Goal::Tall, 8, 1, 0)] {
+            let settings = Settings { goal, hidden, layers, memory, population: 12, ..Settings::default() };
+            let learned = |lanes: usize, slice: u32| {
+                let mut trainer = Trainer::new(Description { legs, carry: false, leap: false }, settings, &flat_ground(), 11).unwrap();
+                trainer.lanes = lanes;
+                // sixty runs in all, in slices of any size
+                for _ in 0..60 / slice {
+                    trainer.train(slice);
+                }
+                (trainer.best.iter().map(|w| w.to_bits()).collect::<Vec<_>>(), trainer.history_best.iter().map(|s| s.to_bits()).collect::<Vec<_>>(), trainer.steps)
+            };
+            let one = learned(1, 1);
+            assert_eq!(one, learned(8, 5), "{legs} legs");
+            assert_eq!(one, learned(4, 60), "{legs} legs");
+        }
+    }
+
+    // Natively, on the machine this was written on (a Ryzen 7 9700X, busy with other work), training
+    // a two-legged walker with a medium brain ran about 470,000 steps a second on one core, and a
+    // four-legged one about 300,000. The floors leave room for a machine three times slower.
+    const FLOOR_TWO_LEGS: f64 = 150_000.0;
+    const FLOOR_FOUR_LEGS: f64 = 100_000.0;
+
+    #[test]
+    fn training_runs_at_least_as_many_steps_a_second_as_its_floor() {
+        for (legs, floor) in [(2, FLOOR_TWO_LEGS), (4, FLOOR_FOUR_LEGS)] {
+            let settings = Settings { hidden: 16, layers: 2, memory: 4, ..Settings::default() };
+            let mut best = 0.0f64;
+            for _ in 0..3 {
+                let mut trainer = Trainer::new(Description { legs, carry: false, leap: false }, settings, &flat_ground(), 1).unwrap();
+                let started = std::time::Instant::now();
+                while trainer.generation < 8 {
+                    trainer.train(64);
+                }
+                best = best.max(trainer.steps as f64 / started.elapsed().as_secs_f64());
+            }
+            std::println!("{legs} legs, medium brain: {best:.0} steps a second in training");
+            assert!(best > floor, "{legs} legs: {best:.0} steps a second, under the floor of {floor}");
+        }
     }
 
     #[test]

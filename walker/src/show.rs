@@ -51,7 +51,7 @@ impl Show {
             world: start.clone(),
             creature: creature.clone(),
             weights: weights.to_vec(),
-            brain: Brain::new(layout),
+            brain: Brain::with(layout, weights),
             senses: vec![0.0; layout.inputs],
             judge,
             drawn: Vec::new(),
@@ -60,7 +60,7 @@ impl Show {
             leftover: 0.0,
         };
         show.creature.sense(&show.world, &mut show.senses);
-        show.brain.think(&show.weights, &show.senses);
+        show.brain.think(&show.senses);
         // that thought was only to have something to draw: the run itself starts with nothing in memory
         show.brain.forget();
         show.draw();
@@ -75,7 +75,7 @@ impl Show {
         while self.leftover >= STEP && taken < MOST_STEPS && !self.judge.over {
             let stride = self.creature.phase(&self.world) as u32;
             self.creature.sense(&self.world, &mut self.senses);
-            self.brain.think(&self.weights, &self.senses);
+            self.brain.think(&self.senses);
             self.creature.drive(&mut self.world, &self.brain.outputs);
             self.world.step();
             self.judge.after_step(&self.creature, &self.world, &self.brain.outputs);
@@ -84,8 +84,8 @@ impl Show {
             // a new stride has begun: a better brain waiting takes over here, mid walk
             if self.creature.phase(&self.world) as u32 != stride {
                 if let Some(weights) = self.pending.take() {
+                    self.brain.load(&weights);
                     self.weights = weights;
-                    self.brain.forget();
                 }
             }
             if self.judge.endless {
@@ -147,12 +147,9 @@ pub struct Crowd {
     pub worlds: Vec<World>,
     pub judges: Vec<Judge>,
     pub creature: Creature,
-    /// Every brain's weights, one after another.
-    pub weights: Vec<f32>,
-    brain: Brain,
+    /// Each walker's brain, loaded with its own weights.
+    brains: Vec<Brain>,
     senses: Vec<f32>,
-    /// Each walker's memory, kept here between steps, since they share one brain to think with.
-    memories: Vec<f32>,
     /// Four numbers for each walker: how far it has gone, the height of its body, its angle, and 1
     /// once its run is over.
     pub drawn: Vec<f32>,
@@ -161,15 +158,14 @@ pub struct Crowd {
 
 impl Crowd {
     pub fn new(start: &World, creature: &Creature, layout: Layout, population: &[f32], judge: Judge) -> Crowd {
-        let count = population.len() / layout.weights();
+        let brains: Vec<Brain> = population.chunks_exact(layout.weights()).map(|weights| Brain::with(layout, weights)).collect();
+        let count = brains.len();
         let mut crowd = Crowd {
             worlds: vec![start.clone(); count],
             judges: vec![judge; count],
             creature: creature.clone(),
-            weights: population.to_vec(),
-            brain: Brain::new(layout),
+            brains,
             senses: vec![0.0; layout.inputs],
-            memories: vec![0.0; count * layout.memory],
             drawn: Vec::new(),
             leftover: 0.0,
         };
@@ -179,21 +175,17 @@ impl Crowd {
 
     pub fn step(&mut self, seconds: f32) -> u32 {
         self.leftover += seconds;
-        let count = self.brain.layout.weights();
         let mut taken = 0;
         while self.leftover >= STEP && taken < MOST_STEPS {
-            for (i, world) in self.worlds.iter_mut().enumerate() {
-                if self.judges[i].over {
+            for ((world, judge), brain) in self.worlds.iter_mut().zip(&mut self.judges).zip(&mut self.brains) {
+                if judge.over {
                     continue;
                 }
                 self.creature.sense(world, &mut self.senses);
-                let kept = self.brain.layout.memory;
-                self.brain.memory.copy_from_slice(&self.memories[i * kept..(i + 1) * kept]);
-                self.brain.think(&self.weights[i * count..(i + 1) * count], &self.senses);
-                self.memories[i * kept..(i + 1) * kept].copy_from_slice(&self.brain.memory);
-                self.creature.drive(world, &self.brain.outputs);
+                brain.think(&self.senses);
+                self.creature.drive(world, &brain.outputs);
                 world.step();
-                self.judges[i].after_step(&self.creature, world, &self.brain.outputs);
+                judge.after_step(&self.creature, world, &brain.outputs);
             }
             self.leftover -= STEP;
             taken += 1;

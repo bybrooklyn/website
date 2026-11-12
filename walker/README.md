@@ -92,8 +92,9 @@ brains on runs of one length, and what is seen is where the best of them goes af
 
 - `train(runs: u32) -> u32`
   Runs up to `runs` brains, each for `seconds` from the same start, and returns the number of
-  generations finished. When a generation is finished the next is bred at once. One run of 10 s
-  takes about 2 ms, so 4 to 8 runs a frame leaves the page responsive.
+  generations finished. When a generation is finished the next is bred at once. The runs of one
+  call go four at a time, side by side, which changes nothing about any of them but lets the
+  processor work on several at once; so ask for at least four. One run of 10 s takes about 1 ms.
 - `generation() -> u32` The number of generations finished.
 - `generation_runs() -> u32` How many brains of the current generation have been scored.
 - `best_score() -> f32` The best score so far, minus infinity before the first generation ends.
@@ -172,9 +173,9 @@ swing in a fifth of a second), as a muscle can only tighten so fast; this is in 
 training sees it too.
 
 The page offers three sizes by name: small (8 neurons, 1 layer, no memory), medium (16, 2 layers,
-4 memories) and large (32, 3 layers, 8 memories). Most of a generation's time goes to the physics,
-not the brain, so the sizes cost nearly the same: natively about 50 ms a generation for two legs
-and 110 to 150 ms for four, at each size. A large brain has more to learn and gets there slower.
+4 memories) and large (32, 3 layers, 8 memories). A step of a two-legged walker with a medium
+brain takes about 2 microseconds natively, a four-legged one about 3.5, and a brain of four layers
+of 64 about doubles that. A large brain has more to learn and gets there slower.
 
 ### The show: one walker in real time
 

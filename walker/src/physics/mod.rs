@@ -28,6 +28,7 @@ use crate::math::{Rotation, Vec2, clamp};
 use collide::{AHEAD, collide};
 use contact::{Contact, GROUND};
 pub use joint::Joint;
+use joint::Pose;
 use shape::{Outline, Shape};
 
 /// How deep the ground is under each piece, in metres. Ground is solid on the right of each piece,
@@ -146,7 +147,7 @@ pub struct Segment {
 
 /// How soft a constraint is: the speed it closes a gap at, per metre of gap, and how much of a full
 /// correction each pass makes. Worked out from a spring's frequency and damping, as Box2D does.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct Soft {
     pub bias_rate: f32,
     pub mass_scale: f32,
@@ -163,6 +164,16 @@ impl Soft {
     }
 }
 
+/// The length of a substep and how stiff contacts and hinges are in it, worked out once a step.
+#[derive(Clone, Copy, Debug, Default)]
+struct Stiffness {
+    h: f32,
+    inverse_h: f32,
+    soft: Soft,
+    hard: Soft,
+    hinge: Soft,
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct World {
     pub bodies: Vec<Body>,
@@ -176,6 +187,10 @@ pub struct World {
     contacts: Vec<Contact>,
     last: Vec<Contact>,
     placed: Vec<Outline>,
+    /// Each joint's pose where the bodies are now, worked out afresh whenever they move.
+    poses: Vec<Pose>,
+    /// How stiff contacts and hinges are in this step's substeps.
+    stiffness: Stiffness,
     leftover: f32,
     /// Steps taken since the world was made.
     pub steps: u32,
@@ -323,18 +338,61 @@ impl World {
 
     /// Moves the world on by one step of 1/60 s.
     pub fn step(&mut self) {
-        let substeps = self.substeps.max(1);
-        let h = STEP / substeps as f32;
+        World::step_together(core::slice::from_mut(self));
+    }
+
+    /// Moves several worlds on by one step each, as `step` would one at a time and to the same bit,
+    /// but in lockstep: the hinges of one world are solved between those of the next, so the
+    /// processor works on several worlds' chains of sums at once instead of waiting on one. The
+    /// worlds share nothing, so how many go together never changes what happens in any of them.
+    pub fn step_together(worlds: &mut [World]) {
+        for world in worlds.iter_mut() {
+            world.begin_step();
+        }
+        let substeps = worlds.iter().map(|world| world.substeps.max(1)).max().unwrap_or(0);
+        let joints = worlds.iter().map(|world| world.joints.len()).max().unwrap_or(0);
+        for substep in 0..substeps {
+            let going = |world: &World| substep < world.substeps.max(1);
+            for world in worlds.iter_mut().filter(|world| going(world)) {
+                world.forces();
+            }
+            for joint in 0..joints {
+                for world in worlds.iter_mut().filter(|world| going(world) && joint < world.joints.len()) {
+                    world.solve_joint(joint, true);
+                }
+            }
+            for world in worlds.iter_mut().filter(|world| going(world)) {
+                world.solve_contacts(true);
+                world.integrate();
+            }
+            for joint in 0..joints {
+                for world in worlds.iter_mut().filter(|world| going(world) && joint < world.joints.len()) {
+                    world.solve_joint(joint, false);
+                }
+            }
+            for world in worlds.iter_mut().filter(|world| going(world)) {
+                world.solve_contacts(false);
+            }
+        }
+        for world in worlds.iter_mut() {
+            let bodies = &mut world.bodies;
+            for contact in &mut world.contacts {
+                contact::bounce(bodies, contact);
+            }
+            world.steps += 1;
+        }
+    }
+
+    /// The start of a step: what touches, how stiff things are, and the masses and poses the passes
+    /// will need.
+    fn begin_step(&mut self) {
+        let h = STEP / self.substeps.max(1) as f32;
         let inverse_h = 1.0 / h;
         self.find_contacts();
-
         // contacts as stiff as a quarter of the substep rate allows, hinges twice as stiff, and
         // contacts against what never moves stiffer too, since only one side gives
         let contact_hertz = (0.25 * inverse_h).min(30.0);
-        let soft = Soft::new(contact_hertz, 10.0, h);
-        let hard = Soft::new(2.0 * contact_hertz, 10.0, h);
-        let hinge = Soft::new(2.0 * contact_hertz, 2.0, h);
-
+        self.stiffness = Stiffness { h, inverse_h, soft: Soft::new(contact_hertz, 10.0, h), hard: Soft::new(2.0 * contact_hertz, 10.0, h), hinge: Soft::new(2.0 * contact_hertz, 2.0, h) };
         let bodies = &mut self.bodies;
         for contact in &mut self.contacts {
             contact::prepare(bodies, contact);
@@ -342,51 +400,60 @@ impl World {
         for joint in &mut self.joints {
             joint.prepare(bodies);
         }
-        let softness = |contact: &Contact, bodies: &[Body]| {
-            let fixed = contact.b == GROUND || !bodies[contact.a as usize].moves() || !bodies[contact.b as usize].moves();
-            if fixed { hard } else { soft }
-        };
+        self.pose();
+    }
 
-        for _ in 0..substeps {
-            for body in bodies.iter_mut().filter(|body| body.moves()) {
-                body.velocity += self.gravity * h;
-                body.velocity = body.velocity * (1.0 / (1.0 + h * body.damping));
-                body.spin *= 1.0 / (1.0 + h * body.spin_damping);
-                let speed = body.velocity.length();
-                if speed > FASTEST {
-                    body.velocity = body.velocity * (FASTEST / speed);
-                }
-                body.spin = clamp(body.spin, -FASTEST_SPIN, FASTEST_SPIN);
+    /// Works out every joint's pose where the bodies are. Poses change only when the bodies move,
+    /// so one working out serves the gentle pass of one substep and the pushing pass of the next.
+    fn pose(&mut self) {
+        self.poses.clear();
+        self.poses.extend(self.joints.iter().map(|joint| joint.pose(&self.bodies)));
+    }
+
+    /// Gravity and damping, then last step's pushes applied again.
+    fn forces(&mut self) {
+        let h = self.stiffness.h;
+        let bodies = &mut self.bodies;
+        for body in bodies.iter_mut().filter(|body| body.moves()) {
+            body.velocity += self.gravity * h;
+            body.velocity = body.velocity * (1.0 / (1.0 + h * body.damping));
+            body.spin *= 1.0 / (1.0 + h * body.spin_damping);
+            let speed = body.velocity.length();
+            if speed > FASTEST {
+                body.velocity = body.velocity * (FASTEST / speed);
             }
-            for joint in &self.joints {
-                joint.warm_start(bodies);
-            }
-            for contact in &self.contacts {
-                contact::warm_start(bodies, contact);
-            }
-            for joint in &mut self.joints {
-                joint.solve(bodies, hinge, h, true);
-            }
-            for contact in &mut self.contacts {
-                let soft = softness(contact, bodies);
-                contact::solve(bodies, contact, soft, inverse_h, true);
-            }
-            for body in bodies.iter_mut().filter(|body| body.moves()) {
-                body.position += body.velocity * h;
-                body.rotation = body.rotation.turned(h * body.spin);
-            }
-            for joint in &mut self.joints {
-                joint.solve(bodies, hinge, h, false);
-            }
-            for contact in &mut self.contacts {
-                let soft = softness(contact, bodies);
-                contact::solve(bodies, contact, soft, inverse_h, false);
-            }
+            body.spin = clamp(body.spin, -FASTEST_SPIN, FASTEST_SPIN);
         }
+        for (joint, pose) in self.joints.iter().zip(&self.poses) {
+            joint.warm_start(bodies, pose);
+        }
+        for contact in &self.contacts {
+            contact::warm_start(bodies, contact);
+        }
+    }
+
+    fn solve_joint(&mut self, index: usize, push: bool) {
+        let Stiffness { h, hinge, .. } = self.stiffness;
+        self.joints[index].solve(&mut self.bodies, &self.poses[index], hinge, h, push);
+    }
+
+    fn solve_contacts(&mut self, push: bool) {
+        let Stiffness { inverse_h, soft, hard, .. } = self.stiffness;
+        let bodies = &mut self.bodies;
         for contact in &mut self.contacts {
-            contact::bounce(bodies, contact);
+            let fixed = contact.b == GROUND || !bodies[contact.a as usize].moves() || !bodies[contact.b as usize].moves();
+            contact::solve(bodies, contact, if fixed { hard } else { soft }, inverse_h, push);
         }
-        self.steps += 1;
+    }
+
+    /// Moves the bodies at the speeds they now have, and works out the joints' poses again.
+    fn integrate(&mut self) {
+        let h = self.stiffness.h;
+        for body in self.bodies.iter_mut().filter(|body| body.moves()) {
+            body.position += body.velocity * h;
+            body.rotation = body.rotation.turned(h * body.spin);
+        }
+        self.pose();
     }
 
     /// Finds every pair that touches or is about to, and carries over last step's pushes for points

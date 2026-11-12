@@ -17,17 +17,26 @@ fn main() {
     for legs in [1, 2, 4] {
         for (name, hidden, layers, memory) in SIZES {
             let settings = Settings { hidden, layers, memory, ..Settings::default() };
-            let mut trainer = Trainer::new(Description { legs, carry: false, leap: false }, settings, &flat_ground(), 1).unwrap();
-            while trainer.generation < 2 {
-                trainer.train(64);
+            // the best of three tries, since a busy machine only ever makes a try slower
+            let (mut wall, mut steps, mut trainer) = (f64::MAX, 0, None);
+            for _ in 0..3 {
+                let mut fresh = Trainer::new(Description { legs, carry: false, leap: false }, settings, &flat_ground(), 1).unwrap();
+                if let Some(lanes) = std::env::var("LANES").ok().and_then(|value| value.parse().ok()) {
+                    fresh.lanes = lanes;
+                }
+                while fresh.generation < 2 {
+                    fresh.train(64);
+                }
+                let (first, before) = (fresh.generation, fresh.steps);
+                let began = Instant::now();
+                while fresh.generation < first + 5 {
+                    fresh.train(64);
+                }
+                wall = wall.min(began.elapsed().as_secs_f64());
+                steps = fresh.steps - before;
+                trainer = Some(fresh);
             }
-            let (first, before) = (trainer.generation, trainer.steps);
-            let began = Instant::now();
-            while trainer.generation < first + 5 {
-                trainer.train(64);
-            }
-            let wall = began.elapsed().as_secs_f64();
-            let steps = trainer.steps - before;
+            let trainer = trainer.unwrap();
             steps_json.push(format!("\"{legs} {name}\": {steps}"));
             // where the time goes, over the current population, run by hand as Trainer::run does
             let (mut physics, mut contacts, mut brain_t, mut body, mut judging) = (Duration::ZERO, Duration::ZERO, Duration::ZERO, Duration::ZERO, Duration::ZERO);
@@ -36,14 +45,14 @@ fn main() {
             for index in 0..trainer.settings.population {
                 let weights = trainer.weights(index).to_vec();
                 let mut world = trainer.start.clone();
-                brain.forget();
+                brain.load(&weights);
                 let creature = trainer.creature.clone();
                 let mut judge = trainer.judge();
                 loop {
                     let t = Instant::now();
                     creature.sense(&world, &mut senses);
                     let t1 = Instant::now();
-                    brain.think(&weights, &senses);
+                    brain.think(&senses);
                     let t2 = Instant::now();
                     creature.drive(&mut world, &brain.outputs);
                     let t3 = Instant::now();
