@@ -20,6 +20,7 @@ import { $ } from "bun";
 import { mkdir } from "node:fs/promises";
 import { dirname, extname, relative, resolve } from "node:path";
 import { themeStyle } from "../src/lib/color";
+import { withoutSpeech } from "./dictation-stubs";
 import { at, frontmatter, isDraft, listMdx, root, slug, stem, writeJson } from "./lib";
 
 const args = process.argv.slice(2);
@@ -194,7 +195,7 @@ async function publish(message: string): Promise<{ ok: boolean; log: string }> {
 
 // ---- the page ----
 
-const bundle = await Bun.build({ entrypoints: [at("scripts/editor/main.ts")], target: "browser" });
+const bundle = await Bun.build({ entrypoints: [at("scripts/editor/main.ts")], target: "browser", plugins: [withoutSpeech] });
 if (!bundle.success) throw new AggregateError(bundle.logs, "The editor's script did not build.");
 const script = await bundle.outputs[0]!.text();
 

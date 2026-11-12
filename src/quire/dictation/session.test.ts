@@ -1,0 +1,210 @@
+// A session from sound to text, with a made-up recognizer and made-up sound: provisional words
+// while speaking, settled text at a pause as one undo step, stopping itself after quiet, the spoken
+// commands, a window cut at its quietest moment, and falling back to pause-only when too slow.
+
+import { describe, expect, test } from "bun:test";
+import { documentOf, paragraph, textAt, type Document, type Selection } from "../document";
+import type { ChangeKind, State } from "../history";
+import { caret } from "../keys";
+import { write as markdown } from "../write";
+import { startSession, type Reason, type Recognizer, type Session, type Target } from "./session";
+import { nothing, type Custom } from "./words";
+
+const RATE = 16000;
+
+/** What the made-up recognizer says: one phrase per loudness, a word for each half second of sound that is loud. */
+const PHRASES: Record<string, string> = { "20": "hello there my dear friend period", "30": "undo that", "40": "delete that", "50": "stop dictation", "60": "second phrase here" };
+
+function recognizer(ms = 50): Recognizer & { calls: number } {
+    const made = {
+        calls: 0,
+        backend: "fake",
+        dispose() {},
+        async transcribe(samples: Float32Array) {
+            made.calls++;
+            let loud = 0;
+            let top = 0;
+            for (const value of samples) if (Math.abs(value) > 0.05) loud++;
+            for (const value of samples) top = Math.max(top, Math.abs(value));
+            const words = (PHRASES[String(Math.round(top * 100))] ?? "").split(" ").filter(Boolean);
+            const shown = Math.min(words.length, Math.floor(loud / (RATE / 2 / 1.4)));
+            return { text: words.slice(0, shown).join(" "), ms };
+        },
+    };
+    return made;
+}
+
+/** An editor's surface reduced to what a session uses, with an undo stack. */
+function target(): Target & { text(): string; steps: number } {
+    let state: State = { doc: documentOf([paragraph()]), selection: caret([0], 0) };
+    const done: State[] = [];
+    const made = {
+        steps: 0,
+        getDocument: () => state.doc,
+        getSelection: (): Selection => state.selection,
+        run(operation: (doc: Document, selection: Selection) => State, _kind?: ChangeKind) {
+            const next = operation(state.doc, state.selection);
+            if (next.doc !== state.doc) {
+                done.push(state);
+                made.steps++;
+            }
+            state = next;
+        },
+        undo() {
+            const back = done.pop();
+            if (back) state = back;
+        },
+        text: () => markdown(state.doc).trim(),
+    };
+    return made;
+}
+
+/** `ms` of a 220 Hz tone, or of quiet, in frames of a tenth of a second. */
+function frames(ms: number, amplitude: number): Float32Array[] {
+    const out: Float32Array[] = [];
+    for (let at = 0; at < ms; at += 100) {
+        const frame = new Float32Array(1600);
+        let seed = at + 3;
+        for (let i = 0; i < 1600; i++) {
+            seed = (seed * 1664525 + 1013904223) % 4294967296;
+            frame[i] = amplitude > 0.01 ? amplitude * Math.sin((2 * Math.PI * 220 * (at / 1000 * RATE + i)) / RATE) : amplitude * (seed / 4294967296 - 0.5) * 2;
+        }
+        out.push(frame);
+    }
+    return out;
+}
+const quiet = (ms: number) => frames(ms, 0.001);
+
+/** Runs a session over frames, letting the recognizer's promises settle between them. */
+async function drive(session: Session, all: Float32Array[]) {
+    for (const frame of all) {
+        session.feed(frame);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    await new Promise((resolve) => setTimeout(resolve, 10));
+}
+
+function make(extra: { ms?: number; custom?: Custom; commands?: boolean } = {}) {
+    const editor = target();
+    const heard = recognizer(extra.ms);
+    const shown: string[] = [];
+    const stops: Reason[] = [];
+    const notes: string[] = [];
+    const session = startSession({
+        target: editor,
+        recognizer: heard,
+        commands: () => extra.commands ?? true,
+        custom: () => extra.custom ?? nothing(),
+        onProvisional: (text) => shown.push(text),
+        onStop: (reason) => stops.push(reason),
+        onNote: (note) => notes.push(note),
+    });
+    return { editor, heard, shown, stops, notes, session };
+}
+
+describe("speaking", () => {
+    test("shows provisional words while speaking, and none in the document", async () => {
+        const { editor, shown, session } = make();
+        await drive(session, [...quiet(500), ...frames(2400, 0.2)]);
+        expect(shown.filter(Boolean).length).toBeGreaterThan(0);
+        expect(shown.at(-1)).toMatch(/^Hello there|hello there/i);
+        expect(editor.text()).toBe("");
+        expect(editor.steps).toBe(0);
+    });
+    test("settles the phrase at a pause as one undoable step, and the provisional words go", async () => {
+        const { editor, shown, session } = make();
+        await drive(session, [...quiet(500), ...frames(2900, 0.2), ...quiet(1200)]);
+        expect(editor.text()).toBe("Hello there my dear friend.");
+        expect(editor.steps).toBe(1);
+        expect(shown.at(-1)).toBe("");
+        editor.undo();
+        expect(editor.text()).toBe("");
+    });
+    test("each phrase is its own step, written after the one before", async () => {
+        const { editor, session } = make();
+        await drive(session, [...quiet(300), ...frames(2900, 0.2), ...quiet(1000), ...frames(2000, 0.6), ...quiet(1000)]);
+        expect(editor.text()).toBe("Hello there my dear friend. Second phrase here");
+        expect(editor.steps).toBe(2);
+    });
+    test("applies the visitor's custom words to what is written", async () => {
+        const { editor, session } = make({ custom: { words: [{ word: "Dearest", sounds: ["dear"] }], shortcuts: [] } });
+        await drive(session, [...quiet(300), ...frames(2900, 0.2), ...quiet(1000)]);
+        expect(editor.text()).toBe("Hello there my Dearest friend.");
+    });
+});
+
+describe("stopping", () => {
+    test("by itself after quiet that follows speech, having written the phrase", async () => {
+        const { editor, stops, session } = make();
+        await drive(session, [...quiet(300), ...frames(2900, 0.2), ...quiet(3500)]);
+        expect(stops).toEqual(["silence"]);
+        expect(editor.text()).toBe("Hello there my dear friend.");
+    });
+    test("by itself when nothing is said for a long time", async () => {
+        const { stops, session } = make();
+        await drive(session, quiet(9000));
+        expect(stops).toEqual(["nothing"]);
+    });
+    test("when asked, settling the phrase still being said", async () => {
+        const { editor, stops, session } = make();
+        await drive(session, [...quiet(300), ...frames(2900, 0.2)]);
+        await session.stop("button");
+        expect(editor.text()).toBe("Hello there my dear friend.");
+        expect(stops).toEqual(["button"]);
+    });
+    test("when the visitor says stop dictation, once", async () => {
+        const { stops, session } = make();
+        await drive(session, [...quiet(300), ...frames(2000, 0.5), ...quiet(1200), ...quiet(300)]);
+        expect(stops).toEqual(["command"]);
+    });
+    test("takes no more sound after it has stopped", async () => {
+        const { editor, session } = make();
+        await session.stop("button");
+        await drive(session, [...quiet(300), ...frames(2900, 0.2), ...quiet(1000)]);
+        expect(editor.text()).toBe("");
+    });
+});
+
+describe("spoken commands", () => {
+    test("undo that takes back the last phrase", async () => {
+        const { editor, session } = make();
+        await drive(session, [...quiet(300), ...frames(2900, 0.2), ...quiet(1000), ...frames(1500, 0.3), ...quiet(1000)]);
+        expect(editor.text()).toBe("");
+    });
+    test("delete that removes the last phrase", async () => {
+        const { editor, session } = make();
+        await drive(session, [...quiet(300), ...frames(2900, 0.2), ...quiet(1000), ...frames(1500, 0.4), ...quiet(1000)]);
+        expect(editor.text()).toBe("");
+    });
+    test("with commands off every word is written", async () => {
+        const { editor, session } = make({ commands: false });
+        await drive(session, [...quiet(300), ...frames(2900, 0.2), ...quiet(1000)]);
+        expect(editor.text()).toBe("Hello there my dear friend period");
+    });
+});
+
+describe("keeping up", () => {
+    test("a recognizer that is too slow turns provisional words off, and says so", async () => {
+        const { editor, notes, session } = make({ ms: 4000 });
+        await drive(session, [...quiet(300), ...frames(5000, 0.2), ...quiet(1000)]);
+        expect(session.mode()).toBe("pause");
+        expect(notes.join(" ")).toContain("cannot keep up");
+        expect(editor.text()).toBe("Hello there my dear friend.");
+    });
+    test("a quick one keeps them", async () => {
+        const { session } = make({ ms: 30 });
+        await drive(session, [...quiet(300), ...frames(4000, 0.2)]);
+        expect(session.mode()).toBe("live");
+    });
+});
+
+describe("a long unbroken stretch", () => {
+    test("is cut at its quietest moment and the first part settled before the pause", async () => {
+        const { editor, heard, session } = make();
+        const dip = [...frames(6000, 0.2), ...frames(300, 0.001), ...frames(6000, 0.2)];
+        await drive(session, dip);
+        expect(heard.calls).toBeGreaterThan(1);
+        expect(editor.steps).toBeGreaterThanOrEqual(1);
+        expect(textAt(editor.getDocument(), [0]).length).toBeGreaterThan(0);
+    });
+});

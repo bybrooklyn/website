@@ -8,6 +8,7 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { withoutSpeech } from "../../scripts/dictation-stubs";
 import { browser, chromium, type Browser } from "../../scripts/browser";
 
 const here = import.meta.dir;
@@ -71,7 +72,7 @@ beforeAll(async () => {
     if (!chromium()) return;
     folder = await mkdtemp(join(tmpdir(), "quire-editor-"));
     await Bun.write(`${folder}/page.ts`, page);
-    const built = await Bun.build({ entrypoints: [`${folder}/page.ts`], target: "browser" });
+    const built = await Bun.build({ entrypoints: [`${folder}/page.ts`], target: "browser", plugins: [withoutSpeech] });
     if (!built.success) throw new Error(built.logs.join("\n"));
     // the site's own styles, with its theme's colors as the layout would set them
     const theme = ":root{--ground:oklch(0.16 0.035 300);--surface:oklch(0.21 0.045 300);--rule:oklch(0.32 0.055 300);--ink:oklch(0.93 0.02 300);--muted:oklch(0.73 0.045 300);--accent:oklch(0.77 0.16 300)} body{max-width:none;display:block;padding:1rem}";

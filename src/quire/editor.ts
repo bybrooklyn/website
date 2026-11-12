@@ -13,6 +13,7 @@
 
 import { createBar, link as linkAction, linkAt } from "./bar";
 import { createConflict } from "./conflict";
+import { createDictation } from "./dictation/dictation";
 import { type Document } from "./document";
 import { collapsed } from "./keys";
 import { createMarkdownView } from "./markdown-view";
@@ -177,6 +178,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
             title.focus();
         }
     });
+    const dictation = createDictation(surface);
 
     // ---- the link field, from the bar's button or Ctrl+K ----
     const links = flowMenu("Link");
@@ -218,6 +220,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         { label: host.classList.contains("markdown") ? "Hide the Markdown" : "Show the Markdown", run: () => showMarkdown(!host.classList.contains("markdown")) },
         { label: "Version history", run: () => void history.open() },
         ...(options.more?.() ?? []),
+        ...dictation.items(dictation.more),
         { label: "Download", hint: surface.getDocument().mdx ? ".mdx" : ".md", run: download },
         { label: "Print", run: () => print() },
     ];
@@ -231,6 +234,12 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         onLink: openLink,
         more,
     });
+    // dictation: a microphone at the end of the bar, the shortcut, and its lines in the three-dot menu (src/quire/dictation/)
+    if (!dictation.why) {
+        const row = make("div", "quire-bar-group");
+        dictation.mount(row);
+        bar.element.querySelector(".quire-bar-strip")?.append(row);
+    }
     // the rich view and the Markdown, side by side when there is room and one in place of the other when not
     const markdown = createMarkdownView(surface);
     const panes = make("div", "quire-panes");
@@ -385,6 +394,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         },
         destroy() {
             caret.destroy();
+            dictation.destroy();
             surface.destroy();
             for (const menu of [...bar.menus, links]) menu.box.remove();
             selectBar.element.remove();
