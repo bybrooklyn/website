@@ -1,0 +1,345 @@
+// What each key and piece of typing is held to: the Markdown the document then writes, and where
+// the cursor then is, the way a person typing would expect. Every Markdown shortcut is checked
+// with the one undo that gives back the characters typed. Run with `bun test src/quire`.
+
+import { expect, test } from "bun:test";
+import { documentOf, paragraph, type Block, type Selection } from "./document";
+import { createHistory } from "./history";
+import { activeBlock, activeMarks, caret, fragment, paste, step, type Editor, type Input } from "./keys";
+import { read } from "./read";
+import { write } from "./write";
+
+/** An editor on some Markdown, the cursor at a place, with a clock that moves on 10 ms a key. */
+function editor(source: string, path: number[] = [0], offset = 0) {
+    let current: Editor = { state: { doc: source === "" ? documentOf([paragraph()]) : read(source), selection: caret(path, offset) }, history: createHistory() };
+    let time = 0;
+    const send = (input: Input) => {
+        const result = step(current, input, time);
+        current = result.editor;
+        time += 10;
+        return result.outcome;
+    };
+    return {
+        type(text: string) {
+            for (const value of text) send({ type: "text", text: value });
+        },
+        key(key: string, modifiers: { shift?: boolean; mod?: boolean; alt?: boolean } = {}) {
+            return send({ type: "key", key, ...modifiers });
+        },
+        select(selection: Selection) {
+            current = { ...current, state: { doc: current.state.doc, selection } };
+        },
+        wait() {
+            time += 5000;
+        },
+        get markdown() {
+            return write(current.state.doc);
+        },
+        get cursor() {
+            return current.state.selection.focus;
+        },
+        get state() {
+            return current.state;
+        },
+        undo: () => send({ type: "key", key: "z", mod: true }),
+        redo: () => send({ type: "key", key: "z", mod: true, shift: true }),
+    };
+}
+
+test("typing a sentence into an empty document writes it, the cursor after the last letter", () => {
+    const e = editor("");
+    e.type("Hello, world.");
+    expect(e.markdown).toBe("Hello, world.\n");
+    expect(e.cursor).toEqual({ path: [0], offset: 13 });
+});
+
+test("typing replaces what is selected", () => {
+    const e = editor("Hello world\n");
+    e.select({ anchor: { path: [0], offset: 6 }, focus: { path: [0], offset: 11 } });
+    e.type("there");
+    expect(e.markdown).toBe("Hello there\n");
+});
+
+test("typing is one undo step until a pause, and undo and redo walk back and forth", () => {
+    const e = editor("");
+    e.type("one two");
+    e.wait();
+    e.type(" three");
+    e.undo();
+    expect(e.markdown).toBe("one two\n");
+    e.undo();
+    expect(e.state.doc.blocks[0]).toMatchObject({ kind: "paragraph", runs: [] });
+    e.redo();
+    e.redo();
+    expect(e.markdown).toBe("one two three\n");
+});
+
+test("Enter splits a paragraph and puts the cursor at the start of the new one", () => {
+    const e = editor("Hello world\n", [0], 5);
+    e.key("Enter");
+    expect(e.markdown).toBe("Hello\n\nworld\n");
+    expect(e.cursor).toEqual({ path: [1], offset: 0 });
+});
+
+test("Backspace at the start of a paragraph joins it to the one before, the cursor at the join", () => {
+    const e = editor("Hello\n\nworld\n", [1], 0);
+    e.key("Backspace");
+    expect(e.markdown).toBe("Helloworld\n");
+    expect(e.cursor).toEqual({ path: [0], offset: 5 });
+});
+
+test("Backspace deletes one character, a whole emoji, or a word with a modifier", () => {
+    const e = editor("Hi \u{1F600}!\n", [0], 5);
+    e.key("Backspace");
+    expect(e.markdown).toBe("Hi !\n");
+    const w = editor("Two words here\n", [0], 14);
+    w.key("Backspace", { alt: true });
+    expect(w.markdown).toBe("Two words\n");
+    expect(w.cursor).toEqual({ path: [0], offset: 10 });
+});
+
+test("Backspace at the start of a heading or list item first makes it a paragraph", () => {
+    const h = editor("# Title\n", [0], 0);
+    h.key("Backspace");
+    expect(h.markdown).toBe("Title\n");
+    const l = editor("- one\n- two\n", [0, 1, 0], 0);
+    l.key("Backspace");
+    expect(l.markdown).toBe("- one\n\ntwo\n");
+    expect(l.cursor).toEqual({ path: [1], offset: 0 });
+    const q = editor("> quoted\n", [0, 0], 0);
+    q.key("Backspace");
+    expect(q.markdown).toBe("quoted\n");
+});
+
+test("Backspace with a selection across blocks removes it and joins the ends", () => {
+    const e = editor("First line\n\nSecond line\n\nThird line\n");
+    e.select({ anchor: { path: [0], offset: 5 }, focus: { path: [2], offset: 5 } });
+    e.key("Backspace");
+    expect(e.markdown).toBe("First line\n");
+    expect(e.cursor).toEqual({ path: [0], offset: 5 });
+});
+
+test("Backspace after a divider removes it; on an empty paragraph it removes the paragraph", () => {
+    const e = editor("Above\n\n---\n\nBelow\n", [2], 0);
+    e.key("Backspace");
+    expect(e.markdown).toBe("Above\n\nBelow\n");
+    expect(e.cursor).toEqual({ path: [1], offset: 0 });
+    const empty = editor("Above\n", [0], 5);
+    empty.key("Enter");
+    empty.key("Backspace");
+    expect(empty.markdown).toBe("Above\n");
+    expect(empty.cursor).toEqual({ path: [0], offset: 5 });
+});
+
+test("Delete removes the next character, and at the end of a block joins the next one", () => {
+    const e = editor("Hello\n\nworld\n", [0], 4);
+    e.key("Delete");
+    expect(e.markdown).toBe("Hell\n\nworld\n");
+    e.key("Delete");
+    expect(e.markdown).toBe("Hellworld\n");
+    expect(e.cursor).toEqual({ path: [0], offset: 4 });
+});
+
+test("Enter in a list makes a new item, and on an empty item leaves the list", () => {
+    const e = editor("- one\n", [0, 0, 0], 3);
+    e.key("Enter");
+    e.type("two");
+    expect(e.markdown).toBe("- one\n- two\n");
+    expect(e.cursor).toEqual({ path: [0, 1, 0], offset: 3 });
+    e.key("Enter");
+    e.key("Enter");
+    e.type("after");
+    expect(e.markdown).toBe("- one\n- two\n\nafter\n");
+    expect(e.cursor).toEqual({ path: [1], offset: 5 });
+});
+
+test("Enter in code is a newline, and on an empty last line leaves the code", () => {
+    const e = editor("```js\nlet a\n```\n", [0], 5);
+    e.key("Enter");
+    e.type("b");
+    expect(e.markdown).toBe("```js\nlet a\nb\n```\n");
+    e.key("Enter");
+    e.key("Enter");
+    e.type("text");
+    expect(e.markdown).toBe("```js\nlet a\nb\n```\n\ntext\n");
+});
+
+test("Enter at the end of a heading starts a paragraph, at its start puts a paragraph above", () => {
+    const e = editor("# Title\n", [0], 5);
+    e.key("Enter");
+    e.type("Body");
+    expect(e.markdown).toBe("# Title\n\nBody\n");
+    const s = editor("# Title\n", [0], 0);
+    s.key("Enter");
+    expect(s.markdown).toBe("# Title\n");
+    expect(read(s.markdown).blocks.length).toBe(1);
+    expect(s.state.doc.blocks.map((block) => block.kind)).toEqual(["paragraph", "heading"]);
+    expect(s.cursor).toEqual({ path: [1], offset: 0 });
+});
+
+test("Shift+Enter puts a hard line break in a paragraph", () => {
+    const e = editor("one\n", [0], 3);
+    e.key("Enter", { shift: true });
+    e.type("two");
+    expect(e.markdown).toBe("one\\\ntwo\n");
+    expect(e.cursor).toEqual({ path: [0], offset: 7 });
+});
+
+test("Tab and Shift+Tab indent and outdent a list item, the cursor staying in it", () => {
+    const e = editor("- one\n- two\n", [0, 1, 0], 2);
+    e.key("Tab");
+    expect(e.markdown).toBe("- one\n  - two\n");
+    expect(e.cursor).toEqual({ path: [0, 0, 1, 0, 0], offset: 2 });
+    e.key("Tab", { shift: true });
+    expect(e.markdown).toBe("- one\n- two\n");
+    expect(e.cursor).toEqual({ path: [0, 1, 0], offset: 2 });
+});
+
+test("Tab moves to the next table cell, adding a row after the last, and Shift+Tab goes back", () => {
+    const e = editor("| a | b |\n| - | - |\n| 1 | 2 |\n", [0, 1, 1], 1);
+    e.key("Tab");
+    expect(e.cursor).toEqual({ path: [0, 2, 0], offset: 0 });
+    e.type("3");
+    expect(e.markdown).toBe("| a   | b   |\n| --- | --- |\n| 1   | 2   |\n| 3   |     |\n");
+    e.key("Tab", { shift: true });
+    expect(e.cursor).toEqual({ path: [0, 1, 1], offset: 1 });
+    expect(editor("Plain\n").key("Tab")).toBeNull();
+});
+
+test("the mark shortcuts bold, italicise, underline, strike and code a selection, and toggle back", () => {
+    const shortcuts: [string, { shift?: boolean }, string][] = [
+        ["b", {}, "a **word** here\n"],
+        ["i", {}, "a *word* here\n"],
+        ["u", {}, "a <u>word</u> here\n"],
+        ["x", { shift: true }, "a ~~word~~ here\n"],
+        ["e", {}, "a `word` here\n"],
+    ];
+    for (const [key, modifiers, expected] of shortcuts) {
+        const e = editor("a word here\n");
+        e.select({ anchor: { path: [0], offset: 2 }, focus: { path: [0], offset: 6 } });
+        e.key(key, { mod: true, ...modifiers });
+        expect(e.markdown).toBe(expected);
+        e.key(key, { mod: true, ...modifiers });
+        expect(e.markdown).toBe("a word here\n");
+    }
+});
+
+test("a mark shortcut with nothing selected applies to what is typed next", () => {
+    const e = editor("Plain\n", [0], 5);
+    e.type(" ");
+    e.key("b", { mod: true });
+    expect(activeMarks(e.state)).toEqual(["bold"]);
+    e.type("bold");
+    e.key("b", { mod: true });
+    e.type(" plain");
+    expect(e.markdown).toBe("Plain **bold** plain\n");
+});
+
+test("undo, redo, link and heading levels have their shortcuts", () => {
+    const e = editor("Text\n");
+    expect(e.key("k", { mod: true })).toEqual({ action: "link" });
+    e.key("2", { mod: true, alt: true });
+    expect(e.markdown).toBe("## Text\n");
+    e.key("0", { mod: true, alt: true });
+    expect(e.markdown).toBe("Text\n");
+    e.undo();
+    expect(e.markdown).toBe("## Text\n");
+    e.key("y", { mod: true });
+    expect(e.markdown).toBe("Text\n");
+    expect(activeBlock(read("# T\n"), [0])).toEqual({ kind: "heading", level: 1, quoted: false });
+    expect(activeBlock(read("> - a\n"), [0, 0, 0, 0])).toEqual({ kind: "paragraph", list: "bullet", quoted: true });
+});
+
+test("each block shortcut turns into its block, and one undo gives back the characters typed", () => {
+    const cases: [string, string, string][] = [
+        ["# ", "Title", "# Title\n"],
+        ["### ", "Small", "### Small\n"],
+        ["###### ", "Tiny", "###### Tiny\n"],
+        ["- ", "item", "- item\n"],
+        ["* ", "item", "- item\n"],
+        ["1. ", "first", "1. first\n"],
+        ["[ ] ", "task", "- [ ] task\n"],
+        ["[x] ", "done", "- [x] done\n"],
+        ["> ", "quote", "> quote\n"],
+        ["```", "code", "```\ncode\n```\n"],
+    ];
+    for (const [typed, then, expected] of cases) {
+        const e = editor("");
+        e.type(typed);
+        e.type(then);
+        expect(e.markdown).toBe(expected);
+        e.undo();
+        expect(write(e.state.doc)).toBe(read(expected).blocks.length ? write(e.state.doc) : "");
+        e.undo();
+        const literal = e.markdown;
+        expect(e.state.doc.blocks[0]!.kind).toBe("paragraph");
+        expect(literal.trimEnd().replace(/\\/g, "")).toBe(typed.trimEnd());
+    }
+});
+
+test("--- typed on its own line becomes a divider with a paragraph after it", () => {
+    const e = editor("");
+    e.type("---");
+    e.type("next");
+    expect(e.markdown).toBe("---\n\nnext\n");
+    expect(e.state.doc.blocks.map((block) => block.kind)).toEqual(["divider", "paragraph"]);
+    expect(e.cursor).toEqual({ path: [1], offset: 4 });
+});
+
+test("each inline shortcut turns into its mark when the closing mark is typed, and one undo gives back the characters", () => {
+    const cases: [string, string][] = [
+        ["**bold**", "**bold**"],
+        ["*italic*", "*italic*"],
+        ["`code`", "`code`"],
+        ["~~gone~~", "~~gone~~"],
+    ];
+    for (const [typed, written] of cases) {
+        const e = editor("");
+        e.type(`a ${typed}`);
+        e.type(" b");
+        expect(e.markdown).toBe(`a ${written} b\n`);
+        expect(activeMarks(e.state)).toEqual([]);
+        e.undo();
+        e.undo();
+        const back = e.state.doc.blocks[0]!;
+        expect(back.kind === "paragraph" && back.runs).toEqual([{ kind: "text", text: `a ${typed}`, marks: [] }]);
+    }
+    const unclosed = editor("");
+    unclosed.type("2 * 3 * 4");
+    expect(unclosed.state.doc.blocks[0]).toMatchObject({ runs: [{ text: "2 * 3 * 4", marks: [] }] });
+});
+
+test("a block shortcut is only taken at the start of a paragraph", () => {
+    const e = editor("");
+    e.type("a # b - c");
+    expect(e.state.doc.blocks.map((block) => block.kind)).toEqual(["paragraph"]);
+});
+
+test("a slash typed on an empty line is reported, and one typed in text is not", () => {
+    const e = editor("");
+    const first = step({ state: e.state, history: createHistory() }, { type: "text", text: "/" }, 0).outcome;
+    expect(first && "state" in first && first.slash).toBe(true);
+    const later = step({ state: { doc: read("text\n"), selection: caret([0], 4) }, history: createHistory() }, { type: "text", text: "/" }, 0).outcome;
+    expect(later && "state" in later && later.slash).toBe(false);
+});
+
+test("pasting one paragraph goes into the line; pasting several splits the block around them", () => {
+    const inline = paste({ doc: read("Hello world\n"), selection: caret([0], 6) }, [{ kind: "paragraph", runs: [{ kind: "text", text: "big", marks: ["italic"] }, { kind: "text", text: " ", marks: [] }], gap: "" }]);
+    expect(write(inline.doc)).toBe("Hello *big* world\n");
+    expect(inline.selection.focus).toEqual({ path: [0], offset: 10 });
+
+    const several = paste({ doc: read("Start end\n"), selection: caret([0], 6) }, read("one\n\n- two\n- three\n\nfour\n").blocks);
+    expect(write(several.doc)).toBe("Start one\n\n- two\n- three\n\nfourend\n");
+    expect(several.selection.focus).toEqual({ path: [2], offset: 4 });
+
+    const intoEmpty = paste({ doc: documentOf([paragraph()]), selection: caret([0], 0) }, read("# A\n\nb\n").blocks as Block[]);
+    expect(write(intoEmpty.doc)).toBe("# A\n\nb\n");
+    expect(intoEmpty.selection.focus).toEqual({ path: [1], offset: 1 });
+});
+
+test("the selected part of a document is copied as blocks, list items staying in their list", () => {
+    const doc = read("Para one\n\n- a\n- b\n\nLast\n");
+    const blocks = fragment(doc, { anchor: { path: [0], offset: 5 }, focus: { path: [2], offset: 2 } });
+    expect(write(documentOf(blocks))).toBe("one\n\n- a\n- b\n\nLa\n");
+    expect(write(documentOf(fragment(doc, { anchor: { path: [0], offset: 0 }, focus: { path: [0], offset: 4 } })))).toBe("Para\n");
+});

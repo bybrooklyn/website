@@ -187,6 +187,12 @@ export interface Range {
     end: Position;
 }
 
+/** What is selected: where the selection began, and where the cursor is now. They are the same when nothing is selected. */
+export interface Selection {
+    anchor: Position;
+    focus: Position;
+}
+
 // ---- making runs and blocks ----
 
 /** Plain text as runs, with the marks given. */
@@ -324,17 +330,18 @@ function splitPieces(list: Piece[], offset: number): [Piece[], Piece[]] {
     return [list, []];
 }
 
-function insertRuns(runs: Run[], offset: number, value: string): Run[] {
+function insertRuns(runs: Run[], offset: number, value: string | Leaf, marks?: Mark[]): Run[] {
     const [before, after] = splitPieces(pieces(runs), offset);
     const last = before[before.length - 1];
     const next = after[0];
     // typed text takes the look of the character before it, and stays in a link only when inside one
     const model = [...before].reverse().find((piece) => piece.leaf.kind === "text")?.leaf ?? next?.leaf;
     const look = model?.kind === "text" ? model : undefined;
-    const leaf: TextRun = { kind: "text", text: value, marks: look ? [...look.marks] : [] };
+    const link = last?.link && sameLink(last.link, next?.link) ? last.link : undefined;
+    if (typeof value !== "string") return fromPieces([...before, { leaf: value, link }, ...after]);
+    const leaf: TextRun = { kind: "text", text: value, marks: marks ? ORDER.filter((mark) => marks.includes(mark)) : look ? [...look.marks] : [] };
     if (look?.color) leaf.color = look.color;
     if (look?.size) leaf.size = look.size;
-    const link = last?.link && sameLink(last.link, next?.link) ? last.link : undefined;
     return fromPieces([...before, { leaf, link }, ...after]);
 }
 
@@ -344,7 +351,8 @@ function deleteRuns(runs: Run[], from: number, to: number): Run[] {
     return fromPieces([...before, ...after]);
 }
 
-function sliceRuns(runs: Run[], from: number, to = Infinity): Run[] {
+/** The runs between two offsets. */
+export function sliceRuns(runs: Run[], from: number, to = Infinity): Run[] {
     const [, rest] = splitPieces(pieces(runs), from);
     const [middle] = splitPieces(rest, to - from);
     return fromPieces(middle);
@@ -546,16 +554,55 @@ function editString(doc: Document, path: number[], change: (value: string) => st
 
 // ---- editing text ----
 
-/** Types text at a position. Inside a paragraph a newline is a soft line break. */
-export function insertText(doc: Document, at: Position, value: string): Document {
+/** Types text at a position. Inside a paragraph a newline is a soft line break. `marks`, if given, are the marks the text gets instead of those of the character before it. */
+export function insertText(doc: Document, at: Position, value: string, marks?: Mark[]): Document {
     if (value === "") return doc;
     const block = blockAt(doc, at.path);
     if (block?.kind === "code" || block?.kind === "raw") return editString(doc, at.path, (old) => old.slice(0, at.offset) + value + old.slice(at.offset));
-    return editRuns(doc, at.path, (runs) => insertRuns(runs, at.offset, value));
+    return editRuns(doc, at.path, (runs) => insertRuns(runs, at.offset, value, marks));
+}
+
+/** Puts a hard line break, or a picture, footnote or other atom, at a position in a paragraph, heading or cell. */
+export function insertAtom(doc: Document, at: Position, leaf: Leaf): Document {
+    return editRuns(doc, at.path, (runs) => insertRuns(runs, at.offset, leaf));
+}
+
+/** Puts runs (pasted text with its marks and links) at a position in a paragraph, heading or cell. */
+export function insertRunsAt(doc: Document, at: Position, runs: Run[]): Document {
+    return editRuns(doc, at.path, (old) => {
+        const [before, after] = splitPieces(pieces(old), at.offset);
+        return fromPieces([...before, ...pieces(runs), ...after]);
+    });
+}
+
+/** A new document of the given blocks, with no frontmatter, a blank line between blocks and a newline at the end. */
+export function documentOf(blocks: Block[], options: { eol?: "\n" | "\r\n"; mdx?: boolean } = {}): Document {
+    const eol = options.eol ?? "\n";
+    return { bom: "", frontmatter: null, lead: "", blocks: blocks.map((block, index) => ({ ...block, gap: index === blocks.length - 1 ? eol : eol + eol })), eol, mdx: !!options.mdx };
+}
+
+/** Removes the block at a path, and any list item, list or quote it leaves empty. */
+export function removeBlock(doc: Document, path: number[]): Document {
+    return removeAt(doc, path);
+}
+
+/** The path of every block that holds no other blocks (paragraphs, headings, code, tables and so on), in reading order. */
+export function blockPaths(doc: Document): number[][] {
+    return leafPaths(doc.blocks);
+}
+
+/** How long the text at a path is. */
+export function lengthOf(doc: Document, path: number[]): number {
+    return lengthAt(doc, path);
+}
+
+/** Compares two positions in reading order: negative if `a` comes first. */
+export function comparePositions(a: Position, b: Position): number {
+    return comparePaths(a.path, b.path) || a.offset - b.offset;
 }
 
 /** Puts a range's two ends in reading order. */
-function ordered(range: Range): Range {
+export function ordered(range: Range): Range {
     const order = comparePaths(range.start.path, range.end.path);
     return order > 0 || (order === 0 && range.start.offset > range.end.offset) ? { start: range.end, end: range.start } : range;
 }
@@ -667,12 +714,12 @@ function runsAt(doc: Document, path: number[]): Run[] | undefined {
     return cellAt(doc, path);
 }
 
-/** Turns a mark on over a range, or off if every character in it already has it. */
-export function toggleMark(doc: Document, range: Range, mark: Mark): Document {
+/** Turns a mark on over a range, or off if every character in it already has it. `force` turns it on or off regardless. */
+export function toggleMark(doc: Document, range: Range, mark: Mark, force?: boolean): Document {
     const parts = covered(doc, range).filter((part) => runsAt(doc, part.path) && part.to > part.from);
     const texts = parts.flatMap((part) => middlePieces(runsAt(doc, part.path)!, part.from, part.to)).filter((piece) => piece.leaf.kind === "text");
     if (texts.length === 0) return doc;
-    const on = !texts.every((piece) => (piece.leaf as TextRun).marks.includes(mark));
+    const on = force ?? !texts.every((piece) => (piece.leaf as TextRun).marks.includes(mark));
     for (const part of parts) {
         doc = editRuns(doc, part.path, (runs) =>
             mapRuns(runs, part.from, part.to, (piece) => {

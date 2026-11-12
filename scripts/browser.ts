@@ -12,6 +12,12 @@ export interface Browser {
     /** Runs an expression in the page and gives back its value. */
     run<T = unknown>(expression: string): Promise<T>;
     click(x: number, y: number): Promise<void>;
+    /** Presses one key as the keyboard would, with modifiers held: "Enter", "Backspace", "Tab", "ArrowLeft", or a letter for a chord. */
+    press(key: string, held?: { shift?: boolean; ctrl?: boolean; alt?: boolean; meta?: boolean }): Promise<void>;
+    /** Types text one key at a time, each a real key press. */
+    type(text: string): Promise<void>;
+    /** Composes text through an input method, as for Japanese: each of `steps` shown in turn, then `text` committed. */
+    compose(steps: string[], text: string): Promise<void>;
     wait(ms: number): Promise<void>;
     /** A PNG of the window, or of one rectangle of the page. */
     picture(clip?: { x: number; y: number; width: number; height: number }): Promise<Buffer>;
@@ -62,6 +68,19 @@ export async function browser({ width = 1200, height = 800, scale = 1, port = 94
     await send("Runtime.enable");
     await send("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: scale, mobile: false });
     const mouse = (type: string, x: number, y: number) => send("Input.dispatchMouseEvent", { type, x, y, button: "left", buttons: type === "mousePressed" ? 1 : 0, clickCount: 1 });
+    // the keys that are not characters, with the codes the browser expects for them
+    const named: Record<string, [number, string?]> = { Enter: [13, "\r"], Backspace: [8], Tab: [9], Delete: [46], Escape: [27], Home: [36], End: [35], ArrowLeft: [37], ArrowUp: [38], ArrowRight: [39], ArrowDown: [40] };
+    const press = async (key: string, held: { shift?: boolean; ctrl?: boolean; alt?: boolean; meta?: boolean } = {}) => {
+        const modifiers = (held.alt ? 1 : 0) | (held.ctrl ? 2 : 0) | (held.meta ? 4 : 0) | (held.shift ? 8 : 0);
+        const known = named[key];
+        const letter = /^[a-z]$/i.test(key);
+        const code = known ? key : letter ? `Key${key.toUpperCase()}` : /^\d$/.test(key) ? `Digit${key}` : "";
+        const keyCode = known ? known[0] : key.toUpperCase().charCodeAt(0);
+        const chord = modifiers & ~8;
+        const text = known ? known[1] : chord ? undefined : held.shift ? key.toUpperCase() : key;
+        await send("Input.dispatchKeyEvent", { type: text ? "keyDown" : "rawKeyDown", key: held.shift && letter ? key.toUpperCase() : key, code, windowsVirtualKeyCode: keyCode, modifiers, ...(text && { text, unmodifiedText: text }) });
+        await send("Input.dispatchKeyEvent", { type: "keyUp", key, code, windowsVirtualKeyCode: keyCode, modifiers });
+    };
 
     return {
         errors,
@@ -81,6 +100,17 @@ export async function browser({ width = 1200, height = 800, scale = 1, port = 94
         async click(x, y) {
             await mouse("mousePressed", x, y);
             await mouse("mouseReleased", x, y);
+        },
+        press,
+        async type(text) {
+            for (const char of text) {
+                await send("Input.dispatchKeyEvent", { type: "keyDown", key: char, text: char, unmodifiedText: char });
+                await send("Input.dispatchKeyEvent", { type: "keyUp", key: char });
+            }
+        },
+        async compose(steps, text) {
+            for (const shown of steps) await send("Input.imeSetComposition", { text: shown, selectionStart: shown.length, selectionEnd: shown.length });
+            await send("Input.insertText", { text });
         },
         async picture(clip) {
             const shot = await send("Page.captureScreenshot", { format: "png", ...(clip && { clip: { ...clip, scale: 1 } }) });

@@ -1,0 +1,144 @@
+/* mdQuire's editing surface on its try-out page (src/pages/mdquire.astro). The text itself takes
+   the site's prose styles; these are only the pieces an editor adds. */
+
+.quire-page {
+    margin-inline: auto;
+    max-width: var(--measure);
+}
+
+.quire-toggle {
+    display: inline-flex;
+    gap: 0.5rem;
+    align-items: center;
+    margin-bottom: var(--line);
+    color: var(--muted);
+    font-size: 0.9rem;
+}
+
+.quire-columns {
+    display: grid;
+    gap: var(--gutter);
+}
+
+.quire-page:has(.showing) {
+    max-width: var(--page);
+}
+
+@media (min-width: 60rem) {
+    .quire-columns.showing {
+        grid-template-columns: minmax(0, var(--measure)) minmax(0, 1fr);
+    }
+}
+
+.quire {
+    min-height: 60vh;
+    outline: none;
+    caret-color: var(--accent);
+}
+
+.quire > :first-child {
+    margin-top: 0;
+}
+
+.quire h1 {
+    margin-bottom: var(--line);
+}
+
+/* A tight list's items hold their paragraphs without the space between paragraphs. */
+.quire-tight > li > p,
+.quire-tight > li > ul,
+.quire-tight > li > ol {
+    margin-block: 0;
+}
+
+.quire-markdown {
+    margin: 0;
+    padding: calc(var(--line) * 0.75) 1.25rem;
+    border: 0.0625rem solid var(--rule);
+    border-radius: var(--radius);
+    background: var(--surface);
+    color: var(--muted);
+    font-size: 0.85rem;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+/* Code and raw blocks say what they are in their corner. */
+.quire pre {
+    position: relative;
+}
+
+.quire pre[data-label]:not([data-label=""])::after {
+    content: attr(data-label);
+    position: absolute;
+    top: 0.3rem;
+    right: 0.6rem;
+    color: var(--muted);
+    font-size: 0.75rem;
+}
+
+.quire-raw {
+    border-style: dashed;
+    background: var(--surface);
+    color: var(--muted);
+}
+
+.quire-image {
+    margin: var(--line) 0;
+}
+
+.quire-image img {
+    max-width: 100%;
+}
+
+.quire-divider hr {
+    margin: calc(var(--line) * 1.5) 0;
+}
+
+.quire ul:has(> .quire-task) {
+    padding-left: 0.25rem;
+}
+
+.quire .quire-task {
+    list-style: none;
+}
+
+.quire-box {
+    display: inline-block;
+    width: 0.9em;
+    height: 0.9em;
+    margin-right: 0.5em;
+    vertical-align: -0.1em;
+    border: 0.125rem solid var(--muted);
+    border-radius: 0.25em;
+    cursor: pointer;
+    transition: background 0.2s var(--ease);
+}
+
+.quire-box[data-checked="true"] {
+    border-color: var(--accent);
+    background: var(--accent);
+}
+
+.quire-task > p {
+    display: inline;
+}
+
+.quire-atom {
+    color: var(--muted);
+    font-size: 0.85em;
+}
+
+.quire-footnote {
+    display: flex;
+    gap: 0.5rem;
+    color: var(--muted);
+    font-size: 0.9rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .quire-box {
+        transition: none;
+    }
+}

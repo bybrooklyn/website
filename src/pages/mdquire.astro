@@ -1,0 +1,21 @@
+---
+// A bare page for trying mdQuire's editing surface. It is not linked from anywhere, not in the
+// menu, kept out of search and the sitemap. No toolbar yet: only the surface, and the Markdown it
+// writes when "show Markdown" is ticked.
+import Base from "../layouts/Base.astro";
+import "../styles/quire.css";
+---
+
+<Base title="mdquire" description="Trying mdQuire's editing surface." unlisted>
+    <div class="quire-page">
+        <label class="quire-toggle"><input type="checkbox" id="quire-show" /> show Markdown</label>
+        <div class="quire-columns">
+            <div id="quire-editor" class="prose" aria-label="Document"></div>
+            <pre id="quire-markdown" class="quire-markdown" hidden></pre>
+        </div>
+    </div>
+</Base>
+
+<script>
+    import "../scripts/mdquire";
+</script>
