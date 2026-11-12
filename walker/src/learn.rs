@@ -388,6 +388,8 @@ pub struct Trainer {
     /// The best and the average score of each finished generation.
     pub history_best: Vec<f32>,
     pub history_mean: Vec<f32>,
+    /// Steps of physics run so far, in every run, to measure how fast training goes.
+    pub steps: u64,
     random: Random,
     world: World,
     brain: Brain,
@@ -435,6 +437,7 @@ impl Trainer {
             best_distance: 0.0,
             history_best: Vec::new(),
             history_mean: Vec::new(),
+            steps: 0,
             random,
             brain: Brain::new(layout),
             senses: vec![0.0; description.senses()],
@@ -466,6 +469,7 @@ impl Trainer {
                 break;
             }
         }
+        self.steps += judge.steps as u64;
         judge.outcome(creature, &self.world)
     }
 

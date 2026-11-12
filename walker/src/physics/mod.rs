@@ -391,7 +391,7 @@ impl World {
 
     /// Finds every pair that touches or is about to, and carries over last step's pushes for points
     /// found again.
-    fn find_contacts(&mut self) {
+    pub fn find_contacts(&mut self) {
         core::mem::swap(&mut self.contacts, &mut self.last);
         self.contacts.clear();
         self.placed.clear();
