@@ -127,6 +127,32 @@ From 12 Nov, "i want to make my website more gay":
 24. A project like pronouns.cc, "very simple".
 25. Spectrum, rewritten for the site at `/spectrum/` (on the `spectrum` branch).
 
+### 26. The generalist: a walker that sees, learns and gets about a world by itself
+
+Decided by question and answer on 12 Nov 2026. Her words: "our little walker thing should build general
+models for walking and traversing the digital world"; "i want to build a generalist model, where it can
+see and learn and walk and do things on its own"; "all of this from scratch in our rust engine".
+
+- **A new mini.** The Walker stays as it is; this is a second mini on the same engine.
+- **The world** is generated: platforms, ledges, drops, stairs, gaps, hazards, things to push or carry,
+  things that move. The player chooses what is in it, how hard it is, and a seed (so a world is a link).
+- **What moves it:** both curiosity (rewarded for reaching and seeing what it has not before) and needs
+  (energy that runs down, food to find).
+- **How it sees:** rays first. A picture later, as its own experiment. Whatever else, a very small
+  vision encoder is shipped as a base to learn on top of, because sight is slow to learn; it is made in
+  the Rust engine too. Nothing else is trained ahead.
+- **Where it learns:** only in the visitor's browser. "we just need it to learn fast and efficiently".
+  So the speed work on the engine comes first (branch `walker-speed`), without hammering the machine.
+- **How it learns:** gradient learning (PPO) written in the engine, beside the evolution it has, and a
+  teacher that evolves worlds to stay at the edge of what it can do (after ACCEL). Researched first:
+  evolution alone (POET) needed a cluster; hard 2D parkour is still open (TeachMyAgent).
+- **The article:** numbers are kept from the start. Evolution against gradient learning in one engine,
+  the teacher running in a tab, or whatever turns out surprising. "we are gonna have to write an article
+  about this eventually".
+
+Order: speed, then the world and the rays, then PPO, then the teacher, then curiosity and needs, then
+the small vision encoder and the picture experiment.
+
 ## Next, as she chose on 11 Nov
 
 1. Plan the word processor (idea 13), with questions.
