@@ -11,7 +11,7 @@ use alloc::vec::Vec;
 
 use crate::Shared;
 use crate::body::Description;
-use crate::learn::{Settings, Trainer, flat_ground};
+use crate::learn::{Goal, Settings, Trainer, flat_ground};
 use crate::math::Vec2;
 use crate::physics::Segment;
 use crate::show::{Crowd, Show};
@@ -38,18 +38,21 @@ fn pointer(list: Option<&[f32]>) -> *const f32 {
 }
 
 /// Makes a new walker with `legs` legs (1, 2 or 4) on flat ground, with a population of `population`
-/// brains, each run for `seconds` when training, and random numbers from `seed`. Returns the number
-/// of weights in one brain, or 0 if the description is not one the engine builds.
+/// brains, each run for `seconds` when training (the goal's own time if 0), random numbers from
+/// `seed`, brains of `layers` hidden layers (1 or 2) of `hidden` neurons each, rewarded for `goal`
+/// (0 far, 1 fast, 2 tall, 3 jump). Returns the number of weights in one brain, or 0 if the
+/// description is not one the engine builds.
 #[unsafe(no_mangle)]
-pub extern "C" fn create(legs: u32, population: u32, seconds: f32, seed: u32) -> u32 {
+pub extern "C" fn create(legs: u32, population: u32, seconds: f32, seed: u32, hidden: u32, layers: u32, goal: u32) -> u32 {
     let description = Description { legs };
-    let settings = Settings { population: population.clamp(2, 1000) as usize, seconds: if seconds > 0.0 { seconds.min(120.0) } else { 10.0 }, ..Settings::default() };
+    let seconds = if seconds > 0.0 { seconds.min(120.0) } else { 0.0 };
+    let settings = Settings { population: population.clamp(2, 1000) as usize, seconds, hidden: hidden as usize, layers: layers as usize, goal: Goal::from_number(goal), ..Settings::default() };
     let Some(trainer) = Trainer::new(description, settings, &flat_ground(), seed as u64) else {
         *WALKER.get() = None;
         return 0;
     };
     let count = trainer.layout.weights();
-    let show = Show::new(&trainer.start, &trainer.creature, trainer.layout, trainer.weights(0));
+    let show = Show::new(&trainer.start, &trainer.creature, trainer.layout, trainer.weights(0), trainer.judge());
     *WALKER.get() = Some(Walker { trainer, show, crowd: None, ground_room: Vec::new(), weights_room: vec![0.0; count], crowd_room: Vec::new() });
     count as u32
 }
@@ -189,7 +192,27 @@ pub extern "C" fn show_reset() {
     let Some(walker) = walker() else { return };
     let trainer = &walker.trainer;
     let weights = if trainer.best_score > f32::NEG_INFINITY { &trainer.best[..] } else { trainer.weights(0) };
-    walker.show = Show::new(&trainer.start, &trainer.creature, trainer.layout, weights);
+    walker.show = Show::new(&trainer.start, &trainer.creature, trainer.layout, weights, trainer.judge());
+}
+
+/// How long a run lasts for this walker's goal, in seconds.
+#[unsafe(no_mangle)]
+pub extern "C" fn run_seconds() -> f32 {
+    walker().map_or(0.0, |walker| walker.trainer.settings.seconds)
+}
+
+/// 1 once the show's run has ended where its scored run ended, else 0. It then stands still until
+/// `show_reset`.
+#[unsafe(no_mangle)]
+pub extern "C" fn show_over() -> u32 {
+    walker().map_or(0, |walker| walker.show.judge.over as u32)
+}
+
+/// The show's run so far, scored as training scores it. At the end of an untouched run it is the
+/// brain's score exactly.
+#[unsafe(no_mangle)]
+pub extern "C" fn show_score() -> f32 {
+    walker().map_or(0.0, |walker| walker.show.outcome().score)
 }
 
 /// How long the show has been running, in seconds.
@@ -236,7 +259,7 @@ pub extern "C" fn show_distance() -> f32 {
     walker().map_or(0.0, |walker| walker.show.creature.distance(&walker.show.world))
 }
 
-/// The number of senses, hidden neurons and outputs in a brain.
+/// The number of senses, hidden neurons in each layer, and outputs in a brain.
 #[unsafe(no_mangle)]
 pub extern "C" fn senses_length() -> u32 {
     walker().map_or(0, |walker| walker.trainer.layout.inputs as u32)
@@ -258,7 +281,14 @@ pub extern "C" fn show_senses() -> *const f32 {
     pointer(walker().map(|walker| &walker.show.senses[..]))
 }
 
-/// What its hidden neurons gave last, `hidden_length` f32, each from -1 to 1.
+/// The number of hidden layers, 1 or 2.
+#[unsafe(no_mangle)]
+pub extern "C" fn layers_length() -> u32 {
+    walker().map_or(0, |walker| walker.trainer.layout.layers as u32)
+}
+
+/// What its hidden neurons gave last, `hidden_length` times `layers_length` f32, the first layer
+/// then the second, each from -1 to 1.
 #[unsafe(no_mangle)]
 pub extern "C" fn show_hidden() -> *const f32 {
     pointer(walker().map(|walker| &walker.show.brain.hidden[..]))
@@ -282,7 +312,7 @@ pub extern "C" fn show_weights() -> *const f32 {
 pub extern "C" fn crowd_reset() -> u32 {
     let Some(walker) = walker() else { return 0 };
     let trainer = &walker.trainer;
-    let crowd = Crowd::new(&trainer.start, &trainer.creature, trainer.layout, &trainer.population);
+    let crowd = Crowd::new(&trainer.start, &trainer.creature, trainer.layout, &trainer.population, trainer.judge());
     let count = crowd.worlds.len() as u32;
     walker.crowd = Some(crowd);
     count
@@ -306,7 +336,7 @@ pub extern "C" fn crowd_start(count: u32) -> u32 {
     let Some(walker) = walker() else { return 0 };
     let length = (walker.trainer.layout.weights() * count as usize).min(walker.crowd_room.len());
     let trainer = &walker.trainer;
-    let crowd = Crowd::new(&trainer.start, &trainer.creature, trainer.layout, &walker.crowd_room[..length]);
+    let crowd = Crowd::new(&trainer.start, &trainer.creature, trainer.layout, &walker.crowd_room[..length], trainer.judge());
     let count = crowd.worlds.len() as u32;
     walker.crowd = Some(crowd);
     count
@@ -318,8 +348,8 @@ pub extern "C" fn crowd_step(seconds: f32) -> u32 {
     walker().and_then(|walker| walker.crowd.as_mut()).map_or(0, |crowd| crowd.step(seconds))
 }
 
-/// Where every body of every walker in the crowd is: walker after walker, `body_count` bodies each,
-/// three f32 per body (x, y, angle). Shapes and sizes are the show's.
+/// Where each walker in the crowd is, four f32 each: how far it has gone, the height of its body,
+/// its body's angle, and 1 once its run is over (else 0). Each stops where its scored run stopped.
 #[unsafe(no_mangle)]
 pub extern "C" fn crowd_bodies() -> *const f32 {
     pointer(walker().and_then(|walker| walker.crowd.as_ref()).map(|crowd| &crowd.drawn[..]))

@@ -6,7 +6,8 @@
 /** The functions of public/wasm/walker.wasm. */
 export interface Engine {
     memory: WebAssembly.Memory;
-    create(legs: number, population: number, seconds: number, seed: number): number;
+    create(legs: number, population: number, seconds: number, seed: number, hidden: number, layers: number, goal: number): number;
+    run_seconds(): number;
     ground_room(pieces: number): number;
     ground_set(pieces: number): number;
     train(runs: number): number;
@@ -27,6 +28,9 @@ export interface Engine {
     show_step(seconds: number): number;
     show_push(x: number, y: number, impulseX: number, impulseY: number): number;
     show_seconds(): number;
+    show_over(): number;
+    show_score(): number;
+    layers_length(): number;
     show_fallen(): number;
     body_count(): number;
     show_bodies(): number;

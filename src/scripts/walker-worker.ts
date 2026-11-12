@@ -72,7 +72,7 @@ onmessage = async (event: MessageEvent<Order>) => {
         await loading;
         if (!engine) return;
         heard = performance.now();
-        engine.create(order.legs, POPULATION, SECONDS, order.seed);
+        engine.create(order.legs, POPULATION, SECONDS, order.seed, 12, 1, 0);
         write(engine, engine.ground_room(order.ground.length / 4), order.ground);
         engine.ground_set(order.ground.length / 4);
         if (order.brain && order.brain.length === engine.weights_length()) {

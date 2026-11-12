@@ -69,7 +69,7 @@ export default function walker(m: Mote): Scene {
         [generation, runs, distance, waiting, better, shownScore, population, haveBrain, fallenFor] = [0, 0, 0, undefined, false, -Infinity, undefined, false, 0];
         const seed = (Math.random() * 2 ** 32) >>> 0;
         if (engine) {
-            engine.create(setup.legs, POPULATION, SECONDS, seed);
+            engine.create(setup.legs, POPULATION, SECONDS, seed, 12, 1, 0);
             write(engine, engine.ground_room(ground.length / 4), ground);
             engine.ground_set(ground.length / 4);
             if (brain) {

@@ -10,9 +10,11 @@ straight out of the module's memory.
   gravity, friction and bounce. Fixed steps of 1/60 s, four substeps each, solved with Box2D 3's
   soft step and warm starting. The same start always gives the same end, to the bit, natively and
   in every browser, because the module brings its own sine, square root and the rest.
-- `src/body.rs`: the creature, built from a number of legs (1, 2 or 4), each with a hip and a knee.
-- `src/brain.rs`: a network of one hidden layer of 12 neurons, its weights one flat list of f32.
-- `src/learn.rs`: evolution with a seeded random generator, run in slices.
+- `src/body.rs`: the creature, built from a number of legs (1, 2 or 4), each with a hip, a knee and
+  a foot, on a rounded body.
+- `src/brain.rs`: a network of one or two hidden layers, its weights one flat list of f32.
+- `src/learn.rs`: the goals a walker can be rewarded for, the judge that scores a run step by step,
+  and evolution with a seeded random generator, run in slices.
 - `src/show.rs`: one brain running in real time, and a whole generation at once.
 - `src/api.rs`: the functions the page calls, listed below.
 
@@ -45,18 +47,23 @@ All numbers are metres, kilograms, seconds and radians, with y up and angles ant
 
 ### Making it
 
-- `create(legs: u32, population: u32, seconds: f32, seed: u32) -> u32`
+- `create(legs: u32, population: u32, seconds: f32, seed: u32, hidden: u32, layers: u32, goal: u32) -> u32`
   Makes a new walker on flat ground, replacing any before it. `legs` is 1, 2 or 4. `population` is
   the number of brains in a generation (2 to 1000; 32 is a good choice). `seconds` is how long each
-  brain is run when training (10 if 0 or less, at most 120). `seed` starts the random numbers; the
-  same seed learns the same way. Returns the number of weights in one brain, or 0 if `legs` is not
-  1, 2 or 4.
+  brain is run when training (the goal's own time if 0 or less, at most 120). `seed` starts the
+  random numbers; the same seed learns the same way. `hidden` is the neurons in each hidden layer
+  (2 to 64) and `layers` the number of hidden layers (1 or 2). `goal` is what it is rewarded for:
+  0 go far, 1 go fast, 2 stand tall, 3 jump (see Goals). Returns the number of weights in one brain,
+  or 0 if `legs` is not 1, 2 or 4.
+- `run_seconds() -> f32` How long a run lasts: 4 s for going fast, 10 s for the others.
 - `ground_room(pieces: u32) -> *mut f32`
   Room for `pieces` pieces of ground, four f32 each: x1, y1, x2, y2. Write them there, then call
   `ground_set`. The pieces may come in any order and need not join, so gaps are allowed. The
   creature starts at x = 0, its feet on the highest ground there.
 - `ground_set(pieces: u32) -> u32`
-  Puts the walker on the ground written into `ground_room`. Training carries on, but the current
+  Puts the walker on the ground written into `ground_room`. Ground is solid for a metre below each
+  piece, so a foot cannot go through it; a piece straight up and down is solid on its right going
+  from its first end to its second (bottom to top for a step up). Training carries on, but the current
   generation is run again and the best brain is scored again, on the new ground. The show starts
   again, and so does the crowd if it is running. With 0 pieces the ground is flat again. Returns 1.
 
@@ -69,9 +76,6 @@ All numbers are metres, kilograms, seconds and radians, with y up and angles ant
 - `generation() -> u32` The number of generations finished.
 - `generation_runs() -> u32` How many brains of the current generation have been scored.
 - `best_score() -> f32` The best score so far, minus infinity before the first generation ends.
-  A score is the distance the torso went forward, less 1 for each second the torso lay on the
-  ground and 0.00005 for each joule of work the motors did. A run ends early once the torso has lain
-  down for a second.
 - `best_distance() -> f32` How far the best brain so far took the torso in its run, in metres.
 - `population_length() -> u32` The number of brains in a generation.
 - `population_weights() -> *const f32` Every brain of the current generation, one after another,
@@ -80,6 +84,21 @@ All numbers are metres, kilograms, seconds and radians, with y up and angles ant
 - `history_length() -> u32` The number of finished generations.
 - `history_best() -> *const f32` The best score of each finished generation, `history_length` f32.
 - `history_mean() -> *const f32` The average score of each, `history_length` f32.
+
+### Goals
+
+Every score is less 1 for each second the body lay on the ground, 0.3 for each second of each knee
+on it, and 0.00005 for each joule of work the motors did. A run ends early once the body has lain
+down for a second. Then, by goal:
+
+- **Go far** (0): the distance the body went forward in 10 s.
+- **Go fast** (1): the distance in 4 s.
+- **Stand tall** (2): the distance times a number from 0.2 to 1 for how tall the body was held on
+  average, plus 2 times that number. Tall is as high above the ground as the body stood at the
+  start, and upright; half that height or lower counts as nothing.
+- **Jump** (3): one and a half times the distance, plus each second spent with nothing touching
+  anything while going forward faster than 0.5 m/s. A foot put down in a gap (touching, with no
+  ground under it) costs 1 and ends the run.
 
 How a generation is made: the best 4 go on unchanged (and are not run again). Each of the others
 has a parent, the best of three picked at random, and half the time a second parent the same way,
@@ -96,13 +115,17 @@ about 0.3.
   scored), joins the population, and the show starts again with it. Returns 1, or 0 if any weight is
   not a finite number. A brain only fits a walker with the same number of legs.
 
-The weights are, in order: for each hidden neuron its weight for every sense, then the 12 hidden
-biases, then for each output its weight for every hidden neuron, then the output biases.
+The weights are, in order, layer by layer from the senses to the outputs: for each neuron of the
+layer its weight for everything coming into it, then that layer's biases.
 
 ### The show: one walker in real time
 
 - `show_reset()` Starts the show from the start with the best brain so far, or a random one before
-  the first generation is finished.
+  the first generation is finished. The show starts from the same world as training and is judged
+  the same way, so, unless it is pushed, it plays the very run the brain was scored on and ends
+  where that run ended: its distance and score at the end are the brain's, to the bit.
+- `show_over() -> u32` 1 once the run has ended, after which the show stands still until reset.
+- `show_score() -> f32` The run's score so far.
 - `show_step(seconds: f32) -> u32` Moves on by `seconds` in whole steps of 1/60 s, the brain
   deciding before each, and keeps the remainder for next time. Returns the steps taken, at most 8.
 - `show_seconds() -> f32` How long the show has been running.
@@ -116,14 +139,20 @@ biases, then for each output its weight for every hidden neuron, then the output
   2 box), and two sizes: a circle's radius and 0, a capsule's half length (without its round ends)
   and radius, a box's half width and half height. A capsule lies along its own x axis.
 - `show_distance() -> f32` How far the torso has gone forward since the start.
-- `senses_length() -> u32`, `hidden_length() -> u32`, `outputs_length() -> u32` The sizes of the
-  brain's three layers.
-- `show_senses() -> *const f32` What the walker sensed before its last step, in this order: the
-  torso's angle; its spin times 0.2; its height above the ground under it (0 to 2, and 2 over a gap);
-  its speed forward and up, each times 0.25; for each joint (hip then knee, leg by leg) its angle and
-  its speed times 0.1; for each foot 1 if it is on the ground, else 0; and the sine and cosine of a
-  clock going round 1.2 times a second.
-- `show_hidden() -> *const f32` What each hidden neuron gave, -1 to 1.
+- `senses_length() -> u32`, `hidden_length() -> u32`, `layers_length() -> u32`, `outputs_length() -> u32`
+  The number of senses, of neurons in each hidden layer, of hidden layers, and of outputs.
+- `show_senses() -> *const f32` What the walker sensed before its last step, in this order:
+  - the body's angle, in radians, 0 upright;
+  - its spin times 0.2;
+  - its height above the ground under it, 0 to 2 (2 over a gap);
+  - its speed forward and its speed up, each times 0.25;
+  - for each joint, hip then knee, leg by leg: its angle and its speed times 0.1;
+  - for each foot, 1 if it is on the ground, else 0;
+  - how much higher the ground is 0.6 m ahead, and 1.2 m ahead, than under the body, from -1 to 1,
+    and -1 over a gap: what a jumper needs to see a step or a gap coming;
+  - the sine and cosine of a clock going round 1.2 times a second, to keep a rhythm by.
+- `show_hidden() -> *const f32` What each hidden neuron gave, -1 to 1, the first layer then the
+  second.
 - `show_outputs() -> *const f32` What each output gave, -1 to 1: the target for each joint, from
   one end of its range (-1) to the other (1). A hip turns from -1.0 (back) to 1.3 (forward) and a
   knee from -2.0 (bent back) to 0 (straight).
@@ -137,8 +166,9 @@ biases, then for each output its weight for every hidden neuron, then the output
   with a generation from elsewhere (a worker).
 - `crowd_start(count: u32) -> u32` Starts the crowd with the brains written into `crowd_room`.
 - `crowd_step(seconds: f32) -> u32` Moves them all on, as `show_step` does.
-- `crowd_bodies() -> *const f32` Walker after walker, `body_count` bodies each, three f32 for each
-  body: x, y and angle. The shapes and sizes are the show's.
+- `crowd_bodies() -> *const f32` Four f32 for each walker: how far it has gone, the height of its
+  body, its body's angle, and 1 once its run has ended (else 0). Each is judged as in training and
+  stops where its run stopped.
 - `crowd_stop()` Stops the crowd and frees its worlds.
 
 ## The physics alone

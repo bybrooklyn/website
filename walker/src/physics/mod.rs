@@ -30,6 +30,10 @@ use contact::{Contact, GROUND};
 pub use joint::Joint;
 use shape::{Outline, Shape};
 
+/// How deep the ground is under each piece, in metres. Ground is solid on the right of each piece,
+/// going from its first end to its second: below it, for pieces that run left to right.
+pub const DEPTH: f32 = 1.0;
+
 /// The length of one step, in seconds.
 pub const STEP: f32 = 1.0 / 60.0;
 /// The most steps one call to `advance` takes, so a page that was hidden for a while does not freeze
@@ -132,7 +136,8 @@ impl Body {
     }
 }
 
-/// A straight piece of ground, solid from both sides.
+/// A straight piece of ground, solid for `DEPTH` below it. A piece that stands straight up, a riser,
+/// is solid on its right going from `a` to `b`: from bottom to top for a step up.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Segment {
     pub a: Vec2,
@@ -370,16 +375,19 @@ impl World {
             if !self.bodies[a].moves() {
                 continue;
             }
-            let start = self.ground.partition_point(|piece| piece.a.x < low_a.x - self.widest);
+            // a slab can reach DEPTH to either side of its piece, under a riser
+            let start = self.ground.partition_point(|piece| piece.a.x < low_a.x - self.widest - DEPTH);
             for index in start..self.ground.len() {
                 let piece = self.ground[index];
-                if piece.a.x > high_a.x {
+                if piece.a.x - DEPTH > high_a.x {
                     break;
                 }
-                if piece.b.x < low_a.x || piece.a.y.min(piece.b.y) > high_a.y || piece.a.y.max(piece.b.y) < low_a.y {
+                let slab = Outline::slab(piece.a, piece.b, DEPTH);
+                let (low, high) = slab.bounds(0.0);
+                if high.x < low_a.x || low.x > high_a.x || low.y > high_a.y || high.y < low_a.y {
                     continue;
                 }
-                let manifold = collide(&self.placed[a], &Outline::line(piece.a, piece.b, 0.0));
+                let manifold = collide(&self.placed[a], &slab);
                 if manifold.count > 0 {
                     let contact = contact::begin(&self.bodies, a as u32, GROUND, index as u32, &manifold);
                     self.keep_contact(contact);
