@@ -798,4 +798,65 @@ used("typing in the Markdown view saves as typing on the page does, and the stat
     await tab.wait(400);
 });
 
+used("the sheet is an A-series page, centred, at least one sheet tall and growing, lighter than the ground", async () => {
+    for (const [wide, high] of [[2560, 1300], [1300, 900], [390, 844]] as const) {
+        await tab.resize(wide, high);
+        await reset("Short.\n", [0], 0);
+        await tab.wait(300);
+        // width in rem: never more than 60, and never the whole window
+        const sheet = await tab.run<{ ratio: number; width: number; centred: number; lighter: boolean }>(`(() => {
+            const paper = document.querySelector('.quire-paper');
+            const box = paper.getBoundingClientRect();
+            const column = document.querySelector('.quire-column').getBoundingClientRect();
+            // lightness of the oklch colour the sheet and the ground are painted in
+            const light = (colour) => { const probe = document.createElement('i'); probe.style.color = colour; document.body.append(probe); const seen = getComputedStyle(probe).color; probe.remove(); return parseFloat(seen.match(/oklch\\(([\\d.]+)/)?.[1] ?? '0'); };
+            return { ratio: box.height / box.width, width: box.width / parseFloat(getComputedStyle(document.documentElement).fontSize), centred: Math.abs((box.left + box.right) / 2 - (column.left + column.right) / 2), lighter: light(getComputedStyle(paper).backgroundColor) > light(getComputedStyle(document.documentElement).getPropertyValue('--ground')) + 0.08 };
+        })()`);
+        expect({ wide, ratio: Math.abs(sheet.ratio - 1.41421) < 0.01, centred: sheet.centred < 2, lighter: sheet.lighter, fits: sheet.width <= 60.01 && sheet.width * 16 < wide }).toEqual({ wide, ratio: true, centred: true, lighter: true, fits: true });
+    }
+    await tab.resize(1300, 900);
+    // a long document makes it taller than one sheet
+    await reset(Array.from({ length: 60 }, (_, index) => `Paragraph ${index}.`).join("\n\n") + "\n", [0], 0);
+    await tab.wait(200);
+    expect(await tab.run<number>("(() => { const box = document.querySelector('.quire-paper').getBoundingClientRect(); return box.height / box.width; })()")).toBeGreaterThan(1.6);
+});
+
+used("the caret is drawn where the cursor is, a line tall, in the accent, blinking once still; with less motion it does not blink", async () => {
+    await reset("Some text here.\n", [0], 4);
+    await tab.run("document.querySelector('.quire').focus()");
+    await tab.press("ArrowRight");
+    await tab.wait(100);
+    const seen = await tab.run<{ dx: number; dy: number; width: number; height: number; colour: string; accent: string }>(`(() => {
+        const caret = document.querySelector('.quire-caret').getBoundingClientRect();
+        const cursor = getSelection().getRangeAt(0).getClientRects()[0];
+        const probe = document.createElement('i'); probe.style.color = 'var(--accent)'; document.body.append(probe); const accent = getComputedStyle(probe).color; probe.remove();
+        return { dx: Math.abs(caret.left + caret.width / 2 - cursor.left), dy: Math.abs(caret.top - cursor.top), width: caret.width, height: caret.height, colour: getComputedStyle(document.querySelector('.quire-caret')).backgroundColor, accent };
+    })()`);
+    expect(seen.dx).toBeLessThan(1.5);
+    expect(seen.dy).toBeLessThan(1.5);
+    expect(seen.width).toBeGreaterThanOrEqual(2);
+    expect(seen.height).toBeGreaterThan(18);
+    expect(seen.colour).toBe(seen.accent);
+    // still, it blinks
+    const blinking = await tab.run<number[]>("q.watch('.quire-caret', 'opacity', 2800)");
+    expect(blinking).toContain(0);
+    expect(blinking[0]).toBe(1);
+    // typing keeps it solid
+    await tab.type("ab");
+    expect(await tab.run("getComputedStyle(document.querySelector('.quire-caret')).opacity")).toBe("1");
+    await tab.media({ "prefers-reduced-motion": "reduce" });
+    try {
+        await tab.press("ArrowLeft");
+        const still = await tab.run<number[]>("q.watch('.quire-caret', 'opacity', 1800)");
+        expect(new Set(still)).toEqual(new Set([1]));
+    } finally {
+        await tab.media({});
+        await tab.wait(100);
+    }
+    // away from the text it goes
+    await tab.run("document.activeElement.blur()");
+    await tab.wait(100);
+    expect(await tab.run("getComputedStyle(document.querySelector('.quire-caret')).opacity")).toBe("0");
+});
+
 if (!live) console.warn("editor.test.ts: no Chromium on this machine, so the editor was not used.");

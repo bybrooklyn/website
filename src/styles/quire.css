@@ -39,17 +39,63 @@
     padding: calc(var(--line) * 1.5) var(--edge) calc(var(--line) * 3);
 }
 
-/* the sheet being written on: a panel a little wider than its line of text, as a page has margins */
+/* The sheet being written on: an A-series page (1 : 1.414), centred, at least one sheet tall and
+   growing with what is written. It is plainly lighter than the ground around it, with a clear
+   edge and no glow. A faint line marks where each further sheet would begin. The line of text
+   is a published post's. */
 .quire-paper {
-    padding: calc(var(--line) * 2) clamp(1.25rem, 6vw, 5rem) calc(var(--line) * 3);
-    border: 0.0625rem solid var(--panel-rule);
-    border-radius: calc(var(--radius) * 2);
-    background: var(--panel);
+    --sheet: 1.41421;
+    container-type: inline-size;
+    position: relative;
+    box-sizing: border-box;
+    width: 100%;
+    aspect-ratio: 1 / var(--sheet);
+    padding: clamp(var(--line), 7cqw, calc(var(--line) * 3)) clamp(1.25rem, 9cqw, 6rem) calc(var(--line) * 3);
+    border: 0.0625rem solid color-mix(in oklch, var(--panel-edge), var(--ink) 18%);
+    border-radius: calc(var(--radius) * 1.2);
+    background:
+        repeating-linear-gradient(to bottom, transparent 0 calc(100cqw * var(--sheet) - 0.0625rem), color-mix(in oklch, var(--panel-edge), transparent 45%) calc(100cqw * var(--sheet) - 0.0625rem) calc(100cqw * var(--sheet))),
+        color-mix(in oklch, var(--panel-raised), var(--ink) 4%);
+}
+
+/* the text fills the sheet from top to bottom, so a press anywhere on it writes */
+.quire-paper {
+    display: flex;
+    flex-direction: column;
 }
 
 .quire-paper > .quire {
-    max-width: 46rem;
+    flex: 1 0 auto;
+    width: 100%;
+    max-width: 44rem;
+    min-height: 0;
     margin-inline: auto;
+}
+
+/* the caret, drawn (caret.ts): a bar of the line's height in the accent, the browser's own made clear */
+.quire-caret {
+    --caret: var(--accent);
+    position: absolute;
+    top: 0;
+    left: -0.09rem;
+    z-index: 2;
+    width: 0.16rem;
+    border-radius: 0.08rem;
+    background: var(--caret);
+    pointer-events: none;
+    opacity: 0;
+}
+
+.quire-caret.shown {
+    opacity: 1;
+}
+
+.quire-caret.shown.off {
+    opacity: 0;
+}
+
+.quire-paper ::selection {
+    background: color-mix(in oklch, var(--accent), transparent 55%);
 }
 
 /* ---- the surface ---- */
@@ -57,7 +103,7 @@
 .quire {
     min-height: 60vh;
     outline: none;
-    caret-color: var(--accent);
+    caret-color: transparent;
 }
 
 .quire > :first-child {
@@ -1715,7 +1761,8 @@ body.quire-app {
     .quire-welcome,
     .quire-alt,
     .quire-file,
-    .quire-raw {
+    .quire-raw,
+    .quire-caret {
         display: none !important;
     }
 

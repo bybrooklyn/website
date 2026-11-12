@@ -26,6 +26,7 @@ import { createTableTools } from "./tables";
 import { flowMenu, linkForm, make, type MenuItem } from "./ui";
 import { changes, createHistoryPanel, createKeeper, memoryStorage, type VersionStorage } from "./versions";
 import { write } from "./write";
+import { createCaret } from "./caret";
 
 /** What the editor is given by the page. */
 export interface EditorOptions {
@@ -103,6 +104,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         return URL.createObjectURL(file);
     };
     const surface = createSurface(text, doc, { onImage: keepPicture, picture: async (address) => (store && id && store.show ? store.show(id, address) : undefined) });
+    const caret = createCaret(surface.element, paper);
 
     // ---- the link field, from the bar's button or Ctrl+K ----
     const links = flowMenu("Link");
@@ -298,6 +300,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
             if (shown !== undefined || plain) showMarkdown(plain || !!shown);
         },
         destroy() {
+            caret.destroy();
             surface.destroy();
             for (const menu of [...bar.menus, links]) menu.box.remove();
             selectBar.element.remove();
