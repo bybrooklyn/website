@@ -1,0 +1,184 @@
+---
+// A lab for mdQuire's top row and its menus, for her to press and tune before anything is built.
+// The top row is proposed as one piece: the wordmark, the menu words and the bar, aligned on one
+// column and centred with the name. Every menu opens the same way: the pressed control's own shape
+// stretches into the menu, its label staying put as the title. The numbers that make the motion can
+// be changed at the page's edge and copied out. Unlisted, and out of the sitemap as /mdquire/ is.
+// Its script and styles are in design/mdquire/; the three mock-ups of the writing screen are linked.
+import Document from "../layouts/Document.astro";
+import Flags from "../components/Flags.astro";
+import "../../design/mdquire/lab.css";
+
+const marks = [
+    ["Bold", "B", "bold"],
+    ["Italic", "I", "italic"],
+    ["Underline", "U", "underline"],
+    ["Strikethrough", "S", "strike"],
+];
+---
+
+<Document title="mdQuire lab" description="A lab for mdQuire's top row and menus." unlisted bodyClass="lab">
+    <header class="lab-top">
+        <div class="lab-top-in">
+            <div class="lab-mark">
+                <a class="lab-word" href="/mdquire/" aria-label="mdQuire: all documents">mdQuire</a>
+                <span class="lab-by"><span class="lab-by-word">by</span> <a class="lab-name" href="/">charlotte</a><Flags /></span>
+            </div>
+            <div class="lab-menus" role="menubar" aria-label="Menus">
+                {["File", "Edit", "View", "Insert", "Format", "Tools"].map((word) => (
+                    <button type="button" class="lab-menu-word" role="menuitem" aria-haspopup="menu" aria-expanded="false" data-menu={word.toLowerCase()} tabindex={word === "File" ? 0 : -1}>
+                        <span class="lab-label">{word}</span>
+                    </button>
+                ))}
+            </div>
+            <p class="lab-status" aria-live="polite"><span>Saved</span><span class="lab-dot" aria-hidden="true">·</span><span>7 words</span></p>
+            <div class="lab-bar" role="toolbar" aria-label="Formatting">
+                <div class="lab-group">
+                    <button type="button" class="lab-btn lab-doc" data-menu="document" aria-haspopup="menu" aria-expanded="false" tabindex="0">
+                        <span class="lab-label">A walk by the river</span>
+                        <svg class="lab-icon lab-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"></path></svg>
+                    </button>
+                </div>
+                <div class="lab-group">
+                    <button type="button" class="lab-btn lab-style" data-menu="paragraph" aria-haspopup="menu" aria-expanded="false" tabindex="-1">
+                        <span class="lab-label">Paragraph</span>
+                        <svg class="lab-icon lab-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"></path></svg>
+                    </button>
+                </div>
+                <div class="lab-group">
+                    {marks.map(([label, letter, look]) => (
+                        <button type="button" class="lab-btn lab-square" aria-label={label} title={label} aria-pressed="false" data-toggle tabindex="-1">
+                            <span class={`lab-glyph lab-glyph-${look}`}>{letter}</span>
+                        </button>
+                    ))}
+                    <button type="button" class="lab-btn lab-square" aria-label="Link" title="Link" tabindex="-1">
+                        <svg class="lab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1"></path><path d="M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1"></path></svg>
+                    </button>
+                </div>
+                <div class="lab-group">
+                    <button type="button" class="lab-btn lab-square" data-menu="lists" aria-haspopup="menu" aria-expanded="false" aria-label="Lists" title="Lists" tabindex="-1">
+                        <svg class="lab-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="7" r="1.2" fill="currentColor"></circle><circle cx="5" cy="12" r="1.2" fill="currentColor"></circle><circle cx="5" cy="17" r="1.2" fill="currentColor"></circle><path d="M9.5 7h10M9.5 12h10M9.5 17h10"></path></svg>
+                    </button>
+                    <button type="button" class="lab-btn lab-square" data-menu="add" aria-haspopup="menu" aria-expanded="false" aria-label="Add a block" title="Add a block" tabindex="-1">
+                        <svg class="lab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+                    </button>
+                    <button type="button" class="lab-btn lab-square" data-menu="text" aria-haspopup="menu" aria-expanded="false" aria-label="Text: color, size, alignment" title="Text" tabindex="-1">
+                        <span class="lab-color-mark">A</span>
+                    </button>
+                </div>
+                <div class="lab-group">
+                    <button type="button" class="lab-btn lab-square" aria-label="Undo" title="Undo" tabindex="-1">
+                        <svg class="lab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7 5 11l4 4"></path><path d="M5 11h9a5 5 0 0 1 0 10h-2"></path></svg>
+                    </button>
+                    <button type="button" class="lab-btn lab-square" aria-label="Redo" title="Redo" tabindex="-1">
+                        <svg class="lab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 7 4 4-4 4"></path><path d="M19 11h-9a5 5 0 0 0 0 10h2"></path></svg>
+                    </button>
+                    <button type="button" class="lab-btn lab-square" aria-label="Find and replace" title="Find and replace" tabindex="-1">
+                        <svg class="lab-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="5.5"></circle><path d="m15 15 4.5 4.5"></path></svg>
+                    </button>
+                </div>
+                <div class="lab-group lab-end">
+                    <button type="button" class="lab-btn lab-square lab-dots" data-menu="more" aria-haspopup="menu" aria-expanded="false" aria-label="More" title="More" tabindex="-1">
+                        <span class="lab-label lab-dots-in"><i></i><i></i><i></i></span>
+                    </button>
+                    <button type="button" class="lab-btn lab-square lab-mic" aria-label="Start dictation" title="Start dictation" aria-pressed="false" tabindex="-1">
+                        <svg class="lab-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3.5" width="6" height="11" rx="3"></rect><path d="M6 11a6 6 0 0 0 12 0M12 17v3.5"></path></svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main id="main" tabindex="-1" class="lab-main">
+        <article class="lab-text">
+            <p class="lab-kicker note">A lab, not the editor. Press anything in the row above; it stays whole as you scroll.</p>
+            <h1 class="lab-title">A walk by the river<span class="lab-caret" aria-hidden="true"></span></h1>
+            <p>The path starts where the houses stop. It runs along the water for a mile or so, past the boatyard and the old mill, and then turns up into the trees. I walk it most mornings before the day has made up its mind.</p>
+            <p>Nothing happens on it, which is the point. A heron stands in the shallows and does not move. The light comes through the leaves in pieces. By the time I reach the bridge I have usually worked out what I meant to say the night before.</p>
+            <h2>What to bring</h2>
+            <ul>
+                <li>Shoes that do not mind mud.</li>
+                <li>Something warm for the shade under the trees.</li>
+                <li>A notebook, or at least a phone with room in it.</li>
+            </ul>
+            <blockquote><p>Walking is the best way I know of thinking without trying to.</p></blockquote>
+            <p>Some days the river is high and brown and loud, and the path is under water at the low bend. Then I go round by the lane, which is longer and has a dog that barks at everyone. The dog and I have an understanding now.</p>
+            <h2>The bridge</h2>
+            <p>The bridge is stone, older than anything else here, with a hump in the middle so that the barges could pass. Standing on the top you can see both ways along the valley. It is the place where I stop and write down whatever the walk has given me, which is sometimes a paragraph and sometimes one word.</p>
+            <p>On the way back the sun is higher and the path is busier. People with dogs, people running, a man who fishes from the same rock every day and has never, as far as I can tell, caught anything. He seems happy enough.</p>
+            <h2>Three looks for an open menu</h2>
+            <p>The same menu, open, drawn three ways. Choose one with Look in the tuning panel to see it move.</p>
+            <div class="lab-looks" aria-hidden="true">
+                {["outline", "raised", "quiet"].map((look) => (
+                    <figure class="lab-look">
+                        <div class={`lab-morph lab-look-${look} lab-still`}>
+                            <div class="lab-morph-title lab-btn lab-style"><span class="lab-label">Paragraph</span><svg class="lab-icon lab-chev" viewBox="0 0 24 24"><path d="m7 10 5 5 5-5"></path></svg></div>
+                            <div class="lab-lines">
+                                <span class="lab-line is-on"><span class="lab-line-mark">¶</span><span class="lab-line-label">Paragraph</span></span>
+                                <span class="lab-line"><span class="lab-line-mark lab-h">H1</span><span class="lab-line-label">Heading 1</span></span>
+                                <span class="lab-line"><span class="lab-line-mark lab-h">H2</span><span class="lab-line-label">Heading 2</span></span>
+                                <span class="lab-line"><span class="lab-line-mark lab-h">H3</span><span class="lab-line-label">Heading 3</span></span>
+                                <span class="lab-line"><span class="lab-line-mark">”</span><span class="lab-line-label">Quote</span></span>
+                            </div>
+                        </div>
+                        <figcaption class="note">{look === "outline" ? "Outline: a step up from the ground, a thin line" : look === "raised" ? "Raised: two steps up, a soft shadow, no line" : "Quiet: the ground itself, a firmer line"}</figcaption>
+                    </figure>
+                ))}
+            </div>
+            <h2>The writing screen, three ways</h2>
+            <p>Three complete mock-ups of the screen under this row, each at any window width. Open one and make the window wider and narrower.</p>
+            <ul class="lab-mocks">
+                <li><a href="/mdquire-lab/a.html">A. Pageless</a>: no sheet, the text at the blog's measure on the ground, the outline in the left margin.</li>
+                <li><a href="/mdquire-lab/b.html">B. A page on a desk</a>: a dark sheet a step up from the ground, square corners, its width growing with the window.</li>
+                <li><a href="/mdquire-lab/c.html">C. Light paper</a>: the same page in warm light paper on the dark desk.</li>
+            </ul>
+            <p>The rest is here so that there is something to scroll.</p>
+            <p>In winter the walk is darker and quieter. The trees are bare, and you can see the river from much further away, grey under a grey sky. The heron is still there. I have started to think it is a different heron each year, playing the part.</p>
+            <p>I wrote most of this page in my head on the path and the rest at the kitchen table afterwards, with the window open and the kettle going. That is the way most things get written here.</p>
+            <p>When the path floods for good, they say, they will build a boardwalk. I hope they do it badly, with a few boards that creak, so that it still feels like somewhere you are allowed to be slow.</p>
+        </article>
+    </main>
+
+    <aside class="lab-tune" aria-label="Tuning">
+        <button type="button" class="lab-tune-head" aria-expanded="true"><span>Tuning</span><svg class="lab-icon lab-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"></path></svg></button>
+        <div class="lab-tune-body">
+            <div class="lab-tune-inner">
+                <label class="lab-field"><span>Open</span><input type="range" name="open" min="0" max="900" step="10" /><output></output></label>
+                <label class="lab-field"><span>Close</span><input type="range" name="close" min="0" max="700" step="10" /><output></output></label>
+                <fieldset class="lab-choice">
+                    <legend>Easing</legend>
+                    <label><input type="radio" name="easing" value="ease" /> Site's ease</label>
+                    <label><input type="radio" name="easing" value="spring" /> Spring</label>
+                    <label><input type="radio" name="easing" value="linear" /> Linear</label>
+                </fieldset>
+                <label class="lab-field"><span>Bounce</span><input type="range" name="bounce" min="0" max="0.6" step="0.02" /><output></output></label>
+                <fieldset class="lab-choice">
+                    <legend>Lines arrive</legend>
+                    <label><input type="radio" name="lines" value="together" /> Together</label>
+                    <label><input type="radio" name="lines" value="stagger" /> One after another</label>
+                </fieldset>
+                <label class="lab-field"><span>Stagger</span><input type="range" name="stagger" min="0" max="80" step="2" /><output></output></label>
+                <label class="lab-field"><span>Corners</span><input type="range" name="radius" min="0" max="20" step="1" /><output></output></label>
+                <label class="lab-check"><input type="checkbox" name="title" /> The label stays as a title</label>
+                <fieldset class="lab-choice">
+                    <legend>Look</legend>
+                    <label><input type="radio" name="look" value="outline" /> Outline</label>
+                    <label><input type="radio" name="look" value="raised" /> Raised</label>
+                    <label><input type="radio" name="look" value="quiet" /> Quiet</label>
+                </fieldset>
+                <label class="lab-check"><input type="checkbox" name="slow" /> Ten times slower, to watch</label>
+                <div class="lab-tune-actions">
+                    <button type="button" class="lab-pill lab-copy">Copy these settings</button>
+                    <button type="button" class="lab-pill lab-reset">Start again</button>
+                </div>
+                <textarea class="lab-out" readonly rows="6" aria-label="The settings as text"></textarea>
+            </div>
+        </div>
+    </aside>
+
+    <button type="button" class="lab-zoom" data-menu="zoom" aria-haspopup="menu" aria-expanded="false" aria-label="Zoom"><span class="lab-label">100%</span></button>
+</Document>
+
+<script>
+    import "../../design/mdquire/lab";
+</script>

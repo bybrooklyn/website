@@ -1,0 +1,107 @@
+<!doctype html>
+<!-- mdQuire's writing screen, mock-up A: pageless. No sheet: the text at the blog's measure on the ground, centred under the top row, the outline in the left margin. Open it from the disk, or on the dev server at /mdquire-lab/a.html. -->
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>mdQuire A: Pageless</title>
+        <meta name="robots" content="noindex" />
+        <link rel="stylesheet" href="mock.css" />
+        <link rel="stylesheet" href="lab.css" />
+    </head>
+    <body class="lab mock mock-a" id="top">
+        <header class="lab-top">
+        <div class="lab-top-in">
+            <div class="lab-mark">
+                <a class="lab-word" href="/mdquire/" aria-label="mdQuire: all documents">mdQuire</a>
+                <span class="lab-by"><span class="lab-by-word">by</span> <a class="lab-name" href="/">charlotte</a><span class="flags"><a class="flag trans" href="/" aria-label="Trans pride flag (home)"><span class="tip" aria-hidden="true">Trans pride flag</span></a><a class="flag lesbian" href="/" aria-label="Lesbian pride flag (home)"><span class="tip" aria-hidden="true">Lesbian pride flag</span></a></span></span>
+            </div>
+            <div class="lab-menus" role="menubar" aria-label="Menus">
+                <button type="button" class="lab-menu-word" aria-haspopup="menu" aria-expanded="false"><span class="lab-label">File</span></button><button type="button" class="lab-menu-word" aria-haspopup="menu" aria-expanded="false"><span class="lab-label">Edit</span></button><button type="button" class="lab-menu-word" aria-haspopup="menu" aria-expanded="false"><span class="lab-label">View</span></button><button type="button" class="lab-menu-word" aria-haspopup="menu" aria-expanded="false"><span class="lab-label">Insert</span></button><button type="button" class="lab-menu-word" aria-haspopup="menu" aria-expanded="false"><span class="lab-label">Format</span></button><button type="button" class="lab-menu-word" aria-haspopup="menu" aria-expanded="false"><span class="lab-label">Tools</span></button>
+            </div>
+            <p class="lab-status" aria-live="polite"><span>Saved</span><span class="lab-dot" aria-hidden="true">·</span><span>7 words</span></p>
+            <div class="lab-bar" role="toolbar" aria-label="Formatting">
+                <div class="lab-group">
+                    <button type="button" class="lab-btn lab-doc" aria-haspopup="menu" aria-expanded="false">
+                        <span class="lab-label">A walk by the river</span>
+                        <svg class="lab-icon lab-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"></path></svg>
+                    </button>
+                </div>
+                <div class="lab-group">
+                    <button type="button" class="lab-btn lab-style" aria-haspopup="menu" aria-expanded="false">
+                        <span class="lab-label">Paragraph</span>
+                        <svg class="lab-icon lab-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"></path></svg>
+                    </button>
+                </div>
+                <div class="lab-group">
+                    <button type="button" class="lab-btn lab-square" aria-label="Bold" title="Bold"><span class="lab-glyph lab-glyph-bold">B</span></button><button type="button" class="lab-btn lab-square" aria-label="Italic" title="Italic"><span class="lab-glyph lab-glyph-italic">I</span></button><button type="button" class="lab-btn lab-square" aria-label="Underline" title="Underline"><span class="lab-glyph lab-glyph-underline">U</span></button><button type="button" class="lab-btn lab-square" aria-label="Strikethrough" title="Strikethrough"><span class="lab-glyph lab-glyph-strike">S</span></button>
+                    <button type="button" class="lab-btn lab-square" aria-label="Link" title="Link">
+                        <svg class="lab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1"></path><path d="M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1"></path></svg>
+                    </button>
+                </div>
+                <div class="lab-group">
+                    <button type="button" class="lab-btn lab-square" aria-haspopup="menu" aria-expanded="false" aria-label="Lists" title="Lists">
+                        <svg class="lab-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="7" r="1.2" fill="currentColor"></circle><circle cx="5" cy="12" r="1.2" fill="currentColor"></circle><circle cx="5" cy="17" r="1.2" fill="currentColor"></circle><path d="M9.5 7h10M9.5 12h10M9.5 17h10"></path></svg>
+                    </button>
+                    <button type="button" class="lab-btn lab-square" aria-haspopup="menu" aria-expanded="false" aria-label="Add a block" title="Add a block">
+                        <svg class="lab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+                    </button>
+                    <button type="button" class="lab-btn lab-square" aria-haspopup="menu" aria-expanded="false" aria-label="Text: color, size, alignment" title="Text">
+                        <span class="lab-color-mark">A</span>
+                    </button>
+                </div>
+                <div class="lab-group">
+                    <button type="button" class="lab-btn lab-square" aria-label="Undo" title="Undo">
+                        <svg class="lab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7 5 11l4 4"></path><path d="M5 11h9a5 5 0 0 1 0 10h-2"></path></svg>
+                    </button>
+                    <button type="button" class="lab-btn lab-square" aria-label="Redo" title="Redo">
+                        <svg class="lab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 7 4 4-4 4"></path><path d="M19 11h-9a5 5 0 0 0 0 10h2"></path></svg>
+                    </button>
+                    <button type="button" class="lab-btn lab-square" aria-label="Find and replace" title="Find and replace">
+                        <svg class="lab-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="5.5"></circle><path d="m15 15 4.5 4.5"></path></svg>
+                    </button>
+                </div>
+                <div class="lab-group lab-end">
+                    <button type="button" class="lab-btn lab-square lab-dots" aria-haspopup="menu" aria-expanded="false" aria-label="More" title="More">
+                        <span class="lab-label lab-dots-in"><i></i><i></i><i></i></span>
+                    </button>
+                    <button type="button" class="lab-btn lab-square lab-mic" aria-label="Start dictation" title="Start dictation" aria-pressed="false">
+                        <svg class="lab-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3.5" width="6" height="11" rx="3"></rect><path d="M6 11a6 6 0 0 0 12 0M12 17v3.5"></path></svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+        <main>
+        <div class="desk">
+            <nav class="outline-wrap" aria-label="Outline">
+                <p class="outline-label">Outline</p>
+                <ul class="outline">
+                    <li><a href="#top" aria-current="location">A walk by the river</a></li>
+                    <li class="sub"><a href="#bring">What to bring</a></li>
+                    <li class="sub"><a href="#bring">The bridge</a></li>
+                </ul>
+            </nav>
+            <article class="doc">
+                <h1 class="doc-title">A walk by the river</h1>
+                <p>The path starts where the houses stop. It runs along the water for a mile or so, past the boatyard and the old mill, and then turns up into the trees. I walk it most mornings before the day has made up its mind.</p>
+                <p>Nothing happens on it, which is the point. A heron stands in the shallows and does not move. The light comes through the leaves in pieces. By the time I reach the bridge I have usually worked out what I meant to<span class="caret" aria-hidden="true"></span> say the night before.</p>
+                <h2 id="bring">What to bring</h2>
+                <ul>
+                    <li>Shoes that do not mind mud.</li>
+                    <li>Something warm for the shade under the trees.</li>
+                    <li>A notebook, or at least a phone with room in it.</li>
+                </ul>
+                <blockquote><p>Walking is the best way I know of thinking without trying to.</p></blockquote>
+                <p>Some days the river is high and brown and loud, and the path is under water at the low bend. Then I go round by the lane, which is longer and has a dog that barks at everyone.</p>
+            </article>
+            <dl class="details" aria-label="About this document">
+                <dt>File</dt><dd>a-walk-by-the-river.md</dd>
+                <dt>Length</dt><dd>412 words, 2 minutes to read</dd>
+                <dt>Kept</dt><dd>In this browser, a moment ago</dd>
+            </dl>
+        </div>
+        </main>
+        <button type="button" class="lab-zoom" aria-label="Zoom"><span class="lab-label">100%</span></button>
+    </body>
+</html>
