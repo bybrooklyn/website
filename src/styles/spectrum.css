@@ -1,0 +1,450 @@
+/* The Spectrum page (src/pages/spectrum.astro): the sliders, the chart beside them, and the share link. */
+
+.spectrum-head h1 {
+    max-width: 18ch;
+}
+
+/* ---- the language picker ---- */
+
+.spectrum-languages {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 1.25rem;
+    margin-top: var(--line);
+}
+
+.spectrum-languages a {
+    color: var(--muted);
+    text-decoration: none;
+}
+
+.spectrum-languages a:hover {
+    color: var(--ink);
+}
+
+.spectrum-languages a[aria-current="true"] {
+    color: var(--ink);
+    text-decoration: underline;
+    text-decoration-color: var(--accent);
+    text-decoration-thickness: 0.125rem;
+    text-underline-offset: 0.3em;
+}
+
+.spectrum-translator {
+    margin: calc(var(--line) * 0.5) 0 0;
+}
+
+/* ---- the sliders and the chart ---- */
+
+.spectrum-body {
+    display: grid;
+    /* one column on a phone, which a long word under a slider must not widen past the screen */
+    grid-template-columns: minmax(0, 1fr);
+    gap: calc(var(--line) * 2) clamp(2rem, 5vw, 4.5rem);
+    align-items: start;
+}
+
+@media (min-width: 60rem) {
+    .spectrum-body {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 26rem);
+    }
+
+    /* The chart stays in sight while the sliders under it are moved. */
+    .spectrum-chart {
+        position: sticky;
+        top: var(--line);
+    }
+}
+
+.spectrum-sliders {
+    display: grid;
+    gap: calc(var(--line) * 1.25);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.spectrum-axis-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.spectrum-axis-head label {
+    font-family: var(--font-head);
+    font-weight: var(--head-weight);
+    font-size: 1.2rem;
+}
+
+/* "Not set": a quiet word that is lit while the slider is unset. */
+.spectrum-unset {
+    flex: none;
+    border: 0.0625rem solid transparent;
+    border-radius: 1rem;
+    padding: 0 0.6rem;
+    background: none;
+    font: inherit;
+    font-size: 0.85rem;
+    color: var(--muted);
+    cursor: pointer;
+    transition:
+        color 0.15s ease,
+        border-color 0.2s ease,
+        background-color 0.2s ease,
+        scale 0.2s var(--ease);
+}
+
+.spectrum-unset:hover {
+    color: var(--ink);
+    border-color: var(--rule);
+}
+
+.spectrum-unset:active {
+    scale: 0.92;
+}
+
+.spectrum-unset[aria-pressed="true"] {
+    color: var(--ink);
+    border-color: var(--accent);
+    background: color-mix(in oklch, var(--accent) 16%, transparent);
+}
+
+.spectrum-unset:focus-visible,
+.spectrum-copy:focus-visible {
+    outline: 0.125rem solid var(--accent);
+    outline-offset: 0.15rem;
+}
+
+/* The slider: a thin track in the rule color, and a round thumb. */
+.spectrum-axis input[type="range"] {
+    --thumb: 1.25rem;
+    display: block;
+    width: 100%;
+    height: 2.25rem;
+    margin: 0;
+    background: none;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+}
+
+.spectrum-axis input[type="range"]::-webkit-slider-runnable-track {
+    height: 0.25rem;
+    border-radius: 0.125rem;
+    background: var(--rule);
+}
+
+.spectrum-axis input[type="range"]::-moz-range-track {
+    height: 0.25rem;
+    border-radius: 0.125rem;
+    background: var(--rule);
+}
+
+.spectrum-axis input[type="range"]::-webkit-slider-thumb {
+    width: var(--thumb);
+    height: var(--thumb);
+    margin-top: calc(var(--thumb) / -2 + 0.125rem);
+    border: 0.1875rem solid var(--ground);
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 0.0625rem var(--accent);
+    -webkit-appearance: none;
+    transition:
+        scale 0.25s var(--ease),
+        background-color 0.2s ease,
+        box-shadow 0.2s ease;
+}
+
+.spectrum-axis input[type="range"]::-moz-range-thumb {
+    width: var(--thumb);
+    height: var(--thumb);
+    border: 0.1875rem solid var(--ground);
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 0.0625rem var(--accent);
+    transition:
+        scale 0.25s var(--ease),
+        background-color 0.2s ease,
+        box-shadow 0.2s ease;
+}
+
+/* Held, the thumb swells a little under the finger, and settles back when let go. */
+.spectrum-axis input[type="range"]:active::-webkit-slider-thumb {
+    scale: 1.25;
+}
+
+.spectrum-axis input[type="range"]:active::-moz-range-thumb {
+    scale: 1.25;
+}
+
+.spectrum-axis input[type="range"]:focus-visible {
+    outline: none;
+}
+
+.spectrum-axis input[type="range"]:focus-visible::-webkit-slider-thumb {
+    box-shadow: 0 0 0 0.0625rem var(--accent), 0 0 0 0.3rem color-mix(in oklch, var(--accent) 35%, transparent);
+}
+
+.spectrum-axis input[type="range"]:focus-visible::-moz-range-thumb {
+    box-shadow: 0 0 0 0.0625rem var(--accent), 0 0 0 0.3rem color-mix(in oklch, var(--accent) 35%, transparent);
+}
+
+/* Unset, the thumb is hollow and the words under it fade. */
+.spectrum-axis.unset input[type="range"]::-webkit-slider-thumb {
+    background: var(--ground);
+    box-shadow: 0 0 0 0.0625rem var(--muted);
+}
+
+.spectrum-axis.unset input[type="range"]::-moz-range-thumb {
+    background: var(--ground);
+    box-shadow: 0 0 0 0.0625rem var(--muted);
+}
+
+.spectrum-ends {
+    display: grid;
+    /* thirds, so the middle word sits under the middle of the slider and a long word wraps instead of widening it */
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.75rem;
+    overflow-wrap: anywhere;
+    font-size: 0.85rem;
+    line-height: 1.3;
+    color: var(--muted);
+    transition: opacity 0.2s ease;
+}
+
+/* Words that fall back to English in Arabic, or Arabic among English, keep their own direction. */
+.spectrum-axis-head label,
+.spectrum-chart figcaption {
+    unicode-bidi: plaintext;
+}
+
+.spectrum-ends span:nth-child(2) {
+    text-align: center;
+}
+
+.spectrum-ends span:last-child {
+    text-align: end;
+}
+
+.spectrum-axis.unset .spectrum-ends {
+    opacity: 0.5;
+}
+
+/* ---- the chart ---- */
+
+.spectrum-chart {
+    margin: 0;
+}
+
+.spectrum-chart .label {
+    margin-top: 0;
+}
+
+.spectrum-chart svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    overflow: visible;
+    /* The names are placed by hand around the chart, so their anchors must not turn round in Arabic. */
+    direction: ltr;
+}
+
+.spectrum-grid polygon,
+.spectrum-grid line {
+    fill: none;
+    stroke: var(--rule);
+    stroke-width: 1;
+}
+
+.spectrum-shape {
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 2.5;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+}
+
+.spectrum-shape.whole {
+    fill: color-mix(in oklch, var(--accent) 20%, transparent);
+}
+
+.spectrum-dots circle {
+    fill: var(--accent);
+    stroke: var(--ground);
+    stroke-width: 1.5;
+    transform-box: fill-box;
+    transform-origin: center;
+    transition:
+        scale 0.35s var(--ease),
+        opacity 0.2s ease;
+}
+
+.spectrum-dots circle.gone {
+    scale: 0;
+    opacity: 0;
+}
+
+.spectrum-names text {
+    fill: var(--ink);
+    font-family: var(--font-text);
+    font-size: 14px;
+}
+
+/* On a phone the chart is drawn smaller, so its names are set larger to stay readable. */
+@media (max-width: 34rem) {
+    .spectrum-names text {
+        font-size: 16px;
+    }
+}
+
+.spectrum-empty {
+    fill: var(--muted);
+    font-family: var(--font-text);
+    font-size: 13px;
+}
+
+/* Only when every slider is unset. */
+.spectrum-empty:not(.shown) {
+    display: none;
+}
+
+.spectrum-chart figcaption {
+    margin-top: calc(var(--line) * 0.5);
+}
+
+/* Said to screen readers, as the chart's description; the chart shows the same. */
+.spectrum-summary {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+/* ---- the share link ---- */
+
+.spectrum-share {
+    margin-top: calc(var(--line) * 2);
+    max-width: 40rem;
+}
+
+.spectrum-share-row {
+    position: relative;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 0.75rem;
+}
+
+.spectrum-share-row input {
+    flex: 1 1 16rem;
+    min-width: 0;
+    border: 0.0625rem solid var(--rule);
+    border-radius: var(--radius);
+    padding: 0.45rem 0.75rem;
+    background: var(--surface);
+    color: var(--ink);
+    font-family: var(--font-code);
+    font-size: 0.85rem;
+}
+
+.spectrum-share-row input:focus-visible {
+    outline: 0.125rem solid var(--accent);
+    outline-offset: 0.1rem;
+}
+
+.spectrum-copy {
+    border: 0.0625rem solid var(--accent);
+    border-radius: var(--radius);
+    padding: 0.35rem 1rem;
+    background: color-mix(in oklch, var(--accent) 14%, transparent);
+    color: var(--ink);
+    font: inherit;
+    cursor: pointer;
+    transition:
+        background-color 0.15s ease,
+        scale 0.2s var(--ease);
+}
+
+.spectrum-copy:hover {
+    background: color-mix(in oklch, var(--accent) 26%, transparent);
+}
+
+/* pressed, it gives a little, as the picture viewer's dots do */
+.spectrum-copy:active {
+    scale: 0.94;
+}
+
+/* "Copied" grows out of the side of the button it sits against, and goes back into it. */
+.spectrum-copied {
+    border-radius: 1rem;
+    padding: 0 0.7rem;
+    background: var(--accent);
+    color: var(--ground);
+    font-size: 0.9rem;
+    transform-origin: left center;
+    opacity: 0;
+    scale: 0.4 0.6;
+    translate: -0.75rem 0;
+    transition:
+        opacity 0.15s ease,
+        scale 0.2s ease-in,
+        translate 0.2s ease-in;
+}
+
+.spectrum[dir="rtl"] .spectrum-copied {
+    transform-origin: right center;
+    translate: 0.75rem 0;
+}
+
+.spectrum-copied:empty {
+    display: none;
+}
+
+.spectrum-copied.shown,
+.spectrum[dir="rtl"] .spectrum-copied.shown {
+    opacity: 1;
+    scale: 1;
+    translate: 0 0;
+    transition:
+        opacity 0.2s ease,
+        scale 0.5s var(--ease),
+        translate 0.5s var(--ease);
+}
+
+.spectrum-credit {
+    max-width: 44rem;
+    margin-top: calc(var(--line) * 2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .spectrum-unset,
+    .spectrum-copy,
+    .spectrum-ends,
+    .spectrum-dots circle,
+    .spectrum-copied,
+    .spectrum-copied.shown,
+    .spectrum[dir="rtl"] .spectrum-copied.shown {
+        transition: none;
+    }
+
+    .spectrum-axis input[type="range"]::-webkit-slider-thumb {
+        transition: none;
+    }
+
+    .spectrum-axis input[type="range"]::-moz-range-thumb {
+        transition: none;
+    }
+
+    .spectrum-axis input[type="range"]:active::-webkit-slider-thumb {
+        scale: 1;
+    }
+
+    .spectrum-axis input[type="range"]:active::-moz-range-thumb {
+        scale: 1;
+    }
+}

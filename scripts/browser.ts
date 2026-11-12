@@ -12,6 +12,8 @@ export interface Browser {
     /** Runs an expression in the page and gives back its value. */
     run<T = unknown>(expression: string): Promise<T>;
     click(x: number, y: number): Promise<void>;
+    /** Presses and lets go of a key, such as "ArrowRight" or "Tab", in whatever has the focus. */
+    press(key: string): Promise<void>;
     wait(ms: number): Promise<void>;
     /** A PNG of the window, or of one rectangle of the page. */
     picture(clip?: { x: number; y: number; width: number; height: number }): Promise<Buffer>;
@@ -81,6 +83,16 @@ export async function browser({ width = 1200, height = 800, scale = 1, port = 94
         async click(x, y) {
             await mouse("mousePressed", x, y);
             await mouse("mouseReleased", x, y);
+        },
+        async press(key) {
+            // Chromium acts on a key only when it is given the key's number as well as its name.
+            const numbers: Record<string, number> = { Tab: 9, Enter: 13, Escape: 27, " ": 32, PageUp: 33, PageDown: 34, End: 35, Home: 36, ArrowLeft: 37, ArrowUp: 38, ArrowRight: 39, ArrowDown: 40 };
+            const number = numbers[key] ?? key.toUpperCase().charCodeAt(0);
+            const named = { key, code: key.length === 1 ? `Key${key.toUpperCase()}` : key, windowsVirtualKeyCode: number, nativeVirtualKeyCode: number };
+            // Enter and space also type a character, which is what presses a button.
+            const typed = key === "Enter" ? "\r" : key.length === 1 ? key : undefined;
+            await send("Input.dispatchKeyEvent", { type: typed ? "keyDown" : "rawKeyDown", ...named, ...(typed && { text: typed }) });
+            await send("Input.dispatchKeyEvent", { type: "keyUp", ...named });
         },
         async picture(clip) {
             const shot = await send("Page.captureScreenshot", { format: "png", ...(clip && { clip: { ...clip, scale: 1 } }) });
