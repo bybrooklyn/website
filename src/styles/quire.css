@@ -1964,6 +1964,20 @@ body.quire-app {
     max-height: none;
 }
 
+/* What a .quire document can give its text: the typefaces the site ships and the system's own, a
+   highlight behind the words, and a line spacing for a paragraph. Nothing is downloaded for them. */
+.quire-paper [data-font="torrens"] { font-family: var(--font-torrens), ui-serif, serif; }
+.quire-paper [data-font="drafting"] { font-family: var(--font-mono), ui-monospace, monospace; }
+.quire-paper [data-font="serif"] { font-family: ui-serif, Georgia, "Times New Roman", serif; }
+.quire-paper [data-font="sans"] { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+.quire-paper [data-font="mono"] { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+.quire-paper .quire-highlight {
+    border-radius: 0.15em;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+}
+.quire-paper [style*="--spacing"] { line-height: calc(1.6 * var(--spacing)); }
+
 /* With less motion asked for, nothing of the editor moves: what opens is simply there, and what
    closes is simply gone. It is stated for all of it at once, so that no state slips through by
    being more particular than this rule. */

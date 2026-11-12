@@ -224,7 +224,7 @@ export function createHistoryPanel(surface: Surface, storage: VersionStorage, na
         view.destroy();
         shown.removeAttribute("role");
         const restore = control("Restore this version", "Restore this version", () => {
-            surface.run(() => read(text, { mdx: surface.getDocument().mdx }));
+            surface.run(() => ({ ...read(text, { mdx: surface.getDocument().mdx }), quire: surface.getDocument().quire }));
             keeper.now();
             close();
             surface.focus();

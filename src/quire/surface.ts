@@ -121,10 +121,17 @@ function drawLeaf(leaf: Leaf): Node {
         wrap.append(node);
         node = wrap;
     }
-    if (leaf.color || leaf.size) {
+    if (leaf.color || leaf.size || leaf.font || leaf.highlight) {
         const span = document.createElement("span");
         if (leaf.color) span.style.color = leaf.color;
         if (leaf.size) span.style.fontSize = leaf.size;
+        // a font is a name the stylesheet turns into a typeface, so only the site's own can be chosen
+        if (leaf.font) span.dataset.font = leaf.font;
+        if (leaf.highlight) {
+            // the color is laid behind the words half seen, so that text of any color stays readable on it
+            span.style.backgroundColor = `color-mix(in oklch, ${leaf.highlight} 45%, transparent)`;
+            span.classList.add("quire-highlight");
+        }
         span.append(node);
         node = span;
     }
@@ -171,6 +178,7 @@ function draw(block: Block, inner: number[]): HTMLElement {
         case "heading": {
             const element = holderOf(document.createElement(block.kind === "paragraph" ? "p" : `h${block.level}`), inner);
             if (block.align) element.style.textAlign = block.align;
+            if (block.spacing) element.style.setProperty("--spacing", String(block.spacing));
             fillRuns(element, block.runs);
             return element;
         }

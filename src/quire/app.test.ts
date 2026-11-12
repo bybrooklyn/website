@@ -11,6 +11,11 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { browser, chromium, type Browser } from "../../scripts/browser";
+import { packQuire, unpackQuire } from "./quire-file";
+import { hash } from "./styling";
+
+/** The smallest PNG: one pixel. */
+const DOT = Uint8Array.from(atob("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="), (c) => c.charCodeAt(0));
 
 const here = import.meta.dir;
 const styles = `${here}/../styles`;
@@ -18,7 +23,9 @@ const styles = `${here}/../styles`;
 const page = (database: string) => `
 import { startApp } from "${here}/app.ts";
 import { write } from "${here}/write.ts";
-import { folderStore } from "${here}/store-folder.ts";
+import { folderStore, oneFileStore } from "${here}/store-folder.ts";
+import { setStyle } from "${here}/document.ts";
+import { packQuire, unpackQuire } from "${here}/quire-file.ts";
 
 // GitHub's contents API, as far as the store uses it, over files kept in the page
 const repo = new Map([["posts/hello.md", { text: "# Hello\\n\\nFrom the repository.\\n", sha: "sha1" }]]);
@@ -53,11 +60,17 @@ async function fetcher(url, init = {}) {
 
 // a download is caught rather than saved, so that its name and text can be read
 const downloads = [];
+const bytes = {};
 HTMLAnchorElement.prototype.click = function () {
-    if (this.download) fetch(this.href).then((answer) => answer.text()).then((text) => downloads.push({ name: this.download, text }));
+    if (!this.download) return;
+    const name = this.download;
+    fetch(this.href).then((answer) => answer.arrayBuffer()).then((buffer) => {
+        bytes[name] = new Uint8Array(buffer);
+        downloads.push({ name, text: new TextDecoder().decode(buffer) });
+    });
 };
 
-window.q = { repo, calls, downloads, write, folderStore };
+window.q = { repo, calls, downloads, bytes, write, folderStore, oneFileStore, setStyle, packQuire, unpackQuire };
 startApp(document.querySelector("#host"), { database: ${JSON.stringify(database)}, fetcher, sample: "# A sample\\n" }).then((app) => {
     window.q.app = app;
     window.q.md = () => write(app.editor.surface.getDocument());
@@ -78,6 +91,9 @@ beforeAll(async () => {
     const css = (await Promise.all(["tokens.css", "base.css", "prose.css", "quire.css"].map((name) => Bun.file(`${styles}/${name}`).text()))).join("\n");
     await Bun.write(`${folder}/page.html`, `<!doctype html><meta charset="utf-8"><style>${css}${theme}</style><body class="quire-app"><header class="quire-top"><a class="site-name" href="/">site</a></header><main id="main"><div id="host"></div></main><script type="module">${await built.outputs[0]!.text()}</script></body>`);
     await Bun.write(`${folder}/post.md`, "# A post\n\nFrom a file.\n");
+    // a .quire file with a styled word, its style addressed as styling.ts says
+    const style = { quire: 1, page: { size: "A5", orientation: "portrait", margins: 20 }, count: 2, blocks: [{ block: 0, hash: hash("A letter"), align: "center" }], runs: [{ block: 1, hash: hash("Dear Sam, hello."), from: 10, to: 15, quote: "hello", before: "Dear Sam, ", color: "#d52d00", font: "serif" }] };
+    await Bun.write(`${folder}/letter.quire`, await packQuire({ markdown: "# A letter\n\nDear Sam, hello.\n", parts: { style: JSON.stringify(style), notes: "{}" }, pictures: new Map([["dot.png", new Blob([DOT])]]) }));
     tab = await browser({ width: 1300, height: 900 });
     // the page is served over http, as the site is, so that its database and storage are its own
     await load();
@@ -227,6 +243,66 @@ used("a repository is connected once, its documents listed, opened and saved as 
     expect(await tab.run("localStorage.getItem('quire-github')")).toBeNull();
     expect(await tab.run("document.querySelector('.quire-name-text').textContent")).not.toBe("hello.md");
     await tab.press("Escape");
+});
+
+used("a .quire file opens with its look, is written in, and downloads as a .quire that holds the change, its style and its picture", async () => {
+    await tab.files([`${folder}/letter.quire`]);
+    await documents();
+    await press(".quire-documents-menu button[data-place='file']");
+    await tab.wait(400);
+    expect(await tab.run("document.querySelector('.quire-name-text').textContent")).toBe("letter.quire");
+    const seen = await tab.run<{ align: string; font: string; color: string }>(`(() => {
+        const word = document.querySelector('.quire [data-font]');
+        return { align: getComputedStyle(document.querySelector('.quire h1')).textAlign, font: word.textContent, color: getComputedStyle(word).color };
+    })()`);
+    expect(seen).toEqual({ align: "center", font: "hello", color: "rgb(213, 45, 0)" });
+    await tab.run("q.app.editor.surface.setSelection({ anchor: { path: [0], offset: 0 }, focus: { path: [0], offset: 0 } })");
+    await tab.type("Old. ");
+    await tab.wait(1300);
+    await press(".quire-dots");
+    await tab.wait(700);
+    expect(await tab.run("[...document.querySelectorAll('.quire-menu.open .quire-menu-line')].map((line) => line.textContent).filter((text) => text.startsWith('Download'))")).toEqual(["Download.quire", "Download as Markdown.md"]);
+    await press(".quire-menu.open .quire-menu-line", "Download.quire");
+    await tab.wait(400);
+    const bundle = await unpackQuire(new Uint8Array(Object.values(await tab.run<Record<string, number>>("q.bytes['letter.quire']"))));
+    expect(bundle.markdown).toBe("# Old. A letter\n\nDear Sam, hello.\n");
+    const style = JSON.parse(bundle.parts.style);
+    expect(style.page).toEqual({ size: "A5", orientation: "portrait", margins: 20 });
+    expect(style.runs[0]).toMatchObject({ quote: "hello", color: "#d52d00", font: "serif" });
+    expect(style.blocks[0]).toMatchObject({ align: "center", hash: hash("Old. A letter") });
+    expect([...bundle.pictures.keys()]).toEqual(["dot.png"]);
+});
+
+used("a document kept in the browser is a .quire one: its look is kept through a reload", async () => {
+    await documents();
+    await press(".quire-documents-menu button[data-place='browser']");
+    await tab.wait(400);
+    await press(".quire-documents-new");
+    await tab.wait(400);
+    await tab.type("Styled words.");
+    await tab.run("q.app.editor.surface.run((doc) => q.setStyle(doc, { start: { path: [0], offset: 0 }, end: { path: [0], offset: 6 } }, { font: 'mono', highlight: '#ff9a56' }))");
+    await tab.wait(1300);
+    await load();
+    expect(await tab.run("document.querySelector('.quire [data-font=mono]')?.textContent")).toBe("Styled");
+    expect(await md()).toBe("Styled words.\n");
+});
+
+used("a .quire file written in place through file handles keeps its look and pictures inside it", async () => {
+    const result = await tab.run<{ markdown: string; style: string; pictures: string[] }>(`(async () => {
+        const root = await navigator.storage.getDirectory();
+        const handle = await root.getFileHandle("in-place.quire", { create: true });
+        const writable = await handle.createWritable();
+        await writable.write(new Blob([await q.packQuire({ markdown: "Hi.\\n", parts: { style: "", notes: "" }, pictures: new Map() })]));
+        await writable.close();
+        const store = q.oneFileStore(handle);
+        const opened = await store.open("in-place.quire");
+        await store.savePicture("in-place.quire", new Blob(["x"], { type: "image/png" }), "x.png");
+        await store.save("in-place.quire", "Hi there.\\n", opened.mark, { style: '{"quire":1}', notes: "{}" });
+        const back = await q.unpackQuire(new Uint8Array(await (await handle.getFile()).arrayBuffer()));
+        await root.removeEntry("in-place.quire");
+        return { markdown: back.markdown, style: back.parts.style, pictures: [...back.pictures.keys()] };
+    })()`);
+    expect(result).toEqual({ markdown: "Hi there.\n", style: '{"quire":1}', pictures: ["x.png"] });
 });
 
 used("the folder store writes real file handles, here the browser's private file system", async () => {

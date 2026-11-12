@@ -8,6 +8,8 @@
 // store refuses because the document changed elsewhere, what was typed is kept and three ways on
 // are offered: keep mine, take theirs, or see both. Pure: time and waiting are passed in.
 
+import type { Parts } from "./quire-file";
+
 /** A document in a store's list. `id` is the store's own way of finding it again. */
 export interface Entry {
     id: string;
@@ -19,7 +21,12 @@ export interface Entry {
 export interface Opened {
     text: string;
     mark: string;
+    /** For a `.quire` document, what it carries beside its Markdown. */
+    quire?: Parts;
 }
+
+/** What a document is saved as: its text, and for a `.quire` document its parts too. */
+export type Writing = { text: string; quire?: Parts };
 
 /** What saving came to: saved with a new mark, refused because the document changed elsewhere, or failed. */
 export type Saved = { ok: true; mark: string } | { ok: false; changed: true; theirs?: Opened } | { ok: false; changed?: false; message: string };
@@ -35,8 +42,9 @@ export interface Store {
     renameAsTyped?: boolean;
     list(): Promise<Entry[]>;
     open(id: string): Promise<Opened>;
-    save(id: string, text: string, mark: string): Promise<Saved>;
-    create(name: string, text: string): Promise<{ id: string; mark: string }>;
+    save(id: string, text: string, mark: string, quire?: Parts): Promise<Saved>;
+    /** Makes a document; given parts, it is made as a `.quire` document. */
+    create(name: string, text: string, quire?: Parts): Promise<{ id: string; mark: string }>;
     rename(id: string, name: string): Promise<string>;
     /** Takes a document away; where the store can, to somewhere it can be brought back from. */
     remove(id: string): Promise<void>;
@@ -44,6 +52,8 @@ export interface Store {
     savePicture(id: string, picture: Blob, name: string): Promise<string>;
     /** The address a picture written in a document can be shown from, if it is not the address itself. */
     show?(id: string, address: string): Promise<string | undefined>;
+    /** The pictures a `.quire` document holds, by name, for writing it out as a file. */
+    pictures?(id: string): Promise<Map<string, Blob>>;
 }
 
 /** A store's own failure, said in plain words for the status. */
@@ -71,7 +81,7 @@ export function fileName(name: string, ending = ".md"): string {
         .replace(/^[-.]+|[-.]+$/g, "")
         .toLowerCase();
     const base = plain || "untitled";
-    return /\.(md|mdx|markdown|txt)$/i.test(base) ? base : `${base}${ending}`;
+    return /\.(md|mdx|markdown|txt|quire)$/i.test(base) ? base : `${base}${ending}`;
 }
 
 /** A name not yet in use among others, with a number added if it is. */
@@ -93,6 +103,9 @@ export function relative(from: string, to: string): string {
     return up === 0 ? `./${path}` : path;
 }
 
+/** What is waiting to be saved: the text or the writing, or a way to make it once it is needed. */
+type Waiting = string | Writing | (() => string | Writing);
+
 /** Saves a document as it is typed, once typing pauses, and keeps what was typed when the store refuses. */
 export function createSaver(
     store: Store,
@@ -110,8 +123,11 @@ export function createSaver(
     let status: Status = { state: "saved" };
     // what is waiting to be saved: the text, or a way to write it, so that a long document is
     // written out once when it is saved rather than on every key
-    let pending: string | (() => string) | undefined;
-    const text = (waiting: string | (() => string)) => (typeof waiting === "string" ? waiting : waiting());
+    let pending: Waiting | undefined;
+    const text = (waiting: Waiting): Writing => {
+        const value = typeof waiting === "function" ? waiting() : waiting;
+        return typeof value === "string" ? { text: value } : value;
+    };
     let cancel: (() => void) | undefined;
     let running: Promise<void> = Promise.resolve();
     const listeners = new Set<(status: Status) => void>();
@@ -126,7 +142,8 @@ export function createSaver(
         set({ state: "saving" });
         let result: Saved;
         try {
-            result = await store.save(id, text(taken), over ?? mark);
+            const writing = text(taken);
+            result = await store.save(id, writing.text, over ?? mark, writing.quire);
         } catch (error) {
             result = { ok: false, message: error instanceof Error ? error.message : String(error) };
         }
@@ -154,7 +171,7 @@ export function createSaver(
 
     return {
         /** Says the text changed: it is saved once typing pauses, unless the store has refused and is waiting for a choice. */
-        changed(next: string | (() => string)) {
+        changed(next: Waiting) {
             pending = next;
             if (status.state === "changed") return;
             if (status.state !== "saving") set({ state: "waiting" });
@@ -182,7 +199,7 @@ export function createSaver(
             return theirs;
         },
         /** What was typed and not yet saved, if anything. */
-        unsaved: () => (pending === undefined ? undefined : text(pending)),
+        unsaved: () => (pending === undefined ? undefined : text(pending).text),
         status: () => status,
         mark: () => mark,
         on(listener: (status: Status) => void) {
@@ -195,8 +212,8 @@ export function createSaver(
 }
 
 /** A store kept wholly in memory: for tests, and for a document with nowhere else to go. */
-export function memoryStore(label = "Memory"): Store & { files: Map<string, { name: string; text: string; mark: number; gone?: boolean }> } {
-    const files = new Map<string, { name: string; text: string; mark: number; gone?: boolean }>();
+export function memoryStore(label = "Memory"): Store & { files: Map<string, { name: string; text: string; mark: number; gone?: boolean; quire?: Parts }> } {
+    const files = new Map<string, { name: string; text: string; mark: number; gone?: boolean; quire?: Parts }>();
     let count = 0;
     const find = (id: string) => {
         const file = files.get(id);
@@ -213,18 +230,19 @@ export function memoryStore(label = "Memory"): Store & { files: Map<string, { na
         },
         async open(id) {
             const file = find(id);
-            return { text: file.text, mark: String(file.mark) };
+            return { text: file.text, mark: String(file.mark), quire: file.quire };
         },
-        async save(id, text, mark) {
+        async save(id, text, mark, quire) {
             const file = find(id);
-            if (String(file.mark) !== mark) return { ok: false, changed: true, theirs: { text: file.text, mark: String(file.mark) } };
+            if (String(file.mark) !== mark) return { ok: false, changed: true, theirs: { text: file.text, mark: String(file.mark), quire: file.quire } };
             file.text = text;
+            if (quire) file.quire = quire;
             file.mark++;
             return { ok: true, mark: String(file.mark) };
         },
-        async create(name, text) {
+        async create(name, text, quire) {
             const id = `doc-${++count}`;
-            files.set(id, { name: freeName(name, [...files.values()].filter((file) => !file.gone).map((file) => file.name)), text, mark: 1 });
+            files.set(id, { name: freeName(name, [...files.values()].filter((file) => !file.gone).map((file) => file.name)), text, mark: 1, quire });
             return { id, mark: "1" };
         },
         async rename(id, name) {

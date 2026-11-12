@@ -9,6 +9,7 @@
 import { createEditor, type Editor } from "./editor";
 import { documentsList, repositoryForm, type Place } from "./documents";
 import { read } from "./read";
+import { emptyParts, opened, type Parts } from "./quire-file";
 import { fileName, type Entry, type Store } from "./store";
 import { browserStore, indexedTables } from "./store-browser";
 import { filesStore, OPENABLE } from "./store-files";
@@ -51,7 +52,7 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
     const keyOf = (store: Store) => (store === browser ? "browser" : store === github ? "github" : store === files ? "files" : "folder");
 
     // ---- where to start ----
-    let start: { store: Store; entry: Entry; text: string; mark: string } | undefined;
+    let start: { store: Store; entry: Entry; text: string; mark: string; quire?: Parts } | undefined;
     const remembered = (() => {
         try {
             return JSON.parse(local()?.getItem(PLACE_KEY) ?? "null") as { place: string; id: string; name: string } | null;
@@ -72,7 +73,7 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
     const firstRun = !start;
     if (!start) {
         const made = await browser.create("Untitled", "");
-        start = { store: browser, entry: { id: made.id, name: "Untitled" }, text: "", mark: made.mark };
+        start = { store: browser, entry: { id: made.id, name: "Untitled" }, text: "", mark: made.mark, quire: emptyParts() };
     }
 
     const remember = (store: Store, entry: Entry) => {
@@ -86,7 +87,7 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
     const menu = flowMenu("Documents", { className: "quire-documents-menu" });
     let from: HTMLElement | undefined;
 
-    const editor: Editor = createEditor(host, read(start.text, { mdx: /\.mdx$/i.test(start.entry.id) }), {
+    const editor: Editor = createEditor(host, opened(start.text, start.quire, { mdx: /\.mdx$/i.test(start.entry.id) }), {
         name: start.entry.name,
         store: start.store,
         id: start.entry.id,
@@ -123,7 +124,7 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
     const pickers = globalThis as unknown as { showOpenFilePicker?: (options: object) => Promise<FileHandle[]>; showDirectoryPicker?: (options: object) => Promise<FolderHandle> };
     const able = canOpen();
     const openInPlace = async () => {
-        const [handle] = (await pickers.showOpenFilePicker?.({ types: [{ description: "Markdown", accept: { "text/markdown": [".md", ".mdx", ".markdown", ".txt"] } }] }).catch(() => [])) ?? [];
+        const [handle] = (await pickers.showOpenFilePicker?.({ types: [{ description: "Markdown and .quire documents", accept: { "text/markdown": [".md", ".mdx", ".markdown", ".txt"], "application/zip": [".quire"] } }] }).catch(() => [])) ?? [];
         if (!handle) return;
         const store = oneFileStore(handle);
         await editor.open(store, { id: handle.name, name: handle.name });

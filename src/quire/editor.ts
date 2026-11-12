@@ -26,6 +26,7 @@ import { createTableTools } from "./tables";
 import { flowMenu, linkForm, make, type MenuItem } from "./ui";
 import { changes, createHistoryPanel, createKeeper, memoryStorage, type VersionStorage } from "./versions";
 import { write } from "./write";
+import { emptyParts, opened, packQuire, written, type Parts } from "./quire-file";
 import { createCaret } from "./caret";
 import { createTitle, nameFor, shownName, type OwnTitle } from "./title";
 
@@ -62,7 +63,8 @@ export interface Editor {
     getName(): string;
     current(): { store?: Store; id?: string; name: string };
     open(store: Store, entry: Entry): Promise<void>;
-    create(store: Store, name: string, text?: string): Promise<void>;
+    /** Makes a new document there and opens it; given parts, it is made as a `.quire` document. */
+    create(store: Store, name: string, text?: string, quire?: Parts): Promise<void>;
     flush(): Promise<void>;
     status(): Status | undefined;
     /** The bar's name, from which the documents list grows. */
@@ -204,21 +206,32 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     };
 
     // ---- the three-dot menu ----
-    const download = () => {
-        const written = write(surface.getDocument());
-        const file = new Blob([written], { type: "text/markdown" });
+    const give = (file: Blob, fileName: string) => {
         const anchor = make("a");
         anchor.href = URL.createObjectURL(file);
-        const ending = surface.getDocument().mdx ? ".mdx" : ".md";
-        anchor.download = /\.(md|mdx|markdown|txt)$/i.test(name) ? name : `${name}${ending}`;
+        anchor.download = fileName;
         anchor.click();
         setTimeout(() => URL.revokeObjectURL(anchor.href), 1000);
+    };
+    /** The document's name without its folder or ending, for a download's name. */
+    const stem = () => name.replace(/^.*\//, "").replace(/\.(md|mdx|markdown|txt|quire)$/i, "") || "Untitled";
+    const download = () => {
+        const doc = surface.getDocument();
+        // a .quire document's Markdown is downloaded with its color, size and centring as small HTML, as a Markdown file keeps them
+        const ending = doc.mdx ? ".mdx" : ".md";
+        give(new Blob([write(doc)], { type: "text/markdown" }), /\.(md|mdx|markdown|txt)$/i.test(name) ? name.replace(/^.*\//, "") : `${stem()}${ending}`);
+    };
+    const downloadQuire = async () => {
+        const { text: markdown, quire } = written(surface.getDocument(), write);
+        const pictures = (store && id && (await store.pictures?.(id).catch(() => undefined))) || new Map<string, Blob>();
+        give(new Blob([(await packQuire({ markdown, parts: quire ?? emptyParts(), pictures })) as BlobPart], { type: "application/zip" }), `${stem()}.quire`);
     };
     const more = (): MenuItem[] => [
         { label: host.classList.contains("markdown") ? "Hide the Markdown" : "Show the Markdown", run: () => showMarkdown(!host.classList.contains("markdown")) },
         { label: "Version history", run: () => void history.open() },
         ...(options.more?.() ?? []),
-        { label: "Download", hint: surface.getDocument().mdx ? ".mdx" : ".md", run: download },
+        ...(surface.getDocument().quire ? [{ label: "Download", hint: ".quire", run: () => void downloadQuire() }] : []),
+        { label: surface.getDocument().quire ? "Download as Markdown" : "Download", hint: surface.getDocument().mdx ? ".mdx" : ".md", run: download },
         { label: "Print", run: () => print() },
     ];
 
@@ -286,7 +299,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         if (!theirs) return;
         await versions.save(historyKey(), mine, { time: Date.now(), ...changes(theirs.text, mine) });
         quiet = true;
-        surface.run(() => read(theirs.text, { mdx: surface.getDocument().mdx }));
+        surface.run(() => opened(theirs.text, theirs.quire ?? (surface.getDocument().quire ? emptyParts() : undefined), { mdx: surface.getDocument().mdx }));
         quiet = false;
     }, () => surface.focus());
     const showStatus = (status: Status) => {
@@ -305,7 +318,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     });
     surface.on("change", ({ doc: now }) => {
         keeper.edited();
-        if (!quiet) saver?.changed(() => write(now));
+        if (!quiet) saver?.changed(() => written(now, write));
     });
 
     // leaving the page with words not yet saved: they are saved if there is time, and the browser asks
@@ -345,16 +358,16 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         saver?.stop();
         stopListening?.();
         keeper.stop();
-        const opened = await next.open(entry.id);
+        const found = await next.open(entry.id);
         store = next;
         id = entry.id;
         name = entry.name;
         bar.setName(name);
         quiet = true;
-        surface.setDocument(read(opened.text, { mdx: /\.mdx$/i.test(entry.id) || /\.mdx$/i.test(entry.name) }));
+        surface.setDocument(opened(found.text, found.quire, { mdx: /\.mdx$/i.test(entry.id) || /\.mdx$/i.test(entry.name) }));
         quiet = false;
         showTitle();
-        saver = createSaver(next, entry.id, opened.mark);
+        saver = createSaver(next, entry.id, found.mark);
         stopListening = saver.on(showStatus);
         showStatus(saver.status());
         keeper = createKeeper(versions, historyKey(), () => write(surface.getDocument()));
@@ -367,8 +380,8 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         getName: () => name,
         current: () => ({ store, id, name }),
         open,
-        async create(next, wanted, body = "") {
-            const made = await next.create(wanted, body);
+        async create(next, wanted, body = "", quire) {
+            const made = await next.create(wanted, body, quire);
             const entry = (await next.list().catch(() => [])).find((each) => each.id === made.id) ?? { id: made.id, name: wanted };
             await open(next, entry);
         },
