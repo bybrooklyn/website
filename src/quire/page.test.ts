@@ -63,6 +63,9 @@ test.skipIf(!live)(
         for (const [wide, high] of [[1300, 900], [2560, 1300]] as const) {
             await tab.resize(wide, high);
             await tab.open(`http://localhost:${server!.port}/mdquire/`, 800);
+            // with nothing open the bar is away: a blank page is opened from the home screen
+            await tab.run("document.querySelector('.quire-shelf.shown .quire-card-open')?.click()");
+            await tab.wait(800);
             const at = await tab.run<{ rem: number; name: number; row: number[]; bar: number[] }>(`(() => { const box = (s) => { const r = document.querySelector(s).getBoundingClientRect(); return [r.top, r.bottom]; }; const name = box('.site-name'); return { rem: parseFloat(getComputedStyle(document.documentElement).fontSize), name: (name[0] + name[1]) / 2, row: box('.quire-menu-row'), bar: box('.quire-bar') }; })()`);
             expect({ wide, above: at.row[0]! >= 0.5 * at.rem }).toEqual({ wide, above: true });
             expect({ wide, centred: Math.abs((at.row[0]! + at.bar[1]!) / 2 - at.name) <= 2 }).toEqual({ wide, centred: true });

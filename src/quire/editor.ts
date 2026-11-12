@@ -51,6 +51,8 @@ export interface EditorOptions {
     onOpen?: (store: Store, entry: Entry) => void;
     /** Opens the documents list from the name in the bar. */
     onName?: (from: HTMLElement) => void;
+    /** Leaves the document for the home screen, from a control at the start of the bar. */
+    onHome?: () => void;
     /** The page's own lines at the head of the File menu: new documents, opening files and folders. */
     fileItems?: () => MenuItem[];
     /** More lines for the three-dot menu, from the page. */
@@ -79,6 +81,10 @@ export interface Editor {
     nameElement(): HTMLElement;
     /** Renames the document where it lives. */
     rename(name: string): Promise<void>;
+    /** Saves what is waiting and lets the document go, so that nothing is open. */
+    leave(): Promise<void>;
+    /** The sheet, which grows out of a picture of it on the home screen and shrinks back. */
+    paper: HTMLElement;
     /** Shows or hides the outline and the Markdown; `plain` shows the text alone, for a file that is not Markdown. */
     view(options: { outline?: boolean; markdown?: boolean; plain?: boolean }): void;
     destroy(): void;
@@ -267,6 +273,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         colors: options.colors,
         onImage: keepPicture,
         onName: (from) => options.onName?.(from),
+        onHome: options.onHome,
         onOutline: () => (outlineView.isOpen() ? outlineView.close() : outlineView.open()),
         onLink: openLink,
         more,
@@ -496,8 +503,31 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         options.onOpen?.(next, entry);
     }
 
+    /** Lets the document go: what is waiting is saved, and the editor holds an empty page kept nowhere. */
+    async function leave() {
+        await saver?.flush();
+        saver?.stop();
+        stopListening?.();
+        keeper.stop();
+        saver = undefined;
+        stopListening = undefined;
+        store = undefined;
+        id = undefined;
+        name = "Untitled";
+        bar.setName(name);
+        outlineView.close();
+        quiet = true;
+        surface.setDocument(read(""));
+        quiet = false;
+        showTitle();
+        keeper = createKeeper(memoryStorage(), "", snapshot);
+        bar.setStatus("", "Nothing is open");
+    }
+
     return {
         surface,
+        paper,
+        leave,
         getName: () => name,
         current: () => ({ store, id, name }),
         open,

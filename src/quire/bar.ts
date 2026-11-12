@@ -313,6 +313,8 @@ export interface BarOptions {
     onName?: (from: HTMLElement) => void;
     /** Shows or hides the outline, from its control in the bar. */
     onOutline?: () => void;
+    /** Leaves the document for the home screen, from the first control in the bar. */
+    onHome?: () => void;
     /** The colors offered for text, by name. */
     colors?: { name: string; value: string }[];
     onImage?: (file: File) => Promise<string>;
@@ -379,7 +381,8 @@ export function createBar(surface: Surface, options: BarOptions): { element: HTM
     // the outline flows out from its control, beside the document's name
     const outlineButton = control("Outline", icon("outline"), () => options.onOutline?.());
     outlineButton.setAttribute("aria-pressed", "false");
-    group(0, none, outlineButton, name);
+    const home = options.onHome ? [control("All documents", icon("shelf"), () => options.onHome!())] : [];
+    group(0, none, ...home, outlineButton, name);
 
     // the style picker
     const styles = flowMenu("Style");
