@@ -1,3 +1,5 @@
+// The title's names: what a file's title shows, and the name a typed title gives it (title.ts).
+
 import { describe, expect, test } from "bun:test";
 import { nameFor, shownName } from "./title";
 

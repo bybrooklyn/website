@@ -1,3 +1,5 @@
+// The caret's colours: one for each blink, going round (caret.ts).
+
 import { describe, expect, test } from "bun:test";
 import { blinkColour } from "./caret";
 

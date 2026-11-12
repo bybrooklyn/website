@@ -20,6 +20,7 @@ export function nameFor(old: string, typed: string): string {
     return words + (old.match(extension)?.[0] ?? "");
 }
 
+/** What the title line tells the editor. */
 export interface TitleOptions {
     /** The writing's own element, which Enter goes on to. */
     goOn: () => void;
