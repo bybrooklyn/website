@@ -27,8 +27,8 @@ export const BOOST = 4;
 
 /** The model's three files: the two networks as bytes (or addresses), and the text of its vocabulary. */
 export interface Model {
-    encoder: ArrayBuffer | string;
-    decoder: ArrayBuffer | string;
+    encoder: ArrayBuffer | Uint8Array | string;
+    decoder: ArrayBuffer | Uint8Array | string;
     vocab: string;
 }
 

@@ -127,7 +127,7 @@ export default defineConfig({
         pruneAssets(),
         ortFiles,
     ],
-    // Workers are built as modules, because the dictation worker loads ONNX Runtime and parakeet.js
+    // Workers are built as modules, because the dictation worker loads ONNX Runtime
     // with import(), which a single-file worker cannot do.
     vite: { worker: { format: "es" } },
     markdown: {

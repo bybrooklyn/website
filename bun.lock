@@ -12,7 +12,6 @@
         "@astrojs/sitemap": "^3.7.4",
         "astro": "7.4.8",
         "onnxruntime-web": "1.24.1",
-        "parakeet.js": "1.4.4",
         "sharp": "0.35.5",
         "typescript": "6",
       },
@@ -632,7 +631,6 @@
 
     "package-manager-detector": ["package-manager-detector@1.9.0", "", {}, "sha512-zAMfbta9nPA8AKkA4WdmNAT8R8s6Dk0/xwPsqNnRidMFcLo1YkLuPDTgs2f64XdzS8vbLNnoJ+uUIkgbz7oRHA=="],
 
-    "parakeet.js": ["parakeet.js@1.4.4", "", { "dependencies": { "onnxruntime-web": "1.24.1" } }, "sha512-+tYIDgp799bvsDye3y2lFyspYHgTOJ5YMZi0mWYABXyJjp/3NZmNaMTnS9jhf4qlIQJoBk0Nmj+UwsI3zk+Aqg=="],
 
     "path-browserify": ["path-browserify@1.0.1", "", {}, "sha512-b7uo2UCUOYZcnF/3ID0lulOJi/bafxa1xPe7ZPsammBSpjSWQkjNxlt635YGS2MiR9GjvuXCtz2emr3jbsz98g=="],
 

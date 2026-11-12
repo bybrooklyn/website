@@ -3,7 +3,7 @@
 // the rest is written. STYLE.md says the same things in words.
 //
 //   dependencies   package.json may not gain a library; Mote and mdQuire import nothing from outside their folders
-//                  (parakeet.js and onnxruntime-web, from src/quire/dictation/ only, are the one allowed exception)
+//                  (onnxruntime-web, from src/quire/dictation/ only, is the one allowed exception)
 //   comments       a source file opens by saying what it is; in Mote and mdQuire every exported thing has a sentence
 //   leftovers      no console.log in src/
 //   words          comments and page text in plain words: no dash as punctuation, no emoji, none of the tells
@@ -14,14 +14,14 @@ import { Glob } from "bun";
 import { at } from "./lib";
 
 /** The libraries the site has. A new one fails the lint: add it here on purpose or do without it. */
-const LIBRARIES = ["@astrojs/check", "@astrojs/markdown-satteri", "@astrojs/mdx", "@astrojs/rss", "@astrojs/sitemap", "@types/bun", "astro", "onnxruntime-web", "parakeet.js", "sharp", "simple-icons", "typescript", "wrangler"];
+const LIBRARIES = ["@astrojs/check", "@astrojs/markdown-satteri", "@astrojs/mdx", "@astrojs/rss", "@astrojs/sitemap", "@types/bun", "astro", "onnxruntime-web", "sharp", "simple-icons", "typescript", "wrangler"];
 /**
  * The one exception to the editor importing nothing from outside itself, by the owner's choice:
- * speech recognition is not rewritten. These two packages, and only these, may be imported, and
- * only from src/quire/dictation/, where they are loaded with import() when dictation is first
- * switched on so that a visitor who never dictates downloads none of them.
+ * the speech models run on ONNX Runtime, which is not rewritten. Only this package may be imported,
+ * and only from src/quire/dictation/, where it is loaded when dictation is first switched on so
+ * that a visitor who never dictates downloads none of it. (The pages fetch its files from /ort/.)
  */
-const SPEECH = ["parakeet.js", "onnxruntime-web"];
+const SPEECH = ["onnxruntime-web"];
 const SPEECH_HOME = "src/quire/dictation/";
 /** Files that only wire a browser feature (a worker, an audio worklet) to code that is tested; they cannot be loaded outside a browser, so their test is the browser test. */
 const SHELLS = ["src/quire/dictation/engine-worker.ts", "src/quire/dictation/capture-worklet.ts", "src/quire/dictation/capture.ts", "src/quire/dictation/engine.ts", "src/quire/dictation/page.ts"];

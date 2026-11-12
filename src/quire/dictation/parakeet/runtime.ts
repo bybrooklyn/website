@@ -19,7 +19,7 @@ export interface Backend {
 
 /** What load needs: the two files (bytes, or an address to fetch them from), and what to prefer. */
 export interface LoadOptions {
-    files: { encoder: ArrayBuffer | string; decoder: ArrayBuffer | string };
+    files: { encoder: ArrayBuffer | Uint8Array | string; decoder: ArrayBuffer | Uint8Array | string };
     prefer?: "webgpu" | "wasm";
     threads?: number;
     /** Session options laid over the ones chosen here; for measuring, not for use. */
@@ -132,7 +132,7 @@ export async function detect(): Promise<Backend> {
 const ENCODER = { graphOptimizationLevel: "all", enableCpuMemArena: true, enableMemPattern: true, executionMode: "sequential" } as const;
 const DECODER = { ...ENCODER, executionProviders: ["wasm"] } as const;
 
-const bytes = (file: ArrayBuffer | string) => (typeof file === "string" ? file : new Uint8Array(file));
+const bytes = (file: ArrayBuffer | Uint8Array | string) => (typeof file === "string" || ArrayBuffer.isView(file) ? (file as Uint8Array | string) : new Uint8Array(file));
 
 /** Loads the two files and gives back the sessions with the encoder ready to run. Falls back to WebAssembly if the card is missing or will not take the encoder. */
 export async function load(options: LoadOptions): Promise<Loaded> {

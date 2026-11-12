@@ -1,5 +1,5 @@
 // Moonshine tiny (27 million parameters, English, MIT) run straight on ONNX Runtime Web, for the
-// smallest dictation tier. parakeet.js cannot run it, so this is the whole of what it needs: the
+// smallest dictation tier. it is not a Parakeet, so this is the whole of what it needs: the
 // encoder once over the audio, then the decoder's greedy loop with its cached attention state, and
 // a tokenizer that only reads tokens back into text.
 //
