@@ -183,6 +183,10 @@ used("the server answers whether a link in a post leads to a file beside it or a
     expect(await ask("/mdquire/")).toBe(true);
     expect(await ask("/blog/no-such-post/")).toBe(false);
     expect(await ask("/robots.txt")).toBe(true);
+    // and it serves the spelling check's dictionary, as the site does
+    const dictionary = await fetch(`${address.replace(/\/\?k=.*$/, "")}/quire/words-en.dat`);
+    expect(dictionary.ok).toBe(true);
+    expect((await dictionary.arrayBuffer()).byteLength).toBeGreaterThan(100_000);
 });
 
 if (!live) console.warn("edit.test.ts: no Chromium on this machine, so the editor was not used.");
