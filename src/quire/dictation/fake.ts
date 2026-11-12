@@ -66,7 +66,7 @@ export function createFake(): { provider: Provider; microphone: (onFrame: (frame
                 for (let i = 0; i < 1600; i++) frame[i] = loudness * Math.sin((2 * Math.PI * 220 * (ticks * 1600 + i)) / RATE);
                 ticks++;
                 feed?.(frame);
-                if (at % 500 === 0) await new Promise((done) => setTimeout(done, 0));
+                await new Promise((done) => setTimeout(done, 12));
             }
             await new Promise((done) => setTimeout(done, controls.delay + 20));
         },
@@ -80,7 +80,7 @@ export function createFake(): { provider: Provider; microphone: (onFrame: (frame
                 }
                 ticks++;
                 feed?.(frame);
-                if (at % 500 === 0) await new Promise((done) => setTimeout(done, 0));
+                await new Promise((done) => setTimeout(done, 12));
             }
             await new Promise((done) => setTimeout(done, controls.delay + 20));
         },
