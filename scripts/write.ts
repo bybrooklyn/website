@@ -225,7 +225,7 @@ const page = `<!doctype html>
 <link rel="stylesheet" href="/style.css">
 </head>
 <body class="quire-app edit-app">
-<header class="quire-top"><p class="site-name">charlotte</p><span class="edit-where">editing on this computer</span></header>
+<header class="quire-top"><div class="quire-top-row"><div class="site-id"><p class="site-name">charlotte</p><span class="edit-where">editing on this computer</span></div><div class="quire-bar-home"></div></div></header>
 <main id="main">
     <div class="edit-panes">
         <div id="quire" class="quire-host"></div>

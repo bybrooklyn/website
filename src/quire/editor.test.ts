@@ -952,4 +952,18 @@ used("a faint \"Type / for blocks\" fades in on the empty line the cursor is on,
     expect(await shown(0)).toBe(1);
 });
 
+used("a long heading with no spaces is one line in the outline, cut with an ellipsis, and the outline never scrolls sideways", async () => {
+    await reset(`# ${"Hey".padEnd(160, "y")}\n\nText.\n`, [1], 0);
+    await button("Outline");
+    await tab.wait(600);
+    const seen = await tab.run<{ sideways: boolean; lines: number; title: string; cut: string }>(`(() => {
+        const nav = document.querySelector('.quire-outline');
+        const link = document.querySelector('.quire-outline-link');
+        return { sideways: nav.scrollWidth > nav.clientWidth, lines: Math.round((link.getBoundingClientRect().height - parseFloat(getComputedStyle(link).paddingTop) - parseFloat(getComputedStyle(link).paddingBottom)) / parseFloat(getComputedStyle(link).lineHeight)), title: link.title, cut: getComputedStyle(link).textOverflow };
+    })()`);
+    expect(seen).toEqual({ sideways: false, lines: 1, title: "Hey".padEnd(160, "y"), cut: "ellipsis" });
+    await button("Outline");
+    await tab.wait(400);
+});
+
 if (!live) console.warn("editor.test.ts: no Chromium on this machine, so the editor was not used.");

@@ -57,4 +57,4 @@ const host = document.querySelector<HTMLElement>("#quire");
 const names: Record<string, string> = { violet: "Violet", pink: "Pink", blue: "Blue", mint: "Mint", amber: "Amber" };
 const colors = Object.entries(accents).map(([key, value]) => ({ name: names[key] ?? key, value: css(value) }));
 
-if (host) void startApp(host, { colors, sample: SAMPLE, lead: document.querySelector<HTMLElement>(".quire-top") ?? undefined });
+if (host) void startApp(host, { colors, sample: SAMPLE, barHome: document.querySelector<HTMLElement>(".quire-bar-home") ?? undefined });

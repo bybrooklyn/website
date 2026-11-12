@@ -25,8 +25,8 @@ export interface AppOptions {
     fetcher?: Fetcher;
     /** The name of the browser database. */
     database?: string;
-    /** What the page puts at the left end of the bar, such as the site's name. */
-    lead?: HTMLElement;
+    /** Where the page wants the bar: in its own top row, beside the site's name. */
+    barHome?: HTMLElement;
 }
 
 /** Where the writer was, remembered in this browser. */
@@ -93,7 +93,7 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
         mark: start.mark,
         versions: browser.versions,
         colors: options.colors,
-        lead: options.lead,
+        barHome: options.barHome,
         onOpen: remember,
         onName: (button) => {
             if (menu.isOpen()) return menu.close(true);

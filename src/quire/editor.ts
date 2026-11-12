@@ -48,8 +48,8 @@ export interface EditorOptions {
     onName?: (from: HTMLElement) => void;
     /** More lines for the three-dot menu, from the page. */
     more?: () => MenuItem[];
-    /** What the page puts at the left end of the bar, such as the site's name. */
-    lead?: HTMLElement;
+    /** Where the page wants the bar: in its own top row, beside the site's name. Above the editor if not given. */
+    barHome?: HTMLElement;
     /** Takes a picture file when there is no store to keep it. */
     onImage?: (file: File) => Promise<string>;
     /** Where the title is kept when it is the document's own (a post's frontmatter title) rather than its name. */
@@ -228,7 +228,6 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         onImage: keepPicture,
         onName: (from) => options.onName?.(from),
         onOutline: () => (outlineView.isOpen() ? outlineView.close() : outlineView.open()),
-        lead: options.lead,
         onLink: openLink,
         more,
     });
@@ -247,7 +246,10 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     };
     markdown.element.inert = true;
     // the bar runs along the top of the whole editor; under it the outline's column and the page
-    host.prepend(bar.element);
+    if (options.barHome) {
+        options.barHome.append(bar.element);
+        host.classList.add("bar-away");
+    } else host.prepend(bar.element);
     bar.element.querySelector('[aria-label="Outline"]')?.setAttribute("data-outline-control", "");
     column.append(panes);
     surface.on("link", () => openLink(bar.element.querySelector<HTMLElement>('[aria-label^="Link"]')!));

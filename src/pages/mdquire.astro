@@ -1,6 +1,8 @@
 ---
-// mdQuire, the editor, filling the window. The site's name leads home; there is no menu taking
-// room. It is unlisted, and kept out of search and the sitemap, until she says otherwise.
+// mdQuire, the editor, filling the window. Its top row is the site's own: the name and flags where
+// every page has them, at the left edge of the site's column, and the editor's bar beside them
+// where the site's menu would be. It is unlisted, and kept out of search and the sitemap, until
+// she says otherwise.
 import Document from "../layouts/Document.astro";
 import Flags from "../components/Flags.astro";
 import { site } from "../data/site";
@@ -9,8 +11,13 @@ import "../styles/quire.css";
 
 <Document title="mdQuire" description="A word processor for Markdown files." unlisted bodyClass="quire-app">
     <header class="quire-top">
-        <a class="site-name" href="/">{site.name.toLowerCase()}</a>
-        <Flags />
+        <div class="quire-top-row">
+            <div class="site-id">
+                <a class="site-name" href="/">{site.name.toLowerCase()}</a>
+                <Flags />
+            </div>
+            <div class="quire-bar-home"></div>
+        </div>
     </header>
     <main id="main" tabindex="-1">
         <div id="quire" class="quire-host"></div>

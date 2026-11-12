@@ -12,6 +12,8 @@
 .quire-editor {
     --bar-height: 3.1rem;
     --edge: clamp(0.75rem, 2vw, 1.5rem);
+    /* how far down the window what stays at the top reaches */
+    --stuck: calc(var(--bar-height) + 0.0625rem);
     /* the editor takes the width it is given and never widens the page; long lines scroll inside it */
     contain: inline-size;
     position: relative;
@@ -328,17 +330,6 @@
 
 .quire-bar-group + .quire-bar-group {
     border-left: 0.0625rem solid var(--rule);
-}
-
-/* the page's lead, the site's name and its flags, starts the row */
-.quire-bar-lead {
-    padding-right: 0.9rem;
-}
-
-.quire-bar-lead .quire-top {
-    gap: 0.6rem;
-    margin: 0;
-    font-size: 1rem;
 }
 
 /* the word count and the three dots keep to the bar's right end, even while the rest scrolls under them */
@@ -957,9 +948,14 @@
 }
 
 .quire-outline-list {
+    min-width: 0;
     margin: 0;
     padding: 0;
     list-style: none;
+}
+
+.quire-outline {
+    overflow-x: hidden;
 }
 
 .quire-outline-item.level-2 {
@@ -986,6 +982,10 @@
     font-size: 0.9rem;
     line-height: 1.35;
     text-align: left;
+    /* one line, never scrolling sideways: a long heading is cut short with an ellipsis */
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
     cursor: pointer;
     transition:
         color 0.25s ease,
@@ -1033,13 +1033,13 @@
     .quire-outline,
     .quire-outline.open {
         position: sticky;
-        top: calc(var(--bar-height) + 0.0625rem);
+        top: var(--stuck);
         bottom: auto;
         left: auto;
         z-index: 1;
         align-self: start;
         width: auto;
-        max-height: calc(100vh - var(--bar-height));
+        max-height: calc(100vh - var(--stuck));
         padding: calc(var(--line) * 1.5) 0.75rem 1rem var(--edge);
         border: 0;
         border-right: 0.0625rem solid var(--rule);
@@ -1057,7 +1057,7 @@
     }
 
     .quire-outline.open {
-        min-height: calc(100vh - var(--bar-height));
+        min-height: calc(100vh - var(--stuck));
         opacity: 1;
         visibility: visible;
         transition:
@@ -1287,7 +1287,7 @@
 
 .quire-source {
     position: sticky;
-    top: calc(var(--bar-height) + var(--line));
+    top: calc(var(--stuck) + var(--line));
     box-sizing: border-box;
     width: 100%;
     min-width: 0;
@@ -1400,15 +1400,6 @@
         overflow: hidden;
     }
 
-    .quire-bar-lead {
-        padding-right: 0.4rem;
-    }
-
-    .quire-bar-lead .flags {
-        max-width: 0;
-        opacity: 0;
-        overflow: hidden;
-    }
 }
 
 /* how saving stands: a fixed slot, its words fading one into the next */
@@ -1590,13 +1581,67 @@ body.quire-app {
     padding: 0;
 }
 
+/* The top row is the site's own: the same column as every page (--page and --gutter, as the body
+   has them), the name and flags at its left edge as high as on any page, and the bar beside them
+   where the site's menu would be, running to the column's right edge. On scrolling the row's top
+   goes up out of sight and the bar stays, with the rule under the whole width. */
 .quire-top {
+    --bar-height: 3.1rem;
+    /* the bar's top above the name's line, so that it sits centred on the name */
+    --rise: calc((var(--bar-height) - var(--line)) / 2);
+    position: sticky;
+    top: calc(var(--line) * -1.25 + var(--rise) + 0.4rem);
+    z-index: 40;
+    border-bottom: 0.0625rem solid var(--rule);
+    background: var(--ground);
+}
+
+.quire-top-row {
+    box-sizing: border-box;
     display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    position: relative;
-    margin: 0.75rem var(--gutter);
-    font-size: 0.85rem;
+    align-items: flex-start;
+    gap: 0.5rem 2rem;
+    max-width: calc(var(--page) + var(--gutter) * 2);
+    margin-inline: auto;
+    padding: calc(var(--line) * 1.25) var(--gutter) 0.5rem;
+}
+
+.quire-top .site-id {
+    flex: none;
+}
+
+.quire-bar-home {
+    flex: 1;
+    min-width: 0;
+    margin-top: calc(var(--rise) * -1);
+}
+
+/* in the top row the bar is one of its parts: no edge, rule or ground of its own */
+.quire-bar-home .quire-bar {
+    --edge: 0rem;
+    position: static;
+    border-bottom: 0;
+    background: var(--ground);
+}
+
+.quire-app .quire-editor {
+    --stuck: calc(var(--bar-height) + 0.9rem + 0.0625rem);
+}
+
+/* on a narrow window the bar takes its own line under the name, and only it stays on scrolling */
+@media (max-width: 40rem) {
+    .quire-top-row {
+        flex-wrap: wrap;
+    }
+
+    .quire-bar-home {
+        flex-basis: 100%;
+        margin-top: 0;
+    }
+
+    .quire-top {
+        top: calc((var(--line) * 2.25 + 0.5rem) * -1 + 0.4rem);
+    }
 }
 
 .quire-app main:focus {

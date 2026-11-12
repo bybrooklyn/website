@@ -282,8 +282,6 @@ export interface BarOptions {
     onName?: (from: HTMLElement) => void;
     /** Shows or hides the outline, from its control in the bar. */
     onOutline?: () => void;
-    /** What the page puts at the bar's left end, before everything else: the site's name, say. */
-    lead?: HTMLElement;
     /** The colors offered for text, by name. */
     colors?: { name: string; value: string }[];
     onImage?: (file: File) => Promise<string>;
@@ -339,8 +337,6 @@ export function createBar(surface: Surface, options: BarOptions): { element: HTM
     fitName(options.name);
     name.addEventListener("mousedown", (event) => event.preventDefault());
     name.addEventListener("click", () => options.onName?.(name));
-    // the page's own lead, the site's name, starts the row
-    if (options.lead) group(0, none, options.lead).classList.add("quire-bar-lead");
     // the outline flows out from its control, beside the document's name
     const outlineButton = control("Outline", icon("outline"), () => options.onOutline?.());
     outlineButton.setAttribute("aria-pressed", "false");
