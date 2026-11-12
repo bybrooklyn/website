@@ -259,8 +259,9 @@ export default function dice(m: Mote): Scene {
         const counts = new Map<number, HTMLElement>();
         const refresh = () => {
             for (const [sides, badge] of counts) {
-                badge.textContent = hand[sides as Sides] ? String(hand[sides as Sides]) : "";
-                badge.hidden = !hand[sides as Sides];
+                // (an emptied one keeps its number while it shrinks away)
+                if (hand[sides as Sides]) badge.textContent = String(hand[sides as Sides]);
+                badge.classList.toggle("on", Boolean(hand[sides as Sides]));
             }
         };
         const empty = () => {
@@ -271,7 +272,7 @@ export default function dice(m: Mote): Scene {
         typed.oninput = empty;
         // each die as it looks from above, with its highest number on top
         const picks = ([4, 6, 8, 10, 12, 20, 100] as const).map((sides) => {
-            const badge = el("span", { class: "dice-count", hidden: true });
+            const badge = el("span", { class: "dice-count" });
             counts.set(sides, badge);
             const add = () => {
                 if (typed.value.trim() === handText()) {
@@ -292,6 +293,8 @@ export default function dice(m: Mote): Scene {
         const share = el("button", { type: "button", class: "quiet", textContent: "copy link to this roll", onclick: () => {
             if (!last) return;
             const address = m.link.set("roll", last);
+            // the button keeps its width while its words change, so nothing beside it jumps
+            share.style.minWidth = `${share.offsetWidth}px`;
             navigator.clipboard?.writeText(address).then(() => (share.textContent = "link copied"), () => (share.textContent = "the link is in the address bar"));
             setTimeout(() => (share.textContent = "copy link to this roll"), 2500);
         } });

@@ -233,7 +233,7 @@ export function view(picture: HTMLImageElement, link?: HTMLAnchorElement | null)
         }
         event.stopPropagation();
         const inMenu = more.box.contains(document.activeElement);
-        if (event.key === "Escape" && more.shut()) return void viewer.focus({ preventScroll: true });
+        if (event.key === "Escape" && more.shut()) return void more.box.querySelector("button")?.focus({ preventScroll: true });
         if (event.key !== "Escape" && (inMenu || (event.key !== "Enter" && event.key !== " "))) return;
         event.preventDefault();
         shut();

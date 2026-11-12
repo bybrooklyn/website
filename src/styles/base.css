@@ -232,7 +232,7 @@ h1 + .lede {
     /* room for the underline inside the clip */
     padding-bottom: 0.3em;
     margin-bottom: -0.3em;
-    transition: width 0.6s cubic-bezier(0.45, 0, 0.2, 1);
+    transition: width 0.5s var(--ease);
 }
 
 .reveal.ready > span {
@@ -267,6 +267,17 @@ h1 + .lede {
     .reveal.ready > span {
         transition: none;
     }
+}
+
+/* Whatever is marked hidden is not shown, even where a rule gives it a display of its own. */
+[hidden] {
+    display: none !important;
+}
+
+/* The same ring on everything that can be pressed, when it is reached by keyboard. */
+:where(button, summary, [role="button"], input, select):focus-visible {
+    outline: 0.125rem solid var(--accent);
+    outline-offset: 0.15rem;
 }
 
 /* ---- home ---- */
@@ -672,6 +683,49 @@ h1 + .about {
 
 .play-button:hover {
     text-decoration-color: var(--accent);
+}
+
+/* once it is pressed the line draws shut, and the game is in the picture's place */
+.play-line {
+    max-height: 4rem;
+    overflow: hidden;
+    transition:
+        max-height 0.4s var(--ease),
+        opacity 0.25s ease,
+        margin 0.4s var(--ease);
+}
+
+.play-here.playing .play-line {
+    max-height: 0;
+    margin-top: 0;
+    opacity: 0;
+    visibility: hidden;
+    transition:
+        max-height 0.4s var(--ease),
+        opacity 0.25s ease,
+        margin 0.4s var(--ease),
+        visibility 0s 0.4s;
+}
+
+.play-still iframe {
+    animation: play-arrive 0.4s ease;
+}
+
+@keyframes play-arrive {
+    from {
+        opacity: 0;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .play-line,
+    .play-here.playing .play-line {
+        transition: none;
+    }
+
+    .play-still iframe {
+        animation: none;
+    }
 }
 
 /* Playmatter on the homepage: the clip across the page, and under it what it is. */

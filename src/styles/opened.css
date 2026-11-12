@@ -140,6 +140,16 @@ body.opened:has(.strip:hover, .strip:focus-visible) .opened-panel {
     }
 }
 
+@media (prefers-reduced-motion: reduce) {
+    .opened-panel {
+        transition: none;
+    }
+
+    body.opened:has(.strip:hover, .strip:focus-visible) .opened-panel {
+        translate: none;
+    }
+}
+
 @media print {
     body.opened {
         overflow: visible;

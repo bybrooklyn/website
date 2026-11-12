@@ -166,12 +166,23 @@
 
 .mote-panel button:hover {
     border-color: var(--accent);
+    background: color-mix(in oklch, var(--accent) 14%, var(--ground));
+}
+
+.mote-panel button:active:not(:disabled) {
+    scale: 0.96;
 }
 
 .mote-panel button.quiet {
     border-color: transparent;
     background: none;
     color: var(--muted);
+}
+
+.mote-panel button.quiet:hover {
+    border-color: transparent;
+    background: color-mix(in oklch, var(--accent) 12%, transparent);
+    color: var(--ink);
 }
 
 .mote-panel input[type="text"] {
@@ -245,6 +256,20 @@
 }
 
 /* How many of that die are in the hand. */
+/* It grows in with the first press of its die and shrinks away when the hand is cleared. */
+.dice-count {
+    scale: 0;
+    opacity: 0;
+    transition:
+        scale 0.3s var(--ease),
+        opacity 0.2s ease;
+}
+
+.dice-count.on {
+    scale: 1;
+    opacity: 1;
+}
+
 .dice-count {
     position: absolute;
     top: -0.4rem;
@@ -260,9 +285,15 @@
     text-align: center;
 }
 
+/* the same height as the field and the buttons beside it */
 .mote-panel .dice-go {
-    padding: 0.35rem 1.4rem;
+    padding: 0.25rem 1.4rem;
     border-color: var(--accent);
+}
+
+.mote-panel .dice-go:hover:not(:disabled) {
+    background: var(--accent);
+    color: var(--ground);
 }
 
 .mote-panel button:disabled {
@@ -273,6 +304,17 @@
 @media (prefers-reduced-motion: reduce) {
     .dice-pick:hover .dice-picture {
         transform: none;
+    }
+
+    .dice-count,
+    .plinko-word,
+    .mini-preview {
+        transition: none;
+    }
+
+    .mini-list a:hover .mini-preview,
+    .mini-list a:focus-visible .mini-preview {
+        translate: none;
     }
 }
 
@@ -312,6 +354,26 @@
 }
 
 /* ---- the Plinko mini's panel: the password, and its settings ---- */
+
+/* The password's line opens when there is a password and draws shut when there is not. */
+.plinko-word {
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    transition:
+        max-height 0.45s var(--ease),
+        opacity 0.3s ease,
+        margin 0.45s var(--ease);
+}
+
+.plinko-word.shown {
+    max-height: 8rem;
+    opacity: 1;
+}
+
+.plinko-word:not(.shown) {
+    margin-bottom: 0;
+}
 
 .plinko-word {
     display: block;
