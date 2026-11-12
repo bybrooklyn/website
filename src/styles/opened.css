@@ -1,8 +1,10 @@
 /* A post or project, opened beside what is left of the site. See Opened.astro. */
 
 :root {
-    /* How much of the site stays visible on the left while something is open. */
-    --strip: 6.5rem;
+    /* How much of the site stays visible on the left while something is open: the margin beside the
+       site's column, less a little room inside the panel, and never too thin for the way back. */
+    --strip: clamp(3.5rem, calc((100vw - var(--page)) / 2 - 2rem), 6.5rem);
+    --panel-border: 0.0625rem;
 }
 
 /* The panel has its own scrollbar; the page must not reserve room for a second one. */
@@ -65,11 +67,13 @@ body.opened {
     position: fixed;
     inset: 0 0 0 var(--strip);
     overflow-y: auto;
+    /* room for its scrollbar whether or not it scrolls, as the page keeps on other pages, so the column sits in the same place */
+    scrollbar-gutter: stable;
     overscroll-behavior: contain;
     scrollbar-color: var(--panel-rule) transparent;
     background: var(--panel);
     /* A line between the two grounds, so the edge reads at a glance. */
-    border: 0.0625rem solid var(--panel-edge);
+    border: var(--panel-border) solid var(--panel-edge);
     border-right: 0;
     border-radius: 2rem 0 0 2rem;
     scroll-behavior: smooth;
@@ -80,6 +84,11 @@ body.opened {
     --rule: var(--panel-rule);
     --astro-code-background: var(--panel-raised);
     --panel-gutter: clamp(1.25rem, 5vw, 4rem);
+    /* What is in the panel starts and ends where the site's column does on every other page: the
+       column is centred in the window, and the panel begins a strip and a border in from its left.
+       A percentage here is of the panel's width, which leaves out its scrollbar as the page's does. */
+    --edge-start: max(1.5rem, calc((100% - var(--strip) - var(--panel-border) - var(--page)) / 2));
+    --edge-end: max(var(--gutter), calc((100% + var(--strip) + var(--panel-border) - var(--page)) / 2));
 }
 
 /* Hovering the strip nudges the panel. */
@@ -91,16 +100,17 @@ body.opened:has(.strip:hover, .strip:focus-visible) .opened-panel {
     outline: none;
 }
 
+/* the same room above the top row, and between it and the page, as the body gives other pages */
 .opened-top {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.25rem 1.5rem;
-    padding: calc(var(--line) * 0.8) var(--panel-gutter) 0;
+    padding: calc(var(--line) * 1.25 - var(--panel-border)) var(--edge-end) 0 var(--edge-start);
 }
 
 .opened-panel main {
-    padding: calc(var(--line) * 1.5) var(--panel-gutter) calc(var(--line) * 2.5);
+    padding: calc(var(--line) * 2.5) var(--edge-end) calc(var(--line) * 2.5) var(--edge-start);
+}
+
+.trail {
+    margin-bottom: var(--line);
 }
 
 .trail {
@@ -134,9 +144,14 @@ body.opened:has(.strip:hover, .strip:focus-visible) .opened-panel {
         display: none;
     }
 
+    :root {
+        --panel-border: 0rem;
+    }
+
     .opened-panel {
         border: 0;
         border-radius: 0;
+        --edge-start: var(--gutter);
     }
 }
 

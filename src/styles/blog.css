@@ -121,7 +121,7 @@
     --toc: 15rem;
     --gap: clamp(2.5rem, 5vw, 5rem);
     max-width: calc(var(--measure) + var(--toc) + var(--gap));
-    margin-inline: auto;
+    /* hung from the site's left edge, under the name, as every page is; not centred */
 }
 
 .post-header {
