@@ -30,6 +30,15 @@ export function barFor(doc: Document, selection: Selection, marks: Mark[]): { sh
     };
 }
 
+/**
+ * Which side of the selection the bar goes: above only when the space between the selection's top
+ * and the text over it is clear for the whole bar, so that it never covers the line above or a
+ * heading; below otherwise.
+ */
+export function sideFor(selection: { top: number; bottom: number }, textAbove: number, height: number, gap = 10): "above" | "below" {
+    return selection.top - textAbove >= height + gap * 2 ? "above" : "below";
+}
+
 /** Builds the selection bar for a surface. `top` gives how far down the window the main bar reaches, which it keeps clear of. */
 export function createSelectBar(surface: Surface, top: () => number = () => 0): { element: HTMLElement; hide(): void } {
     const bar = make("div", "quire-select-bar");
@@ -109,10 +118,24 @@ export function createSelectBar(surface: Surface, top: () => number = () => 0): 
         const rect = range && surface.element.contains(range.commonAncestorContainer) ? range.getBoundingClientRect() : undefined;
         if (!rect || (!rect.width && !rect.height)) return;
         const limit = top();
-        const at = placeNear({ left: rect.left, top: rect.top - limit, width: rect.width, height: rect.height }, { width: bar.offsetWidth, height: bar.offsetHeight }, { width: innerWidth, height: innerHeight - limit }, "above", 10);
+        const side = sideFor(rect, textAbove(range!, rect.top), bar.offsetHeight);
+        const at = placeNear({ left: rect.left, top: rect.top - limit, width: rect.width, height: rect.height }, { width: bar.offsetWidth, height: bar.offsetHeight }, { width: innerWidth, height: innerHeight - limit }, side, 10);
         bar.style.left = `${at.left}px`;
         bar.style.top = `${at.top + limit}px`;
         bar.classList.toggle("below", at.side === "below");
+    }
+
+    /** How far down the window the text over the selection reaches: the line above, or the block above it. */
+    function textAbove(range: Range, from: number): number {
+        let block: Node | null = range.startContainer;
+        while (block && block.parentNode !== surface.element) block = block.parentNode;
+        if (!block) return -Infinity;
+        const before = document.createRange();
+        before.setStartBefore((block as Element).previousElementSibling ?? block);
+        before.setEnd(range.startContainer, range.startOffset);
+        let reach = -Infinity;
+        for (const box of before.getClientRects()) if (box.height > 0 && box.bottom <= from + 1) reach = Math.max(reach, box.bottom);
+        return reach;
     }
 
     function show() {

@@ -4,7 +4,7 @@
 import { expect, test } from "bun:test";
 import { caret } from "./keys";
 import { read } from "./read";
-import { barFor } from "./select-bar";
+import { barFor, sideFor } from "./select-bar";
 
 test("it shows for selected text and not for a cursor alone", () => {
     const doc = read("Some words here\n");
@@ -24,4 +24,15 @@ test("it shows as pressed the marks, link and kind of block of the selection", (
     expect(heading).toMatchObject({ bold: true, italic: false, link: true, heading: true, quote: false, list: false });
     expect(barFor(doc, { anchor: { path: [1, 0], offset: 0 }, focus: { path: [1, 0], offset: 3 } }, []).pressed.quote).toBe(true);
     expect(barFor(doc, { anchor: { path: [2, 0, 0], offset: 0 }, focus: { path: [2, 0, 0], offset: 3 } }, []).pressed.list).toBe(true);
+});
+
+test("it goes above only when the space over the selection is clear for all of it, and below otherwise", () => {
+    // a selection on the first line of a block, with a wide margin over it
+    expect(sideFor({ top: 300, bottom: 320 }, 240, 40)).toBe("above");
+    // a selection on a second line, with the line above just over it
+    expect(sideFor({ top: 300, bottom: 320 }, 296, 40)).toBe("below");
+    // a heading close over it
+    expect(sideFor({ top: 300, bottom: 320 }, 270, 40)).toBe("below");
+    // nothing above at all
+    expect(sideFor({ top: 300, bottom: 320 }, -Infinity, 40)).toBe("above");
 });

@@ -564,4 +564,41 @@ used("everything that appears comes in over several frames, and with less motion
     }
 });
 
+used("the selection bar never covers a heading over the selection, nor the line above it", async () => {
+    const words = Array.from({ length: 60 }, (_, index) => `word${index}`).join(" ");
+    await reset(`# A heading over it\n\n${words}\n`, [1], 0, [1], 5);
+    await tab.wait(500);
+    const overlaps = (a: { top: number; bottom: number; left: number; right: number }, b: { top: number; bottom: number; left: number; right: number }) => a.top < b.bottom && b.top < a.bottom && a.left < b.right && b.left < a.right;
+    const boxes = () =>
+        tab.run<{ bar: DOMRect; heading: DOMRect; selection: DOMRect; line: number }>(
+            "(() => { const box = (e) => e.getBoundingClientRect().toJSON(); return { bar: box(document.querySelector('.quire-select-bar')), heading: box(document.querySelector('.quire h1')), selection: getSelection().getRangeAt(0).getBoundingClientRect().toJSON(), line: parseFloat(getComputedStyle(document.querySelector('.quire p')).lineHeight) }; })()",
+        );
+    let seen = await boxes();
+    expect(overlaps(seen.bar, seen.heading)).toBe(false);
+    expect(overlaps(seen.bar, seen.selection)).toBe(false);
+    // a word on the third line: the line above it is not covered
+    const third = await tab.run<number>("(() => { const p = document.querySelector('.quire p'); const text = p.firstChild; const range = document.createRange(); for (let at = 0; at < text.length; at += 6) { range.setStart(text, at); range.setEnd(text, at + 1); if (range.getBoundingClientRect().top > p.getBoundingClientRect().top + 2.5 * parseFloat(getComputedStyle(p).lineHeight) - 4) return at; } return -1; })()");
+    expect(third).toBeGreaterThan(0);
+    await tab.run(`q.select([1], ${third}, [1], ${third + 5})`);
+    await tab.wait(500);
+    seen = await boxes();
+    const above = { top: seen.selection.top - seen.line, bottom: seen.selection.top - 2, left: seen.selection.left - 400, right: seen.selection.right + 400 };
+    expect(overlaps(seen.bar, above)).toBe(false);
+    expect(overlaps(seen.bar, seen.selection)).toBe(false);
+});
+
+used("typing in the Markdown of a long document reaches the text once typing pauses", async () => {
+    const long = Array.from({ length: 1500 }, (_, index) => `Line ${index} of a long document.`).join("\n\n") + "\n";
+    await reset(long, [0], 0);
+    await choose("More", "Show the Markdown");
+    await tab.wait(500);
+    await tab.run("(() => { const field = document.querySelector('.quire-source'); field.focus(); field.setSelectionRange(4, 4); })()");
+    await tab.type("XY");
+    expect(await tab.run("document.querySelector('.quire p').textContent")).toBe("Line 0 of a long document.");
+    await tab.wait(500);
+    expect(await tab.run("document.querySelector('.quire p').textContent")).toBe("LineXY 0 of a long document.");
+    await choose("More", "Hide the Markdown");
+    await tab.wait(400);
+});
+
 if (!live) console.warn("editor.test.ts: no Chromium on this machine, so the editor was not used.");

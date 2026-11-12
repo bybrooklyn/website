@@ -4,7 +4,7 @@
 
 import { expect, test } from "bun:test";
 import { insertText } from "./document";
-import { keepSame } from "./markdown-view";
+import { keepSame, settleFor } from "./markdown-view";
 import { read } from "./read";
 import { write } from "./write";
 
@@ -44,4 +44,10 @@ test("the same text gives back the same document, and new frontmatter or a fresh
     expect(next.blocks[1]).not.toBe(edited.blocks[1]);
     expect(next.blocks[1]!.source).toBe("Very First paragraph.");
     expect(next.blocks[0]).toBe(edited.blocks[0]);
+});
+
+test("a short document is read again at once, a long one only after a pause in typing", () => {
+    expect(settleFor(500)).toBeLessThanOrEqual(16);
+    expect(settleFor(150_000)).toBeGreaterThan(100);
+    expect(settleFor(2_000_000)).toBeGreaterThanOrEqual(settleFor(150_000));
 });

@@ -26,6 +26,11 @@ export function keepSame(old: Document, next: Document): Document {
     return { ...next, blocks: [...before.slice(0, start), ...after.slice(start, after.length - end), ...before.slice(before.length - end)] };
 }
 
+/** How long to wait after a key in the Markdown before reading it again: at once for a short document, after a pause for a long one. */
+export function settleFor(length: number): number {
+    return length < 20_000 ? 16 : length < 200_000 ? 180 : 400;
+}
+
 /** Builds the Markdown view for a surface. */
 export function createMarkdownView(surface: Surface): { element: HTMLTextAreaElement; refresh(): void } {
     const field = make("textarea", "quire-source");
@@ -35,23 +40,25 @@ export function createMarkdownView(surface: Surface): { element: HTMLTextAreaEle
 
     // the rich view changed: the text follows, unless it is the text being typed in
     const refresh = () => {
-        if (document.activeElement === field) return;
+        // hidden, it is not written at all: it is brought up to date when it is shown
+        if (document.activeElement === field || field.inert) return;
         const text = write(surface.getDocument());
         if (field.value !== text) field.value = text;
     };
     surface.on("change", refresh);
 
-    // the text changed: it is read again, and the rich view follows
-    let waiting = false;
+    // the text changed: it is read again, and the rich view follows. A long document is read again
+    // only once typing pauses, so that each key costs nothing more than the field's own work
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const reread = () => {
+        timer = undefined;
+        const current = surface.getDocument();
+        const next = keepSame(current, read(field.value, { mdx: current.mdx }));
+        if (next !== current) surface.run(() => next, "type");
+    };
     field.addEventListener("input", () => {
-        if (waiting) return;
-        waiting = true;
-        requestAnimationFrame(() => {
-            waiting = false;
-            const current = surface.getDocument();
-            const next = keepSame(current, read(field.value, { mdx: current.mdx }));
-            if (next !== current) surface.run(() => next, "type");
-        });
+        clearTimeout(timer);
+        timer = setTimeout(reread, settleFor(field.value.length));
     });
     field.addEventListener("blur", refresh);
     return { element: field, refresh };
