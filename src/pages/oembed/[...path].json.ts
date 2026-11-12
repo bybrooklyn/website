@@ -5,7 +5,7 @@ import type { APIRoute, GetStaticPaths } from "astro";
 import { site } from "../../data/site";
 import { getMinis } from "../../lib/minis";
 import { getPosts } from "../../lib/posts";
-import { getProjects } from "../../lib/projects";
+import { getProjects, projectPage } from "../../lib/projects";
 import { miniFacts, postFacts, projectShare, type Fact } from "../../lib/share";
 
 export const getStaticPaths = (async () => {
@@ -13,7 +13,7 @@ export const getStaticPaths = (async () => {
     return [
         page("site", []),
         ...(await getPosts()).map((post) => page(`blog/${post.id}`, postFacts(post))),
-        ...(await getProjects()).map((project) => page(`projects/${project.id}`, projectShare(project))),
+        ...(await getProjects()).map((project) => page(projectPage(project).replace(/^\/|\/$/g, ""), projectShare(project))),
         ...(await getMinis()).map((mini) => page(`minis/${mini.id}`, miniFacts(mini))),
     ];
 }) satisfies GetStaticPaths;

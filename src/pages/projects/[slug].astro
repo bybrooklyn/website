@@ -10,15 +10,15 @@ import "../../styles/projects.css";
 import Contents from "../../components/Contents.astro";
 import Opened from "../../layouts/Opened.astro";
 import { formatDate } from "../../lib/posts";
-import { getProjects, projectFacts, type Project } from "../../lib/projects";
+import { getProjects, projectFacts, projectPage, type Project } from "../../lib/projects";
 import { projectShare, sharePicture } from "../../lib/share";
 
 export const getStaticPaths = (async () => {
     const projects = await getProjects();
-    return projects.map((project, index) => ({
-        params: { slug: project.id },
-        props: { project, previous: projects[index - 1], next: projects[index + 1] },
-    }));
+    // A project that opens a page of its own (such as /spectrum/) has no page here, though its neighbours still link to it.
+    return projects.flatMap((project, index) =>
+        project.data.opens ? [] : [{ params: { slug: project.id }, props: { project, previous: projects[index - 1], next: projects[index + 1] } }],
+    );
 }) satisfies GetStaticPaths;
 
 interface Props {
@@ -153,8 +153,8 @@ if (facts) rows.push({ label: "last updated", value: formatDate(new Date(facts.u
 
         <PrevNext
             label="More projects"
-            previous={previous && { href: `/projects/${previous.id}/`, note: "previous", title: previous.data.name }}
-            next={next ? { href: `/projects/${next.id}/`, note: "next", title: next.data.name } : { href: "/projects/", note: "back to the list", title: "all projects" }}
+            previous={previous && { href: projectPage(previous), note: "previous", title: previous.data.name }}
+            next={next ? { href: projectPage(next), note: "next", title: next.data.name } : { href: "/projects/", note: "back to the list", title: "all projects" }}
         />
     </article>
 </Opened>

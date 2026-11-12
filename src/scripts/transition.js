@@ -11,7 +11,9 @@
     // The main pages in nav order, home first, from the <html> element.
     const order = (document.documentElement.dataset.order || "/").split(" ");
     const path = (url) => new URL(url).pathname;
-    const opened = (url) => /^\/(blog|projects|minis)\/[^/]+\/$/.test(path(url));
+    // A few pages open like a project without being under /projects/; <html> lists them.
+    const elsewhere = (document.documentElement.dataset.opened || "").split(" ").filter(Boolean);
+    const opened = (url) => /^\/(blog|projects|minis)\/[^/]+\/$/.test(path(url)) || elsewhere.includes(path(url));
     const place = (url) => order.findLastIndex((href) => (href === "/" ? path(url) === "/" : path(url).startsWith(href)));
     const kinds = (from, to) => {
         const kind = opened(to) ? (opened(from) ? "swap" : "open") : opened(from) ? "close" : "move";

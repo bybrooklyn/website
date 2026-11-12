@@ -22,6 +22,14 @@ export async function getProjects(): Promise<Project[]> {
     return projects.sort((a, b) => a.data.order - b.data.order);
 }
 
+/** Where a project's page is: the page it opens, if it has one, and otherwise its page under /projects/. */
+export const projectPage = (project: Project): string => project.data.opens ?? `/projects/${project.id}/`;
+
+/** The pages that projects open, which are opened pages like a project's own. */
+export async function openedPages(): Promise<string[]> {
+    return (await getProjects()).flatMap((project) => (project.data.opens ? [project.data.opens] : []));
+}
+
 /** What `bun run projects` last read from GitHub, if anything. */
 export function projectFacts(project: Project): ProjectFacts | undefined {
     // (the data file gives each language as a plain list of two, which is what a name and a share are)

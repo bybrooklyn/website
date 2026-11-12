@@ -5,7 +5,7 @@ import "../../styles/projects.css";
 import Base from "../../layouts/Base.astro";
 import { site } from "../../data/site";
 import { ownHue } from "../../lib/drawn";
-import { getProjects } from "../../lib/projects";
+import { getProjects, projectPage } from "../../lib/projects";
 
 const projects = await getProjects();
 ---
@@ -20,7 +20,7 @@ const projects = await getProjects();
         {
             projects.map((project) => (
                 <li>
-                    <a href={`/projects/${project.id}/`}>
+                    <a href={projectPage(project)}>
                         {/* Every project has an emblem in the list, a shape and a color of its own to find it by. Its pictures are for when it is opened. */}
                         <DrawnCover class="project-thumb" name={project.data.name} language={project.data.language} hue={ownHue(project.data.order)} />
                         <div>
