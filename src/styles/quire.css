@@ -1,0 +1,1777 @@
+/* mdQuire, the editor (src/quire/editor.ts), as its try-out page shows it (src/pages/mdquire.astro).
+   The text itself takes the site's prose styles; these are the pieces an editor adds: the bar, the
+   menus that flow out of it, and the marks of a document being edited. Every control that is not
+   always there grows in and shrinks away, as the picture viewer's menu does (viewer.css), and all
+   of it holds still under prefers-reduced-motion. */
+
+/* ---- the editor's frame ---- */
+
+.quire-editor {
+    --bar-height: 2.9rem;
+    /* the editor takes the width it is given and never widens the page; long lines scroll inside it */
+    contain: inline-size;
+    position: relative;
+    margin-inline: auto;
+    max-width: 56rem;
+}
+
+.quire-column {
+    min-width: 0;
+}
+
+/* the sheet being written on: a panel a little wider than its line of text, as a page has margins */
+.quire-paper {
+    padding: calc(var(--line) * 2) clamp(1.25rem, 6vw, 5rem) calc(var(--line) * 3);
+    border: 0.0625rem solid var(--panel-rule);
+    border-radius: calc(var(--radius) * 2);
+    background: var(--panel);
+}
+
+.quire-paper > .quire {
+    max-width: 46rem;
+    margin-inline: auto;
+}
+
+/* ---- the surface ---- */
+
+.quire {
+    min-height: 60vh;
+    outline: none;
+    caret-color: var(--accent);
+}
+
+.quire > :first-child {
+    margin-top: 0;
+}
+
+/* blocks out of sight are not laid out on every key, which keeps a long document quick to type in;
+   each remembers its size once it has been seen, so the page does not jump */
+.quire > * {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 2lh;
+}
+
+.quire > .quire-fresh {
+    content-visibility: visible;
+}
+
+.quire h1 {
+    margin-bottom: var(--line);
+}
+
+/* A tight list's items hold their paragraphs without the space between paragraphs. */
+.quire-tight > li > p,
+.quire-tight > li > ul,
+.quire-tight > li > ol {
+    margin-block: 0;
+}
+
+/* Code and raw blocks say what they are in their corner. */
+.quire pre {
+    position: relative;
+}
+
+.quire pre[data-label]:not([data-label=""])::after {
+    content: attr(data-label);
+    position: absolute;
+    top: 0.3rem;
+    right: 0.6rem;
+    color: var(--muted);
+    font-size: 0.75rem;
+}
+
+.quire-raw {
+    border-style: dashed;
+    background: var(--surface);
+    color: var(--muted);
+}
+
+.quire-image {
+    margin: var(--line) 0;
+}
+
+.quire-image img {
+    display: block;
+    max-width: 100%;
+    margin-inline: auto;
+}
+
+.quire-divider hr {
+    margin: calc(var(--line) * 1.5) 0;
+}
+
+.quire ul:has(> .quire-task) {
+    padding-left: 0.25rem;
+}
+
+.quire .quire-task {
+    list-style: none;
+}
+
+.quire-box {
+    display: inline-block;
+    width: 0.9em;
+    height: 0.9em;
+    margin-right: 0.5em;
+    vertical-align: -0.1em;
+    border: 0.125rem solid var(--muted);
+    border-radius: 0.25em;
+    cursor: pointer;
+    transition:
+        background 0.2s var(--ease),
+        border-color 0.2s var(--ease);
+}
+
+.quire-box[data-checked="true"] {
+    border-color: var(--accent);
+    background: var(--accent);
+}
+
+.quire-task > p {
+    display: inline;
+}
+
+.quire-atom {
+    color: var(--muted);
+    font-size: 0.85em;
+}
+
+.quire-footnote {
+    display: flex;
+    gap: 0.5rem;
+    color: var(--muted);
+    font-size: 0.9rem;
+}
+
+/* ---- the bar ---- */
+
+.quire-bar {
+    /* its buttons do not make the page wider: what does not fit folds or scrolls */
+    contain: inline-size;
+    position: sticky;
+    top: 0.75rem;
+    z-index: 40;
+    margin-bottom: calc(var(--line) * 1.5);
+    border: 0.0625rem solid var(--rule);
+    border-radius: calc(var(--bar-height) / 2);
+    background: var(--surface);
+    font-family: var(--font-text);
+    font-size: 0.95rem;
+    line-height: 1;
+}
+
+.quire-bar-strip {
+    /* what is placed inside the strip stays inside its scrolling */
+    position: relative;
+    display: flex;
+    align-items: center;
+    height: var(--bar-height);
+    padding-left: 0.45rem;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    overscroll-behavior-x: contain;
+}
+
+.quire-bar-strip::-webkit-scrollbar {
+    display: none;
+}
+
+.quire-bar-group {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 0.05rem;
+    max-width: 30rem;
+    padding-inline: 0.15rem;
+    overflow: clip;
+    transition:
+        max-width 0.4s var(--ease),
+        padding 0.4s var(--ease),
+        opacity 0.25s ease,
+        border-color 0.25s ease;
+}
+
+/* a group that does not fit folds away into the three-dot menu, and unfolds when there is room */
+.quire-bar-group.folded {
+    max-width: 0;
+    padding-inline: 0;
+    opacity: 0;
+    border-left-color: transparent;
+}
+
+.quire-bar-group + .quire-bar-group {
+    border-left: 0.0625rem solid var(--rule);
+}
+
+/* the word count and the three dots keep to the bar's right end, even while the rest scrolls under them */
+.quire-bar-end {
+    position: sticky;
+    right: 0;
+    z-index: 1;
+    gap: 0.35rem;
+    margin-left: auto;
+    padding-right: 0.45rem;
+    border-left: 0;
+    background: var(--surface);
+    box-shadow: -0.75rem 0 0.75rem var(--surface);
+}
+
+.quire-bar-group + .quire-bar-end {
+    border-left: 0;
+}
+
+.quire-button {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    gap: 0.3rem;
+    min-width: 2rem;
+    height: 2rem;
+    padding: 0 0.42rem;
+    border: 0;
+    border-radius: 1.05rem;
+    background: transparent;
+    color: var(--ink);
+    font: inherit;
+    cursor: pointer;
+    transition:
+        background 0.2s var(--ease),
+        color 0.2s var(--ease),
+        scale 0.2s var(--ease);
+}
+
+.quire-button:hover {
+    background: color-mix(in oklch, var(--ink) 9%, transparent);
+}
+
+.quire-button.pressed,
+.quire-button.open {
+    background: color-mix(in oklch, var(--accent) 22%, transparent);
+    color: var(--accent);
+}
+
+/* pressed, a button gives a little, as the viewer's dots do */
+.quire-button:active {
+    scale: 0.88;
+}
+
+.quire-button:focus-visible,
+.quire-menu-line:focus-visible {
+    outline: 0.125rem solid var(--accent);
+    outline-offset: -0.125rem;
+}
+
+.quire-icon {
+    width: 1.15rem;
+    height: 1.15rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.7;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.quire-glyph {
+    font-family: var(--font-head);
+    font-size: 1.05rem;
+}
+
+.quire-glyph-bold {
+    font-weight: 750;
+}
+
+.quire-glyph-italic {
+    font-style: italic;
+}
+
+.quire-glyph-underline {
+    text-decoration: underline;
+    text-underline-offset: 0.15em;
+}
+
+.quire-glyph-strike {
+    text-decoration: line-through;
+}
+
+.quire-color-mark {
+    font-family: var(--font-head);
+    font-size: 1.05rem;
+    border-bottom: 0.18rem solid var(--accent);
+    line-height: 1.1;
+}
+
+.quire-name {
+    gap: 0.35rem;
+    max-width: calc(12ch + 2.6rem);
+    padding-inline: 0.65rem 0.5rem;
+    font-family: var(--font-head);
+    font-size: 1.05rem;
+    font-weight: var(--head-weight);
+}
+
+.quire-name-text {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.quire-name .quire-icon {
+    flex: none;
+    width: 0.9rem;
+    height: 0.9rem;
+    transition: rotate 0.3s var(--ease);
+}
+
+.quire-name.open .quire-icon {
+    rotate: 180deg;
+}
+
+.quire-style {
+    min-width: 6.5rem;
+    justify-content: space-between;
+}
+
+.quire-style .quire-icon {
+    width: 0.95rem;
+    height: 0.95rem;
+    transition: rotate 0.3s var(--ease);
+}
+
+.quire-style.open .quire-icon {
+    rotate: 180deg;
+}
+
+.quire-count {
+    max-width: 8rem;
+    color: var(--muted);
+    font-size: 0.85rem;
+    white-space: nowrap;
+    transition:
+        max-width 0.35s var(--ease),
+        opacity 0.25s ease;
+}
+
+.quire-file {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* three dots in a row, all in one place and moved apart; open, the outer two cross and the middle one goes */
+.quire-dots {
+    display: grid;
+    place-items: center;
+}
+
+.quire-dots i {
+    grid-area: 1 / 1;
+    width: 0.28rem;
+    height: 0.28rem;
+    border-radius: 0.14rem;
+    background: currentColor;
+    transition:
+        translate 0.35s var(--ease),
+        rotate 0.4s var(--ease),
+        width 0.35s var(--ease),
+        height 0.35s var(--ease),
+        opacity 0.2s ease;
+}
+
+.quire-dots i:first-child {
+    translate: -0.45rem 0;
+}
+
+.quire-dots i:last-child {
+    translate: 0.45rem 0;
+}
+
+.quire-dots.open i:first-child,
+.quire-dots.open i:last-child {
+    translate: 0 0;
+    width: 1rem;
+    height: 0.13rem;
+}
+
+.quire-dots.open i:first-child {
+    rotate: 45deg;
+}
+
+.quire-dots.open i:last-child {
+    rotate: -45deg;
+}
+
+.quire-dots.open i:nth-child(2) {
+    opacity: 0;
+}
+
+/* ---- the menus that flow out of a control ----
+   One box, from the control's own size to the menu's, a little past it and back, as a drop does.
+   Closing, it draws back in without springing and fades as it arrives. */
+
+.quire-menu {
+    position: fixed;
+    z-index: 70;
+    width: var(--from-w, 2.1rem);
+    height: var(--from-h, 2.1rem);
+    border: 0.0625rem solid var(--rule);
+    border-radius: 1.05rem;
+    background: var(--surface);
+    overflow: hidden;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    font-family: var(--font-text);
+    font-size: 0.95rem;
+    transition:
+        width 0.3s var(--ease),
+        height 0.3s var(--ease),
+        border-radius 0.3s ease,
+        opacity 0.18s ease 0.14s,
+        visibility 0s linear 0.32s;
+}
+
+.quire-menu.open {
+    width: var(--wide);
+    height: var(--high);
+    border-radius: 1rem;
+    border-color: color-mix(in oklch, var(--accent) 55%, var(--rule));
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transition:
+        width 0.55s cubic-bezier(0.3, 1.5, 0.4, 1),
+        height 0.55s cubic-bezier(0.3, 1.5, 0.4, 1) 0.04s,
+        border-radius 0.45s ease,
+        border-color 0.2s ease,
+        opacity 0.12s ease,
+        visibility 0s;
+}
+
+.quire-menu-items {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: max-content;
+    min-width: 11rem;
+    max-width: min(22rem, 100vw - 1rem);
+    padding: 0.4rem;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.quire-menu.from-right .quire-menu-items {
+    right: 0;
+    left: auto;
+}
+
+/* each line of the menu arrives a moment after the one above it */
+.quire-menu-items > * {
+    opacity: 0;
+    translate: 0 -0.35rem;
+    transition:
+        opacity 0.12s ease,
+        translate 0.12s ease;
+}
+
+.quire-menu.open .quire-menu-items > * {
+    opacity: 1;
+    translate: 0 0;
+    transition:
+        opacity 0.3s ease calc(0.1s + var(--line-at, 0) * 0.04s),
+        translate 0.4s var(--ease) calc(0.1s + var(--line-at, 0) * 0.04s);
+}
+
+.quire-menu-line {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    width: 100%;
+    min-height: 2.2rem;
+    padding: 0.3rem 0.8rem 0.3rem 0.55rem;
+    border: 0;
+    border-radius: 0.7rem;
+    background: transparent;
+    color: var(--ink);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.quire-menu-line:hover,
+.quire-menu-line:focus-visible {
+    background: color-mix(in oklch, var(--ink) 9%, transparent);
+}
+
+/* the line the slash menu's arrow keys are on */
+.quire-menu-line.active {
+    background: color-mix(in oklch, var(--accent) 18%, transparent);
+}
+
+/* where the slash menu grows from: the cursor's place, never itself seen */
+.quire-anchor {
+    position: fixed;
+    width: 0.125rem;
+    visibility: hidden;
+    pointer-events: none;
+}
+
+.quire-menu-line.pressed {
+    color: var(--accent);
+}
+
+.quire-menu-line > .quire-icon,
+.quire-menu-line > .quire-style-sample,
+.quire-menu-line > .quire-swatch,
+.quire-menu-line > .quire-size-sample {
+    flex: none;
+    width: 1.4rem;
+    text-align: center;
+}
+
+.quire-menu-label {
+    flex: 1;
+}
+
+.quire-menu-hint {
+    color: var(--muted);
+    font-size: 0.8rem;
+}
+
+.quire-style-sample {
+    color: var(--muted);
+    font-family: var(--font-head);
+    font-weight: 650;
+}
+
+.quire-style-quote {
+    font-size: 1.4rem;
+    line-height: 0.6;
+}
+
+.quire-style-code {
+    font-family: var(--font-code);
+    font-size: 0.75rem;
+    white-space: nowrap;
+}
+
+.quire-swatch {
+    height: 1rem;
+    max-width: 1rem;
+    margin-inline: 0.2rem;
+    border: 0.0625rem solid var(--rule);
+    border-radius: 0.5rem;
+    background: var(--ink);
+}
+
+.quire-size-sample {
+    font-family: var(--font-head);
+}
+
+/* the field for a link's address, in a menu or the selection bar */
+.quire-link {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.quire-link-field {
+    width: min(16rem, 60vw);
+    height: 2.1rem;
+    padding: 0 0.75rem;
+    border: 0.0625rem solid var(--rule);
+    border-radius: 1.05rem;
+    background: var(--ground);
+    color: var(--ink);
+    font: inherit;
+}
+
+.quire-link-field:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.quire-link-set {
+    padding-inline: 0.8rem;
+    color: var(--accent);
+}
+
+/* ---- the selection bar ----
+   It grows out of the top edge of the selected text (or the bottom edge when it sits below),
+   a little past its size and back, and shrinks away plainly when the selection goes. */
+
+.quire-select-bar {
+    position: fixed;
+    z-index: 60;
+    display: flex;
+    padding: 0.2rem;
+    border: 0.0625rem solid color-mix(in oklch, var(--accent) 55%, var(--rule));
+    border-radius: 1.25rem;
+    background: var(--surface);
+    font-family: var(--font-text);
+    font-size: 0.95rem;
+    line-height: 1;
+    opacity: 0;
+    scale: 0.55;
+    transform-origin: 50% 100%;
+    visibility: hidden;
+    pointer-events: none;
+    overflow: hidden;
+    transition:
+        opacity 0.16s ease,
+        scale 0.25s var(--ease),
+        width 0.4s cubic-bezier(0.3, 1.4, 0.4, 1),
+        visibility 0s linear 0.25s;
+}
+
+.quire-select-bar.below {
+    transform-origin: 50% 0;
+}
+
+.quire-select-bar.shown {
+    opacity: 1;
+    scale: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transition:
+        opacity 0.15s ease,
+        scale 0.45s cubic-bezier(0.3, 1.5, 0.4, 1),
+        left 0.25s var(--ease),
+        top 0.25s var(--ease),
+        width 0.4s cubic-bezier(0.3, 1.4, 0.4, 1),
+        visibility 0s;
+}
+
+/* placed before it grows, it does not glide in from where it was last */
+.quire-select-bar.placing {
+    transition: none;
+}
+
+.quire-select-row {
+    display: flex;
+    align-items: center;
+    gap: 0.05rem;
+}
+
+.quire-select-rule {
+    flex: none;
+    width: 0.0625rem;
+    height: 1.2rem;
+    margin-inline: 0.25rem;
+    background: var(--rule);
+}
+
+.quire-select-bar .quire-link {
+    padding-left: 0.1rem;
+}
+
+/* ---- a table's controls, grown at its top edge while the cursor is in it ---- */
+
+.quire-table-tools {
+    position: fixed;
+    z-index: 55;
+    display: flex;
+    align-items: center;
+    padding: 0.15rem;
+    border: 0.0625rem solid var(--rule);
+    border-radius: 1.2rem;
+    background: var(--surface);
+    font-family: var(--font-text);
+    line-height: 1;
+    opacity: 0;
+    scale: 0.6;
+    transform-origin: 100% 100%;
+    visibility: hidden;
+    pointer-events: none;
+    transition:
+        opacity 0.16s ease,
+        scale 0.25s var(--ease),
+        visibility 0s linear 0.25s;
+}
+
+.quire-table-tools.shown {
+    opacity: 1;
+    scale: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transition:
+        opacity 0.15s ease,
+        scale 0.45s cubic-bezier(0.3, 1.5, 0.4, 1),
+        left 0.25s var(--ease),
+        top 0.25s var(--ease),
+        visibility 0s;
+}
+
+.quire-table-tools.placing {
+    transition: none;
+}
+
+.quire-table-tools .quire-button {
+    min-width: 1.9rem;
+    height: 1.9rem;
+}
+
+.quire-signed {
+    display: inline-flex;
+    align-items: center;
+}
+
+.quire-sign {
+    margin-left: -0.1rem;
+    font-size: 0.8rem;
+    font-weight: 700;
+}
+
+/* the cell the cursor is in, so that the controls' row and column are plain */
+.quire td.quire-here,
+.quire th.quire-here {
+    background: color-mix(in oklch, var(--accent) 7%, transparent);
+}
+
+/* ---- a picture's alt text, written under it ---- */
+
+.quire-alt {
+    display: block;
+    width: 100%;
+    margin-top: 0.5rem;
+    padding: 0.3rem 0.5rem;
+    border: 0.0625rem solid transparent;
+    border-radius: 0.5rem;
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    font-size: 0.9rem;
+    text-align: center;
+    transition:
+        border-color 0.2s ease,
+        background 0.2s ease;
+}
+
+.quire-alt:hover {
+    border-color: var(--rule);
+}
+
+.quire-alt:focus {
+    outline: none;
+    border-color: var(--accent);
+    background: var(--ground);
+    color: var(--ink);
+}
+
+/* ---- the outline ----
+   On a narrow screen a panel that flows in from the left when asked for and goes back the same
+   way; on a wide one a column beside the sheet, whose width flows shut when it is closed. */
+
+.quire-outline {
+    position: fixed;
+    top: 1rem;
+    bottom: 1rem;
+    left: 1rem;
+    z-index: 65;
+    width: min(18rem, 100vw - 2rem);
+    padding: 0.9rem 0.6rem 1rem 1rem;
+    border: 0.0625rem solid var(--rule);
+    border-radius: calc(var(--radius) * 2);
+    background: var(--surface);
+    overflow: auto;
+    font-family: var(--font-text);
+    opacity: 0;
+    translate: calc(-100% - 2rem) 0;
+    visibility: hidden;
+    transition:
+        translate 0.35s var(--ease),
+        opacity 0.2s ease,
+        visibility 0s linear 0.35s;
+}
+
+.quire-outline.open {
+    opacity: 1;
+    translate: 0 0;
+    visibility: visible;
+    transition:
+        translate 0.5s cubic-bezier(0.3, 1.25, 0.4, 1),
+        opacity 0.15s ease,
+        visibility 0s;
+}
+
+.quire-outline-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.4rem;
+}
+
+.quire-outline-title {
+    color: var(--muted);
+    font-size: 0.8rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.quire-outline-close .quire-icon {
+    width: 1rem;
+    height: 1rem;
+}
+
+.quire-outline-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.quire-outline-item.level-2 {
+    padding-left: 0.8rem;
+}
+
+.quire-outline-item.level-3,
+.quire-outline-item.level-4,
+.quire-outline-item.level-5,
+.quire-outline-item.level-6 {
+    padding-left: 1.6rem;
+}
+
+.quire-outline-link {
+    display: block;
+    width: 100%;
+    padding: 0.32rem 0.6rem;
+    border: 0;
+    border-left: 0.125rem solid transparent;
+    border-radius: 0 0.5rem 0.5rem 0;
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    font-size: 0.9rem;
+    line-height: 1.35;
+    text-align: left;
+    cursor: pointer;
+    transition:
+        color 0.25s ease,
+        border-color 0.3s var(--ease),
+        background 0.25s ease;
+}
+
+.quire-outline-link:hover {
+    color: var(--ink);
+    background: color-mix(in oklch, var(--ink) 6%, transparent);
+}
+
+.quire-outline-link.current {
+    border-left-color: var(--accent);
+    color: var(--ink);
+}
+
+.quire-outline-link:focus-visible {
+    outline: 0.125rem solid var(--accent);
+    outline-offset: -0.125rem;
+}
+
+.quire-outline-empty {
+    max-height: 0;
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.85rem;
+    opacity: 0;
+    overflow: hidden;
+    transition:
+        max-height 0.3s var(--ease),
+        opacity 0.3s ease;
+}
+
+.quire-outline-empty.shown {
+    max-height: 3rem;
+    opacity: 1;
+}
+
+@media (min-width: 80rem) {
+    .quire-editor {
+        display: grid;
+        grid-template-columns: 12rem minmax(0, 56rem);
+        column-gap: 2.5rem;
+        justify-content: center;
+        max-width: 72rem;
+        transition:
+            grid-template-columns 0.45s var(--ease),
+            column-gap 0.45s var(--ease);
+    }
+
+    .quire-editor:has(> .quire-outline.closed) {
+        grid-template-columns: 0 minmax(0, 56rem);
+        column-gap: 0;
+    }
+
+    .quire-outline,
+    .quire-outline.open {
+        position: sticky;
+        top: calc(0.75rem + var(--bar-height) + var(--line));
+        bottom: auto;
+        left: auto;
+        z-index: 1;
+        align-self: start;
+        width: auto;
+        max-height: calc(100vh - var(--bar-height) - var(--line) * 3);
+        margin-top: calc(var(--bar-height) + var(--line) * 1.5);
+        padding: 0;
+        border: 0;
+        background: transparent;
+        opacity: 1;
+        translate: none;
+        visibility: visible;
+        transition:
+            opacity 0.3s ease,
+            visibility 0s;
+    }
+
+    .quire-outline.closed {
+        opacity: 0;
+        visibility: hidden;
+        transition:
+            opacity 0.2s ease,
+            visibility 0s linear 0.3s;
+    }
+}
+
+/* ---- version history: a panel that slides in from the right; a chosen version slides in over the list ---- */
+
+.quire-history {
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    bottom: 1rem;
+    z-index: 66;
+    display: flex;
+    flex-direction: column;
+    width: min(26rem, 100vw - 2rem);
+    border: 0.0625rem solid var(--rule);
+    border-radius: calc(var(--radius) * 2);
+    background: var(--surface);
+    overflow: hidden;
+    font-family: var(--font-text);
+    opacity: 0;
+    translate: calc(100% + 2rem) 0;
+    visibility: hidden;
+    transition:
+        translate 0.35s var(--ease),
+        opacity 0.2s ease,
+        visibility 0s linear 0.35s;
+}
+
+.quire-history.open {
+    opacity: 1;
+    translate: 0 0;
+    visibility: visible;
+    transition:
+        translate 0.5s cubic-bezier(0.3, 1.25, 0.4, 1),
+        opacity 0.15s ease,
+        visibility 0s;
+}
+
+.quire-history-head {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.6rem 0.6rem 0.4rem 0.8rem;
+}
+
+.quire-history-head .quire-outline-title {
+    flex: 1;
+    transition: translate 0.35s var(--ease);
+}
+
+/* the way back to the list grows in only while a version is shown */
+.quire-history-back {
+    width: 0;
+    min-width: 0;
+    padding: 0;
+    opacity: 0;
+    scale: 0.6;
+    pointer-events: none;
+    transition:
+        width 0.35s var(--ease),
+        min-width 0.35s var(--ease),
+        opacity 0.2s ease,
+        scale 0.35s var(--ease);
+}
+
+.quire-history-back .quire-icon {
+    rotate: 90deg;
+}
+
+.quire-history.previewing .quire-history-back {
+    width: 2rem;
+    min-width: 2rem;
+    opacity: 1;
+    scale: 1;
+    pointer-events: auto;
+}
+
+.quire-history-views {
+    display: grid;
+    flex: 1;
+    grid-template-columns: 100% 100%;
+    min-height: 0;
+    transition: translate 0.45s var(--ease);
+}
+
+.quire-history.previewing .quire-history-views {
+    translate: -100% 0;
+}
+
+.quire-history-list,
+.quire-history-preview {
+    min-height: 0;
+    margin: 0;
+    padding: 0 0.6rem 1rem;
+    overflow: auto;
+    list-style: none;
+}
+
+.quire-history-list > li {
+    opacity: 0;
+    translate: 0 -0.3rem;
+    transition:
+        opacity 0.12s ease,
+        translate 0.12s ease;
+}
+
+.quire-history.open .quire-history-list > li {
+    opacity: 1;
+    translate: 0 0;
+    transition:
+        opacity 0.3s ease calc(0.12s + var(--line-at, 0) * 0.035s),
+        translate 0.4s var(--ease) calc(0.12s + var(--line-at, 0) * 0.035s);
+}
+
+.quire-history-item {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    width: 100%;
+    padding: 0.55rem 0.6rem;
+    border: 0;
+    border-radius: 0.7rem;
+    background: transparent;
+    color: var(--ink);
+    font: inherit;
+    font-size: 0.95rem;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.quire-history-item:hover,
+.quire-history-item:focus-visible {
+    background: color-mix(in oklch, var(--ink) 8%, transparent);
+    outline: none;
+}
+
+.quire-history-summary {
+    display: flex;
+    gap: 0.5rem;
+    color: var(--muted);
+    font-size: 0.82rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.quire-history-opened {
+    color: var(--accent);
+}
+
+.quire-added {
+    color: var(--accent);
+}
+
+.quire-removed {
+    color: var(--muted);
+}
+
+.quire-history-none,
+.quire-history-when {
+    margin: 0.4rem 0.6rem 0.8rem;
+    color: var(--muted);
+    font-size: 0.9rem;
+}
+
+.quire-restore {
+    margin: 0 0.6rem 1rem;
+    padding-inline: 1rem;
+    border: 0.0625rem solid var(--accent);
+    color: var(--accent);
+}
+
+.quire-history-text {
+    margin: 0 0.6rem;
+    padding: 1rem 1.1rem;
+    border: 0.0625rem solid var(--panel-rule);
+    border-radius: var(--radius);
+    background: var(--panel);
+    font-size: 0.92rem;
+    line-height: 1.6;
+}
+
+.quire-history-text > :first-child {
+    margin-top: 0;
+}
+
+/* ---- the Markdown beside the rich view ----
+   Shown, its column flows open beside the sheet; on a narrow screen it takes the sheet's place,
+   the one fading and moving aside as the other comes in. */
+
+.quire-panes {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 0fr);
+    column-gap: 0;
+    align-items: start;
+    transition:
+        grid-template-columns 0.45s var(--ease),
+        column-gap 0.45s var(--ease);
+}
+
+.quire-editor.markdown .quire-panes {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    column-gap: 1.25rem;
+}
+
+.quire-source {
+    position: sticky;
+    top: calc(0.75rem + var(--bar-height) + var(--line));
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    min-height: 60vh;
+    max-height: calc(100vh - var(--bar-height) - var(--line) * 2.5);
+    padding: calc(var(--line) * 0.9) 1.1rem;
+    border: 0.0625rem solid var(--panel-rule);
+    border-radius: calc(var(--radius) * 2);
+    background: var(--panel);
+    color: var(--ink);
+    font-family: var(--font-code);
+    font-size: 0.82rem;
+    line-height: 1.65;
+    tab-size: 4;
+    resize: none;
+    opacity: 0;
+    translate: 1.5rem 0;
+    visibility: hidden;
+    transition:
+        opacity 0.2s ease,
+        translate 0.35s var(--ease),
+        visibility 0s linear 0.35s;
+}
+
+.quire-source:focus {
+    outline: none;
+    border-color: color-mix(in oklch, var(--accent) 55%, var(--panel-rule));
+}
+
+.quire-editor.markdown .quire-source {
+    opacity: 1;
+    translate: 0 0;
+    visibility: visible;
+    transition:
+        opacity 0.3s ease 0.1s,
+        translate 0.45s var(--ease) 0.05s,
+        visibility 0s;
+}
+
+@media (max-width: 60rem) {
+    .quire-panes,
+    .quire-editor.markdown .quire-panes {
+        grid-template-columns: minmax(0, 1fr);
+        column-gap: 0;
+    }
+
+    .quire-panes > * {
+        grid-area: 1 / 1;
+    }
+
+    .quire-paper {
+        transition:
+            opacity 0.25s ease,
+            translate 0.4s var(--ease),
+            visibility 0s;
+    }
+
+    .quire-editor.markdown .quire-paper {
+        opacity: 0;
+        translate: -1.5rem 0;
+        visibility: hidden;
+        transition:
+            opacity 0.2s ease,
+            translate 0.35s var(--ease),
+            visibility 0s linear 0.35s;
+    }
+
+    .quire-source {
+        position: static;
+        max-height: none;
+    }
+}
+
+.quire-menu-note {
+    margin: 0;
+    padding: 0.35rem 0.8rem 0.45rem 0.55rem;
+    color: var(--muted);
+    font-size: 0.85rem;
+}
+
+/* a version shown in the history panel, its headings at the panel's size */
+.quire-history .quire-history-text h1 {
+    font-size: 1.7rem;
+    line-height: 1.15;
+}
+
+.quire-history .quire-history-text h2 {
+    margin-top: 1.4rem;
+    font-size: 1.3rem;
+    line-height: 1.25;
+}
+
+.quire-history .quire-history-text h3 {
+    font-size: 1.1rem;
+}
+
+/* on a phone the bar keeps room for its marks: a shorter name, and the word count goes into the three-dot menu */
+@media (max-width: 40rem) {
+    .quire-name {
+        max-width: calc(7ch + 2.4rem);
+    }
+
+    .quire-style {
+        min-width: 5.6rem;
+    }
+
+    .quire-count {
+        max-width: 0;
+        opacity: 0;
+        overflow: hidden;
+    }
+}
+
+/* how saving stands: a fixed slot, its words fading one into the next */
+.quire-status {
+    display: inline-grid;
+    width: 5.6rem;
+    color: var(--muted);
+    font-size: 0.82rem;
+    text-align: right;
+}
+
+.quire-status.warn {
+    color: var(--accent);
+}
+
+.quire-status-words {
+    grid-area: 1 / 1;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.quire-status-words.here {
+    opacity: 1;
+}
+
+@media (max-width: 40rem) {
+    .quire-status {
+        width: 4.4rem;
+    }
+}
+
+/* ---- changed elsewhere: a panel that flows in from the right, wider when both are shown ---- */
+
+.quire-conflict {
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    z-index: 67;
+    display: flex;
+    flex-direction: column;
+    width: min(26rem, 100vw - 2rem);
+    max-height: calc(100vh - 2rem);
+    padding: 0.8rem 1rem 1rem;
+    border: 0.0625rem solid color-mix(in oklch, var(--accent) 55%, var(--rule));
+    border-radius: calc(var(--radius) * 2);
+    background: var(--surface);
+    overflow: hidden;
+    font-family: var(--font-text);
+    opacity: 0;
+    translate: calc(100% + 2rem) 0;
+    visibility: hidden;
+    transition:
+        translate 0.35s var(--ease),
+        opacity 0.2s ease,
+        width 0.45s var(--ease),
+        visibility 0s linear 0.35s;
+}
+
+.quire-conflict.open {
+    opacity: 1;
+    translate: 0 0;
+    visibility: visible;
+    transition:
+        translate 0.5s cubic-bezier(0.3, 1.25, 0.4, 1),
+        opacity 0.15s ease,
+        width 0.45s var(--ease),
+        visibility 0s;
+}
+
+.quire-conflict.both {
+    width: min(60rem, 100vw - 2rem);
+}
+
+.quire-conflict-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.quire-conflict-title {
+    margin: 0;
+    font-family: var(--font-head);
+    font-size: 1.15rem;
+    font-weight: var(--head-weight);
+}
+
+.quire-conflict-said,
+.quire-conflict-note {
+    margin: 0.4rem 0 0.8rem;
+    color: var(--muted);
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
+.quire-conflict-note {
+    margin: 0.6rem 0 0;
+    font-size: 0.82rem;
+}
+
+.quire-conflict-choices {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+.quire-choice {
+    padding-inline: 0.9rem;
+    border: 0.0625rem solid var(--rule);
+}
+
+.quire-choice:first-child {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+/* both texts side by side, grown open under the choices */
+.quire-conflict-both {
+    display: grid;
+    grid-template-rows: 0fr;
+    min-height: 0;
+    opacity: 0;
+    transition:
+        grid-template-rows 0.45s var(--ease),
+        opacity 0.3s ease;
+}
+
+.quire-conflict.both .quire-conflict-both {
+    grid-template-rows: 1fr;
+    margin-top: 0.8rem;
+    opacity: 1;
+}
+
+.quire-conflict-columns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+    min-height: 0;
+    overflow: auto;
+}
+
+.quire-conflict-side pre {
+    margin: 0.3rem 0 0;
+    padding: 0.7rem 0.8rem;
+    border: 0.0625rem solid var(--panel-rule);
+    border-radius: var(--radius);
+    background: var(--panel);
+    font-family: var(--font-code);
+    font-size: 0.78rem;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.quire-conflict-side .changed {
+    background: color-mix(in oklch, var(--accent) 18%, transparent);
+}
+
+.quire-conflict-side .gap {
+    display: inline-block;
+    width: 100%;
+    background: color-mix(in oklch, var(--ink) 5%, transparent);
+}
+
+@media (max-width: 40rem) {
+    .quire-conflict-columns {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ---- the page: the editor filling the window, the site's name to lead home ---- */
+
+body.quire-app {
+    display: block;
+    max-width: none;
+    padding: 0.9rem clamp(0.75rem, 2.5vw, 2rem) calc(var(--line) * 2);
+}
+
+.quire-top {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    position: relative;
+    margin: 0 0 0.6rem;
+    font-size: 0.85rem;
+}
+
+.quire-app main:focus {
+    outline: none;
+}
+
+/* ---- the welcome, the first time: grown open over the empty sheet, and gone once writing starts ---- */
+
+.quire-welcome {
+    display: grid;
+    grid-template-rows: 0fr;
+    opacity: 0;
+    transition:
+        grid-template-rows 0.5s var(--ease),
+        opacity 0.3s ease,
+        margin 0.5s var(--ease);
+}
+
+.quire-welcome.shown {
+    grid-template-rows: 1fr;
+    margin-bottom: calc(var(--line) * 1.5);
+    opacity: 1;
+}
+
+.quire-welcome-inner {
+    min-height: 0;
+    overflow: hidden;
+}
+
+.quire-welcome-title {
+    margin: 0;
+    font-family: var(--font-head);
+    font-size: 1.6rem;
+    font-weight: var(--head-weight);
+}
+
+.quire-welcome-said {
+    margin: 0.2rem 0 0.9rem;
+    color: var(--muted);
+}
+
+.quire-welcome-choices {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+/* ---- the documents list, grown out of the name ---- */
+
+.quire-documents-menu .quire-menu-items {
+    min-width: min(20rem, 100vw - 1.5rem);
+    max-width: min(28rem, 100vw - 1rem);
+}
+
+.quire-documents {
+    display: flex;
+    flex-direction: column;
+}
+
+.quire-documents-rename {
+    display: grid;
+    gap: 0.25rem;
+    padding: 0.35rem 0.45rem 0.6rem;
+}
+
+.quire-documents-rename .quire-link-field {
+    width: 100%;
+}
+
+.quire-documents-head {
+    margin: 0.5rem 0 0.15rem;
+    padding: 0 0.55rem;
+}
+
+.quire-documents-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.quire-documents-item {
+    display: flex;
+    align-items: center;
+}
+
+.quire-documents-away {
+    flex: none;
+    min-width: 1.9rem;
+    height: 1.9rem;
+    color: var(--muted);
+    opacity: 0.6;
+    transition:
+        opacity 0.2s ease,
+        color 0.2s ease;
+}
+
+.quire-documents-item:hover .quire-documents-away,
+.quire-documents-away:focus-visible,
+.quire-documents-away.asking {
+    opacity: 1;
+}
+
+.quire-documents-away.asking {
+    color: var(--accent);
+}
+
+.quire-documents-search {
+    width: auto;
+    margin: 0.2rem 0.45rem 0.3rem;
+}
+
+.quire-documents-new .quire-icon {
+    width: 1rem;
+}
+
+/* the same staggered arrival as a menu's lines, for the list's own parts */
+.quire-menu-items > .quire-documents > *,
+.quire-menu-items > .quire-repository > * {
+    opacity: 0;
+    translate: 0 -0.35rem;
+    transition:
+        opacity 0.12s ease,
+        translate 0.12s ease;
+}
+
+.quire-menu.open .quire-menu-items > .quire-documents > *,
+.quire-menu.open .quire-menu-items > .quire-repository > * {
+    opacity: 1;
+    translate: 0 0;
+    transition:
+        opacity 0.3s ease calc(0.1s + var(--line-at, 0) * 0.035s),
+        translate 0.4s var(--ease) calc(0.1s + var(--line-at, 0) * 0.035s);
+}
+
+/* ---- connecting a repository ---- */
+
+.quire-repository {
+    display: grid;
+    gap: 0.55rem;
+    width: min(26rem, 100vw - 2.5rem);
+    padding: 0.5rem 0.55rem 0.6rem;
+}
+
+.quire-repository-title {
+    margin: 0 0 0.2rem;
+    font-family: var(--font-head);
+    font-size: 1.15rem;
+    font-weight: var(--head-weight);
+}
+
+.quire-repository-row {
+    display: grid;
+    gap: 0.2rem;
+}
+
+.quire-repository-label {
+    color: var(--muted);
+    font-size: 0.82rem;
+}
+
+.quire-repository .quire-link-field {
+    width: 100%;
+}
+
+.quire-repository-about {
+    margin: 0.2rem 0 0;
+    color: var(--muted);
+    font-size: 0.82rem;
+    line-height: 1.5;
+}
+
+.quire-repository-about a {
+    color: var(--accent);
+}
+
+.quire-repository-said {
+    min-height: 1.2em;
+    margin: 0;
+    color: var(--accent);
+    font-size: 0.85rem;
+}
+
+.quire-repository-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+.quire-forget {
+    margin-left: auto;
+    color: var(--muted);
+}
+
+/* ---- printing: the document alone, in the site's typefaces, dark on white ---- */
+
+@media print {
+    @page {
+        margin: 2cm 2.2cm;
+    }
+
+    html:has(body.quire-app),
+    body.quire-app {
+        background: white;
+        color: black;
+    }
+
+    body.quire-app {
+        padding: 0;
+    }
+
+    .quire-app .skip,
+    .quire-app .to-top,
+    .quire-top,
+    .quire-bar,
+    .quire-outline,
+    .quire-menu,
+    .quire-select-bar,
+    .quire-table-tools,
+    .quire-history,
+    .quire-conflict,
+    .quire-source,
+    .quire-welcome,
+    .quire-alt,
+    .quire-file,
+    .quire-raw {
+        display: none !important;
+    }
+
+    .quire-editor,
+    .quire-editor.markdown {
+        display: block;
+        max-width: none;
+        contain: none;
+    }
+
+    .quire-panes,
+    .quire-editor.markdown .quire-panes {
+        display: block;
+    }
+
+    .quire-paper {
+        padding: 0;
+        border: 0;
+        background: none;
+        opacity: 1 !important;
+        visibility: visible !important;
+        translate: none !important;
+    }
+
+    .quire-paper > .quire {
+        max-width: none;
+        min-height: 0;
+        color: black;
+    }
+
+    .quire > * {
+        content-visibility: visible;
+    }
+
+    .quire a {
+        color: black;
+    }
+
+    .quire pre,
+    .quire :not(pre) > code {
+        background: whitesmoke;
+        color: black;
+    }
+
+    .quire pre[data-label]::after {
+        content: none;
+    }
+
+    .quire blockquote {
+        color: dimgray;
+    }
+
+    .quire-box {
+        border-color: black;
+    }
+
+    .quire-box[data-checked="true"] {
+        background: black;
+    }
+
+    .quire h1,
+    .quire h2,
+    .quire h3 {
+        break-after: avoid;
+    }
+
+    .quire pre,
+    .quire table,
+    .quire-image {
+        break-inside: avoid;
+    }
+}
+
+/* a file that is not Markdown is written as its text alone, the Markdown view across the column */
+.quire-editor.plain .quire-panes {
+    grid-template-columns: minmax(0, 0fr) minmax(0, 1fr);
+    column-gap: 0;
+}
+
+.quire-editor.plain .quire-paper {
+    visibility: hidden;
+}
+
+.quire-editor.plain .quire-source {
+    position: static;
+    max-height: none;
+}
+
+/* With less motion asked for, nothing of the editor moves: what opens is simply there, and what
+   closes is simply gone. It is stated for all of it at once, so that no state slips through by
+   being more particular than this rule. */
+@media (prefers-reduced-motion: reduce) {
+    .quire-editor,
+    .quire-editor *,
+    .quire-menu,
+    .quire-menu *,
+    .quire-select-bar,
+    .quire-select-bar *,
+    .quire-table-tools,
+    .quire-table-tools *,
+    .quire-history,
+    .quire-history *,
+    .quire-conflict,
+    .quire-conflict *,
+    .quire-welcome {
+        transition-duration: 0s !important;
+        transition-delay: 0s !important;
+    }
+}

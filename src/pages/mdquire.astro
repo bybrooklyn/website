@@ -1,0 +1,22 @@
+---
+// mdQuire, the editor, filling the window. The site's name leads home; there is no menu taking
+// room. It is unlisted, and kept out of search and the sitemap, until she says otherwise.
+import Document from "../layouts/Document.astro";
+import Flags from "../components/Flags.astro";
+import { site } from "../data/site";
+import "../styles/quire.css";
+---
+
+<Document title="mdQuire" description="A word processor for Markdown files." unlisted bodyClass="quire-app">
+    <header class="quire-top">
+        <a class="site-name" href="/">{site.name.toLowerCase()}</a>
+        <Flags />
+    </header>
+    <main id="main" tabindex="-1">
+        <div id="quire" class="quire-host"></div>
+    </main>
+</Document>
+
+<script>
+    import "../scripts/mdquire";
+</script>

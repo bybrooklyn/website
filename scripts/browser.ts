@@ -14,8 +14,18 @@ export interface Browser {
     click(x: number, y: number): Promise<void>;
     /** Presses the mouse at one place, moves it in `steps` even steps to another with the button held, and lets go there. */
     drag(from: { x: number; y: number }, to: { x: number; y: number }, steps?: number): Promise<void>;
-    /** Presses and lets go of a key, such as "ArrowRight" or "Tab", in whatever has the focus. */
-    press(key: string): Promise<void>;
+    /** Presses one key as the keyboard would, with modifiers held: "Enter", "Backspace", "Tab", "ArrowLeft", or a letter for a chord. */
+    press(key: string, held?: { shift?: boolean; ctrl?: boolean; alt?: boolean; meta?: boolean }): Promise<void>;
+    /** Types text one key at a time, each a real key press. */
+    type(text: string): Promise<void>;
+    /** Composes text through an input method, as for Japanese: each of `steps` shown in turn, then `text` committed. */
+    compose(steps: string[], text: string): Promise<void>;
+    /** Makes the page see media features as given, such as `{ "prefers-reduced-motion": "reduce" }`, and print or screen media if asked; empty puts them back. */
+    media(features: Record<string, string>, type?: "print" | "screen" | ""): Promise<void>;
+    /** Changes the window's size. */
+    resize(width: number, height: number): Promise<void>;
+    /** Answers every file chooser the page opens from now on with these files, instead of a dialog nobody can close. */
+    files(paths: string[]): Promise<void>;
     wait(ms: number): Promise<void>;
     /** A PNG of the window, or of one rectangle of the page. */
     picture(clip?: { x: number; y: number; width: number; height: number }): Promise<Buffer>;
@@ -48,11 +58,13 @@ export async function browser({ width = 1200, height = 800, scale = 1, port = 94
     const errors: string[] = [];
     const waiting = new Map<number, (answer: any) => void>();
     let loaded = () => {};
+    let chosen: string[] = [];
     let sent = 0;
     socket.onmessage = (message) => {
         const said = JSON.parse(String(message.data));
         if (said.id) waiting.get(said.id)?.(said.result ?? {});
         if (said.method === "Page.loadEventFired") loaded();
+        if (said.method === "Page.fileChooserOpened" && said.params.backendNodeId) void send("DOM.setFileInputFiles", { files: chosen, backendNodeId: said.params.backendNodeId });
         if (said.method === "Runtime.exceptionThrown") errors.push(said.params.exceptionDetails.exception?.description ?? said.params.exceptionDetails.text);
         if (said.method === "Runtime.consoleAPICalled" && said.params.type === "error") errors.push(said.params.args.map((arg: any) => arg.value ?? arg.description).join(" "));
     };
@@ -66,6 +78,21 @@ export async function browser({ width = 1200, height = 800, scale = 1, port = 94
     await send("Runtime.enable");
     await send("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: scale, mobile: false });
     const mouse = (type: string, x: number, y: number, held = type === "mousePressed") => send("Input.dispatchMouseEvent", { type, x, y, button: "left", buttons: held ? 1 : 0, clickCount: 1 });
+    // the keys that are not characters, with the numbers Chromium needs as well as their names to act on them
+    const named: Record<string, [number, string?]> = { Enter: [13, "\r"], Backspace: [8], Tab: [9], Delete: [46], Escape: [27], " ": [32, " "], PageUp: [33], PageDown: [34], Home: [36], End: [35], ArrowLeft: [37], ArrowUp: [38], ArrowRight: [39], ArrowDown: [40] };
+    const press = async (key: string, held: { shift?: boolean; ctrl?: boolean; alt?: boolean; meta?: boolean } = {}) => {
+        const modifiers = (held.alt ? 1 : 0) | (held.ctrl ? 2 : 0) | (held.meta ? 4 : 0) | (held.shift ? 8 : 0);
+        const known = named[key];
+        const letter = /^[a-z]$/i.test(key);
+        const code = key === " " ? "Space" : known ? key : letter ? `Key${key.toUpperCase()}` : /^\d$/.test(key) ? `Digit${key}` : "";
+        const keyCode = known ? known[0] : key.toUpperCase().charCodeAt(0);
+        const chord = modifiers & ~8;
+        // Enter and space also type a character, which is what presses a button
+        const text = known ? known[1] : chord ? undefined : held.shift ? key.toUpperCase() : key;
+        const shown = held.shift && letter ? key.toUpperCase() : key;
+        await send("Input.dispatchKeyEvent", { type: text ? "keyDown" : "rawKeyDown", key: shown, code, windowsVirtualKeyCode: keyCode, nativeVirtualKeyCode: keyCode, modifiers, ...(text && { text, unmodifiedText: text }) });
+        await send("Input.dispatchKeyEvent", { type: "keyUp", key: shown, code, windowsVirtualKeyCode: keyCode, nativeVirtualKeyCode: keyCode, modifiers });
+    };
 
     return {
         errors,
@@ -94,15 +121,26 @@ export async function browser({ width = 1200, height = 800, scale = 1, port = 94
             }
             await mouse("mouseReleased", to.x, to.y);
         },
-        async press(key) {
-            // Chromium acts on a key only when it is given the key's number as well as its name.
-            const numbers: Record<string, number> = { Tab: 9, Enter: 13, Escape: 27, " ": 32, PageUp: 33, PageDown: 34, End: 35, Home: 36, ArrowLeft: 37, ArrowUp: 38, ArrowRight: 39, ArrowDown: 40 };
-            const number = numbers[key] ?? key.toUpperCase().charCodeAt(0);
-            const named = { key, code: key.length === 1 ? `Key${key.toUpperCase()}` : key, windowsVirtualKeyCode: number, nativeVirtualKeyCode: number };
-            // Enter and space also type a character, which is what presses a button.
-            const typed = key === "Enter" ? "\r" : key.length === 1 ? key : undefined;
-            await send("Input.dispatchKeyEvent", { type: typed ? "keyDown" : "rawKeyDown", ...named, ...(typed && { text: typed }) });
-            await send("Input.dispatchKeyEvent", { type: "keyUp", ...named });
+        press,
+        async type(text) {
+            for (const char of text) {
+                await send("Input.dispatchKeyEvent", { type: "keyDown", key: char, text: char, unmodifiedText: char });
+                await send("Input.dispatchKeyEvent", { type: "keyUp", key: char });
+            }
+        },
+        async compose(steps, text) {
+            for (const shown of steps) await send("Input.imeSetComposition", { text: shown, selectionStart: shown.length, selectionEnd: shown.length });
+            await send("Input.insertText", { text });
+        },
+        async media(features, type = "") {
+            await send("Emulation.setEmulatedMedia", { media: type, features: Object.entries(features).map(([name, value]) => ({ name, value })) });
+        },
+        async files(paths) {
+            chosen = paths;
+            await send("Page.setInterceptFileChooserDialog", { enabled: true });
+        },
+        async resize(wide, high) {
+            await send("Emulation.setDeviceMetricsOverride", { width: wide, height: high, deviceScaleFactor: scale, mobile: false });
         },
         async picture(clip) {
             const shot = await send("Page.captureScreenshot", { format: "png", ...(clip && { clip: { ...clip, scale: 1 } }) });

@@ -88,7 +88,8 @@ export default defineConfig({
     },
     integrations: [
         mdx(),
-        sitemap(),
+        // the page for trying the editor is not one for visitors to find
+        sitemap({ filter: (page) => !page.includes("/mdquire/") }),
         resumePdf(),
         cspCheck(),
         privateLinks(),
