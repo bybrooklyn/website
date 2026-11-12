@@ -10,6 +10,7 @@ import { createBar, link as linkAction } from "./bar";
 import { linkAt } from "./bar";
 import { type Document } from "./document";
 import { collapsed } from "./keys";
+import { createOutline } from "./outline";
 import { createSelectBar } from "./select-bar";
 import { createSlash } from "./slash";
 import { createSurface, type Surface } from "./surface";
@@ -98,6 +99,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         options.onRename?.(name);
     });
     const more = (): MenuItem[] => [
+        { label: outlineView.isOpen() ? "Hide the outline" : "Show the outline", run: () => (outlineView.isOpen() ? outlineView.close() : outlineView.open()) },
         { label: "Download", hint: surface.getDocument().mdx ? ".mdx" : ".md", run: download },
         { label: "Open a file", run: () => opener.click() },
     ];
@@ -116,6 +118,8 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     column.append(bar.element, paper, opener);
     surface.on("link", () => openLink(bar.element.querySelector<HTMLElement>('[aria-label^="Link"]')!));
     const selectBar = createSelectBar(surface, () => bar.element.getBoundingClientRect().bottom);
+    const outlineView = createOutline(surface, () => bar.element.getBoundingClientRect().bottom);
+    host.prepend(outlineView.element);
     const slash = createSlash(surface, bar.pickImage);
     const tableTools = createTableTools(surface);
 

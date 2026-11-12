@@ -172,7 +172,7 @@
     align-items: center;
     gap: 0.05rem;
     max-width: 30rem;
-    padding-inline: 0.2rem;
+    padding-inline: 0.15rem;
     overflow: clip;
     transition:
         max-width 0.4s var(--ease),
@@ -193,10 +193,16 @@
     border-left: 0.0625rem solid var(--rule);
 }
 
+/* the word count and the three dots keep to the bar's right end, even while the rest scrolls under them */
 .quire-bar-end {
+    position: sticky;
+    right: 0;
+    z-index: 1;
     gap: 0.35rem;
     margin-left: auto;
     border-left: 0;
+    background: var(--surface);
+    box-shadow: -0.75rem 0 0.75rem var(--surface);
 }
 
 .quire-bar-group + .quire-bar-end {
@@ -287,7 +293,7 @@
 
 .quire-name {
     min-width: 4ch;
-    max-width: 12ch;
+    max-width: calc(12ch + 1.1rem);
     height: 2.1rem;
     padding: 0 0.55rem;
     border: 0;
@@ -312,7 +318,7 @@
 }
 
 .quire-style {
-    min-width: 6.9rem;
+    min-width: 6.5rem;
     justify-content: space-between;
 }
 
@@ -741,6 +747,178 @@
     color: var(--ink);
 }
 
+/* ---- the outline ----
+   On a narrow screen a panel that flows in from the left when asked for and goes back the same
+   way; on a wide one a column beside the sheet, whose width flows shut when it is closed. */
+
+.quire-outline {
+    position: fixed;
+    top: 1rem;
+    bottom: 1rem;
+    left: 1rem;
+    z-index: 65;
+    width: min(18rem, 100vw - 2rem);
+    padding: 0.9rem 0.6rem 1rem 1rem;
+    border: 0.0625rem solid var(--rule);
+    border-radius: calc(var(--radius) * 2);
+    background: var(--surface);
+    overflow: auto;
+    font-family: var(--font-text);
+    opacity: 0;
+    translate: calc(-100% - 2rem) 0;
+    visibility: hidden;
+    transition:
+        translate 0.35s var(--ease),
+        opacity 0.2s ease,
+        visibility 0s linear 0.35s;
+}
+
+.quire-outline.open {
+    opacity: 1;
+    translate: 0 0;
+    visibility: visible;
+    transition:
+        translate 0.5s cubic-bezier(0.3, 1.25, 0.4, 1),
+        opacity 0.15s ease,
+        visibility 0s;
+}
+
+.quire-outline-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.4rem;
+}
+
+.quire-outline-title {
+    color: var(--muted);
+    font-size: 0.8rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.quire-outline-close .quire-icon {
+    width: 1rem;
+    height: 1rem;
+}
+
+.quire-outline-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.quire-outline-item.level-2 {
+    padding-left: 0.8rem;
+}
+
+.quire-outline-item.level-3,
+.quire-outline-item.level-4,
+.quire-outline-item.level-5,
+.quire-outline-item.level-6 {
+    padding-left: 1.6rem;
+}
+
+.quire-outline-link {
+    display: block;
+    width: 100%;
+    padding: 0.32rem 0.6rem;
+    border: 0;
+    border-left: 0.125rem solid transparent;
+    border-radius: 0 0.5rem 0.5rem 0;
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    font-size: 0.9rem;
+    line-height: 1.35;
+    text-align: left;
+    cursor: pointer;
+    transition:
+        color 0.25s ease,
+        border-color 0.3s var(--ease),
+        background 0.25s ease;
+}
+
+.quire-outline-link:hover {
+    color: var(--ink);
+    background: color-mix(in oklch, var(--ink) 6%, transparent);
+}
+
+.quire-outline-link.current {
+    border-left-color: var(--accent);
+    color: var(--ink);
+}
+
+.quire-outline-link:focus-visible {
+    outline: 0.125rem solid var(--accent);
+    outline-offset: -0.125rem;
+}
+
+.quire-outline-empty {
+    max-height: 0;
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.85rem;
+    opacity: 0;
+    overflow: hidden;
+    transition:
+        max-height 0.3s var(--ease),
+        opacity 0.3s ease;
+}
+
+.quire-outline-empty.shown {
+    max-height: 3rem;
+    opacity: 1;
+}
+
+@media (min-width: 80rem) {
+    .quire-editor {
+        display: grid;
+        grid-template-columns: 12rem minmax(0, 56rem);
+        column-gap: 2.5rem;
+        justify-content: center;
+        max-width: 72rem;
+        transition:
+            grid-template-columns 0.45s var(--ease),
+            column-gap 0.45s var(--ease);
+    }
+
+    .quire-editor:has(> .quire-outline.closed) {
+        grid-template-columns: 0 minmax(0, 56rem);
+        column-gap: 0;
+    }
+
+    .quire-outline,
+    .quire-outline.open {
+        position: sticky;
+        top: calc(0.75rem + var(--bar-height) + var(--line));
+        bottom: auto;
+        left: auto;
+        z-index: 1;
+        align-self: start;
+        width: auto;
+        max-height: calc(100vh - var(--bar-height) - var(--line) * 3);
+        margin-top: calc(var(--bar-height) + var(--line) * 1.5);
+        padding: 0;
+        border: 0;
+        background: transparent;
+        opacity: 1;
+        translate: none;
+        visibility: visible;
+        transition:
+            opacity 0.3s ease,
+            visibility 0s;
+    }
+
+    .quire-outline.closed {
+        opacity: 0;
+        visibility: hidden;
+        transition:
+            opacity 0.2s ease,
+            visibility 0s linear 0.3s;
+    }
+}
+
 @media (prefers-reduced-motion: reduce) {
     .quire-box,
     .quire-bar-group,
@@ -757,7 +935,13 @@
     .quire-select-bar.shown,
     .quire-table-tools,
     .quire-table-tools.shown,
-    .quire-alt {
+    .quire-alt,
+    .quire-editor,
+    .quire-outline,
+    .quire-outline.open,
+    .quire-outline.closed,
+    .quire-outline-link,
+    .quire-outline-empty {
         transition: none;
     }
 }

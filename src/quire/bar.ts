@@ -324,7 +324,7 @@ export function createBar(surface: Surface, options: BarOptions): { element: HTM
     name.spellcheck = false;
     let named = options.name;
     const fitName = () => {
-        name.style.width = `${Math.max(4, Math.min(12, name.value.length + 1))}ch`;
+        name.style.width = `calc(${Math.max(4, Math.min(12, name.value.length + 1))}ch + 1.1rem)`;
         name.title = name.value;
     };
     fitName();

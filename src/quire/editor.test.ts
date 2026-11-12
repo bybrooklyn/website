@@ -18,12 +18,13 @@ const page = `
 import { createEditor } from "${here}/editor.ts";
 import { read } from "${here}/read.ts";
 import { write } from "${here}/write.ts";
+import { closeOthers } from "${here}/ui.ts";
 const host = document.querySelector("#host");
 const editor = createEditor(host, read(""), { name: "Test", colors: [{ name: "Pink", value: "salmon" }], onImage: async () => "/picture.png" });
 const surface = editor.surface;
 window.q = {
     editor,
-    reset(markdown, mdx) { surface.setDocument(read(markdown, { mdx })); surface.focus(); },
+    reset(markdown, mdx) { closeOthers(); surface.setDocument(read(markdown, { mdx })); surface.focus(); },
     select(anchor, from, focus = anchor, to = from) { surface.setSelection({ anchor: { path: anchor, offset: from }, focus: { path: focus, offset: to } }); },
     md: () => write(surface.getDocument()),
     caret: () => surface.getSelection().focus,
@@ -32,7 +33,10 @@ window.q = {
         const found = [...document.querySelectorAll(selector)].find((each) => !words || each.textContent.includes(words) || each.getAttribute("aria-label")?.startsWith(words));
         if (!found) return null;
         const box = found.getBoundingClientRect();
-        return { x: box.left + box.width / 2, y: box.top + box.height / 2 };
+        const point = { x: box.left + box.width / 2, y: box.top + box.height / 2 };
+        const top = document.elementFromPoint(point.x, point.y);
+        if (!top || !(found === top || found.contains(top))) return { covered: top ? top.tagName + "." + top.className : "nothing on screen there" };
+        return point;
     },
     /** One property of an element, read on every frame for a while: how it changed over time. */
     watch(selector, property, ms) {
@@ -41,7 +45,7 @@ window.q = {
             const start = performance.now();
             const look = () => {
                 const element = document.querySelector(selector);
-                seen.push(element ? parseFloat(getComputedStyle(element)[property]) : NaN);
+                seen.push(!element ? NaN : property === "x" ? element.getBoundingClientRect().left : parseFloat(getComputedStyle(element)[property]));
                 if (performance.now() - start < ms) requestAnimationFrame(look);
                 else done(seen);
             };
@@ -81,8 +85,9 @@ const caret = () => tab.run<{ path: number[]; offset: number }>("q.caret()");
 
 /** Clicks with the mouse in the middle of the element found by q.at. */
 async function press(selector: string, words?: string) {
-    const point = await tab.run<{ x: number; y: number } | null>(`q.at(${JSON.stringify(selector)}, ${JSON.stringify(words ?? "")})`);
+    const point = await tab.run<{ x: number; y: number; covered?: string } | null>(`q.at(${JSON.stringify(selector)}, ${JSON.stringify(words ?? "")})`);
     if (!point) throw new Error(`nothing to press: ${selector} ${words ?? ""}`);
+    if (point.covered) throw new Error(`${selector} ${words ?? ""} is covered by ${point.covered}`);
     await tab.click(point.x, point.y);
     await tab.wait(40);
 }
@@ -200,13 +205,17 @@ used("a menu grows open over time, past its size and back, and with less motion 
     await tab.wait(400);
 
     await tab.media({ "prefers-reduced-motion": "reduce" });
-    const still = tab.run<number[]>("q.watch('.quire-menu.open', 'width', 300)");
-    await button("Style");
-    const stillWidths = (await still).filter((value) => !Number.isNaN(value));
-    expect(new Set(stillWidths.map(Math.round)).size).toBe(1);
-    await tab.press("Escape");
-    await tab.media({});
-    await tab.wait(400);
+    try {
+        const still = tab.run<number[]>("q.watch('.quire-menu.open', 'width', 300)");
+        await button("Style");
+        const stillWidths = (await still).filter((value) => !Number.isNaN(value));
+        expect(stillWidths.length).toBeGreaterThan(3);
+        expect({ widths: stillWidths, distinct: new Set(stillWidths.map(Math.round)).size }).toMatchObject({ distinct: 1 });
+        await tab.press("Escape");
+    } finally {
+        await tab.media({});
+        await tab.wait(400);
+    }
     expect(tab.errors).toEqual([]);
 });
 
@@ -323,6 +332,58 @@ used("a picture shows with its alt text written under it, which can be changed i
     await tab.run("document.querySelector('.quire-alt').blur()");
     await tab.wait(50);
     expect(await md()).toBe("![A tall tower](/tower.png)\n");
+});
+
+used("the outline lists the headings, follows the cursor, goes to a heading when clicked, and closes and opens", async () => {
+    await reset("# One\n\nfirst\n\n## Two\n\nsecond\n\n## Three\n\nthird\n", [0], 0);
+    await tab.wait(50);
+    const links = () => tab.run<string[]>("[...document.querySelectorAll('.quire-outline-link')].map((link) => link.textContent)");
+    const current = () => tab.run<string>("document.querySelector('.quire-outline-link.current')?.textContent ?? ''");
+    expect(await links()).toEqual(["One", "Two", "Three"]);
+    expect(await current()).toBe("One");
+    await tab.run("q.select([5], 2)");
+    await tab.wait(30);
+    expect(await current()).toBe("Three");
+    await tab.press("ArrowUp");
+    await tab.press("ArrowUp");
+    await tab.press("ArrowUp");
+    await tab.wait(50);
+    expect(await current()).toBe("Two");
+    await press(".quire-outline-link", "One");
+    expect(await caret()).toEqual({ path: [0], offset: 0 });
+    expect(await current()).toBe("One");
+    // a heading typed shows in it
+    await tab.run("q.select([5], 5)");
+    await tab.press("Enter");
+    await tab.type("## Four");
+    await tab.wait(50);
+    expect(await links()).toEqual(["One", "Two", "Three", "Four"]);
+    expect(await current()).toBe("Four");
+    // closed from the three-dot menu its column flows shut over time, and opens again
+    await choose("More", "Hide the outline");
+    const places = await tab.run<number[]>("q.watch('.quire-paper', 'x', 600)");
+    expect(new Set(places.map(Math.round)).size).toBeGreaterThan(3);
+    expect(await tab.run("getComputedStyle(document.querySelector('.quire-outline')).visibility")).toBe("hidden");
+    await choose("More", "Show the outline");
+    await tab.wait(500);
+    expect(await tab.run("getComputedStyle(document.querySelector('.quire-outline')).visibility")).toBe("visible");
+});
+
+used("on a narrow screen the outline is a panel that slides in when asked for and closes with Escape", async () => {
+    await tab.resize(390, 844);
+    await reset("# One\n\ntext\n", [0], 0);
+    // the column it was goes away as a panel does, over a moment
+    await tab.wait(600);
+    expect(await tab.run("getComputedStyle(document.querySelector('.quire-outline')).visibility")).toBe("hidden");
+    await choose("More", "Show the outline");
+    const moves = await tab.run<number[]>("q.watch('.quire-outline', 'opacity', 400)");
+    expect(moves[moves.length - 1]).toBe(1);
+    expect(await tab.run("document.activeElement.textContent")).toBe("One");
+    await tab.press("Escape");
+    await tab.wait(500);
+    expect(await tab.run("getComputedStyle(document.querySelector('.quire-outline')).visibility")).toBe("hidden");
+    await tab.resize(1300, 900);
+    await tab.wait(200);
 });
 
 if (!live) console.warn("editor.test.ts: no Chromium on this machine, so the editor was not used.");
