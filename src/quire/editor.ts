@@ -15,6 +15,7 @@ import { createSelectBar } from "./select-bar";
 import { createSlash } from "./slash";
 import { createSurface, type Surface } from "./surface";
 import { createTableTools } from "./tables";
+import { browserStorage, createHistoryPanel, createKeeper, type VersionStorage } from "./versions";
 import { flowMenu, linkForm, make, type MenuItem } from "./ui";
 import { write } from "./write";
 
@@ -27,6 +28,8 @@ export interface EditorOptions {
     /** The colors offered for text. */
     colors?: { name: string; value: string }[];
     onRename?: (name: string) => void;
+    /** Where version history is kept; the browser's own storage if not given. */
+    storage?: VersionStorage;
 }
 
 /** The editor, as the page sees it. */
@@ -97,8 +100,12 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         name = file.name.replace(/\.(md|mdx|markdown)$/i, "");
         bar.setName(name);
         options.onRename?.(name);
+        keeper.stop();
+        keeper = createKeeper(storage, name, () => write(surface.getDocument()));
+        void keeper.opened();
     });
     const more = (): MenuItem[] => [
+        { label: "Version history", run: () => void history.open() },
         { label: outlineView.isOpen() ? "Hide the outline" : "Show the outline", run: () => (outlineView.isOpen() ? outlineView.close() : outlineView.open()) },
         { label: "Download", hint: surface.getDocument().mdx ? ".mdx" : ".md", run: download },
         { label: "Open a file", run: () => opener.click() },
@@ -123,6 +130,19 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     const slash = createSlash(surface, bar.pickImage);
     const tableTools = createTableTools(surface);
 
+    // ---- version history: a snapshot on opening and after each pause in editing ----
+    const storage = options.storage ?? browserStorage();
+    let keeper = createKeeper(storage, name, () => write(surface.getDocument()));
+    void keeper.opened();
+    surface.on("change", () => keeper.edited());
+    const history = createHistoryPanel(surface, storage, () => name, {
+        opened: () => keeper.opened(),
+        edited: () => keeper.edited(),
+        now: () => keeper.now(),
+        settled: () => keeper.settled(),
+        stop: () => keeper.stop(),
+    });
+
     return {
         surface,
         getName: () => name,
@@ -132,6 +152,8 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
             selectBar.element.remove();
             slash.close();
             tableTools.element.remove();
+            keeper.stop();
+            history.element.remove();
             host.replaceChildren();
         },
     };

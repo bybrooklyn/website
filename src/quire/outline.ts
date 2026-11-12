@@ -123,6 +123,7 @@ export function createOutline(surface: Surface, top: () => number = () => 0): { 
             }
         },
         close() {
+            if (panelled() && nav.contains(document.activeElement)) surface.focus();
             nav.classList.remove("open");
             if (!panelled()) nav.classList.add("closed");
             document.removeEventListener("pointerdown", outside, true);

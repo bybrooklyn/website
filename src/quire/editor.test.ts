@@ -19,8 +19,10 @@ import { createEditor } from "${here}/editor.ts";
 import { read } from "${here}/read.ts";
 import { write } from "${here}/write.ts";
 import { closeOthers } from "${here}/ui.ts";
+import { memoryStorage } from "${here}/versions.ts";
 const host = document.querySelector("#host");
-const editor = createEditor(host, read(""), { name: "Test", colors: [{ name: "Pink", value: "salmon" }], onImage: async () => "/picture.png" });
+const storage = memoryStorage();
+const editor = createEditor(host, read(""), { name: "Test", colors: [{ name: "Pink", value: "salmon" }], onImage: async () => "/picture.png", storage });
 const surface = editor.surface;
 window.q = {
     editor,
@@ -384,6 +386,38 @@ used("on a narrow screen the outline is a panel that slides in when asked for an
     expect(await tab.run("getComputedStyle(document.querySelector('.quire-outline')).visibility")).toBe("hidden");
     await tab.resize(1300, 900);
     await tab.wait(200);
+});
+
+used("a version is kept, listed with what changed, shown as it read, and restored as one undoable step", async () => {
+    await reset("First draft.\n", [0], 12);
+    await choose("More", "Version history");
+    await tab.wait(600);
+    expect(await tab.run("getComputedStyle(document.querySelector('.quire-history')).visibility")).toBe("visible");
+    const first = await tab.run<number>("document.querySelectorAll('.quire-history-item').length");
+    expect(first).toBeGreaterThan(0);
+    await tab.press("Escape");
+    await tab.wait(500);
+    expect(await tab.run("getComputedStyle(document.querySelector('.quire-history')).visibility")).toBe("hidden");
+
+    await tab.run("q.select([0], 12)");
+    await tab.press("Enter");
+    await tab.type("A second line.");
+    expect(await md()).toBe("First draft.\n\nA second line.\n");
+    await choose("More", "Version history");
+    await tab.wait(600);
+    const items = await tab.run<string[]>("[...document.querySelectorAll('.quire-history-item')].map((item) => item.textContent)");
+    expect(items.length).toBe(first + 1);
+    expect(items[0]).toContain("+2");
+    // the one before, shown as it read and restored
+    await press(".quire-history-list li:nth-child(2) .quire-history-item");
+    await tab.wait(500);
+    expect(await tab.run("document.querySelector('.quire-history-text').textContent")).toBe("First draft.");
+    expect(await tab.run("document.querySelector('.quire-history-text').isContentEditable")).toBe(false);
+    await press(".quire-restore");
+    await tab.wait(100);
+    expect(await md()).toBe("First draft.\n");
+    await tab.press("z", { ctrl: true });
+    expect(await md()).toBe("First draft.\n\nA second line.\n");
 });
 
 if (!live) console.warn("editor.test.ts: no Chromium on this machine, so the editor was not used.");
