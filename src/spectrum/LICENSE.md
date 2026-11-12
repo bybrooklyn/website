@@ -10,8 +10,9 @@ link; the axes; their wording; and the translations into Polish, German, Portugu
 their translators' credits.
 
 What was changed: it was rewritten for this site, in its own code and design, and two sliders,
-"Kink role" and "Sexual exploration", were taken out, in every language. Share codes are six
-characters for the nine sliders that are left; the original's seven-character codes still open,
+"Kink role" and "Sexual exploration", were taken out, in every language. Each slider has seventeen
+positions where the original has nine, and only the words at its ends and middle are kept. Share
+codes are eight characters; the original's seven-character codes still open, at the same places and
 without the two sliders taken out.
 
 This is not endorsed by Andrea Vos.

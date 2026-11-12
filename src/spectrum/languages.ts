@@ -2,15 +2,13 @@
 // translations are Andrea Vos's Spectrum's and its translators' (see LICENSE.md), without the two
 // sliders taken out. A language that lacks a word uses the English one.
 
-import { type Axis } from "./axes";
+import { HIGHEST, LOWEST, MIDDLE, type Axis } from "./axes";
 
-/** A slider's name, and the words for its two ends, its middle, and the steps between. */
+/** A slider's name, and the words at its two ends and its middle. */
 export interface Ends {
     label: string;
     farLeft: string;
-    left: string;
     middle: string;
-    right: string;
     farRight: string;
 }
 
@@ -26,6 +24,13 @@ export interface Language {
     copied?: string;
     /** On a slider that has been left unset, and on the button that does it. */
     unset?: string;
+    /**
+     * Where a slider is, for screen readers, with {n} its position, {all} how many there are, {at}
+     * the word it is on, {a} and {b} the words it is between and {near} the nearer of them.
+     */
+    on?: string;
+    between?: string;
+    halfway?: string;
     /** Who translated it, with words before the name. */
     translator?: { said: string; name: string; link?: string };
     axes: Partial<Record<Axis, Ends>>;
@@ -39,16 +44,19 @@ const en: Language = {
     copy: "Copy link",
     copied: "Copied",
     unset: "Not set",
+    on: "{n} of {all}, {at}",
+    between: "{n} of {all}, between {a} and {b}, nearer {near}",
+    halfway: "{n} of {all}, halfway between {a} and {b}",
     axes: {
-        genderIdentity: { label: "Gender identity", farLeft: "Man", left: "Mostly man", middle: "Nonbinary", right: "Mostly woman", farRight: "Woman" },
-        genderExpression: { label: "Gender expression", farLeft: "Hypermasculine", left: "Masculine", middle: "Androgynous", right: "Feminine", farRight: "Hyperfeminine" },
-        sexualOrientation: { label: "Sexual orientation", farLeft: "Straight", left: "Mostly straight", middle: "Bisexual/Pansexual", right: "Mostly gay/lesbian", farRight: "Gay/Lesbian" },
-        romanticOrientation: { label: "Romantic orientation", farLeft: "Heteroromantic", left: "Mostly heteroromantic", middle: "Biromantic/Panromantic", right: "Mostly homoromantic", farRight: "Homoromantic" },
-        sexualAttraction: { label: "Sexual attraction", farLeft: "None", left: "Low", middle: "Moderate", right: "High", farRight: "Very high" },
-        sexualDrive: { label: "Sexual drive (libido)", farLeft: "None", left: "Low", middle: "Regular", right: "High", farRight: "Very high" },
-        romanticDesire: { label: "Romantic desire", farLeft: "None", left: "Low", middle: "Regular", right: "High", farRight: "Very high" },
-        relationshipAttitude: { label: "Relationship attitude", farLeft: "Monogamous", left: "Mostly monogamous", middle: "Open", right: "Mostly polyamorous", farRight: "Polyamorous" },
-        genderComfort: { label: "Gender comfort", farLeft: "Strong dysphoria", left: "Mild dysphoria", middle: "Neutral", right: "Comfortable", farRight: "Euphoric" },
+        genderIdentity: { label: "Gender identity", farLeft: "Man", middle: "Nonbinary", farRight: "Woman" },
+        genderExpression: { label: "Gender expression", farLeft: "Hypermasculine", middle: "Androgynous", farRight: "Hyperfeminine" },
+        sexualOrientation: { label: "Sexual orientation", farLeft: "Straight", middle: "Bisexual/Pansexual", farRight: "Gay/Lesbian" },
+        romanticOrientation: { label: "Romantic orientation", farLeft: "Heteroromantic", middle: "Biromantic/Panromantic", farRight: "Homoromantic" },
+        sexualAttraction: { label: "Sexual attraction", farLeft: "None", middle: "Moderate", farRight: "Very high" },
+        sexualDrive: { label: "Sexual drive (libido)", farLeft: "None", middle: "Regular", farRight: "Very high" },
+        romanticDesire: { label: "Romantic desire", farLeft: "None", middle: "Regular", farRight: "Very high" },
+        relationshipAttitude: { label: "Relationship attitude", farLeft: "Monogamous", middle: "Open", farRight: "Polyamorous" },
+        genderComfort: { label: "Gender comfort", farLeft: "Strong dysphoria", middle: "Neutral", farRight: "Euphoric" },
     },
 };
 
@@ -60,12 +68,12 @@ const pl: Language = {
     copy: "Skopiuj do schowka",
     translator: { said: "Polskie tłumaczenie:", name: "Avis Drożniak", link: "https://zaimki.pl/@avis" },
     axes: {
-        genderIdentity: { label: "Identyfikacja płciowa", farLeft: "Mężczyzna", left: "Mężczyzna", middle: "Niebinarnie", right: "Kobieta", farRight: "Kobieta" },
-        genderExpression: { label: "Wyrażenie płci", farLeft: "Bardziej męskie", left: "Bardziej męskie", middle: "Androgyniczne", right: "Bardziej kobiece", farRight: "Bardziej kobiece" },
-        sexualOrientation: { label: "Orientacja seksualna", farLeft: "Hetero", left: "Hetero", middle: "Bi/Pan", right: "Przeważnie homo", farRight: "Gej/Lesbijka" },
-        sexualDrive: { label: "Pociąg seksualny", farLeft: "Brak", left: "Brak", middle: "Przeciętny", right: "Wysoki", farRight: "Wysoki" },
-        romanticDesire: { label: "Pociąg romantyczny", farLeft: "Brak", left: "Brak", middle: "Przeciętny", right: "Wysoki", farRight: "Wysoki" },
-        relationshipAttitude: { label: "Postawa w związku", farLeft: "Monogamia", left: "Monogamia", middle: "Otwarty", right: "Poliamoria", farRight: "Poliamoria" },
+        genderIdentity: { label: "Identyfikacja płciowa", farLeft: "Mężczyzna", middle: "Niebinarnie", farRight: "Kobieta" },
+        genderExpression: { label: "Wyrażenie płci", farLeft: "Bardziej męskie", middle: "Androgyniczne", farRight: "Bardziej kobiece" },
+        sexualOrientation: { label: "Orientacja seksualna", farLeft: "Hetero", middle: "Bi/Pan", farRight: "Gej/Lesbijka" },
+        sexualDrive: { label: "Pociąg seksualny", farLeft: "Brak", middle: "Przeciętny", farRight: "Wysoki" },
+        romanticDesire: { label: "Pociąg romantyczny", farLeft: "Brak", middle: "Przeciętny", farRight: "Wysoki" },
+        relationshipAttitude: { label: "Postawa w związku", farLeft: "Monogamia", middle: "Otwarty", farRight: "Poliamoria" },
     },
 };
 
@@ -77,12 +85,12 @@ const de: Language = {
     copy: "In die Zwischenablage kopieren",
     translator: { said: "Übersetzt von", name: "Feuerhamster", link: "https://gitlab.com/feuerhamster" },
     axes: {
-        genderIdentity: { label: "Geschlechtliche Identität", farLeft: "Männlich", left: "Männlich", middle: "Nicht-Binär", right: "Weiblich", farRight: "Weiblich" },
-        genderExpression: { label: "Geschlechtlicher Ausdruck", farLeft: "Hyper-Maskulin", left: "Hyper-Maskulin", middle: "Androgyn", right: "Hyper-Feminin", farRight: "Hyper-Feminin" },
-        sexualOrientation: { label: "Sexuelle Orientierung", farLeft: "Heterosexuell", left: "Heterosexuell", middle: "Bi/Pan", right: "Überwiegend homosexuell", farRight: "Schwul/Lesbisch" },
-        sexualDrive: { label: "Sexualtrieb", farLeft: "Kein", left: "Kein", middle: "Regelmäßig", right: "Hoch", farRight: "Hoch" },
-        romanticDesire: { label: "Romantische Wünsche", farLeft: "Keine", left: "Keine", middle: "Regelmäßige", right: "Hohe", farRight: "Hohe" },
-        relationshipAttitude: { label: "Beziehungstyp", farLeft: "Monogam", left: "Monogam", middle: "Offen", right: "Polyamourös", farRight: "Polyamourös" },
+        genderIdentity: { label: "Geschlechtliche Identität", farLeft: "Männlich", middle: "Nicht-Binär", farRight: "Weiblich" },
+        genderExpression: { label: "Geschlechtlicher Ausdruck", farLeft: "Hyper-Maskulin", middle: "Androgyn", farRight: "Hyper-Feminin" },
+        sexualOrientation: { label: "Sexuelle Orientierung", farLeft: "Heterosexuell", middle: "Bi/Pan", farRight: "Schwul/Lesbisch" },
+        sexualDrive: { label: "Sexualtrieb", farLeft: "Kein", middle: "Regelmäßig", farRight: "Hoch" },
+        romanticDesire: { label: "Romantische Wünsche", farLeft: "Keine", middle: "Regelmäßige", farRight: "Hohe" },
+        relationshipAttitude: { label: "Beziehungstyp", farLeft: "Monogam", middle: "Offen", farRight: "Polyamourös" },
     },
 };
 
@@ -94,12 +102,12 @@ const pt: Language = {
     copy: "Copiar para a área de transferência",
     translator: { said: "Traduzido por", name: "Diogo de Souza", link: "https://gitlab.com/sozua" },
     axes: {
-        genderIdentity: { label: "Identidade de Gênero", farLeft: "Homem", left: "Homem", middle: "Não-binário", right: "Mulher", farRight: "Mulher" },
-        genderExpression: { label: "Expressão de Gênero", farLeft: "Hipermasculino", left: "Hipermasculino", middle: "Andrógino", right: "Hiperfeminino", farRight: "Hiperfeminino" },
-        sexualOrientation: { label: "Orientação Sexual", farLeft: "Heterossexual", left: "Heterossexual", middle: "Bi/Pan", right: "Majoritariamente gay", farRight: "Gay/Lésbica" },
-        sexualDrive: { label: "Desejo Sexual", farLeft: "Nenhum", left: "Nenhum", middle: "Regular", right: "Alto", farRight: "Alto" },
-        romanticDesire: { label: "Desejo Romântico", farLeft: "Nenhum", left: "Nenhum", middle: "Regular", right: "Alto", farRight: "Alto" },
-        relationshipAttitude: { label: "Atitude em relação ao relacionamento", farLeft: "Monogâmico", left: "Monogâmico", middle: "Aberto", right: "Poliamoroso", farRight: "Poliamoroso" },
+        genderIdentity: { label: "Identidade de Gênero", farLeft: "Homem", middle: "Não-binário", farRight: "Mulher" },
+        genderExpression: { label: "Expressão de Gênero", farLeft: "Hipermasculino", middle: "Andrógino", farRight: "Hiperfeminino" },
+        sexualOrientation: { label: "Orientação Sexual", farLeft: "Heterossexual", middle: "Bi/Pan", farRight: "Gay/Lésbica" },
+        sexualDrive: { label: "Desejo Sexual", farLeft: "Nenhum", middle: "Regular", farRight: "Alto" },
+        romanticDesire: { label: "Desejo Romântico", farLeft: "Nenhum", middle: "Regular", farRight: "Alto" },
+        relationshipAttitude: { label: "Atitude em relação ao relacionamento", farLeft: "Monogâmico", middle: "Aberto", farRight: "Poliamoroso" },
     },
 };
 
@@ -112,12 +120,12 @@ const ar: Language = {
     copy: "نسخ الرابط",
     translator: { said: "مُترجَمة من قِبَل", name: "متطوع" },
     axes: {
-        genderIdentity: { label: "الهوية الجنسية", farLeft: "ذكر", left: "ذكر", middle: "غير ثنائي", right: "أنثى", farRight: "أنثى" },
-        genderExpression: { label: "التعبير الجنسي", farLeft: "فرط ذكوري", left: "فرط ذكوري", middle: "ما بين", right: "فرط أنثوي", farRight: "فرط أنثوي" },
-        sexualOrientation: { label: "التوجه الجنسي", farLeft: "محب للجنس الآخر", left: "محب للجنس الآخر", middle: "ثنائي/بان", right: "مثلي الجنس غالبًا", farRight: "مثلي/مثلية الجنس" },
-        sexualDrive: { label: "الرغبة الجنسية", farLeft: "غير موجودة", left: "غير موجودة", middle: "متوسطة", right: "عالية", farRight: "عالية" },
-        romanticDesire: { label: "الرغبة الرومانسية", farLeft: "غير موجودة", left: "غير موجودة", middle: "متوسطة", right: "عالية", farRight: "عالية" },
-        relationshipAttitude: { label: "موقف العلاقة", farLeft: "أحادية", left: "أحادية", middle: "منفتحة", right: "متعددة", farRight: "متعددة" },
+        genderIdentity: { label: "الهوية الجنسية", farLeft: "ذكر", middle: "غير ثنائي", farRight: "أنثى" },
+        genderExpression: { label: "التعبير الجنسي", farLeft: "فرط ذكوري", middle: "ما بين", farRight: "فرط أنثوي" },
+        sexualOrientation: { label: "التوجه الجنسي", farLeft: "محب للجنس الآخر", middle: "ثنائي/بان", farRight: "مثلي/مثلية الجنس" },
+        sexualDrive: { label: "الرغبة الجنسية", farLeft: "غير موجودة", middle: "متوسطة", farRight: "عالية" },
+        romanticDesire: { label: "الرغبة الرومانسية", farLeft: "غير موجودة", middle: "متوسطة", farRight: "عالية" },
+        relationshipAttitude: { label: "موقف العلاقة", farLeft: "أحادية", middle: "منفتحة", farRight: "متعددة" },
     },
 };
 
@@ -147,15 +155,26 @@ export function words(code: Code): Words {
     } as Words;
 }
 
-/** The words for where a slider is, for screen readers: the nearest of its five, or unset. */
+/**
+ * Where a slider is, for screen readers, from its number and the words at its ends and middle:
+ * "7 of 17, between Man and Nonbinary, nearer Nonbinary". The words are at 1, 9 and 17.
+ */
 export function said(words: Words, axis: Axis, value: number): string {
     const ends = words.axes[axis];
-    if (!(value >= 1 && value <= 9)) return words.unset;
-    if (value <= 2) return ends.farLeft;
-    if (value <= 4) return ends.left;
-    if (value === 5) return ends.middle;
-    if (value <= 7) return ends.right;
-    return ends.farRight;
+    if (!(value >= LOWEST && value <= HIGHEST)) return words.unset;
+    const fill = (template: string, parts: Record<string, string>) => template.replace(/\{(\w+)\}/g, (_, name: string) => parts[name] ?? "");
+    const n = String(value);
+    const all = String(HIGHEST);
+    const marks: [number, string][] = [
+        [LOWEST, ends.farLeft],
+        [MIDDLE, ends.middle],
+        [HIGHEST, ends.farRight],
+    ];
+    const on = marks.find(([at]) => at === value);
+    if (on) return fill(words.on, { n, all, at: on[1] });
+    const [[low, a], [high, b]] = value < MIDDLE ? [marks[0]!, marks[1]!] : [marks[1]!, marks[2]!];
+    if (value - low === high - value) return fill(words.halfway, { n, all, a, b });
+    return fill(words.between, { n, all, a, b, near: value - low < high - value ? a : b });
 }
 
 /** Words that may break after a slash, so "Bisexual/Pansexual" wraps there on a narrow screen and not inside a word. */

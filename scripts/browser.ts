@@ -12,6 +12,8 @@ export interface Browser {
     /** Runs an expression in the page and gives back its value. */
     run<T = unknown>(expression: string): Promise<T>;
     click(x: number, y: number): Promise<void>;
+    /** Presses the mouse at one place, moves it in `steps` even steps to another with the button held, and lets go there. */
+    drag(from: { x: number; y: number }, to: { x: number; y: number }, steps?: number): Promise<void>;
     /** Presses and lets go of a key, such as "ArrowRight" or "Tab", in whatever has the focus. */
     press(key: string): Promise<void>;
     wait(ms: number): Promise<void>;
@@ -63,7 +65,7 @@ export async function browser({ width = 1200, height = 800, scale = 1, port = 94
     await send("Page.enable");
     await send("Runtime.enable");
     await send("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: scale, mobile: false });
-    const mouse = (type: string, x: number, y: number) => send("Input.dispatchMouseEvent", { type, x, y, button: "left", buttons: type === "mousePressed" ? 1 : 0, clickCount: 1 });
+    const mouse = (type: string, x: number, y: number, held = type === "mousePressed") => send("Input.dispatchMouseEvent", { type, x, y, button: "left", buttons: held ? 1 : 0, clickCount: 1 });
 
     return {
         errors,
@@ -83,6 +85,14 @@ export async function browser({ width = 1200, height = 800, scale = 1, port = 94
         async click(x, y) {
             await mouse("mousePressed", x, y);
             await mouse("mouseReleased", x, y);
+        },
+        async drag(from, to, steps = 10) {
+            await mouse("mousePressed", from.x, from.y);
+            for (let step = 1; step <= steps; step++) {
+                await mouse("mouseMoved", from.x + ((to.x - from.x) * step) / steps, from.y + ((to.y - from.y) * step) / steps, true);
+                await wait(16);
+            }
+            await mouse("mouseReleased", to.x, to.y);
         },
         async press(key) {
             // Chromium acts on a key only when it is given the key's number as well as its name.
