@@ -155,7 +155,7 @@
     display: flex;
     align-items: center;
     height: var(--bar-height);
-    padding-inline: 0.45rem;
+    padding-left: 0.45rem;
     overflow-x: auto;
     overflow-y: hidden;
     scrollbar-width: none;
@@ -200,6 +200,7 @@
     z-index: 1;
     gap: 0.35rem;
     margin-left: auto;
+    padding-right: 0.45rem;
     border-left: 0;
     background: var(--surface);
     box-shadow: -0.75rem 0 0.75rem var(--surface);
@@ -333,9 +334,13 @@
 }
 
 .quire-count {
+    max-width: 8rem;
     color: var(--muted);
     font-size: 0.85rem;
     white-space: nowrap;
+    transition:
+        max-width 0.35s var(--ease),
+        opacity 0.25s ease;
 }
 
 .quire-file {
@@ -446,6 +451,8 @@
     min-width: 11rem;
     max-width: min(22rem, 100vw - 1rem);
     padding: 0.4rem;
+    overflow-y: auto;
+    overscroll-behavior: contain;
 }
 
 .quire-menu.from-right .quire-menu-items {
@@ -1198,40 +1205,61 @@
     }
 }
 
+.quire-menu-note {
+    margin: 0;
+    padding: 0.35rem 0.8rem 0.45rem 0.55rem;
+    color: var(--muted);
+    font-size: 0.85rem;
+}
+
+/* a version shown in the history panel, its headings at the panel's size */
+.quire-history .quire-history-text h1 {
+    font-size: 1.7rem;
+    line-height: 1.15;
+}
+
+.quire-history .quire-history-text h2 {
+    margin-top: 1.4rem;
+    font-size: 1.3rem;
+    line-height: 1.25;
+}
+
+.quire-history .quire-history-text h3 {
+    font-size: 1.1rem;
+}
+
+/* on a phone the bar keeps room for its marks: a shorter name, and the word count goes into the three-dot menu */
+@media (max-width: 40rem) {
+    .quire-name {
+        max-width: calc(7ch + 1.1rem);
+    }
+
+    .quire-style {
+        min-width: 5.6rem;
+    }
+
+    .quire-count {
+        max-width: 0;
+        opacity: 0;
+        overflow: hidden;
+    }
+}
+
+/* With less motion asked for, nothing of the editor moves: what opens is simply there, and what
+   closes is simply gone. It is stated for all of it at once, so that no state slips through by
+   being more particular than this rule. */
 @media (prefers-reduced-motion: reduce) {
-    .quire-box,
-    .quire-bar-group,
-    .quire-button,
-    .quire-name,
-    .quire-style .quire-icon,
-    .quire-dots i,
-    .quire-menu,
-    .quire-menu.open,
-    .quire-menu-items > *,
-    .quire-menu.open .quire-menu-items > *,
-    .quire-menu-line,
-    .quire-select-bar,
-    .quire-select-bar.shown,
-    .quire-table-tools,
-    .quire-table-tools.shown,
-    .quire-alt,
     .quire-editor,
-    .quire-outline,
-    .quire-outline.open,
-    .quire-outline.closed,
-    .quire-outline-link,
-    .quire-outline-empty,
+    .quire-editor *,
+    .quire-menu,
+    .quire-menu *,
+    .quire-select-bar,
+    .quire-select-bar *,
+    .quire-table-tools,
+    .quire-table-tools *,
     .quire-history,
-    .quire-history.open,
-    .quire-history-head .quire-outline-title,
-    .quire-history-back,
-    .quire-history-views,
-    .quire-history-list > li,
-    .quire-history.open .quire-history-list > li,
-    .quire-history-item,
-    .quire-panes,
-    .quire-source,
-    .quire-paper {
-        transition: none;
+    .quire-history * {
+        transition-duration: 0s !important;
+        transition-delay: 0s !important;
     }
 }

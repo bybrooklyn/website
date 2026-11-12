@@ -47,7 +47,6 @@ export function createOutline(surface: Surface, top: () => number = () => 0): { 
 
     let entries: OutlineEntry[] = [];
     let current = -1;
-    let scrolling = false;
 
     function draw(doc: Document) {
         entries = outline(doc);
@@ -85,22 +84,19 @@ export function createOutline(surface: Surface, top: () => number = () => 0): { 
 
     draw(surface.getDocument());
     surface.on("change", ({ doc }) => draw(doc));
-    surface.on("select", ({ selection }) => {
-        if (!scrolling) mark(headingAtCursor(entries, selection.focus));
-    });
-    // when the reader scrolls, the heading they are reading under is the current one; typing puts it back to the cursor's
-    let settle: ReturnType<typeof setTimeout> | undefined;
-    addEventListener(
-        "scroll",
-        () => {
-            scrolling = true;
-            clearTimeout(settle);
-            settle = setTimeout(() => (scrolling = false), 400);
-            const tops = entries.map((entry) => surface.elementAt(entry.path)?.getBoundingClientRect().top ?? Infinity);
-            mark(headingAtScroll(tops, top() + 24));
-        },
-        { passive: true },
-    );
+    // the heading the cursor is under is the current one while the cursor can be seen; once the
+    // reader has scrolled it away, the heading they are reading under is
+    const follow = () => {
+        const focus = surface.getSelection().focus;
+        const cursor = surface.elementAt(focus.path)?.getBoundingClientRect();
+        const seen = !!cursor && cursor.bottom > top() && cursor.top < innerHeight;
+        if (seen) return mark(headingAtCursor(entries, focus));
+        const tops = entries.map((entry) => surface.elementAt(entry.path)?.getBoundingClientRect().top ?? Infinity);
+        // a heading in the upper third of the window is the one being read under
+        mark(headingAtScroll(tops, top() + (innerHeight - top()) / 3));
+    };
+    surface.on("select", follow);
+    addEventListener("scroll", follow, { passive: true });
 
     /** True when the outline is a panel over the page rather than a column beside it. */
     const panelled = () => getComputedStyle(nav).position === "fixed";

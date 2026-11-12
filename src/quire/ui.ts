@@ -149,6 +149,8 @@ export interface MenuItem {
     icon?: string | Node;
     hint?: string;
     pressed?: boolean;
+    /** A line that tells something and does nothing, such as the word count. */
+    note?: boolean;
     run: () => void;
 }
 
@@ -189,16 +191,22 @@ export function flowMenu(label: string, options: { align?: "left" | "right"; cla
         const rect = trigger.getBoundingClientRect();
         box.style.setProperty("--from-w", `${rect.width}px`);
         box.style.setProperty("--from-h", `${rect.height}px`);
+        items.style.maxHeight = "";
         const wide = items.offsetWidth;
-        const high = items.offsetHeight;
-        box.style.setProperty("--wide", `${wide}px`);
-        box.style.setProperty("--high", `${high}px`);
+        const natural = items.offsetHeight;
         const right = options.align === "right" || rect.left + wide > window.innerWidth - 8;
         box.style.left = right ? "" : `${Math.max(8, rect.left)}px`;
         box.style.right = right ? `${Math.max(8, window.innerWidth - rect.right)}px` : "";
         box.classList.toggle("from-right", right);
-        // under the control if it fits, over it if not
-        const below = rect.bottom + 6 + high <= window.innerHeight - 8 || rect.top < high + 14;
+        // under the control if it fits, over it if not, and on whichever side has more room if neither
+        const roomBelow = window.innerHeight - rect.bottom - 14;
+        const roomAbove = rect.top - 14;
+        const below = natural <= roomBelow || roomBelow >= Math.min(natural, 240) || roomBelow >= roomAbove;
+        // a menu taller than its room scrolls inside itself
+        const high = Math.min(natural, below ? roomBelow : roomAbove);
+        if (high < natural) items.style.maxHeight = `${high}px`;
+        box.style.setProperty("--wide", `${wide}px`);
+        box.style.setProperty("--high", `${high}px`);
         box.style.top = below ? `${rect.bottom + 6}px` : "";
         box.style.bottom = below ? "" : `${window.innerHeight - rect.top + 6}px`;
     }
@@ -248,6 +256,12 @@ export function flowMenu(label: string, options: { align?: "left" | "right"; cla
             else {
                 items.setAttribute("role", "menu");
                 content.forEach((item, index) => {
+                    if (item.note) {
+                        const note = make("p", "quire-menu-note", item.label);
+                        note.style.setProperty("--line-at", String(index));
+                        items.append(note);
+                        return;
+                    }
                     const line = make("button", "quire-menu-line");
                     line.type = "button";
                     line.setAttribute("role", "menuitem");

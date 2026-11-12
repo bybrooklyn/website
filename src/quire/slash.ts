@@ -125,6 +125,22 @@ export function createSlash(surface: Surface, pickImage: () => void): { close():
         if (open && slashQuery(surface.getDocument(), selection.focus.path, selection.focus.offset) === undefined) menu.close(false);
     });
 
+    // as the page scrolls, the menu keeps to the cursor
+    addEventListener(
+        "scroll",
+        () => {
+            if (!open) return;
+            const selection = getSelection();
+            const rect = selection?.rangeCount ? selection.getRangeAt(0).getBoundingClientRect() : undefined;
+            if (rect && (rect.width || rect.height)) {
+                anchor.style.left = `${rect.left}px`;
+                anchor.style.top = `${rect.top}px`;
+            }
+            menu.follow();
+        },
+        { passive: true },
+    );
+
     // while it is open its keys come before the editor's
     surface.element.addEventListener(
         "keydown",

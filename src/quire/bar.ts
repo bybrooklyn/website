@@ -317,6 +317,9 @@ export function createBar(surface: Surface, options: BarOptions): { element: HTM
     };
     const none = () => [];
 
+    // the three dots, made first because folded groups open their menus from them
+    const moreButton = dots("More");
+
     // the name, a field that reads as a title until it is clicked
     const name = make("input", "quire-name");
     name.value = options.name;
@@ -428,7 +431,7 @@ export function createBar(surface: Surface, options: BarOptions): { element: HTM
         adds.open(button, additions(), document.activeElement === button);
     });
     addButton.setAttribute("aria-haspopup", "menu");
-    group(3, () => additions().map((item) => ({ ...item, label: `Add ${item.label.toLowerCase()}` })), addButton, chooser);
+    group(3, () => [{ label: "Add a block", icon: "plus", run: () => adds.open(moreButton, additions(), true) }], addButton, chooser);
 
     // color, size, centre
     const swatch = (value: string | null) => {
@@ -455,7 +458,18 @@ export function createBar(surface: Surface, options: BarOptions): { element: HTM
         sizes.open(button, sizeLines(), document.activeElement === button);
     });
     sizeButton.setAttribute("aria-haspopup", "menu");
-    group(1, () => [...colorLines(), ...sizeLines().map((item) => ({ ...item, label: `${item.label} text` })), { label: "Centre", icon: "center", run: doing(center) }], colorButton, sizeButton, press("center", "Centre", icon("center"), doing(center)));
+    // folded, color and size are a line each that opens their menu from the three dots
+    group(
+        1,
+        () => [
+            { label: "Text color", icon: make("span", "quire-color-mark", "A"), run: () => colors.open(moreButton, colorLines(), true) },
+            { label: "Text size", icon: make("span", "quire-size-sample", "Aa"), run: () => sizes.open(moreButton, sizeLines(), true) },
+            { label: "Centre", icon: "center", run: doing(center) },
+        ],
+        colorButton,
+        sizeButton,
+        press("center", "Centre", icon("center"), doing(center)),
+    );
 
     // undo and redo
     const undo = () => {
@@ -480,12 +494,12 @@ export function createBar(surface: Surface, options: BarOptions): { element: HTM
     const count = make("span", "quire-count");
     count.setAttribute("aria-live", "polite");
     const more = flowMenu("More", { align: "right" });
-    const moreButton = dots("More");
     moreButton.addEventListener("click", () => {
         if (more.isOpen()) return more.close(true);
         const folded = groups.filter((each) => each.element.classList.contains("folded")).sort((a, b) => a.fold - b.fold);
         const own = typeof options.more === "function" ? options.more() : (options.more ?? []);
-        more.open(moreButton, [...folded.flatMap((each) => each.lines()), ...own], document.activeElement === moreButton);
+        const counted: MenuItem[] = count.offsetWidth < 8 ? [{ label: count.textContent ?? "", note: true, run: () => {} }] : [];
+        more.open(moreButton, [...counted, ...folded.flatMap((each) => each.lines()), ...own], document.activeElement === moreButton);
     });
     moreButton.setAttribute("aria-haspopup", "menu");
     const end = group(0, none, count, moreButton);
