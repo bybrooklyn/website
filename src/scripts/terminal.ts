@@ -314,7 +314,9 @@ if (typeof document !== "undefined") {
             const wide = probe.getBoundingClientRect().width / 5000;
             probe.remove();
             const across = fit.clientWidth - 2 * Number.parseFloat(getComputedStyle(fit).paddingLeft);
-            const down = host.classList.contains("open") ? (innerHeight * 0.92 - (host.clientHeight - fit.clientHeight) - 2 * Number.parseFloat(getComputedStyle(fit).paddingTop)) / (cast.rows * 1.3) : Infinity;
+            // open, its lines must fit the window too: the window's height less the bar's, which is the frame's height less the screen's
+            const frame = host.querySelector<HTMLElement>(".terminal-window") ?? fit;
+            const down = host.classList.contains("open") ? (innerHeight * 0.92 - (frame.clientHeight - fit.clientHeight) - 2 * Number.parseFloat(getComputedStyle(fit).paddingTop)) / (cast.rows * 1.3) : Infinity;
             view.style.fontSize = `${Math.min(across / (cast.cols * wide), down, host.classList.contains("open") ? 22 : 15)}px`;
         };
 
@@ -326,7 +328,7 @@ if (typeof document !== "undefined") {
             size();
             const screen = new Screen(cast.cols, cast.rows);
             const was: string[] = [];
-            if (again) again.hidden = true;
+            again?.classList.remove("shown");
             let before = 0;
             for (const [at, text] of cast.events) {
                 if (!whole && at > cast.poster) break;
@@ -343,7 +345,11 @@ if (typeof document !== "undefined") {
             // at rest it shows the moment chosen for it, not the empty screen a program leaves behind
             if (whole && cast.poster < Infinity) return run(false);
             paint(screen, view, was, false);
-            if (again) [again.hidden, again.textContent] = [false, whole || !still ? "play again" : "play"];
+            if (again) {
+                const words = whole || !still ? "Play again" : "Play";
+                [again.dataset.shows, again.ariaLabel, again.title] = [words === "Play" ? "play" : "again", words, words];
+                again.classList.add("shown");
+            }
         };
 
         again?.addEventListener("click", () => void run(true));
@@ -351,12 +357,26 @@ if (typeof document !== "undefined") {
         const open = (to: boolean) => {
             host.classList.toggle("open", to);
             document.documentElement.classList.toggle("terminal-open", to);
-            if (grow) [grow.textContent, grow.ariaExpanded] = [to ? "close" : "full size", String(to)];
+            if (grow) [grow.dataset.shows, grow.ariaLabel, grow.title, grow.ariaExpanded] = [to ? "close" : "grow", to ? "Close" : "Full size", to ? "Close" : "Full size", String(to)];
             size();
         };
         grow?.addEventListener("click", () => open(!host.classList.contains("open")));
         host.addEventListener("click", (event) => event.target === host && open(false));
-        document.addEventListener("keydown", (event) => event.key === "Escape" && host.classList.contains("open") && open(false));
+        document.addEventListener("keydown", (event) => {
+            if (!host.classList.contains("open")) return;
+            if (event.key === "Escape") {
+                open(false);
+                grow?.focus({ preventScroll: true });
+            } else if (event.key === "Tab") {
+                // open, it is the whole window: Tab goes round its own buttons and not to the page under it
+                event.preventDefault();
+                const stops = [...host.querySelectorAll<HTMLElement>("button.shown, button.terminal-grow")];
+                const at = stops.indexOf(document.activeElement as HTMLElement);
+                stops[(at + (event.shiftKey ? -1 : 1) + stops.length) % stops.length]?.focus({ preventScroll: true });
+            }
+        });
+        // leaving the page closes it, so it is not still open, with the page locked under it, when the page is come back to
+        for (const leaving of ["pageswap", "pagehide"]) addEventListener(leaving, () => host.classList.contains("open") && open(false));
         new ResizeObserver(size).observe(fit);
 
         // It is fetched and starts when it is first scrolled to, and holds still while out of view.

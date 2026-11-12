@@ -60,6 +60,15 @@ const projects = defineCollection({
                 gallery: z.array(z.object({ src: image(), alt: z.string() })).default([]),
                 /** Position in the list, lowest first. */
                 order: z.number(),
+                /**
+                 * A page of the site that is the project itself, such as /spectrum/. The list and the
+                 * links between projects go there, no page is built at /projects/<name>/, and the page
+                 * named here shows this file's words under the thing.
+                 */
+                opens: z
+                    .string()
+                    .regex(/^\/[a-z0-9-]+\/$/, "A site path such as /spectrum/.")
+                    .optional(),
                 draft: z.boolean().default(false),
             })
             .refine((project) => !project.cover || project.coverAlt, { message: "A project with a cover needs coverAlt." }),

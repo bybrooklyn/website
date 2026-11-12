@@ -53,7 +53,8 @@ const { back, title, ...document } = Astro.props;
         const strip = document.querySelector<HTMLAnchorElement>(".strip");
         try {
             const from = document.referrer ? new URL(document.referrer) : undefined;
-            const opened = (path: string) => /^\/(blog|projects|minis)\/[^/]+\/$/.test(path);
+            const elsewhere = (document.documentElement.dataset.opened ?? "").split(" ").filter(Boolean);
+            const opened = (path: string) => /^\/(blog|projects|minis)\/[^/]+\/$/.test(path) || elsewhere.includes(path);
             if (from && from.origin === location.origin && !opened(from.pathname)) sessionStorage.setItem("opened-from", from.pathname);
             else if (!from || from.origin !== location.origin) sessionStorage.removeItem("opened-from");
             const place = sessionStorage.getItem("opened-from");

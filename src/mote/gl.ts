@@ -295,6 +295,9 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
         return { picture, onto };
     });
     const hides = g.createRenderbuffer();
+    // (bound and given a size before it is attached: a browser warns of one that never was)
+    g.bindRenderbuffer(g.RENDERBUFFER, hides);
+    g.renderbufferStorage(g.RENDERBUFFER, g.DEPTH_COMPONENT24, 1, 1);
     g.bindFramebuffer(g.FRAMEBUFFER, soft[0]!.onto);
     g.framebufferRenderbuffer(g.FRAMEBUFFER, g.DEPTH_ATTACHMENT, g.RENDERBUFFER, hides);
     g.bindFramebuffer(g.FRAMEBUFFER, null);

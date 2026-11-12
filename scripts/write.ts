@@ -43,7 +43,8 @@ async function files() {
             path,
             label: frontmatter(source, "title") ?? frontmatter(source, "name") ?? stem(name),
             draft: frontmatter(source, "draft") === "true",
-            route: route(path),
+            // A project that opens a page of its own is shown there, not at /projects/<name>/.
+            route: frontmatter(source, "opens") ?? route(path),
         };
     };
     const folder = async (label: string, where: string) => ({

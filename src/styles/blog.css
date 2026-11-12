@@ -244,6 +244,11 @@
     line-height: 1.4;
 }
 
+/* the title in the fold's own line stays on that line, beside its triangle */
+.contents summary a {
+    display: inline;
+}
+
 .contents a:hover {
     color: var(--ink);
 }

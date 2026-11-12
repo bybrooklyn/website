@@ -140,8 +140,11 @@ export default function plinko(m: Mote): Scene {
     // ---- under the board: the password, and the settings ----
     let finish = () => {};
     let ready = () => {};
+    /** The settings the password being made, or last made, was made with. */
+    let used = settings;
     const start = (count = settings.length) => {
-        board = drop({ ...settings, length: count });
+        used = { ...settings, length: count };
+        board = drop(used);
         dropping = true;
         build(m.preview ? 0 : count);
         // a knock for each peg struck, higher the further down the board, and the peg lights in the ball's color
@@ -170,24 +173,27 @@ export default function plinko(m: Mote): Scene {
         const panel = m.panel();
         const said = el("p", { class: "table-said", textContent: "Press drop for a password." });
         said.setAttribute("aria-live", "polite");
-        const word = el("output", { class: "plinko-word", hidden: true });
+        const word = el("output", { class: "plinko-word" });
         const about = el("p", { class: "note" });
         const go = el("button", { type: "button", class: "dice-go", textContent: "drop", onclick: () => start() });
         const copy = el("button", { type: "button", class: "quiet", textContent: "copy", disabled: true, onclick: () => {
+            copy.style.minWidth = `${copy.offsetWidth}px`;
             navigator.clipboard?.writeText(word.textContent ?? "").then(() => (copy.textContent = "copied"), () => (copy.textContent = "select it and copy"));
             setTimeout(() => (copy.textContent = "copy"), 2500);
         } });
 
-        const describe = () => {
-            const count = alphabet(settings).length;
-            about.textContent = `${settings.length} characters, each one of ${count}: ${Math.round(strength(settings))} bits.`;
+        /** Says how strong a password made with these settings is. */
+        const describe = (of: Settings = settings) => {
+            about.textContent = `${of.length} characters, each one of ${alphabet(of).length}: ${Math.round(strength(of))} bits.`;
         };
         /** A setting changed: it is kept, and the empty board is set up again if nothing is falling. */
         const changed = () => {
             m.keep("plinko", settings);
-            describe();
+            // a setting changed while a password is being made is for the next one: this one, and the line about it, stay as they are
             if (dropping) return;
-            word.hidden = copy.disabled = true;
+            describe();
+            word.classList.remove("shown");
+            copy.disabled = true;
             said.textContent = "Press drop for a password.";
             board = drop({ ...settings, length: 0 });
             build(settings.length);
@@ -219,13 +225,16 @@ export default function plinko(m: Mote): Scene {
         describe();
         ready = () => {
             said.textContent = "Dropping…";
-            word.hidden = copy.disabled = true;
+            word.classList.remove("shown");
+            copy.disabled = true;
             go.disabled = true;
         };
         finish = () => {
             said.textContent = "Your password:";
             word.textContent = board.password();
-            word.hidden = copy.disabled = go.disabled = false;
+            describe(used);
+            word.classList.add("shown");
+            copy.disabled = go.disabled = false;
         };
     }
 

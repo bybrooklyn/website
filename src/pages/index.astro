@@ -1,13 +1,24 @@
 ---
-import Figure from "../components/Figure.astro";
-import PlayHere from "../components/PlayHere.astro";
+import DrawnCover from "../components/DrawnCover.astro";
 import LanguageBar from "../components/LanguageBar.astro";
+import Picture from "../components/Picture.astro";
 import PostRow from "../components/PostRow.astro";
 import Base from "../layouts/Base.astro";
 import { site } from "../data/site";
+import { getMinis } from "../lib/minis";
 import { getPosts } from "../lib/posts";
+import { getProjects, projectPage } from "../lib/projects";
+import { sharePicture } from "../lib/share";
 
 const posts = (await getPosts()).slice(0, 4);
+const minis = await getMinis();
+const projects = await getProjects();
+// The things named in `site.working`, in that order: a project by its file's name, or "site" for this website itself.
+const working = site.working.flatMap((id) => {
+    if (id === "site") return [{ name: "This website", summary: "The site you are on, with the engine, the minis and the editor made for it.", href: site.source, picture: sharePicture("site"), pixel: false, language: "TypeScript" }];
+    const project = projects.find((one) => one.id === id);
+    return project ? [{ name: project.data.name, summary: project.data.summary, href: projectPage(project), picture: project.data.cover, pixel: project.data.pixel, language: project.data.language }] : [];
+});
 ---
 
 <Base>
@@ -15,50 +26,66 @@ const posts = (await getPosts()).slice(0, 4);
         <div class="hero">
             <section>
                 <h1>i'm charlotte</h1>
+                <p class="pronouns">{site.pronouns}</p>
                 <p class="about">{site.about}</p>
             </section>
             <LanguageBar />
         </div>
 
-        <section aria-labelledby="playmatter-title">
-            <h2 class="feature-title" id="playmatter-title">Playmatter</h2>
-            <div class="feature">
-                <PlayHere src="https://itch.io/embed-upload/19697599?color=10091a" title="Playmatter, playable" ratio="16 / 9" label="play the demo" from="itch.io">
-                <Figure
-                    src="/assets/playmatter.webp"
-                    video="/assets/playmatter.mp4"
-                    alt="A car beside a tower of wood, glass, and bricks in Playmatter."
-                    width={960}
-                    height={488}
-                    pixel
-                    eager
-                />
-                </PlayHere>
-                <div class="feature-words">
-                    <p>
-                        A 2D physics sandbox I'm making. Spawn ragdolls, build things, wire machines together, and see
-                        what happens.
-                    </p>
-                    <p class="note">In development for Windows and Linux.</p>
-                    <p><a href={site.playmatter}>more about playmatter →</a></p>
-                </div>
-            </div>
+        {/* What she is working on now: a few projects, each a small picture, its name and its one line. */}
+        <section aria-labelledby="working-title">
+            <h2 class="label" id="working-title">working on</h2>
+            <ul class="thing-list two">
+                {working.map((thing) => (
+                    <li>
+                        <a href={thing.href}>
+                            {thing.picture ? <Picture class:list={{ pixel: thing.pixel }} src={thing.picture} alt="" width={320} /> : <DrawnCover name={thing.name} language={thing.language} />}
+                            <div>
+                                <h3>{thing.name}</h3>
+                                <p>{thing.summary}</p>
+                            </div>
+                        </a>
+                    </li>
+                ))}
+            </ul>
         </section>
 
-        {
-            posts.length > 0 && (
-                <section aria-labelledby="writing-title">
-                    <h2 class="label" id="writing-title">writing</h2>
-                    <ul class="post-list">
-                        {posts.map((post) => (
-                            <PostRow post={post} level={3} compact />
-                        ))}
-                    </ul>
-                    <p class="more">
-                        <a href="/blog/">all posts →</a>
-                    </p>
-                </section>
-            )
-        }
+        {/* Writing on one side, the minis on the other. */}
+        <div class="home-halves">
+            {
+                posts.length > 0 && (
+                    <section aria-labelledby="writing-title">
+                        <h2 class="label" id="writing-title">writing</h2>
+                        <ul class="post-list">
+                            {posts.map((post) => (
+                                <PostRow post={post} level={3} compact />
+                            ))}
+                        </ul>
+                        <p class="more">
+                            <a href="/blog/">all posts →</a>
+                        </p>
+                    </section>
+                )
+            }
+            <section aria-labelledby="minis-title">
+                <h2 class="label" id="minis-title">minis</h2>
+                <ul class="thing-list">
+                    {minis.map((mini) => (
+                        <li>
+                            <a href={`/minis/${mini.id}/`}>
+                                {sharePicture(`mini-${mini.id}`) && <Picture src={sharePicture(`mini-${mini.id}`)!} alt="" width={320} />}
+                                <div>
+                                    <h3>{mini.data.name}</h3>
+                                    <p>{mini.data.summary}</p>
+                                </div>
+                            </a>
+                        </li>
+                    ))}
+                </ul>
+                <p class="more">
+                    <a href="/minis/">all minis →</a>
+                </p>
+            </section>
+        </div>
     </div>
 </Base>

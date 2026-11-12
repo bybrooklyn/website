@@ -1,0 +1,330 @@
+/* The Spectrum page (src/pages/spectrum.astro): the language picker, the sliders and the share link. */
+
+/* ---- the language picker ---- */
+
+.spectrum-languages {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 1.25rem;
+    margin-top: var(--line);
+}
+
+.spectrum-languages a {
+    color: var(--muted);
+    text-decoration: none;
+}
+
+.spectrum-languages a:hover {
+    color: var(--ink);
+}
+
+.spectrum-languages a[aria-current="true"] {
+    color: var(--ink);
+    text-decoration: underline;
+    text-decoration-color: var(--accent);
+    text-decoration-thickness: 0.125rem;
+    text-underline-offset: 0.3em;
+}
+
+/* Who translated it: a line that opens under the picker for a translated language and draws shut for English. */
+.spectrum-translator {
+    display: grid;
+    grid-template-rows: 0fr;
+    opacity: 0;
+    transition:
+        grid-template-rows 0.4s var(--ease),
+        opacity 0.2s ease;
+}
+
+.spectrum-translator.shown {
+    grid-template-rows: 1fr;
+    opacity: 1;
+    transition:
+        grid-template-rows 0.4s var(--ease),
+        opacity 0.3s ease 0.1s;
+}
+
+.spectrum-translator p {
+    min-height: 0;
+    overflow: hidden;
+    margin: 0;
+    padding-top: calc(var(--line) * 0.5);
+}
+
+/* ---- the sliders ---- */
+
+/* A comfortable width for a slider's three words, a little wider than the text under them. */
+.spectrum-sliders {
+    max-width: 42rem;
+    display: grid;
+    /* one column, which a long word under a slider must not widen past the screen */
+    grid-template-columns: minmax(0, 1fr);
+    gap: calc(var(--line) * 1.25);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.spectrum-axis-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.spectrum-axis-head label {
+    font-family: var(--font-head);
+    font-weight: var(--head-weight);
+    font-size: 1.2rem;
+    /* a slider's name that falls back to English in Arabic keeps its own direction */
+    unicode-bidi: plaintext;
+}
+
+/* "Not set": a quiet word that is lit while the slider is unset. */
+.spectrum-unset {
+    flex: none;
+    border: 0.0625rem solid transparent;
+    border-radius: 1rem;
+    padding: 0 0.6rem;
+    background: none;
+    font: inherit;
+    font-size: 0.85rem;
+    color: var(--muted);
+    cursor: pointer;
+    transition:
+        color 0.15s ease,
+        border-color 0.2s ease,
+        background-color 0.2s ease,
+        scale 0.2s var(--ease);
+}
+
+.spectrum-unset:hover {
+    color: var(--ink);
+    border-color: var(--rule);
+}
+
+.spectrum-unset:active {
+    scale: 0.92;
+}
+
+.spectrum-unset[aria-pressed="true"] {
+    color: var(--ink);
+    border-color: var(--accent);
+    background: color-mix(in oklch, var(--accent) 16%, transparent);
+}
+
+/*
+ * The track: a thin plain rail, and a round thumb on it that stays wherever it is left.
+ * The range input lies over it unseen and takes no pointer; the script reads the pointer on the
+ * track. Sideways the finger is the slider's; up and down it scrolls the page.
+ */
+.spectrum-track {
+    --thumb: 1.25rem;
+    position: relative;
+    height: 2.25rem;
+    cursor: pointer;
+    touch-action: pan-y;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.spectrum-track input {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* The rail's ends are where the thumb's middle stops, so the thumb never hangs past the track. */
+.spectrum-rail {
+    position: absolute;
+    inset-inline: calc(var(--thumb) / 2);
+    top: 50%;
+    height: 0.25rem;
+    margin-top: -0.125rem;
+    border-radius: 0.125rem;
+    background: var(--rule);
+}
+
+
+/* Placed by the script (inset-inline-start); it swells a little while held and settles back when let go. */
+.spectrum-thumb {
+    position: absolute;
+    top: 50%;
+    width: var(--thumb);
+    height: var(--thumb);
+    margin-top: calc(var(--thumb) / -2);
+    margin-inline-start: calc(var(--thumb) / -2);
+    /* one plain dot */
+    border: 0.125rem solid var(--accent);
+    border-radius: 50%;
+    background: var(--accent);
+    transition:
+        scale 0.25s var(--ease),
+        background-color 0.2s ease,
+        border-color 0.2s ease;
+}
+
+.spectrum-track.held .spectrum-thumb,
+.spectrum-track:active .spectrum-thumb {
+    scale: 1.25;
+}
+
+/* The site's ring, on the thumb, when the slider under it is reached by keyboard. */
+.spectrum-track:has(input:focus-visible) .spectrum-thumb {
+    outline: 0.125rem solid var(--accent);
+    outline-offset: 0.15rem;
+}
+
+/* Unset, the thumb is hollow and the words under it fade. */
+.spectrum-axis.unset .spectrum-thumb {
+    border-color: var(--muted);
+    background: var(--panel);
+}
+
+.spectrum-ends {
+    display: grid;
+    /* thirds, so the middle word sits under the middle of the slider and a long word wraps instead of widening it */
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.75rem;
+    overflow-wrap: anywhere;
+    font-size: 0.85rem;
+    line-height: 1.3;
+    color: var(--muted);
+    transition: opacity 0.2s ease;
+}
+
+.spectrum-ends span:nth-child(2) {
+    text-align: center;
+}
+
+.spectrum-ends span:last-child {
+    text-align: end;
+}
+
+.spectrum-axis.unset .spectrum-ends {
+    opacity: 0.5;
+}
+
+/* ---- the share link ---- */
+
+.spectrum-share {
+    margin-top: calc(var(--line) * 2);
+    max-width: 42rem;
+}
+
+.spectrum-share-row {
+    position: relative;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 0.75rem;
+}
+
+.spectrum-share-row input {
+    flex: 1 1 16rem;
+    min-width: 0;
+    border: 0.0625rem solid var(--rule);
+    border-radius: var(--radius);
+    padding: 0.45rem 0.75rem;
+    background: var(--surface);
+    color: var(--ink);
+    font-family: var(--font-code);
+    font-size: 0.85rem;
+}
+
+.spectrum-copy {
+    border: 0.0625rem solid var(--accent);
+    border-radius: var(--radius);
+    padding: 0.35rem 1rem;
+    background: color-mix(in oklch, var(--accent) 14%, transparent);
+    color: var(--ink);
+    font: inherit;
+    cursor: pointer;
+    transition:
+        background-color 0.15s ease,
+        scale 0.2s var(--ease);
+}
+
+.spectrum-copy:hover {
+    background: color-mix(in oklch, var(--accent) 26%, transparent);
+}
+
+/* pressed, it gives a little, as the picture viewer's dots do */
+.spectrum-copy:active {
+    scale: 0.94;
+}
+
+/* "Copied" is always there, shrunk into the side of the button it sits against; it grows out and goes back. */
+.spectrum-copied {
+    border-radius: 1rem;
+    padding: 0 0.7rem;
+    background: var(--accent);
+    color: var(--ground);
+    font-size: 0.9rem;
+    transform-origin: left center;
+    opacity: 0;
+    scale: 0.4 0.6;
+    translate: -0.75rem 0;
+    pointer-events: none;
+    transition:
+        opacity 0.15s ease,
+        scale 0.2s ease-in,
+        translate 0.2s ease-in;
+}
+
+.spectrum[dir="rtl"] .spectrum-copied {
+    transform-origin: right center;
+    translate: 0.75rem 0;
+}
+
+.spectrum-copied.shown,
+.spectrum[dir="rtl"] .spectrum-copied.shown {
+    opacity: 1;
+    scale: 1;
+    translate: 0 0;
+    transition:
+        opacity 0.2s ease,
+        scale 0.5s var(--ease),
+        translate 0.5s var(--ease);
+}
+
+/* Heard by screen readers when the link is copied; the pill beside the button shows the same. */
+.spectrum-status {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+/* The words about it, under the thing itself, set apart from it by a rule. */
+.spectrum-about {
+    margin-top: calc(var(--line) * 2.5);
+    padding-top: calc(var(--line) * 0.5);
+    border-top: 0.0625rem solid var(--rule);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .spectrum-translator,
+    .spectrum-translator.shown,
+    .spectrum-unset,
+    .spectrum-thumb,
+    .spectrum-copy,
+    .spectrum-ends,
+    .spectrum-copied,
+    .spectrum-copied.shown,
+    .spectrum[dir="rtl"] .spectrum-copied.shown {
+        transition: none;
+    }
+
+    .spectrum-track.held .spectrum-thumb,
+    .spectrum-track:active .spectrum-thumb {
+        scale: 1;
+    }
+}

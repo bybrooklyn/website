@@ -251,6 +251,8 @@ export function mote(host: HTMLElement, make: (m: Mote) => Scene, { label = "An 
         [m.pointer.x, m.pointer.y] = [event.offsetX, event.offsetY];
     };
     canvas.addEventListener("pointerdown", (event) => {
+        // a drag that starts on the canvas is the mini's, and must not begin selecting the page's text
+        event.preventDefault();
         place(event);
         m.pointer.down = true;
         // Keep hearing about this pointer even if it leaves the canvas.

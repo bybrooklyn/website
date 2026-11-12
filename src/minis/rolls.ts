@@ -91,13 +91,19 @@ export function total(roll: Roll, shown: number[]): { total: number; said: strin
  * The numbers a roll came to, one for each die, a d100 being one number though it is two dice: how
  * many sides, what it showed, and which of the dice in the tower made it.
  */
-export function numbers(roll: Roll, shown: number[]): { sides: number; value: number; dice: number[] }[] {
+export function numbers(roll: Roll, shown: number[]): { sides: number; value: number; dice: number[]; dropped: boolean; sign: 1 | -1 }[] {
     let next = 0;
-    return roll.groups.flatMap((group) => Array.from({ length: group.count }, () => {
-        if (group.sides !== 100) return { sides: group.sides, value: shown[next]!, dice: [next++] };
-        const [tens, ones] = [next++, next++];
-        return { sides: 100, value: (shown[tens]! % 10) * 10 + (shown[ones]! % 10) || 100, dice: [tens, ones] };
-    }));
+    return roll.groups.flatMap((group) => {
+        const rolled = Array.from({ length: group.count }, () => {
+            if (group.sides !== 100) return { sides: group.sides as number, value: shown[next]!, dice: [next++], dropped: false, sign: group.sign };
+            const [tens, ones] = [next++, next++];
+            return { sides: 100, value: (shown[tens]! % 10) * 10 + (shown[ones]! % 10) || 100, dice: [tens, ones], dropped: false, sign: group.sign };
+        });
+        // the ones left out of the sum, as `total` leaves them out: the lowest, or the highest
+        const order = rolled.map((_, index) => index).sort((a, b) => rolled[a]!.value - rolled[b]!.value);
+        for (const index of group.drop > 0 ? order.slice(0, group.drop) : group.drop < 0 ? order.slice(group.drop) : []) rolled[index]!.dropped = true;
+        return rolled;
+    });
 }
 
 /**
@@ -113,8 +119,9 @@ export function lineUp(rolled: { sides: number; value: number }[]): number[] {
  * is, and the middle of each, measured in half-heights of the picture from its middle. They wrap onto
  * as many lines as lets them be largest, and a short last line is centered.
  */
-export function row(count: number, shape: number): { size: number; at(place: number): [x: number, y: number] } {
-    const [WIDE, TALL] = [1.2, 1.55];
+export function row(count: number, shape: number, WIDE = 1.2): { size: number; at(place: number): [x: number, y: number] } {
+    // (`WIDE` is how wide a place is against how big a thing in it is: more for numbers of two or three figures, so that neighbours do not touch)
+    const TALL = 1.55;
     let [size, columns] = [0, 1];
     for (let across = 1; across <= count; across++) {
         const fits = Math.min(0.27, (2 * shape * 0.9) / (WIDE * across), 1.3 / (TALL * Math.ceil(count / across)));

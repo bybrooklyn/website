@@ -78,7 +78,12 @@ const headings = Astro.props.headings.filter((heading) => heading.depth === 2 ||
     if (copy && navigator.clipboard) {
         copy.hidden = false;
         copy.addEventListener("click", () => {
-            void navigator.clipboard.writeText(document.querySelector(".cite-text")?.textContent ?? "").then(() => (copy.textContent = "copied"));
+            // the button keeps its width while it says so, and says "copy" again after a moment
+            copy.style.minWidth = `${copy.offsetWidth}px`;
+            void navigator.clipboard.writeText(document.querySelector(".cite-text")?.textContent ?? "").then(() => {
+                copy.textContent = "copied";
+                setTimeout(() => (copy.textContent = "copy"), 2500);
+            });
         });
     }
 
@@ -117,7 +122,7 @@ const headings = Astro.props.headings.filter((heading) => heading.depth === 2 ||
         link.after(mark);
     }
 
-    // Mark the link for the section nearest the top of the view.
+    // Mark the link for the section that is being read: the last heading to have passed a line a little above the middle of the view.
     const contents = document.querySelector<HTMLElement>(".contents");
     if (contents) {
         // In the margin the list always shows. On a narrow screen it is folded away
@@ -134,25 +139,40 @@ const headings = Astro.props.headings.filter((heading) => heading.depth === 2 ||
             if (heading) links.set(heading, link);
         }
 
-        const seen = new Set<Element>();
-        const observer = new IntersectionObserver(
-            (entries) => {
-                for (const entry of entries) {
-                    if (entry.isIntersecting) seen.add(entry.target);
-                    else seen.delete(entry.target);
-                }
-                // The first heading in view, or failing that the last one scrolled past.
-                const headings = [...links.keys()];
-                const current =
-                    headings.find((heading) => seen.has(heading)) ??
-                    headings.filter((heading) => heading.getBoundingClientRect().top < 0).at(-1);
-                for (const [heading, link] of links) {
-                    if (heading === current) link.setAttribute("aria-current", "true");
-                    else link.removeAttribute("aria-current");
-                }
-            },
-            { rootMargin: "0px 0px -60% 0px" },
-        );
-        for (const heading of links.keys()) observer.observe(heading);
+        const headings = [...links.keys()];
+        const LINE = 0.45;
+        const mark = () => {
+            const line = innerHeight * LINE;
+            const current = headings.findLast((heading) => heading.getBoundingClientRect().top <= line + 1);
+            for (const [heading, link] of links) {
+                if (heading === current) link.setAttribute("aria-current", "true");
+                else link.removeAttribute("aria-current");
+            }
+        };
+
+        // A short last section could never reach that line: the page ran out first, and its link was never
+        // marked. So the end of the page is given just enough room for the last heading to get there.
+        const panel = contents.closest<HTMLElement>(".opened-panel");
+        const scroller = panel ?? document.documentElement;
+        const room = document.createElement("div");
+        room.setAttribute("aria-hidden", "true");
+        contents.closest("main")?.append(room);
+        const makeRoom = () => {
+            room.style.height = "0px";
+            const last = headings.at(-1);
+            // (only where the list is beside the text; folded away on a narrow screen, nothing is marked)
+            if (last && beside.matches) {
+                const left = scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop;
+                const short = last.getBoundingClientRect().top - innerHeight * LINE - left;
+                if (short > 0) room.style.height = `${Math.ceil(short)}px`;
+            }
+            mark();
+        };
+        (panel ?? window).addEventListener("scroll", mark, { passive: true });
+        addEventListener("resize", makeRoom);
+        // pictures arriving make the text longer, and the room needed less
+        const text = contents.closest("main")?.querySelector(".prose");
+        if (text) new ResizeObserver(makeRoom).observe(text);
+        makeRoom();
     }
 </script>

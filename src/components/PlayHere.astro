@@ -42,7 +42,7 @@ const { src, title, ratio = "16 / 9", label = "play it here", from } = Astro.pro
             frame.referrerPolicy = "no-referrer";
             still.replaceChildren(frame);
             place.classList.add("playing");
-            button.closest("p")!.hidden = true;
+            button.tabIndex = -1;
         };
         button.addEventListener("click", play);
         still.addEventListener("click", play);

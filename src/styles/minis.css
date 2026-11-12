@@ -59,6 +59,11 @@
     cursor: grabbing;
 }
 
+.mote canvas {
+    user-select: none;
+    -webkit-user-select: none;
+}
+
 .mote canvas:focus {
     outline: none;
 }
@@ -141,37 +146,78 @@
 
 /* ---- controls under a mini (the Dice mini's dice to pick, typed roll and history) ---- */
 
+/* The panel is written the way the rest of the site is: the same ground as the mini, thin rules, and
+   things to press that are words, as "all posts →" and "play the demo" are. No slab and no boxed buttons. */
 .mote-panel {
-    padding: calc(var(--line) * 0.7) 1.1rem var(--line);
+    padding: calc(var(--line) * 0.9) 1.25rem var(--line);
     border-top: 0.0625rem solid var(--rule);
-    background: var(--surface);
-    font-size: 0.95rem;
+    font-size: 1rem;
 }
 
 .mote-panel :is(button, input) {
     font: inherit;
     color: var(--ink);
-    border: 0.0625rem solid var(--rule);
-    border-radius: calc(var(--radius) * 0.6);
-    background: var(--ground);
-    padding: 0.25rem 0.65rem;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    padding: 0;
 }
 
+/* A thing to press is a word in the accent, underlined as a link is. */
 .mote-panel button {
+    color: var(--accent);
+    text-decoration: underline 0.06em color-mix(in oklch, var(--accent) 45%, transparent);
+    text-underline-offset: 0.2em;
     cursor: pointer;
     transition:
-        border-color 0.15s ease,
-        background-color 0.15s ease;
+        color 0.15s ease,
+        text-decoration-color 0.15s ease,
+        scale 0.2s var(--ease);
 }
 
-.mote-panel button:hover {
-    border-color: var(--accent);
+.mote-panel button:hover:not(:disabled) {
+    text-decoration-color: var(--accent);
 }
 
+.mote-panel button:active:not(:disabled) {
+    scale: 0.96;
+}
+
+/* two things to press side by side are a clear step apart, so that they read as two */
+.mote-panel button + button {
+    margin-inline-start: 1.1rem;
+}
+
+.table-go > button + button,
+.table-typed > button + button {
+    margin-inline-start: 0;
+}
+
+/* The lesser ones are quiet until pointed at. */
 .mote-panel button.quiet {
-    border-color: transparent;
-    background: none;
     color: var(--muted);
+    text-decoration-color: transparent;
+}
+
+.mote-panel button.quiet:hover:not(:disabled) {
+    color: var(--ink);
+    text-decoration-color: var(--muted);
+}
+
+/* A line to type on is a line: a rule under the words, the accent when it is being typed on. */
+.mote-panel input[type="text"] {
+    padding: 0.2rem 0;
+    border-bottom: 0.0625rem solid var(--rule);
+    transition: border-color 0.15s ease;
+}
+
+.mote-panel input[type="text"]:focus {
+    outline: none;
+    border-bottom-color: var(--accent);
+}
+
+.mote-panel input[type="text"]::placeholder {
+    color: color-mix(in oklch, var(--muted) 70%, transparent);
 }
 
 .mote-panel input[type="text"] {
@@ -202,9 +248,9 @@
 .table-typed {
     display: flex;
     flex-wrap: wrap;
-    align-items: center;
-    gap: 0.4rem;
-    margin-bottom: 0.6rem;
+    align-items: baseline;
+    gap: 0.4rem 1.5rem;
+    margin-bottom: 0.8rem;
 }
 
 /* The dice to pick from: each one as it looks from above, its highest number up. */
@@ -220,8 +266,8 @@
     display: grid;
     justify-items: center;
     gap: 0.1rem;
-    padding: 0.4rem 0.5rem 0.3rem;
-    border-radius: var(--radius);
+    padding: 0.2rem 0.35rem;
+    text-decoration: none;
 }
 
 /* Said this firmly, because every other canvas in a mini is stretched to fill its box. */
@@ -245,6 +291,20 @@
 }
 
 /* How many of that die are in the hand. */
+/* It grows in with the first press of its die and shrinks away when the hand is cleared. */
+.dice-count {
+    scale: 0;
+    opacity: 0;
+    transition:
+        scale 0.3s var(--ease),
+        opacity 0.2s ease;
+}
+
+.dice-count.on {
+    scale: 1;
+    opacity: 1;
+}
+
 .dice-count {
     position: absolute;
     top: -0.4rem;
@@ -260,9 +320,9 @@
     text-align: center;
 }
 
-.mote-panel .dice-go {
-    padding: 0.35rem 1.4rem;
-    border-color: var(--accent);
+/* the main thing to press says where it leads, with the site's arrow */
+.mote-panel .dice-go::after {
+    content: " →";
 }
 
 .mote-panel button:disabled {
@@ -273,6 +333,17 @@
 @media (prefers-reduced-motion: reduce) {
     .dice-pick:hover .dice-picture {
         transform: none;
+    }
+
+    .dice-count,
+    .plinko-word,
+    .mini-preview {
+        transition: none;
+    }
+
+    .mini-list a:hover .mini-preview,
+    .mini-list a:focus-visible .mini-preview {
+        translate: none;
     }
 }
 
@@ -313,6 +384,26 @@
 
 /* ---- the Plinko mini's panel: the password, and its settings ---- */
 
+/* The password's line opens when there is a password and draws shut when there is not. */
+.plinko-word {
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    transition:
+        max-height 0.45s var(--ease),
+        opacity 0.3s ease,
+        margin 0.45s var(--ease);
+}
+
+.plinko-word.shown {
+    max-height: 8rem;
+    opacity: 1;
+}
+
+.plinko-word:not(.shown) {
+    margin-bottom: 0;
+}
+
 .plinko-word {
     display: block;
     margin: 0 0 0.5rem;
@@ -346,8 +437,193 @@
     gap: 0.3rem 1.2rem;
 }
 
-.mote-panel input:is([type="range"], [type="checkbox"]) {
+.mote-panel input:is([type="range"], [type="checkbox"], [type="radio"]) {
     padding: 0;
     border: 0;
     accent-color: var(--accent);
+}
+
+/* ---- the Walker mini: the ground's controls in a strip under the scene, the rest in a column beside it ---- */
+
+/* Room kept while it loads: the side column is the tallest part, a little over the scene and the strip. */
+.mini-stage[data-mini="walker"] {
+    --panel-room: 12rem;
+    max-width: 64rem;
+}
+
+.mini-stage.with-panel[data-mini="walker"] {
+    min-height: calc(clamp(16rem, 48svh, 26rem) + var(--panel-room));
+}
+
+/* One grid for the whole mini: the scene and the ground's strip on the left, the column on the right. */
+.mini-stage[data-mini="walker"]:has(.walker-side) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 17rem;
+    grid-template-rows: minmax(clamp(16rem, 48svh, 26rem), 1fr) auto;
+    grid-template-areas:
+        "scene side"
+        "ground side";
+    min-height: 0;
+}
+
+.mini-stage[data-mini="walker"] > canvas {
+    grid-area: scene;
+    height: clamp(16rem, 48svh, 26rem);
+}
+
+/* Once laid out, the scene fills its place in the grid: lower than other minis, since sky above a
+   walker seen from the side says nothing, and taller when the column beside it is, as when the
+   brain is open. Placed absolutely, so its own size never feeds back into the grid's. */
+.mini-stage[data-mini="walker"]:has(.walker-side) > canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+}
+
+/* The one status line, over the top of the scene. */
+.walker-status {
+    grid-area: scene;
+    align-self: start;
+    z-index: 1;
+    margin: 0;
+    padding: 0.7rem 0.9rem;
+    font-family: var(--font-code);
+    font-size: 0.8rem;
+    line-height: 1.4;
+    color: var(--ink);
+    pointer-events: none;
+}
+
+/* Said aloud to a screen reader and not shown, since the status line says the same. */
+.walker-said {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+/* Each part of the controls is a small label, then its controls, on one grid. */
+.mote-panel.walker-side,
+.mote-panel.walker-ground {
+    display: grid;
+    grid-template-columns: 4.6rem minmax(0, 1fr);
+    align-items: baseline;
+    gap: 0.65rem 0.8rem;
+}
+
+.mote-panel.walker-ground {
+    grid-area: ground;
+    padding-block: 0.75rem;
+}
+
+.mote-panel.walker-side {
+    grid-area: side;
+    align-content: start;
+    border-top: 0;
+    border-left: 0.0625rem solid var(--rule);
+    padding: 1rem;
+    position: relative;
+}
+
+.walker-label {
+    color: var(--muted);
+    font-size: 0.85rem;
+}
+
+.walker-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.walker-choices {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.2rem 0.85rem;
+}
+
+.walker-choices label,
+.walker-controls > label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.walker-ground input[type="range"] {
+    width: min(100%, 14rem);
+}
+
+/* The brain opens under its button: it grows to its height and goes back the same way. */
+.walker-brain {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-rows: 0fr;
+    opacity: 0;
+    margin-block: -0.65rem 0;
+    transition:
+        grid-template-rows 0.4s var(--ease),
+        opacity 0.3s ease,
+        margin 0.4s var(--ease);
+}
+
+.walker-brain.open {
+    grid-template-rows: 1fr;
+    opacity: 1;
+    margin-block: 0;
+}
+
+.walker-brain > div {
+    min-height: 0;
+    overflow: hidden;
+}
+
+/* Said this firmly, because every other canvas in a mini is stretched to fill its box. */
+.mote .mote-panel canvas.walker-brain-picture {
+    display: block;
+    width: 100%;
+    height: 12rem;
+    border: 0.0625rem solid var(--rule);
+    border-radius: calc(var(--radius) * 0.6);
+    background: var(--ground);
+    cursor: default;
+    touch-action: auto;
+}
+
+.mote-panel .walker-share {
+    grid-column: 1 / -1;
+    justify-self: start;
+    margin-top: 0.3rem;
+}
+
+/* On a narrow screen the column goes under the scene, after the ground. */
+@media (max-width: 46rem) {
+    .mini-stage[data-mini="walker"] {
+        --panel-room: 30rem;
+    }
+
+    .mini-stage[data-mini="walker"]:has(.walker-side) {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: clamp(16rem, 48svh, 26rem) auto auto;
+        grid-template-areas:
+            "scene"
+            "ground"
+            "side";
+    }
+
+    .mote-panel.walker-side {
+        border-left: 0;
+        border-top: 0.0625rem solid var(--rule);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .walker-brain {
+        transition: none;
+    }
 }

@@ -125,6 +125,8 @@ function menu(picture: HTMLImageElement, address: () => string): { box: HTMLElem
 }
 
 let closeOpen: (() => void) | undefined;
+/** Takes the open picture away at once, with no flight back: for when the page itself is being left. */
+let dropOpen: (() => void) | undefined;
 
 /** Opens a picture in the viewer. `link`, if the picture is one, is where its full size is. */
 export function view(picture: HTMLImageElement, link?: HTMLAnchorElement | null): void {
@@ -151,11 +153,12 @@ export function view(picture: HTMLImageElement, link?: HTMLAnchorElement | null)
     Object.assign(copy.style, { left: `${to.left}px`, top: `${to.top}px`, width: `${to.width}px`, height: `${to.height}px` });
     const large = largest(picture, link);
     const more = menu(picture, () => large);
-    // the dots sit in the picture's own top right corner, and come in once it has arrived there
-    Object.assign(more.box.style, { top: `${to.top + 10}px`, right: `${innerWidth - to.left - to.width + 10}px` });
-    more.box.animate([{ opacity: 0, scale: 0.6 }, { opacity: 0, scale: 0.6, offset: 0.6 }, { opacity: 1, scale: 1 }], { duration: still.matches ? 0 : 560, easing: EASE });
     viewer.append(shade, copy, more.box);
     document.body.append(viewer);
+    // The dots sit in the picture's own top right corner, as far from its right edge as from its top, and come in
+    // once it has arrived there. Measured against the viewer itself, which is what they are placed in.
+    Object.assign(more.box.style, { top: `${to.top + 10}px`, right: `${viewer.clientWidth - to.left - to.width + 10}px` });
+    more.box.animate([{ opacity: 0, scale: 0.6 }, { opacity: 0, scale: 0.6, offset: 0.6 }, { opacity: 1, scale: 1 }], { duration: still.matches ? 0 : 560, easing: EASE });
 
     // The sharper copy takes over once it has arrived; until then the one already on the page is stretched.
     if (large !== copy.src) {
@@ -194,11 +197,7 @@ export function view(picture: HTMLImageElement, link?: HTMLAnchorElement | null)
         const back = drawn(picture);
         picture.style.visibility = "hidden";
         const done = () => {
-            viewer.remove();
-            picture.style.visibility = "";
-            removeEventListener("keydown", key, true);
-            removeEventListener("resize", shut);
-            closeOpen = undefined;
+            drop();
             (link ?? picture).focus({ preventScroll: true });
         };
         more.shut();
@@ -216,12 +215,25 @@ export function view(picture: HTMLImageElement, link?: HTMLAnchorElement | null)
             { duration: 340, easing: EASE, fill: "forwards" },
         ).finished.then(done, done);
     };
+    const drop = () => {
+        viewer.remove();
+        picture.style.visibility = "";
+        removeEventListener("keydown", key, true);
+        removeEventListener("resize", shut);
+        [closeOpen, dropOpen] = [undefined, undefined];
+    };
     const key = (event: KeyboardEvent) => {
-        // while a picture is open the page under it hears no keys; Tab still moves between the menu's lines
-        if (event.key === "Tab") return;
+        // while a picture is open the page under it hears no keys, and Tab goes round what is in the viewer and nowhere else
+        if (event.key === "Tab") {
+            event.preventDefault();
+            const stops = [...viewer.querySelectorAll<HTMLElement>("button, a[href]")].filter((stop) => !stop.closest("[inert]"));
+            const at = stops.indexOf(document.activeElement as HTMLElement);
+            stops[(at + (event.shiftKey ? -1 : 1) + stops.length) % stops.length]?.focus({ preventScroll: true });
+            return;
+        }
         event.stopPropagation();
         const inMenu = more.box.contains(document.activeElement);
-        if (event.key === "Escape" && more.shut()) return void viewer.focus({ preventScroll: true });
+        if (event.key === "Escape" && more.shut()) return void more.box.querySelector("button")?.focus({ preventScroll: true });
         if (event.key !== "Escape" && (inMenu || (event.key !== "Enter" && event.key !== " "))) return;
         event.preventDefault();
         shut();
@@ -233,7 +245,12 @@ export function view(picture: HTMLImageElement, link?: HTMLAnchorElement | null)
     addEventListener("keydown", key, true);
     addEventListener("resize", shut);
     closeOpen = shut;
+    dropOpen = drop;
 }
+
+// Leaving the page takes an open picture with it. Otherwise it would be in the picture the browser takes of the
+// page for the change to the next one, under the header, and still open when the page was come back to.
+for (const leaving of ["pageswap", "pagehide"]) addEventListener(leaving, () => dropOpen?.());
 
 /**
  * Which pictures open: those in the text of a page, covers, figures, and the one on the photos page.
@@ -252,16 +269,20 @@ document.addEventListener("click", (event) => {
     view(picture, picture.closest<HTMLAnchorElement>(".gallery a"));
 });
 // Each can also be reached and opened with the keyboard, unless it is in a link, which already can be.
-for (const picture of document.querySelectorAll<HTMLImageElement>(WHICH)) {
-    if (!taken(picture)) continue;
+const reachable = (picture: HTMLImageElement) => {
+    if (!taken(picture) || "zoom" in picture.dataset) return;
     picture.dataset.zoom = "";
-    if (picture.closest("a")) continue;
+    if (picture.closest("a")) return;
     picture.tabIndex = 0;
     picture.setAttribute("role", "button");
     picture.setAttribute("aria-label", picture.alt ? `View larger: ${picture.alt}` : "View larger");
-    picture.addEventListener("keydown", (event) => {
-        if (event.key !== "Enter" && event.key !== " ") return;
-        event.preventDefault();
-        view(picture);
-    });
-}
+};
+for (const picture of document.querySelectorAll<HTMLImageElement>(WHICH)) reachable(picture);
+// A picture that arrives later (the photos page gives its picture an address only once it has chosen one) is made reachable when it loads.
+document.addEventListener("load", (event) => event.target instanceof HTMLImageElement && reachable(event.target), true);
+document.addEventListener("keydown", (event) => {
+    const picture = event.target instanceof HTMLImageElement ? event.target : undefined;
+    if (!picture || !("zoom" in picture.dataset) || picture.closest("a") || (event.key !== "Enter" && event.key !== " ")) return;
+    event.preventDefault();
+    view(picture);
+});

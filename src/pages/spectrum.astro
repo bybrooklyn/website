@@ -1,0 +1,117 @@
+---
+// /spectrum/: where you are on the gender and sexuality spectrum, as nine sliders and a link that
+// carries every value. Nothing is stored; the values live in the address. It opens like a project
+// (its words are src/content/projects/spectrum.mdx, which says `opens: /spectrum/`): the thing at
+// the top, then what it is and where it comes from. After Andrea Vos's Spectrum (src/spectrum/LICENSE.md).
+//
+// The sliders are written here in English, each in the middle, so the page reads without scripts.
+// src/scripts/spectrum.ts then reads `?c=` and `?l=`, sets the sliders, puts the words in the
+// language asked for, and keeps the share link and the address up to date.
+import "../styles/content";
+import "../styles/blog.css";
+import "../styles/projects.css";
+import "../styles/spectrum.css";
+import { getEntry, render } from "astro:content";
+import PrevNext from "../components/PrevNext.astro";
+import Opened from "../layouts/Opened.astro";
+import { getProjects, projectPage } from "../lib/projects";
+import { projectShare, sharePicture } from "../lib/share";
+import { axes, HIGHEST, LOWEST, MIDDLE, start } from "../spectrum/axes";
+import { breakable, codes, languages, said, words } from "../spectrum/languages";
+import { along } from "../spectrum/slider";
+
+const project = (await getEntry("projects", "spectrum"))!;
+const { name, summary, language } = project.data;
+const { Content } = await render(project);
+const projects = await getProjects();
+const at = projects.findIndex((each) => each.id === project.id);
+const previous = projects[at - 1];
+const next = projects[at + 1];
+
+const english = words("en");
+const values = start();
+---
+
+<Opened title={name} description={summary} image={sharePicture("project-spectrum")} facts={projectShare(project)} back={{ href: "/projects/", label: "projects" }}>
+    <article class="post spectrum-page">
+        <div class="spectrum" data-spectrum lang="en" dir="ltr">
+            <header class="post-header">
+                <p class="post-meta"><span>{language}</span></p>
+                <h1 data-say="title">{english.title}</h1>
+                <p class="lede" data-say="question">{english.question}</p>
+                <nav class="spectrum-languages" aria-label="Language">
+                    {
+                        codes.map((code) => (
+                            <a href={`/spectrum/?l=${code}`} hreflang={code} lang={code} data-language={code} aria-current={code === "en" ? "true" : undefined}>
+                                {languages[code].name}
+                            </a>
+                        ))
+                    }
+                </nav>
+                {/* Who translated the language picked: it opens under the picker, and draws shut again for English. */}
+                <div class="spectrum-translator">
+                    <p class="note"></p>
+                </div>
+            </header>
+
+            <ol class="spectrum-sliders">
+                {
+                    axes.map((axis, index) => (
+                        <li class="spectrum-axis" data-axis={axis}>
+                            <div class="spectrum-axis-head">
+                                <label for={`axis-${axis}`} data-say={`axes.${axis}.label`}>
+                                    {english.axes[axis].label}
+                                </label>
+                                <button type="button" class="spectrum-unset" aria-pressed="false" aria-label={`${english.unset}: ${english.axes[axis].label}`}>
+                                    <span data-say="unset">{english.unset}</span>
+                                </button>
+                            </div>
+                            {/*
+                                The real slider is the range input: it has the focus, the keys and the value that
+                                screen readers and other assistive technology read and set. It is laid over the
+                                track unseen, and the rail and thumb beside it are what is seen and dragged.
+                            */}
+                            <div class="spectrum-track">
+                                <input type="range" id={`axis-${axis}`} min={LOWEST} max={HIGHEST} step="1" value={values[index]} aria-valuetext={said(english, axis, MIDDLE)} />
+                                <span class="spectrum-rail" aria-hidden="true">
+                                    <span class="spectrum-thumb" style={`inset-inline-start: ${along(values[index]!) * 100}%`} />
+                                </span>
+                            </div>
+                            <div class="spectrum-ends" aria-hidden="true">
+                                <span data-say={`axes.${axis}.farLeft`}>{breakable(english.axes[axis].farLeft)}</span>
+                                <span data-say={`axes.${axis}.middle`}>{breakable(english.axes[axis].middle)}</span>
+                                <span data-say={`axes.${axis}.farRight`}>{breakable(english.axes[axis].farRight)}</span>
+                            </div>
+                        </li>
+                    ))
+                }
+            </ol>
+
+            <div class="spectrum-share">
+                <label for="spectrum-link" class="label" data-say="share">{english.share}</label>
+                <div class="spectrum-share-row">
+                    <input id="spectrum-link" type="text" readonly value="https://bybrooklyn.dev/spectrum/" />
+                    <button type="button" class="spectrum-copy"><span data-say="copy">{english.copy}</span></button>
+                    {/* "Copied" is always there, shrunk into the side of the button until it grows out; the status beside it is what a screen reader hears. */}
+                    <span class="spectrum-copied" aria-hidden="true" data-say="copied">{english.copied}</span>
+                    <span class="spectrum-status" role="status"></span>
+                </div>
+            </div>
+        </div>
+
+        {/* What it is, that nothing is stored, where it comes from and what was changed: the project's own words. */}
+        <div class="prose spectrum-about">
+            <Content />
+        </div>
+
+        <PrevNext
+            label="More projects"
+            previous={previous && { href: projectPage(previous), note: "previous", title: previous.data.name }}
+            next={next ? { href: projectPage(next), note: "next", title: next.data.name } : { href: "/projects/", note: "back to the list", title: "all projects" }}
+        />
+    </article>
+</Opened>
+
+<script>
+    import "../scripts/spectrum";
+</script>

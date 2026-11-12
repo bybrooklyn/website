@@ -88,9 +88,9 @@ From the conversation on 11 Nov, later:
     - Writing from the browser (11 Nov): the site stays as files in git. A private write area
       that only she can log into, with a passkey, saves posts and photos into the repository. The
       board and likes are a small separate piece on a server.
-    - Deploys are to be easy and few: "i could fuck my quota". So saving a draft does not deploy.
-      One "publish" press makes one deploy. To check before building: what Cloudflare Pages counts
-      against the free plan for uploads made with wrangler.
+    - Deploys stay as they are (12 Nov): "i dont feel like making a cloudflare token, and i will
+      not. can we just keep our current system?" So there is no publish workflow. mdQuire saves
+      into the repository, and she runs `bun run deploy` at home when she wants it live.
     - The board: a name and a message, a small drawing, both waiting for her approval before they
       show; and likes on photos.
 14. A mini where a person learns to walk in the browser, with the person to set up. In Rust
@@ -116,6 +116,16 @@ From the conversation on 11 Nov, later:
 19. More queer memes among the shitposts.
 20. Plinko as a table in real 3D with a character on every ball was built and taken back the same
     day: it looked weird. The balls and round posts it needed are still in `space.ts`.
+
+From 12 Nov, "i want to make my website more gay":
+
+21. Accent colors taken from her two flags, trans and lesbian, quiet enough that "you notice if
+    you look". Optional and modular, like everything in this group.
+22. More of her in the words and pages. Hers to write.
+23. The public wiki as "my own personal wikipedia", with a part about transitioning. (The locked
+    wiki in `password.md` is a different thing.)
+24. A project like pronouns.cc, "very simple".
+25. Spectrum, rewritten for the site at `/spectrum/` (on the `spectrum` branch).
 
 ## Next, as she chose on 11 Nov
 

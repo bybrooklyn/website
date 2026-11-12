@@ -64,10 +64,20 @@ test("a row of any number up to sixty stays inside the picture, wide or narrow, 
 test("a d100 is one number in the row, made by two dice, and it leads the row", () => {
     const rolled = numbers(ok("d100 + 2d6"), [7, 3, 5, 2]);
     expect(rolled).toEqual([
-        { sides: 100, value: 73, dice: [0, 1] },
-        { sides: 6, value: 5, dice: [2] },
-        { sides: 6, value: 2, dice: [3] },
+        { sides: 100, value: 73, dice: [0, 1], dropped: false, sign: 1 },
+        { sides: 6, value: 5, dice: [2], dropped: false, sign: 1 },
+        { sides: 6, value: 2, dice: [3], dropped: false, sign: 1 },
     ]);
     expect(numbers(ok("d100"), [10, 10])[0]!.value).toBe(100);
     expect(lineUp(rolled)).toEqual([0, 1, 2]);
+});
+
+test("the numbers left out of a roll's sum are marked, and what is not marked adds up to the sum", () => {
+    const roll = ok("4d6 drop lowest + 2");
+    const shown = [5, 1, 5, 4];
+    const rolled = numbers(roll, shown);
+    expect(rolled.map((one) => one.dropped)).toEqual([false, true, false, false]);
+    expect(rolled.filter((one) => !one.dropped).reduce((sum, one) => sum + one.sign * one.value, 0) + roll.plus).toBe(total(roll, shown).total);
+    const less = ok("d20 - d4");
+    expect(numbers(less, [12, 3]).map((one) => one.sign)).toEqual([1, -1]);
 });

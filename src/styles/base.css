@@ -148,7 +148,8 @@ pre {
     color: var(--muted);
 }
 
-h1 + .lede {
+h1 + .lede,
+.page-head:has(.mote-mark) .lede {
     margin-top: var(--line);
 }
 
@@ -232,7 +233,7 @@ h1 + .lede {
     /* room for the underline inside the clip */
     padding-bottom: 0.3em;
     margin-bottom: -0.3em;
-    transition: width 0.6s cubic-bezier(0.45, 0, 0.2, 1);
+    transition: width 0.5s var(--ease);
 }
 
 .reveal.ready > span {
@@ -269,6 +270,17 @@ h1 + .lede {
     }
 }
 
+/* Whatever is marked hidden is not shown, even where a rule gives it a display of its own. */
+[hidden] {
+    display: none !important;
+}
+
+/* The same ring on everything that can be pressed, when it is reached by keyboard. */
+:where(button, summary, [role="button"], input, select):focus-visible {
+    outline: 0.125rem solid var(--accent);
+    outline-offset: 0.15rem;
+}
+
 /* ---- home ---- */
 
 .home {
@@ -293,8 +305,155 @@ h1 + .lede {
 
 }
 
-.feature .figure {
+/* Rows on the homepage: a small picture, a name and a line. What she is working on, and the minis. */
+.thing-list {
+    display: grid;
+    gap: 0 clamp(2rem, 4vw, 4rem);
     margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.thing-list a {
+    display: grid;
+    grid-template-columns: clamp(5rem, 14vw, 7.5rem) 1fr;
+    gap: 1.1rem;
+    align-items: start;
+    height: 100%;
+    padding: calc(var(--line) * 0.75) 0;
+    border-top: 0.0625rem solid var(--rule);
+    color: var(--ink);
+    text-decoration: none;
+}
+
+.thing-list :is(img, svg) {
+    display: block;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 16 / 10;
+    /* the whole picture, never a crop, as in the projects list */
+    object-fit: contain;
+    border: 0.0625rem solid var(--rule);
+    border-radius: calc(var(--radius) * 0.8);
+    background: var(--surface);
+    transition: border-color 0.15s ease;
+}
+
+.thing-list a:hover :is(img, svg) {
+    border-color: var(--accent);
+}
+
+.thing-list h3 {
+    margin: 0;
+    font-size: clamp(1.25rem, 1.1rem + 0.6vw, 1.5rem);
+    line-height: 1.2;
+    transition: color 0.15s ease;
+}
+
+.thing-list a:hover h3 {
+    color: var(--accent);
+}
+
+.thing-list p {
+    margin: 0.25rem 0 0;
+    color: var(--muted);
+    line-height: 1.4;
+    text-wrap: pretty;
+}
+
+.home-halves {
+    display: grid;
+    gap: calc(var(--line) * 2.5) clamp(2rem, 4vw, 4rem);
+    align-items: start;
+}
+
+.home-halves > * {
+    min-width: 0;
+}
+
+@media (min-width: 62rem) {
+    .thing-list.two,
+    .home-halves {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+/* ---- back to the top of a long page ---- */
+
+/* It is never simply there: it grows in once the page has been scrolled a screen, and shrinks away again. */
+.to-top {
+    position: fixed;
+    right: clamp(1rem, 3vw, 2rem);
+    bottom: clamp(1rem, 3vw, 2rem);
+    z-index: 5;
+    display: grid;
+    place-items: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    border: 0.0625rem solid var(--rule);
+    border-radius: 50%;
+    padding: 0;
+    background: var(--surface);
+    color: var(--ink);
+    cursor: pointer;
+    opacity: 0;
+    scale: 0.5;
+    translate: 0 0.75rem;
+    visibility: hidden;
+    transition:
+        opacity 0.3s ease,
+        scale 0.45s var(--ease),
+        translate 0.45s var(--ease),
+        border-color 0.15s ease,
+        visibility 0s 0.45s;
+}
+
+.to-top.shown {
+    opacity: 1;
+    scale: 1;
+    translate: 0 0;
+    visibility: visible;
+    transition-delay: 0s;
+}
+
+/* A terminal opened to the whole window has the window to itself. */
+:root.terminal-open .to-top {
+    opacity: 0;
+    scale: 0.5;
+    visibility: hidden;
+}
+
+.to-top:hover,
+.to-top:focus-visible {
+    border-color: var(--accent);
+}
+
+.to-top:active {
+    scale: 0.86;
+}
+
+.to-top svg {
+    width: 1.1rem;
+    height: 1.1rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .to-top {
+        scale: 1;
+        translate: none;
+        transition: opacity 0.15s ease, visibility 0s 0.15s;
+    }
+}
+
+@media print {
+    .to-top {
+        display: none;
+    }
 }
 
 .about {
@@ -326,6 +485,12 @@ h1 + .about {
         grid-template-columns: 3fr 2fr;
         align-items: end;
     }
+}
+
+/* her pronouns, small and quiet under her name */
+.hero .pronouns {
+    margin: calc(var(--line) * 0.4) 0 calc(var(--line) * 0.7);
+    color: var(--muted);
 }
 
 .hero .about {
@@ -527,6 +692,49 @@ h1 + .about {
 
 .play-button:hover {
     text-decoration-color: var(--accent);
+}
+
+/* once it is pressed the line draws shut, and the game is in the picture's place */
+.play-line {
+    max-height: 4rem;
+    overflow: hidden;
+    transition:
+        max-height 0.4s var(--ease),
+        opacity 0.25s ease,
+        margin 0.4s var(--ease);
+}
+
+.play-here.playing .play-line {
+    max-height: 0;
+    margin-top: 0;
+    opacity: 0;
+    visibility: hidden;
+    transition:
+        max-height 0.4s var(--ease),
+        opacity 0.25s ease,
+        margin 0.4s var(--ease),
+        visibility 0s 0.4s;
+}
+
+.play-still iframe {
+    animation: play-arrive 0.4s ease;
+}
+
+@keyframes play-arrive {
+    from {
+        opacity: 0;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .play-line,
+    .play-here.playing .play-line {
+        transition: none;
+    }
+
+    .play-still iframe {
+        animation: none;
+    }
 }
 
 /* Playmatter on the homepage: the clip across the page, and under it what it is. */
