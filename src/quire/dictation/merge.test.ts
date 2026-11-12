@@ -84,6 +84,11 @@ describe("a merger", () => {
         expect(join(merger.all())).toBe("we went to the market and then home");
         expect(join(done.settled)).toBe("and then home");
     });
+    test("with overlap off a repeated word at the seam is kept", () => {
+        const merger = createMerger({ overlap: false });
+        merger.update(words("it had"), { final: true });
+        expect(join(merger.update(words("had better"), { final: true }).settled)).toBe("had better");
+    });
     test("reset forgets everything", () => {
         const merger = createMerger();
         merger.update(words("a b"), { final: true });

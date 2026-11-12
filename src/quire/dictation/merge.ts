@@ -58,8 +58,9 @@ export interface Merger {
     reset(): void;
 }
 
-/** Makes a merger with nothing settled. */
-export function createMerger(): Merger {
+/** Makes a merger with nothing settled. With `overlap` off, words are never dropped as repeats: for windows that do not share sound, where a repeated word ("had had") is really said twice. */
+export function createMerger(options: { overlap?: boolean } = {}): Merger {
+    const { overlap = true } = options;
     let done: Word[] = [];
     let previous: string[] = [];
     return {
@@ -69,10 +70,12 @@ export function createMerger(): Merger {
             previous = [];
         },
         update(words, how) {
-            const fresh = dropOverlap(
-                done.map((word) => word.text),
-                words,
-            );
+            const fresh = overlap
+                ? dropOverlap(
+                      done.map((word) => word.text),
+                      words,
+                  )
+                : words;
             const agree = agreeing(previous, fresh.map((word) => word.text));
             let take = 0;
             if (how.final) take = fresh.length;

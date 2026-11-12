@@ -1,0 +1,290 @@
+// One run of dictation, from sound to text. It is given the 16 kHz sound as it arrives, in frames,
+// and a recognizer; it keeps the sound of the phrase being spoken as a window, asks the recognizer
+// again as more of it arrives and shows the answer as provisional words, and when the phrase is
+// settled (a pause, or the window grown too long) writes the final answer into the document as one
+// undoable step.
+//
+// Everything here counts time in samples, so it behaves the same fast or slow, and the tests feed
+// it a minute of sound in a moment. It knows the editor only through `Target`, which is the part of
+// the surface it uses.
+//
+//   const session = startSession({ target: surface, recognizer, commands: () => true, custom: () => words, ... });
+//   session.feed(frame);            // each frame the microphone gives
+//   await session.stop("button");   // settles what is left
+
+import type { Document, Selection } from "../document";
+import { textAt } from "../document";
+import type { State } from "../history";
+import type { ChangeKind } from "../history";
+import { textBefore, write, type Pending } from "./insert";
+import { createMerger, spread, type Word } from "./merge";
+import { interpret } from "./spoken";
+import { createVoice } from "./voice";
+import { correct, type Custom } from "./words";
+
+/** What a recognizer gives back for a stretch of sound. `words` carry times from the start of that sound when the model gives them. */
+export interface Recognized {
+    text: string;
+    words?: Word[];
+    /** Milliseconds the recognizing took. */
+    ms: number;
+}
+
+/** Anything that turns sound into text. */
+export interface Recognizer {
+    transcribe(samples: Float32Array): Promise<Recognized>;
+    /** Which kind of computing it runs on, for the panel. */
+    backend: string;
+    dispose(): void;
+}
+
+/** The part of the editor's surface a session uses. */
+export interface Target {
+    getDocument(): Document;
+    getSelection(): Selection;
+    run(operation: (doc: Document, selection: Selection) => State, kind?: ChangeKind): void;
+    undo(): void;
+}
+
+/** Why a session ended. */
+export type Reason = "button" | "silence" | "nothing" | "command" | "error";
+
+/** What a session is given. */
+export interface SessionOptions {
+    target: Target;
+    recognizer: Recognizer;
+    /** Whether spoken punctuation and commands are on, asked each time since it can be switched during a session. */
+    commands: () => boolean;
+    custom: () => Custom;
+    onLevel?: (level: number, speaking: boolean) => void;
+    /** The provisional words, or "" when there are none. */
+    onProvisional?: (text: string) => void;
+    /** A line for the panel: how it is keeping up. */
+    onNote?: (note: string) => void;
+    onStop?: (reason: Reason) => void;
+    /** Quiet times in milliseconds, for tests. */
+    silence?: number;
+    wait?: number;
+}
+
+/** A running session. */
+export interface Session {
+    feed(frame: Float32Array): void;
+    stop(reason: Reason): Promise<void>;
+    /** "live" shows provisional words; "pause" only recognizes at each pause, because the machine cannot keep up. */
+    mode(): "live" | "pause";
+    /** Recognizing time over sound time, smoothed. */
+    speed(): number;
+}
+
+const RATE = 16000;
+/** The longest window asked about, in seconds; past it the window is cut at its quietest moment. */
+export const WINDOW = 10;
+/** Provisional words need the machine to recognize faster than this many seconds per second of sound. */
+export const LIVE_LIMIT = 0.45;
+/** Sound kept before speech starts, so that the first word is not clipped, in seconds. */
+const PRE_ROLL = 0.8;
+
+/** Starts a session on a target. */
+export function startSession(options: SessionOptions): Session {
+    const { target, recognizer } = options;
+    const voice = createVoice({ silence: options.silence, wait: options.wait });
+    const merger = createMerger({ overlap: false });
+
+    let buffer = new Float32Array(RATE * (WINDOW + 4));
+    let length = 0;
+    /** Samples before the start of the buffer, in all the sound heard. */
+    let origin = 0;
+    let active = false;
+    let queue: Promise<void> = Promise.resolve();
+    let waiting = false;
+    let generation = 0;
+    let lastRun = 0;
+    let busy = false;
+    let speed = 0;
+    let measured = 0;
+    let mode: "live" | "pause" = "live";
+    let stopping = false;
+    let finished = false;
+    let pending: Pending = {};
+    let last: { text: string; after: Document } | undefined;
+    let shown = "";
+
+    const show = (text: string) => {
+        if (text !== shown) options.onProvisional?.((shown = text));
+    };
+    const append = (frame: Float32Array) => {
+        if (length + frame.length > buffer.length) {
+            const bigger = new Float32Array(Math.max(buffer.length * 2, length + frame.length));
+            bigger.set(buffer.subarray(0, length));
+            buffer = bigger;
+        }
+        buffer.set(frame, length);
+        length += frame.length;
+    };
+    const drop = (count: number) => {
+        buffer.copyWithin(0, count, length);
+        length -= count;
+        origin += count;
+    };
+
+    /** The point in the buffer, between one and four seconds from its end, where the sound is quietest. */
+    const quietest = (): number => {
+        const block = 1600;
+        let at = length - 4 * RATE;
+        let low = Infinity;
+        let best = length - RATE;
+        for (at = Math.max(RATE, at); at + block <= length - RATE; at += block) {
+            let sum = 0;
+            for (let i = at; i < at + block; i++) sum += buffer[i]! * buffer[i]!;
+            if (sum < low) {
+                low = sum;
+                best = at + block / 2;
+            }
+        }
+        return best;
+    };
+
+    const note = (text: string) => options.onNote?.(text);
+
+    /** Asks the recognizer about the first `count` samples of the buffer. */
+    async function recognize(count: number): Promise<{ text: string; words: Word[] } | undefined> {
+        const samples = buffer.slice(0, count);
+        const from = origin / RATE;
+        try {
+            const heard = await recognizer.transcribe(samples);
+            const seconds = count / RATE;
+            // how quickly the machine recognizes decides whether provisional words are kept up
+            if (seconds >= 1.2) {
+                const rate = heard.ms / 1000 / seconds;
+                speed = measured === 0 ? rate : speed * 0.6 + rate * 0.4;
+                measured++;
+                if (mode === "live" && measured >= 2 && speed > LIVE_LIMIT) {
+                    mode = "pause";
+                    show("");
+                    note("This machine cannot keep up with live words, so dictation writes each phrase when you pause.");
+                }
+            }
+            const words = (heard.words && heard.words.length > 0 ? heard.words : spread(heard.text, 0, seconds)).map((word) => ({ ...word, start: word.start + from, end: word.end + from }));
+            return { text: heard.text, words };
+        } catch (error) {
+            note(`Dictation stopped: ${error instanceof Error ? error.message : String(error)}`);
+            void finish("error");
+            return undefined;
+        }
+    }
+
+    /** Writes settled text at the cursor as one undoable step and carries out the commands in it. */
+    function settle(text: string) {
+        const fixed = correct(text, options.custom());
+        if (!fixed.trim()) return;
+        const state = { doc: target.getDocument(), selection: target.getSelection() };
+        const steps = interpret(fixed, { before: textBefore(state, (path) => textAt(state.doc, path)), commands: options.commands() });
+        let commands: ReturnType<typeof write>["commands"] = [];
+        target.run((doc, selection) => {
+            const done = write({ doc, selection }, steps, pending);
+            pending = done.pending;
+            commands = done.commands;
+            return done.state;
+        }, "paste");
+        const written = steps.some((step) => step.kind === "text" || step.kind === "line" || step.kind === "paragraph");
+        if (written) last = { text: fixed, after: target.getDocument() };
+        for (const command of commands) {
+            if (command === "undo") target.undo();
+            else if (command === "delete") deleteLast();
+            else if (command === "stop") void finish("command");
+        }
+    }
+
+    /** Takes back the last phrase dictated: by undo if nothing else has been done since, or by taking its text from before the cursor. */
+    function deleteLast() {
+        if (!last) return;
+        if (target.getDocument() === last.after) target.undo();
+        else {
+            const wanted = last.text.trim();
+            target.run((doc, selection) => {
+                const at = selection.focus;
+                const before = textAt(doc, at.path).slice(0, at.offset);
+                const cut = before.trimEnd().endsWith(wanted) ? before.trimEnd().length - wanted.length : -1;
+                if (cut < 0) return { doc, selection };
+                // the text is taken out through the same step as writing, by an erase of nothing and a replacement
+                const state = write({ doc, selection: { anchor: { path: at.path, offset: at.offset }, focus: { path: at.path, offset: at.offset } } }, [{ kind: "text", text: "", erase: at.offset - cut }]);
+                return state.state;
+            }, "delete");
+        }
+        last = undefined;
+    }
+
+    /** Settles the first `count` samples: asks, writes what is said, and drops that sound from the window. */
+    function settleFirst(count: number): Promise<void> {
+        generation++;
+        const job = queue.then(async () => {
+            busy = true;
+            const heard = count >= 1600 ? await recognize(count) : undefined;
+            if (heard) {
+                const merged = merger.update(heard.words, { final: true });
+                if (merged.settled.length > 0) settle(merged.settled.map((word) => word.text).join(" "));
+            }
+            drop(Math.min(count, length));
+            lastRun = 0;
+            if (count >= length) show("");
+            busy = false;
+        });
+        queue = job.catch(() => {});
+        return job;
+    }
+
+    /** Asks about the whole window for provisional words. */
+    function provisional() {
+        if (waiting || busy || finished || mode !== "live" || !active) return;
+        const count = length;
+        const mine = generation;
+        waiting = true;
+        queue = queue.then(async () => {
+            waiting = false;
+            if (mine !== generation || finished) return;
+            busy = true;
+            const heard = await recognize(count);
+            busy = false;
+            if (!heard || mine !== generation || finished) return;
+            lastRun = count;
+            const merged = merger.update(heard.words, {});
+            show(correct(merged.provisional.map((word) => word.text).join(" "), options.custom()));
+        });
+    }
+
+    async function finish(reason: Reason) {
+        if (finished || stopping) return;
+        stopping = true;
+        if (active && length >= 3200) await settleFirst(length);
+        else await queue;
+        finished = true;
+        show("");
+        options.onLevel?.(0, false);
+        options.onStop?.(reason);
+    }
+
+    return {
+        mode: () => mode,
+        speed: () => speed,
+        stop: finish,
+        feed(frame) {
+            if (finished || stopping) return;
+            append(frame);
+            const heard = voice.feed(frame);
+            options.onLevel?.(heard.level, heard.speaking);
+            if (heard.event === "start") active = true;
+            // before anyone speaks only a little sound is kept
+            if (!active && !busy && length > PRE_ROLL * RATE) drop(length - Math.round(PRE_ROLL * RATE));
+            if (heard.event === "pause" && active) {
+                active = false;
+                void settleFirst(length);
+            } else if (heard.event === "silence" || heard.event === "nothing") {
+                void finish(heard.event === "silence" ? "silence" : "nothing");
+            } else if (active && length > WINDOW * RATE && !busy && !waiting) {
+                // the window has grown too long: the first part is settled at its quietest moment
+                void settleFirst(quietest());
+            } else if (active && mode === "live" && length - lastRun >= Math.max(0.8, Math.min(2.5, speed * 1.6)) * RATE) provisional();
+        },
+    };
+}
