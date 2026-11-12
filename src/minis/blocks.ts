@@ -48,7 +48,7 @@ export default function blocks(m: Mote): Scene {
         }
     };
 
-    /** The inside of the box as one closed wall: the floor, the sides and the top, with the four corners as the curves they are. */
+    /** The inside of the box as one closed wall: the top and sides with the box's two upper corners as the curves they are, and the floor, which is flat from side to side. */
     const enclose = () => {
         if (walls) flat.remove(walls);
         const [w, h] = [m.width, m.height - FLOOR];
@@ -57,8 +57,8 @@ export default function blocks(m: Mote): Scene {
             const angle = from + (step / 6) * (Math.PI / 2);
             return [cx + Math.cos(angle) * r, cy + Math.sin(angle) * r];
         });
-        // clockwise from the top left: each corner's curve, a quarter turn at a time
-        walls = flat.wall(r < 2 ? [[0, 0], [w, 0], [w, h], [0, h]] : [...arc(r, r, Math.PI), ...arc(w - r, r, -Math.PI / 2), ...arc(w - r, h - r, 0), ...arc(r, h - r, Math.PI / 2)], true);
+        // clockwise from the top left: each upper corner's curve, a quarter turn at a time, then the floor's square ones
+        walls = flat.wall(r < 2 ? [[0, 0], [w, 0], [w, h], [0, h]] : [...arc(r, r, Math.PI), ...arc(w - r, r, -Math.PI / 2), [w, h], [0, h]], true);
         for (const block of pile) wake(block);
     };
 
