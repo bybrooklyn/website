@@ -11,7 +11,7 @@ use alloc::vec::Vec;
 
 use crate::Shared;
 use crate::body::Description;
-use crate::learn::{Goal, Settings, Trainer, flat_ground};
+use crate::learn::{Climber, Goal, Settings, Trainer, flat_ground};
 use crate::math::Vec2;
 use crate::physics::Segment;
 use crate::show::{Crowd, Show};
@@ -21,21 +21,11 @@ struct Walker {
     show: Show,
     crowd: Option<Crowd>,
     /// Learning one walker at a time, live, when there is one.
-    live: Option<Live>,
+    live: Option<Climber>,
     /// Room the page writes into: ground pieces as four f32 each, and a brain's weights.
     ground_room: Vec<f32>,
     weights_room: Vec<f32>,
     crowd_room: Vec<f32>,
-}
-
-/// One walker learning live: each attempt is a child of the best so far, and is kept if it beats it.
-struct Live {
-    best: Vec<f32>,
-    best_score: f32,
-    best_distance: f32,
-    attempt: u32,
-    /// A brain to try next before the children begin.
-    next: Option<Vec<f32>>,
 }
 
 static WALKER: Shared<Option<Walker>> = Shared::new(None);
@@ -268,12 +258,11 @@ pub extern "C" fn show_endless() -> u32 {
 #[unsafe(no_mangle)]
 pub extern "C" fn live_begin() -> u32 {
     let Some(walker) = walker() else { return 0 };
-    // the first attempt is a calm brain, every weight zero, whose legs keep the rhythm and no more;
-    // the second a random one; whichever does better is the first parent. Measured, each start is
-    // the better one for some bodies, so both are tried, in plain view
-    let calm = alloc::vec![0.0; walker.trainer.layout.weights()];
-    walker.show = attempt_of(&walker.trainer, &calm);
-    walker.live = Some(Live { best: calm, best_score: f32::NEG_INFINITY, best_distance: 0.0, attempt: 1, next: Some(walker.trainer.weights(0).to_vec()) });
+    // the climber's own randomness is seeded from the walker's, so the same seed climbs the same way
+    let seed = walker.trainer.weights(0)[0].to_bits() as u64;
+    let mut climber = Climber::new(walker.trainer.layout, walker.trainer.description, seed);
+    walker.show = attempt_of(&walker.trainer, &climber.next());
+    walker.live = Some(climber);
     1
 }
 
@@ -287,14 +276,8 @@ pub extern "C" fn live_step(seconds: f32) -> u32 {
     walker.show.step(seconds);
     if walker.show.judge.over {
         let outcome = walker.show.outcome();
-        if outcome.score > live.best_score {
-            live.best = walker.show.weights.clone();
-            live.best_score = outcome.score;
-            live.best_distance = outcome.distance;
-        }
-        live.attempt += 1;
-        let child = live.next.take().unwrap_or_else(|| walker.trainer.mutate(&live.best));
-        walker.show = attempt_of(&walker.trainer, &child);
+        live.report(&walker.show.weights, outcome);
+        walker.show = attempt_of(&walker.trainer, &live.next());
     }
     live.attempt
 }
@@ -305,7 +288,7 @@ pub extern "C" fn live_attempt() -> u32 {
     walker().and_then(|walker| walker.live.as_ref()).map_or(0, |live| live.attempt)
 }
 
-/// The best live attempt's score and distance so far.
+/// The best live attempt's score, and the furthest a kept attempt has gone, which never goes down.
 #[unsafe(no_mangle)]
 pub extern "C" fn live_best_score() -> f32 {
     walker().and_then(|walker| walker.live.as_ref()).map_or(f32::NEG_INFINITY, |live| live.best_score)
@@ -313,7 +296,7 @@ pub extern "C" fn live_best_score() -> f32 {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn live_best_distance() -> f32 {
-    walker().and_then(|walker| walker.live.as_ref()).map_or(0.0, |live| live.best_distance)
+    walker().and_then(|walker| walker.live.as_ref()).map_or(0.0, |live| live.furthest)
 }
 
 /// The best live attempt's weights, `weights_length` f32, to share.

@@ -118,6 +118,27 @@ fn exp64(x: f64) -> f64 {
     sum * f64::from_bits(((whole + 1023) as u64) << 52)
 }
 
+/// The natural logarithm of a positive x, by splitting off its power of two and summing the series
+/// for the rest. Nothing calls it often; it turns a starting stride into a brain's biases.
+pub fn ln(x: f32) -> f32 {
+    if x <= 0.0 {
+        return f32::NEG_INFINITY;
+    }
+    let x = x as f64;
+    let bits = x.to_bits();
+    let power = ((bits >> 52) & 0x7ff) as i64 - 1023;
+    let rest = f64::from_bits((bits & 0x000f_ffff_ffff_ffff) | (1023u64 << 52));
+    // ln(rest) = 2 atanh(t) with t = (rest - 1) / (rest + 1), under a third, where twenty terms suffice
+    let t = (rest - 1.0) / (rest + 1.0);
+    let mut sum = 0.0;
+    let mut odd: f64 = 41.0;
+    while odd > 0.0 {
+        sum = 1.0 / odd + t * t * sum;
+        odd -= 2.0;
+    }
+    (2.0 * t * sum + power as f64 * core::f64::consts::LN_2) as f32
+}
+
 /// The hyperbolic tangent, which the brain's neurons use to squash what they add up into -1 to 1.
 pub fn tanh(x: f32) -> f32 {
     if x > 9.0 {
@@ -324,6 +345,8 @@ mod tests {
             assert!((c - angle.cos()).abs() < 2e-7, "cos {angle}");
             assert!((atan2(s, c) - wrap(angle)).abs() < 2e-6, "atan2 {angle}");
             assert!((tanh(angle * 0.3) - (angle * 0.3).tanh()).abs() < 2e-7, "tanh {angle}");
+            let positive = angle.abs() * 3.0 + 0.01;
+            assert!((ln(positive) - positive.ln()).abs() < 2e-6, "ln {positive}");
             angle += 0.0137;
         }
         assert!((atan2(1.0, -1.0) - 3.0 * PI / 4.0).abs() < 1e-6);

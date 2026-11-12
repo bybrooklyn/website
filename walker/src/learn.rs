@@ -299,6 +299,69 @@ impl Default for Settings {
     }
 }
 
+/// One walker learning live, by climbing: each attempt is the best so far with every weight nudged a
+/// little, and it is kept only if it scores better, by the same score a generation uses. The nudges
+/// start small, grow after a success and shrink after a failure, so that about one attempt in five
+/// does better (Rechenberg's one-fifth rule). It starts from a calm brain, every weight zero, whose
+/// legs keep the rhythm and no more, so the first attempt already steps.
+#[derive(Clone, Debug)]
+pub struct Climber {
+    pub best: Vec<f32>,
+    pub best_score: f32,
+    /// The furthest any kept attempt went, which only ever grows.
+    pub furthest: f32,
+    /// The attempt now walking, counting from 1.
+    pub attempt: u32,
+    /// How large a nudge is.
+    pub step: f32,
+    random: Random,
+}
+
+impl Climber {
+    /// A climber starting from a calm brain of this layout, its outputs held at the body's stride.
+    pub fn new(layout: Layout, description: Description, seed: u64) -> Climber {
+        let mut best = vec![0.0; layout.weights()];
+        // with every other weight zero, an output is tanh of its bias, so each bias is the stride's
+        // value run back through tanh
+        let first = layout.weights() - layout.outputs - layout.memory;
+        for (k, &value) in description.stride().iter().enumerate().take(layout.outputs) {
+            let value = value.clamp(-0.95, 0.95);
+            best[first + k] = 0.5 * crate::math::ln((1.0 + value) / (1.0 - value));
+        }
+        Climber { best, best_score: f32::NEG_INFINITY, furthest: 0.0, attempt: 1, step: 0.3, random: Random::new(seed ^ 0x5eed) }
+    }
+
+    /// The first attempt is the calm brain itself; after that, a nudged copy of the best.
+    pub fn next(&mut self) -> Vec<f32> {
+        let mut child = self.best.clone();
+        if self.best_score == f32::NEG_INFINITY {
+            return child;
+        }
+        for weight in &mut child {
+            if self.random.unit() < 0.3 {
+                *weight += self.step * self.random.bell();
+            }
+        }
+        child
+    }
+
+    /// Takes in how an attempt went, keeps it if it did better, and moves on to the next.
+    pub fn report(&mut self, weights: &[f32], outcome: Outcome) {
+        if outcome.score > self.best_score {
+            let first = self.best_score == f32::NEG_INFINITY;
+            self.best.copy_from_slice(weights);
+            self.best_score = outcome.score;
+            self.furthest = self.furthest.max(outcome.distance);
+            if !first {
+                self.step = (self.step * 1.5).min(1.0);
+            }
+        } else {
+            self.step = (self.step * 0.9).max(0.02);
+        }
+        self.attempt += 1;
+    }
+}
+
 pub struct Trainer {
     pub description: Description,
     pub settings: Settings,
@@ -466,6 +529,23 @@ impl Trainer {
             }
         }
         best
+    }
+
+    /// Runs one brain from the start under a judge of the caller's, as a live attempt is judged.
+    pub fn run_judged(&mut self, weights: &[f32], mut judge: Judge) -> Outcome {
+        self.world.copy_from(&self.start);
+        self.brain.forget();
+        let creature = &self.creature;
+        loop {
+            creature.sense(&self.world, &mut self.senses);
+            self.brain.think(weights, &self.senses);
+            creature.drive(&mut self.world, &self.brain.outputs);
+            self.world.step();
+            if judge.after_step(creature, &self.world, &self.brain.outputs) {
+                break;
+            }
+        }
+        judge.outcome(creature, &self.world)
     }
 
     /// A child of one brain: each weight nudged at random with the usual chance, and at least one.
@@ -644,6 +724,26 @@ mod tests {
         let (first, last) = learns(Goal::Jump, &gappy(), 200);
         // the first gap crossed, at 3 m, and no fall: the body down for less than a tenth of a second
         assert!(last.score > first.score + 1.0 && last.distance > 3.5 && last.seconds_down < 0.1, "jump: {} then {}, {} m", first.score, last.score, last.distance);
+    }
+
+    #[test]
+    fn one_walker_live_gets_past_five_metres_within_sixty_attempts() {
+        for legs in [2, 4] {
+            let mut trainer = Trainer::new(Description { legs, carry: false, leap: false }, Settings::default(), &flat_ground(), 9).unwrap();
+            let mut climber = Climber::new(trainer.layout, trainer.description, 9);
+            let mut furthest = Vec::new();
+            while climber.attempt <= 60 {
+                let child = climber.next();
+                let mut judge = trainer.judge();
+                judge.impatient = true;
+                let outcome = trainer.run_judged(&child, judge);
+                climber.report(&child, outcome);
+                furthest.push(climber.furthest);
+            }
+            std::println!("{legs} legs live: furthest after attempts 1, 10, 20, 40, 60: {:.1} {:.1} {:.1} {:.1} {:.1}", furthest[0], furthest[9], furthest[19], furthest[39], furthest[59]);
+            assert!(furthest.windows(2).all(|pair| pair[1] >= pair[0]), "the furthest never goes down");
+            assert!(climber.furthest > 5.0, "{legs} legs went {} m in 60 attempts", climber.furthest);
+        }
     }
 
     #[test]

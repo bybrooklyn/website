@@ -237,15 +237,20 @@ and 110 to 150 ms for four, at each size. A large brain has more to learn and ge
 ### One walker, live
 
 - `live_begin() -> u32` Starts learning one walker at a time, with no generations in the
-  background: the show is each attempt. The first attempt is a calm brain, every weight zero, whose
-  legs keep the rhythm and no more; the second a random one. Measured over 150 attempts, each start
-  was the better one for some bodies, so both are tried, in plain view.
-- `live_step(seconds: f32) -> u32` Moves the attempt on. When it ends (a fall, or the end of its run)
-  it is kept if it scored better than the best so far, and the next attempt, a child of the best
-  (each weight nudged as in a generation, and at least one), starts at once. Returns the attempt's
-  number.
+  background: the show is each attempt. It climbs: each attempt is the best so far with about a
+  third of its weights nudged, kept only if it scores better, by the same score a generation uses.
+  The nudges start at 0.3, grow by half after a success and shrink by a tenth after a failure, so
+  that about one attempt in five does better. The first attempt is a calm brain, every weight zero
+  but the output biases, which hold the legs at a built-in stride that walks with no feedback (for
+  four legs the average outputs of a long run's best walker, for two the best of four thousand
+  strides tried at random), so it steps from the start. An attempt that goes under 0.2 m in four
+  seconds is over. Natively, from a fixed seed, two legs go 8.4 m on the first attempt and 8.7 m by
+  the sixtieth; four legs 7.3 m, then 12.4 m.
+- `live_step(seconds: f32) -> u32` Moves the attempt on. When it ends (a fall, a stop, or the end of
+  its run) it is kept or not, and the next attempt starts at once. Returns the attempt's number.
 - `live_attempt() -> u32`, `live_best_score() -> f32`, `live_best_distance() -> f32`,
-  `live_best_weights() -> *const f32` The attempt now walking, and the best so far.
+  `live_best_weights() -> *const f32` The attempt now walking, the best score so far and its weights,
+  and the furthest a kept attempt has gone, which never goes down.
 - `live_stop()` Goes back to a generation at a time.
 
 ### The crowd: a whole generation at once

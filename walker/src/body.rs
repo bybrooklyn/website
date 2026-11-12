@@ -49,6 +49,19 @@ impl Description {
         3 * self.joints() + usize::from(self.leap && self.legs > 1)
     }
 
+    /// A stride to start from: steady values for the brain's outputs that make the legs walk with no
+    /// feedback at all, measured once and written here. For four legs they are the average outputs of
+    /// the best walker of a long training run, and walk 8.5 m in ten seconds; for two legs, whose
+    /// average falls over, the best of four thousand strides tried at random, which walks 8.4 m. A
+    /// brain that learns live starts here, so its first attempt already steps.
+    pub fn stride(&self) -> &'static [f32] {
+        match self.legs {
+            2 => &[0.6, 0.88, 0.11, 0.39, 0.16, -0.02, -0.16, 0.81, 0.65, 0.62, -0.47, -0.75],
+            4 => &[-0.2, 0.94, 0.49, 0.52, -0.6, -0.21, 0.29, -0.48, -0.03, 0.15, 0.16, -0.08, 0.81, 0.28, 0.42, -0.4, 0.18, -0.23, 0.28, 0.14, 0.18, -0.41, 0.6, -0.41],
+            _ => &[],
+        }
+    }
+
     /// The rhythm the legs keep: how many strides a second, and where in the stride each leg starts,
     /// as a share of a turn. Two legs take turns; four trot, each diagonal pair together.
     pub fn rhythm(&self) -> (f32, &'static [f32]) {
