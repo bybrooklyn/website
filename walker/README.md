@@ -126,6 +126,25 @@ come in.
   the score and distance a helper found for it. Once every member has one, the next generation is
   bred, as `train` would. Returns the number of generations finished.
 
+### Many walkers for a learner that chooses actions
+
+For a learner other than evolution, one that picks each walker's actions step by step and learns
+from rewards. Nothing on the page uses these yet. In Rust, `Envs` in `src/envs.rs` does the same
+with a policy called between steps, thousands of steps a call.
+
+- `envs_create(count: u32) -> u32` Makes `count` walkers (up to 4096), set up as this walker's
+  training is, each at the start. Returns how many.
+- `envs_actions() -> *mut f32` Room for each walker's actions, `outputs_length` f32 each, -1 to 1:
+  what a brain's outputs would be.
+- `envs_step(steps: u32) -> u32` Steps every walker `steps` times by those actions, all in
+  lockstep, and returns the steps taken by all of them together.
+- `envs_observations() -> *const f32`, `envs_rewards() -> *const f32`, `envs_done() -> *const f32`
+  After a step: what each walker senses (`senses_length` f32 each, as `show_senses`), the reward it
+  earned in the last step (the change in the score training gives, so a run's rewards add up to its
+  score), and 1 for each whose run ended in it, else 0. A run that ends starts again at once.
+
+A run here is the very run training would give the same actions, to the bit.
+
 ### Goals
 
 The body is down when it touches the ground, is tipped past sixty degrees, or is held lower than a

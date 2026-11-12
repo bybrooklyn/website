@@ -31,6 +31,12 @@ export interface Engine {
     evaluated(): number;
     member_scored(index: number): number;
     record(index: number, score: number, distance: number): number;
+    envs_create(count: number): number;
+    envs_step(steps: number): number;
+    envs_actions(): number;
+    envs_observations(): number;
+    envs_rewards(): number;
+    envs_done(): number;
     generation(): number;
     generation_runs(): number;
     best_score(): number;

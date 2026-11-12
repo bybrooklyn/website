@@ -11,6 +11,7 @@ use alloc::vec::Vec;
 
 use crate::Shared;
 use crate::body::Description;
+use crate::envs::Envs;
 use crate::learn::{Climber, Goal, Settings, Trainer, flat_ground};
 use crate::math::Vec2;
 use crate::physics::Segment;
@@ -29,6 +30,17 @@ struct Walker {
     /// Brains to run for another trainer (`evaluate`), and how each went, a score and a distance.
     evaluate_room: Vec<f32>,
     evaluated: Vec<f32>,
+    /// Many walkers stepped together for a learner that chooses their actions (`envs_create`).
+    envs: Option<Stepped>,
+}
+
+/// The walkers of `envs_create`, and the lists they read their actions from and write into.
+struct Stepped {
+    envs: Envs,
+    observations: Vec<f32>,
+    actions: Vec<f32>,
+    rewards: Vec<f32>,
+    done: Vec<f32>,
 }
 
 static WALKER: Shared<Option<Walker>> = Shared::new(None);
@@ -74,7 +86,7 @@ pub extern "C" fn create(legs: u32, population: u32, seconds: f32, seed: u32, hi
     };
     let count = trainer.layout.weights();
     let show = show_of(&trainer, trainer.weights(0));
-    *WALKER.get() = Some(Walker { trainer, show, crowd: None, live: None, ground_room: Vec::new(), weights_room: vec![0.0; count], crowd_room: Vec::new(), evaluate_room: Vec::new(), evaluated: Vec::new() });
+    *WALKER.get() = Some(Walker { trainer, show, crowd: None, live: None, ground_room: Vec::new(), weights_room: vec![0.0; count], crowd_room: Vec::new(), evaluate_room: Vec::new(), evaluated: Vec::new(), envs: None });
     count as u32
 }
 
@@ -163,6 +175,55 @@ pub extern "C" fn record(index: u32, score: f32, distance: f32) -> u32 {
     let Some(walker) = walker() else { return 0 };
     walker.trainer.record(index as usize, score, distance);
     walker.trainer.generation
+}
+
+/// Makes `count` walkers (1 to 4096) to be stepped together by a learner that chooses their actions,
+/// set up as this walker's training is: the same creature, ground and goal. Each starts at the start.
+/// Returns how many there are. See `envs_step`.
+#[unsafe(no_mangle)]
+pub extern "C" fn envs_create(count: u32) -> u32 {
+    let Some(walker) = walker() else { return 0 };
+    let envs = Envs::new(&walker.trainer, count.clamp(1, 4096) as usize);
+    let (count, senses, actions) = (envs.len(), envs.senses(), envs.actions());
+    let mut stepped = Stepped { envs, observations: vec![0.0; count * senses], actions: vec![0.0; count * actions], rewards: vec![0.0; count], done: vec![0.0; count] };
+    stepped.envs.observe(&mut stepped.observations);
+    walker.envs = Some(stepped);
+    count as u32
+}
+
+/// Steps every walker of `envs_create` `steps` times, each time by the actions in `envs_actions`
+/// (`outputs_length` f32 for each walker, -1 to 1), and returns the steps taken by all of them. After
+/// it, `envs_observations` holds what each senses (`senses_length` f32 each), `envs_rewards` the
+/// reward each earned in the last step (the change in its score), and `envs_done` 1 for each whose run
+/// ended in the last step and has started again, else 0. A learner steps once a call, changing the
+/// actions between; many steps a call with the actions held measures the engine's speed.
+#[unsafe(no_mangle)]
+pub extern "C" fn envs_step(steps: u32) -> u32 {
+    let Some(stepped) = walker().and_then(|walker| walker.envs.as_mut()) else { return 0 };
+    let before = stepped.envs.steps;
+    let Stepped { envs, observations, actions, rewards, done } = stepped;
+    envs.run(steps as usize, observations, actions, rewards, done, |_, _, _, _| {});
+    (stepped.envs.steps - before) as u32
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn envs_actions() -> *mut f32 {
+    walker().and_then(|walker| walker.envs.as_mut()).map_or(core::ptr::null_mut(), |stepped| stepped.actions.as_mut_ptr())
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn envs_observations() -> *const f32 {
+    pointer(walker().and_then(|walker| walker.envs.as_ref()).map(|stepped| &stepped.observations[..]))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn envs_rewards() -> *const f32 {
+    pointer(walker().and_then(|walker| walker.envs.as_ref()).map(|stepped| &stepped.rewards[..]))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn envs_done() -> *const f32 {
+    pointer(walker().and_then(|walker| walker.envs.as_ref()).map(|stepped| &stepped.done[..]))
 }
 
 /// The number of generations finished.

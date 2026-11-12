@@ -25,6 +25,8 @@ pub mod gait;
 #[cfg(feature = "walker")]
 pub mod show;
 #[cfg(feature = "walker")]
+pub mod envs;
+#[cfg(feature = "walker")]
 pub mod api;
 
 #[cfg(target_arch = "wasm32")]

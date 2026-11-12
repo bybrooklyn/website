@@ -76,6 +76,30 @@ test("a generation shared out among one or eight helpers, as the workers share i
     }
 });
 
+test("many walkers step together for a learner that chooses their actions, sensing, earning and starting again", async () => {
+    const walker = await load();
+    walker.create(4, 8, 0, 3, 16, 2, 4, 1, 0);
+    expect(walker.envs_create(64)).toBe(64);
+    const [senses, outputs] = [walker.senses_length(), walker.outputs_length()];
+    // every walker held to a gentle stride
+    new Float32Array(walker.memory.buffer, walker.envs_actions(), 64 * outputs).fill(0.2);
+    expect(walker.envs_step(1)).toBe(64);
+    expect(floats(walker, walker.envs_observations(), 64 * senses).every(Number.isFinite)).toBe(true);
+    expect(floats(walker, walker.envs_rewards(), 64).every(Number.isFinite)).toBe(true);
+    // in ten seconds, the shortest run with no set length, every run has ended at least once and started again
+    let ended = 0;
+    for (let step = 0; step < 620; step++) {
+        walker.envs_step(1);
+        ended += floats(walker, walker.envs_done(), 64).filter((done) => done === 1).length;
+    }
+    expect(ended).toBeGreaterThanOrEqual(64);
+    const started = performance.now();
+    const steps = walker.envs_step(2000);
+    const seconds = (performance.now() - started) / 1000;
+    expect(steps).toBe(64 * 2000);
+    console.log(`64 four-legged walkers stepped together in WebAssembly: ${(steps / seconds).toFixed(0)} steps a second`);
+});
+
 test("how many workers train is about half the cores, fewer on a phone or with little memory, and one when gentle", () => {
     expect(workersFor("normal", { cores: 16, phone: false })).toBe(8);
     expect(workersFor("normal", { cores: 32, phone: false })).toBe(8);
