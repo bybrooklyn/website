@@ -30,6 +30,9 @@ import { createFeatures, normalize } from "./features";
 const RATE = 16000;
 const FRAME_SECONDS = 0.08;
 const SUBSAMPLING = 8;
+/** Encoder frames of silence put before a window that begins mid-speech (0.24 s), and the log-mel value of silence (features.ts takes the log of 2^-24). */
+const LEAD = 3;
+const SILENCE = Math.log(2 ** -24);
 
 /** A word as dictation uses it: its text, seconds from the start of the phrase, and how sure the model was. */
 export interface Heard {
@@ -119,20 +122,26 @@ export function createStream(parts: StreamParts, options: StreamOptions = {}): S
         }
     };
 
-    /** Encodes from the left context to the newest frame. Gives the encoder's frames and the number of the first one. */
+    /**
+     * Encodes from the left context to the newest frame. A window that begins in the middle of speech
+     * is given a short lead of silence first: the encoder, shown speech that starts at once, can answer
+     * with nothing at all for a window of several seconds (measured, see RUNTIME.md). Gives the
+     * encoder's frames and the number of the first one, counting the lead, so that it may be negative.
+     */
     async function window(): Promise<{ data: Float32Array; frames: number; width: number; first: number } | undefined> {
         const first = Math.max(0, settledAt - left);
         const from = first * SUBSAMPLING;
         const total = base + columns.length;
-        const count = total - from;
-        if (count < 2) return undefined;
-        const data = new Float32Array(bins * count);
-        for (let t = 0; t < count; t++) {
-            const column = columns[from - base + t]!;
+        const lead = first > 0 ? LEAD * SUBSAMPLING : 0;
+        const count = total - from + lead;
+        if (total - from < 2) return undefined;
+        const data = new Float32Array(bins * count).fill(SILENCE);
+        for (let t = lead; t < count; t++) {
+            const column = columns[from - base + t - lead]!;
             for (let m = 0; m < bins; m++) data[m * count + t] = column[m]!;
         }
         const out = await encode(normalize({ data, bins, frames: count }).data, bins, count);
-        return { ...out, first };
+        return { ...out, first: first - lead / SUBSAMPLING };
     }
 
     /** Runs the frames from the settled point up to `until` (an encoder frame) with the real state, and the rest on a copy. */
