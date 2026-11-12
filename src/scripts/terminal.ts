@@ -343,7 +343,10 @@ if (typeof document !== "undefined") {
             // at rest it shows the moment chosen for it, not the empty screen a program leaves behind
             if (whole && cast.poster < Infinity) return run(false);
             paint(screen, view, was, false);
-            if (again) [again.hidden, again.textContent] = [false, whole || !still ? "play again" : "play"];
+            if (again) {
+                const words = whole || !still ? "Play again" : "Play";
+                [again.hidden, again.dataset.shows, again.ariaLabel, again.title] = [false, words === "Play" ? "play" : "again", words, words];
+            }
         };
 
         again?.addEventListener("click", () => void run(true));
@@ -351,7 +354,7 @@ if (typeof document !== "undefined") {
         const open = (to: boolean) => {
             host.classList.toggle("open", to);
             document.documentElement.classList.toggle("terminal-open", to);
-            if (grow) [grow.textContent, grow.ariaExpanded] = [to ? "close" : "full size", String(to)];
+            if (grow) [grow.dataset.shows, grow.ariaLabel, grow.title, grow.ariaExpanded] = [to ? "close" : "grow", to ? "Close" : "Full size", to ? "Close" : "Full size", String(to)];
             size();
         };
         grow?.addEventListener("click", () => open(!host.classList.contains("open")));
