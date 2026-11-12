@@ -57,18 +57,18 @@ const escape = (text: string) => text.replace(/[&<>]/g, (sign) => `&#${sign.char
 
 /**
  * How each mini is photographed, where the plain way (the middle of it, as it starts) shows too little:
- * script to run in its page first, how long to wait, how much of its width to take, and from where.
+ * what to add to its address, how long to wait, how much of its width to take, and from where.
  */
-const shots: Record<string, { script?: string; wait?: number; across?: number; from?: "middle" | "bottom" }> = {
-    dice: { script: `for (const pick of [0, 0, 2, 2, 5, 6]) document.querySelectorAll(".dice-pick")[pick]?.click(); document.querySelector(".dice-go")?.click();`, wait: 9000 },
+const shots: Record<string, { query?: string; wait?: number; across?: number; from?: "middle" | "bottom" }> = {
+    // a roll by link, photographed once the numbers have lined up
+    dice: { query: "?roll=2d20%2B2d6%2Bd8%2Bd4%2B3", wait: 15000 },
     blocks: { across: 0.45, from: "bottom" },
 };
 
 function mini(id: string): Wanted["make"] {
     return async (tab) => {
-        await tab.open(`${await served()}/minis/${id}/`, 1500);
-        const { script, wait = 2500, across = 1, from = "middle" } = shots[id] ?? {};
-        if (script) await tab.run(script);
+        const { query = "", wait = 2500, across = 1, from = "middle" } = shots[id] ?? {};
+        await tab.open(`${await served()}/minis/${id}/${query}`, 1500);
         await tab.wait(wait);
         if (tab.errors.length > 0) throw new Error(`${id}: ${tab.errors.join("; ")}`);
         const box = await tab.run<{ x: number; y: number; width: number; height: number }>(`(() => { const b = document.querySelector(".mini-stage canvas").getBoundingClientRect(); return { x: b.x + scrollX, y: b.y + scrollY, width: b.width, height: b.height }; })()`);

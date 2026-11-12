@@ -51,6 +51,17 @@ export const cross = (a: V3, b: V3): V3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[
 const length = (a: V3) => Math.hypot(a[0], a[1], a[2]) || 1;
 export const unit = (a: V3): V3 => [a[0] / length(a), a[1] / length(a), a[2] / length(a)];
 
+/** A turn part of the way from one to another: good for a short move, such as a number turning to face the eye. */
+export function mixTurn(a: Turn, b: Turn, t: number): Turn {
+    const column = (at: number): V3 => mix3([a[0][at]!, a[1][at]!, a[2][at]!], [b[0][at]!, b[1][at]!, b[2][at]!], t);
+    // made square again: the first direction kept, the second straightened against it, the third across both
+    const x = unit(column(0));
+    const leaning = column(1);
+    const y = unit(minus(leaning, scaled(x, dot3(leaning, x))));
+    const z = cross(x, y);
+    return [[x[0], y[0], z[0]], [x[1], y[1], z[1]], [x[2], y[2], z[2]]];
+}
+
 /** `turn`, turned further by a small rotation given as an axis whose length is the angle. */
 export function spun(turn: Turn, [x, y, z]: V3): Turn {
     const angle = Math.hypot(x, y, z);

@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { read, total, type Roll } from "./rolls";
+import { lineUp, read, row, total, type Roll } from "./rolls";
 
 const ok = (text: string) => read(text) as Roll;
 
@@ -33,4 +33,29 @@ test("a roll is added up from what the dice showed", () => {
     expect(total(ok("d100"), [10, 4]).total).toBe(4);
     expect(total(ok("d100"), [10, 10]).total).toBe(100);
     expect(total(ok("4d6 drop lowest"), [1, 6, 3, 4]).said).toContain("(1)");
+});
+
+test("landed dice line up by kind, most sides first, then by number, highest first", () => {
+    const dice = [
+        { sides: 6, value: 2 },
+        { sides: 20, value: 4 },
+        { sides: 4, value: 3 },
+        { sides: 6, value: 6 },
+        { sides: 20, value: 17 },
+    ] as const;
+    expect(lineUp([...dice]).map((index) => `d${dice[index]!.sides}:${dice[index]!.value}`)).toEqual(["d20:17", "d20:4", "d6:6", "d6:2", "d4:3"]);
+});
+
+test("a row of any number up to sixteen stays inside the picture, wide or narrow, without overlapping", () => {
+    for (const shape of [0.6, 1, 1.65]) {
+        for (let count = 1; count <= 16; count++) {
+            const { size, at } = row(count, shape);
+            const places = Array.from({ length: count }, (_, place) => at(place));
+            for (const [x, y] of places) {
+                expect(Math.abs(x) + size * 0.6).toBeLessThanOrEqual(shape);
+                expect(Math.abs(y) + size * 0.75).toBeLessThanOrEqual(1);
+            }
+            for (const a of places) for (const b of places) if (a !== b) expect(Math.max(Math.abs(a[0] - b[0]), Math.abs(a[1] - b[1]))).toBeGreaterThanOrEqual(size * 1.19);
+        }
+    }
 });

@@ -86,3 +86,35 @@ export function total(roll: Roll, shown: number[]): { total: number; said: strin
     if (roll.plus) parts.push(`${roll.plus < 0 ? "-" : "+"} ${Math.abs(roll.plus)}`);
     return { total: sum, said: parts.join(" ") };
 }
+
+/**
+ * The order dice line up in once they have landed: the kind with the most sides first, and within a
+ * kind the highest number first. Gives each die's place in `dice`, in that order.
+ */
+export function lineUp(dice: { sides: Sides; value: number }[]): number[] {
+    return dice.map((_, index) => index).sort((a, b) => dice[b]!.sides - dice[a]!.sides || dice[b]!.value - dice[a]!.value || a - b);
+}
+
+/**
+ * Where a row of `count` things goes in a picture `shape` times as wide as it is high: how big each
+ * is, and the middle of each, measured in half-heights of the picture from its middle. They wrap onto
+ * as many lines as lets them be largest, and a short last line is centered.
+ */
+export function row(count: number, shape: number): { size: number; at(place: number): [x: number, y: number] } {
+    const [WIDE, TALL] = [1.2, 1.55];
+    let [size, columns] = [0, 1];
+    for (let across = 1; across <= count; across++) {
+        const fits = Math.min(0.27, (2 * shape * 0.9) / (WIDE * across), 1.3 / (TALL * Math.ceil(count / across)));
+        // as large as can be, and of the ways that are as large, the one with the fewest lines
+        if (fits >= size) [size, columns] = [fits, across];
+    }
+    const lines = Math.ceil(count / columns);
+    return {
+        size,
+        at(place) {
+            const line = Math.floor(place / columns);
+            const inLine = line === lines - 1 ? count - line * columns : columns;
+            return [((place % columns) - (inLine - 1) / 2) * WIDE * size, 0.2 + ((lines - 1) / 2 - line) * TALL * size];
+        },
+    };
+}

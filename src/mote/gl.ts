@@ -83,6 +83,19 @@ export interface View {
     font: string;
 }
 
+/** Where a word sits on a face: the face's middle, the way the face looks, the way the word's top points, and half the word's size. */
+export function seat(mesh: Mesh, face: number): { middle: V3; out: V3; up: V3; room: number } {
+    const corners = mesh.faces[face]!.map((corner) => mesh.points[corner]!);
+    const middle = corners.reduce<V3>((sum, corner) => plus(sum, scaled(corner, 1 / corners.length)), [0, 0, 0]);
+    // as big as the face allows: a little under the distance from its middle to its nearest edge
+    const room = Math.min(...corners.map((corner, i) => {
+        const along = unit(minus(corners[(i + 1) % corners.length]!, corner));
+        const to = minus(middle, corner);
+        return Math.hypot(...minus(to, scaled(along, dot(to, along))));
+    })) * 0.78;
+    return { middle, out: unit(cross(minus(corners[1]!, corners[0]!), minus(corners[2]!, corners[0]!))), up: unit(minus(corners[0]!, middle)), room };
+}
+
 const VERTEX = `#version 300 es
 layout(location = 0) in vec3 position;
 layout(location = 1) in vec3 normal;
@@ -377,13 +390,7 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
                 for (let i = 1; i + 1 < corners.length; i++) for (const at of [0, i, i + 1]) faces.push(...corners[at]!, ...(round?.[face[at]!] ?? n), 0, 0);
                 const asked = look.marks?.(number);
                 if (!asked) return;
-                const middle = corners.reduce((sum, corner): V3 => [sum[0] + corner[0] / corners.length, sum[1] + corner[1] / corners.length, sum[2] + corner[2] / corners.length], [0, 0, 0] as V3);
-                // as big as the face allows: a little under the distance from its middle to its nearest edge
-                const room = Math.min(...corners.map((corner, i) => {
-                    const along = unit(minus(corners[(i + 1) % corners.length]!, corner));
-                    const to = minus(middle, corner);
-                    return Math.hypot(...minus(to, along.map((value) => value * dot(to, along)) as V3));
-                })) * 0.78;
+                const { middle, room } = seat(mesh, number);
                 for (const mark of typeof asked === "string" ? [{ word: asked, group: number } as Mark] : asked) {
                     const [u, v] = cell(mark.word, false);
                     // upright toward a corner of the face (its first, unless one is named), and a hair above the face;

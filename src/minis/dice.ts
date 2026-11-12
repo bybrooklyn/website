@@ -1,15 +1,17 @@
 // Dice: a dice tower. Pick dice, or type a roll, and they go in at the top,
 // tumble down the ramps as real solids and roll out into the tray. When they
 // have come to rest the eye goes up over the tray and the number each one
-// landed on lights up. The tumbling is in tower.ts; here it is drawn, by
-// Mote's own 3D drawing (gl.ts), with the dice to pick from and a history
-// under it.
+// landed on lights up, lifts off its die and joins a row, sorted by kind of
+// die and then by number, over the darkened tray. The tumbling is in tower.ts;
+// here it is drawn, by Mote's own 3D drawing (gl.ts), with the dice to pick
+// from and a history under it. A roll can be sent as a link: ?roll=2d6+3.
 
-import { gl, type Color, type Mark, type Part } from "../mote/gl";
-import { block, nearness, normals, paint, spun, turned, upright, type Mesh, type Turn, type V3 } from "../mote/solids";
+import { gl, seat, type Color, type Mark, type Part } from "../mote/gl";
+import { apply, block, cross, mix3, mixTurn, nearness, normals, paint, plus, scaled, spun, turned, upright, type Mesh, type Turn, type V3 } from "../mote/solids";
+import { sounds } from "../mote/sound";
 import { turn } from "../mote/space";
-import type { Mote, Scene } from "../mote/stage";
-import { read, total, type Roll } from "./rolls";
+import { gently, toward, type Mote, type Scene } from "../mote/stage";
+import { lineUp, read, row, total, type Roll } from "./rolls";
 import { SHAPES, SLABS, TOWER, TRAY, throwDice, type Sides, type Slab, type Throw } from "./tower";
 
 export const label = "A dice tower. Dice dropped in at the top tumble down its ramps into a tray.";
@@ -74,6 +76,19 @@ function picture(sides: Sides, word: string, font: string): HTMLCanvasElement {
     return canvas;
 }
 
+/** How long a number takes to go from its die to the row, in seconds, and how far in front of the eye the row is. */
+const FLIGHT = 0.8;
+const FAR = 5;
+
+/** A number on its way from a die to the row: where it left from, and its place in the row. */
+interface Lifted {
+    die: number;
+    number: Part;
+    kind: Part;
+    from: { at: V3; turn: Turn; size: number };
+    arrived: boolean;
+}
+
 export default function dice(m: Mote): Scene {
     let thrown: Throw | undefined;
     let waiting: { roll: Roll; what: string } | undefined;
@@ -110,6 +125,15 @@ export default function dice(m: Mote): Scene {
     let over = 0;
     let shine = 0;
     const landed = () => Boolean(thrown?.done());
+    /** The numbers that have left their dice for the row, the sum under them, and how long ago they set off. */
+    let lifted: Lifted[] = [];
+    let sum: Part | undefined;
+    let lined = 0;
+    const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const sound = m.preview ? undefined : sounds(m);
+    /** How far along its flight the number in this place of the row is, from 0 to 1. Each sets off a moment after the one before. */
+    const flown = (place: number) => Math.max(0, Math.min(1, (lined - place * Math.min(0.12, FLIGHT / lifted.length)) / FLIGHT));
+    const lastIn = () => FLIGHT + (lifted.length - 1) * Math.min(0.12, FLIGHT / Math.max(1, lifted.length));
     const wide = () => (m.width / Math.max(1, m.height) < 1.1 ? 30 / Math.max(0.55, m.width / Math.max(1, m.height) / 1.1) : 30);
     const aim = () => {
         if (!view) return;
@@ -121,7 +145,15 @@ export default function dice(m: Mote): Scene {
 
     const show = (next: Throw) => {
         for (const old of models) view?.remove(old.part);
+        for (const old of lifted) {
+            view?.remove(old.number);
+            view?.remove(old.kind);
+        }
+        if (sum) view?.remove(sum);
+        [lifted, sum, lined] = [[], undefined, 0];
         thrown = next;
+        // a knock for every hard meeting, higher for die on die than for die on wood
+        next.space.hit = (a, b, speed) => sound?.knock(speed / 16, a.im && b.im ? 1500 : 700);
         models = view
             ? next.dice.map((die) => {
                   const color = view.color(hue(die.sides));
@@ -137,12 +169,9 @@ export default function dice(m: Mote): Scene {
     fit();
 
     // ---- what is kept between visits: the last rolls ----
-    let history: { what: string; said: string; total: number }[] = [];
-    try {
-        history = JSON.parse(localStorage.getItem("mote:dice") ?? "[]") as typeof history;
-    } catch {
-        // Nothing kept, or storage is off.
-    }
+    let history = m.recall<{ what: string; said: string; total: number }[]>("dice", []);
+    /** The roll last sent down the tower, as it was typed: what a link to it carries. */
+    let last = "";
 
     // ---- rolling ----
     let said: HTMLElement | undefined;
@@ -155,6 +184,7 @@ export default function dice(m: Mote): Scene {
         if (typeof roll === "string") return say(roll);
         show(throwDice(roll.dice, chance));
         waiting = { roll, what };
+        last = what;
         say("Rolling…");
         m.wake();
     };
@@ -173,16 +203,40 @@ export default function dice(m: Mote): Scene {
         models.forEach((model, index) => {
             model.part.lit = group(thrown!.dice[index]!.sides, values[index]!);
         });
+        // a copy of each number, to lift off its die: it starts where the number is written, the same size and the same way up
+        if (view && !m.preview) {
+            lifted = lineUp(thrown.dice.map((die, index) => ({ sides: die.sides, value: values[index]! }))).map((index) => {
+                const die = thrown!.dice[index]!;
+                const turned = turn(die.body);
+                let from: Lifted["from"];
+                if (die.sides === 4) {
+                    // a four-sided die is read from its top corner, which has no face: its number rises from just above it
+                    from = { at: plus(die.body.p, [0, 0.9, 0]), turn: view.facing(), size: 0.3 };
+                } else {
+                    const { middle, out, up, room } = seat(SHAPES[die.sides], values[index]! - 1);
+                    const [x, y, z] = [apply(turned, cross(up, out)), apply(turned, up), apply(turned, out)];
+                    from = { at: plus(die.body.p, apply(turned, plus(middle, scaled(out, 0.01)))), turn: [[x[0], y[0], z[0]], [x[1], y[1], z[1]], [x[2], y[2], z[2]]], size: room * 2 };
+                }
+                const number = view.sign(String(values[index]), [1, 1, 1]);
+                const kind = view.sign(`d${die.sides}`, view.color(m.color("--muted")));
+                number.hidden = kind.hidden = true;
+                number.emit = 1;
+                kind.emit = 0.55;
+                return { die: index, number, kind, from, arrived: false };
+            });
+        }
         if (!waiting) return;
         const { roll, what } = waiting;
         waiting = undefined;
         const result = total(roll, values);
-        history = [{ what, said: result.said, total: result.total }, ...history].slice(0, 30);
-        try {
-            localStorage.setItem("mote:dice", JSON.stringify(history));
-        } catch {
-            // Not kept.
+        // the sum under the row, unless one die with nothing added says it already
+        if (lifted.length > 0 && (lifted.length > 1 || roll.plus)) {
+            sum = view!.sign(`= ${result.total}`, view!.color(m.color("--accent")));
+            sum.hidden = true;
+            sum.emit = 1;
         }
+        history = [{ what, said: result.said, total: result.total }, ...history].slice(0, 30);
+        m.keep("dice", history);
         render();
         say(`${what}: ${result.total}`);
     };
@@ -212,16 +266,26 @@ export default function dice(m: Mote): Scene {
             return pick;
         });
         const go = el("button", { type: "button", class: "dice-go", textContent: "roll", disabled: true, onclick: () => { const text = handText(); if (text) send(text); } });
+        // the roll just made, as a link that makes it again for whoever opens it
+        const share = el("button", { type: "button", class: "quiet", textContent: "copy link to this roll", onclick: () => {
+            if (!last) return;
+            const address = m.link.set("roll", last);
+            navigator.clipboard?.writeText(address).then(() => (share.textContent = "link copied"), () => (share.textContent = "the link is in the address bar"));
+            setTimeout(() => (share.textContent = "copy link to this roll"), 2500);
+        } });
         const clear = el("button", { type: "button", class: "quiet", textContent: "clear", onclick: () => { for (const key of Object.keys(hand)) delete hand[key as unknown as Sides]; refresh(); } });
         const typed = el("input", { type: "text", placeholder: "or type one: 2d6+3, 4d6 drop lowest, d20 adv", spellcheck: false });
         typed.setAttribute("aria-label", "A roll to make");
         const rollForm = el("form", { class: "table-typed", onsubmit: (event) => { event.preventDefault(); if (typed.value.trim()) send(typed.value.trim()); } }, typed, el("button", { type: "submit", textContent: "roll" }));
         const list = el("ol", { class: "table-history" });
-        panel.append(said, el("div", { class: "dice-picks" }, ...picks), el("div", { class: "table-go" }, go, clear), rollForm, el("h2", { textContent: "rolls" }), list);
+        panel.append(said, el("div", { class: "dice-picks" }, ...picks), el("div", { class: "table-go" }, go, clear, share, sound!.button), rollForm, el("h2", { textContent: "rolls" }), list);
         render = () => {
             list.replaceChildren(...history.map((entry) => el("li", {}, el("strong", { textContent: String(entry.total) }), ` ${entry.what}`, el("span", { textContent: ` ${entry.said}` }))));
         };
         render();
+        // opened from a link to a roll: that roll goes down the tower
+        const asked = m.link.get("roll");
+        if (asked) send(asked);
     }
 
     return {
@@ -238,21 +302,56 @@ export default function dice(m: Mote): Scene {
             // the eye goes up over the dice in a little under a second, and comes back faster; the numbers light as it arrives
             over = landed() ? Math.min(1, over + dt / 0.9) : Math.max(0, over - dt / 0.45);
             shine = landed() && over > 0.6 ? Math.min(1, shine + dt / 0.35) : landed() ? shine : 0;
+            // once the numbers are lit they leave for the row, and the tray darkens behind them
+            const leaving = lifted.length > 0 && shine === 1;
+            if (leaving) lined = still ? lastIn() : lined + dt;
+            if (view) view.shade = toward(view.shade, leaving ? 0.72 : 0, dt * 0.72, 0.4);
         },
         resize: fit,
         // Clicking the tower sends a d20 down it.
         press() {
             if (!waiting) send("d20");
         },
-        resting: () => !m.preview && (!thrown || (landed() && over === 1 && shine === 1)),
+        resting: () => !m.preview && (!thrown || (landed() && over === 1 && shine === 1 && lined >= lastIn())) && (view?.shade ?? 0) === (lifted.length > 0 && thrown ? 0.72 : 0),
+        debug: () => (thrown ? [`${thrown.space.solids.filter((solid) => solid.im && solid.quiet < 0.4).length} of ${thrown.dice.length} dice moving`] : []),
         draw() {
             if (view) {
                 aim();
+                // the row: each number from its die to its place in front of the eye, turning to face it and growing
+                const places = row(lifted.length, m.width / Math.max(1, m.height));
+                const reach = FAR * Math.tan((15 * Math.PI) / 180);
+                const shape = m.width / Math.max(1, m.height);
+                const gone = new Map<number, number>();
+                lifted.forEach((one, place) => {
+                    const t = gently(flown(place));
+                    gone.set(one.die, t);
+                    const [x, y] = places.at(place);
+                    one.number.hidden = one.kind.hidden = lined === 0;
+                    one.number.at = mix3(one.from.at, view.ahead(x / shape, y, FAR), t);
+                    one.number.turn = mixTurn(one.from.turn, view.facing(), t);
+                    one.number.scale = one.from.size + (places.size * reach * 1.5 - one.from.size) * t;
+                    // what kind of die it was, under it, once it is nearly there
+                    one.kind.at = view.ahead(x / shape, y - places.size * 0.6, FAR);
+                    one.kind.turn = view.facing();
+                    one.kind.scale = places.size * reach * 0.62 * gently(Math.max(0, flown(place) * 3 - 2));
+                    if (t === 1 && !one.arrived) {
+                        one.arrived = true;
+                        sound?.tone(440 * 2 ** (place / 12), 0.25, 0.05);
+                    }
+                });
+                if (sum) {
+                    const [, lowest] = places.at(lifted.length - 1);
+                    sum.hidden = lined === 0;
+                    sum.at = view.ahead(0, lowest - places.size * 1.45, FAR);
+                    sum.turn = view.facing();
+                    sum.scale = places.size * reach * 1.9 * gently(Math.max(0, Math.min(1, (lined - lastIn() + 0.3) / 0.3)));
+                }
                 thrown?.dice.forEach((die, index) => {
                     const { part, color, look } = models[index]!;
                     part.at = die.body.p;
                     part.turn = turn(die.body);
-                    part.shine = shine;
+                    // the number on the die goes back to ink as its copy leaves
+                    part.shine = shine * (1 - (gone.get(index) ?? 0));
                     // the die itself goes dimmer as its number lights, so that the number is what is bright
                     look.color = [color[0] * (1 - 0.4 * shine), color[1] * (1 - 0.4 * shine), color[2] * (1 - 0.4 * shine)];
                 });
