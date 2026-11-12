@@ -57,4 +57,20 @@ test.skipIf(!live)(
     60_000,
 );
 
+test.skipIf(!live)(
+    "the menu row and the bar are one piece centred on the site's name, with room above, and on scrolling only the bar stays, as tall as before",
+    async () => {
+        for (const [wide, high] of [[1300, 900], [2560, 1300]] as const) {
+            await tab.resize(wide, high);
+            await tab.open(`http://localhost:${server!.port}/mdquire/`, 800);
+            const at = await tab.run<{ rem: number; name: number; row: number[]; bar: number[] }>(`(() => { const box = (s) => { const r = document.querySelector(s).getBoundingClientRect(); return [r.top, r.bottom]; }; const name = box('.site-name'); return { rem: parseFloat(getComputedStyle(document.documentElement).fontSize), name: (name[0] + name[1]) / 2, row: box('.quire-menu-row'), bar: box('.quire-bar') }; })()`);
+            expect({ wide, above: at.row[0]! >= 0.5 * at.rem }).toEqual({ wide, above: true });
+            expect({ wide, centred: Math.abs((at.row[0]! + at.bar[1]!) / 2 - at.name) <= 2 }).toEqual({ wide, centred: true });
+            const stuck = await tab.run<{ height: number; bar: number; inert: boolean }>(`(async () => { document.querySelector('.quire-paper').style.minHeight = '6000px'; scrollTo({ top: 3000, behavior: 'instant' }); await new Promise((done) => setTimeout(done, 300)); const top = document.querySelector('.quire-top').getBoundingClientRect(); const bar = document.querySelector('.quire-bar').getBoundingClientRect(); return { height: top.bottom, bar: bar.height, inert: document.querySelector('.quire-menu-row').inert }; })()`);
+            expect({ wide, short: stuck.height <= stuck.bar + 1.3 * at.rem, inert: stuck.inert }).toEqual({ wide, short: true, inert: true });
+        }
+    },
+    60_000,
+);
+
 if (!live) console.warn("page.test.ts: skipped, as there is no Chromium or no built site (bun run build)");

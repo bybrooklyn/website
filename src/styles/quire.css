@@ -1983,14 +1983,15 @@ body.quire-app {
 .quire-font-sample { font-size: 1.05rem; line-height: 1; }
 
 /* The menu row: File, Edit, View, Insert, Format, Tools, in small words above the bar. In the
-   site's top row it sits in the room above the bar, so the name and the bar keep their places;
-   the top row then stays whole when it sticks, so the words stay in reach. On a narrow window the
-   row folds away into the three dots, shrinking as it goes. */
+   site's top row the words and the bar are one piece, centred together on the site's name, with
+   room above the words. On scrolling the words go up out of sight with the name and only the bar
+   stays, as tall as it was before there were words; the words are then in the three dots, as they
+   are on a narrow window, where the row folds away, shrinking as it goes. */
 .quire-menu-row {
     display: flex;
     align-items: center;
     gap: 0.05rem;
-    max-height: 1.4rem;
+    max-height: var(--row, 1.4rem);
     overflow: hidden;
     font-family: var(--font-text);
     font-size: 0.85rem;
@@ -2000,13 +2001,20 @@ body.quire-app {
         opacity 0.25s ease;
 }
 
+.quire-top:has(.has-menu-row) {
+    --row: 1.4rem;
+    --row-gap: 0.3rem;
+    top: calc((var(--line) * 1.75 + (var(--row) + var(--row-gap) - var(--bar-height)) / 2 - 0.4rem) * -1);
+}
+
 .quire-bar-home.has-menu-row {
     position: relative;
+    margin-top: calc(var(--rise) * -1 + (var(--row) + var(--row-gap)) / 2);
 }
 
 .quire-bar-home > .quire-menu-row {
     position: absolute;
-    bottom: 100%;
+    bottom: calc(100% + var(--row-gap));
     left: 0;
 }
 
@@ -2053,20 +2061,18 @@ body.quire-app {
         visibility 0s;
 }
 
-@media (min-width: 40.01rem) {
-    .quire-app .quire-top:has(.has-menu-row) {
-        top: 0;
-    }
-
-    .quire-app:has(.has-menu-row) .quire-editor {
-        --stuck: calc(var(--bar-height) + 0.9rem + 0.0625rem + var(--line) * 1.25 - (var(--bar-height) - var(--line)) / 2 - 0.4rem);
-    }
-}
-
 @media (max-width: 40rem) {
     .quire-menu-row {
         max-height: 0;
         opacity: 0;
+    }
+
+    .quire-bar-home.has-menu-row {
+        margin-top: 0;
+    }
+
+    .quire-top:has(.has-menu-row) {
+        top: calc((var(--line) * 2.25 + 0.5rem) * -1 + 0.4rem);
     }
 }
 

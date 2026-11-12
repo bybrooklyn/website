@@ -27,7 +27,7 @@ import { createSaver, said, type Entry, type Status, type Store } from "./store"
 import { createSurface, type Surface } from "./surface";
 import { createTableTools } from "./tables";
 import { flowMenu, linkForm, make, type MenuItem } from "./ui";
-import { changes, createHistoryPanel, createKeeper, memoryStorage, type VersionStorage } from "./versions";
+import { changes, createHistoryPanel, createKeeper, memoryStorage, snapshotParts, snapshotText, type VersionStorage } from "./versions";
 import { write } from "./write";
 import { emptyParts, opened, packQuire, written, type Parts } from "./quire-file";
 import { PAGE } from "./styling";
@@ -364,15 +364,27 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     // in the site's top row the words sit above the bar; anywhere else they are the bar's own first line
     (options.barHome ?? bar.element).prepend(row.element);
     if (options.barHome) options.barHome.classList.add("has-menu-row");
-    /** True when the window is too narrow for the row, which has then folded into the three dots. */
-    const rowFolded = () => typeof matchMedia !== "undefined" && matchMedia("(max-width: 40rem)").matches;
+    // scrolled out of sight with the site's name, the row is in the three dots as on a narrow window
+    let rowAway = false;
+    /** True when the row cannot be reached where it is: folded on a narrow window, or scrolled away. */
+    const rowFolded = () => rowAway || (typeof matchMedia !== "undefined" && matchMedia("(max-width: 40rem)").matches);
     const syncRow = () => (row.element.inert = rowFolded());
     syncRow();
     if (typeof matchMedia !== "undefined") matchMedia("(max-width: 40rem)").addEventListener("change", syncRow);
+    const rowSeen = typeof IntersectionObserver !== "undefined" && options.barHome ? new IntersectionObserver(([entry]) => {
+        rowAway = !!entry && entry.intersectionRatio < 0.99;
+        syncRow();
+    }, { threshold: [0.99] }) : undefined;
+    rowSeen?.observe(row.element);
 
     // ---- version history: a snapshot on opening and after each pause in editing, kept by store and document ----
     const historyKey = () => (store && id ? `${store.label}:${id}` : name);
-    let keeper = createKeeper(versions, historyKey(), () => write(surface.getDocument()));
+    /** The document as a snapshot keeps it: a `.quire` document with its styling. */
+    const snapshot = () => {
+        const { text: markdown, quire } = written(surface.getDocument(), write);
+        return snapshotText(markdown, quire);
+    };
+    let keeper = createKeeper(versions, historyKey(), snapshot);
     void keeper.opened();
     const history = createHistoryPanel(surface, versions, historyKey, {
         opened: () => keeper.opened(),
@@ -389,10 +401,10 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         if (!saver) return;
         if (choice === "mine") return void (await saver.choose("mine"));
         // what was typed here is kept in the version history before theirs takes its place
-        const mine = saver.unsaved() ?? write(surface.getDocument());
+        const mine = snapshot();
         const theirs = await saver.choose("theirs");
         if (!theirs) return;
-        await versions.save(historyKey(), mine, { time: Date.now(), ...changes(theirs.text, mine) });
+        await versions.save(historyKey(), mine, { time: Date.now(), ...changes(theirs.text, snapshotParts(mine).markdown) });
         quiet = true;
         surface.run(() => opened(theirs.text, theirs.quire ?? (surface.getDocument().quire ? emptyParts() : undefined), { mdx: surface.getDocument().mdx }));
         quiet = false;
@@ -479,7 +491,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         saver = createSaver(next, entry.id, found.mark);
         stopListening = saver.on(showStatus);
         showStatus(saver.status());
-        keeper = createKeeper(versions, historyKey(), () => write(surface.getDocument()));
+        keeper = createKeeper(versions, historyKey(), snapshot);
         void keeper.opened();
         options.onOpen?.(next, entry);
     }
@@ -503,6 +515,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         },
         destroy() {
             caret.destroy();
+            rowSeen?.disconnect();
             dictation.destroy();
             surface.destroy();
             for (const menu of [...bar.menus, links, row.menu]) menu.box.remove();
