@@ -96,6 +96,15 @@ From the conversation on 11 Nov, later:
 14. A mini where a person learns to walk in the browser, with the person to set up. In Rust
     compiled to WebAssembly, a couple of crates allowed, made as small as it can be and under
     512 KiB.
+    Decided so far (11 Nov):
+    - Seen from the side, in 2D.
+    - The person is set up by how many legs it has.
+    - Learning is shown three ways: the best one so far, walking; a whole generation at once, most
+      of them falling over; and its brain, drawn as it decides.
+    - A visitor can change the ground, push it around, and save and share a trained walker as a
+      link.
+    - "this entire demo thing needs to be fluid, fun to use, looking really good, and the UI
+      intelligently designed. like the controls for the floor in the bottom and some on the side".
 15. A small physics engine in Rust, 50 KiB or less, first for the walking mini. Whether Dice and
     Blocks move onto it is a later question.
 16. A game where something is pulled back and flung, and planets bend its path toward a target.
