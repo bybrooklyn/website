@@ -10,6 +10,7 @@ import type { Body } from "../mote/flat";
 import { ball, block, mix3, type V3 } from "../mote/solids";
 import { sounds } from "../mote/sound";
 import { el, gently, toward, type Mote, type Scene } from "../mote/stage";
+import { copyText } from "../scripts/copy";
 import { ACROSS, BALL, BIN, BINS, DEFAULTS, LIMITS, PEG, WIDTH, alphabet, drop, strength, type Board, type Settings } from "./board";
 
 export const label = "A Plinko board. Balls fall through pegs into bins of characters, and what they land in becomes a password.";
@@ -176,11 +177,7 @@ export default function plinko(m: Mote): Scene {
         const word = el("output", { class: "plinko-word" });
         const about = el("p", { class: "note" });
         const go = el("button", { type: "button", class: "dice-go", textContent: "drop", onclick: () => start() });
-        const copy = el("button", { type: "button", class: "quiet", textContent: "copy", disabled: true, onclick: () => {
-            copy.style.minWidth = `${copy.offsetWidth}px`;
-            navigator.clipboard?.writeText(word.textContent ?? "").then(() => (copy.textContent = "copied"), () => (copy.textContent = "select it and copy"));
-            setTimeout(() => (copy.textContent = "copy"), 2500);
-        } });
+        const copy = el("button", { type: "button", class: "quiet", textContent: "copy", disabled: true, onclick: () => copyText(copy, word.textContent ?? "", { rest: "copy", done: "copied", failed: "select it and copy" }) });
 
         /** Says how strong a password made with these settings is. */
         const describe = (of: Settings = settings) => {

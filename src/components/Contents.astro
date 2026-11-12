@@ -73,18 +73,13 @@ const headings = Astro.props.headings.filter((heading) => heading.depth === 2 ||
 </aside>
 
 <script>
+    import { copyText } from "../scripts/copy";
+
     // The copy button only appears where copying works.
     const copy = document.querySelector<HTMLButtonElement>(".cite-copy");
     if (copy && navigator.clipboard) {
         copy.hidden = false;
-        copy.addEventListener("click", () => {
-            // the button keeps its width while it says so, and says "copy" again after a moment
-            copy.style.minWidth = `${copy.offsetWidth}px`;
-            void navigator.clipboard.writeText(document.querySelector(".cite-text")?.textContent ?? "").then(() => {
-                copy.textContent = "copied";
-                setTimeout(() => (copy.textContent = "copy"), 2500);
-            });
-        });
+        copy.addEventListener("click", () => copyText(copy, document.querySelector(".cite-text")?.textContent ?? "", { rest: "copy", done: "copied" }));
     }
 
     // A link in the text that goes to one of the sources gets that source's

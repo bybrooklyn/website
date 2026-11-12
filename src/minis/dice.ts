@@ -12,6 +12,7 @@ import { apply, block, cross, mix3, mixTurn, nearness, normals, paint, plus, sca
 import { sounds } from "../mote/sound";
 import { turn } from "../mote/space";
 import { el, gently, toward, type Mote, type Scene } from "../mote/stage";
+import { copyText } from "../scripts/copy";
 import { MOST, lineUp, numbers, read, row, total, type Roll } from "./rolls";
 import { SHAPES, TOWER, slabs, throwDice, trayFor, type Sides, type Slab, type Throw, type Tray } from "./tower";
 
@@ -355,11 +356,7 @@ export default function dice(m: Mote): Scene {
         // the roll just made, as a link that makes it again for whoever opens it
         const share = el("button", { type: "button", class: "quiet", textContent: "copy link to this roll", onclick: () => {
             if (!last) return;
-            const address = m.link.set("roll", last);
-            // the button keeps its width while its words change, so nothing beside it jumps
-            share.style.minWidth = `${share.offsetWidth}px`;
-            navigator.clipboard?.writeText(address).then(() => (share.textContent = "link copied"), () => (share.textContent = "the link is in the address bar"));
-            setTimeout(() => (share.textContent = "copy link to this roll"), 2500);
+            copyText(share, m.link.set("roll", last), { rest: "copy link to this roll", done: "link copied", failed: "the link is in the address bar" });
         } });
         const list = el("ol", { class: "table-history" });
         /** Gives an element a number for its stylesheet to draw with. */

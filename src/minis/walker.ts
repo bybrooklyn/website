@@ -15,6 +15,7 @@
 // What the engine does is in walker/README.md, and what this and the worker share is in walking.ts.
 
 import { el, type Mote, type Scene } from "../mote/stage";
+import { copyText } from "../scripts/copy";
 import type { Order, Report } from "../scripts/walker-worker";
 import {
     COURSE_GOAL,
@@ -358,12 +359,10 @@ export default function walker(m: Mote): Scene {
 
         const share = el("button", { type: "button", class: "walker-share", textContent: "copy link to this walker", disabled: true, onclick: () => {
             if (!engine) return;
-            share.style.minWidth = `${share.offsetWidth}px`;
             const brain = read(engine, live() ? engine.live_best_weights() : engine.show_weights(), engine.weights_length());
             let address = "";
             for (const [name, value] of linkParts(setup, brain)) address = m.link.set(name, value);
-            navigator.clipboard?.writeText(address).then(() => (share.textContent = "link copied"), () => (share.textContent = "the link is in the address bar"));
-            setTimeout(() => (share.textContent = "copy link to this walker"), 2500);
+            copyText(share, address, { rest: "copy link to this walker", done: "link copied", failed: "the link is in the address bar" });
         } });
 
         side.append(
