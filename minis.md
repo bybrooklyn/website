@@ -85,9 +85,14 @@ From the conversation on 11 Nov, later:
       Markdown view and the real page beside it. Everything else that is seen is built again.
     - To be built in one go, not in stages. Opus 5.5 subagents may be used for research and light
       tasks.
-    - Open, hers: "should we just turn this into a full stack website, where i can login and edit
-      and add stuff", with a board for visitors as indie web sites have, so that writing a post is
-      logging in and writing. Not decided.
+    - Writing from the browser (11 Nov): the site stays as files in git. A private write area
+      that only she can log into, with a passkey, saves posts and photos into the repository. The
+      board and likes are a small separate piece on a server.
+    - Deploys are to be easy and few: "i could fuck my quota". So saving a draft does not deploy.
+      One "publish" press makes one deploy. To check before building: what Cloudflare Pages counts
+      against the free plan for uploads made with wrangler.
+    - The board: a name and a message, a small drawing, both waiting for her approval before they
+      show; and likes on photos.
 14. A mini where a person learns to walk in the browser, with the person to set up. In Rust
     compiled to WebAssembly, a couple of crates allowed, made as small as it can be and under
     512 KiB.
