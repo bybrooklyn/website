@@ -520,7 +520,26 @@ export function createBar(surface: Surface, options: BarOptions): { element: HTM
         count.textContent = `${words.toLocaleString("en")} ${words === 1 ? "word" : "words"}`;
     };
     counted(surface.getDocument());
-    surface.on("change", ({ doc }) => counted(doc));
+    // it waits for a pause in a run of typing, but a change after a quiet moment (a document opened) is shown at once
+    let counting: ReturnType<typeof setTimeout> | undefined;
+    let countingWaiting: Document | undefined;
+    surface.on("change", ({ doc }) => {
+        if (counting) {
+            countingWaiting = doc;
+            return;
+        }
+        counted(doc);
+        const settle = () => {
+            counting = undefined;
+            if (countingWaiting) {
+                const next = countingWaiting;
+                countingWaiting = undefined;
+                counted(next);
+                counting = setTimeout(settle, 250);
+            }
+        };
+        counting = setTimeout(settle, 250);
+    });
     surface.on("select", ({ selection, marks }) => {
         const doc = surface.getDocument();
         const now = pressedAt(doc, selection.focus.path, marks);

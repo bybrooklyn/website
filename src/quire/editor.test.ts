@@ -346,7 +346,8 @@ used("a picture shows with its alt text written under it, which can be changed i
 
 used("the outline lists the headings, follows the cursor, goes to a heading when clicked, and closes and opens", async () => {
     await reset("# One\n\nfirst\n\n## Two\n\nsecond\n\n## Three\n\nthird\n", [0], 0);
-    await tab.wait(50);
+    // the outline catches up with a change within a moment, rather than on every key
+    await tab.wait(250);
     const links = () => tab.run<string[]>("[...document.querySelectorAll('.quire-outline-link')].map((link) => link.textContent)");
     const current = () => tab.run<string>("document.querySelector('.quire-outline-link.current')?.textContent ?? ''");
     expect(await links()).toEqual(["One", "Two", "Three"]);
@@ -366,7 +367,7 @@ used("the outline lists the headings, follows the cursor, goes to a heading when
     const long = ["# Near", ...Array.from({ length: 30 }, (_, index) => `Paragraph ${index}.`), "# Far", ...Array.from({ length: 30 }, (_, index) => `More ${index}.`)].join("\n\n") + "\n";
     await reset(long, [0], 0);
     await tab.run("scrollTo({ top: 0, behavior: 'instant' })");
-    await tab.wait(50);
+    await tab.wait(250);
     expect(await current()).toBe("Near");
     await tab.run("document.querySelectorAll('.quire h1')[1].scrollIntoView({ block: 'start', behavior: 'instant' }); scrollBy({ top: -150, behavior: 'instant' })");
     await tab.wait(100);
@@ -374,12 +375,13 @@ used("the outline lists the headings, follows the cursor, goes to a heading when
     await tab.run("scrollTo({ top: 0, behavior: 'instant' })");
     await tab.wait(50);
     await reset("# One\n\nfirst\n\n## Two\n\nsecond\n\n## Three\n\nthird\n", [0], 0);
+    await tab.wait(250);
 
     // a heading typed shows in it
     await tab.run("q.select([5], 5)");
     await tab.press("Enter");
     await tab.type("## Four");
-    await tab.wait(50);
+    await tab.wait(250);
     expect(await links()).toEqual(["One", "Two", "Three", "Four"]);
     expect(await current()).toBe("Four");
     // closed from the three-dot menu its column flows shut over time, and opens again
@@ -670,6 +672,47 @@ used("a document changed elsewhere is not written over: the conflict is shown, a
     await tab.wait(300);
     expect(await tab.run(`q.kept(${JSON.stringify(id)})`)).toBe("Theirs and mine\n");
     expect(await tab.run("q.status()")).toBe("Saved");
+});
+
+used("a 5,000-line document opens in under a second, and a key typed in its middle appears in under 16 ms", async () => {
+    const opened = await tab.run<{ lines: number; open: number }>(`(() => {
+        const parts = [];
+        for (let index = 0; parts.length < 5000; index++) {
+            parts.push("## Section " + index, "", "A paragraph of ordinary length, with **bold**, *italic* and a [link](https://example.com) in it, long enough to wrap onto a second line. Number " + index + ".", "", "- one point", "- another point", "", "\\u0060\\u0060\\u0060js", "let n = " + index + ";", "\\u0060\\u0060\\u0060", "", "| a | b |", "| - | - |", "| 1 | 2 |", "");
+        }
+        const text = parts.slice(0, 5000).join("\\n") + "\\n";
+        const start = performance.now();
+        q.reset(text);
+        document.body.offsetHeight;
+        return { lines: text.split("\\n").length - 1, open: performance.now() - start };
+    })()`);
+    expect(opened.lines).toBe(5000);
+    // a key in the middle: from the key arriving to every listener done and the page laid out again
+    await tab.run(`(() => {
+        const blocks = q.editor.surface.getDocument().blocks;
+        const middle = blocks.findIndex((block, index) => index > blocks.length / 2 && block.kind === "paragraph");
+        q.select([middle], 10);
+        window.keys = [];
+        q.editor.surface.element.addEventListener("keydown", () => (window.started = performance.now()), true);
+        q.editor.surface.element.addEventListener("beforeinput", () => (window.started ??= performance.now()), true);
+        q.editor.surface.on("change", () => {
+            document.body.offsetHeight;
+            window.keys.push(performance.now() - window.started);
+            window.started = undefined;
+        });
+    })()`);
+    await tab.wait(100);
+    await tab.type("typing in the middle");
+    await tab.wait(200);
+    const keys = await tab.run<number[]>("window.keys");
+    expect(keys.length).toBe(20);
+    const sorted = [...keys].sort((a, b) => a - b);
+    const median = sorted[Math.floor(sorted.length / 2)]!;
+    const worst = sorted[sorted.length - 1]!;
+    console.log(`5,000 lines: opened in ${opened.open.toFixed(0)} ms; a key in the middle: median ${median.toFixed(1)} ms, slowest ${worst.toFixed(1)} ms`);
+    expect(opened.open).toBeLessThan(1000);
+    expect(median).toBeLessThan(16);
+    expect(worst).toBeLessThan(16);
 });
 
 if (!live) console.warn("editor.test.ts: no Chromium on this machine, so the editor was not used.");

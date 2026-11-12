@@ -46,7 +46,6 @@ export function createOutline(surface: Surface, top: () => number = () => 0): { 
     nav.append(head, list, empty);
 
     let entries: OutlineEntry[] = [];
-    let current = -1;
 
     function draw(doc: Document) {
         entries = outline(doc);
@@ -70,11 +69,10 @@ export function createOutline(surface: Surface, top: () => number = () => 0): { 
             }),
         );
         empty.classList.toggle("shown", entries.length === 0);
-        mark(current);
+        follow();
     }
 
     function mark(index: number) {
-        current = index;
         list.querySelectorAll(".quire-outline-link").forEach((link, at) => {
             link.classList.toggle("current", at === index);
             if (at === index) link.setAttribute("aria-current", "location");
@@ -83,10 +81,29 @@ export function createOutline(surface: Surface, top: () => number = () => 0): { 
     }
 
     draw(surface.getDocument());
-    surface.on("change", ({ doc }) => draw(doc));
+    // it waits for a pause in a run of typing, but a change after a quiet moment (a document opened) is shown at once
+    let drawing: ReturnType<typeof setTimeout> | undefined;
+    let drawingWaiting: Document | undefined;
+    surface.on("change", ({ doc }) => {
+        if (drawing) {
+            drawingWaiting = doc;
+            return;
+        }
+        draw(doc);
+        const settle = () => {
+            drawing = undefined;
+            if (drawingWaiting) {
+                const next = drawingWaiting;
+                drawingWaiting = undefined;
+                draw(next);
+                drawing = setTimeout(settle, 150);
+            }
+        };
+        drawing = setTimeout(settle, 150);
+    });
     // the heading the cursor is under is the current one while the cursor can be seen; once the
     // reader has scrolled it away, the heading they are reading under is
-    const follow = () => {
+    function follow() {
         const focus = surface.getSelection().focus;
         const cursor = surface.elementAt(focus.path)?.getBoundingClientRect();
         const seen = !!cursor && cursor.bottom > top() && cursor.top < innerHeight;
@@ -94,7 +111,7 @@ export function createOutline(surface: Surface, top: () => number = () => 0): { 
         const tops = entries.map((entry) => surface.elementAt(entry.path)?.getBoundingClientRect().top ?? Infinity);
         // a heading in the upper third of the window is the one being read under
         mark(headingAtScroll(tops, top() + (innerHeight - top()) / 3));
-    };
+    }
     surface.on("select", follow);
     addEventListener("scroll", follow, { passive: true });
 

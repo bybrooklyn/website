@@ -350,15 +350,23 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
     // ---- drawing the document ----
 
     function render() {
+        const fresh: HTMLElement[] = [];
         const wanted = editor.state.doc.blocks.map((block) => {
             let element = drawn.get(block);
             if (!element) {
                 element = draw(block, []);
                 showPictures(element);
                 drawn.set(block, element);
+                fresh.push(element);
             }
             return element;
         });
+        // a block drawn by an edit is laid out at once, so that what is measured next (the cursor's
+        // place, where a menu goes) is its real size; afterwards it may be skipped while out of sight
+        if (fresh.length <= 50) {
+            for (const element of fresh) element.classList.add("quire-fresh");
+            requestAnimationFrame(() => requestAnimationFrame(() => fresh.forEach((element) => element.classList.remove("quire-fresh"))));
+        }
         const keep = new Set<Node>(wanted);
         for (const node of [...root.childNodes]) if (!keep.has(node)) node.remove();
         let child = root.firstChild;

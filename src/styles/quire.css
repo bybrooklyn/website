@@ -44,6 +44,17 @@
     margin-top: 0;
 }
 
+/* blocks out of sight are not laid out on every key, which keeps a long document quick to type in;
+   each remembers its size once it has been seen, so the page does not jump */
+.quire > * {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 2lh;
+}
+
+.quire > .quire-fresh {
+    content-visibility: visible;
+}
+
 .quire h1 {
     margin-bottom: var(--line);
 }
@@ -1679,6 +1690,10 @@ body.quire-app {
         max-width: none;
         min-height: 0;
         color: black;
+    }
+
+    .quire > * {
+        content-visibility: visible;
     }
 
     .quire a {
