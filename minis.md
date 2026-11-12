@@ -77,7 +77,18 @@ From the conversation on 11 Nov, later:
 20. Plinko as a table in real 3D with a character on every ball was built and taken back the same
     day: it looked weird. The balls and round posts it needed are still in `space.ts`.
 
-## Not doing
+## Next, as she chose on 11 Nov
+
+1. Plan the word processor (idea 13), with questions.
+2. Plan the walking mini and its Rust physics engine (ideas 14 and 15).
+3. The 404 page with falling blocks (idea 1), and the post about the physics (idea 3).
+4. Still open from before: the locked wiki (`password.md`), captions for photos, and three details
+   on the resume.
+5. After all of that, a bug and consistency audit of the whole site. It should include Mote's own
+   API, which is written to be read by a person but is uneven between its parts: `flat.ts` counts in
+   pixels with y down and `space.ts` in units with y up, `flat.still` is a value where
+   `space.still()` is a call, and a few calls take a row of bare numbers.
+6. No more minis for now.
 
 - scriptc (vercel-labs): it compiles TypeScript to native programs and WASI modules. It does not draw to a
   browser canvas, so it is no use for minis on the site. It could matter later for a desktop build.
