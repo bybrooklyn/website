@@ -648,6 +648,99 @@
     padding-left: 0.1rem;
 }
 
+/* ---- a table's controls, grown at its top edge while the cursor is in it ---- */
+
+.quire-table-tools {
+    position: fixed;
+    z-index: 55;
+    display: flex;
+    align-items: center;
+    padding: 0.15rem;
+    border: 0.0625rem solid var(--rule);
+    border-radius: 1.2rem;
+    background: var(--surface);
+    font-family: var(--font-text);
+    line-height: 1;
+    opacity: 0;
+    scale: 0.6;
+    transform-origin: 100% 100%;
+    visibility: hidden;
+    pointer-events: none;
+    transition:
+        opacity 0.16s ease,
+        scale 0.25s var(--ease),
+        visibility 0s linear 0.25s;
+}
+
+.quire-table-tools.shown {
+    opacity: 1;
+    scale: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transition:
+        opacity 0.15s ease,
+        scale 0.45s cubic-bezier(0.3, 1.5, 0.4, 1),
+        left 0.25s var(--ease),
+        top 0.25s var(--ease),
+        visibility 0s;
+}
+
+.quire-table-tools.placing {
+    transition: none;
+}
+
+.quire-table-tools .quire-button {
+    min-width: 1.9rem;
+    height: 1.9rem;
+}
+
+.quire-signed {
+    display: inline-flex;
+    align-items: center;
+}
+
+.quire-sign {
+    margin-left: -0.1rem;
+    font-size: 0.8rem;
+    font-weight: 700;
+}
+
+/* the cell the cursor is in, so that the controls' row and column are plain */
+.quire td.quire-here,
+.quire th.quire-here {
+    background: color-mix(in oklch, var(--accent) 7%, transparent);
+}
+
+/* ---- a picture's alt text, written under it ---- */
+
+.quire-alt {
+    display: block;
+    width: 100%;
+    margin-top: 0.5rem;
+    padding: 0.3rem 0.5rem;
+    border: 0.0625rem solid transparent;
+    border-radius: 0.5rem;
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    font-size: 0.9rem;
+    text-align: center;
+    transition:
+        border-color 0.2s ease,
+        background 0.2s ease;
+}
+
+.quire-alt:hover {
+    border-color: var(--rule);
+}
+
+.quire-alt:focus {
+    outline: none;
+    border-color: var(--accent);
+    background: var(--ground);
+    color: var(--ink);
+}
+
 @media (prefers-reduced-motion: reduce) {
     .quire-box,
     .quire-bar-group,
@@ -661,7 +754,10 @@
     .quire-menu.open .quire-menu-items > *,
     .quire-menu-line,
     .quire-select-bar,
-    .quire-select-bar.shown {
+    .quire-select-bar.shown,
+    .quire-table-tools,
+    .quire-table-tools.shown,
+    .quire-alt {
         transition: none;
     }
 }

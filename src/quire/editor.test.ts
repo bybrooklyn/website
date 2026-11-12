@@ -286,4 +286,43 @@ used("the slash menu grows at the cursor, narrows as you type, and makes a headi
     expect(await md()).toBe("Above\n\n| x   |     |     |\n| --- | --- | --- |\n|     |     |     |\n|     |     |     |\n");
 });
 
+used("a table's controls grow at its edge with the cursor in it, and add a row and a column and align it", async () => {
+    await reset("| a | b |\n| --- | --- |\n| 1 | 2 |\n", [0, 1, 1], 1);
+    await tab.press("ArrowLeft");
+    await tab.press("ArrowRight");
+    await tab.wait(500);
+    expect(await tab.run("getComputedStyle(document.querySelector('.quire-table-tools')).opacity")).toBe("1");
+    await press(".quire-table-tools button", "Add a row below");
+    await tab.type("3");
+    expect(await md()).toBe("| a   | b   |\n| --- | --- |\n| 1   | 2   |\n|     | 3   |\n");
+    await press(".quire-table-tools button", "Add a column to the right");
+    await tab.type("c");
+    expect(await md()).toBe("| a   | b   |     |\n| --- | --- | --- |\n| 1   | 2   |     |\n|     | 3   | c   |\n");
+    await press(".quire-table-tools button", "Centre the column");
+    expect(await md()).toBe("| a   | b   |     |\n| --- | --- | :-: |\n| 1   | 2   |     |\n|     | 3   | c   |\n");
+    await press(".quire-table-tools button", "Remove this column");
+    await press(".quire-table-tools button", "Remove this row");
+    expect(await md()).toBe("| a   | b   |\n| --- | --- |\n| 1   | 2   |\n");
+    // Tab goes on to the next cell
+    await reset("| a | b |\n| --- | --- |\n| 1 | 2 |\n", [0, 0, 0], 1);
+    await tab.press("Tab");
+    expect(await caret()).toEqual({ path: [0, 0, 1], offset: 1 });
+    // out of the table, the controls shrink away
+    await reset("Text\n", [0], 0);
+    await tab.wait(400);
+    expect(await tab.run("getComputedStyle(document.querySelector('.quire-table-tools')).visibility")).toBe("hidden");
+});
+
+used("a picture shows with its alt text written under it, which can be changed in place", async () => {
+    await reset("![A tower](/tower.png)\n");
+    expect(await tab.run("document.querySelector('.quire-image img').getAttribute('src')")).toBe("/tower.png");
+    await press(".quire-alt");
+    await tab.run("document.querySelector('.quire-alt').select()");
+    await tab.type("A tall tower");
+    await tab.press("Enter");
+    await tab.run("document.querySelector('.quire-alt').blur()");
+    await tab.wait(50);
+    expect(await md()).toBe("![A tall tower](/tower.png)\n");
+});
+
 if (!live) console.warn("editor.test.ts: no Chromium on this machine, so the editor was not used.");

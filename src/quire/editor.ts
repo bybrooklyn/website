@@ -13,6 +13,7 @@ import { collapsed } from "./keys";
 import { createSelectBar } from "./select-bar";
 import { createSlash } from "./slash";
 import { createSurface, type Surface } from "./surface";
+import { createTableTools } from "./tables";
 import { flowMenu, linkForm, make, type MenuItem } from "./ui";
 import { write } from "./write";
 
@@ -116,6 +117,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     surface.on("link", () => openLink(bar.element.querySelector<HTMLElement>('[aria-label^="Link"]')!));
     const selectBar = createSelectBar(surface, () => bar.element.getBoundingClientRect().bottom);
     const slash = createSlash(surface, bar.pickImage);
+    const tableTools = createTableTools(surface);
 
     return {
         surface,
@@ -125,6 +127,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
             for (const menu of [...bar.menus, links]) menu.box.remove();
             selectBar.element.remove();
             slash.close();
+            tableTools.element.remove();
             host.replaceChildren();
         },
     };
