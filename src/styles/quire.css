@@ -14,6 +14,9 @@
     --edge: clamp(0.75rem, 2vw, 1.5rem);
     /* how far down the window what stays at the top reaches */
     --stuck: calc(var(--bar-height) + 0.0625rem);
+    /* the sheet: plainly lighter than the ground, with a clear edge */
+    --sheet-ground: color-mix(in oklch, var(--panel-raised), var(--ink) 4%);
+    --sheet-edge: color-mix(in oklch, var(--panel-edge), var(--ink) 18%);
     /* the editor takes the width it is given and never widens the page; long lines scroll inside it */
     contain: inline-size;
     position: relative;
@@ -53,11 +56,11 @@
     width: 100%;
     aspect-ratio: 1 / var(--sheet);
     padding: clamp(var(--line), 7cqw, calc(var(--line) * 3)) clamp(1.25rem, 9cqw, 6rem) calc(var(--line) * 3);
-    border: 0.0625rem solid color-mix(in oklch, var(--panel-edge), var(--ink) 18%);
+    border: 0.0625rem solid var(--sheet-edge);
     border-radius: calc(var(--radius) * 1.2);
     background:
         repeating-linear-gradient(to bottom, transparent 0 calc(100cqw * var(--sheet) - 0.0625rem), color-mix(in oklch, var(--panel-edge), transparent 45%) calc(100cqw * var(--sheet) - 0.0625rem) calc(100cqw * var(--sheet))),
-        color-mix(in oklch, var(--panel-raised), var(--ink) 4%);
+        var(--sheet-ground);
 }
 
 /* the text fills the sheet from top to bottom, so a press anywhere on it writes */
@@ -1294,9 +1297,10 @@
     min-height: 60vh;
     max-height: calc(100vh - var(--bar-height) - var(--line) * 2.5);
     padding: calc(var(--line) * 0.9) 1.1rem;
-    border: 0.0625rem solid var(--panel-rule);
-    border-radius: calc(var(--radius) * 2);
-    background: var(--panel);
+    /* the same sheet as the page beside it, so the two are a pair */
+    border: 0.0625rem solid var(--sheet-edge);
+    border-radius: calc(var(--radius) * 1.2);
+    background: var(--sheet-ground);
     color: var(--ink);
     font-family: var(--font-code);
     font-size: 0.82rem;
