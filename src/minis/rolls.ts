@@ -3,6 +3,9 @@
 
 import { SIDES, type Sides } from "./tower";
 
+/** The most dice the tower takes at once. */
+export const MOST = 60;
+
 export interface Group {
     /** How many dice, of how many sides, and whether the group is added or taken away. */
     count: number;
@@ -55,13 +58,13 @@ export function read(text: string): Roll | string {
                 drop = word!.startsWith("adv") ? count - 1 : -(count - 1);
             }
         }
-        if (count < 1 || count > 12) return "Between 1 and 12 dice of a kind.";
+        if (count < 1 || count > MOST) return `Between 1 and ${MOST} dice of a kind.`;
         if (Math.abs(drop) >= count) return "That drops every die.";
         groups.push({ count, sides: sides as Sides | 100, sign, drop });
     }
     const dice = groups.flatMap((group) => Array.from({ length: group.count * (group.sides === 100 ? 2 : 1) }, (): Sides => (group.sides === 100 ? 10 : group.sides)));
     if (dice.length === 0) return "There are no dice in that.";
-    if (dice.length > 60) return "At most 60 dice at once.";
+    if (dice.length > MOST) return `At most ${MOST} dice at once.`;
     return { groups, plus, dice };
 }
 

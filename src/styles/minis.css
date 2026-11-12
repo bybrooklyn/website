@@ -270,6 +270,110 @@
     text-decoration: none;
 }
 
+/* A kind of die: its picture to press, and under it what opens once one is in the hand. */
+.dice-kind {
+    display: grid;
+    justify-items: center;
+    align-content: start;
+}
+
+/* "one less" and which to count grow out from under a die when the first of it is picked, and go back when the last is taken away. */
+.dice-more {
+    display: grid;
+    grid-template-rows: 0fr;
+    opacity: 0;
+    font-size: 0.85em;
+    transition:
+        grid-template-rows 0.3s var(--ease),
+        opacity 0.2s ease;
+}
+
+.dice-more > div {
+    display: grid;
+    justify-items: center;
+    gap: 0.1rem;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.dice-kind.on .dice-more {
+    grid-template-rows: 1fr;
+    opacity: 1;
+}
+
+.mote-panel .dice-more button + button {
+    margin-inline-start: 0;
+}
+
+/* The number added to the total, with less and more either side of it. */
+.dice-add {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    margin-inline-end: auto;
+}
+
+.dice-add-name {
+    color: var(--muted);
+}
+
+.mote-panel .dice-add button {
+    margin-inline-start: 0;
+    padding: 0 0.3rem;
+}
+
+.dice-added {
+    min-width: 2.2ch;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Luck: a sentence for each kind of die, and how often each of its numbers came up, with a line where an even spread would stand. */
+.dice-luck li {
+    display: grid;
+    gap: 0.3rem;
+    margin-bottom: 0.8rem;
+}
+
+.dice-luck-line {
+    color: var(--muted);
+    font-size: 0.9em;
+}
+
+.dice-luck-bars {
+    position: relative;
+    display: flex;
+    align-items: end;
+    gap: 0.125rem;
+    height: 1.75rem;
+    max-width: 22rem;
+}
+
+.dice-luck-bars:empty {
+    display: none;
+}
+
+.dice-luck-bars::after {
+    content: "";
+    position: absolute;
+    inset: auto 0 calc(var(--even) * 100%) 0;
+    border-top: 0.0625rem dashed var(--muted);
+}
+
+.dice-luck-bars i {
+    flex: 1;
+    height: max(0.0625rem, calc(var(--tall) * 100%));
+    background: var(--accent);
+    transition: height 0.3s var(--ease);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .dice-more,
+    .dice-luck-bars i {
+        transition: none;
+    }
+}
+
 /* Said this firmly, because every other canvas in a mini is stretched to fill its box. */
 .mote .mote-panel canvas.dice-picture {
     position: static;

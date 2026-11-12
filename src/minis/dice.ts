@@ -6,18 +6,28 @@
 // here it is drawn, by Mote's own 3D drawing (gl.ts), with the dice to pick
 // from and a history under it. A roll can be sent as a link: ?roll=2d6+3.
 
+import { fortune, tally, type Luck } from "./luck";
 import { gl, seat, type Color, type Mark, type Part } from "../mote/gl";
 import { apply, block, cross, mix3, mixTurn, nearness, normals, paint, plus, scaled, spun, turned, upright, type Mesh, type Turn, type V3 } from "../mote/solids";
 import { sounds } from "../mote/sound";
 import { turn } from "../mote/space";
 import { el, gently, toward, type Mote, type Scene } from "../mote/stage";
-import { lineUp, numbers, read, row, total, type Roll } from "./rolls";
+import { MOST, lineUp, numbers, read, row, total, type Roll } from "./rolls";
 import { SHAPES, TOWER, slabs, throwDice, trayFor, type Sides, type Slab, type Throw, type Tray } from "./tower";
 
 export const label = "A dice tower. Dice dropped in at the top tumble down its ramps into a tray.";
 
 const HUES: Record<Sides, number> = { 4: 25, 6: 300, 8: 205, 10: 145, 12: 85, 20: 340 };
-const hue = (sides: Sides) => `oklch(0.8 0.12 ${HUES[sides]})`;
+/**
+ * The color of a die: its kind's hue, and for the second, third and later dice of that kind in a roll a
+ * shade of its own (lighter or darker, a little to one side of the hue), so that dice of a kind are told apart.
+ */
+const hue = (sides: Sides, nth = 0) => {
+    const part = (by: number) => (nth * by) % 1;
+    const light = nth === 0 ? 0.8 : 0.6 + 0.3 * part(0.618);
+    const strong = nth === 0 ? 0.12 : 0.08 + 0.08 * part(0.382);
+    return `oklch(${light.toFixed(3)} ${strong.toFixed(3)} ${HUES[sides] + (nth === 0 ? 0 : Math.round(36 * part(0.755) - 18))})`;
+};
 const INK = "#1a1024";
 
 /** A fair number from 0 to 1, from the browser's own source of chance. */
@@ -158,9 +168,11 @@ export default function dice(m: Mote): Scene {
         stand(next.tray);
         // a knock for every hard meeting, higher for die on die than for die on wood
         next.space.hit = (a, b, speed) => sound?.knock(speed / 16, a.im && b.im ? 1500 : 700);
+        const seen: Partial<Record<Sides, number>> = {};
         models = view
             ? next.dice.map((die) => {
-                  const color = view.color(hue(die.sides));
+                  const nth = (seen[die.sides] = (seen[die.sides] ?? -1) + 1);
+                  const color = view.color(hue(die.sides, nth));
                   const look = { color: [...color] as Color, marks: written(die.sides), ink: [0.1, 0.06, 0.14] as Color };
                   return { part: view.add(SHAPES[die.sides], look), color, look };
               })
@@ -174,7 +186,9 @@ export default function dice(m: Mote): Scene {
 
     // ---- what is kept between visits: the last rolls ----
     let history = m.recall<{ what: string; said: string; total: number }[]>("dice", []);
-    /** The roll last sent down the tower, as it was typed: what a link to it carries. */
+    /** Every number each kind of die has shown here, kept between visits: what "luck" is worked out from. */
+    let luck = m.recall<Luck>("dice-luck", {});
+    /** The roll last sent down the tower, as it is written: what a link to it carries. */
     let last = "";
 
     // ---- rolling ----
@@ -257,6 +271,8 @@ export default function dice(m: Mote): Scene {
         }
         history = [{ what, said: result.said, total: result.total }, ...history].slice(0, 30);
         m.keep("dice", history);
+        for (const one of numbers(roll, values)) tally(luck, one.sides, one.value);
+        m.keep("dice-luck", luck);
         render();
         say(`${what}: ${result.total}`);
     };
@@ -264,48 +280,78 @@ export default function dice(m: Mote): Scene {
     // ---- under the tower: the dice to pick from, a typed roll, and what was rolled ----
     if (!m.preview) {
         const panel = m.panel();
-        // The roll is written in one place. A die pressed adds itself to what is written there, and
-        // counts how many of it have been pressed for as long as nothing else has been typed.
-        const hand: Partial<Record<Sides | 100, number>> = {};
-        const handText = () => Object.entries(hand).filter(([, count]) => count).map(([sides, count]) => `${count}d${sides}`).join(" + ");
+        // The roll is made by pressing: a die adds one of itself, the small controls under it take one
+        // away and say which to keep, and a number can be added to the total. Nothing is typed.
+        const KINDS = [4, 6, 8, 10, 12, 20, 100] as const;
+        type Kind = (typeof KINDS)[number];
+        const KEEPS = { all: "", highest: " kh1", lowest: " kl1", "drop lowest": " dl", "drop highest": " dh" } as const;
+        type Keep = keyof typeof KEEPS;
+        const hand: Partial<Record<Kind, number>> = {};
+        const keeps: Partial<Record<Kind, Keep>> = {};
+        let added = 0;
+        /** How many dice go down the tower for what is in the hand: a d100 is two. */
+        const held = () => KINDS.reduce((sum, kind) => sum + (hand[kind] ?? 0) * (kind === 100 ? 2 : 1), 0);
+        /** The hand as a roll is written, which is also what a link to it carries. */
+        const handText = () =>
+            KINDS.filter((kind) => hand[kind]).map((kind) => `${hand[kind]}d${kind}${hand[kind]! > 1 ? KEEPS[keeps[kind] ?? "all"] : ""}`).join(" + ") + (added ? ` ${added > 0 ? "+" : "-"} ${Math.abs(added)}` : "");
 
-        said = el("p", { class: "table-said", textContent: "Pick dice, or type a roll, and send them down the tower." });
+        said = el("p", { class: "table-said", textContent: "Pick dice and send them down the tower." });
         said.setAttribute("aria-live", "polite");
-        const typed = el("input", { type: "text", placeholder: "2d6+3, d20 adv", spellcheck: false });
-        typed.setAttribute("aria-label", "The roll to make");
-        const counts = new Map<number, HTMLElement>();
+        const parts = new Map<Kind, { kind: HTMLElement; badge: HTMLElement; more: HTMLElement; keep: HTMLButtonElement }>();
+        const addedText = el("span", { class: "dice-added", textContent: "0" });
         const refresh = () => {
-            for (const [sides, badge] of counts) {
+            for (const [sides, part] of parts) {
+                const count = hand[sides] ?? 0;
                 // (an emptied one keeps its number while it shrinks away)
-                if (hand[sides as Sides]) badge.textContent = String(hand[sides as Sides]);
-                badge.classList.toggle("on", Boolean(hand[sides as Sides]));
+                if (count) part.badge.textContent = String(count);
+                part.kind.classList.toggle("on", count > 0);
+                part.more.inert = count === 0;
+                part.keep.disabled = count < 2;
+                part.keep.textContent = count < 2 ? "all" : (keeps[sides] ?? "all");
             }
+            addedText.textContent = added > 0 ? `+${added}` : added < 0 ? `\u2212${-added}` : "0";
         };
         const empty = () => {
-            for (const key of Object.keys(hand)) delete hand[key as unknown as Sides];
+            for (const kind of KINDS) {
+                delete hand[kind];
+                delete keeps[kind];
+            }
+            added = 0;
             refresh();
         };
-        // typing by hand takes over from the dice pressed
-        typed.oninput = empty;
         // each die as it looks from above, with its highest number on top
-        const picks = ([4, 6, 8, 10, 12, 20, 100] as const).map((sides) => {
+        const picks = KINDS.map((sides) => {
             const badge = el("span", { class: "dice-count" });
-            counts.set(sides, badge);
             const add = () => {
-                if (typed.value.trim() === handText()) {
-                    hand[sides] = (hand[sides] ?? 0) + 1;
-                    typed.value = handText();
-                } else {
-                    typed.value = `${typed.value.trim()} + d${sides}`;
-                }
+                if (held() + (sides === 100 ? 2 : 1) > MOST) return say(`${MOST} dice is the most the tower takes.`);
+                hand[sides] = (hand[sides] ?? 0) + 1;
                 refresh();
             };
             const pick = el("button", { type: "button", class: "dice-pick", onclick: add }, picture(sides === 100 ? 10 : sides, String(sides), font), el("span", { class: "dice-name", textContent: `d${sides}` }), badge);
             pick.setAttribute("aria-label", `Add a d${sides}`);
-            return pick;
+            const less = el("button", { type: "button", class: "quiet", textContent: "one less", onclick: () => { hand[sides] = Math.max(0, (hand[sides] ?? 0) - 1); refresh(); } });
+            less.setAttribute("aria-label", `One d${sides} less`);
+            // which of several to count: pressing it goes round the choices
+            const keep = el("button", { type: "button", class: "quiet", textContent: "all", onclick: () => {
+                const order = Object.keys(KEEPS) as Keep[];
+                keeps[sides] = order[(order.indexOf(keeps[sides] ?? "all") + 1) % order.length]!;
+                refresh();
+            } });
+            keep.setAttribute("aria-label", `Which d${sides} to count`);
+            const more = el("div", { class: "dice-more" }, el("div", {}, less, keep));
+            more.inert = true;
+            const kind = el("div", { class: "dice-kind" }, pick, more);
+            parts.set(sides, { kind, badge, more, keep });
+            return kind;
         });
-        const clear = el("button", { type: "button", class: "quiet", textContent: "clear", onclick: () => { typed.value = ""; empty(); } });
-        const rollForm = el("form", { class: "table-typed", onsubmit: (event) => { event.preventDefault(); if (typed.value.trim()) send(typed.value.trim()); } }, typed, clear, el("button", { type: "submit", class: "dice-go", textContent: "roll" }));
+        const nudge = (by: number, label: string, word: string) => {
+            const button = el("button", { type: "button", class: "quiet", textContent: word, onclick: () => { added = Math.max(-99, Math.min(99, added + by)); refresh(); } });
+            button.setAttribute("aria-label", label);
+            return button;
+        };
+        const clear = el("button", { type: "button", class: "quiet", textContent: "clear", onclick: empty });
+        const go = el("button", { type: "button", class: "dice-go", textContent: "roll", onclick: () => (held() ? send(handText()) : say("Pick some dice first.")) });
+        const rollRow = el("div", { class: "table-typed" }, el("span", { class: "dice-add" }, el("span", { class: "dice-add-name", textContent: "add" }), nudge(-1, "Add one less to the total", "\u2212"), addedText, nudge(1, "Add one more to the total", "+")), clear, go);
         // the roll just made, as a link that makes it again for whoever opens it
         const share = el("button", { type: "button", class: "quiet", textContent: "copy link to this roll", onclick: () => {
             if (!last) return;
@@ -316,14 +362,25 @@ export default function dice(m: Mote): Scene {
             setTimeout(() => (share.textContent = "copy link to this roll"), 2500);
         } });
         const list = el("ol", { class: "table-history" });
-        panel.append(said, el("div", { class: "dice-picks" }, ...picks), rollForm, el("div", { class: "table-go" }, share, sound!.button), el("h2", { textContent: "rolls" }), list);
+        /** Gives an element a number for its stylesheet to draw with. */
+        const styled = <T extends HTMLElement>(node: T, name: string, value: number): T => (node.style.setProperty(name, String(value)), node);
+        const fortunes = el("ul", { class: "dice-luck" });
+        const forget = el("button", { type: "button", class: "quiet", textContent: "forget these", onclick: () => { luck = {}; m.keep("dice-luck", luck); render(); } });
+        panel.append(said, el("div", { class: "dice-picks" }, ...picks), rollRow, el("div", { class: "table-go" }, share, sound!.button), el("h2", { textContent: "rolls" }), list, el("h2", { textContent: "luck" }), fortunes, el("div", { class: "table-go" }, forget));
         render = () => {
             list.replaceChildren(...history.map((entry) => el("li", {}, el("strong", { textContent: String(entry.total) }), ` ${entry.what}`, el("span", { textContent: ` ${entry.said}` }))));
+            // each kind of die rolled here: how many, their average beside what chance says, and how often each number came up
+            const told = fortune(luck);
+            fortunes.replaceChildren(...(told.length ? told : [{ sides: 0, line: "Nothing rolled yet.", bars: [] as number[], even: 0 }]).map((one) =>
+                el("li", {}, el("span", { class: "dice-luck-line", textContent: one.line }), styled(el("span", { class: "dice-luck-bars" }, ...one.bars.map((tall) => styled(el("i"), "--tall", tall))), "--even", one.even)),
+            ));
+            forget.disabled = told.length === 0;
         };
         render();
         // opened from a link to a roll: that roll goes down the tower
         const asked = m.link.get("roll");
         if (asked) send(asked);
+        refresh();
     }
 
     return {

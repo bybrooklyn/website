@@ -18,7 +18,7 @@ test("what cannot be rolled is said plainly", () => {
     expect(typeof read("")).toBe("string");
     expect(typeof read("2d7")).toBe("string");
     expect(typeof read("hello")).toBe("string");
-    expect(typeof read("40d6")).toBe("string");
+    expect(typeof read("61d6")).toBe("string");
     expect(typeof read("2d6 drop lowest 2")).toBe("string");
 });
 
