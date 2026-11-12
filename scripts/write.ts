@@ -17,7 +17,7 @@
 // The page itself is scripts/editor/main.ts, its styles scripts/editor/editor.css.
 
 import { $ } from "bun";
-import { mkdir } from "node:fs/promises";
+import { mkdir, stat } from "node:fs/promises";
 import { dirname, extname, relative, resolve } from "node:path";
 import { themeStyle } from "../src/lib/color";
 import { forEditor } from "./dictation-stubs";
@@ -126,6 +126,18 @@ function route(path: string): string {
     if (path.includes("/pages/")) return `/${name}/`;
     if (path.includes("/resume/")) return "/resume/";
     return "/";
+}
+
+/** Every page the site makes, as addresses ending in a slash: its pages, posts, projects and minis, and the pages Astro makes from src/pages. */
+async function routes(): Promise<Set<string>> {
+    const made = new Set(["/", "/blog/", "/projects/", "/minis/", "/photos/", "/resume/"]);
+    for (const group of await files()) for (const file of group.files) made.add(file.route.replace(/\/?$/, "/"));
+    for (const name of await listMdx("src/content/minis")) made.add(`/minis/${stem(name)}/`);
+    for (const page of await Array.fromAsync(new Bun.Glob("**/*.astro").scan({ cwd: at("src/pages") }))) {
+        if (page.includes("[")) continue;
+        made.add(`/${page.replace(/(^|\/)index\.astro$/, "").replace(/\.astro$/, "/")}`.replace(/\/+$/, "/"));
+    }
+    return made;
 }
 
 let startedDev = false;
@@ -284,6 +296,14 @@ async function handle(request: Request): Promise<Response> {
         return inside && type && (await Bun.file(file).exists()) ? new Response(Bun.file(file), { headers: { "content-type": type } }) : json({ error: "No such picture." }, 404);
     }
     if (url.pathname === "/api/files") return json(await files());
+    if (url.pathname === "/api/exists") {
+        // For checking in the editor: a page of the site if the address starts with a slash, else a file beside the document.
+        const src = decodeURI(query("src").replace(/[?#].*$/, ""));
+        if (src.startsWith("/")) return json({ there: (await routes()).has(src.replace(/\/?$/, "/")) || (await Bun.file(resolve(at("public"), `.${src}`)).exists()) });
+        const file = resolve(dirname(at(query("file"))), src);
+        const inside = [at("src"), at("public")].some((folder) => !relative(folder, file).startsWith(".."));
+        return json({ there: inside && ((await Bun.file(file).exists()) || (await stat(file).then((found) => found.isDirectory(), () => false))) });
+    }
     if (url.pathname === "/api/photos" && request.method === "GET") return json({ photos: await readPhotos() });
     if (url.pathname === "/api/file") {
         const path = query("path");

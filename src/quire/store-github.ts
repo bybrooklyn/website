@@ -10,7 +10,7 @@
 // into their folder, and written in the document by a path relative to it. Nothing else is asked
 // of the network. Tested against a mock of the API.
 
-import { freeName, relative, StoreError, type Saved, type Store } from "./store";
+import { besideDocument, freeName, relative, type Saved, type Store, StoreError } from "./store";
 import { markdownFile } from "./store-files";
 
 /** What the repository store is told once, and keeps in this browser. */
@@ -185,6 +185,12 @@ export function githubStore(settings: GithubSettings, fetcher: Fetcher = (url, i
             const done = await put(path, new Uint8Array(await picture.arrayBuffer()), `Add picture ${free}`);
             if (!done.sha) throw new StoreError(`GitHub answered ${done.status}`);
             return relative(id, path);
+        },
+        async exists(id, address) {
+            const path = besideDocument(id, address);
+            if (path === undefined) return undefined;
+            const answer = await ask("GET", `${contents(path)}?ref=${encodeURIComponent(branch)}`).catch(() => undefined);
+            return answer?.ok ? true : answer?.status === 404 ? false : undefined;
         },
         async show(id, address) {
             if (/^[a-z]+:|^\//i.test(address)) return undefined;

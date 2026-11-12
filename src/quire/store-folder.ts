@@ -10,7 +10,7 @@
 // handles kept in memory.
 
 import { isQuire, packQuire, pictureShelf, unpackQuire, type Parts } from "./quire-file";
-import { fileName, freeName, StoreError, type Opened, type Store } from "./store";
+import { besideDocument, fileName, freeName, type Opened, type Store, StoreError } from "./store";
 import { openable } from "./store-files";
 
 /** The part of a file handle the store uses. */
@@ -159,6 +159,17 @@ export function folderStore(root: FolderHandle): Store {
         },
         async pictures(id) {
             return shelf.get(id);
+        },
+        async exists(id, address) {
+            const path = besideDocument(id, address);
+            if (path === undefined) return undefined;
+            if (!path) return true;
+            const folder = await folderOf(path).catch(() => undefined);
+            if (!folder) return false;
+            const name = parts(path).at(-1)!;
+            // a file, or a folder of that name
+            if (await folder.getFileHandle(name).then(() => true, () => false)) return true;
+            return folder.getDirectoryHandle(name).then(() => true, () => false);
         },
         async show(id, address) {
             if (isQuire(id)) return shelf.show(id, address);

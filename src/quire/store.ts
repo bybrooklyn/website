@@ -56,6 +56,21 @@ export interface Store {
     show?(id: string, address: string): Promise<string | undefined>;
     /** The pictures a `.quire` document holds, by name, for writing it out as a file. */
     pictures?(id: string): Promise<Map<string, Blob>>;
+    /** Whether an address written in a document leads to a file beside it (or, for the site's own server, to one of its pages); undefined when the store cannot tell. Checking asks it, and never about addresses elsewhere on the web. */
+    exists?(id: string, address: string): Promise<boolean | undefined>;
+}
+
+/** The path inside a store of an address written in the document at `id`, or undefined if it leaves the store or is not relative. */
+export function besideDocument(id: string, address: string): string | undefined {
+    if (/^[a-z][\w+.-]*:|^\/|^#/i.test(address) || !address) return undefined;
+    const steps = id.split("/").slice(0, -1);
+    for (const step of address.split("/")) {
+        if (step === "..") {
+            if (!steps.length) return undefined;
+            steps.pop();
+        } else if (step && step !== ".") steps.push(step);
+    }
+    return steps.join("/");
 }
 
 /** A store's own failure, said in plain words for the status. */
