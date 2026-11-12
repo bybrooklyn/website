@@ -117,6 +117,16 @@ From the conversation on 11 Nov, later:
 20. Plinko as a table in real 3D with a character on every ball was built and taken back the same
     day: it looked weird. The balls and round posts it needed are still in `space.ts`.
 
+From 12 Nov, "i want to make my website more gay":
+
+21. Accent colors taken from her two flags, trans and lesbian, quiet enough that "you notice if
+    you look". Optional and modular, like everything in this group.
+22. More of her in the words and pages. Hers to write.
+23. The public wiki as "my own personal wikipedia", with a part about transitioning. (The locked
+    wiki in `password.md` is a different thing.)
+24. A project like pronouns.cc, "very simple".
+25. Spectrum, rewritten for the site at `/spectrum/` (on the `spectrum` branch).
+
 ## Next, as she chose on 11 Nov
 
 1. Plan the word processor (idea 13), with questions.
