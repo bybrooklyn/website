@@ -151,11 +151,12 @@ export function view(picture: HTMLImageElement, link?: HTMLAnchorElement | null)
     Object.assign(copy.style, { left: `${to.left}px`, top: `${to.top}px`, width: `${to.width}px`, height: `${to.height}px` });
     const large = largest(picture, link);
     const more = menu(picture, () => large);
-    // the dots sit in the picture's own top right corner, and come in once it has arrived there
-    Object.assign(more.box.style, { top: `${to.top + 10}px`, right: `${innerWidth - to.left - to.width + 10}px` });
-    more.box.animate([{ opacity: 0, scale: 0.6 }, { opacity: 0, scale: 0.6, offset: 0.6 }, { opacity: 1, scale: 1 }], { duration: still.matches ? 0 : 560, easing: EASE });
     viewer.append(shade, copy, more.box);
     document.body.append(viewer);
+    // The dots sit in the picture's own top right corner, as far from its right edge as from its top, and come in
+    // once it has arrived there. Measured against the viewer itself, which is what they are placed in.
+    Object.assign(more.box.style, { top: `${to.top + 10}px`, right: `${viewer.clientWidth - to.left - to.width + 10}px` });
+    more.box.animate([{ opacity: 0, scale: 0.6 }, { opacity: 0, scale: 0.6, offset: 0.6 }, { opacity: 1, scale: 1 }], { duration: still.matches ? 0 : 560, easing: EASE });
 
     // The sharper copy takes over once it has arrived; until then the one already on the page is stretched.
     if (large !== copy.src) {

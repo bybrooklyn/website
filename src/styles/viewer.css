@@ -54,10 +54,11 @@
     background: var(--surface);
     overflow: hidden;
     cursor: default;
+    /* closing, it draws back in without springing: the bounce belongs to opening only */
     transition:
-        width 0.55s cubic-bezier(0.3, 1.5, 0.4, 1),
-        height 0.55s cubic-bezier(0.3, 1.5, 0.4, 1) 0.04s,
-        border-radius 0.45s ease,
+        width 0.3s var(--ease),
+        height 0.3s var(--ease),
+        border-radius 0.3s ease,
         border-color 0.2s ease;
 }
 
@@ -70,6 +71,11 @@
     width: var(--wide);
     height: var(--high);
     border-radius: 1.1rem;
+    transition:
+        width 0.55s cubic-bezier(0.3, 1.5, 0.4, 1),
+        height 0.55s cubic-bezier(0.3, 1.5, 0.4, 1) 0.04s,
+        border-radius 0.45s ease,
+        border-color 0.2s ease;
 }
 
 .viewer-dots {
