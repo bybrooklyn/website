@@ -10,6 +10,10 @@
 //       };
 //   });
 //
+// It also keeps small things between visits (`m.keep`, `m.recall`), reads and
+// sets the page's address (`m.link`), and with `?debug` in the address shows
+// how long a step takes.
+//
 // A mini only runs while it can be seen, stops when the scene says it has
 // come to rest, and for someone who has asked for reduced motion does not
 // start moving until they touch it.
@@ -42,9 +46,17 @@ export interface Mote {
     wake(): void;
     /** A place under the canvas for ordinary buttons and text, for a mini that needs them. Made the first time it is asked for. */
     panel(): HTMLElement;
-    /** A number kept in the browser between visits, such as a best score. */
-    recall(name: string): number;
-    keep(name: string, value: number): void;
+    /**
+     * Something small kept in the browser between visits: a best score, settings, a history. `recall`
+     * gives `otherwise` when nothing is kept, or when what is kept was written by another `version`
+     * of the mini, so a change to what is kept cannot break it.
+     */
+    recall<T>(name: string, otherwise: T, version?: number): T;
+    keep(name: string, value: unknown, version?: number): void;
+    /** What the page's address says after `?`, to read and to set: a mini's state that can be sent to someone as a link. */
+    link: { get(name: string): string | null; set(name: string, value: string | null): string };
+    /** The page's address ends in `?debug`: the stage shows how long a step takes, and a scene can draw more. */
+    readonly debug: boolean;
 }
 
 export interface Scene {
@@ -61,7 +73,14 @@ export interface Scene {
     keydown?(name: Key): void;
     /** True when nothing is moving, so the loop can stop until something wakes it. */
     resting?(): boolean;
+    /** Lines to show with `?debug` in the address, such as how many bodies are awake. It may also draw on `m.ctx`. */
+    debug?(): string[];
 }
+
+/** `value` moved toward `goal` at a rate that covers 0 to 1 in `seconds`. For a move that takes a set time. */
+export const toward = (value: number, goal: number, dt: number, seconds: number): number => (value < goal ? Math.min(goal, value + dt / seconds) : Math.max(goal, value - dt / seconds));
+/** 0 to 1 made to set off and arrive gently. */
+export const gently = (t: number): number => t * t * (3 - 2 * t);
 
 /** The loop moves in steps of this many seconds, whatever the screen's refresh rate. */
 export const TICK = 1 / 120;
@@ -126,20 +145,33 @@ export function mote(host: HTMLElement, make: (m: Mote) => Scene, { label = "An 
             }
             return panel;
         },
-        recall(name) {
+        recall(name, otherwise, version = 1) {
             try {
-                return Number(localStorage.getItem(`mote:${name}`)) || 0;
+                const kept = JSON.parse(localStorage.getItem(`mote:${name}`) ?? "null") as { version: number; value: never } | null;
+                return kept?.version === version ? kept.value : otherwise;
             } catch {
-                return 0;
+                return otherwise;
             }
         },
-        keep(name, value) {
+        keep(name, value, version = 1) {
             try {
-                localStorage.setItem(`mote:${name}`, String(value));
+                localStorage.setItem(`mote:${name}`, JSON.stringify({ version, value }));
             } catch {
                 // Not kept: private browsing, or storage is off.
             }
         },
+        link: {
+            // One shown small in a list has no say over the page's address.
+            get: (name) => (preview ? null : new URLSearchParams(location.search).get(name)),
+            set(name, value) {
+                const address = new URL(location.href);
+                if (value === null) address.searchParams.delete(name);
+                else address.searchParams.set(name, value);
+                if (!preview) history.replaceState(history.state, "", address);
+                return address.href;
+            },
+        },
+        debug: !preview && new URLSearchParams(location.search).has("debug"),
     };
 
     const fit = () => {
@@ -152,11 +184,24 @@ export function mote(host: HTMLElement, make: (m: Mote) => Scene, { label = "An 
     fit();
     const scene = make(m);
 
+    /** How long a step has been taking, in milliseconds, evened out over the last few. */
+    let took = 0;
     const draw = () => {
         const scale = window.devicePixelRatio || 1;
         ctx.setTransform(scale, 0, 0, scale, 0, 0);
         ctx.clearRect(0, 0, m.width, m.height);
         scene.draw();
+        if (!m.debug) return;
+        const lines = [`step ${took.toFixed(2)} ms of ${(TICK * 1000).toFixed(1)}`, ...(scene.debug?.() ?? [])];
+        ctx.font = "12px monospace";
+        ctx.textAlign = "left";
+        ctx.textBaseline = "top";
+        lines.forEach((line, row) => {
+            ctx.fillStyle = "#000a";
+            ctx.fillRect(6, 6 + row * 16, ctx.measureText(line).width + 8, 16);
+            ctx.fillStyle = "#fff";
+            ctx.fillText(line, 10, 8 + row * 16);
+        });
     };
 
     const stop = () => {
@@ -174,7 +219,9 @@ export function mote(host: HTMLElement, make: (m: Mote) => Scene, { label = "An 
             owed = Math.min(owed + (now - last) / 1000, 0.05);
             last = now;
             while (owed >= TICK) {
+                const before = m.debug ? performance.now() : 0;
                 scene.step?.(TICK);
+                if (m.debug) took += (performance.now() - before - took) * 0.05;
                 m.time += TICK;
                 owed -= TICK;
             }

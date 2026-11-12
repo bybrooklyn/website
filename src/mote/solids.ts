@@ -11,6 +11,8 @@ export interface Mesh {
     points: V3[];
     /** Each face as the numbers of its points, counter-clockwise seen from outside. */
     faces: number[][];
+    /** Lit as if round, with no edge showing between faces that share corners (gl.ts). */
+    smooth?: boolean;
 }
 
 export const upright = (): Turn => [
@@ -42,6 +44,8 @@ export const apply = (turn: Turn, [x, y, z]: V3): V3 => [
 export const plus = (a: V3, b: V3): V3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
 export const minus = (a: V3, b: V3): V3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 export const scaled = (a: V3, by: number): V3 => [a[0] * by, a[1] * by, a[2] * by];
+/** The point `t` of the way from a to b. */
+export const mix3 = (a: V3, b: V3, t: number): V3 => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
 export const dot3 = (a: V3, b: V3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 export const cross = (a: V3, b: V3): V3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 const length = (a: V3) => Math.hypot(a[0], a[1], a[2]) || 1;
@@ -165,13 +169,43 @@ export const block = ([x, y, z]: V3): Mesh => ({
 /** Makes every face wind counter-clockwise seen from outside, for a solid that bulges everywhere and sits around the origin. */
 function outward(mesh: Mesh): Mesh {
     return {
-        points: mesh.points,
+        ...mesh,
         faces: mesh.faces.map((face) => {
             const [a, b, c] = [mesh.points[face[0]!]!, mesh.points[face[1]!]!, mesh.points[face[2]!]!];
             const normal = cross(minus(b, a), minus(c, a));
             return normal[0] * a[0] + normal[1] * a[1] + normal[2] * a[2] < 0 ? face.toReversed() : face;
         }),
     };
+}
+
+/** A ball, as rings of points from its top to its bottom. */
+export function ball(radius: number, around = 20, rings = 12): Mesh {
+    const points: V3[] = [[0, radius, 0]];
+    for (let ring = 1; ring < rings; ring++) {
+        const [level, out] = [Math.cos((ring / rings) * Math.PI) * radius, Math.sin((ring / rings) * Math.PI) * radius];
+        for (let step = 0; step < around; step++) points.push([out * Math.cos((step / around) * 2 * Math.PI), level, out * Math.sin((step / around) * 2 * Math.PI)]);
+    }
+    points.push([0, -radius, 0]);
+    const at = (ring: number, step: number) => 1 + (ring - 1) * around + (step % around);
+    const faces: number[][] = [];
+    for (let step = 0; step < around; step++) {
+        faces.push([0, at(1, step), at(1, step + 1)], [points.length - 1, at(rings - 1, step), at(rings - 1, step + 1)]);
+        for (let ring = 1; ring < rings - 1; ring++) faces.push([at(ring, step), at(ring + 1, step), at(ring + 1, step + 1), at(ring, step + 1)]);
+    }
+    return outward({ points, faces, smooth: true });
+}
+
+/** A round rod lying along z, `long` from end to end. Its flat ends have corners of their own, so they stay flat. */
+export function rod(radius: number, long: number, around = 20): Mesh {
+    const ring = (z: number): V3[] => Array.from({ length: around }, (_, step): V3 => [radius * Math.cos((step / around) * 2 * Math.PI), radius * Math.sin((step / around) * 2 * Math.PI), z]);
+    // the side's two rings, then each end's own
+    const points = [...ring(-long / 2), ...ring(long / 2), ...ring(-long / 2), ...ring(long / 2)];
+    const steps = Array.from({ length: around }, (_, step) => step);
+    return outward({
+        points,
+        faces: [...steps.map((step) => [step, (step + 1) % around, around + ((step + 1) % around), around + step]), steps.map((step) => 2 * around + step), steps.map((step) => 3 * around + step)],
+        smooth: true,
+    });
 }
 
 export const cube = (): Mesh =>

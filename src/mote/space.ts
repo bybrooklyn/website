@@ -376,6 +376,8 @@ export class Space {
     parts = 2;
     /** Slower than this, in units a second, counts as still. */
     slow = 0.12;
+    /** Told of each pair that met hard this step, and how fast they were closing. For a sound, or a flash. */
+    hit?: (a: Solid, b: Solid, speed: number) => void;
     #was: Manifold[] = [];
     #owed = 0;
 
@@ -569,6 +571,13 @@ export class Space {
                 s.dq = turnedBy(s.dq, by);
             }
             contacts(false);
+        }
+
+        if (this.hit) {
+            for (const m of manifolds) {
+                const closing = Math.min(...m.spots.map((s) => s.closing));
+                if (closing < -1.2) this.hit(m.a, m.b, -closing);
+            }
         }
 
         // ---- bounce: what hit hard enough leaves with some of the speed it came with ----

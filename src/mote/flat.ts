@@ -402,6 +402,8 @@ export class Flat {
     gravity: number;
     /** Each step of 1/120 s is taken in this many smaller parts. More holds long chains and heavy things better. */
     parts = 4;
+    /** Told of each pair that met hard this step, and how fast they were closing. For a sound, or a flash. */
+    hit?: (a: Body, b: Body, speed: number) => void;
     /** Stands for "the world" at one end of a joint. */
     readonly ground: Body;
     /** Picks things up, carries them and throws them. */
@@ -865,6 +867,13 @@ export class Flat {
             }
             joined(false);
             contacts(false);
+        }
+
+        if (this.hit) {
+            for (const m of manifolds) {
+                const closing = Math.min(...m.spots.map((s) => s.closing));
+                if (closing < -80) this.hit(m.a, m.b, -closing);
+            }
         }
 
         // ---- bounce: what hit hard enough leaves with some of the speed it came with ----

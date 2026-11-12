@@ -75,6 +75,7 @@ export async function browser({ width = 1200, height = 800, scale = 1, port = 94
         },
         async run(expression) {
             const answer = await send("Runtime.evaluate", { expression, awaitPromise: true, returnByValue: true });
+            if (answer.exceptionDetails) throw new Error(answer.exceptionDetails.exception?.description ?? answer.exceptionDetails.text);
             return answer.result?.value;
         },
         async click(x, y) {

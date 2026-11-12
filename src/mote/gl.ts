@@ -1,6 +1,7 @@
 // Mote's 3D drawing: solids of flat faces, drawn by the graphics card with
 // real depth, so nothing shows through anything, one sun with shadows, light
-// from the sky, and a picture (a number, say) on a face. WebGL 2, no library.
+// from the sky, and a picture (a number, say) on a face. What shines by its own
+// light bleeds a little of it around itself. WebGL 2, no library.
 //
 //   const view = gl(canvas);                      // undefined where WebGL 2 is missing
 //   const die = view.add(mesh, { color: view.color("oklch(0.8 0.12 300)"), marks: (face) => String(face + 1) });
@@ -8,7 +9,7 @@
 //   die.at = [0, 1, 0]; die.turn = turn;
 //   view.draw();
 
-import { cross, dot3 as dot, minus, upright, type Mesh, type Turn, type V3 } from "./solids";
+import { cross, dot3 as dot, minus, plus, scaled, upright, type Mesh, type Turn, type V3 } from "./solids";
 
 export type Color = [r: number, g: number, b: number];
 
@@ -26,6 +27,8 @@ export interface Look {
      */
     marks?(face: number): string | Mark[] | undefined;
     ink?: Color;
+    /** Drawn after everything else and in front of it, above the shade (see `View.shade`). */
+    over?: boolean;
 }
 
 export interface Mark {
@@ -42,6 +45,10 @@ export interface Part {
     /** The group of marks to light up, and how far it is lit, from 0 to 1. */
     lit: number;
     shine: number;
+    /** How many times the size it was made. */
+    scale: number;
+    /** How strongly it shines by its own light, from 0. What shines is not shaded, and bleeds light around itself. */
+    emit: number;
 }
 
 interface Drawn extends Part {
@@ -54,9 +61,17 @@ interface Drawn extends Part {
 
 export interface View {
     add(mesh: Mesh, look: Look): Part;
+    /** A flat card with words on it, one unit high and facing +z until it is turned. Drawn over everything. */
+    sign(words: string, color: Color): Part;
     remove(part: Part): void;
     /** Where the eye is, what it looks at, and how wide it sees, in degrees up and down. */
     look(from: V3, to: V3, degrees: number): void;
+    /** The turn that faces a sign squarely at the eye. */
+    facing(): Turn;
+    /** The place `far` in front of the eye that is seen at (x, y), each from -1 at one edge of the picture to 1 at the other. */
+    ahead(x: number, y: number, far: number): V3;
+    /** How far everything is darkened, from 0 to 1, except what is drawn `over`. */
+    shade: number;
     /** Where the sun is, the box it has to light (two opposite corners), and how bright the sun, the sky and the ground are. */
     light(from: V3, low: V3, high: V3, sun?: number, sky?: number, ground?: number): void;
     /** Fit the drawing to a size in CSS pixels. */
@@ -97,7 +112,8 @@ in float which;
 uniform vec4 color;
 uniform vec3 toSun, levels;
 uniform bool marked, shaded;
-uniform float glow, shine;
+uniform float glow, shine, emit;
+uniform bool glowing;
 uniform sampler2DShadow shadow;
 uniform sampler2D marks;
 out vec4 result;
@@ -123,9 +139,40 @@ void main() {
     // the sun, by how squarely the face meets it, and light from the sky above and the ground below
     float bright = levels.x * max(dot(n, toSun), 0.0) * open + mix(levels.z, levels.y, n.y * 0.5 + 0.5);
     vec3 seen = pow(pow(base.rgb, vec3(2.2)) * bright, vec3(1.0 / 2.2));
-    // a mark that is lit shows white, and by its own light
-    if (marked && abs(which - glow) < 0.5) seen = mix(seen, vec3(1.0), shine);
+    // a mark that is lit shows white, and by its own light; so does anything that shines, in its own color
+    float white = marked && abs(which - glow) < 0.5 ? shine : 0.0;
+    if (glowing) {
+        // the picture of only what shines: everything else is black, and hides what shines behind it
+        if (base.a < 0.5) discard;
+        vec3 light = mix(base.rgb * emit, vec3(1.0), white);
+        result = vec4(light, max(light.r, max(light.g, light.b)));
+        return;
+    }
+    seen = mix(mix(seen, base.rgb, min(emit, 1.0)), vec3(1.0), white);
     result = vec4(seen, base.a);
+}`;
+
+// The whole picture as one triangle: to blur what shines, to lay it over the scene, and to darken the scene.
+const SCREEN_VERTEX = `#version 300 es
+out vec2 at;
+void main() {
+    at = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2));
+    gl_Position = vec4(at * 2.0 - 1.0, 0.0, 1.0);
+}`;
+const SCREEN_FRAGMENT = `#version 300 es
+precision highp float;
+in vec2 at;
+uniform sampler2D from;
+uniform vec2 stride;
+uniform vec4 tint;
+uniform float gain;
+out vec4 result;
+void main() {
+    if (gain == 0.0) { result = tint; return; }
+    const float weights[5] = float[](0.227, 0.1945, 0.1216, 0.054, 0.0162);
+    vec4 sum = texture(from, at) * weights[0];
+    for (int i = 1; i < 5; i++) sum += (texture(from, at + stride * float(i)) + texture(from, at - stride * float(i))) * weights[i];
+    result = sum * gain;
 }`;
 
 const DEPTH_VERTEX = `#version 300 es
@@ -167,12 +214,14 @@ function box(left: number, right: number, bottom: number, top: number, near: num
     return new Float32Array([2 / (right - left), 0, 0, 0, 0, 2 / (top - bottom), 0, 0, 0, 0, -2 / (far - near), 0, -(right + left) / (right - left), -(top + bottom) / (top - bottom), -(far + near) / (far - near), 1]);
 }
 
-const placed = (at: V3, turn: Turn): M4 =>
-    new Float32Array([turn[0][0], turn[1][0], turn[2][0], 0, turn[0][1], turn[1][1], turn[2][1], 0, turn[0][2], turn[1][2], turn[2][2], 0, at[0], at[1], at[2], 1]);
+const placed = (at: V3, turn: Turn, by: number): M4 =>
+    new Float32Array([turn[0][0] * by, turn[1][0] * by, turn[2][0] * by, 0, turn[0][1] * by, turn[1][1] * by, turn[2][1] * by, 0, turn[0][2] * by, turn[1][2] * by, turn[2][2] * by, 0, at[0], at[1], at[2], 1]);
 
 /** Sets a canvas up for drawing in 3D. Returns nothing where the browser cannot. */
 export function gl(canvas: HTMLCanvasElement): View | undefined {
-    const g = canvas.getContext("webgl2", { antialias: true, alpha: true, premultipliedAlpha: false });
+    // The picture's colors are kept already multiplied by how solid they are, which is what blending onto
+    // an empty picture gives, and what lets light be added over the page behind without darkening it.
+    const g = canvas.getContext("webgl2", { antialias: true, alpha: true, premultipliedAlpha: true });
     if (!g) return undefined;
 
     const program = (vertex: string, fragment: string) => {
@@ -188,10 +237,11 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
         const names = new Map<string, WebGLUniformLocation | null>();
         return { made, at: (name: string) => names.get(name) ?? (names.set(name, g.getUniformLocation(made, name)), names.get(name)!) };
     };
-    let main: ReturnType<typeof program>, depth: ReturnType<typeof program>;
+    let main: ReturnType<typeof program>, depth: ReturnType<typeof program>, screen: ReturnType<typeof program>;
     try {
         main = program(VERTEX, FRAGMENT);
         depth = program(DEPTH_VERTEX, DEPTH_FRAGMENT);
+        screen = program(SCREEN_VERTEX, SCREEN_FRAGMENT);
     } catch (problem) {
         console.error("Mote could not set up 3D drawing:", problem);
         return undefined;
@@ -213,9 +263,25 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
     g.framebufferTexture2D(g.FRAMEBUFFER, g.DEPTH_ATTACHMENT, g.TEXTURE_2D, shadow, 0);
     g.bindFramebuffer(g.FRAMEBUFFER, null);
 
+    // what shines, drawn small and blurred: two pictures a quarter of the canvas each way, blurred from one into the other
+    const soft = [0, 1].map(() => {
+        const picture = g.createTexture();
+        g.bindTexture(g.TEXTURE_2D, picture);
+        for (const [name, value] of [[g.TEXTURE_MIN_FILTER, g.LINEAR], [g.TEXTURE_MAG_FILTER, g.LINEAR], [g.TEXTURE_WRAP_S, g.CLAMP_TO_EDGE], [g.TEXTURE_WRAP_T, g.CLAMP_TO_EDGE]] as const) g.texParameteri(g.TEXTURE_2D, name, value);
+        const onto = g.createFramebuffer();
+        g.bindFramebuffer(g.FRAMEBUFFER, onto);
+        g.framebufferTexture2D(g.FRAMEBUFFER, g.COLOR_ATTACHMENT0, g.TEXTURE_2D, picture, 0);
+        return { picture, onto };
+    });
+    const hides = g.createRenderbuffer();
+    g.bindFramebuffer(g.FRAMEBUFFER, soft[0]!.onto);
+    g.framebufferRenderbuffer(g.FRAMEBUFFER, g.DEPTH_ATTACHMENT, g.RENDERBUFFER, hides);
+    g.bindFramebuffer(g.FRAMEBUFFER, null);
+    let [smallWide, smallHigh] = [0, 0];
+
     // what is written on faces: every different word once, side by side in one picture
     const CELL = 128;
-    const ACROSS = 8;
+    const ACROSS = 12;
     const sheet = document.createElement("canvas");
     sheet.width = CELL * ACROSS;
     sheet.height = CELL * ACROSS;
@@ -247,8 +313,49 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
         return array;
     };
 
+    /** The cell of the sheet a word is written in, writing it there the first time. A word on a sign is fitted to the cell's width. */
+    const cell = (word: string, onSign: boolean): [u: number, v: number] => {
+        const key = onSign ? `sign ${word}` : word;
+        let at = written.get(key);
+        if (at === undefined) {
+            at = written.size;
+            written.set(key, at);
+            const [x, y] = [(at % ACROSS) * CELL, Math.floor(at / ACROSS) * CELL];
+            pen.font = `700 ${word.length > 1 ? 74 : 88}px ${view.font}`;
+            pen.textAlign = "center";
+            pen.textBaseline = "middle";
+            pen.fillStyle = "#fff";
+            const wide = pen.measureText(word).width;
+            pen.save();
+            pen.translate(x + CELL / 2, y + CELL / 2 + 6);
+            if (onSign && wide > CELL - 12) pen.scale((CELL - 12) / wide, (CELL - 12) / wide);
+            pen.fillText(word, 0, 0);
+            pen.restore();
+            // a line under 6 and 9 on a face, so that they can be told apart whichever way up
+            if (!onSign && (word === "6" || word === "9")) pen.fillRect(x + 40, y + 108, 48, 7);
+            stale = true;
+        }
+        return [(at % ACROSS) / ACROSS, Math.floor(at / ACROSS) / ACROSS];
+    };
+    const made = (look: Look, faces: number[], words: number[]): Drawn => {
+        const part: Drawn = {
+            at: [0, 0, 0], turn: upright(), hidden: false, lit: -1, shine: 0, scale: 1, emit: 0, look,
+            faces: filled(faces, [3, 3, 2]), count: faces.length / 8,
+            marks: words.length ? filled(words, [3, 3, 2, 1]) : undefined, markCount: words.length / 9,
+        };
+        parts.push(part);
+        return part;
+    };
+    /** The eye's own right, up and back, from where it is and what it looks at. */
+    const eye = (): [V3, V3, V3] => {
+        const back = unit(minus(eyeFrom, eyeTo));
+        const right = unit(cross(Math.abs(back[1]) > 0.999 ? [0, 0, -1] : [0, 1, 0], back));
+        return [right, cross(back, right), back];
+    };
+
     const view: View = {
         font: "serif",
+        shade: 0,
         color(css) {
             // The page gives colors in forms the graphics card cannot read, so a canvas reads them first.
             probe.clearRect(0, 0, 1, 1);
@@ -260,11 +367,14 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
         add(mesh, look) {
             const faces: number[] = [];
             const words: number[] = [];
+            const flat = mesh.faces.map((face) => unit(cross(minus(mesh.points[face[1]!]!, mesh.points[face[0]!]!), minus(mesh.points[face[2]!]!, mesh.points[face[0]!]!))));
+            // a smooth mesh is lit as if round: each corner faces the way the faces around it do, taken together
+            const round = mesh.smooth ? mesh.points.map((_, point) => unit(mesh.faces.reduce<V3>((sum, face, number) => (face.includes(point) ? plus(sum, flat[number]!) : sum), [0, 0, 0]))) : undefined;
             mesh.faces.forEach((face, number) => {
                 const corners = face.map((corner) => mesh.points[corner]!);
-                const n = unit(cross(minus(corners[1]!, corners[0]!), minus(corners[2]!, corners[0]!)));
+                const n = flat[number]!;
                 // each face as a fan of triangles, all facing the way the face does
-                for (let i = 1; i + 1 < corners.length; i++) for (const corner of [corners[0]!, corners[i]!, corners[i + 1]!]) faces.push(...corner, ...n, 0, 0);
+                for (let i = 1; i + 1 < corners.length; i++) for (const at of [0, i, i + 1]) faces.push(...corners[at]!, ...(round?.[face[at]!] ?? n), 0, 0);
                 const asked = look.marks?.(number);
                 if (!asked) return;
                 const middle = corners.reduce((sum, corner): V3 => [sum[0] + corner[0] / corners.length, sum[1] + corner[1] / corners.length, sum[2] + corner[2] / corners.length], [0, 0, 0] as V3);
@@ -275,27 +385,13 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
                     return Math.hypot(...minus(to, along.map((value) => value * dot(to, along)) as V3));
                 })) * 0.78;
                 for (const mark of typeof asked === "string" ? [{ word: asked, group: number } as Mark] : asked) {
-                    let cell = written.get(mark.word);
-                    if (cell === undefined) {
-                        cell = written.size;
-                        written.set(mark.word, cell);
-                        const [x, y] = [(cell % ACROSS) * CELL, Math.floor(cell / ACROSS) * CELL];
-                        pen.font = `700 ${mark.word.length > 1 ? 74 : 88}px ${view.font}`;
-                        pen.textAlign = "center";
-                        pen.textBaseline = "middle";
-                        pen.fillStyle = "#fff";
-                        pen.fillText(mark.word, x + CELL / 2, y + CELL / 2 + 6);
-                        // a line under 6 and 9, so that they can be told apart
-                        if (mark.word === "6" || mark.word === "9") pen.fillRect(x + 40, y + 108, 48, 7);
-                        stale = true;
-                    }
+                    const [u, v] = cell(mark.word, false);
                     // upright toward a corner of the face (its first, unless one is named), and a hair above the face;
                     // one that sits toward a corner is smaller, and part of the way out to it
                     const toward = minus(corners[mark.corner ?? 0]!, middle);
                     const up = unit(toward);
                     const right = cross(up, n);
                     const [size, out] = mark.corner === undefined ? [room, 0] : [room * 0.5, 0.42];
-                    const [u, v] = [(cell % ACROSS) / ACROSS, Math.floor(cell / ACROSS) / ACROSS];
                     const corner = (x: number, y: number) => [
                         ...([0, 1, 2].map((axis) => middle[axis]! + toward[axis]! * out + right[axis]! * x * size + up[axis]! * y * size + n[axis]! * 0.002)),
                         ...n, u + ((x + 1) / 2) / ACROSS, v + ((1 - y) / 2) / ACROSS, mark.group,
@@ -303,13 +399,12 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
                     words.push(...corner(-1, -1), ...corner(1, -1), ...corner(1, 1), ...corner(-1, -1), ...corner(1, 1), ...corner(-1, 1));
                 }
             });
-            const part: Drawn = {
-                at: [0, 0, 0], turn: upright(), hidden: false, lit: -1, shine: 0, look,
-                faces: filled(faces, [3, 3, 2]), count: faces.length / 8,
-                marks: words.length ? filled(words, [3, 3, 2, 1]) : undefined, markCount: words.length / 9,
-            };
-            parts.push(part);
-            return part;
+            return made(look, faces, words);
+        },
+        sign(words, color) {
+            const [u, v] = cell(words, true);
+            const corner = (x: number, y: number) => [x / 2, y / 2, 0, 0, 0, 1, u + ((x + 1) / 2) / ACROSS, v + ((1 - y) / 2) / ACROSS, 0];
+            return made({ color, ink: color, over: true, shaded: false }, [], [...corner(-1, -1), ...corner(1, -1), ...corner(1, 1), ...corner(-1, -1), ...corner(1, 1), ...corner(-1, 1)]);
         },
         remove(part) {
             const at = parts.indexOf(part as Drawn);
@@ -317,6 +412,15 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
         },
         look(from, to, degrees) {
             [eyeFrom, eyeTo, eyeDegrees] = [from, to, degrees];
+        },
+        facing() {
+            const [right, up, back] = eye();
+            return [[right[0], up[0], back[0]], [right[1], up[1], back[1]], [right[2], up[2], back[2]]];
+        },
+        ahead(x, y, far) {
+            const [right, up, back] = eye();
+            const reach = far * Math.tan((eyeDegrees * Math.PI) / 360);
+            return plus(plus(minus(eyeFrom, scaled(back, far)), scaled(right, x * reach * (canvas.width / canvas.height))), scaled(up, y * reach));
         },
         light(from, low, high, sun = 1.6, sky = 0.75, ground = 0.3) {
             const middle: V3 = [(low[0] + high[0]) / 2, (low[1] + high[1]) / 2, (low[2] + high[2]) / 2];
@@ -348,7 +452,11 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
                 stale = false;
             }
             const shown = parts.filter((part) => !part.hidden);
-            const models = new Map(shown.map((part) => [part, placed(part.at, part.turn)]));
+            const models = new Map(shown.map((part) => [part, placed(part.at, part.turn, part.scale)]));
+            const solid = shown.filter((part) => !part.look.over && (part.look.alpha ?? 1) >= 1);
+            const clear = shown.filter((part) => !part.look.over && (part.look.alpha ?? 1) < 1);
+            const above = shown.filter((part) => part.look.over);
+            const shining = shown.some((part) => part.emit > 0 || (part.lit >= 0 && part.shine > 0));
             g.enable(g.DEPTH_TEST);
 
             // first, from the sun: how far away the nearest thing is, everywhere it looks
@@ -359,18 +467,13 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
             g.uniformMatrix4fv(depth.at("sun"), false, sunMatrix);
             g.disable(g.BLEND);
             g.depthMask(true);
-            for (const part of shown) {
-                if (part.look.casts === false || (part.look.alpha ?? 1) < 1) continue;
+            for (const part of solid) {
+                if (part.look.casts === false || part.count === 0) continue;
                 g.uniformMatrix4fv(depth.at("model"), false, models.get(part)!);
                 g.bindVertexArray(part.faces);
                 g.drawArrays(g.TRIANGLES, 0, part.count);
             }
 
-            // then from the eye
-            g.bindFramebuffer(g.FRAMEBUFFER, null);
-            g.viewport(0, 0, canvas.width, canvas.height);
-            g.clearColor(0, 0, 0, 0);
-            g.clear(g.COLOR_BUFFER_BIT | g.DEPTH_BUFFER_BIT);
             g.useProgram(main.made);
             g.uniformMatrix4fv(main.at("eye"), false, times(perspective(eyeDegrees, canvas.width / canvas.height, 0.5, 120), facingMatrix(eyeFrom, eyeTo)));
             g.uniformMatrix4fv(main.at("sun"), false, sunMatrix);
@@ -384,25 +487,99 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
             g.uniform1i(main.at("marks"), 1);
 
             const paint = (part: Drawn, marked: boolean) => {
+                if ((marked ? part.markCount : part.count) === 0) return;
                 g.uniformMatrix4fv(main.at("model"), false, models.get(part)!);
                 g.uniform4f(main.at("color"), ...(marked ? (part.look.ink ?? [0.1, 0.06, 0.14]) : part.look.color), marked ? 1 : (part.look.alpha ?? 1));
                 g.uniform1i(main.at("marked"), marked ? 1 : 0);
                 g.uniform1f(main.at("glow"), part.lit);
                 g.uniform1f(main.at("shine"), part.shine);
+                g.uniform1f(main.at("emit"), part.emit);
                 g.uniform1i(main.at("shaded"), part.look.shaded === false ? 0 : 1);
                 g.bindVertexArray(marked ? part.marks! : part.faces);
                 g.drawArrays(g.TRIANGLES, 0, marked ? part.markCount : part.count);
             };
-            // what is solid, then what is written on it, then what can be seen through
-            for (const part of shown) if ((part.look.alpha ?? 1) >= 1) paint(part, false);
+            /** What is solid, then what is written on it, a hair nearer so that it is not lost in the face. */
+            const solids = () => {
+                for (const part of solid) paint(part, false);
+                g.depthMask(false);
+                g.enable(g.POLYGON_OFFSET_FILL);
+                g.polygonOffset(-2, -2);
+                for (const part of solid) paint(part, true);
+                g.disable(g.POLYGON_OFFSET_FILL);
+            };
+            /** What is drawn over everything: nothing hides it. */
+            const over = () => {
+                g.disable(g.DEPTH_TEST);
+                for (const part of above) {
+                    paint(part, false);
+                    paint(part, true);
+                }
+            };
+            const whole = (from: WebGLTexture | null, stride: [number, number], gain: number, tint: [number, number, number, number] = [0, 0, 0, 0]) => {
+                g.useProgram(screen.made);
+                g.activeTexture(g.TEXTURE2);
+                g.bindTexture(g.TEXTURE_2D, from);
+                g.uniform1i(screen.at("from"), 2);
+                g.uniform2f(screen.at("stride"), ...stride);
+                g.uniform1f(screen.at("gain"), gain);
+                g.uniform4f(screen.at("tint"), ...tint);
+                g.bindVertexArray(null);
+                g.drawArrays(g.TRIANGLES, 0, 3);
+            };
+
+            // then, if anything shines, a small picture of only that, blurred twice each way
+            if (shining) {
+                const [wide, high] = [Math.max(1, canvas.width >> 2), Math.max(1, canvas.height >> 2)];
+                if (wide !== smallWide || high !== smallHigh) {
+                    [smallWide, smallHigh] = [wide, high];
+                    // on a place of its own, so that the pictures the scene is drawn with stay where they are
+                    g.activeTexture(g.TEXTURE2);
+                    for (const { picture } of soft) {
+                        g.bindTexture(g.TEXTURE_2D, picture);
+                        g.texImage2D(g.TEXTURE_2D, 0, g.RGBA8, wide, high, 0, g.RGBA, g.UNSIGNED_BYTE, null);
+                    }
+                    g.bindRenderbuffer(g.RENDERBUFFER, hides);
+                    g.renderbufferStorage(g.RENDERBUFFER, g.DEPTH_COMPONENT24, wide, high);
+                }
+                g.bindFramebuffer(g.FRAMEBUFFER, soft[0]!.onto);
+                g.viewport(0, 0, wide, high);
+                g.clearColor(0, 0, 0, 0);
+                g.clear(g.COLOR_BUFFER_BIT | g.DEPTH_BUFFER_BIT);
+                g.uniform1i(main.at("glowing"), 1);
+                solids();
+                over();
+                g.depthMask(true);
+                for (const reach of [1, 2.4]) {
+                    g.bindFramebuffer(g.FRAMEBUFFER, soft[1]!.onto);
+                    whole(soft[0]!.picture, [reach / wide, 0], 1);
+                    g.bindFramebuffer(g.FRAMEBUFFER, soft[0]!.onto);
+                    whole(soft[1]!.picture, [0, reach / high], 1);
+                }
+                g.useProgram(main.made);
+                g.enable(g.DEPTH_TEST);
+            }
+
+            // then from the eye
+            g.bindFramebuffer(g.FRAMEBUFFER, null);
+            g.viewport(0, 0, canvas.width, canvas.height);
+            g.clearColor(0, 0, 0, 0);
+            g.clear(g.COLOR_BUFFER_BIT | g.DEPTH_BUFFER_BIT);
+            g.uniform1i(main.at("glowing"), 0);
             g.enable(g.BLEND);
             g.blendFuncSeparate(g.SRC_ALPHA, g.ONE_MINUS_SRC_ALPHA, g.ONE, g.ONE_MINUS_SRC_ALPHA);
-            g.depthMask(false);
-            g.enable(g.POLYGON_OFFSET_FILL);
-            g.polygonOffset(-2, -2);
-            for (const part of shown) if (part.marks) paint(part, true);
-            g.disable(g.POLYGON_OFFSET_FILL);
-            for (const part of shown) if ((part.look.alpha ?? 1) < 1) paint(part, false);
+            solids();
+            for (const part of clear) paint(part, false);
+            g.disable(g.DEPTH_TEST);
+            if (view.shade > 0) {
+                whole(null, [0, 0], 0, [0, 0, 0, view.shade]);
+                g.useProgram(main.made);
+            }
+            over();
+            // and the light of what shines, added over it all
+            if (shining) {
+                g.blendFuncSeparate(g.ONE, g.ONE, g.ZERO, g.ONE);
+                whole(soft[0]!.picture, [0, 0], 1.1);
+            }
             g.depthMask(true);
             g.bindVertexArray(null);
         },

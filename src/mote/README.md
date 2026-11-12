@@ -9,15 +9,18 @@ site. It has no dependencies.
 
 | File | What it gives you |
 |---|---|
-| `stage.ts` | A canvas that fits its box and stays sharp, a loop in fixed steps of 1/120 s, the mouse (which a game can hold inside the box), the arrow keys and WASD, Space and Enter, the page's colors, a place for ordinary buttons, and a number kept between visits. It only runs while it can be seen and stops when the scene is at rest. |
-| `flat.ts` | 2D physics: boxes, balls, bars and shapes, with rounded corners if wanted; walls; pins, rods and ropes; a motor; a hand to grab with. Friction, bounce, sleep. |
-| `solids.ts` | The shapes of the dice and other solids of flat faces, and a way to draw one on a 2D canvas with no WebGL. The dice tower falls back to it where WebGL 2 is missing. |
+| `stage.ts` | A canvas that fits its box and stays sharp, a loop in fixed steps of 1/120 s, the mouse, the arrow keys and WASD, Space and Enter, the page's colors, a place for ordinary buttons, something small kept between visits (`m.keep`, `m.recall`), and the page's address to read and set (`m.link`). It only runs while it can be seen and stops when the scene is at rest. With `?debug` in the address it shows how long a step takes. |
+| `flat.ts` | 2D physics: boxes, balls, bars and shapes, with rounded corners if wanted; walls; pins, rods and ropes; a motor; a hand to grab with. Friction, bounce, sleep. `flat.hit` is told of every hard knock. |
+| `solids.ts` | The shapes of the dice, a ball, a rod and other solids, and a way to draw one on a 2D canvas with no WebGL. The dice tower falls back to it where WebGL 2 is missing. |
 | `space.ts` | 3D physics: solids that fall, tumble and hit each other and fixed slabs, corner to corner and edge to edge. The dice tower runs on it. |
-| `gl.ts` | 3D drawing on WebGL 2: real depth, one sun with shadows, light from the sky, and numbers on faces. |
+| `gl.ts` | 3D drawing on WebGL 2: real depth, one sun with shadows, light from the sky, numbers on faces, signs (words that float in front of everything), and glow: a part with `emit` shines and bleeds light around itself. |
+| `sound.ts` | Knocks and notes made by the browser, with no files. Silent until the visitor turns it on. |
 
 `flat.ts` and `space.ts` solve a step the same way, after the soft step method Erin Catto described for
 Box2D 3 (https://box2d.org/posts/2024/02/solver2d/): where things touch is found once, and the step is
-then taken in a few small parts, each solving every contact and joint as a stiff, damped spring. `flat.test.ts` and `space.test.ts` say what each is held to, in numbers.
+then taken in a few small parts, each solving every contact and joint as a stiff, damped spring. `flat.test.ts` and `space.test.ts` say what each is held to, in numbers. `replay.test.ts` checks that
+the same scene run twice ends the same and that a step is fast enough, and `gl.test.ts` draws a scene
+in headless Chromium and reads its pixels.
 
 ## A mini
 
