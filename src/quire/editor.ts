@@ -81,7 +81,16 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
 
     // pictures are kept by the document's store, beside the document
     const keepPicture = async (file: File) => {
-        if (store?.can.pictures && id) return store.savePicture(id, file, file.name || "picture.png");
+        if (store && id) {
+            try {
+                if (!store.can.pictures) throw new Error("pictures cannot be kept here");
+                return await store.savePicture(id, file, file.name || "picture.png");
+            } catch (error) {
+                const why = error instanceof Error ? error.message : String(error);
+                bar.setStatus("No picture", `The picture was not added: ${why}`, "warn");
+                throw error;
+            }
+        }
         if (options.onImage) return options.onImage(file);
         return URL.createObjectURL(file);
     };

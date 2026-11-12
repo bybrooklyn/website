@@ -415,7 +415,9 @@ export function createBar(surface: Surface, options: BarOptions): { element: HTM
         const file = chooser.files?.[0];
         chooser.value = "";
         if (!file || !options.onImage) return;
-        const address = await options.onImage(file);
+        // a store that cannot keep the picture says why, and nothing is put in the text
+        const address = await options.onImage(file).catch(() => undefined);
+        if (!address) return;
         doing(addImage(address, file.name.replace(/\.[^.]+$/, "")))();
     });
     const additions = (): MenuItem[] => [

@@ -653,7 +653,9 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
         const files = [...data.files].filter((file) => file.type.startsWith("image/"));
         if (files.length && options.onImage) {
             for (const file of files) {
-                const address = await options.onImage(file);
+                // a store that cannot keep the picture says why, and nothing is put in the text
+                const address = await options.onImage(file).catch(() => undefined);
+                if (!address) continue;
                 insertBlocks([imageBlock(address, file.name.replace(/\.[^.]+$/, ""))]);
             }
             return;
