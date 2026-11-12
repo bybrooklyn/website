@@ -127,6 +127,35 @@ From 12 Nov, "i want to make my website more gay":
 24. A project like pronouns.cc, "very simple".
 25. Spectrum, rewritten for the site at `/spectrum/` (on the `spectrum` branch).
 
+### 13b. mdQuire, decided 12 Nov 2026 after she tried it, still to build
+
+Her words: "i basically just want mdQuire to feel really really damn nice to use."
+
+- **Logo: a wordmark.** The three symbol sketches were "too generic" and the "wrong idea entirely". It is
+  "mdQuire" plain, in the site's own heading face, with "by charlotte" beside it on one line "in the way we
+  have on pages already" (the site name's look, with the flags), wrapping well when there is no room
+  ("support overflow nicely"). For the browser tab and small places: an italic Q in the accent on a dark
+  rounded square. In mdQuire's top bar "mdQuire takes the place of 'charlotte'" (it leads to the shelf, with
+  a small way back to the site). Used on the tab, the top bar, the shelf, the project page and its share
+  picture. Sketches: scratchpad/main/logo/marks.html.
+- **The sheet:** "A wide dark sheet, edge to edge", square corners, as the writing view; real pages are a
+  page view in View. (With the agent on `mdquire-docs4`.)
+- **Dictation's first launch:** a dialog. The background darkens; "a rounded square with our outline and a
+  material like button at the bottom". Her picture of it: "in the modal framework we create, its a button you
+  press 'Choose' and then it morphs to an expanded with the three options" (Accurate, Light, Tiny as three
+  cards, each with its size and who it is for, the one that suits the machine picked). Build the dialog as a
+  piece other things can use.
+- **Fluid:** typing and the text, opening and closing, the bar; "maybe the cursor moving instead of just
+  instantly moving".
+- **The top bar:** "is close and looks good, it just needs further polish and improvements (look and test it
+  yourself!)".
+- **More Markdown:** code blocks with highlighting; maths and diagrams (drawn by our own code); callouts,
+  definition lists, superscript and subscript, ==highlight==, emoji shortcodes, collapsible sections; the
+  site's own blocks (Figure, Terminal, Timeline, PlayHere) as real blocks; and "when someone types - then >
+  make it an arrow or = and = to be ==/===".
+- **Checking:** Markdown tidiness, her writing rules, links and pictures that exist, and "a real spelling
+  and prose engine"; faint underlines plus a list. (With the agent on `mdquire-lint`.)
+
 ### 26. The generalist: a walker that sees, learns and gets about a world by itself
 
 Decided by question and answer on 12 Nov 2026. Her words: "our little walker thing should build general
