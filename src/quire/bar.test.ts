@@ -3,7 +3,7 @@
 // Run with `bun test src/quire`.
 
 import { expect, test } from "bun:test";
-import { addCode, addDivider, addFootnote, addImage, addTable, center, color, currentStyle, FLAGS, font, FONTS, highlight, link, linkAt, pressedAt, setStyleOf, size, toggle, toggleList, wordAt, type Action } from "./bar";
+import { addCode, addDivider, addFootnote, addImage, addTable, align, aligned, center, spacedAt, spacing, color, currentStyle, FLAGS, font, FONTS, highlight, link, linkAt, pressedAt, setStyleOf, size, toggle, toggleList, wordAt, type Action } from "./bar";
 import { collect } from "./styling";
 import { markdownOnly, type Paragraph, type TextRun } from "./document";
 import type { Selection } from "./document";
@@ -114,4 +114,38 @@ test("the + menu adds a table, code, a divider, a picture and a footnote, the cu
     const noted = run(addFootnote, at("A claim.\n", caret([0], 8)));
     expect(md(noted)).toBe("A claim.[^1]\n\n[^1]: \n");
     expect(noted.selection).toEqual(caret([1, 0], 0));
+});
+
+test("alignment goes on every touched block: left is written as nothing, centre and right as Markdown can say them, and justified only in a .quire document's style", () => {
+    const two = at("One\n\nTwo\n", { anchor: { path: [0], offset: 1 }, focus: { path: [1], offset: 1 } });
+    const right = run(align("right"), two);
+    expect(md(right)).toBe('<div align="right">\n\nOne\n\n</div>\n\n<div align="right">\n\nTwo\n\n</div>\n');
+    expect(aligned(right.doc, [1])).toBe("right");
+    expect(md(run(align("left"), right))).toBe("One\n\nTwo\n");
+    expect(aligned(two.doc, [0])).toBe("left");
+    const justified = run(align("justify"), { ...two, doc: { ...two.doc, quire: { page: { size: "A4" as const, orientation: "portrait" as const, margins: 25 }, notes: null } } });
+    const { markdown, style } = collect(justified.doc);
+    expect(markdown).toBe("One\n\nTwo\n");
+    expect(style.blocks.map((each) => each.align)).toEqual(["justify", "justify"]);
+    expect(write({ ...justified.doc, blocks: markdownOnly(justified.doc.blocks) })).toBe("One\n\nTwo\n");
+});
+
+test("line spacing goes on every touched paragraph, is kept in style.json and never in the Markdown, and Single takes it off", () => {
+    const state = at("One\n\nTwo\n", { anchor: { path: [0], offset: 0 }, focus: { path: [1], offset: 0 } });
+    const spaced = run(spacing(1.5), { ...state, doc: { ...state.doc, quire: { page: { size: "A4" as const, orientation: "portrait" as const, margins: 25 }, notes: null } } });
+    expect(spacedAt(spaced.doc, [1])).toBe(1.5);
+    const { markdown, style } = collect(spaced.doc);
+    expect(markdown).toBe("One\n\nTwo\n");
+    expect(style.blocks.map((each) => each.spacing)).toEqual([1.5, 1.5]);
+    const single = run(spacing(1), spaced);
+    expect(spacedAt(single.doc, [0])).toBe(1);
+    expect((single.doc.blocks[0] as Paragraph).spacing).toBeUndefined();
+    // a spacing already there is not a change, so the block keeps its source and is written as read
+    expect(run(spacing(1), state).doc).toBe(state.doc);
+});
+
+test("the text color menu offers both flags' colors, written as a color Markdown keeps", () => {
+    const state = at("a word here\n", span([0], 2, 6));
+    expect(md(run(color(FLAGS[0]!.value), state))).toBe('a <span style="color:#5bcefa">word</span> here\n');
+    expect(FLAGS.map((each) => each.name)).toContain("Dark rose");
 });

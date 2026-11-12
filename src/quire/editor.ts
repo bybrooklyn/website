@@ -11,7 +11,7 @@
 //
 // Without a store the editor writes nowhere, as in the tests of its parts.
 
-import { addCode, addDivider, addFootnote, addTable, center, createBar, link as linkAction, linkAt, setStyleOf, toggle, toggleList, type Action } from "./bar";
+import { addCode, addDivider, addFootnote, addTable, align, aligned, createBar, link as linkAction, linkAt, setStyleOf, toggle, toggleList, type Action } from "./bar";
 import { createMenuRow, headings } from "./menu-row";
 import { blockPaths, countWords, lengthOf } from "./document";
 import { createConflict } from "./conflict";
@@ -332,7 +332,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     const format = () => row.words[4]!;
     const row = createMenuRow(() =>
         headings(
-            { rich: !!surface.getDocument().quire, outline: outlineView.isOpen(), markdown: host.classList.contains("markdown"), words: countWords(surface.getDocument()) },
+            { rich: !!surface.getDocument().quire, outline: outlineView.isOpen(), markdown: host.classList.contains("markdown"), words: countWords(surface.getDocument()), align: aligned(surface.getDocument(), surface.getSelection().focus.path) },
             {
                 file: options.fileItems,
                 turnRich: () => void makeRich(),
@@ -371,7 +371,11 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
                 heading2: doing(setStyleOf("heading2")),
                 heading3: doing(setStyleOf("heading3")),
                 quote: doing(setStyleOf("quote")),
-                center: doing(center),
+                left: doing(align("left")),
+                center: doing(align("center")),
+                right: doing(align("right")),
+                justify: doing(align("justify")),
+                spacing: () => bar.pickers.spacing(format()),
                 color: () => bar.pickers.color(format()),
                 size: () => bar.pickers.size(format()),
                 font: () => bar.pickers.font(format()),

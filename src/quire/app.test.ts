@@ -234,13 +234,18 @@ used("a file is opened from the computer, and downloaded again with its own name
     expect(await tab.run("q.downloads.at(-1)")).toEqual({ name: "post.md", text: "# A post\n\nFrom a file. Edited.\n" });
 });
 
-used("in a Markdown file the tools it cannot keep are folded away, and turning it into a .quire document makes a copy that has them", async () => {
+used("in a Markdown file the tools it cannot keep are not offered, and turning it into a .quire document makes a copy that has them", async () => {
     // post.md is open from the test before
     expect(await tab.run("document.querySelector('.quire-name-text').textContent")).toBe("post.md");
-    const rich = () => tab.run<{ folded: boolean; inert: boolean; width: number }>("(() => { const group = document.querySelector('.quire-bar .quire-rich'); return { folded: group.classList.contains('folded'), inert: group.inert, width: Math.round(group.getBoundingClientRect().width) }; })()");
-    // folded to nothing but its hairline of border, which is transparent
-    expect(await rich()).toMatchObject({ folded: true, inert: true });
-    expect((await rich()).width).toBeLessThanOrEqual(1);
+    const looks = async () => {
+        await press('.quire-bar button[aria-label^="Text"]');
+        await tab.wait(600);
+        const seen = await tab.run<string[]>("[...document.querySelectorAll('.quire-menu.open .quire-menu-label')].map((line) => line.textContent)");
+        await tab.press("Escape");
+        await tab.wait(300);
+        return seen;
+    };
+    expect(await looks()).toEqual(["Text color", "Text size", "Align left", "Centre", "Align right"]);
     await press(".quire-dots");
     await tab.wait(700);
     const lines = await tab.run<string[]>("[...document.querySelectorAll('.quire-menu.open .quire-menu-line')].map((line) => line.textContent)");
@@ -250,12 +255,13 @@ used("in a Markdown file the tools it cannot keep are folded away, and turning i
     await tab.wait(900);
     expect(await tab.run("document.querySelector('.quire-name-text').textContent")).toBe("post.quire");
     expect(await md()).toBe("# A post\n\nFrom a file. Edited.\n");
-    expect((await rich()).folded).toBe(false);
-    expect((await rich()).width).toBeGreaterThan(40);
-    // a typeface chosen from its control goes on the selection
+    expect(await looks()).toEqual(["Text color", "Text size", "Typeface", "Highlight", "Line spacing", "Align left", "Centre", "Align right", "Justify"]);
+    // a typeface chosen from the text button goes on the selection
     await tab.run("q.app.editor.surface.setSelection({ anchor: { path: [1], offset: 0 }, focus: { path: [1], offset: 4 } })");
-    await press(".quire-bar button", "Typeface");
-    await tab.wait(500);
+    await press('.quire-bar button[aria-label^="Text"]');
+    await tab.wait(600);
+    await press(".quire-menu.open .quire-menu-line", "Typeface");
+    await tab.wait(600);
     await press(".quire-menu.open .quire-menu-line", "System mono");
     await tab.wait(200);
     expect(await tab.run("document.querySelector('.quire [data-font=mono]')?.textContent")).toBe("From");
@@ -427,7 +433,8 @@ used("on a narrow window the menu row folds into the three dots, each word a lin
         await press(".quire-dots");
         await tab.wait(700);
         const lines = await tab.run<string[]>("[...document.querySelectorAll('.quire-menu.open .quire-menu-line')].map((line) => line.textContent)");
-        expect(lines.filter((line) => line.endsWith("›"))).toEqual(["File›", "Edit›", "View›", "Insert›", "Format›", "Tools›"]);
+        const words = ["File›", "Edit›", "View›", "Insert›", "Format›", "Tools›"];
+        expect(lines.filter((line) => words.includes(line))).toEqual(words);
         await press(".quire-menu.open .quire-menu-line", "Format");
         await tab.wait(600);
         expect(await tab.run("[...document.querySelectorAll('.quire-row-menu.open .quire-menu-line')].map((line) => line.textContent)[0]")).toBe("BoldCtrl+B");

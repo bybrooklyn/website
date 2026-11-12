@@ -6,7 +6,7 @@
 import { expect, test } from "bun:test";
 import { headings, type Command, type RowActions } from "./menu-row";
 
-const all: Command[] = ["turnRich", "download", "downloadQuire", "print", "history", "undo", "redo", "selectAll", "link", "outline", "markdown", "table", "picture", "divider", "code", "footnote", "bullet", "number", "task", "bold", "italic", "underline", "strike", "inline", "paragraph", "heading1", "heading2", "heading3", "quote", "color", "size", "center", "font", "highlight"];
+const all: Command[] = ["turnRich", "download", "downloadQuire", "print", "history", "undo", "redo", "selectAll", "link", "outline", "markdown", "table", "picture", "divider", "code", "footnote", "bullet", "number", "task", "bold", "italic", "underline", "strike", "inline", "paragraph", "heading1", "heading2", "heading3", "quote", "color", "size", "font", "highlight", "spacing", "left", "center", "right", "justify"];
 const every: RowActions = Object.fromEntries(all.map((command) => [command, () => {}]));
 const lines = (rich: boolean, act = every) => Object.fromEntries(headings({ rich, outline: true, markdown: false, words: 1204 }, act).map((heading) => [heading.label, heading.items().map((item) => (item.hint ? `${item.label} ${item.hint}` : item.label))]));
 
@@ -14,7 +14,7 @@ test("the row has its six words, and each command is in its menu by name with it
     const seen = lines(true);
     expect(Object.keys(seen)).toEqual(["File", "Edit", "View", "Insert", "Format", "Tools"]);
     expect(seen.Edit).toEqual(["Undo Ctrl+Z", "Redo Ctrl+Shift+Z", "Select all Ctrl+A", "Link Ctrl+K"]);
-    expect(seen.Format).toEqual(["Bold Ctrl+B", "Italic Ctrl+I", "Underline Ctrl+U", "Strikethrough Ctrl+Shift+X", "Inline code Ctrl+E", "Paragraph Ctrl+Alt+0", "Heading 1 Ctrl+Alt+1", "Heading 2 Ctrl+Alt+2", "Heading 3 Ctrl+Alt+3", "Quote", "Text color", "Text size", "Centre", "Typeface", "Highlight"]);
+    expect(seen.Format).toEqual(["Bold Ctrl+B", "Italic Ctrl+I", "Underline Ctrl+U", "Strikethrough Ctrl+Shift+X", "Inline code Ctrl+E", "Paragraph Ctrl+Alt+0", "Heading 1 Ctrl+Alt+1", "Heading 2 Ctrl+Alt+2", "Heading 3 Ctrl+Alt+3", "Quote", "Text color ›", "Text size ›", "Typeface ›", "Highlight ›", "Line spacing ›", "Align left", "Centre", "Align right", "Justify"]);
     expect(seen.Insert).toContain("Table");
     expect(seen.Insert).toContain("Picture");
     expect(seen.Tools![0]).toBe("1,204 words");
@@ -24,8 +24,8 @@ test("the row has its six words, and each command is in its menu by name with it
 });
 
 test("what a Markdown file cannot keep is offered only for a .quire document, and turning one into a .quire only for Markdown", () => {
-    expect(lines(false).Format).not.toContain("Typeface");
-    expect(lines(false).Format).not.toContain("Highlight");
+    for (const kept of ["Typeface ›", "Highlight ›", "Line spacing ›", "Justify"]) expect(lines(false).Format).not.toContain(kept);
+    expect(lines(false).Format).toContain("Centre");
     expect(lines(false).File).toContain("Turn into a .quire document");
     expect(lines(false).File).toContain("Download .md");
     expect(lines(true).File).not.toContain("Turn into a .quire document");

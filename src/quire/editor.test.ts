@@ -130,7 +130,6 @@ used("each mark button on the bar marks the selection", async () => {
         ["Italic", "a *word* here\n"],
         ["Underline", "a <u>word</u> here\n"],
         ["Strikethrough", "a ~~word~~ here\n"],
-        ["Inline code", "a `word` here\n"],
     ];
     for (const [label, expected] of marks) {
         await reset("a word here\n", [0], 2, [0], 6);
@@ -140,17 +139,23 @@ used("each mark button on the bar marks the selection", async () => {
     }
 });
 
-used("the list buttons, centre, undo and redo do what they say", async () => {
-    for (const [label, expected] of [
-        ["Bulleted list", "- Line\n"],
-        ["Numbered list", "1. Line\n"],
-        ["Checklist", "- [ ] Line\n"],
-        ["Centre", '<div align="center">\n\nLine\n\n</div>\n'],
+used("the lists button's menu, the alignments, undo and redo do what they say", async () => {
+    for (const [menu, label, expected] of [
+        ["Lists", "Bulleted list", "- Line\n"],
+        ["Lists", "Numbered list", "1. Line\n"],
+        ["Lists", "Checklist", "- [ ] Line\n"],
+        ["Text", "Align right", '<div align="right">\n\nLine\n\n</div>\n'],
+        ["Text", "Centre", '<div align="center">\n\nLine\n\n</div>\n'],
     ]) {
         await reset("Line\n", [0], 2);
-        await button(label!);
+        await choose(menu!, label!);
         expect(await md()).toBe(expected!);
     }
+    // in a list the button is pressed and shows that list's kind
+    await reset("1. Line\n", [0, 0, 0], 2);
+    expect(await tab.run(`[document.querySelector('.quire-bar button[aria-label="Lists"]').getAttribute("aria-pressed"), document.querySelector('.quire-bar button[aria-label="Lists"]').dataset.kind]`)).toEqual(["true", "number"]);
+    await reset("Line\n", [0], 2);
+    await choose("Text", "Centre");
     await button("Undo");
     expect(await md()).toBe("Line\n");
     await button("Redo");
@@ -178,10 +183,14 @@ used("the style picker, + menu, color and size menus flow open and do what their
     expect(await md()).toBe("Above\n\n![tiny](/picture.png)\n");
 
     await reset("a word here\n", [0], 2, [0], 6);
-    await choose("Text color", "Pink");
+    await choose("Text", "Text color");
+    await tab.wait(650);
+    await press(".quire-menu.open .quire-menu-line", "Pink");
     expect(await md()).toBe('a <span style="color:salmon">word</span> here\n');
     await reset("a word here\n", [0], 2, [0], 6);
-    await choose("Text size", "Large");
+    await choose("Text", "Text size");
+    await tab.wait(650);
+    await press(".quire-menu.open .quire-menu-line", "Large");
     expect(await md()).toBe('a <span style="font-size:1.25em">word</span> here\n');
     expect(await tab.run("document.querySelector('.quire-count').textContent")).toBe("3 words");
 });
