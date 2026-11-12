@@ -11,8 +11,8 @@ import { apply, block, cross, mix3, mixTurn, nearness, normals, paint, plus, sca
 import { sounds } from "../mote/sound";
 import { turn } from "../mote/space";
 import { el, gently, toward, type Mote, type Scene } from "../mote/stage";
-import { lineUp, read, row, total, type Roll } from "./rolls";
-import { SHAPES, SLABS, TOWER, TRAY, throwDice, type Sides, type Slab, type Throw } from "./tower";
+import { lineUp, numbers, read, row, total, type Roll } from "./rolls";
+import { SHAPES, TOWER, slabs, throwDice, trayFor, type Sides, type Slab, type Throw, type Tray } from "./tower";
 
 export const label = "A dice tower. Dice dropped in at the top tumble down its ramps into a tray.";
 
@@ -72,7 +72,7 @@ const FAR = 5;
 
 /** A number on its way from a die to the row: where it left from, and its place in the row. */
 interface Lifted {
-    die: number;
+    dice: number[];
     number: Part;
     kind: Part;
     from: { at: V3; turn: Turn; size: number };
@@ -94,19 +94,29 @@ export default function dice(m: Mote): Scene {
     if (view) m.canvas.parentElement!.insertBefore(under, m.canvas);
     const tipped = (tip: number): Turn => [[Math.cos(tip), -Math.sin(tip), 0], [Math.sin(tip), Math.cos(tip), 0], [0, 0, 1]];
     const SEEN = { tray: "--surface", wall: "--rule", ramp: "--muted", glass: "--ink" } as const;
-    const ground: Slab = { at: [(TRAY.left + TRAY.right) / 2, -0.1, 0], half: [(TRAY.right - TRAY.left) / 2, 0.1, TRAY.deep], tip: 0, kind: "tray" };
-    const pieces = [ground, ...SLABS].filter((slab) => slab.kind !== "unseen");
-    let models: { part: Part; color: Color; look: { color: Color } }[] = [];
-    if (view) {
-        view.font = font;
-        for (const slab of pieces) {
+    /** The tower and tray as they are drawn: set up again when a throw needs a larger tray. */
+    let tray: Tray | undefined;
+    let pieces: Slab[] = [];
+    let standing: Part[] = [];
+    const stand = (next: Tray) => {
+        if (tray && tray.right === next.right && tray.deep === next.deep) return;
+        tray = next;
+        const ground: Slab = { at: [(next.left + next.right) / 2, -0.1, 0], half: [(next.right - next.left) / 2, 0.1, next.deep], tip: 0, kind: "tray" };
+        pieces = [ground, ...slabs(next)].filter((slab) => slab.kind !== "unseen");
+        if (!view) return;
+        for (const part of standing) view.remove(part);
+        standing = pieces.map((slab) => {
             const kind = slab.kind as keyof typeof SEEN;
             const piece = view.add(block(slab.half), { color: view.color(m.color(SEEN[kind])), alpha: kind === "glass" ? 0.035 : 1, casts: kind === "ramp" || kind === "tray" });
             piece.at = slab.at;
             piece.turn = tipped(slab.tip);
-        }
-        view.light([7, 17, 10], [TRAY.left - 0.5, -0.5, -TRAY.deep - 0.5], [TRAY.right + 0.5, TOWER.top + 3, TRAY.deep + 0.5]);
-    }
+            return piece;
+        });
+        view.light([7, 17, 10], [next.left - 0.5, -0.5, -next.deep - 0.5], [next.right + 0.5, TOWER.top + 3, next.deep + 0.5]);
+    };
+    let models: { part: Part; color: Color; look: { color: Color } }[] = [];
+    if (view) view.font = font;
+    stand(trayFor(0));
 
     // ---- the eye: beside the tower while the dice fall, then up over them once they have landed ----
     const BESIDE: [V3, V3] = [[9.5, 12, 22.5], [0.3, 4.9, 0]];
@@ -142,6 +152,7 @@ export default function dice(m: Mote): Scene {
         if (sum) view?.remove(sum);
         [lifted, sum, lined] = [[], undefined, 0];
         thrown = next;
+        stand(next.tray);
         // a knock for every hard meeting, higher for die on die than for die on wood
         next.space.hit = (a, b, speed) => sound?.knock(speed / 16, a.im && b.im ? 1500 : 700);
         models = view
@@ -194,8 +205,10 @@ export default function dice(m: Mote): Scene {
             model.part.lit = group(thrown!.dice[index]!.sides, values[index]!);
         });
         // a copy of each number, to lift off its die: it starts where the number is written, the same size and the same way up
-        if (view && !m.preview) {
-            lifted = lineUp(thrown.dice.map((die, index) => ({ sides: die.sides, value: values[index]! }))).map((index) => {
+        if (view && !m.preview && waiting) {
+            const rolled = numbers(waiting.roll, values);
+            lifted = lineUp(rolled).map((place) => {
+                const { sides, value, dice: [index = 0] } = rolled[place]!;
                 const die = thrown!.dice[index]!;
                 const turned = turn(die.body);
                 let from: Lifted["from"];
@@ -207,12 +220,12 @@ export default function dice(m: Mote): Scene {
                     const [x, y, z] = [apply(turned, cross(up, out)), apply(turned, up), apply(turned, out)];
                     from = { at: plus(die.body.p, apply(turned, plus(middle, scaled(out, 0.01)))), turn: [[x[0], y[0], z[0]], [x[1], y[1], z[1]], [x[2], y[2], z[2]]], size: room * 2 };
                 }
-                const number = view.sign(String(values[index]), [1, 1, 1]);
-                const kind = view.sign(`d${die.sides}`, view.color(m.color("--muted")));
+                const number = view.sign(String(value), [1, 1, 1]);
+                const kind = view.sign(`d${sides}`, view.color(m.color("--muted")));
                 number.hidden = kind.hidden = true;
                 number.emit = 1;
                 kind.emit = 0.55;
-                return { die: index, number, kind, from, arrived: false };
+                return { dice: rolled[place]!.dice, number, kind, from, arrived: false };
             });
         }
         if (!waiting) return;
@@ -234,28 +247,47 @@ export default function dice(m: Mote): Scene {
     // ---- under the tower: the dice to pick from, a typed roll, and what was rolled ----
     if (!m.preview) {
         const panel = m.panel();
+        // The roll is written in one place. A die pressed adds itself to what is written there, and
+        // counts how many of it have been pressed for as long as nothing else has been typed.
         const hand: Partial<Record<Sides | 100, number>> = {};
         const handText = () => Object.entries(hand).filter(([, count]) => count).map(([sides, count]) => `${count}d${sides}`).join(" + ");
 
         said = el("p", { class: "table-said", textContent: "Pick dice, or type a roll, and send them down the tower." });
         said.setAttribute("aria-live", "polite");
+        const typed = el("input", { type: "text", placeholder: "2d6+3, 4d6 drop lowest, d20 adv", spellcheck: false });
+        typed.setAttribute("aria-label", "The roll to make");
         const counts = new Map<number, HTMLElement>();
         const refresh = () => {
             for (const [sides, badge] of counts) {
                 badge.textContent = hand[sides as Sides] ? String(hand[sides as Sides]) : "";
                 badge.hidden = !hand[sides as Sides];
             }
-            go.disabled = !handText();
         };
+        const empty = () => {
+            for (const key of Object.keys(hand)) delete hand[key as unknown as Sides];
+            refresh();
+        };
+        // typing by hand takes over from the dice pressed
+        typed.oninput = empty;
         // each die as it looks from above, with its highest number on top
         const picks = ([4, 6, 8, 10, 12, 20, 100] as const).map((sides) => {
             const badge = el("span", { class: "dice-count", hidden: true });
             counts.set(sides, badge);
-            const pick = el("button", { type: "button", class: "dice-pick", onclick: () => { hand[sides] = Math.min(12, (hand[sides] ?? 0) + 1); refresh(); } }, picture(sides === 100 ? 10 : sides, String(sides), font), el("span", { class: "dice-name", textContent: `d${sides}` }), badge);
+            const add = () => {
+                if (typed.value.trim() === handText()) {
+                    hand[sides] = (hand[sides] ?? 0) + 1;
+                    typed.value = handText();
+                } else {
+                    typed.value = `${typed.value.trim()} + d${sides}`;
+                }
+                refresh();
+            };
+            const pick = el("button", { type: "button", class: "dice-pick", onclick: add }, picture(sides === 100 ? 10 : sides, String(sides), font), el("span", { class: "dice-name", textContent: `d${sides}` }), badge);
             pick.setAttribute("aria-label", `Add a d${sides}`);
             return pick;
         });
-        const go = el("button", { type: "button", class: "dice-go", textContent: "roll", disabled: true, onclick: () => { const text = handText(); if (text) send(text); } });
+        const clear = el("button", { type: "button", class: "quiet", textContent: "clear", onclick: () => { typed.value = ""; empty(); } });
+        const rollForm = el("form", { class: "table-typed", onsubmit: (event) => { event.preventDefault(); if (typed.value.trim()) send(typed.value.trim()); } }, typed, clear, el("button", { type: "submit", class: "dice-go", textContent: "roll" }));
         // the roll just made, as a link that makes it again for whoever opens it
         const share = el("button", { type: "button", class: "quiet", textContent: "copy link to this roll", onclick: () => {
             if (!last) return;
@@ -263,12 +295,8 @@ export default function dice(m: Mote): Scene {
             navigator.clipboard?.writeText(address).then(() => (share.textContent = "link copied"), () => (share.textContent = "the link is in the address bar"));
             setTimeout(() => (share.textContent = "copy link to this roll"), 2500);
         } });
-        const clear = el("button", { type: "button", class: "quiet", textContent: "clear", onclick: () => { for (const key of Object.keys(hand)) delete hand[key as unknown as Sides]; refresh(); } });
-        const typed = el("input", { type: "text", placeholder: "or type one: 2d6+3, 4d6 drop lowest, d20 adv", spellcheck: false });
-        typed.setAttribute("aria-label", "A roll to make");
-        const rollForm = el("form", { class: "table-typed", onsubmit: (event) => { event.preventDefault(); if (typed.value.trim()) send(typed.value.trim()); } }, typed, el("button", { type: "submit", textContent: "roll" }));
         const list = el("ol", { class: "table-history" });
-        panel.append(said, el("div", { class: "dice-picks" }, ...picks), el("div", { class: "table-go" }, go, clear, share, sound!.button), rollForm, el("h2", { textContent: "rolls" }), list);
+        panel.append(said, el("div", { class: "dice-picks" }, ...picks), rollForm, el("div", { class: "table-go" }, share, sound!.button), el("h2", { textContent: "rolls" }), list);
         render = () => {
             list.replaceChildren(...history.map((entry) => el("li", {}, el("strong", { textContent: String(entry.total) }), ` ${entry.what}`, el("span", { textContent: ` ${entry.said}` }))));
         };
@@ -298,9 +326,9 @@ export default function dice(m: Mote): Scene {
             if (view) view.shade = toward(view.shade, leaving ? 0.72 : 0, dt * 0.72, 0.4);
         },
         resize: fit,
-        // Clicking the tower sends a d20 down it.
+        // Clicking the tower before anything has been rolled sends a d20 down it. After that a click does nothing: it would take the row of numbers away.
         press() {
-            if (!waiting) send("d20");
+            if (!thrown) send("d20");
         },
         resting: () => !m.preview && (!thrown || (landed() && over === 1 && shine === 1 && lined >= lastIn())) && (view?.shade ?? 0) === (lifted.length > 0 && thrown ? 0.72 : 0),
         debug: () => (thrown ? [`${thrown.space.solids.filter((solid) => solid.im && solid.quiet < 0.4).length} of ${thrown.dice.length} dice moving`] : []),
@@ -314,7 +342,7 @@ export default function dice(m: Mote): Scene {
                 const gone = new Map<number, number>();
                 lifted.forEach((one, place) => {
                     const t = gently(flown(place));
-                    gone.set(one.die, t);
+                    for (const die of one.dice) gone.set(die, t);
                     const [x, y] = places.at(place);
                     one.number.hidden = one.kind.hidden = lined === 0;
                     one.number.at = mix3(one.from.at, view.ahead(x / shape, y, FAR), t);
@@ -338,6 +366,7 @@ export default function dice(m: Mote): Scene {
                 }
                 thrown?.dice.forEach((die, index) => {
                     const { part, color, look } = models[index]!;
+                    part.hidden = die.waiting;
                     part.at = die.body.p;
                     part.turn = turn(die.body);
                     // the number on the die goes back to ink as its copy leaves
@@ -353,7 +382,7 @@ export default function dice(m: Mote): Scene {
             const flat = { x: m.width * 0.5, y: m.height * 0.78, size: Math.min(m.width / 14, m.height / 12), distance: 40, view: eye };
             const things = [
                 ...pieces.filter((slab) => slab.kind !== "glass").map((slab) => ({ mesh: block(slab.half), at: slab.at, turn: tipped(slab.tip), sides: 0 as Sides | 0, css: m.color(SEEN[slab.kind as keyof typeof SEEN]) })),
-                ...(thrown?.dice ?? []).map((die) => ({ mesh: SHAPES[die.sides], at: die.body.p, turn: turn(die.body), sides: die.sides as Sides | 0, css: "" })),
+                ...(thrown?.dice ?? []).filter((die) => !die.waiting).map((die) => ({ mesh: SHAPES[die.sides], at: die.body.p, turn: turn(die.body), sides: die.sides as Sides | 0, css: "" })),
             ].sort((a, b) => nearness(a.at, eye) - nearness(b.at, eye));
             for (const thing of things) {
                 paint(m.ctx, thing.mesh, thing.turn, {

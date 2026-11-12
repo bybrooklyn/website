@@ -45,8 +45,10 @@ test("every die comes to rest in the tray inside six seconds, and is never insid
     // A die is about 0.8 across, corner to corner. Into the tower or the tray: never more than a thirtieth of that.
     // (a twentieth, since the dice were made to spin three times as fast and ridges were put across the ramps)
     expect(deepest).toBeLessThan(0.045);
-    // Into another die: two that meet spinning fast can overlap by a sixteenth of that for a frame or two.
-    expect(deepestInDie).toBeLessThan(0.06);
+    // Into another die: two that meet spinning fast can overlap by an eighth of that for a frame or two.
+    // (it was a sixteenth while the dice fell as one stack; let in one after another, a die now lands on
+    // the one before it at full speed)
+    expect(deepestInDie).toBeLessThan(0.1);
 }, 120_000);
 
 /** The largest chi-squared a fair die gives one time in a thousand, by how many faces it has. */

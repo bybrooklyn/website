@@ -334,7 +334,8 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
             at = written.size;
             written.set(key, at);
             const [x, y] = [(at % ACROSS) * CELL, Math.floor(at / ACROSS) * CELL];
-            pen.font = `700 ${word.length > 1 ? 74 : 88}px ${view.font}`;
+            // on a sign every word is the same height, so that a row of numbers reads as one line
+            pen.font = `700 ${onSign ? 80 : word.length > 1 ? 74 : 88}px ${view.font}`;
             pen.textAlign = "center";
             pen.textBaseline = "middle";
             pen.fillStyle = "#fff";

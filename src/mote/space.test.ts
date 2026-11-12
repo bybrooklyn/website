@@ -123,3 +123,27 @@ test("a ball of twenty faces bounces as high as its bounce says", () => {
     expect(high - rest).toBeGreaterThan(0.5);
     expect(high - rest).toBeLessThan(1.6);
 });
+
+test("solids that have settled go to sleep, cost nothing, and wake when something lands on them", () => {
+    const space = new Space();
+    space.sleeps = true;
+    space.slab([0, -1, 0], [20, 1, 20]);
+    const lying = space.solid(cube(), [0, 1.01, 0]);
+    for (let i = 0; i < 240; i++) space.step(1 / 120);
+    expect(lying.rest).toBeDefined();
+    expect(space.still()).toBe(true);
+    const [x, y, z] = lying.p;
+    // another dropped on its edge knocks it awake and moves it
+    const falling = space.solid(cube(), [1.2, 6, 0]);
+    let woke = false;
+    for (let i = 0; i < 360; i++) {
+        space.step(1 / 120);
+        woke ||= !lying.rest;
+    }
+    expect(woke).toBe(true);
+    expect(Math.hypot(lying.p[0] - x!, lying.p[1] - y!, lying.p[2] - z!)).toBeGreaterThan(0.01);
+    // and both end at rest on the floor or on each other, not inside it
+    expect(lying.p[1]).toBeGreaterThan(0.9);
+    expect(falling.p[1]).toBeGreaterThan(0.9);
+    expect(space.still()).toBe(true);
+});

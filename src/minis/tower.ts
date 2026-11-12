@@ -28,6 +28,9 @@ const OUT: Record<Sides, V3[]> = Object.fromEntries(SIDES.map((sides) => [sides,
 /** The tower stands at the left of the tray. These are its edges, in units. */
 export const TOWER = { left: -5.6, right: -1, deep: 1.25, top: 8.6 };
 export const TRAY = { left: -5.6, right: 6.4, deep: 3, rim: 0.8 };
+export type Tray = { left: number; right: number; deep: number; rim: number };
+/** The tray for this many dice: the usual one for a handful, longer and deeper for a crowd, so that each die has room to lie flat. */
+export const trayFor = (count: number): Tray => ({ ...TRAY, right: TRAY.right + Math.max(0, count - 20) * 0.11, deep: Math.max(TRAY.deep, 2.4 + count / 30) });
 /** How high the opening at the foot of the tower is. */
 export const OPENING = 4.2;
 /** How thick a wall or a ramp is. */
@@ -56,8 +59,8 @@ const ridge = (highX: number, highY: number, drop: number, x: number): Slab => {
 };
 const tall = TOWER.top + 2.4;
 
-/** Everything that does not move. */
-export const SLABS: Slab[] = [
+/** Everything that does not move, around a tray of the size given. */
+export const slabs = (TRAY: Tray): Slab[] => [
     // the tray's four sides
     { at: [(TRAY.left + TRAY.right) / 2, TRAY.rim / 2, -TRAY.deep], half: [(TRAY.right - TRAY.left) / 2, TRAY.rim / 2, THICK / 2], tip: 0, kind: "tray" },
     { at: [(TRAY.left + TRAY.right) / 2, TRAY.rim / 2, TRAY.deep], half: [(TRAY.right - TRAY.left) / 2, TRAY.rim / 2, THICK / 2], tip: 0, kind: "tray" },
@@ -83,14 +86,21 @@ export const SLABS: Slab[] = [
     ridge(TOWER.left, 4.1, 0.62, -2.5),
 ];
 
+export const SLABS: Slab[] = slabs(TRAY);
+
 export interface Die {
     sides: Sides;
     body: Solid;
+    /** Not yet let into the tower. */
+    waiting: boolean;
 }
 
 export interface Throw {
     dice: Die[];
     space: Space;
+    /** The tray these dice roll out into, and everything that stands still around it. */
+    tray: Tray;
+    slabs: Slab[];
     /** Moves the dice on by `dt` seconds. */
     step(dt: number): void;
     /** Whether every die has come to rest. */
@@ -109,18 +119,27 @@ export interface Throw {
  */
 export const TUNE = { rub: 0.4, bounce: 0.5, spin: 30, damp: 0.03, floor: 2, apart: 1.4, push: 1 };
 
-/** Drops these dice in at the top of the tower, one above another, each turned and spun its own way. `random` gives numbers from 0 to 1. */
+/** How long after one die the next is let into the tower, in seconds. A stream goes down the ramps where a stack would wedge. */
+const BETWEEN = 0.11;
+
+/** Lets these dice into the top of the tower one after another, each turned and spun its own way. `random` gives numbers from 0 to 1. */
 export function throwDice(kinds: Sides[], random: () => number = Math.random): Throw {
     const between = (low: number, high: number) => low + random() * (high - low);
     const space = new Space();
+    space.sleeps = true;
+    const tray = trayFor(kinds.length);
+    const still = slabs(tray);
     // the floor of the tray, and under the tower: felt, which a die grips and tumbles on and does not skate across
-    space.slab([0, -1, 0], [30, 1, 30], undefined, { friction: TUNE.floor });
-    for (const slab of SLABS) space.slab(slab.at, slab.half, angled(0, 0, slab.tip), { friction: TUNE.rub });
+    space.slab([0, -1, 0], [40, 1, 40], undefined, { friction: TUNE.floor });
+    for (const slab of still) space.slab(slab.at, slab.half, angled(0, 0, slab.tip), { friction: TUNE.rub });
 
+    // each die waits far out of the way, and is put at the top of the tower when its turn comes
+    const starts: V3[] = [];
     const dice = kinds.map((sides, index): Die => {
+        starts.push([between(-2.9, -1.9), TOWER.top + 0.9, between(-0.5, 0.5)]);
         const body = space.solid(
             SHAPES[sides],
-            [between(-2.9, -1.9), TOWER.top + 0.6 + index * TUNE.apart, between(-0.5, 0.5)],
+            [index * 4, 500, 0],
             { friction: TUNE.rub, bounce: TUNE.bounce },
             angled(between(0, 6.28), between(0, 6.28), between(0, 6.28)),
         );
@@ -128,19 +147,31 @@ export function throwDice(kinds: Sides[], random: () => number = Math.random): T
         body.w = [between(-1, 1) * TUNE.spin, between(-1, 1) * TUNE.spin, between(-1, 1) * TUNE.spin];
         body.damping = 0.03;
         body.spinDamping = TUNE.damp;
-        return { sides, body };
+        space.hold(body);
+        return { sides, body, waiting: true };
     });
 
     let waited = 0;
+    let [gone, last] = [0, 0];
     return {
         dice,
         space,
+        tray,
+        slabs: still,
         step(dt) {
+            // the next die goes in once its turn has come and the one before has fallen clear of where it starts
+            const [next, start] = [dice[gone], starts[gone]];
+            if (next && start && waited >= gone * BETWEEN && dice.every((die) => die.waiting || Math.hypot(die.body.p[0] - start[0], die.body.p[1] - start[1], die.body.p[2] - start[2]) > 1.5)) {
+                next.waiting = false;
+                next.body.p = start;
+                space.wake(next.body);
+                [gone, last] = [gone + 1, waited];
+            }
             waited += dt;
             space.step(dt);
         },
         // A die that will not lie still is not waited on for ever.
-        done: () => waited > 9 || space.still(),
+        done: () => gone === dice.length && (waited - last > 9 || space.still()),
         values: () => dice.map(shown),
     };
 }

@@ -61,7 +61,7 @@ export function read(text: string): Roll | string {
     }
     const dice = groups.flatMap((group) => Array.from({ length: group.count * (group.sides === 100 ? 2 : 1) }, (): Sides => (group.sides === 100 ? 10 : group.sides)));
     if (dice.length === 0) return "There are no dice in that.";
-    if (dice.length > 16) return "At most 16 dice at once.";
+    if (dice.length > 60) return "At most 60 dice at once.";
     return { groups, plus, dice };
 }
 
@@ -88,11 +88,24 @@ export function total(roll: Roll, shown: number[]): { total: number; said: strin
 }
 
 /**
- * The order dice line up in once they have landed: the kind with the most sides first, and within a
- * kind the highest number first. Gives each die's place in `dice`, in that order.
+ * The numbers a roll came to, one for each die, a d100 being one number though it is two dice: how
+ * many sides, what it showed, and which of the dice in the tower made it.
  */
-export function lineUp(dice: { sides: Sides; value: number }[]): number[] {
-    return dice.map((_, index) => index).sort((a, b) => dice[b]!.sides - dice[a]!.sides || dice[b]!.value - dice[a]!.value || a - b);
+export function numbers(roll: Roll, shown: number[]): { sides: number; value: number; dice: number[] }[] {
+    let next = 0;
+    return roll.groups.flatMap((group) => Array.from({ length: group.count }, () => {
+        if (group.sides !== 100) return { sides: group.sides, value: shown[next]!, dice: [next++] };
+        const [tens, ones] = [next++, next++];
+        return { sides: 100, value: (shown[tens]! % 10) * 10 + (shown[ones]! % 10) || 100, dice: [tens, ones] };
+    }));
+}
+
+/**
+ * The order numbers line up in once the dice have landed: the kind with the most sides first, and
+ * within a kind the highest number first. Gives each one's place in `rolled`, in that order.
+ */
+export function lineUp(rolled: { sides: number; value: number }[]): number[] {
+    return rolled.map((_, index) => index).sort((a, b) => rolled[b]!.sides - rolled[a]!.sides || rolled[b]!.value - rolled[a]!.value || a - b);
 }
 
 /**

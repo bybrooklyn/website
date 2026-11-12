@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { lineUp, read, row, total, type Roll } from "./rolls";
+import { lineUp, numbers, read, row, total, type Roll } from "./rolls";
 
 const ok = (text: string) => read(text) as Roll;
 
@@ -46,9 +46,9 @@ test("landed dice line up by kind, most sides first, then by number, highest fir
     expect(lineUp([...dice]).map((index) => `d${dice[index]!.sides}:${dice[index]!.value}`)).toEqual(["d20:17", "d20:4", "d6:6", "d6:2", "d4:3"]);
 });
 
-test("a row of any number up to sixteen stays inside the picture, wide or narrow, without overlapping", () => {
+test("a row of any number up to sixty stays inside the picture, wide or narrow, without overlapping", () => {
     for (const shape of [0.6, 1, 1.65]) {
-        for (let count = 1; count <= 16; count++) {
+        for (let count = 1; count <= 60; count++) {
             const { size, at } = row(count, shape);
             const places = Array.from({ length: count }, (_, place) => at(place));
             for (const [x, y] of places) {
@@ -58,4 +58,15 @@ test("a row of any number up to sixteen stays inside the picture, wide or narrow
             for (const a of places) for (const b of places) if (a !== b) expect(Math.max(Math.abs(a[0] - b[0]), Math.abs(a[1] - b[1]))).toBeGreaterThanOrEqual(size * 1.19);
         }
     }
+});
+
+test("a d100 is one number in the row, made by two dice, and it leads the row", () => {
+    const rolled = numbers(ok("d100 + 2d6"), [7, 3, 5, 2]);
+    expect(rolled).toEqual([
+        { sides: 100, value: 73, dice: [0, 1] },
+        { sides: 6, value: 5, dice: [2] },
+        { sides: 6, value: 2, dice: [3] },
+    ]);
+    expect(numbers(ok("d100"), [10, 10])[0]!.value).toBe(100);
+    expect(lineUp(rolled)).toEqual([0, 1, 2]);
 });

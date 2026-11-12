@@ -31,6 +31,10 @@
     min-height: calc(clamp(18rem, 62svh, 34rem) + var(--panel-room, 30rem));
 }
 
+.mini-stage[data-mini="dice"] {
+    --panel-room: 22rem;
+}
+
 /* Plinko's controls are shorter than the dice's. */
 .mini-stage[data-mini="plinko"] {
     --panel-room: 24rem;

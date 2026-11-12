@@ -46,8 +46,11 @@ export interface Solid {
     readonly runs: V3[];
     readonly far: number;
     readonly mass: number;
-    readonly im: number;
-    readonly ii: number;
+    /** 1 / mass and 1 / how hard it is to turn: both 0 for something that does not move, or is asleep. */
+    im: number;
+    ii: number;
+    /** Asleep: lying still, and left out of the work until something moving reaches it. What it weighs is kept here meanwhile. */
+    rest?: [im: number, ii: number];
     friction: number;
     bounce: number;
     /** How quickly it slows by itself, per second, moving and turning. */
@@ -376,6 +379,9 @@ export class Space {
     parts = 2;
     /** Slower than this, in units a second, counts as still. */
     slow = 0.12;
+    /** Whether a solid that has lain still for `nap` seconds goes to sleep, and costs nothing until it is knocked. A full tray needs it. */
+    sleeps = false;
+    nap = 0.6;
     /** Told of each pair that met hard this step, and how fast they were closing. For a sound, or a flash. */
     hit?: (a: Solid, b: Solid, speed: number) => void;
     #was: Manifold[] = [];
@@ -410,6 +416,20 @@ export class Space {
         return this.solids.every((solid) => !solid.im || solid.quiet >= seconds);
     }
 
+    /** Holds a solid where it is, as if asleep, until `wake` lets it go: for things let into a scene one after another. */
+    hold(solid: Solid): void {
+        if (!solid.im) return;
+        solid.rest = [solid.im, solid.ii];
+        [solid.im, solid.ii] = [0, 0];
+    }
+
+    wake(solid: Solid): void {
+        if (!solid.rest) return;
+        [solid.im, solid.ii] = solid.rest;
+        solid.rest = undefined;
+        solid.quiet = 0;
+    }
+
     #advance(dt: number): void {
         const { solids } = this;
         const h = dt / this.parts;
@@ -435,6 +455,14 @@ export class Space {
                 }
                 const found = touch(a, b, margin);
                 if (!found) continue;
+                // something asleep is woken by anything that reaches it while moving
+                for (const [lying, other] of [[a, b], [b, a]] as const) {
+                    if (lying.rest && other.im && size(other.v) + size(other.w) * other.far > 8 * this.slow) {
+                        [lying.im, lying.ii] = lying.rest;
+                        lying.rest = undefined;
+                        lying.quiet = 0;
+                    }
+                }
                 const before = this.#was.find((old) => old.a === a && old.b === b);
                 const n = found.n;
                 const t1 = unit(Math.abs(n[0]) < 0.8 ? cross(n, [1, 0, 0]) : cross(n, [0, 1, 0]));
@@ -594,6 +622,10 @@ export class Space {
         for (const s of solids) {
             if (!s.im) continue;
             s.quiet = size(s.v) + size(s.w) * s.far < this.slow ? s.quiet + dt : 0;
+            if (this.sleeps && s.quiet > this.nap) {
+                s.rest = [s.im, s.ii];
+                [s.im, s.ii, s.v, s.w] = [0, 0, [0, 0, 0], [0, 0, 0]];
+            }
         }
     }
 }
