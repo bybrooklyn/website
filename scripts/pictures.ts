@@ -62,8 +62,8 @@ const shots: Record<string, { query?: string; script?: string; wait?: number; ac
     // a roll by link, photographed once the numbers have lined up
     dice: { query: "?roll=2d20%2B2d6%2Bd8%2Bd4%2B3", wait: 15000 },
     blocks: { across: 0.45, from: "bottom" },
-    // a long password's balls, part of the way down
-    plinko: { script: `const length = document.querySelector(".plinko-settings input"); length.value = 40; length.dispatchEvent(new Event("input")); document.querySelector(".dice-go").click();`, wait: 3300, from: "bottom" },
+    // part of the way through a password
+    plinko: { script: `document.querySelector(".dice-go").click();`, wait: 6500 },
 };
 
 function mini(id: string): Wanted["make"] {

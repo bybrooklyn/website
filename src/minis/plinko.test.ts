@@ -6,13 +6,14 @@ import { alphabet, BINS, DEFAULTS, drop, fair, strength, type Settings } from ".
 
 /** Drops the balls and runs the board to its end. */
 function play(settings: Partial<Settings>) {
-    const board = drop({ ...DEFAULTS, ...settings });
-    for (let step = 0; step < 120 * 40 && !board.done(); step++) board.step(1 / 120);
+    // the balls are let go much faster than on the page, so that thousands can be dropped
+    const board = drop({ ...DEFAULTS, ...settings }, undefined, undefined, 0.05);
+    for (let step = 0; step < 120 * 60 && !board.done(); step++) board.step(1 / 120);
     return board;
 }
 
 test("the password is exactly as long as asked for, at any length and on any board", () => {
-    for (const settings of [{ length: 4, rows: 5 }, { length: 16 }, { length: 64, rows: 12, bounce: 0.8, gravity: 0.5 }, { length: 64, rows: 5, bounce: 0.2, gravity: 1.6 }]) {
+    for (const settings of [{ length: 4, rows: 5 }, { length: 16 }, { length: 64, rows: 11, bounce: 0.8, gravity: 0.5 }, { length: 64, rows: 5, bounce: 0.2, gravity: 1.6 }]) {
         const board = play(settings);
         expect(board.done()).toBe(true);
         expect(board.password()).toHaveLength(settings.length);
@@ -26,7 +27,7 @@ test("every character comes up as often as chance says, on every kind of board, 
     const counts = new Map<string, number>();
     const bins = Array.from({ length: BINS }, () => 0);
     let late = 0;
-    const boards = [{ rows: 9 }, { rows: 5, bounce: 0.8 }, { rows: 12, gravity: 1.6 }, { rows: 7, bounce: 0.2, gravity: 0.5 }];
+    const boards = [{ rows: 8 }, { rows: 5, bounce: 0.8 }, { rows: 11, gravity: 1.6 }, { rows: 7, bounce: 0.2, gravity: 0.5 }];
     for (let round = 0; round < 100; round++) {
         const board = play({ ...settings, ...boards[round % boards.length] });
         late += board.late;
@@ -57,4 +58,13 @@ test("the characters are the kinds chosen, small letters if none are, and streng
     expect(alphabet({ lower: false, upper: false, digits: false, symbols: false })).toBe("abcdefghijklmnopqrstuvwxyz");
     expect(alphabet(DEFAULTS)).toHaveLength(86);
     expect(strength({ ...DEFAULTS, length: 10, lower: false, upper: false, symbols: false })).toBeCloseTo(10 * Math.log2(10));
+});
+
+test("on the page a short password takes its time and a long one does not take all day", () => {
+    for (const [length, least, most] of [[16, 6, 16], [64, 10, 24]] as const) {
+        const board = drop({ ...DEFAULTS, length });
+        while (!board.done() && board.time < 60) board.step(1 / 120);
+        expect(board.time).toBeGreaterThan(least);
+        expect(board.time).toBeLessThan(most);
+    }
 });

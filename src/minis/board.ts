@@ -3,10 +3,10 @@
 //
 // A Plinko board is not fair: a ball ends up near the middle far more often than at the edges. So
 // the board alone does not choose a character. Every bin shows a character drawn fairly from the
-// browser's secure source of chance, and the whole row is drawn again each time a ball lands. Which
-// bin a ball reaches has nothing to do with what that bin holds at that moment, so every character
-// is as likely as every other, whatever the board does. The password is the characters in the order
-// the balls landed.
+// browser's secure source of chance, and a bin that catches a ball gives its character up and is
+// given a new one. Which bin a ball reaches has nothing to do with what that bin holds, so every
+// character is as likely as every other, whatever the board does. The balls go one after another,
+// and the password is the characters in the order they landed.
 
 import { Flat, send, speed, type Body } from "../mote/flat";
 
@@ -23,8 +23,8 @@ export interface Settings {
     gravity: number;
 }
 
-export const DEFAULTS: Settings = { length: 16, lower: true, upper: true, digits: true, symbols: true, rows: 9, bounce: 0.5, gravity: 1 };
-export const LIMITS = { length: [4, 64], rows: [5, 12], bounce: [0.2, 0.8], gravity: [0.5, 1.6] } as const;
+export const DEFAULTS: Settings = { length: 16, lower: true, upper: true, digits: true, symbols: true, rows: 8, bounce: 0.55, gravity: 1 };
+export const LIMITS = { length: [4, 64], rows: [5, 11], bounce: [0.2, 0.8], gravity: [0.5, 1.6] } as const;
 
 const KINDS = {
     lower: "abcdefghijklmnopqrstuvwxyz",
@@ -55,23 +55,28 @@ export function fair(below: number, source: (into: Uint32Array) => unknown = (in
 }
 
 // The board is measured in the units of Mote's 2D physics, which are a screen's pixels.
-export const PEG = 7;
-export const BALL = 9;
+export const PEG = 11;
+export const BALL = 14;
 /** From one peg to the next along a row, and from one row to the next. */
-export const ACROSS = 46;
-export const DOWN = 44;
-export const BINS = 12;
+export const ACROSS = 60;
+export const DOWN = 52;
+export const BINS = 9;
 export const WIDTH = BINS * ACROSS;
 /** Above the first row, where the balls come in, and how deep the bins are. */
-const HEAD = 80;
-export const BIN = 56;
+const HEAD = 70;
+export const BIN = 70;
+/** The pull down, in the physics' own units: slow enough that a ball can be followed from peg to peg. */
+const PULL = 1150;
 /** A ball that has not landed this long after it was let go is given its character without the board. */
 const PATIENCE = 14;
 
+/** How long after one ball the next is let go, in seconds: unhurried for a short password, quicker for a long one. */
+export const pace = (length: number): number => Math.max(0.16, Math.min(0.45, 9 / length));
+
 export interface Landing {
-    /** Which bin, where the ball was when it landed, and the character the bin showed. */
+    /** Which bin, the ball that landed in it, and the character the bin showed. */
     bin: number;
-    x: number;
+    ball: Body;
     character: string;
 }
 
@@ -99,20 +104,20 @@ export interface Board {
 }
 
 /**
- * Sets a board up and lets `settings.length` balls go, a few at a time from the top. `pick` gives the
- * fair numbers characters are chosen with; `chance` only scatters where the balls start, and need not
- * be fair.
+ * Sets a board up and lets `settings.length` balls go from the top, one every `every` seconds. `pick`
+ * gives the fair numbers characters are chosen with; `chance` only scatters where the balls start, and
+ * need not be fair.
  */
-export function drop(settings: Settings, pick: (below: number) => number = fair, chance: () => number = Math.random): Board {
+export function drop(settings: Settings, pick: (below: number) => number = fair, chance: () => number = Math.random, every = pace(settings.length)): Board {
     const letters = alphabet(settings);
     const shelf = HEAD + settings.rows * DOWN;
     const height = shelf + BIN;
-    const flat = new Flat(2600 * settings.gravity);
-    const stuff = { bounce: settings.bounce, friction: 0.1 };
+    const flat = new Flat(PULL * settings.gravity);
+    const stuff = { bounce: settings.bounce, friction: 0.05 };
 
     // the sides and the floor, and a short wall between each bin and the next
     flat.wall([[0, -400], [0, height], [WIDTH, height], [WIDTH, -400]]);
-    for (let wall = 1; wall < BINS; wall++) flat.bar(wall * ACROSS, shelf + BIN / 2, BIN, 5, { fixed: true, friction: 0.1, angle: Math.PI / 2 });
+    for (let wall = 1; wall < BINS; wall++) flat.bar(wall * ACROSS, shelf + BIN / 2, BIN, 6, { fixed: true, friction: 0.05, angle: Math.PI / 2 });
     // the pegs: each row set half a step across from the one above, so a ball cannot fall straight through
     const pegs: Body[] = [];
     // (and one peg shorter, so that no ball is caught between a peg and the side)
@@ -133,10 +138,10 @@ export function drop(settings: Settings, pick: (below: number) => number = fair,
         time: 0,
         late: 0,
         step(dt) {
-            // a few balls a moment, each from its own place along the top with a little push
-            while (let_go < settings.length && board.time >= let_go * 0.07) {
-                const ball = flat.ball(WIDTH * (0.15 + chance() * 0.7), -BALL - chance() * 60, BALL, stuff);
-                send(ball, (chance() - 0.5) * 240, 0);
+            // one ball after another, each from its own place near the middle of the top with a little push
+            while (let_go < settings.length && board.time >= let_go * every) {
+                const ball = flat.ball(WIDTH * (0.3 + chance() * 0.4), -BALL, BALL, stuff);
+                send(ball, (chance() - 0.5) * 120, 0);
                 balls.set(ball, undefined);
                 born.set(ball, board.time);
                 let_go++;
@@ -156,16 +161,16 @@ export function drop(settings: Settings, pick: (below: number) => number = fair,
                 if (ball.y > shelf + BALL || late) {
                     const bin = Math.max(0, Math.min(BINS - 1, Math.floor(ball.x / ACROSS)));
                     // the bin's character as it stands; one that never arrived is given a character drawn the same fair way
-                    const landing = { bin, x: ball.x, character: late ? draw() : shown[bin]! };
+                    const landing = { bin, ball, character: late ? draw() : shown[bin]! };
                     landings.push(landing);
                     if (late) board.late++;
                     balls.set(ball, board.time);
-                    // and every bin is given a new one, before the next ball lands
-                    for (let each = 0; each < BINS; each++) shown[each] = draw();
+                    // and the bin is given a new one, for the next ball it catches
+                    shown[bin] = draw();
                     board.landed?.(landing);
                 } else if (ball.asleep || (speed(ball) < 4 && ball.y > 0)) {
                     // come to rest on a peg or on another ball: a push to one side
-                    send(ball, (chance() - 0.5) * 160, -40);
+                    send(ball, (chance() - 0.5) * 120, -30);
                 }
             }
         },
