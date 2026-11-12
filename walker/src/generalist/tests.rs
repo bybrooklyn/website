@@ -99,7 +99,7 @@ fn the_checker_finds_what_cannot_be_crossed_and_the_land_puts_it_right() {
         assert!(check::possible(&land.geometry, -5.0, land.reached.x - 0.3, &reach));
     }
     // and what can be crossed is left alone
-    for piece in [Piece::new(Kind::Gap, 1.2, 0.0, 2.0), Piece::new(Kind::Ledge, 0.4, 0.0, 2.0), Piece::new(Kind::BoxLedge, 0.7, 0.2, 2.0), Piece::new(Kind::Mover, 4.5, 1.0, 2.0), Piece::new(Kind::Seesaw, 1.5, 0.45, 2.0), Piece::new(Kind::Drop, 1.3, 0.0, 2.0)] {
+    for piece in [Piece::new(Kind::Gap, 0.6, 0.0, 2.0), Piece::new(Kind::Ledge, 0.2, 0.0, 2.0), Piece::new(Kind::BoxLedge, 0.38, 0.1, 2.0), Piece::new(Kind::Mover, 4.5, 1.0, 2.0), Piece::new(Kind::Seesaw, 1.5, 0.35, 2.0), Piece::new(Kind::Drop, 1.2, 0.0, 2.0)] {
         assert!(check::piece_possible(&piece, &reach), "{piece:?} should be crossable");
     }
     // a shorter reach finds less crossable

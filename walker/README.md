@@ -397,24 +397,24 @@ The hardest each piece can be, at difficulty d, is a straight line between its v
 
 | | d = 0 | d = 1 |
 |---|---|---|
-| widest gap | 0.3 m | 1.2 m |
-| far side of a gap higher or lower by | 0 | 0.2 m |
-| tallest stair step | 0.05 m | 0.2 m |
+| widest gap | 0.2 m | 0.6 m |
+| far side of a gap higher or lower by | 0 | 0.08 m |
+| tallest stair step | 0.04 m | 0.12 m |
 | most stair steps | 2 | 6 |
-| highest ledge | 0.1 m | 0.36 m |
-| highest ledge with a box | 0.4 m | 0.7 m |
-| deepest drop | 0.3 m | 1.3 m |
-| steepest slope, rise over run | 0.08 | 0.45 |
-| gap between floating platforms | 0.4 m | 1.1 m |
-| floating platforms above the ground | 0.05 m | 0.3 m |
-| widest water | 0.4 m | 1.1 m |
-| widest spikes | 0.3 m | 1.0 m |
+| highest ledge | 0.08 m | 0.2 m |
+| highest ledge with a box | 0.25 m | 0.38 m |
+| deepest drop | 0.3 m | 1.2 m |
+| steepest slope, rise over run | 0.08 | 0.4 |
+| gap between floating platforms | 0.25 m | 0.55 m |
+| floating platforms above the ground | 0.03 m | 0.12 m |
+| widest water | 0.25 m | 0.6 m |
+| widest spikes | 0.2 m | 0.55 m |
 | widest gap a moving platform crosses | 2 m | 4.5 m |
 | its top speed | 0.4 m/s | 1 m/s |
-| highest see-saw pivot | 0.15 m | 0.45 m |
+| highest see-saw pivot | 0.12 m | 0.35 m |
 | level ground after each piece | 4 m | 1.6 m |
 
-So, with everything switched on, there are 1.6 things in every 10 m at difficulty 0 and 2.3 at
+So, with everything switched on, there are 1.6 things in every 10 m at difficulty 0 and 2.5 at
 difficulty 1. The tests measure each of these over many worlds.
 
 ### Every world can be crossed
@@ -423,12 +423,38 @@ Before a piece is laid it is checked (`src/generalist/check.rs`): the world is s
 stand on (ground not steeper than 0.7, platform tops, a loose box's top anywhere it can be pushed
 along level ground, a moving platform anywhere along its way, a see-saw tipped either way, with
 hazards cut out), and one surface can be reached from another if a jump of the creature's reach gets
-from the nearest point of one to the nearest point of the other. That reach is a step of 0.15 m, a
-climb of 0.45 m and a leap of 1.5 m over level ground; a jump that lands `rise` higher goes
-`leap / 2 * (1 + sqrt(1 - rise / climb))`, as a thrown stone does. A piece that cannot be crossed is
-made easier by a fifth, again and again, and given up for level ground if it never can be. The tests
-lay 4,400 worlds of 150 m across every difficulty and check each whole: every one can be crossed, and
-the table is close enough to the reach that a piece needs making easier about once in 3,000.
+from the nearest point of one to the nearest point of the other. That reach is a step of 0.12 m, a
+climb of 0.22 m and a leap of 0.7 m over level ground, a little under what the body was measured to
+do (below); a jump that lands `rise` higher goes `leap / 2 * (1 + sqrt(1 - rise / climb))`, as a
+thrown stone does. A piece that cannot be crossed is made easier by a fifth, again and again, and
+given up for level ground if it never can be. The tests lay 4,400 worlds of 150 m across every
+difficulty and check each whole: every one can be crossed. The table keeps within the reach, so no
+planned piece has needed making easier; the checker is there for pieces given whole, by a link or a
+teacher.
+
+### The body
+
+The Walker's two- and four-legged creatures, their rounded bodies, eyes and feet as they were, with
+a hop (`src/generalist/body.rs`). Its brain gives the Walker's three numbers for each joint, which
+shape each joint's swing to the legs' rhythm, and one more, the hop. When that goes above a half with
+a foot down, the creature crouches (slowly enough that its feet stay down), then springs: every knee
+straightens at once, 2.2 times as strong and nearly three times as quick as walking allows, while each
+hip keeps the line from hip to foot where it should be and follows the knee as it moves, so the push
+goes through the body rather than turning it. The spring ends when the feet leave the ground; in the
+air the legs are held ready to land; after landing it waits half a second before it can hop again.
+
+A hop kicked every body tried head over heels until it was made hard to tip. So the two-legged one
+holds short arms out wide, as someone on a tightrope does: they are stiff, so they are counted in its
+body, which is ten times as hard to tip as a plain block of its size; the page draws them. The
+four-legged one carries its weight spread along its back, three times as hard to tip. How each holds
+its legs in a hop was found by trying 540 ways and keeping the steadiest that went forward
+(`cargo test --release find_how -- --ignored --nocapture`).
+
+Measured with its legs held to the Walker's built-in stride, or standing, and one hop at the best
+moment: two legs hop up a ledge of 0.48 m and over a gap of 0.86 m from standing (its stride no longer
+walks with its arms out, so it gets up steps by hopping); four legs walk up 0.24 m and hop over 0.76 m
+from a walk. The checker's reach is a little under the lesser of each, and the tests hold both bodies
+to doing at least that much.
 
 ### What the physics gained for it
 

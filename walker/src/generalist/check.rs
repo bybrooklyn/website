@@ -31,7 +31,7 @@ pub struct Reach {
     pub leap: f32,
 }
 
-pub const REACH: Reach = Reach { step: 0.15, climb: 0.45, leap: 1.5 };
+pub const REACH: Reach = Reach { step: 0.12, climb: 0.22, leap: 0.7 };
 
 /// Ground steeper than this, as rise over run, cannot be walked on.
 pub const STEEPEST: f32 = 0.7;

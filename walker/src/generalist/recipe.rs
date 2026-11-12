@@ -155,7 +155,7 @@ impl Piece {
             Kind::Ledge | Kind::Drop | Kind::Water | Kind::Spikes => Piece { a: a * 0.8, ..self },
             Kind::Platforms => Piece { a: a * 0.8, b: b * 0.8, ..self },
             Kind::Box => self,
-            Kind::BoxLedge => Piece { a: a * 0.85, ..self },
+            Kind::BoxLedge => Piece { a: a * 0.85, b: b * 0.85, ..self },
             Kind::Mover => Piece { a: a * 0.85, ..self },
             Kind::Seesaw => Piece { b: b * 0.8, ..self },
         };
@@ -170,15 +170,15 @@ pub struct Table;
 impl Table {
     /// The widest gap, in metres.
     pub fn gap(d: f32) -> f32 {
-        lerp(0.3, 1.2, d)
+        lerp(0.2, 0.6, d)
     }
     /// The most the far side of a gap is above or below the near side.
     pub fn gap_rise(d: f32) -> f32 {
-        lerp(0.0, 0.2, d)
+        lerp(0.0, 0.08, d)
     }
     /// The tallest step of a stair.
     pub fn stair(d: f32) -> f32 {
-        lerp(0.05, 0.2, d)
+        lerp(0.04, 0.12, d)
     }
     /// The most steps in a stair.
     pub fn stairs(d: f32) -> f32 {
@@ -186,37 +186,37 @@ impl Table {
     }
     /// The highest ledge to climb with nothing to stand on.
     pub fn ledge(d: f32) -> f32 {
-        lerp(0.1, 0.36, d)
+        lerp(0.08, 0.2, d)
     }
     /// The deepest drop.
     pub fn drop(d: f32) -> f32 {
-        lerp(0.3, 1.3, d)
+        lerp(0.3, 1.2, d)
     }
     /// The steepest slope, as rise over run.
     pub fn slope(d: f32) -> f32 {
-        lerp(0.08, 0.45, d)
+        lerp(0.08, 0.4, d)
     }
     /// How far apart floating platforms are, and the most they are above the ground before them.
     pub fn platform_gap(d: f32) -> f32 {
-        lerp(0.4, 1.1, d)
+        lerp(0.25, 0.55, d)
     }
     pub fn platform_height(d: f32) -> f32 {
-        lerp(0.05, 0.3, d)
+        lerp(0.03, 0.12, d)
     }
     /// The widest pool of water and the widest spikes.
     pub fn water(d: f32) -> f32 {
-        lerp(0.4, 1.1, d)
+        lerp(0.25, 0.6, d)
     }
     pub fn spikes(d: f32) -> f32 {
-        lerp(0.3, 1.0, d)
+        lerp(0.2, 0.55, d)
     }
     /// The biggest loose box, as half its size.
     pub fn box_half(d: f32) -> f32 {
-        lerp(0.12, 0.2, d)
+        lerp(0.08, 0.1, d)
     }
     /// The highest ledge with a box before it.
     pub fn box_ledge(d: f32) -> f32 {
-        lerp(0.4, 0.7, d)
+        lerp(0.25, 0.38, d)
     }
     /// The widest gap a moving platform crosses, and its fastest speed.
     pub fn mover(d: f32) -> f32 {
@@ -227,7 +227,7 @@ impl Table {
     }
     /// The highest pivot of a see-saw.
     pub fn seesaw(d: f32) -> f32 {
-        lerp(0.15, 0.45, d)
+        lerp(0.12, 0.35, d)
     }
     /// The level ground after each piece, in metres: shorter is harder, as things come closer
     /// together. Drawn at 70 to 130 percent of this.
@@ -293,7 +293,7 @@ impl Plan {
                     2 => Piece::new(Kind::Stairs, (Table::stairs(d) * (0.5 + 0.5 * self.random.unit()) + 0.5) as u32 as f32, sign * Table::stair(d) * hard, run),
                     3 => Piece::new(Kind::Ledge, Table::ledge(d) * hard, 0.0, run),
                     4 => Piece::new(Kind::Drop, Table::drop(d) * hard, 0.0, run),
-                    _ => Piece::new(Kind::Platforms, Table::platform_gap(d) * hard, Table::platform_height(d) * (self.random.unit() * 2.0 - 0.5), run),
+                    _ => Piece::new(Kind::Platforms, Table::platform_gap(d) * hard, Table::platform_height(d) * (self.random.unit() * 1.5 - 0.5), run),
                 }
             }
             Some(HAZARDS) => {

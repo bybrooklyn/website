@@ -220,7 +220,8 @@ pub struct Land {
     /// Where pieces come from: a recipe's plan, or a list given whole, after which the way is level.
     plan: Option<Plan>,
     given: Vec<Piece>,
-    reach: Reach,
+    /// The reach pieces are checked against, or none, to lay them as given.
+    reach: Option<Reach>,
 }
 
 impl Land {
@@ -240,10 +241,21 @@ impl Land {
         land
     }
 
+    /// A world from a list of pieces laid exactly as given, crossable or not, then level ground: for
+    /// measuring what the body can do.
+    pub fn from_pieces_unchecked(pieces: &[Piece], until: f32) -> Land {
+        let mut given: Vec<Piece> = pieces.iter().map(|piece| piece.sane()).collect();
+        given.reverse();
+        let mut land = Land::empty(None, given);
+        land.reach = None;
+        land.extend(until);
+        land
+    }
+
     fn empty(plan: Option<Plan>, given: Vec<Piece>) -> Land {
         let mut geometry = Geometry::default();
         geometry.ground.push(Segment { a: Vec2::new(-START_BEHIND, 0.0), b: Vec2::new(START_AHEAD, 0.0) });
-        Land { geometry, pieces: Vec::new(), starts: Vec::new(), reached: Vec2::new(START_AHEAD, 0.0), eased: 0, replaced: 0, plan, given, reach: REACH }
+        Land { geometry, pieces: Vec::new(), starts: Vec::new(), reached: Vec2::new(START_AHEAD, 0.0), eased: 0, replaced: 0, plan, given, reach: Some(REACH) }
     }
 
     /// Lays pieces until the way reaches at least `until` metres.
@@ -264,8 +276,9 @@ impl Land {
     /// The piece, or the piece made easier until a body of the creature's reach can cross it, or
     /// level ground if it never can be.
     fn crossable(&mut self, mut piece: Piece) -> Piece {
+        let Some(reach) = self.reach else { return piece };
         for _ in 0..10 {
-            if check::piece_possible(&piece, &self.reach) {
+            if check::piece_possible(&piece, &reach) {
                 return piece;
             }
             piece = piece.easier();
