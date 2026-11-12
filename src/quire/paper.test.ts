@@ -1,0 +1,55 @@
+// What the paper and the zoom are held to: each paper's size, turned for landscape; the @page rule
+// print is given; a page setup kept only by a `.quire` document; zoom steps that stop at half and
+// twice; and fitting a sheet to the room it has. The sheet itself is used in editor.test.ts.
+
+import { expect, test } from "bun:test";
+import { fitZoom, pageRule, paperSize, percent, setPage, setupItems, stepZoom, ZOOMS } from "./paper";
+import { read } from "./read";
+import { PAGE } from "./styling";
+
+test("each paper is its size in millimetres, and landscape turns it on its side", () => {
+    expect(paperSize({ size: "A4", orientation: "portrait", margins: 25 })).toEqual({ width: 210, height: 297 });
+    expect(paperSize({ size: "Letter", orientation: "landscape", margins: 25 })).toEqual({ width: 279.4, height: 215.9 });
+    expect(paperSize({ size: "A5", orientation: "portrait", margins: 25 })).toEqual({ width: 148, height: 210 });
+});
+
+test("print is given the page's paper, which way up, and its margins", () => {
+    expect(pageRule({ size: "Letter", orientation: "landscape", margins: 12.7 })).toBe("@page { size: Letter landscape; margin: 12.7mm; }");
+});
+
+test("a page setup is kept by a .quire document, and a Markdown file has none to keep", () => {
+    const rich = { ...read("Words.\n"), quire: { page: PAGE, notes: null } };
+    expect(setPage(rich, { ...PAGE, size: "A5" }).quire?.page.size).toBe("A5");
+    const plain = read("Words.\n");
+    expect(setPage(plain, { ...PAGE, size: "A5" })).toBe(plain);
+});
+
+test("zoom steps go from half to twice the size and stop there, and a zoom between steps goes to the next one", () => {
+    expect(ZOOMS[0]).toBe(0.5);
+    expect(ZOOMS[ZOOMS.length - 1]).toBe(2);
+    expect(stepZoom(1, 1)).toBe(1.1);
+    expect(stepZoom(1, -1)).toBe(0.9);
+    expect(stepZoom(2, 1)).toBe(2);
+    expect(stepZoom(0.5, -1)).toBe(0.5);
+    expect(stepZoom(1.3, 1)).toBe(1.5);
+    expect(stepZoom(1.3, -1)).toBe(1.25);
+    expect(percent(0.667)).toBe("67%");
+});
+
+test("fitting the width fills the room, never past twice or below a quarter, and is 1 with nothing to measure", () => {
+    expect(fitZoom(794, 794)).toBe(1);
+    expect(fitZoom(397, 794)).toBe(0.5);
+    expect(fitZoom(5000, 794)).toBe(2);
+    expect(fitZoom(100, 794)).toBe(0.25);
+    expect(fitZoom(0, 794)).toBe(1);
+});
+
+test("page setup offers the three papers, both ways up and three margins, pressing what the page has, and says only what changes", () => {
+    const changes: object[] = [];
+    const items = setupItems({ size: "Letter", orientation: "landscape", margins: 25 }, (change) => changes.push(change));
+    expect(items.filter((item) => item.pressed).map((item) => item.label)).toEqual(["Letter", "Landscape", "Normal"]);
+    expect(items.filter((item) => item.note).map((item) => item.label)).toEqual(["Paper", "Which way up", "Margins"]);
+    items.find((item) => item.label === "A5")!.run();
+    items.find((item) => item.label === "Narrow")!.run();
+    expect(changes).toEqual([{ size: "A5" }, { margins: 12.7 }]);
+});

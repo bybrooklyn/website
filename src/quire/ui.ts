@@ -24,6 +24,7 @@ const PATHS: Record<string, string> = {
     number: '<path d="M4 5.5h1.5V10M4 10h3M4 14.5c0-1 .7-1.5 1.5-1.5s1.5.5 1.5 1.3c0 1.2-3 2.2-3 3.7h3"/><path d="M10.5 7h9M10.5 12h9M10.5 17h9"/>',
     task: '<rect x="3.5" y="4.5" width="5" height="5" rx="1.2"/><path d="m4.6 16 1.4 1.4 2.6-2.8"/><path d="M11.5 7h8M11.5 16h8"/>',
     plus: '<path d="M12 5v14M5 12h14"/>',
+    minus: '<path d="M5 12h14"/>',
     code: '<path d="m9 8-4 4 4 4M15 8l4 4-4 4"/>',
     center: '<path d="M5 6h14M8 10h8M5 14h14M8 18h8"/>',
     undo: '<path d="M9 7 5 11l4 4"/><path d="M5 11h9a5 5 0 0 1 0 10h-2"/>',
@@ -171,6 +172,8 @@ export interface MenuItem {
     pressed?: boolean;
     /** A line that tells something and does nothing, such as the word count. */
     note?: boolean;
+    /** A choice among the lines of the same group: pressing it leaves the menu open, pressed in place of the one that was. */
+    group?: string;
     run: () => void;
 }
 
@@ -317,12 +320,14 @@ export function flowMenu(label: string, options: { align?: "left" | "right"; cla
                     line.setAttribute("role", "menuitem");
                     line.style.setProperty("--line-at", String(index));
                     if (item.pressed) line.classList.add("pressed");
+                    if (item.group) line.dataset.group = item.group;
                     if (item.icon) line.append(typeof item.icon === "string" ? icon(item.icon) : item.icon);
                     line.append(make("span", "quire-menu-label", item.label));
                     if (item.hint) line.append(make("span", "quire-menu-hint", item.hint));
                     line.addEventListener("mousedown", (event) => event.preventDefault());
                     line.addEventListener("click", () => {
-                        menu.close(false);
+                        if (item.group) for (const other of items.querySelectorAll<HTMLElement>(`[data-group="${item.group}"]`)) other.classList.toggle("pressed", other === line);
+                        else menu.close(false);
                         item.run();
                     });
                     items.append(line);

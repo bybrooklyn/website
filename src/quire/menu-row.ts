@@ -34,7 +34,7 @@ export type RowActions = Partial<Record<Command, () => void>> & { file?: () => M
 
 /** Every command the row can hold. */
 export type Command =
-    | "turnRich" | "download" | "downloadQuire" | "print" | "history"
+    | "turnRich" | "download" | "downloadQuire" | "print" | "history" | "pageSetup" | "zoom"
     | "undo" | "redo" | "selectAll" | "link" | "find" | "replace"
     | "outline" | "markdown"
     | "table" | "picture" | "divider" | "code" | "footnote" | "bullet" | "number" | "task"
@@ -53,6 +53,7 @@ export function headings(state: RowState, act: RowActions): Heading[] {
                 ...(state.rich ? line("downloadQuire", "Download", { hint: ".quire" }) : []),
                 ...line("download", state.rich ? "Download as Markdown" : "Download", { hint: ".md" }),
                 ...line("history", "Version history"),
+                ...(state.rich ? line("pageSetup", "Page setup", { hint: "›" }) : []),
                 ...line("print", "Print", { hint: "Ctrl+P" }),
             ],
         },
@@ -72,6 +73,7 @@ export function headings(state: RowState, act: RowActions): Heading[] {
             items: () => [
                 ...line("outline", "Outline", { icon: "outline", pressed: state.outline }),
                 ...line("markdown", "The Markdown beside the page", { pressed: state.markdown }),
+                ...line("zoom", "Zoom", { hint: "›" }),
             ],
         },
         {

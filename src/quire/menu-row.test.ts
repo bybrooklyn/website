@@ -6,7 +6,7 @@
 import { expect, test } from "bun:test";
 import { headings, type Command, type RowActions } from "./menu-row";
 
-const all: Command[] = ["turnRich", "download", "downloadQuire", "print", "history", "undo", "redo", "selectAll", "link", "outline", "markdown", "table", "picture", "divider", "code", "footnote", "bullet", "number", "task", "bold", "italic", "underline", "strike", "inline", "paragraph", "heading1", "heading2", "heading3", "quote", "color", "size", "font", "highlight", "spacing", "left", "center", "right", "justify"];
+const all: Command[] = ["turnRich", "download", "downloadQuire", "print", "history", "undo", "redo", "selectAll", "link", "outline", "markdown", "table", "picture", "divider", "code", "footnote", "bullet", "number", "task", "bold", "italic", "underline", "strike", "inline", "paragraph", "heading1", "heading2", "heading3", "quote", "color", "size", "font", "highlight", "spacing", "left", "center", "right", "justify", "pageSetup", "zoom"];
 const every: RowActions = Object.fromEntries(all.map((command) => [command, () => {}]));
 const lines = (rich: boolean, act = every) => Object.fromEntries(headings({ rich, outline: true, markdown: false, words: 1204 }, act).map((heading) => [heading.label, heading.items().map((item) => (item.hint ? `${item.label} ${item.hint}` : item.label))]));
 
@@ -20,7 +20,7 @@ test("the row has its six words, and each command is in its menu by name with it
     expect(seen.Tools![0]).toBe("1,204 words");
     // every command given is somewhere in the row
     const labels = Object.values(lines(true)).flat().concat(Object.values(lines(false)).flat()).join("\n");
-    for (const word of ["Turn into a .quire document", "Download .quire", "Download as Markdown .md", "Print Ctrl+P", "Version history", "Outline", "The Markdown beside the page", "Horizontal line", "Code block", "Footnote", "Checklist"]) expect(labels).toContain(word);
+    for (const word of ["Turn into a .quire document", "Download .quire", "Download as Markdown .md", "Print Ctrl+P", "Version history", "Page setup ›", "Zoom ›", "Outline", "The Markdown beside the page", "Horizontal line", "Code block", "Footnote", "Checklist"]) expect(labels).toContain(word);
 });
 
 test("what a Markdown file cannot keep is offered only for a .quire document, and turning one into a .quire only for Markdown", () => {

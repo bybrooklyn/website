@@ -44,37 +44,41 @@
     padding: calc(var(--line) * 1.5) var(--edge) calc(var(--line) * 3);
 }
 
-/* The sheet being written on: an A-series page (1 : 1.414), centred, at least one sheet tall and
-   growing with what is written. It is plainly lighter than the ground around it, with a clear
-   edge and no glow. A faint line marks where each further sheet would begin. The line of text
-   is a published post's. */
+/* The sheet being written on: the paper page setup chose (paper.ts sets its size and margins in
+   millimetres), at its real size times the zoom, centred, at least one sheet tall and growing with
+   what is written. It is plainly lighter than the ground around it, with a clear edge and no glow.
+   A faint line marks where each further sheet would begin. The text fills it from top to bottom,
+   so a press anywhere on it writes. A new paper eases to its size. */
 .quire-paper {
-    --sheet: 1.41421;
+    --paper-w: 210;
+    --paper-h: 297;
+    --margin: 25;
     container-type: inline-size;
     position: relative;
     box-sizing: border-box;
-    width: 100%;
-    aspect-ratio: 1 / var(--sheet);
-    padding: clamp(var(--line), 7cqw, calc(var(--line) * 3)) clamp(1.25rem, 9cqw, 6rem) calc(var(--line) * 3);
+    display: flex;
+    flex-direction: column;
+    justify-self: safe center;
+    width: calc(var(--paper-w) * 1mm);
+    aspect-ratio: var(--paper-w) / var(--paper-h);
+    padding: calc(var(--margin) * 1mm);
+    zoom: var(--zoom, 1);
     border: 0.0625rem solid var(--sheet-edge);
     border-radius: calc(var(--radius) * 1.2);
     background:
-        repeating-linear-gradient(to bottom, transparent 0 calc(100cqw * var(--sheet) - 0.0625rem), color-mix(in oklch, var(--panel-edge), transparent 45%) calc(100cqw * var(--sheet) - 0.0625rem) calc(100cqw * var(--sheet))),
+        repeating-linear-gradient(to bottom, transparent 0 calc(var(--paper-h) * 1mm - 0.0625rem), color-mix(in oklch, var(--panel-edge), transparent 45%) calc(var(--paper-h) * 1mm - 0.0625rem) calc(var(--paper-h) * 1mm)),
         var(--sheet-ground);
-}
-
-/* the text fills the sheet from top to bottom, so a press anywhere on it writes */
-.quire-paper {
-    display: flex;
-    flex-direction: column;
+    transition:
+        width 0.45s var(--ease),
+        aspect-ratio 0.45s var(--ease),
+        padding 0.45s var(--ease);
 }
 
 /* everything on the sheet keeps to the text's line: the title, the welcome, a post's fields */
 .quire-paper > :not(.quire-caret) {
     box-sizing: border-box;
     width: 100%;
-    max-width: 44rem;
-    margin-inline: auto;
+    max-width: none;
 }
 
 .quire-paper > .quire {
@@ -87,7 +91,6 @@
     display: block;
     box-sizing: border-box;
     width: 100%;
-    max-width: 44rem;
     margin: 0 auto calc(var(--line) * 1.5);
     padding: 0;
     border: 0;
@@ -1369,6 +1372,11 @@
 
 /* side by side, the page and its Markdown are a matched pair: one row, the same top and bottom */
 @media (min-width: 60.01rem) {
+    /* a sheet zoomed wider than its room is scrolled along; on a narrower window the Markdown slides in from the side, and is not to be scrolled to */
+    .quire-column {
+        overflow-x: auto;
+    }
+
     .quire-editor.markdown .quire-panes {
         align-items: stretch;
     }
@@ -1906,9 +1914,10 @@ body.quire-app {
     overflow: clip;
 }
 
-/* with nothing open the bar has nothing to act on: it fades away, and on a narrow window gives back its line */
+/* with nothing open the bar and the zoom have nothing to act on: they fade away, and on a narrow window the bar gives back its line */
 .quire-bar-home,
-.quire-editor > .quire-bar {
+.quire-editor > .quire-bar,
+.quire-zoom {
     transition:
         opacity 0.3s ease,
         translate 0.4s var(--ease),
@@ -1916,7 +1925,8 @@ body.quire-app {
 }
 
 .quire-bar-home.away,
-.quire-editor.shelved > .quire-bar {
+.quire-editor.shelved > .quire-bar,
+.quire-editor.shelved .quire-zoom {
     opacity: 0;
     translate: 0 -0.5rem;
     visibility: hidden;
@@ -2105,6 +2115,7 @@ body.quire-app {
     .quire-alt,
     .quire-file,
     .quire-raw,
+    .quire-zoom,
     .quire-caret {
         display: none !important;
     }
@@ -2125,7 +2136,11 @@ body.quire-app {
         display: block;
     }
 
+    /* the paper's size and margins are given to print by an @page rule (paper.ts), and the sheet is the page's width */
     .quire-paper {
+        width: auto;
+        aspect-ratio: auto;
+        zoom: 1;
         padding: 0;
         border: 0;
         background: none;
@@ -2341,5 +2356,33 @@ body.quire-app {
     .quire-menu-row * {
         transition-duration: 0s !important;
         transition-delay: 0s !important;
+    }
+}
+
+/* The zoom, a small control at the window's lower right that says how near the sheet is seen; on a
+   narrow window the sheet is the window's width with the text at its own size, and there is no zoom. */
+.quire-zoom {
+    position: fixed;
+    right: var(--edge);
+    bottom: var(--edge);
+    z-index: 3;
+    padding-inline: 0.6rem;
+    border: 0.0625rem solid var(--rule);
+    background: var(--ground);
+    font-size: 0.8rem;
+    font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 40rem) {
+    .quire-paper {
+        width: 100%;
+        aspect-ratio: 1 / 1.41421;
+        padding: var(--line) 1.25rem calc(var(--line) * 3);
+        zoom: 1;
+    }
+
+    .quire-zoom {
+        opacity: 0;
+        visibility: hidden;
     }
 }
