@@ -210,4 +210,43 @@ used("a menu grows open over time, past its size and back, and with less motion 
     expect(tab.errors).toEqual([]);
 });
 
+used("the selection bar grows out of a selection over time, marks it, and its link field sets a link", async () => {
+    await reset("Some words to select here\n", [0], 5);
+    await tab.press("End");
+    await reset("Some words to select here\n", [0], 5);
+    const watching = tab.run<number[]>("q.watch('.quire-select-bar', 'opacity', 500)");
+    for (let index = 0; index < 5; index++) await tab.press("ArrowRight", { shift: true });
+    const opacities = await watching;
+    expect(opacities[0]).toBe(0);
+    expect(opacities[opacities.length - 1]).toBe(1);
+    expect(opacities.filter((value) => value > 0 && value < 1).length).toBeGreaterThan(1);
+    // it sits above the selection and does not cover it
+    const sides = await tab.run<{ bar: number; text: number }>("(() => { const r = getSelection().getRangeAt(0).getBoundingClientRect(); return { bar: document.querySelector('.quire-select-bar').getBoundingClientRect().bottom, text: r.top }; })()");
+    expect(sides.bar).toBeLessThanOrEqual(sides.text);
+
+    await press(".quire-select-bar button", "Italic");
+    expect(await md()).toBe("Some *words* to select here\n");
+    await press(".quire-select-bar button", "Link");
+    await tab.wait(300);
+    expect(await tab.run("document.activeElement.className")).toBe("quire-link-field");
+    await tab.type("https://example.com");
+    await tab.press("Enter");
+    await tab.wait(100);
+    expect(await md()).toBe("Some [*words*](https://example.com) to select here\n");
+
+    // a cursor alone, and the bar shrinks away
+    await tab.press("ArrowRight");
+    await tab.wait(400);
+    expect(await tab.run("getComputedStyle(document.querySelector('.quire-select-bar')).visibility")).toBe("hidden");
+
+    // Escape in the field goes back without a link
+    await reset("Some words\n", [0], 0, [0], 4);
+    await tab.wait(400);
+    await press(".quire-select-bar button", "Link");
+    await tab.wait(300);
+    await tab.type("nowhere");
+    await tab.press("Escape");
+    expect(await md()).toBe("Some words\n");
+});
+
 if (!live) console.warn("editor.test.ts: no Chromium on this machine, so the editor was not used.");

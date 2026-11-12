@@ -53,6 +53,11 @@ export function icon(name: string): SVGSVGElement {
     return svg;
 }
 
+/** A letter drawn the way its button's mark looks: B bold, I italic, and so on. */
+export function glyph(letter: string, look: string): HTMLElement {
+    return make("span", `quire-glyph quire-glyph-${look}`, letter);
+}
+
 /** A button with a label for screen readers (shown as its tooltip too) that leaves the document's selection where it is when pressed. */
 export function control(label: string, content: string | Node, press: (button: HTMLButtonElement) => void, className = "quire-button"): HTMLButtonElement {
     const button = make("button", className);

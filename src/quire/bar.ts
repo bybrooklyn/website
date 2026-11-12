@@ -39,7 +39,7 @@ import {
 import type { State } from "./history";
 import { activeBlock, caret, collapsed, mark, rangeOf, sameLeaf, tableOf } from "./keys";
 import type { Surface } from "./surface";
-import { closeOthers, control, dots, flowMenu, icon, make, moveIndex, type Menu, type MenuItem } from "./ui";
+import { closeOthers, control, dots, flowMenu, glyph, icon, make, moveIndex, type Menu, type MenuItem } from "./ui";
 
 /** What a button does: from the state at the cursor to the next one. */
 export type Action = (state: State) => State;
@@ -569,11 +569,6 @@ export function createBar(surface: Surface, options: BarOptions): { element: HTM
         menus,
         layout,
     };
-}
-
-/** A letter drawn the way its button's mark looks: B bold, I italic, and so on. */
-function glyph(letter: string, look: string): HTMLElement {
-    return make("span", `quire-glyph quire-glyph-${look}`, letter);
 }
 
 /** A small sample of what a style looks like, for its line in the picker. */

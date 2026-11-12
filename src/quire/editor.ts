@@ -10,6 +10,7 @@ import { createBar, link as linkAction } from "./bar";
 import { linkAt } from "./bar";
 import { type Document } from "./document";
 import { collapsed } from "./keys";
+import { createSelectBar } from "./select-bar";
 import { createSurface, type Surface } from "./surface";
 import { flowMenu, linkForm, make, type MenuItem } from "./ui";
 import { write } from "./write";
@@ -112,6 +113,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     });
     column.append(bar.element, paper, opener);
     surface.on("link", () => openLink(bar.element.querySelector<HTMLElement>('[aria-label^="Link"]')!));
+    const selectBar = createSelectBar(surface, () => bar.element.getBoundingClientRect().bottom);
 
     return {
         surface,
@@ -119,6 +121,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         destroy() {
             surface.destroy();
             for (const menu of [...bar.menus, links]) menu.box.remove();
+            selectBar.element.remove();
             host.replaceChildren();
         },
     };

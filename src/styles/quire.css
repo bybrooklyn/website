@@ -566,6 +566,75 @@
     color: var(--accent);
 }
 
+/* ---- the selection bar ----
+   It grows out of the top edge of the selected text (or the bottom edge when it sits below),
+   a little past its size and back, and shrinks away plainly when the selection goes. */
+
+.quire-select-bar {
+    position: fixed;
+    z-index: 60;
+    display: flex;
+    padding: 0.2rem;
+    border: 0.0625rem solid color-mix(in oklch, var(--accent) 55%, var(--rule));
+    border-radius: 1.25rem;
+    background: var(--surface);
+    font-family: var(--font-text);
+    font-size: 0.95rem;
+    line-height: 1;
+    opacity: 0;
+    scale: 0.55;
+    transform-origin: 50% 100%;
+    visibility: hidden;
+    pointer-events: none;
+    overflow: hidden;
+    transition:
+        opacity 0.16s ease,
+        scale 0.25s var(--ease),
+        width 0.4s cubic-bezier(0.3, 1.4, 0.4, 1),
+        visibility 0s linear 0.25s;
+}
+
+.quire-select-bar.below {
+    transform-origin: 50% 0;
+}
+
+.quire-select-bar.shown {
+    opacity: 1;
+    scale: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transition:
+        opacity 0.15s ease,
+        scale 0.45s cubic-bezier(0.3, 1.5, 0.4, 1),
+        left 0.25s var(--ease),
+        top 0.25s var(--ease),
+        width 0.4s cubic-bezier(0.3, 1.4, 0.4, 1),
+        visibility 0s;
+}
+
+/* placed before it grows, it does not glide in from where it was last */
+.quire-select-bar.placing {
+    transition: none;
+}
+
+.quire-select-row {
+    display: flex;
+    align-items: center;
+    gap: 0.05rem;
+}
+
+.quire-select-rule {
+    flex: none;
+    width: 0.0625rem;
+    height: 1.2rem;
+    margin-inline: 0.25rem;
+    background: var(--rule);
+}
+
+.quire-select-bar .quire-link {
+    padding-left: 0.1rem;
+}
+
 @media (prefers-reduced-motion: reduce) {
     .quire-box,
     .quire-bar-group,
@@ -577,7 +646,9 @@
     .quire-menu.open,
     .quire-menu-items > *,
     .quire-menu.open .quire-menu-items > *,
-    .quire-menu-line {
+    .quire-menu-line,
+    .quire-select-bar,
+    .quire-select-bar.shown {
         transition: none;
     }
 }
