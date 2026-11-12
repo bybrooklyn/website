@@ -96,8 +96,27 @@ const count = (set: string) => all.filter((photo) => photo.set === set).length;
         let next = -1;
         let busy = false;
 
-        // Every picture in the set comes up once, in a shuffled order, before any repeats.
+        // Every picture in the set comes up once, in a shuffled order, before any repeats. The order
+        // still to come is kept in the browser between visits, so that coming back carries on through
+        // the pictures not yet seen and does not start again on ones seen last time.
+        const kept = () => `photos-to-come-${set}`;
+        const recall = (not: number): number[] => {
+            try {
+                const names = JSON.parse(localStorage.getItem(kept()) ?? "[]") as string[];
+                return names.map((name) => all.findIndex((photo) => photo.src === name && photo.set === set)).filter((index) => index >= 0 && index !== not);
+            } catch {
+                return [];
+            }
+        };
+        const keep = () => {
+            try {
+                localStorage.setItem(kept(), JSON.stringify(waiting.map((index) => all[index]!.src)));
+            } catch {
+                // without storage each visit is shuffled afresh, as before
+            }
+        };
         const draw = (not: number): number => {
+            if (waiting.length === 0) waiting = recall(not);
             if (waiting.length === 0) {
                 waiting = all.map((_, index) => index).filter((index) => all[index]!.set === set && index !== not);
                 for (let index = waiting.length - 1; index > 0; index--) {
@@ -105,23 +124,35 @@ const count = (set: string) => all.filter((photo) => photo.set === set).length;
                     [waiting[index], waiting[other]] = [waiting[other]!, waiting[index]!];
                 }
             }
-            return waiting.pop() ?? not;
+            const drawn = waiting.pop() ?? not;
+            keep();
+            return drawn;
         };
 
-        // Resolves once the picture is fetched and decoded, so it can be shown whole.
-        // It asks for the same size the page will, so the two share one download.
+        // Resolves once the picture is fetched and decoded, so it can be shown whole: true if it
+        // came, false if it is not there to be had (a page left open since before a picture was
+        // taken off the site still lists it). It asks for the same size the page will, so the two
+        // share one download.
         const sizes = figure.dataset.sizes ?? "100vw";
-        const ready = async (photo: Shown) => {
+        const ready = async (photo: Shown): Promise<boolean> => {
             const loading = new Image();
+            const came = new Promise<boolean>((done) => {
+                loading.onload = () => done(true);
+                loading.onerror = () => done(false);
+            });
             loading.sizes = sizes;
             loading.srcset = photo.srcset;
             loading.src = photo.src;
+            if (!(await came)) return false;
             try {
                 await loading.decode();
             } catch {
                 // A picture that will not decode is shown as it is.
             }
+            return true;
         };
+        /** How many pictures in a row have not been there. After a few the page stops looking. */
+        let missing = 0;
         const pause = (ms: number) => new Promise((done) => setTimeout(done, ms));
 
         // The old picture fades and drifts out, the new one is put in while nothing
@@ -133,14 +164,20 @@ const count = (set: string) => all.filter((photo) => photo.set === set).length;
             if (busy) return;
             busy = true;
             const photo = all[index]!;
-            const loaded = ready(photo).then(() => true);
+            const loaded = ready(photo);
+            // a picture that is not there is passed over for another, without a hole being shown
+            const pass = () => {
+                busy = false;
+                if (++missing <= 5) void show(draw(index));
+            };
             if (image.src && !still) {
                 figure.dataset.state = "leaving";
                 await pause(LEAVE);
             }
             // A picture that is slow to arrive is not waited for: its place is shown at
             // once, in its shape and main color, and the picture fills it when it comes.
-            const here = await Promise.race([loaded, pause(image.src ? 150 : 0).then(() => false)]);
+            const here = await Promise.race([loaded.then((came) => (came ? "here" : "gone")), pause(image.src ? 150 : 0).then(() => "late")]);
+            if (here === "gone") return pass();
             figure.dataset.state = "arriving";
             image.style.backgroundColor = photo.color;
             image.style.setProperty("--shape", `${photo.width} / ${photo.height}`);
@@ -153,13 +190,19 @@ const count = (set: string) => all.filter((photo) => photo.set === set).length;
                 image.srcset = photo.srcset;
                 image.src = photo.src;
             };
-            if (here) put();
-            else {
+            if (here === "here") {
+                missing = 0;
+                put();
+            } else {
                 image.classList.add("waiting");
                 image.removeAttribute("srcset");
                 image.src = BLANK;
-                void loaded.then(() => {
-                    if (image.alt === photo.title && image.classList.contains("waiting")) put();
+                void loaded.then((came) => {
+                    if (image.alt !== photo.title || !image.classList.contains("waiting")) return;
+                    if (came) {
+                        missing = 0;
+                        put();
+                    } else if (!busy) pass();
                 });
             }
             document.querySelector(".photo-title")!.textContent = photo.title;
