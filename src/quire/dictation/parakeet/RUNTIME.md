@@ -308,7 +308,10 @@ pause, with a line in the panel. The delays of the real engine are in the report
 
 ## Not confirmed
 
-- A real warm start with the browser's code cache; memory after `release()` on the card.
+- The memory growth is measured against a browser that other browsers share the machine with; the numbers in MODELS.md are deltas, and good only to a few hundred MB.
+- A person's speech in the live words: every figure is for `espeak-ng`. Redux, the more fragile model, needed more context than Ultra to be right on it.
+- The live words with fewer than 8 threads (a laptop with 4 cores gets 2): between the one-thread result (it falls behind and writes at the pause) and the 8-thread one was only calculated, not run.
+- Safari: `require-corp` isolation should give it threads, and WebGPU there is not available to test.
 - w4a8's word error over a large sample; accuracy of a person's voice rather than `espeak-ng`.
 - Anything in section 2, and the native WebGPU builds on other browsers or GPUs than the two used here.
-- Phones and Safari: WebGPU there was not available to test; `detect()` falls back to WASM when it is not.
+- Phones: not tried; Tiny is the default there.
