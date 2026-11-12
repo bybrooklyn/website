@@ -68,7 +68,7 @@ All numbers are metres, kilograms, seconds and radians, with y up and angles ant
 A run of a set length ends when the body has gone that far, earning 1 for each second it had to
 spare, or when it has had as long as a pace of 0.4 m/s allows (and no less than the goal's own
 time). Its distance counts no further than its length. With no set length, training scores runs
-of the goal's own time, and the walk on screen is endless: it is the same run for those first
+of the goal's own time, but never less than ten seconds, and the walk on screen is endless: it is the same run for those first
 seconds, then goes on with the same brain while the walker stays up. So training still compares
 brains on runs of one length, and what is seen is where the best of them goes after that.
 - `ground_room(pieces: u32) -> *mut f32`
@@ -114,8 +114,8 @@ lean under 0.35 radians) and high (over 0.7 of its standing height) earns 0.5, a
 its feet taking turns earns 0.4: for two legs exactly one foot down, for four one diagonal pair
 down and the other up, for one leg its foot down in the second half of each stride and up in the
 first. Each second of a foot sliding along the ground faster than 0.3 m/s costs 0.5, and each
-change in the brain's outputs from one step to the next costs 0.002 for its size, so the legs
-swing rather than twitch. Then, by goal:
+change in the brain's outputs from one step to the next costs 0.002 for its size, for every goal,
+a jumper's too, so the legs swing rather than twitch. Then, by goal:
 
 - **Go far** (0): the distance the body went forward in 10 s, plus 0.25 for each second on its feet
   and 0.5 for each second in the air going forward (which is how a one-legged walker gets anywhere).
@@ -157,6 +157,13 @@ The weights are, in order, layer by layer from the inputs to the outputs: for ea
 layer its weight for everything coming into it, then that layer's biases. The inputs are the senses
 and then the memory; the outputs are the legs' and then the memory's. Memory is fed back in on the
 next step and starts at zero at the start of every run, so a run played again is the same run.
+
+A first brain's weights are drawn at random, each layer's no larger than the square root of one
+over what comes in to each neuron, so that a wide layer starts near the middle of tanh rather than
+pinned at its ends; biases start at up to 0.1, and the weights that make memory at half size, so
+memory fed back in does not grow on itself. An output may change by at most 0.17 a step (a full
+swing in a fifth of a second), as a muscle can only tighten so fast; this is in the brain, so
+training sees it too.
 
 The page offers three sizes by name: small (8 neurons, 1 layer, no memory), medium (16, 2 layers,
 4 memories) and large (32, 3 layers, 8 memories). Most of a generation's time goes to the physics,

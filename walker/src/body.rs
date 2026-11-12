@@ -129,7 +129,7 @@ const KNEE_SWING: (f32, f32, f32) = (-0.6, 0.5, 0.6);
 /// How much further a jumper's joints may swing than a walker's.
 const LEAP_REACH: f32 = 1.6;
 /// How firmly a hopper on the ground turns its body back toward upright, for each radian of tilt.
-const HOP_LEAN: f32 = 1.5;
+const HOP_LEAN: f32 = 3.0;
 /// How much of its torque a hopper's hip uses while its foot is down.
 const HOP_STANCE_GRIP: f32 = 0.15;
 /// The parcel a carrier has on its back: a small box, which slides where a ball would roll away, its
@@ -386,7 +386,7 @@ impl Creature {
             (line + lean * tilt + 0.1 * lean * torso.spin - 0.5 * (knee + knee_speed * STEP * 2.0), thrust)
         } else {
             // in the air: fold, and put the foot where the landing will set the speed right
-            let wanted = 0.9 + 0.6 * o(0);
+            let wanted = 0.8 + 0.4 * o(0);
             let answer = 0.06 + 0.05 * o(1);
             let ahead = torso.velocity.x * 0.12 + answer * (torso.velocity.x - wanted);
             let along = clamp(ahead / (self.description.build().upper + self.description.build().lower), -0.6, 0.6);

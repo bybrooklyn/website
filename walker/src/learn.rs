@@ -122,6 +122,8 @@ const SLOWEST: f32 = 0.4;
 /// A run ends if the body has gone less than this far in the last this many steps (four seconds).
 const STALL_DISTANCE: f32 = 0.2;
 const STALL_STEPS: u32 = 240;
+/// The shortest run a walker with no set length is trained on, in seconds.
+const ENDLESS_SECONDS: f32 = 10.0;
 /// What stopping costs a jumper, in metres of score: more than putting a foot in a gap does.
 const STALL_COST: f32 = 2.0;
 /// What each second left over earns a run that reached its length, in metres of score.
@@ -213,7 +215,9 @@ impl Judge {
     pub fn outcome(&self, creature: &Creature, world: &World) -> Outcome {
         let distance = creature.distance(world);
         let fell = if self.seconds_down >= DOWN_LIMIT { FALL_COST } else { 0.0 };
-        let manner = if self.goal == Goal::Jump { 0.0 } else { CARRIED_REWARD * self.seconds_carried + TURNS_REWARD * self.seconds_turns - SLIDE_COST * self.seconds_sliding - JERK_COST * self.jerk };
+        // twitching costs every goal, a jumper's too; the rest of the manner of moving does not count
+        // against a leap
+        let manner = if self.goal == Goal::Jump { 0.0 } else { CARRIED_REWARD * self.seconds_carried + TURNS_REWARD * self.seconds_turns - SLIDE_COST * self.seconds_sliding } - JERK_COST * self.jerk;
         let costs = fell + DOWN_COST * self.seconds_down + KNEE_COST * self.seconds_kneeling + WORK_COST * self.work - manner;
         let tall = self.tallness / self.steps.max(1) as f32;
         let early = if self.finished { EARLY_REWARD * (self.most_steps - self.steps.min(self.most_steps)) as f32 * STEP } else { 0.0 };
@@ -398,7 +402,10 @@ pub fn flat_ground() -> Vec<Segment> {
 impl Trainer {
     pub fn new(description: Description, settings: Settings, ground: &[Segment], seed: u64) -> Option<Trainer> {
         let population = settings.population.max(2);
-        let seconds = if settings.seconds > 0.0 { settings.seconds } else { settings.goal.seconds() };
+        // with no set length the walk on screen is endless, so no run is shorter than ten seconds: a walker
+        // scored on four seconds would be seen going on untrained, rearing and falling over
+        let goal_seconds = if settings.length.is_finite() { settings.goal.seconds() } else { settings.goal.seconds().max(ENDLESS_SECONDS) };
+        let seconds = if settings.seconds > 0.0 { settings.seconds } else { goal_seconds };
         let settings = Settings { population, seconds, keep: settings.keep.min(population - 1), ..settings };
         let description = Description { carry: settings.goal == Goal::Carry, leap: settings.goal == Goal::Jump, ..description };
         let mut start = World::new();
@@ -409,8 +416,8 @@ impl Trainer {
         let mut random = Random::new(seed);
         let count = layout.weights();
         // first weights about as large as keeps each neuron's sum near its useful range
-        let spread = 2.0 / sqrt(layout.inputs as f32);
-        let population = (0..settings.population * count).map(|_| (random.unit() * 2.0 - 1.0) * spread).collect();
+        let scales = layout.scales();
+        let population = (0..settings.population).flat_map(|_| scales.iter().map(|scale| (random.unit() * 2.0 - 1.0) * scale).collect::<Vec<f32>>()).collect();
         Some(Trainer {
             description,
             settings,
@@ -529,6 +536,25 @@ impl Trainer {
             }
         }
         best
+    }
+
+    /// Runs one brain from the start as `run` does and gives back the judge that watched it, for what it
+    /// counted along the way.
+    pub fn judge_of(&mut self, weights: &[f32]) -> Judge {
+        self.world.copy_from(&self.start);
+        self.brain.forget();
+        let creature = &self.creature;
+        let mut judge = self.judge();
+        loop {
+            creature.sense(&self.world, &mut self.senses);
+            self.brain.think(weights, &self.senses);
+            creature.drive(&mut self.world, &self.brain.outputs);
+            self.world.step();
+            if judge.after_step(creature, &self.world, &self.brain.outputs) {
+                break;
+            }
+        }
+        judge
     }
 
     /// Runs one brain from the start under a judge of the caller's, as a live attempt is judged.
@@ -717,7 +743,7 @@ mod tests {
 
     #[test]
     fn every_goal_is_learned_better_over_the_generations() {
-        let (first, last) = learns(Goal::Fast, &flat_ground(), 25);
+        let (first, last) = learns(Goal::Fast, &flat_ground(), 40);
         assert!(last.score > first.score + 1.0 && last.distance > 2.0, "fast: {} then {}", first.score, last.score);
         let (first, last) = learns(Goal::Tall, &flat_ground(), 25);
         assert!(last.score > first.score + 1.0, "tall: {} then {}", first.score, last.score);
@@ -744,6 +770,61 @@ mod tests {
             assert!(furthest.windows(2).all(|pair| pair[1] >= pair[0]), "the furthest never goes down");
             assert!(climber.furthest > 5.0, "{legs} legs went {} m in 60 attempts", climber.furthest);
         }
+    }
+
+    /// How much the brain's outputs change in a step, on average for each output.
+    fn twitch(trainer: &mut Trainer, weights: &[f32]) -> f32 {
+        let judge = trainer.judge_of(weights);
+        judge.jerk / (judge.steps.max(1) as f32 * trainer.layout.outputs as f32)
+    }
+
+    // Measured before the fix, a four-legged walker with an own brain of four layers of 64 and eight
+    // memories, going fast, changed each output by 0.36 a step at generation 0 (flipping it nearly
+    // end to end) and 0.19 after 50 generations; a medium brain, 0.04 and 0.10. After it, a medium
+    // brain changes each output by about 0.01 at generation 0 and 0.07 once trained; the largest own
+    // brain, trained, two-legged, 0.12 going far and 0.13 going fast, against the 0.17 a muscle allows.
+    const CALM_AT_FIRST: f32 = 0.03;
+    const CALM_TRAINED: f32 = 0.15;
+
+    #[test]
+    fn no_brain_of_any_size_twitches_on_any_goal_first_or_trained() {
+        let sizes = [("small", 8, 1, 0), ("medium", 16, 2, 4), ("large", 32, 3, 8), ("own", 64, 4, 8)];
+        let goals = [Goal::Far, Goal::Fast, Goal::Tall, Goal::Jump, Goal::Course, Goal::Carry];
+        for (name, hidden, layers, memory) in sizes {
+            for goal in goals {
+                let settings = Settings { goal, hidden, layers, memory, ..Settings::default() };
+                let mut trainer = Trainer::new(Description { legs: 2, carry: false, leap: false }, settings, &flat_ground(), 2).unwrap();
+                let first = trainer.weights(0).to_vec();
+                let at_first = twitch(&mut trainer, &first);
+                assert!(at_first < CALM_AT_FIRST, "{name}, {goal:?}: generation 0 twitches {at_first}");
+                if goal == Goal::Far || goal == Goal::Fast {
+                    while trainer.generation < 50 {
+                        trainer.train(64);
+                    }
+                    let best = trainer.best.clone();
+                    let trained = twitch(&mut trainer, &best);
+                    assert!(trained < CALM_TRAINED, "{name}, {goal:?}: trained twitches {trained}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_owners_walker_four_legs_a_brain_of_four_layers_of_64_going_fast_is_calm_and_learns() {
+        let settings = Settings { goal: Goal::Fast, hidden: 64, layers: 4, memory: 8, ..Settings::default() };
+        let mut trainer = Trainer::new(Description { legs: 4, carry: false, leap: false }, settings, &flat_ground(), 3).unwrap();
+        let first = trainer.weights(0).to_vec();
+        let at_first = twitch(&mut trainer, &first);
+        trainer.train(32);
+        let first_best = trainer.best_score;
+        while trainer.generation < 50 {
+            trainer.train(64);
+        }
+        let best = trainer.best.clone();
+        let trained = twitch(&mut trainer, &best);
+        std::println!("four legs, own 64x4, memory 8, fast: twitch {at_first:.4} at first, {trained:.4} after 50; best {first_best:.1} then {:.1}", trainer.best_score);
+        assert!(at_first < CALM_AT_FIRST && trained < CALM_TRAINED);
+        assert!(trainer.best_score > first_best + 2.0, "the large brain still learns");
     }
 
     #[test]

@@ -291,12 +291,13 @@ test("an endless walk goes past its run's time, takes a better brain without sta
     // it went on past the ten seconds a training run lasts, unless it fell
     if (!walker.show_over()) expect(walker.show_seconds()).toBeGreaterThan(13);
     const before = walker.show_seconds();
+    const fell = walker.show_over() === 1;
     new Float32Array(walker.memory.buffer, walker.weights_room(), count).set(floats(walker, walker.population_weights(), count));
     expect(walker.weights_swap()).toBe(1);
-    if (!walker.show_over()) {
-        walker.show_step(0.1);
-        expect(walker.show_seconds()).toBeGreaterThan(before);
-    }
+    walker.show_step(0.1);
+    // a walk still going takes the new brain and goes on; one that had fallen starts again with it
+    if (fell) expect(walker.show_seconds()).toBeLessThan(0.2);
+    else expect(walker.show_seconds()).toBeGreaterThan(before);
     expect(walker.show_origin()).toBe(0);
 });
 

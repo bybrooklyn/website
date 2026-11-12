@@ -14,7 +14,7 @@
 use alloc::vec;
 use alloc::vec::Vec;
 
-use crate::math::tanh;
+use crate::math::{clamp, tanh};
 
 /// Hidden neurons in a layer when nothing else is asked for. Enough for a gait, few enough to learn in
 /// minutes.
@@ -23,6 +23,9 @@ pub const HIDDEN: usize = 12;
 pub const MOST_HIDDEN: usize = 64;
 pub const MOST_LAYERS: usize = 4;
 pub const MOST_MEMORY: usize = 16;
+/// The most an output may change in one step, out of its range of 2: a full swing takes a fifth of a
+/// second.
+pub const MOST_CHANGE: f32 = 0.17;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Layout {
@@ -52,6 +55,26 @@ impl Layout {
         core::iter::once(self.inputs + self.memory).chain(core::iter::repeat_n(self.hidden, self.layers)).chain(core::iter::once(self.outputs + self.memory))
     }
 
+    /// How large each first weight should be, weight by weight in the list's order: for a layer, the
+    /// square root of one over what comes in to each neuron, so that a neuron's sum starts near the
+    /// middle of tanh however wide the layer before it is. Biases start small, and so do the weights
+    /// that make memory, so that memory fed back in does not grow on itself.
+    pub fn scales(&self) -> Vec<f32> {
+        let sizes: Vec<usize> = self.sizes().collect();
+        let mut scales = Vec::with_capacity(self.weights());
+        for (at, pair) in sizes.windows(2).enumerate() {
+            let (incoming, neurons) = (pair[0], pair[1]);
+            let weight = crate::math::sqrt(1.0 / incoming as f32);
+            let last = at == sizes.len() - 2;
+            for neuron in 0..neurons {
+                let memory = last && neuron >= self.outputs;
+                scales.extend(core::iter::repeat_n(if memory { 0.5 * weight } else { weight }, incoming));
+            }
+            scales.extend(core::iter::repeat_n(0.1, neurons));
+        }
+        scales
+    }
+
     /// How many weights a brain of this shape has.
     pub fn weights(&self) -> usize {
         let sizes: Vec<usize> = self.sizes().collect();
@@ -73,6 +96,8 @@ pub struct Brain {
     pub outputs: Vec<f32>,
     /// What the brain is keeping for its next step.
     pub memory: Vec<f32>,
+    /// Whether this brain's outputs have been given yet in this run; the first are taken as they are.
+    started: bool,
     /// Room for what comes in, and for what the last layer gives before it is split.
     incoming: Vec<f32>,
     last: Vec<f32>,
@@ -98,6 +123,7 @@ impl Brain {
             hidden: vec![0.0; layout.neurons()],
             outputs: vec![0.0; layout.outputs],
             memory: vec![0.0; layout.memory],
+            started: false,
             incoming: vec![0.0; layout.inputs + layout.memory],
             last: vec![0.0; layout.outputs + layout.memory],
         }
@@ -106,6 +132,7 @@ impl Brain {
     /// Empties the memory, for the start of a run.
     pub fn forget(&mut self) {
         self.memory.iter_mut().for_each(|value| *value = 0.0);
+        self.started = false;
     }
 
     /// Runs the senses and the memory through the network with the given weights. The answer is in
@@ -120,7 +147,12 @@ impl Brain {
             rest = layer(rest, &before[(at - 1) * size..], &mut after[..size]);
         }
         layer(rest, &self.hidden[(layers - 1) * size..], &mut self.last);
-        self.outputs.copy_from_slice(&self.last[..outputs]);
+        // an output may move only so far in a step, as a muscle can only tighten so fast: a brain
+        // that flips its answer every step moves the legs no faster than one that means it
+        for (output, &wanted) in self.outputs.iter_mut().zip(&self.last[..outputs]) {
+            *output = if self.started { *output + clamp(wanted - *output, -MOST_CHANGE, MOST_CHANGE) } else { wanted };
+        }
+        self.started = true;
         self.memory.copy_from_slice(&self.last[outputs..]);
     }
 }
