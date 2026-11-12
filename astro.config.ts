@@ -88,7 +88,8 @@ export default defineConfig({
     },
     integrations: [
         mdx(),
-        sitemap(),
+        // the sheet of the site's controls is for deciding on them, not for visitors to find
+        sitemap({ filter: (page) => !page.includes("/controls/") }),
         resumePdf(),
         cspCheck(),
         privateLinks(),
