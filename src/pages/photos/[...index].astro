@@ -126,6 +126,9 @@ const count = (set: string) => all.filter((photo) => photo.set === set).length;
 
         // The old picture fades and drifts out, the new one is put in while nothing
         // shows, and then it fades and settles in with its heading just behind it.
+        /** A set asked for while a picture is still changing, and how a set is switched to. */
+        let later: string | undefined;
+        let pick: (name: string) => void = () => {};
         const show = async (index: number) => {
             if (busy) return;
             busy = true;
@@ -169,19 +172,29 @@ const count = (set: string) => all.filter((photo) => photo.set === set).length;
             next = draw(index);
             void ready(all[next]!);
             busy = false;
+            // a set asked for while a picture was changing is switched to now, not forgotten
+            if (later) {
+                const name = later;
+                later = undefined;
+                pick(name);
+            }
         };
 
         buttons.hidden = all.length < 2;
         buttons.addEventListener("click", (event) => {
             const button = (event.target as Element).closest<HTMLElement>("button");
             if (button?.dataset.step) void show(next);
-            else if (button?.dataset.set && button.dataset.set !== set && !busy) {
-                set = button.dataset.set;
-                waiting = [];
-                for (const other of buttons.querySelectorAll<HTMLElement>("[data-set]")) other.setAttribute("aria-pressed", String(other.dataset.set === set));
-                void show(draw(-1));
+            else if (button?.dataset.set && button.dataset.set !== set) {
+                if (busy) later = button.dataset.set;
+                else pick(button.dataset.set);
             }
         });
+        pick = (name) => {
+            set = name;
+            waiting = [];
+            for (const other of buttons.querySelectorAll<HTMLElement>("[data-set]")) other.setAttribute("aria-pressed", String(other.dataset.set === set));
+            void show(draw(-1));
+        };
         document.addEventListener("keydown", (event) => {
             if (event.key === "ArrowRight" && !event.ctrlKey && !event.metaKey && !event.altKey) void show(next);
         });

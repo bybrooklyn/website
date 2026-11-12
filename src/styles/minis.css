@@ -59,6 +59,11 @@
     cursor: grabbing;
 }
 
+.mote canvas {
+    user-select: none;
+    -webkit-user-select: none;
+}
+
 .mote canvas:focus {
     outline: none;
 }

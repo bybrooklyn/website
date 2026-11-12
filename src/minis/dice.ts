@@ -72,10 +72,13 @@ const FAR = 5;
 
 /** A number on its way from a die to the row: where it left from, and its place in the row. */
 interface Lifted {
+    /** How wide its words are, in figures: neighbours in the row are spaced for the widest. */
+    figures: number;
     dice: number[];
     number: Part;
     kind: Part;
-    from: { at: V3; turn: Turn; size: number };
+    /** Where it left its die. A number that came from no die (what is added on) has none, and grows in its place. */
+    from?: { at: V3; turn: Turn; size: number };
     arrived: boolean;
 }
 
@@ -184,6 +187,8 @@ export default function dice(m: Mote): Scene {
         const roll = read(text);
         if (typeof roll === "string") return say(roll);
         show(throwDice(roll.dice, chance));
+        // a roll opened from a link is no longer the one in the address once another is made
+        if (m.link.get("roll") && m.link.get("roll") !== what) m.link.set("roll", null);
         waiting = { roll, what };
         last = what;
         say("Rolling…");
@@ -208,7 +213,7 @@ export default function dice(m: Mote): Scene {
         if (view && !m.preview && waiting) {
             const rolled = numbers(waiting.roll, values);
             lifted = lineUp(rolled).map((place) => {
-                const { sides, value, dice: [index = 0] } = rolled[place]!;
+                const { sides, value, dropped, sign, dice: [index = 0] } = rolled[place]!;
                 const die = thrown!.dice[index]!;
                 const turned = turn(die.body);
                 let from: Lifted["from"];
@@ -220,13 +225,25 @@ export default function dice(m: Mote): Scene {
                     const [x, y, z] = [apply(turned, cross(up, out)), apply(turned, up), apply(turned, out)];
                     from = { at: plus(die.body.p, apply(turned, plus(middle, scaled(out, 0.01)))), turn: [[x[0], y[0], z[0]], [x[1], y[1], z[1]], [x[2], y[2], z[2]]], size: room * 2 };
                 }
-                const number = view.sign(String(value), [1, 1, 1]);
-                const kind = view.sign(`d${sides}`, view.color(m.color("--muted")));
+                // one taken away has its minus; one left out of the sum is dim, so the bright ones are what add up
+                const words = `${sign < 0 ? "-" : ""}${value}`;
+                const number = view.sign(words, dropped ? view.color(m.color("--muted")) : [1, 1, 1]);
+                const kind = view.sign(dropped ? "dropped" : `d${sides}`, view.color(m.color("--muted")));
+                number.hidden = kind.hidden = true;
+                number.emit = dropped ? 0.35 : 1;
+                kind.emit = 0.55;
+                return { figures: words.length, dice: rolled[place]!.dice, number, kind, from, arrived: false };
+            });
+            // what is added on or taken off has a place at the end of the row, so the row adds up to the sum under it
+            if (waiting.roll.plus) {
+                const words = `${waiting.roll.plus < 0 ? "-" : "+"}${Math.abs(waiting.roll.plus)}`;
+                const number = view.sign(words, [1, 1, 1]);
+                const kind = view.sign(waiting.roll.plus < 0 ? "less" : "added", view.color(m.color("--muted")));
                 number.hidden = kind.hidden = true;
                 number.emit = 1;
                 kind.emit = 0.55;
-                return { dice: rolled[place]!.dice, number, kind, from, arrived: false };
-            });
+                lifted.push({ figures: words.length, dice: [], number, kind, arrived: false });
+            }
         }
         if (!waiting) return;
         const { roll, what } = waiting;
@@ -339,7 +356,8 @@ export default function dice(m: Mote): Scene {
             if (view) {
                 aim();
                 // the row: each number from its die to its place in front of the eye, turning to face it and growing
-                const places = row(lifted.length, m.width / Math.max(1, m.height));
+                const figures = Math.max(1, ...lifted.map((one) => one.figures));
+                const places = row(lifted.length, m.width / Math.max(1, m.height), figures >= 3 ? 1.95 : figures === 2 ? 1.55 : 1.2);
                 const reach = FAR * Math.tan((15 * Math.PI) / 180);
                 const shape = m.width / Math.max(1, m.height);
                 const gone = new Map<number, number>();
@@ -348,9 +366,10 @@ export default function dice(m: Mote): Scene {
                     for (const die of one.dice) gone.set(die, t);
                     const [x, y] = places.at(place);
                     one.number.hidden = one.kind.hidden = lined === 0;
-                    one.number.at = mix3(one.from.at, view.ahead(x / shape, y, FAR), t);
-                    one.number.turn = mixTurn(one.from.turn, view.facing(), t);
-                    one.number.scale = one.from.size + (places.size * reach * 1.5 - one.from.size) * t;
+                    const [there, full] = [view.ahead(x / shape, y, FAR), places.size * reach * 1.5];
+                    one.number.at = one.from ? mix3(one.from.at, there, t) : there;
+                    one.number.turn = one.from ? mixTurn(one.from.turn, view.facing(), t) : view.facing();
+                    one.number.scale = one.from ? one.from.size + (full - one.from.size) * t : full * t;
                     // what kind of die it was, under it, once it is nearly there
                     one.kind.at = view.ahead(x / shape, y - places.size * 0.6, FAR);
                     one.kind.turn = view.facing();

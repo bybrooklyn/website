@@ -140,8 +140,11 @@ export default function plinko(m: Mote): Scene {
     // ---- under the board: the password, and the settings ----
     let finish = () => {};
     let ready = () => {};
+    /** The settings the password being made, or last made, was made with. */
+    let used = settings;
     const start = (count = settings.length) => {
-        board = drop({ ...settings, length: count });
+        used = { ...settings, length: count };
+        board = drop(used);
         dropping = true;
         build(m.preview ? 0 : count);
         // a knock for each peg struck, higher the further down the board, and the peg lights in the ball's color
@@ -179,15 +182,16 @@ export default function plinko(m: Mote): Scene {
             setTimeout(() => (copy.textContent = "copy"), 2500);
         } });
 
-        const describe = () => {
-            const count = alphabet(settings).length;
-            about.textContent = `${settings.length} characters, each one of ${count}: ${Math.round(strength(settings))} bits.`;
+        /** Says how strong a password made with these settings is. */
+        const describe = (of: Settings = settings) => {
+            about.textContent = `${of.length} characters, each one of ${alphabet(of).length}: ${Math.round(strength(of))} bits.`;
         };
         /** A setting changed: it is kept, and the empty board is set up again if nothing is falling. */
         const changed = () => {
             m.keep("plinko", settings);
-            describe();
+            // a setting changed while a password is being made is for the next one: this one, and the line about it, stay as they are
             if (dropping) return;
+            describe();
             word.classList.remove("shown");
             copy.disabled = true;
             said.textContent = "Press drop for a password.";
@@ -228,6 +232,7 @@ export default function plinko(m: Mote): Scene {
         finish = () => {
             said.textContent = "Your password:";
             word.textContent = board.password();
+            describe(used);
             word.classList.add("shown");
             copy.disabled = go.disabled = false;
         };

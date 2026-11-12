@@ -269,16 +269,20 @@ document.addEventListener("click", (event) => {
     view(picture, picture.closest<HTMLAnchorElement>(".gallery a"));
 });
 // Each can also be reached and opened with the keyboard, unless it is in a link, which already can be.
-for (const picture of document.querySelectorAll<HTMLImageElement>(WHICH)) {
-    if (!taken(picture)) continue;
+const reachable = (picture: HTMLImageElement) => {
+    if (!taken(picture) || "zoom" in picture.dataset) return;
     picture.dataset.zoom = "";
-    if (picture.closest("a")) continue;
+    if (picture.closest("a")) return;
     picture.tabIndex = 0;
     picture.setAttribute("role", "button");
     picture.setAttribute("aria-label", picture.alt ? `View larger: ${picture.alt}` : "View larger");
-    picture.addEventListener("keydown", (event) => {
-        if (event.key !== "Enter" && event.key !== " ") return;
-        event.preventDefault();
-        view(picture);
-    });
-}
+};
+for (const picture of document.querySelectorAll<HTMLImageElement>(WHICH)) reachable(picture);
+// A picture that arrives later (the photos page gives its picture an address only once it has chosen one) is made reachable when it loads.
+document.addEventListener("load", (event) => event.target instanceof HTMLImageElement && reachable(event.target), true);
+document.addEventListener("keydown", (event) => {
+    const picture = event.target instanceof HTMLImageElement ? event.target : undefined;
+    if (!picture || !("zoom" in picture.dataset) || picture.closest("a") || (event.key !== "Enter" && event.key !== " ")) return;
+    event.preventDefault();
+    view(picture);
+});
