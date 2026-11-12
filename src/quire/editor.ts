@@ -26,6 +26,8 @@ import { createTableTools } from "./tables";
 import { flowMenu, linkForm, make, type MenuItem } from "./ui";
 import { changes, createHistoryPanel, createKeeper, memoryStorage, type VersionStorage } from "./versions";
 import { write } from "./write";
+import { createCaret } from "./caret";
+import { createTitle, nameFor, shownName, type OwnTitle } from "./title";
 
 /** What the editor is given by the page. */
 export interface EditorOptions {
@@ -46,8 +48,12 @@ export interface EditorOptions {
     onName?: (from: HTMLElement) => void;
     /** More lines for the three-dot menu, from the page. */
     more?: () => MenuItem[];
+    /** Where the page wants the bar: in its own top row, beside the site's name. Above the editor if not given. */
+    barHome?: HTMLElement;
     /** Takes a picture file when there is no store to keep it. */
     onImage?: (file: File) => Promise<string>;
+    /** Where the title is kept when it is the document's own (a post's frontmatter title) rather than its name. */
+    title?: OwnTitle;
 }
 
 /** The editor, as the page sees it. */
@@ -101,6 +107,76 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         return URL.createObjectURL(file);
     };
     const surface = createSurface(text, doc, { onImage: keepPicture, picture: async (address) => (store && id && store.show ? store.show(id, address) : undefined) });
+    const caret = createCaret(surface.element, paper);
+
+    // ---- the title, the first line on the sheet: the document's name ----
+    let renaming = Promise.resolve();
+    let typing: ReturnType<typeof setTimeout> | undefined;
+    /** True when the title shown is kept in the document rather than its name. */
+    const owned = () => !!options.title && options.title.read(surface.getDocument()) !== null;
+    const renameTo = (typed: string) => {
+        const next = nameFor(name, typed);
+        if (next === name) return;
+        renaming = renaming.then(() => rename(next));
+    };
+    const title = createTitle({
+        goOn: () => {
+            surface.setSelection({ anchor: { path: [0], offset: 0 }, focus: { path: [0], offset: 0 } });
+            surface.focus();
+        },
+        typed: (value) => {
+            if (owned()) {
+                surface.run((now) => options.title!.write(now, value), "type");
+                return;
+            }
+            // the bar follows as it is typed; where renaming is cheap the document is renamed a moment after
+            bar.setName(nameFor(name, value));
+            clearTimeout(typing);
+            if (store?.renameAsTyped || !store || !id) typing = setTimeout(() => renameTo(value), 400);
+        },
+        settled: (value) => {
+            if (owned()) return;
+            clearTimeout(typing);
+            renameTo(value);
+        },
+    });
+    paper.prepend(title.element);
+    /** Shows the title for the document as it is now. */
+    const showTitle = () => {
+        const own = options.title?.read(surface.getDocument());
+        if (own !== null && own !== undefined) title.show(own);
+        else title.show(shownName(name) === "Untitled" ? "" : shownName(name), !options.title && (!store || !id || store.can.rename));
+    };
+    // ---- a faint "Type / for blocks" on the empty line the cursor is on, and on an empty document ----
+    let hinted: HTMLElement | undefined;
+    const hint = () => {
+        const blocks = surface.getDocument().blocks;
+        const focused = surface.element.contains(document.activeElement) || document.activeElement === surface.element;
+        const empty = (element: HTMLElement | undefined) => !!element && element.tagName === "P" && element.textContent === "";
+        const line = focused ? surface.elementAt(surface.getSelection().focus.path.slice(0, 1)) : blocks.length === 1 ? surface.elementAt([0]) : undefined;
+        const next = empty(line) && surface.getSelection().anchor.path[0] === surface.getSelection().focus.path[0] ? line : undefined;
+        if (next === hinted) return;
+        hinted?.classList.remove("quire-hinted");
+        hinted = next;
+        if (!next) return;
+        next.dataset.hint = "Type / for blocks";
+        // the words are there first and seen a frame later, so they fade in
+        requestAnimationFrame(() => next === hinted && next.classList.add("quire-hinted"));
+    };
+    surface.on("select", hint);
+    surface.on("change", hint);
+    surface.element.addEventListener("focus", hint);
+    surface.element.addEventListener("blur", () => setTimeout(hint));
+
+    // ArrowUp at the very start of the writing goes up to the title
+    surface.element.addEventListener("keydown", (event) => {
+        if (event.key !== "ArrowUp" || event.shiftKey) return;
+        const { anchor, focus } = surface.getSelection();
+        if (focus.offset === 0 && anchor.offset === 0 && focus.path.every((step) => step === 0) && anchor.path.every((step) => step === 0)) {
+            event.preventDefault();
+            title.focus();
+        }
+    });
 
     // ---- the link field, from the bar's button or Ctrl+K ----
     const links = flowMenu("Link");
@@ -141,7 +217,6 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     const more = (): MenuItem[] => [
         { label: host.classList.contains("markdown") ? "Hide the Markdown" : "Show the Markdown", run: () => showMarkdown(!host.classList.contains("markdown")) },
         { label: "Version history", run: () => void history.open() },
-        { label: outlineView.isOpen() ? "Hide the outline" : "Show the outline", run: () => (outlineView.isOpen() ? outlineView.close() : outlineView.open()) },
         ...(options.more?.() ?? []),
         { label: "Download", hint: surface.getDocument().mdx ? ".mdx" : ".md", run: download },
         { label: "Print", run: () => print() },
@@ -152,6 +227,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         colors: options.colors,
         onImage: keepPicture,
         onName: (from) => options.onName?.(from),
+        onOutline: () => (outlineView.isOpen() ? outlineView.close() : outlineView.open()),
         onLink: openLink,
         more,
     });
@@ -160,6 +236,8 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     const panes = make("div", "quire-panes");
     panes.append(paper, markdown.element);
     const showMarkdown = (shown: boolean) => {
+        // three columns need room: on a smaller window the outline folds away when the Markdown comes
+        if (shown && outlineView.isOpen() && host.getBoundingClientRect().width < 80 * parseFloat(getComputedStyle(document.documentElement).fontSize)) outlineView.close();
         host.classList.toggle("markdown", shown);
         markdown.element.inert = !shown;
         markdown.refresh();
@@ -167,11 +245,20 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         if (getComputedStyle(paper).visibility === "hidden" || (shown && matchMedia("(max-width: 60rem)").matches)) (shown ? markdown.element : surface.element).focus({ preventScroll: true });
     };
     markdown.element.inert = true;
-    column.append(bar.element, panes);
+    // the bar runs along the top of the whole editor; under it the outline's column and the page
+    if (options.barHome) {
+        options.barHome.append(bar.element);
+        host.classList.add("bar-away");
+    } else host.prepend(bar.element);
+    bar.element.querySelector('[aria-label="Outline"]')?.setAttribute("data-outline-control", "");
+    column.append(panes);
     surface.on("link", () => openLink(bar.element.querySelector<HTMLElement>('[aria-label^="Link"]')!));
     const selectBar = createSelectBar(surface, () => bar.element.getBoundingClientRect().bottom);
-    const outlineView = createOutline(surface, () => bar.element.getBoundingClientRect().bottom);
-    host.prepend(outlineView.element);
+    const outlineView = createOutline(surface, () => bar.element.getBoundingClientRect().bottom, (open) => {
+        bar.setOutline(open);
+        host.classList.toggle("outlined", open);
+    });
+    host.insertBefore(outlineView.element, column);
     const slash = createSlash(surface, bar.pickImage);
     const tableTools = createTableTools(surface);
 
@@ -210,6 +297,12 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     if (saver) showStatus(saver.status());
     else bar.setStatus("", "This document is not being saved anywhere");
 
+    showTitle();
+    hint();
+    // a title kept in the document follows a change from elsewhere (undo, the Markdown, a form)
+    surface.on("change", () => {
+        if (options.title && document.activeElement !== title.element) showTitle();
+    });
     surface.on("change", ({ doc: now }) => {
         keeper.edited();
         if (!quiet) saver?.changed(() => write(now));
@@ -227,6 +320,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         if (!store || !id || !store.can.rename) {
             name = value;
             bar.setName(value);
+            showTitle();
             options.onRename?.(value);
             return;
         }
@@ -235,10 +329,12 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
             id = await store.rename(id, value);
             name = (await store.list().catch(() => [])).find((entry) => entry.id === id)?.name ?? value;
             bar.setName(name);
+            showTitle();
             options.onRename?.(value);
             options.onOpen?.(store, { id, name });
         } catch (error) {
             bar.setName(name);
+            showTitle();
             bar.setStatus("Not renamed", `Not renamed: ${error instanceof Error ? error.message : String(error)}`, "warn");
         }
     }
@@ -257,6 +353,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         quiet = true;
         surface.setDocument(read(opened.text, { mdx: /\.mdx$/i.test(entry.id) || /\.mdx$/i.test(entry.name) }));
         quiet = false;
+        showTitle();
         saver = createSaver(next, entry.id, opened.mark);
         stopListening = saver.on(showStatus);
         showStatus(saver.status());
@@ -287,6 +384,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
             if (shown !== undefined || plain) showMarkdown(plain || !!shown);
         },
         destroy() {
+            caret.destroy();
             surface.destroy();
             for (const menu of [...bar.menus, links]) menu.box.remove();
             selectBar.element.remove();

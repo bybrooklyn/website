@@ -41,6 +41,7 @@ const PATHS: Record<string, string> = {
     right: '<path d="M5 6h14M10 10h9M5 14h14M10 18h9"/>',
     trash: '<path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12"/>',
     close: '<path d="m7 7 10 10M17 7 7 17"/>',
+    outline: '<path d="M5 6h14M8 10h11M8 14h11M5 18h14"/>',
 };
 
 /** One of mdQuire's small line icons, drawn in the color of the text around it. */

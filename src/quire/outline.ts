@@ -1,6 +1,7 @@
 // The outline: the document's headings down the side of the editor, the one the cursor (or, while
-// the page is scrolled, the reader) is under marked, and a click on one goes there. On a narrow
-// screen it is a panel that flows in from the side when asked for and goes back the same way.
+// the page is scrolled, the reader) is under marked, and a click on one goes there. It is closed
+// until its control in the bar opens it: on a wide screen as a column at the window's left edge,
+// on a narrow one as a panel over the page, flowing in from the side and back the same way.
 //
 // Which heading is current is pure and tested; the list is DOM.
 
@@ -32,8 +33,8 @@ export function headingAtScroll(tops: number[], line: number): number {
     return found;
 }
 
-/** Builds the outline for a surface. `top` is how far down the window the bar reaches. */
-export function createOutline(surface: Surface, top: () => number = () => 0): { element: HTMLElement; open(): void; close(): void; isOpen(): boolean } {
+/** Builds the outline for a surface, closed. `top` is how far down the window the bar reaches; `onChange` is told when it opens or closes. */
+export function createOutline(surface: Surface, top: () => number = () => 0, onChange: (open: boolean) => void = () => {}): { element: HTMLElement; open(): void; close(): void; isOpen(): boolean } {
     const nav = make("nav", "quire-outline");
     nav.setAttribute("aria-label", "Outline");
     const head = make("div", "quire-outline-head");
@@ -44,6 +45,7 @@ export function createOutline(surface: Surface, top: () => number = () => 0): { 
     const list = make("ol", "quire-outline-list");
     const empty = make("p", "quire-outline-empty", "Headings will show here.");
     nav.append(head, list, empty);
+    nav.inert = true;
 
     let entries: OutlineEntry[] = [];
 
@@ -56,6 +58,8 @@ export function createOutline(surface: Surface, top: () => number = () => 0): { 
             ...entries.map((entry, index) => {
                 const item = make("li", `quire-outline-item level-${entry.level}`);
                 const go = make("button", "quire-outline-link", entry.text || "Untitled heading");
+                // one line, cut short with an ellipsis: the whole heading is in its title
+                go.title = entry.text || "Untitled heading";
                 go.type = "button";
                 go.addEventListener("click", () => {
                     surface.setSelection(caret(entry.path, 0));
@@ -117,8 +121,10 @@ export function createOutline(surface: Surface, top: () => number = () => 0): { 
 
     /** True when the outline is a panel over the page rather than a column beside it. */
     const panelled = () => getComputedStyle(nav).position === "fixed";
+    // a press outside a panel closes it, but not one on the control that opens and closes it
     const outside = (event: PointerEvent) => {
-        if (!nav.contains(event.target as Node)) panel.close();
+        const target = event.target as Element;
+        if (!nav.contains(target) && !target.closest?.("[data-outline-control]")) panel.close();
     };
     const keys = (event: KeyboardEvent) => {
         if (event.key === "Escape") panel.close();
@@ -126,23 +132,24 @@ export function createOutline(surface: Surface, top: () => number = () => 0): { 
     const panel = {
         element: nav,
         open() {
-            // a column beside the sheet opens by no longer being closed; a panel over the page by being open
-            nav.classList.remove("closed");
+            nav.classList.add("open");
+            nav.inert = false;
+            onChange(true);
             if (panelled()) {
-                nav.classList.add("open");
                 setTimeout(() => document.addEventListener("pointerdown", outside, true));
                 document.addEventListener("keydown", keys);
                 (list.querySelector<HTMLElement>(".current") ?? list.querySelector<HTMLElement>("button") ?? closer).focus({ preventScroll: true });
             }
         },
         close() {
-            if (panelled() && nav.contains(document.activeElement)) surface.focus();
+            if (nav.contains(document.activeElement)) surface.focus();
             nav.classList.remove("open");
-            if (!panelled()) nav.classList.add("closed");
+            nav.inert = true;
+            onChange(false);
             document.removeEventListener("pointerdown", outside, true);
             document.removeEventListener("keydown", keys);
         },
-        isOpen: () => (panelled() ? nav.classList.contains("open") : !nav.classList.contains("closed")),
+        isOpen: () => nav.classList.contains("open"),
     };
     return panel;
 }

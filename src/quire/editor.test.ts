@@ -344,12 +344,29 @@ used("a picture shows with its alt text written under it, which can be changed i
     expect(await md()).toBe("![A tall tower](/tower.png)\n");
 });
 
-used("the outline lists the headings, follows the cursor, goes to a heading when clicked, and closes and opens", async () => {
+used("the outline is closed at first, flows out as a column at the left edge from its control in the bar, and the page stays centred", async () => {
     await reset("# One\n\nfirst\n\n## Two\n\nsecond\n\n## Three\n\nthird\n", [0], 0);
-    // the outline catches up with a change within a moment, rather than on every key
-    await tab.wait(250);
+    const shown = () => tab.run<string>("getComputedStyle(document.querySelector('.quire-outline')).visibility");
+    const centred = () =>
+        tab.run<number>("(() => { const column = document.querySelector('.quire-column').getBoundingClientRect(); const paper = document.querySelector('.quire-paper').getBoundingClientRect(); return Math.abs((paper.left + paper.right) / 2 - (column.left + column.right) / 2); })()");
+    expect(await shown()).toBe("hidden");
+    expect(await tab.run("document.querySelector('.quire-bar button[aria-label=\"Outline\"]').getAttribute('aria-pressed')")).toBe("false");
+    expect(await centred()).toBeLessThan(2);
+    // opened, its column's width flows open and the page moves over time to stay centred in what is left
+    const watching = tab.run<number[]>("q.watch('.quire-paper', 'x', 700)");
+    await button("Outline");
+    const places = await watching;
+    expect(new Set(places.map(Math.round)).size).toBeGreaterThan(3);
+    expect(await shown()).toBe("visible");
+    expect(await tab.run("document.querySelector('.quire-bar button[aria-label=\"Outline\"]').getAttribute('aria-pressed')")).toBe("true");
+    // at the editor's left edge, which on the page is the window's
+    expect(await tab.run("Math.round(document.querySelector('.quire-outline').getBoundingClientRect().left - document.querySelector('.quire-editor').getBoundingClientRect().left)")).toBe(0);
+    expect(await centred()).toBeLessThan(2);
+
+    // it lists the headings and follows the cursor
     const links = () => tab.run<string[]>("[...document.querySelectorAll('.quire-outline-link')].map((link) => link.textContent)");
     const current = () => tab.run<string>("document.querySelector('.quire-outline-link.current')?.textContent ?? ''");
+    await tab.wait(250);
     expect(await links()).toEqual(["One", "Two", "Three"]);
     expect(await current()).toBe("One");
     await tab.run("q.select([5], 2)");
@@ -376,7 +393,6 @@ used("the outline lists the headings, follows the cursor, goes to a heading when
     await tab.wait(50);
     await reset("# One\n\nfirst\n\n## Two\n\nsecond\n\n## Three\n\nthird\n", [0], 0);
     await tab.wait(250);
-
     // a heading typed shows in it
     await tab.run("q.select([5], 5)");
     await tab.press("Enter");
@@ -384,25 +400,24 @@ used("the outline lists the headings, follows the cursor, goes to a heading when
     await tab.wait(250);
     expect(await links()).toEqual(["One", "Two", "Three", "Four"]);
     expect(await current()).toBe("Four");
-    // closed from the three-dot menu its column flows shut over time, and opens again
-    await choose("More", "Hide the outline");
-    const places = await tab.run<number[]>("q.watch('.quire-paper', 'x', 600)");
-    expect(new Set(places.map(Math.round)).size).toBeGreaterThan(3);
-    expect(await tab.run("getComputedStyle(document.querySelector('.quire-outline')).visibility")).toBe("hidden");
-    await choose("More", "Show the outline");
-    await tab.wait(500);
-    expect(await tab.run("getComputedStyle(document.querySelector('.quire-outline')).visibility")).toBe("visible");
+    // closed from the same control, it goes and the page comes back to the middle
+    await button("Outline");
+    await tab.wait(600);
+    expect(await shown()).toBe("hidden");
+    expect(await centred()).toBeLessThan(2);
 });
 
-used("on a narrow screen the outline is a panel that slides in when asked for and closes with Escape", async () => {
+used("on a narrow screen the outline is a panel that slides in from its control and closes with Escape", async () => {
     await tab.resize(390, 844);
     await reset("# One\n\ntext\n", [0], 0);
-    // the column it was goes away as a panel does, over a moment
-    await tab.wait(600);
+    await tab.wait(300);
     expect(await tab.run("getComputedStyle(document.querySelector('.quire-outline')).visibility")).toBe("hidden");
-    await choose("More", "Show the outline");
-    const moves = await tab.run<number[]>("q.watch('.quire-outline', 'opacity', 400)");
+    const watching = tab.run<number[]>("q.watch('.quire-outline', 'opacity', 400)");
+    await button("Outline");
+    const moves = await watching;
     expect(moves[moves.length - 1]).toBe(1);
+    expect(moves.some((value) => value > 0 && value < 1)).toBe(true);
+    await tab.wait(300);
     expect(await tab.run("document.activeElement.textContent")).toBe("One");
     await tab.press("Escape");
     await tab.wait(500);
@@ -713,6 +728,242 @@ used("a 5,000-line document opens in under a second, and a key typed in its midd
     expect(opened.open).toBeLessThan(1000);
     expect(median).toBeLessThan(16);
     expect(worst).toBeLessThan(16);
+});
+
+used("the bar's end is cleanly rounded at every width: nothing pinned there shows past its shape", async () => {
+    for (const [wide, high] of [[2560, 1300], [1300, 900], [390, 844]] as const) {
+        await tab.resize(wide, high);
+        await tab.wait(300);
+        const seen = await tab.run<{ corner: boolean; end: boolean }>(`(() => {
+            const bar = document.querySelector('.quire-bar');
+            const box = bar.getBoundingClientRect();
+            const radius = parseFloat(getComputedStyle(bar).borderTopRightRadius);
+            // a point just inside the box but outside the rounded corner is not the bar or anything in it
+            const corner = document.elementFromPoint(box.right - 2, box.top + 2);
+            const end = document.querySelector('.quire-bar-end').getBoundingClientRect();
+            return { corner: radius > 0 ? !bar.contains(corner) : true, end: end.right <= box.right + 0.5 && end.top >= box.top - 0.5 && end.bottom <= box.bottom + 0.5 };
+        })()`);
+        expect({ wide, ...seen }).toEqual({ wide, corner: true, end: true });
+    }
+    await tab.resize(1300, 900);
+    await tab.wait(200);
+});
+
+used("with the outline and the Markdown both open, nothing leaves the window at 1300, 1800 or 2560 wide, and the panes are a matched pair", async () => {
+    for (const [wide, high] of [[1300, 900], [1800, 1000], [2560, 1300]] as const) {
+        await tab.resize(wide, high);
+        await reset("# A title\n\nCharlotte is gay. A paragraph long enough to wrap onto a second line in the page and in its Markdown beside it.\n\n## A heading\n\nMore text.\n", [1], 0);
+        await tab.wait(200);
+        if ((await tab.run("document.querySelector('.quire-bar button[aria-label=\"Outline\"]').getAttribute('aria-pressed')")) !== "true") await button("Outline");
+        await tab.wait(500);
+        if (!(await tab.run<boolean>("document.querySelector('.quire-editor').classList.contains('markdown')"))) await choose("More", "Show the Markdown");
+        await tab.wait(700);
+        const seen = await tab.run<{ outside: string[]; scroll: number; window: number; tops: number; bottoms: number; outline: boolean }>(`(() => {
+            const parts = [".quire-bar", ".quire-outline", ".quire-column", ".quire-paper", ".quire-source", ".quire-bar-end", ".quire-outline-head", ...[...document.querySelectorAll(".quire > *")].map((_, index) => ".quire > :nth-child(" + (index + 1) + ")")];
+            const outside = parts.filter((selector) => {
+                const element = document.querySelector(selector);
+                if (!element || getComputedStyle(element).visibility === "hidden") return false;
+                const box = element.getBoundingClientRect();
+                return box.width > 0 && (box.left < -0.5 || box.right > innerWidth + 0.5);
+            });
+            const paper = document.querySelector(".quire-paper").getBoundingClientRect();
+            const source = document.querySelector(".quire-source").getBoundingClientRect();
+            return { outside, scroll: document.documentElement.scrollWidth, window: innerWidth, tops: Math.abs(paper.top - source.top), bottoms: Math.abs(paper.bottom - source.bottom), outline: getComputedStyle(document.querySelector(".quire-outline")).visibility === "visible" };
+        })()`);
+        expect({ wide, outside: seen.outside, fits: seen.scroll <= seen.window }).toEqual({ wide, outside: [], fits: true });
+        expect({ wide, tops: seen.tops < 1, bottoms: seen.bottoms < 1 }).toEqual({ wide, tops: true, bottoms: true });
+        if (process.env.QUIRE_SHOTS) await Bun.write(`${process.env.QUIRE_SHOTS}/outline-and-markdown-${wide}.png`, await tab.picture());
+        await choose("More", "Hide the Markdown");
+        await tab.wait(400);
+        if (seen.outline) await button("Outline");
+        await tab.wait(400);
+    }
+    await tab.resize(1300, 900);
+    await tab.wait(200);
+});
+
+used("typing in the Markdown view saves as typing on the page does, and the status comes back to saved", async () => {
+    await tab.run("q.useBrowser()");
+    const id = await tab.run<string>(`q.openIn("From the Markdown", "Start.\\n")`);
+    await choose("More", "Show the Markdown");
+    await tab.wait(600);
+    await tab.run("(() => { const field = document.querySelector('.quire-source'); field.focus(); field.setSelectionRange(6, 6); })()");
+    await tab.type(" More words.");
+    await tab.wait(300);
+    expect(await tab.run("q.status()")).not.toBe("Saved");
+    await tab.wait(1500);
+    expect(await tab.run("q.status()")).toBe("Saved");
+    expect(await tab.run(`q.kept(${JSON.stringify(id)})`)).toBe("Start. More words.\n");
+    await choose("More", "Hide the Markdown");
+    await tab.wait(400);
+});
+
+used("the sheet is an A-series page, centred, at least one sheet tall and growing, lighter than the ground", async () => {
+    for (const [wide, high] of [[2560, 1300], [1300, 900], [390, 844]] as const) {
+        await tab.resize(wide, high);
+        await reset("Short.\n", [0], 0);
+        await tab.wait(300);
+        // width in rem: never more than 60, and never the whole window
+        const sheet = await tab.run<{ ratio: number; width: number; centred: number; lighter: boolean }>(`(() => {
+            const paper = document.querySelector('.quire-paper');
+            const box = paper.getBoundingClientRect();
+            const column = document.querySelector('.quire-column').getBoundingClientRect();
+            // lightness of the oklch colour the sheet and the ground are painted in
+            const light = (colour) => { const probe = document.createElement('i'); probe.style.color = colour; document.body.append(probe); const seen = getComputedStyle(probe).color; probe.remove(); return parseFloat(seen.match(/oklch\\(([\\d.]+)/)?.[1] ?? '0'); };
+            return { ratio: box.height / box.width, width: box.width / parseFloat(getComputedStyle(document.documentElement).fontSize), centred: Math.abs((box.left + box.right) / 2 - (column.left + column.right) / 2), lighter: light(getComputedStyle(paper).backgroundColor) > light(getComputedStyle(document.documentElement).getPropertyValue('--ground')) + 0.08 };
+        })()`);
+        expect({ wide, ratio: Math.abs(sheet.ratio - 1.41421) < 0.01, centred: sheet.centred < 2, lighter: sheet.lighter, fits: sheet.width <= 60.01 && sheet.width * 16 < wide }).toEqual({ wide, ratio: true, centred: true, lighter: true, fits: true });
+    }
+    await tab.resize(1300, 900);
+    // a long document makes it taller than one sheet
+    await reset(Array.from({ length: 60 }, (_, index) => `Paragraph ${index}.`).join("\n\n") + "\n", [0], 0);
+    await tab.wait(200);
+    expect(await tab.run<number>("(() => { const box = document.querySelector('.quire-paper').getBoundingClientRect(); return box.height / box.width; })()")).toBeGreaterThan(1.6);
+});
+
+used("the caret is drawn where the cursor is, a line tall, in the accent, blinking once still; with less motion it does not blink", async () => {
+    await reset("Some text here.\n", [0], 4);
+    await tab.run("document.querySelector('.quire').focus()");
+    await tab.press("ArrowRight");
+    await tab.wait(100);
+    const seen = await tab.run<{ dx: number; dy: number; width: number; height: number; colour: string; accent: string }>(`(() => {
+        const caret = document.querySelector('.quire-caret').getBoundingClientRect();
+        const cursor = getSelection().getRangeAt(0).getClientRects()[0];
+        const probe = document.createElement('i'); probe.style.color = 'var(--accent)'; document.body.append(probe); const accent = getComputedStyle(probe).color; probe.remove();
+        return { dx: Math.abs(caret.left + caret.width / 2 - cursor.left), dy: Math.abs(caret.top - cursor.top), width: caret.width, height: caret.height, colour: getComputedStyle(document.querySelector('.quire-caret')).backgroundColor, accent };
+    })()`);
+    expect(seen.dx).toBeLessThan(1.5);
+    expect(seen.dy).toBeLessThan(1.5);
+    expect(seen.width).toBeGreaterThanOrEqual(2);
+    expect(seen.height).toBeGreaterThan(18);
+    expect(seen.colour).toBe(seen.accent);
+    // still, it blinks
+    const blinking = await tab.run<number[]>("q.watch('.quire-caret', 'opacity', 2800)");
+    expect(blinking).toContain(0);
+    expect(blinking[0]).toBe(1);
+    // typing keeps it solid
+    await tab.type("ab");
+    expect(await tab.run("getComputedStyle(document.querySelector('.quire-caret')).opacity")).toBe("1");
+    await tab.media({ "prefers-reduced-motion": "reduce" });
+    try {
+        await tab.press("ArrowLeft");
+        const still = await tab.run<number[]>("q.watch('.quire-caret', 'opacity', 1800)");
+        expect(new Set(still)).toEqual(new Set([1]));
+    } finally {
+        await tab.media({});
+        await tab.wait(100);
+    }
+    // away from the text it goes
+    await tab.run("document.activeElement.blur()");
+    await tab.wait(100);
+    expect(await tab.run("getComputedStyle(document.querySelector('.quire-caret')).opacity")).toBe("0");
+});
+
+used("the title is the first line on the sheet: it renames as typed, the bar follows, empty is a faint Untitled, Enter goes on, and it is not in the Markdown", async () => {
+    await tab.run("q.useBrowser()");
+    const id = await tab.run<string>(`q.openIn("Draft", "Body text.\\n")`);
+    const title = "document.querySelector('.quire-title')";
+    const barName = () => tab.run<string>("document.querySelector('.quire-bar .quire-name').textContent.trim()");
+    expect(await tab.run(`${title}.value`)).toBe("Draft");
+    // it is the first thing on the sheet, above the writing
+    expect(await tab.run(`document.querySelector('.quire-paper').firstElementChild === ${title}`)).toBe(true);
+    await tab.run(`(() => { const field = ${title}; field.focus(); field.select(); })()`);
+    await tab.type("My plans");
+    expect(await barName()).toBe("My plans");
+    // kept in this browser, it is renamed a moment after typing stops, without leaving the line
+    await tab.wait(900);
+    expect(await tab.run<string>(`q.store.list().then((all) => all.find((entry) => entry.id === ${JSON.stringify(id)})?.name)`)).toBe("My plans");
+    // Enter goes on to the writing, at its start
+    await tab.press("Enter");
+    expect(await tab.run("document.activeElement.classList.contains('quire')")).toBe(true);
+    expect(await caret()).toEqual({ path: [0], offset: 0 });
+    // and ArrowUp from there comes back
+    await tab.press("ArrowUp");
+    expect(await tab.run(`document.activeElement === ${title}`)).toBe(true);
+    expect(await md()).toBe("Body text.\n");
+    // emptied, it shows a faint Untitled and the bar says so
+    await tab.run(`(() => { const field = ${title}; field.select(); })()`);
+    await tab.press("Backspace");
+    expect(await tab.run(`${title}.placeholder`)).toBe("Untitled");
+    expect(await barName()).toBe("Untitled");
+    const faint = await tab.run<{ placeholder: string; ink: string }>(`(() => { const style = getComputedStyle(${title}, '::placeholder'); return { placeholder: style.color, ink: getComputedStyle(${title}).color }; })()`);
+    expect(faint.placeholder).not.toBe(faint.ink);
+    await tab.press("Enter");
+    await tab.wait(300);
+    expect(await tab.run<string>(`q.store.list().then((all) => all.find((entry) => entry.id === ${JSON.stringify(id)})?.name)`)).toBe("Untitled");
+});
+
+used("a file's title is its name without the extension, and renaming it keeps the extension", async () => {
+    await tab.run("q.useBrowser()");
+    const id = await tab.run<string>(`q.openIn("notes.md", "Text.\\n")`);
+    const title = "document.querySelector('.quire-title')";
+    expect(await tab.run(`${title}.value`)).toBe("notes");
+    await tab.run(`(() => { const field = ${title}; field.focus(); field.select(); })()`);
+    await tab.type("plans");
+    await tab.press("Enter");
+    await tab.wait(300);
+    expect(await tab.run<string>(`q.store.list().then((all) => all.find((entry) => entry.id === ${JSON.stringify(id)})?.name)`)).toBe("plans.md");
+    expect(await md()).toBe("Text.\n");
+});
+
+used("the text is set as a published post's: its size, line, measure and the gaps between paragraphs and headings", async () => {
+    await reset("A first paragraph.\n\nA second paragraph.\n\n## A heading\n\nUnder the heading.\n", [0], 0);
+    await tab.wait(200);
+    const seen = await tab.run<{ line: number; text: number; size: number; height: number; measure: number; width: number; pp: number; ph: number; hp: number }>(`(() => {
+        const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
+        const kids = [...document.querySelectorAll('.quire > *')];
+        const box = (index) => kids[index].getBoundingClientRect();
+        const style = getComputedStyle(kids[1]);
+        return {
+            line: 1.7 * rem, text: 1.125 * rem, size: parseFloat(style.fontSize), height: parseFloat(style.lineHeight),
+            measure: 44 * rem, width: document.querySelector('.quire').getBoundingClientRect().width,
+            pp: box(1).top - box(0).bottom, ph: box(2).top - box(1).bottom, hp: box(3).top - box(2).bottom,
+        };
+    })()`);
+    // the numbers prose.css and the post layout give: a line between paragraphs, two above a heading, three quarters under it
+    expect(Math.abs(seen.size - seen.text)).toBeLessThan(0.5);
+    expect(Math.abs(seen.height - seen.line)).toBeLessThan(0.5);
+    expect(seen.width).toBeLessThanOrEqual(seen.measure + 0.5);
+    expect(Math.abs(seen.pp - seen.line)).toBeLessThan(1);
+    expect(Math.abs(seen.ph - 2 * seen.line)).toBeLessThan(1);
+    expect(Math.abs(seen.hp - 0.75 * seen.line)).toBeLessThan(1);
+});
+
+used("a faint \"Type / for blocks\" fades in on the empty line the cursor is on, goes when typing starts, and an empty document is never blank", async () => {
+    // how much of the hint is seen on a line: none when the line has no hint at all
+    const shown = (index: number) => tab.run<number>(`(() => { const style = getComputedStyle(document.querySelectorAll('.quire > *')[${index}], '::before'); return style.content === 'none' ? 0 : parseFloat(style.opacity) || 0; })()`);
+    const words = (index: number) => tab.run<string>(`getComputedStyle(document.querySelectorAll('.quire > *')[${index}], '::before').content`);
+    await reset("Some text.\n", [0], 10);
+    await tab.press("Enter");
+    const fading = await tab.run<number[]>(`(() => new Promise((done) => { const seen = []; const start = performance.now(); const look = () => { seen.push(parseFloat(getComputedStyle(document.querySelectorAll('.quire > *')[1], '::before').opacity) || 0); if (performance.now() - start < 700) requestAnimationFrame(look); else done(seen); }; requestAnimationFrame(look); }))()`);
+    expect(fading[fading.length - 1]).toBe(1);
+    expect(fading.some((value) => value > 0 && value < 1)).toBe(true);
+    expect(await words(1)).toBe('"Type / for blocks"');
+    // it is not in the text, and the line with words has none
+    expect(await md()).toBe("Some text.\n");
+    expect(await words(0)).toBe("none");
+    await tab.type("W");
+    await tab.wait(400);
+    expect(await shown(1)).toBe(0);
+    // an empty document shows it even before the cursor is in it
+    await tab.run("q.reset('')");
+    await tab.run("document.activeElement.blur()");
+    await tab.wait(600);
+    expect(await shown(0)).toBe(1);
+});
+
+used("a long heading with no spaces is one line in the outline, cut with an ellipsis, and the outline never scrolls sideways", async () => {
+    await reset(`# ${"Hey".padEnd(160, "y")}\n\nText.\n`, [1], 0);
+    await button("Outline");
+    await tab.wait(600);
+    const seen = await tab.run<{ sideways: boolean; lines: number; title: string; cut: string }>(`(() => {
+        const nav = document.querySelector('.quire-outline');
+        const link = document.querySelector('.quire-outline-link');
+        return { sideways: nav.scrollWidth > nav.clientWidth, lines: Math.round((link.getBoundingClientRect().height - parseFloat(getComputedStyle(link).paddingTop) - parseFloat(getComputedStyle(link).paddingBottom)) / parseFloat(getComputedStyle(link).lineHeight)), title: link.title, cut: getComputedStyle(link).textOverflow };
+    })()`);
+    expect(seen).toEqual({ sideways: false, lines: 1, title: "Hey".padEnd(160, "y"), cut: "ellipsis" });
+    await button("Outline");
+    await tab.wait(400);
 });
 
 if (!live) console.warn("editor.test.ts: no Chromium on this machine, so the editor was not used.");

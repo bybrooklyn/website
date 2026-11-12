@@ -25,6 +25,8 @@ export interface AppOptions {
     fetcher?: Fetcher;
     /** The name of the browser database. */
     database?: string;
+    /** Where the page wants the bar: in its own top row, beside the site's name. */
+    barHome?: HTMLElement;
 }
 
 /** Where the writer was, remembered in this browser. */
@@ -91,6 +93,7 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
         mark: start.mark,
         versions: browser.versions,
         colors: options.colors,
+        barHome: options.barHome,
         onOpen: remember,
         onName: (button) => {
             if (menu.isOpen()) return menu.close(true);
@@ -264,7 +267,7 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
         });
         inner.append(choices);
         card.append(inner);
-        host.querySelector(".quire-paper")?.prepend(card);
+        (host.querySelector(".quire-title") ?? host.querySelector(".quire-paper")?.firstChild)?.after(card);
         requestAnimationFrame(() => card.classList.add("shown"));
         // it goes as soon as the writer starts writing or chooses somewhere else
         const stop = editor.surface.on("change", () => go());
