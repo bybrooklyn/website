@@ -28,25 +28,18 @@
 
 /* Who translated it: a line that opens under the picker for a translated language and draws shut for English. */
 .spectrum-translator {
-    display: grid;
-    grid-template-rows: 0fr;
-    opacity: 0;
-    transition:
-        grid-template-rows 0.4s var(--ease),
-        opacity 0.2s ease;
+    --grow: 0.4s;
+    --fade: 0.2s;
 }
 
-.spectrum-translator.shown {
-    grid-template-rows: 1fr;
-    opacity: 1;
+/* opening, its words wait a moment for the room to open */
+.spectrum-translator.open {
     transition:
         grid-template-rows 0.4s var(--ease),
         opacity 0.3s ease 0.1s;
 }
 
 .spectrum-translator p {
-    min-height: 0;
-    overflow: hidden;
     margin: 0;
     padding-top: calc(var(--line) * 0.5);
 }
@@ -174,12 +167,6 @@
     scale: 1.25;
 }
 
-/* The site's ring, on the thumb, when the slider under it is reached by keyboard. */
-.spectrum-track:has(input:focus-visible) .spectrum-thumb {
-    outline: 0.125rem solid var(--accent);
-    outline-offset: 0.15rem;
-}
-
 /* Unset, the thumb is hollow and the words under it fade. */
 .spectrum-axis.unset .spectrum-thumb {
     border-color: var(--muted);
@@ -293,16 +280,6 @@
         translate 0.5s var(--ease);
 }
 
-/* Heard by screen readers when the link is copied; the pill beside the button shows the same. */
-.spectrum-status {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-}
-
 /* The words about it, under the thing itself, set apart from it by a rule. */
 .spectrum-about {
     margin-top: calc(var(--line) * 2.5);
@@ -311,8 +288,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .spectrum-translator,
-    .spectrum-translator.shown,
+    .spectrum-translator.open,
     .spectrum-unset,
     .spectrum-thumb,
     .spectrum-copy,

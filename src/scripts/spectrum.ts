@@ -13,8 +13,8 @@ import { axes, MIDDLE, start, UNSET, type Values } from "../spectrum/axes";
 import { decode, encode } from "../spectrum/code";
 import { address, breakable, languages, pick, said, words, type Code, type Words } from "../spectrum/languages";
 import { along, keyed, nearest, pointed, settle } from "../spectrum/slider";
+import { still } from "./opening";
 
-const still = matchMedia("(prefers-reduced-motion: reduce)");
 /** How long the thumb takes to settle when let go or clicked, and when a key moves it, in milliseconds. */
 const GLIDE = 420;
 const STEP = 200;
@@ -72,7 +72,7 @@ function run(root: HTMLElement): void {
         }
         // The translator's line keeps its last words while it draws shut, so it does not empty first.
         const credit = text.translator;
-        translator.classList.toggle("shown", Boolean(credit));
+        translator.classList.toggle("open", Boolean(credit));
         if (credit) {
             const line = translator.firstElementChild!;
             const who = document.createElement(credit.link ? "a" : "span");

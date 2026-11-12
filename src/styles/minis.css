@@ -279,26 +279,15 @@
 
 /* "one less" and which to count grow out from under a die when the first of it is picked, and go back when the last is taken away. */
 .dice-more {
-    display: grid;
-    grid-template-rows: 0fr;
-    opacity: 0;
+    --grow: 0.3s;
+    --fade: 0.2s;
     font-size: 0.85em;
-    transition:
-        grid-template-rows 0.3s var(--ease),
-        opacity 0.2s ease;
 }
 
 .dice-more > div {
     display: grid;
     justify-items: center;
     gap: 0.1rem;
-    min-height: 0;
-    overflow: hidden;
-}
-
-.dice-kind.on .dice-more {
-    grid-template-rows: 1fr;
-    opacity: 1;
 }
 
 .mote-panel .dice-more button + button {
@@ -368,7 +357,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .dice-more,
     .dice-luck-bars i {
         transition: none;
     }
@@ -599,16 +587,6 @@
     pointer-events: none;
 }
 
-/* Said aloud to a screen reader and not shown, since the status line says the same. */
-.walker-said {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-}
-
 /* Each part of the controls is a small label, then its controls, on one grid. */
 .mote-panel.walker-side,
 .mote-panel.walker-ground {
@@ -666,21 +644,14 @@
 /* What opens under a row (the brain's own sizes, the brain itself) grows to its height and goes
    back the same way. It keeps to the column's grid, so its labels line up with the rest. */
 .walker-opening {
+    --grow: 0.4s;
+    --fade: 0.3s;
     grid-column: 1 / -1;
-    display: grid;
     grid-template-columns: subgrid;
-    grid-template-rows: 0fr;
-    opacity: 0;
     margin-block: -0.65rem 0;
-    transition:
-        grid-template-rows 0.4s var(--ease),
-        opacity 0.3s ease,
-        margin 0.4s var(--ease);
 }
 
 .walker-opening.open {
-    grid-template-rows: 1fr;
-    opacity: 1;
     margin-block: 0;
 }
 
@@ -690,8 +661,6 @@
     grid-template-columns: subgrid;
     align-items: baseline;
     gap: 0.65rem 0.8rem;
-    min-height: 0;
-    overflow: hidden;
 }
 
 .walker-opening-inside > canvas {
@@ -779,11 +748,5 @@
     .mote-panel.walker-side {
         border-left: 0;
         border-top: 0.0625rem solid var(--rule);
-    }
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .walker-opening {
-        transition: none;
     }
 }

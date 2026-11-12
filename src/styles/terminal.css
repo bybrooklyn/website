@@ -57,14 +57,7 @@
     gap: 0.4rem;
 }
 .terminal-bar button {
-    border: 0;
-    padding: 0;
-    background: none;
-    font: inherit;
     color: var(--accent);
-    cursor: pointer;
-}
-.terminal-bar button {
     display: grid;
     place-items: center;
     width: 1.5rem;

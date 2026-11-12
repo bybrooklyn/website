@@ -41,11 +41,13 @@ const fetchpriority = eager ? "high" : undefined;
 </figure>
 
 <script>
+    import { still } from "../scripts/opening";
+
     // A clip loads and plays only once on screen. With reduced motion, reduced
     // data or a slow connection it stays a poster with controls.
     const connection = (navigator as Navigator & { connection?: { saveData?: boolean; effectiveType?: string } }).connection;
     const sparing =
-        matchMedia("(prefers-reduced-motion: reduce)").matches ||
+        still.matches ||
         matchMedia("(prefers-reduced-data: reduce)").matches ||
         Boolean(connection?.saveData) ||
         /2g|3g/.test(connection?.effectiveType ?? "");

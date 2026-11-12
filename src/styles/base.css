@@ -93,8 +93,7 @@ a:hover {
 }
 
 a:focus-visible {
-    outline: 0.125rem solid var(--accent);
-    outline-offset: 0.2em;
+    --ring-offset: 0.2em;
     border-radius: 0.2em;
 }
 
@@ -275,10 +274,71 @@ h1 + .lede,
     display: none !important;
 }
 
-/* The same ring on everything that can be pressed, when it is reached by keyboard. */
-:where(button, summary, [role="button"], input, select):focus-visible {
+/* Words for screen readers only, kept off the screen. */
+.unseen {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+/*
+ * Something that opens under what is pressed: it grows to its own height and fades in, and draws shut
+ * the same way. Its one child is what is shown. Opened with `open`; where it is used it says how long
+ * it grows (--grow) and fades (--fade).
+ */
+.fold {
+    display: grid;
+    grid-template-rows: 0fr;
+    opacity: 0;
+    transition:
+        grid-template-rows var(--grow) var(--ease),
+        opacity var(--fade) ease,
+        margin var(--grow) var(--ease);
+}
+
+.fold.open {
+    grid-template-rows: 1fr;
+    opacity: 1;
+}
+
+.fold > * {
+    min-height: 0;
+    overflow: hidden;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .fold {
+        transition: none;
+    }
+}
+
+/*
+ * The same ring on everything that can be pressed, when it is reached by keyboard: here, once. A thing
+ * that needs it to stand further off sets --ring-offset beside its own rules.
+ */
+a:focus-visible,
+:where(button, summary, [role="button"], input, select):focus-visible,
+[data-zoom]:focus-visible,
+.flag:focus-visible,
+.strip:focus-visible .strip-button,
+.spectrum-track:has(input:focus-visible) .spectrum-thumb {
     outline: 0.125rem solid var(--accent);
-    outline-offset: 0.15rem;
+    outline-offset: var(--ring-offset, 0.15rem);
+}
+
+/* Things to press drawn wholly by their own rules: none of the browser's box, the type of the words around them. */
+.play-button,
+.cite-copy,
+.photo-buttons button,
+.terminal-bar button {
+    border: 0;
+    padding: 0;
+    background: none;
+    font: inherit;
+    cursor: pointer;
 }
 
 /* ---- home ---- */
@@ -525,6 +585,7 @@ h1 + .about {
     width: 1.5rem;
     height: 0.95rem;
     border-radius: 0.15rem;
+    --ring-offset: 0.2rem;
 }
 
 .flag.trans {
@@ -533,11 +594,6 @@ h1 + .about {
 
 .flag.lesbian {
     background: linear-gradient(#d52d00 0 20%, #ff9a56 20% 40%, #fff 40% 60%, #d362a4 60% 80%, #a30262 80%);
-}
-
-.flag:focus-visible {
-    outline: 0.125rem solid var(--accent);
-    outline-offset: 0.2rem;
 }
 
 .flag .tip {
@@ -671,15 +727,10 @@ h1 + .about {
 }
 
 .play-button {
-    border: 0;
-    padding: 0;
-    background: none;
-    font: inherit;
     font-size: 1.15em;
     color: var(--accent);
     text-decoration: underline 0.06em color-mix(in oklch, var(--accent) 45%, transparent);
     text-underline-offset: 0.2em;
-    cursor: pointer;
 }
 
 .play-button::before {
@@ -735,30 +786,6 @@ h1 + .about {
     .play-still iframe {
         animation: none;
     }
-}
-
-/* Playmatter on the homepage: the clip across the page, and under it what it is. */
-.feature-title {
-    margin: 0 0 calc(var(--line) * 0.6);
-    font-size: clamp(1.8rem, 4vw, 2.6rem);
-}
-
-.feature-words {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: 0.3rem 2rem;
-    margin-top: calc(var(--line) * 0.9);
-}
-
-.feature-words p {
-    margin: 0;
-}
-
-.feature-words p:first-child {
-    flex: 1 1 24rem;
-    max-width: 40rem;
-    font-size: 1.1em;
 }
 
 /* ---- figures ---- */

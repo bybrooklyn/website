@@ -111,6 +111,7 @@ const opened = await openedPages();
         </button>
         <script>
             import "../scripts/viewer";
+            import { still } from "../scripts/opening";
 
             // Back to the top: shown once a long page has been scrolled about a screen, on whatever it is that scrolls.
             const up = document.querySelector<HTMLButtonElement>(".to-top");
@@ -124,7 +125,7 @@ const opened = await openedPages();
                 };
                 (panel ?? window).addEventListener("scroll", look, { passive: true });
                 up.addEventListener("click", () => {
-                    scroller.scrollTo({ top: 0, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
+                    scroller.scrollTo({ top: 0, behavior: still.matches ? "instant" : "smooth" });
                     (panel ?? document.body).focus({ preventScroll: true });
                 });
                 look();

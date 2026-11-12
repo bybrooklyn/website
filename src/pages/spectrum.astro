@@ -49,7 +49,7 @@ const values = start();
                     }
                 </nav>
                 {/* Who translated the language picked: it opens under the picker, and draws shut again for English. */}
-                <div class="spectrum-translator">
+                <div class="spectrum-translator fold">
                     <p class="note"></p>
                 </div>
             </header>
@@ -94,7 +94,7 @@ const values = start();
                     <button type="button" class="spectrum-copy"><span data-say="copy">{english.copy}</span></button>
                     {/* "Copied" is always there, shrunk into the side of the button until it grows out; the status beside it is what a screen reader hears. */}
                     <span class="spectrum-copied" aria-hidden="true" data-say="copied">{english.copied}</span>
-                    <span class="spectrum-status" role="status"></span>
+                    <span class="spectrum-status unseen" role="status"></span>
                 </div>
             </div>
         </div>

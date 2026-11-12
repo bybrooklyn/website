@@ -12,6 +12,8 @@ import { apply, block, cross, mix3, mixTurn, nearness, normals, paint, plus, sca
 import { sounds } from "../mote/sound";
 import { turn } from "../mote/space";
 import { el, gently, toward, type Mote, type Scene } from "../mote/stage";
+import { copyText } from "../scripts/copy";
+import { still } from "../scripts/opening";
 import { MOST, lineUp, numbers, read, row, total, type Roll } from "./rolls";
 import { SHAPES, TOWER, slabs, throwDice, trayFor, type Sides, type Slab, type Throw, type Tray } from "./tower";
 
@@ -142,7 +144,6 @@ export default function dice(m: Mote): Scene {
     let lifted: Lifted[] = [];
     let sum: Part | undefined;
     let lined = 0;
-    const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
     const sound = m.preview ? undefined : sounds(m);
     /** How far along its flight the number in this place of the row is, from 0 to 1. Each sets off a moment after the one before. */
     const flown = (place: number) => Math.max(0, Math.min(1, (lined - place * Math.min(0.12, FLIGHT / lifted.length)) / FLIGHT));
@@ -304,7 +305,7 @@ export default function dice(m: Mote): Scene {
                 const count = hand[sides] ?? 0;
                 // (an emptied one keeps its number while it shrinks away)
                 if (count) part.badge.textContent = String(count);
-                part.kind.classList.toggle("on", count > 0);
+                part.more.classList.toggle("open", count > 0);
                 part.badge.classList.toggle("on", count > 0);
                 part.more.inert = count === 0;
                 part.keep.disabled = count < 2;
@@ -339,7 +340,7 @@ export default function dice(m: Mote): Scene {
                 refresh();
             } });
             keep.setAttribute("aria-label", `Which d${sides} to count`);
-            const more = el("div", { class: "dice-more" }, el("div", {}, less, keep));
+            const more = el("div", { class: "dice-more fold" }, el("div", {}, less, keep));
             more.inert = true;
             const kind = el("div", { class: "dice-kind" }, pick, more);
             parts.set(sides, { kind, badge, more, keep });
@@ -356,11 +357,7 @@ export default function dice(m: Mote): Scene {
         // the roll just made, as a link that makes it again for whoever opens it
         const share = el("button", { type: "button", class: "quiet", textContent: "copy link to this roll", onclick: () => {
             if (!last) return;
-            const address = m.link.set("roll", last);
-            // the button keeps its width while its words change, so nothing beside it jumps
-            share.style.minWidth = `${share.offsetWidth}px`;
-            navigator.clipboard?.writeText(address).then(() => (share.textContent = "link copied"), () => (share.textContent = "the link is in the address bar"));
-            setTimeout(() => (share.textContent = "copy link to this roll"), 2500);
+            copyText(share, m.link.set("roll", last), { rest: "copy link to this roll", done: "link copied", failed: "the link is in the address bar" });
         } });
         const list = el("ol", { class: "table-history" });
         /** Gives an element a number for its stylesheet to draw with. */
@@ -400,7 +397,7 @@ export default function dice(m: Mote): Scene {
             shine = landed() && over > 0.6 ? Math.min(1, shine + dt / 0.35) : landed() ? shine : 0;
             // once the numbers are lit they leave for the row, and the tray darkens behind them
             const leaving = lifted.length > 0 && shine === 1;
-            if (leaving) lined = still ? lastIn() : lined + dt;
+            if (leaving) lined = still.matches ? lastIn() : lined + dt;
             if (view) view.shade = toward(view.shade, leaving ? 0.72 : 0, dt * 0.72, 0.4);
         },
         resize: fit,

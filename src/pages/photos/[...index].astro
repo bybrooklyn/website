@@ -69,6 +69,8 @@ const count = (set: string) => all.filter((photo) => photo.set === set).length;
 </Base>
 
 <script>
+    import { still } from "../../scripts/opening";
+
     interface Shown {
         src: string;
         srcset: string;
@@ -85,7 +87,6 @@ const count = (set: string) => all.filter((photo) => photo.set === set).length;
     const figure = document.querySelector<HTMLElement>(".photo");
     const image = document.querySelector<HTMLImageElement>(".photo-frame > img");
     const buttons = document.querySelector<HTMLElement>(".photo-buttons");
-    const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
     const LEAVE = 240;
     // One clear pixel, standing in for a picture that has not arrived.
     const BLANK = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
@@ -170,7 +171,7 @@ const count = (set: string) => all.filter((photo) => photo.set === set).length;
                 busy = false;
                 if (++missing <= 5) void show(draw(index));
             };
-            if (image.src && !still) {
+            if (image.src && !still.matches) {
                 figure.dataset.state = "leaving";
                 await pause(LEAVE);
             }

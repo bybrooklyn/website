@@ -33,6 +33,7 @@ body.opened {
     width: 1.6rem;
     height: 2.6rem;
     color: color-mix(in oklch, var(--muted) 70%, var(--ground));
+    --ring-offset: 0.5rem;
     transition:
         color 0.2s ease,
         translate 0.35s var(--ease);
@@ -56,8 +57,6 @@ body.opened {
 }
 
 .strip:focus-visible .strip-button {
-    outline: 0.125rem solid var(--accent);
-    outline-offset: 0.5rem;
     border-radius: 0.25rem;
 }
 
