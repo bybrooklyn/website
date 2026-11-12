@@ -17,6 +17,7 @@ How to add one is in `src/mote/README.md`.
 
 - **Blocks** (toy): a pile of blocks. Double-click an empty spot, or press Space, for a new piece. Also what posts embed.
 - **Dice** (toy, 3D; was Table): a dice tower with real tumbling dice (Mote's own 3D physics and drawing). Dice are picked from pictures of each seen from above, or typed. When they land the eye goes up over the tray and each die's number lights. The D&D helper (fight and character views) was taken out on 11 Nov.
+- **Plinko** (toy): a flat arcade board that makes a password, drawn with Mote's 3D drawing so the balls are shaded spheres. Each ball that lands sends its bin's character up to the password.
 - **Archived on 11 Nov** (in `src/minis/archive/`, off the site, still building): Chain, Climb, Balance, Solid. Two that feel right were wanted over six that are fine. How to put one back is in the README there.
 - Mote has a project page at `/projects/mote/`, a logo (a speck in a beam of light) and tests (`bun run test`).
 - The list on `/minis/` shows each mini running, small.
@@ -53,6 +54,28 @@ From the conversation on 10 and 11 Nov:
     character, loud dice.
 11. For Climb: more of the mountain, a clock, a ghost of your best run.
 12. For the terminal: recordings of the full-screen menus, made with asciinema.
+
+From the conversation on 11 Nov, later:
+
+13. A word processor, as a project opened from the projects page (not a mini). Rich text like Word,
+    working from Markdown files, dead simple and fun to write in. Tables and images, find and
+    replace, a word count, print and PDF, several documents. Kept in the browser, files opened and
+    downloaded, real files edited in place where the browser can. Own code only. Made from the
+    site's own editor (`scripts/editor/`), which it replaces, and open for anyone to use.
+14. A mini where a person learns to walk in the browser, with the person to set up. In Rust
+    compiled to WebAssembly, a couple of crates allowed, made as small as it can be and under
+    512 KiB.
+15. A small physics engine in Rust, 50 KiB or less, first for the walking mini. Whether Dice and
+    Blocks move onto it is a later question.
+16. A game where something is pulled back and flung, and planets bend its path toward a target.
+17. Likes on photos, and a guestbook where entries wait to be approved. Both need the site's first
+    code on a server.
+18. A licensing page of the site's own, in plain words, that the footer's license link opens,
+    in place of Creative Commons' page. Maybe as part of a public wiki about her, her projects and
+    licensing.
+19. More queer memes among the shitposts.
+20. Plinko as a table in real 3D with a character on every ball was built and taken back the same
+    day: it looked weird. The balls and round posts it needed are still in `space.ts`.
 
 ## Not doing
 

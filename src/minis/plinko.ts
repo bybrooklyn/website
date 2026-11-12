@@ -1,5 +1,6 @@
 // Plinko: a board that makes a password, seen straight on like an arcade machine. Balls drop one
-// after another through the pegs, which light as they are struck. Each bin shows a character; when
+// after another through the pegs, which light as they are struck. The world is flat; the balls are
+// drawn as the solid, shiny spheres they would be, each with its shadow on the board. Each bin shows a character; when
 // a ball lands in one, that character flies up to the next empty place in the password along the
 // top, and the bin is given another. What makes the password fair is in board.ts; here the board is
 // drawn, by Mote's 3D drawing, with its settings under it.
@@ -122,7 +123,8 @@ export default function plinko(m: Mote): Scene {
             blank.emit = 1;
             return blank;
         });
-        view.light([-3, 8, 14], [-wide / 2 - 0.5, -high / 2 - 2, -0.5], [wide / 2 + 0.5, high / 2 + 2, 0.5], 1.4, 0.75, 0.5);
+        // the sun high and to one side, so that a ball has a bright side, a dark side, and a shadow beside it on the board
+        view.light([-7, 11, 9], [-wide / 2 - 0.5, -high / 2 - 2, -0.5], [wide / 2 + 0.5, high / 2 + 2, 0.5], 1.7, 0.6, 0.3);
         aim();
     };
     /** The eye: straight in front, far enough back to see the board and the password above it. */
@@ -278,12 +280,13 @@ export default function plinko(m: Mote): Scene {
                 let drawn = balls.get(body);
                 if (!drawn) {
                     const color = view.color(`oklch(0.82 0.15 ${(balls.size * 47 + board.landings.length * 47) % 360})`);
-                    drawn = { color, been: [], part: view.add(ballMesh, { color }), tail: Array.from({ length: TRAIL }, (_, at) => view.add(ballMesh, { color: color.map((value) => value * (0.7 - at * 0.09)) as Color, casts: false })) };
+                    drawn = { color, been: [], part: view.add(ballMesh, { color, gloss: 0.7 }), tail: Array.from({ length: TRAIL }, (_, at) => view.add(ballMesh, { color: color.map((value) => value * (0.7 - at * 0.09)) as Color, casts: false })) };
                     balls.set(body, drawn);
                 }
                 const gone = since === undefined ? 0 : Math.min(1, (board.time - since) / 0.5);
                 drawn.part.at = place(body.x, body.y, 0.05);
-                drawn.part.emit = since === undefined ? 0.75 : 1.5 * (1 - gone);
+                // only a little light of its own while it falls, so that the sun and shade on it show it is round
+                drawn.part.emit = since === undefined ? 0.12 : 1.5 * (1 - gone);
                 drawn.part.scale = 1 - gone * gone;
                 drawn.tail.forEach((part, at) => {
                     part.hidden = !drawn.been[at] || since !== undefined;

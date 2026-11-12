@@ -29,6 +29,8 @@ export interface Look {
     ink?: Color;
     /** Drawn after everything else and in front of it, above the shade (see `View.shade`). */
     over?: boolean;
+    /** How shiny: from 0, dull, to 1, a bright spot where the sun glances off it toward the eye. Dull unless said. */
+    gloss?: number;
     /** Only what is written on it is drawn, not its faces: for words on something round, written on an unseen box around it. */
     bare?: boolean;
 }
@@ -104,13 +106,14 @@ layout(location = 1) in vec3 normal;
 layout(location = 2) in vec2 uv;
 layout(location = 3) in float group;
 uniform mat4 model, eye, sun;
-out vec3 facing;
+out vec3 facing, where;
 out vec4 lit;
 out vec2 at;
 out float which;
 void main() {
     vec4 world = model * vec4(position, 1.0);
     facing = mat3(model) * normal;
+    where = world.xyz;
     lit = sun * world;
     at = uv;
     which = group;
@@ -120,12 +123,13 @@ void main() {
 const FRAGMENT = `#version 300 es
 precision highp float;
 precision highp sampler2DShadow;
-in vec3 facing;
+in vec3 facing, where;
 in vec4 lit;
 in vec2 at;
 in float which;
 uniform vec4 color;
-uniform vec3 toSun, levels;
+uniform vec3 toSun, levels, eyeAt;
+uniform float gloss;
 uniform bool marked, shaded;
 uniform float glow, shine, emit;
 uniform bool glowing;
@@ -154,6 +158,8 @@ void main() {
     // the sun, by how squarely the face meets it, and light from the sky above and the ground below
     float bright = levels.x * max(dot(n, toSun), 0.0) * open + mix(levels.z, levels.y, n.y * 0.5 + 0.5);
     vec3 seen = pow(pow(base.rgb, vec3(2.2)) * bright, vec3(1.0 / 2.2));
+    // the sun's glint on something shiny: brightest where the face looks halfway between the sun and the eye
+    if (gloss > 0.0 && !marked) seen += gloss * open * pow(max(dot(n, normalize(toSun + normalize(eyeAt - where))), 0.0), 48.0);
     // a mark that is lit shows white, and by its own light; so does anything that shines, in its own color
     float white = marked && abs(which - glow) < 0.5 ? shine : 0.0;
     if (glowing) {
@@ -488,6 +494,7 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
             g.uniformMatrix4fv(main.at("eye"), false, times(perspective(eyeDegrees, canvas.width / canvas.height, 0.5, 120), facingMatrix(eyeFrom, eyeTo)));
             g.uniformMatrix4fv(main.at("sun"), false, sunMatrix);
             g.uniform3fv(main.at("toSun"), toSun);
+            g.uniform3fv(main.at("eyeAt"), eyeFrom);
             g.uniform3fv(main.at("levels"), levels);
             g.activeTexture(g.TEXTURE0);
             g.bindTexture(g.TEXTURE_2D, shadow);
@@ -504,6 +511,7 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
                 g.uniform1f(main.at("glow"), part.lit);
                 g.uniform1f(main.at("shine"), part.shine);
                 g.uniform1f(main.at("emit"), part.emit);
+                g.uniform1f(main.at("gloss"), part.look.gloss ?? 0);
                 g.uniform1i(main.at("shaded"), part.look.shaded === false ? 0 : 1);
                 g.bindVertexArray(marked ? part.marks! : part.faces);
                 g.drawArrays(g.TRIANGLES, 0, marked ? part.markCount : part.count);
