@@ -58,6 +58,8 @@ export function createOutline(surface: Surface, top: () => number = () => 0, onC
             ...entries.map((entry, index) => {
                 const item = make("li", `quire-outline-item level-${entry.level}`);
                 const go = make("button", "quire-outline-link", entry.text || "Untitled heading");
+                // one line, cut short with an ellipsis: the whole heading is in its title
+                go.title = entry.text || "Untitled heading";
                 go.type = "button";
                 go.addEventListener("click", () => {
                     surface.setSelection(caret(entry.path, 0));
