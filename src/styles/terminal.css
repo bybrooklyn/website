@@ -93,6 +93,29 @@
     stroke-linejoin: round;
 }
 
+/* Play again is there only once the recording has played: it grows in then, and shrinks away while it plays. */
+.terminal-bar .terminal-again {
+    opacity: 0;
+    scale: 0.5;
+    visibility: hidden;
+    transition:
+        opacity 0.25s ease,
+        scale 0.35s var(--ease),
+        background-color 0.15s ease,
+        visibility 0s 0.35s;
+}
+
+.terminal-bar .terminal-again.shown {
+    opacity: 1;
+    scale: 1;
+    visibility: visible;
+    transition-delay: 0s;
+}
+
+.terminal-bar .terminal-again.shown:active {
+    scale: 0.86;
+}
+
 /* only the picture of what the button does now */
 .terminal-bar button:not([data-shows="play"]) .for-play,
 .terminal-bar button:not([data-shows="again"]) .for-again,
@@ -179,5 +202,10 @@
 @media (prefers-reduced-motion: reduce) {
     .terminal-screen .cursor {
         animation: none;
+    }
+
+    .terminal-bar .terminal-again {
+        scale: 1;
+        transition: opacity 0.15s ease, visibility 0s 0.15s;
     }
 }

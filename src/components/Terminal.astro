@@ -22,7 +22,7 @@ const { cast, title, caption } = Astro.props;
             <span class="terminal-title">{title}</span>
             <span class="terminal-buttons">
                 {/* Each button is a picture of what it does: play or play again, and full size or close. The words are for screen readers. */}
-                <button type="button" class="terminal-again" data-shows="again" aria-label="Play again" title="Play again" hidden>
+                <button type="button" class="terminal-again" data-shows="again" aria-label="Play again" title="Play again">
                     <svg class="for-play" viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3.2v9.6l7.4-4.8z" fill="currentColor" stroke="none"></path></svg>
                     <svg class="for-again" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.2 8a4.8 4.8 0 1 0 1.5-3.5M3 2.2v3.2h3.2"></path></svg>
                 </button>

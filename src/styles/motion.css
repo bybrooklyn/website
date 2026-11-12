@@ -24,6 +24,12 @@
     view-transition-name: panel;
 }
 
+/* The way back to the top is carried across the change of page by itself, so that it fades with the
+   change and is not cut off under the panel as the panel slides. */
+.to-top {
+    view-transition-name: to-top;
+}
+
 @media (prefers-reduced-motion: no-preference) {
     @view-transition {
         navigation: auto;

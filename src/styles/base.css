@@ -402,6 +402,13 @@ h1 + .lede {
     transition-delay: 0s;
 }
 
+/* A terminal opened to the whole window has the window to itself. */
+:root.terminal-open .to-top {
+    opacity: 0;
+    scale: 0.5;
+    visibility: hidden;
+}
+
 .to-top:hover,
 .to-top:focus-visible {
     border-color: var(--accent);

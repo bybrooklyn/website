@@ -125,6 +125,8 @@ function menu(picture: HTMLImageElement, address: () => string): { box: HTMLElem
 }
 
 let closeOpen: (() => void) | undefined;
+/** Takes the open picture away at once, with no flight back: for when the page itself is being left. */
+let dropOpen: (() => void) | undefined;
 
 /** Opens a picture in the viewer. `link`, if the picture is one, is where its full size is. */
 export function view(picture: HTMLImageElement, link?: HTMLAnchorElement | null): void {
@@ -195,11 +197,7 @@ export function view(picture: HTMLImageElement, link?: HTMLAnchorElement | null)
         const back = drawn(picture);
         picture.style.visibility = "hidden";
         const done = () => {
-            viewer.remove();
-            picture.style.visibility = "";
-            removeEventListener("keydown", key, true);
-            removeEventListener("resize", shut);
-            closeOpen = undefined;
+            drop();
             (link ?? picture).focus({ preventScroll: true });
         };
         more.shut();
@@ -217,9 +215,22 @@ export function view(picture: HTMLImageElement, link?: HTMLAnchorElement | null)
             { duration: 340, easing: EASE, fill: "forwards" },
         ).finished.then(done, done);
     };
+    const drop = () => {
+        viewer.remove();
+        picture.style.visibility = "";
+        removeEventListener("keydown", key, true);
+        removeEventListener("resize", shut);
+        [closeOpen, dropOpen] = [undefined, undefined];
+    };
     const key = (event: KeyboardEvent) => {
-        // while a picture is open the page under it hears no keys; Tab still moves between the menu's lines
-        if (event.key === "Tab") return;
+        // while a picture is open the page under it hears no keys, and Tab goes round what is in the viewer and nowhere else
+        if (event.key === "Tab") {
+            event.preventDefault();
+            const stops = [...viewer.querySelectorAll<HTMLElement>("button, a[href]")].filter((stop) => !stop.closest("[inert]"));
+            const at = stops.indexOf(document.activeElement as HTMLElement);
+            stops[(at + (event.shiftKey ? -1 : 1) + stops.length) % stops.length]?.focus({ preventScroll: true });
+            return;
+        }
         event.stopPropagation();
         const inMenu = more.box.contains(document.activeElement);
         if (event.key === "Escape" && more.shut()) return void viewer.focus({ preventScroll: true });
@@ -234,7 +245,12 @@ export function view(picture: HTMLImageElement, link?: HTMLAnchorElement | null)
     addEventListener("keydown", key, true);
     addEventListener("resize", shut);
     closeOpen = shut;
+    dropOpen = drop;
 }
+
+// Leaving the page takes an open picture with it. Otherwise it would be in the picture the browser takes of the
+// page for the change to the next one, under the header, and still open when the page was come back to.
+for (const leaving of ["pageswap", "pagehide"]) addEventListener(leaving, () => dropOpen?.());
 
 /**
  * Which pictures open: those in the text of a page, covers, figures, and the one on the photos page.
