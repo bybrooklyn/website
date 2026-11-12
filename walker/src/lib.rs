@@ -55,6 +55,3 @@ impl<T> Shared<T> {
         unsafe { &mut *self.0.get() }
     }
 }
-
-
-

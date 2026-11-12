@@ -59,9 +59,9 @@ impl Description {
     /// The shape of the body and legs for this many legs.
     pub fn build(&self) -> Build {
         match self.legs {
-            1 => Build { half_width: 0.26, half_height: 0.24, mass: 4.0, upper: 0.4, lower: 0.4, upper_radius: 0.065, foot: 0.075, hips: &[0.0], swing: &[0.15], knee: -0.3 },
-            2 => Build { half_width: 0.27, half_height: 0.22, mass: 6.0, upper: 0.42, lower: 0.42, upper_radius: 0.06, foot: 0.05, hips: &[0.0, 0.0], swing: &[0.4, -0.1], knee: -0.3 },
-            _ => Build { half_width: 0.5, half_height: 0.15, mass: 8.0, upper: 0.36, lower: 0.36, upper_radius: 0.055, foot: 0.045, hips: &[-0.36, -0.36, 0.36, 0.36], swing: &[0.4, -0.1, 0.4, -0.1], knee: -0.3 },
+            1 => Build { half_width: 0.26, half_height: 0.24, mass: 4.0, upper: 0.4, lower: 0.4, upper_radius: 0.065, foot: 0.075, hips: &[0.0], swing: &[0.15], knee: -0.3, leg_mass: 0.35, steadiness: 6.0, hip_drop: 0.0 },
+            2 => Build { half_width: 0.27, half_height: 0.22, mass: 6.0, upper: 0.42, lower: 0.42, upper_radius: 0.06, foot: 0.05, hips: &[0.0, 0.0], swing: &[0.4, -0.1], knee: -0.3, leg_mass: 1.0, steadiness: 1.0, hip_drop: 0.55 },
+            _ => Build { half_width: 0.5, half_height: 0.15, mass: 8.0, upper: 0.36, lower: 0.36, upper_radius: 0.055, foot: 0.045, hips: &[-0.36, -0.36, 0.36, 0.36], swing: &[0.4, -0.1, 0.4, -0.1], knee: -0.3, leg_mass: 1.0, steadiness: 1.0, hip_drop: 0.55 },
         }
     }
 }
@@ -84,6 +84,14 @@ pub struct Build {
     pub hips: &'static [f32],
     pub swing: &'static [f32],
     pub knee: f32,
+    /// How heavy the legs are, as a share of a walker's: a hopper's leg is light, so swinging it in
+    /// the air barely turns the body.
+    pub leg_mass: f32,
+    /// How much harder the body is to tip than a plain block of its size would be.
+    pub steadiness: f32,
+    /// How far below the body's middle the hips are, as a share of its half height. A hopper's hip
+    /// is at its middle, so a push along its leg goes through its weight and does not tip it.
+    pub hip_drop: f32,
 }
 
 const UPPER_MASS: f32 = 1.2;
@@ -102,8 +110,10 @@ const TOP_SPEED: f32 = 8.0;
 /// what a leg does when it walks.
 const HIP_SWING: (f32, f32, f32) = (0.1, 0.6, 0.6);
 const KNEE_SWING: (f32, f32, f32) = (-0.6, 0.5, 0.6);
-const HOP_HIP_SWING: (f32, f32, f32) = (0.15, 0.5, 0.15);
-const HOP_KNEE_SWING: (f32, f32, f32) = (-0.7, 0.4, 0.7);
+/// How firmly a hopper on the ground turns its body back toward upright, for each radian of tilt.
+const HOP_LEAN: f32 = 1.5;
+/// How much of its torque a hopper's hip uses while its foot is down.
+const HOP_STANCE_GRIP: f32 = 0.15;
 /// The parcel a carrier has on its back: a small box, which slides where a ball would roll away, its
 /// half width and half height in metres, and its mass in kilograms.
 const LOAD_HALF_WIDTH: f32 = 0.11;
@@ -149,8 +159,10 @@ impl Creature {
 
         // first laid out with the hips at height zero, low in the body, then lifted onto the ground
         let mut parts: Vec<Body> = Vec::new();
-        let mut torso = Body::new(Shape::Box { half_width: build.half_width, half_height: build.half_height }, Vec2::new(0.0, build.half_height * 0.55), 0.0, 1.0);
+        let mut torso = Body::new(Shape::Box { half_width: build.half_width, half_height: build.half_height }, Vec2::new(0.0, build.half_height * build.hip_drop), 0.0, 1.0);
         torso.set_mass(build.mass);
+        // a hopper carries its weight spread out, as a pogo rider holds the bar wide, so it is slow to tip
+        torso.inverse_inertia /= build.steadiness;
         parts.push(torso);
         let mut hinges: Vec<(usize, usize, Vec2, (f32, f32), f32)> = Vec::new();
         for leg in 0..legs {
@@ -164,10 +176,10 @@ impl Creature {
             let along = down(swing);
             let knee_at = hip + along * build.upper;
             let mut upper = Body::new(Shape::Capsule { half: build.upper / 2.0, radius: build.upper_radius }, hip + along * (build.upper / 2.0), swing - PI / 2.0, 1.0);
-            upper.set_mass(UPPER_MASS);
+            upper.set_mass(UPPER_MASS * build.leg_mass);
             let below = down(swing + build.knee);
             let mut lower = Body::new(Shape::Capsule { half: build.lower / 2.0, radius: build.foot }, knee_at + below * (build.lower / 2.0), swing + build.knee - PI / 2.0, 1.0);
-            lower.set_mass(LOWER_MASS);
+            lower.set_mass(LOWER_MASS * build.leg_mass);
             lower.friction = 1.0;
             parts.push(upper);
             parts.push(lower);
@@ -303,21 +315,64 @@ impl Creature {
     /// it is shifted in the stride. So the legs move in strides whatever the brain does, and evolution
     /// shapes the strides rather than inventing them.
     pub fn drive(&self, world: &mut World, outputs: &[f32]) {
+        if self.legs.len() == 1 {
+            return self.hop(world, outputs);
+        }
         let (_, starts) = self.description.rhythm();
         let phase = self.phase(world);
         for (i, &index) in self.joints.iter().enumerate() {
-            let (centre, reach, widest) = match (self.legs.len(), i % 2) {
-                // a hopper balances with its hip and bounces with its knee, like a pogo stick
-                (1, 0) => HOP_HIP_SWING,
-                (1, _) => HOP_KNEE_SWING,
-                (_, 0) => HIP_SWING,
-                _ => KNEE_SWING,
-            };
+            let (centre, reach, widest) = if i % 2 == 0 { HIP_SWING } else { KNEE_SWING };
             let [middle, width, shift] = [0, 1, 2].map(|k| clamp(outputs[3 * i + k], -1.0, 1.0));
             let (s, _) = sin_cos(2.0 * PI * (phase + starts[i / 2]) + PI * shift);
             let joint = &world.joints[index as usize];
             let target = clamp(centre + reach * middle + widest * 0.5 * (width + 1.0) * s, joint.lower, joint.upper);
             self.aim(world, i, target);
+        }
+    }
+
+    /// Drives a one-legged walker as a pogo stick is ridden. In the air the leg is folded to land and
+    /// its foot put ahead of the body by as much as its speed needs, more if it is going faster than
+    /// it wants to and less if slower, so that the next landing brakes or pushes it toward the speed
+    /// it wants. On the ground the leg straightens to throw it up again, and the hip turns the body
+    /// back toward upright, as a rider leans. So it hops whatever the brain does, and evolution
+    /// shapes the hops: the brain's six numbers set the speed it wants, how hard the foot placement
+    /// answers to speed, a trim to where the foot goes, how far the leg straightens and folds, and
+    /// how firmly the body is held upright.
+    fn hop(&self, world: &mut World, outputs: &[f32]) {
+        let o = |k: usize| clamp(outputs[k], -1.0, 1.0);
+        let torso = world.bodies[self.torso as usize];
+        let leg = self.legs[0];
+        let tilt = torso.angle();
+        let hip = world.joints[self.joints[0] as usize].angle(&world.bodies);
+        let knee = world.joints[self.joints[1] as usize].angle(&world.bodies);
+        let grounded = world.bodies[leg.lower as usize].touching;
+        let (hip_target, knee_target) = if grounded {
+            // on the ground: give while the body still comes down, then straighten hard to throw it
+            // up; and turn the body back toward upright, as a rider leans
+            let lean = HOP_LEAN * (1.0 + 0.5 * o(5));
+            let thrust = if torso.velocity.y < 0.0 { knee.min(-0.9 + 0.4 * o(4)) } else { -0.05 - 0.15 * (o(3) + 1.0) };
+            // the line from hip to foot is what must stay put as the knee straightens, not the thigh,
+            // or the push would spin the body; the knee's next step is allowed for as well
+            let knee_speed = world.joints[self.joints[1] as usize].angular_speed(&world.bodies);
+            let line = hip + 0.5 * knee;
+            (line + lean * tilt + 0.1 * lean * torso.spin - 0.5 * (knee + knee_speed * STEP * 2.0), thrust)
+        } else {
+            // in the air: fold, and put the foot where the landing will set the speed right
+            let wanted = 0.9 + 0.6 * o(0);
+            let answer = 0.06 + 0.05 * o(1);
+            let ahead = torso.velocity.x * 0.12 + answer * (torso.velocity.x - wanted);
+            let along = clamp(ahead / (self.description.build().upper + self.description.build().lower), -0.6, 0.6);
+            let angle = crate::math::atan2(along, crate::math::sqrt(1.0 - along * along)) + 0.15 * o(2);
+            (angle - 0.5 * knee - tilt, -0.9 + 0.4 * o(4))
+        };
+        let (hip_joint, knee_joint) = (&world.joints[self.joints[0] as usize], &world.joints[self.joints[1] as usize]);
+        let (hip_target, knee_target) = (clamp(hip_target, hip_joint.lower, hip_joint.upper), clamp(knee_target, knee_joint.lower, knee_joint.upper));
+        self.aim(world, 0, hip_target);
+        self.aim(world, 1, knee_target);
+        // on the ground the hip is held only lightly: the push goes up the leg and through the body's
+        // middle, and a hip held hard would turn it into a spin
+        if grounded {
+            world.joints[self.joints[0] as usize].torque *= HOP_STANCE_GRIP;
         }
     }
 
@@ -332,7 +387,9 @@ impl Creature {
         let index = self.joints[i] as usize;
         let angle = world.joints[index].angle(&world.bodies);
         let joint = &mut world.joints[index];
-        joint.speed = clamp(GAIN * (target - angle), -TOP_SPEED, TOP_SPEED);
+        // a hopper's knee is its spring: it may straighten twice as fast to throw the body up
+        let top = if self.legs.len() == 1 && i == 1 { 2.0 * TOP_SPEED } else { TOP_SPEED };
+        joint.speed = clamp(GAIN * (target - angle), -top, top);
         // a single leg has to throw the whole body up, so its knee is stronger
         let knee = if self.legs.len() == 1 { 1.8 * KNEE_TORQUE } else { KNEE_TORQUE };
         joint.torque = if i % 2 == 0 { HIP_TORQUE } else { knee };

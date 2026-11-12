@@ -215,10 +215,19 @@ and 110 to 150 ms for four, at each size. A large brain has more to learn and ge
   it, and its three outputs shape the swing: where it is centred, how wide it is, and how far it is
   shifted in the stride. A hip swings about 0.1 radians in front of straight down, its centre moved
   up to 0.6 either way and its swing up to 0.6 to each side; a knee swings about a bend of 0.6, its
-  centre moved up to 0.5 and its swing up to 0.6. (A hopper's hip barely swings, 0.15, so it can
-  balance, and its knee swings up to 0.7.) So the legs move in strides whatever the brain does, and
+  centre moved up to 0.5 and its swing up to 0.6. So the legs move in strides whatever the brain does, and
   evolution shapes the strides rather than inventing them. Each target is kept within the joint's
   limits: a hip from -1.0 (back) to 1.3 (forward), a knee from -2.0 (bent back) to 0 (straight).
+
+  One leg hops instead, as a pogo stick is ridden. In the air the leg folds and the foot goes
+  ahead of the body by 0.12 s of its speed, plus more or less as it is faster or slower than it
+  wants to be; on the ground the leg gives while the body comes down, then straightens hard, while
+  the hip, held only lightly so the push does not spin the body, turns the body back toward
+  upright. Its six outputs set the speed it wants (0.3 to 1.5 m/s), how much the foot placement
+  answers to speed, a trim to where the foot goes, how far the leg straightens and folds, and how
+  firmly the body is turned upright. Its leg is light, its hip at the middle of its body, and its
+  body six times as hard to tip as a plain block of its size, as a rider holding a pogo stick's bar
+  wide is, so it can be balanced at all.
 - `show_weights() -> *const f32` The weights the show runs on, to draw the brain's connections.
 
 ### One walker, live

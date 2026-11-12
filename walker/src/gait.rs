@@ -147,7 +147,8 @@ mod tests {
 
     // Before the legs moved in strides, the same training gave: two legs upright 0.13 of the run,
     // one foot down 0.50, strides varying 0.33, 15.9 m; four legs upright 0.91, trotting 0.02,
-    // strides varying 0.40, 29.6 m; one leg upright 0.03, dragging a knee 0.48 of the run.
+    // strides varying 0.40, 29.6 m; one leg upright 0.03, dragging a knee 0.48 of the run. With the legs
+    // in strides but a hopper swinging its leg as a walker does, one leg was upright 0.73 and went 1.2 m.
 
     #[test]
     fn two_legs_learn_to_walk_upright_with_their_feet_taking_turns_in_a_steady_stride() {
@@ -164,8 +165,9 @@ mod tests {
     }
 
     #[test]
-    fn one_leg_stays_up_more_than_it_did_though_it_does_not_yet_hop() {
+    fn one_leg_learns_to_hop_upright_and_steadily_like_a_pogo_stick() {
         let gait = trained(1);
-        assert!(gait.upright > 0.4 && gait.dragging < 0.3, "{gait:?}");
+        assert!(gait.upright > 0.8 && gait.dragging < 0.02, "{gait:?}");
+        assert!(gait.strides >= 10 && gait.variation < 0.2 && gait.distance > 8.0, "{gait:?}");
     }
 }
