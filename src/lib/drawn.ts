@@ -40,3 +40,28 @@ export function cells(name: string, languages: [name: string, share: number][] =
 
 /** The name as large as fits the width of a cover 320 wide. */
 export const nameSize = (name: string) => Math.min(46, 286 / (name.length * 0.55));
+
+/**
+ * A project's emblem: a few large squares, the same on the left as on the right, worked out from
+ * its name. Being symmetrical it has a shape of its own that the eye keeps, which a scatter of
+ * small squares does not, so projects can be told apart in a list at a glance.
+ */
+export function emblem(name: string): Cell[] {
+    let seed = 11;
+    for (const letter of name) seed = (Math.imul(seed, 33) + letter.codePointAt(0)!) >>> 0;
+    const next = () => (seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 2 ** 32;
+    const [ACROSS, DOWN, SIZE, STEP] = [8, 5, 28, 34];
+    const [left, top] = [(320 - (ACROSS - 1) * STEP - SIZE) / 2, (200 - (DOWN - 1) * STEP - SIZE) / 2];
+    const found: Cell[] = [];
+    for (let row = 0; row < DOWN; row++) {
+        for (let column = 0; column < ACROSS / 2; column++) {
+            if (next() < 0.42) continue;
+            const strength = 0.35 + next() * 0.65;
+            for (const at of [column, ACROSS - 1 - column]) found.push({ x: left + at * STEP, y: top + row * STEP, strength });
+        }
+    }
+    return found;
+}
+
+/** A color of a project's own, from its place in the list: each a good way round the wheel from the one before, so no two neighbours are alike. */
+export const ownHue = (order: number): number => (order * 137.5 + 20) % 360;
