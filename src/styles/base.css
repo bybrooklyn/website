@@ -778,30 +778,6 @@ h1 + .about {
     }
 }
 
-/* Playmatter on the homepage: the clip across the page, and under it what it is. */
-.feature-title {
-    margin: 0 0 calc(var(--line) * 0.6);
-    font-size: clamp(1.8rem, 4vw, 2.6rem);
-}
-
-.feature-words {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: 0.3rem 2rem;
-    margin-top: calc(var(--line) * 0.9);
-}
-
-.feature-words p {
-    margin: 0;
-}
-
-.feature-words p:first-child {
-    flex: 1 1 24rem;
-    max-width: 40rem;
-    font-size: 1.1em;
-}
-
 /* ---- figures ---- */
 
 .figure {
