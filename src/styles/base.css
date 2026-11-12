@@ -319,6 +319,18 @@ a:focus-visible,
     outline-offset: var(--ring-offset, 0.15rem);
 }
 
+/* Things to press drawn wholly by their own rules: none of the browser's box, the type of the words around them. */
+.play-button,
+.cite-copy,
+.photo-buttons button,
+.terminal-bar button {
+    border: 0;
+    padding: 0;
+    background: none;
+    font: inherit;
+    cursor: pointer;
+}
+
 /* ---- home ---- */
 
 .home {
@@ -705,15 +717,10 @@ h1 + .about {
 }
 
 .play-button {
-    border: 0;
-    padding: 0;
-    background: none;
-    font: inherit;
     font-size: 1.15em;
     color: var(--accent);
     text-decoration: underline 0.06em color-mix(in oklch, var(--accent) 45%, transparent);
     text-underline-offset: 0.2em;
-    cursor: pointer;
 }
 
 .play-button::before {
