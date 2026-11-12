@@ -62,6 +62,16 @@ From the conversation on 11 Nov, later:
     replace, a word count, print and PDF, several documents. Kept in the browser, files opened and
     downloaded, real files edited in place where the browser can. Own code only. Made from the
     site's own editor (`scripts/editor/`), which it replaces, and open for anyone to use.
+    Decided so far (11 Nov):
+    - The file is Markdown. What Markdown cannot hold (color, size, centering) is allowed, and is
+      kept as small pieces of HTML inside the file.
+    - It looks like the site: the dark page, her typefaces, text in a centered column, the
+      document's name and a word count at the top.
+    - Formatting four ways: a pill at the top, "simple like google docs, but with nice features";
+      a bar that appears over selected text; Markdown typed as you go (`# `, `**bold**`, `- `); and
+      a slash menu on an empty line. The pill and the menus move the way the picture viewer's three
+      dots do, flowing from one shape to the next.
+    - `bun run edit` stays for her own posts, on the same editor code, with its small local server.
 14. A mini where a person learns to walk in the browser, with the person to set up. In Rust
     compiled to WebAssembly, a couple of crates allowed, made as small as it can be and under
     512 KiB.
