@@ -5,6 +5,11 @@
 //! Both start from the same world as training does and are judged the same way (`Judge`), so the
 //! best brain's run on the page is the very run it was scored on, step for step, unless someone
 //! pushes it. Each stops where its scored run stopped; the page then starts it again.
+//!
+//! A show can also be endless: it goes on while the walker stays up, on ground the page lays ahead
+//! of it (`extend`) and drops behind it, with the whole world moved back now and then so the numbers
+//! stay fine (`origin` says how far in all). A better brain can take over at the start of a stride
+//! (`swap`) without the walk starting again.
 
 use alloc::vec;
 use alloc::vec::Vec;
@@ -27,8 +32,18 @@ pub struct Show {
     pub judge: Judge,
     /// Six numbers for each body: x, y, angle, kind, and the two size numbers (see `Shape::size`).
     pub drawn: Vec<f32>,
+    /// How far the world has been moved back, in all, in metres.
+    pub origin: f64,
+    /// A brain waiting to take over at the start of the next stride.
+    pub pending: Option<Vec<f32>>,
     leftover: f32,
 }
+
+/// An endless walk moves the world back by this much whenever the walker passes it, in metres. A
+/// power of two, so positions near it lose nothing in the move.
+const REBASE: f32 = 512.0;
+/// Ground further behind the walker than this is dropped, in metres.
+const BEHIND: f32 = 40.0;
 
 impl Show {
     pub fn new(start: &World, creature: &Creature, layout: Layout, weights: &[f32], judge: Judge) -> Show {
@@ -40,10 +55,14 @@ impl Show {
             senses: vec![0.0; layout.inputs],
             judge,
             drawn: Vec::new(),
+            origin: 0.0,
+            pending: None,
             leftover: 0.0,
         };
         show.creature.sense(&show.world, &mut show.senses);
         show.brain.think(&show.weights, &show.senses);
+        // that thought was only to have something to draw: the run itself starts with nothing in memory
+        show.brain.forget();
         show.draw();
         show
     }
@@ -54,19 +73,52 @@ impl Show {
         self.leftover += seconds;
         let mut taken = 0;
         while self.leftover >= STEP && taken < MOST_STEPS && !self.judge.over {
+            let stride = self.creature.phase(&self.world) as u32;
             self.creature.sense(&self.world, &mut self.senses);
             self.brain.think(&self.weights, &self.senses);
             self.creature.drive(&mut self.world, &self.brain.outputs);
             self.world.step();
-            self.judge.after_step(&self.creature, &self.world);
+            self.judge.after_step(&self.creature, &self.world, &self.brain.outputs);
             self.leftover -= STEP;
             taken += 1;
+            // a new stride has begun: a better brain waiting takes over here, mid walk
+            if self.creature.phase(&self.world) as u32 != stride {
+                if let Some(weights) = self.pending.take() {
+                    self.weights = weights;
+                    self.brain.forget();
+                }
+            }
+            if self.judge.endless {
+                self.keep_near();
+            }
         }
         if taken == MOST_STEPS || self.judge.over {
             self.leftover = 0.0;
         }
         self.draw();
         taken
+    }
+
+    /// Keeps an endless walk near the origin and its ground short: what is far behind is dropped,
+    /// and once the walker passes `REBASE` everything moves back by that much.
+    fn keep_near(&mut self) {
+        let x = self.world.bodies[self.creature.torso as usize].position.x;
+        if self.world.steps % 60 == 0 {
+            self.world.drop_ground_before(x - BEHIND);
+        }
+        if x > REBASE {
+            self.world.shift(REBASE);
+            self.creature.start.x -= REBASE;
+            self.origin += REBASE as f64;
+        }
+    }
+
+    /// Lays more ground for an endless walk. The pieces are given where the page has them, from the
+    /// walk's start, and are moved back as the world has been.
+    pub fn extend(&mut self, pieces: &[crate::physics::Segment]) {
+        let back = self.origin as f32;
+        let moved: Vec<crate::physics::Segment> = pieces.iter().map(|piece| crate::physics::Segment { a: Vec2::new(piece.a.x - back, piece.a.y), b: Vec2::new(piece.b.x - back, piece.b.y) }).collect();
+        self.world.extend_ground(&moved);
     }
 
     /// How the run has gone so far, scored as training scores it.
@@ -99,6 +151,8 @@ pub struct Crowd {
     pub weights: Vec<f32>,
     brain: Brain,
     senses: Vec<f32>,
+    /// Each walker's memory, kept here between steps, since they share one brain to think with.
+    memories: Vec<f32>,
     /// Four numbers for each walker: how far it has gone, the height of its body, its angle, and 1
     /// once its run is over.
     pub drawn: Vec<f32>,
@@ -115,6 +169,7 @@ impl Crowd {
             weights: population.to_vec(),
             brain: Brain::new(layout),
             senses: vec![0.0; layout.inputs],
+            memories: vec![0.0; count * layout.memory],
             drawn: Vec::new(),
             leftover: 0.0,
         };
@@ -132,10 +187,13 @@ impl Crowd {
                     continue;
                 }
                 self.creature.sense(world, &mut self.senses);
+                let kept = self.brain.layout.memory;
+                self.brain.memory.copy_from_slice(&self.memories[i * kept..(i + 1) * kept]);
                 self.brain.think(&self.weights[i * count..(i + 1) * count], &self.senses);
+                self.memories[i * kept..(i + 1) * kept].copy_from_slice(&self.brain.memory);
                 self.creature.drive(world, &self.brain.outputs);
                 world.step();
-                self.judges[i].after_step(&self.creature, world);
+                self.judges[i].after_step(&self.creature, world, &self.brain.outputs);
             }
             self.leftover -= STEP;
             taken += 1;
@@ -164,9 +222,9 @@ mod tests {
 
     #[test]
     fn the_show_plays_the_best_run_exactly_as_it_was_scored() {
-        for (legs, goal) in [(2, Goal::Far), (4, Goal::Fast), (1, Goal::Tall)] {
-            let settings = Settings { goal, ..Settings::default() };
-            let mut trainer = Trainer::new(Description { legs }, settings, &flat_ground(), 2).unwrap();
+        for (legs, goal, layers, memory) in [(2, Goal::Far, 1, 0), (4, Goal::Fast, 3, 6), (1, Goal::Tall, 2, 4)] {
+            let settings = Settings { goal, layers, memory, ..Settings::default() };
+            let mut trainer = Trainer::new(Description { legs, carry: false, leap: false }, settings, &flat_ground(), 2).unwrap();
             while trainer.generation < 5 {
                 trainer.train(32);
             }
@@ -181,5 +239,35 @@ mod tests {
             assert_eq!(show.step(1.0), 0, "an ended run stands still");
             assert!(steps > 0);
         }
+    }
+
+    #[test]
+    fn an_endless_walk_far_from_the_start_is_moved_back_without_a_jolt_and_keeps_its_distance() {
+        let ground = [crate::physics::Segment { a: Vec2::new(-20.0, 0.0), b: Vec2::new(2000.0, 0.0) }];
+        let trainer = Trainer::new(Description { legs: 4, carry: false, leap: false }, Settings::default(), &ground, 1).unwrap();
+        let mut judge = trainer.judge();
+        judge.endless = true;
+        // the same calm brain twice, once carried 600 m along, as if it had walked there
+        let calm = alloc::vec![0.0; trainer.layout.weights()];
+        let mut near = Show::new(&trainer.start, &trainer.creature, trainer.layout, &calm, judge);
+        let mut show = Show::new(&trainer.start, &trainer.creature, trainer.layout, &calm, judge);
+        for body in &mut show.world.bodies {
+            body.position.x += 600.0;
+        }
+        let before = show.creature.distance(&show.world);
+        show.step(1.0 / 60.0);
+        near.step(1.0 / 60.0);
+        assert_eq!(show.origin, 512.0, "moved back once it passed 512 m");
+        let torso = show.world.bodies[show.creature.torso as usize];
+        assert!(torso.position.x < 100.0);
+        assert!((show.creature.distance(&show.world) - before).abs() < 0.05, "the distance carried on across the move");
+        // after the move it walks as the one that never went anywhere does, give or take what an f32 at
+        // 600 m rounds away before the move
+        for _ in 0..120 {
+            show.step(1.0 / 60.0);
+            near.step(1.0 / 60.0);
+        }
+        let apart = (show.creature.distance(&show.world) - 600.0) - near.creature.distance(&near.world);
+        assert!(apart.abs() < 0.05, "no jolt: {apart} m apart");
     }
 }

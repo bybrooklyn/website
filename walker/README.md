@@ -12,7 +12,9 @@ straight out of the module's memory.
   in every browser, because the module brings its own sine, square root and the rest.
 - `src/body.rs`: the creature, built from a number of legs (1, 2 or 4), each with a hip, a knee and
   a foot, on a rounded body.
-- `src/brain.rs`: a network of one or two hidden layers, its weights one flat list of f32.
+- `src/brain.rs`: a network of one to four hidden layers with a little memory, its weights one flat
+  list of f32.
+- `src/gait.rs`: how natural a run looks, in numbers, for the tests.
 - `src/learn.rs`: the goals a walker can be rewarded for, the judge that scores a run step by step,
   and evolution with a seeded random generator, run in slices.
 - `src/show.rs`: one brain running in real time, and a whole generation at once.
@@ -47,15 +49,28 @@ All numbers are metres, kilograms, seconds and radians, with y up and angles ant
 
 ### Making it
 
-- `create(legs: u32, population: u32, seconds: f32, seed: u32, hidden: u32, layers: u32, goal: u32) -> u32`
+- `create(legs: u32, population: u32, seconds: f32, seed: u32, hidden: u32, layers: u32, memory: u32, goal: u32, length: f32) -> u32`
   Makes a new walker on flat ground, replacing any before it. `legs` is 1, 2 or 4. `population` is
   the number of brains in a generation (2 to 1000; 32 is a good choice). `seconds` is how long each
   brain is run when training (the goal's own time if 0 or less, at most 120). `seed` starts the
   random numbers; the same seed learns the same way. `hidden` is the neurons in each hidden layer
-  (2 to 64) and `layers` the number of hidden layers (1 or 2). `goal` is what it is rewarded for:
-  0 go far, 1 go fast, 2 stand tall, 3 jump (see Goals). Returns the number of weights in one brain,
+  (2 to 64), `layers` the number of hidden layers (1 to 4), and `memory` how many values the brain
+  keeps from one step to the next (0 to 16). `goal` is what it is rewarded for:
+  0 go far, 1 go fast, 2 stand tall, 3 jump, 4 the obstacle course, 5 carry (see Goals). `length`
+  is how far a run goes, in metres (see Run length); 0 or less means runs of the goal's own time in
+  training and an endless walk on screen. Returns the number of weights in one brain,
   or 0 if `legs` is not 1, 2 or 4.
-- `run_seconds() -> f32` How long a run lasts: 4 s for going fast, 10 s for the others.
+- `run_seconds() -> f32` How long a run of the goal's own time lasts: 4 s for going fast, 20 s on the
+  course, 10 s for the others.
+
+### Run length
+
+A run of a set length ends when the body has gone that far, earning 1 for each second it had to
+spare, or when it has had as long as a pace of 0.4 m/s allows (and no less than the goal's own
+time). Its distance counts no further than its length. With no set length, training scores runs
+of the goal's own time, and the walk on screen is endless: it is the same run for those first
+seconds, then goes on with the same brain while the walker stays up. So training still compares
+brains on runs of one length, and what is seen is where the best of them goes after that.
 - `ground_room(pieces: u32) -> *mut f32`
   Room for `pieces` pieces of ground, four f32 each: x1, y1, x2, y2. Write them there, then call
   `ground_set`. The pieces may come in any order and need not join, so gaps are allowed. The
@@ -88,10 +103,19 @@ All numbers are metres, kilograms, seconds and radians, with y up and angles ant
 ### Goals
 
 The body is down when it touches the ground, is tipped past sixty degrees, or is held lower than a
-third of the height it stood at. Every score is less 1 for each second down, 0.3 for each second of
-each knee on the ground, and 0.00005 for each joule of work the motors did. A run ends once the body
+third of the height it stood at. Every score is less 1 for each second down, 1 for each second of
+each knee on the ground, and 0.0002 for each joule of work the motors did. A run ends once the body
 has been down for a second, and a run that ends that way costs 3 more, so a walker learns to stay
-up before it learns to go. Then, by goal:
+up before it learns to go.
+
+How it moves counts as well, for every goal, so that what it learns looks like walking. While it is
+going forward (in full from 0.6 m/s, in part below), each second with the body carried upright (a
+lean under 0.35 radians) and high (over 0.7 of its standing height) earns 0.5, and each second with
+its feet taking turns earns 0.4: for two legs exactly one foot down, for four one diagonal pair
+down and the other up, for one leg its foot down in the second half of each stride and up in the
+first. Each second of a foot sliding along the ground faster than 0.3 m/s costs 0.5, and each
+change in the brain's outputs from one step to the next costs 0.002 for its size, so the legs
+swing rather than twitch. Then, by goal:
 
 - **Go far** (0): the distance the body went forward in 10 s, plus 0.25 for each second on its feet
   and 0.5 for each second in the air going forward (which is how a one-legged walker gets anywhere).
@@ -102,7 +126,17 @@ up before it learns to go. Then, by goal:
   counts as nothing.
 - **Jump** (3): one and a half times the distance, plus each second spent with nothing touching
   anything while going forward faster than 0.5 m/s. A foot put down in a gap (touching, with no
-  ground under it) costs 1 and ends the run.
+  ground under it) costs 1 and ends the run; stopping (under 0.2 m in four seconds) costs 2 and ends
+  it too, so waiting at the edge of a gap is worse than trying. The manner of moving does not count
+  for a jumper, since a leap is neither smooth nor upright. A jumper with two or four legs has one
+  more output, which quickens or slows its rhythm from half to one and a half times its pace, so a
+  stride can be timed to land beyond a gap, and its joints may swing 1.6 times as far.
+- **The course** (4): as going far, over 20 s, on the obstacle course the page lays: level ground,
+  then hills, steps and gaps, each stretch and each lap harder.
+- **Carry** (5): the walker has a parcel (a small box, 0.6 kg) on a back with a rim at each end. The
+  distance, plus 0.25 for each second on its feet; the parcel falling below the middle of the body
+  or more than 0.3 m past either end is dropping it, which ends the run and costs 3. Two more senses
+  say where the parcel is.
 
 How a generation is made: the best 4 go on unchanged (and are not run again). Each of the others
 has a parent, the best of three picked at random, and half the time a second parent the same way,
@@ -119,8 +153,15 @@ about 0.3.
   scored), joins the population, and the show starts again with it. Returns 1, or 0 if any weight is
   not a finite number. A brain only fits a walker with the same number of legs.
 
-The weights are, in order, layer by layer from the senses to the outputs: for each neuron of the
-layer its weight for everything coming into it, then that layer's biases.
+The weights are, in order, layer by layer from the inputs to the outputs: for each neuron of the
+layer its weight for everything coming into it, then that layer's biases. The inputs are the senses
+and then the memory; the outputs are the legs' and then the memory's. Memory is fed back in on the
+next step and starts at zero at the start of every run, so a run played again is the same run.
+
+The page offers three sizes by name: small (8 neurons, 1 layer, no memory), medium (16, 2 layers,
+4 memories) and large (32, 3 layers, 8 memories). Most of a generation's time goes to the physics,
+not the brain, so the sizes cost nearly the same: natively about 50 ms a generation for two legs
+and 110 to 150 ms for four, at each size. A large brain has more to learn and gets there slower.
 
 ### The show: one walker in real time
 
@@ -128,7 +169,19 @@ layer its weight for everything coming into it, then that layer's biases.
   the first generation is finished. The show starts from the same world as training and is judged
   the same way, so, unless it is pushed, it plays the very run the brain was scored on and ends
   where that run ended: its distance and score at the end are the brain's, to the bit.
-- `show_over() -> u32` 1 once the run has ended, after which the show stands still until reset.
+- `show_over() -> u32` 1 once the run has ended, after which the show stands still until reset. An
+  endless show ends only in a fall.
+- `show_endless() -> u32` 1 if the show is endless.
+- `show_ground_extend(pieces: u32)` Lays `pieces` more pieces of ground, written into
+  `ground_room` in metres from the walk's start, ahead of an endless show. Ground more than 40 m
+  behind the walker is dropped.
+- `show_origin() -> f64` How far an endless show's world has been moved back: whenever the walker
+  passes 512 m, everything moves back 512 m, a power of two, so positions there lose nothing, and
+  an f32 stays fine however far it walks. Add this to a body's x for where it is from the start.
+- `weights_swap() -> u32` Takes in the brain in `weights_room` as `weights_load` does, but an
+  endless show goes on: the new brain takes over at the start of the walker's next stride.
+- `legs_length() -> u32` and `show_load() -> i32` The number of legs, and the number of the body
+  that is the parcel, or -1.
 - `show_score() -> f32` The run's score so far.
 - `show_step(seconds: f32) -> u32` Moves on by `seconds` in whole steps of 1/60 s, the brain
   deciding before each, and keeps the remainder for next time. Returns the steps taken, at most 8.
@@ -143,8 +196,10 @@ layer its weight for everything coming into it, then that layer's biases.
   2 box), and two sizes: a circle's radius and 0, a capsule's half length (without its round ends)
   and radius, a box's half width and half height. A capsule lies along its own x axis.
 - `show_distance() -> f32` How far the torso has gone forward since the start.
-- `senses_length() -> u32`, `hidden_length() -> u32`, `layers_length() -> u32`, `outputs_length() -> u32`
-  The number of senses, of neurons in each hidden layer, of hidden layers, and of outputs.
+- `senses_length() -> u32`, `hidden_length() -> u32`, `layers_length() -> u32`, `outputs_length() -> u32`,
+  `memory_length() -> u32` The number of senses, of neurons in each hidden layer, of hidden layers,
+  of outputs, and of memories.
+- `show_memory() -> *const f32` What the show's brain is keeping for its next step.
 - `show_senses() -> *const f32` What the walker sensed before its last step, in this order:
   - the body's angle, in radians, 0 upright;
   - its spin times 0.2;
@@ -154,13 +209,49 @@ layer its weight for everything coming into it, then that layer's biases.
   - for each foot, 1 if it is on the ground, else 0;
   - how much higher the ground is 0.6 m ahead, and 1.2 m ahead, than under the body, from -1 to 1,
     and -1 over a gap: what a jumper needs to see a step or a gap coming;
-  - the sine and cosine of a clock going round 1.2 times a second, to keep a rhythm by.
-- `show_hidden() -> *const f32` What each hidden neuron gave, -1 to 1, the first layer then the
-  second.
-- `show_outputs() -> *const f32` What each output gave, -1 to 1: the target for each joint, from
-  one end of its range (-1) to the other (1). A hip turns from -1.0 (back) to 1.3 (forward) and a
-  knee from -2.0 (bent back) to 0 (straight).
+  - the sine and cosine of the rhythm the legs keep (see `show_outputs`);
+  - carrying, where the parcel is from the middle of the back, along it and above it, in the body's
+    own frame, each by the body's size.
+- `show_hidden() -> *const f32` What each hidden neuron gave, -1 to 1, layer after layer.
+- `show_outputs() -> *const f32` What each output gave, -1 to 1, three for each joint. The legs keep
+  a rhythm: 1.8 strides a second for one leg, 1.2 for two (taking turns, half a stride apart), 1.6
+  for four (a trot, each diagonal pair together). Each joint swings like a pendulum in time with
+  it, and its three outputs shape the swing: where it is centred, how wide it is, and how far it is
+  shifted in the stride. A hip swings about 0.1 radians in front of straight down, its centre moved
+  up to 0.6 either way and its swing up to 0.6 to each side; a knee swings about a bend of 0.6, its
+  centre moved up to 0.5 and its swing up to 0.6. So the legs move in strides whatever the brain does, and
+  evolution shapes the strides rather than inventing them. Each target is kept within the joint's
+  limits: a hip from -1.0 (back) to 1.3 (forward), a knee from -2.0 (bent back) to 0 (straight).
+
+  One leg hops instead, as a pogo stick is ridden. In the air the leg folds and the foot goes
+  ahead of the body by 0.12 s of its speed, plus more or less as it is faster or slower than it
+  wants to be; on the ground the leg gives while the body comes down, then straightens hard, while
+  the hip, held only lightly so the push does not spin the body, turns the body back toward
+  upright. Its six outputs set the speed it wants (0.3 to 1.5 m/s), how much the foot placement
+  answers to speed, a trim to where the foot goes, how far the leg straightens and folds, and how
+  firmly the body is turned upright. Its leg is light, its hip at the middle of its body, and its
+  body six times as hard to tip as a plain block of its size, as a rider holding a pogo stick's bar
+  wide is, so it can be balanced at all.
 - `show_weights() -> *const f32` The weights the show runs on, to draw the brain's connections.
+
+### One walker, live
+
+- `live_begin() -> u32` Starts learning one walker at a time, with no generations in the
+  background: the show is each attempt. It climbs: each attempt is the best so far with about a
+  third of its weights nudged, kept only if it scores better, by the same score a generation uses.
+  The nudges start at 0.3, grow by half after a success and shrink by a tenth after a failure, so
+  that about one attempt in five does better. The first attempt is a calm brain, every weight zero
+  but the output biases, which hold the legs at a built-in stride that walks with no feedback (for
+  four legs the average outputs of a long run's best walker, for two the best of four thousand
+  strides tried at random), so it steps from the start. An attempt that goes under 0.2 m in four
+  seconds is over. Natively, from a fixed seed, two legs go 8.4 m on the first attempt and 8.7 m by
+  the sixtieth; four legs 7.3 m, then 12.4 m.
+- `live_step(seconds: f32) -> u32` Moves the attempt on. When it ends (a fall, a stop, or the end of
+  its run) it is kept or not, and the next attempt starts at once. Returns the attempt's number.
+- `live_attempt() -> u32`, `live_best_score() -> f32`, `live_best_distance() -> f32`,
+  `live_best_weights() -> *const f32` The attempt now walking, the best score so far and its weights,
+  and the furthest a kept attempt has gone, which never goes down.
+- `live_stop()` Goes back to a generation at a time.
 
 ### The crowd: a whole generation at once
 

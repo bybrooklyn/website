@@ -1,10 +1,15 @@
-//! The brain: a small network of one or two hidden layers. Each hidden neuron adds up what comes in,
-//! each times its own weight, plus a bias, and squashes the sum with tanh; the next layer does the
-//! same with those, and each output is the target for one joint. All the weights sit in one flat list
-//! of f32, which is what evolution changes and what a shared link carries.
+//! The brain: a small network of one to four hidden layers, with a little memory. Each hidden neuron
+//! adds up what comes in, each times its own weight, plus a bias, and squashes the sum with tanh;
+//! the next layer does the same with those, and the last gives the outputs. All the weights sit in
+//! one flat list of f32, which is what evolution changes and what a shared link carries.
 //!
-//! The list holds, in order, for each layer from the senses to the outputs: for each neuron its
-//! weight for everything coming in, then that layer's biases.
+//! Memory is a few extra outputs that are not sent to the legs but fed back in with the senses on
+//! the next step, so the brain can keep a beat or react to what just happened. It starts at zero at
+//! the start of every run (`forget`), so a run played again is the same run.
+//!
+//! The list holds, in order, for each layer from the inputs to the outputs: for each neuron its
+//! weight for everything coming in, then that layer's biases. The inputs are the senses and then
+//! the memory; the outputs are the legs' and then the memory's.
 
 use alloc::vec;
 use alloc::vec::Vec;
@@ -14,33 +19,43 @@ use crate::math::tanh;
 /// Hidden neurons in a layer when nothing else is asked for. Enough for a gait, few enough to learn in
 /// minutes.
 pub const HIDDEN: usize = 12;
-/// The most hidden neurons a layer may have.
+/// The most hidden neurons a layer may have, hidden layers a brain may have, and memories.
 pub const MOST_HIDDEN: usize = 64;
+pub const MOST_LAYERS: usize = 4;
+pub const MOST_MEMORY: usize = 16;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Layout {
     pub inputs: usize,
     /// Neurons in each hidden layer.
     pub hidden: usize,
-    /// One or two hidden layers.
+    /// One to four hidden layers.
     pub layers: usize,
     pub outputs: usize,
+    /// Values the brain keeps from one step to the next.
+    pub memory: usize,
 }
 
 impl Layout {
     pub fn new(inputs: usize, outputs: usize) -> Layout {
-        Layout { inputs, hidden: HIDDEN, layers: 1, outputs }
+        Layout { inputs, hidden: HIDDEN, layers: 1, outputs, memory: 0 }
     }
 
-    /// A layout with `hidden` neurons in each of `layers` hidden layers, kept within what is allowed.
-    pub fn sized(inputs: usize, outputs: usize, hidden: usize, layers: usize) -> Layout {
-        Layout { inputs, hidden: hidden.clamp(2, MOST_HIDDEN), layers: layers.clamp(1, 2), outputs }
+    /// A layout with `hidden` neurons in each of `layers` hidden layers and `memory` memories, kept
+    /// within what is allowed.
+    pub fn sized(inputs: usize, outputs: usize, hidden: usize, layers: usize, memory: usize) -> Layout {
+        Layout { inputs, hidden: hidden.clamp(2, MOST_HIDDEN), layers: layers.clamp(1, MOST_LAYERS), outputs, memory: memory.min(MOST_MEMORY) }
+    }
+
+    /// The size of each layer in turn, from what comes in to what goes out.
+    fn sizes(&self) -> impl Iterator<Item = usize> + '_ {
+        core::iter::once(self.inputs + self.memory).chain(core::iter::repeat_n(self.hidden, self.layers)).chain(core::iter::once(self.outputs + self.memory))
     }
 
     /// How many weights a brain of this shape has.
     pub fn weights(&self) -> usize {
-        let middle = if self.layers == 2 { self.hidden * (self.hidden + 1) } else { 0 };
-        self.hidden * (self.inputs + 1) + middle + self.outputs * (self.hidden + 1)
+        let sizes: Vec<usize> = self.sizes().collect();
+        sizes.windows(2).map(|pair| pair[1] * (pair[0] + 1)).sum()
     }
 
     /// How many neurons are hidden, in all layers together.
@@ -52,10 +67,15 @@ impl Layout {
 #[derive(Clone, Debug)]
 pub struct Brain {
     pub layout: Layout,
-    /// What each hidden neuron gave last time, the first layer then the second, and each output, to
-    /// draw the brain thinking.
+    /// What each hidden neuron gave last time, layer after layer, and each output, to draw the brain
+    /// thinking.
     pub hidden: Vec<f32>,
     pub outputs: Vec<f32>,
+    /// What the brain is keeping for its next step.
+    pub memory: Vec<f32>,
+    /// Room for what comes in, and for what the last layer gives before it is split.
+    incoming: Vec<f32>,
+    last: Vec<f32>,
 }
 
 /// One layer: every output is tanh of its weighted sum of the inputs plus its bias. Returns the
@@ -73,20 +93,35 @@ fn layer<'a>(weights: &'a [f32], inputs: &[f32], outputs: &mut [f32]) -> &'a [f3
 
 impl Brain {
     pub fn new(layout: Layout) -> Brain {
-        Brain { layout, hidden: vec![0.0; layout.neurons()], outputs: vec![0.0; layout.outputs] }
+        Brain {
+            layout,
+            hidden: vec![0.0; layout.neurons()],
+            outputs: vec![0.0; layout.outputs],
+            memory: vec![0.0; layout.memory],
+            incoming: vec![0.0; layout.inputs + layout.memory],
+            last: vec![0.0; layout.outputs + layout.memory],
+        }
     }
 
-    /// Runs the senses through the network with the given weights. The answer is in `outputs`.
+    /// Empties the memory, for the start of a run.
+    pub fn forget(&mut self) {
+        self.memory.iter_mut().for_each(|value| *value = 0.0);
+    }
+
+    /// Runs the senses and the memory through the network with the given weights. The answer is in
+    /// `outputs`, and the memory is what it kept for next time.
     pub fn think(&mut self, weights: &[f32], senses: &[f32]) {
-        let size = self.layout.hidden;
-        let (first, second) = self.hidden.split_at_mut(size);
-        let rest = layer(weights, senses, first);
-        if self.layout.layers == 2 {
-            let rest = layer(rest, first, second);
-            layer(rest, second, &mut self.outputs);
-        } else {
-            layer(rest, first, &mut self.outputs);
+        let Layout { inputs, hidden: size, layers, outputs, .. } = self.layout;
+        self.incoming[..inputs].copy_from_slice(&senses[..inputs]);
+        self.incoming[inputs..].copy_from_slice(&self.memory);
+        let mut rest = layer(weights, &self.incoming, &mut self.hidden[..size]);
+        for at in 1..layers {
+            let (before, after) = self.hidden.split_at_mut(at * size);
+            rest = layer(rest, &before[(at - 1) * size..], &mut after[..size]);
         }
+        layer(rest, &self.hidden[(layers - 1) * size..], &mut self.last);
+        self.outputs.copy_from_slice(&self.last[..outputs]);
+        self.memory.copy_from_slice(&self.last[outputs..]);
     }
 }
 
@@ -96,13 +131,14 @@ mod tests {
 
     #[test]
     fn the_brain_gives_the_same_outputs_for_the_same_inputs() {
-        for layout in [Layout::new(17, 4), Layout::sized(21, 4, 24, 2)] {
+        for layout in [Layout::new(17, 4), Layout::sized(21, 4, 24, 2, 0), Layout::sized(19, 12, 48, 4, 6)] {
             let weights: Vec<f32> = (0..layout.weights()).map(|i| ((i * 7919) % 200) as f32 / 100.0 - 1.0).collect();
             let senses: Vec<f32> = (0..layout.inputs).map(|i| (i as f32 * 0.37).sin()).collect();
             let mut one = Brain::new(layout);
             let mut two = Brain::new(layout);
             one.think(&weights, &senses);
             two.think(&weights, &vec![0.0; layout.inputs]);
+            two.forget();
             two.think(&weights, &senses);
             assert_eq!(one.outputs.iter().map(|x| x.to_bits()).collect::<Vec<_>>(), two.outputs.iter().map(|x| x.to_bits()).collect::<Vec<_>>());
             assert!(one.outputs.iter().all(|x| x.abs() <= 1.0) && one.outputs.iter().any(|x| *x != 0.0));
@@ -113,6 +149,23 @@ mod tests {
             assert!(calm.outputs.iter().all(|x| *x == 0.0));
         }
         assert_eq!(Layout::new(17, 4).weights(), 12 * 18 + 4 * 13);
-        assert_eq!(Layout::sized(21, 4, 24, 2).weights(), 24 * 22 + 24 * 25 + 4 * 25);
+        assert_eq!(Layout::sized(21, 4, 24, 2, 0).weights(), 24 * 22 + 24 * 25 + 4 * 25);
+        assert_eq!(Layout::sized(19, 12, 8, 3, 2).weights(), 8 * 22 + 8 * 9 + 8 * 9 + 14 * 9);
+    }
+
+    #[test]
+    fn memory_carries_from_one_step_to_the_next_and_is_forgotten_on_request() {
+        let layout = Layout::sized(3, 2, 6, 1, 2);
+        let weights: Vec<f32> = (0..layout.weights()).map(|i| ((i * 31) % 17) as f32 / 8.0 - 1.0).collect();
+        let mut brain = Brain::new(layout);
+        brain.think(&weights, &[0.5, -0.2, 0.1]);
+        let first = brain.outputs.clone();
+        assert!(brain.memory.iter().any(|value| *value != 0.0));
+        // the same senses give a different answer once there is something in memory
+        brain.think(&weights, &[0.5, -0.2, 0.1]);
+        assert_ne!(brain.outputs, first);
+        brain.forget();
+        brain.think(&weights, &[0.5, -0.2, 0.1]);
+        assert_eq!(brain.outputs, first);
     }
 }

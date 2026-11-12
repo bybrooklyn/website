@@ -179,6 +179,9 @@ pub struct World {
     leftover: f32,
     /// Steps taken since the world was made.
     pub steps: u32,
+    /// A clock for whatever drives the bodies to keep its own time by, in turns; the physics leaves
+    /// it alone, and copies it with the rest.
+    pub clock: f32,
 }
 
 impl World {
@@ -204,6 +207,7 @@ impl World {
         self.widest = other.widest;
         self.leftover = other.leftover;
         self.steps = other.steps;
+        self.clock = other.clock;
     }
 
     pub fn add_body(&mut self, body: Body) -> u32 {
@@ -239,6 +243,47 @@ impl World {
         }
         self.widest = self.ground.iter().fold(0.0, |widest, piece| widest.max(piece.b.x - piece.a.x));
         self.last.clear();
+    }
+
+    /// Adds pieces of ground, for ground made ahead of a walker as it goes. Pieces further on than
+    /// all the ground there is stay at the end, so the pieces already there keep their places.
+    pub fn extend_ground(&mut self, pieces: &[Segment]) {
+        for piece in pieces {
+            let piece = if piece.a.x <= piece.b.x { *piece } else { Segment { a: piece.b, b: piece.a } };
+            self.ground.push(piece);
+            let mut j = self.ground.len() - 1;
+            while j > 0 && self.ground[j - 1].a.x > self.ground[j].a.x {
+                self.ground.swap(j - 1, j);
+                j -= 1;
+            }
+            self.widest = self.widest.max(piece.b.x - piece.a.x);
+        }
+    }
+
+    /// Drops the pieces of ground that end before x, for ground left behind. The contacts carried
+    /// over to the next step are told the new places of the pieces they touch, so nothing loses its
+    /// warm start.
+    pub fn drop_ground_before(&mut self, x: f32) -> usize {
+        let gone = self.ground.iter().take_while(|piece| piece.b.x < x).count();
+        if gone > 0 {
+            self.ground.drain(..gone);
+            for contact in self.contacts.iter_mut().filter(|contact| contact.b == GROUND) {
+                contact.segment = contact.segment.saturating_sub(gone as u32);
+            }
+        }
+        gone
+    }
+
+    /// Moves everything `dx` to the left, to keep a walker that has gone far near the origin, where
+    /// an f32 is finest. Shifting by a power of two near where things are loses nothing.
+    pub fn shift(&mut self, dx: f32) {
+        for body in &mut self.bodies {
+            body.position.x -= dx;
+        }
+        for piece in &mut self.ground {
+            piece.a.x -= dx;
+            piece.b.x -= dx;
+        }
     }
 
     /// The height of the highest ground straight below or above x, if there is any there.

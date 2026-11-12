@@ -458,7 +458,7 @@
 /* One grid for the whole mini: the scene and the ground's strip on the left, the column on the right. */
 .mini-stage[data-mini="walker"]:has(.walker-side) {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 17rem;
+    grid-template-columns: minmax(0, 1fr) 18rem;
     grid-template-rows: minmax(clamp(16rem, 48svh, 26rem), 1fr) auto;
     grid-template-areas:
         "scene side"
@@ -559,10 +559,12 @@
     width: min(100%, 14rem);
 }
 
-/* The brain opens under its button: it grows to its height and goes back the same way. */
-.walker-brain {
+/* What opens under a row (the brain's own sizes, the brain itself) grows to its height and goes
+   back the same way. It keeps to the column's grid, so its labels line up with the rest. */
+.walker-opening {
     grid-column: 1 / -1;
     display: grid;
+    grid-template-columns: subgrid;
     grid-template-rows: 0fr;
     opacity: 0;
     margin-block: -0.65rem 0;
@@ -572,15 +574,24 @@
         margin 0.4s var(--ease);
 }
 
-.walker-brain.open {
+.walker-opening.open {
     grid-template-rows: 1fr;
     opacity: 1;
     margin-block: 0;
 }
 
-.walker-brain > div {
+.walker-opening-inside {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: subgrid;
+    align-items: baseline;
+    gap: 0.65rem 0.8rem;
     min-height: 0;
     overflow: hidden;
+}
+
+.walker-opening-inside > canvas {
+    grid-column: 1 / -1;
 }
 
 /* Said this firmly, because every other canvas in a mini is stretched to fill its box. */
@@ -595,10 +606,55 @@
     touch-action: auto;
 }
 
+.mote .mote-panel canvas.walker-course-picture {
+    display: block;
+    width: 100%;
+    height: 3rem;
+    cursor: default;
+    touch-action: auto;
+}
+
+/* The column's groups, each under a small heading with a rule above it. */
+.mote-panel .walker-group {
+    grid-column: 1 / -1;
+    margin: 0.55rem 0 -0.15rem;
+    padding-top: 0.75rem;
+    border-top: 0.0625rem solid var(--rule);
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--ink);
+}
+
+.mote-panel .walker-group:first-of-type {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: 0;
+}
+
+.walker-range {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    width: 100%;
+}
+
+.walker-range input[type="range"] {
+    flex: 1;
+    min-width: 0;
+}
+
+.walker-far {
+    min-width: 4.2rem;
+    color: var(--muted);
+    font-size: 0.9rem;
+    font-variant-numeric: tabular-nums;
+}
+
 .mote-panel .walker-share {
     grid-column: 1 / -1;
     justify-self: start;
-    margin-top: 0.3rem;
+    margin-top: 0.6rem;
 }
 
 /* On a narrow screen the column goes under the scene, after the ground. */
@@ -623,7 +679,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .walker-brain {
+    .walker-opening {
         transition: none;
     }
 }

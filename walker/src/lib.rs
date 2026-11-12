@@ -21,6 +21,8 @@ pub mod brain;
 #[cfg(feature = "walker")]
 pub mod learn;
 #[cfg(feature = "walker")]
+pub mod gait;
+#[cfg(feature = "walker")]
 pub mod show;
 #[cfg(feature = "walker")]
 pub mod api;
