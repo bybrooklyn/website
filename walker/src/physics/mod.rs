@@ -21,13 +21,15 @@ pub mod api;
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod world_tests;
 
 use alloc::rc::Rc;
 use alloc::vec::Vec;
 
 use crate::math::{Rotation, Vec2, clamp};
 use collide::{AHEAD, collide};
-use contact::{Contact, GROUND};
+use contact::{BLOCK, Contact, GROUND};
 pub use joint::Joint;
 use joint::Pose;
 use shape::{Outline, Shape};
@@ -67,6 +69,10 @@ pub struct Body {
     pub spin_damping: f32,
     /// Whether the body rested on the ground, or on a body that never moves, in the last step.
     pub touching: bool,
+    /// A body moved by its velocity and by nothing else, as a moving platform is: it carries what
+    /// stands on it and is not pushed back. Its mass is zero, and whatever drives it sets its
+    /// velocity before each step.
+    pub kinematic: bool,
     outline: Outline,
 }
 
@@ -89,6 +95,7 @@ impl Body {
             damping: 0.0,
             spin_damping: 0.0,
             touching: false,
+            kinematic: false,
             outline: shape.outline(),
         };
         body.set_mass(density * shape.area());
@@ -169,11 +176,16 @@ impl Soft {
 /// box around it, worked out once rather than at every step, and the widest piece, to know how far
 /// left of a body to start looking. Every world copied from another shares the other's ground, so a
 /// generation of runs on the same course makes it once.
+///
+/// It holds static blocks too: boxes that never move, with tops, sides and undersides, as floating
+/// platforms have. They are sorted the same way, each with its outline and its box, with the widest.
 #[derive(Clone, Debug, Default)]
 struct Ground {
     pieces: Vec<Segment>,
     slabs: Vec<(Outline, Vec2, Vec2)>,
     widest: f32,
+    blocks: Vec<(Outline, Vec2, Vec2)>,
+    widest_block: f32,
 }
 
 impl Ground {
@@ -304,20 +316,69 @@ impl World {
         ground.settle();
     }
 
-    /// Drops the pieces of ground that end before x, for ground left behind. The contacts carried
-    /// over to the next step are told the new places of the pieces they touch, so nothing loses its
-    /// warm start.
+    /// Adds static blocks, each by its lowest and highest corners. Like ground they may come in any
+    /// order, and blocks further on than all there are stay at the end, so those already there keep
+    /// their places.
+    pub fn add_blocks(&mut self, blocks: &[(Vec2, Vec2)]) {
+        let ground = Rc::make_mut(&mut self.ground);
+        for &(low, high) in blocks {
+            let half = (high - low) * 0.5;
+            let outline = Shape::Box { half_width: half.x, half_height: half.y }.outline().placed(low + half, Rotation::NONE);
+            ground.blocks.push((outline, low, high));
+            let list = &mut ground.blocks;
+            let mut j = list.len() - 1;
+            while j > 0 && list[j - 1].1.x > list[j].1.x {
+                list.swap(j - 1, j);
+                j -= 1;
+            }
+            ground.widest_block = ground.widest_block.max(high.x - low.x);
+        }
+    }
+
+    /// The static blocks, each as its lowest and highest corners, in order of where each starts.
+    pub fn blocks(&self) -> impl Iterator<Item = (Vec2, Vec2)> + '_ {
+        self.ground.blocks.iter().map(|&(_, low, high)| (low, high))
+    }
+
+    /// Drops the pieces of ground and the blocks that end before x, for what is left behind. The
+    /// contacts carried over to the next step are told the new places of the pieces they touch, so
+    /// nothing loses its warm start.
     pub fn drop_ground_before(&mut self, x: f32) -> usize {
         let gone = self.ground.pieces.iter().take_while(|piece| piece.b.x < x).count();
-        if gone > 0 {
+        let blocks_gone = self.ground.blocks.iter().take_while(|block| block.2.x < x).count();
+        if gone > 0 || blocks_gone > 0 {
             let ground = Rc::make_mut(&mut self.ground);
             ground.pieces.drain(..gone);
             ground.slabs.drain(..gone);
+            ground.blocks.drain(..blocks_gone);
             for contact in self.contacts.iter_mut().filter(|contact| contact.b == GROUND) {
-                contact.segment = contact.segment.saturating_sub(gone as u32);
+                contact.segment = if contact.segment & BLOCK != 0 { BLOCK | (contact.segment & !BLOCK).saturating_sub(blocks_gone as u32) } else { contact.segment.saturating_sub(gone as u32) };
             }
         }
         gone
+    }
+
+    /// Takes a body out of the world. The bodies after it move down a place, and the joints and
+    /// contacts that name them are told so; the joints and contacts of the body taken out go with it.
+    /// So a thing left far behind can be taken away without disturbing anything still going on.
+    pub fn remove_body(&mut self, index: u32) {
+        if index as usize >= self.bodies.len() {
+            return;
+        }
+        self.bodies.remove(index as usize);
+        let moved = |k: u32| if k > index && k != GROUND { k - 1 } else { k };
+        self.joints.retain(|joint| joint.a != index && joint.b != index);
+        for joint in &mut self.joints {
+            joint.a = moved(joint.a);
+            joint.b = moved(joint.b);
+        }
+        for list in [&mut self.contacts, &mut self.last] {
+            list.retain(|contact| contact.a != index && contact.b != index);
+            for contact in list.iter_mut() {
+                contact.a = moved(contact.a);
+                contact.b = moved(contact.b);
+            }
+        }
     }
 
     /// Moves everything `dx` to the left, to keep a walker that has gone far near the origin, where
@@ -333,6 +394,14 @@ impl World {
         }
         // the slabs are worked out again from the moved pieces, as they always were at each step
         ground.settle();
+        let left = Vec2::new(dx, 0.0);
+        for (outline, low, high) in &mut ground.blocks {
+            *low -= left;
+            *high -= left;
+            for corner in &mut outline.corners[..outline.count] {
+                *corner -= left;
+            }
+        }
     }
 
     /// The height of the highest ground straight below or above x, if there is any there.
@@ -484,7 +553,7 @@ impl World {
     /// Moves the bodies at the speeds they now have, and works out the joints' poses again.
     fn integrate(&mut self) {
         let h = self.stiffness.h;
-        for body in self.bodies.iter_mut().filter(|body| body.moves()) {
+        for body in self.bodies.iter_mut().filter(|body| body.moves() || body.kinematic) {
             body.position += body.velocity * h;
             body.rotation = body.rotation.turned(h * body.spin);
         }
@@ -538,6 +607,22 @@ impl World {
                 let manifold = collide(&self.placed[a], slab);
                 if manifold.count > 0 {
                     let contact = contact::begin(&self.bodies, a as u32, GROUND, index as u32, &manifold);
+                    self.keep_contact(contact);
+                }
+            }
+            // and the static blocks, found the same way
+            let start = ground.blocks.partition_point(|block| block.1.x < low_a.x - ground.widest_block);
+            for index in start..ground.blocks.len() {
+                let (block, low, high) = &ground.blocks[index];
+                if low.x > high_a.x {
+                    break;
+                }
+                if high.x < low_a.x || low.y > high_a.y || high.y < low_a.y {
+                    continue;
+                }
+                let manifold = collide(&self.placed[a], block);
+                if manifold.count > 0 {
+                    let contact = contact::begin(&self.bodies, a as u32, GROUND, BLOCK | index as u32, &manifold);
                     self.keep_contact(contact);
                 }
             }

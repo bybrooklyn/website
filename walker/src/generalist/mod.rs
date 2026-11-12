@@ -7,12 +7,17 @@
 //!   and the pieces a recipe is planned into, in order along the way.
 //! - `land`: the pieces built into ground, blocks, hazards and the things that move.
 //! - `check`: proof that a body of the creature's reach can get from the start to the end.
+//! - `stage`: a land put into the physics around one creature, laid ahead and dropped behind as it
+//!   goes, its boxes, moving platforms and see-saws made as it comes near.
 //!
 //! README.md describes the recipe, the pieces and the table of what difficulty means.
 
 pub mod check;
 pub mod land;
 pub mod recipe;
+pub mod stage;
 
+#[cfg(test)]
+mod stage_tests;
 #[cfg(test)]
 mod tests;

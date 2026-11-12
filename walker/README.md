@@ -430,6 +430,32 @@ made easier by a fifth, again and again, and given up for level ground if it nev
 lay 4,400 worlds of 150 m across every difficulty and check each whole: every one can be crossed, and
 the table is close enough to the reach that a piece needs making easier about once in 3,000.
 
+### What the physics gained for it
+
+Only what the world needs, none of it used by the Walker, which learns to the same bit as before:
+
+- **Static blocks** (`World::add_blocks`): boxes that never move, solid on top, sides and underside,
+  for floating platforms. They are kept sorted with the ground, found the same way, and dropped
+  behind and moved back with it.
+- **Bodies that move by themselves** (`Body::kinematic`): moved by the velocity they are given and
+  by nothing else, so a moving platform carries what stands on it by friction and is not pushed
+  back.
+- **Taking a body out** (`World::remove_body`): the joints and contacts that name later bodies are
+  told their new places, so taking out a box far behind changes nothing else, to the bit.
+- Loose boxes and see-saws needed nothing new: boxes, hinges and limits were there. Hazards are not
+  physics: a run ends when any part of the creature's box overlaps one.
+
+`generalist::stage` keeps a world around one creature: the land laid 50 m ahead a stretch at a time
+and dropped 40 m behind, boxes, moving platforms and see-saws made 14 m before the creature reaches
+them and taken out 16 m after, moving platforms driven along their ways, and everything moved back
+by 512 m whenever the creature passes 512 m, as the Walker's endless walk does. Three boxes stacked
+on a block or on the ground stand still to the millimetre for ten seconds (four on a narrow support
+creep about 3 mm in that time), and a creature holding its pose on a platform going to and fro
+moves less than 3 cm on it.
+
+Many Walkers stepped together (`Envs`, 64 at once, one core) ran 750,000 steps a second for two legs
+and 415,000 for four before these were added, and 790,000 and 430,000 after: no slower.
+
 ## Credit
 
 The soft step solver and the way contacts are found follow Erin Catto's Box2D 3 (MIT), rewritten
