@@ -200,6 +200,26 @@ see and learn and walk and do things on its own"; "all of this from scratch in o
   around instead of the eyes being unmovable. basically i want this thing to learn and have a rich way to
   feel and investigate".
 
+**What to build after learning by practice lands (her choices, 12 Nov 2026):**
+
+- All four she was offered first: self-adjusting connections with a learned rule, and a way for the visitor
+  to break a leg and watch it adapt; neurons as tiny shared programs (the model building its own kinds of
+  neuron); a world model, for curiosity and for practising in imagination; a brain that grows, and the
+  builder. With a limit, in her words: "i dont want it to get outrageous, maybe give it a max neurons number
+  and have it change the synapses and connections and thoughts more". So: a cap on neurons; growth and
+  change go mostly into connections.
+- **Senses:** eyes it moves, sharp in the middle; touch (feet, body, arms); hearing or smell (things give
+  off a signal that fades with distance). Balance and effort were not ticked.
+- **Doing:** find food and stay alive; use things (push a box to a ledge, ride a platform, press a switch);
+  play (stretches with no task, rewarded for trying new things); meet another one (two creatures sensing
+  each other).
+- "add a saving feature": creatures can be saved and brought back.
+- "add SIMD and GPU accel with zerocopy where possible": SIMD is in the engine already; the graphics card
+  for the brains' arithmetic (WebGPU) and buffers handed over without copying are to be added and measured.
+  (Shared memory between workers needs the page isolated by two headers, as mdQuire's pages are: ask her
+  before adding them for this page.)
+- **Window:** "A much bigger mini": it takes the page's full width and most of its height.
+
 Order: speed, then the world and the rays, then PPO, then the teacher, then curiosity and needs, then
 the small vision encoder and the picture experiment.
 
