@@ -89,7 +89,7 @@ export interface StreamParts {
 }
 
 /** The sizes used when none are given: measured on the two large models (RUNTIME.md). */
-export const STREAM_DEFAULTS = { chunk: 1, left: 2, right: 1 } as const;
+export const STREAM_DEFAULTS = { chunk: 1, left: 1, right: 1 } as const;
 
 /** Opens a stream. */
 export function createStream(parts: StreamParts, options: StreamOptions = {}): Stream {
@@ -177,6 +177,9 @@ export function createStream(parts: StreamParts, options: StreamOptions = {}): S
     };
 
     async function step(): Promise<Update | undefined> {
+        // Sound that arrived while the last step ran is waiting in the queue; letting it in first makes
+        // this step cover all of it, rather than the first chunk of it and leaving the rest to fall behind.
+        await new Promise((done) => setTimeout(done, 0));
         const started = performance.now();
         const total = given;
         const made = await window();

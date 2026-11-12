@@ -110,8 +110,8 @@ const RATE = 16000;
 export const WINDOW = 10;
 /** Provisional words need the machine to recognize faster than this many seconds per second of sound. */
 export const LIVE_LIMIT = 0.45;
-/** A live stream that is more than this many seconds behind the speaker, twice running, cannot keep up. */
-export const BEHIND_LIMIT = 4;
+/** A live stream whose newest words are more than this many seconds old when they are shown (sound waiting plus the step), twice running, cannot keep up. */
+export const BEHIND_LIMIT = 5;
 /** Sound kept before speech starts, so that the first word is not clipped, in seconds. */
 const PRE_ROLL = 0.8;
 
@@ -231,8 +231,8 @@ export function startSession(options: SessionOptions): Session {
             const rate = update.ms / 1000 / Math.max(0.001, update.seconds);
             speed = measured === 0 ? rate : speed * 0.6 + rate * 0.4;
             measured++;
-            late = update.behind > BEHIND_LIMIT ? late + 1 : 0;
-            if (late >= 2) return giveUp(`they were ${update.behind.toFixed(0)} seconds late`);
+            late = update.behind + update.ms / 1000 > BEHIND_LIMIT ? late + 1 : 0;
+            if (late >= 2) return giveUp(`they were ${(update.behind + update.ms / 1000).toFixed(0)} seconds late`);
             show(correct([...update.words, ...update.tentative].map((word) => word.text).join(" "), options.custom()));
         });
         stream.push(buffer.slice(0, length));
@@ -351,7 +351,7 @@ export function startSession(options: SessionOptions): Session {
             } else if (live) {
                 live.push(frame.slice());
                 unanswered += frame.length;
-                if (unanswered > 2 * BEHIND_LIMIT * RATE) giveUp("no word has come for 8 seconds");
+                if (unanswered > 2 * BEHIND_LIMIT * RATE) giveUp("no word has come for 10 seconds");
             }
             // before anyone speaks only a little sound is kept
             if (!active && !busy && length > PRE_ROLL * RATE) drop(length - Math.round(PRE_ROLL * RATE));

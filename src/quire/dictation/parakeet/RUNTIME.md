@@ -28,8 +28,9 @@ file (3.28 MB brotli) for every visitor, 3.38 MB brotli.
 raw, **1.99 MB brotli**. A browser with a card downloads the JSEP set, 25.3 MB raw, 3.38 MB brotli, the same
 as before, because WebGPU needs that file. `astro.config.ts` (the `ort-files` integration) copies the six files
 into `/ort/`, unhashed, and `RUNTIME = "/ort/"` in `runtime.ts` is where they are fetched from. Nothing is
-bundled; `onnxruntime-web` is read only at build time. The old `?url` import in `engine-worker.ts` still makes
-the build emit the 24.9 MB file into `_astro/` until the engine stops using it.
+bundled; `onnxruntime-web` is read only at build time. The old `?url` import in `engine-worker.ts` that made the
+build emit the 24.9 MB file into `_astro/` is gone: the engine worker now gets ONNX Runtime from `/ort/` through
+`runtime.ts`, and `dist/_astro/` holds no `.wasm`.
 
 The native WebGPU builds (jspi, asyncify) are not shipped: they loaded and ran, but gave **wrong output** for
 every quantized encoder here (empty transcript; with the default output location, "Buffer used in submit while
@@ -37,8 +38,8 @@ destroyed"), while the fp32 Moonshine encoder was right on all of them. Only JSE
 
 ### Files `/ort/*` need cache headers
 
-Not changed (`public/_headers` is not mine). They keep their names, so something like the `/wasm/*` rule
-(a day, then check again) fits. They are not hashed, so do not make them `immutable`.
+Done: `public/_headers` has a rule for `/ort/*` of a day, then check again (`max-age=86400, stale-while-revalidate=604800`),
+like `/wasm/*`. The files are not hashed, so they are not `immutable`.
 
 ## 2. A smaller runtime of her own (untested)
 
@@ -227,6 +228,53 @@ off, so that was not measured. Fetching the model bytes from the local server to
 
 `release()` releases both sessions; memory comes back once the runtime frees its heap and the card its
 buffers. Not measured separately from the dictation check.
+
+## 6. Live words (stream.ts)
+
+The encoder looks at a whole stretch of sound at once, so there is no state to carry between pieces of sound.
+`stream.ts` carries the decoder's instead. Per phrase it keeps the raw log-mel frames (computed once, as the sound
+arrives), the decoder's state at the *settled point*, and the words settled so far. A step encodes only from
+`left` seconds before the settled point to the newest sound, with the features normalized over that window alone;
+the encoder frames after the settled point except the last `right` seconds are decoded with the real state (so they
+become settled, for good, and are never encoded as new again), and the rest is decoded on a copy of the state and
+shown as tentative. A step starts when `chunk` seconds of new sound are in and no step is running, and it takes
+in everything that has arrived, so a slow machine takes bigger steps (fewer repeats of the context) and the words
+come later, instead of a queue growing without end.
+
+**A window that starts in the middle of speech makes the encoder answer with nothing.** Measured: 4 s of the sentence
+sound from 4.96 s on gave an empty transcript, from 5.5 s on likewise, and from 2.0 s on lost its first words; 0.24 s
+of silence (or of faint noise) in front of the same sound gave every word. So a window that does not start at the
+beginning of the phrase is given 24 frames of silence first (`LEAD` in `stream.ts`). This is not in the parakeet.js
+streaming either; it is why a plain sliding window of this model loses whole sentences.
+
+Word error of the finished phrase against the whole-file result (Ultra w4a8, 74 words: the 11 s and the 25 s sample;
+chunks are fixed here, sound fed as fast as it can be processed):
+
+| chunk | left | right 0.5 s | right 1 s | right 2 s |
+| --- | --- | --- | --- | --- |
+| 0.5 s | 1 s | 38 | 2 | 1 |
+| 0.5 s | 2 s | 31 | 0 | 0 |
+| 0.5 s | 3 s | 32 | 0 | 0 |
+| 1 s | 1 s | 17 | 0 | 1 |
+| 1 s | 2 s | 19 | 0 | 0 |
+| 1 s | 3 s | 17 | 0 | 0 |
+| 2 s | 1 s | 14 | 0 | 0 |
+| 2 s | 2 s | 8 | 0 | 0 |
+| 2 s | 3 s | 16 | 0 | 0 |
+
+(Words that differ from the whole-file result; each whole-file result has no errors against the known text.) A right
+context of half a second is not enough: the last second of a window is not judged well, and what is settled from it
+is wrong in a fifth of the words. One second is enough, and a left context of one second is enough. A larger left or
+right context buys nothing in word error and costs encoder time in proportion, so `STREAM_DEFAULTS` is chunk 1 s,
+left 1 s, right 1 s: an encoder window of 3.2 s per step.
+
+The cost of a step is a fixed part and a part in proportion to the window, from the two measured ends: about 0.6 s
+and 0.35 s per second of window on one thread of this machine, for Ultra. At equilibrium the steps cover as much
+sound as the last step took, so on one thread a step takes about 2 s and covers 2 s, and a word is shown between
+about 2 and 4 s after it was spoken. The session measures how late the words are (`BEHIND_LIMIT`, `session.ts`:
+the sound waiting plus the time of the step, over 5 s twice running, or no answer for 10 s of sound) and, if the
+machine cannot keep up, stops asking and writes at each pause, with a line in the panel. See the numbers for the
+real engine in the table at the top of the commit that added them and in the report.
 
 ## Not confirmed
 
