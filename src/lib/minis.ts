@@ -1,3 +1,4 @@
+// The minis, in the order they are listed.
 import { getCollection, type CollectionEntry } from "astro:content";
 import { visible } from "./drafts";
 

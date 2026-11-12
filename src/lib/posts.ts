@@ -1,3 +1,4 @@
+// The blog's posts, newest first, and how a date and a reading time are written.
 import { getCollection, type CollectionEntry } from "astro:content";
 import { visible } from "./drafts";
 

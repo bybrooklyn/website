@@ -1,3 +1,4 @@
+// The blog's feed.
 import rss from "@astrojs/rss";
 import type { APIRoute } from "astro";
 import { site } from "../data/site";

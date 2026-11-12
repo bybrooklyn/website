@@ -1,3 +1,4 @@
+// What each kind of content on the site is made of: posts, minis, pages, projects and the resume.
 import { defineCollection } from "astro:content";
 import { glob } from "astro/loaders";
 import { z } from "astro/zod";

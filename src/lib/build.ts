@@ -1,3 +1,4 @@
+// When and from which commit the site was built, for the line at the foot of every page.
 import { execFileSync } from "node:child_process";
 
 function commit(): string | undefined {

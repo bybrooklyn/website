@@ -1,3 +1,4 @@
+// What reading a typed roll, adding it up and lining its numbers up are held to. Run with `bun run test`.
 import { expect, test } from "bun:test";
 import { lineUp, numbers, read, row, total, type Roll } from "./rolls";
 

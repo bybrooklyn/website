@@ -1,3 +1,4 @@
+// The resume as its page and its PDF need it.
 import { getEntry, type CollectionEntry } from "astro:content";
 import { showDrafts } from "./drafts";
 

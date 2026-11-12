@@ -1,3 +1,4 @@
+// The facts about the site and its owner that pages use: her name, where things are, the menu.
 export const site = {
     name: "Charlotte",
     /** Shown on the resume. */

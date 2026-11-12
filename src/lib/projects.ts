@@ -1,3 +1,4 @@
+// The projects, in order, and what was last read about each from GitHub.
 import { getCollection, type CollectionEntry } from "astro:content";
 import facts from "../data/project-facts.json";
 import { visible } from "./drafts";

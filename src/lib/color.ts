@@ -1,3 +1,4 @@
+// The theme's colors as the page needs them: as CSS, as hex, and how well two of them contrast.
 import { accents, theme, type AccentName, type Oklch } from "../data/theme";
 
 export function css([l, c, h]: Oklch): string {
