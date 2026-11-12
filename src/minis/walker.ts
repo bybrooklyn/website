@@ -10,7 +10,7 @@
 
 import { el, type Mote, type Scene } from "../mote/stage";
 import type { Order, Report } from "../scripts/walker-worker";
-import { DEFAULT_SETUP, ENGINE, GOALS, KINDS, LAYERS, LEGS, LINK_NAMES, NEURONS, POPULATION, fromLink, heightAt, linkParts, oldLink, pieces, read, start, valid, write, type Engine, type Setup } from "./walking";
+import { DEFAULT_SETUP, ENGINE, GOALS, KINDS, LAYERS, LEGS, LINK_NAMES, MEMORIES, NEURONS, POPULATION, PRESETS, presetOf, fromLink, heightAt, linkParts, oldLink, pieces, read, start, valid, write, type Engine, type Setup } from "./walking";
 
 export const label = "A little creature with legs, seen from the side, learning to walk by evolution. Marks along the ground show how far the rest of its generation got.";
 
@@ -21,7 +21,7 @@ const MOST_PUSH = 12;
 const REST = 1;
 
 export default function walker(m: Mote): Scene {
-    const kept = m.recall<Setup>("walker", DEFAULT_SETUP, 2);
+    const kept = m.recall<Setup>("walker", DEFAULT_SETUP, 3);
     let setup: Setup = valid(kept) ? kept : DEFAULT_SETUP;
 
     // opened from a link to a walker: its setup and its trained brain
@@ -68,7 +68,7 @@ export default function walker(m: Mote): Scene {
         [generation, runs, waiting, better, shown, distance, population, ended] = [0, 0, undefined, false, false, 0, undefined, 0];
         const seed = (Math.random() * 2 ** 32) >>> 0;
         if (engine) {
-            engine.create(setup.legs, POPULATION, 0, seed, setup.hidden, setup.layers, setup.goal);
+            engine.create(setup.legs, POPULATION, 0, seed, setup.hidden, setup.layers, setup.memory, setup.goal);
             write(engine, engine.ground_room(ground.length / 4), ground);
             engine.ground_set(ground.length / 4);
             if (brain) take(brain);
@@ -77,7 +77,7 @@ export default function walker(m: Mote): Scene {
             if (showCrowd) engine.crowd_reset();
             [camera.x, camera.y, last] = [0, 0, undefined];
         }
-        tell({ kind: "begin", setup: id, legs: setup.legs, goal: setup.goal, hidden: setup.hidden, layers: setup.layers, ground, seed, brain });
+        tell({ kind: "begin", setup: id, legs: setup.legs, goal: setup.goal, hidden: setup.hidden, layers: setup.layers, memory: setup.memory, ground, seed, brain });
         changed();
         m.wake();
     };
@@ -171,7 +171,7 @@ export default function walker(m: Mote): Scene {
         };
         const describe = () => `${setup.legs} leg${setup.legs === 1 ? "" : "s"}, ${doing()}, on ${setup.ground.kind === "flat" ? "flat ground" : setup.ground.kind}`;
         const restart = () => {
-            m.keep("walker", setup, 2);
+            m.keep("walker", setup, 3);
             // a link to a shared walker no longer says what is on the screen
             for (const name of LINK_NAMES) m.link.set(name, null);
             notice = { text: `Learning again from the start: ${describe()}.`, until: m.time + 5 };
@@ -204,16 +204,42 @@ export default function walker(m: Mote): Scene {
             m.wake();
         } });
 
+        /** A block that grows open under the row that opens it and shrinks shut again, never simply appearing. */
+        const opening = (id: string, ...inside: Node[]) => {
+            const block = el("div", { class: "walker-opening", id }, el("div", { class: "walker-opening-inside" }, ...inside));
+            const shut = (open: boolean) => {
+                block.classList.toggle("open", open);
+                block.inert = !open;
+            };
+            shut(false);
+            return { block, shut, open: () => block.classList.contains("open") };
+        };
+
+        // the brain's size: three by name, or its own mix, whose pickers open under the names
+        const own = opening(
+            "walker-own",
+            ...row("neurons", choices("neurons", "neurons in each layer", NEURONS.map((count) => ({ value: count, text: String(count) })), () => setup.hidden, (hidden) => set({ hidden }))),
+            ...row("layers", choices("layers", "hidden layers", LAYERS.map((count) => ({ value: count, text: String(count) })), () => setup.layers, (layers) => set({ layers }))),
+            ...row("memory", choices("memory", "memories", MEMORIES.map((count) => ({ value: count, text: String(count) })), () => setup.memory, (memory) => set({ memory }))),
+        );
+        own.shut(presetOf(setup) === "own");
+        const sizes = choices("size", "brain size", [...PRESETS.map((preset) => ({ value: preset.name, text: preset.name })), { value: "own", text: "own" }], () => presetOf(setup), (name) => {
+            const preset = PRESETS.find((each) => each.name === name);
+            own.shut(!preset);
+            m.wake();
+            if (preset) set({ hidden: preset.hidden, layers: preset.layers, memory: preset.memory });
+        });
+
         // the brain, drawn in its own block that opens under its button
         const picture = el("canvas", { class: "walker-brain-picture" });
         picture.setAttribute("role", "img");
-        picture.setAttribute("aria-label", "The walker's brain: its senses on the left, its joints on the right, and the neurons between, lit by what passes through them.");
-        const block = el("div", { class: "walker-brain", id: "walker-brain" }, el("div", {}, picture));
+        picture.setAttribute("aria-label", "The walker's brain: its senses and memory on the left, its joints and memory on the right, and the neurons between, lit by what passes through them.");
+        const view = opening("walker-brain", picture);
+        const block = view.block;
         const open = el("button", { type: "button", textContent: "show", onclick: () => {
-            const opening = !block.classList.contains("open");
-            block.classList.toggle("open", opening);
-            open.setAttribute("aria-expanded", String(opening));
-            open.textContent = opening ? "hide" : "show";
+            view.shut(!view.open());
+            open.setAttribute("aria-expanded", String(view.open()));
+            open.textContent = view.open() ? "hide" : "show";
             m.wake();
         } });
         open.setAttribute("aria-expanded", "false");
@@ -231,11 +257,11 @@ export default function walker(m: Mote): Scene {
         side.append(
             ...row("legs", choices("legs", "legs", LEGS.map((legs) => ({ value: legs, text: String(legs) })), () => setup.legs, (legs) => set({ legs }))),
             ...row("goal", choices("goal", "goal", GOALS.map((goal) => ({ value: goal.goal, text: goal.name })), () => setup.goal, (goal) => set({ goal }))),
-            ...row("neurons", choices("neurons", "neurons in each layer", NEURONS.map((count) => ({ value: count, text: String(count) })), () => setup.hidden, (hidden) => set({ hidden }))),
-            ...row("layers", choices("layers", "hidden layers", LAYERS.map((count) => ({ value: count, text: String(count) })), () => setup.layers, (layers) => set({ layers }))),
+            ...row("brain", sizes),
+            own.block,
             ...row("learning", pause, el("button", { type: "button", textContent: "start over", onclick: restart })),
             ...row("crowd", el("label", {}, crowdBox, "show")),
-            ...row("brain", open),
+            ...row("see", el("span", {}, "the brain ", open)),
             block,
             share,
         );
@@ -253,7 +279,7 @@ export default function walker(m: Mote): Scene {
         };
 
         drawBrain = () => {
-            if (!engine || !block.classList.contains("open")) return;
+            if (!engine || !view.open()) return;
             const ctx = picture.getContext("2d");
             if (!ctx) return;
             const scale = window.devicePixelRatio || 1;
@@ -263,9 +289,11 @@ export default function walker(m: Mote): Scene {
             ctx.clearRect(0, 0, wide, high);
             const size = engine.hidden_length();
             const layers = engine.layers_length();
-            const inputs = read(engine, engine.show_senses(), engine.senses_length());
+            // memory goes in with the senses and comes out with the outputs, so it is drawn at both ends
+            const memory = read(engine, engine.show_memory(), engine.memory_length());
+            const inputs = new Float32Array([...read(engine, engine.show_senses(), engine.senses_length()), ...memory]);
             const hidden = read(engine, engine.show_hidden(), size * layers);
-            const outputs = read(engine, engine.show_outputs(), engine.outputs_length());
+            const outputs = new Float32Array([...read(engine, engine.show_outputs(), engine.outputs_length()), ...memory]);
             const weights = read(engine, engine.show_weights(), engine.weights_length());
             const columns = [inputs, ...Array.from({ length: layers }, (_, layer) => hidden.subarray(layer * size, (layer + 1) * size)), outputs];
             const [left, right, top, bottom] = [8, wide - 8, 8, high - 20];

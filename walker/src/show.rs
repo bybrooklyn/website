@@ -44,6 +44,8 @@ impl Show {
         };
         show.creature.sense(&show.world, &mut show.senses);
         show.brain.think(&show.weights, &show.senses);
+        // that thought was only to have something to draw: the run itself starts with nothing in memory
+        show.brain.forget();
         show.draw();
         show
     }
@@ -99,6 +101,8 @@ pub struct Crowd {
     pub weights: Vec<f32>,
     brain: Brain,
     senses: Vec<f32>,
+    /// Each walker's memory, kept here between steps, since they share one brain to think with.
+    memories: Vec<f32>,
     /// Four numbers for each walker: how far it has gone, the height of its body, its angle, and 1
     /// once its run is over.
     pub drawn: Vec<f32>,
@@ -115,6 +119,7 @@ impl Crowd {
             weights: population.to_vec(),
             brain: Brain::new(layout),
             senses: vec![0.0; layout.inputs],
+            memories: vec![0.0; count * layout.memory],
             drawn: Vec::new(),
             leftover: 0.0,
         };
@@ -132,7 +137,10 @@ impl Crowd {
                     continue;
                 }
                 self.creature.sense(world, &mut self.senses);
+                let kept = self.brain.layout.memory;
+                self.brain.memory.copy_from_slice(&self.memories[i * kept..(i + 1) * kept]);
                 self.brain.think(&self.weights[i * count..(i + 1) * count], &self.senses);
+                self.memories[i * kept..(i + 1) * kept].copy_from_slice(&self.brain.memory);
                 self.creature.drive(world, &self.brain.outputs);
                 world.step();
                 self.judges[i].after_step(&self.creature, world, &self.brain.outputs);
@@ -164,8 +172,8 @@ mod tests {
 
     #[test]
     fn the_show_plays_the_best_run_exactly_as_it_was_scored() {
-        for (legs, goal) in [(2, Goal::Far), (4, Goal::Fast), (1, Goal::Tall)] {
-            let settings = Settings { goal, ..Settings::default() };
+        for (legs, goal, layers, memory) in [(2, Goal::Far, 1, 0), (4, Goal::Fast, 3, 6), (1, Goal::Tall, 2, 4)] {
+            let settings = Settings { goal, layers, memory, ..Settings::default() };
             let mut trainer = Trainer::new(Description { legs }, settings, &flat_ground(), 2).unwrap();
             while trainer.generation < 5 {
                 trainer.train(32);

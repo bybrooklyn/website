@@ -12,7 +12,9 @@ straight out of the module's memory.
   in every browser, because the module brings its own sine, square root and the rest.
 - `src/body.rs`: the creature, built from a number of legs (1, 2 or 4), each with a hip, a knee and
   a foot, on a rounded body.
-- `src/brain.rs`: a network of one or two hidden layers, its weights one flat list of f32.
+- `src/brain.rs`: a network of one to four hidden layers with a little memory, its weights one flat
+  list of f32.
+- `src/gait.rs`: how natural a run looks, in numbers, for the tests.
 - `src/learn.rs`: the goals a walker can be rewarded for, the judge that scores a run step by step,
   and evolution with a seeded random generator, run in slices.
 - `src/show.rs`: one brain running in real time, and a whole generation at once.
@@ -47,12 +49,13 @@ All numbers are metres, kilograms, seconds and radians, with y up and angles ant
 
 ### Making it
 
-- `create(legs: u32, population: u32, seconds: f32, seed: u32, hidden: u32, layers: u32, goal: u32) -> u32`
+- `create(legs: u32, population: u32, seconds: f32, seed: u32, hidden: u32, layers: u32, memory: u32, goal: u32) -> u32`
   Makes a new walker on flat ground, replacing any before it. `legs` is 1, 2 or 4. `population` is
   the number of brains in a generation (2 to 1000; 32 is a good choice). `seconds` is how long each
   brain is run when training (the goal's own time if 0 or less, at most 120). `seed` starts the
   random numbers; the same seed learns the same way. `hidden` is the neurons in each hidden layer
-  (2 to 64) and `layers` the number of hidden layers (1 or 2). `goal` is what it is rewarded for:
+  (2 to 64), `layers` the number of hidden layers (1 to 4), and `memory` how many values the brain
+  keeps from one step to the next (0 to 16). `goal` is what it is rewarded for:
   0 go far, 1 go fast, 2 stand tall, 3 jump (see Goals). Returns the number of weights in one brain,
   or 0 if `legs` is not 1, 2 or 4.
 - `run_seconds() -> f32` How long a run lasts: 4 s for going fast, 10 s for the others.
@@ -128,8 +131,15 @@ about 0.3.
   scored), joins the population, and the show starts again with it. Returns 1, or 0 if any weight is
   not a finite number. A brain only fits a walker with the same number of legs.
 
-The weights are, in order, layer by layer from the senses to the outputs: for each neuron of the
-layer its weight for everything coming into it, then that layer's biases.
+The weights are, in order, layer by layer from the inputs to the outputs: for each neuron of the
+layer its weight for everything coming into it, then that layer's biases. The inputs are the senses
+and then the memory; the outputs are the legs' and then the memory's. Memory is fed back in on the
+next step and starts at zero at the start of every run, so a run played again is the same run.
+
+The page offers three sizes by name: small (8 neurons, 1 layer, no memory), medium (16, 2 layers,
+4 memories) and large (32, 3 layers, 8 memories). Most of a generation's time goes to the physics,
+not the brain, so the sizes cost nearly the same: natively about 50 ms a generation for two legs
+and 110 to 150 ms for four, at each size. A large brain has more to learn and gets there slower.
 
 ### The show: one walker in real time
 
@@ -152,8 +162,10 @@ layer its weight for everything coming into it, then that layer's biases.
   2 box), and two sizes: a circle's radius and 0, a capsule's half length (without its round ends)
   and radius, a box's half width and half height. A capsule lies along its own x axis.
 - `show_distance() -> f32` How far the torso has gone forward since the start.
-- `senses_length() -> u32`, `hidden_length() -> u32`, `layers_length() -> u32`, `outputs_length() -> u32`
-  The number of senses, of neurons in each hidden layer, of hidden layers, and of outputs.
+- `senses_length() -> u32`, `hidden_length() -> u32`, `layers_length() -> u32`, `outputs_length() -> u32`,
+  `memory_length() -> u32` The number of senses, of neurons in each hidden layer, of hidden layers,
+  of outputs, and of memories.
+- `show_memory() -> *const f32` What the show's brain is keeping for its next step.
 - `show_senses() -> *const f32` What the walker sensed before its last step, in this order:
   - the body's angle, in radians, 0 upright;
   - its spin times 0.2;
@@ -164,8 +176,7 @@ layer its weight for everything coming into it, then that layer's biases.
   - how much higher the ground is 0.6 m ahead, and 1.2 m ahead, than under the body, from -1 to 1,
     and -1 over a gap: what a jumper needs to see a step or a gap coming;
   - the sine and cosine of the rhythm the legs keep (see `show_outputs`).
-- `show_hidden() -> *const f32` What each hidden neuron gave, -1 to 1, the first layer then the
-  second.
+- `show_hidden() -> *const f32` What each hidden neuron gave, -1 to 1, layer after layer.
 - `show_outputs() -> *const f32` What each output gave, -1 to 1, three for each joint. The legs keep
   a rhythm: 1.8 strides a second for one leg, 1.2 for two (taking turns, half a stride apart), 1.6
   for four (a trot, each diagonal pair together). Each joint swings like a pendulum in time with

@@ -559,10 +559,12 @@
     width: min(100%, 14rem);
 }
 
-/* The brain opens under its button: it grows to its height and goes back the same way. */
-.walker-brain {
+/* What opens under a row (the brain's own sizes, the brain itself) grows to its height and goes
+   back the same way. It keeps to the column's grid, so its labels line up with the rest. */
+.walker-opening {
     grid-column: 1 / -1;
     display: grid;
+    grid-template-columns: subgrid;
     grid-template-rows: 0fr;
     opacity: 0;
     margin-block: -0.65rem 0;
@@ -572,15 +574,24 @@
         margin 0.4s var(--ease);
 }
 
-.walker-brain.open {
+.walker-opening.open {
     grid-template-rows: 1fr;
     opacity: 1;
     margin-block: 0;
 }
 
-.walker-brain > div {
+.walker-opening-inside {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: subgrid;
+    align-items: baseline;
+    gap: 0.65rem 0.8rem;
     min-height: 0;
     overflow: hidden;
+}
+
+.walker-opening-inside > canvas {
+    grid-column: 1 / -1;
 }
 
 /* Said this firmly, because every other canvas in a mini is stretched to fill its box. */
@@ -623,7 +634,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .walker-brain {
+    .walker-opening {
         transition: none;
     }
 }

@@ -221,9 +221,10 @@ pub struct Settings {
     pub goal: Goal,
     /// How long each run lasts; the goal's own time when zero.
     pub seconds: f32,
-    /// Neurons in each hidden layer of the brain, and one or two layers.
+    /// Neurons in each hidden layer of the brain, one to four layers, and how many memories.
     pub hidden: usize,
     pub layers: usize,
+    pub memory: usize,
     /// How many of the best go on unchanged.
     pub keep: usize,
     /// The chance that a weight is nudged in a child, and how far.
@@ -233,7 +234,7 @@ pub struct Settings {
 
 impl Default for Settings {
     fn default() -> Self {
-        Settings { population: 32, goal: Goal::Far, seconds: 0.0, hidden: crate::brain::HIDDEN, layers: 1, keep: 4, nudge_chance: 0.1, nudge_size: 0.3 }
+        Settings { population: 32, goal: Goal::Far, seconds: 0.0, hidden: crate::brain::HIDDEN, layers: 1, memory: 0, keep: 4, nudge_chance: 0.1, nudge_size: 0.3 }
     }
 }
 
@@ -278,8 +279,8 @@ impl Trainer {
         let mut start = World::new();
         start.set_ground(ground);
         let creature = Creature::build(&mut start, description)?;
-        let layout = Layout::sized(description.senses(), description.outputs(), settings.hidden, settings.layers);
-        let settings = Settings { hidden: layout.hidden, layers: layout.layers, ..settings };
+        let layout = Layout::sized(description.senses(), description.outputs(), settings.hidden, settings.layers, settings.memory);
+        let settings = Settings { hidden: layout.hidden, layers: layout.layers, memory: layout.memory, ..settings };
         let mut random = Random::new(seed);
         let count = layout.weights();
         // first weights about as large as keeps each neuron's sum near its useful range
@@ -321,6 +322,7 @@ impl Trainer {
     /// Runs one brain from the start and scores it.
     pub fn run(&mut self, weights: &[f32]) -> Outcome {
         self.world.copy_from(&self.start);
+        self.brain.forget();
         let creature = &self.creature;
         let mut judge = Judge::new(self.settings.goal, self.settings.seconds);
         loop {
@@ -338,6 +340,7 @@ impl Trainer {
     /// Runs one brain from the start, as `run` does, and says how natural its run looked.
     pub fn watch(&mut self, weights: &[f32]) -> crate::gait::Gait {
         self.world.copy_from(&self.start);
+        self.brain.forget();
         let creature = &self.creature;
         let mut judge = Judge::new(self.settings.goal, self.settings.seconds);
         let mut watch = crate::gait::Watch::default();
@@ -569,6 +572,7 @@ mod tests {
         let settings = Settings { hidden: 24, layers: 2, ..Settings::default() };
         let mut trainer = Trainer::new(Description { legs: 4 }, settings, &flat_ground(), 5).unwrap();
         assert_eq!(trainer.layout.weights(), 24 * 30 + 24 * 25 + 24 * 25);
+        assert_eq!(trainer.layout.memory, 0);
         trainer.train(32);
         let first = trainer.best_score;
         while trainer.generation < 20 {

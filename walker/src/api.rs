@@ -39,14 +39,14 @@ fn pointer(list: Option<&[f32]>) -> *const f32 {
 
 /// Makes a new walker with `legs` legs (1, 2 or 4) on flat ground, with a population of `population`
 /// brains, each run for `seconds` when training (the goal's own time if 0), random numbers from
-/// `seed`, brains of `layers` hidden layers (1 or 2) of `hidden` neurons each, rewarded for `goal`
-/// (0 far, 1 fast, 2 tall, 3 jump). Returns the number of weights in one brain, or 0 if the
-/// description is not one the engine builds.
+/// `seed`, brains of `layers` hidden layers (1 to 4) of `hidden` neurons each (2 to 64) and
+/// `memory` memories (0 to 16), rewarded for `goal` (see walker/README.md). Returns the number of
+/// weights in one brain, or 0 if the description is not one the engine builds.
 #[unsafe(no_mangle)]
-pub extern "C" fn create(legs: u32, population: u32, seconds: f32, seed: u32, hidden: u32, layers: u32, goal: u32) -> u32 {
+pub extern "C" fn create(legs: u32, population: u32, seconds: f32, seed: u32, hidden: u32, layers: u32, memory: u32, goal: u32) -> u32 {
     let description = Description { legs };
     let seconds = if seconds > 0.0 { seconds.min(120.0) } else { 0.0 };
-    let settings = Settings { population: population.clamp(2, 1000) as usize, seconds, hidden: hidden as usize, layers: layers as usize, goal: Goal::from_number(goal), ..Settings::default() };
+    let settings = Settings { population: population.clamp(2, 1000) as usize, seconds, hidden: hidden as usize, layers: layers as usize, memory: memory as usize, goal: Goal::from_number(goal), ..Settings::default() };
     let Some(trainer) = Trainer::new(description, settings, &flat_ground(), seed as u64) else {
         *WALKER.get() = None;
         return 0;
@@ -281,7 +281,13 @@ pub extern "C" fn show_senses() -> *const f32 {
     pointer(walker().map(|walker| &walker.show.senses[..]))
 }
 
-/// The number of hidden layers, 1 or 2.
+/// The number of memories the brain keeps from step to step.
+#[unsafe(no_mangle)]
+pub extern "C" fn memory_length() -> u32 {
+    walker().map_or(0, |walker| walker.trainer.layout.memory as u32)
+}
+
+/// The number of hidden layers, 1 to 4.
 #[unsafe(no_mangle)]
 pub extern "C" fn layers_length() -> u32 {
     walker().map_or(0, |walker| walker.trainer.layout.layers as u32)
@@ -292,6 +298,12 @@ pub extern "C" fn layers_length() -> u32 {
 #[unsafe(no_mangle)]
 pub extern "C" fn show_hidden() -> *const f32 {
     pointer(walker().map(|walker| &walker.show.brain.hidden[..]))
+}
+
+/// What the show's brain is keeping in memory for its next step, `memory_length` f32.
+#[unsafe(no_mangle)]
+pub extern "C" fn show_memory() -> *const f32 {
+    pointer(walker().map(|walker| &walker.show.brain.memory[..]))
 }
 
 /// What its outputs gave last, `outputs_length` f32, each from -1 to 1, one for each joint.

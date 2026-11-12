@@ -6,7 +6,9 @@
 /** The functions of public/wasm/walker.wasm. */
 export interface Engine {
     memory: WebAssembly.Memory;
-    create(legs: number, population: number, seconds: number, seed: number, hidden: number, layers: number, goal: number): number;
+    create(legs: number, population: number, seconds: number, seed: number, hidden: number, layers: number, memory: number, goal: number): number;
+    memory_length(): number;
+    show_memory(): number;
     run_seconds(): number;
     ground_room(pieces: number): number;
     ground_set(pieces: number): number;
@@ -83,9 +85,21 @@ export const GOALS: { goal: Goal; name: string; doing: string }[] = [
     { goal: 3, name: "jump", doing: "jumping" },
 ];
 
-/** The sizes of brain on offer: neurons in each hidden layer, and how many hidden layers. */
-export const NEURONS = [6, 12, 24];
-export const LAYERS = [1, 2];
+/** The sizes of brain on offer: neurons in each hidden layer, how many hidden layers, and memories. */
+export const NEURONS = [8, 16, 32, 64];
+export const LAYERS = [1, 2, 3, 4];
+export const MEMORIES = [0, 2, 4, 8];
+
+/** Three sizes of brain by name, the main way to choose one. Any other mix is the visitor's own. */
+export const PRESETS: { name: string; hidden: number; layers: number; memory: number }[] = [
+    { name: "small", hidden: 8, layers: 1, memory: 0 },
+    { name: "medium", hidden: 16, layers: 2, memory: 4 },
+    { name: "large", hidden: 32, layers: 3, memory: 8 },
+];
+
+/** The name of the preset a brain is, or "own". */
+export const presetOf = (setup: { hidden: number; layers: number; memory: number }): string =>
+    PRESETS.find((preset) => preset.hidden === setup.hidden && preset.layers === setup.layers && preset.memory === setup.memory)?.name ?? "own";
 
 /** What the walker walks on: a kind, and how rough, from 0 to 100. */
 export interface Ground {
@@ -99,22 +113,23 @@ export interface Setup {
     goal: Goal;
     hidden: number;
     layers: number;
+    memory: number;
     ground: Ground;
 }
 
-export const DEFAULT_SETUP: Setup = { legs: 2, goal: 0, hidden: 12, layers: 1, ground: { kind: "flat", rough: 30 } };
+export const DEFAULT_SETUP: Setup = { legs: 2, goal: 0, hidden: 16, layers: 2, memory: 4, ground: { kind: "flat", rough: 30 } };
 
 /** Whether something kept or read from a link is a setup the mini can use. */
 export function valid(setup: unknown): setup is Setup {
     const s = setup as Partial<Setup> | null;
-    return !!s && LEGS.includes(s.legs as Legs) && GOALS.some((each) => each.goal === s.goal) && NEURONS.includes(s.hidden as number) && LAYERS.includes(s.layers as number) && KINDS.includes(s.ground?.kind as Kind) && Number.isFinite(s.ground?.rough) && s.ground!.rough >= 0 && s.ground!.rough <= 100;
+    return !!s && LEGS.includes(s.legs as Legs) && GOALS.some((each) => each.goal === s.goal) && NEURONS.includes(s.hidden as number) && LAYERS.includes(s.layers as number) && MEMORIES.includes(s.memory as number) && KINDS.includes(s.ground?.kind as Kind) && Number.isFinite(s.ground?.rough) && s.ground!.rough >= 0 && s.ground!.rough <= 100;
 }
 
 /**
  * Which shape of brain a link holds. It goes up whenever a brain's weights stop meaning what they
  * meant, so an old link is recognised and set aside rather than read wrongly.
  */
-export const LINK_VERSION = 2;
+export const LINK_VERSION = 3;
 
 /** A walker as the parts of a link: its setup and its brain. */
 export function linkParts(setup: Setup, brain: Float32Array): [string, string][] {
@@ -124,6 +139,7 @@ export function linkParts(setup: Setup, brain: Float32Array): [string, string][]
         ["goal", String(setup.goal)],
         ["neurons", String(setup.hidden)],
         ["layers", String(setup.layers)],
+        ["memory", String(setup.memory)],
         ["ground", setup.ground.kind],
         ["rough", String(setup.ground.rough)],
         ["brain", encode(brain)],
@@ -131,7 +147,7 @@ export function linkParts(setup: Setup, brain: Float32Array): [string, string][]
 }
 
 /** The names a link to a walker uses, to clear them all. */
-export const LINK_NAMES = ["v", "legs", "goal", "neurons", "layers", "ground", "rough", "brain"];
+export const LINK_NAMES = ["v", "legs", "goal", "neurons", "layers", "memory", "ground", "rough", "brain"];
 
 /** Whether the address holds a link to a walker from an older version, which cannot be read. */
 export const oldLink = (get: (name: string) => string | null): boolean => get("brain") !== null && get("v") !== String(LINK_VERSION);
@@ -139,7 +155,7 @@ export const oldLink = (get: (name: string) => string | null): boolean => get("b
 /** A walker back from a link, or null if the link does not hold a whole one of this version. */
 export function fromLink(get: (name: string) => string | null): { setup: Setup; brain: Float32Array } | null {
     if (get("v") !== String(LINK_VERSION)) return null;
-    const setup = { legs: Number(get("legs")), goal: Number(get("goal")), hidden: Number(get("neurons")), layers: Number(get("layers")), ground: { kind: get("ground"), rough: Number(get("rough")) } };
+    const setup = { legs: Number(get("legs")), goal: Number(get("goal")), hidden: Number(get("neurons")), layers: Number(get("layers")), memory: Number(get("memory")), ground: { kind: get("ground"), rough: Number(get("rough")) } };
     const brain = decode(get("brain") ?? "");
     return brain && valid(setup) ? { setup, brain } : null;
 }
