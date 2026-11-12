@@ -19,7 +19,6 @@ import type { Order, Report } from "../scripts/walker-worker";
 import {
     COURSE_GOAL,
     DEFAULT_SETUP,
-    ENGINE,
     GOALS,
     KINDS,
     LAYERS,
@@ -32,6 +31,7 @@ import {
     PRESETS,
     Terrain,
     courseAt,
+    engineAddress,
     fromLink,
     groundOf,
     heightAt,
@@ -191,7 +191,7 @@ export default function walker(m: Mote): Scene {
         here = true;
     }
 
-    void fetch(ENGINE)
+    void fetch(engineAddress())
         .then((answer) => answer.arrayBuffer())
         .then(startEngine)
         .then((made) => {

@@ -5,7 +5,7 @@
 // It trains only while the page is drawing the mini: the page says so about once a second, and when
 // it falls quiet (the tab hidden, the mini scrolled away) training waits.
 
-import { ENGINE, POPULATION, read, start, write, type Engine } from "../minis/walking";
+import { POPULATION, engineAddress, read, start, write, type Engine } from "../minis/walking";
 
 /** What the page sends. */
 export type Order =
@@ -22,7 +22,7 @@ export type Report =
 const tell = (report: Report, moved: Transferable[] = []) => postMessage(report, { transfer: moved });
 
 let engine: Engine | undefined;
-const loading = fetch(ENGINE)
+const loading = fetch(engineAddress())
     .then((answer) => answer.arrayBuffer())
     .then(start)
     .then((made) => (engine = made))

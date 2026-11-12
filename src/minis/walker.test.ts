@@ -4,24 +4,45 @@
 // link exactly, and each kind of ground is what it says. `bun run wasm` builds it; `bun test` runs this.
 
 import { expect, test } from "bun:test";
-import { COURSE, DEFAULT_SETUP, KINDS, PRESETS, Terrain, courseAt, decode, encode, fromLink, heightAt, linkParts, oldLink, pieces, presetOf, valid, type Engine, type Setup } from "./walking";
+import { COURSE, DEFAULT_SETUP, KINDS, PRESETS, Terrain, courseAt, decode, encode, engineAddress, fromLink, hasSimd, heightAt, linkParts, oldLink, pieces, presetOf, valid, type Engine, type Setup } from "./walking";
 
 const path = new URL("../../public/wasm/walker.wasm", import.meta.url);
+const scalarPath = new URL("../../public/wasm/walker-scalar.wasm", import.meta.url);
 
 type Walker = Engine;
 
-async function load(): Promise<Walker> {
-    const { instance } = await WebAssembly.instantiate(await Bun.file(path).arrayBuffer(), {});
+async function load(from: URL = path): Promise<Walker> {
+    const { instance } = await WebAssembly.instantiate(await Bun.file(from).arrayBuffer(), {});
     return instance.exports as unknown as Walker;
 }
 
 /** A copy of `length` f32 from the module's memory, made fresh since memory may have grown. */
 const floats = (walker: Walker, pointer: number, length: number) => Array.from(new Float32Array(walker.memory.buffer, pointer, length));
 
-test("the module is under its size limit and needs nothing from the page to load", async () => {
-    expect(Bun.file(path).size).toBeLessThan(512 * 1024);
-    const module = await WebAssembly.compile(await Bun.file(path).arrayBuffer());
-    expect(WebAssembly.Module.imports(module)).toEqual([]);
+test("both builds are under their size limit and need nothing from the page to load", async () => {
+    for (const each of [path, scalarPath]) {
+        expect(Bun.file(each).size).toBeLessThan(512 * 1024);
+        const module = await WebAssembly.compile(await Bun.file(each).arrayBuffer());
+        expect(WebAssembly.Module.imports(module)).toEqual([]);
+    }
+    // this runtime has SIMD, as every current browser does, so it is given the SIMD build
+    expect(hasSimd()).toBe(true);
+    expect(engineAddress()).toBe("/wasm/walker.wasm");
+});
+
+test("the build with SIMD and the build without learn exactly the same way, to the bit", async () => {
+    for (const [legs, hidden, layers, memory] of [[2, 16, 2, 4], [4, 64, 4, 8], [1, 32, 3, 8]] as const) {
+        const fast = await load(path);
+        const plain = await load(scalarPath);
+        const count = fast.create(legs, 12, 0, 21, hidden, layers, memory, 0, 0);
+        plain.create(legs, 12, 0, 21, hidden, layers, memory, 0, 0);
+        while (fast.generation() < 3) fast.train(12);
+        while (plain.generation() < 3) plain.train(12);
+        const bits = (walker: Walker, pointer: number, length: number) => Array.from(new Uint32Array(walker.memory.buffer, pointer, length));
+        expect(bits(fast, fast.best_weights(), count)).toEqual(bits(plain, plain.best_weights(), count));
+        expect(bits(fast, fast.history_best(), 3)).toEqual(bits(plain, plain.history_best(), 3));
+        expect(fast.best_score()).toBe(plain.best_score());
+    }
 });
 
 test("a walker is made only from a description it can build", async () => {

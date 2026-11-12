@@ -28,9 +28,15 @@ cargo test            # in walker/: the physics, the body, the brain and the lea
 bun test src/minis/walker.test.ts   # the built module, from the page's side
 ```
 
-`bun run wasm` fails if the module is over 512 KiB, or if the physics built alone
-(`cargo build --no-default-features`) is over 50 KiB. The built module is committed, so the site
+`bun run wasm` builds the module twice, optimised for speed: with WebAssembly SIMD as
+`walker.wasm`, and without it as `walker-scalar.wasm`, for a browser too old for SIMD (Safari
+before 16.4). The page checks which one the browser can run when it loads. The two give the same
+numbers to the bit. It fails if either is over 512 KiB, or if the physics built alone
+(`cargo build --no-default-features`) is over 80 KiB. The built modules are committed, so the site
 builds without Rust.
+
+`cargo run --release --example speed` says how fast training goes natively for each number of legs
+and each size of brain, and how a run's time divides between the physics, the brain and the rest.
 
 ## Reading from memory
 
@@ -276,7 +282,7 @@ and 110 to 150 ms for four, at each size. A large brain has more to learn and ge
 ## The physics alone
 
 Built with `cargo build --release --target wasm32-unknown-unknown --no-default-features`, the module
-holds only the physics, with these functions instead (about 26 KiB):
+holds only the physics, with these functions instead (about 36 KiB):
 
 - `physics_reset(gravity_x: f32, gravity_y: f32)` Empties the world and sets its gravity.
 - `physics_body(kind: u32, a: f32, b: f32, x: f32, y: f32, angle: f32, density: f32, friction: f32, restitution: f32, group: u32) -> u32`

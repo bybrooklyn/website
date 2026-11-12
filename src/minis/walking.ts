@@ -65,8 +65,27 @@ export interface Engine {
     crowd_stop(): void;
 }
 
-/** Where the built engine is served from. */
+/** Where the built engine is served from: built with WebAssembly SIMD, and without, for older browsers. */
 export const ENGINE = "/wasm/walker.wasm";
+export const SCALAR_ENGINE = "/wasm/walker-scalar.wasm";
+
+/**
+ * The smallest module that uses SIMD (it splats a byte and counts its bits), which a browser without
+ * SIMD will not accept. The same test the wasm-feature-detect project uses.
+ */
+const SIMD_TEST = new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0, 1, 5, 1, 96, 0, 1, 123, 3, 2, 1, 0, 10, 10, 1, 8, 0, 65, 0, 253, 15, 253, 98, 11]);
+
+/** Whether this browser runs WebAssembly SIMD: every current one does; Safari before 16.4 does not. */
+export const hasSimd = (): boolean => {
+    try {
+        return WebAssembly.validate(SIMD_TEST);
+    } catch {
+        return false;
+    }
+};
+
+/** The engine this browser can run. Both builds give the same numbers to the bit; SIMD is faster. */
+export const engineAddress = (): string => (hasSimd() ? ENGINE : SCALAR_ENGINE);
 
 /** Starts an engine from the module's bytes. It needs nothing from the page. */
 export async function start(bytes: ArrayBuffer): Promise<Engine> {
