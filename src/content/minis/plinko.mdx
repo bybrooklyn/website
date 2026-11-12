@@ -1,15 +1,15 @@
 ---
 name: Plinko
-summary: A table of posts that makes passwords.
+summary: A Plinko board that makes passwords.
 kind: toy
 space: 3D
-controls: Press drop, or click the table. Each ball is a character, and the order they reach the bin in is the password.
+controls: Press drop, or click the board. Each ball that lands sends the character in its bin up to the password.
 panel: true
 order: 7
 ---
 
-Every ball is a character. They are let go one after another at the top of a sloped table, roll and knock their way down between the posts, and drop off the end into a bin. The password is the balls in the order they got there. When the last one has settled, each character lifts off its ball and they line up in that order.
+Every bin shows a character. The balls drop one after another, and the pegs light up as they are hit. When a ball lands in a bin, that bin's character flies up to the next empty place in the password along the top, and the bin gets a new one.
 
-Each ball's character comes from the browser's secure random source when the ball is made, so every character is as likely as any other. The table only decides the order, and a fair character is still fair whatever order it arrives in. The balls are real spheres on Mote's 3D physics: they roll, hit the posts and each other, and pile up in the bin.
+A Plinko board is not fair. A ball ends up in some bins far more often than others. So the characters in the bins come from the browser's secure random source, and where a ball lands has nothing to do with what the bin holds. Every character is as likely as any other. The tests drop 6,400 balls on four different boards and check that.
 
-The length, the kinds of character and the table are yours to set. The table settings change how it looks and sounds, not how strong the password is. Your settings are kept in this browser. The password is not kept anywhere.
+The length, the kinds of character and the board are yours to set. The board settings change how it looks and sounds, not how strong the password is. Your settings are kept in this browser. The password is not kept anywhere.
