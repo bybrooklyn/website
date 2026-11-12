@@ -196,6 +196,8 @@ export default function walker(m: Mote): Scene {
         .then(startEngine)
         .then((made) => {
             engine = made;
+            // with ?debug in the address, the engine can be reached from the console, to measure the walker on screen
+            if (m.debug) Object.assign(globalThis, { walkerEngine: made });
             begin(brainToLoad);
         });
 
