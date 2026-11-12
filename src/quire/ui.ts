@@ -225,6 +225,11 @@ export function flowMenu(label: string, options: { align?: "left" | "right"; cla
     }
     box.addEventListener("keydown", onKey);
 
+    // a menu opened with the mouse leaves focus in the text, and Escape there must still close it
+    function escape(event: KeyboardEvent) {
+        if (event.key === "Escape" && opened && !box.contains(document.activeElement)) menu.close(document.activeElement === trigger);
+    }
+
     function outside(event: PointerEvent) {
         if (!opened) return;
         const target = event.target as Node;
@@ -269,6 +274,7 @@ export function flowMenu(label: string, options: { align?: "left" | "right"; cla
             from.setAttribute("aria-expanded", "true");
             from.classList.add("open");
             document.addEventListener("pointerdown", outside, true);
+            document.addEventListener("keydown", escape, true);
             if (focusFirst) lines()[0]?.focus({ preventScroll: true });
         },
         close(returnFocus = false) {
@@ -280,6 +286,7 @@ export function flowMenu(label: string, options: { align?: "left" | "right"; cla
             trigger?.setAttribute("aria-expanded", "false");
             trigger?.classList.remove("open");
             document.removeEventListener("pointerdown", outside, true);
+            document.removeEventListener("keydown", escape, true);
             if (returnFocus) trigger?.focus({ preventScroll: true });
             options.onClose?.();
         },

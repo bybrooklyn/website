@@ -198,7 +198,7 @@ used("a menu grows open over time, past its size and back, and with less motion 
     await reset("Line\n", [0], 0);
     const watching = tab.run<number[]>("q.watch('.quire-menu.open', 'width', 700)");
     await button("Style");
-    const widths = (await watching).filter((value) => !Number.isNaN(value));
+    const widths = (await watching).filter((value) => value !== null && !Number.isNaN(value));
     const final = widths[widths.length - 1]!;
     expect(new Set(widths.map(Math.round)).size).toBeGreaterThan(5);
     expect(widths[0]!).toBeLessThan(final - 10);
@@ -210,7 +210,8 @@ used("a menu grows open over time, past its size and back, and with less motion 
     try {
         const still = tab.run<number[]>("q.watch('.quire-menu.open', 'width', 300)");
         await button("Style");
-        const stillWidths = (await still).filter((value) => !Number.isNaN(value));
+        // a menu that is not there reads as nothing, which comes back from the page as null
+        const stillWidths = (await still).filter((value) => value !== null && !Number.isNaN(value));
         expect(stillWidths.length).toBeGreaterThan(3);
         expect({ widths: stillWidths, distinct: new Set(stillWidths.map(Math.round)).size }).toMatchObject({ distinct: 1 });
         await tab.press("Escape");
@@ -265,7 +266,7 @@ used("the slash menu grows at the cursor, narrows as you type, and makes a headi
     await tab.press("Enter");
     const watching = tab.run<number[]>("q.watch('.quire-slash.open', 'height', 600)");
     await tab.type("/");
-    const heights = (await watching).filter((value) => !Number.isNaN(value));
+    const heights = (await watching).filter((value) => value !== null && !Number.isNaN(value));
     expect(new Set(heights.map(Math.round)).size).toBeGreaterThan(4);
     expect(await tab.run("document.querySelectorAll('.quire-slash.open .quire-menu-line').length")).toBe(11);
     // it opens at the cursor
