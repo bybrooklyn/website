@@ -1,49 +1,54 @@
-// What the Plinko board is held to: the password is the length asked for, every ball is accounted
-// for, and every character comes up as often as chance says, though the bins do not. Run with `bun run test`.
+// What the Plinko table is held to: every ball is a fairly chosen character, every ball gets down
+// the table, and the password is those characters in the order they arrived. Run with `bun run test`.
 
 import { expect, test } from "bun:test";
-import { alphabet, BINS, DEFAULTS, drop, fair, strength, type Settings } from "./board";
+import { alphabet, BIN, DEEP, DEFAULTS, WIDE, drop, fair, strength, type Settings } from "./board";
 
-/** Drops the balls and runs the board to its end. */
+/** Lets the balls go and runs the table until they have all rolled off its foot and come to rest. */
 function play(settings: Partial<Settings>) {
-    // the balls are let go much faster than on the page, so that thousands can be dropped
-    const board = drop({ ...DEFAULTS, ...settings }, undefined, undefined, 0.05);
-    for (let step = 0; step < 120 * 60 && !board.done(); step++) board.step(1 / 120);
+    const board = drop({ ...DEFAULTS, ...settings });
+    for (let step = 0; step < 120 * 90 && !(board.done() && board.space.still()); step++) board.step(1 / 120);
     return board;
 }
 
-test("the password is exactly as long as asked for, at any length and on any board", () => {
-    for (const settings of [{ length: 4, rows: 5 }, { length: 16 }, { length: 64, rows: 11, bounce: 0.8, gravity: 0.5 }, { length: 64, rows: 5, bounce: 0.2, gravity: 1.6 }]) {
+test("every ball gets down the table into the bin, and the password is their characters in the order they arrived", () => {
+    for (const settings of [{ length: 4, rows: 4 }, { length: 16 }, { length: 64, rows: 11, bounce: 0.8, gravity: 0.7 }, { length: 64, rows: 4, bounce: 0.2, gravity: 1.6 }]) {
         const board = play(settings);
         expect(board.done()).toBe(true);
+        expect(board.late).toBe(0);
         expect(board.password()).toHaveLength(settings.length);
-        expect([...board.password()].every((character) => alphabet(DEFAULTS).includes(character))).toBe(true);
-    }
-});
-
-test("every character comes up as often as chance says, on every kind of board, though the bins do not", () => {
-    const settings = { length: 64, upper: false, symbols: false };
-    const letters = alphabet({ ...DEFAULTS, ...settings });
-    const counts = new Map<string, number>();
-    const bins = Array.from({ length: BINS }, () => 0);
-    let late = 0;
-    const boards = [{ rows: 8 }, { rows: 5, bounce: 0.8 }, { rows: 11, gravity: 1.6 }, { rows: 7, bounce: 0.2, gravity: 0.5 }];
-    for (let round = 0; round < 100; round++) {
-        const board = play({ ...settings, ...boards[round % boards.length] });
-        late += board.late;
-        for (const landing of board.landings) {
-            counts.set(landing.character, (counts.get(landing.character) ?? 0) + 1);
-            bins[landing.bin]!++;
+        // the same characters the balls were made with, each once, in the table's order
+        expect([...board.password()].sort()).toEqual(board.balls.map((ball) => ball.character).sort());
+        expect(board.order.map((ball) => ball.place)).toEqual(board.order.map((_, place) => place));
+        for (const ball of board.balls) {
+            const [x, y, z] = ball.body.p;
+            expect(Math.abs(x)).toBeLessThan(WIDE / 2);
+            expect(z).toBeGreaterThan(board.line);
+            expect(z).toBeLessThan(board.line + BIN);
+            expect(y).toBeGreaterThan(-DEEP);
+            expect(y).toBeLessThan(0.5);
         }
     }
-    // how far the counts are from even, as chi-squared: for 36 characters chance alone passes 95 about once in ten million runs
-    const uneven = (seen: number[], total: number) => seen.reduce((sum, count) => sum + (count - total / seen.length) ** 2 / (total / seen.length), 0);
-    expect(uneven(letters.split("").map((letter) => counts.get(letter) ?? 0), 6400)).toBeLessThan(95);
-    // the board itself is nowhere near even: this is why it is not left to choose
-    expect(uneven(bins, 6400)).toBeGreaterThan(200);
-    // and nearly every ball reaches a bin by itself
-    expect(late).toBeLessThan(20);
 }, 120_000);
+
+test("every character is as likely as any other", () => {
+    const settings = { ...DEFAULTS, length: 64, upper: false, symbols: false };
+    const letters = alphabet(settings);
+    const counts = new Map<string, number>();
+    for (let round = 0; round < 100; round++) for (const ball of drop(settings).balls) counts.set(ball.character, (counts.get(ball.character) ?? 0) + 1);
+    // how far the counts are from even, as chi-squared: for 36 characters chance alone passes 95 about once in ten million runs
+    const even = 6400 / letters.length;
+    expect(letters.split("").reduce((sum, letter) => sum + ((counts.get(letter) ?? 0) - even) ** 2 / even, 0)).toBeLessThan(95);
+});
+
+test("a short password takes its time and a long one does not take all day", () => {
+    for (const [length, least, most] of [[16, 6, 20], [64, 14, 32]] as const) {
+        const board = drop({ ...DEFAULTS, length });
+        while (!board.done() && board.time < 60) board.step(1 / 120);
+        expect(board.time).toBeGreaterThan(least);
+        expect(board.time).toBeLessThan(most);
+    }
+}, 60_000);
 
 test("a fair number is never out of range, and one from the uneven last stretch is thrown away", () => {
     for (let i = 0; i < 2000; i++) expect(fair(94)).toBeLessThan(94);
@@ -58,13 +63,4 @@ test("the characters are the kinds chosen, small letters if none are, and streng
     expect(alphabet({ lower: false, upper: false, digits: false, symbols: false })).toBe("abcdefghijklmnopqrstuvwxyz");
     expect(alphabet(DEFAULTS)).toHaveLength(86);
     expect(strength({ ...DEFAULTS, length: 10, lower: false, upper: false, symbols: false })).toBeCloseTo(10 * Math.log2(10));
-});
-
-test("on the page a short password takes its time and a long one does not take all day", () => {
-    for (const [length, least, most] of [[16, 6, 16], [64, 10, 24]] as const) {
-        const board = drop({ ...DEFAULTS, length });
-        while (!board.done() && board.time < 60) board.step(1 / 120);
-        expect(board.time).toBeGreaterThan(least);
-        expect(board.time).toBeLessThan(most);
-    }
 });

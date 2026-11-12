@@ -1,51 +1,44 @@
-// Plinko: a board that makes a password, seen straight on like an arcade machine. Balls drop one
-// after another through the pegs, which light as they are struck. Each bin shows a character; when
-// a ball lands in one, that character flies up to the next empty place in the password along the
-// top, and the bin is given another. What makes the password fair is in board.ts; here the board is
-// drawn, by Mote's 3D drawing, with its settings under it.
+// Plinko: a sloped table of posts that makes a password. Every ball is a character. They are let go
+// one after another at the top, roll and knock their way down between the posts, and drop off the
+// foot of the table into a bin. The password is the balls in the order they got there. When the last
+// has settled the eye goes up over the bin, the table darkens, and each character lifts off its ball
+// into a glowing row. What makes the password fair is in board.ts; here the table is drawn, by Mote's
+// 3D drawing, with its settings under it.
 
 import { gl, type Color, type Part } from "../mote/gl";
-import type { Body } from "../mote/flat";
-import { ball, block, mix3, type V3 } from "../mote/solids";
+import { ball, block, mix3, rod, type Turn, type V3 } from "../mote/solids";
 import { sounds } from "../mote/sound";
+import { turn, type Solid } from "../mote/space";
 import { el, gently, toward, type Mote, type Scene } from "../mote/stage";
-import { ACROSS, BALL, BIN, BINS, DEFAULTS, LIMITS, PEG, WIDTH, alphabet, drop, strength, type Board, type Settings } from "./board";
+import { BALL, BIN, DEEP, DEFAULTS, LIMITS, POST, TALL, TILT, WIDE, alphabet, drop, strength, type Board, type Settings } from "./board";
+import { row } from "./rolls";
 
-export const label = "A Plinko board. Balls fall through pegs into bins of characters, and what they land in becomes a password.";
+export const label = "A sloped table of posts. Balls with a character on each roll down it into a bin, and the order they arrive in is a password.";
 
-/** One unit of the picture is this many of the board's own. */
-const UNIT = 50;
-/** How long a character takes from its bin to its place in the password, in seconds. */
-const FLIGHT = 0.5;
-/** How many places a ball's trail has, and how many steps apart they are. */
-const TRAIL = 6;
-const EVERY = 3;
+/** How long a character takes from its ball to the row, in seconds, and how far in front of the eye the row is. */
+const FLIGHT = 0.7;
+const FAR = 5;
 const mix = (a: Color, b: Color, t: number): Color => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
-
-/** A ball as it is drawn: itself, the fading copies behind it, where it has lately been, and its color. */
-interface Drawn {
-    part: Part;
-    tail: Part[];
-    been: V3[];
-    color: Color;
-}
-
-/** A character of the password: on its way from a bin to its place, or there. */
-interface Letter {
-    part: Part;
-    from: V3;
-    flown: number;
-}
+/** One turn after another. */
+const after = (first: Turn, then: Turn): Turn => then.map((line) => [0, 1, 2].map((column) => line[0]! * first[0]![column]! + line[1]! * first[1]![column]! + line[2]! * first[2]![column]!)) as Turn;
+/** The table is drawn tipped up at its far end by TILT, which the physics has as a tipped pull. */
+const TIPPED: Turn = [[1, 0, 0], [0, Math.cos(TILT), -Math.sin(TILT)], [0, Math.sin(TILT), Math.cos(TILT)]];
+/** Stands a rod, which is made lying along z, on its end. */
+const UPRIGHT: Turn = [[1, 0, 0], [0, 0, 1], [0, -1, 0]];
 
 export default function plinko(m: Mote): Scene {
     const kept = m.recall<Partial<Settings>>("plinko", {});
-    let settings: Settings = { ...DEFAULTS, ...kept, rows: Math.min(LIMITS.rows[1], kept.rows ?? DEFAULTS.rows) };
-    // Until the first drop the board stands empty, with its bins already showing characters.
+    const within = (name: "rows" | "gravity" | "bounce" | "length", value: number) => Math.max(LIMITS[name][0], Math.min(LIMITS[name][1], value));
+    let settings: Settings = { ...DEFAULTS, ...kept };
+    for (const name of ["rows", "gravity", "bounce", "length"] as const) settings[name] = within(name, settings[name]);
+    // Until the first drop the table stands empty.
     let board: Board = drop({ ...settings, length: 0 });
-    let dropping = false;
+    /** Standing empty, balls on the table, all in the bin and coming to rest, or the password shown. */
+    let phase: "idle" | "dropping" | "settling" | "shown" = "idle";
+    let since = 0;
+    const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
     const sound = m.preview ? undefined : sounds(m);
     let auto = -6;
-    let steps = 0;
 
     const under = document.createElement("canvas");
     under.className = "mote-gl";
@@ -60,106 +53,102 @@ export default function plinko(m: Mote): Scene {
         probe.remove();
     }
     const tint = (name: string, by = 1): Color => view!.color(m.color(name)).map((value) => value * by) as Color;
-
-    // ---- where things are ----
-    // The password runs along the top, above the board, on one line or two.
-    let places = { perLine: 1, pitch: 30, top: 60 };
-    const layout = (length: number) => {
-        const perLine = length <= 32 ? Math.max(1, length) : Math.ceil(length / 2);
-        const pitch = Math.min(36, (WIDTH + 40) / perLine);
-        places = { perLine, pitch, top: Math.ceil(Math.max(1, length) / perLine) * pitch * 1.3 + 30 };
+    /** A place on the table, as the picture has it: the table's middle at the picture's, and its far end tipped up. */
+    const place = ([x, y, z]: V3): V3 => {
+        const along = z - board.long / 2;
+        return [x, y * Math.cos(TILT) - along * Math.sin(TILT), y * Math.sin(TILT) + along * Math.cos(TILT)];
     };
-    /** A place on the board, as the picture has it: across, down from the board's top, and out toward the eye. */
-    const place = (x: number, y: number, out = 0): V3 => [(x - WIDTH / 2) / UNIT, ((board.height + places.top) / 2 - (y + places.top)) / UNIT, out];
-    /** Where a character of the password goes. */
-    const slot = (at: number, length: number): V3 => {
-        const line = Math.floor(at / places.perLine);
-        const inLine = Math.min(places.perLine, length - line * places.perLine);
-        return place(WIDTH / 2 + ((at % places.perLine) - (inLine - 1) / 2) * places.pitch, -places.top + 20 + (line + 0.5) * places.pitch * 1.3, 0.3);
-    };
-    const bin = (at: number): V3 => place((at + 0.5) * ACROSS, board.shelf + BIN * 0.5, 0.3);
 
-    // ---- the board, drawn ----
+    // ---- the table, drawn ----
     let fixed: Part[] = [];
-    /** Each peg, how lately it was struck, and the color of the ball that struck it. */
-    let pegs: { part: Part; look: { color: Color }; struck: number; by: Color }[] = [];
-    const balls = new Map<Body, Drawn>();
-    const bins = Array.from({ length: BINS }, () => ({ signs: new Map<string, Part>(), caught: 0 }));
-    /** The empty places of the password, and the characters that have left their bins for them. */
-    let blanks: Part[] = [];
-    let letters: Letter[] = [];
-    /** How brightly the finished password flares, falling back from 1. */
-    let flare = 0;
-    let length = 0;
-    const ballMesh = ball(BALL / UNIT);
-    const pegMesh = ball(PEG / UNIT);
+    /** Each post, how lately it was struck, and the color of the ball that struck it. */
+    const posts = new Map<Solid, { part: Part; look: { color: Color }; struck: number; by: Color }>();
+    /** Each ball: itself, its character written on an unseen box around it, and its color. */
+    let balls: { part: Part; words: Part; color: Color }[] = [];
+    /** The characters that have lifted off their balls, in the password's order, and how long ago they set off. */
+    let lifted: { part: Part; from: V3 }[] = [];
+    let lined = 0;
+    /** How far the eye has gone from beside the table to over the bin, from 0 to 1. */
+    let over = 0;
     let plain: Color = [0.4, 0.4, 0.4];
+    const ballMesh = ball(BALL);
+    const wordsMesh = block([BALL * 1.01, BALL * 1.01, BALL * 1.01]);
+    const gap = () => Math.min(0.05, FLIGHT / Math.max(1, lifted.length));
+    const lastIn = () => FLIGHT + (lifted.length - 1) * gap();
 
-    const build = (count: number) => {
+    const build = () => {
         if (!view) return;
-        for (const part of [...fixed, ...pegs.map((peg) => peg.part), ...blanks, ...letters.map((letter) => letter.part), ...[...balls.values()].flatMap((drawn) => [drawn.part, ...drawn.tail])]) view.remove(part);
-        balls.clear();
-        [letters, flare, length] = [[], 0, count];
-        layout(count);
-        const [wide, high] = [WIDTH / UNIT, board.height / UNIT];
-        const put = (part: Part, at: V3) => ((part.at = at), part);
-        const middle = place(WIDTH / 2, board.height / 2);
+        for (const part of [...fixed, ...[...posts.values()].map((post) => post.part), ...balls.flatMap((one) => [one.part, one.words]), ...lifted.map((one) => one.part)]) view.remove(part);
+        posts.clear();
+        [lifted, lined, over] = [[], 0, 0];
+        const { long, line } = board;
+        const slab = (at: V3, half: V3, color: Color, more: { alpha?: number; casts?: boolean } = {}) => {
+            const part = view.add(block(half), { color, ...more });
+            part.at = place(at);
+            part.turn = TIPPED;
+            return part;
+        };
         fixed = [
-            // a board darker than the page, so that what lights up on it shows
-            put(view.add(block([wide / 2 + 0.12, high / 2 + 0.12, 0.1]), { color: tint("--ground", 0.55), casts: false }), [middle[0], middle[1], -0.3]),
-            put(view.add(block([wide / 2 + 0.2, 0.06, 0.3]), { color: tint("--rule") }), [middle[0], middle[1] - high / 2 - 0.12, 0]),
-            ...[-1, 1].map((side) => put(view.add(block([0.06, high / 2 + 0.18, 0.3]), { color: tint("--rule") }), [side * (wide / 2 + 0.14), middle[1], 0])),
-            ...Array.from({ length: BINS - 1 }, (_, wall) => put(view.add(block([3 / UNIT, BIN / 2 / UNIT, 0.2]), { color: tint("--rule") }), place((wall + 1) * ACROSS, board.shelf + BIN / 2))),
+            // the table, darker than the page so that what is lit shows on it; the bin's floor; the sides; the two ends
+            slab([0, -0.2, line / 2 - 0.25], [WIDE / 2, 0.2, line / 2 + 0.25], tint("--surface", 0.75)),
+            slab([0, -DEEP - 0.15, line + BIN / 2], [WIDE / 2, 0.15, BIN / 2], tint("--ground", 0.8)),
+            slab([0, -DEEP / 2 - 0.2, line - 0.1], [WIDE / 2, DEEP / 2 - 0.2, 0.1], tint("--surface", 0.5), { casts: false }),
+            ...[-1, 1].map((side) => slab([side * (WIDE / 2 + 0.2), -DEEP / 2 + 0.25, long / 2], [0.2, DEEP / 2 + 0.55, long / 2 + 0.2], tint("--rule"), { casts: false })),
+            slab([0, 0.3, -0.2], [WIDE / 2 + 0.4, 0.5, 0.2], tint("--rule"), { casts: false }),
+            slab([0, -DEEP / 2 - 0.1, long + 0.2], [WIDE / 2 + 0.4, DEEP / 2 + 0.1, 0.2], tint("--rule"), { casts: false }),
         ];
-        plain = tint("--muted", 0.6);
-        pegs = board.pegs.map((body) => {
+        plain = tint("--muted", 0.75);
+        const postMesh = rod(POST, TALL);
+        for (const post of board.posts) {
             const look = { color: plain };
-            return { part: put(view.add(pegMesh, look), place(body.x, body.y)), look, struck: 0, by: plain };
+            const part = view.add(postMesh, look);
+            part.at = place([post.x, TALL / 2, post.z]);
+            part.turn = after(UPRIGHT, TIPPED);
+            posts.set(post.body, { part, look, struck: 0, by: plain });
+        }
+        balls = board.balls.map((one, index) => {
+            const color = view.color(`oklch(0.86 0.11 ${(index * 47) % 360})`);
+            const part = view.add(ballMesh, { color });
+            const words = view.add(wordsMesh, { color, bare: true, marks: () => one.character, ink: [0.08, 0.05, 0.12] });
+            part.hidden = words.hidden = true;
+            return { part, words, color };
         });
-        blanks = Array.from({ length: count }, (_, at) => {
-            const blank = put(view.sign("_", tint("--muted", 0.7)), slot(at, count));
-            blank.scale = (places.pitch / UNIT) * 1.5;
-            blank.emit = 1;
-            return blank;
-        });
-        view.light([-3, 8, 14], [-wide / 2 - 0.5, -high / 2 - 2, -0.5], [wide / 2 + 0.5, high / 2 + 2, 0.5], 1.4, 0.75, 0.5);
+        view.light([-6, 16, 9], [-WIDE / 2 - 1, -long / 2 - 1, -long / 2 - 1], [WIDE / 2 + 1, long / 2 + 1, long / 2 + 1], 1.5, 0.8, 0.4);
         aim();
     };
-    /** The eye: straight in front, far enough back to see the board and the password above it. */
+    /** The eye: in front of the foot of the table and above it while the balls roll, then up over the bin. */
     const aim = () => {
         if (!view) return;
         view.size(m.width, m.height);
-        const [wide, high] = [WIDTH / UNIT + 1.2, (board.height + places.top) / UNIT + 0.8];
-        const reach = Math.tan((6 * Math.PI) / 180);
-        const back = Math.max(high / 2 / reach, wide / 2 / (reach * (m.width / Math.max(1, m.height))));
-        view.look([0, 0, back], [0, 0, 0], 12);
+        const shape = m.width / Math.max(1, m.height);
+        const reach = Math.tan((15 * Math.PI) / 180);
+        // far enough back to see the whole table, from its top end to the bin, however wide the picture is
+        const back = Math.max(board.long * 1.55, (WIDE + 2.5) / (2 * reach * shape));
+        const beside: [V3, V3] = [[0, back * 0.8, back * 0.6], [0, -1.3, 0.9]];
+        const bin = place([0, -DEEP / 2, board.line + BIN / 2]);
+        const high = Math.max(BIN * 2.4, (WIDE + 1.5) / (2 * reach * shape));
+        const above: [V3, V3] = [[bin[0], bin[1] + high, bin[2] + high * 0.35], bin];
+        const t = gently(over);
+        view.look(mix3(beside[0], above[0], t), mix3(beside[1], above[1], t), 30);
     };
 
-    // ---- under the board: the password, and the settings ----
+    // ---- under the table: the password, and the settings ----
     let finish = () => {};
     let ready = () => {};
     const start = (count = settings.length) => {
         board = drop({ ...settings, length: count });
-        dropping = true;
-        build(m.preview ? 0 : count);
-        // a knock for each peg struck, higher the further down the board, and the peg lights in the ball's color
-        board.flat.hit = (a, b, speed) => {
-            const [peg, other] = a.im ? [b, a] : [a, b];
-            const at = board.pegs.indexOf(peg);
-            if (at < 0 || !pegs[at]) return;
-            pegs[at].struck = 1;
-            pegs[at].by = balls.get(other)?.color ?? plain;
-            sound?.knock(speed / 500, 500 + (peg.y / board.height) * 900);
+        [phase, since] = ["dropping", 0];
+        build();
+        // a knock for each post struck, higher the further down the table, and the post lights in the ball's color
+        board.space.hit = (a, b, speed) => {
+            const [post, other] = posts.has(a) ? [posts.get(a), b] : [posts.get(b), a];
+            if (post) {
+                post.struck = 1;
+                post.by = balls[board.balls.findIndex((one) => one.body === other)]?.color ?? plain;
+                sound?.knock(speed / 14, 600 + (other.p[2] / board.long) * 900);
+            } else if (a.im && b.im) sound?.knock(speed / 20, 1700);
         };
-        // the character leaves its bin for the next empty place in the password
-        board.landed = (landing) => {
-            bins[landing.bin]!.caught = 1;
-            sound?.tone(330 * 2 ** (landing.bin / 9), 0.2, 0.05);
-            if (!view || m.preview) return;
-            const part = view.sign(landing.character, [1, 1, 1]);
-            part.emit = 1;
-            letters.push({ part, from: bin(landing.bin), flown: 0 });
-        };
+        board.landed = (one) => sound?.tone(330 * 2 ** ((one.place! % 12) / 12), 0.15, 0.04);
         ready();
         m.wake();
     };
@@ -184,11 +173,11 @@ export default function plinko(m: Mote): Scene {
         const changed = () => {
             m.keep("plinko", settings);
             describe();
-            if (dropping) return;
+            if (phase !== "idle") return;
             word.hidden = copy.disabled = true;
             said.textContent = "Press drop for a password.";
             board = drop({ ...settings, length: 0 });
-            build(settings.length);
+            build();
             m.wake();
         };
         const slide = (name: "length" | "rows" | "bounce" | "gravity", words: string, step: number) => {
@@ -211,8 +200,8 @@ export default function plinko(m: Mote): Scene {
             said, word, about,
             el("div", { class: "table-go" }, go, copy, sound!.button),
             el("div", { class: "plinko-settings" }, slide("length", "length", 1), el("div", { class: "plinko-kinds" }, tick("lower", "a to z"), tick("upper", "A to Z"), tick("digits", "0 to 9"), tick("symbols", "symbols"))),
-            el("h2", { textContent: "the board" }),
-            el("div", { class: "plinko-settings" }, slide("rows", "rows of pegs", 1), slide("bounce", "bounce", 0.05), slide("gravity", "gravity", 0.1)),
+            el("h2", { textContent: "the table" }),
+            el("div", { class: "plinko-settings" }, slide("rows", "rows of posts", 1), slide("bounce", "bounce", 0.05), slide("gravity", "gravity", 0.1)),
         );
         describe();
         ready = () => {
@@ -227,123 +216,102 @@ export default function plinko(m: Mote): Scene {
         };
     }
 
-    build(m.preview ? 0 : settings.length);
+    build();
 
     return {
         step(dt) {
-            // Shown small in a list, it drops a few balls by itself now and then.
-            if (m.preview && !dropping && m.time - auto > 9) {
+            // Shown small in a list, it lets a few balls go by itself now and then.
+            if (m.preview && phase !== "dropping" && m.time - auto > 11) {
                 auto = m.time;
                 start(8);
             }
-            if (dropping) {
-                board.step(dt);
-                // where each ball has lately been, for the trail behind it
-                if (++steps % EVERY === 0) for (const [body, drawn] of balls) drawn.been = [place(body.x, body.y, 0.05), ...drawn.been].slice(0, TRAIL);
-                if (board.done() && board.balls.size === 0 && letters.every((letter) => letter.flown >= 1)) {
-                    dropping = false;
-                    flare = 1;
-                    finish();
-                    sound?.tone(660, 0.6, 0.06);
-                    sound?.tone(990, 0.6, 0.04);
-                }
+            if (phase === "dropping" || phase === "settling") board.step(dt);
+            if (phase === "dropping" && board.done()) [phase, since] = ["settling", 0];
+            since += dt;
+            // once they are all in the bin and lying still (or have had long enough), the characters leave their balls
+            if (phase === "settling" && !m.preview && (board.space.still() || since > 4)) {
+                [phase, since] = ["shown", 0];
+                if (view) lifted = board.order.map((one) => {
+                    const part = view.sign(one.character, [1, 1, 1]);
+                    part.emit = 1;
+                    part.hidden = true;
+                    return { part, from: place(one.body.p) };
+                });
+                finish();
+                sound?.tone(660, 0.6, 0.06);
+                sound?.tone(990, 0.6, 0.04);
             }
-            for (const letter of letters) letter.flown = Math.min(1, letter.flown + dt / FLIGHT);
-            for (const peg of pegs) peg.struck = Math.max(0, peg.struck - dt * 2.2);
-            for (const each of bins) each.caught = Math.max(0, each.caught - dt * 2);
-            flare = Math.max(0, flare - dt * 0.8);
-            // once the password is whole the board goes a little darker behind it
-            if (view) view.shade = toward(view.shade, !dropping && letters.length > 0 ? 0.35 : 0, dt * 0.35, 0.5);
+            for (const post of posts.values()) post.struck = Math.max(0, post.struck - dt * 2.2);
+            const shown = phase === "shown";
+            over = toward(over, shown ? 1 : 0, dt, shown ? 0.9 : 0.45);
+            if (shown && over > 0.7 && lifted.length > 0) lined = still ? lastIn() : lined + dt;
+            if (view) view.shade = toward(view.shade, shown && over > 0.7 ? 0.72 : 0, dt * 0.72, 0.4);
         },
         resize: aim,
-        // Clicking the board drops the balls.
+        // Clicking the table before anything has been dropped lets the balls go. After that a click does nothing: it would take the password away.
         press() {
-            if (!dropping && !m.preview) start();
+            if (phase === "idle" && !m.preview) start();
         },
-        resting: () => !m.preview && !dropping && flare === 0 && (view?.shade ?? 0) === (letters.length > 0 ? 0.35 : 0) && pegs.every((peg) => peg.struck === 0) && bins.every((each) => each.caught === 0),
-        debug: () => [`${board.balls.size} balls on the board, ${board.landings.length} landed, ${board.late} out of time`],
+        resting: () => !m.preview && (phase === "idle" || (phase === "shown" && over === 1 && lined >= lastIn() && (view?.shade ?? 0) === (lifted.length > 0 ? 0.72 : 0))) && [...posts.values()].every((post) => post.struck === 0),
+        debug: () => [`${board.balls.filter((one) => !one.waiting && one.place === undefined).length} balls on the table, ${board.order.length} in the bin, ${board.late} out of time`, phase],
         draw() {
             if (!view) return flat();
-            for (const peg of pegs) {
-                peg.look.color = mix(plain, peg.by, peg.struck);
-                peg.part.emit = peg.struck * 1.3;
+            aim();
+            for (const post of posts.values()) {
+                post.look.color = mix(plain, post.by, post.struck);
+                post.part.emit = post.struck * 1.2;
             }
-            // the balls: each its own color, glowing, with fading copies behind it; one that has landed flares and shrinks away
-            for (const [body, drawn] of balls) {
-                if (board.balls.has(body)) continue;
-                for (const part of [drawn.part, ...drawn.tail]) view.remove(part);
-                balls.delete(body);
-            }
-            for (const [body, since] of board.balls) {
-                let drawn = balls.get(body);
-                if (!drawn) {
-                    const color = view.color(`oklch(0.82 0.15 ${(balls.size * 47 + board.landings.length * 47) % 360})`);
-                    drawn = { color, been: [], part: view.add(ballMesh, { color }), tail: Array.from({ length: TRAIL }, (_, at) => view.add(ballMesh, { color: color.map((value) => value * (0.7 - at * 0.09)) as Color, casts: false })) };
-                    balls.set(body, drawn);
-                }
-                const gone = since === undefined ? 0 : Math.min(1, (board.time - since) / 0.5);
-                drawn.part.at = place(body.x, body.y, 0.05);
-                drawn.part.emit = since === undefined ? 0.75 : 1.5 * (1 - gone);
-                drawn.part.scale = 1 - gone * gone;
-                drawn.tail.forEach((part, at) => {
-                    part.hidden = !drawn.been[at] || since !== undefined;
-                    if (drawn.been[at]) part.at = [drawn.been[at][0], drawn.been[at][1], -0.05 - at * 0.01];
-                    part.scale = 0.85 - at * 0.11;
-                    part.emit = 0.45 - at * 0.06;
-                });
-            }
-            // what each bin shows now, brighter for a moment when it catches a ball
-            bins.forEach((each, at) => {
-                const now = board.shown[at]!;
-                let sign = each.signs.get(now);
-                if (!sign) each.signs.set(now, (sign = view.sign(now, tint("--ink"))));
-                for (const [character, other] of each.signs) other.hidden = character !== now;
-                sign.at = bin(at);
-                // a new character grows into the bin as the old one leaves
-                sign.scale = 1.05 * (1 - each.caught * 0.6);
-                sign.emit = 0.55 + each.caught * 0.6;
+            board.balls.forEach((one, index) => {
+                const drawn = balls[index];
+                if (!drawn) return;
+                drawn.part.hidden = drawn.words.hidden = one.waiting;
+                drawn.part.at = drawn.words.at = place(one.body.p);
+                drawn.words.turn = after(turn(one.body), TIPPED);
+                drawn.part.emit = 0.12;
             });
-            // the password: each character from its bin, up in a curve to its place, where it settles
-            letters.forEach((letter, at) => {
-                const t = gently(letter.flown);
-                const to = slot(at, length);
-                const here = mix3(letter.from, to, t);
-                letter.part.at = [here[0] + Math.sin(t * Math.PI) * (to[0] > letter.from[0] ? -0.5 : 0.5), here[1], here[2]];
-                letter.part.scale = 1.05 + ((places.pitch / UNIT) * 1.5 - 1.05) * t;
-                letter.part.emit = 0.75 + (1 - t) * 0.5 + flare * 0.9;
-                if (blanks[at]) blanks[at].hidden = letter.flown >= 1;
+            // the row: each character from its ball to its place in front of the eye, growing as it goes
+            const shape = m.width / Math.max(1, m.height);
+            const places = row(lifted.length, shape);
+            const reach = FAR * Math.tan((15 * Math.PI) / 180);
+            lifted.forEach((one, at) => {
+                const t = gently(Math.max(0, Math.min(1, (lined - at * gap()) / FLIGHT)));
+                const [x, y] = places.at(at);
+                one.part.hidden = lined === 0;
+                one.part.turn = view.facing();
+                one.part.at = mix3(one.from, view.ahead(x / shape, y - 0.2, FAR), t);
+                one.part.scale = BALL * 1.6 + (places.size * reach * 1.5 - BALL * 1.6) * t;
             });
             view.draw();
         },
     };
 
-    /** Flat, where the browser cannot draw in 3D: the same board with no light or glow. */
+    /** Flat, where the browser cannot draw in 3D: the table seen from straight above, with no light or glow. */
     function flat(): void {
         const { ctx } = m;
-        const scale = Math.min(m.width / (WIDTH + 20), m.height / (board.height + 60));
+        const scale = Math.min(m.width / (WIDE + 1), m.height / (board.long + 1));
         ctx.save();
-        ctx.translate((m.width - WIDTH * scale) / 2, (m.height - (board.height - 40) * scale) / 2);
+        ctx.translate(m.width / 2, (m.height - board.long * scale) / 2);
         ctx.scale(scale, scale);
-        const dot = (x: number, y: number, r: number, color: string) => {
+        const dot = (x: number, z: number, r: number, color: string) => {
             ctx.beginPath();
-            ctx.arc(x, y, r, 0, Math.PI * 2);
+            ctx.arc(x, z, r, 0, Math.PI * 2);
             ctx.fillStyle = color;
             ctx.fill();
         };
         ctx.fillStyle = m.color("--surface");
-        ctx.fillRect(0, 0, WIDTH, board.height);
-        ctx.fillStyle = m.color("--rule");
-        for (let wall = 1; wall < BINS; wall++) ctx.fillRect(wall * ACROSS - 2, board.shelf, 4, BIN);
-        for (const peg of board.pegs) dot(peg.x, peg.y, PEG, m.color("--muted"));
-        for (const body of board.balls.keys()) dot(body.x, body.y, BALL, m.color("--accent"));
-        ctx.fillStyle = m.color("--ink");
-        ctx.font = `700 ${BIN * 0.4}px monospace`;
+        ctx.fillRect(-WIDE / 2, 0, WIDE, board.long);
+        ctx.fillStyle = m.color("--ground");
+        ctx.fillRect(-WIDE / 2, board.line, WIDE, BIN);
+        for (const post of board.posts) dot(post.x, post.z, POST, m.color("--muted"));
+        ctx.font = `700 ${BALL * 1.3}px monospace`;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        board.shown.forEach((character, at) => ctx.fillText(character, (at + 0.5) * ACROSS, board.shelf + BIN * 0.5));
-        // the password so far, over the board
-        ctx.font = "700 20px monospace";
-        ctx.fillText(board.password(), WIDTH / 2, -22, WIDTH);
+        for (const one of board.balls) {
+            if (one.waiting) continue;
+            dot(one.body.p[0], one.body.p[2], BALL, m.color("--accent"));
+            ctx.fillStyle = m.color("--ground");
+            ctx.fillText(one.character, one.body.p[0], one.body.p[2]);
+        }
         ctx.restore();
     }
 }

@@ -29,6 +29,8 @@ export interface Look {
     ink?: Color;
     /** Drawn after everything else and in front of it, above the shade (see `View.shade`). */
     over?: boolean;
+    /** Only what is written on it is drawn, not its faces: for words on something round, written on an unseen box around it. */
+    bare?: boolean;
 }
 
 export interface Mark {
@@ -476,7 +478,7 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
             g.disable(g.BLEND);
             g.depthMask(true);
             for (const part of solid) {
-                if (part.look.casts === false || part.count === 0) continue;
+                if (part.look.casts === false || part.look.bare || part.count === 0) continue;
                 g.uniformMatrix4fv(depth.at("model"), false, models.get(part)!);
                 g.bindVertexArray(part.faces);
                 g.drawArrays(g.TRIANGLES, 0, part.count);
@@ -495,7 +497,7 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
             g.uniform1i(main.at("marks"), 1);
 
             const paint = (part: Drawn, marked: boolean) => {
-                if ((marked ? part.markCount : part.count) === 0) return;
+                if ((marked ? part.markCount : part.count) === 0 || (!marked && part.look.bare)) return;
                 g.uniformMatrix4fv(main.at("model"), false, models.get(part)!);
                 g.uniform4f(main.at("color"), ...(marked ? (part.look.ink ?? [0.1, 0.06, 0.14]) : part.look.color), marked ? 1 : (part.look.alpha ?? 1));
                 g.uniform1i(main.at("marked"), marked ? 1 : 0);

@@ -63,7 +63,7 @@ const shots: Record<string, { query?: string; script?: string; wait?: number; ac
     dice: { query: "?roll=2d20%2B2d6%2Bd8%2Bd4%2B3", wait: 15000 },
     blocks: { across: 0.45, from: "bottom" },
     // part of the way through a password
-    plinko: { script: `document.querySelector(".dice-go").click();`, wait: 6500 },
+    plinko: { script: `document.querySelector(".dice-go").click();`, wait: 7000 },
 };
 
 function mini(id: string): Wanted["make"] {
