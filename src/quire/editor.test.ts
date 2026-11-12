@@ -421,4 +421,53 @@ used("a version is kept, listed with what changed, shown as it read, and restore
     expect(await md()).toBe("First draft.\n\nA second line.\n");
 });
 
+used("the Markdown view flows open beside the text, and what is typed in either shows in the other", async () => {
+    await reset("# Title\n\nSome text.\n", [1], 10);
+    await choose("More", "Show the Markdown");
+    const source = "document.querySelector('.quire-source')";
+    const opening = await tab.run<number[]>(`q.watch('.quire-source', 'opacity', 500)`);
+    expect(opening[opening.length - 1]).toBe(1);
+    expect(new Set(opening).size).toBeGreaterThan(2);
+    expect(await tab.run(`${source}.value`)).toBe("# Title\n\nSome text.\n");
+    // side by side on a wide screen
+    const sides = await tab.run<{ text: number; source: number }>(`({ text: document.querySelector('.quire-paper').getBoundingClientRect().right, source: ${source}.getBoundingClientRect().left })`);
+    expect(sides.source).toBeGreaterThan(sides.text);
+
+    // typed in the text, it shows in the Markdown
+    await tab.type(" More.");
+    expect(await tab.run(`${source}.value`)).toBe("# Title\n\nSome text. More.\n");
+
+    // typed in the Markdown, it shows in the text, the cursor staying where it was typed
+    await tab.run(`(() => { const field = ${source}; field.focus(); field.setSelectionRange(7, 7); })()`);
+    await tab.type(" here");
+    await tab.wait(80);
+    expect(await tab.run("document.querySelector('.quire h1').textContent")).toBe("Title here");
+    expect(await tab.run(`${source}.selectionStart`)).toBe(12);
+    await tab.run(`(() => { const field = ${source}; field.setSelectionRange(field.value.length, field.value.length); })()`);
+    await tab.press("Enter");
+    await tab.type("- a list item");
+    await tab.press("Enter");
+    await tab.wait(80);
+    expect(await md()).toBe("# Title here\n\nSome text. More.\n\n- a list item\n");
+    expect(await tab.run("document.querySelector('.quire ul li').textContent")).toBe("a list item");
+    // the untouched heading is still the very element it was
+    await tab.run("window.heading = document.querySelector('.quire h1')");
+    await tab.type("x");
+    await tab.wait(80);
+    expect(await tab.run("window.heading === document.querySelector('.quire h1')")).toBe(true);
+    await tab.press("Backspace");
+    await tab.wait(80);
+
+    // on a narrow screen it takes the text's place, and gives it back
+    await tab.resize(390, 844);
+    await tab.wait(600);
+    expect(await tab.run("getComputedStyle(document.querySelector('.quire-paper')).visibility")).toBe("hidden");
+    await choose("More", "Hide the Markdown");
+    await tab.wait(600);
+    expect(await tab.run("getComputedStyle(document.querySelector('.quire-paper')).visibility")).toBe("visible");
+    expect(await tab.run(`getComputedStyle(${source}).visibility`)).toBe("hidden");
+    await tab.resize(1300, 900);
+    await tab.wait(300);
+});
+
 if (!live) console.warn("editor.test.ts: no Chromium on this machine, so the editor was not used.");

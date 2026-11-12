@@ -1103,6 +1103,101 @@
     margin-top: 0;
 }
 
+/* ---- the Markdown beside the rich view ----
+   Shown, its column flows open beside the sheet; on a narrow screen it takes the sheet's place,
+   the one fading and moving aside as the other comes in. */
+
+.quire-panes {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 0fr);
+    column-gap: 0;
+    align-items: start;
+    transition:
+        grid-template-columns 0.45s var(--ease),
+        column-gap 0.45s var(--ease);
+}
+
+.quire-editor.markdown .quire-panes {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    column-gap: 1.25rem;
+}
+
+.quire-source {
+    position: sticky;
+    top: calc(0.75rem + var(--bar-height) + var(--line));
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    min-height: 60vh;
+    max-height: calc(100vh - var(--bar-height) - var(--line) * 2.5);
+    padding: calc(var(--line) * 0.9) 1.1rem;
+    border: 0.0625rem solid var(--panel-rule);
+    border-radius: calc(var(--radius) * 2);
+    background: var(--panel);
+    color: var(--ink);
+    font-family: var(--font-code);
+    font-size: 0.82rem;
+    line-height: 1.65;
+    tab-size: 4;
+    resize: none;
+    opacity: 0;
+    translate: 1.5rem 0;
+    visibility: hidden;
+    transition:
+        opacity 0.2s ease,
+        translate 0.35s var(--ease),
+        visibility 0s linear 0.35s;
+}
+
+.quire-source:focus {
+    outline: none;
+    border-color: color-mix(in oklch, var(--accent) 55%, var(--panel-rule));
+}
+
+.quire-editor.markdown .quire-source {
+    opacity: 1;
+    translate: 0 0;
+    visibility: visible;
+    transition:
+        opacity 0.3s ease 0.1s,
+        translate 0.45s var(--ease) 0.05s,
+        visibility 0s;
+}
+
+@media (max-width: 60rem) {
+    .quire-panes,
+    .quire-editor.markdown .quire-panes {
+        grid-template-columns: minmax(0, 1fr);
+        column-gap: 0;
+    }
+
+    .quire-panes > * {
+        grid-area: 1 / 1;
+    }
+
+    .quire-paper {
+        transition:
+            opacity 0.25s ease,
+            translate 0.4s var(--ease),
+            visibility 0s;
+    }
+
+    .quire-editor.markdown .quire-paper {
+        opacity: 0;
+        translate: -1.5rem 0;
+        visibility: hidden;
+        transition:
+            opacity 0.2s ease,
+            translate 0.35s var(--ease),
+            visibility 0s linear 0.35s;
+    }
+
+    .quire-source {
+        position: static;
+        max-height: none;
+    }
+}
+
 @media (prefers-reduced-motion: reduce) {
     .quire-box,
     .quire-bar-group,
@@ -1133,7 +1228,10 @@
     .quire-history-views,
     .quire-history-list > li,
     .quire-history.open .quire-history-list > li,
-    .quire-history-item {
+    .quire-history-item,
+    .quire-panes,
+    .quire-source,
+    .quire-paper {
         transition: none;
     }
 }

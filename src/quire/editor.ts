@@ -10,6 +10,7 @@ import { createBar, link as linkAction } from "./bar";
 import { linkAt } from "./bar";
 import { type Document } from "./document";
 import { collapsed } from "./keys";
+import { createMarkdownView } from "./markdown-view";
 import { createOutline } from "./outline";
 import { createSelectBar } from "./select-bar";
 import { createSlash } from "./slash";
@@ -105,6 +106,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         void keeper.opened();
     });
     const more = (): MenuItem[] => [
+        { label: host.classList.contains("markdown") ? "Hide the Markdown" : "Show the Markdown", run: () => showMarkdown(!host.classList.contains("markdown")) },
         { label: "Version history", run: () => void history.open() },
         { label: outlineView.isOpen() ? "Hide the outline" : "Show the outline", run: () => (outlineView.isOpen() ? outlineView.close() : outlineView.open()) },
         { label: "Download", hint: surface.getDocument().mdx ? ".mdx" : ".md", run: download },
@@ -122,7 +124,19 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         onLink: openLink,
         more,
     });
-    column.append(bar.element, paper, opener);
+    // the rich view and the Markdown, side by side when there is room and one in place of the other when not
+    const markdown = createMarkdownView(surface);
+    const panes = make("div", "quire-panes");
+    panes.append(paper, markdown.element);
+    const showMarkdown = (shown: boolean) => {
+        host.classList.toggle("markdown", shown);
+        markdown.element.inert = !shown;
+        markdown.refresh();
+        // on a narrow screen the Markdown takes the text's place, so focus goes with it
+        if (getComputedStyle(paper).visibility === "hidden" || (shown && matchMedia("(max-width: 60rem)").matches)) (shown ? markdown.element : surface.element).focus({ preventScroll: true });
+    };
+    markdown.element.inert = true;
+    column.append(bar.element, panes, opener);
     surface.on("link", () => openLink(bar.element.querySelector<HTMLElement>('[aria-label^="Link"]')!));
     const selectBar = createSelectBar(surface, () => bar.element.getBoundingClientRect().bottom);
     const outlineView = createOutline(surface, () => bar.element.getBoundingClientRect().bottom);
