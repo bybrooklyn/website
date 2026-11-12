@@ -254,7 +254,7 @@ export default function dice(m: Mote): Scene {
 
         said = el("p", { class: "table-said", textContent: "Pick dice, or type a roll, and send them down the tower." });
         said.setAttribute("aria-live", "polite");
-        const typed = el("input", { type: "text", placeholder: "2d6+3, 4d6 drop lowest, d20 adv", spellcheck: false });
+        const typed = el("input", { type: "text", placeholder: "2d6+3, d20 adv", spellcheck: false });
         typed.setAttribute("aria-label", "The roll to make");
         const counts = new Map<number, HTMLElement>();
         const refresh = () => {

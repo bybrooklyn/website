@@ -80,8 +80,9 @@
 
 .viewer-dots {
     position: absolute;
-    top: 0;
-    right: 0;
+    /* out by the width of the box's border, so that it is the whole circle and its dots are in the circle's middle */
+    top: -0.0625rem;
+    right: -0.0625rem;
     /* above the menu's lines, which lie over this corner: without it a press on the cross never arrived */
     z-index: 1;
     display: grid;
@@ -99,7 +100,7 @@
 
 /* open, the cross sits level with the first line of the menu and as far from the edge as the words are */
 .viewer-menu.open .viewer-dots {
-    translate: -0.3rem 0.35rem;
+    translate: -0.3rem 0.15rem;
 }
 
 /* pressed, it gives a little, as a drop would */

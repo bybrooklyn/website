@@ -148,7 +148,8 @@ pre {
     color: var(--muted);
 }
 
-h1 + .lede {
+h1 + .lede,
+.page-head:has(.mote-mark) .lede {
     margin-top: var(--line);
 }
 
@@ -330,7 +331,8 @@ h1 + .lede {
     width: 100%;
     height: auto;
     aspect-ratio: 16 / 10;
-    object-fit: cover;
+    /* the whole picture, never a crop, as in the projects list */
+    object-fit: contain;
     border: 0.0625rem solid var(--rule);
     border-radius: calc(var(--radius) * 0.8);
     background: var(--surface);
@@ -356,6 +358,7 @@ h1 + .lede {
     margin: 0.25rem 0 0;
     color: var(--muted);
     line-height: 1.4;
+    text-wrap: pretty;
 }
 
 .home-halves {

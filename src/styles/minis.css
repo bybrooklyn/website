@@ -179,6 +179,11 @@
     color: var(--muted);
 }
 
+/* the first quiet button in a row starts where the text above and below it starts */
+.table-go > button.quiet:first-child {
+    margin-left: -0.65rem;
+}
+
 .mote-panel button.quiet:hover {
     border-color: transparent;
     background: color-mix(in oklch, var(--accent) 12%, transparent);
