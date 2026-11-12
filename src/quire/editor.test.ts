@@ -977,3 +977,65 @@ used("a long heading with no spaces is one line in the outline, cut with an elli
 });
 
 if (!live) console.warn("editor.test.ts: no Chromium on this machine, so the editor was not used.");
+
+used("find grows from the sheet's top right with Ctrl+F, marks every match and the current one, goes next and back, and replaces one or all as single undo steps", async () => {
+    await reset("A cat, a Cat and a concatenation.\n\nThe cat again.\n", [0], 0);
+    await tab.run("document.querySelector('.quire').focus()");
+    const growing = tab.run<number[]>("q.watch('.quire-find', 'opacity', 500)");
+    await tab.press("f", { ctrl: true });
+    const opacities = (await growing).filter((value) => value !== null);
+    expect(opacities[0]).toBe(0);
+    expect(new Set(opacities.map((value) => Math.round(value * 20))).size).toBeGreaterThan(2);
+    const place = await tab.run<{ right: number; top: number }>("(() => { const find = document.querySelector('.quire-find').getBoundingClientRect(); const sheet = document.querySelector('.quire-paper').getBoundingClientRect(); return { right: Math.round(sheet.right - find.right), top: Math.round(find.top - Math.max(sheet.top, document.querySelector('.quire-bar').getBoundingClientRect().bottom)) }; })()");
+    expect(place.right).toBeGreaterThanOrEqual(0);
+    expect(place.right).toBeLessThan(30);
+    expect(place.top).toBeLessThan(30);
+    expect(await tab.run("document.activeElement.getAttribute('aria-label')")).toBe("Find");
+    await tab.type("cat");
+    await tab.wait(100);
+    const count = () => tab.run<string>("document.querySelector('.quire-find-count').textContent");
+    expect(await count()).toBe("1 of 4");
+    expect(await tab.run("[CSS.highlights.get('quire-found').size, CSS.highlights.get('quire-found-now').size]")).toEqual([3, 1]);
+    await tab.press("Enter");
+    expect(await count()).toBe("2 of 4");
+    await tab.press("Enter", { shift: true });
+    await tab.press("Enter", { shift: true });
+    expect(await count()).toBe("4 of 4");
+    // match case and whole word narrow it
+    await press(".quire-find button", "Match case");
+    expect(await count()).toBe("1 of 3");
+    await press(".quire-find button", "Whole word");
+    expect(await count()).toBe("1 of 2");
+    await press(".quire-find button", "Match case");
+    expect(await count()).toBe("1 of 3");
+    // the replace line grows open; one replaced, then all, each one undo step
+    await press(".quire-find button", "Replace");
+    await tab.wait(450);
+    await tab.run("document.querySelector('.quire-find-replace input').focus()");
+    await tab.type("dog");
+    await tab.press("Enter");
+    await tab.wait(50);
+    expect(await md()).toBe("A dog, a Cat and a concatenation.\n\nThe cat again.\n");
+    expect(await count()).toBe("1 of 2");
+    await press(".quire-find button", "Replace all");
+    await tab.wait(50);
+    expect(await md()).toBe("A dog, a dog and a concatenation.\n\nThe dog again.\n");
+    expect(await count()).toBe("None");
+    await tab.run("q.editor.surface.undo()");
+    expect(await md()).toBe("A dog, a Cat and a concatenation.\n\nThe cat again.\n");
+    await tab.run("q.editor.surface.undo()");
+    expect(await md()).toBe("A cat, a Cat and a concatenation.\n\nThe cat again.\n");
+    // Escape closes it back to the text, the found words selected, and the marks go
+    await tab.run("document.querySelector('.quire-find-field').focus()");
+    await tab.press("Escape");
+    await tab.wait(300);
+    expect(await tab.run("getComputedStyle(document.querySelector('.quire-find')).visibility")).toBe("hidden");
+    expect(await tab.run("CSS.highlights.has('quire-found')")).toBe(false);
+    expect(await tab.run("document.activeElement === document.querySelector('.quire')")).toBe(true);
+    // Ctrl+H opens it with the replace line, and the Edit menu has both
+    await tab.press("h", { ctrl: true });
+    await tab.wait(450);
+    expect(await tab.run("document.querySelector('.quire-find').classList.contains('replacing')")).toBe(true);
+    await tab.press("Escape");
+    expect(tab.errors).toEqual([]);
+});

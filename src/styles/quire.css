@@ -747,7 +747,8 @@
    It grows out of the top edge of the selected text (or the bottom edge when it sits below),
    a little past its size and back, and shrinks away plainly when the selection goes. */
 
-.quire-select-bar {
+.quire-select-bar,
+.quire-find {
     position: fixed;
     z-index: 60;
     display: flex;
@@ -775,7 +776,8 @@
     transform-origin: 50% 0;
 }
 
-.quire-select-bar.shown {
+.quire-select-bar.shown,
+.quire-find.shown {
     opacity: 1;
     scale: 1;
     visibility: visible;
@@ -787,6 +789,86 @@
         top 0.25s var(--ease),
         width 0.4s cubic-bezier(0.3, 1.4, 0.4, 1),
         visibility 0s;
+}
+
+/* find and replace, drawn as the selection bar and grown from the sheet's top right corner */
+.quire-find {
+    flex-direction: column;
+    gap: 0.2rem;
+    max-width: calc(100vw - 1rem);
+    box-sizing: border-box;
+    border-radius: 1.1rem;
+    transform-origin: 100% 0;
+}
+
+.quire-find-lines {
+    min-width: 0;
+}
+
+.quire-find-line,
+.quire-find-replace-inner {
+    display: flex;
+    align-items: center;
+    gap: 0.15rem;
+}
+
+.quire-find-field {
+    flex: 1 1 13rem;
+    width: 13rem;
+    min-width: 3rem;
+}
+
+.quire-find.none .quire-find-field:first-of-type {
+    border-color: var(--rule);
+    color: var(--muted);
+}
+
+.quire-find-count {
+    min-width: 3.4rem;
+    padding-inline: 0.3rem;
+    color: var(--muted);
+    font-size: 0.8rem;
+    text-align: right;
+    white-space: nowrap;
+}
+
+/* the replace line grows open under the find line */
+.quire-find-replace {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 0.4s var(--ease);
+}
+
+.quire-find.replacing .quire-find-replace {
+    grid-template-rows: 1fr;
+}
+
+.quire-find-replace-inner {
+    min-height: 0;
+    overflow: hidden;
+    padding-left: 2.1rem;
+}
+
+.quire-find-more .quire-icon {
+    rotate: -90deg;
+    transition: rotate 0.3s var(--ease);
+}
+
+.quire-find.replacing .quire-find-more .quire-icon {
+    rotate: 0deg;
+}
+
+.quire-find-back .quire-icon {
+    rotate: 180deg;
+}
+
+::highlight(quire-found) {
+    background-color: color-mix(in oklch, var(--accent) 28%, transparent);
+}
+
+::highlight(quire-found-now) {
+    background-color: var(--accent);
+    color: var(--ground);
 }
 
 /* placed before it grows, it does not glide in from where it was last */
@@ -2014,6 +2096,7 @@ body.quire-app {
     .quire-outline,
     .quire-menu,
     .quire-select-bar,
+    .quire-find,
     .quire-table-tools,
     .quire-history,
     .quire-conflict,
@@ -2245,6 +2328,8 @@ body.quire-app {
     .quire-menu *,
     .quire-select-bar,
     .quire-select-bar *,
+    .quire-find,
+    .quire-find *,
     .quire-table-tools,
     .quire-table-tools *,
     .quire-history,

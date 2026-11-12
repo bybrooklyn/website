@@ -32,6 +32,7 @@ import { write } from "./write";
 import { emptyParts, opened, packQuire, written, type Parts } from "./quire-file";
 import { PAGE } from "./styling";
 import { createCaret, FLAG } from "./caret";
+import { createFind } from "./find";
 import { createTitle, nameFor, shownName, type OwnTitle } from "./title";
 
 /** What the editor is given by the page. */
@@ -276,7 +277,15 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         onHome: options.onHome,
         onOutline: () => (outlineView.isOpen() ? outlineView.close() : outlineView.open()),
         onLink: openLink,
+        onFind: () => find.open(),
         more,
+    });
+    // ---- find and replace, from its button, the Edit menu, Ctrl+F and Ctrl+H ----
+    const find = createFind(surface, paper, () => bar.element.getBoundingClientRect().bottom);
+    host.addEventListener("keydown", (event) => {
+        if (!(event.ctrlKey || event.metaKey) || event.altKey || event.shiftKey || (event.key !== "f" && event.key !== "h")) return;
+        event.preventDefault();
+        find.open(event.key === "h");
     });
     // dictation: a microphone at the end of the bar, the shortcut, and its lines in the three-dot menu (src/quire/dictation/)
     if (!dictation.why) {
@@ -333,6 +342,8 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
                 print: () => print(),
                 undo: () => (surface.undo(), surface.focus()),
                 redo: () => (surface.redo(), surface.focus()),
+                find: () => find.open(),
+                replace: () => find.open(true),
                 selectAll: () => {
                     const paths = blockPaths(surface.getDocument());
                     const last = paths[paths.length - 1] ?? [0];
@@ -545,6 +556,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         },
         destroy() {
             caret.destroy();
+            find.destroy();
             rowSeen?.disconnect();
             dictation.destroy();
             surface.destroy();

@@ -322,6 +322,8 @@ export interface BarOptions {
     more?: MenuItem[] | (() => MenuItem[]);
     /** Opens the link field for the selection. */
     onLink?: (from: HTMLElement) => void;
+    /** Opens find and replace. */
+    onFind?: () => void;
 }
 
 const SIZES: [string, string | null][] = [
@@ -554,9 +556,11 @@ export function createBar(surface: Surface, options: BarOptions): { element: HTM
         () => [
             { label: "Undo", icon: "undo", hint: "Ctrl+Z", run: undo },
             { label: "Redo", icon: "redo", hint: "Ctrl+Shift+Z", run: redo },
+            ...(options.onFind ? [{ label: "Find and replace", icon: "search", hint: "Ctrl+F", run: options.onFind }] : []),
         ],
         control("Undo (Ctrl+Z)", icon("undo"), undo),
         control("Redo (Ctrl+Shift+Z)", icon("redo"), redo),
+        ...(options.onFind ? [control("Find and replace (Ctrl+F)", icon("search"), () => options.onFind!())] : []),
     );
 
     // the word count and the rest

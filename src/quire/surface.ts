@@ -33,7 +33,7 @@
 // `quire-task` on a task item and `quire-box` on its box (`data-checked`),
 // `quire-atom` on an inline HTML span or footnote reference.
 
-import { blockAt, blockPaths, documentOf, image as imageBlock, markdownOnly, paragraph, setImageAlt, toggleTask, type Block, type Document, type Leaf, type Mark, type Run, type Selection } from "./document";
+import { blockAt, blockPaths, documentOf, image as imageBlock, markdownOnly, paragraph, setImageAlt, toggleTask, type Block, type Document, type Leaf, type Mark, type Position, type Run, type Selection } from "./document";
 import { createHistory, redo as redoStep, undo as undoStep, type ChangeKind, type State } from "./history";
 import { readHtml, writeHtml } from "./html";
 import { activeBlock, activeMarks, apply, caret, collapsed, fragment, paste, step, type Editor, type Input, type Outcome } from "./keys";
@@ -78,6 +78,8 @@ export interface Surface {
     element: HTMLElement;
     /** The drawn element of the block (or table cell) at a path. */
     elementAt(path: number[]): HTMLElement | undefined;
+    /** The page's own range over a stretch of the text, to mark or measure it without selecting it. */
+    rangeOf(start: Position, end: Position): globalThis.Range | undefined;
     undo(): void;
     redo(): void;
     focus(): void;
@@ -811,6 +813,15 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
         element: root,
         elementAt(path) {
             return holderAt(path) ?? (root.children[path[0]!] as HTMLElement | undefined);
+        },
+        rangeOf(start, end) {
+            if (!holderAt(start.path) || !holderAt(end.path)) return undefined;
+            const range = document.createRange();
+            const from = toPoint(start);
+            const to = toPoint(end);
+            range.setStart(from.node, from.offset);
+            range.setEnd(to.node, to.offset);
+            return range;
         },
         setSelection(selection) {
             commit(apply(editor, { state: { doc: editor.state.doc, selection: fit(editor.state.doc, selection) }, kind: "move" }, Date.now()));
