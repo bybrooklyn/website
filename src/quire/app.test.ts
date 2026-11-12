@@ -493,4 +493,32 @@ used("on the home screen each document's three dots rename it, duplicate it and 
     expect(tab.errors).toEqual([]);
 });
 
+used("the Blog post on the home screen is made as plain Markdown, and a duplicated .quire document keeps its pictures", async () => {
+    await press('.quire-bar button[aria-label="All documents"]');
+    await tab.wait(900);
+    await press(".quire-shelf-start .quire-card:nth-child(2) .quire-card-open");
+    await tab.wait(900);
+    expect(await tab.run("[q.app.editor.surface.getDocument().quire === undefined, document.querySelector('.quire-editor').classList.contains('rich')]")).toEqual([true, false]);
+    const made = await tab.run<string>(`(async () => {
+        const store = q.app.browser;
+        const made = await store.create("With a picture", "![A dot](pictures/dot.png)\\n", { style: "", notes: "" });
+        await store.savePicture(made.id, new Blob(["png"]), "dot.png");
+        return made.id;
+    })()`);
+    await press('.quire-bar button[aria-label="All documents"]');
+    await tab.wait(900);
+    const index = await tab.run<number>("[...document.querySelectorAll('.quire-shelf-recent .quire-card-name')].findIndex((name) => name.textContent === 'With a picture')");
+    await press(`.quire-shelf-recent .quire-card:nth-child(${index + 1}) .quire-dots`);
+    await tab.wait(500);
+    await press(".quire-menu.open .quire-menu-line", "Duplicate");
+    await tab.wait(600);
+    const copied = await tab.run<string[]>(`(async () => {
+        const store = q.app.browser;
+        const copy = (await store.list()).find((entry) => entry.name === "With a picture copy");
+        return copy && copy.id !== ${JSON.stringify(made)} ? [...(await store.pictures(copy.id)).keys()] : [];
+    })()`);
+    expect(copied).toEqual(["dot.png"]);
+    expect(tab.errors).toEqual([]);
+});
+
 if (!live) console.warn("app.test.ts: no Chromium on this machine, so the app was not used.");

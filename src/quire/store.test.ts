@@ -3,7 +3,8 @@
 // typed is never lost. And the small helpers for names and addresses. Run with `bun test src/quire`.
 
 import { expect, test } from "bun:test";
-import { createSaver, fileName, freeName, memoryStore, relative, said, type Status } from "./store";
+import { browserStore, memoryTables } from "./store-browser";
+import { copyDocument, createSaver, fileName, freeName, memoryStore, relative, said, type Status } from "./store";
 
 /** A clock for the saver: waiting is done by hand. */
 function clock() {
@@ -136,4 +137,17 @@ test("a document removed from memory is gone from the list but kept, and a name 
     await store.remove(first.id);
     expect((await store.list()).map((entry) => entry.id)).toEqual([second.id]);
     expect(store.files.get(first.id)?.gone).toBe(true);
+});
+
+test("a copy of a .quire document has its text, its styling and its pictures under the same names; a Markdown one has no parts", async () => {
+    const store = browserStore(memoryTables());
+    const made = await store.create("Letter", "![A dot](pictures/dot.png)\n", { style: '{"quire":1}', notes: "{}" });
+    await store.savePicture(made.id, new Blob(["png"]), "dot.png");
+    const copy = await copyDocument(store, made.id, "Letter copy");
+    expect(await store.open(copy.id)).toMatchObject({ text: "![A dot](pictures/dot.png)\n", quire: { style: '{"quire":1}', notes: "{}" } });
+    const pictures = await store.pictures!(copy.id);
+    expect([...pictures.keys()]).toEqual(["dot.png"]);
+    expect(await pictures.get("dot.png")!.text()).toBe("png");
+    const post = await store.create("Post", "Words.\n");
+    expect((await store.open((await copyDocument(store, post.id, "Post copy")).id)).quire).toBeUndefined();
 });
