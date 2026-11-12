@@ -22,12 +22,14 @@ pub mod api;
 #[cfg(test)]
 mod tests;
 
+use alloc::rc::Rc;
 use alloc::vec::Vec;
 
 use crate::math::{Rotation, Vec2, clamp};
 use collide::{AHEAD, collide};
 use contact::{Contact, GROUND};
 pub use joint::Joint;
+use joint::Pose;
 use shape::{Outline, Shape};
 
 /// How deep the ground is under each piece, in metres. Ground is solid on the right of each piece,
@@ -146,7 +148,7 @@ pub struct Segment {
 
 /// How soft a constraint is: the speed it closes a gap at, per metre of gap, and how much of a full
 /// correction each pass makes. Worked out from a spring's frequency and damping, as Box2D does.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct Soft {
     pub bias_rate: f32,
     pub mass_scale: f32,
@@ -163,19 +165,54 @@ impl Soft {
     }
 }
 
+/// The ground: its pieces, sorted by where each starts on the left, each piece's solid slab and the
+/// box around it, worked out once rather than at every step, and the widest piece, to know how far
+/// left of a body to start looking. Every world copied from another shares the other's ground, so a
+/// generation of runs on the same course makes it once.
+#[derive(Clone, Debug, Default)]
+struct Ground {
+    pieces: Vec<Segment>,
+    slabs: Vec<(Outline, Vec2, Vec2)>,
+    widest: f32,
+}
+
+impl Ground {
+    /// Works out every piece's slab and its box again.
+    fn settle(&mut self) {
+        self.slabs.clear();
+        self.slabs.extend(self.pieces.iter().map(|piece| {
+            let slab = Outline::slab(piece.a, piece.b, DEPTH);
+            let (low, high) = slab.bounds(0.0);
+            (slab, low, high)
+        }));
+    }
+}
+
+/// The length of a substep and how stiff contacts and hinges are in it, worked out once a step.
+#[derive(Clone, Copy, Debug, Default)]
+struct Stiffness {
+    h: f32,
+    inverse_h: f32,
+    soft: Soft,
+    hard: Soft,
+    hinge: Soft,
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct World {
     pub bodies: Vec<Body>,
     pub joints: Vec<Joint>,
     pub gravity: Vec2,
     pub substeps: u32,
-    /// The ground, sorted by where each piece starts on the left.
-    ground: Vec<Segment>,
-    /// The widest piece of ground, to know how far left of a body to start looking.
-    widest: f32,
+    /// The ground, shared by every copy of a world until one of them changes it.
+    ground: Rc<Ground>,
     contacts: Vec<Contact>,
     last: Vec<Contact>,
     placed: Vec<Outline>,
+    /// Each joint's pose where the bodies are now, worked out afresh whenever they move.
+    poses: Vec<Pose>,
+    /// How stiff contacts and hinges are in this step's substeps.
+    stiffness: Stiffness,
     leftover: f32,
     /// Steps taken since the world was made.
     pub steps: u32,
@@ -198,13 +235,14 @@ impl World {
         }
         copy(&mut self.bodies, &other.bodies);
         copy(&mut self.joints, &other.joints);
-        copy(&mut self.ground, &other.ground);
+        if !Rc::ptr_eq(&self.ground, &other.ground) {
+            self.ground = other.ground.clone();
+        }
         copy(&mut self.contacts, &other.contacts);
         copy(&mut self.last, &other.last);
         self.placed.clear();
         self.gravity = other.gravity;
         self.substeps = other.substeps;
-        self.widest = other.widest;
         self.leftover = other.leftover;
         self.steps = other.steps;
         self.clock = other.clock;
@@ -221,52 +259,60 @@ impl World {
     }
 
     pub fn ground(&self) -> &[Segment] {
-        &self.ground
+        &self.ground.pieces
     }
 
     /// Replaces the ground. The pieces may come in any order and need not join up.
     pub fn set_ground(&mut self, pieces: &[Segment]) {
-        self.ground.clear();
+        let ground = Rc::make_mut(&mut self.ground);
+        ground.pieces.clear();
         for piece in pieces {
             // each piece runs left to right, so the sort and the search below need only its first end
             let piece = if piece.a.x <= piece.b.x { *piece } else { Segment { a: piece.b, b: piece.a } };
-            self.ground.push(piece);
+            ground.pieces.push(piece);
         }
         // sorted by inserting each piece in its place, which keeps pieces that start together in the
         // order given and needs no sorting code from the library
-        for i in 1..self.ground.len() {
+        let list = &mut ground.pieces;
+        for i in 1..list.len() {
             let mut j = i;
-            while j > 0 && self.ground[j - 1].a.x > self.ground[j].a.x {
-                self.ground.swap(j - 1, j);
+            while j > 0 && list[j - 1].a.x > list[j].a.x {
+                list.swap(j - 1, j);
                 j -= 1;
             }
         }
-        self.widest = self.ground.iter().fold(0.0, |widest, piece| widest.max(piece.b.x - piece.a.x));
+        ground.widest = ground.pieces.iter().fold(0.0, |widest, piece| widest.max(piece.b.x - piece.a.x));
+        ground.settle();
         self.last.clear();
     }
 
     /// Adds pieces of ground, for ground made ahead of a walker as it goes. Pieces further on than
     /// all the ground there is stay at the end, so the pieces already there keep their places.
     pub fn extend_ground(&mut self, pieces: &[Segment]) {
+        let ground = Rc::make_mut(&mut self.ground);
+        let list = &mut ground.pieces;
         for piece in pieces {
             let piece = if piece.a.x <= piece.b.x { *piece } else { Segment { a: piece.b, b: piece.a } };
-            self.ground.push(piece);
-            let mut j = self.ground.len() - 1;
-            while j > 0 && self.ground[j - 1].a.x > self.ground[j].a.x {
-                self.ground.swap(j - 1, j);
+            list.push(piece);
+            let mut j = list.len() - 1;
+            while j > 0 && list[j - 1].a.x > list[j].a.x {
+                list.swap(j - 1, j);
                 j -= 1;
             }
-            self.widest = self.widest.max(piece.b.x - piece.a.x);
+            ground.widest = ground.widest.max(piece.b.x - piece.a.x);
         }
+        ground.settle();
     }
 
     /// Drops the pieces of ground that end before x, for ground left behind. The contacts carried
     /// over to the next step are told the new places of the pieces they touch, so nothing loses its
     /// warm start.
     pub fn drop_ground_before(&mut self, x: f32) -> usize {
-        let gone = self.ground.iter().take_while(|piece| piece.b.x < x).count();
+        let gone = self.ground.pieces.iter().take_while(|piece| piece.b.x < x).count();
         if gone > 0 {
-            self.ground.drain(..gone);
+            let ground = Rc::make_mut(&mut self.ground);
+            ground.pieces.drain(..gone);
+            ground.slabs.drain(..gone);
             for contact in self.contacts.iter_mut().filter(|contact| contact.b == GROUND) {
                 contact.segment = contact.segment.saturating_sub(gone as u32);
             }
@@ -280,10 +326,13 @@ impl World {
         for body in &mut self.bodies {
             body.position.x -= dx;
         }
-        for piece in &mut self.ground {
+        let ground = Rc::make_mut(&mut self.ground);
+        for piece in &mut ground.pieces {
             piece.a.x -= dx;
             piece.b.x -= dx;
         }
+        // the slabs are worked out again from the moved pieces, as they always were at each step
+        ground.settle();
     }
 
     /// The height of the highest ground straight below or above x, if there is any there.
@@ -301,8 +350,9 @@ impl World {
 
     /// The pieces of ground that might reach between x = left and x = right.
     fn ground_near(&self, left: f32, right: f32) -> impl Iterator<Item = &Segment> {
-        let start = self.ground.partition_point(|piece| piece.a.x < left - self.widest);
-        self.ground[start..].iter().take_while(move |piece| piece.a.x <= right).filter(move |piece| piece.b.x >= left)
+        let ground = &self.ground;
+        let start = ground.pieces.partition_point(|piece| piece.a.x < left - ground.widest);
+        ground.pieces[start..].iter().take_while(move |piece| piece.a.x <= right).filter(move |piece| piece.b.x >= left)
     }
 
     /// Moves the world on by `seconds` of time, in whole steps, keeping what is left over for next
@@ -323,18 +373,61 @@ impl World {
 
     /// Moves the world on by one step of 1/60 s.
     pub fn step(&mut self) {
-        let substeps = self.substeps.max(1);
-        let h = STEP / substeps as f32;
+        World::step_together(core::slice::from_mut(self));
+    }
+
+    /// Moves several worlds on by one step each, as `step` would one at a time and to the same bit,
+    /// but in lockstep: the hinges of one world are solved between those of the next, so the
+    /// processor works on several worlds' chains of sums at once instead of waiting on one. The
+    /// worlds share nothing, so how many go together never changes what happens in any of them.
+    pub fn step_together(worlds: &mut [World]) {
+        for world in worlds.iter_mut() {
+            world.begin_step();
+        }
+        let substeps = worlds.iter().map(|world| world.substeps.max(1)).max().unwrap_or(0);
+        let joints = worlds.iter().map(|world| world.joints.len()).max().unwrap_or(0);
+        for substep in 0..substeps {
+            let going = |world: &World| substep < world.substeps.max(1);
+            for world in worlds.iter_mut().filter(|world| going(world)) {
+                world.forces();
+            }
+            for joint in 0..joints {
+                for world in worlds.iter_mut().filter(|world| going(world) && joint < world.joints.len()) {
+                    world.solve_joint(joint, true);
+                }
+            }
+            for world in worlds.iter_mut().filter(|world| going(world)) {
+                world.solve_contacts(true);
+                world.integrate();
+            }
+            for joint in 0..joints {
+                for world in worlds.iter_mut().filter(|world| going(world) && joint < world.joints.len()) {
+                    world.solve_joint(joint, false);
+                }
+            }
+            for world in worlds.iter_mut().filter(|world| going(world)) {
+                world.solve_contacts(false);
+            }
+        }
+        for world in worlds.iter_mut() {
+            let bodies = &mut world.bodies;
+            for contact in &mut world.contacts {
+                contact::bounce(bodies, contact);
+            }
+            world.steps += 1;
+        }
+    }
+
+    /// The start of a step: what touches, how stiff things are, and the masses and poses the passes
+    /// will need.
+    fn begin_step(&mut self) {
+        let h = STEP / self.substeps.max(1) as f32;
         let inverse_h = 1.0 / h;
         self.find_contacts();
-
         // contacts as stiff as a quarter of the substep rate allows, hinges twice as stiff, and
         // contacts against what never moves stiffer too, since only one side gives
         let contact_hertz = (0.25 * inverse_h).min(30.0);
-        let soft = Soft::new(contact_hertz, 10.0, h);
-        let hard = Soft::new(2.0 * contact_hertz, 10.0, h);
-        let hinge = Soft::new(2.0 * contact_hertz, 2.0, h);
-
+        self.stiffness = Stiffness { h, inverse_h, soft: Soft::new(contact_hertz, 10.0, h), hard: Soft::new(2.0 * contact_hertz, 10.0, h), hinge: Soft::new(2.0 * contact_hertz, 2.0, h) };
         let bodies = &mut self.bodies;
         for contact in &mut self.contacts {
             contact::prepare(bodies, contact);
@@ -342,56 +435,65 @@ impl World {
         for joint in &mut self.joints {
             joint.prepare(bodies);
         }
-        let softness = |contact: &Contact, bodies: &[Body]| {
-            let fixed = contact.b == GROUND || !bodies[contact.a as usize].moves() || !bodies[contact.b as usize].moves();
-            if fixed { hard } else { soft }
-        };
+        self.pose();
+    }
 
-        for _ in 0..substeps {
-            for body in bodies.iter_mut().filter(|body| body.moves()) {
-                body.velocity += self.gravity * h;
-                body.velocity = body.velocity * (1.0 / (1.0 + h * body.damping));
-                body.spin *= 1.0 / (1.0 + h * body.spin_damping);
-                let speed = body.velocity.length();
-                if speed > FASTEST {
-                    body.velocity = body.velocity * (FASTEST / speed);
-                }
-                body.spin = clamp(body.spin, -FASTEST_SPIN, FASTEST_SPIN);
+    /// Works out every joint's pose where the bodies are. Poses change only when the bodies move,
+    /// so one working out serves the gentle pass of one substep and the pushing pass of the next.
+    fn pose(&mut self) {
+        self.poses.clear();
+        self.poses.extend(self.joints.iter().map(|joint| joint.pose(&self.bodies)));
+    }
+
+    /// Gravity and damping, then last step's pushes applied again.
+    fn forces(&mut self) {
+        let h = self.stiffness.h;
+        let bodies = &mut self.bodies;
+        for body in bodies.iter_mut().filter(|body| body.moves()) {
+            body.velocity += self.gravity * h;
+            body.velocity = body.velocity * (1.0 / (1.0 + h * body.damping));
+            body.spin *= 1.0 / (1.0 + h * body.spin_damping);
+            let speed = body.velocity.length();
+            if speed > FASTEST {
+                body.velocity = body.velocity * (FASTEST / speed);
             }
-            for joint in &self.joints {
-                joint.warm_start(bodies);
-            }
-            for contact in &self.contacts {
-                contact::warm_start(bodies, contact);
-            }
-            for joint in &mut self.joints {
-                joint.solve(bodies, hinge, h, true);
-            }
-            for contact in &mut self.contacts {
-                let soft = softness(contact, bodies);
-                contact::solve(bodies, contact, soft, inverse_h, true);
-            }
-            for body in bodies.iter_mut().filter(|body| body.moves()) {
-                body.position += body.velocity * h;
-                body.rotation = body.rotation.turned(h * body.spin);
-            }
-            for joint in &mut self.joints {
-                joint.solve(bodies, hinge, h, false);
-            }
-            for contact in &mut self.contacts {
-                let soft = softness(contact, bodies);
-                contact::solve(bodies, contact, soft, inverse_h, false);
-            }
+            body.spin = clamp(body.spin, -FASTEST_SPIN, FASTEST_SPIN);
         }
+        for (joint, pose) in self.joints.iter().zip(&self.poses) {
+            joint.warm_start(bodies, pose);
+        }
+        for contact in &self.contacts {
+            contact::warm_start(bodies, contact);
+        }
+    }
+
+    fn solve_joint(&mut self, index: usize, push: bool) {
+        let Stiffness { h, hinge, .. } = self.stiffness;
+        self.joints[index].solve(&mut self.bodies, &self.poses[index], hinge, h, push);
+    }
+
+    fn solve_contacts(&mut self, push: bool) {
+        let Stiffness { inverse_h, soft, hard, .. } = self.stiffness;
+        let bodies = &mut self.bodies;
         for contact in &mut self.contacts {
-            contact::bounce(bodies, contact);
+            let fixed = contact.b == GROUND || !bodies[contact.a as usize].moves() || !bodies[contact.b as usize].moves();
+            contact::solve(bodies, contact, if fixed { hard } else { soft }, inverse_h, push);
         }
-        self.steps += 1;
+    }
+
+    /// Moves the bodies at the speeds they now have, and works out the joints' poses again.
+    fn integrate(&mut self) {
+        let h = self.stiffness.h;
+        for body in self.bodies.iter_mut().filter(|body| body.moves()) {
+            body.position += body.velocity * h;
+            body.rotation = body.rotation.turned(h * body.spin);
+        }
+        self.pose();
     }
 
     /// Finds every pair that touches or is about to, and carries over last step's pushes for points
     /// found again.
-    fn find_contacts(&mut self) {
+    pub fn find_contacts(&mut self) {
         core::mem::swap(&mut self.contacts, &mut self.last);
         self.contacts.clear();
         self.placed.clear();
@@ -421,18 +523,19 @@ impl World {
                 continue;
             }
             // a slab can reach DEPTH to either side of its piece, under a riser
-            let start = self.ground.partition_point(|piece| piece.a.x < low_a.x - self.widest - DEPTH);
-            for index in start..self.ground.len() {
-                let piece = self.ground[index];
+            // a second handle on the shared ground, so contacts can be kept while it is read
+            let ground = Rc::clone(&self.ground);
+            let start = ground.pieces.partition_point(|piece| piece.a.x < low_a.x - ground.widest - DEPTH);
+            for index in start..ground.pieces.len() {
+                let piece = ground.pieces[index];
                 if piece.a.x - DEPTH > high_a.x {
                     break;
                 }
-                let slab = Outline::slab(piece.a, piece.b, DEPTH);
-                let (low, high) = slab.bounds(0.0);
+                let (slab, low, high) = &ground.slabs[index];
                 if high.x < low_a.x || low.x > high_a.x || low.y > high_a.y || high.y < low_a.y {
                     continue;
                 }
-                let manifold = collide(&self.placed[a], &slab);
+                let manifold = collide(&self.placed[a], slab);
                 if manifold.count > 0 {
                     let contact = contact::begin(&self.bodies, a as u32, GROUND, index as u32, &manifold);
                     self.keep_contact(contact);

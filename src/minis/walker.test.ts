@@ -4,24 +4,114 @@
 // link exactly, and each kind of ground is what it says. `bun run wasm` builds it; `bun test` runs this.
 
 import { expect, test } from "bun:test";
-import { COURSE, DEFAULT_SETUP, KINDS, PRESETS, Terrain, courseAt, decode, encode, fromLink, heightAt, linkParts, oldLink, pieces, presetOf, valid, type Engine, type Setup } from "./walking";
+import { COURSE, DEFAULT_SETUP, KINDS, PRESETS, Terrain, courseAt, decode, encode, engineAddress, fromLink, hasSimd, heightAt, linkParts, oldLink, pieces, presetOf, valid, workersFor, type Engine, type Setup } from "./walking";
 
 const path = new URL("../../public/wasm/walker.wasm", import.meta.url);
+const scalarPath = new URL("../../public/wasm/walker-scalar.wasm", import.meta.url);
 
 type Walker = Engine;
 
-async function load(): Promise<Walker> {
-    const { instance } = await WebAssembly.instantiate(await Bun.file(path).arrayBuffer(), {});
+async function load(from: URL = path): Promise<Walker> {
+    const { instance } = await WebAssembly.instantiate(await Bun.file(from).arrayBuffer(), {});
     return instance.exports as unknown as Walker;
 }
 
 /** A copy of `length` f32 from the module's memory, made fresh since memory may have grown. */
 const floats = (walker: Walker, pointer: number, length: number) => Array.from(new Float32Array(walker.memory.buffer, pointer, length));
 
-test("the module is under its size limit and needs nothing from the page to load", async () => {
-    expect(Bun.file(path).size).toBeLessThan(512 * 1024);
-    const module = await WebAssembly.compile(await Bun.file(path).arrayBuffer());
-    expect(WebAssembly.Module.imports(module)).toEqual([]);
+test("both builds are under their size limit and need nothing from the page to load", async () => {
+    for (const each of [path, scalarPath]) {
+        expect(Bun.file(each).size).toBeLessThan(512 * 1024);
+        const module = await WebAssembly.compile(await Bun.file(each).arrayBuffer());
+        expect(WebAssembly.Module.imports(module)).toEqual([]);
+    }
+    // this runtime has SIMD, as every current browser does, so it is given the SIMD build
+    expect(hasSimd()).toBe(true);
+    expect(engineAddress()).toBe("/wasm/walker.wasm");
+});
+
+test("the build with SIMD and the build without learn exactly the same way, to the bit", async () => {
+    for (const [legs, hidden, layers, memory] of [[2, 16, 2, 4], [4, 64, 4, 8], [1, 32, 3, 8]] as const) {
+        const fast = await load(path);
+        const plain = await load(scalarPath);
+        const count = fast.create(legs, 12, 0, 21, hidden, layers, memory, 0, 0);
+        plain.create(legs, 12, 0, 21, hidden, layers, memory, 0, 0);
+        while (fast.generation() < 3) fast.train(12);
+        while (plain.generation() < 3) plain.train(12);
+        const bits = (walker: Walker, pointer: number, length: number) => Array.from(new Uint32Array(walker.memory.buffer, pointer, length));
+        expect(bits(fast, fast.best_weights(), count)).toEqual(bits(plain, plain.best_weights(), count));
+        expect(bits(fast, fast.history_best(), 3)).toEqual(bits(plain, plain.history_best(), 3));
+        expect(fast.best_score()).toBe(plain.best_score());
+    }
+});
+
+test("a generation shared out among one or eight helpers, as the workers share it, learns exactly as one module alone", async () => {
+    const bits = (walker: Walker, pointer: number, length: number) => Array.from(new Uint32Array(walker.memory.buffer, pointer, length));
+    const alone = await load();
+    const count = alone.create(4, 32, 0, 13, 16, 2, 4, 1, 0);
+    while (alone.generation() < 4) alone.train(32);
+    for (const workers of [1, 8]) {
+        const lead = await load();
+        lead.create(4, 32, 0, 13, 16, 2, 4, 1, 0);
+        // helpers made from another seed: only the world each run starts from matters, and that is the same
+        const helpers = await Promise.all(Array.from({ length: workers }, () => load()));
+        for (const helper of helpers) helper.create(4, 32, 0, 77, 16, 2, 4, 1, 0);
+        while (lead.generation() < 4) {
+            const todo = [...Array(32).keys()].filter((member) => !lead.member_scored(member));
+            const population = floats(lead, lead.population_weights(), 32 * count);
+            const answers: [number, number, number][] = [];
+            helpers.forEach((helper, w) => {
+                const share = todo.filter((_, k) => k % workers === w);
+                new Float32Array(helper.memory.buffer, helper.evaluate_room(share.length), share.length * count).set(share.flatMap((member) => population.slice(member * count, (member + 1) * count)));
+                const ran = helper.evaluate(share.length);
+                const found = floats(helper, helper.evaluated(), 2 * ran);
+                share.forEach((member, k) => answers.push([member, found[2 * k]!, found[2 * k + 1]!]));
+            });
+            // the answers come back in their own order
+            for (const [member, score, distance] of answers.reverse()) lead.record(member, score, distance);
+        }
+        expect(bits(lead, lead.best_weights(), count)).toEqual(bits(alone, alone.best_weights(), count));
+        expect(bits(lead, lead.population_weights(), 32 * count)).toEqual(bits(alone, alone.population_weights(), 32 * count));
+        expect(bits(lead, lead.history_best(), 4)).toEqual(bits(alone, alone.history_best(), 4));
+    }
+});
+
+test("many walkers step together for a learner that chooses their actions, sensing, earning and starting again", async () => {
+    const walker = await load();
+    walker.create(4, 8, 0, 3, 16, 2, 4, 1, 0);
+    expect(walker.envs_create(64)).toBe(64);
+    const [senses, outputs] = [walker.senses_length(), walker.outputs_length()];
+    // every walker held to a gentle stride
+    new Float32Array(walker.memory.buffer, walker.envs_actions(), 64 * outputs).fill(0.2);
+    expect(walker.envs_step(1)).toBe(64);
+    expect(floats(walker, walker.envs_observations(), 64 * senses).every(Number.isFinite)).toBe(true);
+    expect(floats(walker, walker.envs_rewards(), 64).every(Number.isFinite)).toBe(true);
+    // in ten seconds, the shortest run with no set length, every run has ended at least once and started again
+    let ended = 0;
+    for (let step = 0; step < 620; step++) {
+        walker.envs_step(1);
+        ended += floats(walker, walker.envs_done(), 64).filter((done) => done === 1).length;
+    }
+    expect(ended).toBeGreaterThanOrEqual(64);
+    const started = performance.now();
+    const steps = walker.envs_step(2000);
+    const seconds = (performance.now() - started) / 1000;
+    expect(steps).toBe(64 * 2000);
+    console.log(`64 four-legged walkers stepped together in WebAssembly: ${(steps / seconds).toFixed(0)} steps a second`);
+});
+
+test("how many workers train is about half the cores, fewer on a phone or with little memory, and one when gentle", () => {
+    expect(workersFor("normal", { cores: 16, phone: false })).toBe(8);
+    expect(workersFor("normal", { cores: 32, phone: false })).toBe(8);
+    expect(workersFor("normal", { cores: 4, phone: false })).toBe(2);
+    expect(workersFor("normal", { cores: 1, phone: false })).toBe(1);
+    expect(workersFor("normal", { cores: 8, phone: true })).toBe(2);
+    expect(workersFor("normal", { cores: 16, memory: 2, phone: false })).toBe(2);
+    expect(workersFor("normal", { cores: 16, memory: 1, phone: false })).toBe(1);
+    expect(workersFor("gentle", { cores: 16, phone: false })).toBe(1);
+    expect(workersFor("all", { cores: 16, phone: false })).toBe(15);
+    expect(workersFor("all", { cores: 8, phone: true })).toBe(4);
+    expect(workersFor("all", { cores: 0, phone: false })).toBe(1);
 });
 
 test("a walker is made only from a description it can build", async () => {

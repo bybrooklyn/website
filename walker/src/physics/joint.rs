@@ -82,14 +82,35 @@ impl Joint {
         }
     }
 
-    fn arms(&self, bodies: &[Body]) -> (Vec2, Vec2) {
-        (bodies[self.a as usize].rotation.apply(self.local_a), bodies[self.b as usize].rotation.apply(self.local_b))
+    /// What a pass over the joint needs that depends only on where the bodies are and how they are
+    /// turned, not on how fast they move: the passes change only speeds, so this is worked out once
+    /// for each placing of the bodies (`World::step` does it for every joint at once, which lets the
+    /// processor work on several angles together) and is the same, to the bit, as working it out in
+    /// the pass itself.
+    pub(crate) fn pose(&self, bodies: &[Body]) -> Pose {
+        let (one, two) = (&bodies[self.a as usize], &bodies[self.b as usize]);
+        let (ra, rb) = (one.rotation.apply(self.local_a), two.rotation.apply(self.local_b));
+        let (ma, mb, ia, ib) = (one.inverse_mass, two.inverse_mass, one.inverse_inertia, two.inverse_inertia);
+        let k11 = ma + mb + ra.y * ra.y * ia + rb.y * rb.y * ib;
+        let k12 = -ra.y * ra.x * ia - rb.y * rb.x * ib;
+        let k22 = ma + mb + ra.x * ra.x * ia + rb.x * rb.x * ib;
+        let determinant = k11 * k22 - k12 * k12;
+        Pose {
+            angle: if self.limited { self.angle(bodies) } else { 0.0 },
+            ra,
+            rb,
+            gap: (two.position + rb) - (one.position + ra),
+            k11,
+            k12,
+            k22,
+            inverse: if determinant != 0.0 { 1.0 / determinant } else { 0.0 },
+        }
     }
 
-    pub(crate) fn warm_start(&self, bodies: &mut [Body]) {
+    pub(crate) fn warm_start(&self, bodies: &mut [Body], pose: &Pose) {
         let mut one = motion(bodies, self.a);
         let mut two = motion(bodies, self.b);
-        let (ra, rb) = self.arms(bodies);
+        let (ra, rb) = (pose.ra, pose.rb);
         let axial = self.motor_impulse + self.lower_impulse - self.upper_impulse;
         one.velocity -= self.linear_impulse * one.inverse_mass;
         one.spin -= one.inverse_inertia * (ra.cross(self.linear_impulse) + axial);
@@ -100,8 +121,8 @@ impl Joint {
     }
 
     /// One pass over the joint, the same shape as a contact's: with `push` it also closes any gap
-    /// that has opened at the hinge or past a limit.
-    pub(crate) fn solve(&mut self, bodies: &mut [Body], soft: Soft, h: f32, push: bool) {
+    /// that has opened at the hinge or past a limit. `pose` is the joint's pose where the bodies are.
+    pub(crate) fn solve(&mut self, bodies: &mut [Body], pose: &Pose, soft: Soft, h: f32, push: bool) {
         let mut one = motion(bodies, self.a);
         let mut two = motion(bodies, self.b);
 
@@ -116,7 +137,7 @@ impl Joint {
         }
 
         if self.limited {
-            let angle = self.angle(bodies);
+            let angle = pose.angle;
             // the lower limit pushes the angle up, the upper limit pushes it down
             for (gap, sign) in [(angle - self.lower, 1.0f32), (self.upper - angle, -1.0)] {
                 let (bias, mass_scale, impulse_scale) = if gap > 0.0 {
@@ -137,20 +158,10 @@ impl Joint {
             }
         }
 
-        let (ra, rb) = self.arms(bodies);
+        let (ra, rb) = (pose.ra, pose.rb);
         let drift = (two.velocity + rb.spun(two.spin)) - (one.velocity + ra.spun(one.spin));
-        let (bias, mass_scale, impulse_scale) = if push {
-            let gap = (bodies[self.b as usize].position + rb) - (bodies[self.a as usize].position + ra);
-            (gap * soft.bias_rate, soft.mass_scale, soft.impulse_scale)
-        } else {
-            (Vec2::ZERO, 1.0, 0.0)
-        };
-        let (ma, mb, ia, ib) = (one.inverse_mass, two.inverse_mass, one.inverse_inertia, two.inverse_inertia);
-        let k11 = ma + mb + ra.y * ra.y * ia + rb.y * rb.y * ib;
-        let k12 = -ra.y * ra.x * ia - rb.y * rb.x * ib;
-        let k22 = ma + mb + ra.x * ra.x * ia + rb.x * rb.x * ib;
-        let determinant = k11 * k22 - k12 * k12;
-        let determinant = if determinant != 0.0 { 1.0 / determinant } else { 0.0 };
+        let (bias, mass_scale, impulse_scale) = if push { (pose.gap * soft.bias_rate, soft.mass_scale, soft.impulse_scale) } else { (Vec2::ZERO, 1.0, 0.0) };
+        let (k11, k12, k22, determinant) = (pose.k11, pose.k12, pose.k22, pose.inverse);
         let rhs = drift + bias;
         let solved = Vec2::new(determinant * (k22 * rhs.x - k12 * rhs.y), determinant * (k11 * rhs.y - k12 * rhs.x));
         let impulse = -solved * mass_scale - self.linear_impulse * impulse_scale;
@@ -160,6 +171,20 @@ impl Joint {
         keep(bodies, self.a, one);
         keep(bodies, self.b, two);
     }
+}
+
+/// A joint's pose where the bodies are: its angle, the arms from each body's middle to the hinge,
+/// the gap that has opened at the hinge, and the mass the hinge pushes against.
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct Pose {
+    angle: f32,
+    ra: Vec2,
+    rb: Vec2,
+    gap: Vec2,
+    k11: f32,
+    k12: f32,
+    k22: f32,
+    inverse: f32,
 }
 
 fn push_apart(one: &mut Motion, two: &mut Motion, ra: Vec2, rb: Vec2, impulse: Vec2) {

@@ -28,9 +28,15 @@ cargo test            # in walker/: the physics, the body, the brain and the lea
 bun test src/minis/walker.test.ts   # the built module, from the page's side
 ```
 
-`bun run wasm` fails if the module is over 512 KiB, or if the physics built alone
-(`cargo build --no-default-features`) is over 50 KiB. The built module is committed, so the site
+`bun run wasm` builds the module twice, optimised for speed: with WebAssembly SIMD as
+`walker.wasm`, and without it as `walker-scalar.wasm`, for a browser too old for SIMD (Safari
+before 16.4). The page checks which one the browser can run when it loads. The two give the same
+numbers to the bit. It fails if either is over 512 KiB, or if the physics built alone
+(`cargo build --no-default-features`) is over 80 KiB. The built modules are committed, so the site
 builds without Rust.
+
+`cargo run --release --example speed` says how fast training goes natively for each number of legs
+and each size of brain, and how a run's time divides between the physics, the brain and the rest.
 
 ## Reading from memory
 
@@ -86,8 +92,9 @@ brains on runs of one length, and what is seen is where the best of them goes af
 
 - `train(runs: u32) -> u32`
   Runs up to `runs` brains, each for `seconds` from the same start, and returns the number of
-  generations finished. When a generation is finished the next is bred at once. One run of 10 s
-  takes about 2 ms, so 4 to 8 runs a frame leaves the page responsive.
+  generations finished. When a generation is finished the next is bred at once. The runs of one
+  call go four at a time, side by side, which changes nothing about any of them but lets the
+  processor work on several at once; so ask for at least four. One run of 10 s takes about 1 ms.
 - `generation() -> u32` The number of generations finished.
 - `generation_runs() -> u32` How many brains of the current generation have been scored.
 - `best_score() -> f32` The best score so far, minus infinity before the first generation ends.
@@ -99,6 +106,44 @@ brains on runs of one length, and what is seen is where the best of them goes af
 - `history_length() -> u32` The number of finished generations.
 - `history_best() -> *const f32` The best score of each finished generation, `history_length` f32.
 - `history_mean() -> *const f32` The average score of each, `history_length` f32.
+
+### Training on several threads
+
+A generation's runs share nothing but their start, so they can be run anywhere, by any number of
+helpers, so long as one walker breeds. The page's workers do this: one leads, and hands out shares
+of each generation to the others, each its own module made with the same `create` and ground. What
+is learned is the same, to the bit, however many helpers there are and whatever order their answers
+come in.
+
+- `evaluate_room(count: u32) -> *mut f32` Room for `count` brains, one after another.
+- `evaluate(count: u32) -> u32` Runs the brains written there from the start, as training runs
+  them, and returns how many it ran. It changes nothing in this walker's own training.
+- `evaluated() -> *const f32` Two f32 for each brain the last `evaluate` ran: its score, then how
+  far it went.
+- `member_scored(index: u32) -> u32` 1 if that member of the current generation has its score (the
+  best few carried over have theirs already), else 0.
+- `record(index: u32, score: f32, distance: f32) -> u32` Gives a member of the current generation
+  the score and distance a helper found for it. Once every member has one, the next generation is
+  bred, as `train` would. Returns the number of generations finished.
+
+### Many walkers for a learner that chooses actions
+
+For a learner other than evolution, one that picks each walker's actions step by step and learns
+from rewards. Nothing on the page uses these yet. In Rust, `Envs` in `src/envs.rs` does the same
+with a policy called between steps, thousands of steps a call.
+
+- `envs_create(count: u32) -> u32` Makes `count` walkers (up to 4096), set up as this walker's
+  training is, each at the start. Returns how many.
+- `envs_actions() -> *mut f32` Room for each walker's actions, `outputs_length` f32 each, -1 to 1:
+  what a brain's outputs would be.
+- `envs_step(steps: u32) -> u32` Steps every walker `steps` times by those actions, all in
+  lockstep, and returns the steps taken by all of them together.
+- `envs_observations() -> *const f32`, `envs_rewards() -> *const f32`, `envs_done() -> *const f32`
+  After a step: what each walker senses (`senses_length` f32 each, as `show_senses`), the reward it
+  earned in the last step (the change in the score training gives, so a run's rewards add up to its
+  score), and 1 for each whose run ended in it, else 0. A run that ends starts again at once.
+
+A run here is the very run training would give the same actions, to the bit.
 
 ### Goals
 
@@ -166,9 +211,9 @@ swing in a fifth of a second), as a muscle can only tighten so fast; this is in 
 training sees it too.
 
 The page offers three sizes by name: small (8 neurons, 1 layer, no memory), medium (16, 2 layers,
-4 memories) and large (32, 3 layers, 8 memories). Most of a generation's time goes to the physics,
-not the brain, so the sizes cost nearly the same: natively about 50 ms a generation for two legs
-and 110 to 150 ms for four, at each size. A large brain has more to learn and gets there slower.
+4 memories) and large (32, 3 layers, 8 memories). A step of a two-legged walker with a medium
+brain takes about 2 microseconds natively, a four-legged one about 3.5, and a brain of four layers
+of 64 about doubles that. A large brain has more to learn and gets there slower.
 
 ### The show: one walker in real time
 
@@ -276,7 +321,7 @@ and 110 to 150 ms for four, at each size. A large brain has more to learn and ge
 ## The physics alone
 
 Built with `cargo build --release --target wasm32-unknown-unknown --no-default-features`, the module
-holds only the physics, with these functions instead (about 26 KiB):
+holds only the physics, with these functions instead (about 36 KiB):
 
 - `physics_reset(gravity_x: f32, gravity_y: f32)` Empties the world and sets its gravity.
 - `physics_body(kind: u32, a: f32, b: f32, x: f32, y: f32, angle: f32, density: f32, friction: f32, restitution: f32, group: u32) -> u32`

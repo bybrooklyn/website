@@ -101,17 +101,62 @@ pub struct Brain {
     /// Room for what comes in, and for what the last layer gives before it is split.
     incoming: Vec<f32>,
     last: Vec<f32>,
+    /// The weights it thinks with (`load`), laid out for adding up many neurons at once: each layer
+    /// in blocks of up to `BLOCK` neurons, each block input by input, then the layer's biases.
+    arranged: Vec<f32>,
+}
+
+/// How many neurons of a layer are added up side by side: four lanes of SIMD, four times over.
+const BLOCK: usize = 16;
+
+/// Lays out one layer's weights from the list's order (neuron by neuron, each its weight for every
+/// input) into `into`, by blocks of neurons, input by input. Returns the weights it did not use.
+fn arrange<'a>(weights: &'a [f32], inputs: usize, outputs: usize, into: &mut Vec<f32>) -> &'a [f32] {
+    let (rows, rest) = weights.split_at(outputs * inputs);
+    let (biases, rest) = rest.split_at(outputs);
+    for first in (0..outputs).step_by(BLOCK) {
+        let wide = (outputs - first).min(BLOCK);
+        for i in 0..inputs {
+            into.extend((first..first + wide).map(|j| rows[j * inputs + i]));
+        }
+    }
+    into.extend_from_slice(biases);
+    rest
 }
 
 /// One layer: every output is tanh of its weighted sum of the inputs plus its bias. Returns the
-/// weights it did not use.
-fn layer<'a>(weights: &'a [f32], inputs: &[f32], outputs: &mut [f32]) -> &'a [f32] {
-    let (rows, rest) = weights.split_at(outputs.len() * inputs.len());
+/// weights it did not use. Each neuron's sum is added up in the order one neuron at a time would
+/// have it (its bias, then each input in turn), so the answer is the same to the bit; only the
+/// neurons of a block are added up side by side, which the compiler turns into SIMD.
+fn layer<'a>(arranged: &'a [f32], inputs: &[f32], outputs: &mut [f32]) -> &'a [f32] {
+    let (mut blocks, rest) = arranged.split_at(outputs.len() * inputs.len());
     let (biases, rest) = rest.split_at(outputs.len());
-    for (j, output) in outputs.iter_mut().enumerate() {
-        let row = &rows[j * inputs.len()..(j + 1) * inputs.len()];
-        let sum = row.iter().zip(inputs).fold(biases[j], |sum, (w, x)| sum + w * x);
-        *output = tanh(sum);
+    for (outputs, biases) in outputs.chunks_mut(BLOCK).zip(biases.chunks(BLOCK)) {
+        let (block, after) = blocks.split_at(outputs.len() * inputs.len());
+        blocks = after;
+        if let (Ok(outputs), Ok(biases)) = (<&mut [f32; BLOCK]>::try_from(&mut *outputs), <&[f32; BLOCK]>::try_from(biases)) {
+            // a whole block, its sums kept in registers
+            let mut sums = *biases;
+            for (row, &input) in block.chunks_exact(BLOCK).zip(inputs) {
+                for (sum, &weight) in sums.iter_mut().zip(row) {
+                    *sum += weight * input;
+                }
+            }
+            for (output, sum) in outputs.iter_mut().zip(sums) {
+                *output = tanh(sum);
+            }
+        } else {
+            let wide = outputs.len();
+            outputs.copy_from_slice(biases);
+            for (row, &input) in block.chunks_exact(wide).zip(inputs) {
+                for (sum, &weight) in outputs.iter_mut().zip(row) {
+                    *sum += weight * input;
+                }
+            }
+            for output in outputs.iter_mut() {
+                *output = tanh(*output);
+            }
+        }
     }
     rest
 }
@@ -126,7 +171,28 @@ impl Brain {
             started: false,
             incoming: vec![0.0; layout.inputs + layout.memory],
             last: vec![0.0; layout.outputs + layout.memory],
+            arranged: vec![0.0; layout.weights()],
         }
+    }
+
+    /// A brain of this layout that thinks with these weights.
+    pub fn with(layout: Layout, weights: &[f32]) -> Brain {
+        let mut brain = Brain::new(layout);
+        brain.load(weights);
+        brain
+    }
+
+    /// Takes the weights to think with, in the list's order, and empties the memory, for the start
+    /// of a run. The weights are laid out for thinking once here, not at every step.
+    pub fn load(&mut self, weights: &[f32]) {
+        let Layout { inputs, hidden, layers, outputs, memory } = self.layout;
+        self.arranged.clear();
+        let mut rest = arrange(weights, inputs + memory, hidden, &mut self.arranged);
+        for _ in 1..layers {
+            rest = arrange(rest, hidden, hidden, &mut self.arranged);
+        }
+        arrange(rest, hidden, outputs + memory, &mut self.arranged);
+        self.forget();
     }
 
     /// Empties the memory, for the start of a run.
@@ -135,13 +201,13 @@ impl Brain {
         self.started = false;
     }
 
-    /// Runs the senses and the memory through the network with the given weights. The answer is in
-    /// `outputs`, and the memory is what it kept for next time.
-    pub fn think(&mut self, weights: &[f32], senses: &[f32]) {
+    /// Runs the senses and the memory through the network with the weights it was given (`load`).
+    /// The answer is in `outputs`, and the memory is what it kept for next time.
+    pub fn think(&mut self, senses: &[f32]) {
         let Layout { inputs, hidden: size, layers, outputs, .. } = self.layout;
         self.incoming[..inputs].copy_from_slice(&senses[..inputs]);
         self.incoming[inputs..].copy_from_slice(&self.memory);
-        let mut rest = layer(weights, &self.incoming, &mut self.hidden[..size]);
+        let mut rest = layer(&self.arranged, &self.incoming, &mut self.hidden[..size]);
         for at in 1..layers {
             let (before, after) = self.hidden.split_at_mut(at * size);
             rest = layer(rest, &before[(at - 1) * size..], &mut after[..size]);
@@ -161,23 +227,49 @@ impl Brain {
 mod tests {
     use super::*;
 
+    /// One layer worked the plain way, a neuron at a time from the list's order, as the brain always
+    /// did, to hold the quick way to.
+    fn plain_layer<'a>(weights: &'a [f32], inputs: &[f32], outputs: &mut [f32]) -> &'a [f32] {
+        let (rows, rest) = weights.split_at(outputs.len() * inputs.len());
+        let (biases, rest) = rest.split_at(outputs.len());
+        for (j, output) in outputs.iter_mut().enumerate() {
+            let row = &rows[j * inputs.len()..(j + 1) * inputs.len()];
+            *output = tanh(row.iter().zip(inputs).fold(biases[j], |sum, (w, x)| sum + w * x));
+        }
+        rest
+    }
+
+    #[test]
+    fn neurons_added_up_side_by_side_give_what_one_at_a_time_gives_to_the_bit() {
+        for (inputs, outputs) in [(1, 1), (3, 7), (22, 16), (19, 17), (64, 64), (72, 33), (5, 48)] {
+            let weights: Vec<f32> = (0..outputs * (inputs + 1)).map(|i| ((i * 7919) % 2000) as f32 / 700.0 - 1.4).collect();
+            let given: Vec<f32> = (0..inputs).map(|i| (i as f32 * 0.37).sin() * 1.3).collect();
+            let mut arranged = Vec::new();
+            arrange(&weights, inputs, outputs, &mut arranged);
+            let (mut quick, mut plain) = (vec![0.0; outputs], vec![0.0; outputs]);
+            layer(&arranged, &given, &mut quick);
+            plain_layer(&weights, &given, &mut plain);
+            assert_eq!(quick.iter().map(|x| x.to_bits()).collect::<Vec<_>>(), plain.iter().map(|x| x.to_bits()).collect::<Vec<_>>(), "{inputs} in, {outputs} out");
+        }
+    }
+
     #[test]
     fn the_brain_gives_the_same_outputs_for_the_same_inputs() {
         for layout in [Layout::new(17, 4), Layout::sized(21, 4, 24, 2, 0), Layout::sized(19, 12, 48, 4, 6)] {
             let weights: Vec<f32> = (0..layout.weights()).map(|i| ((i * 7919) % 200) as f32 / 100.0 - 1.0).collect();
             let senses: Vec<f32> = (0..layout.inputs).map(|i| (i as f32 * 0.37).sin()).collect();
-            let mut one = Brain::new(layout);
-            let mut two = Brain::new(layout);
-            one.think(&weights, &senses);
-            two.think(&weights, &vec![0.0; layout.inputs]);
+            let mut one = Brain::with(layout, &weights);
+            let mut two = Brain::with(layout, &weights);
+            one.think(&senses);
+            two.think(&vec![0.0; layout.inputs]);
             two.forget();
-            two.think(&weights, &senses);
+            two.think(&senses);
             assert_eq!(one.outputs.iter().map(|x| x.to_bits()).collect::<Vec<_>>(), two.outputs.iter().map(|x| x.to_bits()).collect::<Vec<_>>());
             assert!(one.outputs.iter().all(|x| x.abs() <= 1.0) && one.outputs.iter().any(|x| *x != 0.0));
             assert_eq!(one.hidden.len(), layout.neurons());
             // a brain with every weight zero is calm: every output is zero
-            let mut calm = Brain::new(layout);
-            calm.think(&vec![0.0; layout.weights()], &senses);
+            let mut calm = Brain::with(layout, &vec![0.0; layout.weights()]);
+            calm.think(&senses);
             assert!(calm.outputs.iter().all(|x| *x == 0.0));
         }
         assert_eq!(Layout::new(17, 4).weights(), 12 * 18 + 4 * 13);
@@ -189,15 +281,15 @@ mod tests {
     fn memory_carries_from_one_step_to_the_next_and_is_forgotten_on_request() {
         let layout = Layout::sized(3, 2, 6, 1, 2);
         let weights: Vec<f32> = (0..layout.weights()).map(|i| ((i * 31) % 17) as f32 / 8.0 - 1.0).collect();
-        let mut brain = Brain::new(layout);
-        brain.think(&weights, &[0.5, -0.2, 0.1]);
+        let mut brain = Brain::with(layout, &weights);
+        brain.think(&[0.5, -0.2, 0.1]);
         let first = brain.outputs.clone();
         assert!(brain.memory.iter().any(|value| *value != 0.0));
         // the same senses give a different answer once there is something in memory
-        brain.think(&weights, &[0.5, -0.2, 0.1]);
+        brain.think(&[0.5, -0.2, 0.1]);
         assert_ne!(brain.outputs, first);
         brain.forget();
-        brain.think(&weights, &[0.5, -0.2, 0.1]);
+        brain.think(&[0.5, -0.2, 0.1]);
         assert_eq!(brain.outputs, first);
     }
 }
