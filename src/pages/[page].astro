@@ -6,8 +6,10 @@ import "../styles/content";
 import type { GetStaticPaths } from "astro";
 import { getCollection, render, type CollectionEntry } from "astro:content";
 import "../styles/blog.css";
+import "../styles/projects.css";
 import Contents from "../components/Contents.astro";
 import Base from "../layouts/Base.astro";
+import { site } from "../data/site";
 import { visible } from "../lib/drafts";
 
 export const getStaticPaths = (async () => {
@@ -41,6 +43,31 @@ const { Content, headings } = await render(entry);
         <div class="post-body">
             <Contents {title} {headings} />
             <div class="prose">
+                {/* The about page opens with the plain facts about her: what to call her, where she is, how to reach her. */}
+                {
+                    entry.id === "about" && (
+                        <dl class="facts">
+                            <div>
+                                <dt>pronouns</dt>
+                                <dd>{site.pronouns}</dd>
+                            </div>
+                            <div>
+                                <dt>where</dt>
+                                <dd>{site.location}</dd>
+                            </div>
+                            <div>
+                                <dt>time</dt>
+                                <dd>{site.time}</dd>
+                            </div>
+                            <div>
+                                <dt>reach me</dt>
+                                <dd>
+                                    <a href={`mailto:${site.email}`}>{site.email}</a>
+                                </dd>
+                            </div>
+                        </dl>
+                    )
+                }
                 <Content />
             </div>
         </div>
