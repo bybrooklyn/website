@@ -906,4 +906,27 @@ used("a file's title is its name without the extension, and renaming it keeps th
     expect(await md()).toBe("Text.\n");
 });
 
+used("the text is set as a published post's: its size, line, measure and the gaps between paragraphs and headings", async () => {
+    await reset("A first paragraph.\n\nA second paragraph.\n\n## A heading\n\nUnder the heading.\n", [0], 0);
+    await tab.wait(200);
+    const seen = await tab.run<{ line: number; text: number; size: number; height: number; measure: number; width: number; pp: number; ph: number; hp: number }>(`(() => {
+        const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
+        const kids = [...document.querySelectorAll('.quire > *')];
+        const box = (index) => kids[index].getBoundingClientRect();
+        const style = getComputedStyle(kids[1]);
+        return {
+            line: 1.7 * rem, text: 1.125 * rem, size: parseFloat(style.fontSize), height: parseFloat(style.lineHeight),
+            measure: 44 * rem, width: document.querySelector('.quire').getBoundingClientRect().width,
+            pp: box(1).top - box(0).bottom, ph: box(2).top - box(1).bottom, hp: box(3).top - box(2).bottom,
+        };
+    })()`);
+    // the numbers prose.css and the post layout give: a line between paragraphs, two above a heading, three quarters under it
+    expect(Math.abs(seen.size - seen.text)).toBeLessThan(0.5);
+    expect(Math.abs(seen.height - seen.line)).toBeLessThan(0.5);
+    expect(seen.width).toBeLessThanOrEqual(seen.measure + 0.5);
+    expect(Math.abs(seen.pp - seen.line)).toBeLessThan(1);
+    expect(Math.abs(seen.ph - 2 * seen.line)).toBeLessThan(1);
+    expect(Math.abs(seen.hp - 0.75 * seen.line)).toBeLessThan(1);
+});
+
 if (!live) console.warn("editor.test.ts: no Chromium on this machine, so the editor was not used.");
