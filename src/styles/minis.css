@@ -750,3 +750,76 @@
         border-top: 0.0625rem solid var(--rule);
     }
 }
+
+/* ---- the generalist: the scene, and its controls in a column beside it, in the Walker's style ---- */
+
+.mini-stage[data-mini="generalist"] {
+    --panel-room: 16rem;
+    max-width: 64rem;
+}
+
+.mini-stage.with-panel[data-mini="generalist"] {
+    min-height: calc(clamp(16rem, 52svh, 28rem) + var(--panel-room));
+}
+
+.mini-stage[data-mini="generalist"]:has(.walker-side) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 19rem;
+    grid-template-rows: minmax(clamp(16rem, 52svh, 28rem), 1fr);
+    grid-template-areas: "scene side";
+    min-height: 0;
+}
+
+.mini-stage[data-mini="generalist"] > canvas {
+    grid-area: scene;
+    height: clamp(16rem, 52svh, 28rem);
+}
+
+/* Placed absolutely in its grid area, as the Walker's scene is, so its own size never feeds back. */
+.mini-stage[data-mini="generalist"]:has(.walker-side) > canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+}
+
+/* The seed is a line to type on, as wide as the column lets it be. */
+.mini-stage[data-mini="generalist"] .walker-controls input[type="text"] {
+    flex: 1 1 6rem;
+    font-family: var(--font-code);
+    font-size: 0.9rem;
+}
+
+.mini-stage[data-mini="generalist"] .walker-controls input[type="checkbox"] {
+    margin: 0;
+}
+
+/* A range with its switch beside it takes what room is left. */
+.mini-stage[data-mini="generalist"] .walker-controls .walker-range {
+    flex: 1;
+    width: auto;
+    min-width: 0;
+}
+
+.mini-stage[data-mini="generalist"] .walker-range input[type="range"]:disabled {
+    opacity: 0.4;
+}
+
+.mini-stage[data-mini="generalist"] .walker-far {
+    min-width: 1.8rem;
+    text-align: right;
+}
+
+@media (max-width: 46rem) {
+    .mini-stage[data-mini="generalist"] {
+        --panel-room: 30rem;
+    }
+
+    .mini-stage[data-mini="generalist"]:has(.walker-side) {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: clamp(16rem, 52svh, 28rem) auto;
+        grid-template-areas:
+            "scene"
+            "side";
+    }
+}

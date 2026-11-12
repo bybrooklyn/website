@@ -341,6 +341,279 @@ holds only the physics, with these functions instead (about 36 KiB):
 - `physics_body_count() -> u32` and `physics_bodies() -> *const f32` Six f32 for each body, as in
   `show_bodies`.
 
+## The generalist
+
+A second mini on the same engine: a creature that sees, learns and gets about a generated world by
+itself. It is in `src/generalist/`, behind the `generalist` feature, and is built into a module of its
+own, `public/wasm/generalist.wasm`, so the Walker's module holds none of it. The physics, the body,
+the brain and evolution are shared. `cargo test` runs both; `tests/unchanged.rs` holds the Walker to
+learning exactly as it did before the generalist was added, to the bit.
+
+### A world
+
+A world is described two ways, one made from the other.
+
+A **recipe** is six numbers: a seed (a whole number; the page turns a word into one), a difficulty
+from 0 to 1, and an amount from 0 (switched off) to 1 of each of four kinds of thing: ground
+(platforms, ledges, drops, stairs, gaps and slopes), hazards (water and spikes), things to push
+(loose boxes), and things that move (moving platforms and see-saws). A link carries a recipe.
+
+A recipe is planned into a list of **pieces**, laid one after another along the way from the start,
+as far as anyone goes. Each piece is four numbers: its kind, two sizes, and the level ground after it
+before the next, in metres. A teacher that changes worlds changes these, and a world can be given as
+its pieces instead of a recipe (then the way is level after the last). The kinds, and what their two
+sizes `a` and `b` are:
+
+| kind | number | a | b |
+|------|--------|---|---|
+| level ground | 0 | length | |
+| slope | 1 | length | rise (less than 0 goes down) |
+| gap, no bottom | 2 | width | how much higher the far side is |
+| stairs | 3 | how many steps | rise of each (less than 0 goes down); each 0.8 m long |
+| ledge | 4 | height | |
+| drop | 5 | depth | |
+| floating platforms | 6 | gap between them, and from each side | height of their tops above the near side |
+| water | 7 | width | |
+| spikes | 8 | width | |
+| loose box | 9 | half its size | |
+| ledge with a box before it | 10 | height | the box's half size |
+| moving platform over a gap | 11 | the gap's width | its top speed, m/s |
+| see-saw | 12 | the plank's half length | the pivot's height |
+
+The creature starts at x = 0 on level ground from 12 m behind it to 4 m ahead. Gaps go 2 m down
+and then there is nothing: falling in ends a run, as touching a hazard does. Floating platforms
+are 1 m wide and come in twos. A moving platform is 1.2 m wide, starts at the left of its gap, and
+eases across and back. A see-saw's left end starts on the ground.
+
+Planning picks each piece's kind by the amounts, weighed against a fixed 0.3 for a stretch of level
+ground, so with everything at 1 about three pieces in four are something; then a piece of that kind
+evenly, at 60 to 100 percent of the hardest the table allows. Ups and downs lean back toward the
+start's height. Only plus, times and a seeded random generator are used, so the same recipe makes
+the same world to the bit, natively and in every browser, however far at a time it is made.
+
+### What difficulty means
+
+The hardest each piece can be, at difficulty d, is a straight line between its value at 0 and at 1:
+
+| | d = 0 | d = 1 |
+|---|---|---|
+| widest gap | 0.2 m | 0.6 m |
+| far side of a gap higher or lower by | 0 | 0.08 m |
+| tallest stair step | 0.04 m | 0.12 m |
+| most stair steps | 2 | 6 |
+| highest ledge | 0.08 m | 0.2 m |
+| highest ledge with a box | 0.25 m | 0.38 m |
+| deepest drop | 0.3 m | 1.2 m |
+| steepest slope, rise over run | 0.08 | 0.4 |
+| gap between floating platforms | 0.25 m | 0.55 m |
+| floating platforms above the ground | 0.03 m | 0.12 m |
+| widest water | 0.25 m | 0.6 m |
+| widest spikes | 0.2 m | 0.55 m |
+| widest gap a moving platform crosses | 2 m | 4.5 m |
+| its top speed | 0.4 m/s | 1 m/s |
+| highest see-saw pivot | 0.12 m | 0.35 m |
+| level ground after each piece | 4 m | 1.6 m |
+
+So, with everything switched on, there are 1.6 things in every 10 m at difficulty 0 and 2.5 at
+difficulty 1. The tests measure each of these over many worlds.
+
+### Every world can be crossed
+
+Before a piece is laid it is checked (`src/generalist/check.rs`): the world is seen as surfaces to
+stand on (ground not steeper than 0.7, platform tops, a loose box's top anywhere it can be pushed
+along level ground, a moving platform anywhere along its way, a see-saw tipped either way, with
+hazards cut out), and one surface can be reached from another if a jump of the creature's reach gets
+from the nearest point of one to the nearest point of the other. That reach is a step of 0.12 m, a
+climb of 0.22 m and a leap of 0.7 m over level ground, a little under what the body was measured to
+do (below); a jump that lands `rise` higher goes `leap / 2 * (1 + sqrt(1 - rise / climb))`, as a
+thrown stone does. A piece that cannot be crossed is made easier by a fifth, again and again, and
+given up for level ground if it never can be. The tests lay 4,400 worlds of 150 m across every
+difficulty and check each whole: every one can be crossed. The table keeps within the reach, so no
+planned piece has needed making easier; the checker is there for pieces given whole, by a link or a
+teacher.
+
+### The body
+
+The Walker's two- and four-legged creatures, their rounded bodies, eyes and feet as they were, with
+a hop (`src/generalist/body.rs`). Its brain gives the Walker's three numbers for each joint, which
+shape each joint's swing to the legs' rhythm, and one more, the hop. When that goes above a half with
+a foot down, the creature crouches (slowly enough that its feet stay down), then springs: every knee
+straightens at once, 2.2 times as strong and nearly three times as quick as walking allows, while each
+hip keeps the line from hip to foot where it should be and follows the knee as it moves, so the push
+goes through the body rather than turning it. The spring ends when the feet leave the ground; in the
+air the legs are held ready to land; after landing it waits half a second before it can hop again.
+
+A hop kicked every body tried head over heels until it was made hard to tip. So the two-legged one
+holds short arms out wide, as someone on a tightrope does: they are stiff, so they are counted in its
+body, which is ten times as hard to tip as a plain block of its size; the page draws them. The
+four-legged one carries its weight spread along its back, three times as hard to tip. How each holds
+its legs in a hop was found by trying 540 ways and keeping the steadiest that went forward
+(`cargo test --release find_how -- --ignored --nocapture`).
+
+Measured with its legs held to the Walker's built-in stride, or standing, and one hop at the best
+moment: two legs hop up a ledge of 0.48 m and over a gap of 0.86 m from standing (its stride no longer
+walks with its arms out, so it gets up steps by hopping); four legs walk up 0.24 m and hop over 0.76 m
+from a walk. The checker's reach is a little under the lesser of each, and the tests hold both bodies
+to doing at least that much.
+
+### What it senses
+
+Rays first, a picture later. Sixteen rays from its eye (at the front of its body, a little above the
+middle), held level with the world whatever the body does, as an animal holds its head steady. Eleven
+look down ahead, aimed to land every 0.35 m from 0.3 m to 3.8 m in front of an eye a metre up, so a
+gap or a pool as narrow as the narrowest falls between two of them by the time it is a hop away; five
+look level and up at 15, 35, 60 and 90 degrees, for walls, ledges, boxes and platforms overhead. Each
+sees 6 m. A ray is cast through the physics (`World::cast` in `src/physics/cast.rs`): the ground and
+the blocks are sorted by where they start, so a binary search finds the few the ray can cross;
+bodies are passed over unless the ray crosses their box. Hazards, which are not solid, are found
+along the ray as far as it got. A creature in a busy world sees about 930,000 times a second
+natively, sixteen rays each, on one core (where casting past everything in its stretch of world would
+allow 535,000), and a test holds the quick cast to the slow one's answer, to the bit, over 40,000
+rays.
+
+The senses, in the order the brain takes them:
+
+| | numbers | what |
+|---|---|---|
+| rays | 16 times 6 | for each ray, from straight down ahead turning up: how near what it meets is (1 touching, 0 nothing within 6 m), then 1 or 0 for whether it is the edge of a drop (ground or a platform within 0.3 m of where it ends over a gap or something more than 0.12 m lower), a box, a hazard, a moving thing (a moving platform or a see-saw), food (always 0 for now). Ground is what is near with none of these. |
+| body | 4 | its angle (0 upright), its spin times 0.2, its speed forward and up, each times 0.25 |
+| joints | 2 for each | hip then knee, leg by leg: the angle, and the speed times 0.1 |
+| feet | 1 for each | 1 if on something, else 0 |
+| rhythm | 2 | the sine and cosine of the legs' rhythm |
+| hop | 2 | 1 while it hops, else 0; 1 when it can hop, else 0 |
+
+So two legs sense 96 + 18 = 114 numbers and four legs 96 + 28 = 124.
+
+`eyes::picture` makes, from the same world, the picture the creature would see instead: a strip of
+greyscale pixels from 80 degrees down to 60 degrees up, each lit by what its ray meets (a hazard
+brightest, then a box, a moving thing, ground, an edge) and dimmer the further off. It is tested and
+not yet given to any brain; it is where the picture experiment will start.
+
+### Many creatures for a learner
+
+`generalist::envs::Envs` steps N creatures in N worlds together, for the gradient learner to come:
+each step takes every creature's actions, moves them all on in lockstep (`World::step_together`), and
+writes into the caller's lists what each senses (the layout above), its reward, and 1 if its run
+ended (it has started again at once from its start), else 0. Creature i lives in the world of the
+recipe's seed plus i, or all in the recipe's own world; what happens to it depends on that seed and
+its actions alone, never on how many are stepped beside it, which a test holds to the bit.
+
+The actions, each -1 to 1: for each joint, hip then knee, leg by leg, the three numbers that shape its
+swing to the legs' rhythm (where it is centred, how wide, how far shifted in the stride), as the
+Walker's; then the hop, which starts when it goes above 0.5. So 13 for two legs and 25 for four.
+
+The reward: each metre further than the creature has been before earns 1, so a run's rewards add up
+to the furthest it got; touching a hazard or falling into a gap costs 3 and ends the run; each change
+in the actions from one step to the next costs 0.002 for its size, as twitching costs the Walker. A
+run also ends after its time (30 s unless asked), after its body has been down for a second, or once
+it has got no further than 0.2 m in five seconds.
+
+Natively, 64 two-legged creatures step about 340,000 times a second together on one core, seeing as
+they go (the Walker's, which see nothing, about 790,000). The page's module in Bun's JavaScriptCore
+steps them about 250,000 times a second.
+
+`generalist::evolve::Evolution` is the Walker's evolution, unchanged in its rules (32 brains, the best
+4 kept, children of the better of three, a weight nudged by about 0.3 one time in ten), scored by the
+sum of a run's rewards, its runs going four at a time through `Envs`. A generation's runs can be
+handed out and their scores handed back in any order, as the Walker's are.
+
+### How far evolution gets: the baseline
+
+What gradient learning will be measured against. Made with
+`cargo run --release --example baseline 400` (`examples/baseline.rs`): the world of seed 1 with
+everything at 1, the page's settings (32 brains of two hidden layers of 16 neurons with 4 memories,
+runs of up to 30 s), first brains from seed 1, each world and body trained on one core of a Ryzen 7
+9700X with other work going on. The distance is the furthest any brain had got through the world by
+then, in metres from the start (the first 4 m are the level start); the time is that core's.
+
+| legs | difficulty | after 10 | after 50 | after 100 | after 200 | after 400 | 400 took |
+|---|---|---|---|---|---|---|---|
+| 2 | 0.1 | 2.9 m | 4.4 m | 4.4 m | 5.5 m | 5.9 m | 24 s |
+| 2 | 0.3 | 2.9 m | 4.5 m | 6.3 m | 6.3 m | 6.4 m | 23 s |
+| 2 | 0.5 | 2.9 m | 4.3 m | 4.4 m | 4.9 m | 7.0 m | 24 s |
+| 2 | 0.8 | 2.9 m | 4.4 m | 4.4 m | 4.7 m | 5.4 m | 23 s |
+| 4 | 0.1 | 7.0 m | 13.4 m | 13.4 m | 17.1 m | 17.8 m | 85 s |
+| 4 | 0.3 | 12.8 m | 12.8 m | 14.0 m | 15.3 m | 15.9 m | 89 s |
+| 4 | 0.5 | 7.9 m | 8.6 m | 8.7 m | 11.6 m | 14.3 m | 82 s |
+| 4 | 0.8 | 7.3 m | 8.1 m | 8.4 m | 8.4 m | 8.4 m | 81 s |
+
+Honestly: evolution gets the two-legged creature off the start and over the first thing or two,
+then stalls; its brains learn to lunge and hop forward rather than to walk, since a hop that lands
+earns at once and a stride that is not yet a stride earns nothing. The four-legged one walks, so it
+gets further, and gets less far as the world gets harder: at difficulty 0.8 it stops at the first
+hard piece. None got anywhere near the end of a world. Runs that fall end at once, so a generation is
+quick (two legs about 17 generations a second on one core; in the page, with eight workers, about
+50), and more generations do not help much. In the browser, two minutes of learning on the page with
+everything switched on reached 8.0 m in the world "meadow" at difficulty 0.1 and 15.2 m at 0.5, riding
+a moving platform over a gap on the way.
+
+### The generalist's functions
+
+In `public/wasm/generalist.wasm` (`src/generalist/api.rs`, the work in `src/generalist/page.rs`). One
+creature and its learning per module instance. A function that gives a list gives a pointer, and
+`length()` then gives how many f32 it holds; read them as with the Walker's.
+
+- `create(legs, seed, difficulty, ground, hazards, boxes, moving, population, hidden, layers, memory, seconds, brain_seed) -> u32`
+  Two or four legs, in the world of the recipe (seed, a difficulty and four amounts from 0 to 1),
+  learning by evolution with `population` brains of `layers` hidden layers of `hidden` neurons and
+  `memory` memories, runs of `seconds` (30 if 0), first brains drawn from `brain_seed`. Returns the
+  number of weights in a brain, or 0.
+- Learning, as the Walker's: `train(runs)`, `generation()`, `generation_runs()`, `best_score()`,
+  `best_distance()`, `weights_length()`, `population_length()`, `best_weights()`,
+  `population_weights()`, `history_best()`, `history_mean()`, `history_distance()` (the furthest of
+  each generation), `evaluate_room(count)`, `evaluate(count)`, `evaluated()`, `member_scored(i)`,
+  `record(i, score, distance)`, `weights_room()`, `weights_load()`.
+- The show, the best brain so far walking the world from the start, playing the very run it was
+  scored on unless it is touched: `show_reset()`, `show_step(seconds) -> steps`, `show_over()`,
+  `show_end()` (how it ended: 0 going, 1 time, 2 down, 3 stalled, 4 hazard, 5 fell),
+  `show_distance()`, `show_furthest()`, `show_score()`, `show_seconds()`, `show_hop()` (1 mid-hop),
+  `legs_length()`, `show_bodies()` (six f32 a body as the Walker's: the torso, then each leg's upper
+  and lower part), `show_things()` (six f32 for each box, moving platform and see-saw plank made: 0, 1
+  or 2 for which, x, y, angle, half width, half height), `show_rays()` (the eye's x and y, then for
+  each ray its distance and what it saw: 0 nothing, 1 ground, 2 an edge, 3 a box, 4 a hazard, 5 a
+  moving thing, 6 food), `ray_angles()`, `show_push(x, y, impulse_x, impulse_y)`, `show_hold(x, y)`
+  (carries the body toward the point until `show_drop()`; its run is not judged while held).
+  Positions are in metres from the start.
+- The world to draw: `land_ground(until, from)` (the world made at least to `until` metres; four f32
+  for each piece of ground from number `from` on), `land_blocks(from)` (four f32 for each floating
+  platform), `land_hazards(from)` (five: the box, then 0 water or 1 spikes), `picture(count)` (what
+  the show's creature would see, `count` greyscale pixels).
+- For a learner: `envs_create(count, alike)`, `envs_actions()`, `envs_step(steps)`,
+  `envs_observations()`, `envs_rewards()`, `envs_done()`, `senses_length()`, `actions_length()`,
+  `rays_length()`.
+
+The module is 190 KiB with SIMD (the Walker's is 127 KiB, the physics alone 37 KiB; what the
+generalist added to the Walker's own module is 1.3 KiB of physics it does not use, which the
+compiler mostly leaves out). `src/minis/generalist.test.ts` holds it to the native engine's
+fingerprint of three creatures' 600 steps and three generations of evolution, to the bit, with SIMD
+and without.
+
+### What the physics gained for it
+
+Only what the world needs, none of it used by the Walker, which learns to the same bit as before:
+
+- **Static blocks** (`World::add_blocks`): boxes that never move, solid on top, sides and underside,
+  for floating platforms. They are kept sorted with the ground, found the same way, and dropped
+  behind and moved back with it.
+- **Bodies that move by themselves** (`Body::kinematic`): moved by the velocity they are given and
+  by nothing else, so a moving platform carries what stands on it by friction and is not pushed
+  back.
+- **Taking a body out** (`World::remove_body`): the joints and contacts that name later bodies are
+  told their new places, so taking out a box far behind changes nothing else, to the bit.
+- Loose boxes and see-saws needed nothing new: boxes, hinges and limits were there. Hazards are not
+  physics: a run ends when any part of the creature's box overlaps one.
+
+`generalist::stage` keeps a world around one creature: the land laid 50 m ahead a stretch at a time
+and dropped 40 m behind, boxes, moving platforms and see-saws made 14 m before the creature reaches
+them and taken out 16 m after, moving platforms driven along their ways, and everything moved back
+by 512 m whenever the creature passes 512 m, as the Walker's endless walk does. Three boxes stacked
+on a block or on the ground stand still to the millimetre for ten seconds (four on a narrow support
+creep about 3 mm in that time), and a creature holding its pose on a platform going to and fro
+moves less than 3 cm on it.
+
+Many Walkers stepped together (`Envs`, 64 at once, one core) ran 750,000 steps a second for two legs
+and 415,000 for four before these were added, and 790,000 and 430,000 after: no slower.
+
 ## Credit
 
 The soft step solver and the way contacts are found follow Erin Catto's Box2D 3 (MIT), rewritten

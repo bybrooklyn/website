@@ -14,6 +14,8 @@ const BOUNCE_SPEED: f32 = 1.0;
 
 /// Marks the second body of a contact with the ground, which does not move.
 pub const GROUND: u32 = u32::MAX;
+/// Marks a contact with the ground whose `segment` is the number of a static block, not a piece.
+pub const BLOCK: u32 = 0x4000_0000;
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Point {

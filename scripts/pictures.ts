@@ -56,9 +56,9 @@ const escape = (text: string) => text.replace(/[&<>]/g, (sign) => `&#${sign.char
 
 /**
  * How each mini is photographed, where the plain way (the middle of it, as it starts) shows too little:
- * what to add to its address, script to run in its page, how long to wait, how much of its width to take, and from where.
+ * what to add to its address, script to run in its page, how long to wait, how much of its width to take, and from where (or how far down, from 0 to 1).
  */
-const shots: Record<string, { query?: string; script?: string; wait?: number; across?: number; from?: "middle" | "bottom" }> = {
+const shots: Record<string, { query?: string; script?: string; wait?: number; across?: number; from?: "middle" | "bottom" | number }> = {
     // a roll by link, photographed once the numbers have lined up
     dice: { query: "?roll=2d20%2B2d6%2Bd8%2Bd4%2B3", wait: 15000 },
     blocks: { across: 0.45, from: "bottom" },
@@ -66,6 +66,8 @@ const shots: Record<string, { query?: string; script?: string; wait?: number; ac
     plinko: { script: `document.querySelector(".dice-go").click();`, wait: 7000 },
     // some generations in, with the crowd and the brain showing
     walker: { wait: 14000, from: "bottom" },
+    // learning some way into a world with everything in it, the ground and what it sees showing
+    generalist: { query: "?seed=meadow&hard=50&ground=100&hazards=100&boxes=100&moving=100&off=&legs=2", wait: 20000, from: 0.72 },
 };
 
 function mini(id: string): Wanted["make"] {
@@ -79,7 +81,7 @@ function mini(id: string): Wanted["make"] {
         // A piece of the canvas in the picture's shape.
         const height = Math.min(box.height, (box.width * across * HEIGHT) / WIDTH);
         const width = (height * WIDTH) / HEIGHT;
-        const shot = await tab.picture({ x: box.x + (box.width - width) / 2, y: box.y + (box.height - height) * (from === "bottom" ? 1 : 0.5), width, height });
+        const shot = await tab.picture({ x: box.x + (box.width - width) / 2, y: box.y + (box.height - height) * (from === "bottom" ? 1 : from === "middle" ? 0.5 : from), width, height });
         return sharp(shot).resize(WIDTH, HEIGHT).png().toBuffer();
     };
 }

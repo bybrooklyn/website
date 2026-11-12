@@ -1,5 +1,5 @@
 //! The physics alone, as a module of its own for the page: build a world of bodies, ground and
-//! hinges, step it, and read where everything is. It is built only without the `walker` feature
+//! hinges, step it, and read where everything is. It is built only without the `walker` and `generalist` features
 //! (`cargo build --no-default-features`), to measure and use the physics by itself. README.md lists
 //! each function.
 

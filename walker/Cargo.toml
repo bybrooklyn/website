@@ -12,9 +12,14 @@ license = "MIT"
 crate-type = ["cdylib", "rlib"]
 
 [features]
-# Without this feature the module holds the physics alone, to keep it small enough to use elsewhere.
-default = ["walker"]
-walker = []
+# With neither feature the module holds the physics alone, to keep it small enough to use elsewhere.
+# `walker` is the Walker mini's engine and `generalist` the generalist's; each is built into a module
+# of its own (`bun run wasm`), and both are on for `cargo test`.
+default = ["walker", "generalist"]
+walker = ["creature"]
+generalist = ["creature"]
+# What both share: the body, the brain and evolution.
+creature = []
 
 [profile.release]
 opt-level = 3

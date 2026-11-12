@@ -1,7 +1,8 @@
 //! The walking mini's engine. A small 2D physics engine (`physics`), a creature built in it from a
 //! description (`body`), a little network that drives it (`brain`), and evolution that teaches it to
 //! walk (`learn`). The page reaches it through plain exported functions (`api` and `physics::api`),
-//! described in README.md.
+//! described in README.md. The generalist (`generalist`) is a second mini on the same engine: a
+//! creature that sees and gets about a generated world, built into a module of its own.
 //!
 //! In the browser it runs without the standard library, on its own allocator (`memory`) and its own
 //! sine, square root and the rest (`math`), so the module stays small and gives the same numbers on
@@ -14,13 +15,13 @@ extern crate alloc;
 pub mod math;
 pub mod physics;
 
-#[cfg(feature = "walker")]
+#[cfg(feature = "creature")]
 pub mod body;
-#[cfg(feature = "walker")]
+#[cfg(feature = "creature")]
 pub mod brain;
-#[cfg(feature = "walker")]
+#[cfg(feature = "creature")]
 pub mod learn;
-#[cfg(feature = "walker")]
+#[cfg(feature = "creature")]
 pub mod gait;
 #[cfg(feature = "walker")]
 pub mod show;
@@ -28,6 +29,8 @@ pub mod show;
 pub mod envs;
 #[cfg(feature = "walker")]
 pub mod api;
+#[cfg(feature = "generalist")]
+pub mod generalist;
 
 #[cfg(target_arch = "wasm32")]
 mod memory;
