@@ -355,6 +355,19 @@ used("the outline lists the headings, follows the cursor, goes to a heading when
     await press(".quire-outline-link", "One");
     expect(await caret()).toEqual({ path: [0], offset: 0 });
     expect(await current()).toBe("One");
+    // with the cursor scrolled out of sight, the heading being read under is the current one
+    const long = ["# Near", ...Array.from({ length: 30 }, (_, index) => `Paragraph ${index}.`), "# Far", ...Array.from({ length: 30 }, (_, index) => `More ${index}.`)].join("\n\n") + "\n";
+    await reset(long, [0], 0);
+    await tab.run("scrollTo({ top: 0, behavior: 'instant' })");
+    await tab.wait(50);
+    expect(await current()).toBe("Near");
+    await tab.run("document.querySelectorAll('.quire h1')[1].scrollIntoView({ block: 'start', behavior: 'instant' }); scrollBy({ top: -150, behavior: 'instant' })");
+    await tab.wait(100);
+    expect(await current()).toBe("Far");
+    await tab.run("scrollTo({ top: 0, behavior: 'instant' })");
+    await tab.wait(50);
+    await reset("# One\n\nfirst\n\n## Two\n\nsecond\n\n## Three\n\nthird\n", [0], 0);
+
     // a heading typed shows in it
     await tab.run("q.select([5], 5)");
     await tab.press("Enter");
@@ -468,6 +481,87 @@ used("the Markdown view flows open beside the text, and what is typed in either 
     expect(await tab.run(`getComputedStyle(${source}).visibility`)).toBe("hidden");
     await tab.resize(1300, 900);
     await tab.wait(300);
+});
+
+used("the bar's link button opens a field that sets a link, and the + menu adds code and a footnote", async () => {
+    await reset("a word here\n", [0], 2, [0], 6);
+    await button("Link");
+    await tab.wait(500);
+    expect(await tab.run("document.activeElement.className")).toBe("quire-link-field");
+    await tab.type("/somewhere");
+    await tab.press("Enter");
+    expect(await md()).toBe("a [word](/somewhere) here\n");
+    // a link already there can be taken off from the same field
+    await tab.run("q.select([0], 3)");
+    await button("Link");
+    await tab.wait(500);
+    expect(await tab.run("document.activeElement.value")).toBe("/somewhere");
+    await press(".quire-menu.open button", "Remove the link");
+    expect(await md()).toBe("a word here\n");
+
+    await reset("Above\n", [0], 5);
+    await choose("Add a block", "Code block");
+    await tab.type("let a = 1;");
+    expect(await md()).toBe("Above\n\n```\nlet a = 1;\n```\n");
+    await reset("A claim.\n", [0], 8);
+    await choose("Add a block", "Footnote");
+    await tab.type("The source.");
+    expect(await md()).toBe("A claim.[^1]\n\n[^1]: The source.\n");
+});
+
+/** Watches how something comes into view while `show` makes it appear: its opacity on every frame. */
+async function appearing(selector: string, show: () => Promise<void>, ms = 600): Promise<number[]> {
+    const watching = tab.run<(number | null)[]>(`q.watch(${JSON.stringify(selector)}, "opacity", ${ms})`);
+    await show();
+    return (await watching).filter((value): value is number => value !== null && !Number.isNaN(value));
+}
+
+/** Everything that is not always there, each made to appear once. */
+async function everythingAppearing(): Promise<Record<string, number[]>> {
+    const seen: Record<string, number[]> = {};
+    await reset("Some words here\n", [0], 0);
+    seen["selection bar"] = await appearing(".quire-select-bar", () => tab.run("q.select([0], 0, [0], 4)"));
+    await reset("| a | b |\n| --- | --- |\n| 1 | 2 |\n", [0], 0);
+    await reset("Text\n", [0], 0);
+    await tab.wait(400);
+    seen["table controls"] = await appearing(".quire-table-tools", async () => {
+        await tab.run('q.reset("| a | b |\\n| --- | --- |\\n| 1 | 2 |\\n")');
+        await tab.run("q.select([0, 1, 0], 1)");
+    });
+    await reset("Above\n", [0], 5);
+    await tab.press("Enter");
+    seen["slash menu"] = await appearing(".quire-slash", () => tab.type("/"));
+    await tab.press("Escape");
+    await reset("Text\n", [0], 0);
+    await button("More");
+    await tab.wait(650);
+    seen["history panel"] = await appearing(".quire-history", () => press(".quire-menu.open .quire-menu-line", "Version history"));
+    await tab.press("Escape");
+    await tab.wait(500);
+    await button("More");
+    await tab.wait(650);
+    seen["Markdown view"] = await appearing(".quire-source", () => press(".quire-menu.open .quire-menu-line", "Show the Markdown"));
+    await choose("More", "Hide the Markdown");
+    await tab.wait(500);
+    return seen;
+}
+
+used("everything that appears comes in over several frames, and with less motion asked for it does not move", async () => {
+    const between = (values: number[]) => values.filter((value) => value > 0.02 && value < 0.98).length;
+    for (const [name, values] of Object.entries(await everythingAppearing())) {
+        expect({ name, last: values[values.length - 1] }).toEqual({ name, last: 1 });
+        expect({ name, frames: between(values) > 1 }).toEqual({ name, frames: true });
+    }
+    await tab.media({ "prefers-reduced-motion": "reduce" });
+    try {
+        for (const [name, values] of Object.entries(await everythingAppearing())) {
+            expect({ name, last: values[values.length - 1] }).toEqual({ name, last: 1 });
+            expect({ name, frames: between(values) }).toEqual({ name, frames: 0 });
+        }
+    } finally {
+        await tab.media({});
+        await tab.wait(300);
+    }
 });
 
 if (!live) console.warn("editor.test.ts: no Chromium on this machine, so the editor was not used.");
