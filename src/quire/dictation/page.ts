@@ -13,6 +13,8 @@ declare global {
     interface Window {
         dictationTest?: TestControls;
         dictation?: ReturnType<typeof createDictation>;
+        /** The document as Markdown, for the check that runs the real model. */
+        dictationDoc?: () => string;
     }
 }
 
@@ -26,6 +28,7 @@ async function start(host: HTMLElement) {
     const surface = createSurface(paper, documentOf([paragraph()]));
     const dictation = createDictation(surface, { provider: fake?.provider, microphone: fake?.microphone, silence: fake ? 2500 : undefined });
     window.dictation = dictation;
+    window.dictationDoc = () => write(surface.getDocument()).trim();
     if (dictation.why) {
         const line = document.createElement("p");
         line.className = "dictation-why";

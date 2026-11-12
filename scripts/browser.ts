@@ -37,12 +37,13 @@ export interface Browser {
 /** Where Chromium is, or undefined if this machine has none. */
 export const chromium = (): string | undefined => ["chromium", "chromium-browser", "google-chrome-stable", "google-chrome"].map((name) => Bun.which(name)).find(Boolean) ?? undefined;
 
-export async function browser({ width = 1200, height = 800, scale = 1, port = 9400 + Math.floor(Math.random() * 500) } = {}): Promise<Browser> {
+/** `args` are more command line flags for Chromium, such as a fake microphone for a test of dictation. */
+export async function browser({ width = 1200, height = 800, scale = 1, port = 9400 + Math.floor(Math.random() * 500), args = [] as string[] } = {}): Promise<Browser> {
     const program = chromium();
     if (!program) throw new Error("No Chromium on this machine.");
     const profile = await mkdtemp(join(tmpdir(), "site-browser-"));
     // SwiftShader draws WebGL without a graphics card, the same on every machine.
-    const chrome = spawn(program, ["--headless=new", `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`, "--enable-unsafe-swiftshader", "--hide-scrollbars", "about:blank"], { stdio: "ignore" });
+    const chrome = spawn(program, ["--headless=new", `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`, "--enable-unsafe-swiftshader", "--hide-scrollbars", ...args, "about:blank"], { stdio: "ignore" });
     const wait = (ms: number) => new Promise<void>((done) => setTimeout(done, ms));
 
     let page: { webSocketDebuggerUrl: string } | undefined;

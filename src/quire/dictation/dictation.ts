@@ -44,6 +44,8 @@ export interface Dictation {
     /** Lines for a menu: the switch, and the panel. */
     items(from: HTMLElement): MenuItem[];
     toggle(): void;
+    /** How the engine is doing: where it runs, how long it took to load, and recognizing time over sound time (0 before the first measure). */
+    stats(): { backend: string; loadMs: number; speed: number; mode: "live" | "pause" | "none"; message: string };
     state(): "off" | "loading" | "listening" | "downloading" | "asking";
     destroy(): void;
 }
@@ -104,6 +106,7 @@ export function createDictation(surface: Surface, options: DictationOptions = {}
         mount() {},
         items: () => [{ label: why, note: true, run() {} }],
         toggle() {},
+        stats: () => ({ backend: "", loadMs: 0, speed: 0, mode: "none", message: why }),
         state: () => "off",
         destroy() {},
     };
@@ -128,6 +131,7 @@ export function createDictation(surface: Surface, options: DictationOptions = {}
         let release: ReturnType<typeof setTimeout> | undefined;
         let view: "main" | "words" = "main";
         let starting = 0;
+        let lastSpeed = 0;
 
         const tier = (): Tier => tierOf(tierId);
         const panel = make("div", "quire-dictation");
@@ -174,17 +178,27 @@ export function createDictation(surface: Surface, options: DictationOptions = {}
         };
 
         // ---- the words shown faintly at the cursor ----
+        let caretBox: DOMRect | undefined;
         const place = () => {
             if (!speaking) return;
             const selected = getSelection();
             const range = selected && selected.rangeCount > 0 && surface.element.contains(selected.anchorNode) ? selected.getRangeAt(0).cloneRange() : undefined;
-            let rect = range?.getClientRects()[0] ?? range?.getBoundingClientRect();
+            let rect: DOMRect | undefined = caretBox ?? range?.getClientRects()[0];
+            // a caret between two characters has no box of its own: the one before it gives where it is
+            if ((!rect || rect.height === 0) && range && range.startContainer.nodeType === Node.TEXT_NODE && range.startOffset > 0) {
+                const before = document.createRange();
+                before.setStart(range.startContainer, range.startOffset - 1);
+                before.setEnd(range.startContainer, range.startOffset);
+                const box = before.getClientRects()[0];
+                if (box) rect = new DOMRect(box.right, box.top, 0, box.height);
+            }
+            if (!rect && range) rect = range.getBoundingClientRect();
             const column = surface.element.getBoundingClientRect();
-            if (!rect || (rect.width === 0 && rect.height === 0 && rect.top === 0)) rect = new DOMRect(column.left, column.top, 0, 28);
+            if (!rect || (rect.width === 0 && rect.height === 0)) rect = new DOMRect(column.left, column.top, 0, 28);
             ghost.style.left = `${column.left}px`;
             ghost.style.top = `${rect.top}px`;
             ghost.style.width = `${column.width}px`;
-            ghost.style.textIndent = `${Math.max(0, rect.left - column.left)}px`;
+            ghost.style.textIndent = `${Math.max(0, rect.left - column.left + (rect.left > column.left ? 6 : 0))}px`;
             ghost.style.lineHeight = `${Math.max(rect.height, 20)}px`;
         };
         const showWords = (text: string) => {
@@ -196,7 +210,10 @@ export function createDictation(surface: Surface, options: DictationOptions = {}
         const follow = () => place();
         addEventListener("scroll", follow, true);
         addEventListener("resize", follow);
-        const unselect = surface.on("select", follow);
+        const unselect = surface.on("select", (where) => {
+            caretBox = where.rect ?? undefined;
+            place();
+        });
 
         // ---- starting and stopping ----
         function toggle() {
@@ -254,12 +271,15 @@ export function createDictation(surface: Surface, options: DictationOptions = {}
                 onStop: (reason) => void ended(reason),
             });
             surface.focus();
+            // the panel is put away so that the words being written can be seen
+            box?.close(false);
             setState("listening");
             live.textContent = "Dictation is on";
         }
 
         /** Dictation has stopped: the microphone is closed at once, the model a little later. */
         async function ended(reason: string) {
+            lastSpeed = session?.speed() ?? lastSpeed;
             mic?.close();
             mic = undefined;
             session = undefined;
@@ -525,6 +545,7 @@ export function createDictation(surface: Surface, options: DictationOptions = {}
                 ];
             },
             toggle,
+            stats: () => ({ backend: recognizer?.backend ?? "", loadMs, speed: session?.speed() ?? lastSpeed, mode: session?.mode() ?? "none", message }),
             state: () => state,
             destroy() {
                 starting++;

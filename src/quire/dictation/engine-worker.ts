@@ -33,7 +33,9 @@ function storage(dir: FileSystemDirectoryHandle): Folder {
     const has = (name: string) => dir.getFileHandle(name).then(() => true, () => false);
     return {
         async open(name) {
-            const access = await (await dir.getFileHandle(name, { create: true })).createSyncAccessHandle();
+            // createSyncAccessHandle is in every browser's worker but not yet in TypeScript's types
+            const handle = (await dir.getFileHandle(name, { create: true })) as FileSystemFileHandle & { createSyncAccessHandle(): Promise<{ getSize(): number; write(data: Uint8Array, options: { at: number }): number; truncate(size: number): void; flush(): void; close(): void }> };
+            const access = await handle.createSyncAccessHandle();
             return {
                 size: () => access.getSize(),
                 write: (data, at) => void access.write(data, { at }),
@@ -95,8 +97,10 @@ async function load(tier: Tier) {
             self.fetch = real;
         }
         release = async () => {
-            await model.encoderSession?.release?.();
-            await model.joinerSession?.release?.();
+            // the sessions are not in parakeet.js's types, and ending the worker frees them in any case
+            const sessions = model as unknown as Record<string, { release?: () => Promise<void> } | undefined>;
+            await sessions.encoderSession?.release?.();
+            await sessions.joinerSession?.release?.();
         };
         recognize = async (samples) => {
             const result = await model.transcribe(samples, 16000, { returnTimestamps: true, enableProfiling: false });

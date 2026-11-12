@@ -20,7 +20,7 @@ export const canListen = (): boolean => typeof navigator !== "undefined" && !!na
 export async function openMicrophone(onFrame: (frame: Float32Array) => void): Promise<Microphone> {
     let stream: MediaStream;
     try {
-        stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+        stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
     } catch (error) {
         const name = error instanceof DOMException ? error.name : "";
         throw new MicrophoneError(name === "NotAllowedError" ? "The microphone was not allowed. Allow it for this site in the browser's address bar and try again." : name === "NotFoundError" ? "No microphone was found." : "The microphone could not be opened.");

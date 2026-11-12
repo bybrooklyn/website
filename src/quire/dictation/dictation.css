@@ -102,7 +102,7 @@
 .quire-dictation {
     display: grid;
     gap: 0.55rem;
-    width: min(23rem, 100vw - 2rem);
+    width: min(20rem, calc(100vw - 3rem));
     padding: 0.45rem 0.55rem 0.6rem;
 }
 
@@ -315,4 +315,13 @@
     .quire-dictation-track::after {
         transition: none;
     }
+}
+
+/* the test page's editor has one column, which takes the width it is given */
+#dictation-host {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.quire-dictation-head .quire-dictation-title {
+    margin: 0;
 }

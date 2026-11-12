@@ -10,6 +10,7 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { withoutSpeech } from "../../scripts/dictation-stubs";
 import { browser, chromium, type Browser } from "../../scripts/browser";
 
 const here = import.meta.dir;
@@ -72,7 +73,7 @@ beforeAll(async () => {
     if (!live) return;
     folder = await mkdtemp(join(tmpdir(), "quire-app-"));
     await Bun.write(`${folder}/page.ts`, page(`quire-app-test-${Date.now()}`));
-    const built = await Bun.build({ entrypoints: [`${folder}/page.ts`], target: "browser" });
+    const built = await Bun.build({ entrypoints: [`${folder}/page.ts`], target: "browser", plugins: [withoutSpeech] });
     if (!built.success) throw new Error(built.logs.join("\n"));
     const theme = ":root{--ground:oklch(0.16 0.035 300);--surface:oklch(0.21 0.045 300);--rule:oklch(0.32 0.055 300);--ink:oklch(0.93 0.02 300);--muted:oklch(0.73 0.045 300);--accent:oklch(0.77 0.16 300)}";
     const css = (await Promise.all(["tokens.css", "base.css", "prose.css", "quire.css"].map((name) => Bun.file(`${styles}/${name}`).text()))).join("\n");
