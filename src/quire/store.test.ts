@@ -4,7 +4,7 @@
 
 import { expect, test } from "bun:test";
 import { browserStore, memoryTables } from "./store-browser";
-import { copyDocument, createSaver, fileName, freeName, memoryStore, relative, said, type Status } from "./store";
+import { besideDocument, copyDocument, createSaver, fileName, freeName, memoryStore, relative, said, type Status } from "./store";
 
 /** A clock for the saver: waiting is done by hand. */
 function clock() {
@@ -150,4 +150,14 @@ test("a copy of a .quire document has its text, its styling and its pictures und
     expect(await pictures.get("dot.png")!.text()).toBe("png");
     const post = await store.create("Post", "Words.\n");
     expect((await store.open((await copyDocument(store, post.id, "Post copy")).id)).quire).toBeUndefined();
+});
+
+test("an address in a document is found beside it, and one that leaves the store or the folder is not", () => {
+    expect(besideDocument("posts/one.md", "pics/cat.png")).toBe("posts/pics/cat.png");
+    expect(besideDocument("posts/one.md", "../two.md")).toBe("two.md");
+    expect(besideDocument("posts/one.md", "./three.md")).toBe("posts/three.md");
+    expect(besideDocument("one.md", "../out.md")).toBeUndefined();
+    expect(besideDocument("one.md", "https://example.com")).toBeUndefined();
+    expect(besideDocument("one.md", "/blog/x/")).toBeUndefined();
+    expect(besideDocument("one.md", "#top")).toBeUndefined();
 });

@@ -107,3 +107,14 @@ test("one .quire file on its own keeps its pictures inside it", async () => {
 test("without the API in this place, neither choice is offered", () => {
     expect(canOpen()).toEqual({ file: false, folder: false });
 });
+
+test("the folder store says whether an address in a document leads to a file or folder", async () => {
+    const store = folderStore(memoryFolder("notes", { "posts/one.md": "# One", "posts/pics/cat.png": "png", "two.md": "# Two" }));
+    expect(await store.exists!("posts/one.md", "pics/cat.png")).toBe(true);
+    expect(await store.exists!("posts/one.md", "../two.md")).toBe(true);
+    expect(await store.exists!("posts/one.md", "pics")).toBe(true);
+    expect(await store.exists!("posts/one.md", "pics/dog.png")).toBe(false);
+    expect(await store.exists!("posts/one.md", "nowhere/dog.png")).toBe(false);
+    expect(await store.exists!("posts/one.md", "../../out.md")).toBeUndefined();
+    expect(await store.exists!("posts/one.md", "https://example.com/")).toBeUndefined();
+});

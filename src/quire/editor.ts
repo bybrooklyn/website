@@ -33,6 +33,7 @@ import { emptyParts, opened, packQuire, written, type Parts } from "./quire-file
 import { PAGE } from "./styling";
 import { createCaret, FLAG } from "./caret";
 import { createFind } from "./find";
+import { mountChecking } from "./check/mount";
 import { createTitle, nameFor, shownName, type OwnTitle } from "./title";
 import { createZoom, pageRule, percent, setPage, setupItems } from "./paper";
 import type { Page } from "./document";
@@ -282,6 +283,8 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         onFind: () => find.open(),
         more,
     });
+    // checking (src/quire/check/): underlines, a count at the bar's end, and its settings from Tools
+    const checking = mountChecking({ surface, bar: bar.element, where: () => ({ store, id, name }) });
     // ---- find and replace, from its button, the Edit menu, Ctrl+F and Ctrl+H ----
     const find = createFind(surface, paper, () => bar.element.getBoundingClientRect().bottom);
     host.addEventListener("keydown", (event) => {
@@ -423,6 +426,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
                 size: () => bar.pickers.size(format()),
                 font: () => bar.pickers.font(format()),
                 highlight: () => bar.pickers.highlight(format()),
+                check: () => checking.open(row.words[5]!),
             },
         ),
     );
@@ -603,6 +607,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         },
         destroy() {
             caret.destroy();
+            checking.destroy();
             printing.remove();
             find.destroy();
             rowSeen?.disconnect();

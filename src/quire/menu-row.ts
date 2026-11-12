@@ -39,7 +39,8 @@ export type Command =
     | "outline" | "markdown"
     | "table" | "picture" | "divider" | "code" | "footnote" | "bullet" | "number" | "task"
     | "bold" | "italic" | "underline" | "strike" | "inline" | "paragraph" | "heading1" | "heading2" | "heading3" | "quote"
-    | "color" | "size" | "font" | "highlight" | "spacing" | "left" | "center" | "right" | "justify";
+    | "color" | "size" | "font" | "highlight" | "spacing" | "left" | "center" | "right" | "justify"
+    | "check";
 
 /** The menus of the row, for a document as it stands. */
 export function headings(state: RowState, act: RowActions): Heading[] {
@@ -115,7 +116,7 @@ export function headings(state: RowState, act: RowActions): Heading[] {
         },
         {
             label: "Tools",
-            items: () => [{ label: `${state.words.toLocaleString("en")} ${state.words === 1 ? "word" : "words"}`, note: true, run: () => {} }, ...line("history", "Version history")],
+            items: () => [{ label: `${state.words.toLocaleString("en")} ${state.words === 1 ? "word" : "words"}`, note: true, run: () => {} }, ...line("history", "Version history"), ...line("check", "Checking", { hint: "›" })],
         },
     ];
 }

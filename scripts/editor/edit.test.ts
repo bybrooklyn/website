@@ -172,4 +172,21 @@ used("the notes on photographs open in the text's place, a picture at a time", a
     expect(tab.errors.filter((error) => !error.includes("localhost:4321"))).toEqual([]);
 });
 
+used("the server answers whether a link in a post leads to a file beside it or a page of the site", async () => {
+    const ask = async (src: string) => ((await (await fetch(`${address.replace(/\/\?k=.*$/, "")}/api/exists?file=src/content/blog/blocks.mdx&src=${encodeURIComponent(src)}`, { headers: { "x-edit-key": key } })).json()) as { there: boolean }).there;
+    expect(await ask("./blocks.mdx")).toBe(true);
+    expect(await ask("../../content.config.ts")).toBe(true);
+    expect(await ask("./nothing.png")).toBe(false);
+    expect(await ask("../../../../etc/passwd")).toBe(false);
+    expect(await ask("/blog/blocks/")).toBe(true);
+    expect(await ask("/blog/blocks")).toBe(true);
+    expect(await ask("/mdquire/")).toBe(true);
+    expect(await ask("/blog/no-such-post/")).toBe(false);
+    expect(await ask("/robots.txt")).toBe(true);
+    // and it serves the spelling check's dictionary, as the site does
+    const dictionary = await fetch(`${address.replace(/\/\?k=.*$/, "")}/quire/words-en.dat`);
+    expect(dictionary.ok).toBe(true);
+    expect((await dictionary.arrayBuffer()).byteLength).toBeGreaterThan(100_000);
+});
+
 if (!live) console.warn("edit.test.ts: no Chromium on this machine, so the editor was not used.");

@@ -73,6 +73,11 @@ export function editStore(key: string, files: (groups: { label: string; files: O
             const { url } = await ask<{ url: string }>(`/api/upload?file=${encodeURIComponent(id)}&name=${encodeURIComponent(name)}`, undefined, picture);
             return url;
         },
+        async exists(id, address) {
+            if (/^[a-z][\w+.-]*:|^\/\/|^#/i.test(address)) return undefined;
+            const { there } = await ask<{ there: boolean }>(`/api/exists?file=${encodeURIComponent(id)}&src=${encodeURIComponent(address)}`);
+            return there;
+        },
         async show(id, address) {
             if (/^[a-z]+:/i.test(address)) return undefined;
             return `/api/asset?file=${encodeURIComponent(id)}&src=${encodeURIComponent(address)}&k=${key}`;
