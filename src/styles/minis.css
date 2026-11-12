@@ -183,6 +183,16 @@
     scale: 0.96;
 }
 
+/* two things to press side by side are a clear step apart, so that they read as two */
+.mote-panel button + button {
+    margin-inline-start: 1.1rem;
+}
+
+.table-go > button + button,
+.table-typed > button + button {
+    margin-inline-start: 0;
+}
+
 /* The lesser ones are quiet until pointed at. */
 .mote-panel button.quiet {
     color: var(--muted);
@@ -427,208 +437,181 @@
     gap: 0.3rem 1.2rem;
 }
 
-.mote-panel input:is([type="range"], [type="checkbox"]) {
+.mote-panel input:is([type="range"], [type="checkbox"], [type="radio"]) {
     padding: 0;
     border: 0;
     accent-color: var(--accent);
 }
 
-/* ---- the Walker mini: the ground's controls in a strip under the canvas, the rest in a column beside it ---- */
+/* ---- the Walker mini: the ground's controls in a strip under the scene, the rest in a column beside it ---- */
 
+/* Room kept while it loads: the side column is the tallest part, a little over the scene and the strip. */
 .mini-stage[data-mini="walker"] {
-    --panel-room: 4.5rem;
+    --panel-room: 12rem;
     max-width: 64rem;
 }
 
+.mini-stage.with-panel[data-mini="walker"] {
+    min-height: calc(clamp(16rem, 48svh, 26rem) + var(--panel-room));
+}
+
+/* One grid for the whole mini: the scene and the ground's strip on the left, the column on the right. */
 .mini-stage[data-mini="walker"]:has(.walker-side) {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 14rem;
+    grid-template-columns: minmax(0, 1fr) 17rem;
+    grid-template-rows: minmax(clamp(16rem, 48svh, 26rem), 1fr) auto;
     grid-template-areas:
-        "canvas side"
+        "scene side"
         "ground side";
     min-height: 0;
 }
 
 .mini-stage[data-mini="walker"] > canvas {
-    grid-area: canvas;
+    grid-area: scene;
+    height: clamp(16rem, 48svh, 26rem);
 }
 
-.walker-ground {
+/* Once laid out, the scene fills its place in the grid: lower than other minis, since sky above a
+   walker seen from the side says nothing, and taller when the column beside it is, as when the
+   brain is open. Placed absolutely, so its own size never feeds back into the grid's. */
+.mini-stage[data-mini="walker"]:has(.walker-side) > canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+}
+
+/* The one status line, over the top of the scene. */
+.walker-status {
+    grid-area: scene;
+    align-self: start;
+    z-index: 1;
+    margin: 0;
+    padding: 0.7rem 0.9rem;
+    font-family: var(--font-code);
+    font-size: 0.8rem;
+    line-height: 1.4;
+    color: var(--ink);
+    pointer-events: none;
+}
+
+/* Said aloud to a screen reader and not shown, since the status line says the same. */
+.walker-said {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+/* Each part of the controls is a small label, then its controls, on one grid. */
+.mote-panel.walker-side,
+.mote-panel.walker-ground {
+    display: grid;
+    grid-template-columns: 4.6rem minmax(0, 1fr);
+    align-items: baseline;
+    gap: 0.65rem 0.8rem;
+}
+
+.mote-panel.walker-ground {
     grid-area: ground;
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.6rem 1.6rem;
-    padding-block: 0.7rem;
+    padding-block: 0.75rem;
 }
 
 .mote-panel.walker-side {
     grid-area: side;
-    display: flex;
-    flex-direction: column;
-    gap: 0.9rem;
+    align-content: start;
     border-top: 0;
     border-left: 0.0625rem solid var(--rule);
     padding: 1rem;
+    position: relative;
 }
 
-.walker-said {
-    margin: 0;
-    min-height: 3.6em;
-    color: var(--muted);
-    font-size: 0.9rem;
-    line-height: 1.35;
-}
-
-.walker-generations {
-    margin: -0.3rem 0 0;
-    color: var(--muted);
-}
-
-.walker-count {
-    font-family: var(--font-head);
-    font-size: 1.9rem;
-    line-height: 1;
-    color: var(--ink);
-    font-variant-numeric: tabular-nums;
-}
-
-.mote-panel fieldset {
-    margin: 0;
-    padding: 0;
-    border: 0;
-    min-width: 0;
-}
-
-.mote-panel legend {
-    padding: 0;
-    margin-bottom: 0.3rem;
+.walker-label {
     color: var(--muted);
     font-size: 0.85rem;
 }
 
-.walker-ground legend {
-    float: left;
-    margin: 0 0.7rem 0 0;
-    line-height: 2rem;
+.walker-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem;
 }
 
-/* A row of choices: radio inputs, hidden, whose labels look like buttons that join up. */
 .walker-choices {
     display: flex;
     flex-wrap: wrap;
+    gap: 0.2rem 0.85rem;
 }
 
-.walker-side .walker-choices legend {
-    width: 100%;
-}
-
-.walker-choices label {
-    position: relative;
+.walker-choices label,
+.walker-controls > label {
     display: inline-flex;
-}
-
-.walker-choices input {
-    position: absolute;
-    opacity: 0;
-    inset: 0;
-    margin: 0;
+    align-items: center;
+    gap: 0.35rem;
+    white-space: nowrap;
     cursor: pointer;
 }
 
-.walker-choices span {
-    padding: 0.25rem 0.8rem;
-    border: 0.0625rem solid var(--rule);
-    margin-left: -0.0625rem;
-    background: var(--ground);
-    line-height: 1.45rem;
+.walker-ground input[type="range"] {
+    width: min(100%, 14rem);
+}
+
+/* The brain opens under its button: it grows to its height and goes back the same way. */
+.walker-brain {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-rows: 0fr;
+    opacity: 0;
+    margin-block: -0.65rem 0;
     transition:
-        border-color 0.2s var(--ease),
-        background-color 0.2s var(--ease),
-        color 0.2s var(--ease);
+        grid-template-rows 0.4s var(--ease),
+        opacity 0.3s ease,
+        margin 0.4s var(--ease);
 }
 
-.walker-choices label:first-of-type span {
-    margin-left: 0;
-    border-radius: calc(var(--radius) * 0.6) 0 0 calc(var(--radius) * 0.6);
+.walker-brain.open {
+    grid-template-rows: 1fr;
+    opacity: 1;
+    margin-block: 0;
 }
 
-.walker-choices label:last-of-type span {
-    border-radius: 0 calc(var(--radius) * 0.6) calc(var(--radius) * 0.6) 0;
+.walker-brain > div {
+    min-height: 0;
+    overflow: hidden;
 }
 
-.walker-choices label:hover span {
-    border-color: var(--accent);
-}
-
-.walker-choices input:checked + span {
-    position: relative;
-    border-color: var(--accent);
-    background: var(--accent);
-    color: var(--ground);
-}
-
-.walker-choices input:focus-visible + span {
-    outline: 0.125rem solid var(--accent);
-    outline-offset: 0.125rem;
-}
-
-.walker-side .walker-choices label {
-    flex: 1;
-}
-
-.walker-side .walker-choices span {
-    flex: 1;
-    text-align: center;
-}
-
-.walker-rough {
-    display: flex;
-    align-items: center;
-    gap: 0.7rem;
-    flex: 1;
-    min-width: min(100%, 13rem);
-    color: var(--muted);
-    font-size: 0.85rem;
-}
-
-.walker-rough input[type="range"] {
-    flex: 1;
-    min-width: 0;
-}
-
-.walker-buttons {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.4rem;
-}
-
-.walker-buttons button {
-    flex: 1 1 auto;
-}
-
-.walker-show label {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.1rem 0;
+/* Said this firmly, because every other canvas in a mini is stretched to fill its box. */
+.mote .mote-panel canvas.walker-brain-picture {
+    display: block;
+    width: 100%;
+    height: 12rem;
+    border: 0.0625rem solid var(--rule);
+    border-radius: calc(var(--radius) * 0.6);
+    background: var(--ground);
+    cursor: default;
+    touch-action: auto;
 }
 
 .mote-panel .walker-share {
-    margin-top: auto;
-    border-color: var(--accent);
+    grid-column: 1 / -1;
+    justify-self: start;
+    margin-top: 0.3rem;
 }
 
-/* On a narrow screen the column goes under the canvas, after the ground. */
+/* On a narrow screen the column goes under the scene, after the ground. */
 @media (max-width: 46rem) {
     .mini-stage[data-mini="walker"] {
-        --panel-room: 24rem;
+        --panel-room: 30rem;
     }
 
     .mini-stage[data-mini="walker"]:has(.walker-side) {
         grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: clamp(16rem, 48svh, 26rem) auto auto;
         grid-template-areas:
-            "canvas"
+            "scene"
             "ground"
             "side";
     }
@@ -636,18 +619,11 @@
     .mote-panel.walker-side {
         border-left: 0;
         border-top: 0.0625rem solid var(--rule);
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        align-items: start;
-    }
-
-    .walker-side > :is(.walker-said, .walker-buttons, .walker-share) {
-        grid-column: 1 / -1;
     }
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .walker-choices span {
+    .walker-brain {
         transition: none;
     }
 }

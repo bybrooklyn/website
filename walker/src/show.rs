@@ -1,12 +1,17 @@
 //! Walkers run in real time for the page to draw. `Show` is one brain in its own world, which a
 //! visitor can push, with what it senses and thinks laid out for drawing its brain. `Crowd` is a whole
-//! generation at once, each in a world of its own, laid out for drawing their bodies only.
+//! generation at once, each in a world of its own, laid out for drawing.
+//!
+//! Both start from the same world as training does and are judged the same way (`Judge`), so the
+//! best brain's run on the page is the very run it was scored on, step for step, unless someone
+//! pushes it. Each stops where its scored run stopped; the page then starts it again.
 
 use alloc::vec;
 use alloc::vec::Vec;
 
 use crate::body::Creature;
 use crate::brain::{Brain, Layout};
+use crate::learn::{Judge, Outcome};
 use crate::math::Vec2;
 use crate::physics::{STEP, World};
 
@@ -19,19 +24,21 @@ pub struct Show {
     pub weights: Vec<f32>,
     pub brain: Brain,
     pub senses: Vec<f32>,
+    pub judge: Judge,
     /// Six numbers for each body: x, y, angle, kind, and the two size numbers (see `Shape::size`).
     pub drawn: Vec<f32>,
     leftover: f32,
 }
 
 impl Show {
-    pub fn new(start: &World, creature: &Creature, layout: Layout, weights: &[f32]) -> Show {
+    pub fn new(start: &World, creature: &Creature, layout: Layout, weights: &[f32], judge: Judge) -> Show {
         let mut show = Show {
             world: start.clone(),
             creature: creature.clone(),
             weights: weights.to_vec(),
             brain: Brain::new(layout),
             senses: vec![0.0; layout.inputs],
+            judge,
             drawn: Vec::new(),
             leftover: 0.0,
         };
@@ -42,22 +49,29 @@ impl Show {
     }
 
     /// Moves on by `seconds` in whole steps, the brain thinking before each, and returns the steps.
+    /// Once the run is over it stands still.
     pub fn step(&mut self, seconds: f32) -> u32 {
         self.leftover += seconds;
         let mut taken = 0;
-        while self.leftover >= STEP && taken < MOST_STEPS {
+        while self.leftover >= STEP && taken < MOST_STEPS && !self.judge.over {
             self.creature.sense(&self.world, &mut self.senses);
             self.brain.think(&self.weights, &self.senses);
             self.creature.drive(&mut self.world, &self.brain.outputs);
             self.world.step();
+            self.judge.after_step(&self.creature, &self.world);
             self.leftover -= STEP;
             taken += 1;
         }
-        if taken == MOST_STEPS {
+        if taken == MOST_STEPS || self.judge.over {
             self.leftover = 0.0;
         }
         self.draw();
         taken
+    }
+
+    /// How the run has gone so far, scored as training scores it.
+    pub fn outcome(&self) -> Outcome {
+        self.judge.outcome(&self.creature, &self.world)
     }
 
     /// Pushes the body nearest the point (x, y) at that point, and returns which body it was.
@@ -79,21 +93,24 @@ impl Show {
 
 pub struct Crowd {
     pub worlds: Vec<World>,
+    pub judges: Vec<Judge>,
     pub creature: Creature,
     /// Every brain's weights, one after another.
     pub weights: Vec<f32>,
     brain: Brain,
     senses: Vec<f32>,
-    /// Three numbers for each body of each walker in turn: x, y and angle.
+    /// Four numbers for each walker: how far it has gone, the height of its body, its angle, and 1
+    /// once its run is over.
     pub drawn: Vec<f32>,
     leftover: f32,
 }
 
 impl Crowd {
-    pub fn new(start: &World, creature: &Creature, layout: Layout, population: &[f32]) -> Crowd {
+    pub fn new(start: &World, creature: &Creature, layout: Layout, population: &[f32], judge: Judge) -> Crowd {
         let count = population.len() / layout.weights();
         let mut crowd = Crowd {
             worlds: vec![start.clone(); count],
+            judges: vec![judge; count],
             creature: creature.clone(),
             weights: population.to_vec(),
             brain: Brain::new(layout),
@@ -111,10 +128,14 @@ impl Crowd {
         let mut taken = 0;
         while self.leftover >= STEP && taken < MOST_STEPS {
             for (i, world) in self.worlds.iter_mut().enumerate() {
+                if self.judges[i].over {
+                    continue;
+                }
                 self.creature.sense(world, &mut self.senses);
                 self.brain.think(&self.weights[i * count..(i + 1) * count], &self.senses);
                 self.creature.drive(world, &self.brain.outputs);
                 world.step();
+                self.judges[i].after_step(&self.creature, world);
             }
             self.leftover -= STEP;
             taken += 1;
@@ -128,10 +149,37 @@ impl Crowd {
 
     fn draw(&mut self) {
         self.drawn.clear();
-        for world in &self.worlds {
-            for body in &world.bodies {
-                self.drawn.extend_from_slice(&[body.position.x, body.position.y, body.angle()]);
+        for (world, judge) in self.worlds.iter().zip(&self.judges) {
+            let torso = &world.bodies[self.creature.torso as usize];
+            self.drawn.extend_from_slice(&[self.creature.distance(world), torso.position.y, torso.angle(), if judge.over { 1.0 } else { 0.0 }]);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::body::Description;
+    use crate::learn::{Goal, Settings, Trainer, flat_ground};
+
+    #[test]
+    fn the_show_plays_the_best_run_exactly_as_it_was_scored() {
+        for (legs, goal) in [(2, Goal::Far), (4, Goal::Fast), (1, Goal::Tall)] {
+            let settings = Settings { goal, ..Settings::default() };
+            let mut trainer = Trainer::new(Description { legs }, settings, &flat_ground(), 2).unwrap();
+            while trainer.generation < 5 {
+                trainer.train(32);
             }
+            let mut show = Show::new(&trainer.start, &trainer.creature, trainer.layout, &trainer.best, trainer.judge());
+            let mut steps = 0;
+            while !show.judge.over {
+                steps += show.step(1.0 / 60.0);
+            }
+            let outcome = show.outcome();
+            assert_eq!(outcome.score.to_bits(), trainer.best_score.to_bits(), "{legs} legs, {goal:?}");
+            assert_eq!(outcome.distance.to_bits(), trainer.best_distance.to_bits());
+            assert_eq!(show.step(1.0), 0, "an ended run stands still");
+            assert!(steps > 0);
         }
     }
 }

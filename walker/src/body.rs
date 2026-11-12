@@ -1,11 +1,14 @@
-//! The creature: a box of a torso with one, two or four legs, each leg an upper and a lower part,
-//! joined at the hip and the knee by hinges with motors. It says what it feels (`sense`) and moves
-//! its joints toward where the brain asks (`drive`).
+//! The creature: a rounded body with one, two or four legs, each leg an upper and a lower part,
+//! joined at the hip and the knee by hinges with motors, and a foot at the end of the lower part. It
+//! says what it feels (`sense`) and moves its joints toward where the brain asks (`drive`).
 //!
-//! Seen from the side, two legs at one hip are a near leg and a far leg. They pass through each other
-//! and through the torso, as limbs drawn on paper do. A joint is driven toward a target angle, as a
-//! muscle pulls toward a pose: the motor turns at a speed in proportion to how far off the angle is,
-//! up to a top speed and a top torque.
+//! One leg is a hopper with a big foot. Two is a biped, its legs from the middle of a round body.
+//! Four is an animal: a longer body with a front pair and a back pair. Seen from the side, the two
+//! legs at one hip are a near leg and a far leg; they pass through each other and through the body,
+//! as limbs drawn on paper do. The front is toward +x, where the eyes are drawn.
+//!
+//! A joint is driven toward a target angle, as a muscle pulls toward a pose: the motor turns at a
+//! speed in proportion to how far off the angle is, up to a top speed and a top torque.
 
 use alloc::vec::Vec;
 
@@ -29,19 +32,43 @@ impl Description {
         2 * self.legs as usize
     }
 
-    /// How many numbers `sense` gives: five for the torso, two for each joint, one for each foot, and
-    /// two for a clock.
+    /// How many numbers `sense` gives: five for the body, two for each joint, one for each foot, two
+    /// for the ground ahead, and two for a clock.
     pub fn senses(&self) -> usize {
-        5 + 2 * self.joints() + self.legs as usize + 2
+        5 + 2 * self.joints() + self.legs as usize + 2 + 2
+    }
+
+    /// The shape of the body and legs for this many legs.
+    pub fn build(&self) -> Build {
+        match self.legs {
+            1 => Build { half_width: 0.26, half_height: 0.24, mass: 4.0, upper: 0.4, lower: 0.4, upper_radius: 0.065, foot: 0.075, hips: &[0.0], swing: &[0.15], knee: -0.3 },
+            2 => Build { half_width: 0.27, half_height: 0.22, mass: 6.0, upper: 0.42, lower: 0.42, upper_radius: 0.06, foot: 0.05, hips: &[0.0, 0.0], swing: &[0.4, -0.1], knee: -0.3 },
+            _ => Build { half_width: 0.5, half_height: 0.15, mass: 8.0, upper: 0.36, lower: 0.36, upper_radius: 0.055, foot: 0.045, hips: &[-0.36, -0.36, 0.36, 0.36], swing: &[0.4, -0.1, 0.4, -0.1], knee: -0.3 },
+        }
     }
 }
 
-const TORSO_HALF_HEIGHT: f32 = 0.1;
-const UPPER_LENGTH: f32 = 0.45;
-const UPPER_RADIUS: f32 = 0.06;
+/// The proportions of a creature, in metres and kilograms.
+#[derive(Clone, Copy, Debug)]
+pub struct Build {
+    pub half_width: f32,
+    pub half_height: f32,
+    pub mass: f32,
+    /// The lengths of the upper and lower parts of a leg, from joint to joint and knee to foot.
+    pub upper: f32,
+    pub lower: f32,
+    pub upper_radius: f32,
+    /// The lower part's radius, which is the round of the foot that meets the ground.
+    pub foot: f32,
+    /// Where each hip is along the body, how far each leg swings forward to start, and the knees' bend.
+    /// A leg swung forward 0.4 and one back 0.1, both knees bent 0.3, put their feet level and as far
+    /// in front of the hip as behind it, so the stance is square.
+    pub hips: &'static [f32],
+    pub swing: &'static [f32],
+    pub knee: f32,
+}
+
 const UPPER_MASS: f32 = 1.2;
-const LOWER_LENGTH: f32 = 0.45;
-const LOWER_RADIUS: f32 = 0.05;
 const LOWER_MASS: f32 = 0.8;
 /// A hip swings the leg from a little behind straight down to well in front, a knee bends backward.
 const HIP_LIMITS: (f32, f32) = (-1.0, 1.3);
@@ -54,6 +81,8 @@ const GAIN: f32 = 12.0;
 const TOP_SPEED: f32 = 8.0;
 /// How often the clock the brain feels goes round, in turns a second.
 const CLOCK: f32 = 1.2;
+/// Where the brain feels the ground ahead of the body, in metres.
+const AHEAD: [f32; 2] = [0.6, 1.2];
 
 #[derive(Clone, Copy, Debug)]
 pub struct Leg {
@@ -71,6 +100,8 @@ pub struct Creature {
     /// The angle each joint started at, which `hold` keeps.
     pub pose: Vec<f32>,
     pub start: Vec2,
+    /// How high the body stood above the ground at the start.
+    pub stand: f32,
 }
 
 impl Creature {
@@ -79,44 +110,37 @@ impl Creature {
         if !description.valid() {
             return None;
         }
+        let build = description.build();
         let legs = description.legs as usize;
-        let (half_width, torso_mass, hips, splay): (f32, f32, &[f32], &[f32]) = match legs {
-            1 => (0.3, 5.0, &[0.0], &[0.0]),
-            2 => (0.35, 6.0, &[0.0, 0.0], &[0.4, -0.1]),
-            _ => (0.45, 8.0, &[-0.32, -0.32, 0.32, 0.32], &[0.4, -0.1, 0.4, -0.1]),
-        };
-        // with the knees bent this much, a leg swung forward 0.4 and one swung back 0.1 put their feet
-        // level and as far in front of the hip as behind it, so the stance is square
-        let knee = -0.3;
         let group = world.bodies.len() as u32 + 1;
 
-        // first laid out with the hips at height zero, then lifted onto the ground
+        // first laid out with the hips at height zero, low in the body, then lifted onto the ground
         let mut parts: Vec<Body> = Vec::new();
-        let mut torso = Body::new(Shape::Box { half_width, half_height: TORSO_HALF_HEIGHT }, Vec2::new(0.0, TORSO_HALF_HEIGHT * 0.6), 0.0, 1.0);
-        torso.set_mass(torso_mass);
+        let mut torso = Body::new(Shape::Box { half_width: build.half_width, half_height: build.half_height }, Vec2::new(0.0, build.half_height * 0.55), 0.0, 1.0);
+        torso.set_mass(build.mass);
         parts.push(torso);
         let mut hinges: Vec<(usize, usize, Vec2, (f32, f32), f32)> = Vec::new();
         for leg in 0..legs {
-            let hip = Vec2::new(hips[leg], 0.0);
-            let swing = splay[leg];
+            let hip = Vec2::new(build.hips[leg], 0.0);
+            let swing = build.swing[leg];
             // a leg straight down points at -pi/2; a hip angle swings the foot forward
             let down = |angle: f32| {
                 let (s, c) = sin_cos(angle);
                 Vec2::new(s, -c)
             };
             let along = down(swing);
-            let knee_at = hip + along * UPPER_LENGTH;
-            let mut upper = Body::new(Shape::Capsule { half: UPPER_LENGTH / 2.0, radius: UPPER_RADIUS }, hip + along * (UPPER_LENGTH / 2.0), swing - PI / 2.0, 1.0);
+            let knee_at = hip + along * build.upper;
+            let mut upper = Body::new(Shape::Capsule { half: build.upper / 2.0, radius: build.upper_radius }, hip + along * (build.upper / 2.0), swing - PI / 2.0, 1.0);
             upper.set_mass(UPPER_MASS);
-            let below = down(swing + knee);
-            let mut lower = Body::new(Shape::Capsule { half: LOWER_LENGTH / 2.0, radius: LOWER_RADIUS }, knee_at + below * (LOWER_LENGTH / 2.0), swing + knee - PI / 2.0, 1.0);
+            let below = down(swing + build.knee);
+            let mut lower = Body::new(Shape::Capsule { half: build.lower / 2.0, radius: build.foot }, knee_at + below * (build.lower / 2.0), swing + build.knee - PI / 2.0, 1.0);
             lower.set_mass(LOWER_MASS);
             lower.friction = 1.0;
             parts.push(upper);
             parts.push(lower);
             let index = parts.len();
             hinges.push((0, index - 2, hip, HIP_LIMITS, swing));
-            hinges.push((index - 2, index - 1, knee_at, KNEE_LIMITS, knee));
+            hinges.push((index - 2, index - 1, knee_at, KNEE_LIMITS, build.knee));
         }
 
         // lift it so the lowest point of every part clears the ground under it
@@ -152,18 +176,22 @@ impl Creature {
             pose.push(angle);
         }
         let legs = (0..legs as u32).map(|leg| Leg { upper: first + 1 + 2 * leg, lower: first + 2 + 2 * leg }).collect();
-        let creature = Creature { description, torso: first, legs, joints, pose, start: world.bodies[first as usize].position };
+        let start = world.bodies[first as usize].position;
+        let stand = start.y - world.ground_height(start.x).unwrap_or(0.0);
+        let creature = Creature { description, torso: first, legs, joints, pose, start, stand };
         creature.hold(world);
         Some(creature)
     }
 
     /// What the creature feels, written into `into`, which is `description.senses()` long. In order:
-    /// the torso's angle, its spin, its height above the ground, its speed forward and up; each joint's
-    /// angle and speed; whether each foot is on the ground; and a clock's sine and cosine. Each is
-    /// scaled to be about one at most.
+    /// the body's angle, its spin, its height above the ground, its speed forward and up; each joint's
+    /// angle and speed; whether each foot is on the ground; how much higher the ground is 0.6 m and
+    /// 1.2 m ahead than under the body; and a clock's sine and cosine. Each is scaled to be about one
+    /// at most.
     pub fn sense(&self, world: &World, into: &mut [f32]) {
         let torso = &world.bodies[self.torso as usize];
-        let height = world.ground_height(torso.position.x).map_or(2.0, |ground| torso.position.y - ground);
+        let under = world.ground_height(torso.position.x);
+        let height = under.map_or(2.0, |ground| torso.position.y - ground);
         into[0] = torso.angle();
         into[1] = 0.2 * torso.spin;
         into[2] = clamp(height, 0.0, 2.0);
@@ -178,6 +206,13 @@ impl Creature {
         }
         for leg in &self.legs {
             into[at] = if world.bodies[leg.lower as usize].touching { 1.0 } else { 0.0 };
+            at += 1;
+        }
+        // a gap ahead feels like ground a metre down
+        let level = under.unwrap_or(torso.position.y - self.stand);
+        for ahead in AHEAD {
+            let there = world.ground_height(torso.position.x + ahead).map_or(-1.0, |ground| clamp(ground - level, -1.0, 1.0));
+            into[at] = there;
             at += 1;
         }
         let (s, c) = sin_cos(2.0 * PI * CLOCK * STEP * world.steps as f32);
@@ -222,13 +257,44 @@ impl Creature {
         work
     }
 
-    /// How far the torso has gone forward since it was built.
+    /// How far the body has gone forward since it was built.
     pub fn distance(&self, world: &World) -> f32 {
         world.bodies[self.torso as usize].position.x - self.start.x
     }
 
+    /// Whether the creature is down: its body on the ground, tipped over past about sixty degrees,
+    /// or held lower than a third of its standing height. Scooting along on its side or its back is
+    /// being down, though the body may not quite touch.
     pub fn fallen(&self, world: &World) -> bool {
-        world.bodies[self.torso as usize].touching
+        let torso = &world.bodies[self.torso as usize];
+        let low = world.ground_height(torso.position.x).is_some_and(|ground| torso.position.y - ground < self.stand / 3.0);
+        torso.touching || torso.rotation.cos < 0.5 || low
+    }
+
+    /// How many knees are on the ground: crawling, which is allowed but costs.
+    pub fn kneeling(&self, world: &World) -> usize {
+        self.legs.iter().filter(|leg| world.bodies[leg.upper as usize].touching).count()
+    }
+
+    /// Whether nothing of the creature touches anything: in the air.
+    pub fn flying(&self, world: &World) -> bool {
+        !world.bodies[self.torso as usize].touching && self.legs.iter().all(|leg| !world.bodies[leg.upper as usize].touching && !world.bodies[leg.lower as usize].touching)
+    }
+
+    /// Whether a foot is down where there is no ground to stand on: at the bottom or side of a gap.
+    pub fn in_gap(&self, world: &World) -> bool {
+        self.legs.iter().any(|leg| {
+            let foot = &world.bodies[leg.lower as usize];
+            foot.touching && world.ground_height(foot.position.x).is_none()
+        })
+    }
+
+    /// How tall the body is held now, from 0 (low or tipped over) to 1 (as high as it stood, upright).
+    pub fn tallness(&self, world: &World) -> f32 {
+        let torso = &world.bodies[self.torso as usize];
+        let Some(ground) = world.ground_height(torso.position.x) else { return 0.0 };
+        let high = clamp((torso.position.y - ground - 0.5 * self.stand) / (0.5 * self.stand), 0.0, 1.0);
+        high * torso.rotation.cos.max(0.0)
     }
 }
 
@@ -271,6 +337,8 @@ mod tests {
             assert!((angle - creature.pose[i]).abs() < 0.05, "joint {i} at {angle}, not {}", creature.pose[i]);
         }
         assert!(creature.legs.iter().all(|leg| world.bodies[leg.lower as usize].touching), "both feet are down");
+        assert!(creature.tallness(&world) > 0.95, "stands as tall as it was built");
+        assert!(!creature.flying(&world) && !creature.in_gap(&world) && creature.kneeling(&world) == 0);
     }
 
     #[test]
@@ -283,9 +351,32 @@ mod tests {
         }
         assert!(!creature.fallen(&world));
         assert!(world.bodies[creature.torso as usize].velocity.length() < 0.01);
-        assert_eq!(creature.description.senses(), 27);
+        assert_eq!(creature.description.senses(), 29);
         let mut world = flat();
         assert!(Creature::build(&mut world, Description { legs: 1 }).is_some());
         assert!(Creature::build(&mut world, Description { legs: 3 }).is_none());
+    }
+
+    #[test]
+    fn no_foot_sinks_into_the_ground_under_a_heavy_landing() {
+        // dropped from half a metre up, every foot comes to rest on the ground, not in it
+        for legs in [1, 2, 4] {
+            let mut world = flat();
+            let creature = Creature::build(&mut world, Description { legs }).unwrap();
+            for body in &mut world.bodies {
+                body.position.y += 0.5;
+            }
+            let mut deepest: f32 = 0.0;
+            for _ in 0..240 {
+                creature.hold(&mut world);
+                world.step();
+                for leg in &creature.legs {
+                    let foot = &world.bodies[leg.lower as usize];
+                    let lowest = foot.placed().bounds(0.0).0.y;
+                    deepest = deepest.min(lowest);
+                }
+            }
+            assert!(deepest > -0.02, "{legs} legs: a foot went {deepest} m into the ground");
+        }
     }
 }

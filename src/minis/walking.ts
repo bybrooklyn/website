@@ -6,7 +6,8 @@
 /** The functions of public/wasm/walker.wasm. */
 export interface Engine {
     memory: WebAssembly.Memory;
-    create(legs: number, population: number, seconds: number, seed: number): number;
+    create(legs: number, population: number, seconds: number, seed: number, hidden: number, layers: number, goal: number): number;
+    run_seconds(): number;
     ground_room(pieces: number): number;
     ground_set(pieces: number): number;
     train(runs: number): number;
@@ -27,6 +28,9 @@ export interface Engine {
     show_step(seconds: number): number;
     show_push(x: number, y: number, impulseX: number, impulseY: number): number;
     show_seconds(): number;
+    show_over(): number;
+    show_score(): number;
+    layers_length(): number;
     show_fallen(): number;
     body_count(): number;
     show_bodies(): number;
@@ -61,9 +65,8 @@ export const read = (engine: Engine, pointer: number, length: number): Float32Ar
 /** Writes f32 into room the engine made. */
 export const write = (engine: Engine, pointer: number, values: ArrayLike<number>) => new Float32Array(engine.memory.buffer, pointer, values.length).set(values);
 
-/** How many brains a generation has, and how long each is tried, in seconds. */
+/** How many brains a generation has. */
 export const POPULATION = 32;
-export const SECONDS = 10;
 
 export type Legs = 1 | 2 | 4;
 export const LEGS: Legs[] = [1, 2, 4];
@@ -71,10 +74,63 @@ export const LEGS: Legs[] = [1, 2, 4];
 export type Kind = "flat" | "hills" | "steps" | "gaps";
 export const KINDS: Kind[] = ["flat", "hills", "steps", "gaps"];
 
+/** What a walker is rewarded for, as the engine numbers it (walker/README.md, Goals). */
+export type Goal = 0 | 1 | 2 | 3;
+export const GOALS: { goal: Goal; name: string; doing: string }[] = [
+    { goal: 0, name: "go far", doing: "going far" },
+    { goal: 1, name: "go fast", doing: "going fast" },
+    { goal: 2, name: "stand tall", doing: "standing tall" },
+    { goal: 3, name: "jump", doing: "jumping" },
+];
+
+/** The sizes of brain on offer: neurons in each hidden layer, and how many hidden layers. */
+export const NEURONS = [6, 12, 24];
+export const LAYERS = [1, 2];
+
 /** What the walker walks on: a kind, and how rough, from 0 to 100. */
 export interface Ground {
     kind: Kind;
     rough: number;
+}
+
+/** Everything a walker is set up with, which changing starts its learning again. */
+export interface Setup {
+    legs: Legs;
+    goal: Goal;
+    hidden: number;
+    layers: number;
+    ground: Ground;
+}
+
+export const DEFAULT_SETUP: Setup = { legs: 2, goal: 0, hidden: 12, layers: 1, ground: { kind: "flat", rough: 30 } };
+
+/** Whether something kept or read from a link is a setup the mini can use. */
+export function valid(setup: unknown): setup is Setup {
+    const s = setup as Partial<Setup> | null;
+    return !!s && LEGS.includes(s.legs as Legs) && GOALS.some((each) => each.goal === s.goal) && NEURONS.includes(s.hidden as number) && LAYERS.includes(s.layers as number) && KINDS.includes(s.ground?.kind as Kind) && Number.isFinite(s.ground?.rough) && s.ground!.rough >= 0 && s.ground!.rough <= 100;
+}
+
+/** A walker as the parts of a link: its setup and its brain. */
+export function linkParts(setup: Setup, brain: Float32Array): [string, string][] {
+    return [
+        ["legs", String(setup.legs)],
+        ["goal", String(setup.goal)],
+        ["neurons", String(setup.hidden)],
+        ["layers", String(setup.layers)],
+        ["ground", setup.ground.kind],
+        ["rough", String(setup.ground.rough)],
+        ["brain", encode(brain)],
+    ];
+}
+
+/** The names a link to a walker uses, to clear them all. */
+export const LINK_NAMES = ["legs", "goal", "neurons", "layers", "ground", "rough", "brain"];
+
+/** A walker back from a link, or null if the link does not hold a whole one. */
+export function fromLink(get: (name: string) => string | null): { setup: Setup; brain: Float32Array } | null {
+    const setup = { legs: Number(get("legs")), goal: Number(get("goal")), hidden: Number(get("neurons")), layers: Number(get("layers")), ground: { kind: get("ground"), rough: Number(get("rough")) } };
+    const brain = decode(get("brain") ?? "");
+    return brain && valid(setup) ? { setup, brain } : null;
 }
 
 /** The ground runs from here to there, in metres, and is level around the start, where the walker is built. */

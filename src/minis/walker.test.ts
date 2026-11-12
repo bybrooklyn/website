@@ -4,7 +4,7 @@
 // link exactly, and each kind of ground is what it says. `bun run wasm` builds it; `bun test` runs this.
 
 import { expect, test } from "bun:test";
-import { KINDS, decode, encode, heightAt, pieces, type Engine } from "./walking";
+import { DEFAULT_SETUP, KINDS, decode, encode, fromLink, heightAt, linkParts, pieces, valid, type Engine, type Setup } from "./walking";
 
 const path = new URL("../../public/wasm/walker.wasm", import.meta.url);
 
@@ -26,21 +26,21 @@ test("the module is under its size limit and needs nothing from the page to load
 
 test("a walker is made only from a description it can build", async () => {
     const walker = await load();
-    expect(walker.create(3, 8, 2, 1)).toBe(0);
-    // a two-legged brain: 17 senses, 12 hidden neurons and 4 outputs, each layer with its biases
-    expect(walker.create(2, 8, 2, 1)).toBe(12 * 18 + 4 * 13);
-    expect([walker.senses_length(), walker.hidden_length(), walker.outputs_length()]).toEqual([17, 12, 4]);
+    expect(walker.create(3, 8, 2, 1, 12, 1, 0)).toBe(0);
+    // a two-legged brain: 19 senses, 12 hidden neurons and 4 outputs, each layer with its biases
+    expect(walker.create(2, 8, 2, 1, 12, 1, 0)).toBe(12 * 20 + 4 * 13);
+    expect([walker.senses_length(), walker.hidden_length(), walker.outputs_length()]).toEqual([19, 12, 4]);
     expect(walker.body_count()).toBe(5);
-    expect(walker.create(4, 8, 2, 1)).toBe(12 * 28 + 8 * 13);
+    expect(walker.create(4, 8, 2, 1, 12, 1, 0)).toBe(12 * 30 + 8 * 13);
     expect(walker.body_count()).toBe(9);
-    expect(walker.create(1, 8, 2, 1)).toBeGreaterThan(0);
+    expect(walker.create(1, 8, 2, 1, 12, 1, 0)).toBeGreaterThan(0);
 });
 
 test("training finishes generations, keeps a history, and learns the same way from the same seed", async () => {
     const one = await load();
     const two = await load();
-    one.create(2, 8, 3, 5);
-    two.create(2, 8, 3, 5);
+    one.create(2, 8, 3, 5, 12, 1, 0);
+    two.create(2, 8, 3, 5, 12, 1, 0);
     expect(one.best_score()).toBe(-Infinity);
     const started = performance.now();
     one.train(8);
@@ -59,14 +59,14 @@ test("training finishes generations, keeps a history, and learns the same way fr
 
 test("a brain taken out of one walker and loaded into another walks the same", async () => {
     const one = await load();
-    const count = one.create(2, 8, 3, 9);
+    const count = one.create(2, 8, 3, 9, 12, 1, 0);
     while (one.generation() < 2) one.train(4);
     const weights = floats(one, one.best_weights(), count);
     one.show_reset();
     one.show_step(1);
 
     const two = await load();
-    two.create(2, 8, 3, 1);
+    two.create(2, 8, 3, 1, 12, 1, 0);
     new Float32Array(two.memory.buffer, two.weights_room(), count).set(weights);
     expect(two.weights_load()).toBe(1);
     expect(floats(two, two.best_weights(), count)).toEqual(weights);
@@ -80,7 +80,7 @@ test("a brain taken out of one walker and loaded into another walks the same", a
 
 test("the show moves, can be pushed, and lays out its body and brain for drawing", async () => {
     const walker = await load();
-    walker.create(2, 8, 3, 2);
+    walker.create(2, 8, 3, 2, 12, 1, 0);
     walker.train(8);
     walker.show_reset();
     const bodies = floats(walker, walker.show_bodies(), 6 * walker.body_count());
@@ -105,7 +105,7 @@ test("the show moves, can be pushed, and lays out its body and brain for drawing
 
 test("new ground takes the walker up onto it, and the crowd runs a whole generation", async () => {
     const walker = await load();
-    walker.create(2, 6, 3, 3);
+    walker.create(2, 6, 3, 3, 12, 1, 0);
     // a step up of half a metre right under the start
     const step = [-20, 0.5, 5, 0.5, 5, 0.5, 5, 0, 5, 0, 40, 0];
     new Float32Array(walker.memory.buffer, walker.ground_room(3), 12).set(step);
@@ -115,10 +115,10 @@ test("new ground takes the walker up onto it, and the crowd runs a whole generat
 
     expect(walker.crowd_reset()).toBe(6);
     walker.crowd_step(0.5);
-    const crowd = floats(walker, walker.crowd_bodies(), 6 * walker.body_count() * 3);
+    const crowd = floats(walker, walker.crowd_bodies(), 6 * 4);
     expect(crowd.every(Number.isFinite)).toBe(true);
     // each walker has its own brain, so they do not all move alike
-    const torsos = Array.from({ length: 6 }, (_, i) => crowd[i * walker.body_count() * 3]);
+    const torsos = Array.from({ length: 6 }, (_, i) => crowd[i * 4]);
     expect(new Set(torsos).size).toBeGreaterThan(1);
     walker.crowd_stop();
     expect(walker.crowd_step(1)).toBe(0);
@@ -137,7 +137,7 @@ test("a brain written into a link reads back exactly, and text that is not one r
 
     // a trained brain taken out of the engine goes through a link and back in unchanged
     const walker = await load();
-    const count = walker.create(2, 6, 2, 4);
+    const count = walker.create(2, 6, 2, 4, 12, 1, 0);
     walker.train(6);
     const best = new Float32Array(walker.memory.buffer, walker.best_weights(), count).slice();
     const score = walker.best_score();
@@ -161,7 +161,7 @@ test("every kind of ground is level at the start, made the same each time, rough
         const spread = (list: number[]) => Math.max(...heights(list)) - Math.min(...heights(list));
         if (kind !== "gaps") expect(spread(rough)).toBeGreaterThan(spread(smooth));
 
-        walker.create(2, 4, 2, 1);
+        walker.create(2, 4, 2, 1, 12, 1, 0);
         new Float32Array(walker.memory.buffer, walker.ground_room(rough.length / 4), rough.length).set(rough);
         expect(walker.ground_set(rough.length / 4)).toBe(1);
         walker.show_step(0.5);
@@ -180,22 +180,61 @@ test("every kind of ground is level at the start, made the same each time, rough
 test("a generation trained in one module runs as the crowd in another, as the page and its worker do", async () => {
     const worker = await load();
     const page = await load();
-    const count = worker.create(2, 6, 2, 8);
-    page.create(2, 6, 2, 8);
+    const count = worker.create(2, 6, 2, 8, 12, 1, 0);
+    page.create(2, 6, 2, 8, 12, 1, 0);
     while (worker.generation() < 2) worker.train(6);
     expect(Number.isFinite(worker.best_distance())).toBe(true);
     expect(worker.population_length()).toBe(6);
     const generation = floats(worker, worker.population_weights(), 6 * count);
     page.crowd_reset();
-    const before = floats(page, page.crowd_bodies(), 6 * 5 * 3);
+    const before = floats(page, page.crowd_bodies(), 6 * 4);
     new Float32Array(page.memory.buffer, page.crowd_room(6), 6 * count).set(generation);
     expect(page.crowd_start(6)).toBe(6);
     page.crowd_step(1);
-    const after = floats(page, page.crowd_bodies(), 6 * 5 * 3);
+    const after = floats(page, page.crowd_bodies(), 6 * 4);
     expect(after.every(Number.isFinite)).toBe(true);
     expect(after).not.toEqual(before);
     expect(page.show_seconds()).toBe(0);
     page.show_step(0.1);
     expect(page.show_seconds()).toBeCloseTo(0.1, 1);
     expect([0, 1]).toContain(page.show_fallen());
+});
+
+test("a whole walker, its setup and its brain, goes through a link and back unchanged", () => {
+    const setup: Setup = { legs: 4, goal: 3, hidden: 24, layers: 2, ground: { kind: "gaps", rough: 65 } };
+    const brain = Float32Array.from({ length: 1600 }, (_, i) => Math.sin(i * 1.7) * 3.1);
+    const address = new URL("https://example.org/minis/walker/");
+    for (const [name, value] of linkParts(setup, brain)) address.searchParams.set(name, value);
+    const back = fromLink((name) => address.searchParams.get(name))!;
+    expect(back.setup).toEqual(setup);
+    expect(Array.from(new Uint32Array(back.brain.buffer))).toEqual(Array.from(new Uint32Array(brain.buffer)));
+    // a link missing a part, or with a part out of range, is not a walker
+    address.searchParams.set("neurons", "13");
+    expect(fromLink((name) => address.searchParams.get(name))).toBeNull();
+    expect(fromLink(() => null)).toBeNull();
+    expect(valid(DEFAULT_SETUP)).toBe(true);
+    expect(valid({ ...DEFAULT_SETUP, ground: { kind: "lava", rough: 10 } })).toBe(false);
+});
+
+test("the show plays the best brain's run exactly as it was scored, and stops where it stopped", async () => {
+    for (const [legs, goal] of [[2, 0], [4, 1], [1, 2], [2, 3]] as const) {
+        const trainer = await load();
+        const count = trainer.create(legs, 16, 0, 6, 16, 2, goal);
+        expect(trainer.layers_length()).toBe(2);
+        expect(trainer.run_seconds()).toBe(goal === 1 ? 4 : 10);
+        while (trainer.generation() < 3) trainer.train(16);
+        const brain = floats(trainer, trainer.best_weights(), count);
+
+        // the page's own module, given the brain the worker found
+        const page = await load();
+        page.create(legs, 16, 0, 99, 16, 2, goal);
+        new Float32Array(page.memory.buffer, page.weights_room(), count).set(brain);
+        expect(page.weights_load()).toBe(1);
+        let steps = 0;
+        while (!page.show_over() && steps < 2000) steps += Math.max(1, page.show_step(1 / 60));
+        expect(page.show_over()).toBe(1);
+        expect(page.show_score()).toBe(trainer.best_score());
+        expect(page.show_distance()).toBe(trainer.best_distance());
+        expect(page.show_step(1)).toBe(0);
+    }
 });

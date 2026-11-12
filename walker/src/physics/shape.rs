@@ -99,6 +99,20 @@ impl Outline {
         Outline { corners: [a, b, a, b], normals: [normal, -normal, normal, -normal], count: 2, radius }
     }
 
+    /// A piece of ground from `a` to `b` as a solid slab `depth` deep on its right side, which is below
+    /// it for ground running left to right. Something pushed deep into the ground is pushed back out of
+    /// the top, where a bare line would let it through to the other side.
+    pub fn slab(a: Vec2, b: Vec2, depth: f32) -> Outline {
+        let along = (b - a).normalized();
+        let down = along.right() * depth;
+        let corners = [a + down, b + down, b, a];
+        let mut normals = [Vec2::ZERO; 4];
+        for i in 0..4 {
+            normals[i] = (corners[(i + 1) % 4] - corners[i]).normalized().right();
+        }
+        Outline { corners, normals, count: 4, radius: 0.0 }
+    }
+
     /// The outline moved to where a body is.
     pub fn placed(&self, position: Vec2, rotation: Rotation) -> Outline {
         let mut placed = *self;
