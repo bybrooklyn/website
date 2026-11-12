@@ -1,0 +1,412 @@
+/* What the three mock-ups of mdQuire's writing screen share (a.html, b.html, c.html): the site's
+   fonts and tokens, copied here so that each file opens by itself from the disk, its base type, the
+   pride flags, and the writing screen's parts. The top row is the lab's own (lab.css, linked beside
+   this). On her dev server the files are served at /mdquire-lab/a.html and so on, by
+   src/pages/mdquire-lab/[mock].html.ts, which puts both stylesheets inside the page. */
+
+@font-face {
+    font-family: "Torrens Serif";
+    src: url("../../src/assets/fonts/torrens-serif.woff2") format("woff2");
+    font-weight: 100 900;
+    font-style: normal;
+    font-display: block;
+}
+
+@font-face {
+    font-family: "Torrens Serif";
+    src: url("../../src/assets/fonts/torrens-serif-italic.woff2") format("woff2");
+    font-weight: 100 900;
+    font-style: italic;
+    font-display: block;
+}
+
+@font-face {
+    font-family: "Drafting Mono";
+    src: url("../../src/assets/fonts/drafting-mono.woff2") format("woff2");
+    font-weight: 100 700;
+    font-display: block;
+}
+
+/* the theme, as src/data/theme.ts and src/styles/tokens.css have it */
+:root {
+    color-scheme: dark;
+    --ground: oklch(0.16 0.035 300);
+    --surface: oklch(0.21 0.045 300);
+    --rule: oklch(0.32 0.055 300);
+    --ink: oklch(0.93 0.02 300);
+    --muted: oklch(0.73 0.045 300);
+    --accent: oklch(0.77 0.16 300);
+    --panel: oklch(0.19 0.042 300);
+    --panel-rule: oklch(0.33 0.06 300);
+    --panel-raised: oklch(0.245 0.052 300);
+    --panel-edge: oklch(0.36 0.07 300);
+    --font-head: "Torrens Serif", Georgia, serif;
+    --font-text: "Torrens Serif", Georgia, serif;
+    --font-code: "Drafting Mono", ui-monospace, monospace;
+    --head-weight: 520;
+    --text-weight: 400;
+    --line: 1.7rem;
+    --text: 1.125rem;
+    --page: 72rem;
+    --measure: 38rem;
+    --gutter: clamp(1.25rem, 4vw, 3rem);
+    --radius: 0.625rem;
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+    /* how tall the top row is, for what keeps clear of it */
+    --top: 6.55rem;
+}
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+html {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--font-text);
+    font-size: clamp(100%, 0.7rem + 0.4vw, 118%);
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    scrollbar-gutter: stable;
+    scrollbar-color: var(--rule) transparent;
+    accent-color: var(--accent);
+}
+
+body {
+    margin: 0;
+    font-size: var(--text);
+    line-height: var(--line);
+    font-weight: var(--text-weight);
+}
+
+h1,
+h2 {
+    margin: 0;
+    font-family: var(--font-head);
+    font-weight: var(--head-weight);
+    text-wrap: balance;
+}
+
+h2 {
+    margin-top: calc(var(--line) * 1.5);
+    margin-bottom: calc(var(--line) * 0.5);
+    font-size: 1.75rem;
+    line-height: calc(var(--line) * 1.25);
+    letter-spacing: -0.01em;
+}
+
+p,
+ul,
+blockquote {
+    margin: 0 0 var(--line);
+}
+
+p {
+    text-wrap: pretty;
+}
+
+a {
+    color: var(--accent);
+}
+
+button {
+    font: inherit;
+}
+
+/* the flags beside her name, as base.css draws them */
+.flags {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    gap: 0.35rem;
+}
+
+.flag {
+    position: relative;
+    display: block;
+    width: 1.5rem;
+    height: 0.95rem;
+    border-radius: 0.15rem;
+}
+
+.flag.trans {
+    background: linear-gradient(#5bcefa 0 20%, #f5a9b8 20% 40%, #fff 40% 60%, #f5a9b8 60% 80%, #5bcefa 80%);
+}
+
+.flag.lesbian {
+    background: linear-gradient(#d52d00 0 20%, #ff9a56 20% 40%, #fff 40% 60%, #d362a4 60% 80%, #a30262 80%);
+}
+
+.flag .tip {
+    display: none;
+}
+
+/* ---- the document, the same in all three ---- */
+
+.doc-title {
+    margin-bottom: calc(var(--line) * 1.25);
+    font-size: clamp(2.25rem, 1.5rem + 2vw, 3.4rem);
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+}
+
+.doc-meta {
+    margin: calc(var(--line) * -0.75) 0 calc(var(--line) * 1.25);
+    color: var(--muted);
+    font-size: 0.875rem;
+}
+
+.doc ul {
+    padding-left: 1.25em;
+}
+
+.doc li::marker {
+    color: var(--accent);
+}
+
+.doc li + li {
+    margin-top: calc(var(--line) * 0.25);
+}
+
+.doc blockquote {
+    margin-inline: 0;
+    padding-left: 1.25rem;
+    border-left: 0.1875rem solid var(--accent);
+    color: var(--muted);
+    font-style: italic;
+}
+
+.doc blockquote p {
+    margin: 0;
+}
+
+.doc > :last-child {
+    margin-bottom: 0;
+}
+
+.caret {
+    display: inline-block;
+    width: max(0.09rem, 1.5px);
+    height: 1.15em;
+    margin: 0 -0.045rem;
+    vertical-align: -0.22em;
+    background: var(--accent);
+}
+
+/* the outline: the document's headings, quiet, kept in the margin at the left while the text scrolls */
+.outline {
+    position: sticky;
+    top: calc(var(--top) + var(--line) * 2);
+    align-self: start;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: 0.85rem;
+    line-height: 1.35;
+}
+
+.outline-label {
+    margin-bottom: 0.6rem;
+    color: var(--muted);
+    font-size: 0.8rem;
+}
+
+.outline li + li {
+    margin-top: 0.15rem;
+}
+
+.outline a {
+    display: block;
+    padding: 0.3rem 0 0.3rem 0.75rem;
+    border-left: 0.125rem solid var(--rule);
+    color: var(--muted);
+    text-decoration: none;
+}
+
+.outline .sub a {
+    padding-left: 1.5rem;
+}
+
+.outline a[aria-current] {
+    border-left-color: var(--accent);
+    color: var(--ink);
+}
+
+/* what is known about the document, quiet, in the right margin */
+.details {
+    margin: 0;
+    font-size: 0.85rem;
+    line-height: 1.35;
+}
+
+.details dt {
+    color: var(--muted);
+    font-size: 0.8rem;
+}
+
+.details dd {
+    margin: 0 0 0.75rem;
+}
+
+/* the zoom keeps to the window's lower right, where most tools have it; on a phone there is nothing to zoom */
+.mock .lab-zoom {
+    gap: 0.35rem;
+}
+
+@media (max-width: 40rem) {
+    .mock .lab-zoom {
+        display: none;
+    }
+}
+
+/* ---- A: pageless. The text at the blog's measure on the ground itself, centred in the window under
+   the top row's centre; the outline in the left margin, level with the name above it. ---- */
+
+.mock-a .desk {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, var(--measure)) minmax(0, 1fr);
+    column-gap: var(--gutter);
+    max-width: calc(var(--page) + var(--gutter) * 2);
+    margin-inline: auto;
+    padding: calc(var(--line) * 2.5) var(--gutter) calc(var(--line) * 8);
+}
+
+.mock-a .doc {
+    grid-column: 2;
+    grid-row: 1;
+}
+
+.mock-a .details {
+    grid-column: 3;
+    grid-row: 1;
+    position: sticky;
+    top: calc(var(--top) + var(--line) * 2.5);
+    align-self: start;
+    justify-self: end;
+    width: 13rem;
+    max-width: 100%;
+    text-align: right;
+}
+
+.mock-a .outline-wrap {
+    grid-column: 1;
+    grid-row: 1;
+    position: sticky;
+    top: calc(var(--top) + var(--line) * 2.5);
+    align-self: start;
+    max-width: 13rem;
+}
+
+@media (max-width: 64rem) {
+    .mock-a .desk {
+        grid-template-columns: minmax(0, var(--measure));
+        justify-content: center;
+    }
+
+    .mock-a .doc {
+        grid-column: 1;
+    }
+
+    .mock-a .outline-wrap,
+    .mock-a .details {
+        display: none;
+    }
+}
+
+/* ---- B and C: a page on a desk. The page is centred in the window, as wide as the blog's measure
+   and a margin each side that grows with the window, so it is never small and never a slab. Square
+   corners, barely eased; a quiet edge. ---- */
+
+.mock-page {
+    --margin: clamp(3rem, 2rem + 5vw, 9.5rem);
+    --sheet: calc(var(--measure) + var(--margin) * 2);
+}
+
+.mock-page .desk {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) min(var(--sheet), 100% - var(--gutter) * 2) minmax(0, 1fr);
+    padding: calc(var(--line) * 1.5) 0 calc(var(--line) * 3);
+}
+
+.mock-page .sheet {
+    grid-column: 2;
+    grid-row: 1;
+    min-height: calc(100vh - var(--top) - var(--line) * 1.5 + 2px);
+    padding: calc(var(--margin) * 0.7 + 1rem) var(--margin) calc(var(--margin) + 2rem);
+    border-radius: 0.1875rem;
+}
+
+.mock-page .doc {
+    max-width: var(--measure);
+    margin-inline: auto;
+}
+
+/* the outline starts where the name above it starts, at the left edge of the site's column, when there is room */
+.mock-page .desk {
+    container-type: inline-size;
+}
+
+.mock-page .outline-wrap {
+    grid-column: 1;
+    grid-row: 1;
+    position: sticky;
+    top: calc(var(--top) + var(--line) * 1.5 + var(--margin) * 0.7 + 1rem);
+    align-self: start;
+    justify-self: start;
+    /* where the name starts, unless that leaves the outline too little room beside the page; then nearer the page */
+    --from: max(var(--gutter), min((100cqw - min(100cqw, var(--page) + var(--gutter) * 2)) / 2 + var(--gutter), (100cqw - var(--sheet)) / 2 - 11rem));
+    width: min(12rem, (100cqw - var(--sheet)) / 2 - var(--from) - 1.5rem);
+    margin-left: var(--from);
+}
+
+@media (max-width: 80rem) {
+    .mock-page .outline-wrap {
+        display: none;
+    }
+}
+
+@media (max-width: 40rem) {
+    .mock-page {
+        --margin: 1.25rem;
+    }
+
+    .mock-page .desk {
+        grid-template-columns: 0.75rem minmax(0, 1fr) 0.75rem;
+        padding-top: 0.75rem;
+    }
+
+    .mock-page .sheet {
+        grid-column: 2;
+        padding-top: calc(var(--line) * 1.25);
+    }
+}
+
+/* B: the page in the site's dark: one step up from the desk, with a clear edge one step up again */
+.mock-b .sheet {
+    border: 0.0625rem solid color-mix(in oklch, var(--panel-edge) 80%, var(--ground));
+    background: var(--panel-raised);
+    box-shadow: 0 1.5rem 3rem -1.5rem oklch(0.08 0.03 300 / 0.7);
+}
+
+.mock-b .desk {
+    background: var(--ground);
+}
+
+/* C: light paper on the dark desk; the text in the site's ink turned dark, the accent deepened to read on it */
+.mock-c .sheet {
+    --ink: oklch(0.24 0.04 300);
+    --muted: oklch(0.47 0.045 300);
+    --accent: oklch(0.52 0.19 300);
+    --rule: oklch(0.86 0.02 300);
+    background: oklch(0.965 0.009 300);
+    color: var(--ink);
+    box-shadow:
+        0 0 0 0.0625rem oklch(0.08 0.03 300 / 0.6),
+        0 1.5rem 3rem -1.5rem oklch(0.04 0.02 300 / 0.9);
+}
+
+.mock-c .sheet ::selection {
+    background: oklch(0.52 0.19 300 / 0.25);
+}
