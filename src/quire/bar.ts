@@ -313,6 +313,8 @@ export interface BarOptions {
     onName?: (from: HTMLElement) => void;
     /** Shows or hides the outline, from its control in the bar. */
     onOutline?: () => void;
+    /** Leaves the document for the home screen, from the first control in the bar. */
+    onHome?: () => void;
     /** The colors offered for text, by name. */
     colors?: { name: string; value: string }[];
     onImage?: (file: File) => Promise<string>;
@@ -320,6 +322,8 @@ export interface BarOptions {
     more?: MenuItem[] | (() => MenuItem[]);
     /** Opens the link field for the selection. */
     onLink?: (from: HTMLElement) => void;
+    /** Opens find and replace. */
+    onFind?: () => void;
 }
 
 const SIZES: [string, string | null][] = [
@@ -379,7 +383,8 @@ export function createBar(surface: Surface, options: BarOptions): { element: HTM
     // the outline flows out from its control, beside the document's name
     const outlineButton = control("Outline", icon("outline"), () => options.onOutline?.());
     outlineButton.setAttribute("aria-pressed", "false");
-    group(0, none, outlineButton, name);
+    const home = options.onHome ? [control("All documents", icon("shelf"), () => options.onHome!())] : [];
+    group(0, none, ...home, outlineButton, name);
 
     // the style picker
     const styles = flowMenu("Style");
@@ -551,9 +556,11 @@ export function createBar(surface: Surface, options: BarOptions): { element: HTM
         () => [
             { label: "Undo", icon: "undo", hint: "Ctrl+Z", run: undo },
             { label: "Redo", icon: "redo", hint: "Ctrl+Shift+Z", run: redo },
+            ...(options.onFind ? [{ label: "Find and replace", icon: "search", hint: "Ctrl+F", run: options.onFind }] : []),
         ],
         control("Undo (Ctrl+Z)", icon("undo"), undo),
         control("Redo (Ctrl+Shift+Z)", icon("redo"), redo),
+        ...(options.onFind ? [control("Find and replace (Ctrl+F)", icon("search"), () => options.onFind!())] : []),
     );
 
     // the word count and the rest

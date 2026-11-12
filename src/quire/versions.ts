@@ -1,13 +1,18 @@
-// Version history: snapshots of a document's Markdown, one when it is opened and one after each
+// Version history: snapshots of a document, one when it is opened and one after each
 // minute's pause in editing, at most fifty kept and thinned so that older ones are sparser. Each
 // knows how many lines it added and removed since the one before. A panel lists them by time,
 // shows a chosen one as it read, and restores it as a new step that can be undone.
+//
+// A snapshot is text: the Markdown, and for a `.quire` document its style.json and notes.json
+// after it (snapshotText), so that restoring an old version brings back its typeface, highlight
+// and spacing too. The lines added and removed are counted in the Markdown alone.
 //
 // The snapshots are kept through VersionStorage: in the browser's own database for every store
 // (tableVersions in store-browser.ts), or in memory (memoryStorage). Thinning, the summary of
 // changes and when snapshots are taken are pure and tested; the panel is DOM.
 
-import { read } from "./read";
+import { type Document } from "./document";
+import { opened, type Parts } from "./quire-file";
 import { createSurface, type Surface } from "./surface";
 import { control, icon, make } from "./ui";
 
@@ -56,6 +61,36 @@ export function changes(before: string, after: string): { added: number; removed
     }
     const shared = row[b.length]!;
     return { added: b.length - shared, removed: a.length - shared };
+}
+
+// ---- what a snapshot holds ----
+
+/** What divides a snapshot's Markdown from the parts of a `.quire` document after it. A NUL is never in Markdown that is written. */
+const PARTS_MARK = "\n\u0000quire parts\n";
+
+/** A snapshot's text: the Markdown alone, or with a `.quire` document's parts after it. */
+export function snapshotText(markdown: string, parts?: Parts): string {
+    return parts ? `${markdown}${PARTS_MARK}${JSON.stringify(parts)}` : markdown;
+}
+
+/** A snapshot taken apart again: its Markdown and, if it was a `.quire` document's, its parts. A snapshot from before parts were kept is Markdown alone. */
+export function snapshotParts(saved: string): { markdown: string; parts?: Parts } {
+    const at = saved.indexOf(PARTS_MARK);
+    if (at < 0) return { markdown: saved };
+    try {
+        const parts = JSON.parse(saved.slice(at + PARTS_MARK.length)) as Partial<Parts>;
+        return { markdown: saved.slice(0, at), parts: { style: typeof parts.style === "string" ? parts.style : "", notes: typeof parts.notes === "string" ? parts.notes : "" } };
+    } catch {
+        return { markdown: saved.slice(0, at) };
+    }
+}
+
+/** The document a snapshot holds, read as the editor opens a document; a Markdown snapshot of a `.quire` document keeps the page it is restored into. */
+export function snapshotDocument(saved: string, into: Document): Document {
+    const { markdown, parts } = snapshotParts(saved);
+    if (parts) return opened(markdown, parts);
+    const doc = opened(markdown, undefined, { mdx: into.mdx });
+    return into.quire ? { ...doc, quire: into.quire } : doc;
 }
 
 // ---- thinning ----
@@ -132,9 +167,9 @@ export function createKeeper(
             const newest = (await storage.list(name))[0];
             last = newest ? await storage.load(newest.id) : undefined;
         }
-        // the same text as the last one kept is not kept again, even on opening
-        if (current === last) return undefined;
-        const counted = changes(last ?? "", current);
+        // the same text as the last one kept is not kept again, even on opening; nor is an empty page with nothing before it
+        if (current === last || (current === "" && last === undefined)) return undefined;
+        const counted = changes(snapshotParts(last ?? "").markdown, snapshotParts(current).markdown);
         const saved = await storage.save(name, current, { time: now(), ...counted, ...(opened ? { opened: true } : {}) });
         last = current;
         for (const id of thin(await storage.list(name), now())) await storage.remove(id);
@@ -219,12 +254,12 @@ export function createHistoryPanel(surface: Surface, storage: VersionStorage, na
     async function showVersion(version: VersionInfo) {
         const text = await storage.load(version.id);
         const shown = make("div", "quire-history-text prose");
-        // the version as it read, drawn as the editor draws it, and not editable
-        const view = createSurface(shown, read(text, { mdx: surface.getDocument().mdx }));
+        // the version as it read, styling and all, drawn as the editor draws it, and not editable
+        const view = createSurface(shown, snapshotDocument(text, surface.getDocument()));
         view.destroy();
         shown.removeAttribute("role");
         const restore = control("Restore this version", "Restore this version", () => {
-            surface.run(() => ({ ...read(text, { mdx: surface.getDocument().mdx }), quire: surface.getDocument().quire }));
+            surface.run(() => snapshotDocument(text, surface.getDocument()));
             keeper.now();
             close();
             surface.focus();

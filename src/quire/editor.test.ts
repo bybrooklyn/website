@@ -822,7 +822,7 @@ used("the sheet is an A-series page, centred, at least one sheet tall and growin
     expect(await tab.run<number>("(() => { const box = document.querySelector('.quire-paper').getBoundingClientRect(); return box.height / box.width; })()")).toBeGreaterThan(1.6);
 });
 
-used("the caret is drawn where the cursor is, a line tall, in the accent, blinking once still; with less motion it does not blink", async () => {
+used("the caret is drawn where the cursor is, a line tall, blinking once still in the lesbian flag's colours, each clear on the sheet; with less motion it is the accent and does not blink", async () => {
     await reset("Some text here.\n", [0], 4);
     await tab.run("document.querySelector('.quire').focus()");
     await tab.press("ArrowRight");
@@ -837,19 +837,28 @@ used("the caret is drawn where the cursor is, a line tall, in the accent, blinki
     expect(seen.dy).toBeLessThan(1.5);
     expect(seen.width).toBeGreaterThanOrEqual(2);
     expect(seen.height).toBeGreaterThan(18);
-    expect(seen.colour).toBe(seen.accent);
-    // still, it blinks
+    const flag = ["rgb(213, 45, 0)", "rgb(255, 154, 86)", "rgb(255, 255, 255)", "rgb(211, 98, 164)", "rgb(163, 2, 98) edged"];
+    expect(flag.map((each) => each.replace(" edged", ""))).toContain(seen.colour);
+    // still, it blinks, and each time it comes back on it is the next colour of the flag
+    const colours = tab.run<string[]>(`new Promise((done) => { const seen = []; const caret = document.querySelector('.quire-caret'); const start = performance.now(); const step = () => { const style = getComputedStyle(caret); if (style.opacity === '1') { const now = style.backgroundColor + (caret.classList.contains('edged') ? ' edged' : ''); if (seen[seen.length - 1] !== now) seen.push(now); } if (performance.now() - start < 6800) requestAnimationFrame(step); else done(seen); }; requestAnimationFrame(step); })`);
     const blinking = await tab.run<number[]>("q.watch('.quire-caret', 'opacity', 2800)");
     expect(blinking).toContain(0);
     expect(blinking[0]).toBe(1);
+    // the colours go round the flag from wherever it was, the darkest alone drawn with an edge
+    const went = (await colours).slice(0, 6);
+    const from = flag.indexOf(went[0]!);
+    expect(from).toBeGreaterThanOrEqual(0);
+    expect(went).toEqual(Array.from({ length: 6 }, (_, index) => flag[(from + index) % flag.length]));
     // typing keeps it solid
     await tab.type("ab");
+    await tab.wait(50);
     expect(await tab.run("getComputedStyle(document.querySelector('.quire-caret')).opacity")).toBe("1");
     await tab.media({ "prefers-reduced-motion": "reduce" });
     try {
         await tab.press("ArrowLeft");
         const still = await tab.run<number[]>("q.watch('.quire-caret', 'opacity', 1800)");
         expect(new Set(still)).toEqual(new Set([1]));
+        expect(await tab.run("getComputedStyle(document.querySelector('.quire-caret')).backgroundColor")).toBe(seen.accent);
     } finally {
         await tab.media({});
         await tab.wait(100);
@@ -968,3 +977,65 @@ used("a long heading with no spaces is one line in the outline, cut with an elli
 });
 
 if (!live) console.warn("editor.test.ts: no Chromium on this machine, so the editor was not used.");
+
+used("find grows from the sheet's top right with Ctrl+F, marks every match and the current one, goes next and back, and replaces one or all as single undo steps", async () => {
+    await reset("A cat, a Cat and a concatenation.\n\nThe cat again.\n", [0], 0);
+    await tab.run("document.querySelector('.quire').focus()");
+    const growing = tab.run<number[]>("q.watch('.quire-find', 'opacity', 500)");
+    await tab.press("f", { ctrl: true });
+    const opacities = (await growing).filter((value) => value !== null);
+    expect(opacities[0]).toBe(0);
+    expect(new Set(opacities.map((value) => Math.round(value * 20))).size).toBeGreaterThan(2);
+    const place = await tab.run<{ right: number; top: number }>("(() => { const find = document.querySelector('.quire-find').getBoundingClientRect(); const sheet = document.querySelector('.quire-paper').getBoundingClientRect(); return { right: Math.round(sheet.right - find.right), top: Math.round(find.top - Math.max(sheet.top, document.querySelector('.quire-bar').getBoundingClientRect().bottom)) }; })()");
+    expect(place.right).toBeGreaterThanOrEqual(0);
+    expect(place.right).toBeLessThan(30);
+    expect(place.top).toBeLessThan(30);
+    expect(await tab.run("document.activeElement.getAttribute('aria-label')")).toBe("Find");
+    await tab.type("cat");
+    await tab.wait(100);
+    const count = () => tab.run<string>("document.querySelector('.quire-find-count').textContent");
+    expect(await count()).toBe("1 of 4");
+    expect(await tab.run("[CSS.highlights.get('quire-found').size, CSS.highlights.get('quire-found-now').size]")).toEqual([3, 1]);
+    await tab.press("Enter");
+    expect(await count()).toBe("2 of 4");
+    await tab.press("Enter", { shift: true });
+    await tab.press("Enter", { shift: true });
+    expect(await count()).toBe("4 of 4");
+    // match case and whole word narrow it
+    await press(".quire-find button", "Match case");
+    expect(await count()).toBe("1 of 3");
+    await press(".quire-find button", "Whole word");
+    expect(await count()).toBe("1 of 2");
+    await press(".quire-find button", "Match case");
+    expect(await count()).toBe("1 of 3");
+    // the replace line grows open; one replaced, then all, each one undo step
+    await press(".quire-find button", "Replace");
+    await tab.wait(450);
+    await tab.run("document.querySelector('.quire-find-replace input').focus()");
+    await tab.type("dog");
+    await tab.press("Enter");
+    await tab.wait(50);
+    expect(await md()).toBe("A dog, a Cat and a concatenation.\n\nThe cat again.\n");
+    expect(await count()).toBe("1 of 2");
+    await press(".quire-find button", "Replace all");
+    await tab.wait(50);
+    expect(await md()).toBe("A dog, a dog and a concatenation.\n\nThe dog again.\n");
+    expect(await count()).toBe("None");
+    await tab.run("q.editor.surface.undo()");
+    expect(await md()).toBe("A dog, a Cat and a concatenation.\n\nThe cat again.\n");
+    await tab.run("q.editor.surface.undo()");
+    expect(await md()).toBe("A cat, a Cat and a concatenation.\n\nThe cat again.\n");
+    // Escape closes it back to the text, the found words selected, and the marks go
+    await tab.run("document.querySelector('.quire-find-field').focus()");
+    await tab.press("Escape");
+    await tab.wait(300);
+    expect(await tab.run("getComputedStyle(document.querySelector('.quire-find')).visibility")).toBe("hidden");
+    expect(await tab.run("CSS.highlights.has('quire-found')")).toBe(false);
+    expect(await tab.run("document.activeElement === document.querySelector('.quire')")).toBe(true);
+    // Ctrl+H opens it with the replace line, and the Edit menu has both
+    await tab.press("h", { ctrl: true });
+    await tab.wait(450);
+    expect(await tab.run("document.querySelector('.quire-find').classList.contains('replacing')")).toBe(true);
+    await tab.press("Escape");
+    expect(tab.errors).toEqual([]);
+});

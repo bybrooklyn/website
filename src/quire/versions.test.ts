@@ -4,7 +4,42 @@
 // no more. Run with `bun test src/quire`.
 
 import { expect, test } from "bun:test";
-import { changes, createKeeper, KEPT, memoryStorage, thin, when } from "./versions";
+import { setStyle } from "./document";
+import { emptyParts, opened, written } from "./quire-file";
+import { changes, createKeeper, KEPT, memoryStorage, snapshotDocument, snapshotParts, snapshotText, thin, when } from "./versions";
+import { write } from "./write";
+
+test("a .quire document's snapshot carries its styling, and restoring it brings back the typeface, highlight and spacing", () => {
+    const styled = setStyle(opened("A line of words\n", emptyParts()), { start: { path: [0], offset: 2 }, end: { path: [0], offset: 6 } }, { font: "serif", highlight: "yellow" });
+    const spaced = { ...styled, blocks: styled.blocks.map((block) => (block.kind === "paragraph" ? { ...block, spacing: 2 } : block)) };
+    const { text, quire } = written(spaced, write);
+    const saved = snapshotText(text, quire);
+    expect(snapshotParts(saved)).toEqual({ markdown: "A line of words\n", parts: quire });
+    const back = snapshotDocument(saved, opened("Something else\n", emptyParts()));
+    expect(written(back, write)).toEqual({ text, quire });
+    const block = back.blocks[0]!;
+    expect(block.kind === "paragraph" && block.spacing).toBe(2);
+    expect(JSON.stringify(block)).toContain('"font":"serif"');
+    expect(JSON.stringify(block)).toContain('"highlight":"yellow"');
+});
+
+test("a Markdown snapshot, or one kept before styling was, restores as Markdown and keeps the page it is restored into", () => {
+    expect(snapshotParts("# Plain\n")).toEqual({ markdown: "# Plain\n" });
+    const into = opened("x\n", emptyParts());
+    const back = snapshotDocument("# Plain\n", into);
+    expect(back.quire).toEqual(into.quire);
+    expect(write(back)).toBe("# Plain\n");
+    expect(snapshotDocument("# Plain\n", opened("x\n", undefined)).quire).toBeUndefined();
+});
+
+test("the lines added and removed are counted in the Markdown alone, not in the styling kept after it", async () => {
+    const storage = memoryStorage();
+    let text = snapshotText("one\n", { style: "{}", notes: "" });
+    const keeper = createKeeper(storage, "doc", () => text, { wait: () => () => {} });
+    await keeper.opened();
+    text = snapshotText("one\ntwo\n", { style: '{\n"a": 1\n}', notes: "" });
+    expect(await keeper.now()).toMatchObject({ added: 1, removed: 0 });
+});
 
 test("the lines added and removed between two texts are counted", () => {
     expect(changes("a\nb\nc\n", "a\nb\nc\n")).toEqual({ added: 0, removed: 0 });

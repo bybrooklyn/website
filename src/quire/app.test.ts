@@ -147,18 +147,47 @@ async function documents() {
     await tab.wait(700);
 }
 
-used("the first run writes at once in a new browser document, the welcome going as writing starts, and a reload comes back to it", async () => {
+/** The sheet's width on each frame for a while, as something is pressed: to see it travel. */
+const paperWidths = (ms: number) => tab.run<number[]>(`new Promise((done) => { const seen = []; const start = performance.now(); const step = () => { seen.push(Math.round(document.querySelector('.quire-paper').getBoundingClientRect().width)); if (performance.now() - start < ${ms}) requestAnimationFrame(step); else done(seen); }; requestAnimationFrame(step); })`);
+const shelfShown = () => tab.run<boolean>("document.querySelector('.quire-shelf').classList.contains('shown') && getComputedStyle(document.querySelector('.quire-shelf')).visibility === 'visible'");
+
+used("with nothing open the home screen shows ways to start; Blank grows into a page, leaving shrinks it back onto its picture, and a reload comes back to what was open", async () => {
     await tab.wait(700);
-    expect(await tab.run("getComputedStyle(document.querySelector('.quire-welcome')).opacity")).toBe("1");
+    expect(await shelfShown()).toBe(true);
+    expect(await tab.run("[...document.querySelectorAll('.quire-shelf-row:first-of-type .quire-card-name')].map((name) => name.textContent)")).toEqual(["Blank", "Blog post", "Notes"]);
+    expect(await tab.run("!!document.querySelector('.quire-shelf-none')")).toBe(true);
+    // the bar has nothing to act on, and is away
+    expect(await tab.run("getComputedStyle(document.querySelector('.quire-bar')).visibility")).toBe("hidden");
+    const card = await tab.run<number>("document.querySelector('.quire-shelf-row .quire-mini-holder').getBoundingClientRect().width");
+    const growing = paperWidths(600);
+    await press(".quire-shelf-row .quire-card-open");
+    const grown = await growing;
+    expect(grown.filter((width) => width < card * 2).length).toBeGreaterThan(0);
+    expect(new Set(grown).size).toBeGreaterThan(5);
+    expect(await shelfShown()).toBe(false);
     expect(await tab.run("document.querySelector('.quire-name-text').textContent")).toBe("Untitled");
     await tab.type("First words.");
-    await tab.wait(700);
-    expect(await tab.run("!!document.querySelector('.quire-welcome')")).toBe(false);
-    await tab.wait(800);
+    await tab.wait(1500);
     expect(await status()).toBe("Saved");
+    // leaving: the page shrinks back onto its picture, which shows the words written
+    const shrinking = paperWidths(600);
+    await press('.quire-bar button[aria-label="All documents"]');
+    const shrunk = await shrinking;
+    await tab.wait(300);
+    expect(shrunk.some((width) => width < shrunk[0]! / 2)).toBe(true);
+    expect(await shelfShown()).toBe(true);
+    expect(await tab.run("document.querySelector('.quire-shelf-recent .quire-card-name').textContent")).toBe("Untitled");
+    expect(await tab.run("document.querySelector('.quire-shelf-recent .quire-mini').textContent")).toContain("First words.");
+    // with nothing open a reload is the home screen again, and a document opened is what a reload comes back to
     await load();
+    await tab.wait(300);
+    expect(await shelfShown()).toBe(true);
+    await press(".quire-shelf-recent .quire-card-open");
+    await tab.wait(600);
     expect(await md()).toBe("First words.\n");
-    expect(await tab.run("!!document.querySelector('.quire-welcome')")).toBe(false);
+    await load();
+    expect(await shelfShown()).toBe(false);
+    expect(await md()).toBe("First words.\n");
 });
 
 used("the documents list flows out of the name: a new document, a rename, one taken away and brought back", async () => {
@@ -416,6 +445,48 @@ used("printed, the page is the document alone, dark on white, with none of the e
             return { bar: shown(".quire-bar"), outline: shown(".quire-outline"), top: shown(".quire-top"), paper: getComputedStyle(document.querySelector(".quire-paper")).borderTopStyle, body: getComputedStyle(document.body).backgroundColor, text: getComputedStyle(document.querySelector(".quire")).color };
         })()`);
         expect(seen).toEqual({ bar: "none", outline: "none", top: "none", paper: "none", body: "rgb(255, 255, 255)", text: "rgb(0, 0, 0)" });
+    } finally {
+        await tab.media({});
+    }
+    expect(tab.errors).toEqual([]);
+});
+
+used("on the home screen each document's three dots rename it, duplicate it and delete it, asking once more; with less motion nothing travels", async () => {
+    await press('.quire-bar button[aria-label="All documents"]');
+    await tab.wait(900);
+    const names = () => tab.run<string[]>("[...document.querySelectorAll('.quire-shelf-recent .quire-card-name')].map((name) => name.textContent)");
+    const first = (await names())[0]!;
+    await press(".quire-shelf-recent .quire-dots");
+    await tab.wait(500);
+    expect(await tab.run("[...document.querySelectorAll('.quire-menu.open .quire-menu-line')].map((line) => line.textContent)")).toEqual(["Open", "Rename", "Duplicate", "Delete"]);
+    await press(".quire-menu.open .quire-menu-line", "Duplicate");
+    await tab.wait(600);
+    expect(await names()).toContain(`${first} copy`);
+    // renamed in place on its card
+    const copy = (await names()).indexOf(`${first} copy`);
+    await press(`.quire-shelf-recent .quire-card:nth-child(${copy + 1}) .quire-dots`);
+    await tab.wait(500);
+    await press(".quire-menu.open .quire-menu-line", "Rename");
+    await tab.run("document.querySelector('.quire-card-field').select()");
+    await tab.type("Kept twice");
+    await tab.press("Enter");
+    await tab.wait(600);
+    expect(await names()).toContain("Kept twice");
+    // deleting asks once more in the same menu
+    const kept = (await names()).indexOf("Kept twice");
+    await press(`.quire-shelf-recent .quire-card:nth-child(${kept + 1}) .quire-dots`);
+    await tab.wait(500);
+    await press(".quire-menu.open .quire-menu-line", "Delete");
+    await tab.wait(500);
+    expect(await tab.run("[...document.querySelectorAll('.quire-menu.open .quire-menu-line')].map((line) => line.textContent)")).toEqual(["Delete Kept twice", "Keep it"]);
+    await press(".quire-menu.open .quire-menu-line", "Delete Kept twice");
+    await tab.wait(600);
+    expect(await names()).not.toContain("Kept twice");
+    await tab.media({ "prefers-reduced-motion": "reduce" });
+    try {
+        const widths = paperWidths(400);
+        await press(".quire-shelf-recent .quire-card-open");
+        expect(new Set(await widths).size).toBeLessThanOrEqual(2);
     } finally {
         await tab.media({});
     }

@@ -27,11 +27,12 @@ import { createSaver, said, type Entry, type Status, type Store } from "./store"
 import { createSurface, type Surface } from "./surface";
 import { createTableTools } from "./tables";
 import { flowMenu, linkForm, make, type MenuItem } from "./ui";
-import { changes, createHistoryPanel, createKeeper, memoryStorage, type VersionStorage } from "./versions";
+import { changes, createHistoryPanel, createKeeper, memoryStorage, snapshotParts, snapshotText, type VersionStorage } from "./versions";
 import { write } from "./write";
 import { emptyParts, opened, packQuire, written, type Parts } from "./quire-file";
 import { PAGE } from "./styling";
-import { createCaret } from "./caret";
+import { createCaret, FLAG } from "./caret";
+import { createFind } from "./find";
 import { createTitle, nameFor, shownName, type OwnTitle } from "./title";
 
 /** What the editor is given by the page. */
@@ -51,6 +52,8 @@ export interface EditorOptions {
     onOpen?: (store: Store, entry: Entry) => void;
     /** Opens the documents list from the name in the bar. */
     onName?: (from: HTMLElement) => void;
+    /** Leaves the document for the home screen, from a control at the start of the bar. */
+    onHome?: () => void;
     /** The page's own lines at the head of the File menu: new documents, opening files and folders. */
     fileItems?: () => MenuItem[];
     /** More lines for the three-dot menu, from the page. */
@@ -79,6 +82,10 @@ export interface Editor {
     nameElement(): HTMLElement;
     /** Renames the document where it lives. */
     rename(name: string): Promise<void>;
+    /** Saves what is waiting and lets the document go, so that nothing is open. */
+    leave(): Promise<void>;
+    /** The sheet, which grows out of a picture of it on the home screen and shrinks back. */
+    paper: HTMLElement;
     /** Shows or hides the outline and the Markdown; `plain` shows the text alone, for a file that is not Markdown. */
     view(options: { outline?: boolean; markdown?: boolean; plain?: boolean }): void;
     destroy(): void;
@@ -117,7 +124,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         return URL.createObjectURL(file);
     };
     const surface = createSurface(text, doc, { onImage: keepPicture, picture: async (address) => (store && id && store.show ? store.show(id, address) : undefined) });
-    const caret = createCaret(surface.element, paper);
+    const caret = createCaret(surface.element, paper, FLAG);
 
     // ---- the title, the first line on the sheet: the document's name ----
     let renaming = Promise.resolve();
@@ -267,9 +274,18 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         colors: options.colors,
         onImage: keepPicture,
         onName: (from) => options.onName?.(from),
+        onHome: options.onHome,
         onOutline: () => (outlineView.isOpen() ? outlineView.close() : outlineView.open()),
         onLink: openLink,
+        onFind: () => find.open(),
         more,
+    });
+    // ---- find and replace, from its button, the Edit menu, Ctrl+F and Ctrl+H ----
+    const find = createFind(surface, paper, () => bar.element.getBoundingClientRect().bottom);
+    host.addEventListener("keydown", (event) => {
+        if (!(event.ctrlKey || event.metaKey) || event.altKey || event.shiftKey || (event.key !== "f" && event.key !== "h")) return;
+        event.preventDefault();
+        find.open(event.key === "h");
     });
     // dictation: a microphone at the end of the bar, the shortcut, and its lines in the three-dot menu (src/quire/dictation/)
     if (!dictation.why) {
@@ -326,6 +342,8 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
                 print: () => print(),
                 undo: () => (surface.undo(), surface.focus()),
                 redo: () => (surface.redo(), surface.focus()),
+                find: () => find.open(),
+                replace: () => find.open(true),
                 selectAll: () => {
                     const paths = blockPaths(surface.getDocument());
                     const last = paths[paths.length - 1] ?? [0];
@@ -364,15 +382,27 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     // in the site's top row the words sit above the bar; anywhere else they are the bar's own first line
     (options.barHome ?? bar.element).prepend(row.element);
     if (options.barHome) options.barHome.classList.add("has-menu-row");
-    /** True when the window is too narrow for the row, which has then folded into the three dots. */
-    const rowFolded = () => typeof matchMedia !== "undefined" && matchMedia("(max-width: 40rem)").matches;
+    // scrolled out of sight with the site's name, the row is in the three dots as on a narrow window
+    let rowAway = false;
+    /** True when the row cannot be reached where it is: folded on a narrow window, or scrolled away. */
+    const rowFolded = () => rowAway || (typeof matchMedia !== "undefined" && matchMedia("(max-width: 40rem)").matches);
     const syncRow = () => (row.element.inert = rowFolded());
     syncRow();
     if (typeof matchMedia !== "undefined") matchMedia("(max-width: 40rem)").addEventListener("change", syncRow);
+    const rowSeen = typeof IntersectionObserver !== "undefined" && options.barHome ? new IntersectionObserver(([entry]) => {
+        rowAway = !!entry && entry.intersectionRatio < 0.99;
+        syncRow();
+    }, { threshold: [0.99] }) : undefined;
+    rowSeen?.observe(row.element);
 
     // ---- version history: a snapshot on opening and after each pause in editing, kept by store and document ----
     const historyKey = () => (store && id ? `${store.label}:${id}` : name);
-    let keeper = createKeeper(versions, historyKey(), () => write(surface.getDocument()));
+    /** The document as a snapshot keeps it: a `.quire` document with its styling. */
+    const snapshot = () => {
+        const { text: markdown, quire } = written(surface.getDocument(), write);
+        return snapshotText(markdown, quire);
+    };
+    let keeper = createKeeper(versions, historyKey(), snapshot);
     void keeper.opened();
     const history = createHistoryPanel(surface, versions, historyKey, {
         opened: () => keeper.opened(),
@@ -389,10 +419,10 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         if (!saver) return;
         if (choice === "mine") return void (await saver.choose("mine"));
         // what was typed here is kept in the version history before theirs takes its place
-        const mine = saver.unsaved() ?? write(surface.getDocument());
+        const mine = snapshot();
         const theirs = await saver.choose("theirs");
         if (!theirs) return;
-        await versions.save(historyKey(), mine, { time: Date.now(), ...changes(theirs.text, mine) });
+        await versions.save(historyKey(), mine, { time: Date.now(), ...changes(theirs.text, snapshotParts(mine).markdown) });
         quiet = true;
         surface.run(() => opened(theirs.text, theirs.quire ?? (surface.getDocument().quire ? emptyParts() : undefined), { mdx: surface.getDocument().mdx }));
         quiet = false;
@@ -479,13 +509,36 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         saver = createSaver(next, entry.id, found.mark);
         stopListening = saver.on(showStatus);
         showStatus(saver.status());
-        keeper = createKeeper(versions, historyKey(), () => write(surface.getDocument()));
+        keeper = createKeeper(versions, historyKey(), snapshot);
         void keeper.opened();
         options.onOpen?.(next, entry);
     }
 
+    /** Lets the document go: what is waiting is saved, and the editor holds an empty page kept nowhere. */
+    async function leave() {
+        await saver?.flush();
+        saver?.stop();
+        stopListening?.();
+        keeper.stop();
+        saver = undefined;
+        stopListening = undefined;
+        store = undefined;
+        id = undefined;
+        name = "Untitled";
+        bar.setName(name);
+        outlineView.close();
+        quiet = true;
+        surface.setDocument(read(""));
+        quiet = false;
+        showTitle();
+        keeper = createKeeper(memoryStorage(), "", snapshot);
+        bar.setStatus("", "Nothing is open");
+    }
+
     return {
         surface,
+        paper,
+        leave,
         getName: () => name,
         current: () => ({ store, id, name }),
         open,
@@ -503,6 +556,8 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         },
         destroy() {
             caret.destroy();
+            find.destroy();
+            rowSeen?.disconnect();
             dictation.destroy();
             surface.destroy();
             for (const menu of [...bar.menus, links, row.menu]) menu.box.remove();

@@ -14,8 +14,8 @@
     --edge: clamp(0.75rem, 2vw, 1.5rem);
     /* how far down the window what stays at the top reaches */
     --stuck: calc(var(--bar-height) + 0.0625rem);
-    /* the sheet: plainly lighter than the ground, with a clear edge */
-    --sheet-ground: color-mix(in oklch, var(--panel-raised), var(--ink) 4%);
+    /* the sheet: plainly lighter than the ground, with a clear edge, and dark enough that the flag's red caret is 3 : 1 on it */
+    --sheet-ground: color-mix(in oklch, var(--panel-raised), var(--ink) 2%);
     --sheet-edge: color-mix(in oklch, var(--panel-edge), var(--ink) 18%);
     /* the editor takes the width it is given and never widens the page; long lines scroll inside it */
     contain: inline-size;
@@ -149,6 +149,11 @@
     background: var(--caret);
     pointer-events: none;
     opacity: 0;
+}
+
+/* a colour of the flag too dark to stand out on the sheet is drawn with a hairline of ink round it (caret.ts) */
+.quire-caret.edged {
+    box-shadow: 0 0 0 0.0625rem color-mix(in oklch, var(--ink) 80%, transparent);
 }
 
 .quire-caret.shown {
@@ -601,8 +606,10 @@
     left: auto;
 }
 
-/* each line of the menu arrives a moment after the one above it */
-.quire-menu-items > * {
+/* each line of the menu arrives a moment after the one above it, as each thing on the home screen does */
+.quire-menu-items > *,
+.quire-shelf-inner > :not(ul),
+.quire-card {
     opacity: 0;
     translate: 0 -0.35rem;
     transition:
@@ -610,7 +617,9 @@
         translate 0.12s ease;
 }
 
-.quire-menu.open .quire-menu-items > * {
+.quire-menu.open .quire-menu-items > *,
+.quire-shelf.shown .quire-shelf-inner > :not(ul),
+.quire-shelf.shown .quire-card {
     opacity: 1;
     translate: 0 0;
     transition:
@@ -738,7 +747,8 @@
    It grows out of the top edge of the selected text (or the bottom edge when it sits below),
    a little past its size and back, and shrinks away plainly when the selection goes. */
 
-.quire-select-bar {
+.quire-select-bar,
+.quire-find {
     position: fixed;
     z-index: 60;
     display: flex;
@@ -766,7 +776,8 @@
     transform-origin: 50% 0;
 }
 
-.quire-select-bar.shown {
+.quire-select-bar.shown,
+.quire-find.shown {
     opacity: 1;
     scale: 1;
     visibility: visible;
@@ -778,6 +789,86 @@
         top 0.25s var(--ease),
         width 0.4s cubic-bezier(0.3, 1.4, 0.4, 1),
         visibility 0s;
+}
+
+/* find and replace, drawn as the selection bar and grown from the sheet's top right corner */
+.quire-find {
+    flex-direction: column;
+    gap: 0.2rem;
+    max-width: calc(100vw - 1rem);
+    box-sizing: border-box;
+    border-radius: 1.1rem;
+    transform-origin: 100% 0;
+}
+
+.quire-find-lines {
+    min-width: 0;
+}
+
+.quire-find-line,
+.quire-find-replace-inner {
+    display: flex;
+    align-items: center;
+    gap: 0.15rem;
+}
+
+.quire-find-field {
+    flex: 1 1 13rem;
+    width: 13rem;
+    min-width: 3rem;
+}
+
+.quire-find.none .quire-find-field:first-of-type {
+    border-color: var(--rule);
+    color: var(--muted);
+}
+
+.quire-find-count {
+    min-width: 3.4rem;
+    padding-inline: 0.3rem;
+    color: var(--muted);
+    font-size: 0.8rem;
+    text-align: right;
+    white-space: nowrap;
+}
+
+/* the replace line grows open under the find line */
+.quire-find-replace {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 0.4s var(--ease);
+}
+
+.quire-find.replacing .quire-find-replace {
+    grid-template-rows: 1fr;
+}
+
+.quire-find-replace-inner {
+    min-height: 0;
+    overflow: hidden;
+    padding-left: 2.1rem;
+}
+
+.quire-find-more .quire-icon {
+    rotate: -90deg;
+    transition: rotate 0.3s var(--ease);
+}
+
+.quire-find.replacing .quire-find-more .quire-icon {
+    rotate: 0deg;
+}
+
+.quire-find-back .quire-icon {
+    rotate: 180deg;
+}
+
+::highlight(quire-found) {
+    background-color: color-mix(in oklch, var(--accent) 28%, transparent);
+}
+
+::highlight(quire-found-now) {
+    background-color: var(--accent);
+    color: var(--ground);
 }
 
 /* placed before it grows, it does not glide in from where it was last */
@@ -1653,45 +1744,186 @@ body.quire-app {
     outline: none;
 }
 
-/* ---- the welcome, the first time: grown open over the empty sheet, and gone once writing starts ---- */
+/* ---- the home screen, with nothing open: ways to start, and the recent documents as small pages ---- */
 
-.quire-welcome {
-    display: grid;
-    grid-template-rows: 0fr;
+/* it takes the page's place under the bar, as wide as the page, and fades in and out over it */
+.quire-shelf {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    z-index: 1;
+    align-self: start;
+    padding: calc(var(--line) * 1.5) var(--edge) calc(var(--line) * 3);
     opacity: 0;
+    visibility: hidden;
     transition:
-        grid-template-rows 0.5s var(--ease),
         opacity 0.3s ease,
-        margin 0.5s var(--ease);
+        visibility 0s 0.3s;
 }
 
-.quire-welcome.shown {
-    grid-template-rows: 1fr;
-    margin-bottom: calc(var(--line) * 1.5);
+.quire-shelf.shown {
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 0.3s ease;
+}
+
+.quire-shelf-inner {
+    width: min(60rem, 100%);
+    margin-inline: auto;
+}
+
+.quire-shelf-head {
+    margin: 0 0 0.9rem;
+    font-weight: 400;
+    line-height: 1.4;
+}
+
+.quire-shelf-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(9rem, var(--share, 40%)), 1fr));
+    gap: 1.5rem 1.25rem;
+    margin: 0 0 calc(var(--line) * 1.75);
+    padding: 0;
+    list-style: none;
+}
+
+/* the three ways to start stay one row, even on a phone */
+.quire-shelf-start {
+    --share: 28%;
+}
+
+.quire-card {
+    position: relative;
+    min-width: 0;
+}
+
+.quire-card-open {
+    display: block;
+    width: 100%;
+    padding: 0;
+    border: 0;
+    border-radius: calc(var(--radius) * 0.8);
+    background: none;
+    cursor: pointer;
+}
+
+/* the small page: the real page drawn at its own width and made small, so that it is laid out as the page is */
+.quire-mini {
+    aspect-ratio: 1 / 1.41421;
+    overflow: hidden;
+    border: 0.0625rem solid var(--sheet-edge);
+    border-radius: calc(var(--radius) * 0.8);
+    background: var(--sheet-ground);
+    opacity: 0;
+    transition:
+        opacity 0.3s ease,
+        translate 0.35s var(--ease),
+        border-color 0.2s ease;
+}
+
+.quire-mini-holder.drawn > .quire-mini {
     opacity: 1;
 }
 
-.quire-welcome-inner {
-    min-height: 0;
+.quire-card-open:hover .quire-mini,
+.quire-card-open:focus-visible .quire-mini {
+    translate: 0 -0.2rem;
+    border-color: var(--accent);
+}
+
+.quire-card-open:focus-visible {
+    outline: none;
+}
+
+.quire-mini .quire-mini-page {
+    transform-origin: 0 0;
+    scale: var(--mini-scale, 0.18);
+    border: 0;
+    background: none;
+    pointer-events: none;
+}
+
+.quire-card-words {
+    display: grid;
+    gap: 0.1rem;
+    margin-top: 0.6rem;
+    padding-right: 2.2rem;
+    font-family: var(--font-text);
+    line-height: 1.3;
+}
+
+.quire-card-name,
+.quire-card-about {
     overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
-.quire-welcome-title {
-    margin: 0;
-    font-family: var(--font-head);
-    font-size: 1.6rem;
-    font-weight: var(--head-weight);
+.quire-card-name {
+    color: var(--ink);
+    font-size: 0.95rem;
 }
 
-.quire-welcome-said {
-    margin: 0.2rem 0 0.9rem;
+.quire-card-about {
+    color: var(--muted);
+    font-size: 0.78rem;
+}
+
+.quire-card > .quire-dots {
+    position: absolute;
+    right: -0.35rem;
+    bottom: 0;
+}
+
+.quire-shelf-none {
+    margin: 0 0 var(--line);
     color: var(--muted);
 }
 
-.quire-welcome-choices {
+.quire-shelf-ways {
     display: flex;
     flex-wrap: wrap;
     gap: 0.4rem;
+    font-size: 0.9rem;
+}
+
+.quire-mini-blank {
+    display: grid;
+    place-items: center;
+    color: var(--muted);
+}
+
+.quire-mini-blank .quire-icon {
+    width: 2rem;
+    height: 2rem;
+    opacity: 0.6;
+}
+
+/* behind the home screen the page is not there to be reached, nor to make the window scroll */
+.quire-editor.shelved > .quire-column,
+.quire-editor.shelved > .quire-outline {
+    visibility: hidden;
+    max-height: 100vh;
+    overflow: clip;
+}
+
+/* with nothing open the bar has nothing to act on: it fades away, and on a narrow window gives back its line */
+.quire-bar-home,
+.quire-editor > .quire-bar {
+    transition:
+        opacity 0.3s ease,
+        translate 0.4s var(--ease),
+        visibility 0s;
+}
+
+.quire-bar-home.away,
+.quire-editor.shelved > .quire-bar {
+    opacity: 0;
+    translate: 0 -0.5rem;
+    visibility: hidden;
+    transition:
+        opacity 0.25s ease,
+        translate 0.4s var(--ease),
+        visibility 0s 0.25s;
 }
 
 /* ---- the documents list, grown out of the name ---- */
@@ -1864,11 +2096,12 @@ body.quire-app {
     .quire-outline,
     .quire-menu,
     .quire-select-bar,
+    .quire-find,
     .quire-table-tools,
     .quire-history,
     .quire-conflict,
     .quire-source,
-    .quire-welcome,
+    .quire-shelf,
     .quire-alt,
     .quire-file,
     .quire-raw,
@@ -1983,14 +2216,15 @@ body.quire-app {
 .quire-font-sample { font-size: 1.05rem; line-height: 1; }
 
 /* The menu row: File, Edit, View, Insert, Format, Tools, in small words above the bar. In the
-   site's top row it sits in the room above the bar, so the name and the bar keep their places;
-   the top row then stays whole when it sticks, so the words stay in reach. On a narrow window the
-   row folds away into the three dots, shrinking as it goes. */
+   site's top row the words and the bar are one piece, centred together on the site's name, with
+   room above the words. On scrolling the words go up out of sight with the name and only the bar
+   stays, as tall as it was before there were words; the words are then in the three dots, as they
+   are on a narrow window, where the row folds away, shrinking as it goes. */
 .quire-menu-row {
     display: flex;
     align-items: center;
     gap: 0.05rem;
-    max-height: 1.4rem;
+    max-height: var(--row, 1.4rem);
     overflow: hidden;
     font-family: var(--font-text);
     font-size: 0.85rem;
@@ -2000,13 +2234,20 @@ body.quire-app {
         opacity 0.25s ease;
 }
 
+.quire-top:has(.has-menu-row) {
+    --row: 1.4rem;
+    --row-gap: 0.3rem;
+    top: calc((var(--line) * 1.75 + (var(--row) + var(--row-gap) - var(--bar-height)) / 2 - 0.4rem) * -1);
+}
+
 .quire-bar-home.has-menu-row {
     position: relative;
+    margin-top: calc(var(--rise) * -1 + (var(--row) + var(--row-gap)) / 2);
 }
 
 .quire-bar-home > .quire-menu-row {
     position: absolute;
-    bottom: 100%;
+    bottom: calc(100% + var(--row-gap));
     left: 0;
 }
 
@@ -2053,20 +2294,26 @@ body.quire-app {
         visibility 0s;
 }
 
-@media (min-width: 40.01rem) {
-    .quire-app .quire-top:has(.has-menu-row) {
-        top: 0;
-    }
-
-    .quire-app:has(.has-menu-row) .quire-editor {
-        --stuck: calc(var(--bar-height) + 0.9rem + 0.0625rem + var(--line) * 1.25 - (var(--bar-height) - var(--line)) / 2 - 0.4rem);
-    }
-}
-
 @media (max-width: 40rem) {
     .quire-menu-row {
         max-height: 0;
         opacity: 0;
+    }
+
+    .quire-bar-home.has-menu-row {
+        margin-top: 0;
+    }
+
+    .quire-bar-home {
+        max-height: 4rem;
+    }
+
+    .quire-bar-home.away {
+        max-height: 0;
+    }
+
+    .quire-top:has(.has-menu-row) {
+        top: calc((var(--line) * 2.25 + 0.5rem) * -1 + 0.4rem);
     }
 }
 
@@ -2081,13 +2328,15 @@ body.quire-app {
     .quire-menu *,
     .quire-select-bar,
     .quire-select-bar *,
+    .quire-find,
+    .quire-find *,
     .quire-table-tools,
     .quire-table-tools *,
     .quire-history,
     .quire-history *,
     .quire-conflict,
     .quire-conflict *,
-    .quire-welcome,
+    .quire-bar-home,
     .quire-menu-row,
     .quire-menu-row * {
         transition-duration: 0s !important;
