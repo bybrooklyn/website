@@ -517,6 +517,36 @@ steps them about 250,000 times a second.
 sum of a run's rewards, its runs going four at a time through `Envs`. A generation's runs can be
 handed out and their scores handed back in any order, as the Walker's are.
 
+### How far evolution gets: the baseline
+
+What gradient learning will be measured against. Made with
+`cargo run --release --example baseline 400` (`examples/baseline.rs`): the world of seed 1 with
+everything at 1, the page's settings (32 brains of two hidden layers of 16 neurons with 4 memories,
+runs of up to 30 s), first brains from seed 1, each world and body trained on one core of a Ryzen 7
+9700X with other work going on. The distance is the furthest any brain had got through the world by
+then, in metres from the start (the first 4 m are the level start); the time is that core's.
+
+| legs | difficulty | after 10 | after 50 | after 100 | after 200 | after 400 | 400 took |
+|---|---|---|---|---|---|---|---|
+| 2 | 0.1 | 2.9 m | 4.4 m | 4.4 m | 5.5 m | 5.9 m | 24 s |
+| 2 | 0.3 | 2.9 m | 4.5 m | 6.3 m | 6.3 m | 6.4 m | 23 s |
+| 2 | 0.5 | 2.9 m | 4.3 m | 4.4 m | 4.9 m | 7.0 m | 24 s |
+| 2 | 0.8 | 2.9 m | 4.4 m | 4.4 m | 4.7 m | 5.4 m | 23 s |
+| 4 | 0.1 | 7.0 m | 13.4 m | 13.4 m | 17.1 m | 17.8 m | 85 s |
+| 4 | 0.3 | 12.8 m | 12.8 m | 14.0 m | 15.3 m | 15.9 m | 89 s |
+| 4 | 0.5 | 7.9 m | 8.6 m | 8.7 m | 11.6 m | 14.3 m | 82 s |
+| 4 | 0.8 | 7.3 m | 8.1 m | 8.4 m | 8.4 m | 8.4 m | 81 s |
+
+Honestly: evolution gets the two-legged creature off the start and over the first thing or two,
+then stalls; its brains learn to lunge and hop forward rather than to walk, since a hop that lands
+earns at once and a stride that is not yet a stride earns nothing. The four-legged one walks, so it
+gets further, and gets less far as the world gets harder: at difficulty 0.8 it stops at the first
+hard piece. None got anywhere near the end of a world. Runs that fall end at once, so a generation is
+quick (two legs about 17 generations a second on one core; in the page, with eight workers, about
+50), and more generations do not help much. In the browser, two minutes of learning on the page with
+everything switched on reached 8.0 m in the world "meadow" at difficulty 0.1 and 15.2 m at 0.5, riding
+a moving platform over a gap on the way.
+
 ### The generalist's functions
 
 In `public/wasm/generalist.wasm` (`src/generalist/api.rs`, the work in `src/generalist/page.rs`). One
