@@ -179,6 +179,10 @@ see and learn and walk and do things on its own"; "all of this from scratch in o
   the teacher running in a tab, or whatever turns out surprising. "we are gonna have to write an article
   about this eventually".
 
+- **The small vision encoder** is to be trained once on her machine, on pictures the world generator
+  draws (she said yes to this on 12 Nov 2026), and shipped; ask before the run, since it uses the
+  processor for a while.
+
 Order: speed, then the world and the rays, then PPO, then the teacher, then curiosity and needs, then
 the small vision encoder and the picture experiment.
 
