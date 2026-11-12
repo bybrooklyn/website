@@ -124,6 +124,7 @@ export function browserStore(tables: Tables, now: () => number = Date.now): Stor
     return {
         label: "This browser",
         can: { list: true, create: true, rename: true, remove: true, pictures: true, save: true },
+        renameAsTyped: true,
         versions: tableVersions(tables),
         async list() {
             const kept = (await tables.all<Kept>("documents")).filter((each) => !each.gone);

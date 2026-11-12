@@ -39,6 +39,17 @@ const first = documents.find((entry) => entry.id === remembered) ?? documents[0]
 const opened = await store.open(first.id);
 const versions = browserStore(await indexedTables("quire-edit")).versions;
 
+/** Writes one frontmatter value: one written in quotes keeps them, and one written bare stays bare (a date, a list, true), unless what is typed would then read as something else. */
+function writeField(now: Document, name: string, value: string): Document {
+    const line = now.frontmatter?.split(/\r?\n/).find((each) => each.startsWith(`${name}:`)) ?? "";
+    const was = line.slice(name.length + 1).trim();
+    // a value written in quotes stays in the same quotes
+    if (was.startsWith('"')) return setField(now, name, JSON.stringify(value), true);
+    if (was.startsWith("'")) return setField(now, name, `'${value.replace(/'/g, "''")}'`, true);
+    const bare = !/^["']/.test(was) && !/: | #|^[\s"'&*!|>%@`]/.test(value) && value !== "";
+    return setField(now, name, value, bare);
+}
+
 const editor = createEditor(host, read(opened.text, { mdx: /\.mdx$/.test(first.id) }), {
     name: first.name,
     store,
@@ -47,6 +58,11 @@ const editor = createEditor(host, read(opened.text, { mdx: /\.mdx$/.test(first.i
     versions,
     colors,
     lead: document.querySelector<HTMLElement>(".quire-top") ?? undefined,
+    // a post's title is its frontmatter's; a file without one is titled by its name
+    title: {
+        read: (doc) => fields(doc).find(([field]) => field === "title")?.[1] ?? null,
+        write: (doc, value) => writeField(doc, "title", value),
+    },
     onOpen: (_store, entry) => arrive(entry.id),
     onName: (button) => (files.isOpen() ? files.close(true) : void showFiles(button)),
     more: () => [
@@ -85,7 +101,7 @@ const front = (() => {
     const swap = make("button", "quire-button edit-front-swap", "Edit as text");
     swap.type = "button";
     box.append(rows, raw, swap);
-    host.querySelector(".quire-paper")!.prepend(box);
+    host.querySelector(".quire-title")!.after(box);
     let shownFront: string | null = null;
 
     /** The frontmatter's lines between its two fences, and the fences, so that the middle can be written back alone. */
@@ -98,20 +114,17 @@ const front = (() => {
         shownFront = doc.frontmatter;
         box.classList.toggle("absent", !markdown || doc.frontmatter === null);
         rows.replaceChildren(
-            ...fields(doc).map(([name, value]) => {
+            // the title is the large line on the sheet, not a field here
+            ...fields(doc)
+                .filter(([name]) => name !== "title")
+                .map(([name, value]) => {
                 const row = make("label", "edit-front-row");
                 row.append(make("span", "edit-front-name", name));
                 const input = make("input", "quire-link-field");
                 input.value = value;
                 input.spellcheck = name === "title" || name === "summary" || name.endsWith("Alt");
                 input.addEventListener("input", () => {
-                    editor.surface.run((now) => {
-                        const line = now.frontmatter?.split(/\r?\n/).find((each) => each.startsWith(`${name}:`)) ?? "";
-                        const was = line.slice(name.length + 1).trim();
-                        // a value written bare stays bare (a date, a list, true), unless what is typed would then read as something else
-                        const bare = !/^["']/.test(was) && !/: | #|^[\s"'&*!|>%@`]/.test(input.value) && input.value !== "";
-                        return setField(now, name, input.value, bare);
-                    }, "type");
+                    editor.surface.run((now) => writeField(now, name, input.value), "type");
                     shownFront = editor.surface.getDocument().frontmatter;
                     raw.value = shownFront ? parts(shownFront).middle : "";
                 });

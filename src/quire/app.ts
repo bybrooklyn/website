@@ -267,7 +267,7 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
         });
         inner.append(choices);
         card.append(inner);
-        host.querySelector(".quire-paper")?.prepend(card);
+        (host.querySelector(".quire-title") ?? host.querySelector(".quire-paper")?.firstChild)?.after(card);
         requestAnimationFrame(() => card.classList.add("shown"));
         // it goes as soon as the writer starts writing or chooses somewhere else
         const stop = editor.surface.on("change", () => go());

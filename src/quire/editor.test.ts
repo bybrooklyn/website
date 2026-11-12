@@ -859,4 +859,51 @@ used("the caret is drawn where the cursor is, a line tall, in the accent, blinki
     expect(await tab.run("getComputedStyle(document.querySelector('.quire-caret')).opacity")).toBe("0");
 });
 
+used("the title is the first line on the sheet: it renames as typed, the bar follows, empty is a faint Untitled, Enter goes on, and it is not in the Markdown", async () => {
+    await tab.run("q.useBrowser()");
+    const id = await tab.run<string>(`q.openIn("Draft", "Body text.\\n")`);
+    const title = "document.querySelector('.quire-title')";
+    const barName = () => tab.run<string>("document.querySelector('.quire-bar .quire-name').textContent.trim()");
+    expect(await tab.run(`${title}.value`)).toBe("Draft");
+    // it is the first thing on the sheet, above the writing
+    expect(await tab.run(`document.querySelector('.quire-paper').firstElementChild === ${title}`)).toBe(true);
+    await tab.run(`(() => { const field = ${title}; field.focus(); field.select(); })()`);
+    await tab.type("My plans");
+    expect(await barName()).toBe("My plans");
+    // kept in this browser, it is renamed a moment after typing stops, without leaving the line
+    await tab.wait(900);
+    expect(await tab.run<string>(`q.store.list().then((all) => all.find((entry) => entry.id === ${JSON.stringify(id)})?.name)`)).toBe("My plans");
+    // Enter goes on to the writing, at its start
+    await tab.press("Enter");
+    expect(await tab.run("document.activeElement.classList.contains('quire')")).toBe(true);
+    expect(await caret()).toEqual({ path: [0], offset: 0 });
+    // and ArrowUp from there comes back
+    await tab.press("ArrowUp");
+    expect(await tab.run(`document.activeElement === ${title}`)).toBe(true);
+    expect(await md()).toBe("Body text.\n");
+    // emptied, it shows a faint Untitled and the bar says so
+    await tab.run(`(() => { const field = ${title}; field.select(); })()`);
+    await tab.press("Backspace");
+    expect(await tab.run(`${title}.placeholder`)).toBe("Untitled");
+    expect(await barName()).toBe("Untitled");
+    const faint = await tab.run<{ placeholder: string; ink: string }>(`(() => { const style = getComputedStyle(${title}, '::placeholder'); return { placeholder: style.color, ink: getComputedStyle(${title}).color }; })()`);
+    expect(faint.placeholder).not.toBe(faint.ink);
+    await tab.press("Enter");
+    await tab.wait(300);
+    expect(await tab.run<string>(`q.store.list().then((all) => all.find((entry) => entry.id === ${JSON.stringify(id)})?.name)`)).toBe("Untitled");
+});
+
+used("a file's title is its name without the extension, and renaming it keeps the extension", async () => {
+    await tab.run("q.useBrowser()");
+    const id = await tab.run<string>(`q.openIn("notes.md", "Text.\\n")`);
+    const title = "document.querySelector('.quire-title')";
+    expect(await tab.run(`${title}.value`)).toBe("notes");
+    await tab.run(`(() => { const field = ${title}; field.focus(); field.select(); })()`);
+    await tab.type("plans");
+    await tab.press("Enter");
+    await tab.wait(300);
+    expect(await tab.run<string>(`q.store.list().then((all) => all.find((entry) => entry.id === ${JSON.stringify(id)})?.name)`)).toBe("plans.md");
+    expect(await md()).toBe("Text.\n");
+});
+
 if (!live) console.warn("editor.test.ts: no Chromium on this machine, so the editor was not used.");

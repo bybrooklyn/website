@@ -31,6 +31,8 @@ export interface Store {
     can: { list: boolean; create: boolean; rename: boolean; remove: boolean; pictures: boolean; save: boolean };
     /** Said beside the status when saving keeps the text only somewhere passing, as a file opened and not yet downloaded is. */
     note?: string;
+    /** True where renaming costs next to nothing, so the title renames as it is typed rather than when it is left. */
+    renameAsTyped?: boolean;
     list(): Promise<Entry[]>;
     open(id: string): Promise<Opened>;
     save(id: string, text: string, mark: string): Promise<Saved>;
@@ -205,6 +207,7 @@ export function memoryStore(label = "Memory"): Store & { files: Map<string, { na
         label,
         files,
         can: { list: true, create: true, rename: true, remove: true, pictures: true, save: true },
+        renameAsTyped: true,
         async list() {
             return [...files.entries()].filter(([, file]) => !file.gone).map(([id, file]) => ({ id, name: file.name }));
         },

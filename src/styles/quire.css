@@ -72,6 +72,39 @@
     margin-inline: auto;
 }
 
+/* the title, the first line on the sheet: set as a published post's title, and faint "Untitled" when empty */
+.quire-title {
+    display: block;
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 44rem;
+    margin: 0 auto calc(var(--line) * 1.5);
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--ink);
+    font-family: var(--font-head);
+    font-weight: var(--head-weight);
+    font-size: clamp(2.25rem, 1.25rem + 4cqw, 4.25rem);
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+    field-sizing: content;
+    resize: none;
+    overflow: hidden;
+    outline: none;
+    caret-color: var(--accent);
+}
+
+.quire-title::placeholder {
+    color: color-mix(in oklch, var(--muted), transparent 45%);
+    opacity: 1;
+}
+
+.quire-title[readonly] {
+    cursor: default;
+}
+
 /* the caret, drawn (caret.ts): a bar of the line's height in the accent, the browser's own made clear */
 .quire-caret {
     --caret: var(--accent);

@@ -27,6 +27,7 @@ import { flowMenu, linkForm, make, type MenuItem } from "./ui";
 import { changes, createHistoryPanel, createKeeper, memoryStorage, type VersionStorage } from "./versions";
 import { write } from "./write";
 import { createCaret } from "./caret";
+import { createTitle, nameFor, shownName, type OwnTitle } from "./title";
 
 /** What the editor is given by the page. */
 export interface EditorOptions {
@@ -51,6 +52,8 @@ export interface EditorOptions {
     lead?: HTMLElement;
     /** Takes a picture file when there is no store to keep it. */
     onImage?: (file: File) => Promise<string>;
+    /** Where the title is kept when it is the document's own (a post's frontmatter title) rather than its name. */
+    title?: OwnTitle;
 }
 
 /** The editor, as the page sees it. */
@@ -105,6 +108,54 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     };
     const surface = createSurface(text, doc, { onImage: keepPicture, picture: async (address) => (store && id && store.show ? store.show(id, address) : undefined) });
     const caret = createCaret(surface.element, paper);
+
+    // ---- the title, the first line on the sheet: the document's name ----
+    let renaming = Promise.resolve();
+    let typing: ReturnType<typeof setTimeout> | undefined;
+    /** True when the title shown is kept in the document rather than its name. */
+    const owned = () => !!options.title && options.title.read(surface.getDocument()) !== null;
+    const renameTo = (typed: string) => {
+        const next = nameFor(name, typed);
+        if (next === name) return;
+        renaming = renaming.then(() => rename(next));
+    };
+    const title = createTitle({
+        goOn: () => {
+            surface.setSelection({ anchor: { path: [0], offset: 0 }, focus: { path: [0], offset: 0 } });
+            surface.focus();
+        },
+        typed: (value) => {
+            if (owned()) {
+                surface.run((now) => options.title!.write(now, value), "type");
+                return;
+            }
+            // the bar follows as it is typed; where renaming is cheap the document is renamed a moment after
+            bar.setName(nameFor(name, value));
+            clearTimeout(typing);
+            if (store?.renameAsTyped || !store || !id) typing = setTimeout(() => renameTo(value), 400);
+        },
+        settled: (value) => {
+            if (owned()) return;
+            clearTimeout(typing);
+            renameTo(value);
+        },
+    });
+    paper.prepend(title.element);
+    /** Shows the title for the document as it is now. */
+    const showTitle = () => {
+        const own = options.title?.read(surface.getDocument());
+        if (own !== null && own !== undefined) title.show(own);
+        else title.show(shownName(name) === "Untitled" ? "" : shownName(name), !options.title && (!store || !id || store.can.rename));
+    };
+    // ArrowUp at the very start of the writing goes up to the title
+    surface.element.addEventListener("keydown", (event) => {
+        if (event.key !== "ArrowUp" || event.shiftKey) return;
+        const { anchor, focus } = surface.getSelection();
+        if (focus.offset === 0 && anchor.offset === 0 && focus.path.every((step) => step === 0) && anchor.path.every((step) => step === 0)) {
+            event.preventDefault();
+            title.focus();
+        }
+    });
 
     // ---- the link field, from the bar's button or Ctrl+K ----
     const links = flowMenu("Link");
@@ -223,6 +274,11 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     if (saver) showStatus(saver.status());
     else bar.setStatus("", "This document is not being saved anywhere");
 
+    showTitle();
+    // a title kept in the document follows a change from elsewhere (undo, the Markdown, a form)
+    surface.on("change", () => {
+        if (options.title && document.activeElement !== title.element) showTitle();
+    });
     surface.on("change", ({ doc: now }) => {
         keeper.edited();
         if (!quiet) saver?.changed(() => write(now));
@@ -240,6 +296,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         if (!store || !id || !store.can.rename) {
             name = value;
             bar.setName(value);
+            showTitle();
             options.onRename?.(value);
             return;
         }
@@ -248,10 +305,12 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
             id = await store.rename(id, value);
             name = (await store.list().catch(() => [])).find((entry) => entry.id === id)?.name ?? value;
             bar.setName(name);
+            showTitle();
             options.onRename?.(value);
             options.onOpen?.(store, { id, name });
         } catch (error) {
             bar.setName(name);
+            showTitle();
             bar.setStatus("Not renamed", `Not renamed: ${error instanceof Error ? error.message : String(error)}`, "warn");
         }
     }
@@ -270,6 +329,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         quiet = true;
         surface.setDocument(read(opened.text, { mdx: /\.mdx$/i.test(entry.id) || /\.mdx$/i.test(entry.name) }));
         quiet = false;
+        showTitle();
         saver = createSaver(next, entry.id, opened.mark);
         stopListening = saver.on(showStatus);
         showStatus(saver.status());

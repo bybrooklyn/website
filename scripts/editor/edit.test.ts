@@ -122,16 +122,20 @@ used("a new post is made by the server's own endpoint, its frontmatter edited as
     expect(((await made.json()) as { path: string }).path).toBe("src/content/blog/scratch-post.mdx");
     const before = await onDisk("src/content/blog/scratch-post.mdx");
     await open("Scratch post");
-    // the frontmatter is a form of its fields
-    expect(await tab.run("[...document.querySelectorAll('.edit-front-name')].map((name) => name.textContent)")).toEqual(["title", "date", "summary", "draft"]);
+    // the title is the large line on the sheet, and the rest of the frontmatter a form of its fields
+    expect(await tab.run("document.querySelector('.quire-title').value")).toBe("Scratch post");
+    expect(await tab.run("[...document.querySelectorAll('.edit-front-name')].map((name) => name.textContent)")).toEqual(["date", "summary", "draft"]);
     await tab.run("(() => { const row = [...document.querySelectorAll('.edit-front-row')].find((each) => each.textContent.startsWith('summary')); const input = row.querySelector('input'); input.focus(); input.select(); })()");
     await tab.type("A scratch post: made by the test.");
     // and the text below it
     await tab.run("(() => { const text = document.querySelector('.quire'); text.focus(); const selection = getSelection(); selection.selectAllChildren(text); selection.collapseToEnd(); })()");
     await tab.wait(50);
     await tab.type("Words of the post.");
+    // the title typed on the sheet is the frontmatter's title
+    await tab.run("(() => { const field = document.querySelector('.quire-title'); field.focus(); field.setSelectionRange(field.value.length, field.value.length); })()");
+    await tab.type(" two");
     await tab.wait(1500);
-    const expected = before.replace('summary: "TODO: one sentence about this post."', 'summary: "A scratch post: made by the test."').replace(/\n\n$/, "\n\nWords of the post.\n");
+    const expected = before.replace('title: "Scratch post"', 'title: "Scratch post two"').replace('summary: "TODO: one sentence about this post."', 'summary: "A scratch post: made by the test."').replace(/\n\n$/, "\n\nWords of the post.\n");
     expect(await onDisk("src/content/blog/scratch-post.mdx")).toBe(expected);
     // the date and the commented lines are as the server wrote them
     expect(expected.split("\n").filter((line) => line.startsWith("date:") || line.startsWith("#"))).toEqual(before.split("\n").filter((line) => line.startsWith("date:") || line.startsWith("#")));
