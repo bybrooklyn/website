@@ -2,8 +2,10 @@
 // opened to the whole window (terminal.ts). Each is one thing travelling from where it sits on the
 // page to its open place and back, over a shade, with Tab kept inside it while it is open.
 
+/** The numbers of the site's own easing, `--ease` in tokens.css, for code that works the curve out itself. */
+export const CURVE: [number, number, number, number] = [0.22, 1, 0.36, 1];
 /** The site's own easing, `--ease` in tokens.css. */
-export const EASE = "cubic-bezier(0.22, 1, 0.36, 1)";
+export const EASE = `cubic-bezier(${CURVE.join(", ")})`;
 /** Whether the visitor has asked for less motion. (Where there is no window, as under test, they have not.) */
 export const still: { readonly matches: boolean } = typeof matchMedia === "function" ? matchMedia("(prefers-reduced-motion: reduce)") : { matches: false };
 
@@ -50,6 +52,11 @@ export function shade(name: string, under?: Element): { lift(): void } {
             cover.animate([{ opacity: 1 }, { opacity: 0 }], { duration: still.matches ? 120 : 300, easing: "ease-in", fill: "forwards" }).finished.then(gone, gone);
         },
     };
+}
+
+/** Runs `then` when the page is being left: before the browser takes its picture for the change to the next page, and when it is put away. */
+export function leaving(then: () => void): void {
+    for (const event of ["pageswap", "pagehide"]) addEventListener(event, then);
 }
 
 /** Tab goes round these stops and nowhere else. */

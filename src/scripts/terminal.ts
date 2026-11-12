@@ -8,7 +8,7 @@
 // file puts a Screen on the page and plays a recording into it.
 // terminal.test.ts holds Screen to what each code means.
 
-import { boxOf, round, shade, still, travel } from "./opening";
+import { boxOf, leaving, round, shade, still, travel } from "./opening";
 
 export interface Cell {
     /** One character; empty for the second half of a wide one. */
@@ -396,7 +396,7 @@ if (typeof document !== "undefined") {
             }
         });
         // leaving the page closes it, so it is not still open, with the page locked under it, when the page is come back to
-        for (const leaving of ["pageswap", "pagehide"]) addEventListener(leaving, () => open(false, false));
+        leaving(() => open(false, false));
         new ResizeObserver(size).observe(fit);
 
         // It is fetched and starts when it is first scrolled to, and holds still while out of view.

@@ -14,7 +14,7 @@
 // original's place and let go, so it travels there. Closing is the same run
 // in reverse, to wherever the original is by then.
 
-import { EASE, over, round, still, type Box } from "./opening";
+import { EASE, leaving, over, round, still, type Box } from "./opening";
 
 /** Where the picture itself is drawn inside its element, which differs when it is fitted with `object-fit: contain`. */
 function drawn(picture: HTMLImageElement): Box {
@@ -237,7 +237,7 @@ export function view(picture: HTMLImageElement, link?: HTMLAnchorElement | null)
 
 // Leaving the page takes an open picture with it. Otherwise it would be in the picture the browser takes of the
 // page for the change to the next one, under the header, and still open when the page was come back to.
-for (const leaving of ["pageswap", "pagehide"]) addEventListener(leaving, () => dropOpen?.());
+leaving(() => dropOpen?.());
 
 /**
  * Which pictures open: those in the text of a page, covers, figures, and the one on the photos page.

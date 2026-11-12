@@ -3,6 +3,7 @@
 // (mirrored when the page runs right to left), and where each key takes it.
 // src/scripts/spectrum.ts moves the thumb with these.
 
+import { CURVE } from "../scripts/opening";
 import { HIGHEST, LOWEST } from "./axes";
 
 const STEPS = HIGHEST - LOWEST;
@@ -22,11 +23,11 @@ export function pointed(x: number, left: number, width: number, rtl = false): nu
 }
 
 /**
- * The site's own easing, `--ease` in tokens.css: cubic-bezier(0.22, 1, 0.36, 1), quick to start and
- * slow to settle. Given how far along in time, gives how far along in distance. The thumb glides
- * with it to the position it settles on.
+ * The site's own easing, `--ease` in tokens.css (CURVE in opening.ts), quick to start and slow to
+ * settle. Given how far along in time, gives how far along in distance. The thumb glides with it to
+ * the position it settles on.
  */
-export function settle(time: number, [x1, y1, x2, y2] = [0.22, 1, 0.36, 1]): number {
+export function settle(time: number, [x1, y1, x2, y2] = CURVE): number {
     if (time <= 0) return 0;
     if (time >= 1) return 1;
     const curve = (a: number, b: number, s: number) => 3 * a * s * (1 - s) ** 2 + 3 * b * s * s * (1 - s) + s ** 3;
