@@ -280,16 +280,6 @@
         translate 0.5s var(--ease);
 }
 
-/* Heard by screen readers when the link is copied; the pill beside the button shows the same. */
-.spectrum-status {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-}
-
 /* The words about it, under the thing itself, set apart from it by a rule. */
 .spectrum-about {
     margin-top: calc(var(--line) * 2.5);

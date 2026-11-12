@@ -587,16 +587,6 @@
     pointer-events: none;
 }
 
-/* Said aloud to a screen reader and not shown, since the status line says the same. */
-.walker-said {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-}
-
 /* Each part of the controls is a small label, then its controls, on one grid. */
 .mote-panel.walker-side,
 .mote-panel.walker-ground {

@@ -240,7 +240,7 @@ export default function walker(m: Mote): Scene {
         // one status, over the scene; said aloud only when something changes, not with every generation
         const status = el("p", { class: "walker-status" });
         status.setAttribute("aria-hidden", "true");
-        const said = el("p", { class: "walker-said" });
+        const said = el("p", { class: "walker-said unseen" });
         said.setAttribute("aria-live", "polite");
         host.insertBefore(status, strip);
         side.append(said);
