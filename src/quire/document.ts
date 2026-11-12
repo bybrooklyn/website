@@ -394,6 +394,33 @@ function mapRuns(runs: Run[], from: number, to: number, change: (piece: Piece) =
     return fromPieces([...before, ...middle.map(change), ...after]);
 }
 
+/** Blocks with what only a `.quire` document keeps taken off them (font, highlight, line spacing, justified), as they go into a Markdown file. */
+export function markdownOnly(blocks: Block[]): Block[] {
+    const plain = (runs: Run[]) => restyleRuns(runs, 0, Infinity, { font: null, highlight: null });
+    return blocks.map((block): Block => {
+        switch (block.kind) {
+            case "paragraph":
+            case "heading": {
+                const { spacing: _spacing, ...rest } = block;
+                const next = { ...rest, runs: plain(block.runs) };
+                if (next.align === "justify") delete next.align;
+                return next;
+            }
+            case "image":
+                return block.align === "justify" ? { ...block, align: undefined } : block;
+            case "table":
+                return { ...block, header: block.header.map(plain), rows: block.rows.map((row) => row.map(plain)) };
+            case "list":
+                return { ...block, items: block.items.map((item) => ({ ...item, blocks: markdownOnly(item.blocks) })) };
+            case "quote":
+            case "footnote":
+                return { ...block, blocks: markdownOnly(block.blocks) };
+            default:
+                return block;
+        }
+    });
+}
+
 /** Gives the text between two offsets a look, or takes parts of one away with null. Values cannot hold quotes or semicolons. */
 export function restyleRuns(runs: Run[], from: number, to: number, look: { [key in keyof Look]?: string | null }): Run[] {
     const clean = (value: string) => value.replace(/["';<>]/g, "").trim();

@@ -95,6 +95,7 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
         versions: browser.versions,
         colors: options.colors,
         barHome: options.barHome,
+        richHome: browser,
         onOpen: remember,
         onName: (button) => {
             if (menu.isOpen()) return menu.close(true);

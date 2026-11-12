@@ -42,6 +42,9 @@ const PATHS: Record<string, string> = {
     trash: '<path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12"/>',
     close: '<path d="m7 7 10 10M17 7 7 17"/>',
     outline: '<path d="M5 6h14M8 10h11M8 14h11M5 18h14"/>',
+    highlight: '<path d="m14.5 4.5 5 5L11 18H6v-5z"/><path d="M4 21h16" opacity=".55"/>',
+    justify: '<path d="M5 6h14M5 10h14M5 14h14M5 18h14"/>',
+    file: '<path d="M7 3.5h7l4 4V20a.5.5 0 0 1-.5.5h-10.5A.5.5 0 0 1 6.5 20V4a.5.5 0 0 1 .5-.5z"/><path d="M14 3.5V8h4"/>',
 };
 
 /** One of mdQuire's small line icons, drawn in the color of the text around it. */

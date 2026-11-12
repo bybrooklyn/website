@@ -33,7 +33,7 @@
 // `quire-task` on a task item and `quire-box` on its box (`data-checked`),
 // `quire-atom` on an inline HTML span or footnote reference.
 
-import { blockAt, blockPaths, documentOf, image as imageBlock, paragraph, setImageAlt, toggleTask, type Block, type Document, type Leaf, type Mark, type Run, type Selection } from "./document";
+import { blockAt, blockPaths, documentOf, image as imageBlock, markdownOnly, paragraph, setImageAlt, toggleTask, type Block, type Document, type Leaf, type Mark, type Run, type Selection } from "./document";
 import { createHistory, redo as redoStep, undo as undoStep, type ChangeKind, type State } from "./history";
 import { readHtml, writeHtml } from "./html";
 import { activeBlock, activeMarks, apply, caret, collapsed, fragment, paste, step, type Editor, type Input, type Outcome } from "./keys";
@@ -694,7 +694,8 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
 
     function insertBlocks(blocks: Block[]) {
         if (blocks.length === 0) return;
-        commit(apply(editor, { state: paste(editor.state, blocks), kind: "paste" }, Date.now()));
+        // a Markdown file cannot keep a typeface or a highlight, so what is pasted into one comes without them
+        commit(apply(editor, { state: paste(editor.state, editor.state.doc.quire ? blocks : markdownOnly(blocks)), kind: "paste" }, Date.now()));
     }
 
     function onPaste(event: ClipboardEvent) {

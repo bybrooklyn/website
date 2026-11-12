@@ -128,6 +128,7 @@ export function browserStore(tables: Tables, now: () => number = Date.now): Stor
     const urls = new Map<string, string>();
     return {
         label: "This browser",
+        quire: true,
         can: { list: true, create: true, rename: true, remove: true, pictures: true, save: true },
         renameAsTyped: true,
         versions: tableVersions(tables),

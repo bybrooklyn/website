@@ -204,6 +204,34 @@ used("a file is opened from the computer, and downloaded again with its own name
     expect(await tab.run("q.downloads.at(-1)")).toEqual({ name: "post.md", text: "# A post\n\nFrom a file. Edited.\n" });
 });
 
+used("in a Markdown file the tools it cannot keep are folded away, and turning it into a .quire document makes a copy that has them", async () => {
+    // post.md is open from the test before
+    expect(await tab.run("document.querySelector('.quire-name-text').textContent")).toBe("post.md");
+    const rich = () => tab.run<{ folded: boolean; inert: boolean; width: number }>("(() => { const group = document.querySelector('.quire-bar .quire-rich'); return { folded: group.classList.contains('folded'), inert: group.inert, width: Math.round(group.getBoundingClientRect().width) }; })()");
+    // folded to nothing but its hairline of border, which is transparent
+    expect(await rich()).toMatchObject({ folded: true, inert: true });
+    expect((await rich()).width).toBeLessThanOrEqual(1);
+    await press(".quire-dots");
+    await tab.wait(700);
+    const lines = await tab.run<string[]>("[...document.querySelectorAll('.quire-menu.open .quire-menu-line')].map((line) => line.textContent)");
+    expect(lines).toContain("Turn into a .quire document");
+    expect(lines.some((line) => line.startsWith("Typeface") || line.startsWith("Highlight"))).toBe(false);
+    await press(".quire-menu.open .quire-menu-line", "Turn into a .quire document");
+    await tab.wait(900);
+    expect(await tab.run("document.querySelector('.quire-name-text').textContent")).toBe("post.quire");
+    expect(await md()).toBe("# A post\n\nFrom a file. Edited.\n");
+    expect((await rich()).folded).toBe(false);
+    expect((await rich()).width).toBeGreaterThan(40);
+    // a typeface chosen from its control goes on the selection
+    await tab.run("q.app.editor.surface.setSelection({ anchor: { path: [1], offset: 0 }, focus: { path: [1], offset: 4 } })");
+    await press(".quire-bar button", "Typeface");
+    await tab.wait(500);
+    await press(".quire-menu.open .quire-menu-line", "System mono");
+    await tab.wait(200);
+    expect(await tab.run("document.querySelector('.quire [data-font=mono]')?.textContent")).toBe("From");
+    expect(await md()).toBe("# A post\n\nFrom a file. Edited.\n");
+});
+
 used("a repository is connected once, its documents listed, opened and saved as commits, and it can be forgotten", async () => {
     await documents();
     await press(".quire-documents-menu button[data-place='github']");

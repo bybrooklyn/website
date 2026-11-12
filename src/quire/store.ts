@@ -38,6 +38,8 @@ export interface Store {
     can: { list: boolean; create: boolean; rename: boolean; remove: boolean; pictures: boolean; save: boolean };
     /** Said beside the status when saving keeps the text only somewhere passing, as a file opened and not yet downloaded is. */
     note?: string;
+    /** True where `.quire` documents can be made and kept, beside or instead of Markdown files. */
+    quire?: boolean;
     /** True where renaming costs next to nothing, so the title renames as it is typed rather than when it is left. */
     renameAsTyped?: boolean;
     list(): Promise<Entry[]>;

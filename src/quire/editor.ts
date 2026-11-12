@@ -27,6 +27,7 @@ import { flowMenu, linkForm, make, type MenuItem } from "./ui";
 import { changes, createHistoryPanel, createKeeper, memoryStorage, type VersionStorage } from "./versions";
 import { write } from "./write";
 import { emptyParts, opened, packQuire, written, type Parts } from "./quire-file";
+import { PAGE } from "./styling";
 import { createCaret } from "./caret";
 import { createTitle, nameFor, shownName, type OwnTitle } from "./title";
 
@@ -53,6 +54,8 @@ export interface EditorOptions {
     barHome?: HTMLElement;
     /** Takes a picture file when there is no store to keep it. */
     onImage?: (file: File) => Promise<string>;
+    /** Where a Markdown document turned into a `.quire` one is made when its own store keeps no `.quire` documents; downloaded if not given. */
+    richHome?: Store;
     /** Where the title is kept when it is the document's own (a post's frontmatter title) rather than its name. */
     title?: OwnTitle;
 }
@@ -226,7 +229,22 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         const pictures = (store && id && (await store.pictures?.(id).catch(() => undefined))) || new Map<string, Blob>();
         give(new Blob([(await packQuire({ markdown, parts: quire ?? emptyParts(), pictures })) as BlobPart], { type: "application/zip" }), `${stem()}.quire`);
     };
+    /** Makes a `.quire` copy of a Markdown document and opens it: in the same place if it can keep one, in the browser if not, or as a download. */
+    const makeRich = async () => {
+        const doc = surface.getDocument();
+        if (doc.quire) return;
+        const copy = written({ ...doc, mdx: false, quire: { page: PAGE, notes: null } }, write);
+        const target = store?.quire && store.can.create ? store : options.richHome;
+        if (!target) {
+            const pictures = new Map<string, Blob>();
+            give(new Blob([(await packQuire({ markdown: copy.text, parts: copy.quire ?? emptyParts(), pictures })) as BlobPart], { type: "application/zip" }), `${stem()}.quire`);
+            return;
+        }
+        await create(target, stem(), copy.text, copy.quire);
+        surface.focus();
+    };
     const more = (): MenuItem[] => [
+        ...(surface.getDocument().quire ? [] : [{ label: "Turn into a .quire document", icon: "file", run: () => void makeRich() }]),
         { label: host.classList.contains("markdown") ? "Hide the Markdown" : "Show the Markdown", run: () => showMarkdown(!host.classList.contains("markdown")) },
         { label: "Version history", run: () => void history.open() },
         ...(options.more?.() ?? []),
@@ -310,6 +328,14 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     if (saver) showStatus(saver.status());
     else bar.setStatus("", "This document is not being saved anywhere");
 
+    // what only a .quire document can keep folds away from the bar while the document is Markdown
+    const richNow = () => {
+        const on = !!surface.getDocument().quire;
+        bar.setRich(on);
+        host.classList.toggle("rich", on);
+    };
+    surface.on("change", richNow);
+    richNow();
     showTitle();
     hint();
     // a title kept in the document follows a change from elsewhere (undo, the Markdown, a form)
@@ -352,6 +378,12 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         }
     }
 
+    async function create(next: Store, wanted: string, body = "", quire?: Parts) {
+        const made = await next.create(wanted, body, quire);
+        const entry = (await next.list().catch(() => [])).find((each) => each.id === made.id) ?? { id: made.id, name: wanted };
+        await open(next, entry);
+    }
+
     /** Moves to a document: saves what is waiting in the old one, opens the new, and starts its saver and history. */
     async function open(next: Store, entry: Entry) {
         await saver?.flush();
@@ -380,11 +412,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         getName: () => name,
         current: () => ({ store, id, name }),
         open,
-        async create(next, wanted, body = "", quire) {
-            const made = await next.create(wanted, body, quire);
-            const entry = (await next.list().catch(() => [])).find((each) => each.id === made.id) ?? { id: made.id, name: wanted };
-            await open(next, entry);
-        },
+        create,
         flush: async () => {
             await saver?.flush();
         },

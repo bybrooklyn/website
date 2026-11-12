@@ -98,6 +98,7 @@ export function folderStore(root: FolderHandle): Store {
     };
     return {
         label: root.name,
+        quire: true,
         can: { list: true, create: true, rename: true, remove: true, pictures: true, save: true },
         async list() {
             const found = await walk(root, "", 0, []);

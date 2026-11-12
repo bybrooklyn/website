@@ -29,6 +29,7 @@ export function filesStore(): Store & { add(file: Blob & { name: string }): Prom
     return {
         label: "Files on this computer",
         note: "Download it to keep it.",
+        quire: true,
         can: { list: true, create: true, rename: true, remove: true, pictures: true, save: true },
         async add(file) {
             if (!openable(file.name)) throw new StoreError("only Markdown, text and .quire files can be opened");
