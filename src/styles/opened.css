@@ -124,54 +124,19 @@ body.opened:has(.strip:hover, .strip:focus-visible) .opened-panel {
     color: var(--ink);
 }
 
-/* Phones: no strip. The panel is the screen, and the way back floats in the corner. */
+/* Phones and narrow windows: no strip and no button. The panel is the screen, and the way back is the trail at its top. */
 @media (max-width: 40rem) {
     :root {
         --strip: 0rem;
     }
 
-    .opened-panel {
-        border-radius: 0;
-    }
-
-    body.opened:has(.strip:hover, .strip:focus-visible) .opened-panel {
-        translate: none;
-    }
-
     .strip {
-        z-index: 2;
-    }
-
-    /* Floating over the page, it needs a ground of its own to stay readable. */
-    .strip {
-        inset: auto auto 0.9rem 0.9rem;
-        display: grid;
-        width: 3rem;
-        height: 3rem;
-        border-radius: 50%;
-        background: color-mix(in oklch, var(--ground) 88%, transparent);
-        border: 0.0625rem solid var(--panel-edge);
-        -webkit-backdrop-filter: blur(0.4rem);
-        backdrop-filter: blur(0.4rem);
-    }
-
-    .strip-button {
-        width: 0.9rem;
-        height: 1.5rem;
-        color: var(--ink);
+        display: none;
     }
 
     .opened-panel {
         border: 0;
-    }
-
-    .strip:hover .strip-button,
-    .strip:focus-visible .strip-button {
-        translate: none;
-    }
-
-    .opened-panel main {
-        padding-bottom: calc(var(--line) * 4.5);
+        border-radius: 0;
     }
 }
 

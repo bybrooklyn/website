@@ -129,6 +129,9 @@ From the conversation on 11 Nov, later:
    pixels with y down and `space.ts` in units with y up, `flat.still` is a value where
    `space.still()` is a call, and a few calls take a row of bare numbers.
 6. No more minis for now.
+7. A rule for all of it, hers: "everyTHING, needs to be fluid", as the page transitions already
+   are. Nothing is to be rewritten for it; what is added should move that way, and the audit
+   should look for what does not.
 
 - scriptc (vercel-labs): it compiles TypeScript to native programs and WASI modules. It does not draw to a
   browser canvas, so it is no use for minis on the site. It could matter later for a desktop build.
