@@ -140,3 +140,22 @@ fn the_same_world_stepped_twice_from_the_same_start_ends_identical() {
         assert_eq!(a.spin.to_bits(), b.spin.to_bits());
     }
 }
+
+#[test]
+fn a_resting_box_stays_at_rest_when_the_world_is_moved_back_and_its_ground_is_trimmed() {
+    let mut world = World::new();
+    world.set_ground(&[Segment { a: Vec2::new(600.0, 0.0), b: Vec2::new(650.0, 0.0) }, Segment { a: Vec2::new(650.0, 0.0), b: Vec2::new(760.0, 0.0) }]);
+    world.add_body(Body::new(Shape::Box { half_width: 0.5, half_height: 0.25 }, Vec2::new(700.0, 0.4), 0.0, 1.0));
+    run(&mut world, 3.0);
+    let before = world.bodies[0];
+    world.shift(512.0);
+    assert_eq!(world.bodies[0].position.x, before.position.x - 512.0, "a power of two near the numbers moves them exactly");
+    // the piece behind goes, and the piece it rests on moves to the front of the list
+    assert_eq!(world.drop_ground_before(140.0), 1);
+    world.extend_ground(&[Segment { a: Vec2::new(248.0, 0.0), b: Vec2::new(300.0, 0.1) }]);
+    run(&mut world, 3.0);
+    let after = world.bodies[0];
+    assert!((after.position.x - (before.position.x - 512.0)).abs() < 1e-3, "slid {}", after.position.x - (before.position.x - 512.0));
+    assert!((after.position.y - before.position.y).abs() < 1e-4 && after.velocity.length() < 1e-3);
+    assert_eq!(world.ground().len(), 2);
+}

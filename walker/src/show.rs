@@ -5,6 +5,11 @@
 //! Both start from the same world as training does and are judged the same way (`Judge`), so the
 //! best brain's run on the page is the very run it was scored on, step for step, unless someone
 //! pushes it. Each stops where its scored run stopped; the page then starts it again.
+//!
+//! A show can also be endless: it goes on while the walker stays up, on ground the page lays ahead
+//! of it (`extend`) and drops behind it, with the whole world moved back now and then so the numbers
+//! stay fine (`origin` says how far in all). A better brain can take over at the start of a stride
+//! (`swap`) without the walk starting again.
 
 use alloc::vec;
 use alloc::vec::Vec;
@@ -27,8 +32,18 @@ pub struct Show {
     pub judge: Judge,
     /// Six numbers for each body: x, y, angle, kind, and the two size numbers (see `Shape::size`).
     pub drawn: Vec<f32>,
+    /// How far the world has been moved back, in all, in metres.
+    pub origin: f64,
+    /// A brain waiting to take over at the start of the next stride.
+    pub pending: Option<Vec<f32>>,
     leftover: f32,
 }
+
+/// An endless walk moves the world back by this much whenever the walker passes it, in metres. A
+/// power of two, so positions near it lose nothing in the move.
+const REBASE: f32 = 512.0;
+/// Ground further behind the walker than this is dropped, in metres.
+const BEHIND: f32 = 40.0;
 
 impl Show {
     pub fn new(start: &World, creature: &Creature, layout: Layout, weights: &[f32], judge: Judge) -> Show {
@@ -40,6 +55,8 @@ impl Show {
             senses: vec![0.0; layout.inputs],
             judge,
             drawn: Vec::new(),
+            origin: 0.0,
+            pending: None,
             leftover: 0.0,
         };
         show.creature.sense(&show.world, &mut show.senses);
@@ -56,6 +73,7 @@ impl Show {
         self.leftover += seconds;
         let mut taken = 0;
         while self.leftover >= STEP && taken < MOST_STEPS && !self.judge.over {
+            let stride = self.creature.phase(&self.world) as u32;
             self.creature.sense(&self.world, &mut self.senses);
             self.brain.think(&self.weights, &self.senses);
             self.creature.drive(&mut self.world, &self.brain.outputs);
@@ -63,12 +81,44 @@ impl Show {
             self.judge.after_step(&self.creature, &self.world, &self.brain.outputs);
             self.leftover -= STEP;
             taken += 1;
+            // a new stride has begun: a better brain waiting takes over here, mid walk
+            if self.creature.phase(&self.world) as u32 != stride {
+                if let Some(weights) = self.pending.take() {
+                    self.weights = weights;
+                    self.brain.forget();
+                }
+            }
+            if self.judge.endless {
+                self.keep_near();
+            }
         }
         if taken == MOST_STEPS || self.judge.over {
             self.leftover = 0.0;
         }
         self.draw();
         taken
+    }
+
+    /// Keeps an endless walk near the origin and its ground short: what is far behind is dropped,
+    /// and once the walker passes `REBASE` everything moves back by that much.
+    fn keep_near(&mut self) {
+        let x = self.world.bodies[self.creature.torso as usize].position.x;
+        if self.world.steps % 60 == 0 {
+            self.world.drop_ground_before(x - BEHIND);
+        }
+        if x > REBASE {
+            self.world.shift(REBASE);
+            self.creature.start.x -= REBASE;
+            self.origin += REBASE as f64;
+        }
+    }
+
+    /// Lays more ground for an endless walk. The pieces are given where the page has them, from the
+    /// walk's start, and are moved back as the world has been.
+    pub fn extend(&mut self, pieces: &[crate::physics::Segment]) {
+        let back = self.origin as f32;
+        let moved: Vec<crate::physics::Segment> = pieces.iter().map(|piece| crate::physics::Segment { a: Vec2::new(piece.a.x - back, piece.a.y), b: Vec2::new(piece.b.x - back, piece.b.y) }).collect();
+        self.world.extend_ground(&moved);
     }
 
     /// How the run has gone so far, scored as training scores it.
@@ -174,7 +224,7 @@ mod tests {
     fn the_show_plays_the_best_run_exactly_as_it_was_scored() {
         for (legs, goal, layers, memory) in [(2, Goal::Far, 1, 0), (4, Goal::Fast, 3, 6), (1, Goal::Tall, 2, 4)] {
             let settings = Settings { goal, layers, memory, ..Settings::default() };
-            let mut trainer = Trainer::new(Description { legs }, settings, &flat_ground(), 2).unwrap();
+            let mut trainer = Trainer::new(Description { legs, carry: false }, settings, &flat_ground(), 2).unwrap();
             while trainer.generation < 5 {
                 trainer.train(32);
             }

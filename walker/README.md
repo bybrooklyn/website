@@ -49,16 +49,28 @@ All numbers are metres, kilograms, seconds and radians, with y up and angles ant
 
 ### Making it
 
-- `create(legs: u32, population: u32, seconds: f32, seed: u32, hidden: u32, layers: u32, memory: u32, goal: u32) -> u32`
+- `create(legs: u32, population: u32, seconds: f32, seed: u32, hidden: u32, layers: u32, memory: u32, goal: u32, length: f32) -> u32`
   Makes a new walker on flat ground, replacing any before it. `legs` is 1, 2 or 4. `population` is
   the number of brains in a generation (2 to 1000; 32 is a good choice). `seconds` is how long each
   brain is run when training (the goal's own time if 0 or less, at most 120). `seed` starts the
   random numbers; the same seed learns the same way. `hidden` is the neurons in each hidden layer
   (2 to 64), `layers` the number of hidden layers (1 to 4), and `memory` how many values the brain
   keeps from one step to the next (0 to 16). `goal` is what it is rewarded for:
-  0 go far, 1 go fast, 2 stand tall, 3 jump (see Goals). Returns the number of weights in one brain,
+  0 go far, 1 go fast, 2 stand tall, 3 jump, 4 the obstacle course, 5 carry (see Goals). `length`
+  is how far a run goes, in metres (see Run length); 0 or less means runs of the goal's own time in
+  training and an endless walk on screen. Returns the number of weights in one brain,
   or 0 if `legs` is not 1, 2 or 4.
-- `run_seconds() -> f32` How long a run lasts: 4 s for going fast, 10 s for the others.
+- `run_seconds() -> f32` How long a run of the goal's own time lasts: 4 s for going fast, 20 s on the
+  course, 10 s for the others.
+
+### Run length
+
+A run of a set length ends when the body has gone that far, earning 1 for each second it had to
+spare, or when it has had as long as a pace of 0.4 m/s allows (and no less than the goal's own
+time). Its distance counts no further than its length. With no set length, training scores runs
+of the goal's own time, and the walk on screen is endless: it is the same run for those first
+seconds, then goes on with the same brain while the walker stays up. So training still compares
+brains on runs of one length, and what is seen is where the best of them goes after that.
 - `ground_room(pieces: u32) -> *mut f32`
   Room for `pieces` pieces of ground, four f32 each: x1, y1, x2, y2. Write them there, then call
   `ground_set`. The pieces may come in any order and need not join, so gaps are allowed. The
@@ -115,6 +127,12 @@ swing rather than twitch. Then, by goal:
 - **Jump** (3): one and a half times the distance, plus each second spent with nothing touching
   anything while going forward faster than 0.5 m/s. A foot put down in a gap (touching, with no
   ground under it) costs 1 and ends the run.
+- **The course** (4): as going far, over 20 s, on the obstacle course the page lays: level ground,
+  then hills, steps and gaps, each stretch and each lap harder.
+- **Carry** (5): the walker has a parcel (a small box, 0.6 kg) on a back with a rim at each end. The
+  distance, plus 0.25 for each second on its feet; the parcel falling below the middle of the body
+  or more than 0.3 m past either end is dropping it, which ends the run and costs 3. Two more senses
+  say where the parcel is.
 
 How a generation is made: the best 4 go on unchanged (and are not run again). Each of the others
 has a parent, the best of three picked at random, and half the time a second parent the same way,
@@ -147,7 +165,19 @@ and 110 to 150 ms for four, at each size. A large brain has more to learn and ge
   the first generation is finished. The show starts from the same world as training and is judged
   the same way, so, unless it is pushed, it plays the very run the brain was scored on and ends
   where that run ended: its distance and score at the end are the brain's, to the bit.
-- `show_over() -> u32` 1 once the run has ended, after which the show stands still until reset.
+- `show_over() -> u32` 1 once the run has ended, after which the show stands still until reset. An
+  endless show ends only in a fall.
+- `show_endless() -> u32` 1 if the show is endless.
+- `show_ground_extend(pieces: u32)` Lays `pieces` more pieces of ground, written into
+  `ground_room` in metres from the walk's start, ahead of an endless show. Ground more than 40 m
+  behind the walker is dropped.
+- `show_origin() -> f64` How far an endless show's world has been moved back: whenever the walker
+  passes 512 m, everything moves back 512 m, a power of two, so positions there lose nothing, and
+  an f32 stays fine however far it walks. Add this to a body's x for where it is from the start.
+- `weights_swap() -> u32` Takes in the brain in `weights_room` as `weights_load` does, but an
+  endless show goes on: the new brain takes over at the start of the walker's next stride.
+- `legs_length() -> u32` and `show_load() -> i32` The number of legs, and the number of the body
+  that is the parcel, or -1.
 - `show_score() -> f32` The run's score so far.
 - `show_step(seconds: f32) -> u32` Moves on by `seconds` in whole steps of 1/60 s, the brain
   deciding before each, and keeps the remainder for next time. Returns the steps taken, at most 8.
@@ -175,7 +205,9 @@ and 110 to 150 ms for four, at each size. A large brain has more to learn and ge
   - for each foot, 1 if it is on the ground, else 0;
   - how much higher the ground is 0.6 m ahead, and 1.2 m ahead, than under the body, from -1 to 1,
     and -1 over a gap: what a jumper needs to see a step or a gap coming;
-  - the sine and cosine of the rhythm the legs keep (see `show_outputs`).
+  - the sine and cosine of the rhythm the legs keep (see `show_outputs`);
+  - carrying, where the parcel is from the middle of the back, along it and above it, in the body's
+    own frame, each by the body's size.
 - `show_hidden() -> *const f32` What each hidden neuron gave, -1 to 1, layer after layer.
 - `show_outputs() -> *const f32` What each output gave, -1 to 1, three for each joint. The legs keep
   a rhythm: 1.8 strides a second for one leg, 1.2 for two (taking turns, half a stride apart), 1.6
@@ -188,6 +220,18 @@ and 110 to 150 ms for four, at each size. A large brain has more to learn and ge
   evolution shapes the strides rather than inventing them. Each target is kept within the joint's
   limits: a hip from -1.0 (back) to 1.3 (forward), a knee from -2.0 (bent back) to 0 (straight).
 - `show_weights() -> *const f32` The weights the show runs on, to draw the brain's connections.
+
+### One walker, live
+
+- `live_begin() -> u32` Starts learning one walker at a time, from a brain of the first
+  generation, with no generations in the background: the show is each attempt.
+- `live_step(seconds: f32) -> u32` Moves the attempt on. When it ends (a fall, or the end of its run)
+  it is kept if it scored better than the best so far, and the next attempt, a child of the best
+  (each weight nudged as in a generation, and at least one), starts at once. Returns the attempt's
+  number.
+- `live_attempt() -> u32`, `live_best_score() -> f32`, `live_best_distance() -> f32`,
+  `live_best_weights() -> *const f32` The attempt now walking, and the best so far.
+- `live_stop()` Goes back to a generation at a time.
 
 ### The crowd: a whole generation at once
 

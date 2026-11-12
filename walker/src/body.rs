@@ -21,6 +21,8 @@ use crate::physics::{Body, Joint, STEP, World};
 pub struct Description {
     /// 1, 2 or 4.
     pub legs: u32,
+    /// Whether a parcel rests on its back, to be carried.
+    pub carry: bool,
 }
 
 impl Description {
@@ -33,9 +35,10 @@ impl Description {
     }
 
     /// How many numbers `sense` gives: five for the body, two for each joint, one for each foot, two
-    /// for the ground ahead, and two for the rhythm's clock.
+    /// for the ground ahead, two for the rhythm's clock, and two for where the parcel is, if it
+    /// carries one.
     pub fn senses(&self) -> usize {
-        5 + 2 * self.joints() + self.legs as usize + 2 + 2
+        5 + 2 * self.joints() + self.legs as usize + 2 + 2 + if self.carry { 2 } else { 0 }
     }
 
     /// How many numbers the brain gives `drive`: three for each joint, which shape its swing.
@@ -101,6 +104,14 @@ const HIP_SWING: (f32, f32, f32) = (0.1, 0.6, 0.6);
 const KNEE_SWING: (f32, f32, f32) = (-0.6, 0.5, 0.6);
 const HOP_HIP_SWING: (f32, f32, f32) = (0.15, 0.5, 0.15);
 const HOP_KNEE_SWING: (f32, f32, f32) = (-0.7, 0.4, 0.7);
+/// The parcel a carrier has on its back: a small box, which slides where a ball would roll away, its
+/// half width and half height in metres, and its mass in kilograms.
+const LOAD_HALF_WIDTH: f32 = 0.11;
+const LOAD_RADIUS: f32 = 0.07;
+const LOAD_MASS: f32 = 0.6;
+/// The radius of each rim of a carrier's cupped back, in metres.
+const RIM: f32 = 0.04;
+
 /// Where the brain feels the ground ahead of the body, in metres.
 const AHEAD: [f32; 2] = [0.6, 1.2];
 
@@ -122,6 +133,8 @@ pub struct Creature {
     pub start: Vec2,
     /// How high the body stood above the ground at the start.
     pub stand: f32,
+    /// The parcel on its back, if it carries one.
+    pub load: Option<u32>,
 }
 
 impl Creature {
@@ -198,7 +211,30 @@ impl Creature {
         let legs = (0..legs as u32).map(|leg| Leg { upper: first + 1 + 2 * leg, lower: first + 2 + 2 * leg }).collect();
         let start = world.bodies[first as usize].position;
         let stand = start.y - world.ground_height(start.x).unwrap_or(0.0);
-        let creature = Creature { description, torso: first, legs, joints, pose, start, stand };
+        // a carrier's back is cupped: a small rim at each end, held to the body by a hinge that may not
+        // turn, so a parcel slides between them rather than off
+        if description.carry {
+            let torso = world.bodies[first as usize];
+            for side in [-1.0, 1.0] {
+                let at = torso.position + Vec2::new(side * (build.half_width - RIM), build.half_height + RIM * 0.5);
+                let mut rim = Body::new(Shape::Circle { radius: RIM }, at, 0.0, 1.0);
+                rim.set_mass(0.05);
+                rim.group = group;
+                let index = world.add_body(rim);
+                let mut joint = Joint::new(&world.bodies, first, index, at);
+                joint.limited = true;
+                world.add_joint(joint);
+            }
+        }
+        // the parcel sits on the middle of its back; it is not one of the creature's parts, so the two touch
+        let load = description.carry.then(|| {
+            let mut ball = Body::new(Shape::Box { half_width: LOAD_HALF_WIDTH, half_height: LOAD_RADIUS }, Vec2::new(start.x, start.y + build.half_height + LOAD_RADIUS + 0.002), 0.0, 1.0);
+            ball.set_mass(LOAD_MASS);
+            ball.friction = 1.0;
+            ball.spin_damping = 2.0;
+            world.add_body(ball)
+        });
+        let creature = Creature { description, torso: first, legs, joints, pose, start, stand, load };
         creature.hold(world);
         Some(creature)
     }
@@ -238,6 +274,22 @@ impl Creature {
         let (s, c) = sin_cos(2.0 * PI * self.phase(world));
         into[at] = s;
         into[at + 1] = c;
+        // where the parcel is from the middle of the back, in the body's own frame, by its size
+        if let Some(load) = self.load {
+            let build = self.description.build();
+            let from = torso.rotation.undo(world.bodies[load as usize].position - torso.position);
+            into[at + 2] = clamp(from.x / build.half_width, -2.0, 2.0);
+            into[at + 3] = clamp((from.y - build.half_height - LOAD_RADIUS) / build.half_height, -2.0, 2.0);
+        }
+    }
+
+    /// Whether the parcel has been dropped: fallen below the middle of the body, or off past its end.
+    pub fn dropped(&self, world: &World) -> bool {
+        let Some(load) = self.load else { return false };
+        let torso = &world.bodies[self.torso as usize];
+        let from = torso.rotation.undo(world.bodies[load as usize].position - torso.position);
+        let build = self.description.build();
+        from.y < 0.0 || from.x > build.half_width + 0.3 || from.x < -build.half_width - 0.3
     }
 
     /// Where the rhythm is, in turns since the start.
@@ -353,7 +405,7 @@ mod tests {
     #[test]
     fn a_two_legged_body_with_its_motors_holding_stands_for_five_seconds() {
         let mut world = flat();
-        let creature = Creature::build(&mut world, Description { legs: 2 }).unwrap();
+        let creature = Creature::build(&mut world, Description { legs: 2, carry: false }).unwrap();
         let start = world.bodies[creature.torso as usize].position;
         let mut settled = start;
         let mut senses = alloc::vec![0.0; creature.description.senses()];
@@ -385,7 +437,7 @@ mod tests {
     #[test]
     fn a_four_legged_body_stands_and_a_one_legged_body_is_built() {
         let mut world = flat();
-        let creature = Creature::build(&mut world, Description { legs: 4 }).unwrap();
+        let creature = Creature::build(&mut world, Description { legs: 4, carry: false }).unwrap();
         for _ in 0..300 {
             creature.hold(&mut world);
             world.step();
@@ -394,8 +446,8 @@ mod tests {
         assert!(world.bodies[creature.torso as usize].velocity.length() < 0.01);
         assert_eq!(creature.description.senses(), 29);
         let mut world = flat();
-        assert!(Creature::build(&mut world, Description { legs: 1 }).is_some());
-        assert!(Creature::build(&mut world, Description { legs: 3 }).is_none());
+        assert!(Creature::build(&mut world, Description { legs: 1, carry: false }).is_some());
+        assert!(Creature::build(&mut world, Description { legs: 3, carry: false }).is_none());
     }
 
     #[test]
@@ -403,7 +455,7 @@ mod tests {
         // dropped from half a metre up, every foot comes to rest on the ground, not in it
         for legs in [1, 2, 4] {
             let mut world = flat();
-            let creature = Creature::build(&mut world, Description { legs }).unwrap();
+            let creature = Creature::build(&mut world, Description { legs, carry: false }).unwrap();
             for body in &mut world.bodies {
                 body.position.y += 0.5;
             }

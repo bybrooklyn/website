@@ -20,13 +20,30 @@ struct Walker {
     trainer: Trainer,
     show: Show,
     crowd: Option<Crowd>,
+    /// Learning one walker at a time, live, when there is one.
+    live: Option<Live>,
     /// Room the page writes into: ground pieces as four f32 each, and a brain's weights.
     ground_room: Vec<f32>,
     weights_room: Vec<f32>,
     crowd_room: Vec<f32>,
 }
 
+/// One walker learning live: each attempt is a child of the best so far, and is kept if it beats it.
+struct Live {
+    best: Vec<f32>,
+    best_score: f32,
+    best_distance: f32,
+    attempt: u32,
+}
+
 static WALKER: Shared<Option<Walker>> = Shared::new(None);
+
+/// A show of a brain from the walker's start: endless when the walker's runs have no set length.
+fn show_of(trainer: &Trainer, weights: &[f32]) -> Show {
+    let mut judge = trainer.judge();
+    judge.endless = !trainer.settings.length.is_finite();
+    Show::new(&trainer.start, &trainer.creature, trainer.layout, weights, judge)
+}
 
 fn walker() -> Option<&'static mut Walker> {
     WALKER.get().as_mut()
@@ -40,20 +57,22 @@ fn pointer(list: Option<&[f32]>) -> *const f32 {
 /// Makes a new walker with `legs` legs (1, 2 or 4) on flat ground, with a population of `population`
 /// brains, each run for `seconds` when training (the goal's own time if 0), random numbers from
 /// `seed`, brains of `layers` hidden layers (1 to 4) of `hidden` neurons each (2 to 64) and
-/// `memory` memories (0 to 16), rewarded for `goal` (see walker/README.md). Returns the number of
-/// weights in one brain, or 0 if the description is not one the engine builds.
+/// `memory` memories (0 to 16), rewarded for `goal` (see walker/README.md), each run going `length`
+/// metres (or, if it is 0 or less, runs of the goal's own time, and an endless show). Returns the
+/// number of weights in one brain, or 0 if the description is not one the engine builds.
 #[unsafe(no_mangle)]
-pub extern "C" fn create(legs: u32, population: u32, seconds: f32, seed: u32, hidden: u32, layers: u32, memory: u32, goal: u32) -> u32 {
-    let description = Description { legs };
+pub extern "C" fn create(legs: u32, population: u32, seconds: f32, seed: u32, hidden: u32, layers: u32, memory: u32, goal: u32, length: f32) -> u32 {
+    let description = Description { legs, carry: false };
     let seconds = if seconds > 0.0 { seconds.min(120.0) } else { 0.0 };
-    let settings = Settings { population: population.clamp(2, 1000) as usize, seconds, hidden: hidden as usize, layers: layers as usize, memory: memory as usize, goal: Goal::from_number(goal), ..Settings::default() };
+    let length = if length > 0.0 { length.min(1000.0) } else { f32::INFINITY };
+    let settings = Settings { population: population.clamp(2, 1000) as usize, seconds, length, hidden: hidden as usize, layers: layers as usize, memory: memory as usize, goal: Goal::from_number(goal), ..Settings::default() };
     let Some(trainer) = Trainer::new(description, settings, &flat_ground(), seed as u64) else {
         *WALKER.get() = None;
         return 0;
     };
     let count = trainer.layout.weights();
-    let show = Show::new(&trainer.start, &trainer.creature, trainer.layout, trainer.weights(0), trainer.judge());
-    *WALKER.get() = Some(Walker { trainer, show, crowd: None, ground_room: Vec::new(), weights_room: vec![0.0; count], crowd_room: Vec::new() });
+    let show = show_of(&trainer, trainer.weights(0));
+    *WALKER.get() = Some(Walker { trainer, show, crowd: None, live: None, ground_room: Vec::new(), weights_room: vec![0.0; count], crowd_room: Vec::new() });
     count as u32
 }
 
@@ -192,7 +211,112 @@ pub extern "C" fn show_reset() {
     let Some(walker) = walker() else { return };
     let trainer = &walker.trainer;
     let weights = if trainer.best_score > f32::NEG_INFINITY { &trainer.best[..] } else { trainer.weights(0) };
-    walker.show = Show::new(&trainer.start, &trainer.creature, trainer.layout, weights, trainer.judge());
+    walker.show = show_of(trainer, weights);
+}
+
+/// Takes in the brain written into `weights_room` as `weights_load` does, but an endless show does
+/// not start again: the new brain takes over at the start of the walker's next stride. Returns 1 if
+/// it worked.
+#[unsafe(no_mangle)]
+pub extern "C" fn weights_swap() -> u32 {
+    let Some(walker) = walker() else { return 0 };
+    let weights = walker.weights_room.clone();
+    if !walker.trainer.load(&weights) {
+        return 0;
+    }
+    if walker.show.judge.endless && !walker.show.judge.over {
+        walker.show.pending = Some(weights);
+    } else {
+        show_reset();
+    }
+    1
+}
+
+/// Lays `pieces` more pieces of ground, written into `ground_room`, ahead of an endless show. They
+/// are given from the walk's start, as the page made them; ground far behind the walker is dropped.
+#[unsafe(no_mangle)]
+pub extern "C" fn show_ground_extend(pieces: u32) {
+    let Some(walker) = walker() else { return };
+    let pieces: Vec<Segment> = walker.ground_room.chunks_exact(4).take(pieces as usize).map(|p| Segment { a: Vec2::new(p[0], p[1]), b: Vec2::new(p[2], p[3]) }).collect();
+    walker.show.extend(&pieces);
+}
+
+/// How far an endless show's world has been moved back, in metres: add it to a body's x for where
+/// it is from the start.
+#[unsafe(no_mangle)]
+pub extern "C" fn show_origin() -> f64 {
+    walker().map_or(0.0, |walker| walker.show.origin)
+}
+
+/// 1 if the show is endless, else 0.
+#[unsafe(no_mangle)]
+pub extern "C" fn show_endless() -> u32 {
+    walker().map_or(0, |walker| walker.show.judge.endless as u32)
+}
+
+/// Starts learning one walker at a time, live, from a brain of the first generation: the show is
+/// each attempt. Returns 1 if it worked.
+#[unsafe(no_mangle)]
+pub extern "C" fn live_begin() -> u32 {
+    let Some(walker) = walker() else { return 0 };
+    let first = walker.trainer.weights(0).to_vec();
+    walker.show = show_of(&walker.trainer, &first);
+    walker.live = Some(Live { best: first, best_score: f32::NEG_INFINITY, best_distance: 0.0, attempt: 1 });
+    1
+}
+
+/// Moves the live attempt on by `seconds`. When it ends (a fall, or the end of its run), it is kept
+/// if it did better than the best so far, and the next attempt, a child of the best, starts at
+/// once. Returns the number of the attempt now walking.
+#[unsafe(no_mangle)]
+pub extern "C" fn live_step(seconds: f32) -> u32 {
+    let Some(walker) = walker() else { return 0 };
+    let Some(live) = walker.live.as_mut() else { return 0 };
+    walker.show.step(seconds);
+    if walker.show.judge.over {
+        let outcome = walker.show.outcome();
+        if outcome.score > live.best_score {
+            live.best = walker.show.weights.clone();
+            live.best_score = outcome.score;
+            live.best_distance = outcome.distance;
+        }
+        live.attempt += 1;
+        let child = walker.trainer.mutate(&live.best);
+        walker.show = show_of(&walker.trainer, &child);
+    }
+    live.attempt
+}
+
+/// The live attempt now walking, counting from 1.
+#[unsafe(no_mangle)]
+pub extern "C" fn live_attempt() -> u32 {
+    walker().and_then(|walker| walker.live.as_ref()).map_or(0, |live| live.attempt)
+}
+
+/// The best live attempt's score and distance so far.
+#[unsafe(no_mangle)]
+pub extern "C" fn live_best_score() -> f32 {
+    walker().and_then(|walker| walker.live.as_ref()).map_or(f32::NEG_INFINITY, |live| live.best_score)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn live_best_distance() -> f32 {
+    walker().and_then(|walker| walker.live.as_ref()).map_or(0.0, |live| live.best_distance)
+}
+
+/// The best live attempt's weights, `weights_length` f32, to share.
+#[unsafe(no_mangle)]
+pub extern "C" fn live_best_weights() -> *const f32 {
+    pointer(walker().and_then(|walker| walker.live.as_ref()).map(|live| &live.best[..]))
+}
+
+/// Stops learning live; the walker learns a generation at a time again.
+#[unsafe(no_mangle)]
+pub extern "C" fn live_stop() {
+    if let Some(walker) = walker() {
+        walker.live = None;
+        show_reset();
+    }
 }
 
 /// How long a run lasts for this walker's goal, in seconds.
@@ -238,6 +362,19 @@ pub extern "C" fn show_step(seconds: f32) -> u32 {
 #[unsafe(no_mangle)]
 pub extern "C" fn show_push(x: f32, y: f32, impulse_x: f32, impulse_y: f32) -> i32 {
     walker().and_then(|walker| walker.show.push(Vec2::new(x, y), Vec2::new(impulse_x, impulse_y))).map_or(-1, |body| body as i32)
+}
+
+/// The walker's number of legs, and the number of the body that is the parcel it carries, or -1.
+/// Bodies go: the body, each leg's upper and lower part, then for a carrier the two rims of its back
+/// and the parcel.
+#[unsafe(no_mangle)]
+pub extern "C" fn legs_length() -> u32 {
+    walker().map_or(0, |walker| walker.trainer.description.legs)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn show_load() -> i32 {
+    walker().and_then(|walker| walker.show.creature.load).map_or(-1, |load| load as i32)
 }
 
 /// The number of bodies in one walker.

@@ -53,15 +53,21 @@ pub enum Goal {
     Tall,
     /// Go forward, with time in the air going forward, without putting a foot down in a gap.
     Jump,
+    /// Get as far along the obstacle course as it can in twenty seconds.
+    Course,
+    /// Go as far as it can with a ball on its back, without dropping it.
+    Carry,
 }
 
 impl Goal {
-    /// The goal for each number the page uses: 0 far, 1 fast, 2 tall, 3 jump.
+    /// The goal for each number the page uses: 0 far, 1 fast, 2 tall, 3 jump, 4 the course, 5 carry.
     pub fn from_number(number: u32) -> Goal {
         match number {
             1 => Goal::Fast,
             2 => Goal::Tall,
             3 => Goal::Jump,
+            4 => Goal::Course,
+            5 => Goal::Carry,
             _ => Goal::Far,
         }
     }
@@ -70,6 +76,7 @@ impl Goal {
     pub fn seconds(self) -> f32 {
         match self {
             Goal::Fast => 4.0,
+            Goal::Course => 20.0,
             _ => 10.0,
         }
     }
@@ -94,11 +101,27 @@ pub struct Judge {
     pub jerk: f32,
     last: [f32; 24],
     pub in_gap: bool,
+    /// Whether the ball was dropped, carrying.
+    pub dropped: bool,
+    /// How far a run goes before it is finished, in metres; infinite for a run of the goal's time.
+    pub length: f32,
+    /// Whether the run reached its length.
+    pub finished: bool,
+    /// A run with no end but a fall, as the page shows an endless walk.
+    pub endless: bool,
     pub over: bool,
 }
 
+/// The slowest pace a run of a set length allows, in metres a second: a run of 10 m may take 25 s.
+const SLOWEST: f32 = 0.4;
+/// What each second left over earns a run that reached its length, in metres of score.
+const EARLY_REWARD: f32 = 1.0;
+
 impl Judge {
-    pub fn new(goal: Goal, seconds: f32) -> Judge {
+    /// A judge for runs of `seconds`, or, if `length` is finite, runs that end when the body has gone
+    /// that far, with as long as the slowest pace allows (and no less than `seconds`).
+    pub fn new(goal: Goal, seconds: f32, length: f32) -> Judge {
+        let seconds = if length.is_finite() { (length / SLOWEST).max(seconds).min(120.0) } else { seconds };
         Judge {
             goal,
             steps: 0,
@@ -114,6 +137,10 @@ impl Judge {
             jerk: 0.0,
             last: [0.0; 24],
             in_gap: false,
+            dropped: false,
+            length,
+            finished: false,
+            endless: false,
             over: false,
         }
     }
@@ -150,7 +177,14 @@ impl Judge {
         if self.goal == Goal::Jump && creature.in_gap(world) {
             self.in_gap = true;
         }
-        self.over = self.steps >= self.most_steps || self.seconds_down >= DOWN_LIMIT || self.in_gap;
+        if self.goal == Goal::Carry && creature.dropped(world) {
+            self.dropped = true;
+        }
+        if creature.distance(world) >= self.length {
+            self.finished = true;
+        }
+        let fell = self.seconds_down >= DOWN_LIMIT || self.in_gap || self.dropped;
+        self.over = fell || !self.endless && (self.steps >= self.most_steps || self.finished);
         self.over
     }
 
@@ -160,14 +194,18 @@ impl Judge {
         let fell = if self.seconds_down >= DOWN_LIMIT { FALL_COST } else { 0.0 };
         let manner = CARRIED_REWARD * self.seconds_carried + TURNS_REWARD * self.seconds_turns - SLIDE_COST * self.seconds_sliding - JERK_COST * self.jerk;
         let costs = fell + DOWN_COST * self.seconds_down + KNEE_COST * self.seconds_kneeling + WORK_COST * self.work - manner;
-        let tall = self.tallness / self.most_steps.max(1) as f32;
+        let tall = self.tallness / self.steps.max(1) as f32;
+        let early = if self.finished { EARLY_REWARD * (self.most_steps - self.steps.min(self.most_steps)) as f32 * STEP } else { 0.0 };
+        let distance = distance.min(self.length);
         let score = match self.goal {
             // a little for every second on its feet, so that a dive forward and a fall is not the easy answer
-            Goal::Far | Goal::Fast => distance + UP_REWARD * (self.steps as f32 * STEP - self.seconds_down) + AIR_REWARD * self.seconds_flying,
+            Goal::Far | Goal::Fast | Goal::Course => distance + UP_REWARD * (self.steps as f32 * STEP - self.seconds_down) + AIR_REWARD * self.seconds_flying,
             // standing tall and still scores a little; tall and going forward scores most
             Goal::Tall => distance * (0.2 + 0.8 * tall) + 2.0 * tall + AIR_REWARD * self.seconds_flying,
             Goal::Jump => 1.5 * distance + self.seconds_flying - if self.in_gap { 1.0 } else { 0.0 },
-        } - costs;
+            // distance only while carrying: a dropped ball ends the run and costs as a fall does
+            Goal::Carry => distance + UP_REWARD * (self.steps as f32 * STEP - self.seconds_down) - if self.dropped { FALL_COST } else { 0.0 },
+        } + early - costs;
         Outcome { score, distance, seconds_down: self.seconds_down, work: self.work }
     }
 }
@@ -221,6 +259,8 @@ pub struct Settings {
     pub goal: Goal,
     /// How long each run lasts; the goal's own time when zero.
     pub seconds: f32,
+    /// How far each run goes, in metres, or infinite for runs of the goal's own time.
+    pub length: f32,
     /// Neurons in each hidden layer of the brain, one to four layers, and how many memories.
     pub hidden: usize,
     pub layers: usize,
@@ -234,7 +274,7 @@ pub struct Settings {
 
 impl Default for Settings {
     fn default() -> Self {
-        Settings { population: 32, goal: Goal::Far, seconds: 0.0, hidden: crate::brain::HIDDEN, layers: 1, memory: 0, keep: 4, nudge_chance: 0.1, nudge_size: 0.3 }
+        Settings { population: 32, goal: Goal::Far, seconds: 0.0, length: f32::INFINITY, hidden: crate::brain::HIDDEN, layers: 1, memory: 0, keep: 4, nudge_chance: 0.1, nudge_size: 0.3 }
     }
 }
 
@@ -276,6 +316,7 @@ impl Trainer {
         let population = settings.population.max(2);
         let seconds = if settings.seconds > 0.0 { settings.seconds } else { settings.goal.seconds() };
         let settings = Settings { population, seconds, keep: settings.keep.min(population - 1), ..settings };
+        let description = Description { carry: settings.goal == Goal::Carry, ..description };
         let mut start = World::new();
         start.set_ground(ground);
         let creature = Creature::build(&mut start, description)?;
@@ -316,7 +357,7 @@ impl Trainer {
 
     /// A judge for a run of this trainer's goal and length.
     pub fn judge(&self) -> Judge {
-        Judge::new(self.settings.goal, self.settings.seconds)
+        Judge::new(self.settings.goal, self.settings.seconds, self.settings.length)
     }
 
     /// Runs one brain from the start and scores it.
@@ -324,7 +365,7 @@ impl Trainer {
         self.world.copy_from(&self.start);
         self.brain.forget();
         let creature = &self.creature;
-        let mut judge = Judge::new(self.settings.goal, self.settings.seconds);
+        let mut judge = self.judge();
         loop {
             creature.sense(&self.world, &mut self.senses);
             self.brain.think(weights, &self.senses);
@@ -342,7 +383,7 @@ impl Trainer {
         self.world.copy_from(&self.start);
         self.brain.forget();
         let creature = &self.creature;
-        let mut judge = Judge::new(self.settings.goal, self.settings.seconds);
+        let mut judge = self.judge();
         let mut watch = crate::gait::Watch::default();
         loop {
             creature.sense(&self.world, &mut self.senses);
@@ -404,6 +445,23 @@ impl Trainer {
             }
         }
         best
+    }
+
+    /// A child of one brain: each weight nudged at random with the usual chance, and at least one.
+    pub fn mutate(&mut self, parent: &[f32]) -> Vec<f32> {
+        let mut child = parent.to_vec();
+        let mut nudged = false;
+        for weight in &mut child {
+            if self.random.unit() < self.settings.nudge_chance {
+                *weight += self.settings.nudge_size * self.random.bell();
+                nudged = true;
+            }
+        }
+        if !nudged && !child.is_empty() {
+            let at = self.random.below(child.len());
+            child[at] += self.settings.nudge_size * self.random.bell();
+        }
+        child
     }
 
     /// Scores the generation and makes the next one from it.
@@ -494,8 +552,8 @@ mod tests {
     #[test]
     fn the_same_seed_learns_the_same_way() {
         let settings = Settings { population: 6, seconds: 2.0, ..Settings::default() };
-        let mut one = Trainer::new(Description { legs: 2 }, settings, &flat_ground(), 7).unwrap();
-        let mut two = Trainer::new(Description { legs: 2 }, settings, &flat_ground(), 7).unwrap();
+        let mut one = Trainer::new(Description { legs: 2, carry: false }, settings, &flat_ground(), 7).unwrap();
+        let mut two = Trainer::new(Description { legs: 2, carry: false }, settings, &flat_ground(), 7).unwrap();
         one.train(20);
         for _ in 0..10 {
             two.train(2);
@@ -508,7 +566,7 @@ mod tests {
     #[test]
     fn a_two_legged_walker_learns_to_go_clearly_further_than_its_first_generation() {
         let settings = Settings::default();
-        let mut trainer = Trainer::new(Description { legs: 2 }, settings, &flat_ground(), 1).unwrap();
+        let mut trainer = Trainer::new(Description { legs: 2, carry: false }, settings, &flat_ground(), 1).unwrap();
         let generations = 30;
         let started = std::time::Instant::now();
         trainer.train(settings.population as u32);
@@ -543,7 +601,7 @@ mod tests {
     /// of the last.
     fn learns(goal: Goal, ground: &[Segment], generations: u32) -> (Outcome, Outcome) {
         let settings = Settings { goal, ..Settings::default() };
-        let mut trainer = Trainer::new(Description { legs: 2 }, settings, ground, 3).unwrap();
+        let mut trainer = Trainer::new(Description { legs: 2, carry: false }, settings, ground, 3).unwrap();
         trainer.train(settings.population as u32);
         let first = trainer.best.clone();
         while trainer.generation < generations {
@@ -570,7 +628,7 @@ mod tests {
     #[test]
     fn a_bigger_brain_of_two_layers_learns_too() {
         let settings = Settings { hidden: 24, layers: 2, ..Settings::default() };
-        let mut trainer = Trainer::new(Description { legs: 4 }, settings, &flat_ground(), 5).unwrap();
+        let mut trainer = Trainer::new(Description { legs: 4, carry: false }, settings, &flat_ground(), 5).unwrap();
         assert_eq!(trainer.layout.weights(), 24 * 30 + 24 * 25 + 24 * 25);
         assert_eq!(trainer.layout.memory, 0);
         trainer.train(32);
@@ -580,5 +638,86 @@ mod tests {
         }
         std::println!("four legs, two layers of 24: generation 0 best {first}, after 20 generations {}", trainer.best_score);
         assert!(trainer.best_score > first + 1.0);
+    }
+
+    /// A short obstacle course as the page makes one: level ground, then hills, then steps, then gaps.
+    fn course() -> Vec<Segment> {
+        let mut ground = vec![Segment { a: Vec2::new(-20.0, 0.0), b: Vec2::new(15.0, 0.0) }];
+        let mut x = 15.0;
+        let mut y = 0.0;
+        // gentle hills
+        while x < 45.0 {
+            let next = 0.25 * crate::math::sin_cos((x + 0.5 - 15.0) * 0.6).0;
+            ground.push(Segment { a: Vec2::new(x, y), b: Vec2::new(x + 0.5, next) });
+            x += 0.5;
+            y = next;
+        }
+        // steps up
+        while x < 75.0 {
+            ground.push(Segment { a: Vec2::new(x, y), b: Vec2::new(x, y + 0.08) });
+            y += 0.08;
+            ground.push(Segment { a: Vec2::new(x, y), b: Vec2::new(x + 2.5, y) });
+            x += 2.5;
+        }
+        // gaps
+        while x < 300.0 {
+            ground.push(Segment { a: Vec2::new(x + 0.25, y), b: Vec2::new(x + 3.5, y) });
+            x += 3.5;
+        }
+        ground
+    }
+
+    /// Trains for a goal and returns the best of the first generation and of the last.
+    fn learns_on(goal: Goal, legs: u32, ground: &[Segment], generations: u32) -> (Outcome, Outcome) {
+        let settings = Settings { goal, ..Settings::default() };
+        let mut trainer = Trainer::new(Description { legs, carry: false }, settings, ground, 4).unwrap();
+        trainer.train(settings.population as u32);
+        let first = trainer.best.clone();
+        while trainer.generation < generations {
+            trainer.train(settings.population as u32);
+        }
+        let first = trainer.run(&first);
+        let best = trainer.best.clone();
+        let last = trainer.run(&best);
+        std::println!("{goal:?}, {legs} legs: generation 0 best {first:?}; after {generations} generations {last:?}");
+        (first, last)
+    }
+
+    #[test]
+    fn the_obstacle_course_is_learned_further_over_the_generations() {
+        let (first, last) = learns_on(Goal::Course, 4, &course(), 60);
+        assert!(last.score > first.score + 3.0 && last.distance > first.distance + 3.0, "course: {first:?} then {last:?}");
+    }
+
+    #[test]
+    fn carrying_a_ball_is_learned_further_over_the_generations_without_dropping_it() {
+        let (first, last) = learns_on(Goal::Carry, 2, &flat_ground(), 60);
+        assert!(last.score > first.score + 3.0 && last.distance > first.distance + 2.0, "carry: {first:?} then {last:?}");
+    }
+
+    #[test]
+    fn a_ball_on_the_back_stays_there_while_the_walker_stands_and_falls_off_when_it_tips() {
+        for legs in [1, 2, 4] {
+            let settings = Settings { goal: Goal::Carry, ..Settings::default() };
+            let mut trainer = Trainer::new(Description { legs, carry: false }, settings, &flat_ground(), 1).unwrap();
+            assert_eq!(trainer.description.senses(), Description { legs, carry: false }.senses() + 2);
+            let creature = trainer.creature.clone();
+            let mut world = trainer.start.clone();
+            for _ in 0..120 {
+                creature.hold(&mut world);
+                world.step();
+            }
+            assert!(!creature.dropped(&world), "{legs} legs: the ball fell off a walker standing still");
+            // tipped well over, the ball rolls off
+            let torso = creature.torso as usize;
+            let at = world.bodies[torso].position + Vec2::new(0.0, 0.3);
+            world.bodies[torso].push(at, Vec2::new(-40.0, 0.0));
+            let dropped = (0..240).any(|_| {
+                world.step();
+                creature.dropped(&world)
+            });
+            assert!(dropped || legs == 4, "{legs} legs: a hard shove did not drop the ball");
+            let _ = &mut trainer;
+        }
     }
 }
