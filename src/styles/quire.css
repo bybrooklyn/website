@@ -64,7 +64,8 @@
     padding: calc(var(--margin) * 1mm);
     zoom: var(--zoom, 1);
     border: 0.0625rem solid var(--sheet-edge);
-    border-radius: calc(var(--radius) * 1.2);
+    /* a sheet of paper: its corners are barely eased, not rounded */
+    border-radius: 0.125rem;
     background:
         repeating-linear-gradient(to bottom, transparent 0 calc(var(--paper-h) * 1mm - 0.0625rem), color-mix(in oklch, var(--panel-edge), transparent 45%) calc(var(--paper-h) * 1mm - 0.0625rem) calc(var(--paper-h) * 1mm)),
         var(--sheet-ground);
@@ -145,18 +146,24 @@
     --caret: var(--accent);
     position: absolute;
     top: 0;
-    left: -0.09rem;
+    left: -0.045rem;
     z-index: 2;
-    width: 0.16rem;
-    border-radius: 0.08rem;
+    /* a thin square-ended line, as a text cursor is */
+    width: max(0.09rem, 1.5px);
     background: var(--caret);
     pointer-events: none;
     opacity: 0;
+    /* it fades as it blinks and slides the little way to where it is next; caret.ts puts it somewhere new at once */
+    transition:
+        opacity 0.12s ease,
+        translate 0.07s ease-out,
+        height 0.07s ease-out;
 }
 
-/* a colour of the flag too dark to stand out on the sheet is drawn with a hairline of ink round it (caret.ts) */
-.quire-caret.edged {
-    box-shadow: 0 0 0 0.0625rem color-mix(in oklch, var(--ink) 80%, transparent);
+@media (prefers-reduced-motion: reduce) {
+    .quire-caret {
+        transition: none;
+    }
 }
 
 .quire-caret.shown {

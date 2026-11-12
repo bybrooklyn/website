@@ -60,6 +60,9 @@ export function caretBox(root: HTMLElement, frame: HTMLElement): { left: number;
     return { left: (rect.left - origin.left) / zoom - frame.clientLeft, top: (rect.top - origin.top) / zoom - frame.clientTop, height: rect.height / zoom };
 }
 
+/** How much of the line's height the caret stands: about the height of the letters with their tails. */
+const TALL = 0.9;
+
 /** The colour shown after `index` blinks, going round the list. */
 export function blinkColour(colours: readonly string[], index: number): string {
     return colours[((index % colours.length) + colours.length) % colours.length];
@@ -98,10 +101,22 @@ export function createCaret(root: HTMLElement, frame: HTMLElement, colours: read
     /** Puts the caret where the cursor is now; true when it is shown. */
     const move = () => {
         const box = document.activeElement === root || root.contains(document.activeElement) ? caretBox(root, frame) : null;
+        const was = element.classList.contains("shown");
         element.classList.toggle("shown", !!box);
         if (!box) return false;
-        element.style.translate = `${box.left}px ${box.top}px`;
-        element.style.height = `${box.height}px`;
+        // as tall as the letters, not the whole line: a little is taken off the line's height, top and bottom alike
+        const tall = box.height * TALL;
+        const top = box.top + (box.height - tall) / 2;
+        // a long way (another line, a click elsewhere, or its first showing) is gone to at once; a letter's width is slid
+        const [x = 0, y = 0] = element.style.translate.split(" ").map(parseFloat);
+        const far = !was || Math.abs(top - y) > 1 || Math.abs(box.left - x) > 40;
+        if (far) element.style.transition = "none";
+        element.style.translate = `${box.left}px ${top}px`;
+        element.style.height = `${tall}px`;
+        if (far) {
+            void element.offsetWidth;
+            element.style.transition = "";
+        }
         return true;
     };
     const place = () => {

@@ -844,7 +844,8 @@ used("the caret is drawn where the cursor is, a line tall, blinking once still i
     })()`);
     expect(seen.dx).toBeLessThan(1.5);
     expect(seen.dy).toBeLessThan(1.5);
-    expect(seen.width).toBeGreaterThanOrEqual(2);
+    expect(seen.width).toBeGreaterThanOrEqual(1.4);
+    expect(seen.width).toBeLessThanOrEqual(2.2);
     expect(seen.height).toBeGreaterThan(18);
     const flag = ["rgb(213, 45, 0)", "rgb(255, 154, 86)", "rgb(255, 255, 255)", "rgb(211, 98, 164)", "rgb(163, 2, 98) edged"];
     expect(flag.map((each) => each.replace(" edged", ""))).toContain(seen.colour);

@@ -63,6 +63,9 @@ export function fitZoom(room: number, paper: number): number {
 /** A zoom said as a percentage. */
 export const percent = (zoom: number): string => `${Math.round(zoom * 100)}%`;
 
+/** How large the sheet is shown when nothing else is asked for: a good deal bigger than the paper's own size, so that the page fills more of the window and the writing is easy to read. Less where the room is narrower. */
+export const USUAL = 1;
+
 /** How many CSS pixels a millimetre is. */
 const MM = 96 / 25.4;
 
@@ -75,7 +78,7 @@ export function createZoom(paper: HTMLElement, room: HTMLElement, space: () => n
     const wanted = () => {
         if (narrow()) return 1;
         const fit = fitZoom(space(), paperSize(page()).width * MM);
-        return mode === "fit" ? fit : mode === "auto" ? Math.min(1, fit) : mode;
+        return mode === "fit" ? fit : mode === "auto" ? Math.min(USUAL, fit) : mode;
     };
 
     /** Shows the zoom asked for; when it changes, the sheet eases from its old size about the middle of the window. */
@@ -95,7 +98,8 @@ export function createZoom(paper: HTMLElement, room: HTMLElement, space: () => n
         paper.style.setProperty("--zoom", String(next));
         // the window is scrolled so that the same point is in the middle again
         const after = paper.getBoundingClientRect();
-        scrollBy({ top: after.top + local.y * next - middle.y, behavior: "instant" });
+        // (at the very top of the page it stays at the top: the sheet grows downward from under the bar)
+        if (scrollY > 0) scrollBy({ top: after.top + local.y * next - middle.y, behavior: "instant" });
         if (room.scrollWidth > room.clientWidth) room.scrollLeft += after.left + local.x * next - middle.x;
         onChange?.(next);
         if (!animate || still()) return;
