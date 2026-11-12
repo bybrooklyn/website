@@ -1,11 +1,9 @@
-// The page for mdQuire (src/pages/mdquire.astro): the whole editor, writing to documents kept in
-// this browser. The first time, it opens a sample document that holds every kind of block.
+// The page for mdQuire (src/pages/mdquire.astro): the whole app, with the site's colors for text
+// and a sample document holding every kind of block, offered from the welcome the first time.
 
 import { accents } from "../data/theme";
 import { css } from "../lib/color";
-import { createEditor } from "../quire/editor";
-import { read } from "../quire/read";
-import { browserStore, indexedTables } from "../quire/store-browser";
+import { startApp } from "../quire/app";
 
 const SAMPLE = `---
 title: Every kind of block
@@ -59,16 +57,4 @@ const host = document.querySelector<HTMLElement>("#quire");
 const names: Record<string, string> = { violet: "Violet", pink: "Pink", blue: "Blue", mint: "Mint", amber: "Amber" };
 const colors = Object.entries(accents).map(([key, value]) => ({ name: names[key] ?? key, value: css(value) }));
 
-async function start(place: HTMLElement) {
-    const store = browserStore(await indexedTables());
-    let entry = (await store.list())[0];
-    if (!entry) {
-        const made = await store.create("Every kind of block", SAMPLE);
-        entry = { id: made.id, name: "Every kind of block" };
-    }
-    const opened = await store.open(entry.id);
-    const editor = createEditor(place, read(opened.text, { mdx: true }), { name: entry.name, store, id: entry.id, mark: opened.mark, versions: store.versions, colors });
-    editor.surface.focus();
-}
-
-if (host) void start(host);
+if (host) void startApp(host, { colors, sample: SAMPLE });

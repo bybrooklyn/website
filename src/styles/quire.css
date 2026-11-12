@@ -247,7 +247,6 @@
 }
 
 .quire-button:focus-visible,
-.quire-name:focus-visible,
 .quire-menu-line:focus-visible {
     outline: 0.125rem solid var(--accent);
     outline-offset: -0.125rem;
@@ -293,29 +292,29 @@
 }
 
 .quire-name {
-    min-width: 4ch;
-    max-width: calc(12ch + 1.1rem);
-    height: 2.1rem;
-    padding: 0 0.55rem;
-    border: 0;
-    border-radius: 1.05rem;
-    background: transparent;
-    color: var(--ink);
+    gap: 0.35rem;
+    max-width: calc(12ch + 2.6rem);
+    padding-inline: 0.65rem 0.5rem;
     font-family: var(--font-head);
     font-size: 1.05rem;
     font-weight: var(--head-weight);
+}
+
+.quire-name-text {
+    overflow: hidden;
+    white-space: nowrap;
     text-overflow: ellipsis;
-    cursor: text;
-    transition: background 0.2s var(--ease);
 }
 
-.quire-name:hover,
-.quire-name:focus {
-    background: color-mix(in oklch, var(--ink) 9%, transparent);
+.quire-name .quire-icon {
+    flex: none;
+    width: 0.9rem;
+    height: 0.9rem;
+    transition: rotate 0.3s var(--ease);
 }
 
-.quire-name:focus {
-    outline: none;
+.quire-name.open .quire-icon {
+    rotate: 180deg;
 }
 
 .quire-style {
@@ -1231,7 +1230,7 @@
 /* on a phone the bar keeps room for its marks: a shorter name, and the word count goes into the three-dot menu */
 @media (max-width: 40rem) {
     .quire-name {
-        max-width: calc(7ch + 1.1rem);
+        max-width: calc(7ch + 2.4rem);
     }
 
     .quire-style {
@@ -1416,6 +1415,311 @@
     }
 }
 
+/* ---- the page: the editor filling the window, the site's name to lead home ---- */
+
+body.quire-app {
+    display: block;
+    max-width: none;
+    padding: 0.9rem clamp(0.75rem, 2.5vw, 2rem) calc(var(--line) * 2);
+}
+
+.quire-top {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    position: relative;
+    margin: 0 0 0.6rem;
+    font-size: 0.85rem;
+}
+
+.quire-app main:focus {
+    outline: none;
+}
+
+/* ---- the welcome, the first time: grown open over the empty sheet, and gone once writing starts ---- */
+
+.quire-welcome {
+    display: grid;
+    grid-template-rows: 0fr;
+    opacity: 0;
+    transition:
+        grid-template-rows 0.5s var(--ease),
+        opacity 0.3s ease,
+        margin 0.5s var(--ease);
+}
+
+.quire-welcome.shown {
+    grid-template-rows: 1fr;
+    margin-bottom: calc(var(--line) * 1.5);
+    opacity: 1;
+}
+
+.quire-welcome-inner {
+    min-height: 0;
+    overflow: hidden;
+}
+
+.quire-welcome-title {
+    margin: 0;
+    font-family: var(--font-head);
+    font-size: 1.6rem;
+    font-weight: var(--head-weight);
+}
+
+.quire-welcome-said {
+    margin: 0.2rem 0 0.9rem;
+    color: var(--muted);
+}
+
+.quire-welcome-choices {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+/* ---- the documents list, grown out of the name ---- */
+
+.quire-documents-menu .quire-menu-items {
+    min-width: min(20rem, 100vw - 1.5rem);
+    max-width: min(28rem, 100vw - 1rem);
+}
+
+.quire-documents {
+    display: flex;
+    flex-direction: column;
+}
+
+.quire-documents-rename {
+    display: grid;
+    gap: 0.25rem;
+    padding: 0.35rem 0.45rem 0.6rem;
+}
+
+.quire-documents-rename .quire-link-field {
+    width: 100%;
+}
+
+.quire-documents-head {
+    margin: 0.5rem 0 0.15rem;
+    padding: 0 0.55rem;
+}
+
+.quire-documents-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.quire-documents-item {
+    display: flex;
+    align-items: center;
+}
+
+.quire-documents-away {
+    flex: none;
+    min-width: 1.9rem;
+    height: 1.9rem;
+    color: var(--muted);
+    opacity: 0.6;
+    transition:
+        opacity 0.2s ease,
+        color 0.2s ease;
+}
+
+.quire-documents-item:hover .quire-documents-away,
+.quire-documents-away:focus-visible,
+.quire-documents-away.asking {
+    opacity: 1;
+}
+
+.quire-documents-away.asking {
+    color: var(--accent);
+}
+
+.quire-documents-search {
+    width: auto;
+    margin: 0.2rem 0.45rem 0.3rem;
+}
+
+.quire-documents-new .quire-icon {
+    width: 1rem;
+}
+
+/* the same staggered arrival as a menu's lines, for the list's own parts */
+.quire-menu-items > .quire-documents > *,
+.quire-menu-items > .quire-repository > * {
+    opacity: 0;
+    translate: 0 -0.35rem;
+    transition:
+        opacity 0.12s ease,
+        translate 0.12s ease;
+}
+
+.quire-menu.open .quire-menu-items > .quire-documents > *,
+.quire-menu.open .quire-menu-items > .quire-repository > * {
+    opacity: 1;
+    translate: 0 0;
+    transition:
+        opacity 0.3s ease calc(0.1s + var(--line-at, 0) * 0.035s),
+        translate 0.4s var(--ease) calc(0.1s + var(--line-at, 0) * 0.035s);
+}
+
+/* ---- connecting a repository ---- */
+
+.quire-repository {
+    display: grid;
+    gap: 0.55rem;
+    width: min(26rem, 100vw - 2.5rem);
+    padding: 0.5rem 0.55rem 0.6rem;
+}
+
+.quire-repository-title {
+    margin: 0 0 0.2rem;
+    font-family: var(--font-head);
+    font-size: 1.15rem;
+    font-weight: var(--head-weight);
+}
+
+.quire-repository-row {
+    display: grid;
+    gap: 0.2rem;
+}
+
+.quire-repository-label {
+    color: var(--muted);
+    font-size: 0.82rem;
+}
+
+.quire-repository .quire-link-field {
+    width: 100%;
+}
+
+.quire-repository-about {
+    margin: 0.2rem 0 0;
+    color: var(--muted);
+    font-size: 0.82rem;
+    line-height: 1.5;
+}
+
+.quire-repository-about a {
+    color: var(--accent);
+}
+
+.quire-repository-said {
+    min-height: 1.2em;
+    margin: 0;
+    color: var(--accent);
+    font-size: 0.85rem;
+}
+
+.quire-repository-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+.quire-forget {
+    margin-left: auto;
+    color: var(--muted);
+}
+
+/* ---- printing: the document alone, in the site's typefaces, dark on white ---- */
+
+@media print {
+    html:has(body.quire-app),
+    body.quire-app {
+        background: white;
+        color: black;
+    }
+
+    body.quire-app {
+        padding: 0;
+    }
+
+    .quire-app .skip,
+    .quire-app .to-top,
+    .quire-top,
+    .quire-bar,
+    .quire-outline,
+    .quire-menu,
+    .quire-select-bar,
+    .quire-table-tools,
+    .quire-history,
+    .quire-conflict,
+    .quire-source,
+    .quire-welcome,
+    .quire-alt,
+    .quire-file,
+    .quire-raw {
+        display: none !important;
+    }
+
+    .quire-editor,
+    .quire-editor.markdown {
+        display: block;
+        max-width: none;
+        contain: none;
+    }
+
+    .quire-panes,
+    .quire-editor.markdown .quire-panes {
+        display: block;
+    }
+
+    .quire-paper {
+        padding: 0;
+        border: 0;
+        background: none;
+        opacity: 1 !important;
+        visibility: visible !important;
+        translate: none !important;
+    }
+
+    .quire-paper > .quire {
+        max-width: none;
+        min-height: 0;
+        color: black;
+    }
+
+    .quire a {
+        color: black;
+    }
+
+    .quire pre,
+    .quire :not(pre) > code {
+        background: whitesmoke;
+        color: black;
+    }
+
+    .quire pre[data-label]::after {
+        content: none;
+    }
+
+    .quire blockquote {
+        color: dimgray;
+    }
+
+    .quire-box {
+        border-color: black;
+    }
+
+    .quire-box[data-checked="true"] {
+        background: black;
+    }
+
+    .quire h1,
+    .quire h2,
+    .quire h3 {
+        break-after: avoid;
+    }
+
+    .quire pre,
+    .quire table,
+    .quire-image {
+        break-inside: avoid;
+    }
+}
+
 /* With less motion asked for, nothing of the editor moves: what opens is simply there, and what
    closes is simply gone. It is stated for all of it at once, so that no state slips through by
    being more particular than this rule. */
@@ -1431,7 +1735,8 @@
     .quire-history,
     .quire-history *,
     .quire-conflict,
-    .quire-conflict * {
+    .quire-conflict *,
+    .quire-welcome {
         transition-duration: 0s !important;
         transition-delay: 0s !important;
     }

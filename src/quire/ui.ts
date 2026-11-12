@@ -232,6 +232,8 @@ export function flowMenu(label: string, options: { align?: "left" | "right"; cla
         }
     }
     box.addEventListener("keydown", onKey);
+    // what is in the menu may grow or shrink while it is open (a message under a form, say): the box follows
+    if (typeof ResizeObserver !== "undefined") new ResizeObserver(() => opened && place()).observe(items);
 
     // a menu opened with the mouse leaves focus in the text, and Escape there must still close it
     function escape(event: KeyboardEvent) {

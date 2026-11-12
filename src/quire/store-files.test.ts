@@ -11,7 +11,7 @@ test("a Markdown file opens with its text, and other kinds of file are refused",
     const entry = await store.add(file("post.mdx", "# Post\n"));
     expect(entry.name).toBe("post.mdx");
     expect(await store.open(entry.id)).toEqual({ text: "# Post\n", mark: "1" });
-    await expect(store.add(file("picture.png", "x"))).rejects.toThrow("only Markdown");
+    expect(await store.add(file("picture.png", "x")).then(() => "", (error) => String(error))).toContain("only Markdown");
     expect(openable("notes.txt")).toBe(true);
     expect(openable("notes.TXT")).toBe(true);
     expect(openable("notes.docx")).toBe(false);
@@ -24,7 +24,7 @@ test("an opened file is saved on its mark, and the status says to download it", 
     expect((await store.save(entry.id, "stale", "1")).ok).toBe(false);
     expect(store.note).toContain("Download");
     expect(store.can.pictures).toBe(false);
-    await expect(store.savePicture(entry.id, new Blob(["x"]), "x.png")).rejects.toThrow("cannot keep pictures");
+    expect(await store.savePicture(entry.id, new Blob(["x"]), "x.png").then(() => "", (error) => String(error))).toContain("cannot keep pictures");
 });
 
 test("a new or renamed file keeps a plain name, never the same as another open one", async () => {

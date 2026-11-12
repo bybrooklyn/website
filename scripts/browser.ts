@@ -20,8 +20,8 @@ export interface Browser {
     type(text: string): Promise<void>;
     /** Composes text through an input method, as for Japanese: each of `steps` shown in turn, then `text` committed. */
     compose(steps: string[], text: string): Promise<void>;
-    /** Makes the page see media features as given, such as `{ "prefers-reduced-motion": "reduce" }`; empty puts them back. */
-    media(features: Record<string, string>): Promise<void>;
+    /** Makes the page see media features as given, such as `{ "prefers-reduced-motion": "reduce" }`, and print or screen media if asked; empty puts them back. */
+    media(features: Record<string, string>, type?: "print" | "screen" | ""): Promise<void>;
     /** Changes the window's size. */
     resize(width: number, height: number): Promise<void>;
     /** Answers every file chooser the page opens from now on with these files, instead of a dialog nobody can close. */
@@ -132,8 +132,8 @@ export async function browser({ width = 1200, height = 800, scale = 1, port = 94
             for (const shown of steps) await send("Input.imeSetComposition", { text: shown, selectionStart: shown.length, selectionEnd: shown.length });
             await send("Input.insertText", { text });
         },
-        async media(features) {
-            await send("Emulation.setEmulatedMedia", { features: Object.entries(features).map(([name, value]) => ({ name, value })) });
+        async media(features, type = "") {
+            await send("Emulation.setEmulatedMedia", { media: type, features: Object.entries(features).map(([name, value]) => ({ name, value })) });
         },
         async files(paths) {
             chosen = paths;

@@ -38,7 +38,7 @@ test("a document taken away goes to the trash and can be brought back", async ()
     await store.remove(kept.id);
     expect(await store.list()).toEqual([]);
     expect((await store.trash()).map((entry) => entry.name)).toEqual(["Draft"]);
-    await expect(store.open(kept.id)).rejects.toThrow("no longer kept");
+    expect(await store.open(kept.id).then(() => "", (error) => String(error))).toContain("no longer kept");
     await store.restore(kept.id);
     expect((await store.open(kept.id)).text).toBe("words");
     expect(await store.trash()).toEqual([]);

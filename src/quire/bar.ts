@@ -278,7 +278,8 @@ export function pressedAt(doc: Document, path: number[], marks: Mark[]) {
 /** What the bar needs from the editor around it. */
 export interface BarOptions {
     name: string;
-    onRename?: (name: string) => void;
+    /** Opens the documents list from the name. */
+    onName?: (from: HTMLElement) => void;
     /** The colors offered for text, by name. */
     colors?: { name: string; value: string }[];
     onImage?: (file: File) => Promise<string>;
@@ -320,38 +321,20 @@ export function createBar(surface: Surface, options: BarOptions): { element: HTM
     // the three dots, made first because folded groups open their menus from them
     const moreButton = dots("More");
 
-    // the name, a field that reads as a title until it is clicked
-    const name = make("input", "quire-name");
-    name.value = options.name;
-    name.setAttribute("aria-label", "Document name");
-    name.spellcheck = false;
-    let named = options.name;
-    const fitName = () => {
-        name.style.width = `calc(${Math.max(4, Math.min(12, name.value.length + 1))}ch + 1.1rem)`;
-        name.title = name.value;
+    // the document's name: pressed, the documents list flows out of it
+    const name = make("button", "quire-button quire-name");
+    name.type = "button";
+    name.setAttribute("aria-haspopup", "menu");
+    const nameText = make("span", "quire-name-text", options.name);
+    name.append(nameText, icon("chevron"));
+    const fitName = (value: string) => {
+        nameText.textContent = value;
+        name.title = value;
+        name.setAttribute("aria-label", `${value}: documents`);
     };
-    fitName();
-    name.addEventListener("input", fitName);
-    name.addEventListener("keydown", (event) => {
-        if (event.key === "Enter") {
-            event.preventDefault();
-            name.blur();
-        } else if (event.key === "Escape") {
-            name.value = named;
-            fitName();
-            name.blur();
-        }
-        event.stopPropagation();
-    });
-    name.addEventListener("change", () => {
-        const value = name.value.trim() || named;
-        name.value = value;
-        fitName();
-        if (value !== named) {
-            named = value;
-            options.onRename?.(value);
-        }
-    });
+    fitName(options.name);
+    name.addEventListener("mousedown", (event) => event.preventDefault());
+    name.addEventListener("click", () => options.onName?.(name));
     group(0, none, name);
 
     // the style picker
@@ -552,9 +535,9 @@ export function createBar(surface: Surface, options: BarOptions): { element: HTM
 
     // ---- the keyboard: one stop for Tab, the arrows along it ----
 
-    const stops = () => [...strip.querySelectorAll<HTMLElement>("button, input.quire-name")].filter((each) => !each.closest(".folded"));
+    const stops = () => [...strip.querySelectorAll<HTMLElement>("button")].filter((each) => !each.closest(".folded"));
     const rove = (current: HTMLElement) => {
-        for (const each of strip.querySelectorAll<HTMLElement>("button, input.quire-name")) each.tabIndex = each === current ? 0 : -1;
+        for (const each of strip.querySelectorAll<HTMLElement>("button")) each.tabIndex = each === current ? 0 : -1;
     };
     rove(stops()[0]!);
     strip.addEventListener("focusin", (event) => {
@@ -563,7 +546,7 @@ export function createBar(surface: Surface, options: BarOptions): { element: HTM
     strip.addEventListener("keydown", (event) => {
         const all = stops();
         const at = all.indexOf(document.activeElement as HTMLElement);
-        if (at < 0 || document.activeElement === name) return;
+        if (at < 0) return;
         if (event.key === "ArrowDown" && document.activeElement?.getAttribute("aria-haspopup")) {
             event.preventDefault();
             (document.activeElement as HTMLElement).click();
@@ -583,9 +566,7 @@ export function createBar(surface: Surface, options: BarOptions): { element: HTM
     return {
         element: bar,
         setName(value) {
-            named = value;
-            name.value = value;
-            fitName();
+            fitName(value);
         },
         menus,
         layout,

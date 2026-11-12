@@ -67,7 +67,7 @@ test("one file on its own can be written, and says plainly what it cannot do", a
     const opened = await store.open("only.md");
     expect((await store.save("only.md", "two", opened.mark)).ok).toBe(true);
     expect(store.can.pictures).toBe(false);
-    await expect(store.create("x", "")).rejects.toThrow("open a folder");
+    expect(await store.create("x", "").then(() => "", (error) => String(error))).toContain("open a folder");
 });
 
 test("without the API in this place, neither choice is offered", () => {

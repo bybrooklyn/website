@@ -128,7 +128,7 @@ test("a file too large for the contents API to send whole is read as a blob", as
 test("a refused token is said plainly, and nothing is asked of any address but api.github.com, always with the token", async () => {
     const github = mockGithub(POSTS);
     const refused = githubStore({ ...SETTINGS, token: "wrong" }, github.fetcher);
-    await expect(refused.list()).rejects.toThrow("GitHub refused the token");
+    expect(await refused.list().then(() => "", (error) => String(error))).toContain("GitHub refused the token");
     const store = githubStore(SETTINGS, github.fetcher);
     await store.list();
     await store.open("src/content/blog/first.mdx");

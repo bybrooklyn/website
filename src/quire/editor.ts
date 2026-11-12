@@ -42,6 +42,8 @@ export interface EditorOptions {
     onRename?: (name: string) => void;
     /** Told whenever the editor moves to another document, so the page can remember it. */
     onOpen?: (store: Store, entry: Entry) => void;
+    /** Opens the documents list from the name in the bar. */
+    onName?: (from: HTMLElement) => void;
     /** More lines for the three-dot menu, from the page. */
     more?: () => MenuItem[];
     /** Takes a picture file when there is no store to keep it. */
@@ -59,6 +61,8 @@ export interface Editor {
     status(): Status | undefined;
     /** The bar's name, from which the documents list grows. */
     nameElement(): HTMLElement;
+    /** Renames the document where it lives. */
+    rename(name: string): Promise<void>;
     destroy(): void;
 }
 
@@ -145,7 +149,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         name,
         colors: options.colors,
         onImage: keepPicture,
-        onRename: (value) => void rename(value),
+        onName: (from) => options.onName?.(from),
         onLink: openLink,
         more,
     });
@@ -220,13 +224,15 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     async function rename(value: string) {
         if (!store || !id || !store.can.rename) {
             name = value;
+            bar.setName(value);
             options.onRename?.(value);
             return;
         }
         await saver?.flush();
         try {
             id = await store.rename(id, value);
-            name = value;
+            name = (await store.list().catch(() => [])).find((entry) => entry.id === id)?.name ?? value;
+            bar.setName(name);
             options.onRename?.(value);
             options.onOpen?.(store, { id, name });
         } catch (error) {
@@ -272,6 +278,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         },
         status: () => saver?.status(),
         nameElement: () => bar.name,
+        rename,
         destroy() {
             surface.destroy();
             for (const menu of [...bar.menus, links]) menu.box.remove();
