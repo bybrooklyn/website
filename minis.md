@@ -170,6 +170,13 @@ After the audit (design/mdquire/AUDIT.md), the lab (/mdquire-lab/) and three moc
   from under it; no title inside and no X. (She disliked seeing "Edit" inside the open menu over its
   neighbours.) Its look: "i like the raised one". Lines as large as in the lab ("As it is"). Shortcuts as
   "Symbols". Nothing else was wrong in the open menu.
+- **It opens on A** ("A: no page"); C is chosen from View.
+- **The dictation dialog starts "In the middle of the screen":** the first press of the microphone dims
+  the page and shows a small rounded panel in the centre with a line of explanation and a filled "Choose"
+  button, which grows into the three cards.
+- **After the look, "All three at once":** the feel (the dialog and the fluidity pass), more Markdown, and
+  the Docs-style leftovers (resizable pictures, comments, inserts, download-as), as three agents in
+  parallel.
 - Speeds were left at the lab's starting values (open 200 ms with a slight spring, close 140 ms, lines
   14 ms apart); she has not sent other numbers.
 
