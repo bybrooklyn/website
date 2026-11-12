@@ -25,6 +25,7 @@ const plain = (url: string) => url.replace(/^https?:\/\//, "");
                     <a href={`mailto:${site.email}`}>{site.email}</a>
                     <a href={site.github}>{plain(site.github)}</a>
                     <a href={Astro.site}>{Astro.site?.host}</a>
+                    <span>{site.linkedin.short}</span>
                 </p>
             </div>
             <a class="resume-pdf" href={resumePdf} download>download pdf</a>

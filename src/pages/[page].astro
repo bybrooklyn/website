@@ -69,6 +69,12 @@ const { Content, headings } = await render(entry);
                                     <a href={`mailto:${site.email}`}>{site.email}</a>
                                 </dd>
                             </div>
+                            <div>
+                                <dt>linkedin</dt>
+                                <dd>
+                                    {site.linkedin.short} {site.linkedin.why}
+                                </dd>
+                            </div>
                         </dl>
                     )
                 }
