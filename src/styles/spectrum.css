@@ -114,7 +114,7 @@
 }
 
 /*
- * The track: a thin rail with a faint mark at each of its seventeen positions, and a round thumb on it.
+ * The track: a thin plain rail, and a round thumb on it that stays wherever it is left.
  * The range input lies over it unseen and takes no pointer; the script reads the pointer on the
  * track. Sideways the finger is the slider's; up and down it scrolls the page.
  */
@@ -150,16 +150,6 @@
     background: var(--rule);
 }
 
-.spectrum-rail i {
-    position: absolute;
-    top: 50%;
-    width: 0.125rem;
-    height: 0.625rem;
-    margin-top: -0.3125rem;
-    margin-inline-start: -0.0625rem;
-    border-radius: 0.0625rem;
-    background: color-mix(in oklch, var(--muted) 40%, transparent);
-}
 
 /* Placed by the script (inset-inline-start); it swells a little while held and settles back when let go. */
 .spectrum-thumb {

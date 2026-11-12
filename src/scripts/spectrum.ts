@@ -86,6 +86,8 @@ function run(root: HTMLElement): void {
     // ---- values ----
 
     let writing = 0;
+    /** Where each thumb was left by hand, from 0 to 1 along its track, when that is not exactly on a position. */
+    const rest: (number | undefined)[] = axes.map(() => undefined);
     function show(): void {
         axes.forEach((axis, index) => {
             const value = values[index]!;
@@ -93,7 +95,8 @@ function run(root: HTMLElement): void {
             sliders[index]!.setAttribute("aria-valuetext", said(text, axis, value));
             rows[index]!.classList.toggle("unset", value === UNSET);
             unsets[index]!.setAttribute("aria-pressed", String(value === UNSET));
-            if (!moving[index]) put(index, along(value || before[index]!));
+            // the thumb stays exactly where it was left; only a link's copy of it is rounded to a position
+            if (!moving[index]) put(index, rest[index] ?? along(value || before[index]!));
         });
         const code = encode(values);
         const here = address(chosen ? code : undefined, language);
@@ -153,10 +156,19 @@ function run(root: HTMLElement): void {
     }
 
     /** Glides a thumb to a position, and only once it is there sets the slider to it. */
-    const glide = (index: number, value: number, time: number) =>
+    const glide = (index: number, value: number, time: number) => {
+        rest[index] = undefined;
         slide(index, along(value), time, () => {
             heading[index] = undefined;
             set(index, value);
+        });
+    };
+    /** Leaves a thumb at a place of the visitor's choosing, gliding there if it is not there already. The value kept, and shared, is the nearest position. */
+    const leave = (index: number, place: number, time: number) =>
+        slide(index, place, time, () => {
+            heading[index] = undefined;
+            rest[index] = place;
+            set(index, nearest(place));
         });
 
     axes.forEach((_, index) => {
@@ -196,9 +208,11 @@ function run(root: HTMLElement): void {
         const letGo = (event: PointerEvent) => {
             if (!hold || event.pointerId !== hold.pointer) return;
             const place = hold.dragging ? places[index]! : at(event);
+            const hold_dragged = hold.dragging;
             hold = undefined;
             track.classList.remove("held");
-            glide(index, nearest(place), GLIDE);
+            // dragged, it stays where it was let go; clicked on the track, the thumb glides to the click
+            leave(index, place, hold_dragged ? 0 : GLIDE);
         };
         track.addEventListener("pointerup", letGo);
         // The browser took the touch for a scroll up or down: the thumb goes back where it was.
