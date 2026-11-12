@@ -1,18 +1,21 @@
-// Share codes: every slider's value in six characters, for `/spectrum/?c=<code>`.
+// Share codes: every slider's value in eight characters, for `/spectrum/?c=<code>`.
 //
-// The nine values (each 0 to 9, 0 for unset) are read as one nine-digit number, in the order of
-// `axes`, and that number is written in base 62. It always fits in six characters, and is padded
-// with zeros to six. This is the scheme of the old app, made for nine sliders where it had eleven.
+// The nine values (each 0 to 17, 0 for unset) are the digits of one number in base 18, in the
+// order of `axes`, and that number is written in base 62, padded with zeros to eight characters.
 //
-// The old app's codes were seven characters for its eleven sliders, so a code's length says which
-// it is. An old code is read the old way and its last two values, the sliders taken out, are dropped.
+// Two older kinds still open, and a code's length says which it is. Six characters held nine
+// sliders of nine positions, as a nine-digit decimal number in base 62. Seven characters are the
+// old app's, eleven sliders the same way, whose last two (the sliders taken out) are dropped. A
+// value v from either is the position 2v - 1 of the seventeen.
 
-import { axes, UNSET, type Values } from "./axes";
+import { axes, HIGHEST, UNSET, widened, type Values } from "./axes";
 
-export const LENGTH = 6;
-/** The length of the old eleven-slider codes. */
+export const LENGTH = 8;
+/** Nine sliders of nine positions. */
+export const NINE_LENGTH = 6;
+/** The old app's eleven sliders of nine positions. */
 export const OLD_LENGTH = 7;
-const OLD_SLIDERS = 11;
+const BASE = HIGHEST + 1;
 const DIGITS = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
 /** A whole number written in base 62, padded with zeros to `length`. */
@@ -33,20 +36,33 @@ function read(text: string): number | undefined {
     return number;
 }
 
-/** The code for these values. Anything that is not a whole number from 0 to 9 is written as unset. */
+/** The code for these values. Anything that is not a whole number from 0 to 17 is written as unset. */
 export function encode(values: Values): string {
-    const digits = axes.map((_, index) => {
+    const number = axes.reduce((sum, _, index) => {
         const value = values[index] ?? UNSET;
-        return Number.isInteger(value) && value >= 0 && value <= 9 ? value : UNSET;
-    });
-    return written(Number(digits.join("")), LENGTH);
+        return sum * BASE + (Number.isInteger(value) && value >= 0 && value <= HIGHEST ? value : UNSET);
+    }, 0);
+    return written(number, LENGTH);
 }
 
-/** The values a code holds, new or old, or undefined for something that is not a code. */
-export function decode(code: string): Values | undefined {
-    const sliders = code.length === LENGTH ? axes.length : code.length === OLD_LENGTH ? OLD_SLIDERS : 0;
-    const number = sliders ? read(code) : undefined;
+/** A code of nine positions read the old way: its decimal digits, the first nine of them. */
+function nines(code: string, sliders: number): Values | undefined {
+    const number = read(code);
     if (number === undefined || number >= 10 ** sliders) return undefined;
-    // An old code's first nine digits are the nine sliders that are kept, in the same order.
-    return [...String(number).padStart(sliders, "0")].slice(0, axes.length).map(Number);
+    return [...String(number).padStart(sliders, "0")].slice(0, axes.length).map((digit) => widened(Number(digit)));
+}
+
+/** The values a code holds, of any of the three kinds, or undefined for something that is not a code. */
+export function decode(code: string): Values | undefined {
+    if (code.length === NINE_LENGTH) return nines(code, axes.length);
+    if (code.length === OLD_LENGTH) return nines(code, 11);
+    if (code.length !== LENGTH) return undefined;
+    let number = read(code);
+    if (number === undefined || number >= BASE ** axes.length) return undefined;
+    const values: Values = [];
+    for (let index = 0; index < axes.length; index++) {
+        values.unshift(number % BASE);
+        number = Math.floor(number / BASE);
+    }
+    return values;
 }

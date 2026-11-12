@@ -18,6 +18,7 @@ import { getProjects, projectPage } from "../lib/projects";
 import { projectShare, sharePicture } from "../lib/share";
 import { axes, HIGHEST, LOWEST, MIDDLE, start } from "../spectrum/axes";
 import { breakable, codes, languages, said, words } from "../spectrum/languages";
+import { along } from "../spectrum/slider";
 
 const project = (await getEntry("projects", "spectrum"))!;
 const { name, summary, language } = project.data;
@@ -29,6 +30,8 @@ const next = projects[at + 1];
 
 const english = words("en");
 const values = start();
+/** Where the original's nine positions are along the track, in percent: every other one of the seventeen. */
+const marks = Array.from({ length: 9 }, (_, index) => along(LOWEST + index * 2) * 100);
 ---
 
 <Opened title={name} description={summary} image={sharePicture("project-spectrum")} facts={projectShare(project)} back={{ href: "/projects/", label: "projects" }}>
@@ -47,7 +50,10 @@ const values = start();
                         ))
                     }
                 </nav>
-                <p class="note spectrum-translator" hidden></p>
+                {/* Who translated the language picked: it opens under the picker, and draws shut again for English. */}
+                <div class="spectrum-translator">
+                    <p class="note"></p>
+                </div>
             </header>
 
             <ol class="spectrum-sliders">
@@ -62,7 +68,19 @@ const values = start();
                                     <span data-say="unset">{english.unset}</span>
                                 </button>
                             </div>
-                            <input type="range" id={`axis-${axis}`} min={LOWEST} max={HIGHEST} step="1" value={values[index]} aria-valuetext={said(english, axis, MIDDLE)} />
+                            {/*
+                                The real slider is the range input: it has the focus, the keys and the value that
+                                screen readers and other assistive technology read and set. It is laid over the
+                                track unseen, and the rail and thumb beside it are what is seen and dragged.
+                            */}
+                            <div class="spectrum-track">
+                                <input type="range" id={`axis-${axis}`} min={LOWEST} max={HIGHEST} step="1" value={values[index]} aria-valuetext={said(english, axis, MIDDLE)} />
+                                <span class="spectrum-rail" aria-hidden="true">
+                                    {/* faint marks at the original's nine positions */}
+                                    {marks.map((at) => <i style={`inset-inline-start: ${at}%`} />)}
+                                    <span class="spectrum-thumb" style={`inset-inline-start: ${along(values[index]!) * 100}%`} />
+                                </span>
+                            </div>
                             <div class="spectrum-ends" aria-hidden="true">
                                 <span data-say={`axes.${axis}.farLeft`}>{breakable(english.axes[axis].farLeft)}</span>
                                 <span data-say={`axes.${axis}.middle`}>{breakable(english.axes[axis].middle)}</span>
@@ -78,7 +96,9 @@ const values = start();
                 <div class="spectrum-share-row">
                     <input id="spectrum-link" type="text" readonly value="https://bybrooklyn.dev/spectrum/" />
                     <button type="button" class="spectrum-copy"><span data-say="copy">{english.copy}</span></button>
-                    <span class="spectrum-copied" role="status" aria-live="polite"></span>
+                    {/* "Copied" is always there, shrunk into the side of the button until it grows out; the status beside it is what a screen reader hears. */}
+                    <span class="spectrum-copied" aria-hidden="true" data-say="copied">{english.copied}</span>
+                    <span class="spectrum-status" role="status"></span>
                 </div>
             </div>
         </div>

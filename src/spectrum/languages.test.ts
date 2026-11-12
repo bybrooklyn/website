@@ -45,9 +45,28 @@ test("only Arabic runs right to left", () => {
     for (const code of codes) expect(words(code).rtl).toBe(code === "ar");
 });
 
-test("a slider's value is said as the nearest of its five words, or unset", () => {
+test("a slider's place is said by its number and the words at its ends and middle, or unset", () => {
     const english = words("en");
-    expect([0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((value) => said(english, "sexualDrive", value))).toEqual(["Not set", "None", "None", "Low", "Low", "Regular", "High", "High", "Very high", "Very high"]);
+    const say = (value: number) => said(english, "genderIdentity", value);
+    expect(say(0)).toBe("Not set");
+    expect(say(1)).toBe("1 of 17, Man");
+    expect(say(2)).toBe("2 of 17, between Man and Nonbinary, nearer Man");
+    expect(say(5)).toBe("5 of 17, halfway between Man and Nonbinary");
+    expect(say(7)).toBe("7 of 17, between Man and Nonbinary, nearer Nonbinary");
+    expect(say(9)).toBe("9 of 17, Nonbinary");
+    expect(say(12)).toBe("12 of 17, between Nonbinary and Woman, nearer Nonbinary");
+    expect(say(13)).toBe("13 of 17, halfway between Nonbinary and Woman");
+    expect(say(16)).toBe("16 of 17, between Nonbinary and Woman, nearer Woman");
+    expect(say(17)).toBe("17 of 17, Woman");
+    expect(say(18)).toBe("Not set");
+});
+
+test("no language keeps a word for each step between the ends and the middle", () => {
+    for (const language of Object.values(languages)) for (const ends of Object.values(language.axes)) expect(Object.keys(ends!).sort()).toEqual(["farLeft", "farRight", "label", "middle"]);
+});
+
+test("in another language the words at the ends are its own, and the rest of the sentence is English", () => {
+    expect(said(words("pl"), "genderIdentity", 3)).toBe("3 of 17, between Mężczyzna and Niebinarnie, nearer Mężczyzna");
 });
 
 test("words may break after a slash, and read the same", () => {
