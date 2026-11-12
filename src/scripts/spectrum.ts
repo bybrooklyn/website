@@ -13,8 +13,8 @@ import { axes, MIDDLE, start, UNSET, type Values } from "../spectrum/axes";
 import { decode, encode } from "../spectrum/code";
 import { address, breakable, languages, pick, said, words, type Code, type Words } from "../spectrum/languages";
 import { along, keyed, nearest, pointed, settle } from "../spectrum/slider";
+import { still } from "./opening";
 
-const still = matchMedia("(prefers-reduced-motion: reduce)");
 /** How long the thumb takes to settle when let go or clicked, and when a key moves it, in milliseconds. */
 const GLIDE = 420;
 const STEP = 200;

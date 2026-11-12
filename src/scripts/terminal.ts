@@ -8,7 +8,7 @@
 // file puts a Screen on the page and plays a recording into it.
 // terminal.test.ts holds Screen to what each code means.
 
-import { boxOf, round, shade, travel } from "./opening";
+import { boxOf, round, shade, still, travel } from "./opening";
 
 export interface Cell {
     /** One character; empty for the second half of a wide one. */
@@ -300,7 +300,6 @@ if (typeof document !== "undefined") {
         const again = host.querySelector<HTMLButtonElement>(".terminal-again");
         const grow = host.querySelector<HTMLButtonElement>(".terminal-grow");
         if (!view || !fit || !host.dataset.cast) continue;
-        const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
         /** Each play has a number; a play stops when it is no longer the latest. */
         let play = 0;
         let visible = false;
@@ -348,7 +347,7 @@ if (typeof document !== "undefined") {
             if (whole && cast.poster < Infinity) return run(false);
             paint(screen, view, was, false);
             if (again) {
-                const words = whole || !still ? "Play again" : "Play";
+                const words = whole || !still.matches ? "Play again" : "Play";
                 [again.dataset.shows, again.ariaLabel, again.title] = [words === "Play" ? "play" : "again", words, words];
                 again.classList.add("shown");
             }
@@ -403,7 +402,7 @@ if (typeof document !== "undefined") {
         // It is fetched and starts when it is first scrolled to, and holds still while out of view.
         new IntersectionObserver(([entry]) => {
             visible = Boolean(entry?.isIntersecting);
-            if (visible && play === 0) void run(!still);
+            if (visible && play === 0) void run(!still.matches);
         }, { threshold: 0.3 }).observe(host);
     }
 }

@@ -21,7 +21,7 @@ import "../styles/timeline.css";
 </section>
 
 <script>
-    const still = matchMedia("(prefers-reduced-motion: reduce)");
+    import { still } from "../scripts/opening";
 
     /** Further input waits this long, most of the 0.3s transition in timeline.css, so stepping can be brisk. */
     const MOVE = 220;

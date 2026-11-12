@@ -13,6 +13,7 @@ import { sounds } from "../mote/sound";
 import { turn } from "../mote/space";
 import { el, gently, toward, type Mote, type Scene } from "../mote/stage";
 import { copyText } from "../scripts/copy";
+import { still } from "../scripts/opening";
 import { MOST, lineUp, numbers, read, row, total, type Roll } from "./rolls";
 import { SHAPES, TOWER, slabs, throwDice, trayFor, type Sides, type Slab, type Throw, type Tray } from "./tower";
 
@@ -143,7 +144,6 @@ export default function dice(m: Mote): Scene {
     let lifted: Lifted[] = [];
     let sum: Part | undefined;
     let lined = 0;
-    const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
     const sound = m.preview ? undefined : sounds(m);
     /** How far along its flight the number in this place of the row is, from 0 to 1. Each sets off a moment after the one before. */
     const flown = (place: number) => Math.max(0, Math.min(1, (lined - place * Math.min(0.12, FLIGHT / lifted.length)) / FLIGHT));
@@ -396,7 +396,7 @@ export default function dice(m: Mote): Scene {
             shine = landed() && over > 0.6 ? Math.min(1, shine + dt / 0.35) : landed() ? shine : 0;
             // once the numbers are lit they leave for the row, and the tray darkens behind them
             const leaving = lifted.length > 0 && shine === 1;
-            if (leaving) lined = still ? lastIn() : lined + dt;
+            if (leaving) lined = still.matches ? lastIn() : lined + dt;
             if (view) view.shade = toward(view.shade, leaving ? 0.72 : 0, dt * 0.72, 0.4);
         },
         resize: fit,
