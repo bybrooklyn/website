@@ -122,6 +122,8 @@ const SLOWEST: f32 = 0.4;
 /// A run ends if the body has gone less than this far in the last this many steps (four seconds).
 const STALL_DISTANCE: f32 = 0.2;
 const STALL_STEPS: u32 = 240;
+/// What stopping costs a jumper, in metres of score: more than putting a foot in a gap does.
+const STALL_COST: f32 = 2.0;
 /// What each second left over earns a run that reached its length, in metres of score.
 const EARLY_REWARD: f32 = 1.0;
 
@@ -151,7 +153,8 @@ impl Judge {
             endless: false,
             checked: 0.0,
             stalled: false,
-            impatient: false,
+            // a jumper that stops at the edge of a gap has not jumped: its run ends there, and that costs
+            impatient: goal == Goal::Jump,
             over: false,
         }
     }
@@ -210,7 +213,7 @@ impl Judge {
     pub fn outcome(&self, creature: &Creature, world: &World) -> Outcome {
         let distance = creature.distance(world);
         let fell = if self.seconds_down >= DOWN_LIMIT { FALL_COST } else { 0.0 };
-        let manner = CARRIED_REWARD * self.seconds_carried + TURNS_REWARD * self.seconds_turns - SLIDE_COST * self.seconds_sliding - JERK_COST * self.jerk;
+        let manner = if self.goal == Goal::Jump { 0.0 } else { CARRIED_REWARD * self.seconds_carried + TURNS_REWARD * self.seconds_turns - SLIDE_COST * self.seconds_sliding - JERK_COST * self.jerk };
         let costs = fell + DOWN_COST * self.seconds_down + KNEE_COST * self.seconds_kneeling + WORK_COST * self.work - manner;
         let tall = self.tallness / self.steps.max(1) as f32;
         let early = if self.finished { EARLY_REWARD * (self.most_steps - self.steps.min(self.most_steps)) as f32 * STEP } else { 0.0 };
@@ -220,7 +223,7 @@ impl Judge {
             Goal::Far | Goal::Fast | Goal::Course => distance + UP_REWARD * (self.steps as f32 * STEP - self.seconds_down) + AIR_REWARD * self.seconds_flying,
             // standing tall and still scores a little; tall and going forward scores most
             Goal::Tall => distance * (0.2 + 0.8 * tall) + 2.0 * tall + AIR_REWARD * self.seconds_flying,
-            Goal::Jump => 1.5 * distance + self.seconds_flying - if self.in_gap { 1.0 } else { 0.0 },
+            Goal::Jump => 1.5 * distance + self.seconds_flying - if self.in_gap { 1.0 } else { 0.0 } - if self.stalled { STALL_COST } else { 0.0 },
             // distance only while carrying: a dropped ball ends the run and costs as a fall does
             Goal::Carry => distance + UP_REWARD * (self.steps as f32 * STEP - self.seconds_down) - if self.dropped { FALL_COST } else { 0.0 },
         } + early - costs;
@@ -334,7 +337,7 @@ impl Trainer {
         let population = settings.population.max(2);
         let seconds = if settings.seconds > 0.0 { settings.seconds } else { settings.goal.seconds() };
         let settings = Settings { population, seconds, keep: settings.keep.min(population - 1), ..settings };
-        let description = Description { carry: settings.goal == Goal::Carry, ..description };
+        let description = Description { carry: settings.goal == Goal::Carry, leap: settings.goal == Goal::Jump, ..description };
         let mut start = World::new();
         start.set_ground(ground);
         let creature = Creature::build(&mut start, description)?;
@@ -570,8 +573,8 @@ mod tests {
     #[test]
     fn the_same_seed_learns_the_same_way() {
         let settings = Settings { population: 6, seconds: 2.0, ..Settings::default() };
-        let mut one = Trainer::new(Description { legs: 2, carry: false }, settings, &flat_ground(), 7).unwrap();
-        let mut two = Trainer::new(Description { legs: 2, carry: false }, settings, &flat_ground(), 7).unwrap();
+        let mut one = Trainer::new(Description { legs: 2, carry: false, leap: false }, settings, &flat_ground(), 7).unwrap();
+        let mut two = Trainer::new(Description { legs: 2, carry: false, leap: false }, settings, &flat_ground(), 7).unwrap();
         one.train(20);
         for _ in 0..10 {
             two.train(2);
@@ -584,7 +587,7 @@ mod tests {
     #[test]
     fn a_two_legged_walker_learns_to_go_clearly_further_than_its_first_generation() {
         let settings = Settings::default();
-        let mut trainer = Trainer::new(Description { legs: 2, carry: false }, settings, &flat_ground(), 1).unwrap();
+        let mut trainer = Trainer::new(Description { legs: 2, carry: false, leap: false }, settings, &flat_ground(), 1).unwrap();
         let generations = 30;
         let started = std::time::Instant::now();
         trainer.train(settings.population as u32);
@@ -619,7 +622,7 @@ mod tests {
     /// of the last.
     fn learns(goal: Goal, ground: &[Segment], generations: u32) -> (Outcome, Outcome) {
         let settings = Settings { goal, ..Settings::default() };
-        let mut trainer = Trainer::new(Description { legs: 2, carry: false }, settings, ground, 3).unwrap();
+        let mut trainer = Trainer::new(Description { legs: 2, carry: false, leap: false }, settings, ground, 3).unwrap();
         trainer.train(settings.population as u32);
         let first = trainer.best.clone();
         while trainer.generation < generations {
@@ -638,15 +641,15 @@ mod tests {
         assert!(last.score > first.score + 1.0 && last.distance > 2.0, "fast: {} then {}", first.score, last.score);
         let (first, last) = learns(Goal::Tall, &flat_ground(), 25);
         assert!(last.score > first.score + 1.0, "tall: {} then {}", first.score, last.score);
-        let (first, last) = learns(Goal::Jump, &gappy(), 80);
-        // walking in strides, a two-legged jumper learns to stay up and reach the first gap, not yet to cross it
-        assert!(last.score > first.score + 3.0 && last.seconds_down == 0.0, "jump: {} then {}, {} m", first.score, last.score, last.distance);
+        let (first, last) = learns(Goal::Jump, &gappy(), 200);
+        // the first gap crossed, at 3 m, and no fall: the body down for less than a tenth of a second
+        assert!(last.score > first.score + 1.0 && last.distance > 3.5 && last.seconds_down < 0.1, "jump: {} then {}, {} m", first.score, last.score, last.distance);
     }
 
     #[test]
     fn a_bigger_brain_of_two_layers_learns_too() {
         let settings = Settings { hidden: 24, layers: 2, ..Settings::default() };
-        let mut trainer = Trainer::new(Description { legs: 4, carry: false }, settings, &flat_ground(), 5).unwrap();
+        let mut trainer = Trainer::new(Description { legs: 4, carry: false, leap: false }, settings, &flat_ground(), 5).unwrap();
         assert_eq!(trainer.layout.weights(), 24 * 30 + 24 * 25 + 24 * 25);
         assert_eq!(trainer.layout.memory, 0);
         trainer.train(32);
@@ -688,7 +691,7 @@ mod tests {
     /// Trains for a goal and returns the best of the first generation and of the last.
     fn learns_on(goal: Goal, legs: u32, ground: &[Segment], generations: u32) -> (Outcome, Outcome) {
         let settings = Settings { goal, ..Settings::default() };
-        let mut trainer = Trainer::new(Description { legs, carry: false }, settings, ground, 4).unwrap();
+        let mut trainer = Trainer::new(Description { legs, carry: false, leap: false }, settings, ground, 4).unwrap();
         trainer.train(settings.population as u32);
         let first = trainer.best.clone();
         while trainer.generation < generations {
@@ -717,8 +720,8 @@ mod tests {
     fn a_ball_on_the_back_stays_there_while_the_walker_stands_and_falls_off_when_it_tips() {
         for legs in [1, 2, 4] {
             let settings = Settings { goal: Goal::Carry, ..Settings::default() };
-            let mut trainer = Trainer::new(Description { legs, carry: false }, settings, &flat_ground(), 1).unwrap();
-            assert_eq!(trainer.description.senses(), Description { legs, carry: false }.senses() + 2);
+            let mut trainer = Trainer::new(Description { legs, carry: false, leap: false }, settings, &flat_ground(), 1).unwrap();
+            assert_eq!(trainer.description.senses(), Description { legs, carry: false, leap: false }.senses() + 2);
             let creature = trainer.creature.clone();
             let mut world = trainer.start.clone();
             for _ in 0..120 {

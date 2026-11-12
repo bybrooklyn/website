@@ -179,6 +179,9 @@ pub struct World {
     leftover: f32,
     /// Steps taken since the world was made.
     pub steps: u32,
+    /// A clock for whatever drives the bodies to keep its own time by, in turns; the physics leaves
+    /// it alone, and copies it with the rest.
+    pub clock: f32,
 }
 
 impl World {
@@ -204,6 +207,7 @@ impl World {
         self.widest = other.widest;
         self.leftover = other.leftover;
         self.steps = other.steps;
+        self.clock = other.clock;
     }
 
     pub fn add_body(&mut self, body: Body) -> u32 {

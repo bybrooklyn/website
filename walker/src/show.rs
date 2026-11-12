@@ -224,7 +224,7 @@ mod tests {
     fn the_show_plays_the_best_run_exactly_as_it_was_scored() {
         for (legs, goal, layers, memory) in [(2, Goal::Far, 1, 0), (4, Goal::Fast, 3, 6), (1, Goal::Tall, 2, 4)] {
             let settings = Settings { goal, layers, memory, ..Settings::default() };
-            let mut trainer = Trainer::new(Description { legs, carry: false }, settings, &flat_ground(), 2).unwrap();
+            let mut trainer = Trainer::new(Description { legs, carry: false, leap: false }, settings, &flat_ground(), 2).unwrap();
             while trainer.generation < 5 {
                 trainer.train(32);
             }
@@ -244,7 +244,7 @@ mod tests {
     #[test]
     fn an_endless_walk_far_from_the_start_is_moved_back_without_a_jolt_and_keeps_its_distance() {
         let ground = [crate::physics::Segment { a: Vec2::new(-20.0, 0.0), b: Vec2::new(2000.0, 0.0) }];
-        let trainer = Trainer::new(Description { legs: 4, carry: false }, Settings::default(), &ground, 1).unwrap();
+        let trainer = Trainer::new(Description { legs: 4, carry: false, leap: false }, Settings::default(), &ground, 1).unwrap();
         let mut judge = trainer.judge();
         judge.endless = true;
         // the same calm brain twice, once carried 600 m along, as if it had walked there

@@ -126,7 +126,11 @@ swing rather than twitch. Then, by goal:
   counts as nothing.
 - **Jump** (3): one and a half times the distance, plus each second spent with nothing touching
   anything while going forward faster than 0.5 m/s. A foot put down in a gap (touching, with no
-  ground under it) costs 1 and ends the run.
+  ground under it) costs 1 and ends the run; stopping (under 0.2 m in four seconds) costs 2 and ends
+  it too, so waiting at the edge of a gap is worse than trying. The manner of moving does not count
+  for a jumper, since a leap is neither smooth nor upright. A jumper with two or four legs has one
+  more output, which quickens or slows its rhythm from half to one and a half times its pace, so a
+  stride can be timed to land beyond a gap, and its joints may swing 1.6 times as far.
 - **The course** (4): as going far, over 20 s, on the obstacle course the page lays: level ground,
   then hills, steps and gaps, each stretch and each lap harder.
 - **Carry** (5): the walker has a parcel (a small box, 0.6 kg) on a back with a rim at each end. The

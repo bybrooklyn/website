@@ -71,7 +71,7 @@ fn pointer(list: Option<&[f32]>) -> *const f32 {
 /// number of weights in one brain, or 0 if the description is not one the engine builds.
 #[unsafe(no_mangle)]
 pub extern "C" fn create(legs: u32, population: u32, seconds: f32, seed: u32, hidden: u32, layers: u32, memory: u32, goal: u32, length: f32) -> u32 {
-    let description = Description { legs, carry: false };
+    let description = Description { legs, carry: false, leap: false };
     let seconds = if seconds > 0.0 { seconds.min(120.0) } else { 0.0 };
     let length = if length > 0.0 { length.min(1000.0) } else { f32::INFINITY };
     let settings = Settings { population: population.clamp(2, 1000) as usize, seconds, length, hidden: hidden as usize, layers: layers as usize, memory: memory as usize, goal: Goal::from_number(goal), ..Settings::default() };

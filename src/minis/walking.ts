@@ -160,7 +160,7 @@ export function valid(setup: unknown): setup is Setup {
  * Which shape of brain a link holds. It goes up whenever a brain's weights stop meaning what they
  * meant, so an old link is recognised and set aside rather than read wrongly.
  */
-export const LINK_VERSION = 4;
+export const LINK_VERSION = 5;
 
 /** A walker as the parts of a link: its setup and its brain. */
 export function linkParts(setup: Setup, brain: Float32Array): [string, string][] {

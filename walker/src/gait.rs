@@ -135,7 +135,7 @@ mod tests {
 
     /// Trains for two hundred generations with a fixed seed and watches the best run.
     fn trained(legs: u32) -> super::Gait {
-        let mut trainer = Trainer::new(Description { legs, carry: false }, Settings::default(), &flat_ground(), 1).unwrap();
+        let mut trainer = Trainer::new(Description { legs, carry: false, leap: false }, Settings::default(), &flat_ground(), 1).unwrap();
         while trainer.generation < 200 {
             trainer.train(64);
         }

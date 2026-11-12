@@ -23,6 +23,8 @@ pub struct Description {
     pub legs: u32,
     /// Whether a parcel rests on its back, to be carried.
     pub carry: bool,
+    /// Whether its brain may quicken or slow the legs' rhythm, as a jumper needs to time its leaps.
+    pub leap: bool,
 }
 
 impl Description {
@@ -41,9 +43,10 @@ impl Description {
         5 + 2 * self.joints() + self.legs as usize + 2 + 2 + if self.carry { 2 } else { 0 }
     }
 
-    /// How many numbers the brain gives `drive`: three for each joint, which shape its swing.
+    /// How many numbers the brain gives `drive`: three for each joint, which shape its swing, and, for
+    /// a jumper with two or four legs, one that quickens or slows the rhythm.
     pub fn outputs(&self) -> usize {
-        3 * self.joints()
+        3 * self.joints() + usize::from(self.leap && self.legs > 1)
     }
 
     /// The rhythm the legs keep: how many strides a second, and where in the stride each leg starts,
@@ -110,6 +113,8 @@ const TOP_SPEED: f32 = 8.0;
 /// what a leg does when it walks.
 const HIP_SWING: (f32, f32, f32) = (0.1, 0.6, 0.6);
 const KNEE_SWING: (f32, f32, f32) = (-0.6, 0.5, 0.6);
+/// How much further a jumper's joints may swing than a walker's.
+const LEAP_REACH: f32 = 1.6;
 /// How firmly a hopper on the ground turns its body back toward upright, for each radian of tilt.
 const HOP_LEAN: f32 = 1.5;
 /// How much of its torque a hopper's hip uses while its foot is down.
@@ -306,7 +311,9 @@ impl Creature {
 
     /// Where the rhythm is, in turns since the start.
     pub fn phase(&self, world: &World) -> f32 {
-        self.description.rhythm().0 * STEP * world.steps as f32
+        // a jumper's rhythm keeps its own clock, since it can be quickened or slowed; any other goes
+        // at a steady pace from the start
+        if self.description.outputs() > 3 * self.joints.len() { world.clock } else { self.description.rhythm().0 * STEP * world.steps as f32 }
     }
 
     /// Sets each joint's motor to follow a swing the brain shapes. Each joint swings like a pendulum
@@ -318,10 +325,18 @@ impl Creature {
         if self.legs.len() == 1 {
             return self.hop(world, outputs);
         }
-        let (_, starts) = self.description.rhythm();
+        // the rhythm goes at half to one and a half times its pace, as the brain asks: slowed, a stride
+        // can be timed to step over a gap rather than into it
+        let (pace, starts) = self.description.rhythm();
+        let leaping = self.description.outputs() > 3 * self.joints.len();
+        if leaping {
+            world.clock += STEP * pace * (1.0 + 0.5 * clamp(outputs[3 * self.joints.len()], -1.0, 1.0));
+        }
         let phase = self.phase(world);
         for (i, &index) in self.joints.iter().enumerate() {
             let (centre, reach, widest) = if i % 2 == 0 { HIP_SWING } else { KNEE_SWING };
+            // a jumper may swing further either way, to reach across a gap or gather itself for a leap
+            let (reach, widest) = if leaping { (reach * LEAP_REACH, widest * LEAP_REACH) } else { (reach, widest) };
             let [middle, width, shift] = [0, 1, 2].map(|k| clamp(outputs[3 * i + k], -1.0, 1.0));
             let (s, _) = sin_cos(2.0 * PI * (phase + starts[i / 2]) + PI * shift);
             let joint = &world.joints[index as usize];
@@ -462,7 +477,7 @@ mod tests {
     #[test]
     fn a_two_legged_body_with_its_motors_holding_stands_for_five_seconds() {
         let mut world = flat();
-        let creature = Creature::build(&mut world, Description { legs: 2, carry: false }).unwrap();
+        let creature = Creature::build(&mut world, Description { legs: 2, carry: false, leap: false }).unwrap();
         let start = world.bodies[creature.torso as usize].position;
         let mut settled = start;
         let mut senses = alloc::vec![0.0; creature.description.senses()];
@@ -494,7 +509,7 @@ mod tests {
     #[test]
     fn a_four_legged_body_stands_and_a_one_legged_body_is_built() {
         let mut world = flat();
-        let creature = Creature::build(&mut world, Description { legs: 4, carry: false }).unwrap();
+        let creature = Creature::build(&mut world, Description { legs: 4, carry: false, leap: false }).unwrap();
         for _ in 0..300 {
             creature.hold(&mut world);
             world.step();
@@ -503,8 +518,8 @@ mod tests {
         assert!(world.bodies[creature.torso as usize].velocity.length() < 0.01);
         assert_eq!(creature.description.senses(), 29);
         let mut world = flat();
-        assert!(Creature::build(&mut world, Description { legs: 1, carry: false }).is_some());
-        assert!(Creature::build(&mut world, Description { legs: 3, carry: false }).is_none());
+        assert!(Creature::build(&mut world, Description { legs: 1, carry: false, leap: false }).is_some());
+        assert!(Creature::build(&mut world, Description { legs: 3, carry: false, leap: false }).is_none());
     }
 
     #[test]
@@ -512,7 +527,7 @@ mod tests {
         // dropped from half a metre up, every foot comes to rest on the ground, not in it
         for legs in [1, 2, 4] {
             let mut world = flat();
-            let creature = Creature::build(&mut world, Description { legs, carry: false }).unwrap();
+            let creature = Creature::build(&mut world, Description { legs, carry: false, leap: false }).unwrap();
             for body in &mut world.bodies {
                 body.position.y += 0.5;
             }
