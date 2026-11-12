@@ -1,0 +1,1335 @@
+/*
+ * The site's controls: one of each kind, written once. Shown in every state on /controls/.
+ *
+ * The same for all of them:
+ *   height   var(--control), for everything that sits in a row, so a field, a button and a switch line up
+ *   radius   var(--radius) for a box; a box inside a box is that less the gap between them; round things are round
+ *   words    var(--control-text) in the text face; small labels at 0.875rem in the muted color
+ *   ring     the site's own, from base.css, when reached by keyboard
+ *   touch    color answers in 0.15s; pressed, a control gives a little at once and settles back slowly (--ease)
+ *   coming   a control that is not always there grows in and shrinks away (.appears), never switched on and off
+ *
+ * Hover is only for a pointer that can hover, so that nothing stays lit after a tap. Nothing moves by itself,
+ * and under prefers-reduced-motion nothing moves at all. The scripts some of them need are in src/scripts/controls.ts.
+ */
+
+/* ---- what every control shares ---- */
+
+.button,
+.field,
+.choice,
+.menu-button,
+.menu-items > * {
+    font-family: var(--font-text);
+    font-size: var(--control-text);
+    font-weight: var(--text-weight);
+    line-height: 1;
+}
+
+/* ---- buttons ---- */
+
+/* A button: the main action of a group, such as roll, drop or copy. One to a group. */
+.button {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    height: var(--control);
+    min-width: var(--control);
+    margin: 0;
+    padding: 0 1rem;
+    border: 0.0625rem solid var(--accent);
+    border-radius: var(--radius);
+    background: color-mix(in oklch, var(--accent) 14%, transparent);
+    color: var(--ink);
+    white-space: nowrap;
+    text-decoration: none;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition:
+        background-color 0.15s ease,
+        border-color 0.15s ease,
+        color 0.15s ease,
+        scale 0.45s var(--ease);
+}
+
+@media (hover: hover) {
+    .button:hover {
+        background: color-mix(in oklch, var(--accent) 26%, transparent);
+    }
+}
+
+/* pressed, it gives at once, and settles back slowly when let go */
+.button:active {
+    scale: 0.95;
+    background: color-mix(in oklch, var(--accent) 32%, transparent);
+    transition-duration: 0.15s, 0.15s, 0.15s, 0.08s;
+}
+
+/* A quiet button: the other things a group can do, such as clear, copy a link, sound. */
+.button.quiet {
+    border-color: transparent;
+    background: none;
+    color: var(--muted);
+}
+
+@media (hover: hover) {
+    .button.quiet:hover {
+        background: color-mix(in oklch, var(--accent) 12%, transparent);
+        color: var(--ink);
+    }
+}
+
+.button.quiet:active {
+    background: color-mix(in oklch, var(--accent) 18%, transparent);
+    color: var(--ink);
+}
+
+/* A quiet button that starts a line begins where the words above and below it begin. */
+.button.quiet.flush {
+    margin-inline-start: -1rem;
+}
+
+/* An icon button: a picture with no words, as in a terminal's bar. It needs an aria-label. The picture is
+   drawn in the accent, since there is no word to say it can be pressed. */
+.button.icon {
+    width: var(--control);
+    padding: 0;
+    border-color: transparent;
+    background: none;
+    color: var(--accent);
+}
+
+@media (hover: hover) {
+    .button.icon:hover {
+        background: color-mix(in oklch, var(--accent) 14%, transparent);
+    }
+}
+
+.button.icon:active {
+    scale: 0.86;
+    background: color-mix(in oklch, var(--accent) 20%, transparent);
+}
+
+.button svg {
+    flex: none;
+    width: 1.1rem;
+    height: 1.1rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    transition: opacity 0.2s ease;
+}
+
+/* Not now: faded, and it neither answers the pointer nor gives. */
+.button:disabled,
+.button[aria-disabled="true"] {
+    opacity: 0.45;
+    cursor: default;
+    pointer-events: none;
+}
+
+/* Busy, between being pressed and being done: its words step back and three dots take their place, still,
+   the picture viewer's dots. It keeps its width. */
+.button::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0.25rem;
+    height: 0.25rem;
+    margin: -0.125rem 0 0 -0.125rem;
+    border-radius: 50%;
+    background: currentColor;
+    box-shadow:
+        -0.45rem 0 currentColor,
+        0.45rem 0 currentColor;
+    opacity: 0;
+    scale: 0.4;
+    transition:
+        opacity 0.15s ease,
+        scale 0.25s var(--ease);
+}
+
+.button[aria-busy="true"] {
+    color: transparent;
+    pointer-events: none;
+}
+
+.button[aria-busy="true"] svg {
+    opacity: 0;
+}
+
+.button[aria-busy="true"]::after {
+    color: var(--ink);
+    opacity: 1;
+    scale: 1;
+    transition:
+        opacity 0.25s ease 0.08s,
+        scale 0.45s var(--ease) 0.08s;
+}
+
+.button.icon[aria-busy="true"]::after {
+    color: var(--accent);
+}
+
+.button[aria-busy="true"]:active {
+    scale: 1;
+}
+
+/* ---- a link that acts ---- */
+
+/* A link that takes you somewhere or starts something, written as a link with an arrow after it:
+   all posts, all minis, another picture, play the demo. On hover the arrow leans the way it points. */
+.action-link {
+    display: inline;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    color: var(--accent);
+    text-decoration-line: underline;
+    text-decoration-thickness: 0.06em;
+    text-underline-offset: 0.2em;
+    text-decoration-color: color-mix(in oklch, var(--accent) 45%, transparent);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition:
+        text-decoration-color 0.15s ease,
+        color 0.15s ease,
+        opacity 0.15s ease;
+}
+
+/* the arrow is not underlined, and is drawn here so it can move */
+.action-link::after {
+    content: "→";
+    display: inline-block;
+    margin-inline-start: 0.4em;
+    transition:
+        translate 0.45s var(--ease),
+        opacity 0.2s ease;
+}
+
+/* one that starts something here, rather than going somewhere, has a triangle before it instead */
+.action-link.here::after {
+    content: none;
+}
+
+.action-link.here::before {
+    content: "";
+    display: inline-block;
+    margin-inline-end: 0.45em;
+    border-block: 0.32em solid transparent;
+    border-left: 0.55em solid currentColor;
+    transition: translate 0.45s var(--ease);
+}
+
+@media (hover: hover) {
+    .action-link:hover {
+        text-decoration-color: var(--accent);
+    }
+
+    .action-link:hover::after {
+        translate: 0.2em 0;
+    }
+
+    .action-link.here:hover::before {
+        translate: 0.12em 0;
+    }
+}
+
+.action-link:active::after {
+    translate: 0.35em 0;
+    transition-duration: 0.08s;
+}
+
+.action-link.here:active::before {
+    translate: 0.2em 0;
+    transition-duration: 0.08s;
+}
+
+.action-link:focus-visible {
+    outline: 0.125rem solid var(--accent);
+    outline-offset: 0.2em;
+    border-radius: 0.2em;
+}
+
+.action-link:disabled,
+.action-link[aria-disabled="true"] {
+    color: var(--muted);
+    text-decoration-color: transparent;
+    pointer-events: none;
+}
+
+.action-link[aria-busy="true"] {
+    color: var(--muted);
+    cursor: progress;
+}
+
+.action-link[aria-busy="true"]::after {
+    opacity: 0;
+}
+
+/* ---- choosing one of a few ---- */
+
+/* A pill switch: one of a few, all in sight, such as flat, hills, steps or gaps. Radio inputs inside labels,
+   so the arrow keys move the choice. The marker under the chosen one slides to the next when the choice
+   changes, and at no other time (src/scripts/controls.ts places it). Add .fill to share out the width. */
+.choice {
+    --gap: 0.1875rem;
+    position: relative;
+    display: inline-flex;
+    height: var(--control);
+    margin: 0;
+    padding: var(--gap);
+    border: 0.0625rem solid var(--rule);
+    border-radius: var(--radius);
+    background: var(--ground);
+    vertical-align: middle;
+}
+
+.choice.fill {
+    display: flex;
+}
+
+.choice.fill label {
+    flex: 1;
+}
+
+.choice label {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.choice input {
+    position: absolute;
+    inset: 0;
+    margin: 0;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.choice span {
+    display: grid;
+    flex: 1;
+    place-items: center;
+    padding: 0 0.8rem;
+    border-radius: calc(var(--radius) - var(--gap));
+    color: var(--muted);
+    white-space: nowrap;
+    transition:
+        color 0.2s ease,
+        scale 0.45s var(--ease);
+}
+
+@media (hover: hover) {
+    .choice label:hover span {
+        color: var(--ink);
+    }
+}
+
+.choice label:active span {
+    scale: 0.92;
+    transition-duration: 0.2s, 0.08s;
+}
+
+.choice input:checked + span {
+    color: var(--ink);
+}
+
+/* the ring goes round the word, since the input itself cannot be seen */
+.choice input:focus-visible + span {
+    outline: 0.125rem solid var(--accent);
+    outline-offset: 0.15rem;
+}
+
+.choice-marker {
+    position: absolute;
+    top: var(--gap);
+    bottom: var(--gap);
+    left: 0;
+    width: var(--wide, 0);
+    translate: var(--at, 0) 0;
+    border: 0.0625rem solid var(--accent);
+    border-radius: calc(var(--radius) - var(--gap));
+    background: color-mix(in oklch, var(--accent) 18%, var(--ground));
+    pointer-events: none;
+    opacity: 0;
+    transition:
+        translate 0.45s var(--ease),
+        width 0.45s var(--ease);
+}
+
+.choice.ready .choice-marker {
+    opacity: 1;
+}
+
+/* placed where it is, not moved there: on arrival, and when the page is resized or its type arrives */
+.choice.still .choice-marker {
+    transition: none;
+}
+
+/* Before the script has placed the marker, or without scripts, the chosen word is marked in place. */
+.choice:not(.ready) input:checked + span {
+    background: color-mix(in oklch, var(--accent) 18%, var(--ground));
+    box-shadow: inset 0 0 0 0.0625rem var(--accent);
+}
+
+.choice:has(input:disabled) {
+    opacity: 0.45;
+}
+
+.choice label:has(input:disabled) {
+    pointer-events: none;
+}
+
+/* ---- a slider ---- */
+
+/* A slider, for a number in a range: its name, the track, and its value, in one row.
+   `<label class="slider"><span>how rough</span><input type="range"><output>40</output></label>`;
+   the script keeps the value up to date. */
+.slider {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    height: var(--control);
+    min-width: min(100%, 14rem);
+    color: var(--muted);
+    font-size: 0.875rem;
+}
+
+.slider > span {
+    white-space: nowrap;
+}
+
+.slider output {
+    min-width: 2.5ch;
+    color: var(--ink);
+    font-size: var(--control-text);
+    font-variant-numeric: tabular-nums;
+    text-align: end;
+}
+
+.slider input {
+    --thumb: 1.125rem;
+    flex: 1;
+    min-width: 4rem;
+    height: var(--control);
+    margin: 0;
+    border-radius: var(--radius);
+    background: none;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.slider input::-webkit-slider-runnable-track {
+    height: 0.25rem;
+    border-radius: 0.125rem;
+    background: var(--rule);
+}
+
+.slider input::-moz-range-track {
+    height: 0.25rem;
+    border-radius: 0.125rem;
+    background: var(--rule);
+}
+
+.slider input::-moz-range-progress {
+    height: 0.25rem;
+    border-radius: 0.125rem;
+    background: var(--accent);
+}
+
+.slider input::-webkit-slider-thumb {
+    width: var(--thumb);
+    height: var(--thumb);
+    margin-top: calc(var(--thumb) / -2 + 0.125rem);
+    border: 0.1875rem solid var(--ground);
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 0.0625rem var(--accent);
+    -webkit-appearance: none;
+    transition: scale 0.45s var(--ease);
+}
+
+.slider input::-moz-range-thumb {
+    width: var(--thumb);
+    height: var(--thumb);
+    border: 0.1875rem solid var(--ground);
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 0.0625rem var(--accent);
+    transition: scale 0.45s var(--ease);
+}
+
+/* by keyboard the ring goes round the thumb, as far out and as thick as the site's ring is everywhere else */
+.slider input:focus-visible {
+    outline: none;
+}
+
+.slider input:focus-visible::-webkit-slider-thumb {
+    box-shadow:
+        0 0 0 0.0625rem var(--accent),
+        0 0 0 calc(0.0625rem + 0.15rem) var(--ground),
+        0 0 0 calc(0.1875rem + 0.15rem) var(--accent);
+}
+
+.slider input:focus-visible::-moz-range-thumb {
+    box-shadow:
+        0 0 0 0.0625rem var(--accent),
+        0 0 0 calc(0.0625rem + 0.15rem) var(--ground),
+        0 0 0 calc(0.1875rem + 0.15rem) var(--accent);
+}
+
+@media (hover: hover) {
+    .slider input:hover::-webkit-slider-thumb {
+        scale: 1.12;
+    }
+
+    .slider input:hover::-moz-range-thumb {
+        scale: 1.12;
+    }
+}
+
+/* held, the thumb swells a little under the finger, and settles back when let go */
+.slider input:active::-webkit-slider-thumb {
+    scale: 1.3;
+    transition-duration: 0.12s;
+}
+
+.slider input:active::-moz-range-thumb {
+    scale: 1.3;
+    transition-duration: 0.12s;
+}
+
+.slider:has(input:disabled) {
+    opacity: 0.45;
+}
+
+.slider input:disabled {
+    cursor: default;
+}
+
+/* ---- a checkbox and a toggle ---- */
+
+/* A checkbox: one of several things that can each be on or off, such as what to show.
+   `<label class="check"><input type="checkbox"> the crowd</label>` */
+.check,
+.toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    height: var(--control);
+    color: var(--ink);
+    font-size: var(--control-text);
+    line-height: 1;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.check input,
+.toggle input {
+    position: relative;
+    flex: none;
+    margin: 0;
+    border: 0.0625rem solid var(--muted);
+    background: var(--ground);
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    transition:
+        background-color 0.2s ease,
+        border-color 0.15s ease,
+        scale 0.45s var(--ease);
+}
+
+.check input {
+    width: 1.125rem;
+    height: 1.125rem;
+    border-radius: calc(var(--radius) / 2);
+}
+
+/* the tick: two sides of a box, turned, drawn in the ground color on the accent */
+.check input::before {
+    content: "";
+    position: absolute;
+    top: 0.1rem;
+    left: 0.32rem;
+    width: 0.3rem;
+    height: 0.58rem;
+    border: solid var(--ground);
+    border-width: 0 0.125rem 0.125rem 0;
+    rotate: 45deg;
+    opacity: 0;
+    scale: 0.3;
+    transition:
+        opacity 0.15s ease,
+        scale 0.35s var(--ease);
+}
+
+.check input:checked {
+    border-color: var(--accent);
+    background: var(--accent);
+}
+
+.check input:checked::before {
+    opacity: 1;
+    scale: 1;
+}
+
+@media (hover: hover) {
+    .check:hover input,
+    .toggle:hover input {
+        border-color: var(--accent);
+    }
+}
+
+.check:active input {
+    scale: 0.86;
+    transition-duration: 0.2s, 0.15s, 0.08s;
+}
+
+/* A toggle: one thing that is on or off and takes effect at once, such as sound.
+   `<label class="toggle"><input type="checkbox" role="switch"> sound</label>` */
+.toggle input {
+    width: 2.25rem;
+    height: 1.25rem;
+    border-radius: 0.625rem;
+}
+
+.toggle input::before {
+    content: "";
+    position: absolute;
+    top: 0.1875rem;
+    left: 0.1875rem;
+    width: 0.75rem;
+    height: 0.75rem;
+    border-radius: 0.375rem;
+    background: var(--muted);
+    transition:
+        translate 0.45s var(--ease),
+        width 0.3s var(--ease),
+        background-color 0.2s ease;
+}
+
+.toggle input:checked {
+    border-color: var(--accent);
+    background: color-mix(in oklch, var(--accent) 30%, var(--ground));
+}
+
+.toggle input:checked::before {
+    translate: 1rem 0;
+    background: var(--accent);
+}
+
+/* held, the knob stretches toward where it is going, and goes there when let go */
+.toggle:active input::before {
+    width: 0.95rem;
+    transition-duration: 0.45s, 0.12s, 0.2s;
+}
+
+.toggle:active input:checked::before {
+    translate: 0.8rem 0;
+}
+
+.check:has(input:disabled),
+.toggle:has(input:disabled) {
+    opacity: 0.45;
+    cursor: default;
+    pointer-events: none;
+}
+
+/* ---- a text field ---- */
+
+/* A text field: a line to type into, such as a roll to make. Sunk into the ground. */
+.field {
+    min-width: 0;
+    height: var(--control);
+    margin: 0;
+    padding: 0 0.75rem;
+    border: 0.0625rem solid var(--rule);
+    border-radius: var(--radius);
+    background: var(--ground);
+    color: var(--ink);
+    transition: border-color 0.15s ease;
+}
+
+.field::placeholder {
+    color: var(--muted);
+    opacity: 0.8;
+}
+
+.field.code {
+    font-family: var(--font-code);
+    font-size: 0.875rem;
+}
+
+@media (hover: hover) {
+    .field:hover {
+        border-color: color-mix(in oklch, var(--accent) 45%, var(--rule));
+    }
+}
+
+.field:focus {
+    border-color: var(--accent);
+}
+
+.field:disabled {
+    opacity: 0.45;
+    pointer-events: none;
+}
+
+.field[aria-busy="true"] {
+    color: var(--muted);
+    cursor: progress;
+}
+
+/* A field with its button joined to its end: the button is what the field is for, such as roll or copy.
+   `<div class="field-with-button"><input class="field"><button class="button">roll</button></div>` */
+.field-with-button {
+    display: flex;
+    min-width: 0;
+}
+
+.field-with-button > .field {
+    flex: 1;
+    border-start-end-radius: 0;
+    border-end-end-radius: 0;
+}
+
+.field-with-button > .button {
+    margin-inline-start: -0.0625rem;
+    border-start-start-radius: 0;
+    border-end-start-radius: 0;
+}
+
+/* joined, the button gives by its color alone: shrinking would open a gap at the join */
+.field-with-button > .button:active {
+    scale: none;
+}
+
+/* ---- a count and a status ---- */
+
+/* A count badge: how many, on or beside what it counts, such as how many d6 are in the hand. It grows in
+   with the first and shrinks away at none (add .appears and toggle .shown). .corner puts it on the corner
+   of what it counts, which needs position: relative. */
+.badge {
+    display: inline-block;
+    min-width: 1.375rem;
+    height: 1.375rem;
+    padding: 0 0.375rem;
+    border-radius: 0.6875rem;
+    background: var(--accent);
+    color: var(--ground);
+    font-family: var(--font-text);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.375rem;
+    text-align: center;
+    vertical-align: middle;
+}
+
+.badge.corner {
+    position: absolute;
+    top: -0.5rem;
+    right: -0.5rem;
+}
+
+/* A status line: what is happening or just happened, in a sentence. Announced as it changes (aria-live),
+   and it keeps one line's room so nothing under it moves. The script's say() changes its words. */
+.status {
+    min-height: var(--line);
+    margin: 0;
+    color: var(--muted);
+    font-size: var(--control-text);
+    line-height: var(--line);
+    transition:
+        opacity 0.15s ease,
+        translate 0.3s var(--ease);
+}
+
+.status strong {
+    color: var(--ink);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+/* between one sentence and the next, the old one lifts away and the new one settles in from below */
+.status.changing {
+    opacity: 0;
+    translate: 0 -0.25rem;
+    transition-duration: 0.12s;
+}
+
+.status.arriving {
+    opacity: 0;
+    translate: 0 0.25rem;
+    transition: none;
+}
+
+/* ---- panels, and where controls go ---- */
+
+/* A panel: controls that belong together, on the surface. Inside it each .control-group is a small label
+   over what it labels; .inline puts the label beside it instead. */
+.control-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    padding: 1rem 1.125rem;
+    border: 0.0625rem solid var(--rule);
+    border-radius: var(--radius);
+    background: var(--surface);
+}
+
+.control-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+.control-group.inline {
+    flex-direction: row;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.control-label {
+    margin: 0;
+    padding: 0;
+    color: var(--muted);
+    font-family: var(--font-text);
+    font-size: 0.875rem;
+    font-weight: var(--text-weight);
+    line-height: 1.25;
+    white-space: nowrap;
+}
+
+/* A row: controls side by side, wrapping onto the next line when there is no room. */
+.control-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1rem;
+}
+
+/* .grow lets one thing in a row take the room that is left, such as a field or a slider */
+.control-row > .grow {
+    flex: 1 1 12rem;
+}
+
+/* A column: controls one above the other, each as wide as the column. */
+.control-column {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.control-column > :is(.button, .choice) {
+    width: 100%;
+}
+
+/* A stage: a mini with its panels, one along the bottom and one at the side. The side goes under the
+   bottom when the stage is narrow. `.stage-view` is the canvas's place. */
+.control-stage {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 15rem;
+    grid-template-rows: 1fr auto;
+    grid-template-areas:
+        "view side"
+        "bottom side";
+    border: 0.0625rem solid var(--rule);
+    border-radius: var(--radius);
+    overflow: hidden;
+    background: var(--ground);
+}
+
+.stage-view {
+    grid-area: view;
+    min-height: 16rem;
+}
+
+.control-stage > .control-panel {
+    border: 0;
+    border-radius: 0;
+}
+
+.control-stage > .control-panel.bottom {
+    grid-area: bottom;
+    border-top: 0.0625rem solid var(--rule);
+}
+
+.control-stage > .control-panel.side {
+    grid-area: side;
+    border-left: 0.0625rem solid var(--rule);
+}
+
+/* A stage with nothing at the side is one column. */
+.control-stage:not(:has(> .side)) {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+        "view"
+        "bottom";
+}
+
+/* narrow, the side goes under the bottom */
+@media (max-width: 46rem) {
+    .control-stage {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: auto;
+        grid-template-areas:
+            "view"
+            "bottom"
+            "side";
+    }
+
+    .control-stage > .control-panel.side {
+        border-left: 0;
+        border-top: 0.0625rem solid var(--rule);
+    }
+}
+
+/* ---- a menu ---- */
+
+/* A menu: a few things to do that need not always be in sight. It flows open from its button, as the
+   picture viewer's does: one box that grows from the button to the menu's size, a little past and back,
+   and draws back in without springing. Its items arrive one after another. The script measures it and
+   works its keys. Holds its button's place in the row; .end grows it leftward from the button's right.
+   .dots makes the button the viewer's three dots, which become a cross.
+   ```
+   <div class="menu" data-menu>
+       <div class="menu-box">
+           <button class="menu-button" type="button" aria-expanded="false">share</button>
+           <div class="menu-items" role="menu" inert>
+               <button type="button" role="menuitem">copy the link</button>
+           </div>
+       </div>
+   </div>
+   ``` */
+.menu {
+    position: relative;
+    display: inline-block;
+    width: var(--shut, auto);
+    height: var(--control);
+    vertical-align: middle;
+}
+
+.menu-box {
+    position: relative;
+    top: 0;
+    left: 0;
+    z-index: 20;
+    width: var(--shut, auto);
+    height: var(--control);
+    border: 0.0625rem solid var(--rule);
+    border-radius: var(--radius);
+    background: var(--surface);
+    overflow: hidden;
+    transition:
+        width 0.3s var(--ease),
+        height 0.3s var(--ease),
+        border-color 0.2s ease;
+}
+
+/* once measured it lies over what is under it, and the menu holds its place */
+.menu.ready .menu-box {
+    position: absolute;
+}
+
+.menu.end .menu-box {
+    left: auto;
+    right: 0;
+}
+
+@media (hover: hover) {
+    .menu-box:hover {
+        border-color: color-mix(in oklch, var(--accent) 60%, var(--rule));
+    }
+}
+
+.menu.open .menu-box {
+    z-index: 25;
+    width: var(--wide);
+    height: var(--high);
+    border-color: var(--accent);
+    transition:
+        width 0.55s var(--spring),
+        height 0.55s var(--spring) 0.04s,
+        border-color 0.2s ease;
+}
+
+.menu-button {
+    position: relative;
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    /* less the box's border above and below */
+    height: calc(var(--control) - 0.125rem);
+    margin: 0;
+    padding: 0 0.9rem;
+    border: 0;
+    border-radius: calc(var(--radius) - 0.0625rem);
+    background: none;
+    color: var(--ink);
+    white-space: nowrap;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: scale 0.45s var(--ease);
+}
+
+.menu.end .menu-button {
+    float: right;
+}
+
+.menu-button:active {
+    scale: 0.94;
+    transition-duration: 0.08s;
+}
+
+/* a small mark that turns over as the menu opens */
+.menu-button > .menu-turn {
+    width: 0.4rem;
+    height: 0.4rem;
+    margin-top: -0.2rem;
+    border: solid var(--muted);
+    border-width: 0 0.09rem 0.09rem 0;
+    rotate: 45deg;
+    transition:
+        rotate 0.45s var(--ease),
+        margin 0.45s var(--ease);
+}
+
+.menu.open .menu-button > .menu-turn {
+    rotate: 225deg;
+    margin-top: 0.2rem;
+}
+
+.menu-button:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+.menu:has(.menu-button:disabled) .menu-box {
+    pointer-events: none;
+}
+
+/* the dots, as in the viewer: three in a row, which run together and cross */
+.menu.dots .menu-button {
+    width: calc(var(--control) - 0.125rem);
+    padding: 0;
+    justify-content: center;
+}
+
+.menu-dots {
+    display: grid;
+    place-items: center;
+}
+
+.menu-dots i {
+    grid-area: 1 / 1;
+    width: 0.3rem;
+    height: 0.3rem;
+    border-radius: 0.15rem;
+    background: var(--ink);
+    transition:
+        translate 0.35s var(--ease),
+        rotate 0.4s var(--ease),
+        width 0.35s var(--ease),
+        height 0.35s var(--ease),
+        opacity 0.2s ease;
+}
+
+.menu-dots i:first-child {
+    translate: -0.5rem 0;
+}
+
+.menu-dots i:last-child {
+    translate: 0.5rem 0;
+}
+
+.menu.open .menu-dots i:is(:first-child, :last-child) {
+    translate: 0 0;
+    width: 1.05rem;
+    height: 0.14rem;
+}
+
+.menu.open .menu-dots i:first-child {
+    rotate: 45deg;
+}
+
+.menu.open .menu-dots i:last-child {
+    rotate: -45deg;
+}
+
+.menu.open .menu-dots i:nth-child(2) {
+    opacity: 0;
+}
+
+.menu-items {
+    position: absolute;
+    /* under the button, which is the box's height less its border */
+    top: calc(var(--control) - 0.125rem);
+    left: 0;
+    display: flex;
+    flex-direction: column;
+    width: max-content;
+    max-width: min(20rem, 100vw - 2rem);
+    padding: 0 0.25rem 0.25rem;
+}
+
+.menu.end .menu-items {
+    left: auto;
+    right: 0;
+}
+
+.menu-items > * {
+    display: flex;
+    align-items: center;
+    height: var(--control);
+    margin: 0;
+    padding: 0 0.65rem;
+    border: 0;
+    border-radius: calc(var(--radius) - 0.25rem);
+    background: none;
+    color: var(--ink);
+    text-align: start;
+    text-decoration: none;
+    white-space: nowrap;
+    cursor: pointer;
+    /* each one arrives a moment after the one above it */
+    opacity: 0;
+    translate: 0 -0.35rem;
+    transition:
+        opacity 0.12s ease,
+        translate 0.12s ease,
+        background-color 0.15s ease;
+}
+
+.menu.open .menu-items > * {
+    opacity: 1;
+    translate: 0 0;
+    transition:
+        opacity 0.3s ease calc(0.1s + var(--at, 0) * 0.045s),
+        translate 0.4s var(--ease) calc(0.1s + var(--at, 0) * 0.045s),
+        background-color 0.15s ease;
+}
+
+@media (hover: hover) {
+    .menu-items > :hover {
+        background: color-mix(in oklch, var(--accent) 14%, transparent);
+    }
+}
+
+.menu-items > :active {
+    background: color-mix(in oklch, var(--accent) 22%, transparent);
+}
+
+/* inside the box the ring is drawn inside the item, or the box would cut it off */
+.menu-items > :focus-visible {
+    outline: 0.125rem solid var(--accent);
+    outline-offset: -0.125rem;
+    background: color-mix(in oklch, var(--accent) 14%, transparent);
+}
+
+.menu-items > :disabled,
+.menu-items > [aria-disabled="true"] {
+    color: var(--muted);
+    pointer-events: none;
+}
+
+/* ---- a tooltip ---- */
+
+/* A tooltip: the name of something that shows no words, such as an icon button. It comes after the
+   pointer has rested half a second, or at once by keyboard, growing out of what it names; it goes at
+   once. `<span class="has-tooltip"><button aria-describedby="t1">…</button><span class="tooltip"
+   role="tooltip" id="t1">play again</span></span>` */
+.has-tooltip {
+    position: relative;
+    display: inline-flex;
+}
+
+.tooltip {
+    position: absolute;
+    bottom: calc(100% + 0.375rem);
+    left: 50%;
+    z-index: 30;
+    padding: 0.3rem 0.6rem;
+    translate: -50% 0.25rem;
+    border: 0.0625rem solid var(--rule);
+    border-radius: calc(var(--radius) * 0.6);
+    background: var(--surface);
+    color: var(--ink);
+    font-family: var(--font-text);
+    font-size: 0.8125rem;
+    line-height: 1.3;
+    white-space: nowrap;
+    pointer-events: none;
+    transform-origin: 50% 100%;
+    opacity: 0;
+    scale: 0.6;
+    visibility: hidden;
+    transition:
+        opacity 0.1s ease,
+        scale 0.15s ease,
+        translate 0.15s ease,
+        visibility 0s 0.15s;
+}
+
+.has-tooltip:has(:focus-visible) .tooltip,
+.tooltip.shown {
+    opacity: 1;
+    scale: 1;
+    translate: -50% 0;
+    visibility: visible;
+    transition:
+        opacity 0.2s ease,
+        scale 0.4s var(--ease),
+        translate 0.4s var(--ease),
+        visibility 0s;
+}
+
+@media (hover: hover) {
+    .has-tooltip:hover .tooltip {
+        opacity: 1;
+        scale: 1;
+        translate: -50% 0;
+        visibility: visible;
+        transition:
+            opacity 0.2s ease 0.5s,
+            scale 0.4s var(--ease) 0.5s,
+            translate 0.4s var(--ease) 0.5s,
+            visibility 0s 0.5s;
+    }
+}
+
+/* ---- appearing and leaving ---- */
+
+/* The one way a control that is not always there comes and goes: it grows in from half its size and
+   shrinks back, and while gone it cannot be reached. Add .appears, then toggle .shown. Where it grows
+   from is its transform-origin, the middle unless said otherwise. */
+.appears {
+    opacity: 0;
+    scale: 0.5;
+    visibility: hidden;
+    transition:
+        opacity 0.2s ease,
+        scale 0.3s var(--ease),
+        visibility 0s 0.3s,
+        background-color 0.15s ease,
+        border-color 0.15s ease,
+        color 0.15s ease;
+}
+
+.appears.shown {
+    opacity: 1;
+    scale: 1;
+    visibility: visible;
+    transition:
+        opacity 0.3s ease,
+        scale 0.45s var(--ease),
+        visibility 0s,
+        background-color 0.15s ease,
+        border-color 0.15s ease,
+        color 0.15s ease;
+}
+
+.button.appears.shown:active {
+    scale: 0.95;
+}
+
+/* ---- held still ---- */
+
+@media (prefers-reduced-motion: reduce) {
+    .button,
+    .button::after,
+    .button[aria-busy="true"]::after,
+    .button svg,
+    .action-link,
+    .action-link.here::before,
+    .action-link::after,
+    .choice span,
+    .choice-marker,
+    .check input,
+    .check input::before,
+    .toggle input,
+    .toggle input::before,
+    .field,
+    .status,
+    .menu-box,
+    .menu.open .menu-box,
+    .menu-button,
+    .menu-button > .menu-turn,
+    .menu-dots i,
+    .menu-items > *,
+    .menu.open .menu-items > *,
+    .tooltip,
+    .has-tooltip:has(:focus-visible) .tooltip,
+    .tooltip.shown,
+    .appears,
+    .appears.shown {
+        transition: none;
+    }
+
+    .slider input::-webkit-slider-thumb {
+        transition: none;
+    }
+
+    .slider input::-moz-range-thumb {
+        transition: none;
+    }
+
+    @media (hover: hover) {
+        .has-tooltip:hover .tooltip {
+            transition: none;
+        }
+    }
+
+    /* what gave or swelled when pressed holds its size; the color still answers */
+    .button:active,
+    .button.icon:active,
+    .button.appears.shown:active,
+    .choice label:active span,
+    .check:active input,
+    .menu-button:active {
+        scale: none;
+    }
+
+    .slider input:is(:hover, :active)::-webkit-slider-thumb {
+        scale: none;
+    }
+
+    .slider input:is(:hover, :active)::-moz-range-thumb {
+        scale: none;
+    }
+
+    .action-link:is(:hover, :active)::after,
+    .action-link.here:is(:hover, :active)::before {
+        translate: none;
+    }
+
+    .toggle:active input::before {
+        width: 0.75rem;
+    }
+
+    .toggle:active input:checked::before {
+        translate: 1rem 0;
+    }
+
+    .appears {
+        scale: none;
+    }
+}
