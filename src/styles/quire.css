@@ -6,17 +6,37 @@
 
 /* ---- the editor's frame ---- */
 
+/* The bar runs along the top of the whole editor, with a rule under it. Under it, the outline's
+   column at the left edge (closed until asked for, its width flowing open) and the page, centred in
+   the room that is left. */
 .quire-editor {
-    --bar-height: 2.9rem;
+    --bar-height: 3.1rem;
+    --edge: clamp(0.75rem, 2vw, 1.5rem);
     /* the editor takes the width it is given and never widens the page; long lines scroll inside it */
     contain: inline-size;
     position: relative;
-    margin-inline: auto;
-    max-width: 56rem;
+    display: grid;
+    grid-template-columns: [outline] 0 [page] minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
+    min-height: 100vh;
+    transition: grid-template-columns 0.45s var(--ease);
+}
+
+.quire-editor > .quire-bar {
+    grid-column: 1 / -1;
+    grid-row: 1;
+}
+
+.quire-editor > .quire-outline {
+    grid-column: 1;
+    grid-row: 2;
 }
 
 .quire-column {
+    grid-column: 2;
+    grid-row: 2;
     min-width: 0;
+    padding: calc(var(--line) * 1.5) var(--edge) calc(var(--line) * 3);
 }
 
 /* the sheet being written on: a panel a little wider than its line of text, as a page has margins */
@@ -149,12 +169,10 @@
     /* its buttons do not make the page wider: what does not fit folds or scrolls */
     contain: inline-size;
     position: sticky;
-    top: 0.75rem;
+    top: 0;
     z-index: 40;
-    margin-bottom: calc(var(--line) * 1.5);
-    border: 0.0625rem solid var(--rule);
-    border-radius: calc(var(--bar-height) / 2);
-    background: var(--surface);
+    border-bottom: 0.0625rem solid var(--rule);
+    background: var(--ground);
     font-family: var(--font-text);
     font-size: 0.95rem;
     line-height: 1;
@@ -168,7 +186,7 @@
     display: flex;
     align-items: center;
     height: var(--bar-height);
-    padding-left: 0.45rem;
+    padding-left: var(--edge);
     overflow-x: auto;
     overflow-y: hidden;
     scrollbar-width: none;
@@ -206,6 +224,17 @@
     border-left: 0.0625rem solid var(--rule);
 }
 
+/* the page's lead, the site's name and its flags, starts the row */
+.quire-bar-lead {
+    padding-right: 0.9rem;
+}
+
+.quire-bar-lead .quire-top {
+    gap: 0.6rem;
+    margin: 0;
+    font-size: 1rem;
+}
+
 /* the word count and the three dots keep to the bar's right end, even while the rest scrolls under them */
 .quire-bar-end {
     position: sticky;
@@ -213,10 +242,10 @@
     z-index: 1;
     gap: 0.35rem;
     margin-left: auto;
-    padding-right: 0.45rem;
+    padding-right: var(--edge);
     border-left: 0;
-    background: var(--surface);
-    box-shadow: -0.75rem 0 0.75rem var(--surface);
+    background: var(--ground);
+    box-shadow: -0.75rem 0 0.75rem var(--ground);
 }
 
 .quire-bar-group + .quire-bar-end {
@@ -890,51 +919,44 @@
     opacity: 1;
 }
 
-@media (min-width: 80rem) {
-    .quire-editor {
-        display: grid;
-        grid-template-columns: 12rem minmax(0, 56rem);
-        column-gap: 2.5rem;
-        justify-content: center;
-        max-width: 72rem;
-        transition:
-            grid-template-columns 0.45s var(--ease),
-            column-gap 0.45s var(--ease);
-    }
-
-    .quire-editor:has(> .quire-outline.closed) {
-        grid-template-columns: 0 minmax(0, 56rem);
-        column-gap: 0;
+@media (min-width: 64rem) {
+    .quire-editor.outlined {
+        grid-template-columns: [outline] 15rem [page] minmax(0, 1fr);
     }
 
     .quire-outline,
     .quire-outline.open {
         position: sticky;
-        top: calc(0.75rem + var(--bar-height) + var(--line));
+        top: calc(var(--bar-height) + 0.0625rem);
         bottom: auto;
         left: auto;
         z-index: 1;
         align-self: start;
         width: auto;
-        max-height: calc(100vh - var(--bar-height) - var(--line) * 3);
-        margin-top: calc(var(--bar-height) + var(--line) * 1.5);
-        padding: 0;
+        max-height: calc(100vh - var(--bar-height));
+        padding: calc(var(--line) * 1.5) 0.75rem 1rem var(--edge);
         border: 0;
+        border-right: 0.0625rem solid var(--rule);
+        border-radius: 0;
         background: transparent;
-        opacity: 1;
         translate: none;
-        visibility: visible;
-        transition:
-            opacity 0.3s ease,
-            visibility 0s;
     }
 
-    .quire-outline.closed {
+    .quire-outline {
         opacity: 0;
         visibility: hidden;
         transition:
             opacity 0.2s ease,
             visibility 0s linear 0.3s;
+    }
+
+    .quire-outline.open {
+        min-height: calc(100vh - var(--bar-height));
+        opacity: 1;
+        visibility: visible;
+        transition:
+            opacity 0.3s ease 0.12s,
+            visibility 0s;
     }
 }
 
@@ -1127,6 +1149,8 @@
    the one fading and moving aside as the other comes in. */
 
 .quire-panes {
+    width: min(60rem, 100%);
+    margin-inline: auto;
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 0fr);
     column-gap: 0;
@@ -1137,13 +1161,27 @@
 }
 
 .quire-editor.markdown .quire-panes {
+    width: 100%;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     column-gap: 1.25rem;
 }
 
+/* side by side, the page and its Markdown are a matched pair: one row, the same top and bottom */
+@media (min-width: 60.01rem) {
+    .quire-editor.markdown .quire-panes {
+        align-items: stretch;
+    }
+
+    .quire-editor.markdown .quire-source {
+        position: static;
+        height: auto;
+        max-height: none;
+    }
+}
+
 .quire-source {
     position: sticky;
-    top: calc(0.75rem + var(--bar-height) + var(--line));
+    top: calc(var(--bar-height) + var(--line));
     box-sizing: border-box;
     width: 100%;
     min-width: 0;
@@ -1251,6 +1289,16 @@
     }
 
     .quire-count {
+        max-width: 0;
+        opacity: 0;
+        overflow: hidden;
+    }
+
+    .quire-bar-lead {
+        padding-right: 0.4rem;
+    }
+
+    .quire-bar-lead .flags {
         max-width: 0;
         opacity: 0;
         overflow: hidden;
@@ -1433,7 +1481,7 @@
 body.quire-app {
     display: block;
     max-width: none;
-    padding: 0.9rem clamp(0.75rem, 2.5vw, 2rem) calc(var(--line) * 2);
+    padding: 0;
 }
 
 .quire-top {
@@ -1441,7 +1489,7 @@ body.quire-app {
     align-items: center;
     gap: 0.75rem;
     position: relative;
-    margin: 0 0 0.6rem;
+    margin: 0.75rem var(--gutter);
     font-size: 0.85rem;
 }
 

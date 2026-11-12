@@ -46,6 +46,7 @@ const editor = createEditor(host, read(opened.text, { mdx: /\.mdx$/.test(first.i
     mark: opened.mark,
     versions,
     colors,
+    lead: document.querySelector<HTMLElement>(".quire-top") ?? undefined,
     onOpen: (_store, entry) => arrive(entry.id),
     onName: (button) => (files.isOpen() ? files.close(true) : void showFiles(button)),
     more: () => [

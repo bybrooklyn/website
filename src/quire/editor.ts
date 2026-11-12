@@ -46,6 +46,8 @@ export interface EditorOptions {
     onName?: (from: HTMLElement) => void;
     /** More lines for the three-dot menu, from the page. */
     more?: () => MenuItem[];
+    /** What the page puts at the left end of the bar, such as the site's name. */
+    lead?: HTMLElement;
     /** Takes a picture file when there is no store to keep it. */
     onImage?: (file: File) => Promise<string>;
 }
@@ -141,7 +143,6 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     const more = (): MenuItem[] => [
         { label: host.classList.contains("markdown") ? "Hide the Markdown" : "Show the Markdown", run: () => showMarkdown(!host.classList.contains("markdown")) },
         { label: "Version history", run: () => void history.open() },
-        { label: outlineView.isOpen() ? "Hide the outline" : "Show the outline", run: () => (outlineView.isOpen() ? outlineView.close() : outlineView.open()) },
         ...(options.more?.() ?? []),
         { label: "Download", hint: surface.getDocument().mdx ? ".mdx" : ".md", run: download },
         { label: "Print", run: () => print() },
@@ -152,6 +153,8 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         colors: options.colors,
         onImage: keepPicture,
         onName: (from) => options.onName?.(from),
+        onOutline: () => (outlineView.isOpen() ? outlineView.close() : outlineView.open()),
+        lead: options.lead,
         onLink: openLink,
         more,
     });
@@ -160,6 +163,8 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     const panes = make("div", "quire-panes");
     panes.append(paper, markdown.element);
     const showMarkdown = (shown: boolean) => {
+        // three columns need room: on a smaller window the outline folds away when the Markdown comes
+        if (shown && outlineView.isOpen() && host.getBoundingClientRect().width < 80 * parseFloat(getComputedStyle(document.documentElement).fontSize)) outlineView.close();
         host.classList.toggle("markdown", shown);
         markdown.element.inert = !shown;
         markdown.refresh();
@@ -167,11 +172,17 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         if (getComputedStyle(paper).visibility === "hidden" || (shown && matchMedia("(max-width: 60rem)").matches)) (shown ? markdown.element : surface.element).focus({ preventScroll: true });
     };
     markdown.element.inert = true;
-    column.append(bar.element, panes);
+    // the bar runs along the top of the whole editor; under it the outline's column and the page
+    host.prepend(bar.element);
+    bar.element.querySelector('[aria-label="Outline"]')?.setAttribute("data-outline-control", "");
+    column.append(panes);
     surface.on("link", () => openLink(bar.element.querySelector<HTMLElement>('[aria-label^="Link"]')!));
     const selectBar = createSelectBar(surface, () => bar.element.getBoundingClientRect().bottom);
-    const outlineView = createOutline(surface, () => bar.element.getBoundingClientRect().bottom);
-    host.prepend(outlineView.element);
+    const outlineView = createOutline(surface, () => bar.element.getBoundingClientRect().bottom, (open) => {
+        bar.setOutline(open);
+        host.classList.toggle("outlined", open);
+    });
+    host.insertBefore(outlineView.element, column);
     const slash = createSlash(surface, bar.pickImage);
     const tableTools = createTableTools(surface);
 

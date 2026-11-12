@@ -280,6 +280,10 @@ export interface BarOptions {
     name: string;
     /** Opens the documents list from the name. */
     onName?: (from: HTMLElement) => void;
+    /** Shows or hides the outline, from its control in the bar. */
+    onOutline?: () => void;
+    /** What the page puts at the bar's left end, before everything else: the site's name, say. */
+    lead?: HTMLElement;
     /** The colors offered for text, by name. */
     colors?: { name: string; value: string }[];
     onImage?: (file: File) => Promise<string>;
@@ -297,7 +301,7 @@ const SIZES: [string, string | null][] = [
 ];
 
 /** Builds the bar for a surface. */
-export function createBar(surface: Surface, options: BarOptions): { element: HTMLElement; setName(name: string): void; menus: Menu[]; layout(): void; pickImage(): void; setStatus(short: string, full: string, tone?: "quiet" | "warn"): void; name: HTMLElement } {
+export function createBar(surface: Surface, options: BarOptions): { element: HTMLElement; setName(name: string): void; menus: Menu[]; layout(): void; pickImage(): void; setStatus(short: string, full: string, tone?: "quiet" | "warn"): void; name: HTMLElement; setOutline(open: boolean): void } {
     const bar = make("div", "quire-bar");
     bar.setAttribute("role", "toolbar");
     bar.setAttribute("aria-label", "Formatting");
@@ -335,7 +339,12 @@ export function createBar(surface: Surface, options: BarOptions): { element: HTM
     fitName(options.name);
     name.addEventListener("mousedown", (event) => event.preventDefault());
     name.addEventListener("click", () => options.onName?.(name));
-    group(0, none, name);
+    // the page's own lead, the site's name, starts the row
+    if (options.lead) group(0, none, options.lead).classList.add("quire-bar-lead");
+    // the outline flows out from its control, beside the document's name
+    const outlineButton = control("Outline", icon("outline"), () => options.onOutline?.());
+    outlineButton.setAttribute("aria-pressed", "false");
+    group(0, none, outlineButton, name);
 
     // the style picker
     const styles = flowMenu("Style");
@@ -604,6 +613,10 @@ export function createBar(surface: Surface, options: BarOptions): { element: HTM
             setTimeout(() => leaving.remove(), 400);
         },
         name,
+        setOutline(open) {
+            outlineButton.setAttribute("aria-pressed", String(open));
+            outlineButton.classList.toggle("pressed", open);
+        },
     };
 }
 

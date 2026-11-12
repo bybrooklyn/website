@@ -344,12 +344,29 @@ used("a picture shows with its alt text written under it, which can be changed i
     expect(await md()).toBe("![A tall tower](/tower.png)\n");
 });
 
-used("the outline lists the headings, follows the cursor, goes to a heading when clicked, and closes and opens", async () => {
+used("the outline is closed at first, flows out as a column at the left edge from its control in the bar, and the page stays centred", async () => {
     await reset("# One\n\nfirst\n\n## Two\n\nsecond\n\n## Three\n\nthird\n", [0], 0);
-    // the outline catches up with a change within a moment, rather than on every key
-    await tab.wait(250);
+    const shown = () => tab.run<string>("getComputedStyle(document.querySelector('.quire-outline')).visibility");
+    const centred = () =>
+        tab.run<number>("(() => { const column = document.querySelector('.quire-column').getBoundingClientRect(); const paper = document.querySelector('.quire-paper').getBoundingClientRect(); return Math.abs((paper.left + paper.right) / 2 - (column.left + column.right) / 2); })()");
+    expect(await shown()).toBe("hidden");
+    expect(await tab.run("document.querySelector('.quire-bar button[aria-label=\"Outline\"]').getAttribute('aria-pressed')")).toBe("false");
+    expect(await centred()).toBeLessThan(2);
+    // opened, its column's width flows open and the page moves over time to stay centred in what is left
+    const watching = tab.run<number[]>("q.watch('.quire-paper', 'x', 700)");
+    await button("Outline");
+    const places = await watching;
+    expect(new Set(places.map(Math.round)).size).toBeGreaterThan(3);
+    expect(await shown()).toBe("visible");
+    expect(await tab.run("document.querySelector('.quire-bar button[aria-label=\"Outline\"]').getAttribute('aria-pressed')")).toBe("true");
+    // at the editor's left edge, which on the page is the window's
+    expect(await tab.run("Math.round(document.querySelector('.quire-outline').getBoundingClientRect().left - document.querySelector('.quire-editor').getBoundingClientRect().left)")).toBe(0);
+    expect(await centred()).toBeLessThan(2);
+
+    // it lists the headings and follows the cursor
     const links = () => tab.run<string[]>("[...document.querySelectorAll('.quire-outline-link')].map((link) => link.textContent)");
     const current = () => tab.run<string>("document.querySelector('.quire-outline-link.current')?.textContent ?? ''");
+    await tab.wait(250);
     expect(await links()).toEqual(["One", "Two", "Three"]);
     expect(await current()).toBe("One");
     await tab.run("q.select([5], 2)");
@@ -376,7 +393,6 @@ used("the outline lists the headings, follows the cursor, goes to a heading when
     await tab.wait(50);
     await reset("# One\n\nfirst\n\n## Two\n\nsecond\n\n## Three\n\nthird\n", [0], 0);
     await tab.wait(250);
-
     // a heading typed shows in it
     await tab.run("q.select([5], 5)");
     await tab.press("Enter");
@@ -384,25 +400,24 @@ used("the outline lists the headings, follows the cursor, goes to a heading when
     await tab.wait(250);
     expect(await links()).toEqual(["One", "Two", "Three", "Four"]);
     expect(await current()).toBe("Four");
-    // closed from the three-dot menu its column flows shut over time, and opens again
-    await choose("More", "Hide the outline");
-    const places = await tab.run<number[]>("q.watch('.quire-paper', 'x', 600)");
-    expect(new Set(places.map(Math.round)).size).toBeGreaterThan(3);
-    expect(await tab.run("getComputedStyle(document.querySelector('.quire-outline')).visibility")).toBe("hidden");
-    await choose("More", "Show the outline");
-    await tab.wait(500);
-    expect(await tab.run("getComputedStyle(document.querySelector('.quire-outline')).visibility")).toBe("visible");
+    // closed from the same control, it goes and the page comes back to the middle
+    await button("Outline");
+    await tab.wait(600);
+    expect(await shown()).toBe("hidden");
+    expect(await centred()).toBeLessThan(2);
 });
 
-used("on a narrow screen the outline is a panel that slides in when asked for and closes with Escape", async () => {
+used("on a narrow screen the outline is a panel that slides in from its control and closes with Escape", async () => {
     await tab.resize(390, 844);
     await reset("# One\n\ntext\n", [0], 0);
-    // the column it was goes away as a panel does, over a moment
-    await tab.wait(600);
+    await tab.wait(300);
     expect(await tab.run("getComputedStyle(document.querySelector('.quire-outline')).visibility")).toBe("hidden");
-    await choose("More", "Show the outline");
-    const moves = await tab.run<number[]>("q.watch('.quire-outline', 'opacity', 400)");
+    const watching = tab.run<number[]>("q.watch('.quire-outline', 'opacity', 400)");
+    await button("Outline");
+    const moves = await watching;
     expect(moves[moves.length - 1]).toBe(1);
+    expect(moves.some((value) => value > 0 && value < 1)).toBe(true);
+    await tab.wait(300);
     expect(await tab.run("document.activeElement.textContent")).toBe("One");
     await tab.press("Escape");
     await tab.wait(500);
@@ -732,6 +747,55 @@ used("the bar's end is cleanly rounded at every width: nothing pinned there show
     }
     await tab.resize(1300, 900);
     await tab.wait(200);
+});
+
+used("with the outline and the Markdown both open, nothing leaves the window at 1300, 1800 or 2560 wide, and the panes are a matched pair", async () => {
+    for (const [wide, high] of [[1300, 900], [1800, 1000], [2560, 1300]] as const) {
+        await tab.resize(wide, high);
+        await reset("# A title\n\nCharlotte is gay. A paragraph long enough to wrap onto a second line in the page and in its Markdown beside it.\n\n## A heading\n\nMore text.\n", [1], 0);
+        await tab.wait(200);
+        if ((await tab.run("document.querySelector('.quire-bar button[aria-label=\"Outline\"]').getAttribute('aria-pressed')")) !== "true") await button("Outline");
+        await tab.wait(500);
+        if (!(await tab.run<boolean>("document.querySelector('.quire-editor').classList.contains('markdown')"))) await choose("More", "Show the Markdown");
+        await tab.wait(700);
+        const seen = await tab.run<{ outside: string[]; scroll: number; window: number; tops: number; bottoms: number; outline: boolean }>(`(() => {
+            const parts = [".quire-bar", ".quire-outline", ".quire-column", ".quire-paper", ".quire-source", ".quire-bar-end", ".quire-outline-head", ...[...document.querySelectorAll(".quire > *")].map((_, index) => ".quire > :nth-child(" + (index + 1) + ")")];
+            const outside = parts.filter((selector) => {
+                const element = document.querySelector(selector);
+                if (!element || getComputedStyle(element).visibility === "hidden") return false;
+                const box = element.getBoundingClientRect();
+                return box.width > 0 && (box.left < -0.5 || box.right > innerWidth + 0.5);
+            });
+            const paper = document.querySelector(".quire-paper").getBoundingClientRect();
+            const source = document.querySelector(".quire-source").getBoundingClientRect();
+            return { outside, scroll: document.documentElement.scrollWidth, window: innerWidth, tops: Math.abs(paper.top - source.top), bottoms: Math.abs(paper.bottom - source.bottom), outline: getComputedStyle(document.querySelector(".quire-outline")).visibility === "visible" };
+        })()`);
+        expect({ wide, outside: seen.outside, fits: seen.scroll <= seen.window }).toEqual({ wide, outside: [], fits: true });
+        expect({ wide, tops: seen.tops < 1, bottoms: seen.bottoms < 1 }).toEqual({ wide, tops: true, bottoms: true });
+        if (process.env.QUIRE_SHOTS) await Bun.write(`${process.env.QUIRE_SHOTS}/outline-and-markdown-${wide}.png`, await tab.picture());
+        await choose("More", "Hide the Markdown");
+        await tab.wait(400);
+        if (seen.outline) await button("Outline");
+        await tab.wait(400);
+    }
+    await tab.resize(1300, 900);
+    await tab.wait(200);
+});
+
+used("typing in the Markdown view saves as typing on the page does, and the status comes back to saved", async () => {
+    await tab.run("q.useBrowser()");
+    const id = await tab.run<string>(`q.openIn("From the Markdown", "Start.\\n")`);
+    await choose("More", "Show the Markdown");
+    await tab.wait(600);
+    await tab.run("(() => { const field = document.querySelector('.quire-source'); field.focus(); field.setSelectionRange(6, 6); })()");
+    await tab.type(" More words.");
+    await tab.wait(300);
+    expect(await tab.run("q.status()")).not.toBe("Saved");
+    await tab.wait(1500);
+    expect(await tab.run("q.status()")).toBe("Saved");
+    expect(await tab.run(`q.kept(${JSON.stringify(id)})`)).toBe("Start. More words.\n");
+    await choose("More", "Hide the Markdown");
+    await tab.wait(400);
 });
 
 if (!live) console.warn("editor.test.ts: no Chromium on this machine, so the editor was not used.");
