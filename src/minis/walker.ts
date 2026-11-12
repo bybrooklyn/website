@@ -1,45 +1,93 @@
 // Walker: a little creature, seen from the side, that learns to walk in the visitor's browser.
-// Evolution runs in a worker (src/scripts/walker-worker.ts) on its own copy of the Rust engine. This
-// page runs a second copy that plays the best brain's run again, the very run it was scored on, from
-// the start each time; when a better brain turns up it takes over at the next start. The rest of the
-// generation is shown as small marks along the ground, one for each, where each got to.
 //
-// The ground's controls are in a strip along the bottom, the rest in a column at the side, with the
-// brain drawn there behind a button. What the engine does is in walker/README.md, and what this and
-// the worker share is in walking.ts.
+// It learns one of two ways. A generation at a time: evolution runs in a worker
+// (src/scripts/walker-worker.ts) on its own copy of the Rust engine, and this page runs a second copy
+// that shows the best brain so far. Or one walker, live: the page's copy tries one walker after
+// another on screen, each a child of the best so far, kept if it does better.
+//
+// A run goes a set distance, or is endless. A set distance shows the best brain's own scored run
+// again from the start each time, with the rest of the generation as marks along the ground. An
+// endless walk goes on while the walker stays up, on ground laid ahead of it, and a better brain
+// takes over at the start of a stride.
+//
+// The ground's controls are in a strip along the bottom (a picture of the course, when that is the
+// goal), the rest in a column at the side, in groups, with what is less used behind small openings.
+// What the engine does is in walker/README.md, and what this and the worker share is in walking.ts.
 
 import { el, type Mote, type Scene } from "../mote/stage";
 import type { Order, Report } from "../scripts/walker-worker";
-import { DEFAULT_SETUP, ENGINE, GOALS, KINDS, LAYERS, LEGS, LINK_NAMES, MEMORIES, NEURONS, POPULATION, PRESETS, presetOf, fromLink, heightAt, linkParts, oldLink, pieces, read, start, valid, write, type Engine, type Setup } from "./walking";
+import {
+    COURSE_GOAL,
+    DEFAULT_SETUP,
+    ENGINE,
+    GOALS,
+    KINDS,
+    LAYERS,
+    LEGS,
+    LENGTHS,
+    LINK_NAMES,
+    MEMORIES,
+    NEURONS,
+    POPULATION,
+    PRESETS,
+    Terrain,
+    courseAt,
+    fromLink,
+    groundOf,
+    heightAt,
+    lengthName,
+    linkParts,
+    oldLink,
+    presetOf,
+    read,
+    start as startEngine,
+    valid,
+    write,
+    type Engine,
+    type Setup,
+    type Way,
+} from "./walking";
 
-export const label = "A little creature with legs, seen from the side, learning to walk by evolution. Marks along the ground show how far the rest of its generation got.";
+export const label = "A little creature with legs, seen from the side, learning to walk. Marks along the ground show how far the rest of its generation got.";
 
 /** How hard a drag pushes, in newton seconds for each metre dragged, and the most one move can give. */
 const PUSH = 25;
 const MOST_PUSH = 12;
 /** How long the walker rests where its run ended before starting again, in seconds. */
 const REST = 1;
+/** The ground made from the start for training, and for every walk to begin on. */
+const MADE = 400;
+/** An endless walk has ground made this far ahead of it, a stretch at a time, and keeps this much behind. */
+const AHEAD = 150;
+const STRETCH = 100;
+const KEPT_BEHIND = 60;
+/** The fewest seconds between one better brain taking over an endless walk and the next. */
+const SWAP_EVERY = 8;
 
 export default function walker(m: Mote): Scene {
-    const kept = m.recall<Setup>("walker", DEFAULT_SETUP, 3);
+    const kept = m.recall<Setup>("walker", DEFAULT_SETUP, 4);
     let setup: Setup = valid(kept) ? kept : DEFAULT_SETUP;
 
     // opened from a link to a walker: its setup and its trained brain
     const linked = fromLink((name) => m.link.get(name));
     let brainToLoad: Float32Array | undefined;
-    if (linked) [setup, brainToLoad] = [linked.setup, linked.brain];
+    if (linked) [setup, brainToLoad] = [{ ...linked.setup, ground: setup.goal === COURSE_GOAL ? setup.ground : linked.setup.ground }, linked.brain];
 
     let engine: Engine | undefined;
     let worker: Worker | undefined;
     /** Training on this thread instead, where a worker could not be started. */
     let here = false;
     let id = 0;
-    let ground = pieces(setup.ground);
+    /** The ground the walk on screen is on, from its start, and what makes more of it. */
+    let terrain = new Terrain(groundOf(setup));
+    let ground: number[] = [];
+    let beginning: number[] = [];
     let generation = 0;
     let runs = 0;
+    let attempt = 0;
     let paused = false;
     let showCrowd = true;
-    /** A better brain from the worker, waiting for the run on screen to end. */
+    /** A better brain from the worker, waiting for the run on screen to end, or for the next stride. */
     let waiting: Float32Array | undefined;
     let better = false;
     /** The brain on screen: whether there is one yet, and how far its scored run went. */
@@ -50,6 +98,9 @@ export default function walker(m: Mote): Scene {
     let ended = 0;
     let beat = 0;
     let ticks = 0;
+    let swapped = 0;
+    /** How far the engine has moved an endless walk's world back, to add to what it says. */
+    let origin = 0;
     const stale = !linked && oldLink((name) => m.link.get(name));
     let notice = { text: brainToLoad ? "A shared walker, already trained. Learning goes on from it." : stale ? "That link is to a walker from an older version, which this one cannot read. Learning starts fresh." : "", until: 7 };
     const camera = { x: 0, y: 0 };
@@ -58,26 +109,42 @@ export default function walker(m: Mote): Scene {
     let last: { x: number; y: number } | undefined;
     let grabbed: { x: number; y: number } | undefined;
     const doing = () => GOALS[setup.goal]!.doing;
+    const live = () => setup.way === "live";
+    const endless = () => setup.length === 0;
 
     // ---- the engine, on this page and in the worker ----
     const tell = (order: Order) => worker?.postMessage(order);
 
+    /** The ground from the start again, as every walk begins on it. */
+    const fresh = () => {
+        terrain = new Terrain(groundOf(setup));
+        beginning = [-20, 0, 3, 0, ...terrain.next(MADE)];
+        ground = [...beginning];
+        origin = 0;
+    };
+
     const begin = (brain?: Float32Array) => {
         id += 1;
-        ground = pieces(setup.ground);
-        [generation, runs, waiting, better, shown, distance, population, ended] = [0, 0, undefined, false, false, 0, undefined, 0];
+        fresh();
+        [generation, runs, attempt, waiting, better, shown, distance, population, ended] = [0, 0, 0, undefined, false, false, 0, undefined, 0];
         const seed = (Math.random() * 2 ** 32) >>> 0;
         if (engine) {
-            engine.create(setup.legs, POPULATION, 0, seed, setup.hidden, setup.layers, setup.memory, setup.goal);
-            write(engine, engine.ground_room(ground.length / 4), ground);
-            engine.ground_set(ground.length / 4);
+            engine.create(setup.legs, POPULATION, 0, seed, setup.hidden, setup.layers, setup.memory, setup.goal, setup.length);
+            write(engine, engine.ground_room(beginning.length / 4), beginning);
+            engine.ground_set(beginning.length / 4);
             if (brain) take(brain);
             engine.show_reset();
             // the worker starts from the same seed, so its first generation is this one
             if (showCrowd) engine.crowd_reset();
+            if (live()) {
+                engine.live_begin();
+                [shown, attempt] = [true, 1];
+            }
             [camera.x, camera.y, last] = [0, 0, undefined];
         }
-        tell({ kind: "begin", setup: id, legs: setup.legs, goal: setup.goal, hidden: setup.hidden, layers: setup.layers, memory: setup.memory, ground, seed, brain });
+        tell({ kind: "begin", setup: id, legs: setup.legs, goal: setup.goal, hidden: setup.hidden, layers: setup.layers, memory: setup.memory, length: setup.length, ground: beginning, seed, brain });
+        // learning live needs no generations in the background
+        tell({ kind: live() || paused ? "pause" : "resume" });
         changed();
         m.wake();
     };
@@ -87,16 +154,17 @@ export default function walker(m: Mote): Scene {
         if (!engine || brain.length !== engine.weights_length()) return;
         write(engine, engine.weights_room(), brain);
         engine.weights_load();
+        fresh();
         [shown, distance] = [true, engine.best_distance()];
     };
 
     const hear = (report: Report) => {
         if (report.kind === "failed") return trainHere();
-        if (report.setup !== id) return;
+        if (report.setup !== id || live()) return;
         [generation, runs] = [report.generation, report.runs];
         if (report.brain) waiting = report.brain;
         if (report.population) population = report.population;
-        // the first brain goes on at once; after that a better one waits for the next start
+        // the first brain goes on at once; after that a better one waits for the next start, or stride
         if (waiting && !shown && engine) {
             take(waiting);
             waiting = undefined;
@@ -124,7 +192,7 @@ export default function walker(m: Mote): Scene {
 
     void fetch(ENGINE)
         .then((answer) => answer.arrayBuffer())
-        .then(start)
+        .then(startEngine)
         .then((made) => {
             engine = made;
             begin(brainToLoad);
@@ -132,16 +200,33 @@ export default function walker(m: Mote): Scene {
 
     /** Starts the latest generation from the start, beside the best as it starts again. */
     const crowd = () => {
-        if (!engine || !showCrowd) return;
+        if (!engine || !showCrowd || live() || endless()) return;
         if (population && !here) {
             write(engine, engine.crowd_room(POPULATION), population);
             engine.crowd_start(POPULATION);
         } else engine.crowd_reset();
     };
 
-    // ---- the controls: the ground along the bottom, the rest at the side ----
+    /** Lays ground ahead of an endless walk, and forgets what is far behind it. */
+    const layAhead = (engine: Engine, x: number) => {
+        if (!engine.show_endless()) return;
+        if (terrain.reached < x + AHEAD) {
+            const more = terrain.next(terrain.reached + STRETCH);
+            write(engine, engine.ground_room(more.length / 4), more);
+            engine.show_ground_extend(more.length / 4);
+            ground.push(...more);
+        }
+        if (ground.length > 4 * 1500) {
+            const kept: number[] = [];
+            for (let i = 0; i < ground.length; i += 4) if (Math.max(ground[i]!, ground[i + 2]!) > x - KEPT_BEHIND) kept.push(ground[i]!, ground[i + 1]!, ground[i + 2]!, ground[i + 3]!);
+            ground = kept;
+        }
+    };
+
+    // ---- the controls: the ground along the bottom, the rest at the side, in groups ----
     let changed = () => {};
     let drawBrain = () => {};
+    let drawCourse = () => {};
     if (!m.preview) {
         const host = m.canvas.parentElement!;
         const side = m.panel();
@@ -156,9 +241,11 @@ export default function walker(m: Mote): Scene {
         host.insertBefore(status, strip);
         side.append(said);
 
-        /** A row of the side's grid: a small label, then its controls. */
+        /** A row of a grid: a small label, then its controls. */
         const row = (words: string, ...controls: (Node | string)[]) => [el("span", { class: "walker-label", textContent: words }), el("div", { class: "walker-controls" }, ...controls)];
-        /** A set of radio buttons, one for each option, labelled by `name`. */
+        /** A group's heading, across the column. */
+        const group = (words: string) => el("h3", { class: "walker-group", textContent: words });
+        /** A set of radio buttons, one for each option. */
         const choices = <T extends string | number>(name: string, words: string, options: { value: T; text: string }[], chosen: () => T, pick: (value: T) => void) => {
             const set = el("div", { class: "walker-choices" });
             set.setAttribute("role", "radiogroup");
@@ -169,9 +256,19 @@ export default function walker(m: Mote): Scene {
             }
             return set;
         };
-        const describe = () => `${setup.legs} leg${setup.legs === 1 ? "" : "s"}, ${doing()}, on ${setup.ground.kind === "flat" ? "flat ground" : setup.ground.kind}`;
+        /** A block that grows open under the row that opens it and shrinks shut again, never simply appearing. */
+        const opening = (id: string, ...inside: Node[]) => {
+            const block = el("div", { class: "walker-opening", id }, el("div", { class: "walker-opening-inside" }, ...inside));
+            const shut = (open: boolean) => {
+                block.classList.toggle("open", open);
+                block.inert = !open;
+            };
+            shut(false);
+            return { block, shut, open: () => block.classList.contains("open") };
+        };
+        const describe = () => `${setup.legs} leg${setup.legs === 1 ? "" : "s"}, ${doing()}${setup.goal === COURSE_GOAL ? "" : `, on ${setup.ground.kind === "flat" ? "flat ground" : setup.ground.kind}`}, ${lengthName(setup.length)}`;
         const restart = () => {
-            m.keep("walker", setup, 3);
+            m.keep("walker", setup, 4);
             // a link to a shared walker no longer says what is on the screen
             for (const name of LINK_NAMES) m.link.set(name, null);
             notice = { text: `Learning again from the start: ${describe()}.`, until: m.time + 5 };
@@ -183,39 +280,26 @@ export default function walker(m: Mote): Scene {
             restart();
         };
 
+        // the strip: the ground's kind and roughness, or, for the course, a picture of it
         const rough = el("input", { type: "range", min: "0", max: "100", step: "5", value: String(setup.ground.rough) });
         rough.setAttribute("aria-label", "how rough");
         rough.addEventListener("change", () => set({ ground: { ...setup.ground, rough: Number(rough.value) } }));
-        strip.append(
-            ...row("ground", choices("ground", "ground", KINDS.map((kind) => ({ value: kind, text: kind })), () => setup.ground.kind, (kind) => set({ ground: { ...setup.ground, kind } }))),
-            ...row("rough", rough),
-        );
-
-        const pause = el("button", { type: "button", textContent: "pause", onclick: () => {
-            paused = !paused;
-            tell({ kind: paused ? "pause" : "resume" });
-            said.textContent = paused ? "Learning is paused." : "Learning goes on.";
-            changed();
-            m.wake();
-        } });
-        const crowdBox = el("input", { type: "checkbox", checked: showCrowd, onchange: () => {
-            showCrowd = crowdBox.checked;
-            crowd();
-            m.wake();
-        } });
-
-        /** A block that grows open under the row that opens it and shrinks shut again, never simply appearing. */
-        const opening = (id: string, ...inside: Node[]) => {
-            const block = el("div", { class: "walker-opening", id }, el("div", { class: "walker-opening-inside" }, ...inside));
-            const shut = (open: boolean) => {
-                block.classList.toggle("open", open);
-                block.inert = !open;
-            };
-            shut(false);
-            return { block, shut, open: () => block.classList.contains("open") };
+        const kinds = opening("walker-kinds", ...row("ground", choices("ground", "ground", KINDS.map((kind) => ({ value: kind, text: kind })), () => setup.ground.kind, (kind) => set({ ground: { ...setup.ground, kind } }))), ...row("rough", rough));
+        const map = el("canvas", { class: "walker-course-picture" });
+        map.setAttribute("role", "img");
+        map.setAttribute("aria-label", "The obstacle course: level ground, hills, steps and gaps, each harder than the last, with a mark at how far the best has got.");
+        const course = opening("walker-course", ...row("course", map));
+        strip.append(kinds.block, course.block);
+        const showGround = () => {
+            kinds.shut(setup.goal !== COURSE_GOAL);
+            course.shut(setup.goal === COURSE_GOAL);
         };
+        showGround();
 
-        // the brain's size: three by name, or its own mix, whose pickers open under the names
+        // body
+        const legs = choices("legs", "legs", LEGS.map((count) => ({ value: count, text: String(count) })), () => setup.legs, (count) => set({ legs: count }));
+
+        // brain: three sizes by name, or its own mix, whose pickers open under the names
         const own = opening(
             "walker-own",
             ...row("neurons", choices("neurons", "neurons in each layer", NEURONS.map((count) => ({ value: count, text: String(count) })), () => setup.hidden, (hidden) => set({ hidden }))),
@@ -229,64 +313,140 @@ export default function walker(m: Mote): Scene {
             m.wake();
             if (preset) set({ hidden: preset.hidden, layers: preset.layers, memory: preset.memory });
         });
-
-        // the brain, drawn in its own block that opens under its button
         const picture = el("canvas", { class: "walker-brain-picture" });
         picture.setAttribute("role", "img");
         picture.setAttribute("aria-label", "The walker's brain: its senses and memory on the left, its joints and memory on the right, and the neurons between, lit by what passes through them.");
         const view = opening("walker-brain", picture);
-        const block = view.block;
-        const open = el("button", { type: "button", textContent: "show", onclick: () => {
+        const look = el("button", { type: "button", textContent: "show it", onclick: () => {
             view.shut(!view.open());
-            open.setAttribute("aria-expanded", String(view.open()));
-            open.textContent = view.open() ? "hide" : "show";
+            look.setAttribute("aria-expanded", String(view.open()));
+            look.textContent = view.open() ? "hide it" : "show it";
             m.wake();
         } });
-        open.setAttribute("aria-expanded", "false");
-        open.setAttribute("aria-controls", "walker-brain");
+        look.setAttribute("aria-expanded", "false");
+        look.setAttribute("aria-controls", "walker-brain");
+
+        // what it learns: its goal, and how far a run goes
+        const goals = choices("goal", "goal", GOALS.map((goal) => ({ value: goal.goal, text: goal.name })), () => setup.goal, (goal) => {
+            setup = { ...setup, goal };
+            showGround();
+            restart();
+        });
+        const far = el("input", { type: "range", min: "0", max: String(LENGTHS.length - 1), step: "1", value: String(LENGTHS.indexOf(setup.length)) });
+        far.setAttribute("aria-label", "how far a run goes");
+        const farSaid = el("output", { class: "walker-far", textContent: lengthName(setup.length) });
+        far.addEventListener("input", () => (farSaid.textContent = lengthName(LENGTHS[Number(far.value)]!)));
+        far.addEventListener("change", () => set({ length: LENGTHS[Number(far.value)]! }));
+
+        // how it learns: the way, pausing and starting over, the crowd
+        const ways = choices<Way>("way", "how it learns", [{ value: "generation", text: "a generation at a time" }, { value: "live", text: "one walker, live" }], () => setup.way, (way) => set({ way }));
+        const pause = el("button", { type: "button", textContent: "pause", onclick: () => {
+            paused = !paused;
+            tell({ kind: paused || live() ? "pause" : "resume" });
+            said.textContent = paused ? "Learning is paused." : "Learning goes on.";
+            changed();
+            m.wake();
+        } });
+        const crowdBox = el("input", { type: "checkbox", checked: showCrowd, onchange: () => {
+            showCrowd = crowdBox.checked;
+            crowd();
+            m.wake();
+        } });
 
         const share = el("button", { type: "button", class: "walker-share", textContent: "copy link to this walker", disabled: true, onclick: () => {
             if (!engine) return;
             share.style.minWidth = `${share.offsetWidth}px`;
+            const brain = read(engine, live() ? engine.live_best_weights() : engine.show_weights(), engine.weights_length());
             let address = "";
-            for (const [name, value] of linkParts(setup, read(engine, engine.show_weights(), engine.weights_length()))) address = m.link.set(name, value);
+            for (const [name, value] of linkParts(setup, brain)) address = m.link.set(name, value);
             navigator.clipboard?.writeText(address).then(() => (share.textContent = "link copied"), () => (share.textContent = "the link is in the address bar"));
             setTimeout(() => (share.textContent = "copy link to this walker"), 2500);
         } });
 
         side.append(
-            ...row("legs", choices("legs", "legs", LEGS.map((legs) => ({ value: legs, text: String(legs) })), () => setup.legs, (legs) => set({ legs }))),
-            ...row("goal", choices("goal", "goal", GOALS.map((goal) => ({ value: goal.goal, text: goal.name })), () => setup.goal, (goal) => set({ goal }))),
-            ...row("brain", sizes),
+            group("body"),
+            ...row("legs", legs),
+            group("brain"),
+            ...row("size", sizes),
             own.block,
+            ...row("see", look),
+            view.block,
+            group("what it learns"),
+            ...row("goal", goals),
+            ...row("how far", el("span", { class: "walker-range" }, far, farSaid)),
+            group("how it learns"),
+            ...row("way", ways),
             ...row("learning", pause, el("button", { type: "button", textContent: "start over", onclick: restart })),
-            ...row("crowd", el("label", {}, crowdBox, "show")),
-            ...row("see", el("span", {}, "the brain ", open)),
-            block,
+            ...row("crowd", el("label", {}, crowdBox, "show the rest")),
             share,
         );
 
         changed = () => {
             pause.textContent = paused ? "resume" : "pause";
-            share.disabled = !shown;
+            share.disabled = !shown || (live() && attempt < 2);
+            crowdBox.disabled = live() || endless();
             const now = !engine
                 ? "Loading the walker."
-                : !shown
-                  ? `Generation 0, ${doing()}, ${runs} of ${POPULATION} tried`
-                  : `Generation ${generation}, ${doing()}, best ${distance.toFixed(1)} m${paused ? ", paused" : ""}`;
-            const text = m.time < notice.until && notice.text ? notice.text : now;
+                : live()
+                  ? `Attempt ${attempt}, ${doing()}, best ${distance.toFixed(1)} m`
+                  : !shown
+                    ? `Generation 0, ${doing()}, ${runs} of ${POPULATION} tried`
+                    : endless()
+                      ? `Generation ${generation}, ${doing()}, walked ${distance.toFixed(1)} m`
+                      : `Generation ${generation}, ${doing()}, best ${distance.toFixed(1)} m`;
+            const text = m.time < notice.until && notice.text ? notice.text : `${now}${paused ? ", paused" : ""}`;
             if (status.textContent !== text) status.textContent = text;
+        };
+
+        /** A canvas sized to its box, cleared, ready to draw on in CSS pixels. */
+        const ready = (canvas: HTMLCanvasElement) => {
+            const ctx = canvas.getContext("2d");
+            if (!ctx) return undefined;
+            const scale = window.devicePixelRatio || 1;
+            const [wide, high] = [canvas.clientWidth, canvas.clientHeight];
+            if (canvas.width !== Math.round(wide * scale) || canvas.height !== Math.round(high * scale)) [canvas.width, canvas.height] = [Math.round(wide * scale), Math.round(high * scale)];
+            ctx.setTransform(scale, 0, 0, scale, 0, 0);
+            ctx.clearRect(0, 0, wide, high);
+            return { ctx, wide, high };
+        };
+
+        drawCourse = () => {
+            if (!course.open()) return;
+            const drawn = ready(map);
+            if (!drawn) return;
+            const { ctx, wide, high } = drawn;
+            // the first two laps, squeezed into the picture, each stretch in its own tone
+            const span = 240;
+            const profile = new Terrain({ kind: "course", rough: 0 }).next(span);
+            let [low, top] = [0, 0];
+            for (let i = 1; i < profile.length; i += 2) [low, top] = [Math.min(low, profile[i]!), Math.max(top, profile[i]!)];
+            const x = (along: number) => 4 + ((wide - 8) * along) / span;
+            const y = (height: number) => high - 6 - ((high - 14) * (height - low)) / Math.max(1, top - low);
+            ctx.lineWidth = 2;
+            ctx.lineCap = "round";
+            for (let i = 0; i < profile.length; i += 4) {
+                const kind = courseAt(profile[i]!).kind;
+                ctx.strokeStyle = m.color(kind === "flat" ? "--muted" : "--ink");
+                ctx.globalAlpha = kind === "flat" ? 0.6 : 0.35 + 0.65 * courseAt(profile[i]!).hard;
+                ctx.beginPath();
+                ctx.moveTo(x(profile[i]!), y(profile[i + 1]!));
+                ctx.lineTo(x(profile[i + 2]!), y(profile[i + 3]!));
+                ctx.stroke();
+            }
+            ctx.globalAlpha = 1;
+            const reached = Math.min(span, Math.max(0, distance));
+            const at = heightAt(profile, reached) ?? low;
+            ctx.fillStyle = m.color("--accent");
+            ctx.beginPath();
+            ctx.arc(x(reached), y(at) - 5, 4, 0, Math.PI * 2);
+            ctx.fill();
         };
 
         drawBrain = () => {
             if (!engine || !view.open()) return;
-            const ctx = picture.getContext("2d");
-            if (!ctx) return;
-            const scale = window.devicePixelRatio || 1;
-            const [wide, high] = [picture.clientWidth, picture.clientHeight];
-            if (picture.width !== Math.round(wide * scale)) [picture.width, picture.height] = [Math.round(wide * scale), Math.round(high * scale)];
-            ctx.setTransform(scale, 0, 0, scale, 0, 0);
-            ctx.clearRect(0, 0, wide, high);
+            const drawn = ready(picture);
+            if (!drawn) return;
+            const { ctx, wide, high } = drawn;
             const size = engine.hidden_length();
             const layers = engine.layers_length();
             // memory goes in with the senses and comes out with the outputs, so it is drawn at both ends
@@ -341,7 +501,7 @@ export default function walker(m: Mote): Scene {
             ctx.fillStyle = muted;
             ctx.font = `11px ${code}`;
             ctx.textBaseline = "bottom";
-            const names = ["senses", ...Array.from({ length: layers }, () => "hidden"), "joints"];
+            const names = ["senses", ...Array.from({ length: layers }, () => ""), "joints"];
             names.forEach((name, column) => {
                 ctx.textAlign = column === 0 ? "left" : column === names.length - 1 ? "right" : "center";
                 ctx.fillText(name, place(column, 0)[0] + (column === 0 ? -6 : column === names.length - 1 ? 6 : 0), high - 2);
@@ -355,6 +515,7 @@ export default function walker(m: Mote): Scene {
     let scale = 100;
     /** The ground's line sits this far down the scene, so the scene is mostly sky with a band of earth. */
     const horizon = () => m.height * 0.82;
+    // the scene is drawn in metres from the walk's start; the engine's world may have been moved back by `origin`
     const toScreen = (x: number, y: number): [number, number] => [(x - camera.x) * scale + m.width * 0.42, horizon() - (y - camera.y) * scale];
     const toWorld = (sx: number, sy: number): [number, number] => [(sx - m.width * 0.42) / scale + camera.x, (horizon() - sy) / scale + camera.y];
 
@@ -398,17 +559,17 @@ export default function walker(m: Mote): Scene {
             ctx.globalAlpha = 0.6;
             ctx.fillRect(sx - 0.5, sy + 4, 1, x % 5 === 0 ? 7 : 4);
             ctx.globalAlpha = 1;
-            if (x % 5 === 0 && sy + 14 < m.height - 12) ctx.fillText(x === 0 ? "start" : `${x} m`, sx, sy + 14);
+            if (x % 5 === 0 && sy + 14 < m.height - 12 && sx > 16 && sx < m.width - 16) ctx.fillText(x === 0 ? "start" : `${x} m`, sx, sy + 14);
         }
     };
 
-    /** The flag where the best brain's run ends: the one distance the status gives. */
+    /** The flag where the best run ended (or, live, the best attempt): the one distance the status gives. */
     const drawFlag = () => {
-        if (!shown) return;
+        if (!shown || (endless() && !live())) return;
         const { ctx } = m;
         const y = heightAt(ground, distance) ?? camera.y;
         const [sx, sy] = toScreen(distance, y);
-        if (sx < -20 || sx > m.width + 20) return;
+        if (sx < -20 || sx > m.width + 20 || distance <= 0) return;
         ctx.strokeStyle = m.color("--muted");
         ctx.lineWidth = 1.5;
         ctx.beginPath();
@@ -449,7 +610,7 @@ export default function walker(m: Mote): Scene {
         ctx.globalAlpha = 1;
     };
 
-    /** A limb from a to b, round at both ends and thicker at a, as one shape. */
+    /** A limb from a to b, round at both ends and thicker at a. */
     const limb = (ax: number, ay: number, bx: number, by: number, wa: number, wb: number) => {
         const { ctx } = m;
         const length = Math.hypot(bx - ax, by - ay) || 1;
@@ -474,7 +635,9 @@ export default function walker(m: Mote): Scene {
         const { ctx } = m;
         const count = engine.body_count();
         const bodies = read(engine, engine.show_bodies(), 6 * count);
-        const legs = (count - 1) / 2;
+        for (let i = 0; i < bodies.length; i += 6) bodies[i] += origin;
+        const legs = engine.legs_length();
+        const load = engine.show_load();
         const [tx, ty, angle, , hw, hh] = [bodies[0]!, bodies[1]!, bodies[2]!, bodies[3]!, bodies[4]!, bodies[5]!];
         const facing = Math.cos(angle) >= 0 ? 1 : -1;
         const leg = (index: number, color: string) => {
@@ -491,7 +654,7 @@ export default function walker(m: Mote): Scene {
             const foot = bodies[lower * 6 + 5]!;
             // the foot sits on the ground: if the soft contact lets it dip a few millimetres, it is drawn on top
             const under = heightAt(ground, fx);
-            const lift = under !== undefined && fy - foot < under ? under - (fy - foot) : 0;
+            const lift = under !== undefined && fy - foot < under && under - (fy - foot) < 0.05 ? under - (fy - foot) : 0;
             const [shx, shy] = toScreen(hx, hy);
             const [skx, sky] = toScreen(kx, ky);
             const [sfx, sfy] = toScreen(fx, fy + lift);
@@ -507,14 +670,16 @@ export default function walker(m: Mote): Scene {
         const near = (index: number) => legs === 1 || index % 2 === 0;
         for (let i = 0; i < legs; i++) if (!near(i)) leg(i, m.color("--muted"));
 
-        // the body: a rounded shape, with its eyes at the front
+        // the body: a rounded shape, flatter on top with a little rim at each end when it carries
+        // something, with its eyes at the front
         const [sx, sy] = toScreen(tx, ty);
         ctx.save();
         ctx.translate(sx, sy);
         ctx.rotate(-angle);
         ctx.fillStyle = m.color("--accent");
         ctx.beginPath();
-        ctx.roundRect(-hw * scale, -hh * scale, 2 * hw * scale, 2 * hh * scale, Math.min(hw, hh) * scale * 0.95);
+        const round = Math.min(hw, hh) * scale * 0.95;
+        ctx.roundRect(-hw * scale, -hh * scale, 2 * hw * scale, 2 * hh * scale, load >= 0 ? [round * 0.35, round * 0.35, round, round] : round);
         ctx.fill();
         const eye = Math.min(hh * 0.3, 0.065) * scale;
         const front = legs === 4 ? 0.78 : 0.5;
@@ -533,10 +698,37 @@ export default function walker(m: Mote): Scene {
             ctx.fill();
         }
         ctx.restore();
+        if (load >= 0) {
+            // the rims, in the body's colour, and the parcel between them
+            ctx.fillStyle = m.color("--accent");
+            for (const rim of [1 + 2 * legs, 2 + 2 * legs]) {
+                const [rx, ry] = toScreen(bodies[rim * 6]!, bodies[rim * 6 + 1]!);
+                ctx.beginPath();
+                ctx.arc(rx, ry, bodies[rim * 6 + 4]! * scale, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            const [px, py] = toScreen(bodies[load * 6]!, bodies[load * 6 + 1]!);
+            const [pw, ph] = [bodies[load * 6 + 4]! * scale, bodies[load * 6 + 5]! * scale];
+            ctx.save();
+            ctx.translate(px, py);
+            ctx.rotate(-bodies[load * 6 + 2]!);
+            ctx.fillStyle = m.color("--ink");
+            ctx.beginPath();
+            ctx.roundRect(-pw, -ph, 2 * pw, 2 * ph, ph * 0.35);
+            ctx.fill();
+            ctx.fillStyle = m.color("--accent");
+            ctx.fillRect(-pw * 0.12, -ph, pw * 0.24, 2 * ph);
+            ctx.restore();
+        }
         for (let i = 0; i < legs; i++) if (near(i)) leg(i, m.color("--ink"));
     };
 
-    const torso = () => (engine ? read(engine, engine.show_bodies(), 2) : new Float32Array(2));
+    /** Where the walker's body is, in metres from the walk's start. */
+    const torso = (): [number, number] => {
+        if (!engine) return [0, 0];
+        const [x, y] = read(engine, engine.show_bodies(), 2);
+        return [x! + origin, y!];
+    };
 
     return {
         step(dt) {
@@ -546,45 +738,68 @@ export default function walker(m: Mote): Scene {
                 beat = m.time;
                 tell({ kind: "beat" });
             }
-            if (here && !paused && ticks % 2 === 0) {
-                const before = engine.best_score();
-                engine.train(1);
-                [generation, runs] = [engine.generation(), engine.generation_runs()];
-                if (engine.best_score() > before) better = true;
-                if (better && !shown) {
-                    engine.show_reset();
-                    [shown, distance, better] = [true, engine.best_distance(), false];
-                    crowd();
+            if (live()) {
+                if (!paused) {
+                    const now = engine.live_step(dt);
+                    // a new attempt starts at the start, on fresh ground
+                    if (now !== attempt) {
+                        [attempt, distance] = [now, Math.max(0, engine.live_best_distance())];
+                        fresh();
+                        last = undefined;
+                    }
                 }
-            }
-            // nothing walks until there is a brain worth showing
-            if (shown) engine.show_step(dt);
-            if (showCrowd && shown) engine.crowd_step(dt);
-            // at the end of its run the walker rests a moment, then starts again, with a better brain if one came
-            if (shown && engine.show_over()) {
-                ended += dt;
-                if (ended >= REST && !paused) {
-                    ended = 0;
-                    if (waiting) take(waiting);
-                    else if (better) {
+            } else {
+                if (here && !paused && ticks % 2 === 0) {
+                    const before = engine.best_score();
+                    engine.train(1);
+                    [generation, runs] = [engine.generation(), engine.generation_runs()];
+                    if (engine.best_score() > before) better = true;
+                    if (better && !shown) {
                         engine.show_reset();
-                        distance = engine.best_distance();
-                    } else engine.show_reset();
-                    [waiting, better] = [undefined, false];
-                    crowd();
-                    last = undefined;
+                        [shown, distance, better] = [true, engine.best_distance(), false];
+                        crowd();
+                    }
                 }
+                // nothing walks until there is a brain worth showing
+                if (shown) engine.show_step(dt);
+                if (showCrowd && shown && !endless()) engine.crowd_step(dt);
+                // walking on endlessly, a better brain takes over at the next stride, with no start again;
+                // not more often than every few seconds, so each one is seen walking
+                if (endless() && shown && waiting && !engine.show_over() && m.time - swapped > SWAP_EVERY) {
+                    write(engine, engine.weights_room(), waiting);
+                    engine.weights_swap();
+                    [waiting, swapped] = [undefined, m.time];
+                }
+                // at the end of its run, or a fall, the walker rests a moment, then starts again
+                if (shown && engine.show_over()) {
+                    ended += dt;
+                    if (ended >= REST && !paused) {
+                        ended = 0;
+                        if (waiting) take(waiting);
+                        else {
+                            engine.show_reset();
+                            fresh();
+                            if (better) distance = engine.best_distance();
+                        }
+                        [waiting, better] = [undefined, false];
+                        crowd();
+                        last = undefined;
+                    }
+                }
+                if (endless() && shown) distance = engine.show_distance();
             }
+            origin = engine.show_origin();
             // the view follows the walker, gently, and its eyes look the way it moves
             const [x, y] = torso();
-            camera.x += (x! - camera.x) * Math.min(1, dt * 4);
-            camera.y += ((heightAt(ground, x!) ?? camera.y) - camera.y) * Math.min(1, dt * 2);
+            layAhead(engine, x);
+            camera.x += (x - camera.x) * Math.min(1, dt * 4);
+            camera.y += ((heightAt(ground, x) ?? camera.y) - camera.y) * Math.min(1, dt * 2);
             if (last) {
-                const [vx, vy] = [x! - last.x, y! - last.y];
+                const [vx, vy] = [x - last.x, y - last.y];
                 const speed = Math.hypot(vx, vy);
-                if (speed > 0.0005) looking = { x: looking.x + (vx / speed - looking.x) * 0.1, y: looking.y + (vy / speed - looking.y) * 0.1 };
+                if (speed > 0.0005 && speed < 1) looking = { x: looking.x + (vx / speed - looking.x) * 0.1, y: looking.y + (vy / speed - looking.y) * 0.1 };
             }
-            last = { x: x!, y: y! };
+            last = { x, y };
             if (ticks % 6 === 0) changed();
         },
         press(x, y) {
@@ -592,7 +807,7 @@ export default function walker(m: Mote): Scene {
             const [wx, wy] = toWorld(x, y);
             const bodies = read(engine, engine.show_bodies(), 6 * engine.body_count());
             let near = Infinity;
-            for (let i = 0; i < bodies.length; i += 6) near = Math.min(near, Math.hypot(bodies[i]! - wx, bodies[i + 1]! - wy));
+            for (let i = 0; i < bodies.length; i += 6) near = Math.min(near, Math.hypot(bodies[i]! + origin - wx, bodies[i + 1]! - wy));
             grabbed = near < 0.7 ? { x: wx, y: wy } : undefined;
         },
         move(x, y) {
@@ -601,7 +816,7 @@ export default function walker(m: Mote): Scene {
             let [ix, iy] = [(wx - grabbed.x) * PUSH, (wy - grabbed.y) * PUSH];
             const size = Math.hypot(ix, iy);
             if (size > MOST_PUSH) [ix, iy] = [(ix * MOST_PUSH) / size, (iy * MOST_PUSH) / size];
-            engine.show_push(wx, wy, ix, iy);
+            engine.show_push(wx - origin, wy, ix, iy);
             grabbed = { x: wx, y: wy };
         },
         release() {
@@ -611,16 +826,16 @@ export default function walker(m: Mote): Scene {
             if (!engine) return;
             const [x, y] = torso();
             const push = { left: [-10, 0], right: [10, 0], up: [0, 12], down: [0, -10], action: [10, 4] }[name];
-            engine.show_push(x!, y! + 0.05, push[0]!, push[1]!);
+            engine.show_push(x - origin, y + 0.05, push[0]!, push[1]!);
         },
-        resting: () => !m.preview && paused && !!engine && engine.show_over() === 1,
-        debug: () => [`${here ? "training on the page" : "training in a worker"}, ${generation} generations, ${runs} runs`],
+        resting: () => !m.preview && paused && !!engine && (live() || engine.show_over() === 1),
+        debug: () => [`${live() ? "learning live" : here ? "training on the page" : "training in a worker"}, ${generation} generations, ${runs} runs, ${ground.length / 4} pieces of ground, moved back ${origin} m`],
         draw() {
             scale = Math.max(40, Math.min(m.height / 2.9, m.width / 3.8));
             drawGround();
             if (!engine) return;
             drawFlag();
-            if (showCrowd && shown) drawCrowd(engine);
+            if (showCrowd && shown && !live() && !endless()) drawCrowd(engine);
             drawCreature(engine);
             if (grabbed && m.pointer.down) {
                 const { ctx } = m;
@@ -631,6 +846,7 @@ export default function walker(m: Mote): Scene {
                 ctx.stroke();
             }
             drawBrain();
+            drawCourse();
         },
     };
 }

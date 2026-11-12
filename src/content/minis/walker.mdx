@@ -3,15 +3,17 @@ name: Walker
 summary: A little creature that learns to walk, in your browser.
 kind: toy
 space: 2D
-controls: Drag on the walker to push it, or use the arrow keys. The ground is set along the bottom; the body, the goal, the brain and learning at the side.
+controls: Drag on the walker to push it, or use the arrow keys. The ground is set along the bottom; the body, the brain, what it learns and how it learns at the side.
 panel: true
 order: 8
 ---
 
-It starts knowing nothing. Its legs keep a rhythm, and its brain shapes how each leg swings to it. Each generation is thirty-two brains, and each one is given the same body on the same ground and scored on how well it meets its goal, and on how it moves: upright, feet taking turns, not sliding or twitching. The best four go on to the next generation unchanged, and the rest are their children, mixed and changed a little at random.
+It starts knowing nothing. Its legs keep a rhythm, and its brain shapes how each leg swings to it. It is scored on how well it meets its goal, and on how it moves: upright, feet taking turns, not sliding or twitching.
 
-The walker on the screen is the best brain so far, playing back the very run it was scored on, from the start each time. When a better one turns up it takes over at the next start, and the flag marks how far it got. The rest of its generation are the small marks along the ground, one for each, where each one got to.
+It can learn a generation at a time. Each generation is thirty-two brains, given the same body on the same ground. The best four go on unchanged, and the rest are their children, mixed and changed a little at random. Or it can learn one walker at a time, live: each attempt is a child of the best so far, and is kept only if it does better. You see every attempt.
 
-It can have one leg, two or four. It can be rewarded for going far, going fast, standing tall, or jumping, which is best tried on the ground with gaps or steps. Its brain can be bigger, with more neurons in a layer or a second layer; the brain at the side lights up with what passes through it as it walks. Changing any of these starts the learning again from nothing.
+A run goes a set distance, from two metres to a hundred, or is endless. On a set distance the walker on the screen is the best brain so far, playing back the very run it was scored on, and the rest of its generation are the small marks along the ground. On endless it keeps walking while it stays up, on ground made ahead of it as it goes, and a better brain takes over at the start of a stride.
 
-All of it runs in your browser. The body and its physics are written in Rust and run as WebAssembly, and the learning goes on in the background while the page draws. "Copy link to this walker" puts its brain in the link, so whoever opens it gets the same walker, already trained.
+It can have one leg, two or four. It can be rewarded for going far, going fast, standing tall, jumping, getting along an obstacle course that turns from level ground to hills, steps and gaps, each harder than the last, or carrying a parcel on its back without dropping it. Its brain can be small, medium or large, or a mix of its own, with up to four layers and a little memory that it feeds back to itself from one moment to the next. The brain at the side lights up with what passes through it as it walks. Changing any of these starts the learning again from nothing.
+
+All of it runs in your browser. The body and its physics are written in Rust and run as WebAssembly. "Copy link to this walker" puts its brain in the link, so whoever opens it gets the same walker, already trained.
