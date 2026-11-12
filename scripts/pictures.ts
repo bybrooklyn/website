@@ -9,7 +9,6 @@
 // (`bun run pictures mini-dice`). `bun run pictures --check` only says which are missing, and
 // `bun run check` runs that, so a new post, project or mini cannot go out with no picture.
 
-import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import sharp from "sharp";
@@ -57,18 +56,21 @@ const escape = (text: string) => text.replace(/[&<>]/g, (sign) => `&#${sign.char
 
 /**
  * How each mini is photographed, where the plain way (the middle of it, as it starts) shows too little:
- * what to add to its address, how long to wait, how much of its width to take, and from where.
+ * what to add to its address, script to run in its page, how long to wait, how much of its width to take, and from where.
  */
-const shots: Record<string, { query?: string; wait?: number; across?: number; from?: "middle" | "bottom" }> = {
+const shots: Record<string, { query?: string; script?: string; wait?: number; across?: number; from?: "middle" | "bottom" }> = {
     // a roll by link, photographed once the numbers have lined up
     dice: { query: "?roll=2d20%2B2d6%2Bd8%2Bd4%2B3", wait: 15000 },
     blocks: { across: 0.45, from: "bottom" },
+    // a long password's balls, part of the way down
+    plinko: { script: `const length = document.querySelector(".plinko-settings input"); length.value = 40; length.dispatchEvent(new Event("input")); document.querySelector(".dice-go").click();`, wait: 3300, from: "bottom" },
 };
 
 function mini(id: string): Wanted["make"] {
     return async (tab) => {
-        const { query = "", wait = 2500, across = 1, from = "middle" } = shots[id] ?? {};
+        const { query = "", script, wait = 2500, across = 1, from = "middle" } = shots[id] ?? {};
         await tab.open(`${await served()}/minis/${id}/${query}`, 1500);
+        if (script) await tab.run(`${script}; 1`);
         await tab.wait(wait);
         if (tab.errors.length > 0) throw new Error(`${id}: ${tab.errors.join("; ")}`);
         const box = await tab.run<{ x: number; y: number; width: number; height: number }>(`(() => { const b = document.querySelector(".mini-stage canvas").getBoundingClientRect(); return { x: b.x + scrollX, y: b.y + scrollY, width: b.width, height: b.height }; })()`);
@@ -81,18 +83,14 @@ function mini(id: string): Wanted["make"] {
 }
 
 /** The site, running here for the minis to be photographed on. Started the first time it is asked for. */
-let running: Promise<string> | undefined;
-let server: ReturnType<typeof spawn> | undefined;
-function served(): Promise<string> {
-    return (running ??= (async () => {
-        const address = "http://localhost:4399";
-        server = spawn("bunx", ["astro", "dev", "--port", "4399"], { cwd: at(), stdio: "ignore" });
-        for (let tries = 0; tries < 120; tries++) {
-            await new Promise((done) => setTimeout(done, 250));
-            if (await fetch(`${address}/minis/`).then((answer) => answer.ok, () => false)) return address;
-        }
-        throw new Error("The site did not start.");
-    })());
+let running: Promise<{ address: string; stop(): Promise<void> }> | undefined;
+async function served(): Promise<string> {
+    running ??= (async () => {
+        const { dev } = await import("astro");
+        const server = await dev({ root: at(), logLevel: "silent", server: { port: 4399 } });
+        return { address: `http://localhost:${server.address.port}`, stop: () => server.stop() };
+    })();
+    return (await running).address;
 }
 
 async function wanted(): Promise<Wanted[]> {
@@ -136,6 +134,6 @@ try {
     }
 } finally {
     await tab.close();
-    server?.kill();
+    await (await running)?.stop();
 }
 process.exit(0);

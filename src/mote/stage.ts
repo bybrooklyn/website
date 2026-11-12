@@ -77,6 +77,16 @@ export interface Scene {
     debug?(): string[];
 }
 
+/** Makes an element, for a mini's panel: its tag, what to set on it, and what goes inside. */
+export function el<K extends keyof HTMLElementTagNameMap>(tag: K, set: Partial<HTMLElementTagNameMap[K]> & { class?: string } = {}, ...inside: (Node | string)[]): HTMLElementTagNameMap[K] {
+    const made = document.createElement(tag);
+    const { class: name, ...rest } = set;
+    if (name) made.className = name;
+    Object.assign(made, rest);
+    made.append(...inside);
+    return made;
+}
+
 /** `value` moved toward `goal` at a rate that covers 0 to 1 in `seconds`. For a move that takes a set time. */
 export const toward = (value: number, goal: number, dt: number, seconds: number): number => (value < goal ? Math.min(goal, value + dt / seconds) : Math.max(goal, value - dt / seconds));
 /** 0 to 1 made to set off and arrive gently. */

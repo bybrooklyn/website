@@ -10,7 +10,7 @@ import { gl, seat, type Color, type Mark, type Part } from "../mote/gl";
 import { apply, block, cross, mix3, mixTurn, nearness, normals, paint, plus, scaled, spun, turned, upright, type Mesh, type Turn, type V3 } from "../mote/solids";
 import { sounds } from "../mote/sound";
 import { turn } from "../mote/space";
-import { gently, toward, type Mote, type Scene } from "../mote/stage";
+import { el, gently, toward, type Mote, type Scene } from "../mote/stage";
 import { lineUp, read, row, total, type Roll } from "./rolls";
 import { SHAPES, SLABS, TOWER, TRAY, throwDice, type Sides, type Slab, type Throw } from "./tower";
 
@@ -22,16 +22,6 @@ const INK = "#1a1024";
 
 /** A fair number from 0 to 1, from the browser's own source of chance. */
 const chance = () => crypto.getRandomValues(new Uint32Array(1))[0]! / 2 ** 32;
-
-/** A small helper for making elements. */
-function el<K extends keyof HTMLElementTagNameMap>(tag: K, set: Partial<HTMLElementTagNameMap[K]> & { class?: string } = {}, ...inside: (Node | string)[]): HTMLElementTagNameMap[K] {
-    const made = document.createElement(tag);
-    const { class: name, ...rest } = set;
-    if (name) made.className = name;
-    Object.assign(made, rest);
-    made.append(...inside);
-    return made;
-}
 
 /** What is written on a die. A four-sided one has the number of each corner beside that corner, on every face. */
 const written = (sides: Sides) => (face: number): string | Mark[] =>

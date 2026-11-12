@@ -1,0 +1,15 @@
+---
+name: Plinko
+summary: A Plinko board that makes passwords.
+kind: toy
+space: 3D
+controls: Press drop, or click the board. Each ball that lands adds the character in its bin to the password.
+panel: true
+order: 7
+---
+
+Every bin shows a character. A ball falls through the pegs, lands in a bin, and that bin's character goes on the end of the password. When the last ball has landed the characters lift out of the bins and line up in the order they landed.
+
+A Plinko board is not fair. A ball ends up near the middle or down the sides far more often than anywhere else. So the characters in the bins come from the browser's secure random source, and the whole row is drawn again every time a ball lands. Where a ball lands has nothing to do with what the bin holds at that moment, so every character is as likely as any other. The tests drop 6,400 balls on four different boards and check that.
+
+The length, the kinds of character and the board are yours to set. The board settings change how it looks and sounds, not how strong the password is. Your settings are kept in this browser. The password is not kept anywhere.
