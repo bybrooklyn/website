@@ -15,6 +15,7 @@ import transition from "../scripts/transition.js?raw";
 import { accents, theme, type AccentName } from "../data/theme";
 import { hex, themeStyle } from "../lib/color";
 import { hasPosts } from "../lib/posts";
+import { openedPages } from "../lib/projects";
 import { sharePicture, type Fact } from "../lib/share";
 
 interface Props {
@@ -48,10 +49,12 @@ const oembed = new URL(`/oembed/${facts.length > 0 ? Astro.url.pathname.replace(
 const posts = await hasPosts();
 /** The main pages in nav order, home first: the page transition moves along this. */
 const order = ["/", ...nav.map((item) => item.href)];
+/** Pages that open like a project although they are not under /projects/, such as /spectrum/. */
+const opened = await openedPages();
 ---
 
 <!doctype html>
-<html lang="en" style={themeStyle(accent)} data-order={order.join(" ")}>
+<html lang="en" style={themeStyle(accent)} data-order={order.join(" ")} data-opened={opened.join(" ")}>
     <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />

@@ -5,13 +5,13 @@ styles `src/styles/spectrum.css` are made after **Spectrum** by [Andrea Vos](htt
 which is licensed under the
 [Opinionated Queer License v1.1](https://oql.avris.it/license/v1.1).
 
-What derives from the original: the idea of a page of sliders for gender and sexuality, with a chart
-and a share link; the axes; their wording; and the translations into Polish, German, Portuguese and
-Arabic, with their translators' credits.
+What derives from the original: the idea of a page of sliders for gender and sexuality with a share
+link; the axes; their wording; and the translations into Polish, German, Portuguese and Arabic, with
+their translators' credits.
 
 What was changed: it was rewritten for this site, in its own code and design, and two sliders,
-"Kink role" and "Sexual exploration", were taken out, in every language, along with the chart's
-corner that held them. Share codes are six characters for the nine sliders that are left; the
-original's seven-character codes still open, without the two sliders taken out.
+"Kink role" and "Sexual exploration", were taken out, in every language. Share codes are six
+characters for the nine sliders that are left; the original's seven-character codes still open,
+without the two sliders taken out.
 
 This is not endorsed by Andrea Vos.

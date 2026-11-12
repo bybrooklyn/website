@@ -26,15 +26,9 @@ export interface Language {
     copied?: string;
     /** On a slider that has been left unset, and on the button that does it. */
     unset?: string;
-    /** The chart's name, the line under it, and what it says with nothing set. */
-    chart?: string;
-    hint?: string;
-    empty?: string;
     /** Who translated it, with words before the name. */
     translator?: { said: string; name: string; link?: string };
     axes: Partial<Record<Axis, Ends>>;
-    /** The names of the chart's corners, by the keys in `groups`. */
-    corners: Partial<Record<string, string>>;
 }
 
 const en: Language = {
@@ -45,9 +39,6 @@ const en: Language = {
     copy: "Copy link",
     copied: "Copied",
     unset: "Not set",
-    chart: "Overview",
-    hint: "Average of each group’s set axes (1–9); unset axes are excluded.",
-    empty: "Set at least one slider to see your chart.",
     axes: {
         genderIdentity: { label: "Gender identity", farLeft: "Man", left: "Mostly man", middle: "Nonbinary", right: "Mostly woman", farRight: "Woman" },
         genderExpression: { label: "Gender expression", farLeft: "Hypermasculine", left: "Masculine", middle: "Androgynous", right: "Feminine", farRight: "Hyperfeminine" },
@@ -59,7 +50,6 @@ const en: Language = {
         relationshipAttitude: { label: "Relationship attitude", farLeft: "Monogamous", left: "Mostly monogamous", middle: "Open", right: "Mostly polyamorous", farRight: "Polyamorous" },
         genderComfort: { label: "Gender comfort", farLeft: "Strong dysphoria", left: "Mild dysphoria", middle: "Neutral", right: "Comfortable", farRight: "Euphoric" },
     },
-    corners: { genderSelf: "Gender self", expression: "Expression", orientation: "Orientation", desire: "Desire", relationships: "Relationships" },
 };
 
 const pl: Language = {
@@ -68,7 +58,6 @@ const pl: Language = {
     question: "Gdzie znajdujesz się na Spektrum Płci i Seksualności?",
     share: "Udostępnij",
     copy: "Skopiuj do schowka",
-    chart: "Przegląd",
     translator: { said: "Polskie tłumaczenie:", name: "Avis Drożniak", link: "https://zaimki.pl/@avis" },
     axes: {
         genderIdentity: { label: "Identyfikacja płciowa", farLeft: "Mężczyzna", left: "Mężczyzna", middle: "Niebinarnie", right: "Kobieta", farRight: "Kobieta" },
@@ -78,7 +67,6 @@ const pl: Language = {
         romanticDesire: { label: "Pociąg romantyczny", farLeft: "Brak", left: "Brak", middle: "Przeciętny", right: "Wysoki", farRight: "Wysoki" },
         relationshipAttitude: { label: "Postawa w związku", farLeft: "Monogamia", left: "Monogamia", middle: "Otwarty", right: "Poliamoria", farRight: "Poliamoria" },
     },
-    corners: { genderSelf: "Płeć", expression: "Ekspresja", orientation: "Orientacja", desire: "Pożądanie", relationships: "Relacje" },
 };
 
 const de: Language = {
@@ -87,7 +75,6 @@ const de: Language = {
     question: "Wo befindest du dich auf dem Spektrum von Geschlecht und Sexualität?",
     share: "Teile deins",
     copy: "In die Zwischenablage kopieren",
-    chart: "Überblick",
     translator: { said: "Übersetzt von", name: "Feuerhamster", link: "https://gitlab.com/feuerhamster" },
     axes: {
         genderIdentity: { label: "Geschlechtliche Identität", farLeft: "Männlich", left: "Männlich", middle: "Nicht-Binär", right: "Weiblich", farRight: "Weiblich" },
@@ -97,7 +84,6 @@ const de: Language = {
         romanticDesire: { label: "Romantische Wünsche", farLeft: "Keine", left: "Keine", middle: "Regelmäßige", right: "Hohe", farRight: "Hohe" },
         relationshipAttitude: { label: "Beziehungstyp", farLeft: "Monogam", left: "Monogam", middle: "Offen", right: "Polyamourös", farRight: "Polyamourös" },
     },
-    corners: { genderSelf: "Geschlecht", expression: "Ausdruck", orientation: "Orientierung", desire: "Verlangen", relationships: "Beziehungen" },
 };
 
 const pt: Language = {
@@ -106,7 +92,6 @@ const pt: Language = {
     question: "Onde você está no Espectro de Gênero e Sexualidade?",
     share: "Compartilhe o seu",
     copy: "Copiar para a área de transferência",
-    chart: "Resumo",
     translator: { said: "Traduzido por", name: "Diogo de Souza", link: "https://gitlab.com/sozua" },
     axes: {
         genderIdentity: { label: "Identidade de Gênero", farLeft: "Homem", left: "Homem", middle: "Não-binário", right: "Mulher", farRight: "Mulher" },
@@ -116,7 +101,6 @@ const pt: Language = {
         romanticDesire: { label: "Desejo Romântico", farLeft: "Nenhum", left: "Nenhum", middle: "Regular", right: "Alto", farRight: "Alto" },
         relationshipAttitude: { label: "Atitude em relação ao relacionamento", farLeft: "Monogâmico", left: "Monogâmico", middle: "Aberto", right: "Poliamoroso", farRight: "Poliamoroso" },
     },
-    corners: { genderSelf: "Gênero", expression: "Expressão", orientation: "Orientação", desire: "Desejo", relationships: "Relações" },
 };
 
 const ar: Language = {
@@ -126,7 +110,6 @@ const ar: Language = {
     question: "أين أنت على الطيف الجنسي؟",
     share: "المشاركة",
     copy: "نسخ الرابط",
-    chart: "نظرة عامة",
     translator: { said: "مُترجَمة من قِبَل", name: "متطوع" },
     axes: {
         genderIdentity: { label: "الهوية الجنسية", farLeft: "ذكر", left: "ذكر", middle: "غير ثنائي", right: "أنثى", farRight: "أنثى" },
@@ -136,7 +119,6 @@ const ar: Language = {
         romanticDesire: { label: "الرغبة الرومانسية", farLeft: "غير موجودة", left: "غير موجودة", middle: "متوسطة", right: "عالية", farRight: "عالية" },
         relationshipAttitude: { label: "موقف العلاقة", farLeft: "أحادية", left: "أحادية", middle: "منفتحة", right: "متعددة", farRight: "متعددة" },
     },
-    corners: { genderSelf: "الهوية", expression: "التعبير", orientation: "التوجه", desire: "الرغبة", relationships: "العلاقات" },
 };
 
 /** The languages by their codes, in the picker's order. */
@@ -153,7 +135,7 @@ export function pick(asked: string | null | undefined): Code {
 }
 
 /** Every word a page needs, in one language, with English for any it lacks. */
-export type Words = Required<Omit<Language, "translator">> & Pick<Language, "translator"> & { axes: Record<Axis, Ends>; corners: Record<string, string> };
+export type Words = Required<Omit<Language, "translator">> & Pick<Language, "translator"> & { axes: Record<Axis, Ends> };
 
 export function words(code: Code): Words {
     const own = languages[code];
@@ -162,7 +144,6 @@ export function words(code: Code): Words {
         ...own,
         rtl: Boolean(own.rtl),
         axes: { ...en.axes, ...own.axes } as Record<Axis, Ends>,
-        corners: { ...en.corners, ...own.corners } as Record<string, string>,
     } as Words;
 }
 

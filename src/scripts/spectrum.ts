@@ -1,19 +1,13 @@
 // The Spectrum page (src/pages/spectrum.astro) brought to life: it reads the values from `?c=` and
 // the language from `?l=`, sets the sliders, puts every word in that language, and from then on
-// keeps the chart, the share link and the address in step with the sliders. The address is changed
-// in place with history.replaceState, so moving a slider never reloads the page.
-//
-// The chart's shape flows from one set of values to the next with the site's easing, and jumps for
-// anyone who has asked for reduced motion. All the working out is in src/spectrum/.
+// keeps the share link and the address in step with the sliders. The address is changed in place
+// with history.replaceState, so moving a slider never reloads the page. The working out is in
+// src/spectrum/.
 
 import { axes, MIDDLE, start, UNSET, type Values } from "../spectrum/axes";
 import { decode, encode } from "../spectrum/code";
 import { address, breakable, languages, pick, said, words, type Code, type Words } from "../spectrum/languages";
-import { between, corners, place, settle, shape, shown } from "../spectrum/radar";
 
-const still = matchMedia("(prefers-reduced-motion: reduce)");
-/** How long the chart takes to flow to new values, in milliseconds. */
-const FLOW = 520;
 /** Keys that move a slider. On an unset slider the first of them only sets it, where it stands. */
 const MOVES = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown"];
 
@@ -38,10 +32,6 @@ function run(root: HTMLElement): void {
     const link = find<HTMLInputElement>("#spectrum-link");
     const copy = find<HTMLButtonElement>(".spectrum-copy");
     const copied = find<HTMLElement>(".spectrum-copied");
-    const figure = find<SVGPathElement>(".spectrum-shape");
-    const dots = [...root.querySelectorAll<SVGCircleElement>(".spectrum-dots circle")];
-    const empty = find<SVGTextElement>(".spectrum-empty");
-    const summary = [...root.querySelectorAll<HTMLLIElement>(".spectrum-summary li")];
     const translator = find<HTMLElement>(".spectrum-translator");
     const pickers = [...root.querySelectorAll<HTMLAnchorElement>("[data-language]")];
 
@@ -95,7 +85,6 @@ function run(root: HTMLElement): void {
             rows[index]!.classList.toggle("unset", value === UNSET);
             unsets[index]!.setAttribute("aria-pressed", String(value === UNSET));
         });
-        flow(corners(values));
         const code = encode(values);
         const here = address(chosen ? code : undefined, language);
         link.value = new URL(address(code, language), location.origin).href;
@@ -126,43 +115,6 @@ function run(root: HTMLElement): void {
         });
         unsets[index]!.addEventListener("click", () => set(index, values[index] === UNSET ? before[index]! : UNSET));
     });
-
-    // ---- the chart ----
-
-    let drawn = corners(start());
-    let moving = 0;
-
-    function draw(now: number[]): void {
-        const { d, whole } = shape(now);
-        figure.setAttribute("d", d);
-        figure.classList.toggle("whole", whole);
-        now.forEach((value, index) => {
-            const at = place(value, index);
-            const dot = dots[index]!;
-            dot.setAttribute("cx", at.x.toFixed(1));
-            dot.setAttribute("cy", at.y.toFixed(1));
-            dot.classList.toggle("gone", value === 0);
-        });
-        drawn = now;
-    }
-
-    function flow(to: number[]): void {
-        cancelAnimationFrame(moving);
-        to.forEach((value, index) => {
-            const group = summary[index]!;
-            group.textContent = `${word(`corners.${group.dataset.corner}`)}: ${value === 0 ? text.unset : shown(value)}`;
-        });
-        empty.classList.toggle("shown", to.every((value) => value === 0));
-        if (still.matches) return draw(to);
-        const from = drawn;
-        const began = performance.now();
-        const step = (time: number) => {
-            const along = Math.min((time - began) / FLOW, 1);
-            draw(between(from, to, settle(along)));
-            if (along < 1) moving = requestAnimationFrame(step);
-        };
-        moving = requestAnimationFrame(step);
-    }
 
     // ---- languages ----
 

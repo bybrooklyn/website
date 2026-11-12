@@ -1,8 +1,8 @@
 // What the list of sliders is held to: nine of them, the two taken out stay out, and every slider
-// belongs to exactly one corner of the chart. Run with `bun run test`.
+// starts in the middle. Run with `bun run test`.
 
 import { expect, test } from "bun:test";
-import { axes, groups, kept, start } from "./axes";
+import { axes, kept, start } from "./axes";
 
 test("there are nine sliders, and the two taken out are not among them", () => {
     expect(axes).toHaveLength(9);
@@ -13,13 +13,6 @@ test("there are nine sliders, and the two taken out are not among them", () => {
 test("the sliders keep the order of the old eleven, so an old code's first nine digits are theirs", () => {
     const old = ["genderIdentity", "genderExpression", "sexualOrientation", "romanticOrientation", "sexualAttraction", "sexualDrive", "romanticDesire", "relationshipAttitude", "genderComfort", "kinkRole", "sexualExploration"];
     expect([...axes] as string[]).toEqual(old.slice(0, 9));
-});
-
-test("every slider is in exactly one corner, and there is no corner for the sliders taken out", () => {
-    const members = groups.flatMap((group) => group.members).sort();
-    expect(members).toEqual([...axes].sort());
-    expect(groups.map((group) => group.key)).not.toContain("kink");
-    expect(groups).toHaveLength(5);
 });
 
 test("every slider starts in the middle, and only whole numbers from 1 to 9 are kept", () => {

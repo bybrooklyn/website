@@ -1,8 +1,4 @@
-/* The Spectrum page (src/pages/spectrum.astro): the sliders, the chart beside them, and the share link. */
-
-.spectrum-head h1 {
-    max-width: 18ch;
-}
+/* The Spectrum page (src/pages/spectrum.astro): the language picker, the sliders and the share link. */
 
 /* ---- the language picker ---- */
 
@@ -34,30 +30,14 @@
     margin: calc(var(--line) * 0.5) 0 0;
 }
 
-/* ---- the sliders and the chart ---- */
+/* ---- the sliders ---- */
 
-.spectrum-body {
-    display: grid;
-    /* one column on a phone, which a long word under a slider must not widen past the screen */
-    grid-template-columns: minmax(0, 1fr);
-    gap: calc(var(--line) * 2) clamp(2rem, 5vw, 4.5rem);
-    align-items: start;
-}
-
-@media (min-width: 60rem) {
-    .spectrum-body {
-        grid-template-columns: minmax(0, 1fr) minmax(0, 26rem);
-    }
-
-    /* The chart stays in sight while the sliders under it are moved. */
-    .spectrum-chart {
-        position: sticky;
-        top: var(--line);
-    }
-}
-
+/* A comfortable width for a slider's three words, a little wider than the text under them. */
 .spectrum-sliders {
+    max-width: 42rem;
     display: grid;
+    /* one column, which a long word under a slider must not widen past the screen */
+    grid-template-columns: minmax(0, 1fr);
     gap: calc(var(--line) * 1.25);
     margin: 0;
     padding: 0;
@@ -213,9 +193,8 @@
     transition: opacity 0.2s ease;
 }
 
-/* Words that fall back to English in Arabic, or Arabic among English, keep their own direction. */
-.spectrum-axis-head label,
-.spectrum-chart figcaption {
+/* A slider's name that falls back to English in Arabic keeps its own direction. */
+.spectrum-axis-head label {
     unicode-bidi: plaintext;
 }
 
@@ -231,105 +210,11 @@
     opacity: 0.5;
 }
 
-/* ---- the chart ---- */
-
-.spectrum-chart {
-    margin: 0;
-}
-
-.spectrum-chart .label {
-    margin-top: 0;
-}
-
-.spectrum-chart svg {
-    display: block;
-    width: 100%;
-    height: auto;
-    overflow: visible;
-    /* The names are placed by hand around the chart, so their anchors must not turn round in Arabic. */
-    direction: ltr;
-}
-
-.spectrum-grid polygon,
-.spectrum-grid line {
-    fill: none;
-    stroke: var(--rule);
-    stroke-width: 1;
-}
-
-.spectrum-shape {
-    fill: none;
-    stroke: var(--accent);
-    stroke-width: 2.5;
-    stroke-linejoin: round;
-    stroke-linecap: round;
-}
-
-.spectrum-shape.whole {
-    fill: color-mix(in oklch, var(--accent) 20%, transparent);
-}
-
-.spectrum-dots circle {
-    fill: var(--accent);
-    stroke: var(--ground);
-    stroke-width: 1.5;
-    transform-box: fill-box;
-    transform-origin: center;
-    transition:
-        scale 0.35s var(--ease),
-        opacity 0.2s ease;
-}
-
-.spectrum-dots circle.gone {
-    scale: 0;
-    opacity: 0;
-}
-
-.spectrum-names text {
-    fill: var(--ink);
-    font-family: var(--font-text);
-    font-size: 14px;
-}
-
-/* On a phone the chart is drawn smaller, so its names are set larger to stay readable. */
-@media (max-width: 34rem) {
-    .spectrum-names text {
-        font-size: 16px;
-    }
-}
-
-.spectrum-empty {
-    fill: var(--muted);
-    font-family: var(--font-text);
-    font-size: 13px;
-}
-
-/* Only when every slider is unset. */
-.spectrum-empty:not(.shown) {
-    display: none;
-}
-
-.spectrum-chart figcaption {
-    margin-top: calc(var(--line) * 0.5);
-}
-
-/* Said to screen readers, as the chart's description; the chart shows the same. */
-.spectrum-summary {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    margin: 0;
-    padding: 0;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-}
-
 /* ---- the share link ---- */
 
 .spectrum-share {
     margin-top: calc(var(--line) * 2);
-    max-width: 40rem;
+    max-width: 42rem;
 }
 
 .spectrum-share-row {
@@ -416,16 +301,17 @@
         translate 0.5s var(--ease);
 }
 
-.spectrum-credit {
-    max-width: 44rem;
-    margin-top: calc(var(--line) * 2);
+/* The words about it, under the thing itself, set apart from it by a rule. */
+.spectrum-about {
+    margin-top: calc(var(--line) * 2.5);
+    padding-top: calc(var(--line) * 0.5);
+    border-top: 0.0625rem solid var(--rule);
 }
 
 @media (prefers-reduced-motion: reduce) {
     .spectrum-unset,
     .spectrum-copy,
     .spectrum-ends,
-    .spectrum-dots circle,
     .spectrum-copied,
     .spectrum-copied.shown,
     .spectrum[dir="rtl"] .spectrum-copied.shown {

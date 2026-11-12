@@ -5,7 +5,7 @@ import "../../styles/blog.css";
 import "../../styles/projects.css";
 import Base from "../../layouts/Base.astro";
 import { site } from "../../data/site";
-import { getProjects } from "../../lib/projects";
+import { getProjects, projectPage } from "../../lib/projects";
 
 const projects = await getProjects();
 ---
@@ -20,7 +20,7 @@ const projects = await getProjects();
         {
             projects.map((project) => (
                 <li>
-                    <a href={`/projects/${project.id}/`}>
+                    <a href={projectPage(project)}>
                         {project.data.cover ? (
                             <Picture class:list={["project-thumb", { pixel: project.data.pixel }]}
                                 src={project.data.cover}

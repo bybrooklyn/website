@@ -3,7 +3,7 @@
 // right to left. Run with `bun run test`.
 
 import { expect, test } from "bun:test";
-import { axes, groups } from "./axes";
+import { axes } from "./axes";
 import { address, breakable, codes, languages, pick, said, words } from "./languages";
 
 test("the five languages, in the picker's order", () => {
@@ -22,8 +22,7 @@ test("English has every word, and every language has every word through it", () 
     for (const code of codes) {
         const all = words(code);
         for (const axis of axes) for (const word of Object.values(all.axes[axis])) expect(word.length).toBeGreaterThan(0);
-        for (const group of groups) expect(all.corners[group.key]!.length).toBeGreaterThan(0);
-        for (const word of [all.title, all.question, all.share, all.copy, all.copied, all.unset, all.chart, all.hint, all.empty]) expect(word.length).toBeGreaterThan(0);
+        for (const word of [all.title, all.question, all.share, all.copy, all.copied, all.unset]) expect(word.length).toBeGreaterThan(0);
     }
 });
 
@@ -34,11 +33,10 @@ test("a language's own words are used, and English only where it has none", () =
     expect(words("de").unset).toBe("Not set");
 });
 
-test("the two sliders taken out, and their corner, are in no language", () => {
+test("the two sliders taken out are in no language", () => {
     for (const language of Object.values(languages)) {
         expect(Object.keys(language.axes)).not.toContain("kinkRole");
         expect(Object.keys(language.axes)).not.toContain("sexualExploration");
-        expect(Object.keys(language.corners)).not.toContain("kink");
         for (const key of Object.keys(language.axes)) expect(axes as readonly string[]).toContain(key);
     }
 });
