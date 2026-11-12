@@ -1,0 +1,12 @@
+# What GitHub counts in the repository's language bar.
+#
+# Three small files are left out of it, so that the bar shows what the site is written in:
+# TypeScript, Rust, CSS, Astro and MDX.
+#
+# - transition.js has to be plain JavaScript: its text is put into every page's head as it stands,
+#   and astro.config.ts allows exactly that text in the content security policy.
+# - The two Python scripts trim the typefaces with fontTools, once, when a font changes. They are
+#   tools for the fonts, not part of the site.
+src/scripts/transition.js linguist-detectable=false
+scripts/trim-fonts.py linguist-detectable=false
+scripts/fraunces-soft.py linguist-detectable=false
