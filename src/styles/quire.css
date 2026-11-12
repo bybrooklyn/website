@@ -14,8 +14,8 @@
     --edge: clamp(0.75rem, 2vw, 1.5rem);
     /* how far down the window what stays at the top reaches */
     --stuck: calc(var(--bar-height) + 0.0625rem);
-    /* the sheet: plainly lighter than the ground, with a clear edge */
-    --sheet-ground: color-mix(in oklch, var(--panel-raised), var(--ink) 4%);
+    /* the sheet: plainly lighter than the ground, with a clear edge, and dark enough that the flag's red caret is 3 : 1 on it */
+    --sheet-ground: color-mix(in oklch, var(--panel-raised), var(--ink) 2%);
     --sheet-edge: color-mix(in oklch, var(--panel-edge), var(--ink) 18%);
     /* the editor takes the width it is given and never widens the page; long lines scroll inside it */
     contain: inline-size;
@@ -149,6 +149,11 @@
     background: var(--caret);
     pointer-events: none;
     opacity: 0;
+}
+
+/* a colour of the flag too dark to stand out on the sheet is drawn with a hairline of ink round it (caret.ts) */
+.quire-caret.edged {
+    box-shadow: 0 0 0 0.0625rem color-mix(in oklch, var(--ink) 80%, transparent);
 }
 
 .quire-caret.shown {

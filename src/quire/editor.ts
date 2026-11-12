@@ -31,7 +31,7 @@ import { changes, createHistoryPanel, createKeeper, memoryStorage, snapshotParts
 import { write } from "./write";
 import { emptyParts, opened, packQuire, written, type Parts } from "./quire-file";
 import { PAGE } from "./styling";
-import { createCaret } from "./caret";
+import { createCaret, FLAG } from "./caret";
 import { createTitle, nameFor, shownName, type OwnTitle } from "./title";
 
 /** What the editor is given by the page. */
@@ -123,7 +123,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         return URL.createObjectURL(file);
     };
     const surface = createSurface(text, doc, { onImage: keepPicture, picture: async (address) => (store && id && store.show ? store.show(id, address) : undefined) });
-    const caret = createCaret(surface.element, paper);
+    const caret = createCaret(surface.element, paper, FLAG);
 
     // ---- the title, the first line on the sheet: the document's name ----
     let renaming = Promise.resolve();

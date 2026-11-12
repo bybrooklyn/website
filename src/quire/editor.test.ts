@@ -822,7 +822,7 @@ used("the sheet is an A-series page, centred, at least one sheet tall and growin
     expect(await tab.run<number>("(() => { const box = document.querySelector('.quire-paper').getBoundingClientRect(); return box.height / box.width; })()")).toBeGreaterThan(1.6);
 });
 
-used("the caret is drawn where the cursor is, a line tall, in the accent, blinking once still; with less motion it does not blink", async () => {
+used("the caret is drawn where the cursor is, a line tall, blinking once still in the lesbian flag's colours, each clear on the sheet; with less motion it is the accent and does not blink", async () => {
     await reset("Some text here.\n", [0], 4);
     await tab.run("document.querySelector('.quire').focus()");
     await tab.press("ArrowRight");
@@ -837,19 +837,28 @@ used("the caret is drawn where the cursor is, a line tall, in the accent, blinki
     expect(seen.dy).toBeLessThan(1.5);
     expect(seen.width).toBeGreaterThanOrEqual(2);
     expect(seen.height).toBeGreaterThan(18);
-    expect(seen.colour).toBe(seen.accent);
-    // still, it blinks
+    const flag = ["rgb(213, 45, 0)", "rgb(255, 154, 86)", "rgb(255, 255, 255)", "rgb(211, 98, 164)", "rgb(163, 2, 98) edged"];
+    expect(flag.map((each) => each.replace(" edged", ""))).toContain(seen.colour);
+    // still, it blinks, and each time it comes back on it is the next colour of the flag
+    const colours = tab.run<string[]>(`new Promise((done) => { const seen = []; const caret = document.querySelector('.quire-caret'); const start = performance.now(); const step = () => { const style = getComputedStyle(caret); if (style.opacity === '1') { const now = style.backgroundColor + (caret.classList.contains('edged') ? ' edged' : ''); if (seen[seen.length - 1] !== now) seen.push(now); } if (performance.now() - start < 6800) requestAnimationFrame(step); else done(seen); }; requestAnimationFrame(step); })`);
     const blinking = await tab.run<number[]>("q.watch('.quire-caret', 'opacity', 2800)");
     expect(blinking).toContain(0);
     expect(blinking[0]).toBe(1);
+    // the colours go round the flag from wherever it was, the darkest alone drawn with an edge
+    const went = (await colours).slice(0, 6);
+    const from = flag.indexOf(went[0]!);
+    expect(from).toBeGreaterThanOrEqual(0);
+    expect(went).toEqual(Array.from({ length: 6 }, (_, index) => flag[(from + index) % flag.length]));
     // typing keeps it solid
     await tab.type("ab");
+    await tab.wait(50);
     expect(await tab.run("getComputedStyle(document.querySelector('.quire-caret')).opacity")).toBe("1");
     await tab.media({ "prefers-reduced-motion": "reduce" });
     try {
         await tab.press("ArrowLeft");
         const still = await tab.run<number[]>("q.watch('.quire-caret', 'opacity', 1800)");
         expect(new Set(still)).toEqual(new Set([1]));
+        expect(await tab.run("getComputedStyle(document.querySelector('.quire-caret')).backgroundColor")).toBe(seen.accent);
     } finally {
         await tab.media({});
         await tab.wait(100);
