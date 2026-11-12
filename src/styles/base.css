@@ -93,8 +93,7 @@ a:hover {
 }
 
 a:focus-visible {
-    outline: 0.125rem solid var(--accent);
-    outline-offset: 0.2em;
+    --ring-offset: 0.2em;
     border-radius: 0.2em;
 }
 
@@ -275,10 +274,18 @@ h1 + .lede,
     display: none !important;
 }
 
-/* The same ring on everything that can be pressed, when it is reached by keyboard. */
-:where(button, summary, [role="button"], input, select):focus-visible {
+/*
+ * The same ring on everything that can be pressed, when it is reached by keyboard: here, once. A thing
+ * that needs it to stand further off sets --ring-offset beside its own rules.
+ */
+a:focus-visible,
+:where(button, summary, [role="button"], input, select):focus-visible,
+[data-zoom]:focus-visible,
+.flag:focus-visible,
+.strip:focus-visible .strip-button,
+.spectrum-track:has(input:focus-visible) .spectrum-thumb {
     outline: 0.125rem solid var(--accent);
-    outline-offset: 0.15rem;
+    outline-offset: var(--ring-offset, 0.15rem);
 }
 
 /* ---- home ---- */
@@ -525,6 +532,7 @@ h1 + .about {
     width: 1.5rem;
     height: 0.95rem;
     border-radius: 0.15rem;
+    --ring-offset: 0.2rem;
 }
 
 .flag.trans {
@@ -533,11 +541,6 @@ h1 + .about {
 
 .flag.lesbian {
     background: linear-gradient(#d52d00 0 20%, #ff9a56 20% 40%, #fff 40% 60%, #d362a4 60% 80%, #a30262 80%);
-}
-
-.flag:focus-visible {
-    outline: 0.125rem solid var(--accent);
-    outline-offset: 0.2rem;
 }
 
 .flag .tip {

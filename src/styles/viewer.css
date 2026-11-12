@@ -5,9 +5,8 @@
     cursor: zoom-in;
 }
 
-[data-zoom]:focus-visible {
-    outline: 0.125rem solid var(--accent);
-    outline-offset: 0.25rem;
+[data-zoom] {
+    --ring-offset: 0.25rem;
 }
 
 .viewer {

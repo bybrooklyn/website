@@ -174,12 +174,6 @@
     scale: 1.25;
 }
 
-/* The site's ring, on the thumb, when the slider under it is reached by keyboard. */
-.spectrum-track:has(input:focus-visible) .spectrum-thumb {
-    outline: 0.125rem solid var(--accent);
-    outline-offset: 0.15rem;
-}
-
 /* Unset, the thumb is hollow and the words under it fade. */
 .spectrum-axis.unset .spectrum-thumb {
     border-color: var(--muted);
