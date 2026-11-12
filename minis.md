@@ -156,6 +156,23 @@ Her words: "i basically just want mdQuire to feel really really damn nice to use
 - **Checking:** Markdown tidiness, her writing rules, links and pictures that exist, and "a real spelling
   and prose engine"; faint underlines plus a list. (With the agent on `mdquire-lint`.)
 
+### 13c. mdQuire's look, chosen from the lab and the mock-ups on 12 Nov 2026
+
+After the audit (design/mdquire/AUDIT.md), the lab (/mdquire-lab/) and three mock-ups (a, b, c):
+
+- **The writing screen:** "have A and C be an option to choose", and to "Should the writer be able to
+  switch between them?": "yea". A is no page (the writing on the site's ground at her blog's measure, the
+  outline in the left margin, the document's details in the right); C is a light paper page on the dark
+  desk. B (the dark page) was not chosen. My reading: A is what opens first, C is chosen from View.
+- **The top row:** "One line". Her marked picture: the wordmark "mdQuire by charlotte" goes to the far left
+  of the window, and the menus with the bar are centred ("maybe center this").
+- **An open menu** "Drops below, covers nothing": the pressed word stays in the row, lit, and the menu grows
+  from under it; no title inside and no X. (She disliked seeing "Edit" inside the open menu over its
+  neighbours.) Its look: "i like the raised one". Lines as large as in the lab ("As it is"). Shortcuts as
+  "Symbols". Nothing else was wrong in the open menu.
+- Speeds were left at the lab's starting values (open 200 ms with a slight spring, close 140 ms, lines
+  14 ms apart); she has not sent other numbers.
+
 ### 26. The generalist: a walker that sees, learns and gets about a world by itself
 
 Decided by question and answer on 12 Nov 2026. Her words: "our little walker thing should build general
