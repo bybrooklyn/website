@@ -87,15 +87,19 @@ All numbers are metres, kilograms, seconds and radians, with y up and angles ant
 
 ### Goals
 
-Every score is less 1 for each second the body lay on the ground, 0.3 for each second of each knee
-on it, and 0.00005 for each joule of work the motors did. A run ends early once the body has lain
-down for a second. Then, by goal:
+The body is down when it touches the ground, is tipped past sixty degrees, or is held lower than a
+third of the height it stood at. Every score is less 1 for each second down, 0.3 for each second of
+each knee on the ground, and 0.00005 for each joule of work the motors did. A run ends once the body
+has been down for a second, and a run that ends that way costs 3 more, so a walker learns to stay
+up before it learns to go. Then, by goal:
 
-- **Go far** (0): the distance the body went forward in 10 s.
-- **Go fast** (1): the distance in 4 s.
+- **Go far** (0): the distance the body went forward in 10 s, plus 0.25 for each second on its feet
+  and 0.5 for each second in the air going forward (which is how a one-legged walker gets anywhere).
+- **Go fast** (1): the same, in 4 s.
 - **Stand tall** (2): the distance times a number from 0.2 to 1 for how tall the body was held on
-  average, plus 2 times that number. Tall is as high above the ground as the body stood at the
-  start, and upright; half that height or lower counts as nothing.
+  average, plus 2 times that number, plus 0.5 for each second in the air going forward. Tall is as
+  high above the ground as the body stood at the start, and upright; half that height or lower
+  counts as nothing.
 - **Jump** (3): one and a half times the distance, plus each second spent with nothing touching
   anything while going forward faster than 0.5 m/s. A foot put down in a gap (touching, with no
   ground under it) costs 1 and ends the run.

@@ -41,7 +41,7 @@ impl Description {
     /// The shape of the body and legs for this many legs.
     pub fn build(&self) -> Build {
         match self.legs {
-            1 => Build { half_width: 0.26, half_height: 0.24, mass: 5.0, upper: 0.4, lower: 0.42, upper_radius: 0.065, foot: 0.075, hips: &[0.0], swing: &[0.0], knee: -0.3 },
+            1 => Build { half_width: 0.26, half_height: 0.24, mass: 4.0, upper: 0.4, lower: 0.4, upper_radius: 0.065, foot: 0.075, hips: &[0.0], swing: &[0.15], knee: -0.3 },
             2 => Build { half_width: 0.27, half_height: 0.22, mass: 6.0, upper: 0.42, lower: 0.42, upper_radius: 0.06, foot: 0.05, hips: &[0.0, 0.0], swing: &[0.4, -0.1], knee: -0.3 },
             _ => Build { half_width: 0.5, half_height: 0.15, mass: 8.0, upper: 0.36, lower: 0.36, upper_radius: 0.055, foot: 0.045, hips: &[-0.36, -0.36, 0.36, 0.36], swing: &[0.4, -0.1, 0.4, -0.1], knee: -0.3 },
         }
@@ -262,8 +262,13 @@ impl Creature {
         world.bodies[self.torso as usize].position.x - self.start.x
     }
 
+    /// Whether the creature is down: its body on the ground, tipped over past about sixty degrees,
+    /// or held lower than a third of its standing height. Scooting along on its side or its back is
+    /// being down, though the body may not quite touch.
     pub fn fallen(&self, world: &World) -> bool {
-        world.bodies[self.torso as usize].touching
+        let torso = &world.bodies[self.torso as usize];
+        let low = world.ground_height(torso.position.x).is_some_and(|ground| torso.position.y - ground < self.stand / 3.0);
+        torso.touching || torso.rotation.cos < 0.5 || low
     }
 
     /// How many knees are on the ground: crawling, which is allowed but costs.

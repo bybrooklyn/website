@@ -20,11 +20,19 @@ use crate::physics::{STEP, Segment, World};
 /// What each second of body on the ground costs, in metres of score, and each second of a knee on it.
 const DOWN_COST: f32 = 1.0;
 const KNEE_COST: f32 = 0.3;
+/// What each second on its feet earns, going far or fast, in metres of score.
+const UP_REWARD: f32 = 0.25;
+/// What each second in the air going forward earns for the goals other than jumping, in metres of
+/// score: a small push toward the hops a one-legged walker needs to get anywhere.
+const AIR_REWARD: f32 = 0.5;
 /// What each joule of motor work costs, in metres of score.
 const WORK_COST: f32 = 0.00005;
 /// A run ends once the body has lain on the ground this long, in seconds. The creature has fallen,
 /// and watching it lie there teaches nothing.
 const DOWN_LIMIT: f32 = 1.0;
+/// What a run that ends in a fall costs besides, in metres of score. More than a dive forward gains,
+/// so a walker learns first to stay up, and only then to go.
+const FALL_COST: f32 = 3.0;
 
 /// What a walker is rewarded for.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -104,12 +112,14 @@ impl Judge {
     /// The score of the run so far, with how far it went.
     pub fn outcome(&self, creature: &Creature, world: &World) -> Outcome {
         let distance = creature.distance(world);
-        let costs = DOWN_COST * self.seconds_down + KNEE_COST * self.seconds_kneeling + WORK_COST * self.work;
+        let fell = if self.seconds_down >= DOWN_LIMIT { FALL_COST } else { 0.0 };
+        let costs = fell + DOWN_COST * self.seconds_down + KNEE_COST * self.seconds_kneeling + WORK_COST * self.work;
         let tall = self.tallness / self.most_steps.max(1) as f32;
         let score = match self.goal {
-            Goal::Far | Goal::Fast => distance,
+            // a little for every second on its feet, so that a dive forward and a fall is not the easy answer
+            Goal::Far | Goal::Fast => distance + UP_REWARD * (self.steps as f32 * STEP - self.seconds_down) + AIR_REWARD * self.seconds_flying,
             // standing tall and still scores a little; tall and going forward scores most
-            Goal::Tall => distance * (0.2 + 0.8 * tall) + 2.0 * tall,
+            Goal::Tall => distance * (0.2 + 0.8 * tall) + 2.0 * tall + AIR_REWARD * self.seconds_flying,
             Goal::Jump => 1.5 * distance + self.seconds_flying - if self.in_gap { 1.0 } else { 0.0 },
         } - costs;
         Outcome { score, distance, seconds_down: self.seconds_down, work: self.work }
@@ -484,7 +494,7 @@ mod tests {
         assert!(last.score > first.score + 1.0 && last.distance > 2.0, "fast: {} then {}", first.score, last.score);
         let (first, last) = learns(Goal::Tall, &flat_ground(), 25);
         assert!(last.score > first.score + 1.0, "tall: {} then {}", first.score, last.score);
-        let (first, last) = learns(Goal::Jump, &gappy(), 40);
+        let (first, last) = learns(Goal::Jump, &gappy(), 80);
         assert!(last.score > first.score + 1.0 && last.distance > 3.5, "jump: {} then {}, {} m", first.score, last.score, last.distance);
     }
 
