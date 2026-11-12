@@ -16,7 +16,7 @@ pub mod contact;
 pub mod joint;
 pub mod shape;
 
-#[cfg(not(feature = "walker"))]
+#[cfg(not(feature = "creature"))]
 pub mod api;
 
 #[cfg(test)]

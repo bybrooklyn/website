@@ -341,6 +341,95 @@ holds only the physics, with these functions instead (about 36 KiB):
 - `physics_body_count() -> u32` and `physics_bodies() -> *const f32` Six f32 for each body, as in
   `show_bodies`.
 
+## The generalist
+
+A second mini on the same engine: a creature that sees, learns and gets about a generated world by
+itself. It is in `src/generalist/`, behind the `generalist` feature, and is built into a module of its
+own, `public/wasm/generalist.wasm`, so the Walker's module holds none of it. The physics, the body,
+the brain and evolution are shared. `cargo test` runs both; `tests/unchanged.rs` holds the Walker to
+learning exactly as it did before the generalist was added, to the bit.
+
+### A world
+
+A world is described two ways, one made from the other.
+
+A **recipe** is six numbers: a seed (a whole number; the page turns a word into one), a difficulty
+from 0 to 1, and an amount from 0 (switched off) to 1 of each of four kinds of thing: ground
+(platforms, ledges, drops, stairs, gaps and slopes), hazards (water and spikes), things to push
+(loose boxes), and things that move (moving platforms and see-saws). A link carries a recipe.
+
+A recipe is planned into a list of **pieces**, laid one after another along the way from the start,
+as far as anyone goes. Each piece is four numbers: its kind, two sizes, and the level ground after it
+before the next, in metres. A teacher that changes worlds changes these, and a world can be given as
+its pieces instead of a recipe (then the way is level after the last). The kinds, and what their two
+sizes `a` and `b` are:
+
+| kind | number | a | b |
+|------|--------|---|---|
+| level ground | 0 | length | |
+| slope | 1 | length | rise (less than 0 goes down) |
+| gap, no bottom | 2 | width | how much higher the far side is |
+| stairs | 3 | how many steps | rise of each (less than 0 goes down); each 0.8 m long |
+| ledge | 4 | height | |
+| drop | 5 | depth | |
+| floating platforms | 6 | gap between them, and from each side | height of their tops above the near side |
+| water | 7 | width | |
+| spikes | 8 | width | |
+| loose box | 9 | half its size | |
+| ledge with a box before it | 10 | height | the box's half size |
+| moving platform over a gap | 11 | the gap's width | its top speed, m/s |
+| see-saw | 12 | the plank's half length | the pivot's height |
+
+The creature starts at x = 0 on level ground from 12 m behind it to 4 m ahead. Gaps go 2 m down
+and then there is nothing: falling in ends a run, as touching a hazard does. Floating platforms
+are 1 m wide and come in twos. A moving platform is 1.2 m wide, starts at the left of its gap, and
+eases across and back. A see-saw's left end starts on the ground.
+
+Planning picks each piece's kind by the amounts, weighed against a fixed 0.3 for a stretch of level
+ground, so with everything at 1 about three pieces in four are something; then a piece of that kind
+evenly, at 60 to 100 percent of the hardest the table allows. Ups and downs lean back toward the
+start's height. Only plus, times and a seeded random generator are used, so the same recipe makes
+the same world to the bit, natively and in every browser, however far at a time it is made.
+
+### What difficulty means
+
+The hardest each piece can be, at difficulty d, is a straight line between its value at 0 and at 1:
+
+| | d = 0 | d = 1 |
+|---|---|---|
+| widest gap | 0.3 m | 1.2 m |
+| far side of a gap higher or lower by | 0 | 0.2 m |
+| tallest stair step | 0.05 m | 0.2 m |
+| most stair steps | 2 | 6 |
+| highest ledge | 0.1 m | 0.36 m |
+| highest ledge with a box | 0.4 m | 0.7 m |
+| deepest drop | 0.3 m | 1.3 m |
+| steepest slope, rise over run | 0.08 | 0.45 |
+| gap between floating platforms | 0.4 m | 1.1 m |
+| floating platforms above the ground | 0.05 m | 0.3 m |
+| widest water | 0.4 m | 1.1 m |
+| widest spikes | 0.3 m | 1.0 m |
+| widest gap a moving platform crosses | 2 m | 4.5 m |
+| its top speed | 0.4 m/s | 1 m/s |
+| highest see-saw pivot | 0.15 m | 0.45 m |
+| level ground after each piece | 4 m | 1.6 m |
+
+So, with everything switched on, there are 1.6 things in every 10 m at difficulty 0 and 2.3 at
+difficulty 1. The tests measure each of these over many worlds.
+
+### Every world can be crossed
+
+Before a piece is laid it is checked (`src/generalist/check.rs`): the world is seen as surfaces to
+stand on (ground not steeper than 0.7, platform tops, a loose box's top anywhere it can be pushed
+along level ground, a moving platform anywhere along its way, a see-saw tipped either way, with
+hazards cut out), and one surface can be reached from another if a jump of the creature's reach gets
+from the nearest point of one to the nearest point of the other. That reach is a step of 0.15 m, a
+climb of 0.45 m and a leap of 1.5 m over level ground; a jump that lands `rise` higher goes
+`leap / 2 * (1 + sqrt(1 - rise / climb))`, as a thrown stone does. A piece that cannot be crossed is
+made easier by a fifth, again and again, and given up for level ground if it never can be. The tests
+lay 4,400 worlds of 150 m across every difficulty and check each whole: every one can be crossed, and
+the table is close enough to the reach that a piece needs making easier about once in 3,000.
+
 ## Credit
 
 The soft step solver and the way contacts are found follow Erin Catto's Box2D 3 (MIT), rewritten

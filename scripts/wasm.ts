@@ -35,8 +35,10 @@ async function build(name: string, flags: string[], rust: string, target: string
 
 // each build has a target folder of its own, so the builds do not undo each other
 await build("the physics alone", ["--no-default-features"], SIMD, "target/physics", 80 * KIB);
-await build("walker.wasm", [], SIMD, "target", 512 * KIB);
-await build("walker-scalar.wasm", [], SCALAR, "target/scalar", 512 * KIB);
+// the Walker alone: the crate's default has the generalist too, for `cargo test`
+const WALKER = ["--no-default-features", "--features", "walker"];
+await build("walker.wasm", WALKER, SIMD, "target", 512 * KIB);
+await build("walker-scalar.wasm", WALKER, SCALAR, "target/scalar", 512 * KIB);
 
 await mkdir(at("public/wasm"), { recursive: true });
 await Bun.write(at("public/wasm/walker.wasm"), Bun.file(built("target")));
