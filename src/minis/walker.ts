@@ -10,7 +10,7 @@
 
 import { el, type Mote, type Scene } from "../mote/stage";
 import type { Order, Report } from "../scripts/walker-worker";
-import { DEFAULT_SETUP, ENGINE, GOALS, KINDS, LAYERS, LEGS, LINK_NAMES, NEURONS, POPULATION, fromLink, heightAt, linkParts, pieces, read, start, valid, write, type Engine, type Setup } from "./walking";
+import { DEFAULT_SETUP, ENGINE, GOALS, KINDS, LAYERS, LEGS, LINK_NAMES, NEURONS, POPULATION, fromLink, heightAt, linkParts, oldLink, pieces, read, start, valid, write, type Engine, type Setup } from "./walking";
 
 export const label = "A little creature with legs, seen from the side, learning to walk by evolution. Marks along the ground show how far the rest of its generation got.";
 
@@ -50,7 +50,8 @@ export default function walker(m: Mote): Scene {
     let ended = 0;
     let beat = 0;
     let ticks = 0;
-    let notice = { text: brainToLoad ? "A shared walker, already trained. Learning goes on from it." : "", until: 6 };
+    const stale = !linked && oldLink((name) => m.link.get(name));
+    let notice = { text: brainToLoad ? "A shared walker, already trained. Learning goes on from it." : stale ? "That link is to a walker from an older version, which this one cannot read. Learning starts fresh." : "", until: 7 };
     const camera = { x: 0, y: 0 };
     /** Where the body was a moment ago, for which way the eyes look. */
     let looking = { x: 1, y: 0 };

@@ -4,7 +4,7 @@
 // link exactly, and each kind of ground is what it says. `bun run wasm` builds it; `bun test` runs this.
 
 import { expect, test } from "bun:test";
-import { DEFAULT_SETUP, KINDS, decode, encode, fromLink, heightAt, linkParts, pieces, valid, type Engine, type Setup } from "./walking";
+import { DEFAULT_SETUP, KINDS, decode, encode, fromLink, heightAt, linkParts, oldLink, pieces, valid, type Engine, type Setup } from "./walking";
 
 const path = new URL("../../public/wasm/walker.wasm", import.meta.url);
 
@@ -27,11 +27,11 @@ test("the module is under its size limit and needs nothing from the page to load
 test("a walker is made only from a description it can build", async () => {
     const walker = await load();
     expect(walker.create(3, 8, 2, 1, 12, 1, 0)).toBe(0);
-    // a two-legged brain: 19 senses, 12 hidden neurons and 4 outputs, each layer with its biases
-    expect(walker.create(2, 8, 2, 1, 12, 1, 0)).toBe(12 * 20 + 4 * 13);
-    expect([walker.senses_length(), walker.hidden_length(), walker.outputs_length()]).toEqual([19, 12, 4]);
+    // a two-legged brain: 19 senses, 12 hidden neurons, and 12 outputs (three to shape each joint's swing), each layer with its biases
+    expect(walker.create(2, 8, 2, 1, 12, 1, 0)).toBe(12 * 20 + 12 * 13);
+    expect([walker.senses_length(), walker.hidden_length(), walker.outputs_length()]).toEqual([19, 12, 12]);
     expect(walker.body_count()).toBe(5);
-    expect(walker.create(4, 8, 2, 1, 12, 1, 0)).toBe(12 * 30 + 8 * 13);
+    expect(walker.create(4, 8, 2, 1, 12, 1, 0)).toBe(12 * 30 + 24 * 13);
     expect(walker.body_count()).toBe(9);
     expect(walker.create(1, 8, 2, 1, 12, 1, 0)).toBeGreaterThan(0);
 });
@@ -214,6 +214,12 @@ test("a whole walker, its setup and its brain, goes through a link and back unch
     expect(fromLink(() => null)).toBeNull();
     expect(valid(DEFAULT_SETUP)).toBe(true);
     expect(valid({ ...DEFAULT_SETUP, ground: { kind: "lava", rough: 10 } })).toBe(false);
+    // a link from before the brain changed shape is known for what it is, and not read
+    address.searchParams.set("neurons", "24");
+    address.searchParams.delete("v");
+    expect(fromLink((name) => address.searchParams.get(name))).toBeNull();
+    expect(oldLink((name) => address.searchParams.get(name))).toBe(true);
+    expect(oldLink(() => null)).toBe(false);
 });
 
 test("the show plays the best brain's run exactly as it was scored, and stops where it stopped", async () => {

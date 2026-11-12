@@ -58,7 +58,7 @@ impl Show {
             self.brain.think(&self.weights, &self.senses);
             self.creature.drive(&mut self.world, &self.brain.outputs);
             self.world.step();
-            self.judge.after_step(&self.creature, &self.world);
+            self.judge.after_step(&self.creature, &self.world, &self.brain.outputs);
             self.leftover -= STEP;
             taken += 1;
         }
@@ -135,7 +135,7 @@ impl Crowd {
                 self.brain.think(&self.weights[i * count..(i + 1) * count], &self.senses);
                 self.creature.drive(world, &self.brain.outputs);
                 world.step();
-                self.judges[i].after_step(&self.creature, world);
+                self.judges[i].after_step(&self.creature, world, &self.brain.outputs);
             }
             self.leftover -= STEP;
             taken += 1;

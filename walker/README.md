@@ -88,10 +88,19 @@ All numbers are metres, kilograms, seconds and radians, with y up and angles ant
 ### Goals
 
 The body is down when it touches the ground, is tipped past sixty degrees, or is held lower than a
-third of the height it stood at. Every score is less 1 for each second down, 0.3 for each second of
-each knee on the ground, and 0.00005 for each joule of work the motors did. A run ends once the body
+third of the height it stood at. Every score is less 1 for each second down, 1 for each second of
+each knee on the ground, and 0.0002 for each joule of work the motors did. A run ends once the body
 has been down for a second, and a run that ends that way costs 3 more, so a walker learns to stay
-up before it learns to go. Then, by goal:
+up before it learns to go.
+
+How it moves counts as well, for every goal, so that what it learns looks like walking. While it is
+going forward (in full from 0.6 m/s, in part below), each second with the body carried upright (a
+lean under 0.35 radians) and high (over 0.7 of its standing height) earns 0.5, and each second with
+its feet taking turns earns 0.4: for two legs exactly one foot down, for four one diagonal pair
+down and the other up, for one leg its foot down in the second half of each stride and up in the
+first. Each second of a foot sliding along the ground faster than 0.3 m/s costs 0.5, and each
+change in the brain's outputs from one step to the next costs 0.002 for its size, so the legs
+swing rather than twitch. Then, by goal:
 
 - **Go far** (0): the distance the body went forward in 10 s, plus 0.25 for each second on its feet
   and 0.5 for each second in the air going forward (which is how a one-legged walker gets anywhere).
@@ -154,12 +163,19 @@ layer its weight for everything coming into it, then that layer's biases.
   - for each foot, 1 if it is on the ground, else 0;
   - how much higher the ground is 0.6 m ahead, and 1.2 m ahead, than under the body, from -1 to 1,
     and -1 over a gap: what a jumper needs to see a step or a gap coming;
-  - the sine and cosine of a clock going round 1.2 times a second, to keep a rhythm by.
+  - the sine and cosine of the rhythm the legs keep (see `show_outputs`).
 - `show_hidden() -> *const f32` What each hidden neuron gave, -1 to 1, the first layer then the
   second.
-- `show_outputs() -> *const f32` What each output gave, -1 to 1: the target for each joint, from
-  one end of its range (-1) to the other (1). A hip turns from -1.0 (back) to 1.3 (forward) and a
-  knee from -2.0 (bent back) to 0 (straight).
+- `show_outputs() -> *const f32` What each output gave, -1 to 1, three for each joint. The legs keep
+  a rhythm: 1.8 strides a second for one leg, 1.2 for two (taking turns, half a stride apart), 1.6
+  for four (a trot, each diagonal pair together). Each joint swings like a pendulum in time with
+  it, and its three outputs shape the swing: where it is centred, how wide it is, and how far it is
+  shifted in the stride. A hip swings about 0.1 radians in front of straight down, its centre moved
+  up to 0.6 either way and its swing up to 0.6 to each side; a knee swings about a bend of 0.6, its
+  centre moved up to 0.5 and its swing up to 0.6. (A hopper's hip barely swings, 0.15, so it can
+  balance, and its knee swings up to 0.7.) So the legs move in strides whatever the brain does, and
+  evolution shapes the strides rather than inventing them. Each target is kept within the joint's
+  limits: a hip from -1.0 (back) to 1.3 (forward), a knee from -2.0 (bent back) to 0 (straight).
 - `show_weights() -> *const f32` The weights the show runs on, to draw the brain's connections.
 
 ### The crowd: a whole generation at once

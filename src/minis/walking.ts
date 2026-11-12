@@ -110,9 +110,16 @@ export function valid(setup: unknown): setup is Setup {
     return !!s && LEGS.includes(s.legs as Legs) && GOALS.some((each) => each.goal === s.goal) && NEURONS.includes(s.hidden as number) && LAYERS.includes(s.layers as number) && KINDS.includes(s.ground?.kind as Kind) && Number.isFinite(s.ground?.rough) && s.ground!.rough >= 0 && s.ground!.rough <= 100;
 }
 
+/**
+ * Which shape of brain a link holds. It goes up whenever a brain's weights stop meaning what they
+ * meant, so an old link is recognised and set aside rather than read wrongly.
+ */
+export const LINK_VERSION = 2;
+
 /** A walker as the parts of a link: its setup and its brain. */
 export function linkParts(setup: Setup, brain: Float32Array): [string, string][] {
     return [
+        ["v", String(LINK_VERSION)],
         ["legs", String(setup.legs)],
         ["goal", String(setup.goal)],
         ["neurons", String(setup.hidden)],
@@ -124,10 +131,14 @@ export function linkParts(setup: Setup, brain: Float32Array): [string, string][]
 }
 
 /** The names a link to a walker uses, to clear them all. */
-export const LINK_NAMES = ["legs", "goal", "neurons", "layers", "ground", "rough", "brain"];
+export const LINK_NAMES = ["v", "legs", "goal", "neurons", "layers", "ground", "rough", "brain"];
 
-/** A walker back from a link, or null if the link does not hold a whole one. */
+/** Whether the address holds a link to a walker from an older version, which cannot be read. */
+export const oldLink = (get: (name: string) => string | null): boolean => get("brain") !== null && get("v") !== String(LINK_VERSION);
+
+/** A walker back from a link, or null if the link does not hold a whole one of this version. */
 export function fromLink(get: (name: string) => string | null): { setup: Setup; brain: Float32Array } | null {
+    if (get("v") !== String(LINK_VERSION)) return null;
     const setup = { legs: Number(get("legs")), goal: Number(get("goal")), hidden: Number(get("neurons")), layers: Number(get("layers")), ground: { kind: get("ground"), rough: Number(get("rough")) } };
     const brain = decode(get("brain") ?? "");
     return brain && valid(setup) ? { setup, brain } : null;

@@ -33,9 +33,24 @@ impl Description {
     }
 
     /// How many numbers `sense` gives: five for the body, two for each joint, one for each foot, two
-    /// for the ground ahead, and two for a clock.
+    /// for the ground ahead, and two for the rhythm's clock.
     pub fn senses(&self) -> usize {
         5 + 2 * self.joints() + self.legs as usize + 2 + 2
+    }
+
+    /// How many numbers the brain gives `drive`: three for each joint, which shape its swing.
+    pub fn outputs(&self) -> usize {
+        3 * self.joints()
+    }
+
+    /// The rhythm the legs keep: how many strides a second, and where in the stride each leg starts,
+    /// as a share of a turn. Two legs take turns; four trot, each diagonal pair together.
+    pub fn rhythm(&self) -> (f32, &'static [f32]) {
+        match self.legs {
+            1 => (1.8, &[0.0]),
+            2 => (1.2, &[0.0, 0.5]),
+            _ => (1.6, &[0.0, 0.5, 0.5, 0.0]),
+        }
     }
 
     /// The shape of the body and legs for this many legs.
@@ -79,8 +94,13 @@ const KNEE_TORQUE: f32 = 50.0;
 /// How fast a joint turns for each radian it is from its target, and its top speed.
 const GAIN: f32 = 12.0;
 const TOP_SPEED: f32 = 8.0;
-/// How often the clock the brain feels goes round, in turns a second.
-const CLOCK: f32 = 1.2;
+/// Where each joint swings about, and how far it may swing to each side, in radians. The hip swings
+/// about a little in front of straight down, the knee about a gentle bend; neither may be sent past
+/// what a leg does when it walks.
+const HIP_SWING: (f32, f32, f32) = (0.1, 0.6, 0.6);
+const KNEE_SWING: (f32, f32, f32) = (-0.6, 0.5, 0.6);
+const HOP_HIP_SWING: (f32, f32, f32) = (0.15, 0.5, 0.15);
+const HOP_KNEE_SWING: (f32, f32, f32) = (-0.7, 0.4, 0.7);
 /// Where the brain feels the ground ahead of the body, in metres.
 const AHEAD: [f32; 2] = [0.6, 1.2];
 
@@ -215,17 +235,36 @@ impl Creature {
             into[at] = there;
             at += 1;
         }
-        let (s, c) = sin_cos(2.0 * PI * CLOCK * STEP * world.steps as f32);
+        let (s, c) = sin_cos(2.0 * PI * self.phase(world));
         into[at] = s;
         into[at + 1] = c;
     }
 
-    /// Sets each joint's motor toward a target from the brain, -1 for one end of its range and 1 for
-    /// the other.
-    pub fn drive(&self, world: &mut World, targets: &[f32]) {
-        for (i, &joint) in self.joints.iter().enumerate() {
-            let joint = &world.joints[joint as usize];
-            let target = joint.lower + 0.5 * (clamp(targets[i], -1.0, 1.0) + 1.0) * (joint.upper - joint.lower);
+    /// Where the rhythm is, in turns since the start.
+    pub fn phase(&self, world: &World) -> f32 {
+        self.description.rhythm().0 * STEP * world.steps as f32
+    }
+
+    /// Sets each joint's motor to follow a swing the brain shapes. Each joint swings like a pendulum
+    /// in time with the rhythm, starting where its leg's place in the stride says; for each joint the
+    /// brain gives three numbers from -1 to 1: where the swing is centred, how wide it is, and how far
+    /// it is shifted in the stride. So the legs move in strides whatever the brain does, and evolution
+    /// shapes the strides rather than inventing them.
+    pub fn drive(&self, world: &mut World, outputs: &[f32]) {
+        let (_, starts) = self.description.rhythm();
+        let phase = self.phase(world);
+        for (i, &index) in self.joints.iter().enumerate() {
+            let (centre, reach, widest) = match (self.legs.len(), i % 2) {
+                // a hopper balances with its hip and bounces with its knee, like a pogo stick
+                (1, 0) => HOP_HIP_SWING,
+                (1, _) => HOP_KNEE_SWING,
+                (_, 0) => HIP_SWING,
+                _ => KNEE_SWING,
+            };
+            let [middle, width, shift] = [0, 1, 2].map(|k| clamp(outputs[3 * i + k], -1.0, 1.0));
+            let (s, _) = sin_cos(2.0 * PI * (phase + starts[i / 2]) + PI * shift);
+            let joint = &world.joints[index as usize];
+            let target = clamp(centre + reach * middle + widest * 0.5 * (width + 1.0) * s, joint.lower, joint.upper);
             self.aim(world, i, target);
         }
     }
@@ -242,7 +281,9 @@ impl Creature {
         let angle = world.joints[index].angle(&world.bodies);
         let joint = &mut world.joints[index];
         joint.speed = clamp(GAIN * (target - angle), -TOP_SPEED, TOP_SPEED);
-        joint.torque = if i % 2 == 0 { HIP_TORQUE } else { KNEE_TORQUE };
+        // a single leg has to throw the whole body up, so its knee is stronger
+        let knee = if self.legs.len() == 1 { 1.8 * KNEE_TORQUE } else { KNEE_TORQUE };
+        joint.torque = if i % 2 == 0 { HIP_TORQUE } else { knee };
     }
 
     /// The work the motors did in the last step, in joules, counting work done braking as well.

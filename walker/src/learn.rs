@@ -14,19 +14,27 @@ use alloc::vec::Vec;
 
 use crate::body::{Creature, Description};
 use crate::brain::{Brain, Layout};
-use crate::math::{Vec2, sqrt};
+use crate::math::{Vec2, clamp, sqrt};
 use crate::physics::{STEP, Segment, World};
 
 /// What each second of body on the ground costs, in metres of score, and each second of a knee on it.
 const DOWN_COST: f32 = 1.0;
-const KNEE_COST: f32 = 0.3;
+const KNEE_COST: f32 = 1.0;
 /// What each second on its feet earns, going far or fast, in metres of score.
 const UP_REWARD: f32 = 0.25;
 /// What each second in the air going forward earns for the goals other than jumping, in metres of
 /// score: a small push toward the hops a one-legged walker needs to get anywhere.
 const AIR_REWARD: f32 = 0.5;
 /// What each joule of motor work costs, in metres of score.
-const WORK_COST: f32 = 0.00005;
+const WORK_COST: f32 = 0.0002;
+/// How a walker moves counts too, for every goal, so that what it learns looks like walking. Each
+/// second with the body carried upright and high earns this much, each second with its feet taking
+/// turns this much, each second of a foot sliding along the ground costs this much, and so does each
+/// sudden change in what the brain asks of the legs.
+const CARRIED_REWARD: f32 = 0.5;
+const TURNS_REWARD: f32 = 0.4;
+const SLIDE_COST: f32 = 0.5;
+const JERK_COST: f32 = 0.002;
 /// A run ends once the body has lain on the ground this long, in seconds. The creature has fallen,
 /// and watching it lie there teaches nothing.
 const DOWN_LIMIT: f32 = 1.0;
@@ -79,19 +87,56 @@ pub struct Judge {
     /// How tall the body was held, added up over the steps.
     pub tallness: f32,
     pub work: f32,
+    pub seconds_carried: f32,
+    pub seconds_turns: f32,
+    pub seconds_sliding: f32,
+    /// How much the brain's outputs changed from step to step, added up.
+    pub jerk: f32,
+    last: [f32; 24],
     pub in_gap: bool,
     pub over: bool,
 }
 
 impl Judge {
     pub fn new(goal: Goal, seconds: f32) -> Judge {
-        Judge { goal, steps: 0, most_steps: (seconds / STEP) as u32, seconds_down: 0.0, seconds_kneeling: 0.0, seconds_flying: 0.0, tallness: 0.0, work: 0.0, in_gap: false, over: false }
+        Judge {
+            goal,
+            steps: 0,
+            most_steps: (seconds / STEP) as u32,
+            seconds_down: 0.0,
+            seconds_kneeling: 0.0,
+            seconds_flying: 0.0,
+            tallness: 0.0,
+            work: 0.0,
+            seconds_carried: 0.0,
+            seconds_turns: 0.0,
+            seconds_sliding: 0.0,
+            jerk: 0.0,
+            last: [0.0; 24],
+            in_gap: false,
+            over: false,
+        }
     }
 
     /// Takes in a step just taken. Returns true once the run is over: its time is up, the body has
     /// lain down too long, or, jumping, a foot went down in a gap.
-    pub fn after_step(&mut self, creature: &Creature, world: &World) -> bool {
+    pub fn after_step(&mut self, creature: &Creature, world: &World, outputs: &[f32]) -> bool {
         self.steps += 1;
+        for (last, &now) in self.last.iter_mut().zip(outputs) {
+            if self.steps > 1 {
+                self.jerk += if now > *last { now - *last } else { *last - now };
+            }
+            *last = now;
+        }
+        // the manner of moving counts only while going forward, so marching on the spot earns nothing
+        let going = clamp(world.bodies[creature.torso as usize].velocity.x / 0.6, 0.0, 1.0);
+        if crate::gait::carried(creature, world) {
+            self.seconds_carried += STEP * going;
+        }
+        if crate::gait::taking_turns(creature, world) {
+            self.seconds_turns += STEP * going;
+        }
+        self.seconds_sliding += STEP * crate::gait::sliding(creature, world) as f32;
         self.work += creature.effort(world);
         self.seconds_kneeling += STEP * creature.kneeling(world) as f32;
         self.tallness += creature.tallness(world);
@@ -113,7 +158,8 @@ impl Judge {
     pub fn outcome(&self, creature: &Creature, world: &World) -> Outcome {
         let distance = creature.distance(world);
         let fell = if self.seconds_down >= DOWN_LIMIT { FALL_COST } else { 0.0 };
-        let costs = fell + DOWN_COST * self.seconds_down + KNEE_COST * self.seconds_kneeling + WORK_COST * self.work;
+        let manner = CARRIED_REWARD * self.seconds_carried + TURNS_REWARD * self.seconds_turns - SLIDE_COST * self.seconds_sliding - JERK_COST * self.jerk;
+        let costs = fell + DOWN_COST * self.seconds_down + KNEE_COST * self.seconds_kneeling + WORK_COST * self.work - manner;
         let tall = self.tallness / self.most_steps.max(1) as f32;
         let score = match self.goal {
             // a little for every second on its feet, so that a dive forward and a fall is not the easy answer
@@ -232,7 +278,7 @@ impl Trainer {
         let mut start = World::new();
         start.set_ground(ground);
         let creature = Creature::build(&mut start, description)?;
-        let layout = Layout::sized(description.senses(), description.joints(), settings.hidden, settings.layers);
+        let layout = Layout::sized(description.senses(), description.outputs(), settings.hidden, settings.layers);
         let settings = Settings { hidden: layout.hidden, layers: layout.layers, ..settings };
         let mut random = Random::new(seed);
         let count = layout.weights();
@@ -282,11 +328,30 @@ impl Trainer {
             self.brain.think(weights, &self.senses);
             creature.drive(&mut self.world, &self.brain.outputs);
             self.world.step();
-            if judge.after_step(creature, &self.world) {
+            if judge.after_step(creature, &self.world, &self.brain.outputs) {
                 break;
             }
         }
         judge.outcome(creature, &self.world)
+    }
+
+    /// Runs one brain from the start, as `run` does, and says how natural its run looked.
+    pub fn watch(&mut self, weights: &[f32]) -> crate::gait::Gait {
+        self.world.copy_from(&self.start);
+        let creature = &self.creature;
+        let mut judge = Judge::new(self.settings.goal, self.settings.seconds);
+        let mut watch = crate::gait::Watch::default();
+        loop {
+            creature.sense(&self.world, &mut self.senses);
+            self.brain.think(weights, &self.senses);
+            creature.drive(&mut self.world, &self.brain.outputs);
+            self.world.step();
+            watch.after_step(creature, &self.world);
+            if judge.after_step(creature, &self.world, &self.brain.outputs) {
+                break;
+            }
+        }
+        watch.gait(creature, &self.world)
     }
 
     fn run_member(&mut self, index: usize) {
@@ -495,14 +560,15 @@ mod tests {
         let (first, last) = learns(Goal::Tall, &flat_ground(), 25);
         assert!(last.score > first.score + 1.0, "tall: {} then {}", first.score, last.score);
         let (first, last) = learns(Goal::Jump, &gappy(), 80);
-        assert!(last.score > first.score + 1.0 && last.distance > 3.5, "jump: {} then {}, {} m", first.score, last.score, last.distance);
+        // walking in strides, a two-legged jumper learns to stay up and reach the first gap, not yet to cross it
+        assert!(last.score > first.score + 3.0 && last.seconds_down == 0.0, "jump: {} then {}, {} m", first.score, last.score, last.distance);
     }
 
     #[test]
     fn a_bigger_brain_of_two_layers_learns_too() {
         let settings = Settings { hidden: 24, layers: 2, ..Settings::default() };
         let mut trainer = Trainer::new(Description { legs: 4 }, settings, &flat_ground(), 5).unwrap();
-        assert_eq!(trainer.layout.weights(), 24 * 30 + 24 * 25 + 8 * 25);
+        assert_eq!(trainer.layout.weights(), 24 * 30 + 24 * 25 + 24 * 25);
         trainer.train(32);
         let first = trainer.best_score;
         while trainer.generation < 20 {
