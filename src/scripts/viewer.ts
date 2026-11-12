@@ -14,15 +14,7 @@
 // original's place and let go, so it travels there. Closing is the same run
 // in reverse, to wherever the original is by then.
 
-const EASE = "cubic-bezier(0.22, 1, 0.36, 1)";
-const still = matchMedia("(prefers-reduced-motion: reduce)");
-
-interface Box {
-    left: number;
-    top: number;
-    width: number;
-    height: number;
-}
+import { EASE, over, round, still, type Box } from "./opening";
 
 /** Where the picture itself is drawn inside its element, which differs when it is fitted with `object-fit: contain`. */
 function drawn(picture: HTMLImageElement): Box {
@@ -56,7 +48,6 @@ function centered(shape: number, limit: number): Box {
 }
 
 /** The transform that makes something at `to` appear to be at `from`. */
-const over = (from: Box, to: Box) => `translate(${from.left - to.left}px, ${from.top - to.top}px) scale(${from.width / to.width}, ${from.height / to.height})`;
 
 /** What is known about a picture from the page around it: what it is called, and who made it or when. */
 function about(picture: HTMLImageElement): { title: string; more: string } {
@@ -225,11 +216,7 @@ export function view(picture: HTMLImageElement, link?: HTMLAnchorElement | null)
     const key = (event: KeyboardEvent) => {
         // while a picture is open the page under it hears no keys, and Tab goes round what is in the viewer and nowhere else
         if (event.key === "Tab") {
-            event.preventDefault();
-            const stops = [...viewer.querySelectorAll<HTMLElement>("button, a[href]")].filter((stop) => !stop.closest("[inert]"));
-            const at = stops.indexOf(document.activeElement as HTMLElement);
-            stops[(at + (event.shiftKey ? -1 : 1) + stops.length) % stops.length]?.focus({ preventScroll: true });
-            return;
+            return round(event, [...viewer.querySelectorAll<HTMLElement>("button, a[href]")].filter((stop) => !stop.closest("[inert]")));
         }
         event.stopPropagation();
         const inMenu = more.box.contains(document.activeElement);

@@ -8,6 +8,8 @@
 // file puts a Screen on the page and plays a recording into it.
 // terminal.test.ts holds Screen to what each code means.
 
+import { boxOf, round, shade, travel } from "./opening";
+
 export interface Cell {
     /** One character; empty for the second half of a wide one. */
     text: string;
@@ -353,12 +355,34 @@ if (typeof document !== "undefined") {
         };
 
         again?.addEventListener("click", () => void run(true));
-        // Open, it fills the window; a click outside it, Escape, or the button again puts it back.
-        const open = (to: boolean) => {
+        // Open, it fills the window; a click outside it, Escape, or the button again puts it back. It travels
+        // there from where it sits on the page and back again, over a shade, as a picture does (opening.ts).
+        const frame = host.querySelector<HTMLElement>(".terminal-window") ?? fit;
+        let cover: ReturnType<typeof shade> | undefined;
+        /** Keeps the terminal's room in the page while it is out of it, so the page under it does not move. */
+        let room: HTMLElement | undefined;
+        const open = (to: boolean, moving = true) => {
+            if (to === host.classList.contains("open")) return;
+            const from = boxOf(frame);
+            if (to) {
+                room = document.createElement("div");
+                room.style.height = `${host.offsetHeight}px`;
+                room.style.margin = getComputedStyle(host).margin;
+                host.before(room);
+                cover = shade("terminal-shade", host);
+            } else {
+                room?.remove();
+                cover?.lift();
+            }
             host.classList.toggle("open", to);
             document.documentElement.classList.toggle("terminal-open", to);
             if (grow) [grow.dataset.shows, grow.ariaLabel, grow.title, grow.ariaExpanded] = [to ? "close" : "grow", to ? "Close" : "Full size", to ? "Close" : "Full size", String(to)];
             size();
+            if (!moving) return;
+            // on its way back it stays above the shade that is fading under it
+            host.classList.add("travelling");
+            const arrived = () => host.classList.remove("travelling");
+            travel(frame, from, to ? 420 : 340).finished.then(arrived, arrived);
         };
         grow?.addEventListener("click", () => open(!host.classList.contains("open")));
         host.addEventListener("click", (event) => event.target === host && open(false));
@@ -369,14 +393,11 @@ if (typeof document !== "undefined") {
                 grow?.focus({ preventScroll: true });
             } else if (event.key === "Tab") {
                 // open, it is the whole window: Tab goes round its own buttons and not to the page under it
-                event.preventDefault();
-                const stops = [...host.querySelectorAll<HTMLElement>("button.shown, button.terminal-grow")];
-                const at = stops.indexOf(document.activeElement as HTMLElement);
-                stops[(at + (event.shiftKey ? -1 : 1) + stops.length) % stops.length]?.focus({ preventScroll: true });
+                round(event, [...host.querySelectorAll<HTMLElement>("button.shown, button.terminal-grow")]);
             }
         });
         // leaving the page closes it, so it is not still open, with the page locked under it, when the page is come back to
-        for (const leaving of ["pageswap", "pagehide"]) addEventListener(leaving, () => host.classList.contains("open") && open(false));
+        for (const leaving of ["pageswap", "pagehide"]) addEventListener(leaving, () => open(false, false));
         new ResizeObserver(size).observe(fit);
 
         // It is fetched and starts when it is first scrolled to, and holds still while out of view.

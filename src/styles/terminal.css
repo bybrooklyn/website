@@ -188,7 +188,20 @@
     place-content: center;
     margin: 0;
     padding: 4vh 3vw;
+}
+
+/* The shade under an open terminal, faded in and out by opening.ts as the picture viewer's is. */
+.terminal-shade {
+    position: fixed;
+    inset: 0;
+    z-index: 29;
     background: oklch(0.08 0.02 300 / 0.86);
+}
+
+/* On its way back to the page it is still above the shade. */
+.terminal.travelling .terminal-window {
+    position: relative;
+    z-index: 30;
 }
 .terminal.open .terminal-window {
     width: min(94vw, 150vh);
