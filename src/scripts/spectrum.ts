@@ -72,7 +72,7 @@ function run(root: HTMLElement): void {
         }
         // The translator's line keeps its last words while it draws shut, so it does not empty first.
         const credit = text.translator;
-        translator.classList.toggle("shown", Boolean(credit));
+        translator.classList.toggle("open", Boolean(credit));
         if (credit) {
             const line = translator.firstElementChild!;
             const who = document.createElement(credit.link ? "a" : "span");

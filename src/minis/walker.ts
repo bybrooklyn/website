@@ -262,7 +262,7 @@ export default function walker(m: Mote): Scene {
         };
         /** A block that grows open under the row that opens it and shrinks shut again, never simply appearing. */
         const opening = (id: string, ...inside: Node[]) => {
-            const block = el("div", { class: "walker-opening", id }, el("div", { class: "walker-opening-inside" }, ...inside));
+            const block = el("div", { class: "walker-opening fold", id }, el("div", { class: "walker-opening-inside" }, ...inside));
             const shut = (open: boolean) => {
                 block.classList.toggle("open", open);
                 block.inert = !open;

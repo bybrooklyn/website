@@ -275,6 +275,37 @@ h1 + .lede,
 }
 
 /*
+ * Something that opens under what is pressed: it grows to its own height and fades in, and draws shut
+ * the same way. Its one child is what is shown. Opened with `open`; where it is used it says how long
+ * it grows (--grow) and fades (--fade).
+ */
+.fold {
+    display: grid;
+    grid-template-rows: 0fr;
+    opacity: 0;
+    transition:
+        grid-template-rows var(--grow) var(--ease),
+        opacity var(--fade) ease,
+        margin var(--grow) var(--ease);
+}
+
+.fold.open {
+    grid-template-rows: 1fr;
+    opacity: 1;
+}
+
+.fold > * {
+    min-height: 0;
+    overflow: hidden;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .fold {
+        transition: none;
+    }
+}
+
+/*
  * The same ring on everything that can be pressed, when it is reached by keyboard: here, once. A thing
  * that needs it to stand further off sets --ring-offset beside its own rules.
  */

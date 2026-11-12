@@ -305,7 +305,7 @@ export default function dice(m: Mote): Scene {
                 const count = hand[sides] ?? 0;
                 // (an emptied one keeps its number while it shrinks away)
                 if (count) part.badge.textContent = String(count);
-                part.kind.classList.toggle("on", count > 0);
+                part.more.classList.toggle("open", count > 0);
                 part.more.inert = count === 0;
                 part.keep.disabled = count < 2;
                 part.keep.textContent = count < 2 ? "all" : (keeps[sides] ?? "all");
@@ -339,7 +339,7 @@ export default function dice(m: Mote): Scene {
                 refresh();
             } });
             keep.setAttribute("aria-label", `Which d${sides} to count`);
-            const more = el("div", { class: "dice-more" }, el("div", {}, less, keep));
+            const more = el("div", { class: "dice-more fold" }, el("div", {}, less, keep));
             more.inert = true;
             const kind = el("div", { class: "dice-kind" }, pick, more);
             parts.set(sides, { kind, badge, more, keep });
