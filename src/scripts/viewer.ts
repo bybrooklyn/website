@@ -1,7 +1,8 @@
 // Clicking a picture anywhere on the site lifts it out of the page, moves it
 // to the middle of the window at full size, and puts it back where it was
 // when it is clicked again, Escape is pressed or the page is scrolled. Three
-// dots in the corner flow out into a small menu: what the picture is, opening
+// dots in the picture's corner flow out into a small menu, and become a cross
+// that closes it: what the picture is, opening
 // it in a new tab, downloading it, and what may be done with it.
 //
 // Every page has it (Document.astro). Which pictures it takes is in WHICH,
@@ -150,6 +151,9 @@ export function view(picture: HTMLImageElement, link?: HTMLAnchorElement | null)
     Object.assign(copy.style, { left: `${to.left}px`, top: `${to.top}px`, width: `${to.width}px`, height: `${to.height}px` });
     const large = largest(picture, link);
     const more = menu(picture, () => large);
+    // the dots sit in the picture's own top right corner, and come in once it has arrived there
+    Object.assign(more.box.style, { top: `${to.top + 10}px`, right: `${innerWidth - to.left - to.width + 10}px` });
+    more.box.animate([{ opacity: 0, scale: 0.6 }, { opacity: 0, scale: 0.6, offset: 0.6 }, { opacity: 1, scale: 1 }], { duration: still.matches ? 0 : 560, easing: EASE });
     viewer.append(shade, copy, more.box);
     document.body.append(viewer);
 
@@ -197,6 +201,8 @@ export function view(picture: HTMLImageElement, link?: HTMLAnchorElement | null)
             closeOpen = undefined;
             (link ?? picture).focus({ preventScroll: true });
         };
+        more.shut();
+        more.box.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 100, fill: "forwards" });
         shade.animate([{ opacity: 1 }, { opacity: 0 }], { duration: still.matches ? 120 : 300, easing: "ease-in", fill: "forwards" });
         if (still.matches) {
             copy.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 120, fill: "forwards" }).finished.then(done, done);

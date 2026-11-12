@@ -79,7 +79,15 @@ From the conversation on 11 Nov, later:
     - A picture put in a document is saved beside the file and linked the usual Markdown way; for
       a document kept in the browser it is kept in the browser with it.
     - First version also has an outline of the headings and a version history kept in the browser.
-    - Name not settled. Hers: "motenote" or "motenoted".
+    - Its name is mdQuire ("because md").
+    - Of the present editor she said all four things are wrong: typing feels broken, formatting is
+      awkward, it looks bad, and files and saving. What is kept is saving as you type, the plain
+      Markdown view and the real page beside it. Everything else that is seen is built again.
+    - To be built in one go, not in stages. Opus 5.5 subagents may be used for research and light
+      tasks.
+    - Open, hers: "should we just turn this into a full stack website, where i can login and edit
+      and add stuff", with a board for visitors as indie web sites have, so that writing a post is
+      logging in and writing. Not decided.
 14. A mini where a person learns to walk in the browser, with the person to set up. In Rust
     compiled to WebAssembly, a couple of crates allowed, made as small as it can be and under
     512 KiB.
