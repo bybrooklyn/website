@@ -183,6 +183,23 @@ see and learn and walk and do things on its own"; "all of this from scratch in o
   draws (she said yes to this on 12 Nov 2026), and shipped; ask before the run, since it uses the
   processor for a while.
 
+**After she watched it (12 Nov 2026):** "the generalist is weird. and just hops to move". Her answers:
+
+- **Movement:** "Let it find its own way, but not this": no rule about how to move; a strong cost on wasted
+  effort and on leaving the ground when there is nothing to clear.
+- **New kinds of neuron,** all four she was offered: rhythm neurons (oscillators the brain conducts);
+  neurons that learn while it lives ("auto weight adjustments": connections that change during a run, the
+  rule for changing being what is learned); neurons with their own memory and timing; mood neurons that
+  turn the rest of the brain up or down. And: "allow new neuron types to be built by the model itself as
+  well" (my reading: a neuron's own rule is a small learned thing, so that kinds of neuron can be found,
+  not only chosen).
+- **The page:** "Everything, as a builder": add a layer, pick its size and kind of neuron, wire in rhythm or
+  memory, and see the brain's picture change.
+- **Learning:** it gets good fast; it looks alive, not robotic; she can see why it learns; it keeps what it
+  learned. "i want to make the screen and window for it bigger too." "we should add a neuron for looking
+  around instead of the eyes being unmovable. basically i want this thing to learn and have a rich way to
+  feel and investigate".
+
 Order: speed, then the world and the rays, then PPO, then the teacher, then curiosity and needs, then
 the small vision encoder and the picture experiment.
 
