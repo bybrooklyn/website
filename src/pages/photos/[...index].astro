@@ -65,7 +65,8 @@ const count = (set: string) => all.filter((photo) => photo.set === set).length;
         }
     </p>
 
-    <script type="application/json" id="photo-list" set:html={JSON.stringify(all)} />
+    {/* "<" written as <, so that a title holding "</script>" cannot end the list early */}
+    <script type="application/json" id="photo-list" set:html={JSON.stringify(all).replace(/</g, "\\u003c")} />
 </Base>
 
 <script>
