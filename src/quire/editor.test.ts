@@ -769,8 +769,9 @@ used("on a phone the find bar is wholly in the window, its edges clear of both s
 });
 
 used("the emoji list's long names and codes end inside its lines, never running past its edge", async () => {
-    await reset("\n", [0], 0);
-    await tab.type(":smiling");
+    await tab.wait(500);
+    await reset("Words\n", [0], 5);
+    await tab.type(" :smiling");
     await tab.wait(600);
     const past = await tab.run<string[]>(`(() => { const list = [...document.querySelectorAll('.quire-emoji-list')].find((each) => each.matches(':popover-open')); if (!list) return ['no list']; const edge = list.querySelector('.quire-menu-items').getBoundingClientRect().right; return [...list.querySelectorAll('.quire-menu-label, .quire-menu-hint')].filter((each) => each.getBoundingClientRect().right > edge + 0.5).map((each) => each.textContent); })()`);
     expect(past).toEqual([]);
