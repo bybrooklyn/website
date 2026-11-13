@@ -97,7 +97,7 @@ test("a note whose words are deleted says so in its card, and undo brings the wo
     expect(await marked()).toBe(1);
     await page!.press(".quire-notes .quire-note");
     await tab.wait(300);
-    await page!.press(".quire-notes .quire-note button", "Delete");
+    await page!.press(".quire-notes .quire-note button", "Remove the comment");
     await tab.wait(200);
     expect(await tab.run("q.doc().comments")).toBeUndefined();
     expect(await page!.md()).toBe(TEXT);
