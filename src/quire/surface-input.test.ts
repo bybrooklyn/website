@@ -398,6 +398,34 @@ describe("pasting", () => {
         await tab.wait(50);
         expect(await md(tab)).toBe("**bold**\n");
     });
+
+    inPage("an address pasted over selected words links them in one undo step; with nothing selected, or with Ctrl+Shift+V, or of another scheme, it is text", async (tab) => {
+        const paste = (text: string) =>
+            tab.run(`(() => {
+                const data = new DataTransfer();
+                data.setData("text/plain", ${JSON.stringify(text)});
+                quire.element.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
+            })()`);
+        await tab.run(`quire.reset("Read the notes here\\n")`);
+        await tab.run("quire.select([0], 5, 14)");
+        await paste(" https://example.com/notes\n");
+        expect(await md(tab)).toBe("Read [the notes](https://example.com/notes) here\n");
+        await tab.press("z", { ctrl: true });
+        expect(await md(tab)).toBe("Read the notes here\n");
+        await tab.run("quire.select([0], 5, 14)");
+        await paste("javascript:alert(1)");
+        expect(await md(tab)).toBe("Read javascript:alert(1) here\n");
+        await tab.run(`quire.reset("Read the notes here\\n")`);
+        await tab.run("quire.select([0], 5, 14)");
+        // the key alone, as a script sends it: a real Ctrl+Shift+V would paste the empty clipboard first
+        await tab.run(`quire.key({ key: "V", code: "KeyV", ctrlKey: true, shiftKey: true })`);
+        await paste("https://example.com/notes");
+        expect(await md(tab)).toBe("Read https://example.com/notes here\n");
+        await tab.run(`quire.reset("")`);
+        await tab.run("quire.select([0], 0)");
+        await paste("https://example.com/notes");
+        expect(await md(tab)).toBe("https://example.com/notes\n");
+    });
 });
 
 describe("keyboard layouts", () => {

@@ -200,6 +200,11 @@ typing, Backspace and Format commands change all of them (`matching.ts`). Insert
 empty anchor, `<a id="name"></a>`, drawn as a small flag, and the link field offers the headings (by the
 ids the site gives them) and the bookmarks (`bookmarks.ts`).
 
+**Links.** A web address pasted over selected words makes them the link, in one undo
+step, as Docs and GitHub do. What counts is one http, https or mailto address and nothing else around it
+(`webAddress`); `javascript:` and every other scheme are pasted as text, and Ctrl+Shift+V always pastes the
+text.
+
 **Inserts and downloads** (`inserts.ts`, `export.ts`, `docx.ts`). Insert adds today's date, special
 characters and a table of contents. File, Download as gives Markdown, `.quire`, a web page, plain text and
 Word (a `.docx` written from scratch). PDF is the browser's print dialog with the page already set up.
