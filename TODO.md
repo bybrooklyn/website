@@ -140,6 +140,7 @@ What was found and fixed is in [`docs/AUDIT.md`](docs/AUDIT.md). Still open from
 - The menus in Google Docs' order and names, a sign on every line, long menus folded into groups, each thing in one menu only.
 - In the bar, alignment (left, centre, right, justify) as one button that grows open in place, and the three lists as another.
 - Links: an address pasted over selected words links them; a pasted bare address gets a small chip to show it as words or a short form; resting on a link shows a card with open, copy, edit and remove.
+- Subtitle in a plain Markdown file too, kept as a `subtitle:` line in the frontmatter (today it exists only in a `.quire` document).
 - Suggesting mode, kept in the file as CriticMarkup.
 - New kinds to start from: meeting notes, a changelog entry, a project page.
 - An emoji picker to browse and search.
