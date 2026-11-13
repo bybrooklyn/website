@@ -60,3 +60,8 @@ test("emoji, their selectors and skin tones are never words to spell, and an acc
     expect(one!.range.end.offset - one!.range.start.offset).toBe(6);
     expect(one!.suggest!().map((fix) => fix.label)).toContain("café");
 });
+
+test("words in paths, file names, hashtags and handles are not spelled", () => {
+    expect(spelled("Open index.html, package.json and foo.tar.gz in /home/me/src/quire or C:\\Users\\me\\Dcuments, see example.com/foo and #opensource or @somebody.\n")).toEqual([]);
+    expect(spelled("A plain wrod / and a slash.\n")).toEqual(["wrod"]);
+});

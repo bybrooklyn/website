@@ -1,6 +1,7 @@
 // Spelling: each word of the text that the dictionary (dictionary.ts) does not know, with the words
 // that may have been meant. What is never checked: code and code blocks, web addresses and emails,
-// the frontmatter, words with a digit in them, words in capitals (an acronym such as GPU) and words
+// the frontmatter, words with a digit or a full stop in them, words in a path (beside a slash) or after
+// a # or @, words in capitals (an acronym such as GPU) and words
 // with a capital inside (TypeScript, iPhone), which are names a dictionary does not hold.
 //
 // The speller the rule asks is made by createSpeller from the dictionary, the country's spelling,
@@ -31,6 +32,11 @@ export function unchecked(word: string): boolean {
     return word.split(/[-‐]/).some((part) => /^.+\p{Lu}/u.test(part.replace(/['’]s$/, "")));
 }
 
+/** True for a word that is part of a path, a hashtag or a handle: a slash or backslash beside it (src/quire, example.com/foo), or a # or @ before it. */
+export function pathlike(text: string, from: number, to: number): boolean {
+    return /[/\\#@~]/.test(text[from - 1] ?? "") || /[/\\]/.test(text[to] ?? "");
+}
+
 const misspelled: Rule = {
     id: "spelling",
     kind: "spelling",
@@ -42,7 +48,7 @@ const misspelled: Rule = {
         const speller = context.speller;
         if (!speller || unit.code) return [];
         return unit.words
-            .filter((one) => !unchecked(one.word) && !speller.known(one.word))
+            .filter((one) => !unchecked(one.word) && !pathlike(unit.read.text, one.from, one.to) && !speller.known(one.word))
             .map((one) => ({
                 from: one.from,
                 to: one.to,
