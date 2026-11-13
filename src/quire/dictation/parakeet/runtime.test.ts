@@ -2,7 +2,7 @@
 // the encoder output, and what it does when the card is missing or will not take the model.
 
 import { afterEach, describe, expect, test } from "bun:test";
-import { detect, load, provide, type Ort } from "./runtime";
+import { detect, load, ortFor, provide, type Ort } from "./runtime";
 
 // A stand-in for ONNX Runtime: sessions that record how they were made and what they were fed.
 interface Made {
@@ -62,7 +62,7 @@ function browser(settings: { gpu?: unknown; isolated?: boolean; cores?: number }
 }
 const card = (info: { isFallbackAdapter?: boolean } = {}) => ({ requestAdapter: async () => ({ info, requestDevice: async () => ({}) }) });
 afterEach(() => {
-    for (const key of ["navigator", "crossOriginIsolated", "SharedArrayBuffer", "self"]) {
+    for (const key of ["navigator", "crossOriginIsolated", "SharedArrayBuffer", "self", "location"]) {
         if (key in original) (globalThis as Record<string, unknown>)[key] = original[key];
         else delete (globalThis as Record<string, unknown>)[key];
     }
@@ -96,6 +96,19 @@ describe("detect", () => {
         expect((await detect()).threads).toBe(6);
         browser({ cores: 32, isolated: true });
         expect((await detect()).threads).toBe(8);
+    });
+});
+
+describe("ortFor", () => {
+    test("a fetch of the runtime that failed is not kept: the next asks again", async () => {
+        browser({});
+        (globalThis as { location?: unknown }).location = { href: "file:///nowhere/at/all/" };
+        const first = ortFor("wasm", "/missing-runtime/");
+        await expect(first).rejects.toBeDefined();
+        await new Promise((done) => setTimeout(done, 0));
+        const second = ortFor("wasm", "/missing-runtime/");
+        expect(second).not.toBe(first);
+        await expect(second).rejects.toBeDefined();
     });
 });
 

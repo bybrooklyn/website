@@ -83,6 +83,11 @@ export function ortFor(flavor: Flavor, base = RUNTIME): Promise<Ort> {
             return ort;
         });
         modules.set(key, loading);
+        // a fetch that failed (the connection blinked, a deploy was replacing the files) is not remembered, so the next press tries again
+        const mine = loading;
+        loading.catch(() => {
+            if (modules.get(key) === mine) modules.delete(key);
+        });
     }
     return loading;
 }
