@@ -37,8 +37,12 @@ export function read(source: string, options: ReadOptions = {}): Document {
     const lines = splitLines(rest);
     // new text is written with the ending most of the file's lines have, so one stray CRLF does not set it
     let crlf = 0;
-    for (const line of lines) if (line.eol === "\r\n") crlf++;
-    const eol = crlf * 2 > lines.filter((line) => line.eol !== "").length ? "\r\n" : "\n";
+    let ended = 0;
+    for (const line of lines) {
+        if (line.eol === "\r\n") crlf++;
+        if (line.eol !== "") ended++;
+    }
+    const eol = crlf * 2 > ended ? "\r\n" : "\n";
     let frontmatter: string | null = null;
     let at = 0;
     // frontmatter opens on the first line and closes on the first line that is only `---`, never on one that merely starts with it
@@ -56,8 +60,15 @@ export function read(source: string, options: ReadOptions = {}): Document {
     const guessed = definitions(body);
     const context: Context = { mdx: !!options.mdx, refs: guessed, found: new Map() };
     let { lead, blocks } = parseBlocks(body, context);
-    if (!sameDefinitions(guessed, context.found!)) ({ lead, blocks } = parseBlocks(body, { mdx: context.mdx, refs: context.found! }));
-    return { bom, frontmatter, lead, blocks, eol, mdx: context.mdx };
+    let references = context.references ?? 0;
+    if (!sameDefinitions(guessed, context.found!)) {
+        const again: Context = { mdx: context.mdx, refs: context.found! };
+        ({ lead, blocks } = parseBlocks(body, again));
+        references = again.references ?? 0;
+    }
+    const doc: Document = { bom, frontmatter, lead, blocks, eol, mdx: context.mdx };
+    if (references > 0) doc.references = true;
+    return doc;
 }
 
 // ---- lines ----
@@ -187,9 +198,6 @@ function interrupts(line: string): boolean {
 
 // ---- blocks ----
 
-/** For each block read, whether it holds a reference link, `[text][label]` or `[label]`, which the writer must check is still defined (write.ts). */
-export const referring = new WeakMap<Block, boolean>();
-
 /** For each block read, the block read straight after it among its neighbours: two blocks that still stand together keep the gap the file had between them (write.ts). */
 export const followed = new WeakMap<Block, Block>();
 
@@ -254,15 +262,14 @@ function parseBlocks(lines: Line[], context: Context): { lead: string; blocks: B
     const lead = joinFull(lines.slice(0, at));
     const blocks: Block[] = [];
     while (at < lines.length) {
-        const counted = context.references ?? 0;
         const [block, end] = readBlock(lines, at, context);
-        referring.set(block, (context.references ?? 0) > counted);
         let next = end;
         while (next < lines.length && blank(lines[next]!.text)) next++;
         block.source = joinSource(lines.slice(at, end));
         block.gap = lines[end - 1]!.eol + joinFull(lines.slice(end, next));
         const before = blocks[blocks.length - 1];
-        if (before) followed.set(before, block);
+        // the writer asks only of a gap of one line ending, so only such neighbours are noted
+        if (before && before.gap.indexOf("\n") === before.gap.length - 1) followed.set(before, block);
         blocks.push(block);
         at = next;
     }
@@ -305,7 +312,7 @@ function readBlock(lines: Line[], at: number, context: Context): [Block, number]
         if (details) return details;
         const atx = ATX.exec(text);
         if (atx) {
-            const content = atx[2]!.replace(/[ \t]+#+[ \t]*$/, "").replace(/^[ \t]*#+[ \t]*$/, "").trim();
+            const content = headingText(atx[2]!);
             return [{ kind: "heading", level: atx[1]!.length as Level, runs: runsFrom(content, context), gap: "" }, at + 1];
         }
         if (THEMATIC.test(text)) return [{ kind: "divider", gap: "" }, at + 1];
@@ -340,6 +347,16 @@ function readBlock(lines: Line[], at: number, context: Context): [Block, number]
         if (terms) return terms;
     }
     return readParagraph(lines, at, context);
+}
+
+/** A heading's text without its closing sequence of `#`s, which must stand after a space; worked by hand, as a pattern would be slow on a long run of spaces. */
+function headingText(raw: string): string {
+    let end = raw.length;
+    while (end > 0 && (raw[end - 1] === " " || raw[end - 1] === "\t")) end--;
+    let hashes = end;
+    while (hashes > 0 && raw[hashes - 1] === "#") hashes--;
+    if (hashes < end && (hashes === 0 || raw[hashes - 1] === " " || raw[hashes - 1] === "\t")) end = hashes;
+    return raw.slice(0, end).trim();
 }
 
 /** A block of display maths between `$$` lines, or on one line as `$$ ... $$`; undefined if the `$$` never closes. */
@@ -929,7 +946,9 @@ export function parseInline(text: string, options: ReadOptions = {}): Run[] {
 const runsFrom = (text: string, context: Context) => tidyRuns(inline(text, context));
 
 function inline(text: string, context: Context): Run[] {
-    const address = addresses(text);
+    // which characters sit in a web address, worked out when a shortcode or a pipe or equals sign first asks
+    let mask: Uint8Array | null | undefined;
+    const inAddress = (at: number) => !!(mask === undefined ? (mask = addresses(text) ?? null) : mask)?.[at];
     const tokens: Token[] = [];
     let buffer = "";
     const flush = () => {
@@ -964,8 +983,11 @@ function inline(text: string, context: Context): Run[] {
             continue;
         }
         if (char === "\n") {
-            const spaces = /[ \t]*$/.exec(buffer)![0];
-            buffer = buffer.slice(0, buffer.length - spaces.length);
+            // the spaces before the line ends, counted by hand: a pattern would take time growing with the square of a long run of them
+            let cut = buffer.length;
+            while (cut > 0 && (buffer[cut - 1] === " " || buffer[cut - 1] === "\t")) cut--;
+            const spaces = buffer.slice(cut);
+            buffer = buffer.slice(0, cut);
             if (spaces.replace(/\t/g, "").length >= 2 && !spaces.includes("\t")) push({ kind: "break" });
             else buffer += "\n";
             index++;
@@ -987,7 +1009,7 @@ function inline(text: string, context: Context): Run[] {
         }
         if (char === ":") {
             // a shortcode standing as a word of its own, not in a word and not in a web address (emoji.ts)
-            const name = shortcodeAt(text, index, !!address?.[index]);
+            const name = shortcodeAt(text, index, inAddress(index));
             if (name) {
                 push({ kind: "emoji", name });
                 index += name.length + 2;
@@ -1159,7 +1181,7 @@ function inline(text: string, context: Context): Run[] {
                 count,
                 length: count,
                 // inside a web address `==` and `||` are part of the address: they may close a mark opened before it, never open one
-                open: char === "_" ? left && (!right || punctuation(before)) : loose && address?.[index] ? false : left,
+                open: char === "_" ? left && (!right || punctuation(before)) : loose && left && inAddress(index) ? false : left,
                 close: char === "_" ? right && (!left || punctuation(after)) : right,
             });
             index += count;
@@ -1197,13 +1219,19 @@ function runsPlain(runs: Leaf[]): string {
 
 /** CommonMark's emphasis rule: each closing run of `*`, `_` or `~` finds the nearest opening run it can pair with. */
 function emphasis(tokens: Token[]) {
+    // as in CommonMark's own reader: once a closer of a kind has looked back and found nothing, the
+    // closers of that kind after it look no further back than it did, so a long line of signs that
+    // never pair is read in time growing with its length, not with its square
+    let floors: Map<string, number> | undefined;
     for (let close = 0; close < tokens.length; close++) {
         const closer = tokens[close]!;
         if (!isDelimiter(closer) || !closer.close) continue;
         let matched = true;
         while (closer.count > 0 && matched) {
             matched = false;
-            for (let open = close - 1; open >= 0; open--) {
+            const kind = closer.char === "*" || closer.char === "_" ? `${closer.char}${closer.length % 3}${closer.open ? 1 : 0}` : `${closer.char}${closer.count}`;
+            const floor = floors?.get(kind) ?? -1;
+            for (let open = close - 1; open > floor; open--) {
                 const opener = tokens[open]!;
                 if (!isDelimiter(opener) || opener.char !== closer.char || !opener.open || opener.count === 0) continue;
                 const paired = closer.char === "~" || closer.char === "=" || closer.char === "|";
@@ -1223,6 +1251,7 @@ function emphasis(tokens: Token[]) {
                 matched = true;
                 break;
             }
+            if (!matched) (floors ??= new Map()).set(kind, close - 1);
         }
     }
 }

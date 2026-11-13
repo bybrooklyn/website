@@ -584,7 +584,7 @@ export function addresses(text: string): Uint8Array | undefined {
         const char = text[index]!;
         // an address ends at a space, and at what closes the link or tag it is written in: a `)` it
         // did not open, `]`, `>`, a quote or a backtick
-        if (/\s/.test(char) || (inside && (/[\]<>"'`]/.test(char) || (char === ")" && depth === 0)))) {
+        if (char === " " || char === "\t" || char === "\n" || (char > "\u007f" && /\s/.test(char)) || (inside && (char === "]" || char === "<" || char === ">" || char === '"' || char === "'" || char === "`" || (char === ")" && depth === 0)))) {
             start = index + 1;
             inside = false;
             continue;

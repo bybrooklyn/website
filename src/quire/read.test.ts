@@ -384,3 +384,22 @@ test("an autolink alone on its line is a paragraph holding a link, not HTML", ()
     expect(read("<div>\n").blocks[0]?.kind).toBe("raw");
     expect(read("<my-tag attr>\n").blocks[0]?.kind).toBe("raw");
 });
+
+test("a hostile line of a hundred thousand characters is read, edited and written in moments", () => {
+    const lines = [
+        `a${" ".repeat(100000)}b\nc`,
+        `# a${" ".repeat(100000)}b`,
+        `**a${" ".repeat(100000)}b**`,
+        `http://x.y/${"a||".repeat(33000)}`,
+        `see http://x.y/${":smile:".repeat(14000)}`,
+        `${"a:smile:".repeat(12000)}`,
+        `| ${"a ".repeat(50000)}|\n|---|\n`,
+    ];
+    for (const line of lines) {
+        const started = performance.now();
+        const doc = read(`${line}\n`);
+        const touched = insertText(doc, { path: blockPaths(doc)[0]!, offset: 0 }, "z");
+        write(touched);
+        expect({ line: line.slice(0, 20), slow: performance.now() - started > 1000 }).toEqual({ line: line.slice(0, 20), slow: false });
+    }
+});

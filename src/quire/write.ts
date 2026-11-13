@@ -5,12 +5,14 @@
 
 import { pictureHtml, sized } from "./pictures";
 import type { Align, Block, Document, Leaf, LinkRun, List, ListItem, Run, TextRun } from "./document";
-import { emojiOf, inAddress } from "./emoji";
-import { definedLabels, followed, normalLabel, referring, standsApart } from "./read";
+import { addresses, emojiOf, inAddress } from "./emoji";
+import { definedLabels, followed, normalLabel, standsApart } from "./read";
 
 interface Context {
     eol: string;
     mdx: boolean;
+    /** Set when the document was read with reference links in it. */
+    references?: boolean;
     /** The labels the document's definitions name, found when a reference link is first written. */
     defined?: () => Set<string>;
     /** Set while the runs being written hold dollar signs that could pair as maths, so that each is escaped. */
@@ -38,7 +40,7 @@ function said(value: unknown, what: string): string {
 /** Writes a whole document. */
 export function write(doc: Document): string {
     let defined: Set<string> | undefined;
-    const context: Context = { eol: doc.eol, mdx: doc.mdx, defined: () => (defined ??= definedLabels(doc.blocks)) };
+    const context: Context = { eol: doc.eol, mdx: doc.mdx, references: !!doc.references, defined: () => (defined ??= definedLabels(doc.blocks)) };
     let body = writeBlocks(doc.blocks, context, false);
     // a `---` on the first line opens frontmatter when another such line comes later, so a line across
     // the page that has come to the top is written `***` when it would be read so
@@ -68,11 +70,11 @@ function otherSign(list: List): List {
 
 /**
  * True if a block still kept as its source holds a reference link whose definition is no longer in
- * the document: written as its source, the link would read back as plain text. The reader marks
- * the blocks that hold none, and only a source with a `[` in it can hold one, which keeps this quick.
+ * the document: written as its source, the link would read back as plain text. Only a file read with
+ * reference links, and a source with a `[` in it, can hold one, which keeps this quick.
  */
 function lostReference(block: Block, context: Context): boolean {
-    if (block.source === undefined || referring.get(block) === false || !block.source.includes("[")) return false;
+    if (block.source === undefined || !context.references || !block.source.includes("[")) return false;
     const lost = (runs: Run[]) => runs.some((run) => run.kind === "link" && run.ref !== undefined && (run.ref || run.label) !== undefined && !context.defined?.().has(normalLabel(run.ref || run.label!)));
     switch (block.kind) {
         case "paragraph":
@@ -98,30 +100,33 @@ function refreshed(block: Block, context: Context): Block {
     return { ...block, source: undefined };
 }
 
+/** True for a paragraph of nothing but spaces and line breaks, which has no Markdown form. */
+const empty = (block: Block) => block.kind === "paragraph" && block.runs.every((run) => run.kind === "break" || (run.kind === "text" && run.text.trim() === "" && !run.marks.includes("code")));
+
 /** Writes blocks one after another. `inside` is true in a list item, quote or footnote, where the last block ends with nothing. */
 function writeBlocks(all: Block[], context: Context, inside: boolean): string {
-    // an empty paragraph (or one of spaces) has no Markdown form, so a fresh one is left out, and so is the empty line an
-    // empty item, quote or footnote is read with, once something else stands beside it
-    const empty = (block: Block) => block.kind === "paragraph" && block.runs.every((run) => run.kind === "break" || (run.kind === "text" && run.text.trim() === "" && !run.marks.includes("code")));
-    const blocks = all.filter((block) => !(empty(block) && (block.source === undefined || (block.source === "" && all.length > 1))));
-    if (blocks.length && blocks.length < all.length && all[all.length - 1] !== blocks[blocks.length - 1]) blocks[blocks.length - 1] = { ...blocks[blocks.length - 1]!, gap: all[all.length - 1]!.gap };
+    // an empty paragraph (or one of spaces) has no Markdown form, so a fresh one is left out, and so is
+    // the empty line an empty item, quote or footnote is read with, once something else stands beside
+    // it; and so is a block written afresh as nothing at all (a list left holding only empty lines)
+    const blocks: Block[] = [];
     const texts: string[] = [];
-    blocks.forEach((block, index) => {
-        const before = blocks[index - 1];
-        if (block.kind === "list" && before?.kind === "list" && block.style !== "definition" && before.style !== "definition" && (before.style === "number") === (block.style === "number") && signOf(before) === signOf(block)) blocks[index] = otherSign(block);
-        if (lostReference(blocks[index]!, context)) blocks[index] = refreshed(blocks[index]!, context);
-        const each = blocks[index]!;
-        texts.push(each.source ?? said(writeBlock(each, context), `a block of kind ${String(each?.kind)}`));
-    });
-    // a block written afresh as nothing at all (a list left holding only empty lines) takes no room
-    for (let index = blocks.length - 1; index >= 0; index--) {
-        if (texts[index] !== "" || blocks[index]!.source !== undefined || blocks.length === 1) continue;
-        if (index === blocks.length - 1 && index > 0) blocks[index - 1] = { ...blocks[index - 1]!, gap: blocks[index]!.gap };
-        blocks.splice(index, 1);
-        texts.splice(index, 1);
+    for (const block of all) {
+        if ((block.source === undefined || (block.source === "" && all.length > 1)) && empty(block)) continue;
+        let each = block;
+        const before = blocks[blocks.length - 1];
+        if (each.kind === "list" && before?.kind === "list" && each.style !== "definition" && before.style !== "definition" && (before.style === "number") === (each.style === "number") && signOf(before) === signOf(each)) each = otherSign(each);
+        if (context.references && lostReference(each, context)) each = refreshed(each, context);
+        const text = each.source ?? said(writeBlock(each, context), `a block of kind ${String(each?.kind)}`);
+        if (text === "" && each.source === undefined && all.length > 1) continue;
+        blocks.push(each);
+        texts.push(text);
     }
+    // the last block holds what ends the file (or nothing, inside a container), wherever it went
+    const last = blocks.length - 1;
+    if (last >= 0 && blocks[last] !== all[all.length - 1]) blocks[last] = { ...blocks[last]!, gap: all[all.length - 1]!.gap };
     let out = "";
-    blocks.forEach((block, index) => {
+    for (let index = 0; index <= last; index++) {
+        const block = blocks[index]!;
         out += texts[index];
         const next = blocks[index + 1];
         let gap = block.gap;
@@ -136,8 +141,24 @@ function writeBlocks(all: Block[], context: Context, inside: boolean): string {
             }
         }
         out += gap;
-    });
+    }
     return out;
+}
+
+/** Takes spaces and tabs off the start of a line, the end, or both, counted by hand: a pattern would take time growing with the square of a long run of spaces inside the line. */
+function trimSpaces(line: string, start: boolean, end: boolean): string {
+    let from = 0;
+    let to = line.length;
+    if (start) while (from < to && (line[from] === " " || line[from] === "\t")) from++;
+    if (end) while (to > from && (line[to - 1] === " " || line[to - 1] === "\t")) to--;
+    return line.slice(from, to);
+}
+
+/** Text on one line: each line break, with the spaces and tabs around it, becomes one space. */
+function oneLine(text: string): string {
+    if (!text.includes("\n")) return text;
+    const lines = text.split("\n");
+    return lines.map((line, index) => trimSpaces(line, index > 0, index < lines.length - 1)).join(" ");
 }
 
 /** Puts a prefix before each line of text: `first` on the first, `rest` on the others, `empty` on blank ones. */
@@ -161,7 +182,7 @@ function writeBlock(block: Block, context: Context): string {
         case "heading": {
             // a heading is one line: a break that reached one is written as the space it is drawn as
             const runs = block.runs.map((run): Run => (run.kind === "break" ? { kind: "text", text: " ", marks: [] } : run));
-            let content = writeRuns(runs, context, false).replace(/[ \t]*\n[ \t]*/g, " ").trim();
+            let content = oneLine(writeRuns(runs, context, false)).trim();
             // a heading that ends in #s would lose them as a closing sequence
             if (/(^|[ \t])#+$/.test(content)) content = content.replace(/#(#*)$/, "\\#$1");
             return aligned("#".repeat(Math.min(6, Math.max(1, Number(block.level) || 1))) + (content ? ` ${content}` : ""), block.align);
@@ -276,7 +297,7 @@ function tableText(header: Run[][], align: (Align | null)[], rows: Run[][][], co
     // in a row a pipe is the edge of a cell before it is anything else, so every pipe written inside a
     // cell, in text, code, an address or HTML, is escaped; the reader takes the escapes off before it
     // reads the cell's text, as GitHub does
-    const cell = (runs: Run[]) => writeRuns(runs, context, true).replace(/[ \t]*\n[ \t]*/g, " ").trim().replace(/\|/g, "\\|");
+    const cell = (runs: Run[]) => oneLine(writeRuns(runs, context, true)).trim().replace(/\|/g, "\\|");
     const head = header.map(cell);
     const body = rows.map((row) => header.map((_, column) => cell(row[column] ?? [])));
     const widths = head.map((value, column) => Math.max(3, value.length, ...body.map((row) => row[column]!.length)));
@@ -326,7 +347,7 @@ function paragraphText(all: Run[], context: Context): string {
     return lines
         .map((raw, index) => {
             let line = raw.replace(/^[ \t]+/, "");
-            if (!line.endsWith("\\")) line = line.replace(/[ \t]+$/, "");
+            if (!line.endsWith("\\")) line = trimSpaces(line, false, true);
             if (/^(#{1,6}(\s|$)|>|[-+*_](\s|$)|-#\s|(=+|-+)\s*$|:[ \t])/.test(line)) line = `\\${line}`;
             line = line.replace(/^(\d{1,9})([.)])(?=\s|$)/, "$1\\$2");
             if (index === 0 && context.mdx && /^(import|export)\b/.test(line)) line = `&#${line.charCodeAt(0)};${line.slice(1)}`;
@@ -489,6 +510,13 @@ function writeLeaves(all: Leaf[], context: Context, cell: boolean, before = " ",
         if (literal(leaf)) return "`";
         return step < 0 ? lastOf(leaf.text) : firstOf(leaf.text);
     };
+    // whether the token at `index` would be written on the end of a web address; asked only of text that holds one
+    const addressed = leaves.some((leaf) => leaf.kind === "text" && (leaf.text.includes("://") || leaf.text.includes("www.")));
+    const inAddressAt = (index: number): boolean => {
+        if (!addressed) return false;
+        const prefix = before + tokens.slice(0, index).map((each) => (isSign(each) ? signText(each) : each.text)).join("");
+        return inAddress(`${prefix}:`, prefix.length);
+    };
     const signNear = (index: number) => {
         const token = tokens[index];
         return token && isSign(token) ? signChar(token) : "";
@@ -504,8 +532,7 @@ function writeLeaves(all: Leaf[], context: Context, cell: boolean, before = " ",
         else if (leaf.kind === "emoji") {
             // a shortcode against a letter or digit, or on the end of a web address, would not be read as
             // one (emoji.ts), so there the emoji itself is written
-            const prefix = before + tokens.slice(0, index).map((each) => (isSign(each) ? signText(each) : each.text)).join("");
-            const glued = /[\p{L}\p{N}]/u.test(beside(index - 1, -1)) || /[\p{L}\p{N}]/u.test(beside(index + 1, 1)) || inAddress(`${prefix}:`, prefix.length);
+            const glued = /[\p{L}\p{N}]/u.test(beside(index - 1, -1)) || /[\p{L}\p{N}]/u.test(beside(index + 1, 1)) || inAddressAt(index);
             token.text = glued && emojiOf(leaf.name) ? emojiOf(leaf.name)! : `:${said(leaf.name, "an emoji's name")}:`;
         }
         else if (leaf.kind === "html") token.text = said(leaf.html, "inline HTML");
@@ -546,10 +573,7 @@ function writeLeaves(all: Leaf[], context: Context, cell: boolean, before = " ",
             if (opening.length && closing.length) for (const sign of opening) failing.add(sign.pair);
             if (opening.length && !opens) for (const sign of opening) failing.add(sign.pair);
             // `==` and `||` written on the end of a web address are part of it, and open nothing (read.ts)
-            if (opening.length && loose && !isSpace(left)) {
-                const prefix = before + tokens.slice(0, index).map((token) => (isSign(token) ? signText(token) : token.text)).join("");
-                if (inAddress(prefix + char, prefix.length)) for (const sign of opening) failing.add(sign.pair);
-            }
+            if (opening.length && loose && !isSpace(left) && inAddressAt(index)) for (const sign of opening) failing.add(sign.pair);
             if (closing.length && !closes) for (const sign of closing) failing.add(sign.pair);
             index = end;
         }
@@ -616,11 +640,11 @@ function codeSpan(value: string): string {
 }
 
 /** True if a known shortcode starts at `index` in text and would be read as one: not against a letter or digit on either side, nor in a web address (emoji.ts). */
-function shortcode(value: string, index: number, left: string, after: string): boolean {
+function shortcode(value: string, index: number, left: string, after: string, address: () => Uint8Array | undefined): boolean {
     const name = /^:([a-z0-9_+-]+):/.exec(value.slice(index, index + 64))?.[1];
     if (name === undefined || emojiOf(name) === undefined) return false;
     const word = /[\p{L}\p{N}]/u;
-    return !word.test(left) && !word.test(value[index + name.length + 2] ?? after) && !inAddress(value, index);
+    return !word.test(left) && !word.test(value[index + name.length + 2] ?? after) && !address()?.[index];
 }
 
 /**
@@ -630,6 +654,8 @@ function shortcode(value: string, index: number, left: string, after: string): b
  */
 function escapeText(value: string, context: Context, cell: boolean, before: string, after: string, signs: [string, string] = ["", ""], label = false): string {
     let out = "";
+    // which characters sit in a web address, worked out once, when a shortcode first asks
+    let addressed: Uint8Array | null | undefined;
     for (let index = 0; index < value.length; index++) {
         const char = value[index]!;
         const left = index === 0 ? before : value[index - 1]!;
@@ -652,9 +678,9 @@ function escapeText(value: string, context: Context, cell: boolean, before: stri
             (char === "$" && !!context.dollars) ||
             (char === "|" && !cell && (touching("|") || (left !== "|" && right === "|" && third !== "|" && !(space(left) && space(third))))) ||
             (char === "=" && (touching("=") || (left !== "=" && right === "=" && third !== "=" && !(space(left) && space(third))))) ||
-            (char === ":" && shortcode(value, index, left, after));
+            (char === ":" && shortcode(value, index, left, after, () => (addressed ??= addresses(value) ?? null) ?? undefined));
         // a no-break space would be invisible in the file, so it is written as the entity it is read from
-        if (char === " ") out += "&nbsp;";
+        if (char === "\u00a0") out += "&nbsp;";
         else out += risky ? `\\${char}` : char;
     }
     return out;

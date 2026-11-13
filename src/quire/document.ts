@@ -232,6 +232,8 @@ export interface Document {
     quire?: QuireExtras;
     /** The writer's notes, each marked on its text by id (comments.ts). Never written into the Markdown. */
     comments?: Comment[];
+    /** Set when the file held reference links, `[text][label]`, so that the writer checks their definitions are still there. */
+    references?: boolean;
 }
 
 /** A note the writer keeps on some of her text: what it says, and whether it is dealt with. */
