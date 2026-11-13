@@ -79,6 +79,7 @@ describe("commands for the dictation", () => {
         const written = say(start("Hello"), "undo that");
         expect(written.commands).toEqual(["undo"]);
         expect(text(written.state)).toBe("Hello");
-        expect(say(start("Hello"), "that is all stop dictation").commands).toEqual(["stop"]);
+        expect(say(start("Hello"), "stop dictation").commands).toEqual(["stop"]);
+        expect(say(start("Hello"), "that is all stop dictation").commands).toEqual([]);
     });
 });
