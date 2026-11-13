@@ -68,7 +68,7 @@ const emoji: Rule = {
     why: "Emoji are for chat; her published pages have none.",
     on: true,
     unit(unit) {
-        return matches(unit, /\s?(?:\p{Extended_Pictographic}(?:\u{FE0F}|\u{200D}\p{Extended_Pictographic})*)+/gu, (match) => ({ from: match.index!, to: match.index! + match[0].length, message: "An emoji.", fixes: [replaceWith("Take it out", "")] }));
+        return matches(unit, /\s?(?:(?:\p{Extended_Pictographic}|\p{Regional_Indicator}|[#*0-9]\u{FE0F}?\u{20E3})(?:[\u{FE0E}\u{FE0F}\u{20E3}\u{E0020}-\u{E007F}]|\p{Emoji_Modifier}|\u{200D}\p{Extended_Pictographic})*)+/gu, (match) => ({ from: match.index!, to: match.index! + match[0].length, message: "An emoji.", fixes: [replaceWith("Take it out", "")] }));
     },
 };
 

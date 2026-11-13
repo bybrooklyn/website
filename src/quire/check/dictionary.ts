@@ -144,7 +144,8 @@ export function readDictionary(text: string): Dictionary {
     };
 
     const known = (raw: string, dialect: Dialect): boolean => {
-        const word = raw.replace(/’/g, "'");
+        // a letter and a combining accent are looked up as the one letter they make
+        const word = raw.normalize("NFC").replace(/’/g, "'");
         if (!word || /\d/.test(word)) return true;
         if (listed(word, dialect)) return true;
         // possessives: "dog's", "dogs'", "James's"
@@ -207,7 +208,7 @@ export function readDictionary(text: string): Dictionary {
     };
 
     const suggest = (raw: string, dialect: Dialect, wanted = 6): string[] => {
-        const word = raw.replace(/’/g, "'");
+        const word = raw.normalize("NFC").replace(/’/g, "'");
         const small = word.toLowerCase();
         const target = [...small].map((letter) => letter.charCodeAt(0));
         // a letter added costs less when it doubles the one beside it

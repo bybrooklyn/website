@@ -27,6 +27,11 @@ test("emoji, taken out", () => {
     expect(fires("Done 🎉\n", "writing-emoji")).toBe(1);
     expect(fires("Done.\n", "writing-emoji")).toBe(0);
     expect(fixed("Done 🎉\n", "writing-emoji")).toBe("Done\n");
+    // the whole emoji goes, with its skin tone, selectors and joiners: nothing is left behind
+    expect(fixed("Hello 👍🏽 done\n", "writing-emoji")).toBe("Hello done\n");
+    expect(fixed("Hello 🏳️‍⚧️ done\n", "writing-emoji")).toBe("Hello done\n");
+    expect(fixed("Go 🇬🇧 now\n", "writing-emoji")).toBe("Go now\n");
+    expect(fixed("Press 1️⃣ now\n", "writing-emoji")).toBe("Press now\n");
 });
 
 test("the keep-out words", () => {

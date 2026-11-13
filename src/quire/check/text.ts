@@ -5,7 +5,8 @@
 // Sentences end at a full stop, a question or an exclamation mark, with any closing quote or bracket
 // after it, followed by a space and something that can start a sentence. A full stop after a known
 // abbreviation (Mr., e.g., etc. inside a sentence), after a single capital (an initial) or between
-// digits (3.14) does not end one. Words are letters with apostrophes and hyphens inside them.
+// digits (3.14) does not end one. Words are found at Unicode's word boundaries (the browser's segmenter,
+// or the same rules by hand), joined by hyphens; an emoji and its selectors and skin tones are never a word.
 
 import type { Run } from "../document";
 
@@ -66,18 +67,56 @@ export function addresses(text: string): Word[] {
 }
 
 const LETTER = /[\p{L}\p{M}]/u;
-const WORD = /[\p{L}\p{M}\p{N}]+(?:['’][\p{L}\p{M}]+|[-‐][\p{L}\p{M}\p{N}]+)*/gu;
+
+/** The browser's own word boundaries (Unicode's UAX #29), where it has them. */
+const SEGMENTER = typeof Intl !== "undefined" && typeof Intl.Segmenter === "function" ? new Intl.Segmenter("en", { granularity: "word" }) : undefined;
+/** Letters, marks and digits, with an apostrophe between letters or a full stop or comma between digits kept inside: the same boundaries, by hand. A variation selector or keycap is never part of a word. */
+const PIECE = /[\p{L}\p{N}](?:(?![︎️⃣])[\p{L}\p{M}\p{N}])*(?:(?:(?<=\p{L}\p{M}*)['’.](?=\p{L})|(?<=\p{N})[.,](?=\p{N}))[\p{L}\p{N}](?:(?![︎️⃣])[\p{L}\p{M}\p{N}])*)*/gu;
+/** What makes a piece part of an emoji: a picture, a skin tone, a flag's letter. */
+const PICTURE = /\p{Extended_Pictographic}|\p{Emoji_Modifier}|\p{Regional_Indicator}/u;
+/** What turns the letter or digit before it into an emoji: the emoji variation selector, or a keycap. */
+const AS_EMOJI = /^[️⃣]/;
+/** A selector or keycap the segmenter leaves on the end of a word. */
+const SELECTORS = /[︎️⃣]+$/;
+
+/** Spans of the text that are words by Unicode's boundaries: from the segmenter, or by hand where there is none (`byHand`, also for tests). */
+export function wordSpans(text: string, byHand = !SEGMENTER): Span[] {
+    const pieces: Span[] = [];
+    const keep = (from: number, piece: string) => {
+        const bare = piece.replace(SELECTORS, "");
+        // a letter or digit shown as an emoji (the information sign, a keycap) and anything with a picture in it is not a word
+        if (!bare || !/^[\p{L}\p{N}]/u.test(bare) || PICTURE.test(bare) || AS_EMOJI.test(text.slice(from + bare.length, from + bare.length + 1))) return;
+        pieces.push({ from, to: from + bare.length });
+    };
+    if (byHand) for (const match of text.matchAll(PIECE)) keep(match.index, match[0]);
+    else
+        for (const segment of SEGMENTER!.segment(text)) {
+            if (!segment.isWordLike) continue;
+            // an underscore or a colon joins words for Unicode (snake_case, mailto:you); here, as by hand, they part them
+            let at = segment.index;
+            for (const part of segment.segment.split(/[\p{Pc}\u202F:\uFE13\uFE55\uFF1A]/u)) {
+                keep(at, part);
+                at += part.length + 1;
+            }
+        }
+    // words joined by a hyphen are one word: well-known
+    const joined: Span[] = [];
+    for (const piece of pieces) {
+        const last = joined[joined.length - 1];
+        if (last && piece.from === last.to + 1 && /[-‐]/.test(text[last.to]!)) last.to = piece.to;
+        else joined.push({ ...piece });
+    }
+    return joined;
+}
 
 /** The words of the text that are not quiet. A word touching a quiet letter is left out whole. */
 export function words(read: Read): Word[] {
     const found: Word[] = [];
-    for (const match of read.text.matchAll(WORD)) {
-        const from = match.index;
-        const to = from + match[0].length;
+    for (const { from, to } of wordSpans(read.text)) {
         let quiet = false;
         for (let index = from; index < to && !quiet; index++) if (read.quiet[index]) quiet = true;
         if (quiet || (from > 0 && read.quiet[from - 1] && /\S/.test(read.text[from - 1]!)) || (to < read.text.length && read.quiet[to] && /\S/.test(read.text[to]!))) continue;
-        found.push({ from, to, word: match[0] });
+        found.push({ from, to, word: read.text.slice(from, to) });
     }
     return found;
 }

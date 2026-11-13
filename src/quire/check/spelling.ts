@@ -14,16 +14,17 @@ import { isName } from "./names";
 /** Makes the speller the rules ask, from a dictionary and the words she has let through. */
 export function createSpeller(dictionary: Dictionary, dialect: Dialect, own: ReadonlySet<string> = new Set(), ignored: ReadonlySet<string> = new Set()): Speller {
     const allowed = (word: string) => isName(word) || own.has(word) || own.has(word.toLowerCase()) || ignored.has(word) || ignored.has(word.toLowerCase());
+    // an accent typed as a letter and a combining mark is looked up as the one letter it makes; the document keeps what was typed
     return {
-        known: (word) => allowed(word) || dictionary.known(word, dialect),
+        known: (word) => allowed(word) || allowed(word.normalize("NFC")) || dictionary.known(word, dialect),
         suggest: (word) => dictionary.suggest(word, dialect),
         variant: (word) => dictionary.variant(word),
     };
 }
 
-/** True for a word the spelling check leaves alone: a number, an acronym, or a name with a capital inside. */
+/** True for a word the spelling check leaves alone: a number, an acronym, a name with a capital inside, or a file name or abbreviation with a full stop inside. */
 export function unchecked(word: string): boolean {
-    if (/\d/.test(word)) return true;
+    if (/\d/.test(word) || word.includes(".")) return true;
     const letters = word.replace(/['’-]/g, "");
     if (letters.length > 1 && letters === letters.toUpperCase()) return true;
     // a capital after the first letter of any part: TypeScript, iPhone, McDonald, but not Well-Known

@@ -3,7 +3,8 @@
 
 import { expect, test } from "bun:test";
 import { text as runs } from "../document";
-import { addresses, readingEase, readRuns, readText, sentences, syllables, words } from "./text";
+import { Glob } from "bun";
+import { addresses, readingEase, readRuns, readText, sentences, syllables, wordSpans, words } from "./text";
 
 const split = (value: string) => sentences(readText(value)).map((span) => value.slice(span.from, span.to));
 
@@ -39,4 +40,28 @@ test("syllables and the reading ease are near what a reader would count", () => 
     expect(readingEase(10, 1, 13)).toBeGreaterThan(80);
     expect(readingEase(40, 1, 80)).toBeLessThan(10);
     expect(readingEase(0, 0, 0)).toBe(0);
+});
+
+test("words follow Unicode's word boundaries: emoji, joiners, selectors and skin tones are never words, and an accent typed as a mark stays in its word", () => {
+    for (const byHand of [false, true]) {
+        const listed = (value: string) => wordSpans(value, byHand).map((span) => value.slice(span.from, span.to));
+        expect(listed("Hello 🏳️‍⚧️ there ❤️ and 👍🏽 done ℹ️ 1️⃣ 🇬🇧 #️⃣")).toEqual(["Hello", "there", "and", "done"]);
+        expect(listed("\ufe0f \u200d \u{1F3FD} \ufe0e")).toEqual([]);
+        expect(listed("cafe\u0301 au lait, naïve Zoë")).toEqual(["cafe\u0301", "au", "lait", "naïve", "Zoë"]);
+        expect(listed("Don't stop the well-known cat’s dance, snake_case, dogs' bones")).toEqual(["Don't", "stop", "the", "well-known", "cat’s", "dance", "snake", "case", "dogs", "bones"]);
+        expect(listed("It cost 3.14, or 1,000, e.g. in index.html")).toEqual(["It", "cost", "3.14", "or", "1,000", "e.g", "in", "index.html"]);
+    }
+});
+
+test("the segmenter and the hand-written boundaries agree on every word of the site's own writing", async () => {
+    const root = new URL("../../../", import.meta.url).pathname;
+    let compared = 0;
+    for (const file of await Array.fromAsync(new Glob("src/content/**/*.{md,mdx}").scan({ cwd: root }))) {
+        const text = await Bun.file(`${root}${file}`).text();
+        const take = (byHand: boolean) => wordSpans(text, byHand).map((span) => text.slice(span.from, span.to)).filter((word) => /^[\p{Script=Latin}\p{N}'’.,_-]+$/u.test(word));
+        const [segmented, hand] = [take(false), take(true)];
+        expect([file, hand]).toEqual([file, segmented]);
+        compared += hand.length;
+    }
+    expect(compared).toBeGreaterThan(5_000);
 });
