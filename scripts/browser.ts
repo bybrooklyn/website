@@ -186,6 +186,8 @@ export async function browser({ width = 1200, height = 800, scale = 1, port = 0,
 
         await send("Page.enable");
         await send("Runtime.enable");
+        // a file the page saves goes into the browser's own profile, which is taken away with it, and never into the person's Downloads folder
+        await send("Page.setDownloadBehavior", { behavior: "allow", downloadPath: profile }).catch(() => {});
         await send("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: scale, mobile: false });
     } catch (error) {
         // a browser that did not come up properly is not left running until the whole run ends

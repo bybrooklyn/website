@@ -82,6 +82,13 @@ All of it is to be simple and easy first, with the depth underneath.
   browsers with no account and nothing stored. Foxy's nine-digit code needs a rendezvous that a browser
   cannot do alone until Foxy's web client exists; when it does, imgQuire is to use it.
 
+- **Working it.** The steps are hidden until wanted: a "steps" button grows the list open at the side.
+  Single keys pick a tool (C crop, R redact, A arrow, T text, B box, G grade, E export), Enter applies,
+  Escape leaves, and the palette is mdQuire's. The first Ctrl+C asks whether to copy the picture as it
+  looks or as the export is set, and remembers.
+- **Names.** imgQuire, in a suite called Quire: mdQuire, imgQuire, later vidQuire. The trail reads
+  charlotte / Quire / the document.
+
 ## The pride flag assembler
 
 A mini on imgQuire's engine. Flags mixed and faded: split, diagonal, a smooth fade from one into another,

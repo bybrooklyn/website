@@ -3425,7 +3425,7 @@ body.quire-app,
    The marks are drawn here rather than by the browser, so that their size and height on the line are
    the same in every list: a filled dot, then a ring, then a square, as Docs nests them; numbers sit
    right-aligned on their full stops, nested numbers as letters, then roman numerals. A checklist's
-   boxes stand where the dots stand. Items are spaced as a little more than a paragraph's own lines. */
+   boxes stand where the dots stand. Items are spaced as a paragraph's own lines are, with nothing more between them. */
 .prose.quire :is(ul, ol) {
     padding-left: 1em;
     list-style: none;
@@ -3444,7 +3444,7 @@ body.quire-app,
 }
 
 .prose.quire li + li {
-    margin-top: calc(var(--line) * 0.2);
+    margin-top: 0;
 }
 
 /* a loose list (blank lines between its items in the file) has its items half a line apart, as the paragraphs
@@ -3455,7 +3455,7 @@ body.quire-app,
 }
 
 .prose.quire li > :is(ul, ol) {
-    margin-block: calc(var(--line) * 0.2) 0;
+    margin-block: 0;
 }
 
 /* the dot: a circle a third of an em across, its middle on the middle of the first line's small letters */

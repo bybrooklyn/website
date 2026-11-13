@@ -1612,7 +1612,7 @@ used("in a loose list the items are half a line apart, as the paragraphs and cod
             gap(inner(items(tight)[0]), inner(items(tight)[1])),
         ];
     })()`);
-    expect(seen).toEqual([0.5, 0.5, 0.5, 0.2]);
+    expect(seen).toEqual([0.5, 0.5, 0.5, 0]);
 });
 
 used("a faint \"Type / for blocks\" fades in on the empty line the cursor is on, goes when typing starts, and an empty document is never blank", async () => {
