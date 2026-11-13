@@ -223,7 +223,7 @@ test("a request the browser refuses at once is said in plain words too, and a st
     // the database's put refuses at once, as Chrome does when there is no room
     const tables = await indexedTables("quire", {
         open() {
-            const opening = real.call(stand.factory, "quire") as { onsuccess?: () => void; result?: { transaction: (name: string, mode: string) => { objectStore: () => Record<string, unknown> } } };
+            const opening = real.call(stand.factory, "quire") as unknown as { onsuccess?: () => void; result?: { transaction: (name: string, mode: string) => { objectStore: () => Record<string, unknown> } } };
             const done = () => {
                 const database = opening.result!;
                 const transaction = database.transaction.bind(database);
