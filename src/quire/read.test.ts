@@ -351,3 +351,12 @@ test("a raw block in a CRLF file holds plain newlines, and an edit to it is writ
     const typed = insertText(doc, { path: [0], offset: 6 }, "y\nz");
     expect(write(typed)).toBe("<div>\r\ny\r\nzx\r\n</div>\r\n\r\ntext\r\n");
 });
+
+test("new text takes the line ending most of the file has, so one stray CRLF in an LF file does not change it", () => {
+    expect(read("a\nb\nc\nd\r\n").eol).toBe("\n");
+    expect(read("a\r\nb\r\nc\n").eol).toBe("\r\n");
+    expect(read("a\r\n").eol).toBe("\r\n");
+    expect(read("a").eol).toBe("\n");
+    const added = insertText(read("a\n\nb\n\nc\n\nd\r\n"), { path: [0], offset: 1 }, "x");
+    expect(write(added)).toBe("ax\n\nb\n\nc\n\nd\r\n");
+});

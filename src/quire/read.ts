@@ -33,7 +33,10 @@ export function read(source: string, options: ReadOptions = {}): Document {
     const bom = source.startsWith("﻿") ? "﻿" : "";
     const rest = source.slice(bom.length);
     const lines = splitLines(rest);
-    const eol = rest.includes("\r\n") ? "\r\n" : "\n";
+    // new text is written with the ending most of the file's lines have, so one stray CRLF does not set it
+    let crlf = 0;
+    for (const line of lines) if (line.eol === "\r\n") crlf++;
+    const eol = crlf * 2 > lines.filter((line) => line.eol !== "").length ? "\r\n" : "\n";
     let frontmatter: string | null = null;
     let at = 0;
     // frontmatter opens on the first line and closes on the first line that is only `---`, never on one that merely starts with it
