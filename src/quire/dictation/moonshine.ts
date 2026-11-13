@@ -55,7 +55,12 @@ export function decodeTokens(pieces: string[], ids: number[]): string {
 export function piecesOf(tokenizerJson: string): string[] {
     const vocab = (JSON.parse(tokenizerJson) as { model: { vocab: Record<string, number> } }).model.vocab;
     const pieces: string[] = [];
-    for (const [piece, id] of Object.entries(vocab)) pieces[id] = piece;
+    const entries = Object.entries(vocab);
+    for (const [piece, id] of entries) {
+        // the ids run from 0 with few gaps if any, so one far past the count of entries is a changed file, refused rather than followed
+        if (!Number.isInteger(id) || id < 0 || id >= Math.max(2 * entries.length, 1024)) throw new Error(`the tokenizer names piece ${id} but has only ${entries.length}`);
+        pieces[id] = piece;
+    }
     return pieces;
 }
 

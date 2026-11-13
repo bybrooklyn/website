@@ -13,6 +13,16 @@ describe("vocabulary", () => {
         expect(vocab.pieces.length).toBe(12);
         expect(vocab.blank).toBe(11);
     });
+    test(
+        "refuses at once a line whose id is past the count of lines, which once hung the worker for seconds",
+        () => {
+            const started = performance.now();
+            expect(() => vocabulary("a 0\nx 30000000\n<blk> 2")).toThrow("only 3 lines");
+            expect(() => vocabulary("x 4294967294")).toThrow();
+            expect(performance.now() - started).toBeLessThan(100);
+        },
+        1000,
+    );
     test("takes the last piece as the blank when none is named", () => {
         expect(vocabulary("a 0\nb 1\n").blank).toBe(1);
     });

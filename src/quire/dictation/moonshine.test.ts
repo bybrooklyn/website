@@ -13,6 +13,11 @@ describe("piecesOf", () => {
         expect(pieces[5]).toBe("▁the");
         expect(pieces).toHaveLength(8);
     });
+    test("refuses an id far past the count of pieces, or one that is not a whole number", () => {
+        expect(() => piecesOf(JSON.stringify({ model: { vocab: { a: 0, b: 4294967294 } } }))).toThrow();
+        expect(() => piecesOf(JSON.stringify({ model: { vocab: { a: 0, b: -1 } } }))).toThrow();
+        expect(piecesOf(JSON.stringify({ model: { vocab: { a: 0, b: 3 } } }))[3]).toBe("b");
+    });
 });
 
 describe("decodeTokens", () => {
