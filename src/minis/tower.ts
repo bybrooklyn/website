@@ -86,7 +86,6 @@ export const slabs = (TRAY: Tray): Slab[] => [
     ridge(TOWER.left, 4.1, 0.62, -2.5),
 ];
 
-export const SLABS: Slab[] = slabs(TRAY);
 
 export interface Die {
     sides: Sides;
