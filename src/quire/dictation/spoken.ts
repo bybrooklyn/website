@@ -6,8 +6,9 @@
 //   interpret("Hello comma world period", { before: "", commands: true })
 //     gives text steps: "Hello", ",", " world", "." with the spacing and capitals put right.
 //
-// The recognizer (Parakeet v2) already writes punctuation and capitals of its own. A spoken mark is
-// therefore not added on top of one the model wrote: it replaces it, or finds it already there.
+// The Parakeet recognizers (v3) already write punctuation and capitals of their own (Moonshine writes
+// none). A spoken mark is therefore not added on top of one the model wrote: it replaces it, or
+// finds it already there.
 
 /** What a spoken command does. The headings and the lists change the block being written; the rest act on the dictation. */
 export type Command = "heading1" | "heading2" | "heading3" | "bullet" | "numbered" | "undo" | "delete" | "stop";

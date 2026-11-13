@@ -46,7 +46,7 @@ async function loaded() {
     const provider = createProvider();
     const loading = provider.load(tier, []);
     const worker = Pretend.made[0]!;
-    worker.answer({ type: "loaded", id: worker.last("load"), ms: 5, backend: "the processor", threads: 1, live: true });
+    worker.answer({ type: "loaded", id: worker.last("load"), ms: 5, backend: "the processor", live: true });
     const { recognizer } = await loading;
     return { provider, worker, recognizer };
 }
@@ -85,8 +85,8 @@ describe("the engine", () => {
         worker.onerror?.({ message: "gone" });
         const again = provider.load(tier, []);
         const next = Pretend.made[1]!;
-        worker.answer({ type: "loaded", id: next.last("load"), ms: 1, backend: "old", threads: 1, live: false });
-        next.answer({ type: "loaded", id: next.last("load"), ms: 1, backend: "new", threads: 1, live: false });
+        worker.answer({ type: "loaded", id: next.last("load"), ms: 1, backend: "old", live: false });
+        next.answer({ type: "loaded", id: next.last("load"), ms: 1, backend: "new", live: false });
         expect((await again).recognizer.backend).toBe("new");
     });
     test("a live phrase whose sound the worker could not take fails its finish, so the session recognizes it whole", async () => {

@@ -29,7 +29,7 @@ export type Sent = { text: string; start: number; end: number };
 export type Answer =
     | { type: "progress"; id: number; bytes: number }
     | { type: "downloaded"; id: number }
-    | { type: "loaded"; id: number; ms: number; backend: string; threads: number; live: boolean }
+    | { type: "loaded"; id: number; ms: number; backend: string; live: boolean }
     | { type: "stream-update"; stream: number; update: LiveUpdate }
     | { type: "stream-done"; id: number; words: Sent[] }
     | { type: "heard"; id: number; text: string; words: { text: string; start: number; end: number }[]; ms: number }

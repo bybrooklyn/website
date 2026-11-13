@@ -200,7 +200,7 @@ header changes nothing for another page that uses the file.
 GitHub store (`api.github.com`, 200) working, since both answer CORS; the test was made with each. Safari does not
 know `credentialless`, and its pages would have stayed on one thread. `require-corp` costs these pages nothing that
 the page policy did not already take: its `<meta>` allows images, scripts, styles and fonts only from the site itself
-(`img-src 'self' data:`), so a picture from another site never loaded there. What the headers stop on `/mdquire/*`
+(`img-src 'self' data: blob:`), so a picture from another site never loaded there. What the headers stop on `/mdquire/*`
 that was possible before: **a cross-origin frame** (the policy allows `frame-src https:`) now loads only if the frame
 sends `Cross-Origin-Resource-Policy: cross-origin` (tested: a page on another origin loaded in an iframe without
 the headers, and did not with them, with or without its own COEP); and **a cross-origin `no-cors` fetch**. `COOP:

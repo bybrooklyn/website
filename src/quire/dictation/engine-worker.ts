@@ -107,7 +107,7 @@ async function load(tier: Tier, words: string[], id: number) {
         live_ = true;
         place = model.backend.kind === "webgpu" ? "the graphics card" : model.backend.threads > 1 ? `the processor, ${model.backend.threads} threads` : "the processor";
     }
-    say({ type: "loaded", id, ms: Math.round(performance.now() - started), backend: place, threads: 1, live: live_ });
+    say({ type: "loaded", id, ms: Math.round(performance.now() - started), backend: place, live: live_ });
 }
 
 self.onmessage = async (event: MessageEvent<Ask>) => {
