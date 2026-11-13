@@ -121,3 +121,15 @@ test("style.json keeps a header, a footer and page numbers as a line of plain te
     expect(page).toEqual({ size: "A5", orientation: "portrait", margins: 25, header: "My book", numbers: true });
     expect(readStyle(JSON.stringify({ page: { header: "", numbers: "yes" } })).page).toEqual({ size: "A4", orientation: "portrait", margins: 25 });
 });
+
+test("styled words looked for again are found whole, never inside a longer word", () => {
+    let doc = read("is it red.\n\nOther.\n");
+    doc = setStyle(doc, range([0], 0, 2), { color: "#d52d00" });
+    const { style } = collect(doc);
+    // the line changed elsewhere: "is" is now inside "This" first, and a word of its own further on
+    const back = restore(read("This line: is it red.\n\nOther.\n"), style);
+    const red = runs(back, [0]).filter((run) => run.color);
+    expect(red.map((run) => run.text)).toEqual(["is"]);
+    expect(runs(back, [0]).map((run) => run.text).join("")).toBe("This line: is it red.");
+    expect(runs(back, [0])[0]!.text.startsWith("This line: ")).toBe(true);
+});

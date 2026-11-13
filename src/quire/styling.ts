@@ -278,10 +278,20 @@ function findWords(found: { parts: { cell?: [number, number]; runs: Run[] }[] }[
             const whole = runsText(part.runs);
             for (let at = whole.indexOf(run.quote); at >= 0; at = whole.indexOf(run.quote, at + 1)) {
                 const place = { number: index, cell: part.cell, from: at, to: at + run.quote.length };
-                if (whole.slice(0, at).endsWith(run.before)) return place;
-                loose ??= place;
+                // words found whole, not inside a longer word ("is" in "This"), unless the characters before them say where they are
+                const apart = wholeWords(whole, at, run.quote);
+                if (whole.slice(0, at).endsWith(run.before) && (run.before !== "" || apart)) return place;
+                if (apart) loose ??= place;
             }
         }
     }
     return loose && run.quote.trim().length >= 4 ? loose : undefined;
+}
+
+/** True when words found at `at` in a text are not part of a longer word on either side. */
+function wholeWords(text: string, at: number, quote: string): boolean {
+    const letter = /[\p{L}\p{N}_]/u;
+    const startsWord = letter.test(quote[0] ?? "");
+    const endsWord = letter.test(quote[quote.length - 1] ?? "");
+    return !(startsWord && letter.test(text[at - 1] ?? "")) && !(endsWord && letter.test(text[at + quote.length] ?? ""));
 }
