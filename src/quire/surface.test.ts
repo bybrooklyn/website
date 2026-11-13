@@ -213,4 +213,110 @@ test.skipIf(!chromium())(
     60_000,
 );
 
+test.skipIf(!chromium())(
+    "a key typed in a block draws it again in the element it had, so its neighbours are not restyled, and undo and redo still show the right text",
+    async () => {
+        const { tab, folder } = await open();
+        try {
+            await tab.run(`quire.reset("One\\n\\nTwo\\n\\nThree\\n")`);
+            await tab.run(`quire.surface.setSelection({ anchor: { path: [1], offset: 3 }, focus: { path: [1], offset: 3 } })`);
+            await tab.run(`window.before = [...document.querySelector("#editor").children]`);
+            await tab.type("s");
+            expect(await tab.run<boolean[]>(`[...document.querySelector("#editor").children].map((each, index) => each === window.before[index])`)).toEqual([true, true, true]);
+            expect(await tab.run<string>(`document.querySelector("#editor").textContent`)).toBe("OneTwosThree");
+            await tab.press("Enter");
+            await tab.type("# Big");
+            expect(await tab.run<string>("quire.markdown()")).toBe("One\n\nTwos\n\n# Big\n\nThree\n");
+            for (let index = 0; index < 10; index++) await tab.press("z", { ctrl: true });
+            expect(await tab.run<string>("quire.markdown()")).toBe("One\n\nTwo\n\nThree\n");
+            expect(await tab.run<string>(`document.querySelector("#editor").textContent`)).toBe("OneTwoThree");
+            for (let index = 0; index < 10; index++) await tab.press("z", { ctrl: true, shift: true });
+            expect(await tab.run<string>(`[...document.querySelector("#editor").children].map((each) => each.tagName + ":" + each.textContent).join(" ")`)).toBe("P:One P:Twos H1:Big P:Three");
+            expect(tab.errors).toEqual([]);
+        } finally {
+            await tab.close();
+            await rm(folder, { recursive: true, force: true });
+        }
+    },
+    60_000,
+);
+
+test.skipIf(!chromium())(
+    "a surface taken away leaves no timer behind: a long code block's late highlighting does not run after destroy",
+    async () => {
+        const { tab, folder } = await open();
+        try {
+            await tab.run(`quire.reset(${JSON.stringify("```js\n" + "let a = 1;\n".repeat(700) + "```\n")})`);
+            await tab.run(`quire.surface.setSelection({ anchor: { path: [0], offset: 3 }, focus: { path: [0], offset: 3 } })`);
+            await tab.type("x");
+            const spans = () => tab.run<number>("document.querySelectorAll('#editor code span').length");
+            expect(await spans()).toBe(0);
+            await tab.run("quire.surface.destroy()");
+            await tab.wait(400);
+            expect(await spans()).toBe(0);
+            expect(tab.errors).toEqual([]);
+        } finally {
+            await tab.close();
+            await rm(folder, { recursive: true, force: true });
+        }
+    },
+    60_000,
+);
+
+test.skipIf(!chromium())(
+    "focus given back to the text by a menu or a dialog puts back the selection it had, where the browser would put the cursor at the start",
+    async () => {
+        const { tab, folder } = await open();
+        try {
+            await tab.run(`quire.reset("Hello world here\\n")`);
+            // a key pressed first, so that the page has the focus a person's window would have
+            await tab.press("End");
+            await tab.run(`quire.surface.setSelection({ anchor: { path: [0], offset: 6 }, focus: { path: [0], offset: 11 } })`);
+            await tab.run(`(() => { const field = document.createElement("input"); document.body.append(field); field.focus(); })()`);
+            await tab.wait(50);
+            await tab.run("document.querySelector('#editor').focus()");
+            await tab.wait(50);
+            expect(await tab.run("quire.surface.getSelection()")).toEqual({ anchor: { path: [0], offset: 6 }, focus: { path: [0], offset: 11 } });
+            expect(await tab.run<string>("document.getSelection().toString()")).toBe("world");
+            await tab.type("X");
+            expect(await tab.run<string>("quire.markdown()")).toBe("Hello X here\n");
+            expect(tab.errors).toEqual([]);
+        } finally {
+            await tab.close();
+            await rm(folder, { recursive: true, force: true });
+        }
+    },
+    60_000,
+);
+
+test.skipIf(!chromium())(
+    "a task's box, a callout's kind and a folding section's button work from a screen reader's click as from the mouse, once each",
+    async () => {
+        const { tab, folder } = await open();
+        try {
+            await tab.run(`quire.reset("- [ ] task\\n\\n> [!NOTE]\\n> Said\\n\\n<details>\\n<summary>More</summary>\\n\\nInside\\n\\n</details>\\n")`);
+            // a click no pointer made, as a screen reader's activation sends
+            const press = (selector: string) => tab.run(`document.querySelector(${JSON.stringify(selector)}).dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, detail: 0 }))`);
+            await press("[data-box]");
+            await press("[data-callout-kind]");
+            await press("[data-fold]");
+            const md = await tab.run<string>("quire.markdown()");
+            expect(md).toContain("- [x] task");
+            expect(md).toContain("[!TIP]");
+            expect(md).toContain("<details open>");
+            // the mouse: pressed and let go on the box, it is ticked once, not twice (the box given a size, which the site's styles give it)
+            await tab.run(`(() => { const style = document.createElement("style"); style.textContent = ".quire-box { display: inline-block; width: 1em; height: 1em; background: #888 }"; document.head.append(style); })()`);
+            const box = await tab.run<{ x: number; y: number }>(`(() => { const r = document.querySelector("[data-box]").getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+            await tab.click(box.x, box.y);
+            await tab.wait(50);
+            expect(await tab.run<string>("quire.markdown()")).toContain("- [ ] task");
+            expect(tab.errors).toEqual([]);
+        } finally {
+            await tab.close();
+            await rm(folder, { recursive: true, force: true });
+        }
+    },
+    60_000,
+);
+
 if (!chromium()) console.warn("surface.test.ts: no Chromium on this machine, so the surface was not typed in.");

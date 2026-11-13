@@ -50,7 +50,7 @@ import {
 import type { State } from "./history";
 import { activeBlock, caret, collapsed, mark, pageBreakAt, rangeOf, sameLeaf, tableOf } from "./keys";
 import type { Surface } from "./surface";
-import { closeOthers, control, dots, flowMenu, glyph, icon, make, moveIndex, still, type Menu, type MenuItem } from "./ui";
+import { closeOthers, composing, control, dots, flowMenu, glyph, icon, make, moveIndex, still, type Menu, type MenuItem } from "./ui";
 
 /** What a button does: from the state at the cursor to the next one. */
 export type Action = (state: State) => State;
@@ -612,9 +612,12 @@ export function createBar(surface: Surface, options: BarOptions) {
         };
         field.addEventListener("input", show);
         field.addEventListener("keydown", (event) => {
+            if (composing(event)) return;
             if (event.key === "Enter") found.querySelector<HTMLElement>(".quire-menu-line")?.click();
             if (event.key === "ArrowDown") {
                 event.preventDefault();
+                // the menu's own arrow keys must not move on again from the line just reached
+                event.stopPropagation();
                 found.querySelector<HTMLElement>(".quire-menu-line")?.focus();
             }
         });
@@ -719,16 +722,23 @@ export function createBar(surface: Surface, options: BarOptions) {
     sizeField.inputMode = "numeric";
     sizeField.setAttribute("aria-label", "Text size");
     sizeField.title = "Text size";
+    // Enter applies the size and gives the text the focus back, and the field's change on losing the focus must not apply it again
+    let entered = false;
+    sizeField.addEventListener("focus", () => (entered = false));
     sizeField.addEventListener("keydown", (event) => {
+        if (composing(event)) return;
         if (event.key === "Enter") {
             event.preventDefault();
+            entered = true;
             setSize(typedSize(parseFloat(sizeField.value), richOn));
         } else if (event.key === "Escape") {
             showSize();
             surface.focus();
         }
     });
-    sizeField.addEventListener("change", () => setSize(typedSize(parseFloat(sizeField.value), richOn)));
+    sizeField.addEventListener("change", () => {
+        if (!entered) setSize(typedSize(parseFloat(sizeField.value), richOn));
+    });
     const showSize = () => {
         if (document.activeElement === sizeField) return;
         const was = parseFloat(sizeField.value);
@@ -784,7 +794,7 @@ export function createBar(surface: Surface, options: BarOptions) {
         tool(opener(highlights, "Highlight", icon("highlight"), highlightLines), FOLDS.colors, () => [{ label: "Highlight", icon: "highlight", hint: "›", run: () => highlights.open(moreButton, highlightLines(), true) }], true),
     );
 
-    // ---- link, picture (comment comes when comments do) ----
+    // ---- link, picture ----
     const chooser = make("input");
     chooser.type = "file";
     chooser.accept = "image/*";
@@ -861,8 +871,8 @@ export function createBar(surface: Surface, options: BarOptions) {
     strip.append(end);
 
     // how saving stands and the word count, "Saved · 7 words", which the page puts at the right of its first line
+    // the count is not announced as it changes, which in a run of typing would be every quarter second; the word count dialog says it on request
     const count = make("span", "quire-count");
-    count.setAttribute("aria-live", "polite");
     const status = make("span", "quire-status");
     status.setAttribute("role", "status");
     let words = make("span", "quire-status-words here");
@@ -873,6 +883,9 @@ export function createBar(surface: Surface, options: BarOptions) {
     statusLine.append(status, dot, count);
 
     // ---- folding what does not fit ----
+
+    /** Gives the bar its Tab stop back when the control that held it has folded away (set once the stops are known, below). */
+    let keepStop: (() => void) | undefined;
 
     /** Folds the tools that do not fit, least used first, so that nothing wraps; on a narrow window nothing folds and the bar slides sideways instead. */
     function layout() {
@@ -920,6 +933,7 @@ export function createBar(surface: Surface, options: BarOptions) {
         // the first group still shown has no rule before it, so that the line starts on the same edge as the one above
         const lead = groups.find((element) => !element.classList.contains("folded"));
         for (const element of groups) element.classList.toggle("lead", element === lead);
+        keepStop?.();
     }
     // laid out again when the room changes, when a tool's own width does (a label, a typeface arriving) and when the fonts have come
     let waiting = 0;
@@ -933,30 +947,37 @@ export function createBar(surface: Surface, options: BarOptions) {
 
     // ---- keeping it true to the cursor ----
 
+    // each top-level block's words are kept by the block, so that a count after a key reads again only the block it changed
+    const wordsIn = new WeakMap<Block, number>();
     const counted = (doc: Document) => {
-        const words = countWords(doc);
+        let words = 0;
+        for (const block of doc.blocks) {
+            let own = wordsIn.get(block);
+            if (own === undefined) wordsIn.set(block, (own = countWords({ ...doc, blocks: [block] })));
+            words += own;
+        }
         count.textContent = `${words.toLocaleString("en")} ${words === 1 ? "word" : "words"}`;
     };
     counted(surface.getDocument());
-    // it waits for a pause in a run of typing, but a change after a quiet moment (a document opened) is shown at once
+    // The count is made after the keystroke, never inside it (counting a long document's every word
+    // took most of the 16 ms a key may take), and at most every 250 ms in a run of typing; a change
+    // after a quiet moment (a document opened) is shown as soon as the key's work is done.
     let counting: ReturnType<typeof setTimeout> | undefined;
     let countingWaiting: Document | undefined;
+    let countedAt = -Infinity;
     surface.on("change", ({ doc }) => {
-        if (counting) {
-            countingWaiting = doc;
-            return;
-        }
-        counted(doc);
-        const settle = () => {
-            counting = undefined;
-            if (countingWaiting) {
-                const next = countingWaiting;
+        countingWaiting = doc;
+        if (counting) return;
+        counting = setTimeout(
+            () => {
+                counting = undefined;
+                countedAt = performance.now();
+                const next = countingWaiting!;
                 countingWaiting = undefined;
                 counted(next);
-                counting = setTimeout(settle, 250);
-            }
-        };
-        counting = setTimeout(settle, 250);
+            },
+            Math.max(0, countedAt + 250 - performance.now()),
+        );
     });
     surface.on("select", ({ selection, marks }) => {
         const doc = surface.getDocument();
@@ -986,6 +1007,11 @@ export function createBar(surface: Surface, options: BarOptions) {
         for (const each of strip.querySelectorAll<HTMLElement>("button, input")) each.tabIndex = each === current ? 0 : -1;
     };
     rove(stops()[0]!);
+    // the one Tab stop may be a tool that has just folded away; then the first one left takes it
+    keepStop = () => {
+        const all = stops();
+        if (all.length && !all.some((each) => each.tabIndex === 0)) rove(all[0]!);
+    };
     strip.addEventListener("focusin", (event) => {
         if (stops().includes(event.target as HTMLElement)) rove(event.target as HTMLElement);
     });

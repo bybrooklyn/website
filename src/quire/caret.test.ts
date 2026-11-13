@@ -1,6 +1,10 @@
 // The caret's colours: one for each blink, going round (caret.ts).
 
 import { describe, expect, test } from "bun:test";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { browser, chromium } from "../../scripts/browser";
 import { blinkColour, contrast, FLAG, hexRgb, luminance, needsEdge } from "./caret";
 
 describe("the lesbian flag", () => {
@@ -36,3 +40,41 @@ describe("blinkColour", () => {
         expect(blinkColour(["accent"], 5)).toBe("accent");
     });
 });
+
+test.skipIf(!chromium())(
+    "the text's caret is not drawn while a field inside the document has the keyboard",
+    async () => {
+        const folder = await mkdtemp(join(tmpdir(), "quire-caret-"));
+        const tab = await browser({ width: 900, height: 700 });
+        try {
+            await Bun.write(
+                `${folder}/page.ts`,
+                `import { createSurface } from "${import.meta.dir}/surface.ts";
+                import { createCaret } from "${import.meta.dir}/caret.ts";
+                import { read } from "${import.meta.dir}/read.ts";
+                const frame = document.querySelector("#frame");
+                const sheet = document.querySelector("#sheet");
+                const surface = createSurface(sheet, read("Text\\n\\n\u0060\u0060\u0060js\\nlet a;\\n\u0060\u0060\u0060\\n"));
+                createCaret(sheet, frame);
+                surface.focus();`,
+            );
+            const built = await Bun.build({ entrypoints: [`${folder}/page.ts`], target: "browser" });
+            if (!built.success) throw new Error(built.logs.join("\n"));
+            await Bun.write(`${folder}/page.html`, `<!doctype html><meta charset="utf-8"><div id="frame" style="position:relative"><div id="sheet"></div></div><script type="module">${await built.outputs[0]!.text()}</script>`);
+            await tab.open(`file://${folder}/page.html`, 300);
+            const shown = () => tab.run<boolean>("document.querySelector('.quire-caret').classList.contains('shown')");
+            await tab.press("End");
+            await tab.wait(100);
+            expect(await shown()).toBe(true);
+            await tab.run("document.querySelector('[data-lang]').focus()");
+            await tab.type("x");
+            await tab.wait(100);
+            expect(await shown()).toBe(false);
+            expect(tab.errors).toEqual([]);
+        } finally {
+            await tab.close();
+            await rm(folder, { recursive: true, force: true });
+        }
+    },
+    60_000,
+);

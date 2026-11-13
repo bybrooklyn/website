@@ -17,7 +17,7 @@
 import type { Page } from "./document";
 import { paperSize, setPage } from "./paper";
 import type { Surface } from "./surface";
-import { flowMenu, make } from "./ui";
+import { composing, flowMenu, make } from "./ui";
 
 /** A piece of the text that goes to the next page whole: where it is laid out, top and bottom, before any piece is moved; and whether it is a page break. */
 export interface Piece {
@@ -257,6 +257,7 @@ export function createPages(paper: HTMLElement, surface: Surface, options: Pages
             // what is typed in each field is a step of its own
             input.addEventListener("focus", () => surface.setSelection(surface.getSelection()));
             input.addEventListener("keydown", (event) => {
+                if (composing(event)) return event.stopPropagation();
                 if (event.key === "Enter") {
                     event.preventDefault();
                     menu.close(false);

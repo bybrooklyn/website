@@ -6,6 +6,7 @@
 // frontmatter's title, given through `own`.
 
 import type { Document } from "./document";
+import { composing } from "./ui";
 import { namesIn } from "./check/names";
 
 const extension = /\.(md|mdx|markdown|txt|quire)$/i;
@@ -75,6 +76,7 @@ export function createTitle(options: TitleOptions): { element: HTMLTextAreaEleme
         options.typed(field.value);
     });
     field.addEventListener("keydown", (event) => {
+        if (composing(event)) return;
         const atEnd = field.selectionStart === field.value.length && field.selectionEnd === field.value.length;
         if (event.key === "Enter" || (event.key === "ArrowDown" && atEnd)) {
             event.preventDefault();
