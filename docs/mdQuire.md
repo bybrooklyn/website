@@ -50,8 +50,8 @@ numbers (`pages.ts`), version history kept in the browser (`versions.ts`), table
 outline of the headings (`outline.ts`), a slash menu on an empty line (`slash.ts`) and a bar over
 selected text (`select-bar.ts`).
 
-**Checking** (`check/`). Markdown tidiness, the site's writing rules (the same lists as `scripts/lint.ts`,
-copied because mdQuire may not import from outside), links and pictures that lead nowhere, spelling
+**Checking** (`check/`). Markdown tidiness, the site's writing rules (written once in `check/tells.ts`,
+which `scripts/lint.ts` imports, so the two give the same verdict), links and pictures that lead nowhere, spelling
 against an English dictionary of its own (about 126,000 words), and prose rules with a reading score.
 Findings are faint underlines, a popover with fixes, a count and a list. Nothing of it loads until it is
 first switched on.

@@ -102,6 +102,8 @@ export interface Context {
     speller?: Speller;
     /** Whether an address in a link or picture leads somewhere: true, false, or undefined when it is not known (yet). */
     exists?: (address: string) => boolean | undefined;
+    /** Where the document is kept (its path in the site under `bun run edit`), for the rules that leave her own pages alone. */
+    document?: string;
     /** Told when a rule throws: that rule reports nothing for the unit or document, and the others still run. */
     failed?: (rule: string, error: unknown) => void;
 }

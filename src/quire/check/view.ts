@@ -69,6 +69,7 @@ export function createChecking(host: CheckingHost & { keep: CheckingHost["keep"]
         settings: prefs.settings,
         speller: dictionary && prefs.settings.kinds.spelling ? createSpeller(dictionary, prefs.settings.dialect, own, new Set(ignored.words)) : undefined,
         exists: host.where().store?.exists ? exists : undefined,
+        document: host.where().id,
         failed: debug ? (id, error) => console.warn(`Checking: the rule ${id} failed and reported nothing.`, error) : undefined,
     });
 

@@ -109,9 +109,9 @@ test("on the site's own posts and pages, no rule that starts switched on cries w
     const counts: Record<string, number> = {};
     for (const file of await Array.fromAsync(new Glob("src/content/**/*.{md,mdx}").scan({ cwd: root }))) {
         const doc = read(await Bun.file(`${root}${file}`).text(), { mdx: file.endsWith(".mdx") });
-        for (const one of check(doc, { settings: DEFAULTS, speller }, rules)) counts[one.rule] = (counts[one.rule] ?? 0) + 1;
+        for (const one of check(doc, { settings: DEFAULTS, speller, document: file }, rules)) counts[one.rule] = (counts[one.rule] ?? 0) + 1;
     }
-    // what is left was looked at by hand: long sentences she wrote, semicolons in the résumé's lists, the keep-out word on her about page and "*arr"
+    // what is left was looked at by hand: long sentences she wrote, semicolons in the résumé's lists and "*arr" (her about page is hers, and left alone)
     // (ten, not five: her own writing grows, and a handful of long sentences across the whole site is not a rule crying wolf)
     for (const [rule, count] of Object.entries(counts)) expect([rule, count]).toEqual([rule, Math.min(count, 10)]);
 });
