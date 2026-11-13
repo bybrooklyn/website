@@ -4,7 +4,8 @@
 // version history beside them. Run with `bun test src/quire`.
 
 import { expect, test } from "bun:test";
-import { browserStore, memoryTables } from "./store-browser";
+import { browserStore, indexedTables, memoryTables } from "./store-browser";
+import { createSaver } from "./store";
 
 test("a document made in the browser with parts is a .quire one, its style and notes saved beside its text, its pictures given back for a download", async () => {
     const store = browserStore(memoryTables());
@@ -85,4 +86,95 @@ test("a document made without parts is plain Markdown and stays so when saved; o
     expect((await store.open(post.id)).quire).toBeUndefined();
     await tables.put("documents", { id: "old", name: "Old", text: "x", mark: 1, modified: 1 });
     expect((await store.open("old")).quire).toEqual({ style: "", notes: "" });
+});
+
+/**
+ * A stand-in for the browser's IndexedDB, just enough for the store: requests succeed a moment after
+ * they are made, and the transaction commits a moment after its last request, or, when asked,
+ * fails at that point as a full disk makes a real one fail after its requests have succeeded.
+ */
+function standInIndexedDB() {
+    const tables = new Map<string, Map<string, unknown>>();
+    const state = { failAtCommit: false };
+    const soon = (run: () => void) => setTimeout(run, 0);
+    const database = {
+        objectStoreNames: { contains: (name: string) => tables.has(name) },
+        createObjectStore: (name: string) => tables.set(name, new Map()),
+        close() {},
+        transaction(name: string) {
+            const table = tables.get(name)!;
+            const writes: [string, unknown][] = [];
+            let waiting = 0;
+            let finished = false;
+            const transaction: Record<string, unknown> & { oncomplete?: () => void; onabort?: () => void; error: unknown } = {
+                error: null,
+                abort() {
+                    if (finished) throw new Error("InvalidStateError");
+                    finished = true;
+                    transaction.error = { name: "AbortError" };
+                    soon(() => transaction.onabort?.());
+                },
+                objectStore: () => store,
+            };
+            const settle = () =>
+                soon(() => {
+                    if (finished || waiting > 0) return;
+                    finished = true;
+                    if (state.failAtCommit && writes.length) {
+                        transaction.error = { name: "QuotaExceededError" };
+                        return transaction.onabort?.();
+                    }
+                    for (const [key, value] of writes) value === undefined ? table.delete(key) : table.set(key, structuredClone(value));
+                    transaction.oncomplete?.();
+                });
+            const request = (answer: () => unknown) => {
+                const made: { result?: unknown; onsuccess?: () => void } = {};
+                waiting++;
+                soon(() => {
+                    made.result = answer();
+                    waiting--;
+                    made.onsuccess?.();
+                    settle();
+                });
+                return made;
+            };
+            const store = {
+                get: (id: string) => request(() => table.get(id)),
+                getAll: () => request(() => [...table.values()]),
+                put: (row: { id: string }) => request(() => (writes.push([row.id, row]), row.id)),
+                delete: (id: string) => request(() => writes.push([id, undefined])),
+            };
+            return transaction;
+        },
+    };
+    const factory = {
+        open() {
+            const opening: { result?: unknown; onupgradeneeded?: () => void; onsuccess?: () => void } = {};
+            soon(() => {
+                opening.result = database;
+                opening.onupgradeneeded?.();
+                opening.onsuccess?.();
+            });
+            return opening;
+        },
+    };
+    return { factory: factory as unknown as IDBFactory, state, tables };
+}
+
+test("a write to the browser's storage is done only when its transaction commits; one that fails at the end is a failure, not saved", async () => {
+    const stand = standInIndexedDB();
+    const store = browserStore(await indexedTables("quire", stand.factory));
+    const made = await store.create("Draft", "first");
+    expect((await store.open(made.id)).text).toBe("first");
+    stand.state.failAtCommit = true;
+    await expect(store.save(made.id, "second", made.mark)).rejects.toThrow("this browser has no more room");
+    stand.state.failAtCommit = false;
+    expect((await store.open(made.id)).text).toBe("first");
+    // and the saver says so, keeping the words waiting
+    stand.state.failAtCommit = true;
+    const saver = createSaver(store, made.id, made.mark, { wait: (run) => (run(), () => {}) });
+    saver.changed("second");
+    await saver.settled();
+    expect(saver.status()).toEqual({ state: "failed", message: "this browser has no more room" });
+    expect(saver.unsaved()).toBe("second");
 });

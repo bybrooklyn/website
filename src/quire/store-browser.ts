@@ -47,30 +47,92 @@ export function memoryTables(): Tables {
     };
 }
 
-/** The browser's own tables, in an IndexedDB database. */
-export function indexedTables(name = "quire"): Promise<Tables> {
-    return new Promise((done, failed) => {
-        const opening = indexedDB.open(name, 1);
-        opening.onupgradeneeded = () => {
-            for (const table of TABLES) if (!opening.result.objectStoreNames.contains(table)) opening.result.createObjectStore(table, { keyPath: "id" });
-        };
-        opening.onerror = () => failed(new StoreError("This browser would not keep documents."));
-        opening.onsuccess = () => {
-            const database = opening.result;
-            const ask = <T>(table: string, mode: IDBTransactionMode, run: (store: IDBObjectStore) => IDBRequest<T>) =>
-                new Promise<T>((answer, refuse) => {
-                    const request = run(database.transaction(table, mode).objectStore(table));
-                    request.onsuccess = () => answer(request.result);
-                    request.onerror = () => refuse(new StoreError(request.error?.name === "QuotaExceededError" ? "this browser has no more room" : "this browser would not keep it"));
-                });
-            done({
-                get: (table, id) => ask(table, "readonly", (store) => store.get(id)),
-                put: async (table, row) => void (await ask(table, "readwrite", (store) => store.put(row))),
-                remove: async (table, id) => void (await ask(table, "readwrite", (store) => store.delete(id))),
-                all: (table) => ask(table, "readonly", (store) => store.getAll()),
-            } as Tables);
-        };
-    });
+/** What went wrong in the browser's storage, in plain words. */
+const refusal = (error: unknown) => new StoreError((error as DOMException | null)?.name === "QuotaExceededError" ? "this browser has no more room" : "this browser would not keep it");
+
+/**
+ * The browser's own tables, in an IndexedDB database. A write is done only once its transaction has
+ * committed: a request can succeed and its transaction still fail at the end (no more room, the
+ * storage cleared), and that is a failure. A connection the browser closes is opened again.
+ * `factory` is the browser's IndexedDB, given so that a test can stand in for it.
+ */
+export async function indexedTables(name = "quire", factory: IDBFactory = globalThis.indexedDB): Promise<Tables> {
+    const connect = () =>
+        new Promise<IDBDatabase>((done, failed) => {
+            let opening: IDBOpenDBRequest;
+            try {
+                opening = factory.open(name, 1);
+            } catch {
+                return failed(new StoreError("This browser would not keep documents."));
+            }
+            opening.onupgradeneeded = () => {
+                for (const table of TABLES) if (!opening.result.objectStoreNames.contains(table)) opening.result.createObjectStore(table, { keyPath: "id" });
+            };
+            opening.onerror = () => failed(new StoreError("This browser would not keep documents."));
+            opening.onsuccess = () => {
+                const made = opening.result;
+                // another tab upgrading the database, or the browser closing it: this connection goes, and the next call opens a new one
+                made.onversionchange = () => {
+                    made.close();
+                    stale = true;
+                };
+                made.onclose = () => (stale = true);
+                done(made);
+            };
+        });
+    let stale = false;
+    let database: Promise<IDBDatabase> = connect();
+    await database;
+    const reconnect = () => {
+        stale = false;
+        database = connect();
+    };
+    /** Runs some work in one transaction and gives what it gave once the transaction has committed. */
+    async function within<T>(table: string, mode: IDBTransactionMode, work: (store: IDBObjectStore, give: (value: T) => void, fail: (error: unknown) => void) => void, again = true): Promise<T> {
+        let connection: IDBDatabase;
+        let transaction: IDBTransaction;
+        try {
+            if (stale) reconnect();
+            connection = await database;
+            transaction = connection.transaction(table, mode);
+        } catch (error) {
+            // a closed connection is opened again, once
+            if (!again) throw refusal(error);
+            reconnect();
+            return within(table, mode, work, false);
+        }
+        return new Promise<T>((done, failed) => {
+            let value: T;
+            let thrown: unknown;
+            transaction.oncomplete = () => done(value);
+            transaction.onabort = () => failed(thrown ?? refusal(transaction.error));
+            const fail = (error: unknown) => {
+                thrown = error;
+                try {
+                    transaction.abort();
+                } catch {
+                    // already finished: it is failed below in any case
+                }
+            };
+            try {
+                work(transaction.objectStore(table), (given) => (value = given), fail);
+            } catch (error) {
+                fail(error);
+            }
+        });
+    }
+    /** Runs one request and gives its result, once the transaction has committed. */
+    const ask = <T>(table: string, mode: IDBTransactionMode, run: (store: IDBObjectStore) => IDBRequest<T>) =>
+        within<T>(table, mode, (store, give) => {
+            const request = run(store);
+            request.onsuccess = () => give(request.result);
+        });
+    return {
+        get: (table, id) => ask(table, "readonly", (store) => store.get(id)),
+        put: async (table, row) => void (await ask(table, "readwrite", (store) => store.put(row))),
+        remove: async (table, id) => void (await ask(table, "readwrite", (store) => store.delete(id))),
+        all: (table) => ask(table, "readonly", (store) => store.getAll()),
+    } as Tables;
 }
 
 interface Kept extends Row {
