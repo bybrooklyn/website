@@ -153,6 +153,35 @@ fn find_how_each_body_should_hop_and_measure_what_it_can_do() {
     }
 }
 
+/// How many worlds hold a piece that a body which cannot hop (as practice's cannot) may be unable to
+/// cross: the checker run again with the reach the body has walking to the Walker's stride with no
+/// hop (what it walks up, and over), against the reach it counts on, which is a hopping body's. A
+/// policy that learns to bound may do more than the stride, so this counts what is in doubt, not
+/// what is impossible. walker/README.md ("Every world can be crossed") gives the numbers.
+/// `cargo test --release no_hop -- --ignored --nocapture`
+#[test]
+#[ignore]
+fn count_the_worlds_a_body_with_no_hop_may_not_cross() {
+    use super::check::{self, Reach};
+    use super::recipe::Recipe;
+    for legs in [2, 4] {
+        let (up, over) = (most(legs, Kind::Ledge, false), most(legs, Kind::Gap, false));
+        let walking = Reach { step: up.min(REACH.step), climb: up.min(REACH.step), leap: over };
+        std::println!("{legs} legs with no hop: walks up {up:.2} m and over gaps of {over:.2} m; reach {walking:?}");
+        let mut total = 0;
+        for difficulty in [0.0, 0.25, 0.5, 0.75, 1.0] {
+            let doubtful = (1..=100).filter(|&seed| {
+                let land = Land::new(Recipe { seed, difficulty, amounts: [1.0; 4] }, 150.0);
+                !check::possible(&land.geometry, -5.0, land.reached.x - 0.3, &walking)
+            });
+            let count = doubtful.count();
+            total += count;
+            std::println!("  difficulty {difficulty}: {count} of 100 worlds hold a piece beyond walking");
+        }
+        std::println!("  in all, {total} of 500");
+    }
+}
+
 #[test]
 fn each_body_hops_forward_and_lands_on_its_feet() {
     for legs in [2, 4] {
