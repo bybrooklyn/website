@@ -1,7 +1,8 @@
 # What Google Docs' menus have that mdQuire does not (13 Nov 2026)
 
 Marks: **S** makes sense for a Markdown editor and is small; **B** makes sense and is big; **X** does not fit.
-Nothing here is built. Things mdQuire already has are left out.
+Things mdQuire already has are left out. Built since: Make a copy, Rename and Details in File; Cut, Copy,
+Paste and Delete in Edit; Full screen; Word count while typing; Typing preferences; a short help page.
 
 ## File
 - New document, Open (as menu lines; the shelf does it now) : S
