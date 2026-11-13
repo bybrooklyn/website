@@ -223,7 +223,7 @@
 /* A line to type on is a line: a rule under the words, the accent when it is being typed on. */
 .mote-panel input[type="text"] {
     padding: 0.2rem 0;
-    border-bottom: 0.0625rem solid var(--rule);
+    border-bottom: 0.0625rem solid var(--field-edge);
     transition: border-color 0.15s ease;
 }
 

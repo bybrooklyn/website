@@ -140,7 +140,7 @@
     height: 0.25rem;
     margin-top: -0.125rem;
     border-radius: 0.125rem;
-    background: var(--rule);
+    background: var(--field-edge);
 }
 
 
@@ -215,7 +215,7 @@
 .spectrum-share-row input {
     flex: 1 1 16rem;
     min-width: 0;
-    border: 0.0625rem solid var(--rule);
+    border: 0.0625rem solid var(--field-edge);
     border-radius: var(--radius);
     padding: 0.45rem 0.75rem;
     background: var(--surface);

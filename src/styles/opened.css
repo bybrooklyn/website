@@ -77,6 +77,7 @@ body.opened {
     /* Inside the panel the raised and ruled colors step up with it. */
     --surface: var(--panel-raised);
     --rule: var(--panel-rule);
+    --field-edge: var(--panel-field-edge);
     --astro-code-background: var(--panel-raised);
     --panel-gutter: clamp(1.25rem, 5vw, 4rem);
 }
