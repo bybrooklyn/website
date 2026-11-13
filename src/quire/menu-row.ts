@@ -125,7 +125,7 @@ export function headings(state: RowState, act: RowActions): Heading[] {
                 ...line("symbols", "Special characters", { hint: "›" }),
                 ...(state.contents ? line("updateContents", "Update the table of contents") : line("contents", "Table of contents")),
                 ...line("comment", "Comment"),
-                ...(state.rich ? line("headerFooter", "Header, footer and page numbers", { hint: "›" }) : []),
+                ...(state.rich ? line("headerFooter", "Header, footer and page numbers", state.paged ? { hint: "›" } : { hint: "Page view only", disabled: true }) : []),
                 ...line("bullet", "Bulleted list", { icon: "bullet" }),
                 ...line("number", "Numbered list", { icon: "number" }),
                 ...line("task", "Checklist", { icon: "task" }),

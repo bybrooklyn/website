@@ -146,7 +146,7 @@ export function commandLines(menus: Heading[]): Line[] {
     return menus.flatMap((heading) =>
         heading.items().flatMap((item) => {
             const key = item.key ?? `${heading.label}: ${item.label}`;
-            if (item.note || seen.has(key)) return [];
+            if (item.note || item.disabled || seen.has(key)) return [];
             seen.add(key);
             const slash = SLASH_ITEMS.find((each) => commandOf(each.key) === key);
             return [{ icon: slash?.icon, ...item, key, menu: heading.label, words: slash?.words, fits: FITS[key], hint: item.hint && keySymbols(item.hint).words ? item.hint : undefined }];
