@@ -330,3 +330,16 @@ test("an empty list item, quote or footnote holds one empty line the cursor can 
     const items = (read("- a\n-\n- b\n").blocks[0] as List).items;
     expect(items.map((item) => item.blocks.length)).toEqual([1, 1, 1]);
 });
+
+test("only a definition block defines a link: a line that looks like one in code or inside a paragraph does not", () => {
+    const linkIn = (source: string) => {
+        const block = read(source).blocks.find((each) => each.kind === "paragraph" && runText(each).startsWith("see"));
+        return block?.kind === "paragraph" && block.runs.some((run) => run.kind === "link");
+    };
+    expect(linkIn("```\n[a]: http://evil\n```\n\nsee [a]\n")).toBe(false);
+    expect(linkIn("    [a]: http://evil\n\nsee [a]\n")).toBe(false);
+    expect(linkIn("text\n[a]: http://evil\n\nsee [a]\n")).toBe(false);
+    expect(linkIn("see [a]\n\n[a]: http://good\n")).toBe(true);
+    expect(linkIn("see [a]\n\n> [a]: http://good\n")).toBe(true);
+    same("```\n[a]: http://evil\n```\n\nsee [a]\n");
+});

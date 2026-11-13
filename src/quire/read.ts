@@ -22,6 +22,8 @@ interface Context {
     mdx: boolean;
     /** Link reference definitions, by their label in lower case. */
     refs: Map<string, { href: string; title?: string }>;
+    /** The definitions found in definition blocks as the body is read, when they are being gathered. */
+    found?: Map<string, { href: string; title?: string }>;
     /** Set while a table cell is read, where pipes are the cell's edges and make no spoiler, and `<br>` is a line break. */
     cell?: boolean;
 }
@@ -43,8 +45,13 @@ export function read(source: string, options: ReadOptions = {}): Document {
         }
     }
     const body = lines.slice(at);
-    const context: Context = { mdx: !!options.mdx, refs: definitions(body) };
-    const { lead, blocks } = parseBlocks(body, context);
+    // links are read with every line that looks like a definition; only lines read as definition
+    // blocks are definitions (not those in code, or inside a paragraph), so if those differ the body
+    // is read again with the true ones, which is seldom
+    const guessed = definitions(body);
+    const context: Context = { mdx: !!options.mdx, refs: guessed, found: new Map() };
+    let { lead, blocks } = parseBlocks(body, context);
+    if (!sameDefinitions(guessed, context.found!)) ({ lead, blocks } = parseBlocks(body, { mdx: context.mdx, refs: context.found! }));
     return { bom, frontmatter, lead, blocks, eol, mdx: context.mdx };
 }
 
@@ -308,6 +315,7 @@ function readBlock(lines: Line[], at: number, context: Context): [Block, number]
         if (DEFINITION.test(line)) {
             let end = at + 1;
             while (end < lines.length && DEFINITION.test(lines[end]!.text)) end++;
+            if (context.found) for (const [label, target] of definitions(lines.slice(at, end))) if (!context.found.has(label)) context.found.set(label, target);
             return raw(end);
         }
         const table = readTable(lines, at, context);
@@ -678,7 +686,7 @@ const paragraphText = (lines: Line[]) =>
         .join("\n")
         .trim();
 
-/** Every link reference definition in the body, so `[text][label]` and `[label]` can be read as links. */
+/** Every line of these that looks like a link reference definition, so `[text][label]` and `[label]` can be read as links. */
 function definitions(lines: Line[]): Map<string, { href: string; title?: string }> {
     const out = new Map<string, { href: string; title?: string }>();
     for (const line of lines) {
@@ -690,6 +698,13 @@ function definitions(lines: Line[]): Map<string, { href: string; title?: string 
         out.set(label, match[3] ? { href, title: unescape(match[3].slice(1, -1)) } : { href });
     }
     return out;
+}
+
+/** True if two sets of definitions name the same labels with the same targets. */
+function sameDefinitions(a: Map<string, { href: string; title?: string }>, b: Map<string, { href: string; title?: string }>): boolean {
+    if (a.size !== b.size) return false;
+    for (const [label, target] of a) if (b.get(label)?.href !== target.href || b.get(label)?.title !== target.title) return false;
+    return true;
 }
 
 const normalLabel = (label: string) => label.trim().replace(/\s+/g, " ").toLowerCase();
