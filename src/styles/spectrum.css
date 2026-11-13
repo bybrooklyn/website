@@ -143,7 +143,6 @@
     background: var(--field-edge);
 }
 
-
 /* Placed by the script (inset-inline-start); it swells a little while held and settles back when let go. */
 .spectrum-thumb {
     position: absolute;

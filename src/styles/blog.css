@@ -541,10 +541,6 @@
         pointer-events: none;
     }
 
-    .contents summary::-webkit-details-marker {
-        display: none;
-    }
-
     /* In the margin the list is always open, and the title leads back to the top. */
     .contents summary a {
         pointer-events: auto;
