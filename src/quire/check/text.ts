@@ -31,7 +31,7 @@ export interface Read {
 // an address takes brackets that pair up inside it (Foo_(bar)), as GitHub does, and never the stop or bracket after it
 const ADDRESS = /\b(?:https?:\/\/|www\.)(?:[^\s<>()]|\([^\s<>()]*\))*(?:[^\s<>().,;:!?'"’”]|\([^\s<>()]*\))|\b[\w.+-]+@[\w-]+\.[\w.-]+\w/g;
 
-/** Reads runs: their text, quiet where they are code, pictures, HTML or a web address. */
+/** Reads runs: their text, quiet where they are code, maths, pictures, HTML or a web address. */
 export function readRuns(runs: Run[]): Read {
     let text = "";
     const marks: number[] = [];
@@ -40,7 +40,8 @@ export function readRuns(runs: Run[]): Read {
             if (run.kind === "link") walk(run.runs);
             else if (run.kind === "text") {
                 text += run.text;
-                const quiet = run.marks.includes("code") ? 1 : 0;
+                // a formula is quiet as code is: its letters are symbols, not words
+                const quiet = run.marks.includes("code") || run.marks.includes("math") ? 1 : 0;
                 for (let index = 0; index < run.text.length; index++) marks.push(quiet);
             } else {
                 text += run.kind === "break" ? "\n" : "￼";

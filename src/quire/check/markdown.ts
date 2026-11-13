@@ -183,7 +183,7 @@ const bareUrl: Rule = {
     },
 };
 
-/** True when the letter at an offset is in code, by its runs. */
+/** True when the letter at an offset is in code or maths, by its runs. */
 function isCode(unit: Unit, offset: number): boolean {
     let at = 0;
     const walk = (runs: Run[]): boolean | undefined => {
@@ -194,7 +194,7 @@ function isCode(unit: Unit, offset: number): boolean {
                 continue;
             }
             const length = run.kind === "text" ? run.text.length : 1;
-            if (offset < at + length) return run.kind === "text" && run.marks.includes("code");
+            if (offset < at + length) return run.kind === "text" && (run.marks.includes("code") || run.marks.includes("math"));
             at += length;
         }
         return undefined;

@@ -65,3 +65,8 @@ test("the segmenter and the hand-written boundaries agree on every word of the s
     }
     expect(compared).toBeGreaterThan(5_000);
 });
+
+test("a formula marked as maths is quiet, as code is", () => {
+    const read = readRuns([...runs("where "), ...runs("sqrt x plus ab", ["math"]), ...runs(" holds")]);
+    expect(words(read).map((word) => word.word)).toEqual(["where", "holds"]);
+});
