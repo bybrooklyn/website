@@ -28,10 +28,14 @@ export interface Vocabulary {
 /** Reads the text of a `vocab.txt`: lines of `piece id`, the blank written `<blk>`. */
 export function vocabulary(text: string): Vocabulary {
     const pieces: string[] = [];
-    for (const line of text.split(/\r?\n/)) {
+    const lines = text.split(/\r?\n/);
+    for (const line of lines) {
         const cut = line.search(/\s\S+$/);
         if (cut < 0) continue;
         const id = Number(line.slice(cut).trim());
+        // A file has a line for each piece, so no id can be past the count of lines. One that is would
+        // make the list as long as the number says, which for a changed or hostile file hangs the worker.
+        if (Number.isInteger(id) && id >= lines.length) throw new Error(`the vocabulary names piece ${id} but has only ${lines.length} lines`);
         if (Number.isInteger(id) && id >= 0) pieces[id] = line.slice(0, cut);
     }
     for (let id = 0; id < pieces.length; id++) pieces[id] ??= "";

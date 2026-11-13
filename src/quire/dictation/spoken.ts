@@ -6,8 +6,9 @@
 //   interpret("Hello comma world period", { before: "", commands: true })
 //     gives text steps: "Hello", ",", " world", "." with the spacing and capitals put right.
 //
-// The recognizer (Parakeet v2) already writes punctuation and capitals of its own. A spoken mark is
-// therefore not added on top of one the model wrote: it replaces it, or finds it already there.
+// The Parakeet recognizers (v3) already write punctuation and capitals of their own (Moonshine writes
+// none). A spoken mark is therefore not added on top of one the model wrote: it replaces it, or
+// finds it already there.
 
 /** What a spoken command does. The headings and the lists change the block being written; the rest act on the dictation. */
 export type Command = "heading1" | "heading2" | "heading3" | "bullet" | "numbered" | "undo" | "delete" | "stop";
@@ -114,38 +115,36 @@ function atoms(phrase: string, commands: boolean): Atom[] {
     const word = (token: Token): Atom => ({ kind: "word", text: token.lead + token.core + token.trail });
     if (!commands) return all.map(word);
     const whole = plain(phrase);
+    // A command is a phrase by itself. "stop dictation" at the end of a longer phrase is not one: "I told them
+    // to stop listening" is a sentence, and its last two words were once dropped and dictation switched off.
     if (ALONE[whole]) return [{ kind: "command", command: ALONE[whole]! }];
-    // "stop dictation" may close a phrase: the rest is written, then it stops
-    const closing = / stop (dictation|listening)$/.test(` ${whole}`) && all.length >= 3;
-    const body = closing ? all.slice(0, -2) : all;
     const out: Atom[] = [];
-    for (let at = 0; at < body.length; at++) {
+    for (let at = 0; at < all.length; at++) {
         let size = 0;
         for (const tried of [3, 2, 1]) {
-            if (at + tried > body.length) continue;
-            const run = body.slice(at, at + tried);
+            if (at + tried > all.length) continue;
+            const run = all.slice(at, at + tried);
             // the words of a spoken phrase run together: only the last may carry punctuation
             if (run.slice(0, -1).some((token) => token.trail) || run.slice(1).some((token) => token.lead)) continue;
             const said = run.map((token) => token.core.toLowerCase()).join(" ");
             const last = run[run.length - 1]!;
             const mark = MARKS[said];
-            const before = body[at - 1];
+            const before = all[at - 1];
             if (mark && !(before && ARTICLES.has(before.core.toLowerCase()) && !before.trail)) {
                 out.push({ kind: "mark", ...mark });
                 size = tried;
                 break;
             }
             const kind = BREAKS[said];
-            if (kind && (!GUARDED.has(said) || at + tried === body.length || /[.!?]/.test(last.trail))) {
+            if (kind && (!GUARDED.has(said) || at + tried === all.length || /[.!?]/.test(last.trail))) {
                 out.push({ kind });
                 size = tried;
                 break;
             }
         }
         if (size) at += size - 1;
-        else out.push(word(body[at]!));
+        else out.push(word(all[at]!));
     }
-    if (closing) out.push({ kind: "command", command: "stop" });
     return out;
 }
 

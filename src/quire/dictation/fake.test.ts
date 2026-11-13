@@ -39,7 +39,10 @@ test("the made-up recognizer says the phrase of the loudness, one more word for 
 test("the made-up microphone feeds frames to whoever opened it, until closed", async () => {
     const { microphone, controls } = createFake();
     const frames: number[] = [];
-    const mic = await microphone((frame) => frames.push(frame.length));
+    const mic = await microphone(
+        (frame) => frames.push(frame.length),
+        () => {},
+    );
     expect(controls.microphoneOpen()).toBe(true);
     await controls.speak(300);
     expect(frames).toEqual([1600, 1600, 1600]);

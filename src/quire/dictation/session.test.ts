@@ -3,7 +3,7 @@
 // commands, a window cut at its quietest moment, and falling back to pause-only when too slow.
 
 import { describe, expect, test } from "bun:test";
-import { documentOf, paragraph, textAt, type Document, type Selection } from "../document";
+import { documentOf, insertText, paragraph, textAt, type Document, type Selection } from "../document";
 import type { ChangeKind, State } from "../history";
 import { caret } from "../keys";
 import { write as markdown } from "../write";
@@ -176,6 +176,48 @@ describe("spoken commands", () => {
         await drive(session, [...quiet(300), ...frames(2900, 0.2), ...quiet(1000), ...frames(1500, 0.4), ...quiet(1000)]);
         expect(editor.text()).toBe("");
     });
+    /** An editor holding a line the writer typed herself, as its own undo step. */
+    function typed() {
+        const editor = target();
+        editor.run((doc) => ({ doc: insertText(doc, { path: [0], offset: 0 }, "Mine. "), selection: caret([0], 6) }), "type");
+        return editor;
+    }
+    function on(editor: Target) {
+        return startSession({ target: editor, recognizer: recognizer(), commands: () => true, custom: () => nothing() });
+    }
+    test("undo that, said before anything was dictated, leaves the writer's own work alone", async () => {
+        const editor = typed();
+        await drive(on(editor), [...quiet(300), ...frames(1500, 0.3), ...quiet(1000), ...frames(1500, 0.3), ...quiet(1000)]);
+        expect(editor.text()).toBe("Mine.");
+    });
+    test("undo that, said again and again, takes back only the one phrase dictated", async () => {
+        const editor = typed();
+        await drive(on(editor), [...quiet(300), ...frames(2900, 0.2), ...quiet(1000), ...frames(1500, 0.3), ...quiet(1000), ...frames(1500, 0.3), ...quiet(1000), ...frames(1500, 0.3), ...quiet(1000)]);
+        expect(editor.text()).toBe("Mine.");
+        editor.undo();
+        expect(editor.text()).toBe("");
+    });
+    test("undo that does nothing once the writer has changed the document since the phrase", async () => {
+        const editor = typed();
+        const session = on(editor);
+        await drive(session, [...quiet(300), ...frames(2900, 0.2), ...quiet(1000)]);
+        editor.run((doc, selection) => ({ doc: insertText(doc, selection.focus, " Also mine."), selection: caret([0], selection.focus.offset + 11) }), "type");
+        await drive(session, [...frames(1500, 0.3), ...quiet(1000)]);
+        expect(editor.text()).toBe("Mine. Hello there my dear friend. Also mine.");
+    });
+    test("delete that, said again and again, takes back only the one phrase dictated, as one undo step", async () => {
+        const editor = typed();
+        await drive(on(editor), [...quiet(300), ...frames(2900, 0.2), ...quiet(1000), ...frames(1500, 0.4), ...quiet(1000), ...frames(1500, 0.4), ...quiet(1000)]);
+        expect(editor.text()).toBe("Mine.");
+    });
+    test("a phrase that could not be written (the cursor where text cannot go) is not taken back by delete that, so the writer's work stays", async () => {
+        const editor = typed();
+        const run = editor.run;
+        // the editor writes nothing for a dictated phrase, as in a block that takes no text
+        editor.run = (operation, kind) => (kind === "paste" ? void operation(editor.getDocument(), editor.getSelection()) : run(operation, kind));
+        await drive(on(editor), [...quiet(300), ...frames(2900, 0.2), ...quiet(1000), ...frames(1500, 0.4), ...quiet(1000)]);
+        expect(editor.text()).toBe("Mine.");
+    });
     test("with commands off every word is written", async () => {
         const { editor, session } = make({ commands: false });
         await drive(session, [...quiet(300), ...frames(2900, 0.2), ...quiet(1000)]);
@@ -275,6 +317,14 @@ describe("a recognizer with a live stream", () => {
         expect(heard.first[1]!).toBeLessThanOrEqual(1.6 * RATE);
         expect(editor.text().split(/\s+/).filter((word) => /hello/i.test(word)).length).toBe(2);
     });
+    test("sound that never pauses is ended in phrases of thirty seconds, each in a stream of its own, so the phrase and its sound do not grow for ever", async () => {
+        const { editor, session, heard } = setup(streaming());
+        await drive(session, [...quiet(300), ...frames(70000, 0.2)]);
+        expect(heard.opened).toBeGreaterThanOrEqual(3);
+        expect(editor.steps).toBeGreaterThanOrEqual(2);
+        // the later streams start with no sound of the one before
+        expect(heard.first.slice(1).every((samples) => samples === 1600)).toBe(true);
+    });
     test("falls back to writing at the pause when the stream is far behind, and says so", async () => {
         const { editor, notes, session, heard } = setup(streaming(9));
         await drive(session, [...quiet(300), ...frames(3000, 0.2), ...quiet(1200)]);
@@ -284,5 +334,112 @@ describe("a recognizer with a live stream", () => {
         // the phrase is still written, by asking the recognizer about the whole of it
         expect(heard.calls).toBeGreaterThan(0);
         expect(editor.text().length).toBeGreaterThan(0);
+    });
+});
+
+describe("the microphone", () => {
+    /** A recognizer whose answers wait until the test lets them go. */
+    function held() {
+        const waiting: (() => void)[] = [];
+        const made = {
+            backend: "fake",
+            dispose() {},
+            transcribe: (samples: Float32Array) => new Promise<{ text: string; ms: number }>((done) => waiting.push(() => recognizer().transcribe(samples).then(done))),
+            release: () => waiting.splice(0).forEach((go) => go()),
+        };
+        return made;
+    }
+    test("is let go the moment stop is pressed, while the last phrase is still being recognized", async () => {
+        const heard = held();
+        const events: string[] = [];
+        const session = startSession({ target: target(), recognizer: heard, commands: () => true, custom: () => nothing(), onRelease: () => events.push("release"), onStop: () => events.push("stop") });
+        await drive(session, [...quiet(300), ...frames(2900, 0.2)]);
+        const stopped = session.stop("button");
+        expect(events).toEqual(["release"]);
+        heard.release();
+        await new Promise((done) => setTimeout(done, 0));
+        heard.release();
+        await stopped;
+        expect(events).toEqual(["release", "stop"]);
+    });
+    test("is let go when the session stops itself after quiet, before the phrase is written", async () => {
+        const heard = held();
+        const events: string[] = [];
+        const session = startSession({ target: target(), recognizer: heard, commands: () => true, custom: () => nothing(), onRelease: () => events.push("release"), onStop: () => events.push("stop") });
+        await drive(session, [...quiet(300), ...frames(2900, 0.2), ...quiet(3500)]);
+        expect(events).toEqual(["release"]);
+        heard.release();
+        await new Promise((done) => setTimeout(done, 10));
+        heard.release();
+        await session.stop("button");
+        expect(events).toEqual(["release", "stop"]);
+    });
+});
+
+describe("every way out of a session", () => {
+    /** Ways a session can end, each from the middle of a phrase, with the recognizer and editor it needs. */
+    const ways: [string, (session: Session) => void | Promise<void>, { failing?: "transcribe" | "finish" | "write"; live?: boolean }][] = [
+        ["the button", (session) => void session.stop("button"), {}],
+        ["a page that is hidden or left", (session) => void session.stop("hidden"), {}],
+        ["a microphone taken away", (session) => void session.stop("lost"), {}],
+        ["quiet after speech", () => {}, {}],
+        ["an error in recognizing", () => {}, { failing: "transcribe" }],
+        ["an error while writing into the document", () => {}, { failing: "write" }],
+        ["the worker dying under a live phrase", () => {}, { failing: "finish", live: true }],
+    ];
+    for (const [what, end, how] of ways) {
+        test(`${what}: the microphone is let go once, stop resolves, and onStop is called once`, async () => {
+            const editor = target();
+            if (how.failing === "write")
+                editor.run = () => {
+                    throw new Error("boom");
+                };
+            const base = how.live ? streaming() : recognizer();
+            const dead = () => Promise.reject(new Error("The speech engine stopped"));
+            const heard: Recognizer = {
+                ...base,
+                transcribe: how.failing === "transcribe" || how.failing === "finish" ? dead : base.transcribe,
+                ...(how.live ? { stream: () => ({ ...(base as ReturnType<typeof streaming>).stream(), finish: dead }) } : {}),
+            };
+            const released: number[] = [];
+            const stops: Reason[] = [];
+            const session = startSession({ target: editor, recognizer: heard, commands: () => true, custom: () => nothing(), onRelease: () => released.push(1), onStop: (reason) => stops.push(reason) });
+            await drive(session, [...quiet(300), ...frames(2900, 0.2)]);
+            await end(session);
+            await drive(session, [...quiet(3500)]);
+            await session.stop("button");
+            await session.stop("button");
+            expect(released.length).toBe(1);
+            expect(stops.length).toBe(1);
+            if (how.failing) expect(stops[0]).toBe("error");
+        });
+    }
+});
+
+describe("a throw while a phrase is settled", () => {
+    test("in the editor's writing ends the session: stop resolves and onStop is called once", async () => {
+        const editor = target();
+        editor.run = () => {
+            throw new Error("boom");
+        };
+        const stops: Reason[] = [];
+        const notes: string[] = [];
+        const session = startSession({ target: editor, recognizer: recognizer(), commands: () => true, custom: () => nothing(), onStop: (reason) => stops.push(reason), onNote: (note) => notes.push(note) });
+        await drive(session, [...quiet(300), ...frames(2900, 0.2)]);
+        await session.stop("button");
+        expect(stops).toEqual(["error"]);
+        expect(notes.join(" ")).toContain("boom");
+        await session.stop("button");
+        expect(stops.length).toBe(1);
+    });
+    test("at a pause ends the session at once, without waiting for the button", async () => {
+        const editor = target();
+        editor.run = () => {
+            throw new Error("boom");
+        };
+        const stops: Reason[] = [];
+        const session = startSession({ target: editor, recognizer: recognizer(), commands: () => true, custom: () => nothing(), onStop: (reason) => stops.push(reason) });
+        await drive(session, [...quiet(300), ...frames(2900, 0.2), ...quiet(1000)]);
+        expect(stops).toEqual(["error"]);
     });
 });

@@ -66,9 +66,17 @@ export interface Recognizer {
 export async function open(model: Model, options: Options = {}): Promise<Recognizer> {
     const bins = options.bins ?? 128;
     const loaded = await load({ files: { encoder: model.encoder, decoder: model.decoder }, prefer: options.prefer, threads: options.threads });
-    const pieces = vocabulary(model.vocab);
-    const ort = (await ortFor(loaded.backend.kind === "webgpu" ? "jsep" : "wasm")) as unknown as Runtime;
-    const step = stepFor(loaded.decoder as DecoderSession, ort);
+    let pieces: ReturnType<typeof vocabulary>;
+    let step: ReturnType<typeof stepFor>;
+    try {
+        pieces = vocabulary(model.vocab);
+        const ort = (await ortFor(loaded.backend.kind === "webgpu" ? "jsep" : "wasm")) as unknown as Runtime;
+        step = stepFor(loaded.decoder as DecoderSession, ort);
+    } catch (error) {
+        // a vocabulary or a decoder that will not do: the sessions already made are let go
+        await loaded.release().catch(() => undefined);
+        throw error;
+    }
     let decoder: Decoder;
     const lean = (list: string[]) => {
         decoder = createDecoder(step, { vocabulary: pieces, durations: DURATIONS, blank: pieces.blank, boost: list.length > 0 ? booster(list, pieces, BOOST) : undefined });

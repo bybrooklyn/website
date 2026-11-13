@@ -5,7 +5,7 @@
 // `stepFor` against a pretend session.
 
 import { describe, expect, test } from "bun:test";
-import { copy, createDecoder, frameMajor, stepFor, type DecodeState, type Session, type Step, type Tensor, type Word } from "./decode";
+import { copy, createDecoder, stepFor, type DecodeState, type Session, type Step, type Tensor, type Word } from "./decode";
 import { vocabulary } from "./tokens";
 
 const vocab = vocabulary(["▁the 0", "▁cat 1", "▁sat 2", "▁on 3", "▁mat 4", ". 5", "<blk> 6"].join("\n"));
@@ -168,12 +168,6 @@ describe("resuming", () => {
     });
 });
 
-describe("frame order", () => {
-    test("turns channels of frames into frames of channels", () => {
-        expect([...frameMajor(Float32Array.of(1, 2, 3, 10, 20, 30), 2, 3)]).toEqual([1, 10, 2, 20, 3, 30]);
-    });
-});
-
 describe("stepFor", () => {
     /** A pretend session for a decoder and joint with the given memory shape, which records what it was fed. */
     const pretend = (layers: number, long: boolean) => {
@@ -214,6 +208,18 @@ describe("stepFor", () => {
             expect([...new Set(state.prediction.h)]).toEqual([1]);
         });
     }
+    test("makes its tensors once: decoding from a fresh copy of the state at every step keeps nothing more", async () => {
+        const { session } = pretend(2, false);
+        let made = 0;
+        const ort = { Tensor: class { constructor(public type: string, public data: ArrayBufferView, public dims: readonly number[]) { made++; } } as unknown as new (type: string, data: ArrayBufferView, dims: readonly number[]) => Tensor };
+        const step = stepFor(session, ort);
+        const run = createDecoder(step, { vocabulary: vocab, durations: DURATIONS, blank: BLANK });
+        const state = run.start();
+        await run.decode(frames(3), 3, 3, copy(state));
+        const after = made;
+        for (let at = 0; at < 50; at++) await run.decode(frames(3), 3, 3, copy(state));
+        expect(made).toBe(after);
+    });
     test("says plainly when the inputs are not those of a decoder and joint", () => {
         const { session, ort } = pretend(1, false);
         expect(() => stepFor({ ...session, inputMetadata: session.inputMetadata.slice(0, 3) }, ort)).toThrow();

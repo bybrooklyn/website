@@ -151,6 +151,89 @@ test.skipIf(!ready)("a download shows its progress in the dialog, can be cancell
     await run("window.dictation.toggle()");
 });
 
+test.skipIf(!ready)("closing the dialog during a download cancels it, and a download that finishes anyway never opens the microphone", async () => {
+    await fresh();
+    await run("window.dictationTest.downloadTime = 1500");
+    await press(button("Start dictation"));
+    await choose();
+    await press(".quire-dictation-download");
+    await until("window.dictation.state() === 'downloading'", "downloading");
+    await tab.press("Escape");
+    await until("window.dictation.state() === 'off'", "cancelled by closing the dialog");
+    await tab.wait(1800);
+    expect(await run("window.dictationTest.downloaded().length")).toBe(0);
+    expect(await run("window.dictationTest.opened()")).toBe(0);
+    // a cancel that comes too late: the download ends after the dialog has gone
+    await run("window.dictationTest.cancellable = false");
+    await press(button("Start dictation"));
+    await choose();
+    await press(".quire-dictation-download");
+    await until("window.dictation.state() === 'downloading'", "downloading again");
+    await tab.press("Escape");
+    await until("window.dictationTest.downloaded().length === 1", "the download ended anyway", 4000);
+    await tab.wait(500);
+    expect(await state()).toBe("off");
+    expect(await run("window.dictationTest.opened()")).toBe(0);
+    expect(await run("window.dictationTest.microphoneOpen()")).toBe(false);
+});
+
+test.skipIf(!ready)(
+    "every way out of dictation closes the microphone once, leaves no answer waiting, and says it stopped once",
+    async () => {
+        const ways: [string, string][] = [
+            ["the button", "window.dictation.toggle()"],
+            ["a press again while it is starting", "window.dictation.toggle(); window.dictation.toggle()"],
+            ["an error in recognizing", "window.dictationTest.fail = 'error'; window.dictationTest.quiet(1200)"],
+            ["the worker dying", "window.dictationTest.fail = 'dead'; window.dictationTest.quiet(1200)"],
+            ["the tab hidden", "Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true }); document.dispatchEvent(new Event('visibilitychange'))"],
+            ["the page being left", "dispatchEvent(new Event('pagehide'))"],
+            ["the microphone's permission withdrawn", "window.dictationTest.takeAway()"],
+            ["quiet after speech", "window.dictationTest.quiet(3500)"],
+            ["the spoken command", "window.dictationTest.quiet(1000).then(() => window.dictationTest.speak(1500, 0.5)).then(() => window.dictationTest.quiet(1000))"],
+        ];
+        for (const [what, how] of ways) {
+            await fresh();
+            await listening();
+            // in the middle of a phrase, so that there is something left to recognize as it ends
+            await run("window.dictationTest.speak(2400, 0.2)");
+            if (what === "a press again while it is starting") {
+                await run("window.dictation.toggle()");
+                await until("window.dictation.state() === 'off'", `${what}: off before`);
+                await run("window.dictationTest.quiet(100)");
+            }
+            const stoppedBefore = await run<number>("window.dictationTest.stopped()");
+            await run(how);
+            await until("window.dictation.state() === 'off'", `${what}: off`, 8000);
+            await tab.wait(300);
+            const after = await run<{ open: boolean; opened: number; closed: number; pending: number; stopped: number }>("({ open: window.dictationTest.microphoneOpen(), opened: window.dictationTest.opened(), closed: window.dictationTest.closed(), pending: window.dictationTest.pending(), stopped: window.dictationTest.stopped() })");
+            expect({ what, ...after, stopped: after.stopped - stoppedBefore }).toEqual({ what, open: false, opened: after.opened, closed: after.opened, pending: 0, stopped: 1 });
+        }
+    },
+    240000,
+);
+
+test.skipIf(!ready)("taking dictation down closes the microphone at once, still writes the last phrase, then ends the engine; a download under way is cancelled", async () => {
+    await fresh();
+    await listening();
+    await run("window.dictationTest.speak(3000, 0.2)");
+    await run("window.dictation.destroy()");
+    expect(await run("window.dictationTest.microphoneOpen()")).toBe(false);
+    await until("window.dictationTest.markdown() !== ''", "the last phrase written");
+    expect(await markdown()).toBe("Hello there my dear friend.");
+    await until("window.dictationTest.disposed() === 1", "the engine ended");
+    expect(await run("window.dictationTest.pending()")).toBe(0);
+    await fresh();
+    await run("window.dictationTest.downloadTime = 1500");
+    await press(button("Start dictation"));
+    await choose();
+    await press(".quire-dictation-download");
+    await until("window.dictation.state() === 'downloading'", "downloading");
+    await run("window.dictation.destroy()");
+    await tab.wait(1800);
+    expect(await run("window.dictationTest.downloaded().length")).toBe(0);
+    expect(await run("window.dictationTest.opened()")).toBe(0);
+});
+
 test.skipIf(!ready)("after the download it listens, shows provisional words that are not in the document, then settles them as one undo step", async () => {
     await fresh();
     await listening();
@@ -237,7 +320,6 @@ test.skipIf(!ready)("custom words and shortcuts correct what is written, and are
 
 test.skipIf(!ready)("Ctrl+D switches it on and off from the editor, and the browser's own use of the key is prevented", async () => {
     await fresh();
-    await run("window.dictationTest.downloaded"); // the made-up engine starts empty
     // keep the model so that the shortcut goes straight to listening
     await listening();
     await run("window.dictationTest.quiet(100)");
@@ -272,11 +354,11 @@ test.skipIf(!ready)("nothing appears without a transition, and under reduced mot
 });
 
 test.skipIf(!ready)("the control is absent, with a line saying why, where nothing can run it", async () => {
-    await tab.open(PAGE, 400);
-    await run("window.dictation.destroy()");
-    // the page with no microphone API at all
-    await tab.open(`http://localhost:${PORT}/mdquire-dictation/`, 400);
-    const none = await run<boolean>("!window.dictation?.why || !!document.querySelector('.quire-dictate')");
-    // headless Chromium has a microphone API, so either the control is there or the reason is
-    expect(none).toBe(true);
+    // the test page told that this browser cannot dictate, as one without a microphone or WebAssembly is
+    await tab.open(`${PAGE}&none`, 400);
+    await until("window.dictation", "the page is ready");
+    expect(await run<string>("window.dictation.why")).toBe("Dictation cannot run in this test.");
+    expect(await run<number>("document.querySelectorAll('.quire-dictate, .quire-dictate-more').length")).toBe(0);
+    expect(await text(".dictation-why")).toBe("Dictation cannot run in this test.");
+    expect(await run<string>("window.dictation.state()")).toBe("off");
 });

@@ -41,6 +41,25 @@ describe("createDownsampler", () => {
         ).out;
         expect(pieces).toEqual(whole);
     });
+    /** The loudness (root mean square) of a tone at a frequency, after a second of it has been downsampled from a rate. */
+    const through = (rate: number, hertz: number) => {
+        const tone = Float32Array.from({ length: rate }, (_, i) => Math.sin((2 * Math.PI * hertz * i) / rate));
+        const out = createDownsampler(rate)
+            .push([tone])
+            .flatMap((each) => [...each])
+            .slice(800);
+        return Math.sqrt(out.reduce((sum, value) => sum + value * value, 0) / out.length);
+    };
+    for (const rate of [48000, 44100]) {
+        test(`at ${rate} Hz keeps speech as it is and does not fold sound above 8 kHz back into it`, () => {
+            // a tone of amplitude one has a loudness of 0.707
+            expect(through(rate, 1000)).toBeCloseTo(0.707, 1);
+            expect(through(rate, 3000)).toBeCloseTo(0.707, 1);
+            // a hiss at 10 kHz and at 12 kHz would be heard at 6 and 4 kHz: averaging let half or more of it through
+            expect(through(rate, 10000)).toBeLessThan(0.01);
+            expect(through(rate, 12000)).toBeLessThan(0.01);
+        });
+    }
     test("gives nothing for no channels", () => {
         expect(createDownsampler(48000).push([])).toEqual([]);
     });

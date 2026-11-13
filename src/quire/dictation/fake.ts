@@ -36,6 +36,23 @@ export interface TestControls {
     downloaded(): string[];
     /** How long a made-up download takes, in milliseconds. */
     downloadTime: number;
+    /** False makes cancelling come too late, so that the made-up download finishes anyway. */
+    cancellable: boolean;
+    /** How many times the made-up microphone was opened, and closed. */
+    opened(): number;
+    closed(): number;
+    /** Takes the microphone away, as unplugging it or withdrawing its permission does. */
+    takeAway(): void;
+    /** Makes the recognizer fail: "error" fails its next answers, "dead" fails every answer waiting (when its wait ends) and every one after, as a worker that died. */
+    fail: "" | "error" | "dead";
+    /** Answers of the recognizer still waiting. */
+    pending(): number;
+    /** How many times dictation said it had stopped. */
+    stopped(): number;
+    /** Counts one stop; the page calls it. */
+    stop(): void;
+    /** How many times the made-up engine was ended. */
+    disposed(): number;
     /** How slowly the made-up recognizer works, in milliseconds per call. */
     delay: number;
     /** The document as Markdown. */
@@ -47,15 +64,31 @@ export interface TestControls {
 }
 
 /** Makes the made-up engine and microphone, and the controls to drive them. */
-export function createFake(): { provider: Provider; microphone: (onFrame: (frame: Float32Array) => void) => Promise<Microphone>; controls: Omit<TestControls, "markdown" | "provisional"> } {
+export function createFake(): { provider: Provider; microphone: (onFrame: (frame: Float32Array) => void, onLost: () => void) => Promise<Microphone>; controls: Omit<TestControls, "markdown" | "provisional"> } {
     const kept = new Set<string>();
     let feed: ((frame: Float32Array) => void) | undefined;
     let cancelled = false;
     let asked = 0;
     let ticks = 0;
 
+    let opened = 0;
+    let closed = 0;
+    let stopped = 0;
+    let disposed = 0;
+    let lost: (() => void) | undefined;
+    /** The answers waiting, each with a way to fail it. */
+    const waiting = new Set<(error: Error) => void>();
     const controls = {
         downloadTime: 400,
+        cancellable: true,
+        opened: () => opened,
+        closed: () => closed,
+        takeAway: () => lost?.(),
+        fail: "" as "" | "error" | "dead",
+        pending: () => waiting.size,
+        stopped: () => stopped,
+        stop: () => void stopped++,
+        disposed: () => disposed,
         delay: 40,
         microphoneOpen: () => feed !== undefined,
         downloaded: () => [...kept],
@@ -91,7 +124,19 @@ export function createFake(): { provider: Provider; microphone: (onFrame: (frame
         dispose() {},
         async transcribe(samples) {
             asked++;
-            await new Promise((done) => setTimeout(done, controls.delay));
+            if (controls.fail) throw new Error(controls.fail === "dead" ? "The speech engine stopped" : "The model failed");
+            await new Promise((done, fail) => {
+                const failed = (error: Error) => {
+                    waiting.delete(failed);
+                    fail(error);
+                };
+                waiting.add(failed);
+                setTimeout(() => {
+                    waiting.delete(failed);
+                    done(undefined);
+                }, controls.delay);
+            });
+            if (controls.fail) throw new Error("The speech engine stopped");
             let loud = 0;
             let top = 0;
             for (const value of samples) {
@@ -119,24 +164,38 @@ export function createFake(): { provider: Provider; microphone: (onFrame: (frame
             kept.add(tier.id);
         },
         cancel() {
-            cancelled = true;
+            if (controls.cancellable) cancelled = true;
         },
         async load() {
             await new Promise((done) => setTimeout(done, 60));
             return { recognizer, ms: 60 };
+        },
+        dispose() {
+            disposed++;
         },
         async remove(tier) {
             kept.delete(tier.id);
         },
     };
 
-    const microphone = async (onFrame: (frame: Float32Array) => void): Promise<Microphone> => {
+    const microphone = async (onFrame: (frame: Float32Array) => void, onLost: () => void): Promise<Microphone> => {
         feed = onFrame;
-        return {
-            close() {
-                feed = undefined;
-            },
+        opened++;
+        let open = true;
+        // as the real one, closing twice is the same as once
+        const close = () => {
+            if (!open) return;
+            closed++;
+            open = false;
+            feed = undefined;
+            lost = undefined;
         };
+        lost = () => {
+            if (!open) return;
+            close();
+            onLost();
+        };
+        return { close };
     };
 
     return { provider, microphone, controls };

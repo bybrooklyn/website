@@ -2,7 +2,7 @@
 // default tier follows the device.
 
 import { describe, expect, test } from "bun:test";
-import { addressOf, defaultTier, megabytes, placeOf, sizeOf, tierOf, TIERS } from "./models";
+import { addressOf, defaultTier, deviceNow, megabytes, placeOf, sizeOf, tierOf, TIERS } from "./models";
 
 describe("the tiers", () => {
     test("each has an encoder and a decoder, and the vocabulary its engine reads", () => {
@@ -39,6 +39,12 @@ test("addressOf is the repository's resolve address for the file", () => {
     expect(addressOf(tiny, tiny.files[0]!)).toBe("https://huggingface.co/onnx-community/moonshine-tiny-ONNX/resolve/main/onnx/encoder_model.onnx");
 });
 
+test("addressOf fetches at the tier's revision, which every tier names", () => {
+    for (const tier of TIERS) expect(tier.revision.length).toBeGreaterThan(0);
+    const tiny = { ...tierOf("tiny"), revision: "0123abcd" };
+    expect(addressOf(tiny, tiny.files[0]!)).toBe("https://huggingface.co/onnx-community/moonshine-tiny-ONNX/resolve/0123abcd/onnx/encoder_model.onnx");
+});
+
 test("megabytes says a size the way the panel does", () => {
     expect(megabytes(54833597)).toBe("55 MB");
     expect(megabytes(667728000)).toBe("668 MB");
@@ -62,5 +68,20 @@ describe("the default tier", () => {
         expect(placeOf(tierOf("main"), { gpu: false })).toBe("processor");
         expect(placeOf(tierOf("light"), { gpu: true })).toBe("processor");
         expect(placeOf(tierOf("tiny"), { gpu: true })).toBe("processor");
+    });
+    test("an iPad, which says it is a Mac, is read as a tablet by its touch screen, and a Mac without one is not", () => {
+        const saved = globalThis.navigator;
+        const as = (userAgent: string, maxTouchPoints: number) => {
+            Object.defineProperty(globalThis, "navigator", { value: { userAgent, maxTouchPoints }, configurable: true });
+            return deviceNow();
+        };
+        const mac = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15";
+        try {
+            expect(as(mac, 5).mobile).toBe(true);
+            expect(defaultTier(as(mac, 5))).toBe("tiny");
+            expect(as(mac, 0).mobile).toBe(false);
+        } finally {
+            Object.defineProperty(globalThis, "navigator", { value: saved, configurable: true });
+        }
     });
 });

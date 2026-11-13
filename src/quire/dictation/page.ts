@@ -1,7 +1,8 @@
 // The script of the test page for dictation (src/pages/mdquire-dictation.astro): a plain editing
 // surface and the dictation control, with nothing of the editor's layout around them. With `?fake`
 // in the address it is given a made-up engine and microphone and a `window.dictationTest` to drive
-// them, for the browser tests; without it, it is the real thing.
+// them, for the browser tests (and with `&none` as well, it is told that dictation cannot run here);
+// without it, it is the real thing.
 
 import { documentOf, paragraph } from "../document";
 import { write } from "../write";
@@ -26,7 +27,7 @@ async function start(host: HTMLElement) {
     const bar = host.querySelector<HTMLElement>("#dictation-bar")!;
     const paper = host.querySelector<HTMLElement>("#dictation-paper")!;
     const surface = createSurface(paper, documentOf([paragraph()]));
-    const dictation = createDictation(surface, { provider: fake?.provider, microphone: fake?.microphone, silence: fake ? 2500 : undefined });
+    const dictation = createDictation(surface, { provider: fake?.provider, microphone: fake?.microphone, silence: fake ? 2500 : undefined, unavailable: fake && new URLSearchParams(location.search).has("none") ? () => "Dictation cannot run in this test." : undefined, onStopped: fake ? () => fake.controls.stop() : undefined });
     window.dictation = dictation;
     window.dictationDoc = () => write(surface.getDocument()).trim();
     if (dictation.why) {

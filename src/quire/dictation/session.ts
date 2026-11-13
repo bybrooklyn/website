@@ -17,7 +17,7 @@ import { textAt } from "../document";
 import type { State } from "../history";
 import type { ChangeKind } from "../history";
 import { textBefore, write, type Pending } from "./insert";
-import { createMerger, spread, type Word } from "./merge";
+import { spread, type Word } from "./merge";
 import { interpret } from "./spoken";
 import { createVoice } from "./voice";
 import { correct, type Custom } from "./words";
@@ -74,8 +74,8 @@ export interface Target {
     undo(): void;
 }
 
-/** Why a session ended. */
-export type Reason = "button" | "silence" | "nothing" | "command" | "error";
+/** Why a session ended: "hidden" when the page was hidden or left, "lost" when the microphone was taken away. */
+export type Reason = "button" | "silence" | "nothing" | "command" | "error" | "hidden" | "lost";
 
 /** What a session is given. */
 export interface SessionOptions {
@@ -89,6 +89,8 @@ export interface SessionOptions {
     onProvisional?: (text: string) => void;
     /** A line for the panel: how it is keeping up. */
     onNote?: (note: string) => void;
+    /** Called once, the moment the session stops taking sound and before the last phrase is settled from what was already heard: the microphone is closed here. */
+    onRelease?: () => void;
     onStop?: (reason: Reason) => void;
     /** Quiet times in milliseconds, for tests. */
     silence?: number;
@@ -112,6 +114,8 @@ export const WINDOW = 10;
 export const LIVE_LIMIT = 0.45;
 /** A live stream whose newest words are more than this many seconds old when they are shown (sound waiting plus the step), twice running, cannot keep up. */
 export const BEHIND_LIMIT = 5;
+/** The longest a live phrase runs without a pause before it is ended, in seconds. */
+const LONGEST = 3 * WINDOW;
 /** Sound kept before speech starts, so that the first word is not clipped, in seconds. */
 const PRE_ROLL = 0.8;
 
@@ -119,7 +123,6 @@ const PRE_ROLL = 0.8;
 export function startSession(options: SessionOptions): Session {
     const { target, recognizer } = options;
     const voice = createVoice({ silence: options.silence, wait: options.wait });
-    const merger = createMerger({ overlap: false });
 
     let buffer = new Float32Array(RATE * (WINDOW + 4));
     let length = 0;
@@ -136,6 +139,9 @@ export function startSession(options: SessionOptions): Session {
     let mode: "live" | "pause" = "live";
     let stopping = false;
     let finished = false;
+    /** The session's end, once it has begun, and whether something went wrong on the way. */
+    let ending: Promise<void> | undefined;
+    let failed = false;
     let pending: Pending = {};
     let last: { text: string; after: Document } | undefined;
     let shown = "";
@@ -203,8 +209,7 @@ export function startSession(options: SessionOptions): Session {
             const words = (heard.words && heard.words.length > 0 ? heard.words : spread(heard.text, 0, seconds)).map((word) => ({ ...word, start: word.start + from, end: word.end + from }));
             return { text: heard.text, words };
         } catch (error) {
-            note(`Dictation stopped: ${error instanceof Error ? error.message : String(error)}`);
-            void finish("error");
+            fail(error);
             return undefined;
         }
     }
@@ -219,7 +224,7 @@ export function startSession(options: SessionOptions): Session {
     }
 
     /** Opens a live stream for the phrase that has just begun, starting it with the sound kept from before the speech. */
-    function openLive() {
+    function openLive(preRoll = true) {
         if (!recognizer.stream || mode !== "live") return;
         const stream = recognizer.stream();
         live = stream;
@@ -237,7 +242,7 @@ export function startSession(options: SessionOptions): Session {
         });
         // Only the last stretch before the speech is the new phrase's. The buffer can still hold the end
         // of the one before, while that one is being finished, and giving it again would write it twice.
-        stream.push(buffer.slice(Math.max(0, length - Math.round((PRE_ROLL + 0.4) * RATE)), length));
+        if (preRoll) stream.push(buffer.slice(Math.max(0, length - Math.round((PRE_ROLL + 0.4) * RATE)), length));
     }
 
     /** Writes settled text at the cursor as one undoable step and carries out the commands in it. */
@@ -247,22 +252,35 @@ export function startSession(options: SessionOptions): Session {
         const state = { doc: target.getDocument(), selection: target.getSelection() };
         const steps = interpret(fixed, { before: textBefore(state, (path) => textAt(state.doc, path)), commands: options.commands() });
         let commands: ReturnType<typeof write>["commands"] = [];
+        const unchanged = state.doc;
         target.run((doc, selection) => {
             const done = write({ doc, selection }, steps, pending);
             pending = done.pending;
             commands = done.commands;
             return done.state;
         }, "paste");
-        const written = steps.some((step) => step.kind === "text" || step.kind === "line" || step.kind === "paragraph");
-        if (written) last = { text: fixed, after: target.getDocument() };
+        // Only a phrase that changed the document is one to take back. One that wrote nothing (the cursor in a block
+        // that takes no text) must not be, or "delete that" would undo the step before it, which is the writer's.
+        if (target.getDocument() !== unchanged) last = { text: fixed, after: target.getDocument() };
         for (const command of commands) {
-            if (command === "undo") target.undo();
+            if (command === "undo") undoLast();
             else if (command === "delete") deleteLast();
             else if (command === "stop") void finish("command");
         }
     }
 
-    /** Takes back the last phrase dictated: by undo if nothing else has been done since, or by taking its text from before the cursor. */
+    /**
+     * "undo that" is heard from sound alone, which a video or another voice in the room can make, so
+     * it is bounded: it takes back only the last phrase this session wrote, and only while the
+     * document is still exactly as that phrase left it. Then the phrase is forgotten, so saying it
+     * again does nothing until another phrase is written. It never reaches the writer's own work.
+     */
+    function undoLast() {
+        if (last && target.getDocument() === last.after) target.undo();
+        last = undefined;
+    }
+
+    /** Takes back the last phrase dictated: by undo if nothing else has been done since, or by taking its text from before the cursor. Bounded as `undoLast` is: once, and only this session's last phrase. */
     function deleteLast() {
         if (!last) return;
         if (target.getDocument() === last.after) target.undo();
@@ -276,7 +294,8 @@ export function startSession(options: SessionOptions): Session {
                 // the text is taken out through the same step as writing, by an erase of nothing and a replacement
                 const state = write({ doc, selection: { anchor: { path: at.path, offset: at.offset }, focus: { path: at.path, offset: at.offset } } }, [{ kind: "text", text: "", erase: at.offset - cut }]);
                 return state.state;
-            }, "delete");
+                // a step of its own kind, so that it never joins a Backspace typed just before and one undo puts it back
+            }, "replace");
         }
         last = undefined;
     }
@@ -289,23 +308,28 @@ export function startSession(options: SessionOptions): Session {
         live = undefined;
         const job = queue.then(async () => {
             busy = true;
-            // a live phrase already holds everything said, so it is only asked to finish
-            let said: string | undefined;
-            if (stream) {
-                said = await stream.finish().then((words) => words.map((word) => word.text).join(" "), () => undefined);
+            try {
+                // a live phrase already holds everything said, so it is only asked to finish
+                let said: string | undefined;
+                if (stream) {
+                    said = await stream.finish().then((words) => words.map((word) => word.text).join(" "), () => undefined);
+                }
+                const heard = said === undefined && count >= 1600 ? await recognize(count) : undefined;
+                if (said?.trim()) settle(said);
+                if (heard) {
+                    if (heard.words.length > 0) settle(heard.words.map((word) => word.text).join(" "));
+                }
+                drop(Math.min(count, length));
+                lastRun = 0;
+                if (count >= length) show("");
+            } catch (error) {
+                // the phrase could not be written: the session ends here, as it does when recognizing fails
+                fail(error);
+            } finally {
+                busy = false;
             }
-            const heard = said === undefined && count >= 1600 ? await recognize(count) : undefined;
-            if (said?.trim()) settle(said);
-            if (heard) {
-                const merged = merger.update(heard.words, { final: true });
-                if (merged.settled.length > 0) settle(merged.settled.map((word) => word.text).join(" "));
-            }
-            drop(Math.min(count, length));
-            lastRun = 0;
-            if (count >= length) show("");
-            busy = false;
         });
-        queue = job.catch(() => {});
+        queue = job;
         return job;
     }
 
@@ -319,24 +343,58 @@ export function startSession(options: SessionOptions): Session {
             waiting = false;
             if (mine !== generation || finished) return;
             busy = true;
-            const heard = await recognize(count);
-            busy = false;
-            if (!heard || mine !== generation || finished) return;
-            lastRun = count;
-            const merged = merger.update(heard.words, {});
-            show(correct(merged.provisional.map((word) => word.text).join(" "), options.custom()));
+            try {
+                const heard = await recognize(count);
+                if (!heard || mine !== generation || finished) return;
+                lastRun = count;
+                show(correct(heard.words.map((word) => word.text).join(" "), options.custom()));
+            } catch (error) {
+                fail(error);
+            } finally {
+                busy = false;
+            }
         });
     }
 
-    async function finish(reason: Reason) {
-        if (finished || stopping) return;
+    /** Something went wrong in recognizing or writing: it is said, and the session ends. */
+    function fail(error: unknown) {
+        failed = true;
+        note(`Dictation stopped: ${error instanceof Error ? error.message : String(error)}`);
+        void finish("error");
+    }
+
+    /**
+     * Ends the session, once: whatever asks again is given the same promise. Every way out comes
+     * here, and whatever happens while the last phrase is settled, the promise resolves and
+     * `onStop` is called exactly once.
+     */
+    function finish(reason: Reason): Promise<void> {
+        if (ending) return ending;
         stopping = true;
-        if (active && length >= 3200) await settleFirst(length);
-        else await queue;
-        finished = true;
-        show("");
-        options.onLevel?.(0, false);
-        options.onStop?.(reason);
+        // no more sound is taken from here, so the microphone goes at once and only the work on what was heard goes on
+        try {
+            options.onRelease?.();
+        } catch (error) {
+            failed = true;
+            note(`Dictation stopped: ${error instanceof Error ? error.message : String(error)}`);
+        }
+        ending = (async () => {
+            try {
+                if (active && length >= 3200) await settleFirst(length);
+                else await queue;
+            } catch (error) {
+                failed = true;
+                note(`Dictation stopped: ${error instanceof Error ? error.message : String(error)}`);
+            } finally {
+                finished = true;
+                live?.cancel();
+                live = undefined;
+                show("");
+                options.onLevel?.(0, false);
+                options.onStop?.(failed ? "error" : reason);
+            }
+        })();
+        return ending;
     }
 
     return {
@@ -363,6 +421,12 @@ export function startSession(options: SessionOptions): Session {
                 void settleFirst(length);
             } else if (heard.event === "silence" || heard.event === "nothing") {
                 void finish(heard.event === "silence" ? "silence" : "nothing");
+            } else if (active && live && length > LONGEST * RATE && !busy) {
+                // Sound that never pauses (a television, a fan above the threshold) would keep one live phrase open, and
+                // all its sound, for as long as it lasts. At three windows the phrase is ended and the next goes on in a
+                // new stream, given none of the old sound, which the old one already holds.
+                void settleFirst(length);
+                openLive(false);
             } else if (active && length > WINDOW * RATE && !busy && !waiting && !live) {
                 // the window has grown too long: the first part is settled at its quietest moment
                 void settleFirst(quietest());

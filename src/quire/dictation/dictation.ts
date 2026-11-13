@@ -28,7 +28,10 @@ import { correct, load as loadWords, save as saveWords, type Custom } from "./wo
 /** What the page can give dictation in place of the real things. */
 export interface DictationOptions {
     provider?: Provider;
-    microphone?: (onFrame: (frame: Float32Array) => void) => Promise<Microphone>;
+    /** Opens a microphone; `onLost` is called if it is taken away while open. */
+    microphone?: (onFrame: (frame: Float32Array) => void, onLost: () => void) => Promise<Microphone>;
+    /** Called each time dictation has stopped, with why; for the browser tests, which count it. */
+    onStopped?: (reason: string) => void;
     /** The reason dictation cannot work here, or nothing if it can. */
     unavailable?: () => string | undefined;
     /** Quiet times in milliseconds, for tests. */
@@ -133,6 +136,9 @@ export function createDictation(surface: Surface, options: DictationOptions = {}
         let recognizer: Recognizer | undefined;
         let loadMs = 0;
         let release: ReturnType<typeof setTimeout> | undefined;
+        /** The load of the model under way, which a second press waits for; and whether dictation has been taken down. */
+        let loading: Promise<{ recognizer: Recognizer; ms: number } | undefined> | undefined;
+        let gone = false;
         let view: "main" | "words" = "main";
         let starting = 0;
         let lastSpeed = 0;
@@ -244,25 +250,40 @@ export function createDictation(surface: Surface, options: DictationOptions = {}
                 }
                 cached.set(wanted.id, true);
                 setState("loading");
-                const loaded = await provider.load(wanted, wordsToLean()).then(
-                    (made) => made,
-                    (error: Error) => {
-                        say(`The model could not be loaded: ${error.message}`);
-                        return undefined;
-                    },
-                );
-                if (!loaded) return void setState("off");
-                if (mine !== starting) return void loaded.recognizer.dispose();
-                recognizer = loaded.recognizer;
+                // A press, a cancel and a press again while the model loads wait for the one load, rather than
+                // loading the model a second time beside the first.
+                loading ??= provider
+                    .load(wanted, wordsToLean())
+                    .then(
+                        (made) => made,
+                        (error: Error) => {
+                            say(`The model could not be loaded: ${error.message}`);
+                            return undefined;
+                        },
+                    )
+                    .finally(() => (loading = undefined));
+                const loaded = await loading;
+                if (!loaded) {
+                    if (mine === starting) setState("off");
+                    return;
+                }
+                recognizer ??= loaded.recognizer;
                 loadMs = loaded.ms;
+                // pressed off while it loaded: the model is kept for a moment, as after any stop, and then let go
+                if (mine !== starting) return void scheduleRelease();
             } else setState("loading");
             try {
-                mic = await microphone((frame) => session?.feed(frame));
+                mic = await microphone(
+                    (frame) => session?.feed(frame),
+                    () => stop("lost"),
+                );
             } catch (error) {
                 say(error instanceof MicrophoneError || error instanceof Error ? error.message : "The microphone could not be opened.");
-                return void setState("off");
+                scheduleRelease();
+                if (mine === starting) setState("off");
+                return;
             }
-            if (mine !== starting) return void mic.close();
+            if (mine !== starting) return void releaseMic();
             recognizer.boost?.(wordsToLean());
             session = startSession({
                 target: surface,
@@ -277,6 +298,7 @@ export function createDictation(surface: Surface, options: DictationOptions = {}
                     note = text;
                     render();
                 },
+                onRelease: releaseMic,
                 onStop: (reason) => void ended(reason),
             });
             // the panel and the first launch's dialog are put away so that the words being written can be seen
@@ -287,31 +309,62 @@ export function createDictation(surface: Surface, options: DictationOptions = {}
             live.textContent = "Dictation is on";
         }
 
-        /** Dictation has stopped: the microphone is closed at once, the model a little later. */
+        /** Closes the microphone, once. The browser's recording light goes out here, the moment dictation is switched off, while the last phrase is still being recognized from the sound already heard. */
+        function releaseMic() {
+            const open = mic;
+            mic = undefined;
+            open?.close();
+        }
+
+        /** Dictation has stopped and the last phrase is written: the microphone is closed already, the model goes a little later. */
         async function ended(reason: string) {
             lastSpeed = session?.speed() ?? lastSpeed;
-            mic?.close();
-            mic = undefined;
+            releaseMic();
             session = undefined;
             button.style.setProperty("--level", "0");
             showWords("");
-            const why = reason === "silence" ? "Dictation switched itself off after a quiet moment." : reason === "nothing" ? "Dictation switched itself off because nothing was said." : reason === "command" ? "Dictation stopped." : reason === "error" ? message || "Dictation stopped." : "";
+            const why = reason === "silence" ? "Dictation switched itself off after a quiet moment." : reason === "nothing" ? "Dictation switched itself off because nothing was said." : reason === "command" || reason === "hidden" || reason === "lost" ? "Dictation stopped." : reason === "error" ? message || "Dictation stopped." : "";
             if (why) say(why);
             else live.textContent = "Dictation is off";
             setState("off");
+            options.onStopped?.(reason);
+            scheduleRelease();
+        }
+
+        /** The model is let go a little after dictation stops (or fails to start), which gives back the memory it held. */
+        function scheduleRelease() {
             clearTimeout(release);
-            // the model is let go soon after, which gives back the memory it held
+            // taken down: the model and the worker go now, once nothing is being written
+            if (gone) {
+                if (session) return;
+                recognizer?.dispose();
+                recognizer = undefined;
+                provider.dispose();
+                return;
+            }
             release = setTimeout(() => {
+                if (session) return;
                 recognizer?.dispose();
                 recognizer = undefined;
             }, KEEP);
         }
 
-        function stop(reason: "button") {
+        function stop(reason: "button" | "hidden" | "lost") {
             starting++;
+            releaseMic();
             if (session) void session.stop(reason);
-            else void ended(reason);
+            else if (state === "listening" || state === "loading") void ended(reason);
         }
+
+        // Dictation stops when the page is hidden or left, and the microphone with it: nobody is there to see what it writes.
+        const onHidden = () => {
+            if (document.visibilityState === "hidden" && (state === "listening" || state === "loading")) stop("hidden");
+        };
+        const onLeave = () => {
+            if (state === "listening" || state === "loading") stop("hidden");
+        };
+        document.addEventListener("visibilitychange", onHidden);
+        addEventListener("pagehide", onLeave);
 
         // ---- the shortcut ----
         const onKey = (event: KeyboardEvent) => {
@@ -326,6 +379,8 @@ export function createDictation(surface: Surface, options: DictationOptions = {}
         // ---- downloading ----
         async function download() {
             const wanted = tier();
+            // the dialog whose "Download and start" was pressed: only while it is still open does the download go on to the microphone
+            const from = asking;
             progress = { bytes: 0, total: sizeOf(wanted) };
             say("");
             setState("downloading");
@@ -346,6 +401,9 @@ export function createDictation(surface: Surface, options: DictationOptions = {}
             if (askCount) askCount.textContent = "Getting it ready";
             void navigator.storage?.persist?.().catch(() => {});
             await refresh();
+            // A download that ends after its dialog was closed (it was cancelled too late to stop) never opens the
+            // microphone by itself, minutes after the press: the microphone opens only on the writer's own press.
+            if (!from || asking !== from || !from.isOpen()) return void setState("off");
             await start();
         }
 
@@ -444,9 +502,12 @@ export function createDictation(surface: Surface, options: DictationOptions = {}
                     action(`Remove the model (${megabytes(sizeOf(wanted))})`, async () => {
                         recognizer?.dispose();
                         recognizer = undefined;
-                        await provider.remove(wanted);
+                        const failed = await provider.remove(wanted).then(
+                            () => undefined,
+                            (error: Error) => error,
+                        );
                         await refresh();
-                        say(`The ${wanted.name.toLowerCase()} model was removed from this browser.`);
+                        say(failed ? `The model could not be removed: ${failed.message}` : `The ${wanted.name.toLowerCase()} model was removed from this browser.`);
                     }),
                 );
             }
@@ -560,6 +621,8 @@ export function createDictation(surface: Surface, options: DictationOptions = {}
                 onClose: () => {
                     asking = askBar = askCount = undefined;
                     if (state === "asking") setState("off");
+                    // closing the dialog (Escape, a click outside, Not now) is saying no to what it was doing
+                    if (state === "downloading") provider.cancel();
                 },
             });
         }
@@ -674,12 +737,17 @@ export function createDictation(surface: Surface, options: DictationOptions = {}
             stats: () => ({ backend: recognizer?.backend ?? "", loadMs, speed: session?.speed() ?? lastSpeed, mode: session?.mode() ?? "none", message }),
             state: () => state,
             destroy() {
+                gone = true;
                 starting++;
-                clearTimeout(release);
-                void session?.stop("button");
-                mic?.close();
-                recognizer?.dispose();
+                releaseMic();
+                if (state === "downloading") provider.cancel();
+                // The last phrase is still recognized and written before the model goes: the session's end lets it go
+                // (scheduleRelease, from ended). With no session it goes now, and so does a load that ends later.
+                if (session) void session.stop("button");
+                else scheduleRelease();
                 surface.element.removeEventListener("keydown", onKey, true);
+                document.removeEventListener("visibilitychange", onHidden);
+                removeEventListener("pagehide", onLeave);
                 removeEventListener("scroll", follow, true);
                 removeEventListener("resize", follow);
                 unselect();

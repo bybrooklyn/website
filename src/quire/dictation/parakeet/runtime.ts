@@ -8,6 +8,8 @@
 // WebAssembly-only one, 12 MB, or the one with WebGPU, 25 MB) and so that a smaller build made by
 // hand can be dropped in by changing that one line.
 
+import { frameMajor } from "./decode";
+
 /** Where ONNX Runtime's files are served from. The build copies them there (astro.config.ts). */
 export const RUNTIME = "/ort/";
 
@@ -22,8 +24,6 @@ export interface LoadOptions {
     files: { encoder: ArrayBuffer | Uint8Array | string; decoder: ArrayBuffer | Uint8Array | string };
     prefer?: "webgpu" | "wasm";
     threads?: number;
-    /** Session options laid over the ones chosen here; for measuring, not for use. */
-    tune?: { encoder?: object; decoder?: object; flavor?: Flavor };
 }
 
 /** What load gives back. */
@@ -62,8 +62,6 @@ export interface Ort {
 const FILES = {
     wasm: { api: "ort.wasm.min.mjs", glue: "ort-wasm-simd-threaded.mjs", wasm: "ort-wasm-simd-threaded.wasm" },
     jsep: { api: "ort.min.mjs", glue: "ort-wasm-simd-threaded.jsep.mjs", wasm: "ort-wasm-simd-threaded.jsep.wasm" },
-    jspi: { api: "ort.jspi.min.mjs", glue: "ort-wasm-simd-threaded.jspi.mjs", wasm: "ort-wasm-simd-threaded.jspi.wasm" },
-    asyncify: { api: "ort.webgpu.min.mjs", glue: "ort-wasm-simd-threaded.asyncify.mjs", wasm: "ort-wasm-simd-threaded.asyncify.wasm" },
 } as const;
 /** The name of a build of ONNX Runtime. */
 export type Flavor = keyof typeof FILES;
@@ -83,6 +81,11 @@ export function ortFor(flavor: Flavor, base = RUNTIME): Promise<Ort> {
             return ort;
         });
         modules.set(key, loading);
+        // a fetch that failed (the connection blinked, a deploy was replacing the files) is not remembered, so the next press tries again
+        const mine = loading;
+        loading.catch(() => {
+            if (modules.get(key) === mine) modules.delete(key);
+        });
     }
     return loading;
 }
@@ -100,20 +103,21 @@ export function provide(flavor: Flavor, ort: Ort): void {
 }
 
 /** Threads WebAssembly can use here: more than one only when the page is cross-origin isolated, which lets it share memory. Half the processor's threads, between 1 and 8: measured, more than that buys little (RUNTIME.md). */
-function threadsHere(): number {
+export function threadsHere(): number {
     if (!self.crossOriginIsolated || typeof SharedArrayBuffer === "undefined") return 1;
     return Math.max(1, Math.min(8, Math.floor((navigator.hardwareConcurrency || 2) / 2)));
 }
 
 /** Whether the browser gives a graphics adapter and a device from it, which is the only way to know WebGPU will work. */
 async function graphicsCard(): Promise<boolean> {
-    const gpu = (navigator as unknown as { gpu?: { requestAdapter(): Promise<{ info?: { isFallbackAdapter?: boolean }; requestDevice(): Promise<unknown> } | null> } }).gpu;
+    const gpu = (navigator as unknown as { gpu?: { requestAdapter(): Promise<{ info?: { isFallbackAdapter?: boolean }; requestDevice(): Promise<{ destroy?(): void }> } | null> } }).gpu;
     if (!gpu) return false;
     try {
         const adapter = await gpu.requestAdapter();
         // a software stand-in for a card (SwiftShader) runs the encoder ten times slower than WebAssembly does
         if (!adapter || adapter.info?.isFallbackAdapter) return false;
-        await adapter.requestDevice();
+        // the device was asked for only to know that one is given; it is let go at once rather than left to be collected
+        (await adapter.requestDevice()).destroy?.();
         return true;
     } catch {
         return false;
@@ -142,11 +146,11 @@ export async function load(options: LoadOptions): Promise<Loaded> {
     if (kind === "webgpu" && here.kind !== "webgpu") kind = "wasm";
     const threads = options.threads ?? here.threads;
 
-    let ort = await ortFor(kind === "webgpu" ? (options.tune?.flavor ?? WEBGPU) : "wasm");
+    let ort = await ortFor(kind === "webgpu" ? WEBGPU : "wasm");
     settle(ort, threads);
     let encoder: Session;
     try {
-        encoder = await ort.InferenceSession.create(bytes(options.files.encoder), { ...ENCODER, executionProviders: kind === "webgpu" ? ["webgpu", "wasm"] : ["wasm"], ...options.tune?.encoder });
+        encoder = await ort.InferenceSession.create(bytes(options.files.encoder), { ...ENCODER, executionProviders: kind === "webgpu" ? ["webgpu", "wasm"] : ["wasm"] });
     } catch (error) {
         // the card was there but the encoder would not run on it: carry on without it
         if (kind !== "webgpu") throw error;
@@ -157,7 +161,14 @@ export async function load(options: LoadOptions): Promise<Loaded> {
         encoder = await ort.InferenceSession.create(bytes(options.files.encoder), { ...ENCODER, executionProviders: ["wasm"] });
     }
     // the decoder follows the encoder into the same module, so that only one WebAssembly module is made
-    const decoder = await ort.InferenceSession.create(bytes(options.files.decoder), { ...DECODER, ...options.tune?.decoder });
+    let decoder: Session;
+    try {
+        decoder = await ort.InferenceSession.create(bytes(options.files.decoder), DECODER);
+    } catch (error) {
+        // the encoder made already is let go, or its memory would stay with the worker
+        await encoder.release().catch(() => undefined);
+        throw error;
+    }
 
     // names and kinds are read from the files, so that a model exported with other names still runs
     const [signal, length] = encoder.inputNames.length > 1 ? [encoder.inputNames[0]!, encoder.inputNames[1]!] : [encoder.inputNames[0]!, undefined];
@@ -179,14 +190,15 @@ export async function load(options: LoadOptions): Promise<Loaded> {
                 input.dispose();
                 lengths?.dispose();
             }
-            const tensor = results[out]!;
-            // the output is [1, width, frames]; the decoder wants one row of `width` numbers per frame
-            const [, width, steps] = tensor.dims as [number, number, number];
-            const source = (await tensor.getData()) as Float32Array;
-            const data = new Float32Array(steps * width);
-            for (let step = 0; step < steps; step++) for (let at = 0; at < width; at++) data[step * width + at] = source[at * steps + step]!;
-            for (const each of Object.values(results)) each.dispose();
-            return { data, frames: steps, width };
+            try {
+                const tensor = results[out]!;
+                // the output is [1, width, frames]; the decoder wants one row of `width` numbers per frame
+                const [, width, steps] = tensor.dims as [number, number, number];
+                return { data: frameMajor((await tensor.getData()) as Float32Array, width, steps), frames: steps, width };
+            } finally {
+                // on the card the outputs are its memory, let go whether or not they could be read
+                for (const each of Object.values(results)) each.dispose();
+            }
         },
         async release() {
             await encoder.release();

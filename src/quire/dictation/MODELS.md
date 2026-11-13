@@ -1,16 +1,20 @@
 # The speech models of dictation
 
 The list is one small table in code: `TIERS` in `models.ts`. A row says which Hugging Face repository
-the files come from, the path and size of each file in it, the license and who to credit. To point a
-tier at files you have made yourself, change that row (`repo`, and the `path` and `bytes` of each
-file) and nothing else. The engine reads the role of each file (`encoder`, `decoder`, `vocab` or
+the files come from and at which revision, the path, size and (when known) SHA-256 of each file in it,
+the license and who to credit. To point a tier at files you have made yourself, change that row
+(`repo`, `revision`, and the `path`, `bytes` and `sha256` of each file) and nothing else. The engine reads the role of each file (`encoder`, `decoder`, `vocab` or
 `tokenizer`), not its name.
 
 A tier whose encoder can run on the graphics card says so (`card: true`); the runtime then uses the card if the
 browser has a real one, and the panel says "graphics card" or "processor". Only a 4-bit encoder can.
 
 Sizes in the table must be the real sizes in bytes: the download refuses a file that arrives at any
-other size (a half-written or changed file), and the panel shows the sum.
+other size (a half-written or changed file), and the panel shows the sum. A file with a `sha256` is
+refused unless its bytes have that digest. A kept file is marked with the revision, size and digest
+it was fetched for, and is fetched again when the row says otherwise, so a changed row never runs on
+old bytes. `revision` should be a commit hash, which pins the files; the rows are still on `main`
+and have no digests until those are read from Hugging Face and written in.
 
 ## What is measured
 

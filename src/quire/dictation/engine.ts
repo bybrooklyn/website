@@ -5,36 +5,34 @@
 // The whole of what the panel and the session need of an engine is `Provider`. The browser tests
 // give the page a made-up one with the same shape, so no model is ever downloaded in a test.
 
-import { nameOf } from "./download";
+import { nameOf, whole } from "./download";
 import type { Tier } from "./models";
 import type { Live, LiveUpdate, Recognizer } from "./session";
 
-/** What the page asks of the worker. */
+/** What the page asks of the worker. Every ask that is answered carries a number, and its answers carry the same one. */
 export type Ask =
-    | { type: "download"; tier: string }
+    | { type: "download"; id: number; tier: string }
     | { type: "cancel" }
-    | { type: "load"; tier: string; words: string[] }
+    | { type: "load"; id: number; tier: string; words: string[] }
     | { type: "recognize"; id: number; samples: Float32Array }
     | { type: "words"; words: string[] }
     | { type: "stream-open"; stream: number }
     | { type: "stream-push"; stream: number; samples: Float32Array }
     | { type: "stream-finish"; stream: number; id: number }
-    | { type: "stream-cancel"; stream: number }
-    | { type: "release" };
+    | { type: "stream-cancel"; stream: number };
 
 /** A word with its time, as the worker sends it. */
 export type Sent = { text: string; start: number; end: number };
 
-/** What the worker answers. */
+/** What the worker answers. A failure names the ask it answers, or the live phrase whose sound could not be taken. */
 export type Answer =
-    | { type: "progress"; bytes: number }
-    | { type: "downloaded" }
-    | { type: "loaded"; ms: number; backend: string; threads: number; live: boolean }
+    | { type: "progress"; id: number; bytes: number }
+    | { type: "downloaded"; id: number }
+    | { type: "loaded"; id: number; ms: number; backend: string; live: boolean }
     | { type: "stream-update"; stream: number; update: LiveUpdate }
     | { type: "stream-done"; id: number; words: Sent[] }
     | { type: "heard"; id: number; text: string; words: { text: string; start: number; end: number }[]; ms: number }
-    | { type: "released" }
-    | { type: "failed"; message: string; cancelled: boolean; id?: number };
+    | { type: "failed"; message: string; cancelled: boolean; id?: number; stream?: number };
 
 /** What the panel and the session use of an engine. */
 export interface Provider {
@@ -49,6 +47,8 @@ export interface Provider {
     load(tier: Tier, words: string[]): Promise<{ recognizer: Recognizer; ms: number }>;
     /** Deletes a tier's files from this browser. */
     remove(tier: Tier): Promise<void>;
+    /** Ends the engine and gives back all it holds (a download under way, a model loaded), for when dictation is taken down. */
+    dispose(): void;
 }
 
 const FOLDER = "mdquire-dictation";
@@ -68,23 +68,122 @@ async function directory(create: boolean): Promise<FileSystemDirectoryHandle | u
 /** The real engine: a worker running ONNX Runtime Web. */
 export function createProvider(): Provider {
     let worker: Worker | undefined;
-    let listener: ((answer: Answer) => void) | undefined;
+    /** Every ask that waits for an answer, by its number, with what to do with the answer and with a failure. */
+    let pending = new Map<number, { answer: (answer: Answer) => void; fail: (error: Error) => void }>();
+    /** The live phrases' listeners, and the phrases whose worker side has failed. */
+    const updates = new Map<number, (update: LiveUpdate) => void>();
+    const broken = new Set<number>();
+    let asked = 0;
+    let streams = 0;
+
+    /** The worker has died (out of memory, a crash) or been ended: every ask still waiting is told, and the next one makes a new worker. */
+    const lose = (gone: Worker, why: string) => {
+        if (worker !== gone) return;
+        gone.terminate();
+        worker = undefined;
+        const waiting = pending;
+        pending = new Map();
+        updates.clear();
+        for (const each of waiting.values()) each.fail(new Error(why));
+    };
     const open = () => {
         if (!worker) {
-            worker = new Worker(new URL("./engine-worker.ts", import.meta.url), { type: "module" });
-            worker.onmessage = (event: MessageEvent<Answer>) => listener?.(event.data);
-            worker.onerror = (event) => listener?.({ type: "failed", message: event.message || "the engine could not start", cancelled: false });
+            const made = new Worker(new URL("./engine-worker.ts", import.meta.url), { type: "module" });
+            made.onmessage = (event: MessageEvent<Answer>) => {
+                if (worker !== made) return;
+                const answer = event.data;
+                if (answer.type === "stream-update") return updates.get(answer.stream)?.(answer.update);
+                if (answer.type === "failed" && answer.stream !== undefined) {
+                    broken.add(answer.stream);
+                    updates.delete(answer.stream);
+                }
+                if ("id" in answer && answer.id !== undefined) pending.get(answer.id)?.answer(answer);
+            };
+            made.onerror = (event) => lose(made, `The speech engine stopped: ${event.message || "it could not start"}`);
+            made.onmessageerror = () => lose(made, "The speech engine stopped: a message could not be read");
+            worker = made;
         }
         return worker;
     };
-    const ask = (message: Ask, transfer: Transferable[] = []) => open().postMessage(message, transfer);
+    /** Asks the worker something and waits for its last answer; `step` is given the answers that come before it (progress). */
+    const request = <T>(make: (id: number) => Ask, settle: (answer: Answer) => T | undefined, transfer: Transferable[] = [], step?: (answer: Answer) => void): Promise<T> => {
+        const target = open();
+        const id = ++asked;
+        return new Promise<T>((resolve, reject) => {
+            pending.set(id, {
+                answer: (answer) => {
+                    if (answer.type === "failed") {
+                        pending.delete(id);
+                        reject(Object.assign(new Error(answer.message), { cancelled: answer.cancelled }));
+                        return;
+                    }
+                    const done = settle(answer);
+                    if (done === undefined) return void step?.(answer);
+                    pending.delete(id);
+                    resolve(done);
+                },
+                fail: reject,
+            });
+            target.postMessage(make(id), transfer);
+        });
+    };
+
+    /** A recognizer on the worker as it is now: once that worker has gone, it answers nothing but a failure. */
+    const recognizerOn = (mine: Worker, answer: Extract<Answer, { type: "loaded" }>): Recognizer => {
+        const gone = () => Promise.reject(new Error("The speech engine stopped"));
+        const live = (): Live => {
+            const stream = ++streams;
+            if (worker === mine) mine.postMessage({ type: "stream-open", stream } satisfies Ask);
+            return {
+                push: (samples) => {
+                    if (worker === mine && !broken.has(stream)) mine.postMessage({ type: "stream-push", stream, samples } satisfies Ask, [samples.buffer]);
+                },
+                onUpdate: (next) => void updates.set(stream, next),
+                finish: () => {
+                    const words = worker !== mine || broken.has(stream) ? gone() : request<Sent[]>((id) => ({ type: "stream-finish", stream, id }), (each) => (each.type === "stream-done" ? each.words : undefined));
+                    return words.finally(() => {
+                        updates.delete(stream);
+                        broken.delete(stream);
+                    });
+                },
+                cancel: () => {
+                    updates.delete(stream);
+                    broken.delete(stream);
+                    if (worker === mine) mine.postMessage({ type: "stream-cancel", stream } satisfies Ask);
+                },
+            };
+        };
+        return {
+            ...(answer.live ? { stream: live, boost: (list: string[]) => void (worker === mine && mine.postMessage({ type: "words", words: list } satisfies Ask)) } : {}),
+            backend: answer.backend,
+            transcribe: (samples) =>
+                worker !== mine
+                    ? gone()
+                    : request(
+                          (id) => ({ type: "recognize", id, samples }),
+                          (each) => (each.type === "heard" ? { text: each.text, words: each.words, ms: each.ms } : undefined),
+                          [samples.buffer],
+                      ),
+            dispose() {
+                // ending the worker is what gives its memory back
+                lose(mine, "The speech engine was let go");
+            },
+        };
+    };
 
     return {
         async cached(tier) {
             const top = await directory(false);
             const dir = await top?.getDirectoryHandle(tier.id).catch(() => undefined);
             if (!dir) return false;
-            for (const file of tier.files) if (!(await dir.getFileHandle(`${nameOf(file.path)}.whole`).then(() => true, () => false))) return false;
+            // a file is ready only if its mark is for the table as it is now and its size is right (download.ts)
+            const fileOf = (name: string) => dir.getFileHandle(name).then((handle) => handle.getFile());
+            for (const file of tier.files) {
+                const name = nameOf(file.path);
+                const mark = await fileOf(`${name}.whole`).then((each) => each.text(), () => undefined);
+                const size = await fileOf(name).then((each) => each.size, () => -1);
+                if (!whole(tier, file, mark, size)) return false;
+            }
             return true;
         },
         async used() {
@@ -98,96 +197,41 @@ export function createProvider(): Provider {
             return total;
         },
         download(tier, progress) {
-            return new Promise((resolve, reject) => {
-                listener = (answer) => {
-                    if (answer.type === "progress") progress(answer.bytes);
-                    else if (answer.type === "downloaded") resolve();
-                    else if (answer.type === "failed") reject(Object.assign(new Error(answer.message), { cancelled: answer.cancelled }));
-                };
-                ask({ type: "download", tier: tier.id });
-            });
+            return request<true>(
+                (id) => ({ type: "download", id, tier: tier.id }),
+                (answer) => (answer.type === "downloaded" ? true : undefined),
+                [],
+                (answer) => answer.type === "progress" && progress(answer.bytes),
+            ).then(() => undefined);
         },
         cancel() {
             worker?.postMessage({ type: "cancel" } satisfies Ask);
         },
-        load(tier, words) {
-            return new Promise((resolve, reject) => {
-                const waiting = new Map<number, { done: (answer: Extract<Answer, { type: "heard" }>) => void; fail: (error: Error) => void }>();
-                const finishing = new Map<number, { done: (words: Sent[]) => void; fail: (error: Error) => void }>();
-                // Phrases overlap: the next may begin while the last is still being finished, so each has a number of its own.
-                const updates = new Map<number, (update: LiveUpdate) => void>();
-                let sent = 0;
-                let streams = 0;
-                const live = (): Live => {
-                    const stream = ++streams;
-                    ask({ type: "stream-open", stream });
-                    return {
-                        push: (samples) => ask({ type: "stream-push", stream, samples }, [samples.buffer]),
-                        onUpdate: (next) => void updates.set(stream, next),
-                        finish: () =>
-                            new Promise((done, fail) => {
-                                const id = ++sent;
-                                finishing.set(id, { done, fail });
-                                ask({ type: "stream-finish", stream, id });
-                            }).finally(() => updates.delete(stream)) as Promise<Sent[]>,
-                        cancel: () => {
-                            updates.delete(stream);
-                            ask({ type: "stream-cancel", stream });
-                        },
-                    };
-                };
-                listener = (answer) => {
-                    if (answer.type === "loaded") {
-                        resolve({
-                            ms: answer.ms,
-                            recognizer: {
-                                ...(answer.live
-                                    ? {
-                                          stream: live,
-                                          boost: (list: string[]) => ask({ type: "words", words: list }),
-                                      }
-                                    : {}),
-                                backend: answer.backend,
-                                transcribe: (samples) =>
-                                    new Promise((done, fail) => {
-                                        const id = ++sent;
-                                        waiting.set(id, { done: (heard) => done({ text: heard.text, words: heard.words, ms: heard.ms }), fail });
-                                        ask({ type: "recognize", id, samples }, [samples.buffer]);
-                                    }),
-                                dispose() {
-                                    // ending the worker is what gives its memory back
-                                    worker?.terminate();
-                                    worker = undefined;
-                                    listener = undefined;
-                                },
-                            },
-                        });
-                    } else if (answer.type === "heard") {
-                        waiting.get(answer.id)?.done(answer);
-                        waiting.delete(answer.id);
-                    } else if (answer.type === "stream-update") {
-                        updates.get(answer.stream)?.(answer.update);
-                    } else if (answer.type === "stream-done") {
-                        finishing.get(answer.id)?.done(answer.words);
-                        finishing.delete(answer.id);
-                    } else if (answer.type === "failed") {
-                        const error = new Error(answer.message);
-                        if (answer.id !== undefined) {
-                            waiting.get(answer.id)?.fail(error);
-                            finishing.get(answer.id)?.fail(error);
-                            waiting.delete(answer.id);
-                            finishing.delete(answer.id);
-                        } else reject(error);
-                    }
-                };
-                ask({ type: "load", tier: tier.id, words });
-            });
+        async load(tier, words) {
+            const mine = open();
+            const answer = await request<Extract<Answer, { type: "loaded" }>>((id) => ({ type: "load", id, tier: tier.id, words }), (each) => (each.type === "loaded" ? each : undefined));
+            if (worker !== mine) throw new Error("The speech engine stopped");
+            return { ms: answer.ms, recognizer: recognizerOn(mine, answer) };
+        },
+        dispose() {
+            if (worker) lose(worker, "The speech engine was let go");
         },
         async remove(tier) {
-            worker?.terminate();
-            worker = undefined;
+            if (worker) lose(worker, "The model was removed");
             const top = await directory(false);
-            await top?.removeEntry(tier.id, { recursive: true }).catch(() => {});
+            if (!top) return;
+            // The ended worker may hold its files for a moment yet, which makes the removal fail: it is tried
+            // again a few times, and a removal that still fails is said, not passed over as done.
+            for (let tries = 0; ; tries++) {
+                try {
+                    await top.removeEntry(tier.id, { recursive: true });
+                    return;
+                } catch (error) {
+                    if (error instanceof DOMException && error.name === "NotFoundError") return;
+                    if (tries >= 4) throw error;
+                    await new Promise((done) => setTimeout(done, 100 * (tries + 1)));
+                }
+            }
         },
     };
 }

@@ -55,7 +55,12 @@ export function decodeTokens(pieces: string[], ids: number[]): string {
 export function piecesOf(tokenizerJson: string): string[] {
     const vocab = (JSON.parse(tokenizerJson) as { model: { vocab: Record<string, number> } }).model.vocab;
     const pieces: string[] = [];
-    for (const [piece, id] of Object.entries(vocab)) pieces[id] = piece;
+    const entries = Object.entries(vocab);
+    for (const [piece, id] of entries) {
+        // the ids run from 0 with few gaps if any, so one far past the count of entries is a changed file, refused rather than followed
+        if (!Number.isInteger(id) || id < 0 || id >= Math.max(2 * entries.length, 1024)) throw new Error(`the tokenizer names piece ${id} but has only ${entries.length}`);
+        pieces[id] = piece;
+    }
     return pieces;
 }
 
@@ -76,7 +81,14 @@ export interface Moonshine {
 /** Loads the encoder and decoder as ONNX Runtime sessions and gives back the recognizer. */
 export async function createMoonshine(ort: Ort, files: { encoder: ArrayBuffer | Uint8Array | string; decoder: ArrayBuffer | Uint8Array | string; tokenizer: string }, options: object = {}): Promise<Moonshine> {
     const pieces = piecesOf(files.tokenizer);
-    const [encoder, decoder] = await Promise.all([ort.InferenceSession.create(files.encoder, options), ort.InferenceSession.create(files.decoder, options)]);
+    const made = await Promise.allSettled([ort.InferenceSession.create(files.encoder, options), ort.InferenceSession.create(files.decoder, options)]);
+    const failed = made.find((each) => each.status === "rejected");
+    if (failed) {
+        // the one that was made is let go, or its memory would stay with the worker
+        for (const each of made) if (each.status === "fulfilled") await each.value.release?.();
+        throw failed.reason;
+    }
+    const [encoder, decoder] = made.map((each) => (each as PromiseFulfilledResult<Session>).value) as [Session, Session];
     const empty = () => new ort.Tensor("float32", new Float32Array(0), [1, HEADS, 0, HEAD]);
 
     return {

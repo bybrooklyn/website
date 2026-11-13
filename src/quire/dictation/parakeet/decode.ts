@@ -103,7 +103,7 @@ export function copy(state: DecodeState): DecodeState {
     return { ...state, prediction: { ...prediction, h: prediction.h.slice(), c: prediction.c.slice() }, open: open && { ...open } };
 }
 
-/** Turns the encoder's output, which is `width` channels of `frames` numbers each, into `frames` frames of `width` numbers each, the order `decode` reads. */
+/** Turns the encoder's output, which is `width` channels of `frames` numbers each, into `frames` frames of `width` numbers each, the order `decode` reads. runtime.ts's `encode` does this to every output. */
 export function frameMajor(channels: Float32Array, width: number, frames: number): Float32Array {
     const out = new Float32Array(frames * width);
     for (let t = 0; t < frames; t++) for (let d = 0; d < width; d++) out[t * width + d] = channels[d * frames + t]!;
@@ -254,12 +254,12 @@ export function stepFor(session: Session, ort: Runtime): Step {
     const lastTensor = new ort.Tensor(target.type!, last, [1, 1]);
     const ones = long ? BigInt64Array.of(1n) : Int32Array.of(1);
     const lengthTensor = length && new ort.Tensor(length.type!, ones, [1]);
-    const kept = new Map<Float32Array, Tensor>();
-    const wrap = (data: Float32Array) => {
-        let tensor = kept.get(data);
-        if (!tensor) kept.set(data, (tensor = new ort.Tensor("float32", data, [layers, 1, hidden])));
-        return tensor;
-    };
+    // The memory going in is copied into two buffers of its own, not wrapped where it lies: every live
+    // step decodes from a fresh copy of the state, and a tensor kept for each copy was never let go.
+    const hIn = new Float32Array(layers * hidden);
+    const cIn = new Float32Array(layers * hidden);
+    const hTensor = new ort.Tensor("float32", hIn, [layers, 1, hidden]);
+    const cTensor = new ort.Tensor("float32", cIn, [layers, 1, hidden]);
     const out: PredictionState = { layers, hidden, h: new Float32Array(layers * hidden), c: new Float32Array(layers * hidden) };
 
     let held: Tensor | undefined;
@@ -267,7 +267,9 @@ export function stepFor(session: Session, ort: Runtime): Step {
         frame.set(input);
         if (long) (last as BigInt64Array)[0] = BigInt(token);
         else (last as Int32Array)[0] = token;
-        const feeds: Record<string, Tensor> = { [encoder.name]: frameTensor, [target.name]: lastTensor, [memory[0]!.name]: wrap(state.h), [memory[1]!.name]: wrap(state.c) };
+        hIn.set(state.h);
+        cIn.set(state.c);
+        const feeds: Record<string, Tensor> = { [encoder.name]: frameTensor, [target.name]: lastTensor, [memory[0]!.name]: hTensor, [memory[1]!.name]: cTensor };
         if (length && lengthTensor) feeds[length.name] = lengthTensor;
         const result = await session.run(feeds);
         out.h.set(result[states[0]!]!.data as Float32Array);
