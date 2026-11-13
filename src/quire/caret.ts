@@ -58,11 +58,17 @@ export function caretBox(root: HTMLElement, frame: HTMLElement): { left: number;
         const element = (node.nodeType === Node.ELEMENT_NODE ? (node as Element) : node.parentElement)!;
         const child = element.childNodes[range.startOffset];
         const box = (child instanceof Element ? child : element).getBoundingClientRect();
-        const style = getComputedStyle(child instanceof Element ? child : element);
-        const line = parseFloat(style.lineHeight) || box.height;
-        // as tall as the text would be there, as the browser's caret is, in the middle of the line
-        const text = Math.min(line, box.height || line, (parseFloat(style.fontSize) || line) * 1.25);
-        rect = new DOMRect(box.left + (parseFloat(style.paddingLeft) || 0), box.top + (parseFloat(style.paddingTop) || 0) + (line - text) / 2, 0, text);
+        if (child instanceof HTMLBRElement && box.height > 0) {
+            // the `<br>` holding the line open is an inline box already the text's height and at its place on
+            // the line, where the browser draws its caret; centring it in the line again put the caret low
+            rect = new DOMRect(box.left, box.top, 0, box.height);
+        } else {
+            const style = getComputedStyle(child instanceof Element ? child : element);
+            const line = parseFloat(style.lineHeight) || box.height;
+            // as tall as the text would be there, as the browser's caret is, in the middle of the line
+            const text = Math.min(line, box.height || line, (parseFloat(style.fontSize) || line) * 1.25);
+            rect = new DOMRect(box.left + (parseFloat(style.paddingLeft) || 0), box.top + (parseFloat(style.paddingTop) || 0) + (line - text) / 2, 0, text);
+        }
     }
     const origin = frame.getBoundingClientRect();
     // a sheet shown nearer or further (paper.ts) is measured on screen at its zoom, and placed inside at its own size

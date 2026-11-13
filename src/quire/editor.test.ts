@@ -1203,6 +1203,29 @@ used("the caret is drawn where the cursor is, a line tall, blinking once still i
     expect(await tab.run("getComputedStyle(document.querySelector('.quire-caret')).opacity")).toBe("0");
 });
 
+used("on an empty line, of every kind, the caret stands where the first letter typed will be: it does not move up or down when the letter comes", async () => {
+    await pageView(false);
+    const drawn = () => tab.run<{ top: number; height: number }>(`(() => { const box = document.querySelector('.quire-caret').getBoundingClientRect(); return { top: box.top, height: box.height }; })()`);
+    for (const [markdown, path] of [
+        ["Above.\n\nBelow.\n", [0]],
+        ["## Above\n\nBelow.\n", [0]],
+        ["- Above\n", [0, 0, 0]],
+        ["> Above\n", [0, 0]],
+    ] as [string, number[]][]) {
+        await reset(markdown, path, 0);
+        await tab.press("End");
+        await tab.press("Enter");
+        // a heading's next line is a paragraph: make it a heading again, so the empty line is the kind being tried
+        if (markdown.startsWith("## ")) await tab.type("## ");
+        await tab.wait(120);
+        const empty = await drawn();
+        await tab.type("x");
+        await tab.wait(120);
+        const typed = await drawn();
+        expect({ markdown, off: Math.abs(empty.top - typed.top) <= 1, tall: Math.abs(empty.height - typed.height) <= 1 }).toEqual({ markdown, off: true, tall: true });
+    }
+});
+
 used("the caret slides briefly when a key moves it along a line, is at once on another line, and with less motion never slides", async () => {
     await pageView(false);
     await reset("A first line of words.\n\nA second.\n\nA third line, longer than the others are.\n", [0], 3);
