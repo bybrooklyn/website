@@ -46,6 +46,8 @@ export default function plinko(m: Mote): Scene {
     let board: Board = drop({ ...settings, length: 0 });
     let dropping = false;
     const sound = m.preview ? undefined : sounds(m);
+    // only tapped, never dragged: a finger that lands on the board can still scroll the page (the stylesheet stops that for the minis that are steered)
+    m.canvas.style.touchAction = "pan-y";
     let auto = -6;
     let steps = 0;
 

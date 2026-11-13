@@ -145,6 +145,8 @@ export default function dice(m: Mote): Scene {
     let sum: Part | undefined;
     let lined = 0;
     const sound = m.preview ? undefined : sounds(m);
+    // only tapped, never dragged: a finger that lands on the tower can still scroll the page (the stylesheet stops that for the minis that are steered)
+    m.canvas.style.touchAction = "pan-y";
     /** How far along its flight the number in this place of the row is, from 0 to 1. Each sets off a moment after the one before. */
     const flown = (place: number) => Math.max(0, Math.min(1, (lined - place * Math.min(0.12, FLIGHT / lifted.length)) / FLIGHT));
     const lastIn = () => FLIGHT + (lifted.length - 1) * Math.min(0.12, FLIGHT / Math.max(1, lifted.length));
