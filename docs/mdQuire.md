@@ -48,7 +48,12 @@ fold away for such files, and a Markdown file can be turned into a `.quire`.
 (`find.ts`), zoom and page setup (`paper.ts`), page view with page breaks, headers, footers and page
 numbers (`pages.ts`), version history kept in the browser (`versions.ts`), tables (`tables.ts`), an
 outline of the headings (`outline.ts`), a slash menu on an empty line (`slash.ts`) and a bar over
-selected text (`select-bar.ts`).
+selected text (`select-bar.ts`). The slash menu opens on the five things the writer makes most and a
+quiet last line, More, that grows it open to the rest; before anything is counted the five are Heading 2,
+Bulleted list, Checklist, Picture and Code block. What is made is counted however it was made (the slash
+menu, the bar, a menu, a shortcut, a typed Markdown mark) by comparing the document before and after each
+change that makes things (`most-used.ts`). The counts stay in the browser's own storage, are never sent,
+and Tools, Forget what I use most, clears them.
 
 **Checking** (`check/`). Markdown tidiness, the site's writing rules (written once in `check/tells.ts`,
 which `scripts/lint.ts` imports, so the two give the same verdict), links and pictures that lead nowhere, spelling

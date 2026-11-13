@@ -22,6 +22,7 @@ import { type Document } from "./document";
 import { collapsed, fragment, pageBreakAt } from "./keys";
 import { createPages } from "./pages";
 import { createMarkdownView } from "./markdown-view";
+import { remember } from "./most-used";
 import { createOutline } from "./outline";
 import { read } from "./read";
 import { createSelectBar } from "./select-bar";
@@ -718,6 +719,8 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
                 wordCount: () => showCount(row.words[5]!),
                 shortcuts: () => showShortcuts(row.words[5]!),
                 searchMenus: () => bar.search(),
+                // the slash menu opens on the first five again
+                forgetUsed: () => (remember(), bar.setStatus("Forgotten", "What you use most is forgotten: the slash menu opens on its first five again")),
                 tools: () => dictation.items(row.words[5]!),
     };
     const row = createMenuRow(() =>
