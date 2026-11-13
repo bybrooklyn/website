@@ -94,6 +94,26 @@ export const gently = (t: number): number => t * t * (3 - 2 * t);
 
 /** The loop moves in steps of this many seconds, whatever the screen's refresh rate. */
 export const TICK = 1 / 120;
+/** The most time a frame makes up, in seconds: after a pause the loop goes on from where it was and does not race to catch up. */
+const BEHIND = 0.05;
+/** A frame's time comes with a little jitter. Owed this little short of a whole step, the step is taken now and not a frame late. */
+const JITTER = 0.0004;
+
+/**
+ * How many steps a frame takes, from the seconds still owed from frames before and the seconds since
+ * the last frame, and what is owed after them. On a 60 Hz screen every frame takes two steps, and not
+ * now one and now three; on one at 240 Hz, one step every other frame.
+ */
+export function paced(owed: number, seconds: number): { steps: number; owed: number } {
+    // a clock that went backward, or a time that is not a number, gives no steps and is not carried on
+    let left = Math.min((Number.isFinite(owed) ? owed : 0) + (seconds > 0 ? seconds : 0), BEHIND);
+    let steps = 0;
+    while (left >= TICK - JITTER) {
+        steps++;
+        left -= TICK;
+    }
+    return { steps, owed: left };
+}
 
 const KEYS: Record<string, Key> = {
     ArrowLeft: "left",
@@ -226,14 +246,13 @@ export function mote(host: HTMLElement, make: (m: Mote) => Scene, { label = "An 
         owed = 0;
         const loop = (now: number) => {
             // Catch up in fixed steps, but never try to make up a long pause.
-            owed = Math.min(owed + (now - last) / 1000, 0.05);
-            last = now;
-            while (owed >= TICK) {
+            const due = paced(owed, (now - last) / 1000);
+            [owed, last] = [due.owed, now];
+            for (let step = 0; step < due.steps; step++) {
                 const before = m.debug ? performance.now() : 0;
                 scene.step?.(TICK);
                 if (m.debug) took += (performance.now() - before - took) * 0.05;
                 m.time += TICK;
-                owed -= TICK;
             }
             draw();
             if (scene.resting?.()) {
