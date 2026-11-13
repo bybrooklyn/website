@@ -1012,6 +1012,16 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
             restoring = performance.now() + 100;
             return;
         }
+        if (mod && (key === "ArrowUp" || key === "ArrowDown") && !event.altKey) {
+            // Ctrl+Up and Ctrl+Down go to the very top and bottom of the writing, and with Shift select to there
+            syncSelection();
+            const paths = blockPaths(editor.state.doc);
+            const path = (key === "ArrowUp" ? paths[0] : paths[paths.length - 1]) ?? [0];
+            const focus = { path, offset: key === "ArrowUp" ? 0 : lengthOf(editor.state.doc, path) };
+            commit(apply(editor, { state: { doc: editor.state.doc, selection: { anchor: event.shiftKey ? editor.state.selection.anchor : focus, focus } }, kind: "move" }, Date.now()));
+            event.preventDefault();
+            return;
+        }
         syncSelection();
         const word = (key === "Backspace" || key === "Delete") && (MAC ? event.altKey : event.ctrlKey);
         if ((key === "Backspace" || key === "Delete") && !word && !mod && !event.altKey) wholeCharacter(key === "Delete");

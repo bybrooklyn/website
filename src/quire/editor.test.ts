@@ -1392,6 +1392,22 @@ used("the caret glides when a key moves it along a line or to another line, ends
     expect(tab.errors).toEqual([]);
 });
 
+used("Ctrl+Up and Ctrl+Down go to the top and bottom of the writing without leaving for the title, and with Shift select to there", async () => {
+    await pageView(false);
+    await reset("One.\n\nTwo.\n\nThree.\n", [1], 2);
+    await tab.run("document.querySelector('.quire').focus()");
+    await tab.press("ArrowUp", { ctrl: true });
+    expect(await caret()).toEqual({ path: [0], offset: 0 });
+    expect(await tab.run("document.activeElement.classList.contains('quire')")).toBe(true);
+    await tab.press("ArrowDown", { ctrl: true });
+    expect(await caret()).toEqual({ path: [2], offset: 6 });
+    await tab.run("q.select([1], 2)");
+    await tab.press("ArrowDown", { ctrl: true, shift: true });
+    await tab.type("x");
+    expect(await md()).toBe("One.\n\nTwx\n");
+    expect(tab.errors).toEqual([]);
+});
+
 used("the title is the first line on the sheet: it renames as typed, the bar follows, empty is a faint Untitled, Enter goes on, and it is not in the Markdown", async () => {
     await tab.run("q.useBrowser()");
     const id = await tab.run<string>(`q.openIn("Draft", "Body text.\\n")`);

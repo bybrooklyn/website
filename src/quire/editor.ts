@@ -256,7 +256,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
 
     // ArrowUp at the very start of the writing goes up to the title
     surface.element.addEventListener("keydown", (event) => {
-        if (event.key !== "ArrowUp" || event.shiftKey) return;
+        if (event.key !== "ArrowUp" || event.shiftKey || event.ctrlKey || event.metaKey || event.defaultPrevented) return;
         const { anchor, focus } = surface.getSelection();
         if (focus.offset === 0 && anchor.offset === 0 && focus.path.every((step) => step === 0) && anchor.path.every((step) => step === 0)) {
             event.preventDefault();
