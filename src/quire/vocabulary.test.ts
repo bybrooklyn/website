@@ -32,7 +32,9 @@ test("one undo straight after a typed conversion gives back the characters as ty
         // the conversion happens on the sign that completes it; undo once there
         let { editor, time } = typeInto("");
         let converted = false;
+        let sofar = "";
         for (const char of typed) {
+            sofar += char;
             const result = step(editor, { type: "text", text: char }, (time += 10));
             editor = result.editor;
             if (result.outcome && "kind" in result.outcome && (result.outcome.kind === "shortcut" || result.outcome.kind === "symbol")) {
@@ -41,9 +43,9 @@ test("one undo straight after a typed conversion gives back the characters as ty
                 break;
             }
         }
-        if (!converted) continue;
+        // every example converts somewhere, and the undo gives back exactly what was typed up to there
         const text = runsText((editor.state.doc.blocks[0] as { runs: Run[] }).runs);
-        expect({ typed, text: typed.startsWith(text) }).toEqual({ typed, text: true });
+        expect({ typed, converted, text }).toEqual({ typed, converted: true, text: sofar });
     }
 });
 
