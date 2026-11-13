@@ -4,7 +4,7 @@
 // in the document, settled text as undo steps, stopping itself after quiet, the spoken commands,
 // custom words, the shortcut, and that nothing appears without a transition. Needs `bun run build`
 // and a Chromium; skipped, with a notice, without either. It starts `astro preview` on port 4393
-// if nothing is listening there, and stops it again.
+// (stopping first a preview of this checkout's left running there), and stops it again.
 
 import { afterAll, beforeAll, expect, setDefaultTimeout, test } from "bun:test";
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
@@ -19,22 +19,37 @@ const PAGE = `http://localhost:${PORT}/mdquire-dictation/?fake`;
 const ready = existsSync(at("dist/mdquire-dictation/index.html")) && !!chromium();
 let server: ChildProcess | undefined;
 let tab: Browser;
+const answers = () => fetch(`http://localhost:${PORT}/`).then(() => true, () => false);
+/** Waits up to `ms` for the port to be answering, or to be quiet, and says whether it came to that. */
+async function heard(answering: boolean, ms: number) {
+    for (let waited = 0; waited < ms && (await answers()) !== answering; waited += 100) await new Promise((done) => setTimeout(done, 100));
+    return (await answers()) === answering;
+}
+/** Astro's own command for stopping this checkout's preview; it touches no other checkout's. */
+const stopPreview = () => spawnSync("bunx", ["astro", "preview", "stop"], { cwd: at("."), stdio: "ignore" });
 
 beforeAll(async () => {
     if (!ready) return console.warn("dictation browser test skipped: needs `bun run build` and a Chromium");
-    const listening = await fetch(`http://localhost:${PORT}/`).then(() => true, () => false);
-    if (!listening) {
-        server = spawn("bunx", ["astro", "preview", "--port", String(PORT)], { cwd: at("."), stdio: "ignore" });
-        for (let tries = 0; tries < 100 && !(await fetch(`http://localhost:${PORT}/`).then(() => true, () => false)); tries++) await new Promise((done) => setTimeout(done, 100));
+    // Astro's preview carries on as a service of its own after the command that started it is gone. One
+    // left from an earlier run serves the build of then, not of now, so it is stopped before starting afresh.
+    if (await answers()) {
+        stopPreview();
+        if (!(await heard(false, 5000))) throw new Error(`Something that is not this checkout's preview answers on port ${PORT}; set DICTATION_PORT to another.`);
     }
+    server = spawn("bunx", ["astro", "preview", "--port", String(PORT)], { cwd: at("."), stdio: "ignore" });
+    if (!(await heard(true, 15000))) throw new Error(`astro preview did not start on port ${PORT}.`);
     tab = await browser({ width: 1300, height: 800 });
 });
 afterAll(async () => {
-    if (ready) await tab.close();
-    // Astro's preview carries on as a service of its own after the command that started it is gone, and refuses
-    // to start a second: left running, later runs were served an old build. It is stopped by Astro's own command.
-    if (server) spawnSync("bunx", ["astro", "preview", "stop"], { cwd: at("."), stdio: "ignore" });
-    server?.kill();
+    // The preview is stopped even when the browser never started, by Astro's own command (killing the
+    // command that started it does not stop the service).
+    try {
+        // undefined when the browser never started
+        await tab?.close();
+    } finally {
+        if (server) stopPreview();
+        server?.kill();
+    }
 });
 
 const run = <T>(expression: string) => tab.run<T>(expression);
