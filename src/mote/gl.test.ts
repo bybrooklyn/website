@@ -77,8 +77,10 @@ async function drawn<T>(script: string): Promise<T> {
         const built = await Bun.build({ entrypoints: [`${folder}/scene.ts`], target: "browser" });
         await Bun.write(`${folder}/page.html`, `<!doctype html><canvas style="width:400px;height:300px"></canvas><script type="module">${await built.outputs[0]!.text()}</script>`);
         await tab.open(`file://${folder}/page.html`);
+        // (a page that waits on the browser sets its result a moment after it has loaded)
+        const result = await tab.run<T>("new Promise((done) => { const look = () => (window.result ? done(window.result) : setTimeout(look, 50)); look(); })");
         expect(tab.errors).toEqual([]);
-        return await tab.run<T>("window.result");
+        return result;
     } finally {
         await tab.close();
         await rm(folder, { recursive: true, force: true });
@@ -171,6 +173,56 @@ window.result = { wrong, apart: unlike(seen[150], seen[151]) };
     expect(result.wrong).toEqual([]);
     // and the comparison can tell two words apart
     expect(result.apart).toBeGreaterThan(2);
+}, 30_000);
+
+test.skipIf(!chromium())("a context the browser takes away is asked back, and the scene is drawn again when it returns", async () => {
+    const result = await drawn<{ before: number[]; restored: boolean; again: number[]; redrawn: number[]; disposed: boolean }>(`
+import { gl } from "${here}/gl.ts";
+import { cube } from "${here}/solids.ts";
+const canvas = document.querySelector("canvas");
+const view = gl(canvas);
+view.size(400, 300);
+view.look([0, 2, 9], [0, 0, 0], 30);
+view.light([4, 9, 6], [-3, -2, -3], [3, 2, 3]);
+view.add(cube(), { color: [0.9, 0.2, 0.2], marks: (face) => String(face + 1) });
+const g = canvas.getContext("webgl2");
+const middle = () => {
+    const pixel = new Uint8Array(4);
+    g.readPixels(canvas.width >> 1, canvas.height >> 1, 1, 1, g.RGBA, g.UNSIGNED_BYTE, pixel);
+    return [...pixel];
+};
+view.draw();
+const before = middle();
+const lose = g.getExtension("WEBGL_lose_context");
+const event = (name) => new Promise((done) => {
+    canvas.addEventListener(name, () => done(true), { once: true });
+    setTimeout(() => done(false), 3000);
+});
+const gone = event("webglcontextlost");
+lose.loseContext();
+await gone;
+// (asked back only once the browser has finished telling of the loss)
+await new Promise((done) => setTimeout(done, 50));
+// what the view drew by itself as the context came back, read in the same moment
+let redrawn = [];
+const back = new Promise((done) => {
+    canvas.addEventListener("webglcontextrestored", () => { redrawn = middle(); done(true); }, { once: true });
+    setTimeout(() => done(false), 3000);
+});
+lose.restoreContext();
+const restored = await back;
+view.draw();
+const again = middle();
+view.dispose();
+window.result = { before, restored, again, redrawn, disposed: g.isContextLost() };
+`);
+    expect(result.before[3]).toBe(255);
+    expect(result.restored).toBe(true);
+    // the same red cube, drawn again with no word from the scene, and on the next draw
+    expect(result.redrawn).toEqual(result.before);
+    expect(result.again).toEqual(result.before);
+    // and a view let go of gives its context back
+    expect(result.disposed).toBe(true);
 }, 30_000);
 
 if (!chromium()) console.warn("gl.test.ts: no Chromium on this machine, so the drawing was not looked at.");

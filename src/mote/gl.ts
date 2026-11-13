@@ -104,6 +104,8 @@ export interface View {
     color(css: string): Color;
     /** The face numbers and words are written in. */
     font: string;
+    /** Frees everything on the graphics card and lets the context go. The view draws nothing after. */
+    dispose(): void;
 }
 
 /** Where a word sits on a face: the face's middle, the way the face looks, the way the word's top points, and half the word's size. */
@@ -257,6 +259,9 @@ function box(left: number, right: number, bottom: number, top: number, near: num
 const placed = (at: V3, turn: Turn, by: number): M4 =>
     new Float32Array([turn[0][0] * by, turn[1][0] * by, turn[2][0] * by, 0, turn[0][1] * by, turn[1][1] * by, turn[2][1] * by, 0, turn[0][2] * by, turn[1][2] * by, turn[2][2] * by, 0, at[0], at[1], at[2], 1]);
 
+/** A shader program, and where each of its inputs is, looked up once. */
+type Program = { made: WebGLProgram; at(name: string): WebGLUniformLocation | null };
+
 /** Sets a canvas up for drawing in 3D. Returns nothing where the browser cannot. */
 export function gl(canvas: HTMLCanvasElement): View | undefined {
     // The picture's colors are kept already multiplied by how solid they are, which is what blending onto
@@ -264,7 +269,7 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
     const g = canvas.getContext("webgl2", { antialias: true, alpha: true, premultipliedAlpha: true });
     if (!g) return undefined;
 
-    const program = (vertex: string, fragment: string) => {
+    const program = (vertex: string, fragment: string): Program => {
         const made = g.createProgram();
         for (const [kind, source] of [[g.VERTEX_SHADER, vertex], [g.FRAGMENT_SHADER, fragment]] as const) {
             const shader = g.createShader(kind)!;
@@ -277,50 +282,62 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
         const names = new Map<string, WebGLUniformLocation | null>();
         return { made, at: (name: string) => names.get(name) ?? (names.set(name, g.getUniformLocation(made, name)), names.get(name)!) };
     };
-    let main: ReturnType<typeof program>, depth: ReturnType<typeof program>, screen: ReturnType<typeof program>;
-    try {
-        main = program(VERTEX, FRAGMENT);
-        depth = program(DEPTH_VERTEX, DEPTH_FRAGMENT);
-        screen = program(SCREEN_VERTEX, SCREEN_FRAGMENT);
-    } catch (problem) {
-        console.error("Mote could not set up 3D drawing:", problem);
-        return undefined;
-    }
 
-    // where shadows are worked out: how far each thing is from the sun, seen from the sun
+    // What lives on the graphics card, and is lost with it: made here, and made again when the
+    // browser gives back a context it took away (as a phone may, from a page in the background).
     const SHADOW = 2048;
-    const shadow = g.createTexture();
-    g.bindTexture(g.TEXTURE_2D, shadow);
-    g.texImage2D(g.TEXTURE_2D, 0, g.DEPTH_COMPONENT24, SHADOW, SHADOW, 0, g.DEPTH_COMPONENT, g.UNSIGNED_INT, null);
-    g.texParameteri(g.TEXTURE_2D, g.TEXTURE_MIN_FILTER, g.LINEAR);
-    g.texParameteri(g.TEXTURE_2D, g.TEXTURE_MAG_FILTER, g.LINEAR);
-    g.texParameteri(g.TEXTURE_2D, g.TEXTURE_WRAP_S, g.CLAMP_TO_EDGE);
-    g.texParameteri(g.TEXTURE_2D, g.TEXTURE_WRAP_T, g.CLAMP_TO_EDGE);
-    g.texParameteri(g.TEXTURE_2D, g.TEXTURE_COMPARE_MODE, g.COMPARE_REF_TO_TEXTURE);
-    g.texParameteri(g.TEXTURE_2D, g.TEXTURE_COMPARE_FUNC, g.LEQUAL);
-    const frame = g.createFramebuffer();
-    g.bindFramebuffer(g.FRAMEBUFFER, frame);
-    g.framebufferTexture2D(g.FRAMEBUFFER, g.DEPTH_ATTACHMENT, g.TEXTURE_2D, shadow, 0);
-    g.bindFramebuffer(g.FRAMEBUFFER, null);
+    let main: Program, depth: Program, screen: Program;
+    let shadow: WebGLTexture, frame: WebGLFramebuffer, hides: WebGLRenderbuffer, marks: WebGLTexture;
+    let soft: { picture: WebGLTexture; onto: WebGLFramebuffer }[];
+    const setup = (): boolean => {
+        try {
+            main = program(VERTEX, FRAGMENT);
+            depth = program(DEPTH_VERTEX, DEPTH_FRAGMENT);
+            screen = program(SCREEN_VERTEX, SCREEN_FRAGMENT);
+        } catch (problem) {
+            console.error("Mote could not set up 3D drawing:", problem);
+            return false;
+        }
 
-    // what shines, drawn small and blurred: two pictures a quarter of the canvas each way, blurred from one into the other
-    const soft = [0, 1].map(() => {
-        const picture = g.createTexture();
-        g.bindTexture(g.TEXTURE_2D, picture);
-        for (const [name, value] of [[g.TEXTURE_MIN_FILTER, g.LINEAR], [g.TEXTURE_MAG_FILTER, g.LINEAR], [g.TEXTURE_WRAP_S, g.CLAMP_TO_EDGE], [g.TEXTURE_WRAP_T, g.CLAMP_TO_EDGE]] as const) g.texParameteri(g.TEXTURE_2D, name, value);
-        const onto = g.createFramebuffer();
-        g.bindFramebuffer(g.FRAMEBUFFER, onto);
-        g.framebufferTexture2D(g.FRAMEBUFFER, g.COLOR_ATTACHMENT0, g.TEXTURE_2D, picture, 0);
-        return { picture, onto };
-    });
-    const hides = g.createRenderbuffer();
-    // (bound and given a size before it is attached: a browser warns of one that never was)
-    g.bindRenderbuffer(g.RENDERBUFFER, hides);
-    g.renderbufferStorage(g.RENDERBUFFER, g.DEPTH_COMPONENT24, 1, 1);
-    g.bindFramebuffer(g.FRAMEBUFFER, soft[0]!.onto);
-    g.framebufferRenderbuffer(g.FRAMEBUFFER, g.DEPTH_ATTACHMENT, g.RENDERBUFFER, hides);
-    g.bindFramebuffer(g.FRAMEBUFFER, null);
+        // where shadows are worked out: how far each thing is from the sun, seen from the sun
+        shadow = g.createTexture();
+        g.bindTexture(g.TEXTURE_2D, shadow);
+        g.texImage2D(g.TEXTURE_2D, 0, g.DEPTH_COMPONENT24, SHADOW, SHADOW, 0, g.DEPTH_COMPONENT, g.UNSIGNED_INT, null);
+        g.texParameteri(g.TEXTURE_2D, g.TEXTURE_MIN_FILTER, g.LINEAR);
+        g.texParameteri(g.TEXTURE_2D, g.TEXTURE_MAG_FILTER, g.LINEAR);
+        g.texParameteri(g.TEXTURE_2D, g.TEXTURE_WRAP_S, g.CLAMP_TO_EDGE);
+        g.texParameteri(g.TEXTURE_2D, g.TEXTURE_WRAP_T, g.CLAMP_TO_EDGE);
+        g.texParameteri(g.TEXTURE_2D, g.TEXTURE_COMPARE_MODE, g.COMPARE_REF_TO_TEXTURE);
+        g.texParameteri(g.TEXTURE_2D, g.TEXTURE_COMPARE_FUNC, g.LEQUAL);
+        frame = g.createFramebuffer();
+        g.bindFramebuffer(g.FRAMEBUFFER, frame);
+        g.framebufferTexture2D(g.FRAMEBUFFER, g.DEPTH_ATTACHMENT, g.TEXTURE_2D, shadow, 0);
+        g.bindFramebuffer(g.FRAMEBUFFER, null);
+
+        // what shines, drawn small and blurred: two pictures a quarter of the canvas each way, blurred from one into the other
+        soft = [0, 1].map(() => {
+            const picture = g.createTexture();
+            g.bindTexture(g.TEXTURE_2D, picture);
+            for (const [name, value] of [[g.TEXTURE_MIN_FILTER, g.LINEAR], [g.TEXTURE_MAG_FILTER, g.LINEAR], [g.TEXTURE_WRAP_S, g.CLAMP_TO_EDGE], [g.TEXTURE_WRAP_T, g.CLAMP_TO_EDGE]] as const) g.texParameteri(g.TEXTURE_2D, name, value);
+            const onto = g.createFramebuffer();
+            g.bindFramebuffer(g.FRAMEBUFFER, onto);
+            g.framebufferTexture2D(g.FRAMEBUFFER, g.COLOR_ATTACHMENT0, g.TEXTURE_2D, picture, 0);
+            return { picture, onto };
+        });
+        hides = g.createRenderbuffer();
+        // (bound and given a size before it is attached: a browser warns of one that never was)
+        g.bindRenderbuffer(g.RENDERBUFFER, hides);
+        g.renderbufferStorage(g.RENDERBUFFER, g.DEPTH_COMPONENT24, 1, 1);
+        g.bindFramebuffer(g.FRAMEBUFFER, soft[0]!.onto);
+        g.framebufferRenderbuffer(g.FRAMEBUFFER, g.DEPTH_ATTACHMENT, g.RENDERBUFFER, hides);
+        g.bindFramebuffer(g.FRAMEBUFFER, null);
+        marks = g.createTexture();
+        [smallWide, smallHigh] = [0, 0];
+        stale = true;
+        return true;
+    };
     let [smallWide, smallHigh] = [0, 0];
+    let stale = true;
 
     // What is written on faces: every different word once, side by side in one picture. A cell no
     // shape uses any more is written over by the next new word, the one longest unused first.
@@ -334,8 +351,6 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
     /** Each cell's word, how many shapes use it, and when the last of them was freed. */
     const cells = Array.from({ length: ACROSS * ACROSS }, () => ({ key: undefined as string | undefined, users: 0, freed: 0 }));
     let clock = 0;
-    const marks = g.createTexture();
-    let stale = true;
 
     const parts: Drawn[] = [];
     let [eyeFrom, eyeTo, eyeDegrees]: [V3, V3, number] = [[0, 5, 20], [0, 0, 0], 30];
@@ -343,6 +358,7 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
     let toSun: V3 = [0, 1, 0];
     let levels: [number, number, number] = [1.6, 0.75, 0.3];
     const probe = document.createElement("canvas").getContext("2d", { willReadFrequently: true })!;
+    if (!setup()) return undefined;
 
     const filled = (data: Float32Array, sizes: number[]): [WebGLVertexArrayObject, WebGLBuffer] => {
         const array = g.createVertexArray();
@@ -548,6 +564,7 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
             canvas.height = Math.max(1, Math.round(height * scale));
         },
         draw() {
+            if (lost || g.isContextLost()) return;
             sweep();
             if (stale) {
                 g.bindTexture(g.TEXTURE_2D, marks);
@@ -691,6 +708,35 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
             g.depthMask(true);
             g.bindVertexArray(null);
         },
+        dispose() {
+            canvas.removeEventListener("webglcontextlost", lose);
+            canvas.removeEventListener("webglcontextrestored", restore);
+            for (const part of parts) part.shape.users--;
+            parts.length = 0;
+            sweep();
+            for (const one of [main, depth, screen]) g.deleteProgram(one.made);
+            for (const texture of [shadow, marks, ...soft.map((one) => one.picture)]) g.deleteTexture(texture);
+            for (const onto of [frame, ...soft.map((one) => one.onto)]) g.deleteFramebuffer(onto);
+            g.deleteRenderbuffer(hides);
+            lost = true;
+            g.getExtension("WEBGL_lose_context")?.loseContext();
+        },
     };
+
+    // A lost context is asked back (that is what preventing the default does), and when it comes
+    // back everything on the card is made again from what is kept here, and the picture drawn again.
+    let lost = false;
+    function lose(event: Event): void {
+        event.preventDefault();
+        lost = true;
+    }
+    function restore(): void {
+        if (!setup()) return;
+        for (const home of shapes.values()) for (const shape of home.values()) upload(shape);
+        lost = false;
+        view.draw();
+    }
+    canvas.addEventListener("webglcontextlost", lose);
+    canvas.addEventListener("webglcontextrestored", restore);
     return view;
 }
