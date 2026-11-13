@@ -11,6 +11,13 @@ dist
 .dev.vars
 .dev.vars.*
 
+# secrets and keys of any kind: never committed, whatever adds files (the editor's Publish stages everything)
+password.md
+.env
+.env.*
+*.pem
+*.key
+
 # resume PDFs of drafts, and the build they are printed from
 resume-preview
 .resume-build
