@@ -104,7 +104,7 @@ test("a fix is an edit of the finding's range, keeping the text around it", () =
 test("a job always moves on, even when it is given no time at all", () => {
     const big = read(Array.from({ length: 50 }, (_, index) => `Line ${index} is bad.`).join("\n\n"));
     const job = createChecker([bad, headings]).start(big, { settings: { ...DEFAULTS, rules: { headings: true } } });
-    let out;
+    let out: ReturnType<typeof job.run>;
     let runs = 0;
     while (!(out = job.run(() => 0)) && runs < 1000) runs++;
     expect(out?.length).toBe(50);
