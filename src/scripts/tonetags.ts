@@ -38,8 +38,9 @@ if (root) {
 
     box.addEventListener("input", show);
     // the link carries what is being searched for, so that whoever opens it sees the same tags
-    const copy = root.querySelector<HTMLButtonElement>(".tonetags-copy")!;
-    copy.addEventListener("click", () => {
+    // (the page has no such button at present; this is kept for when one is wanted again, with its styles in tonetags.css)
+    const copy = root.querySelector<HTMLButtonElement>(".tonetags-copy");
+    copy?.addEventListener("click", () => {
         const here = new URL(location.pathname, location.origin);
         if (box.value.trim()) here.searchParams.set("q", box.value.trim());
         copyMarked(copy, here.href);

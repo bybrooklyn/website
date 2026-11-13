@@ -12,7 +12,7 @@
 }
 
 /* The search: a soft rounded field the width of the list, a magnifier at its start. Its edge takes the accent while it is typed in. */
-/* The button that copies a link to the page, and beside it at the right the search. */
+/* The search. */
 .tonetags-top {
     /* how tall the field and the button are; the button at rest is as wide as this too, so that it is a circle */
     --tall: 3rem;
@@ -21,6 +21,9 @@
     gap: 0.5rem;
 }
 
+/* NOT ON THE PAGE AT PRESENT, kept to be used again: a button that copies a link to the page (a `button.tonetags-copy` put
+   in `.tonetags-top`, holding a `.tonetags-copy-rest` with the symbol and a `.tonetags-copy-more`, and a `.tonetags-copy-done`;
+   src/scripts/tonetags.ts wires it when it is there). */
 /* A round button the height of the field beside it, with the field's own quiet edge and ground. At rest it is a circle round
    the copy symbol; its edge takes the accent when it is pointed at, and it gives a little when pressed. */
 .tonetags-copy {

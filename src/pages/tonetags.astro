@@ -21,7 +21,7 @@ import { projectShare, sharePicture } from "../lib/share";
 import { tags } from "../tonetags/tags";
 
 const project = (await getEntry("projects", "tone-tags"))!;
-const { name, summary, language } = project.data;
+const { name, summary } = project.data;
 const projects = await getProjects();
 const at = projects.findIndex((each) => each.id === project.id);
 const previous = projects[at - 1];
@@ -37,22 +37,12 @@ const all = placed.toSorted((a, b) => a.tag.forms[0]!.localeCompare(b.tag.forms[
 <Opened title={name} description={summary} image={sharePicture("project-tone-tags")} facts={projectShare(project)} back={{ href: "/projects/", label: "projects" }}>
     <article class="post tonetags-page">
         <header class="post-header">
-            <p class="post-meta"><span>{language}</span></p>
             <h1>{name.toLowerCase()}</h1>
             <p class="lede">{summary}</p>
         </header>
 
         <div class="tonetags" data-tonetags>
             <div class="tonetags-top">
-                {/* copies this page's address, with what is being searched for in it, to send to someone */}
-                <button type="button" class="tonetags-copy" aria-label="Copy website link">
-                    {/* a copy symbol at rest; "copy website link" opens out beside it when it is pointed at or reached by keyboard */}
-                    <span class="tonetags-copy-rest" aria-hidden="true">
-                        <svg viewBox="0 0 16 16"><rect x="5.5" y="5.75" width="8" height="8" rx="1.5"></rect><path d="M10.5 5.75v-2a1.5 1.5 0 0 0-1.5-1.5H4A1.5 1.5 0 0 0 2.5 3.75v5A1.5 1.5 0 0 0 4 10.25h1.5"></path></svg>
-                        <span class="tonetags-copy-more"><span>copy website link</span></span>
-                    </span>
-                    <span class="tonetags-copy-done" aria-hidden="true">link copied</span>
-                </button>
                 <label class="tonetags-find">
                     <span class="unseen">Search the tags</span>
                     <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5"></circle><path d="M10.5 10.5 14 14"></path></svg>
