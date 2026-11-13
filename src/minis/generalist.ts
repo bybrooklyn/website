@@ -291,12 +291,20 @@ export default function generalist(m: Mote): Scene {
     else here = true;
 
     void fetch(engineAddress())
-        .then((answer) => answer.arrayBuffer())
+        .then((answer) => {
+            if (!answer.ok) throw new Error(`the engine answered ${answer.status}`);
+            return answer.arrayBuffer();
+        })
         .then(startEngine)
         .then((started) => {
             engine = started;
             if (m.debug) Object.assign(globalThis, { generalistEngine: started });
             begin();
+        })
+        .catch(() => {
+            // offline, blocked or missing: said, rather than "Loading." for ever
+            stopped = "The creature could not be loaded. Reloading the page may help";
+            changed();
         });
 
     // ---- the controls: a strip under the world, and a column beside it ----
