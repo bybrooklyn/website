@@ -684,10 +684,17 @@ function removeAt(doc: Document, path: number[]): Document {
     return edit(doc, path, (blocks, index) => spliceBlocks(blocks, index, 1, []));
 }
 
+/** Runs with each line break made a space: a heading is one line in Markdown, and cannot keep a break. */
+function unbroken(runs: Run[]): Run[] {
+    if (!pieces(runs).some((piece) => piece.leaf.kind === "break")) return runs;
+    return fromPieces(pieces(runs).map((piece) => (piece.leaf.kind === "break" ? { ...piece, leaf: { kind: "text", text: " ", marks: [] } } : piece)));
+}
+
 /** Changes the runs at a path, in a paragraph, a heading or a table cell. */
 function editRuns(doc: Document, path: number[], change: (runs: Run[]) => Run[]): Document {
     const block = blockAt(doc, path);
-    if (block?.kind === "paragraph" || block?.kind === "heading") return replace(doc, path, () => [{ ...block, runs: change(block.runs), source: undefined }]);
+    if (block?.kind === "paragraph") return replace(doc, path, () => [{ ...block, runs: change(block.runs), source: undefined }]);
+    if (block?.kind === "heading") return replace(doc, path, () => [{ ...block, runs: unbroken(change(block.runs)), source: undefined }]);
     const cell = cellAt(doc, path);
     if (!cell) return doc;
     const row = path[path.length - 2]!;
@@ -1045,7 +1052,7 @@ export function changeKind(doc: Document, path: number[], to: Kind): Document {
         }
         if (!runs) return doc;
         if (to.kind === "heading" && block.kind === "heading" && block.level === to.level) return doc;
-        const next: Paragraph | Heading = to.kind === "heading" ? { kind: "heading", level: to.level, runs, gap: block.gap } : { kind: "paragraph", runs, gap: block.gap };
+        const next: Paragraph | Heading = to.kind === "heading" ? { kind: "heading", level: to.level, runs: unbroken(runs), gap: block.gap } : { kind: "paragraph", runs, gap: block.gap };
         if ((block.kind === "paragraph" || block.kind === "heading") && block.align) next.align = block.align;
         return replace(doc, path, () => [next]);
     }

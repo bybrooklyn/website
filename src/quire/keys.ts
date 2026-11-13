@@ -484,6 +484,8 @@ function softBreak(state: State): Outcome {
     const block = blockAt(doc, at.path);
     if (block?.kind === "code" || block?.kind === "raw") return done(insertText(doc, at, "\n"), caret(at.path, at.offset + 1), "type");
     if (!textual(block) && !tableOf(doc, at.path)) return null;
+    // a heading is one line in Markdown: a break in it could not be kept
+    if (block?.kind === "heading") return done(state.doc, state.selection, "move");
     return done(insertAtom(doc, at, { kind: "break" }), caret(at.path, at.offset + 1), "type");
 }
 

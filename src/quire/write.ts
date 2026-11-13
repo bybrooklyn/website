@@ -106,7 +106,9 @@ function writeBlock(block: Block, context: Context): string {
         case "paragraph":
             return aligned((block.subtext ? "-# " : "") + paragraphText(block.runs, context), block.align);
         case "heading": {
-            let content = writeRuns(block.runs, context, false).replace(/[ \t]*\n[ \t]*/g, " ").trim();
+            // a heading is one line: a break that reached one is written as the space it is drawn as
+            const runs = block.runs.map((run): Run => (run.kind === "break" ? { kind: "text", text: " ", marks: [] } : run));
+            let content = writeRuns(runs, context, false).replace(/[ \t]*\n[ \t]*/g, " ").trim();
             // a heading that ends in #s would lose them as a closing sequence
             if (/(^|[ \t])#+$/.test(content)) content = content.replace(/#(#*)$/, "\\#$1");
             return aligned("#".repeat(Math.min(6, Math.max(1, Number(block.level) || 1))) + (content ? ` ${content}` : ""), block.align);

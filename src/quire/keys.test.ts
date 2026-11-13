@@ -486,3 +486,12 @@ test("lists edited into new shapes are written so that they read back as the sam
     nested.key("Backspace");
     expect(shape(nested.markdown)).toEqual([{ list: "bullet", start: 1, items: [["two", "nested", { list: "bullet", start: 1, items: [["nested two"]] }], ["three"]] }]);
 });
+
+test("a heading is one line: Shift+Enter in it does nothing, and a paragraph with a break made a heading has a space there", () => {
+    const e = editor("# Title\n", [0], 0);
+    e.key("Enter", { shift: true });
+    expect(e.markdown).toBe("# Title\n");
+    const two = editor("one\\\ntwo\n", [0], 0);
+    two.key("2", { mod: true, alt: true });
+    expect(two.markdown).toBe("## one two\n");
+});
