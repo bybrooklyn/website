@@ -272,3 +272,15 @@ inBrowser("the bar always has one Tab stop, even when the tool that held it fold
         expect((await stops()).length).toBe(1);
     }),
 );
+
+inBrowser("ArrowDown from the search of the menus goes to the first result, not the second", () =>
+    onPage("Text\n", 1300, async (tab) => {
+        await tab.wait(200);
+        await tab.run("bar.search()");
+        await tab.wait(300);
+        await tab.type("a");
+        await tab.wait(50);
+        await tab.press("ArrowDown");
+        expect(await tab.run<string>("document.activeElement.textContent")).toBe("Alpha");
+    }),
+);

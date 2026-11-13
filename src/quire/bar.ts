@@ -616,6 +616,8 @@ export function createBar(surface: Surface, options: BarOptions) {
             if (event.key === "Enter") found.querySelector<HTMLElement>(".quire-menu-line")?.click();
             if (event.key === "ArrowDown") {
                 event.preventDefault();
+                // the menu's own arrow keys must not move on again from the line just reached
+                event.stopPropagation();
                 found.querySelector<HTMLElement>(".quire-menu-line")?.focus();
             }
         });
