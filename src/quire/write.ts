@@ -678,7 +678,10 @@ function escapeText(value: string, context: Context, cell: boolean, before: stri
             (char === "$" && !!context.dollars) ||
             (char === "|" && !cell && (touching("|") || (left !== "|" && right === "|" && third !== "|" && !(space(left) && space(third))))) ||
             (char === "=" && (touching("=") || (left !== "=" && right === "=" && third !== "=" && !(space(left) && space(third))))) ||
-            (char === ":" && shortcode(value, index, left, after, () => (addressed ??= addresses(value) ?? null) ?? undefined));
+            (char === ":" && shortcode(value, index, left, after, () => {
+                if (addressed === undefined) addressed = addresses(value) ?? null;
+                return addressed ?? undefined;
+            }));
         // a no-break space would be invisible in the file, so it is written as the entity it is read from
         if (char === "\u00a0") out += "&nbsp;";
         else out += risky ? `\\${char}` : char;
