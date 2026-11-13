@@ -521,17 +521,20 @@ mod tests {
         })
     }
 
-    // These take a minute or so each, on every core: `cargo test --release -- --ignored every`.
+    // These take half a minute or so each, on every core: `cargo test -- --ignored every`. They are
+    // what holds the two builds to the same numbers (the square root by Newton's way, which the build
+    // without SIMD uses, equals the processor's for every f32) and the quick tanh, angle and wrap to
+    // the exact ones, so run them whenever this file changes.
 
     #[test]
-    #[ignore]
+    #[ignore = "slow: tries every f32 (cargo test -- --ignored every)"]
     fn every_positive_f32_has_the_same_square_root_from_newton_and_from_the_processor() {
         let wrong = every_f32(1, 0x7f80_0000, |x| (sqrt64(x as f64) as f32).to_bits() == ((x as f64).sqrt() as f32).to_bits());
         assert!(wrong.is_empty(), "differs for {wrong:x?}");
     }
 
     #[test]
-    #[ignore]
+    #[ignore = "slow: tries every f32 (cargo test -- --ignored every)"]
     fn every_f32_has_the_same_tanh_the_quick_way_as_the_exact_way() {
         let wrong = every_f32(0, u32::MAX, |x| x.is_nan() || tanh(x).to_bits() == tanh_exact(x).to_bits());
         assert!(wrong.is_empty(), "differs for {wrong:x?}");
@@ -540,7 +543,7 @@ mod tests {
     /// The square root is the only part of the quick angle that differs from the exact one, and it
     /// differs only for a double, which cannot all be tried, so this tries many angles of each size.
     #[test]
-    #[ignore]
+    #[ignore = "slow: tries every f32 (cargo test -- --ignored every)"]
     fn every_size_of_angle_comes_out_the_same_the_quick_way_as_the_exact_way() {
         let wrong = every_f32(0, 0x7f80_0000, |y| {
             [1.0f32, -1.0, 0.37, -2.9, 1e-3, 7e5].iter().all(|&x| atan2(y, x).to_bits() == atan2_exact(y, x).to_bits() && atan2(-y, x).to_bits() == atan2_exact(-y, x).to_bits())
@@ -549,7 +552,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
+    #[ignore = "slow: tries every f32 (cargo test -- --ignored every)"]
     fn every_f32_is_wrapped_the_same_with_the_short_cut_as_the_long_way() {
         let long = |angle: f32| {
             let turns = nearest(angle as f64 / (2.0 * core::f64::consts::PI));
