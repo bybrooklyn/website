@@ -51,6 +51,7 @@ pub struct Page {
     pub practice: Option<Practice>,
     pub policy: Option<Learner>,
     held_actions: Vec<f32>,
+    asked: Vec<f32>,
     pub running_out: Vec<f64>,
     pub running_room: Vec<f64>,
     pub state_room: Vec<f32>,
@@ -81,7 +82,7 @@ impl Page {
         let land = Rc::new(super::land::Land::new(recipe, super::envs::MADE));
         let start = Run::new(land, legs, seconds)?;
         let layout = evolution.layout;
-        let mut page = Page { recipe, legs, seconds, brain: Brain::new(layout), senses: vec![0.0; layout.inputs], show: start.clone(), start, evolution, leftover: 0.0, held: None, out: Vec::new(), weights_room: vec![0.0; layout.weights()], evaluate_room: Vec::new(), evaluated: Vec::new(), envs: None, practice: None, policy: None, held_actions: Vec::new(), running_out: Vec::new(), running_room: Vec::new(), state_room: Vec::new(), parts: Default::default(), shown_weights: Vec::new() };
+        let mut page = Page { recipe, legs, seconds, brain: Brain::new(layout), senses: vec![0.0; layout.inputs], show: start.clone(), start, evolution, leftover: 0.0, held: None, out: Vec::new(), weights_room: vec![0.0; layout.weights()], evaluate_room: Vec::new(), evaluated: Vec::new(), envs: None, practice: None, policy: None, held_actions: Vec::new(), asked: Vec::new(), running_out: Vec::new(), running_room: Vec::new(), state_room: Vec::new(), parts: Default::default(), shown_weights: Vec::new() };
         page.show_reset();
         Some(page)
     }
@@ -105,9 +106,14 @@ impl Page {
         while self.leftover >= STEP && taken < MOST_STEPS && (!self.show.judge.over() || self.held.is_some()) {
             let actions = match &mut self.policy {
                 Some(policy) => {
-                    // a policy decides every few steps, as it practised, and its actions hold between
-                    if self.show.judge.steps % Way::of(self.legs).skip == 0 {
-                        policy.act(&self.senses, &mut self.held_actions);
+                    // a policy decides every few steps, as it practised, and its actions are held between
+                    // by practice's own rule (no hop)
+                    let way = Way::of(self.legs);
+                    if self.show.judge.steps % way.skip == 0 {
+                        let mut asked = core::mem::take(&mut self.asked);
+                        policy.act(&self.senses, &mut asked);
+                        way.hold(&asked, &mut self.held_actions);
+                        self.asked = asked;
                     }
                     self.held_actions.clone()
                 }
@@ -315,6 +321,7 @@ impl Page {
             return false;
         }
         self.held_actions = vec![0.0; start.body.actions()];
+        self.asked = vec![0.0; start.body.actions()];
         self.start = start;
         self.policy = Some(learner);
         self.show_reset();
