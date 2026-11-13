@@ -62,11 +62,12 @@ export function createTextMenu(surface: Surface, menus: () => { items: () => Men
         keyedAt = performance.now();
         open(at.left, at.bottom, true);
     }
-    root.addEventListener("contextmenu", onMenu);
+    // heard on the page, after every handler on the text itself (a spelling popover, a picture's or a table's menu), any of which comes first
+    document.addEventListener("contextmenu", onMenu);
     root.addEventListener("keydown", onKey);
     return {
         destroy() {
-            root.removeEventListener("contextmenu", onMenu);
+            document.removeEventListener("contextmenu", onMenu);
             root.removeEventListener("keydown", onKey);
             anchor.remove();
             menu.box.remove();

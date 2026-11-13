@@ -434,7 +434,7 @@
 }
 
 /* while a picture is picked, what the keys act on is the picture, and no caret blinks beside it */
-.quire-paper:has(.quire-picked) > .quire-caret.shown {
+.quire.quire-picking ~ .quire-caret.shown {
     opacity: 0;
 }
 

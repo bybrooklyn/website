@@ -178,6 +178,8 @@ export function createPictureTools(surface: Surface, options: PictureOptions = {
         if (picked && (picked.length !== path.length || picked.some((step, k) => step !== path[k]))) figureAt(picked)?.classList.remove("quire-picked");
         picked = path;
         figure.classList.add("quire-picked");
+        // the text says a picture is picked, for no caret to blink beside it (quire.css)
+        root.classList.add("quire-picking");
         const fresh = !frame.classList.contains("shown");
         place();
         if (fresh) requestAnimationFrame(() => picked && frame.classList.add("shown"));
@@ -190,6 +192,7 @@ export function createPictureTools(surface: Surface, options: PictureOptions = {
         closePanel(false);
         figureAt(picked)?.classList.remove("quire-picked");
         picked = undefined;
+        root.classList.remove("quire-picking");
         frame.classList.remove("shown");
         label.classList.remove("shown");
         setTimeout(() => !picked && frame.remove(), still() ? 0 : 220);

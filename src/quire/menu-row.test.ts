@@ -55,7 +55,7 @@ test("Insert has a page break with its shortcut, and for a .quire document the h
 
 test("Select all occurrences is dimmed while the words appear in fewer than two places", () => {
     const act: RowActions = { ...every, selectMatching: () => {} };
-    const line = (matches: number) => headings({ rich: true, matches, outline: true, markdown: false, words: 0 }, act)[1]!.items().find((item) => item.key === "selectMatching");
+    const line = (matches: number) => headings({ rich: true, matches: () => matches, outline: true, markdown: false, words: 0 }, act)[1]!.items().find((item) => item.key === "selectMatching");
     expect(line(1)?.disabled).toBe(true);
     expect(line(3)?.disabled).toBeUndefined();
 });

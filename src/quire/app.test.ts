@@ -231,6 +231,9 @@ used("the documents list flows out of the name: a new document, a rename, one ta
     await tab.press("Enter");
     await tab.wait(400);
     expect(await tab.run("document.querySelector('.quire-name-text').textContent")).toBe("Plans");
+    // Enter closed the list and gave the keyboard back to the writing
+    expect(await tab.run("document.activeElement.classList.contains('quire')")).toBe(true);
+    await documents();
     // the other one taken away, asked twice on the same button, and brought back from the trash
     await press(".quire-documents-away");
     await press(".quire-documents-away");

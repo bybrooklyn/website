@@ -187,9 +187,13 @@ used("a right click on an underlined word opens its popover in place of the brow
     expect(await popped()).toContain("\"Teh\" is not in the dictionary.");
     await tab.press("Escape");
     await tab.wait(300);
-    // anywhere else the browser's menu is left alone
+    // anywhere else it is the text's own menu (text-menu.ts), not the popover
     const plain = await tab.run<{ x: number; y: number }>("q.word('cat')");
-    expect(await tab.run<boolean>(`q.surface.element.dispatchEvent(new MouseEvent("contextmenu", { clientX: ${plain.x}, clientY: ${plain.y}, bubbles: true, cancelable: true }))`)).toBe(true);
+    await tab.run(`q.surface.element.dispatchEvent(new MouseEvent("contextmenu", { clientX: ${plain.x}, clientY: ${plain.y}, bubbles: true, cancelable: true }))`);
+    await until("!!document.querySelector('.quire-text-menu.open')");
+    expect(await tab.run("!!document.querySelector('.quire-check-pop.open')")).toBe(false);
+    await tab.press("Escape");
+    await tab.wait(300);
 });
 
 used("ignoring and adding to the dictionary take the underline away", async () => {
