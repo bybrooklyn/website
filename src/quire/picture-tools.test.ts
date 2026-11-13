@@ -139,6 +139,13 @@ test("wrap text from the menu floats the picture with the words beside it, as on
     await rightClick();
     await page!.press(".quire-picture-menu .quire-menu-line", "Size");
     await tab.wait(500);
+    // the panel's wrap is a switch that says it is on by being pressed, never by its words
+    expect(await tab.run("(() => { const wrap = document.querySelector('.quire-picture-panel .quire-picture-wrap'); return [wrap.getAttribute('aria-pressed'), wrap.textContent]; })()")).toEqual(["true", "Wrap text"]);
+    await tab.press("Escape");
+    await tab.wait(300);
+    await rightClick();
+    await page!.press(".quire-picture-menu .quire-menu-line", "Size");
+    await tab.wait(500);
     await page!.press(".quire-picture-panel button", "Half width");
     expect(await page!.md()).toContain(`<img src="${picture}" alt="A wide picture" width="50%" align="left" />`);
     await page!.press(".quire-picture-panel button", "Picture to the right");

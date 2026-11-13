@@ -55,7 +55,8 @@ export function shortWhen(time: number, now: number): string {
     const sameDay = (a: Date, b: Date) => a.toDateString() === b.toDateString();
     if (sameDay(date, today)) return `today ${date.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`;
     if (sameDay(date, new Date(now - 86_400_000))) return "yesterday";
-    return date.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: date.getFullYear() === today.getFullYear() ? undefined : "numeric" });
+    // the month first, as the site writes dates
+    return date.toLocaleDateString("en-US", { day: "numeric", month: "short", year: date.getFullYear() === today.getFullYear() ? undefined : "numeric" });
 }
 
 /** The name for a copy: " copy" before the ending, if there is one. */

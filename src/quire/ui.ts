@@ -287,10 +287,9 @@ export function fieldForm(options: { value?: string; label: string; placeholder?
     return form;
 }
 
-/** "About mdQuire": what it is and who made it, in the project page's own words, with the way to her site and to the project, for a menu to hold. */
+/** "About mdQuire": what it is and who made it, in the project page's own words, with the way to her site and to the project, for its dialog to hold (the dialog's title is the name). */
 export function aboutPanel(): HTMLElement {
     const panel = make("div", "quire-about");
-    const name = make("p", "quire-about-name", "mdQuire");
     const said = make("p", "quire-about-text", "A word processor for Markdown files, in the browser. Charlotte made it.");
     const links = make("p", "quire-about-links");
     const link = (href: string, words: string) => {
@@ -299,7 +298,7 @@ export function aboutPanel(): HTMLElement {
         return anchor;
     };
     links.append(link("/", "Her site"), link("/projects/mdquire/", "The project"));
-    panel.append(name, said, links);
+    panel.append(said, links);
     return panel;
 }
 

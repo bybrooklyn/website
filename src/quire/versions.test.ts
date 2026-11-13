@@ -6,7 +6,8 @@
 import { expect, test } from "bun:test";
 import { setStyle } from "./document";
 import { emptyParts, opened, written } from "./quire-file";
-import { changes, createKeeper, KEPT, memoryStorage, snapshotDocument, snapshotParts, snapshotText, thin, when } from "./versions";
+import { read } from "./read";
+import { addedBlocks, changes, createKeeper, KEPT, memoryStorage, snapshotDocument, snapshotParts, snapshotText, thin, when } from "./versions";
 import { write } from "./write";
 
 test("a .quire document's snapshot carries its styling, and restoring it brings back the typeface, highlight and spacing", () => {
@@ -127,8 +128,8 @@ test("a snapshot's time reads as the hour today, and with its day before that", 
     const now = new Date(2026, 10, 12, 15, 0).getTime();
     expect(when(new Date(2026, 10, 12, 9, 5).getTime(), now)).toBe("Today, 09:05");
     expect(when(new Date(2026, 10, 11, 22, 30).getTime(), now)).toBe("Yesterday, 22:30");
-    expect(when(new Date(2026, 9, 3, 8, 0).getTime(), now)).toBe("3 Oct, 08:00");
-    expect(when(new Date(2025, 9, 3, 8, 0).getTime(), now)).toBe("3 Oct 2025, 08:00");
+    expect(when(new Date(2026, 9, 3, 8, 0).getTime(), now)).toBe("Oct 3, 08:00");
+    expect(when(new Date(2025, 9, 3, 8, 0).getTime(), now)).toBe("Oct 3, 2025, 08:00");
 });
 
 test("a stopped keeper, for a document that was left, keeps no snapshot of what is shown after it", async () => {
@@ -172,4 +173,11 @@ test("one snapshot that cannot be kept (no more room) does not stop the ones aft
     await keeper.settled();
     expect((await storage.list("doc")).length).toBe(1);
     expect(await storage.load((await storage.list("doc"))[0]!.id)).toBe("two\n");
+});
+
+test("a version shown marks the blocks it added since the one before, a block there twice counting twice", () => {
+    expect(addedBlocks(read("One.\n\nTwo.\n"), read("One.\n\nNew.\n\nTwo.\n"))).toEqual([1]);
+    expect(addedBlocks(read("Same.\n"), read("Same.\n\nSame.\n"))).toEqual([1]);
+    expect(addedBlocks(undefined, read("First.\n\nSecond.\n"))).toEqual([0, 1]);
+    expect(addedBlocks(read("Gone.\n\nKept.\n"), read("Kept.\n"))).toEqual([]);
 });

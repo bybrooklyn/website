@@ -41,6 +41,8 @@ test("words selected and a note added from Insert sit in the margin beside their
     await tab.wait(100);
     expect(await tab.run("document.activeElement.className")).toBe("quire-note-field");
     await tab.type("Too quick?");
+    // the comment's buttons are in every dialog's order, named as Docs names them
+    expect(await tab.run("[...document.querySelectorAll('.quire-note-form button')].map((each) => each.textContent)")).toEqual(["Cancel", "Comment"]);
     await page!.press(".quire-note-keep");
     await tab.wait(400);
     expect(await page!.md()).toBe(TEXT);
@@ -116,7 +118,7 @@ test("on a narrow window the notes are a list that opens from View", async () =>
     await tab.press("Enter", { ctrl: true });
     await tab.wait(300);
     expect(await tab.run("[...document.querySelectorAll('.quire-menu.open .quire-notes-list .quire-note-text')].map((each) => each.textContent)")).toEqual(["Narrow"]);
-    expect(await tab.run("document.querySelector('.quire-notes-where')?.textContent")).toBe("A Markdown file cannot hold notes, so these are kept in this browser only.");
+    expect(await tab.run("document.querySelector('.quire-notes-where')?.textContent")).toBe("A Markdown file cannot hold comments, so these are kept in this browser only.");
     await tab.resize(1500, 900);
     await tab.wait(300);
 });

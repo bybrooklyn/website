@@ -156,7 +156,7 @@ test.skipIf(!ready)("a download shows its progress in the dialog, can be cancell
     await press(".quire-dictation-cancel");
     await until("window.dictation.state() === 'off'", "cancelled");
     await until("document.querySelector('dialog.quire-dialog .quire-dictation-warn')", "the line saying so");
-    expect(await text("dialog.quire-dialog .quire-dictation-warn")).toContain("cancelled");
+    expect(await text("dialog.quire-dialog .quire-dictation-warn")).toContain("canceled");
     expect(await run("window.dictationTest.downloaded().length")).toBe(0);
     // the choice is offered again, and this time it downloads and listens, the dialog put away
     await run("window.dictationTest.downloadTime = 300");

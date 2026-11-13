@@ -17,7 +17,8 @@
 import type { Page } from "./document";
 import { paperSize, setPage } from "./paper";
 import type { Surface } from "./surface";
-import { composing, flowMenu, make } from "./ui";
+import { openDialog, switchButton, type Dialog } from "./dialog";
+import { make } from "./ui";
 
 /** A piece of the text that goes to the next page whole: where it is laid out, top and bottom, before any piece is moved; and whether it is a page break. */
 export interface Piece {
@@ -236,51 +237,48 @@ export function createPages(paper: HTMLElement, surface: Surface, options: Pages
     watcher?.observe(paper);
     soon();
 
-    // ---- the header, footer and page numbers: a small form flowing out of what was pressed ----
-    const menu = flowMenu("Header and footer");
-    /** Changes the page set up, as one undo step; a run of typing in a field is gathered into one. */
-    const change = (part: Partial<Page>, kind: "type" | "format" = "format") => {
+    // ---- the header, footer and page numbers: a form of two fields and a switch, so a dialog grown out of what was pressed ----
+    /** Changes the page set up, as one undo step. */
+    const change = (part: Partial<Page>) => {
         const next: Page = { ...options.page(), ...part };
         for (const key of ["header", "footer"] as const) if (!next[key]?.trim()) delete next[key];
         if (!next.numbers) delete next.numbers;
-        surface.run((doc) => setPage(doc, next), kind);
+        surface.run((doc) => setPage(doc, next));
     };
+    let asking: Dialog | undefined;
     function edit(from: HTMLElement) {
         if (!options.rich()) return;
-        const form = make("div", "quire-page-form");
         const field = (label: string, key: "header" | "footer") => {
+            const row = make("label", "quire-form-row");
             const input = make("input", "quire-link-field");
             input.value = options.page()[key] ?? "";
-            input.placeholder = label;
-            input.setAttribute("aria-label", label);
-            input.addEventListener("input", () => change({ [key]: input.value }, "type"));
-            // what is typed in each field is a step of its own
-            input.addEventListener("focus", () => surface.setSelection(surface.getSelection()));
-            input.addEventListener("keydown", (event) => {
-                if (composing(event)) return event.stopPropagation();
-                if (event.key === "Enter") {
-                    event.preventDefault();
-                    menu.close(false);
-                    surface.focus();
-                }
-                // Tab goes on to the next field, rather than closing the menu
-                if (event.key !== "Escape" && event.key !== "ArrowUp" && event.key !== "ArrowDown") event.stopPropagation();
-            });
-            return input;
+            input.placeholder = "On every page";
+            input.setAttribute("aria-label", `${label}, on every page`);
+            row.append(make("span", "quire-form-label", label), input);
+            return { row, input };
         };
-        const numbers = make("button", "quire-menu-line");
-        numbers.type = "button";
-        numbers.append(make("span", "quire-menu-label", "Page numbers"));
-        numbers.classList.toggle("pressed", !!options.page().numbers);
-        numbers.setAttribute("aria-pressed", String(!!options.page().numbers));
-        numbers.addEventListener("click", () => {
-            change({ numbers: !options.page().numbers });
-            numbers.classList.toggle("pressed", !!options.page().numbers);
-            numbers.setAttribute("aria-pressed", String(!!options.page().numbers));
+        const header = field("Header", "header");
+        const footer = field("Footer", "footer");
+        let numbers = !!options.page().numbers;
+        const turn = switchButton("Page numbers", numbers, (on) => (numbers = on));
+        asking = openDialog(from, {
+            title: "Header and footer",
+            className: "quire-page-dialog",
+            body: [header.row, footer.row, turn],
+            dismiss: "Cancel",
+            action: {
+                label: "OK",
+                press: (_, dialog) => {
+                    change({ header: header.input.value, footer: footer.input.value, numbers });
+                    void dialog.close();
+                },
+            },
+            onClose: () => {
+                asking = undefined;
+                surface.focus();
+            },
         });
-        form.append(field("Header, on every page", "header"), field("Footer, on every page", "footer"), numbers);
-        menu.open(from, form);
-        form.querySelector("input")?.focus({ preventScroll: true });
+        header.input.focus({ preventScroll: true });
     }
     // a header or footer is edited by double-clicking it on any page
     layer.addEventListener("dblclick", (event) => {
@@ -291,7 +289,8 @@ export function createPages(paper: HTMLElement, surface: Surface, options: Pages
 
     return {
         edit,
-        menu,
+        /** True while the header and footer's dialog is open. */
+        editing: () => !!asking?.isOpen(),
         now: () => count,
         /** Lays the pages out again at once, as a test or a change of paper wants. */
         lay,
@@ -314,7 +313,7 @@ export function createPages(paper: HTMLElement, surface: Surface, options: Pages
             watcher?.disconnect();
             removeEventListener("scroll", soon, { capture: true });
             cancelAnimationFrame(waiting);
-            menu.box.remove();
+            void asking?.close();
             layer.remove();
         },
     };

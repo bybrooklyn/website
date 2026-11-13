@@ -16,7 +16,7 @@
 //
 //   const pictures = createPictureTools(surface, { keep, margin });   // pictures.destroy()
 
-import { insetOf, DIALOG } from "./dialog";
+import { insetOf, DIALOG, switchButton } from "./dialog";
 import { blockAt, removeBlock, setAlign, setImage, type Align, type Image } from "./document";
 import { landedAt, landings, moveBlockTo, snapWidth, staysPut } from "./pictures";
 import type { Operation, Surface } from "./surface";
@@ -142,8 +142,7 @@ export function createPictureTools(surface: Surface, options: PictureOptions = {
         for (const [align, button] of aligns) pressed(button, (block.align ?? "left") === align);
         for (const [align, button] of sides) pressed(button, (block.align ?? "left") === align);
         for (const [width, button] of sizes) pressed(button, block.width === width);
-        pressed(wrap, !!block.wrap);
-        wrap.textContent = block.wrap ? "On" : "Off";
+        wrap.set(!!block.wrap);
         wrap.disabled = block.align === "center";
         // a field being written in is left as it is
         if (document.activeElement !== caption) caption.value = block.caption ?? "";
@@ -271,7 +270,9 @@ export function createPictureTools(surface: Surface, options: PictureOptions = {
     const described = field("What the picture shows", (value) => change((path) => (doc) => setImage(doc, path, { alt: value })));
     const sides = new Map(SIDES.map(([align, words]) => [align, control(words, icon(align), () => sitAt(align))] as const));
     const sizes = new Map(SIZES.map(([name, width]) => [width, control(name === "Own size" ? "Its own size" : `${name} width`, name, () => change((path) => (doc) => setImage(doc, path, { width })), "quire-button quire-picture-size")] as const));
-    const wrap = control("Text flows round the picture", "Off", () => change((path) => (doc) => setImage(doc, path, { wrap: !pictureOf(path)?.wrap })), "quire-button quire-picture-wrap");
+    // a switch, drawn as every switch is: pressed with a tick when on, its line's name its only words
+    const wrap = switchButton("Wrap text", false, () => change((path) => (doc) => setImage(doc, path, { wrap: !pictureOf(path)?.wrap })));
+    wrap.classList.add("quire-picture-wrap");
     line("Caption", caption);
     line("Description", described);
     line("Alignment", ...sides.values());

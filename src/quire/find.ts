@@ -108,10 +108,10 @@ export function createFind(surface: Surface, sheet: HTMLElement, top: () => numb
         button.setAttribute("aria-pressed", "false");
         return button;
     };
-    const back = control("The one before (Shift+Enter)", icon("chevron"), () => go(-1));
+    const back = control("Previous (Shift+Enter)", icon("chevron"), () => go(-1));
     back.classList.add("quire-find-back");
-    const on = control("The next (Enter)", icon("chevron"), () => go(1));
-    const more = control("Replace", icon("chevron"), () => showReplace(!bar.classList.contains("replacing")));
+    const on = control("Next (Enter)", icon("chevron"), () => go(1));
+    const more = control("Show replace", icon("chevron"), () => showReplace(!bar.classList.contains("replacing")));
     more.classList.add("quire-find-more");
     findLine.append(more, field, count, toggle("Match case", glyph("Aa", "case"), "matchCase"), toggle("Whole word", glyph("W", "word"), "wholeWord"), back, on, control("Close (Escape)", icon("close"), () => close()));
     const replaceLine = make("div", "quire-find-line quire-find-replace");
@@ -120,7 +120,7 @@ export function createFind(surface: Surface, sheet: HTMLElement, top: () => numb
     replacement.placeholder = "Replace with";
     replacement.setAttribute("aria-label", "Replace with");
     replacement.spellcheck = false;
-    inner.append(replacement, control("Replace this one", "Replace", () => replaceOne(), "quire-button quire-choice"), control("Replace all", "All", () => replaceAll(), "quire-button quire-choice"));
+    inner.append(replacement, control("Replace this one", "Replace", () => replaceOne(), "quire-button quire-choice"), control("Replace all", "Replace all", () => replaceAll(), "quire-button quire-choice"));
     replaceLine.append(inner);
     lines.append(findLine, replaceLine);
     bar.append(lines);
@@ -203,6 +203,8 @@ export function createFind(surface: Surface, sheet: HTMLElement, top: () => numb
         bar.classList.toggle("replacing", shown);
         replaceLine.inert = !shown;
         more.setAttribute("aria-expanded", String(shown));
+        more.setAttribute("aria-label", shown ? "Hide replace" : "Show replace");
+        more.title = shown ? "Hide replace" : "Show replace";
     }
     showReplace(false);
 
@@ -256,7 +258,8 @@ export function createFind(surface: Surface, sheet: HTMLElement, top: () => numb
             const [from, to] = [selection.anchor.offset, selection.focus.offset].sort((a, b) => a - b);
             field.value = textAt(surface.getDocument(), selection.anchor.path).slice(from, to);
         }
-        if (replacing) showReplace(true);
+        // Find opens as find alone and Find and replace with the replace line, whichever was open last time
+        showReplace(replacing);
         place();
         // it grows out of what was pressed (the bar's button, a menu's line), or from the sheet's corner when asked for from the keyboard
         const width = bar.offsetWidth;
@@ -264,8 +267,9 @@ export function createFind(surface: Surface, sheet: HTMLElement, top: () => numb
         void bar.offsetWidth;
         bar.classList.add("shown");
         bar.inert = false;
-        (replacing && field.value ? replacement : field).focus({ preventScroll: true });
-        (replacing && field.value ? replacement : field).select();
+        // the caret starts in Find either way, as Docs has it
+        field.focus({ preventScroll: true });
+        field.select();
         search(true);
     }
 

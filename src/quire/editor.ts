@@ -53,7 +53,7 @@ import { createDetails } from "./details";
 import { createFind } from "./find";
 import { mountChecking } from "./check/mount";
 import { createTitle, nameFor, shownName, type OwnTitle } from "./title";
-import { createZoom, pageRule, percent, setPage, setupItems } from "./paper";
+import { createZoom, pageRule, percent, setPage, setupForm } from "./paper";
 import type { Page } from "./document";
 import { moreCommands } from "./more-commands";
 import { createMatching } from "./matching";
@@ -295,9 +295,8 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         form.querySelector("input")?.focus({ preventScroll: true });
     };
 
-    // ---- About mdQuire, from Tools and the three dots: a small panel that grows out of where it was asked for ----
-    const about = flowMenu("About mdQuire", { className: "quire-about-menu" });
-    const showAbout = (from: HTMLElement) => (about.isOpen() ? about.close(true) : about.open(from, aboutPanel()));
+    // ---- About mdQuire, from Tools and the three dots: something to read, so a dialog grown out of where it was asked for ----
+    const showAbout = (from: HTMLElement) => openDialog(from, { title: "About mdQuire", body: [aboutPanel()], action: { label: "Done", press: (_, dialog) => void dialog.close() }, onClose: () => surface.focus() });
 
     // ---- the three-dot menu ----
     const give = (file: Blob, fileName: string) => {
@@ -448,7 +447,6 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         return (host.clientWidth - gutter * 2) / (host.classList.contains("markdown") ? 2 : 1);
     };
     const zooms = flowMenu("Zoom", { align: "right" });
-    const setups = flowMenu("Page setup", { align: "right" });
     // the page as pages of that paper in page view, with the header, footer and numbers of a .quire document
     const pages = createPages(paper, surface, { page: pageNow, rich: () => !!surface.getDocument().quire });
     const zoom = createZoom(paper, column, space, pageNow, pages.paged, (now) => {
@@ -508,7 +506,24 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         zoom.refresh();
     };
     showView(rememberedView(), false);
-    const openSetup = (from: HTMLElement) => setups.open(from, setupItems(pageNow(), (change) => surface.run((doc) => setPage(doc, { ...pageNow(), ...change }))), true);
+    // page setup is a form of three choices, so a dialog, as Docs has it: nothing changes until OK, and Cancel leaves the page as it was
+    const openSetup = (from: HTMLElement) => {
+        const form = setupForm(pageNow());
+        openDialog(from, {
+            title: "Page setup",
+            body: [form.element],
+            className: "quire-setup-dialog",
+            dismiss: "Cancel",
+            action: {
+                label: "OK",
+                press: (_, dialog) => {
+                    surface.run((doc) => setPage(doc, form.page()));
+                    void dialog.close();
+                },
+            },
+            onClose: () => surface.focus(),
+        });
+    };
     /** The zoom's lines, and for a `.quire` document the page setup, which opens in its place. */
     const zoomLines = (from: () => HTMLElement): MenuItem[] => [{ label: "Page view", pressed: pages.paged(), run: () => showView(!pages.paged()) }, ...zoom.items(), ...(surface.getDocument().quire ? [{ label: "Page setup", hint: "›", run: () => openSetup(from()) }] : [])];
     // as the Markdown opens beside the sheet, or the window (or the browser's own zoom) changes, the sheet's column narrows and the sheet follows it
@@ -520,6 +535,10 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         watcher.observe(element);
         watchers.push(watcher);
     };
+    // side panels start below the top's two lines (--quire-below-bar in quire.css), wherever they end on this window
+    const topEnd = () => document.documentElement.style.setProperty("--quire-top-bottom", `${Math.max(0, Math.round(top.getBoundingClientRect().bottom))}px`);
+    watch(top, topEnd);
+    topEnd();
     // only a change of width matters: the editor grows taller with every line typed
     let wideAt = 0;
     watch(markdown.element, () => zoom.refresh(false));
@@ -787,10 +806,11 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     };
     // ---- every shortcut and every piece of typing, Ctrl+/: a dialog with a search, grown from where it was asked for ----
     const showShortcuts = (from: HTMLElement) => {
+        // a plain field, not a search one, so that Escape closes the dialog at once rather than first clearing what was typed
         const field = make("input", "quire-link-field quire-keys-search");
-        field.type = "search";
-        field.placeholder = "Search the shortcuts and typing";
-        field.setAttribute("aria-label", "Search the shortcuts and typing");
+        field.type = "text";
+        field.placeholder = "Search shortcuts";
+        field.setAttribute("aria-label", "Search shortcuts");
         const list = make("div", "quire-keys");
         const fill = () => {
             const found = findShortcuts(field.value);
@@ -981,19 +1001,15 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     const askUnsaved = (why: string) =>
         new Promise<"retry" | "stay" | "discard">((answer) => {
             let chosen: "retry" | "stay" | "discard" = "stay";
-            // the two other ways sit under the words, as the row at the bottom has room for two buttons
-            const ways = make("p");
-            const way = (label: string, press: () => void) => {
-                const button = make("button", "quire-dialog-dismiss", label);
-                button.type = "button";
-                button.addEventListener("click", press);
-                ways.append(button);
-            };
-            way("Download a copy", () => void (surface.getDocument().quire ? downloadQuire() : download()));
-            way("Leave without saving", () => ((chosen = "discard"), void dialog.close()));
-            const dialog = openDialog(bar.statusLine, {
+            // every way out is in the one row: leaving without saving, which loses the words, stands apart at the far left
+            openDialog(bar.statusLine, {
                 title: "Not saved",
-                body: [make("p", "", `The latest changes to this document have not been saved: ${why}. They are still here.`), ways],
+                className: "quire-unsaved-dialog",
+                body: [make("p", "", `The latest changes to this document have not been saved: ${why}. They are still here.`)],
+                others: [
+                    { label: "Leave without saving", far: true, press: (dialog) => ((chosen = "discard"), void dialog.close()) },
+                    { label: "Download a copy", press: () => void (surface.getDocument().quire ? downloadQuire() : download()) },
+                ],
                 action: { label: "Try again", press: (_, open) => ((chosen = "retry"), void open.close()) },
                 dismiss: "Stay",
                 onClose: () => answer(chosen),
@@ -1127,7 +1143,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
             if (!options.top) top.remove();
             dictation.destroy();
             surface.destroy();
-            for (const menu of [...bar.menus, links, row.menu, zooms, setups, about]) menu.box.remove();
+            for (const menu of [...bar.menus, links, row.menu, zooms]) menu.box.remove();
             selectBar.element.remove();
             linkCard.element.remove();
             palette.destroy();

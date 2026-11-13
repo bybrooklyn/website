@@ -14,6 +14,7 @@
 import { type Document } from "./document";
 import { opened, type Parts } from "./quire-file";
 import { createSurface, type Surface } from "./surface";
+import { filledButton } from "./dialog";
 import { control, icon, make } from "./ui";
 
 /** What is known of a snapshot without its text. */
@@ -91,6 +92,20 @@ export function snapshotDocument(saved: string, into: Document): Document {
     if (parts) return opened(markdown, parts);
     const doc = opened(markdown, undefined, { mdx: into.mdx });
     return into.quire ? { ...doc, quire: into.quire } : doc;
+}
+
+/** Which of a version's top blocks are new since the one before it: those whose Markdown the one before does not have (as many times). */
+export function addedBlocks(before: Document | undefined, after: Document): number[] {
+    const markdown = (block: Document["blocks"][number]) => (block.source ?? JSON.stringify({ ...block, gap: "" })).trim();
+    const left = new Map<string, number>();
+    for (const block of before?.blocks ?? []) left.set(markdown(block), (left.get(markdown(block)) ?? 0) + 1);
+    const added: number[] = [];
+    after.blocks.forEach((block, index) => {
+        const had = left.get(markdown(block)) ?? 0;
+        if (had > 0) left.set(markdown(block), had - 1);
+        else if (markdown(block)) added.push(index);
+    });
+    return added;
 }
 
 // ---- thinning ----
@@ -227,7 +242,9 @@ export function when(time: number, now: number): string {
     if (sameDay(date, today)) return `Today, ${hour}`;
     const yesterday = new Date(now - 86_400_000);
     if (sameDay(date, yesterday)) return `Yesterday, ${hour}`;
-    return `${date.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: date.getFullYear() === today.getFullYear() ? undefined : "numeric" })}, ${hour}`;
+    // the month first, as the site writes dates
+    const day = date.toLocaleDateString("en-US", { day: "numeric", month: "short", year: date.getFullYear() === today.getFullYear() ? undefined : "numeric" });
+    return `${day}, ${hour}`;
 }
 
 /** Builds the history panel for a surface. */
@@ -236,10 +253,10 @@ export function createHistoryPanel(surface: Surface, storage: VersionStorage, na
     panel.setAttribute("aria-label", "Version history");
     panel.inert = true;
     const head = make("div", "quire-history-head");
-    const title = make("span", "quire-outline-title", "History");
+    const title = make("span", "quire-outline-title", "Version history");
     const back = control("Back to the list", icon("chevron"), () => showList());
     back.classList.add("quire-history-back");
-    const closer = control("Close the history", icon("close"), () => close());
+    const closer = control("Close", icon("close"), () => close());
     head.append(back, title, closer);
     const views = make("div", "quire-history-views");
     const list = make("ol", "quire-history-list");
@@ -264,7 +281,7 @@ export function createHistoryPanel(surface: Surface, storage: VersionStorage, na
                 summary.append(make("span", "quire-added", `+${version.added}`), make("span", "quire-removed", `−${version.removed}`));
                 open.append(summary);
                 open.setAttribute("aria-label", `${when(version.time, now)}: ${version.added} lines added, ${version.removed} removed${version.opened ? ", as opened" : ""}`);
-                open.addEventListener("click", () => showVersion(version));
+                open.addEventListener("click", () => showVersion(version, versions[index + 1]));
                 item.append(open);
                 return item;
             }),
@@ -272,21 +289,25 @@ export function createHistoryPanel(surface: Surface, storage: VersionStorage, na
         if (!versions.length) list.append(make("li", "quire-history-none", "Nothing kept yet."));
     }
 
-    async function showVersion(version: VersionInfo) {
+    async function showVersion(version: VersionInfo, older?: VersionInfo) {
         const text = await storage.load(version.id);
+        const before = older ? snapshotDocument(await storage.load(older.id), surface.getDocument()) : undefined;
         const shown = make("div", "quire-history-text prose");
-        // the version as it read, styling and all, drawn as the editor draws it, and not editable
-        const view = createSurface(shown, snapshotDocument(text, surface.getDocument()));
+        // the version as it read, styling and all, drawn as the editor draws it, and not editable; what it added since the one before is tinted
+        const doc = snapshotDocument(text, surface.getDocument());
+        const view = createSurface(shown, doc);
+        for (const index of addedBlocks(before, doc)) view.elementAt([index])?.classList.add("quire-history-added");
         view.destroy();
         shown.removeAttribute("role");
-        const restore = control("Restore this version", "Restore this version", () => {
+        const restore = filledButton("Restore this version", () => {
             surface.run(() => snapshotDocument(text, surface.getDocument()));
             keeper.now();
             close();
             surface.focus();
-        }, "quire-button quire-restore");
-        const label = make("p", "quire-history-when", when(version.time, Date.now()));
-        preview.replaceChildren(label, restore, shown);
+        }, "quire-dialog-action quire-restore");
+        const head = make("div", "quire-history-chosen");
+        head.append(make("p", "quire-history-when", when(version.time, Date.now())), restore);
+        preview.replaceChildren(head, shown);
         panel.classList.add("previewing");
         restore.focus({ preventScroll: true });
     }
@@ -296,8 +317,12 @@ export function createHistoryPanel(surface: Surface, storage: VersionStorage, na
         list.querySelector<HTMLElement>("button")?.focus({ preventScroll: true });
     }
 
+    // Escape steps back one level, as everywhere: from a version shown to the list, and from the list out of the panel
     const keys = (event: KeyboardEvent) => {
-        if (event.key === "Escape") close();
+        if (event.key !== "Escape") return;
+        event.preventDefault();
+        if (panel.classList.contains("previewing")) showList();
+        else close();
     };
     const outside = (event: PointerEvent) => {
         if (!panel.contains(event.target as Node)) close();

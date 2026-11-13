@@ -1,8 +1,13 @@
 // When a document changed somewhere else while it was being written here, saving stops and this
 // panel says so. What was typed is kept. Three ways on: keep mine (write it over theirs), take
 // theirs (mine is kept in the version history first), or see both side by side, the lines that
-// differ marked. The side-by-side reading is pure and tested; the panel is DOM.
+// differ marked. It comes by itself, so it is a side panel below the bar, as everything to consult
+// while writing is, and not a dialog: it does not take the keyboard from the text, so that a key
+// typed as it arrives cannot choose for the writer; it is said aloud, and reached with Tab. Its
+// buttons are in the order every dialog's are, keeping mine filled at the right. The side-by-side
+// reading is pure and tested; the panel is DOM.
 
+import { filledButton, switchButton } from "./dialog";
 import { control, icon, make } from "./ui";
 
 /** One row of the side-by-side view: a line of mine, a line of theirs, or the same line in both. */
@@ -38,25 +43,31 @@ export function sideBySide(mine: string, theirs: string): Row[] {
 /** Builds the panel. `choose` is told which way the writer went. */
 export function createConflict(choose: (choice: "mine" | "theirs") => void, back: () => void = () => {}) {
     const panel = make("aside", "quire-conflict");
-    panel.setAttribute("role", "alertdialog");
-    panel.setAttribute("aria-label", "Changed elsewhere");
+    panel.setAttribute("aria-labelledby", "quire-conflict-title");
     panel.inert = true;
     const head = make("div", "quire-conflict-head");
-    head.append(make("p", "quire-conflict-title", "This document changed somewhere else"));
+    const title = make("p", "quire-conflict-title", "This document changed somewhere else");
+    title.id = "quire-conflict-title";
+    // said aloud as it comes, the focus staying in the text
+    title.setAttribute("role", "alert");
+    head.append(title);
     const closer = control("Not now", icon("close"), () => close());
     head.append(closer);
     const said = make("p", "quire-conflict-said", "It was saved there after you opened it here. What you typed is kept and nothing has been written over.");
     const choices = make("div", "quire-conflict-choices");
-    const mine = control("Keep mine", "Keep mine", () => {
-        close();
-        choose("mine");
-    }, "quire-button quire-choice");
-    const theirs = control("Take theirs", "Take theirs", () => {
+    const both = switchButton("See both", false, (on) => panel.classList.toggle("both", on));
+    both.classList.add("far");
+    const theirs = make("button", "quire-dialog-dismiss", "Take theirs");
+    theirs.type = "button";
+    theirs.addEventListener("click", () => {
         close();
         choose("theirs");
-    }, "quire-button quire-choice");
-    const both = control("See both", "See both", () => panel.classList.toggle("both"), "quire-button quire-choice");
-    choices.append(mine, theirs, both);
+    });
+    const mine = filledButton("Keep mine", () => {
+        close();
+        choose("mine");
+    });
+    choices.append(both, theirs, mine);
     const note = make("p", "quire-conflict-note", "Taking theirs keeps yours in the version history.");
     const view = make("div", "quire-conflict-both");
     panel.append(head, said, choices, note, view);
@@ -82,9 +93,9 @@ export function createConflict(choose: (choice: "mine" | "theirs") => void, back
         columns.append(left, right);
         view.append(columns);
         panel.classList.remove("both");
+        both.set(false);
         panel.classList.add("open");
         panel.inert = false;
-        mine.focus({ preventScroll: true });
     }
 
     function close() {

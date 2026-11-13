@@ -177,16 +177,84 @@ export function createZoom(paper: HTMLElement, room: HTMLElement, space: () => n
 /** What the zoom is, as the page sees it. */
 export type Zoom = ReturnType<typeof createZoom>;
 
-/** The page setup's lines for a menu: the paper, which way up, and the margins, each line pressed when it is what the page has. */
-export function setupItems(page: Page, choose: (change: Partial<Page>) => void): MenuItem[] {
-    const line = (label: string, on: boolean, change: Partial<Page>, group: string): MenuItem => ({ label, pressed: on, group, run: () => choose(change) });
+/** One choice in page setup: what it says, a note under it (a margin's size), what it changes, and whether the page has it now. */
+export interface SetupChoice {
+    label: string;
+    note?: string;
+    change: Partial<Page>;
+    on: boolean;
+}
+
+/** Page setup's three groups, as its dialog shows them: the paper, its orientation and the margins, each choice on when it is what the page has. */
+export function setupChoices(page: Page): { label: string; choices: SetupChoice[] }[] {
     return [
-        { label: "Paper", note: true, run: () => {} },
-        ...(Object.keys(PAPERS) as Page["size"][]).map((size) => line(size, page.size === size, { size }, "size")),
-        { label: "Which way up", note: true, run: () => {} },
-        line("Portrait", page.orientation === "portrait", { orientation: "portrait" }, "orientation"),
-        line("Landscape", page.orientation === "landscape", { orientation: "landscape" }, "orientation"),
-        { label: "Margins", note: true, run: () => {} },
-        ...MARGINS.map(([label, margins]) => line(label, Math.abs(page.margins - margins) < 0.5, { margins }, "margins")),
+        { label: "Paper", choices: (Object.keys(PAPERS) as Page["size"][]).map((size) => ({ label: size, change: { size }, on: page.size === size })) },
+        {
+            label: "Orientation",
+            choices: [
+                { label: "Portrait", change: { orientation: "portrait" }, on: page.orientation === "portrait" },
+                { label: "Landscape", change: { orientation: "landscape" }, on: page.orientation === "landscape" },
+            ],
+        },
+        { label: "Margins", choices: MARGINS.map(([label, margins]) => ({ label, note: `${margins} mm`, change: { margins }, on: Math.abs(page.margins - margins) < 0.5 })) },
     ];
+}
+
+/**
+ * Page setup's form, for its dialog: each group a row of buttons of which one is pressed, as a
+ * choice of a few is everywhere in mdQuire, the arrow keys moving along a row. Nothing changes the
+ * page until the dialog is answered: `page()` is what has been chosen so far.
+ */
+export function setupForm(start: Page): { element: HTMLElement; page(): Page } {
+    let chosen: Page = { ...start };
+    const form = document.createElement("div");
+    form.className = "quire-setup";
+    const draw = (focusIn?: string) => {
+        form.replaceChildren();
+        for (const group of setupChoices(chosen)) {
+            const label = document.createElement("p");
+            label.className = "quire-setup-label";
+            label.id = `quire-setup-${group.label.toLowerCase()}`;
+            label.textContent = group.label;
+            const row = document.createElement("div");
+            row.className = "quire-setup-row";
+            row.setAttribute("role", "radiogroup");
+            row.setAttribute("aria-labelledby", label.id);
+            const buttons = group.choices.map((choice) => {
+                const button = document.createElement("button");
+                button.type = "button";
+                button.className = `quire-setup-choice${choice.on ? " on" : ""}`;
+                button.setAttribute("role", "radio");
+                button.setAttribute("aria-checked", String(choice.on));
+                button.tabIndex = choice.on ? 0 : -1;
+                const words = document.createElement("span");
+                words.textContent = choice.label;
+                button.append(words);
+                if (choice.note) {
+                    const note = document.createElement("span");
+                    note.className = "quire-setup-note";
+                    note.textContent = choice.note;
+                    button.append(note);
+                }
+                button.addEventListener("click", () => {
+                    chosen = { ...chosen, ...choice.change };
+                    draw(group.label);
+                });
+                return button;
+            });
+            // the arrows go along a row and choose as they go, as a row of radio buttons does
+            row.addEventListener("keydown", (event) => {
+                const by = event.key === "ArrowRight" || event.key === "ArrowDown" ? 1 : event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 0;
+                if (!by) return;
+                event.preventDefault();
+                const at = buttons.findIndex((button) => button === document.activeElement);
+                buttons[(at + by + buttons.length) % buttons.length]!.click();
+            });
+            row.append(...buttons);
+            form.append(label, row);
+            if (focusIn === group.label) buttons.find((button) => button.getAttribute("aria-checked") === "true")?.focus();
+        }
+    };
+    draw();
+    return { element: form, page: () => chosen };
 }

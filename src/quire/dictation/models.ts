@@ -152,6 +152,14 @@ export function defaultTier(device: Device): Tier["id"] {
 /** Where a tier runs on this machine, in the words the panel uses. */
 export const placeOf = (tier: Tier, device: Pick<Device, "gpu">): "graphics card" | "processor" => (tier.card && device.gpu ? "graphics card" : "processor");
 
+/** Where the tiers run on this machine, said once for all of them under the choices rather than on each: the processor for all, or which use the graphics card. */
+export function placesSaid(tiers: Tier[], device: Pick<Device, "gpu">): string {
+    const card = tiers.filter((tier) => placeOf(tier, device) === "graphics card").map((tier) => tier.name);
+    if (!card.length) return "On this machine they run on the processor.";
+    if (card.length === tiers.length) return "On this machine they run on the graphics card.";
+    return `On this machine ${card.join(" and ")} ${card.length === 1 ? "runs" : "run"} on the graphics card, the others on the processor.`;
+}
+
 /** Reads the device from the browser. */
 export function deviceNow(): Device {
     const nav = navigator as Navigator & { connection?: { saveData?: boolean; effectiveType?: string }; deviceMemory?: number; userAgentData?: { mobile?: boolean } };

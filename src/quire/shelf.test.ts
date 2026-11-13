@@ -33,8 +33,8 @@ test("when a document was touched is said as a row has room for: the time today,
     const now = new Date(2026, 10, 13, 15, 30).getTime();
     expect(shortWhen(new Date(2026, 10, 13, 9, 4).getTime(), now)).toBe("today 09:04");
     expect(shortWhen(new Date(2026, 10, 12, 23, 59).getTime(), now)).toBe("yesterday");
-    expect(shortWhen(new Date(2026, 10, 3, 12, 0).getTime(), now)).toBe("3 Nov");
-    expect(shortWhen(new Date(2025, 0, 20, 12, 0).getTime(), now)).toBe("20 Jan 2025");
+    expect(shortWhen(new Date(2026, 10, 3, 12, 0).getTime(), now)).toBe("Nov 3");
+    expect(shortWhen(new Date(2025, 0, 20, 12, 0).getTime(), now)).toBe("Jan 20, 2025");
 });
 
 test("a copy is named with copy before its ending", () => {

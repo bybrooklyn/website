@@ -557,6 +557,20 @@ used("a version is kept, listed with what changed, shown as it read, and restore
     await tab.wait(500);
     expect(await tab.run("document.querySelector('.quire-history-text').textContent")).toBe("First draft.");
     expect(await tab.run("document.querySelector('.quire-history-text').isContentEditable")).toBe(false);
+    // the panel is Version history, below the bar, and Escape steps back one level: to the list, then out
+    expect(await tab.run("document.querySelector('.quire-history-head .quire-outline-title').textContent")).toBe("Version history");
+    expect(await tab.run("document.querySelector('.quire-history').getBoundingClientRect().top >= document.querySelector('.quire-bar').getBoundingClientRect().bottom")).toBe(true);
+    await tab.press("Escape");
+    await tab.wait(400);
+    expect(await tab.run("document.querySelector('.quire-history').classList.contains('open') && !document.querySelector('.quire-history').classList.contains('previewing')")).toBe(true);
+    // the newer version shows what it added tinted
+    await press(".quire-history-list li:nth-child(1) .quire-history-item");
+    await tab.wait(500);
+    expect(await tab.run("[...document.querySelectorAll('.quire-history-text .quire-history-added')].map((each) => each.textContent)")).toEqual(["A second line."]);
+    await tab.press("Escape");
+    await tab.wait(400);
+    await press(".quire-history-list li:nth-child(2) .quire-history-item");
+    await tab.wait(500);
     await press(".quire-restore");
     await tab.wait(100);
     expect(await md()).toBe("First draft.\n");
@@ -857,6 +871,10 @@ used("a document changed elsewhere is not written over: the conflict is shown, a
     expect(await tab.run(`q.kept(${JSON.stringify(id)})`)).toBe("Theirs\n");
     await tab.wait(400);
     expect(await tab.run("getComputedStyle(document.querySelector('.quire-conflict')).visibility")).toBe("visible");
+    // it comes below the bar and leaves the keyboard in the text, so that a key typed as it comes chooses nothing
+    expect(await tab.run("document.querySelector('.quire-conflict').getBoundingClientRect().top >= document.querySelector('.quire-bar').getBoundingClientRect().bottom")).toBe(true);
+    expect(await tab.run("document.activeElement === q.editor.surface.element")).toBe(true);
+    expect(await tab.run<string[]>("[...document.querySelectorAll('.quire-conflict-choices button')].map((b) => b.textContent)")).toEqual(["See both", "Take theirs", "Keep mine"]);
     // see both, side by side
     await press(".quire-conflict button", "See both");
     await tab.wait(400);
@@ -914,6 +932,9 @@ used("words that could not be saved keep the writer in the document: she is told
     await tab.run(going);
     await tab.wait(700);
     expect(await tab.run<string>("document.querySelector('dialog.quire-dialog[open]')?.textContent ?? ''")).toContain("have not been saved: the disk is full");
+    // every way out is a button in the one row, leaving without saving at the far left and trying again, filled, at the right
+    expect(await tab.run<string[]>("[...document.querySelectorAll('dialog.quire-dialog[open] .quire-dialog-actions button')].map((b) => b.textContent)")).toEqual(["Leave without saving", "Download a copy", "Stay", "Try again"]);
+    expect(await tab.run<number>("document.querySelectorAll('dialog.quire-dialog[open] .quire-dialog-body button').length")).toBe(0);
     // staying keeps the words and the document
     await press("dialog.quire-dialog[open] button", "Stay");
     await tab.wait(400);
@@ -1069,10 +1090,19 @@ used("a .quire document's header, footer and page numbers are set from Insert or
     await tab.wait(650);
     await press(".quire-menu.open .quire-menu-line", "Header, footer and page numbers");
     await tab.wait(650);
+    // a dialog: two fields with their labels and a switch, and nothing changes until OK
+    expect(await tab.run("document.querySelector('dialog.quire-dialog[open] .quire-dialog-title')?.textContent")).toBe("Header and footer");
     await tab.type("My book");
     await tab.press("Tab");
     await tab.type("Draft");
-    await press(".quire-menu.open .quire-menu-line", "Page numbers");
+    await press("dialog.quire-dialog[open] .quire-switch", "Page numbers");
+    expect(await tab.run("document.querySelector('dialog.quire-dialog[open] .quire-switch').getAttribute('aria-pressed')")).toBe("true");
+    expect(await tab.run("q.editor.surface.getDocument().quire.page.header")).toBeUndefined();
+    // Enter in a field answers it, as OK does
+    await tab.run("document.querySelector('dialog.quire-dialog[open] input').focus()");
+    await tab.press("Enter");
+    await tab.wait(400);
+    expect(await tab.run("!!document.querySelector('dialog.quire-dialog')")).toBe(false);
     expect(await tab.run("q.editor.surface.getDocument().quire.page")).toEqual({ size: "A4", orientation: "portrait", margins: 25, header: "My book", footer: "Draft", numbers: true });
     const marks = await tab.run<{ heads: string[]; feet: string[]; numbers: string[] }>("({ heads: [...document.querySelectorAll('.quire-page-head')].map((each) => each.textContent), feet: [...document.querySelectorAll('.quire-page-foot > :first-child')].map((each) => each.textContent), numbers: [...document.querySelectorAll('.quire-page-number')].map((each) => each.textContent) })");
     expect(marks.heads.length).toBeGreaterThan(1);
@@ -1080,13 +1110,10 @@ used("a .quire document's header, footer and page numbers are set from Insert or
     expect(new Set(marks.feet)).toEqual(new Set(["Draft"]));
     expect(marks.numbers).toEqual(marks.heads.map((_, index) => String(index + 1)));
     expect(await tab.run("document.adoptedStyleSheets.some((sheet) => [...sheet.cssRules].some((rule) => rule.cssText.includes('My book') && rule.cssText.includes('counter(page)')))")).toBe(true);
-    await tab.press("Escape");
-    await tab.wait(300);
-    // each change is one step back: the numbers, then the footer typed, then the header
+    // the whole of it is one step back
     await tab.run("q.editor.surface.undo()");
-    expect(await tab.run("q.editor.surface.getDocument().quire.page.numbers")).toBeUndefined();
-    await tab.run("q.editor.surface.undo()");
-    expect(await tab.run("q.editor.surface.getDocument().quire.page.footer")).toBeUndefined();
+    expect(await tab.run("q.editor.surface.getDocument().quire.page.header")).toBeUndefined();
+    await tab.run("q.editor.surface.redo()");
     expect(await tab.run("q.editor.surface.getDocument().quire.page.header")).toBe("My book");
     // a double click on the header of the second page opens the same form there
     const head = await tab.run<{ x: number; y: number }>("(() => { const head = document.querySelectorAll('.quire-page-head')[1]; head.scrollIntoView({ block: 'center' }); const box = head.getBoundingClientRect(); return { x: box.left + box.width / 2, y: box.top + box.height / 2 }; })()");
@@ -1099,7 +1126,11 @@ used("a .quire document's header, footer and page numbers are set from Insert or
     await tab.wait(650);
     expect(await tab.run("document.activeElement.getAttribute('aria-label')")).toBe("Header, on every page");
     expect(await tab.run("document.activeElement.value")).toBe("My book");
+    // Escape leaves it as it was
+    await tab.type(" changed");
     await tab.press("Escape");
+    await tab.wait(400);
+    expect(await tab.run("q.editor.surface.getDocument().quire.page.header")).toBe("My book");
     expect(tab.errors).toEqual([]);
 });
 
@@ -1685,7 +1716,7 @@ used("find grows from the sheet's top right with Ctrl+F, marks every match and t
     await press(".quire-find button", "Match case");
     expect(await count()).toBe("1 of 3");
     // the replace line grows open; one replaced, then all, each one undo step
-    await press(".quire-find button", "Replace");
+    await press(".quire-find button", "Show replace");
     await tab.wait(450);
     await tab.run("document.querySelector('.quire-find-replace input').focus()");
     await tab.type("dog");
@@ -1708,10 +1739,21 @@ used("find grows from the sheet's top right with Ctrl+F, marks every match and t
     expect(await tab.run("getComputedStyle(document.querySelector('.quire-find')).visibility")).toBe("hidden");
     expect(await tab.run("CSS.highlights.has('quire-found')")).toBe(false);
     expect(await tab.run("document.activeElement === document.querySelector('.quire')")).toBe(true);
-    // Ctrl+H opens it with the replace line, and the Edit menu has both
+    // Ctrl+H opens it with the replace line, the caret in Find as Docs has it
     await tab.press("h", { ctrl: true });
     await tab.wait(450);
     expect(await tab.run("document.querySelector('.quire-find').classList.contains('replacing')")).toBe(true);
+    expect(await tab.run("document.activeElement.getAttribute('aria-label')")).toBe("Find");
+    // going from match to match draws no selection bar over the text
+    await tab.press("Enter");
+    await tab.wait(300);
+    expect(await tab.run("document.querySelector('.quire-select-bar')?.classList.contains('shown') ?? false")).toBe(false);
+    await tab.press("Escape");
+    await tab.wait(300);
+    // Ctrl+F opens find alone, even after the replace line was open
+    await tab.press("f", { ctrl: true });
+    await tab.wait(450);
+    expect(await tab.run("document.querySelector('.quire-find').classList.contains('replacing')")).toBe(false);
     await tab.press("Escape");
     expect(tab.errors).toEqual([]);
 });
@@ -1770,41 +1812,55 @@ used("page setup, from the zoom control, gives a .quire document's sheet its pap
     await tab.wait(650);
     await press(".quire-menu.open .quire-menu-line", "Page setup");
     await tab.wait(650);
-    await press(".quire-menu.open .quire-menu-line", "A5");
-    await tab.wait(100);
-    // the menu stays open for the next choice, pressed where it now is
-    await press(".quire-menu.open .quire-menu-line", "Landscape");
-    await tab.wait(700);
-    expect(await tab.run("[...document.querySelectorAll('.quire-menu.open .quire-menu-line.pressed')].map((line) => line.textContent)")).toEqual(["A5", "Landscape", "Normal"]);
+    // a dialog: the choices are rows of buttons, and nothing changes until OK
+    expect(await tab.run("document.querySelector('dialog.quire-dialog[open] .quire-dialog-title')?.textContent")).toBe("Page setup");
+    await press("dialog.quire-dialog[open] .quire-setup-choice", "A5");
+    await press("dialog.quire-dialog[open] .quire-setup-choice", "Landscape");
+    expect(await tab.run("[...document.querySelectorAll('dialog.quire-dialog[open] .quire-setup-choice[aria-checked=true]')].map((each) => each.firstChild.textContent)")).toEqual(["A5", "Landscape", "Normal"]);
+    expect(await tab.run("q.editor.surface.getDocument().quire.page.size")).toBe("A4");
+    await press("dialog.quire-dialog[open] button", "OK");
+    await tab.wait(400);
+    expect(await tab.run("!!document.querySelector('dialog.quire-dialog')")).toBe(false);
     expect(await tab.run("q.editor.surface.getDocument().quire.page")).toEqual({ size: "A5", orientation: "landscape", margins: 25 });
     expect(await shape()).toBeCloseTo(210 / 148, 1);
     // print is given the page as a stylesheet adopted through the CSSOM, which the page's policy allows, not a <style> added at run time, which it refuses
     expect(await tab.run("document.adoptedStyleSheets.some((sheet) => [...sheet.cssRules].some((rule) => rule.cssText.includes('@media print') && rule.cssText.toLowerCase().includes('size: a5 landscape; margin: 25mm')))")).toBe(true);
     expect(await tab.run("[...document.querySelectorAll('head style')].some((style) => style.textContent.includes('size: A5'))")).toBe(false);
+    // the whole setup is one step back
+    await tab.run("q.editor.surface.undo()");
+    expect(await tab.run("q.editor.surface.getDocument().quire.page.size")).toBe("A4");
+    // Cancel, or Escape, leaves the page as it was
+    await zoomMenu();
+    await tab.wait(650);
+    await press(".quire-menu.open .quire-menu-line", "Page setup");
+    await tab.wait(650);
+    await press("dialog.quire-dialog[open] .quire-setup-choice", "Letter");
     await tab.press("Escape");
-    // each choice is one step back
-    await tab.run("q.editor.surface.undo(); q.editor.surface.undo()");
+    await tab.wait(400);
     expect(await tab.run("q.editor.surface.getDocument().quire.page.size")).toBe("A4");
     expect(tab.errors).toEqual([]);
 });
 
-used("About mdQuire, in Tools and in the three dots, says what it is and who made it, with the way to her site and the project, and grows in", async () => {
+used("About mdQuire, in Tools and in the three dots, is a dialog that says what it is and who made it, with the way to her site and the project; it grows in, takes the keyboard, and Escape gives the text back", async () => {
     await reset("Text\n", [0], 0);
     await press(".quire-menu-row .quire-row-word", "Tools");
     await tab.wait(650);
-    const watching = tab.run<number[]>("q.watch('.quire-about-menu', 'height', 400)");
+    const watching = tab.run<number[]>("q.watch('.quire-dialog-skin', 'height', 400)");
     await press(".quire-menu.open .quire-menu-line", "About mdQuire");
     const heights = (await watching).filter((value) => !Number.isNaN(value));
     expect(new Set(heights.map(Math.round)).size).toBeGreaterThan(3);
-    const seen = await tab.run<{ text: string; links: string[] }>("(() => { const panel = document.querySelector('.quire-about-menu.open .quire-about'); return { text: panel.textContent, links: [...panel.querySelectorAll('a')].map((link) => link.getAttribute('href')) }; })()");
+    const seen = await tab.run<{ modal: boolean; title: string; text: string; links: string[]; inside: boolean }>("(() => { const dialog = document.querySelector('dialog.quire-dialog[open]'); const panel = dialog.querySelector('.quire-about'); return { modal: dialog.matches(':modal'), title: dialog.querySelector('.quire-dialog-title').textContent, text: panel.textContent, links: [...panel.querySelectorAll('a')].map((link) => link.getAttribute('href')), inside: dialog.contains(document.activeElement) }; })()");
+    expect(seen).toMatchObject({ modal: true, title: "About mdQuire", inside: true, links: ["/", "/projects/mdquire/"] });
     expect(seen.text).toContain("Charlotte made it");
-    expect(seen.links).toEqual(["/", "/projects/mdquire/"]);
     await tab.press("Escape");
-    await tab.wait(300);
+    await tab.wait(400);
+    expect(await tab.run("!!document.querySelector('dialog.quire-dialog')")).toBe(false);
+    expect(await tab.run("document.activeElement === q.editor.surface.element")).toBe(true);
     await choose("More", "About mdQuire");
     await tab.wait(400);
-    expect(await tab.run("!!document.querySelector('.quire-about-menu.open .quire-about')")).toBe(true);
+    expect(await tab.run("!!document.querySelector('dialog.quire-dialog[open] .quire-about')")).toBe(true);
     await tab.press("Escape");
+    await tab.wait(400);
 });
 
 used("typing, the caret is never a frame behind: on every frame it is within a pixel of the cursor's own place", async () => {
@@ -1950,7 +2006,8 @@ used("Ctrl+/ opens every shortcut and every piece of typing in a dialog, with a 
     const narrowed = await tab.run<string[]>(`[...document.querySelectorAll("dialog[open] .quire-keys tr")].map((row) => row.textContent)`);
     expect(narrowed.length).toBeLessThan(6);
     expect(narrowed.some((row) => row.includes("Bulleted list"))).toBe(true);
-    await tab.press("Escape");
+    // one Escape closes it, words in the search or not, as every dialog
     await tab.press("Escape");
     await tab.wait(400);
+    expect(await tab.run("!!document.querySelector('dialog.quire-dialog')")).toBe(false);
 });

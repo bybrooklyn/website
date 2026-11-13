@@ -176,6 +176,10 @@ async function showFiles(from: HTMLElement) {
         canRename: false,
         canRemove: false,
         places: [],
+        finish: () => {
+            files.close(false);
+            editor.surface.focus();
+        },
         open: async (entry) => {
             files.close(false);
             if (entry.id === PHOTOS) return notes.open();

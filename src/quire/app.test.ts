@@ -216,7 +216,7 @@ used("with nothing open the home screen shows ways to start; blank grows into a 
     expect(await md()).toBe("First words.\n");
 });
 
-used("the documents list flows out of the name: a new document, a rename, one taken away and brought back", async () => {
+used("the documents list flows out of the name: a new document, a rename that Enter finishes, one deleted after asking and restored", async () => {
     await documents();
     expect(await tab.run("[...document.querySelectorAll('.quire-documents-list .quire-menu-line')].map((line) => line.textContent)")).toEqual(["Untitled"]);
     await press(".quire-documents-new");
@@ -231,9 +231,17 @@ used("the documents list flows out of the name: a new document, a rename, one ta
     await tab.press("Enter");
     await tab.wait(400);
     expect(await tab.run("document.querySelector('.quire-name-text').textContent")).toBe("Plans");
-    // the other one taken away, asked twice on the same button, and brought back from the trash
+    // Enter renamed it, closed the list, and gave the text back
+    expect(await tab.run("!!document.querySelector('.quire-documents-menu:popover-open')")).toBe(false);
+    expect(await tab.run("document.activeElement === q.app.editor.surface.element")).toBe(true);
+    await documents();
+    // the place shown heads the documents and is not offered again under Open from, and Drive, not set up, is not there at all
+    expect(await tab.run("[...document.querySelectorAll('.quire-documents-menu [data-place]')].map((line) => line.dataset.place).includes('browser')")).toBe(false);
+    expect(await tab.run("document.querySelector('.quire-documents-menu').textContent.includes('Google Drive')")).toBe(false);
+    // the other one deleted, asked once more in its place as the home list asks, and restored from the trash
     await press(".quire-documents-away");
-    await press(".quire-documents-away");
+    expect(await tab.run("[...document.querySelectorAll('.quire-documents-item.asking button')].map((line) => line.textContent)")).toEqual(["Delete Untitled", "Keep it"]);
+    await press(".quire-documents-sure");
     await tab.wait(300);
     expect(await tab.run("[...document.querySelectorAll('.quire-documents-list .quire-menu-line')].map((line) => line.textContent)")).toEqual(["Plans"]);
     await press(".quire-documents-trash");
@@ -307,12 +315,17 @@ used("a repository is connected once, its documents listed, opened and saved as 
     await fill("Repository", "someone/site");
     await fill("Folder of documents", "posts");
     await fill("Access token", "wrong-token");
-    await press(".quire-repository button[type=submit]");
+    // a dialog, whose buttons are in every dialog's order and which says nothing of a Forget it does not have yet
+    expect(await tab.run("document.querySelector('dialog.quire-dialog[open] .quire-dialog-title').textContent")).toBe("Write in a GitHub repository");
+    expect(await tab.run<string[]>("[...document.querySelectorAll('dialog.quire-dialog[open] .quire-dialog-actions button')].map((b) => b.textContent)")).toEqual(["Cancel", "Connect"]);
+    expect(await tab.run("document.querySelector('.quire-repository-about').textContent.includes('Forget')")).toBe(false);
+    await press("dialog.quire-dialog[open] .quire-dialog-action", "Connect");
     await tab.wait(300);
     expect(await tab.run("document.querySelector('.quire-repository-said').textContent")).toContain("GitHub refused the token");
     await fill("Access token", "pretend-token");
-    await press(".quire-repository button[type=submit]");
-    await tab.wait(800);
+    // Enter in a field connects, as the filled button does
+    await tab.press("Enter");
+    await tab.wait(900);
     expect(await tab.run("[...document.querySelectorAll('.quire-documents-list .quire-menu-line')].map((line) => line.textContent)")).toEqual(["hello.md"]);
     expect(await tab.run("JSON.parse(localStorage.getItem('quire-github')).token")).toBe("pretend-token");
     await press(".quire-documents-list .quire-menu-line", "hello.md");
@@ -330,8 +343,9 @@ used("a repository is connected once, its documents listed, opened and saved as 
     await documents();
     await press(".quire-documents-menu button[data-place='github-settings']");
     await tab.wait(600);
-    await press(".quire-repository button", "Forget");
-    await tab.wait(500);
+    expect(await tab.run<string[]>("[...document.querySelectorAll('dialog.quire-dialog[open] .quire-dialog-actions button')].map((b) => b.textContent)")).toEqual(["Forget", "Cancel", "Save and open"]);
+    await press("dialog.quire-dialog[open] button", "Forget");
+    await tab.wait(700);
     expect(await tab.run("localStorage.getItem('quire-github')")).toBeNull();
     expect(await tab.run("document.querySelector('.quire-name-text').textContent")).not.toBe("hello.md");
     await tab.press("Escape");
@@ -550,6 +564,26 @@ used("the Blog post on the home screen is made as plain Markdown, and a duplicat
     })()`);
     expect(copied).toEqual(["dot.png"]);
     expect(tab.errors).toEqual([]);
+});
+
+used("in light paper the home screen's list is on a light sheet with dark words, and the round button for the commands is not there", async () => {
+    await tab.run("localStorage.setItem('quire-look', 'paper'); localStorage.removeItem('quire-place')");
+    await load();
+    await tab.wait(600);
+    try {
+        expect(await shelfShown()).toBe(true);
+        // lightness read from the computed colors: the sheet light, its words dark, as the page is in that look
+        const seen = await tab.run<{ sheet: number; words: number; button: string }>(`(() => {
+            const light = (color) => { const canvas = document.createElement("canvas").getContext("2d"); canvas.fillStyle = color; canvas.fillRect(0, 0, 1, 1); const [r, g, b] = canvas.getImageData(0, 0, 1, 1).data; return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255; };
+            const inner = document.querySelector(".quire-shelf-inner");
+            return { sheet: light(getComputedStyle(inner).backgroundColor), words: light(getComputedStyle(inner.querySelector(".quire-shelf-name, .quire-shelf-none")).color), button: getComputedStyle(document.querySelector(".quire-palette-button")).visibility };
+        })()`);
+        expect(seen.sheet).toBeGreaterThan(0.85);
+        expect(seen.words).toBeLessThan(0.35);
+        expect(seen.button).toBe("hidden");
+    } finally {
+        await tab.run("localStorage.removeItem('quire-look')");
+    }
 });
 
 if (!live) console.warn("app.test.ts: no Chromium on this machine, so the app was not used.");

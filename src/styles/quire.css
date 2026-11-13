@@ -25,6 +25,14 @@
 :root {
     /* the slight overshoot the panels and bars open on */
     --quire-spring: cubic-bezier(0.3, 1.25, 0.4, 1);
+    /* the three corners everything of the editor's own is drawn with: small for what sits inside
+       something (a line, a field, a button), middle for menus, bars, strips and cards, large for
+       dialogs and side panels */
+    --quire-round-small: 0.5rem;
+    --quire-round: 0.75rem;
+    --quire-round-large: 1.25rem;
+    /* where a side panel starts: below the top's two lines (the page sets --stuck there), with a gap */
+    --quire-below-bar: calc(var(--quire-top-bottom, 6.5rem) + 0.75rem);
 }
 
 .quire-editor {
@@ -148,8 +156,10 @@
     --quire-faint: oklch(from var(--muted) 0.63 c h);
 }
 
-/* C's inks, for the light paper: the site's ink turned dark, the accent deepened to read on it */
-.look-paper .quire-paper {
+/* C's inks, for the light paper: the site's ink turned dark, the accent deepened to read on it;
+   the home screen's list sits on a sheet of the same paper in that look */
+.look-paper .quire-paper,
+.look-paper > .quire-shelf .quire-shelf-inner {
     --paper: oklch(0.965 0.009 300);
     --ink: oklch(0.24 0.04 300);
     --muted: oklch(0.47 0.045 300);
@@ -674,7 +684,7 @@
     min-width: var(--press);
     height: var(--press);
     padding: 0 var(--inset);
-    border-radius: 0.5rem;
+    border-radius: var(--quire-round-small);
     color: var(--ink);
     white-space: nowrap;
     transition:
@@ -797,7 +807,7 @@
     width: 2.6rem;
     height: 1.7rem;
     border: 0.0625rem solid var(--rule);
-    border-radius: 0.35rem;
+    border-radius: var(--quire-round-small);
     background: transparent;
     color: var(--ink);
     font: inherit;
@@ -887,7 +897,7 @@
     padding: 0;
     overflow: hidden;
     border: 0;
-    border-radius: 10px;
+    border-radius: var(--quire-round);
     background: var(--panel-raised);
     box-shadow:
         0 0.75rem 2rem oklch(0.05 0.02 300 / 0.55),
@@ -954,7 +964,7 @@
     width: 100%;
     min-height: 2.1rem;
     padding: 0.3rem 0.8rem 0.3rem 0.45rem;
-    border-radius: calc(10px - 0.35rem);
+    border-radius: var(--quire-round-small);
     color: var(--ink);
     text-align: left;
     white-space: nowrap;
@@ -985,22 +995,10 @@
         translate 0.4s var(--ease) calc(0.1s + var(--line-at, 0) * 0.04s);
 }
 
-/* About mdQuire: a few words, who made it, and the way to her site and the project */
-.quire-about {
-    width: min(19rem, 100vw - 3rem);
-    padding: 0.5rem 0.6rem 0.4rem;
-    white-space: normal;
-}
-
+/* About mdQuire, a dialog: a few words, who made it, and the way to her site and the project */
 .quire-about p {
     margin: 0 0 0.6rem;
-    line-height: 1.4;
-}
-
-.quire-about-name {
-    font-family: var(--font-head);
-    font-weight: var(--head-weight);
-    font-size: 1.3rem;
+    line-height: 1.5;
 }
 
 .quire-about-links {
@@ -1015,7 +1013,7 @@
     margin: 6px 0;
     padding: 0.3rem 0.55rem;
     border: 0;
-    border-radius: 0.4rem;
+    border-radius: var(--quire-round-small);
     background: var(--panel-raised);
     box-shadow: 0 0.3rem 0.9rem oklch(0.05 0.02 300 / 0.5);
     color: var(--ink);
@@ -1092,7 +1090,7 @@
     max-width: 1rem;
     margin-inline: 0.2rem;
     border: 0.0625rem solid var(--rule);
-    border-radius: 0.5rem;
+    border-radius: var(--quire-round-small);
     background: var(--ink);
 }
 
@@ -1108,7 +1106,7 @@
     height: 2.1rem;
     padding: 0 0.75rem;
     border: 0.0625rem solid var(--rule);
-    border-radius: 1.05rem;
+    border-radius: var(--quire-round-small);
     background: var(--ground);
     color: var(--ink);
     font: inherit;
@@ -1147,7 +1145,7 @@
     display: flex;
     padding: 0.2rem;
     border: 0.0625rem solid color-mix(in oklch, var(--accent) 55%, var(--rule));
-    border-radius: 1.25rem;
+    border-radius: var(--quire-round);
     background: var(--surface);
     font-family: var(--font-text);
     font-size: 0.95rem;
@@ -1191,7 +1189,7 @@
     /* the width it is placed in, which leaves out any room kept for a scrollbar, as 100vw does not */
     max-width: calc(100% - 1rem);
     box-sizing: border-box;
-    border-radius: 1.1rem;
+    border-radius: var(--quire-round);
     transform-origin: 100% 0;
 }
 
@@ -1348,7 +1346,7 @@
     align-items: center;
     padding: 0.15rem;
     border: 0.0625rem solid var(--rule);
-    border-radius: 1.2rem;
+    border-radius: var(--quire-round);
     background: var(--surface);
     font-family: var(--font-text);
     line-height: 1;
@@ -1425,7 +1423,7 @@
     width: min(18rem, 100vw - 2rem);
     padding: 0.9rem 0.6rem 1rem 1rem;
     border: 0.0625rem solid var(--rule);
-    border-radius: calc(var(--radius) * 2);
+    border-radius: var(--quire-round-large);
     background: var(--surface);
     overflow: hidden auto;
     font-family: var(--font-text);
@@ -1602,7 +1600,7 @@
 
 .quire-history {
     position: fixed;
-    top: 1rem;
+    top: var(--quire-below-bar);
     right: 1rem;
     bottom: 1rem;
     z-index: 66;
@@ -1610,7 +1608,7 @@
     flex-direction: column;
     width: min(26rem, 100vw - 2rem);
     border: 0.0625rem solid var(--rule);
-    border-radius: calc(var(--radius) * 2);
+    border-radius: var(--quire-round-large);
     background: var(--surface);
     overflow: hidden;
     font-family: var(--font-text);
@@ -1718,7 +1716,7 @@
     width: 100%;
     padding: 0.55rem 0.6rem;
     border: 0;
-    border-radius: 0.7rem;
+    border-radius: var(--quire-round-small);
     background: transparent;
     color: var(--ink);
     font: inherit;
@@ -1765,18 +1763,32 @@
     font-size: 0.9rem;
 }
 
-.quire-restore {
-    margin: 0 0.6rem 1rem;
-    padding-inline: 1rem;
-    border: 0.0625rem solid var(--accent);
-    color: var(--accent);
+/* a version shown: when it was at the left, and restoring it, the panel's one filled button, at the right */
+.quire-history-chosen {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.6rem;
+    margin: 0 0.6rem 0.8rem;
+}
+
+.quire-history-chosen .quire-history-when {
+    margin: 0;
+}
+
+/* what a version added since the one before is tinted, as Docs colors the changes */
+.quire-history-text .quire-history-added {
+    margin-inline: -0.4rem;
+    padding-inline: 0.4rem;
+    border-radius: var(--quire-round-small);
+    background: color-mix(in oklch, var(--accent) 16%, transparent);
 }
 
 .quire-history-text {
     margin: 0 0.6rem;
     padding: 1rem 1.1rem;
     border: 0.0625rem solid var(--panel-rule);
-    border-radius: var(--radius);
+    border-radius: var(--quire-round);
     background: var(--panel);
     font-size: 0.92rem;
     line-height: 1.6;
@@ -1987,16 +1999,17 @@
 
 .quire-conflict {
     position: fixed;
-    top: 1rem;
+    top: var(--quire-below-bar);
     right: 1rem;
     z-index: 67;
     display: flex;
     flex-direction: column;
-    width: min(26rem, 100vw - 2rem);
-    max-height: calc(100vh - 2rem);
+    width: min(29rem, 100vw - 2rem);
+    max-height: calc(100vh - var(--quire-below-bar) - 1rem);
+    box-sizing: border-box;
     padding: 0.8rem 1rem 1rem;
     border: 0.0625rem solid color-mix(in oklch, var(--accent) 55%, var(--rule));
-    border-radius: calc(var(--radius) * 2);
+    border-radius: var(--quire-round-large);
     background: var(--surface);
     overflow: hidden;
     font-family: var(--font-text);
@@ -2052,20 +2065,23 @@
     font-size: 0.82rem;
 }
 
+/* the choices in a dialog's order: seeing both, a switch, alone at the left, then taking theirs, and keeping mine filled at the right */
 .quire-conflict-choices {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.4rem;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.4rem 0.6rem;
 }
 
+.quire-conflict-choices .far {
+    margin-right: auto;
+}
+
+/* a quiet choice with an outline, as find's Replace and All are */
 .quire-choice {
     padding-inline: 0.9rem;
     border: 0.0625rem solid var(--rule);
-}
-
-.quire-choice:first-child {
-    border-color: var(--accent);
-    color: var(--accent);
 }
 
 /* both texts side by side, grown open under the choices */
@@ -2097,7 +2113,7 @@
     margin: 0.3rem 0 0;
     padding: 0.7rem 0.8rem;
     border: 0.0625rem solid var(--panel-rule);
-    border-radius: var(--radius);
+    border-radius: var(--quire-round);
     background: var(--panel);
     font-family: var(--font-code);
     font-size: 0.78rem;
@@ -2548,6 +2564,34 @@ body.quire-app,
     }
 }
 
+/* in light paper the list of documents is on a light sheet, as the page is: the paper's inks, its
+   corners barely eased, its fine line and shadow, and room inside it as a page has */
+.look-paper > .quire-shelf .quire-shelf-inner {
+    min-height: 0;
+    box-sizing: border-box;
+    padding: calc(var(--line) * 1.5) clamp(1.25rem, 5vw, 3.5rem) calc(var(--line) * 2);
+    border-radius: 0.1875rem;
+    color: var(--ink);
+}
+
+/* the round button for the commands is the writing's: with nothing open it shrinks away */
+.quire-editor > .quire-palette-button {
+    transition:
+        opacity 0.2s ease,
+        scale 0.3s var(--ease),
+        visibility 0s;
+}
+
+.quire-editor.shelved > .quire-palette-button {
+    opacity: 0;
+    scale: 0.6;
+    visibility: hidden;
+    transition:
+        opacity 0.2s ease,
+        scale 0.3s var(--ease),
+        visibility 0s 0.3s;
+}
+
 /* the margins' outline and details fade as the home screen comes in over them, while the page shrinks back into its row, and come back as it goes */
 .quire-editor:has(> .quire-shelf.shown) > :is(.quire-outline, .quire-details) {
     opacity: 0;
@@ -2631,13 +2675,18 @@ body.quire-app,
 }
 
 .quire-documents-item:hover .quire-documents-away,
-.quire-documents-away:focus-visible,
-.quire-documents-away.asking {
+.quire-documents-away:focus-visible {
     opacity: 1;
 }
 
-.quire-documents-away.asking {
-    color: var(--accent);
+/* asked once more, in the line's place, as the home list asks: Delete it, then Keep it */
+.quire-documents-item.asking {
+    flex-direction: column;
+    align-items: stretch;
+}
+
+.quire-documents-sure .quire-icon {
+    width: 1rem;
 }
 
 .quire-documents-search {
@@ -2650,8 +2699,7 @@ body.quire-app,
 }
 
 /* the same staggered arrival as a menu's lines, for the list's own parts */
-.quire-menu-items > .quire-documents > *,
-.quire-menu-items > .quire-repository > * {
+.quire-menu-items > .quire-documents > * {
     opacity: 0;
     translate: 0 -0.35rem;
     transition:
@@ -2659,8 +2707,7 @@ body.quire-app,
         translate 0.12s ease;
 }
 
-.quire-menu.open .quire-menu-items > .quire-documents > *,
-.quire-menu.open .quire-menu-items > .quire-repository > * {
+.quire-menu.open .quire-menu-items > .quire-documents > * {
     opacity: 1;
     translate: 0 0;
     transition:
@@ -2668,11 +2715,30 @@ body.quire-app,
         translate 0.4s var(--ease) calc(0.1s + var(--line-at, 0) * 0.035s);
 }
 
-/* ---- connecting a repository ---- */
+/* ---- connecting a repository: a dialog of five fields, each with its label over it ---- */
 
 .quire-repository {
     display: grid;
-    gap: 0.55rem;
+    gap: 0.6rem;
+}
+
+.quire-repository-row {
+    display: grid;
+    gap: 0.3rem;
+}
+
+.quire-repository-label {
+    color: var(--muted);
+    font-size: 0.85rem;
+}
+
+.quire-repository .quire-link-field {
+    box-sizing: border-box;
+    width: 100%;
+}
+
+/* the same rows in a menu (the site's editor asks a new post's title so) */
+.quire-menu .quire-repository {
     width: min(26rem, 100vw - 2.5rem);
     padding: 0.5rem 0.55rem 0.6rem;
 }
@@ -2682,20 +2748,6 @@ body.quire-app,
     font-family: var(--font-head);
     font-size: 1.15rem;
     font-weight: var(--head-weight);
-}
-
-.quire-repository-row {
-    display: grid;
-    gap: 0.2rem;
-}
-
-.quire-repository-label {
-    color: var(--muted);
-    font-size: 0.82rem;
-}
-
-.quire-repository .quire-link-field {
-    width: 100%;
 }
 
 .quire-repository-about {
@@ -2714,17 +2766,6 @@ body.quire-app,
     margin: 0;
     color: var(--accent);
     font-size: 0.85rem;
-}
-
-.quire-repository-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.4rem;
-}
-
-.quire-forget {
-    margin-left: auto;
-    color: var(--muted);
 }
 
 /* ---- printing: the document alone, in the site's typefaces, dark on white ---- */
@@ -2902,7 +2943,7 @@ body.quire-app,
     align-items: center;
     height: 1.85rem;
     padding: 0 var(--inset);
-    border-radius: 0.45rem;
+    border-radius: var(--quire-round-small);
     color: var(--muted);
     line-height: 1;
     transition:
@@ -2969,7 +3010,7 @@ body.quire-app,
     position: absolute;
     inset: 0;
     border: 0.0625rem solid color-mix(in oklch, var(--rule) 68%, var(--accent));
-    border-radius: 1.1rem;
+    border-radius: var(--quire-round-large);
     background: var(--surface);
     box-shadow: 0 1.5rem 3rem -1rem oklch(0.05 0.02 300 / 0.7);
 }
@@ -2977,10 +3018,12 @@ body.quire-app,
 .quire-dialog-in {
     position: relative;
     display: grid;
+    /* the title and the buttons stay put; what is between them scrolls when there is more than the window holds */
+    grid-template-rows: auto minmax(0, 1fr) auto;
     gap: 0.9rem;
     max-height: calc(100dvh - 2rem);
     padding: 1.4rem 1.5rem 1.25rem;
-    overflow: auto;
+    overflow: hidden;
     box-sizing: border-box;
 }
 
@@ -2993,7 +3036,18 @@ body.quire-app,
 
 .quire-dialog-body {
     display: grid;
+    align-content: start;
     gap: 0.75rem;
+    min-height: 0;
+    /* room round the edge for a field's focus ring, which the scrolling would otherwise cut */
+    margin: -0.25rem;
+    padding: 0.25rem;
+    overflow: auto;
+}
+
+/* Not saved has four ways out, which want the room to stand in one row */
+.quire-dialog.quire-unsaved-dialog {
+    width: min(40rem, 100vw - 2rem);
 }
 
 .quire-dialog-body > p {
@@ -3095,6 +3149,23 @@ body.quire-app,
     display: none;
 }
 
+/* a way out that leaves something behind stands alone at the far left */
+.quire-dialog-actions .far {
+    margin-right: auto;
+}
+
+/* a narrow window puts the buttons on more than one line, the filled one last */
+.quire-dialog-actions {
+    flex-wrap: wrap;
+}
+
+:is(.quire-dialog, .quire-history, .quire-conflict) :is(.quire-dialog-action, .quire-dialog-dismiss) {
+    border: 0;
+    background: none;
+    font: inherit;
+    cursor: pointer;
+}
+
 .quire-dialog button {
     white-space: nowrap;
     border: 0;
@@ -3104,12 +3175,12 @@ body.quire-app,
 }
 
 /* the filled button: a press spreads from where the finger or pointer came down */
-.quire-dialog .quire-dialog-action {
+:is(.quire-dialog, .quire-history, .quire-conflict) .quire-dialog-action {
     position: relative;
     overflow: hidden;
     min-height: 2.6rem;
     padding: 0 1.4rem;
-    border-radius: 1.3rem;
+    border-radius: var(--quire-round-small);
     background: var(--accent);
     color: var(--ground);
     font-weight: 600;
@@ -3120,7 +3191,7 @@ body.quire-app,
         scale 0.2s var(--ease);
 }
 
-.quire-dialog .quire-dialog-action:hover {
+:is(.quire-dialog, .quire-history, .quire-conflict) .quire-dialog-action:hover {
     background: color-mix(in oklch, var(--accent) 88%, var(--ink));
     box-shadow: 0 0.3rem 0.9rem oklch(0.05 0.02 300 / 0.45);
 }
@@ -3146,10 +3217,10 @@ body.quire-app,
     pointer-events: none;
 }
 
-.quire-dialog .quire-dialog-dismiss {
+:is(.quire-dialog, .quire-history, .quire-conflict) .quire-dialog-dismiss {
     min-height: 2.6rem;
     padding: 0 1rem;
-    border-radius: 1.3rem;
+    border-radius: var(--quire-round-small);
     color: var(--muted);
     transition:
         background 0.15s ease,
@@ -3159,6 +3230,129 @@ body.quire-app,
 .quire-dialog-dismiss:hover {
     background: color-mix(in oklch, var(--ink) 8%, transparent);
     color: var(--ink);
+}
+
+/* a label over what it names, in a dialog's form: quiet and small, as the site's labels are */
+.quire-setup-label,
+.quire-form-label {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.85rem;
+}
+
+/* a field in a dialog's form: its label above it, and the field the dialog's width */
+.quire-form-row {
+    display: grid;
+    gap: 0.3rem;
+}
+
+.quire-form-row .quire-link-field {
+    box-sizing: border-box;
+    width: 100%;
+}
+
+.quire-dialog-body > .quire-switch {
+    justify-self: start;
+}
+
+/* page setup: each choice of a few is a row of buttons, the one chosen pressed */
+.quire-setup {
+    display: grid;
+    gap: 0.4rem;
+}
+
+.quire-setup-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-bottom: 0.6rem;
+}
+
+.quire-dialog .quire-setup-choice {
+    display: grid;
+    gap: 0.1rem;
+    min-width: 5.5rem;
+    min-height: 2.5rem;
+    padding: 0.35rem 0.9rem;
+    border: 0.0625rem solid var(--rule);
+    border-radius: var(--quire-round-small);
+    color: var(--ink);
+    text-align: left;
+    transition:
+        background 0.15s ease,
+        border-color 0.15s ease;
+}
+
+.quire-dialog .quire-setup-choice:hover {
+    background: color-mix(in oklch, var(--ink) 8%, transparent);
+}
+
+.quire-dialog .quire-setup-choice.on {
+    border-color: transparent;
+    background: color-mix(in oklch, var(--accent) 22%, transparent);
+    color: var(--accent);
+}
+
+.quire-setup-note {
+    color: var(--muted);
+    font-size: 0.8rem;
+}
+
+/* a switch (switchButton in dialog.ts), the same wherever one is: its words, a tick before them
+   when it is on, and on, the pressed square the bar's buttons have; its state is never its words */
+.quire-switch {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    min-height: 2.25rem;
+    padding: 0 0.8rem 0 0.55rem;
+    border: 0.0625rem solid var(--rule);
+    border-radius: var(--quire-round-small);
+    background: transparent;
+    color: var(--ink);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition:
+        background 0.15s ease,
+        border-color 0.15s ease,
+        color 0.15s ease;
+}
+
+.quire-switch:hover {
+    background: color-mix(in oklch, var(--ink) 8%, transparent);
+}
+
+.quire-switch-tick {
+    flex: none;
+    width: 1.05rem;
+    height: 1.05rem;
+    border: 0.0625rem solid color-mix(in oklch, var(--muted) 70%, transparent);
+    border-radius: 0.25rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-dasharray: 20;
+    stroke-dashoffset: 20;
+    transition: stroke-dashoffset 0.2s var(--ease), border-color 0.15s ease;
+}
+
+.quire-switch.on {
+    border-color: transparent;
+    background: color-mix(in oklch, var(--accent) 22%, transparent);
+    color: var(--accent);
+}
+
+.quire-switch.on .quire-switch-tick {
+    border-color: currentColor;
+    stroke-dashoffset: 0;
+}
+
+.quire-switch:disabled {
+    opacity: 0.5;
+    cursor: default;
 }
 
 /* what a pressed thing becomes grows out of it in its colour */
@@ -3188,6 +3382,8 @@ body.quire-app,
     .quire-history *,
     .quire-conflict,
     .quire-conflict *,
+    .quire-switch,
+    .quire-switch *,
     .quire-top,
     .quire-top *,
     .quire-check-count {
@@ -3364,7 +3560,7 @@ body.quire-app,
     gap: 0.1rem;
     padding: 0.35rem 0.5rem;
     border: 0;
-    border-radius: 0.6rem;
+    border-radius: var(--quire-round-small);
     background: none;
     color: var(--ink);
     font: inherit;
@@ -3383,6 +3579,19 @@ body.quire-app,
 .quire-check-said {
     color: var(--muted);
     font-size: 0.82rem;
+}
+
+/* the same words found again are one line, saying how many times */
+.quire-check-times {
+    margin-left: 0.5rem;
+    color: var(--muted);
+    font-family: var(--font-text);
+}
+
+/* the settings, a dialog: the form takes the dialog's width, and the list of rules scrolls inside it */
+.quire-dialog.quire-check-settings .quire-check-form {
+    width: auto;
+    padding: 0;
 }
 
 .quire-check-set {
@@ -3424,7 +3633,7 @@ body.quire-app,
     width: 6rem;
     padding: 0.2rem 0.4rem;
     border: 0.0625rem solid var(--rule);
-    border-radius: 0.5rem;
+    border-radius: var(--quire-round-small);
     background: var(--ground);
     color: var(--ink);
     font: inherit;

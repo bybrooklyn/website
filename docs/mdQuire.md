@@ -103,7 +103,8 @@ A row is one button, reached by Tab and opened with Enter. The page grows out of
 from and shrinks back into it on leaving, the keyboard landing on that row again; something new grows
 out of the word pressed. Narrower than 40rem a row takes two lines, the name first. Opening a file or a
 folder, connecting a repository and the sample are a quiet row of words under the list, and an empty
-shelf says so in one line.
+shelf says so in one line. In light paper the list sits on a sheet of the same paper as the page, and the
+round button for the commands is not shown while the home screen is.
 
 **Around the writing.** The home screen, find and replace
 (`find.ts`), zoom and page setup (`paper.ts`), page view with page breaks, headers, footers and page
@@ -159,8 +160,25 @@ a trail (the site's name and flags, then mdQuire, then the document's name; the 
 second to the shelf, the third opens the documents list) with the menu words, and under it the tools in
 the order Google Docs has them, with the size as a number between minus and plus and alignment as four
 buttons always shown. Find, the status, the three dots and the microphone are at the right. An "About
-mdQuire" line is in Tools and the three dots. The browser tab shows an italic Q on a dark rounded square
+mdQuire" line is in Tools and the three dots, and opens a dialog. The browser tab shows an italic Q on a dark rounded square
 (`public/mdquire/icon.svg`). The caret is one plain line, drawn in the same frame as the letter typed.
+
+**Which surface a job gets.** One rule (`dialog.ts` says it at its head). A form of several fields, or
+something to read, is a dialog: About, Page setup, Header and footer, Word count, Keyboard shortcuts,
+Checking settings, connecting GitHub, Google Drive, dictation's first launch, Not saved. A single value is
+one small field at the caret or the control (a link, a bookmark, a list's number). A list to pick from is a
+menu (the documents list, what checking found, special characters). Something to consult while writing is
+a side panel that starts below the bar: version history, comments, the picture, the outline, and the
+changed elsewhere panel, which comes by itself and so leaves the keyboard in the text. Every dialog is
+answered one way: the filled button at the right, a quiet cancel to its left, other quiet ways before
+that, and one that leaves something behind (Leave without saving, Forget) alone at the far left. Enter in
+a field does what the filled button does; Escape steps back one level, from a dialog, from a version
+shown in the history to its list, and from the list out. A form that changes the document (Page setup,
+Header and footer) changes nothing until OK, and the change is one undo. Deleting asks once more in the
+same place, "Delete it" then "Keep it", on the home list and in the documents list. A switch is drawn one
+way (`switchButton`): its words, a tick before them, and when on, the pressed square the bar's buttons
+have. Corners are three sizes: small for what sits inside something, middle for menus, bars, strips and
+cards, large for dialogs and panels.
 
 **The menus.** Every command is in the menu row by name with its shortcut. A menu is the browser's popover,
 anchored to its word: the word stays in the row, lit, and the menu grows from under it, covering nothing

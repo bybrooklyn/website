@@ -171,7 +171,7 @@
     align-items: center;
     gap: 0.15rem;
     padding: 0.2rem;
-    border-radius: 0.6rem;
+    border-radius: var(--quire-round);
     background: var(--surface);
     box-shadow: 0 0.5rem 1.5rem -0.5rem oklch(0.04 0.02 300 / 0.8);
     pointer-events: auto;
@@ -242,7 +242,7 @@
     position: absolute;
     inset: 0;
     border: 0.0625rem solid var(--rule);
-    border-radius: calc(var(--radius) * 2);
+    border-radius: var(--quire-round-large);
     background: var(--surface);
     box-shadow: 0 1rem 2.5rem -1rem oklch(0.04 0.02 300 / 0.7);
 }
@@ -287,7 +287,7 @@
     width: 100%;
     padding: 0.35rem 0.5rem;
     border: 0.0625rem solid var(--rule);
-    border-radius: 0.5rem;
+    border-radius: var(--quire-round-small);
     background: var(--ground);
     color: var(--ink);
     font: inherit;
@@ -311,9 +311,19 @@
     font-size: 0.85rem;
 }
 
-.quire-picture-wrap {
-    min-width: 3.2rem;
-    border: 0.0625rem solid var(--rule);
+/* the wrap switch stands beside its line's name, which says what it is: the tick alone is seen, the words are said */
+.quire-switch.quire-picture-wrap {
+    min-height: 1.9rem;
+    padding: 0 0.45rem;
+}
+
+.quire-picture-wrap .quire-switch-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
 }
 
 .quire-picture-wrap:disabled {
@@ -455,7 +465,7 @@
 .quire-note {
     box-sizing: border-box;
     padding: 0.55rem 0.7rem 0.45rem;
-    border-radius: 0.6rem;
+    border-radius: var(--quire-round);
     background: var(--panel);
     box-shadow: 0 0 0 0.0625rem var(--panel-rule);
     color: var(--ink);
@@ -530,6 +540,8 @@
 .quire-note:is(:hover, :focus-within, .now, .gone) .quire-note-actions,
 .quire-notes-list .quire-note-actions,
 .quire-note-form .quire-note-actions {
+    justify-content: flex-end;
+    gap: 0.4rem;
     max-height: 2.5rem;
     margin-top: 0.35rem;
     opacity: 1;
@@ -552,7 +564,7 @@
     min-height: 4.5rem;
     padding: 0.4rem 0.5rem;
     border: 0.0625rem solid var(--rule);
-    border-radius: 0.45rem;
+    border-radius: var(--quire-round-small);
     background: var(--ground);
     color: var(--ink);
     font: inherit;
@@ -630,7 +642,7 @@
     width: 100%;
     padding: 0.4rem 0.6rem;
     border: 0.0625rem solid var(--rule);
-    border-radius: 0.5rem;
+    border-radius: var(--quire-round-small);
     background: var(--ground);
     color: var(--ink);
     font: inherit;
@@ -662,7 +674,7 @@
 .quire-special {
     aspect-ratio: 1;
     border: 0;
-    border-radius: 0.4rem;
+    border-radius: var(--quire-round-small);
     background: transparent;
     color: var(--ink);
     font: inherit;
@@ -797,7 +809,7 @@
         inset: auto 0 0 !important;
         width: 100%;
         margin: 0;
-        border-radius: 12px 12px 0 0;
+        border-radius: var(--quire-round) var(--quire-round) 0 0;
         position-area: none !important;
     }
 

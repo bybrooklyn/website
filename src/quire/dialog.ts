@@ -1,10 +1,18 @@
-// A dialog, the one kind mdQuire has, for anything that asks before going on (dictation's first
-// launch is the first). The page behind darkens; the dialog is a rounded square with the site's
-// outline, its words, and a filled button at the bottom. It grows out of the control that was
-// pressed and goes back into it: one skin, laid over the control at its place and corners, whose
-// edges move out to the dialog's, with what is inside arriving once the skin is nearly there.
-// Focus stays inside it while it is open and goes back to the control when it closes; Escape, a
-// press outside and the dialog's own ways out close it. It is the browser's modal <dialog>, so a
+// A dialog, the one kind mdQuire has, for anything that asks before going on, a form of several
+// fields, or something to read (dictation's first launch was the first). Which surface a job gets
+// is one rule: a form or something to read is a dialog; a single value is one small field at the
+// caret or the control; a list to pick from is a menu (ui.ts); something to consult while writing
+// (version history, comments, the picture, the outline) is a side panel that starts below the
+// bar. The page behind darkens; the dialog is a rounded square with the site's outline, its words,
+// and at the bottom the one way the dialog is answered, the same in every dialog: the filled
+// button at the right, a quiet cancel to its left, and any other quiet ways before that, one that
+// leaves something behind at the far left. Enter in a field does what the filled button does.
+// It grows out of the control that was pressed and goes back into it: one skin, laid over the
+// control at its place and corners, whose edges move out to the dialog's, with what is inside
+// arriving once the skin is nearly there. Focus stays inside it while it is open and goes back to
+// the control when it closes; Escape (one step back, as everywhere), a press outside and the
+// dialog's own ways out close it. A switch (switchButton) is drawn here too, as every switch in
+// mdQuire is. It is the browser's modal <dialog>, so a
 // screen reader hears it as a dialog with its title as its name, and the rest of the page is inert.
 // One is open at a time: opening another closes the first.
 //
@@ -12,10 +20,10 @@
 //   dialog.change(() => swap(), from);   // the dialog eases to its new size; `from` grows into what replaced it
 //   await dialog.close();
 //
-// The counting (insetOf, rippleFrom) is pure and tested; the rest is DOM. Its styles are in
+// The counting (insetOf, rippleFrom, enterAnswers) is pure and tested; the rest is DOM. Its styles are in
 // src/styles/quire.css, under "the dialog".
 
-import { EASE, make, MOTION, springCurve, still, type Box } from "./ui";
+import { composing, EASE, make, MOTION, springCurve, still, type Box } from "./ui";
 
 /** What a dialog holds. */
 export interface DialogParts {
@@ -24,8 +32,12 @@ export interface DialogParts {
     body: Node[];
     /** The filled button at the bottom. Pressing it leaves the dialog open: `press` closes it if it should. */
     action?: { label: string; press: (button: HTMLButtonElement, dialog: Dialog) => void };
-    /** A quieter way out beside the button ("Not now"); it closes the dialog. */
+    /** A quieter way out beside the button ("Not now", "Cancel"); it closes the dialog. */
     dismiss?: string;
+    /** More quiet buttons before the cancel, such as "Download a copy"; one marked `far` stands alone at the far left, for a way out that leaves something behind ("Leave without saving"). */
+    others?: { label: string; press: (dialog: Dialog) => void; far?: boolean }[];
+    /** Where focus goes when it closes, when that is not the control it grew from (a line of a menu that has gone). */
+    returnTo?: HTMLElement;
     className?: string;
     /** Told once the dialog has closed, however it was closed. */
     onClose?: () => void;
@@ -48,6 +60,9 @@ export interface Dialog {
     close(): Promise<void>;
 }
 
+/** One of the three corners (quire.css), read as a length, as the browser's motions want one. */
+const corner = (name: "--quire-round" | "--quire-round-large") => getComputedStyle(document.documentElement).getPropertyValue(name).trim() || (name === "--quire-round" ? "0.75rem" : "1.25rem");
+
 /** How long the dialog takes: it opens on the menus' slight spring, a little slower as it travels further, and closes on the site's easing. */
 export const DIALOG = { open: 320, close: 200, change: 260 };
 
@@ -62,6 +77,39 @@ export function rippleFrom(button: Box, x: number, y: number): { left: number; t
     const down = Math.max(y - button.top, button.top + button.height - y);
     const size = 2 * Math.hypot(across, down);
     return { left: x - button.left - size / 2, top: y - button.top - size / 2, size };
+}
+
+/** Whether Enter in a field of this type answers the dialog: a field of one line does, a box to tick or a button does not. */
+export function enterAnswers(type: string): boolean {
+    return ["text", "search", "url", "email", "password", "number", "tel", ""].includes(type);
+}
+
+/**
+ * A switch: a button that is on or off, drawn as every switch in mdQuire is, the pressed square the
+ * bar's buttons have when on, with a tick before its words, and its words never its state. Pressing
+ * it turns it and tells `change` the new state.
+ */
+export function switchButton(label: string, on: boolean, change: (on: boolean) => void): HTMLButtonElement & { set(on: boolean): void } {
+    const button = make("button", "quire-switch") as HTMLButtonElement & { set(on: boolean): void };
+    button.type = "button";
+    const tick = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    tick.setAttribute("viewBox", "0 0 24 24");
+    tick.setAttribute("aria-hidden", "true");
+    tick.setAttribute("class", "quire-switch-tick");
+    tick.innerHTML = '<path d="m6 12.5 4 4 8-9"/>';
+    button.append(tick, make("span", "quire-switch-label", label));
+    button.set = (next: boolean) => {
+        button.setAttribute("aria-pressed", String(next));
+        button.classList.toggle("on", next);
+    };
+    button.set(on);
+    button.addEventListener("mousedown", (event) => event.preventDefault());
+    button.addEventListener("click", () => {
+        const next = button.getAttribute("aria-pressed") !== "true";
+        button.set(next);
+        change(next);
+    });
+    return button;
 }
 
 const boxOf = (element: Element): Box => {
@@ -129,7 +177,7 @@ export function openDialog(from: HTMLElement | undefined, parts: DialogParts): D
             moving.push(
                 skin.animate([{ inset: px(from) }, { inset: "0px" }], { duration: DIALOG.change, easing: EASE }),
                 // what is inside is shown as far as the skin has reached, so that nothing new stands outside it
-                inner.animate([{ clipPath: `inset(${px(from.map((each) => Math.max(0, each)))} round 1.1rem)` }, { clipPath: "inset(0px round 1.1rem)" }], { duration: DIALOG.change, easing: EASE }),
+                inner.animate([{ clipPath: `inset(${px(from.map((each) => Math.max(0, each)))} round ${corner("--quire-round-large")})` }, { clipPath: `inset(0px round ${corner("--quire-round-large")})` }], { duration: DIALOG.change, easing: EASE }),
             );
             if (!made || !was) return;
             // what replaced the pressed thing grows out of where it was, in its colour, which fades as it goes
@@ -139,7 +187,7 @@ export function openDialog(from: HTMLElement | undefined, parts: DialogParts): D
             inner.append(sweep);
             const local = (box: Box) => ({ left: `${box.left - after.left}px`, top: `${box.top - after.top}px`, width: `${box.width}px`, height: `${box.height}px` });
             const gone = () => sweep.remove();
-            sweep.animate([{ ...local(was), borderRadius: radius, opacity: 1 }, { ...local(to), borderRadius: "0.75rem", opacity: 0 }], { duration: DIALOG.change + 80, easing: EASE, fill: "both" }).finished.then(gone, gone);
+            sweep.animate([{ ...local(was), borderRadius: radius, opacity: 1 }, { ...local(to), borderRadius: corner("--quire-round"), opacity: 0 }], { duration: DIALOG.change + 80, easing: EASE, fill: "both" }).finished.then(gone, gone);
             made.animate([{ opacity: 0 }, { opacity: 1 }], { duration: DIALOG.change, delay: DIALOG.change * 0.3, easing: EASE, fill: "backwards" });
         },
         close() {
@@ -153,7 +201,8 @@ export function openDialog(from: HTMLElement | undefined, parts: DialogParts): D
             // the page is live again the moment closing starts, so that a press or a key at once is not lost: the
             // browser's dialog is closed now, and what is seen going back into the control is drawn where it was
             if (showing) element.close();
-            if (from?.isConnected && (focused || document.activeElement === document.body)) from.focus({ preventScroll: true });
+            const goBack = parts.returnTo?.isConnected ? parts.returnTo : from;
+            if (goBack?.isConnected && (focused || document.activeElement === document.body)) goBack.focus({ preventScroll: true });
             parts.onClose?.();
             let shade: HTMLElement | undefined;
             const finish = () => {
@@ -182,18 +231,34 @@ export function openDialog(from: HTMLElement | undefined, parts: DialogParts): D
         },
     };
 
-    if (parts.dismiss) {
-        const quiet = make("button", "quire-dialog-dismiss", parts.dismiss);
+    const quietButton = (label: string, press: () => void) => {
+        const quiet = make("button", "quire-dialog-dismiss", label);
         quiet.type = "button";
-        quiet.addEventListener("click", () => void dialog.close());
+        quiet.addEventListener("click", press);
+        return quiet;
+    };
+    for (const other of parts.others ?? []) {
+        const quiet = quietButton(other.label, () => other.press(dialog));
+        if (other.far) quiet.classList.add("far");
         actions.append(quiet);
     }
+    if (parts.dismiss) actions.append(quietButton(parts.dismiss, () => void dialog.close()));
+    let primary: HTMLButtonElement | undefined;
     if (parts.action) {
         const action = parts.action;
-        const button = filledButton(action.label, (pressed) => action.press(pressed, dialog));
-        button.autofocus = true;
-        actions.append(button);
+        primary = filledButton(action.label, (pressed) => action.press(pressed, dialog));
+        primary.autofocus = true;
+        actions.append(primary);
     }
+    // Enter in a field of one line answers the dialog as its filled button does, unless the field took the key itself
+    element.addEventListener("keydown", (event) => {
+        const field = event.target;
+        if (event.key !== "Enter" || event.defaultPrevented || composing(event) || event.shiftKey || !(field instanceof HTMLInputElement) || !enterAnswers(field.type)) return;
+        const button = actions.querySelector<HTMLButtonElement>(".quire-dialog-action");
+        if (!button || button.disabled) return;
+        event.preventDefault();
+        button.click();
+    });
 
     // Escape asks to close: the dialog goes back into its control rather than vanishing
     element.addEventListener("cancel", (event) => {

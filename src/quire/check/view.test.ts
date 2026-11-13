@@ -159,8 +159,8 @@ used("nothing of checking loads until it is first used; then the underlines are 
     expect(await counted()).toBe("4");
     // the browser's own spelling marks are off while these are on
     expect(await tab.run("q.surface.element.spellcheck")).toBe(false);
-    // the settings opened with it, from Tools
-    expect(await tab.run("document.querySelector('.quire-check-settings.open') !== null")).toBe(true);
+    // what was found opened with it, from Tools, as Docs' Spelling and grammar does
+    await until("!!document.querySelector('.quire-check-list.open')");
     await tab.press("Escape");
     await tab.wait(300);
 });
@@ -220,6 +220,7 @@ used("the count opens the list of everything, which jumps to a finding; F8 goes 
     expect(list).toContain("Reading ease");
     expect(list).toContain("Spelling 2");
     expect(list).toContain("Writing 1");
+    // each misspelling is a line of its own, as these two differ
     await press(".quire-check-list.open .quire-check-line", "wrdo");
     await until("!!document.querySelector('.quire-check-pop.open')");
     expect(await tab.run("q.surface.getSelection().focus")).toEqual({ path: [2], offset: 12 });
@@ -251,15 +252,17 @@ used("the settings switch a kind off, and it stays off", async () => {
     await press(".quire-check-count");
     await tab.wait(600);
     await press(".quire-check-list.open .quire-check-action", "Settings");
-    await until("!!document.querySelector('.quire-check-settings.open')");
+    // the settings are a dialog
+    await until("!!document.querySelector('dialog.quire-check-settings[open]')");
     await tab.wait(600);
-    await press(".quire-check-settings.open .quire-check-switch", "All of writing");
+    await press("dialog.quire-check-settings[open] .quire-check-switch", "All of writing");
     await until("q.marked().prose === 0");
     expect((await marked()).spelling).toBe(1);
     expect(await tab.run("JSON.parse(localStorage.getItem('quire-check')).settings.kinds.prose")).toBe(false);
-    await press(".quire-check-settings.open .quire-check-switch", "All of writing");
+    await press("dialog.quire-check-settings[open] .quire-check-switch", "All of writing");
     await until("q.marked().prose === 1");
     await tab.press("Escape");
+    await until("!document.querySelector('dialog.quire-check-settings')");
 });
 
 used("with checking on, a 5,000-line document is checked in idle time and a key typed in its middle is painted in under 16 ms", async () => {

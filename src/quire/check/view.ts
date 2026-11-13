@@ -9,10 +9,11 @@
 // the one before, Alt+Enter opens the one at the cursor.
 
 import type { Position } from "../document";
+import { openDialog, type Dialog } from "../dialog";
 import { control, flowMenu, make } from "../ui";
 import { createChecker, KINDS, ruleOn, type Context, type Finding, type Fix, type Job, type Rule, type Unit } from "./engine";
 import { loadDictionary, type Dictionary } from "./dictionary";
-import { around, byKind, findingAt, findingKey, KIND_NAMES, loadIgnored, loadOwn, loadPrefs, nextFinding, saveIgnored, saveOwn, savePrefs, shownFindings, type Ignored } from "./findings";
+import { around, byKind, findingAt, findingKey, KIND_NAMES, loadIgnored, loadOwn, loadPrefs, nextFinding, sameTogether, saveIgnored, saveOwn, savePrefs, shownFindings, type Ignored } from "./findings";
 import type { CheckingHost } from "./mount";
 import { readability } from "./prose";
 import { RULES } from "./rules";
@@ -78,14 +79,17 @@ export function createChecking(host: CheckingHost & { keep: CheckingHost["keep"]
     });
 
     // ---- the count, at the end of the bar ----
-    const count = control("Checking", make("span", "quire-check-number", "0"), () => (list.isOpen() ? list.close(true) : openList()), "quire-button quire-check-count");
-    count.setAttribute("aria-haspopup", "dialog");
+    const count = control("Checking", make("span", "quire-check-number", "0"), () => (list.isOpen() ? list.close(true) : openList(count)), "quire-button quire-check-count");
+    count.setAttribute("aria-haspopup", "menu");
     host.bar.querySelector(".quire-bar-end")?.prepend(count);
     const number = count.firstElementChild as HTMLElement;
 
     const list = flowMenu("Everything found", { align: "right", className: "quire-check-list" });
     const pop = flowMenu("What was found", { className: "quire-check-pop" });
-    const settingsMenu = flowMenu("Checking settings", { align: "right", className: "quire-check-settings" });
+    // the settings are a form of many boxes, so a dialog; the list of what was found is a list to pick from, so a menu
+    let settingsDialog: Dialog | undefined;
+    /** What the list grows from: the count, or Tools when it was asked for there. */
+    let listFrom: HTMLElement = count;
     // the popover grows from the word: this stands where the word is, for it to grow from
     const anchor = make("span", "quire-check-anchor");
     anchor.tabIndex = -1;
@@ -186,7 +190,7 @@ export function createChecking(host: CheckingHost & { keep: CheckingHost["keep"]
         count.classList.toggle("shown", prefs.on);
         count.classList.toggle("clear", prefs.on && shown.length === 0);
         count.inert = !prefs.on;
-        if (list.isOpen()) list.open(count, listBody());
+        if (list.isOpen()) list.open(listFrom.isConnected ? listFrom : count, listBody());
     }
 
     // ---- switching on and off ----
@@ -370,32 +374,39 @@ export function createChecking(host: CheckingHost & { keep: CheckingHost["keep"]
         for (const group of byKind(shown)) {
             const section = make("section", "quire-check-group");
             section.append(make("h3", `quire-check-kind ${group.kind}`, `${KIND_NAMES[group.kind]} ${group.findings.length}`));
-            for (const finding of group.findings.slice(0, LISTED)) {
+            // the same words found again by the same rule are one line, saying how many times
+            const lines = sameTogether(group.findings, textOf);
+            for (const same of lines.slice(0, LISTED)) {
+                const finding = same[0]!;
                 const line = make("button", "quire-check-line");
                 line.type = "button";
                 const words = textOf(finding).replace(/\s+/g, " ").trim();
-                line.append(make("span", "quire-check-words", words.length > 40 ? `${words.slice(0, 38)}…` : words || "(here)"), make("span", "quire-check-said", finding.message));
+                const shownWords = make("span", "quire-check-words", words.length > 40 ? `${words.slice(0, 38)}…` : words || "(here)");
+                if (same.length > 1) shownWords.append(make("span", "quire-check-times", `${same.length} times`));
+                line.append(shownWords, make("span", "quire-check-said", finding.message));
                 line.addEventListener("mousedown", (event) => event.preventDefault());
                 line.addEventListener("click", () => {
                     list.close(false);
-                    go(finding);
+                    // the first of them after the cursor, so that pressing the line again goes on to the next
+                    go(nextFinding(same, surface.getSelection().focus, 1) ?? finding);
                 });
                 section.append(line);
             }
-            if (group.findings.length > LISTED) section.append(make("p", "quire-check-none", `and ${group.findings.length - LISTED} more`));
+            if (lines.length > LISTED) section.append(make("p", "quire-check-none", `and ${lines.length - LISTED} more`));
             body.append(section);
         }
         const foot = make("div", "quire-check-foot");
         const settings = make("button", "quire-button quire-check-action", "Settings");
         settings.type = "button";
-        settings.addEventListener("click", () => openSettings(count, false));
+        settings.addEventListener("click", () => openSettings(settings, false));
         foot.append(settings, make("span", "quire-check-keys", "F8 next, Shift+F8 back"));
         body.append(foot);
         return body;
     }
-    function openList() {
+    function openList(from: HTMLElement, focusFirst = document.activeElement === from) {
         now();
-        list.open(count, listBody(), document.activeElement === count);
+        listFrom = from;
+        list.open(from, listBody(), focusFirst);
     }
 
     // ---- the settings ----
@@ -417,12 +428,17 @@ export function createChecking(host: CheckingHost & { keep: CheckingHost["keep"]
         }));
         for (const kind of KINDS) {
             const group = make("fieldset", "quire-check-set");
+            group.dataset.kind = kind;
             group.append(make("legend", "", KIND_NAMES[kind]));
             group.append(box(`All of ${KIND_NAMES[kind].toLowerCase()}`, prefs.settings.kinds[kind], (on) => {
                 prefs.settings.kinds[kind] = on;
                 apply();
-                // the kind's own rules fold in or out under it
-                settingsMenu.open(lastFrom ?? count, settingsBody());
+                // the kind's own rules fold in or out under it, the dialog easing to its new size
+                const dialog = settingsDialog;
+                if (dialog) dialog.change(() => {
+                    dialog.body.replaceChildren(settingsBody());
+                    dialog.body.querySelector<HTMLElement>(`[data-kind="${kind}"] input`)?.focus();
+                });
             }));
             if (prefs.settings.kinds[kind]) for (const each of RULES.filter((one) => one.kind === kind)) group.append(box(each.label, ruleOn(each, prefs.settings), (on) => {
                 prefs.settings.rules[each.id] = on;
@@ -467,19 +483,35 @@ export function createChecking(host: CheckingHost & { keep: CheckingHost["keep"]
         body.append(numbers);
         return body;
     }
-    let lastFrom: HTMLElement | undefined;
     function openSettings(from: HTMLElement, switchOn: boolean) {
         if (switchOn && !prefs.on) {
             prefs.on = true;
             apply();
         }
-        lastFrom = from;
-        settingsMenu.open(from, settingsBody(), true);
+        // what is ticked takes effect at once, so the dialog has only Done
+        settingsDialog = openDialog(from, {
+            title: "Checking settings",
+            className: "quire-check-settings",
+            body: [settingsBody()],
+            returnTo: listFrom.isConnected ? listFrom : count,
+            action: { label: "Done", press: (_, dialog) => void dialog.close() },
+            onClose: () => (settingsDialog = undefined),
+        });
+    }
+
+    /** Spelling and grammar, from Tools: what was found, switching checking on the first time. */
+    function openResults(from: HTMLElement) {
+        if (!prefs.on) {
+            prefs.on = true;
+            apply();
+        }
+        openList(from, true);
     }
 
     apply();
     return {
         openSettings,
+        openResults,
         /** The findings shown now, for tests. */
         findings: () => shown,
         destroy() {
@@ -493,7 +525,8 @@ export function createChecking(host: CheckingHost & { keep: CheckingHost["keep"]
             surface.element.removeEventListener("contextmenu", onMenu);
             surface.element.removeEventListener("beforeinput", onInput);
             surface.element.spellcheck = spellcheckWas;
-            for (const menu of [list, pop, settingsMenu]) menu.box.remove();
+            for (const menu of [list, pop]) menu.box.remove();
+            void settingsDialog?.close();
             anchor.remove();
             count.remove();
         },
