@@ -20,7 +20,8 @@
 //                                (doc, sel) => toggleMark(doc, rangeOf(sel), "bold"); it is one undo step
 //   surface.undo(), surface.redo(), surface.focus(), surface.destroy()
 //   surface.on(name, listener)   returns a function that stops listening. The names:
-//     "change"   { doc }                           the document changed
+//     "change"   { doc, before, kind }             the document changed: what it was, and the kind of
+//                                                  change (history.ts) where one is known
 //     "select"   { selection, marks, block, rect } the cursor moved: the marks and kind of block at
 //                                                  it, and the selection's rectangle on screen
 //     "slash"    { selection, rect }               "/" was typed on an empty line
@@ -65,7 +66,7 @@ export interface SelectionInfo {
 
 /** The events and what each one carries. */
 export interface SurfaceEvents {
-    change: { doc: Document };
+    change: { doc: Document; before?: Document; kind?: ChangeKind };
     select: SelectionInfo;
     slash: { selection: Selection; rect: DOMRect | null };
     link: { selection: Selection; rect: DOMRect | null };
@@ -905,12 +906,13 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
 
     /** Puts a new editor in place: draws what changed, puts the cursor back, tells the listeners. */
     function commit(next: Editor, outcome?: Outcome) {
-        const changed = next.state.doc !== editor.state.doc;
+        const before = editor.state.doc;
+        const changed = next.state.doc !== before;
         editor = next;
         if (changed) render();
         markHere();
         placeSelection();
-        if (changed) emit("change", { doc: editor.state.doc });
+        if (changed) emit("change", { doc: editor.state.doc, before, kind: outcome && "state" in outcome && outcome.kind !== "move" ? outcome.kind : undefined });
         announce();
         if (outcome && "state" in outcome && outcome.slash) emit("slash", { selection: editor.state.selection, rect: rect() });
     }
@@ -1379,7 +1381,8 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
     function insertBlocks(blocks: Block[]) {
         if (blocks.length === 0) return;
         // a Markdown file cannot keep a typeface or a highlight, so what is pasted into one comes without them
-        commit(apply(editor, { state: paste(editor.state, editor.state.doc.quire ? blocks : markdownOnly(blocks)), kind: "paste" }, Date.now()));
+        const pasted = { state: paste(editor.state, editor.state.doc.quire ? blocks : markdownOnly(blocks)), kind: "paste" as const };
+        commit(apply(editor, pasted, Date.now()), pasted);
     }
 
     function onPaste(event: ClipboardEvent) {
@@ -1457,7 +1460,7 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
     function run(operation: Operation, kind: ChangeKind = "format") {
         const result = operation(editor.state.doc, editor.state.selection);
         const state: State = "blocks" in result ? { doc: result, selection: fit(result, editor.state.selection) } : result;
-        commit(apply(editor, { state, kind }, Date.now()));
+        commit(apply(editor, { state, kind }, Date.now()), { state, kind });
     }
 
     /** A field inside the document was changed: a picture's alt text, a code block's language, a folding section's summary, or a component's property. */
