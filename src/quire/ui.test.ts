@@ -199,6 +199,16 @@ used("a press outside closes it, Escape closes it and gives focus back, and a pr
     await settle();
 });
 
+used("a menu opened from the keyboard while writing (a shortcut) gives the focus back to the writing when it closes, not to its control", async () => {
+    await run("(() => { const writing = document.createElement('textarea'); writing.id = 'writing'; writing.style.cssText = 'position:absolute;left:300px;top:300px'; document.body.append(writing); writing.focus(); })()");
+    await run("window.menu.open(document.getElementById('top'), [{ label: 'One', run() {} }, { label: 'Two', run() {} }], true)");
+    expect(await run<string>("document.activeElement.textContent")).toBe("One");
+    await tab.press("Escape");
+    expect(await run<string>("document.activeElement.id")).toBe("writing");
+    await settle();
+    await run("document.getElementById('writing').remove()");
+});
+
 used("closing, it is seen going back onto its control's edge, and opening another menu closes it", async () => {
     await run("window.opened('top')");
     await settle();

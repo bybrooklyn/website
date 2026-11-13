@@ -401,6 +401,8 @@ export function flowMenu(label: string, options: { align?: "left" | "right"; cla
     box.setAttribute("aria-label", label);
     items.inert = true;
     let trigger: HTMLElement | undefined;
+    /** Where the keyboard was when the menu opened, if not on its control: a shortcut typed in the text opens a menu, and closing it goes back there. */
+    let came: HTMLElement | undefined;
     let opened = false;
     let giveFocus = false;
     /** The menu's size as it ends, and whether it went above its control. */
@@ -589,7 +591,9 @@ export function flowMenu(label: string, options: { align?: "left" | "right"; cla
             control.classList.remove("open");
             if (control instanceof HTMLButtonElement) control.popoverTargetElement = null;
         }
-        if (control?.isConnected && (giveFocus || inside)) control.focus({ preventScroll: true });
+        const returnTo = came?.isConnected ? came : control;
+        came = undefined;
+        if (returnTo?.isConnected && (giveFocus || inside)) returnTo.focus({ preventScroll: true });
         giveFocus = false;
         options.onClose?.();
         const at = final;
@@ -647,6 +651,8 @@ export function flowMenu(label: string, options: { align?: "left" | "right"; cla
             box.classList.add("open");
             box.classList.toggle("sliding", sliding);
             if (!opened) {
+                const now = document.activeElement;
+                came = now instanceof HTMLElement && now !== from && now !== document.body && !box.contains(now) ? now : undefined;
                 opened = true;
                 box.showPopover();
             }
