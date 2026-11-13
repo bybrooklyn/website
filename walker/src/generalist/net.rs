@@ -302,15 +302,22 @@ impl Adam {
         Adam { mean: vec![0.0; weights], square: vec![0.0; weights], steps: 0, kept_mean: 1.0, kept_square: 1.0 }
     }
 
-    /// Takes up again after `steps` steps, its running averages already put back.
+    /// Takes up again after `steps` steps, its running averages already put back. The powers are
+    /// taken a step at a time, as stepping takes them, so they come out the same to the bit; once
+    /// neither changes any more (each settles on the smallest f32 it rounds to) the rest are skipped,
+    /// so a count of billions from a spoiled saved state is taken up at once.
     pub fn restart_at(&mut self, steps: u32) {
         self.steps = 0;
         self.kept_mean = 1.0;
         self.kept_square = 1.0;
         while self.steps < steps {
+            let before = (self.kept_mean, self.kept_square);
             self.steps += 1;
             self.kept_mean *= ADAM_MEAN;
             self.kept_square *= ADAM_SQUARE;
+            if (self.kept_mean, self.kept_square) == before {
+                self.steps = steps;
+            }
         }
     }
 
