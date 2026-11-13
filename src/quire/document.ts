@@ -1352,7 +1352,14 @@ export function fields(doc: Document): [string, string][] {
 }
 
 function unquote(value: string): string {
-    if (/^"(?:[^"\\]|\\.)*"$/.test(value)) return value.slice(1, -1).replace(/\\(.)/g, "$1");
+    if (/^"(?:[^"\\]|\\.)*"$/.test(value)) {
+        // YAML's double quotes take the escapes JSON does (\n is a line break, \t a tab), and a few more
+        try {
+            return JSON.parse(value) as string;
+        } catch {
+            return value.slice(1, -1).replace(/\\(.)/g, "$1");
+        }
+    }
     if (/^'(?:[^']|'')*'$/.test(value)) return value.slice(1, -1).replace(/''/g, "'");
     return value;
 }
@@ -1368,7 +1375,7 @@ export function getField(doc: Document, key: string): string | undefined {
  * `raw` says it is to be written exactly as given (a date, a list, `true`).
  */
 export function setField(doc: Document, key: string, value: string, raw = false): Document {
-    const plain = raw || (value !== "" && !/^[\s\-?:,[\]{}#&*!|>'"%@`]|: | #|\s$|^(true|false|null|yes|no|~)$|^[\d.+-]+$/i.test(value));
+    const plain = raw || (value !== "" && !/^[\s\-?:,[\]{}#&*!|>'"%@`]|: | #|\s$|[\r\n]|^(true|false|null|yes|no|~)$|^[\d.+-]+$/i.test(value));
     const written = `${key}: ${plain ? value : JSON.stringify(value)}`;
     const eol = doc.eol;
     if (!doc.frontmatter) return { ...doc, frontmatter: `---${eol}${written}${eol}---${eol}` };

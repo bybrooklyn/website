@@ -12,6 +12,7 @@ import {
     deleteText,
     divider,
     documentOf,
+    fields,
     isPageBreak,
     pageBreak,
     paragraph,
@@ -389,4 +390,14 @@ test("a page break is the HTML that makes one, known however it is spaced or quo
     for (const html of ['<div style="break-after: page"></div>', "<div style='break-after:page;'></div>", '<div style="page-break-after: always"></div>']) expect(isPageBreak({ kind: "raw", text: html, gap: "" })).toBe(true);
     expect(isPageBreak({ kind: "raw", text: "<div>break-after: page</div>", gap: "" })).toBe(false);
     expect(read('<div style="break-after: page"></div>\n').blocks.map(isPageBreak)).toEqual([true]);
+});
+
+test("a frontmatter value with a line break in it is quoted, and read back with the break", () => {
+    const doc = setField(read("Body\n"), "title", "a\nb");
+    expect(write(doc)).toBe('---\ntitle: "a\\nb"\n---\nBody\n');
+    expect(fields(read(write(doc)))).toEqual([["title", "a\nb"]]);
+    expect(fields(read('---\na: "tab\\there \\"q\\""\nb: \'it\'\'s\'\n---\n'))).toEqual([
+        ["a", 'tab\there "q"'],
+        ["b", "it's"],
+    ]);
 });
