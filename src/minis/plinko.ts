@@ -11,7 +11,7 @@ import { ball, block, mix3, type V3 } from "../mote/solids";
 import { sounds } from "../mote/sound";
 import { el, gently, toward, type Mote, type Scene } from "../mote/stage";
 import { copyText } from "../scripts/copy";
-import { ACROSS, BALL, BIN, BINS, DEFAULTS, LIMITS, PEG, WIDTH, alphabet, drop, strength, type Board, type Settings } from "./board";
+import { ACROSS, BALL, BIN, BINS, LIMITS, PEG, WIDTH, alphabet, drop, keptSettings, strength, type Board, type Settings } from "./board";
 
 export const label = "A Plinko board. Balls fall through pegs into bins of characters, and what they land in becomes a password.";
 
@@ -40,8 +40,8 @@ interface Letter {
 }
 
 export default function plinko(m: Mote): Scene {
-    const kept = m.recall<Partial<Settings>>("plinko", {});
-    let settings: Settings = { ...DEFAULTS, ...kept, rows: Math.min(LIMITS.rows[1], kept.rows ?? DEFAULTS.rows) };
+    // read back inside the limits: a stored length that is not a number would lay no balls and never finish
+    let settings: Settings = keptSettings(m.recall<unknown>("plinko", {}));
     // Until the first drop the board stands empty, with its bins already showing characters.
     let board: Board = drop({ ...settings, length: 0 });
     let dropping = false;

@@ -2,7 +2,7 @@
 // for, and every character comes up as often as chance says, though the bins do not. Run with `bun run test`.
 
 import { expect, test } from "bun:test";
-import { alphabet, BINS, DEFAULTS, drop, fair, strength, type Settings } from "./board";
+import { alphabet, BINS, DEFAULTS, LIMITS, drop, fair, keptSettings, strength, type Settings } from "./board";
 
 /** Drops the balls and runs the board to its end. */
 function play(settings: Partial<Settings>) {
@@ -67,4 +67,16 @@ test("on the page a short password takes its time and a long one does not take a
         expect(board.time).toBeGreaterThan(least);
         expect(board.time).toBeLessThan(most);
     }
+});
+
+test("settings kept from an earlier visit are read back inside the limits, and a damaged one still lets a board finish", () => {
+    expect(keptSettings({ ...DEFAULTS, length: 20, rows: 6 })).toEqual({ ...DEFAULTS, length: 20, rows: 6 });
+    expect(keptSettings({ length: null, rows: "x", bounce: Number.NaN, gravity: 99, lower: "yes" })).toEqual({ ...DEFAULTS, gravity: LIMITS.gravity[1] });
+    expect(keptSettings({ length: 1e9, rows: 2.5, bounce: -1 })).toEqual({ ...DEFAULTS, length: LIMITS.length[1], rows: LIMITS.rows[0], bounce: LIMITS.bounce[0] });
+    for (const value of [null, undefined, 3, "x", []]) expect(keptSettings(value)).toEqual(DEFAULTS);
+    // a stored length that was not a number laid no balls, and the board never said it was done
+    const board = drop(keptSettings({ length: "16" }));
+    for (let step = 0; step < 120 * 60 && !board.done(); step++) board.step(1 / 120);
+    expect(board.done()).toBe(true);
+    expect(board.password().length).toBe(DEFAULTS.length);
 });
