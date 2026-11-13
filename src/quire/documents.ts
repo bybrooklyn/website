@@ -1,11 +1,12 @@
 // The documents list, which flows out of the document's name in the bar: the name to rename, the
-// documents in the place this one lives, a new one, the other places documents can live (this
-// browser, a file, a folder, a repository), and the browser's trash. And the form that connects a
-// repository, which takes the list's place in the same box. What is shown is built here; app.ts
-// says what each choice does. Filtering a long list is pure and tested.
+// documents in the place this one lives, a new one, the other places to open from (this browser, a
+// file, a folder, GitHub), and the browser's trash. A list to pick from, so a menu. And the form
+// that connects a repository, which is a form of several fields and so a dialog (app.ts opens it).
+// What is shown is built here; app.ts says what each choice does. Filtering a long list is pure and
+// tested.
 
 import type { Entry } from "./store";
-import { control, icon, make } from "./ui";
+import { composing, control, icon, make } from "./ui";
 
 /** The entries whose name has every word of the query in it, in the order they came. */
 export function filterEntries(entries: Entry[], query: string): Entry[] {
@@ -24,6 +25,11 @@ export interface Place {
     choose: (button?: HTMLElement) => void;
 }
 
+/** The places the list offers to open from: those that can be chosen, less the one shown, whose name already heads the documents. */
+export function placesOffered(places: Place[]): Place[] {
+    return places.filter((place) => !place.current);
+}
+
 /** What the documents list shows, and what to call for each thing in it. */
 export interface DocumentsView {
     name: string;
@@ -37,7 +43,10 @@ export interface DocumentsView {
     trash?: Entry[];
     open(entry: Entry): void;
     create(): void;
-    rename(name: string): void;
+    /** Renames the document; `done` when it was asked for with Enter, which closes the list and gives the text back. */
+    rename(name: string, done: boolean): void;
+    /** Closes the list and gives the text back, as Enter in the name does when the name did not change. */
+    finish(): void;
     remove(entry: Entry): void;
     restore?(entry: Entry): void;
 }
@@ -58,13 +67,23 @@ export function documentsList(view: DocumentsView): HTMLElement {
     field.value = view.name;
     field.disabled = !view.canRename;
     field.setAttribute("aria-label", "This document's name");
+    let renamed = false;
     field.addEventListener("keydown", (event) => {
+        // Escape is the menu's, which closes as it does from any line; the name typed is let go first
+        if (event.key === "Escape") {
+            field.value = view.name;
+            return;
+        }
         event.stopPropagation();
-        if (event.key === "Enter" && field.value.trim() && field.value.trim() !== view.name) view.rename(field.value.trim());
-        if (event.key === "Escape") field.value = view.name;
+        if (event.key !== "Enter" || composing(event)) return;
+        event.preventDefault();
+        // Enter renames, closes the list and gives the text back
+        renamed = true;
+        if (field.value.trim() && field.value.trim() !== view.name) view.rename(field.value.trim(), true);
+        else view.finish();
     });
     field.addEventListener("change", () => {
-        if (field.value.trim() && field.value.trim() !== view.name) view.rename(field.value.trim());
+        if (!renamed && field.value.trim() && field.value.trim() !== view.name) view.rename(field.value.trim(), false);
     });
     naming.append(field);
     box.append(naming);
@@ -82,11 +101,21 @@ export function documentsList(view: DocumentsView): HTMLElement {
                 open.addEventListener("click", () => view.open(entry));
                 item.append(open);
                 if (view.canRemove && entry.id !== view.currentId) {
-                    // taking a document away asks once more on the same button, rather than in a dialog
-                    const away = control(`Take ${entry.name} away`, icon("trash"), (button) => {
-                        if (button.classList.contains("asking")) return view.remove(entry);
-                        button.classList.add("asking");
-                        button.setAttribute("aria-label", `Press again to take ${entry.name} away`);
+                    // deleting asks once more in the same place, as the home list does: "Delete it" and "Keep it" in place of the line
+                    const away = control(`Delete ${entry.name}`, icon("trash"), () => {
+                        const sure = make("button", "quire-menu-line quire-documents-sure");
+                        sure.type = "button";
+                        sure.append(icon("trash"), make("span", "quire-menu-label", `Delete ${entry.name}`));
+                        sure.addEventListener("click", () => view.remove(entry));
+                        const keep = make("button", "quire-menu-line quire-documents-keep", "Keep it");
+                        keep.type = "button";
+                        keep.addEventListener("click", () => {
+                            item.replaceChildren(open, away);
+                            away.focus();
+                        });
+                        item.replaceChildren(sure, keep);
+                        item.classList.add("asking");
+                        sure.focus();
                     });
                     away.classList.add("quire-documents-away");
                     item.append(away);
@@ -114,9 +143,9 @@ export function documentsList(view: DocumentsView): HTMLElement {
         box.append(fresh);
     }
 
-    // the places documents can live
-    box.append(next(make("p", "quire-outline-title quire-documents-head", "Places")));
-    for (const place of view.places) {
+    // the other places to open from
+    box.append(next(make("p", "quire-outline-title quire-documents-head", "Open from")));
+    for (const place of placesOffered(view.places)) {
         if (place.absent) {
             box.append(next(make("p", "quire-menu-note", place.absent)));
             continue;
@@ -130,11 +159,11 @@ export function documentsList(view: DocumentsView): HTMLElement {
 
     // the browser's trash, from where a document can be brought back
     if (view.trash?.length && view.restore) {
-        box.append(next(make("p", "quire-outline-title quire-documents-head", "Taken away")));
+        box.append(next(make("p", "quire-outline-title quire-documents-head", "Deleted")));
         for (const entry of view.trash) {
             const back = next(make("button", "quire-menu-line quire-documents-trash"));
             back.type = "button";
-            back.append(make("span", "quire-menu-label", entry.name), make("span", "quire-menu-hint", "bring back"));
+            back.append(make("span", "quire-menu-label", entry.name), make("span", "quire-menu-hint", "Restore"));
             back.addEventListener("click", () => view.restore!(entry));
             box.append(back);
         }
@@ -146,14 +175,15 @@ export function documentsList(view: DocumentsView): HTMLElement {
 export interface RepositoryForm {
     settings?: { owner: string; repo: string; branch: string; folder: string; pictures: string; token: string };
     connect(values: { repository: string; branch: string; folder: string; pictures: string; token: string }): Promise<string | undefined>;
-    forget(): void;
-    back(): void;
 }
 
-/** Builds the form that connects a repository, saying plainly where the token is kept and sent. */
-export function repositoryForm(form: RepositoryForm): HTMLElement {
-    const box = make("form", "quire-repository");
-    box.noValidate = true;
+/**
+ * Builds the form that connects a repository, for its dialog, saying plainly where the token is
+ * kept and sent. `send()` tries what was typed and is true once it is connected; while it tries,
+ * and when it is refused, the form says so in its own words.
+ */
+export function repositoryForm(form: RepositoryForm): { element: HTMLElement; send(): Promise<boolean> } {
+    const box = make("div", "quire-repository");
     const field = (label: string, value: string, hint: string, type = "text") => {
         const row = make("label", "quire-repository-row");
         row.append(make("span", "quire-repository-label", label));
@@ -163,13 +193,11 @@ export function repositoryForm(form: RepositoryForm): HTMLElement {
         input.placeholder = hint;
         input.spellcheck = false;
         input.autocomplete = "off";
-        input.addEventListener("keydown", (event) => event.stopPropagation());
         row.append(input);
         box.append(row);
         return input;
     };
     const kept = form.settings;
-    box.append(make("p", "quire-repository-title", "Write in a GitHub repository"));
     const repository = field("Repository", kept ? `${kept.owner}/${kept.repo}` : "", "owner/name");
     const branch = field("Branch", kept?.branch ?? "main", "main");
     const folder = field("Folder of documents", kept?.folder ?? "", "src/content/blog");
@@ -179,31 +207,28 @@ export function repositoryForm(form: RepositoryForm): HTMLElement {
     about.append(
         "Use a fine-grained personal access token that can read and write the contents of this one repository and nothing else (",
         Object.assign(make("a", "", "make one on GitHub"), { href: "https://github.com/settings/personal-access-tokens/new", target: "_blank", rel: "noopener" }),
-        "). It is kept only in this browser, in its local storage, and is sent only to api.github.com. To remove it, press Forget below, or clear this site's data in the browser.",
+        // Forget is offered only once a repository is kept, so it is spoken of only then
+        `). It is kept only in this browser, in its local storage, and is sent only to api.github.com.${kept ? " To remove it, press Forget, or clear this site's data in the browser." : ""}`,
     );
     box.append(about);
     const said = make("p", "quire-repository-said");
     said.setAttribute("role", "status");
-    const actions = make("div", "quire-repository-actions");
-    const connect = make("button", "quire-button quire-choice", kept ? "Save and open" : "Connect");
-    connect.type = "submit";
-    const back = control("Back to the documents", "Back", () => form.back(), "quire-button");
-    actions.append(connect, back);
-    if (kept) actions.append(control("Forget this repository and its token", "Forget", () => form.forget(), "quire-button quire-forget"));
-    box.append(said, actions);
-    box.addEventListener("submit", async (event) => {
-        event.preventDefault();
+    box.append(said);
+    let sending = false;
+    async function send(): Promise<boolean> {
+        if (sending) return false;
+        sending = true;
         said.textContent = "Connecting";
-        connect.disabled = true;
         let problem: string | undefined;
         try {
             problem = await form.connect({ repository: repository.value, branch: branch.value, folder: folder.value, pictures: pictures.value, token: token.value });
         } catch (error) {
-            // whatever went wrong, the button comes back and the reason is said
+            // whatever went wrong, the reason is said
             problem = error instanceof Error ? error.message : String(error);
         }
-        connect.disabled = false;
+        sending = false;
         said.textContent = problem ?? "";
-    });
-    return box;
+        return !problem;
+    }
+    return { element: box, send };
 }

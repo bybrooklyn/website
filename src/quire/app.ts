@@ -9,7 +9,7 @@
 
 import { createEditor, type Editor } from "./editor";
 import { documentsList, repositoryForm, type Place } from "./documents";
-import { DRIVE_WORDS, drivePlace, type DriveOptions } from "./drive-place";
+import { drivePlace, type DriveOptions } from "./drive-place";
 import { blockPaths, lengthOf } from "./document";
 import { read } from "./read";
 import { emptyParts, opened, type Parts } from "./quire-file";
@@ -19,6 +19,7 @@ import { filesStore, OPENABLE } from "./store-files";
 import { canOpen, folderStore, oneFileStore, type FileHandle, type FolderHandle } from "./store-folder";
 import { folderPath, forgetSettings, githubStore, keepSettings, readSettings, repository, type Fetcher } from "./store-github";
 import { boxOf, copyName, createShelf, recent, templates, travel, type Listed, type Template } from "./shelf";
+import { openDialog } from "./dialog";
 import { flowMenu, make, type Box } from "./ui";
 
 /** What the page gives the app. */
@@ -171,14 +172,14 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
         }
         const places: Place[] = [
             { key: "browser", label: "This browser", current: shown === browser, choose: () => ((shown = browser), void showDocuments()) },
-            { key: "file", label: "Open a file", choose: () => chooser.click() },
-            able.file ? { key: "in-place", label: "Open a file to write in place", choose: () => void openInPlace() } : { key: "in-place", label: "", absent: "This browser cannot write files in place; Chrome and Edge can.", choose: () => {} },
-            able.folder ? { key: "folder", label: folder ? `Folder: ${folder.label}` : "Open a folder", current: shown === folder && !!folder, choose: () => (folder && shown !== folder ? ((shown = folder), void showDocuments()) : void openFolder()) } : { key: "folder", label: "", absent: "Folders can be opened in Chrome and Edge.", choose: () => {} },
+            { key: "file", label: "A file, as a copy", choose: () => chooser.click() },
+            able.file ? { key: "in-place", label: "A file, saving to it", choose: () => void openInPlace() } : { key: "in-place", label: "", absent: "This browser cannot save to a file; Chrome and Edge can.", choose: () => {} },
+            able.folder ? { key: "folder", label: folder ? `Folder: ${folder.label}` : "A folder", current: shown === folder && !!folder, choose: () => (folder && shown !== folder ? ((shown = folder), void showDocuments()) : void openFolder()) } : { key: "folder", label: "", absent: "Folders can be opened in Chrome and Edge.", choose: () => {} },
             github
-                ? { key: "github", label: `Repository: ${github.label}`, current: shown === github, choose: () => ((shown = github!), void showDocuments()) }
-                : { key: "github", label: "Connect a repository", choose: () => showRepository() },
+                ? { key: "github", label: `GitHub: ${github.label}`, current: shown === github, choose: () => ((shown = github!), void showDocuments()) }
+                : { key: "github", label: "GitHub", choose: (button) => showRepository(button) },
         ];
-        if (github) places.push({ key: "github-settings", label: "Repository settings", choose: () => showRepository() });
+        if (github) places.push({ key: "github-settings", label: "GitHub settings", choose: (button) => showRepository(button) });
         places.push(...drivePlaces());
         const list = documentsList({
             name: current.name,
@@ -203,12 +204,14 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
                 if (await made) await showEditor();
                 editor.surface.focus();
             },
-            rename: async (name) => {
+            rename: async (name, done) => {
+                if (done) finish();
                 await editor.rename(name);
-                await showDocuments();
+                if (!done && menu.isOpen()) await showDocuments();
             },
+            finish,
             remove: async (entry) => {
-                const problem = await shown.remove(entry.id).then(() => undefined, (error) => `${entry.name} was not taken away: ${error instanceof Error ? error.message : String(error)}`);
+                const problem = await shown.remove(entry.id).then(() => undefined, (error) => `${entry.name} was not deleted: ${error instanceof Error ? error.message : String(error)}`);
                 await showDocuments(problem);
             },
             restore: async (entry) => {
@@ -219,24 +222,30 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
         if (from) menu.open(from, list);
     }
 
-    // ---- connecting a repository ----
-    function showRepository() {
+    /** Closes the documents list and gives the text back. */
+    function finish() {
+        menu.close(false);
+        if (!shelf.shown()) editor.surface.focus();
+    }
+
+    // ---- connecting a repository: a form of five fields, so a dialog, grown out of what was pressed ----
+    function showRepository(pressed?: HTMLElement) {
+        const kept = settings;
+        const forget = async () => {
+            forgetSettings(local());
+            settings = undefined;
+            const was = github;
+            github = undefined;
+            if (editor.current().store === was) {
+                const newest = (await browser.list())[0];
+                if (newest) await editor.open(browser, newest);
+                else await editor.create(browser, "Untitled", "", emptyParts());
+            }
+            shown = browser;
+            await placesChanged();
+        };
         const form = repositoryForm({
             settings,
-            back: () => void showDocuments(),
-            forget: async () => {
-                forgetSettings(local());
-                settings = undefined;
-                const was = github;
-                github = undefined;
-                if (editor.current().store === was) {
-                    const newest = (await browser.list())[0];
-                    if (newest) await editor.open(browser, newest);
-                    else await editor.create(browser, "Untitled", "", emptyParts());
-                }
-                shown = browser;
-                await placesChanged();
-            },
             connect: async (values) => {
                 const where = repository(values.repository);
                 if (!where) return "The repository is written as owner/name.";
@@ -257,18 +266,39 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
                 settings = next;
                 github = store;
                 shown = store;
-                await placesChanged();
                 return undefined;
             },
         });
-        if (from) menu.open(from, form);
-        form.querySelector("input")?.focus({ preventScroll: true });
+        // the documents list it may have been opened from has closed; closing, it goes back to what opened the list
+        const back = from;
+        openDialog(pressed?.isConnected ? pressed : back, {
+            title: "Write in a GitHub repository",
+            className: "quire-repository-dialog",
+            body: [form.element],
+            returnTo: back,
+            others: kept ? [{ label: "Forget", far: true, press: (dialog) => void dialog.close().then(forget) }] : [],
+            dismiss: "Cancel",
+            action: {
+                label: kept ? "Save and open" : "Connect",
+                press: (button, dialog) => {
+                    button.disabled = true;
+                    void form.send().then(async (connected) => {
+                        button.disabled = false;
+                        if (!connected) return;
+                        await dialog.close();
+                        await placesChanged();
+                    });
+                },
+            },
+        });
+        form.element.querySelector("input")?.focus({ preventScroll: true });
     }
 
     // ---- Google Drive ----
     /** Google Drive's lines among the places: not set up, to open, or open with a way to lock it. */
     function drivePlaces(): Place[] {
-        if (drive.state() === "not set up") return [{ key: "drive", label: "", absent: DRIVE_WORDS.notSetUp, choose: () => {} }];
+        // until it is set up it is not offered at all: the note that it is not is for the owner, not the writer
+        if (drive.state() === "not set up") return [];
         const open = drive.store();
         const lines: Place[] = [open ? { key: "drive", label: "Google Drive", current: shown === open, choose: () => ((shown = open), void showDocuments()) } : { key: "drive", label: "Google Drive", choose: (button) => void openDrive(button) }];
         if (open) lines.push({ key: "drive-out", label: "Lock Google Drive and sign out", choose: () => void signOutDrive() });
