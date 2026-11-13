@@ -82,6 +82,8 @@
     outline: none;
 }
 
+/* The canvas fills a frame that clips (.mote), so the site's ring is drawn just inside its edge: the one
+   exception, with the type tester, that base.css names. */
 .mote canvas:focus-visible:not([data-touched]) {
     outline: 0.125rem solid var(--accent);
     outline-offset: -0.125rem;
@@ -225,8 +227,8 @@
     transition: border-color 0.15s ease;
 }
 
+/* the rule takes the accent, and the keyboard has the site's ring as well (base.css) */
 .mote-panel input[type="text"]:focus {
-    outline: none;
     border-bottom-color: var(--accent);
 }
 

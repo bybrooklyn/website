@@ -134,11 +134,6 @@
     border: 0.0625rem solid var(--rule);
     border-radius: 2rem;
     background: var(--surface);
-    transition: border-color 0.15s ease;
-}
-
-.tonetags-find:focus-within {
-    border-color: var(--accent);
 }
 
 .tonetags-find svg {
@@ -162,7 +157,7 @@
     font-size: 1.1rem;
 }
 
-/* the field's own edge shows where the keyboard is, so the box inside it needs no ring of its own */
+/* the site's ring goes round the whole field (base.css), so the box inside it needs none of its own */
 .tonetags-find input:focus {
     outline: none;
 }
