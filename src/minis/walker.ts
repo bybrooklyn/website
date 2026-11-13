@@ -39,6 +39,7 @@ import {
     heightAt,
     lengthName,
     linkParts,
+    linkedSetup,
     machine,
     oldLink,
     presetOf,
@@ -76,7 +77,7 @@ export default function walker(m: Mote): Scene {
     // opened from a link to a walker: its setup and its trained brain
     const linked = fromLink((name) => m.link.get(name));
     let brainToLoad: Float32Array | undefined;
-    if (linked) [setup, brainToLoad] = [{ ...linked.setup, ground: setup.goal === COURSE_GOAL ? setup.ground : linked.setup.ground }, linked.brain];
+    if (linked) [setup, brainToLoad] = [linkedSetup(setup, linked.setup), linked.brain];
 
     let engine: Engine | undefined;
     let worker: Worker | undefined;

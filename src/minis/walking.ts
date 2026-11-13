@@ -257,6 +257,9 @@ export function fromLink(get: (name: string) => string | null): { setup: Setup; 
     return brain && valid(setup) ? { setup, brain } : null;
 }
 
+/** The setup a link to a walker opens: the link's own, ground and all. Only for the course, which brings its own ground, is the visitor's kept ground left as it was. */
+export const linkedSetup = (kept: Setup, linked: Setup): Setup => ({ ...linked, ground: linked.goal === COURSE_GOAL ? kept.ground : linked.ground });
+
 /** The ground runs from here to there, in metres, and is level around the start, where the walker is built. */
 const BEHIND = -20;
 const AHEAD = 400;

@@ -4,7 +4,7 @@
 // link exactly, and each kind of ground is what it says. `bun run wasm` builds it; `bun test` runs this.
 
 import { expect, test } from "bun:test";
-import { COURSE, DEFAULT_SETUP, KINDS, PRESETS, Terrain, courseAt, decode, encode, engineAddress, fromLink, hasSimd, heightAt, linkParts, oldLink, pieces, presetOf, valid, workersFor, type Engine, type Setup } from "./walking";
+import { COURSE, COURSE_GOAL, DEFAULT_SETUP, KINDS, PRESETS, Terrain, courseAt, decode, encode, engineAddress, fromLink, hasSimd, heightAt, linkParts, linkedSetup, oldLink, pieces, presetOf, valid, workersFor, type Engine, type Setup } from "./walking";
 
 const path = new URL("../../public/wasm/walker.wasm", import.meta.url);
 const scalarPath = new URL("../../public/wasm/walker-scalar.wasm", import.meta.url);
@@ -310,6 +310,15 @@ test("a whole walker, its setup and its brain, goes through a link and back unch
     expect(fromLink((name) => address.searchParams.get(name))).toBeNull();
     expect(oldLink((name) => address.searchParams.get(name))).toBe(true);
     expect(oldLink(() => null)).toBe(false);
+});
+
+test("a linked walker walks on the ground in its link, whatever goal was kept from the last visit", () => {
+    const course: Setup = { ...DEFAULT_SETUP, goal: COURSE_GOAL };
+    const steps: Setup = { ...DEFAULT_SETUP, goal: 2, ground: { kind: "steps", rough: 70 } };
+    expect(linkedSetup(course, steps).ground).toEqual({ kind: "steps", rough: 70 });
+    expect(linkedSetup(DEFAULT_SETUP, steps).ground).toEqual({ kind: "steps", rough: 70 });
+    // a link to a walker on the course keeps the visitor's own ground for when they leave the course
+    expect(linkedSetup(steps, { ...course, ground: { kind: "flat", rough: 0 } }).ground).toEqual({ kind: "steps", rough: 70 });
 });
 
 test("the show plays the best brain's run exactly as it was scored, and stops where it stopped", async () => {
