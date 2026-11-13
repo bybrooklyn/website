@@ -46,6 +46,7 @@ import { diagram } from "./diagram";
 import { emojiOf } from "./emoji";
 import { highlight, LANGUAGE_NAMES } from "./highlight";
 import { maths } from "./maths";
+import { namesIn } from "./check/names";
 
 /** What the host gives the surface. `onImage` stores a pasted or dropped picture and gives back its address. */
 export interface SurfaceOptions {
@@ -167,6 +168,24 @@ function drawMath(source: string): HTMLElement {
     return wrap;
 }
 
+/** Text with each of the site's own names (check/names.ts) in a span the browser's spelling leaves alone, since it cannot be taught them. */
+function named(text: string): Node {
+    const found = namesIn(text);
+    if (found.length === 0) return document.createTextNode(text);
+    const pieces = document.createDocumentFragment();
+    let at = 0;
+    for (const [start, end] of found) {
+        if (start > at) pieces.append(text.slice(at, start));
+        const name = document.createElement("span");
+        name.spellcheck = false;
+        name.textContent = text.slice(start, end);
+        pieces.append(name);
+        at = end;
+    }
+    if (at < text.length) pieces.append(text.slice(at));
+    return pieces;
+}
+
 /** Draws one leaf of text: the text inside an element for each of its marks. */
 function drawLeaf(leaf: Leaf, how: Drawing = plainDrawing): Node {
     if (leaf.kind === "break") return document.createElement("br");
@@ -194,7 +213,7 @@ function drawLeaf(leaf: Leaf, how: Drawing = plainDrawing): Node {
         atom.textContent = leaf.kind === "footnote" ? `[${leaf.label}]` : leaf.html;
         return atom;
     }
-    let node: Node = leaf.marks.includes("math") ? drawMath(leaf.text) : how.join && !leaf.marks.includes("code") && leaf.text.includes("==") ? joined(leaf.text) : document.createTextNode(leaf.text);
+    let node: Node = leaf.marks.includes("math") ? drawMath(leaf.text) : how.join && !leaf.marks.includes("code") && leaf.text.includes("==") ? joined(leaf.text) : named(leaf.text);
     for (const [mark, tag] of [...TAGS].reverse()) {
         if (!leaf.marks.includes(mark)) continue;
         const wrap = document.createElement(tag);
