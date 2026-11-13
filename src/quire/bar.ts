@@ -871,8 +871,8 @@ export function createBar(surface: Surface, options: BarOptions) {
     strip.append(end);
 
     // how saving stands and the word count, "Saved · 7 words", which the page puts at the right of its first line
+    // the count is not announced as it changes, which in a run of typing would be every quarter second; the word count dialog says it on request
     const count = make("span", "quire-count");
-    count.setAttribute("aria-live", "polite");
     const status = make("span", "quire-status");
     status.setAttribute("role", "status");
     let words = make("span", "quire-status-words here");

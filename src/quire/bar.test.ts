@@ -301,3 +301,10 @@ inBrowser("a size typed in the field and Enter is one step of undo, not two", ()
         expect(await tab.run<string>("md()")).toBe("a word here\n");
     }),
 );
+
+inBrowser("the word count is not a live region, so it is not read out at every pause in typing", () =>
+    onPage("Text\n", 1300, async (tab) => {
+        expect(await tab.run<string | null>("document.querySelector('.quire-count').getAttribute('aria-live')")).toBeNull();
+        expect(await tab.run<string | null>("document.querySelector('.quire-count').closest('[aria-live], [role=status]')?.className ?? null")).toBeNull();
+    }),
+);
