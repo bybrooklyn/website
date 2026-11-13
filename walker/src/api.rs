@@ -146,7 +146,7 @@ pub extern "C" fn evaluate_room(count: u32) -> *mut f32 {
 #[unsafe(no_mangle)]
 pub extern "C" fn evaluate(count: u32) -> u32 {
     let Some(walker) = walker() else { return 0 };
-    let length = (walker.trainer.layout.weights() * count as usize).min(walker.evaluate_room.len());
+    let length = (walker.trainer.layout.weights() * count.min(1000) as usize).min(walker.evaluate_room.len());
     let brains = length / walker.trainer.layout.weights();
     walker.evaluated.clear();
     walker.evaluated.resize(2 * brains, 0.0);
@@ -600,7 +600,7 @@ pub extern "C" fn crowd_room(count: u32) -> *mut f32 {
 #[unsafe(no_mangle)]
 pub extern "C" fn crowd_start(count: u32) -> u32 {
     let Some(walker) = walker() else { return 0 };
-    let length = (walker.trainer.layout.weights() * count as usize).min(walker.crowd_room.len());
+    let length = (walker.trainer.layout.weights() * count.min(1000) as usize).min(walker.crowd_room.len());
     let trainer = &walker.trainer;
     let crowd = Crowd::new(&trainer.start, &trainer.creature, trainer.layout, &walker.crowd_room[..length], trainer.judge());
     let count = crowd.worlds.len() as u32;
