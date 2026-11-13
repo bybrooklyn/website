@@ -913,6 +913,31 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
     /** True for an event from a field inside the document, such as a picture's alt text, which is the field's own. */
     const fromField = (event: Event) => event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement;
 
+    /**
+     * A collapsed cursor about to be deleted from, widened to the whole character as a reader sees it
+     * (a flag, a family of emoji joined into one, a letter with an accent written after it), when that
+     * is more than the one code point or surrogate pair the model's own step removes.
+     */
+    function wholeCharacter(forward: boolean) {
+        const { focus } = editor.state.selection;
+        if (!collapsed(editor.state.selection) || typeof Intl === "undefined" || !("Segmenter" in Intl)) return;
+        const holder = holderAt(focus.path);
+        if (!holder) return;
+        const text = textOf(holder);
+        let start = 0;
+        let end = 0;
+        for (const { index, segment } of new Intl.Segmenter().segment(text)) {
+            start = index;
+            end = index + segment.length;
+            if (forward ? end > focus.offset : end >= focus.offset) break;
+        }
+        if (forward ? start !== focus.offset : end !== focus.offset) return;
+        const piece = text.slice(start, end);
+        const step = piece.codePointAt(0)! > 0xffff ? 2 : 1;
+        if (piece.length <= step) return;
+        editor = { ...editor, state: { doc: editor.state.doc, selection: { anchor: { path: focus.path, offset: start }, focus: { path: focus.path, offset: end } } } };
+    }
+
     function onKeyDown(event: KeyboardEvent) {
         if (fromField(event)) return;
         // Safari sends key 229 for keys that belong to a composition
@@ -927,6 +952,7 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
         if (MAC && event.ctrlKey && !mod) return;
         syncSelection();
         const word = (key === "Backspace" || key === "Delete") && (MAC ? event.altKey : event.ctrlKey);
+        if ((key === "Backspace" || key === "Delete") && !word && !mod && !event.altKey) wholeCharacter(key === "Delete");
         if (send({ type: "key", key, shift: event.shiftKey, mod: mod && !word, alt: event.altKey && !word, word })) event.preventDefault();
     }
 
@@ -1077,9 +1103,11 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
                 send({ type: "key", key: "Enter", shift: true });
                 return;
             case "deleteContentBackward":
+                wholeCharacter(false);
                 send({ type: "key", key: "Backspace" });
                 return;
             case "deleteContentForward":
+                wholeCharacter(true);
                 send({ type: "key", key: "Delete" });
                 return;
             case "deleteWordBackward":

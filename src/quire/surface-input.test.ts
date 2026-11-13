@@ -339,6 +339,24 @@ describe("every kind of input that changes text either changes the model or is c
         expect(await shown(tab)).toBe("one\ntwo");
     });
 
+    inPage("Backspace and Delete take a whole character as a reader sees it: a flag, a joined family, an accent written after its letter", async (tab) => {
+        await tab.run(`quire.reset("a🏳️‍🌈b👨‍👩‍👧c🇫🇷de\\u0301\\n")`);
+        const length = await tab.run<number>("quire.surface.getDocument().blocks[0].runs[0].text.length");
+        await tab.run(`quire.select([0], ${length})`);
+        await tab.press("Backspace");
+        expect(await md(tab)).toBe("a🏳️‍🌈b👨‍👩‍👧c🇫🇷d\n");
+        await tab.press("ArrowLeft");
+        await tab.wait(30);
+        await tab.press("Backspace");
+        expect(await md(tab)).toBe("a🏳️‍🌈b👨‍👩‍👧cd\n");
+        await tab.run("quire.select([0], 1)");
+        await tab.press("Delete");
+        expect(await md(tab)).toBe("ab👨‍👩‍👧cd\n");
+        await tab.run("quire.select([0], 2)");
+        await tab.run(`quire.input("deleteContentForward", null)`);
+        expect(await md(tab)).toBe("abcd\n");
+    });
+
     inPage("copy, cut and a drop in a field inside the document are the field's own", async (tab) => {
         await tab.run(`quire.reset("\`\`\`js\\nlet a;\\n\`\`\`\\n\\nText here\\n")`);
         await tab.run("quire.select([1], 0, 4)");
