@@ -495,3 +495,16 @@ test("a heading is one line: Shift+Enter in it does nothing, and a paragraph wit
     two.key("2", { mod: true, alt: true });
     expect(two.markdown).toBe("## one two\n");
 });
+
+test("the cursor lands in a cell, never on a table: after pasting a table, and after Backspace below one", () => {
+    // a pasted table leaves the cursor at the end of its last cell, where typing goes into the cell
+    const pasted = paste({ doc: read("x\n"), selection: caret([0], 1) }, read("| a | b |\n|---|---|\n| 1 | 2 |\n").blocks);
+    expect(pasted.selection.focus).toEqual({ path: [1, 1, 1], offset: 1 });
+    const empty = paste({ doc: documentOf([paragraph()]), selection: caret([0], 0) }, read("| a |\n|---|\n| 1 |\n").blocks);
+    expect(empty.selection.focus).toEqual({ path: [0, 1, 0], offset: 1 });
+    // Backspace on an empty line under a table takes the line away and goes to the end of the table's last cell
+    const below = editor("| a |\n|---|\n| 1 |\n\nx\n", [1], 1);
+    below.key("Backspace");
+    below.key("Backspace");
+    expect(below.cursor).toEqual({ path: [0, 1, 0], offset: 1 });
+});

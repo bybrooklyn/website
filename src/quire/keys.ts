@@ -395,7 +395,12 @@ function lastCell(table: Block, path: number[]): number[] {
     return [...path, table.rows.length, table.header.length - 1];
 }
 
-const endOf = (doc: Document, path: number[]): [number[], number] => [path, lengthOf(doc, path)];
+/** The end of the text at a path; for a table, the end of its last cell, since the table itself is not a place to write. */
+function endOf(doc: Document, path: number[]): [number[], number] {
+    const block = blockAt(doc, path);
+    const at = block?.kind === "table" ? lastCell(block, path) : path;
+    return [at, lengthOf(doc, at)];
+}
 
 function forwardDelete(state: State, word: boolean): Outcome {
     if (!collapsed(state.selection)) return backspace(state, word);
