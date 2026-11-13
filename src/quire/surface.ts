@@ -46,6 +46,7 @@ import { diagram } from "./diagram";
 import { emojiOf } from "./emoji";
 import { highlight, LANGUAGE_NAMES } from "./highlight";
 import { maths } from "./maths";
+import { namesIn } from "./check/names";
 
 /** What the host gives the surface. `onImage` stores a pasted or dropped picture and gives back its address. */
 export interface SurfaceOptions {
@@ -96,6 +97,8 @@ export interface Surface {
     setSymbols(on: boolean): void;
     /** Whether typed arrows and signs become their characters. */
     symbols(): boolean;
+    /** Puts text in at the cursor as it is, each line a paragraph, with no formatting and no Markdown read from it. */
+    pasteText(text: string): void;
 }
 
 const MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
@@ -108,6 +111,7 @@ const TAGS: [Mark, string][] = [
     ["mark", "mark"],
     ["sup", "sup"],
     ["sub", "sub"],
+    ["spoiler", "span"],
 ];
 
 /** A code block longer than this many characters is drawn as plain text at once and highlighted a moment after typing stops, so that a key in it stays quick. */
@@ -164,6 +168,24 @@ function drawMath(source: string): HTMLElement {
     return wrap;
 }
 
+/** Text with each of the site's own names (check/names.ts) in a span the browser's spelling leaves alone, since it cannot be taught them. */
+function named(text: string): Node {
+    const found = namesIn(text);
+    if (found.length === 0) return document.createTextNode(text);
+    const pieces = document.createDocumentFragment();
+    let at = 0;
+    for (const [start, end] of found) {
+        if (start > at) pieces.append(text.slice(at, start));
+        const name = document.createElement("span");
+        name.spellcheck = false;
+        name.textContent = text.slice(start, end);
+        pieces.append(name);
+        at = end;
+    }
+    if (at < text.length) pieces.append(text.slice(at));
+    return pieces;
+}
+
 /** Draws one leaf of text: the text inside an element for each of its marks. */
 function drawLeaf(leaf: Leaf, how: Drawing = plainDrawing): Node {
     if (leaf.kind === "break") return document.createElement("br");
@@ -191,10 +213,12 @@ function drawLeaf(leaf: Leaf, how: Drawing = plainDrawing): Node {
         atom.textContent = leaf.kind === "footnote" ? `[${leaf.label}]` : leaf.html;
         return atom;
     }
-    let node: Node = leaf.marks.includes("math") ? drawMath(leaf.text) : how.join && !leaf.marks.includes("code") && leaf.text.includes("==") ? joined(leaf.text) : document.createTextNode(leaf.text);
+    let node: Node = leaf.marks.includes("math") ? drawMath(leaf.text) : how.join && !leaf.marks.includes("code") && leaf.text.includes("==") ? joined(leaf.text) : named(leaf.text);
     for (const [mark, tag] of [...TAGS].reverse()) {
         if (!leaf.marks.includes(mark)) continue;
         const wrap = document.createElement(tag);
+        // a spoiler is drawn dimmed with a dotted edge, so that it can still be read and written in here
+        if (mark === "spoiler") wrap.className = "quire-spoiler";
         wrap.append(node);
         node = wrap;
     }
@@ -366,6 +390,7 @@ function draw(block: Block, inner: number[], how: Drawing = plainDrawing): HTMLE
         case "heading": {
             const element = holderOf(document.createElement(block.kind === "paragraph" ? "p" : `h${block.level}`), inner);
             if (block.align) element.style.textAlign = block.align;
+            if (block.kind === "paragraph" && block.subtext) element.className = "quire-subtext";
             if (block.spacing) element.style.setProperty("--spacing", String(block.spacing));
             fillRuns(element, block.runs, how);
             return element;
@@ -654,7 +679,7 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
         if (holder) {
             const box = holder.closest<HTMLElement>(".quire-drawn");
             if (box) now.push(box);
-            for (const math of holder.querySelectorAll<HTMLElement>(".quire-math")) {
+            for (const math of holder.querySelectorAll<HTMLElement>(".quire-math, .quire-spoiler")) {
                 const start = offsetIn(holder, math, 0);
                 if (focus.offset >= start && focus.offset <= start + units(math)) now.push(math);
             }
@@ -843,6 +868,8 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
         // Safari sends key 229 for keys that belong to a composition
         if (composing || event.isComposing || (event as { keyCode?: number }).keyCode === 229) return;
         const mod = MAC ? event.metaKey : event.ctrlKey;
+        // Ctrl+Shift+V pastes, through the paste event, without formatting
+        if (mod && event.shiftKey && event.code === "KeyV") plainNext = true;
         let key = event.key;
         if (mod && /^Key[A-Z]$/.test(event.code)) key = event.code.slice(3).toLowerCase();
         if (mod && /^Digit[0-9]$/.test(event.code)) key = event.code.slice(5);
@@ -1020,12 +1047,30 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
         }
         const html = data.getData("text/html");
         const text = data.getData("text/plain");
+        // Ctrl+Shift+V: the text alone, nothing read from it
+        if (plainNext) {
+            plainNext = false;
+            return insertPlain(text);
+        }
         const kind = blockAt(editor.state.doc, editor.state.selection.focus.path)?.kind;
         if (kind === "code" || kind === "raw") return insertBlocks([paragraph(text)]);
         const fromHtml = html ? readHtml(html) : [];
         if (fromHtml.length) return insertBlocks(fromHtml);
         if (!text) return;
         if (looksLikeMarkdown(text)) return insertBlocks(read(text.replace(/\r\n?/g, "\n"), { mdx: editor.state.doc.mdx }).blocks);
+        insertBlocks(
+            text
+                .split(/\r?\n/)
+                .filter((line) => line.trim() !== "")
+                .map((line) => paragraph(line)),
+        );
+    }
+
+    /** Pasting without formatting: each line of the text a paragraph, in a code block the text as it is. */
+    let plainNext = false;
+    function insertPlain(text: string) {
+        const kind = blockAt(editor.state.doc, editor.state.selection.focus.path)?.kind;
+        if (kind === "code" || kind === "raw") return insertBlocks([paragraph(text)]);
         insertBlocks(
             text
                 .split(/\r?\n/)
@@ -1205,6 +1250,10 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
             placeSelection();
         },
         symbols: () => symbols,
+        pasteText(text) {
+            syncSelection();
+            insertPlain(text);
+        },
         destroy() {
             for (const [target, name, handler] of handlers) target.removeEventListener(name, handler);
             root.contentEditable = "false";

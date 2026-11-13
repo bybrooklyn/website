@@ -6,6 +6,7 @@ import { satteri } from "@astrojs/markdown-satteri";
 import mdx from "@astrojs/mdx";
 import sitemap from "@astrojs/sitemap";
 import cspCheck from "./integrations/csp-check";
+import { discordMarkdown } from "./integrations/discord-markdown";
 import { engineVersions } from "./integrations/engine-versions";
 import privateLinks from "./integrations/private-links";
 import pruneAssets from "./integrations/prune-assets";
@@ -147,6 +148,8 @@ export default defineConfig({
     markdown: {
         processor: satteri({
             features: { smartPunctuation: true },
+            // `-# small text` and `||spoilers||`, as mdQuire writes them (integrations/discord-markdown.ts)
+            hastPlugins: [discordMarkdown],
         }),
         shikiConfig: {
             // Code takes its colors from the theme; see tokens.css.

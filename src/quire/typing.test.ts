@@ -117,12 +117,12 @@ test("a known emoji shortcode becomes the emoji as its colon is typed, an unknow
 
 // ---- marks ----
 
-test("==marked==, ^sup^, ~sub~ and $maths$ are made as their closing mark is typed, and undo gives the characters back", () => {
+test("==marked==, ^sup^ and ~strike~ are made as their closing mark is typed, and undo gives the characters back; dollars stay dollars", () => {
     const cases: [string, string][] = [
         ["==hi==", "==hi==\n"],
         ["E=mc^2^", "E=mc<sup>2</sup>\n"],
-        ["H~2~", "H<sub>2</sub>\n"],
-        ["area $\\pi r^2$", "area $\\pi r^2$\n"],
+        // one tilde is strikethrough, as GitHub reads it; subscript is Ctrl+comma
+        ["a ~b~", "a ~~b~~\n"],
     ];
     for (const [typed, written] of cases) {
         const e = editor("");
@@ -131,16 +131,12 @@ test("==marked==, ^sup^, ~sub~ and $maths$ are made as their closing mark is typ
         e.undo();
         expect({ typed, back: text(e.doc) }).toEqual({ typed, back: typed });
     }
-    const maths = editor("");
-    maths.type("$x$");
-    expect(maths.doc.blocks[0]).toMatchObject({ runs: [{ kind: "text", text: "x", marks: ["math"] }] });
-    // typing on after maths is outside it
-    maths.type(" then");
-    expect(maths.markdown).toBe("$x$ then\n");
-    // money is not maths
-    const money = editor("");
-    money.type("from $5 to $10");
-    expect(money.markdown).toBe("from $5 to $10\n");
+    // a dollar is a dollar sign, as standard Markdown has it: nothing between two is maths
+    for (const typed of ["from $5 to $10", "area $x$ here"]) {
+        const e = editor("");
+        e.type(typed);
+        expect(e.markdown).toBe(typed + "\n");
+    }
 });
 
 test("Ctrl with full stop, comma and Shift+H mark superscript, subscript and marked text", () => {

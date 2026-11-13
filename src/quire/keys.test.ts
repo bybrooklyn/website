@@ -3,7 +3,7 @@
 // with the one undo that gives back the characters typed. Run with `bun test src/quire`.
 
 import { expect, test } from "bun:test";
-import { documentOf, paragraph, type Block, type Selection } from "./document";
+import { documentOf, paragraph, runsText, type Block, type Run, type Selection } from "./document";
 import { createHistory } from "./history";
 import { activeBlock, activeMarks, caret, fragment, paste, step, type Editor, type Input } from "./keys";
 import { read } from "./read";
@@ -102,10 +102,11 @@ test("Backspace at the start of a heading or list item first makes it a paragrap
     const h = editor("# Title\n", [0], 0);
     h.key("Backspace");
     expect(h.markdown).toBe("Title\n");
-    const l = editor("- one\n- two\n", [0, 1, 0], 0);
+    // the first item has no item above to join: it becomes a paragraph
+    const l = editor("- one\n- two\n", [0, 0, 0], 0);
     l.key("Backspace");
-    expect(l.markdown).toBe("- one\n\ntwo\n");
-    expect(l.cursor).toEqual({ path: [1], offset: 0 });
+    expect(l.markdown).toBe("one\n\n- two\n");
+    expect(l.cursor).toEqual({ path: [0], offset: 0 });
     const q = editor("> quoted\n", [0, 0], 0);
     q.key("Backspace");
     expect(q.markdown).toBe("quoted\n");
@@ -368,4 +369,87 @@ test("Backspace after a page break takes the break away, as it does a divider", 
     const typed = editor('One\n\n<div style="break-after: page"></div>\n\nTwo\n', [2], 0);
     typed.key("Backspace");
     expect(typed.markdown).toBe("One\n\nTwo\n");
+});
+
+// ---- lists as Google Docs has them ----
+
+test("a list mark typed after a soft line break makes that line alone the item, and the line above stays a paragraph", () => {
+    // the owner's report: "it made the previous line one too". The line above was the same paragraph, joined by Shift+Enter.
+    for (const [typed, expected] of [
+        ["* ", "It is written in typescript\n\n- item\n"],
+        ["1. ", "It is written in typescript\n\n1. item\n"],
+        ["[ ] ", "It is written in typescript\n\n- [ ] item\n"],
+        ["## ", "It is written in typescript\n\n## item\n"],
+        ["> ", "It is written in typescript\n\n> item\n"],
+    ] as const) {
+        const e = editor("It is written in typescript\n", [0], 27);
+        e.key("Enter", { shift: true });
+        e.type(typed);
+        e.type("item");
+        expect(e.markdown).toBe(expected);
+        // one undo gives back the line as typed, break and all
+        e.undo();
+        e.undo();
+        expect(e.state.doc.blocks.length).toBe(1);
+        expect(runsText((e.state.doc.blocks[0] as { runs: Run[] }).runs)).toBe(`It is written in typescript\n${typed}`);
+    }
+});
+
+test("every list mark Docs takes converts only the paragraph it is typed in, the one before untouched", () => {
+    const cases: [string, string][] = [
+        ["* ", "- x"],
+        ["- ", "- x"],
+        ["+ ", "- x"],
+        ["1. ", "1. x"],
+        ["1) ", "1. x"],
+        ["3. ", "3. x"],
+        ["a. ", "1. x"],
+        ["[] ", "- [ ] x"],
+        ["[ ] ", "- [ ] x"],
+        ["[x] ", "- [x] x"],
+    ];
+    for (const [typed, item] of cases) {
+        const e = editor("Before\n", [0], 6);
+        e.key("Enter");
+        e.type(typed);
+        e.type("x");
+        expect({ typed, md: e.markdown }).toEqual({ typed, md: `Before\n\n${item}\n` });
+        e.undo();
+        e.undo();
+        expect({ typed, kind: e.state.doc.blocks.map((block) => block.kind) }).toEqual({ typed, kind: ["paragraph", "paragraph"] });
+    }
+});
+
+test("a mark typed at the start of a line that has text makes that line an item with its text", () => {
+    const e = editor("first\n\nsecond\n", [1], 0);
+    e.type("* ");
+    expect(e.markdown).toBe("first\n\n- second\n");
+});
+
+test("Enter on an empty nested item takes it out one level, and at the top level out of the list", () => {
+    const e = editor("- one\n  - two\n", [0, 0, 1, 0, 0], 3);
+    e.key("Enter");
+    e.key("Enter");
+    expect(e.markdown).toBe("- one\n  - two\n-\n");
+    e.key("Enter");
+    e.type("after");
+    expect(e.markdown).toBe("- one\n  - two\n\nafter\n");
+});
+
+test("Backspace at the start of a later item takes its bullet away and keeps its text as a line of the item above; again joins the lines", () => {
+    const e = editor("- one\n- two\n", [0, 1, 0], 0);
+    e.key("Backspace");
+    expect(e.markdown).toBe("- one\\\n  two\n");
+    expect(e.cursor).toEqual({ path: [0, 0, 0], offset: 4 });
+    e.key("Backspace");
+    expect(e.markdown).toBe("- onetwo\n");
+    expect(e.cursor).toEqual({ path: [0, 0, 0], offset: 3 });
+});
+
+test("Tab nests an item with its own children, and Shift+Tab brings it back with them", () => {
+    const e = editor("- one\n- two\n  - child\n", [0, 1, 0], 0);
+    e.key("Tab");
+    expect(e.markdown).toBe("- one\n  - two\n    - child\n");
+    e.key("Tab", { shift: true });
+    expect(e.markdown).toBe("- one\n- two\n  - child\n");
 });
