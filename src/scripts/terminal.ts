@@ -324,7 +324,6 @@ if (typeof document !== "undefined") {
         const run = async (whole: boolean): Promise<void> => {
             const mine = ++play;
             cast ??= await load(host.dataset.cast!);
-            host.style.setProperty("--cols", String(cast.cols));
             host.style.setProperty("--rows", String(cast.rows));
             size();
             const screen = new Screen(cast.cols, cast.rows);
