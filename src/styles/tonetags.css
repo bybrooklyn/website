@@ -11,8 +11,7 @@
     grid-column: 1 / -1;
 }
 
-/* The search: a soft rounded field the width of the list, a magnifier at its start. Its edge takes the accent while it is typed in. */
-/* The search. */
+/* The search: a soft rounded field the width of the list, a magnifier at its start. */
 .tonetags-top {
     /* how tall the field is */
     --tall: 3rem;

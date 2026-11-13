@@ -273,10 +273,7 @@
     margin-top: calc(var(--line) * 0.3);
 }
 
-/*
- * The sources: numbered to match the small numbers in the text. One line
- * each, the name and then where it is, cut short where the column ends.
- */
+/* How many sources there are, quietly after the label. */
 .post-extra .label .count {
     margin-left: 0.35em;
     font-weight: 400;
@@ -289,6 +286,10 @@
     margin-bottom: calc(var(--line) * 0.3);
 }
 
+/*
+ * The sources: numbered to match the small numbers in the text. One line
+ * each, the name and then where it is, cut short where the column ends.
+ */
 .post-extra .sources {
     counter-reset: source;
     margin: 0 0 var(--line) -0.4em;
