@@ -86,7 +86,11 @@ export function folderStore(root: FolderHandle): Store {
     async function fileAt(path: string, create = false): Promise<FileHandle> {
         try {
             return await (await folderOf(path, create)).getFileHandle(parts(path).at(-1)!, { create });
-        } catch {
+        } catch (error) {
+            // a file gone is said so; permission refused or a file locked is said as what it is, not as gone
+            const kind = (error as { name?: string; message?: string })?.name ?? "";
+            if (kind === "NotAllowedError" || kind === "SecurityError") throw new StoreError(`permission to use ${path} was not given`);
+            if (kind === "NoModificationAllowedError" || kind === "InvalidStateError") throw new StoreError(`${path} is in use elsewhere and cannot be written now`);
             throw new StoreError(`${path} is not in the folder any more`);
         }
     }

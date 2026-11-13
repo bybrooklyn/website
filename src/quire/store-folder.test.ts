@@ -192,3 +192,16 @@ test("a file renamed to the name it already has keeps it, rather than becoming n
     expect((await store.open("posts/my-post.md")).text).toBe("words");
     expect(await store.rename("posts/my-post.md", "Other")).toBe("posts/other-2.md");
 });
+
+test("a file the browser will not let be used is said as such, not as gone from the folder", async () => {
+    const root = memoryFolder("site", { "a.md": "a" });
+    const refuse = (name: string) => async () => {
+        throw Object.assign(new Error("refused"), { name });
+    };
+    root.getFileHandle = refuse("NotAllowedError");
+    expect(await folderStore(root).open("a.md").then(() => "", String)).toContain("permission to use a.md was not given");
+    root.getFileHandle = refuse("NoModificationAllowedError");
+    expect(await folderStore(root).open("a.md").then(() => "", String)).toContain("a.md is in use elsewhere");
+    root.getFileHandle = refuse("NotFoundError");
+    expect(await folderStore(root).open("a.md").then(() => "", String)).toContain("a.md is not in the folder any more");
+});
