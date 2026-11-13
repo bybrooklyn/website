@@ -36,6 +36,10 @@ export interface TestControls {
     downloaded(): string[];
     /** How long a made-up download takes, in milliseconds. */
     downloadTime: number;
+    /** False makes cancelling come too late, so that the made-up download finishes anyway. */
+    cancellable: boolean;
+    /** How many times the made-up microphone was opened. */
+    opened(): number;
     /** How slowly the made-up recognizer works, in milliseconds per call. */
     delay: number;
     /** The document as Markdown. */
@@ -54,8 +58,11 @@ export function createFake(): { provider: Provider; microphone: (onFrame: (frame
     let asked = 0;
     let ticks = 0;
 
+    let opened = 0;
     const controls = {
         downloadTime: 400,
+        cancellable: true,
+        opened: () => opened,
         delay: 40,
         microphoneOpen: () => feed !== undefined,
         downloaded: () => [...kept],
@@ -119,7 +126,7 @@ export function createFake(): { provider: Provider; microphone: (onFrame: (frame
             kept.add(tier.id);
         },
         cancel() {
-            cancelled = true;
+            if (controls.cancellable) cancelled = true;
         },
         async load() {
             await new Promise((done) => setTimeout(done, 60));
@@ -132,6 +139,7 @@ export function createFake(): { provider: Provider; microphone: (onFrame: (frame
 
     const microphone = async (onFrame: (frame: Float32Array) => void): Promise<Microphone> => {
         feed = onFrame;
+        opened++;
         return {
             close() {
                 feed = undefined;

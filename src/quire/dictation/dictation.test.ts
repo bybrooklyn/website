@@ -151,6 +151,32 @@ test.skipIf(!ready)("a download shows its progress in the dialog, can be cancell
     await run("window.dictation.toggle()");
 });
 
+test.skipIf(!ready)("closing the dialog during a download cancels it, and a download that finishes anyway never opens the microphone", async () => {
+    await fresh();
+    await run("window.dictationTest.downloadTime = 1500");
+    await press(button("Start dictation"));
+    await choose();
+    await press(".quire-dictation-download");
+    await until("window.dictation.state() === 'downloading'", "downloading");
+    await tab.press("Escape");
+    await until("window.dictation.state() === 'off'", "cancelled by closing the dialog");
+    await tab.wait(1800);
+    expect(await run("window.dictationTest.downloaded().length")).toBe(0);
+    expect(await run("window.dictationTest.opened()")).toBe(0);
+    // a cancel that comes too late: the download ends after the dialog has gone
+    await run("window.dictationTest.cancellable = false");
+    await press(button("Start dictation"));
+    await choose();
+    await press(".quire-dictation-download");
+    await until("window.dictation.state() === 'downloading'", "downloading again");
+    await tab.press("Escape");
+    await until("window.dictationTest.downloaded().length === 1", "the download ended anyway", 4000);
+    await tab.wait(500);
+    expect(await state()).toBe("off");
+    expect(await run("window.dictationTest.opened()")).toBe(0);
+    expect(await run("window.dictationTest.microphoneOpen()")).toBe(false);
+});
+
 test.skipIf(!ready)("after the download it listens, shows provisional words that are not in the document, then settles them as one undo step", async () => {
     await fresh();
     await listening();

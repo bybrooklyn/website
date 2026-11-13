@@ -334,6 +334,8 @@ export function createDictation(surface: Surface, options: DictationOptions = {}
         // ---- downloading ----
         async function download() {
             const wanted = tier();
+            // the dialog whose "Download and start" was pressed: only while it is still open does the download go on to the microphone
+            const from = asking;
             progress = { bytes: 0, total: sizeOf(wanted) };
             say("");
             setState("downloading");
@@ -354,6 +356,9 @@ export function createDictation(surface: Surface, options: DictationOptions = {}
             if (askCount) askCount.textContent = "Getting it ready";
             void navigator.storage?.persist?.().catch(() => {});
             await refresh();
+            // A download that ends after its dialog was closed (it was cancelled too late to stop) never opens the
+            // microphone by itself, minutes after the press: the microphone opens only on the writer's own press.
+            if (!from || asking !== from || !from.isOpen()) return void setState("off");
             await start();
         }
 
@@ -568,6 +573,8 @@ export function createDictation(surface: Surface, options: DictationOptions = {}
                 onClose: () => {
                     asking = askBar = askCount = undefined;
                     if (state === "asking") setState("off");
+                    // closing the dialog (Escape, a click outside, Not now) is saying no to what it was doing
+                    if (state === "downloading") provider.cancel();
                 },
             });
         }
