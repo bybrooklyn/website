@@ -114,6 +114,8 @@ const semicolon: Rule = {
     why: "Her own sentences end with a full stop where a semicolon might go.",
     on: true,
     unit(unit, context) {
+        // a list's items are pieces, not sentences, and a semicolon between their parts is how they are written
+        if (unit.listed) return [];
         return matches(unit, context, /\s*;\s+/g, (match, text) => {
             const at = match.index!;
             // semicolons that separate the items of a series are left alone: a sentence with two, or a short piece either side

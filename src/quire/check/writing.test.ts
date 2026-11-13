@@ -49,6 +49,7 @@ test("\"not just X\" and \"not X, but Y\" framings", () => {
 test("a semicolon between two sentences, and not between the items of a series", () => {
     expect(fires("The site was slow for years and nobody knew; the fonts were eleven megabytes in all.\n", "writing-semicolon")).toBe(1);
     expect(fires("It has walls; pins; ropes and a motor.\n", "writing-semicolon")).toBe(0);
+    expect(fires("- Built the site for years and nobody knew; the fonts were eleven megabytes in all.\n", "writing-semicolon")).toBe(0);
     expect(fixed("The site was slow for years and nobody knew; the fonts were eleven megabytes in all.\n", "writing-semicolon")).toBe("The site was slow for years and nobody knew. The fonts were eleven megabytes in all.\n");
 });
 
