@@ -247,13 +247,19 @@ export function mote(host: HTMLElement, make: (m: Mote) => Scene, { label = "An 
             // Catch up in fixed steps, but never try to make up a long pause.
             const due = paced(owed, (now - last) / 1000);
             [owed, last] = [due.owed, now];
-            for (let step = 0; step < due.steps; step++) {
-                const before = m.debug ? performance.now() : 0;
-                scene.step?.(TICK);
-                if (m.debug) took += (performance.now() - before - took) * 0.05;
-                m.time += TICK;
+            try {
+                for (let step = 0; step < due.steps; step++) {
+                    const before = m.debug ? performance.now() : 0;
+                    scene.step?.(TICK);
+                    if (m.debug) took += (performance.now() - before - took) * 0.05;
+                    m.time += TICK;
+                }
+                draw();
+            } catch (problem) {
+                // A scene that throws stops here, but not for good: the next touch or scroll starts it again.
+                frame = 0;
+                throw problem;
             }
-            draw();
             if (scene.resting?.()) {
                 frame = 0;
                 return;
