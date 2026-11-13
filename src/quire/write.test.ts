@@ -289,3 +289,9 @@ test("a no-break space is written as &nbsp;, not as an invisible character", () 
     expect(write(doc)).toBe("a&nbsp;bc\n");
     expect(readsBack(made([paragraph("one two")]))).toBe("one&nbsp;two\n");
 });
+
+test("the old maths mark, which nothing makes now, is written as plain text and taken off as runs are tidied", () => {
+    expect(write(made([withRuns([{ kind: "text", text: "x^2 costs $5", marks: ["math"] }])]))).toBe("x^2 costs $5\n");
+    expect(tidyRuns([{ kind: "text", text: "a", marks: ["math", "bold"] }])).toEqual([{ kind: "text", text: "a", marks: ["bold"] }]);
+    expect(read("$x$ and $5\n").blocks[0]).toMatchObject({ kind: "paragraph", runs: [{ kind: "text", text: "$x$ and $5", marks: [] }] });
+});

@@ -15,12 +15,10 @@ interface Context {
     references?: boolean;
     /** The labels the document's definitions name, found when a reference link is first written. */
     defined?: () => Set<string>;
-    /** Set while the runs being written hold dollar signs that could pair as maths, so that each is escaped. */
-    dollars?: boolean;
 }
 
-/** Text marked as maths or code is written as it is, inside its own delimiters, and never escaped. */
-const literal = (leaf: TextRun) => leaf.marks.includes("code") || leaf.marks.includes("math");
+/** Text marked as code is written as it is, inside its backticks, and never escaped. */
+const literal = (leaf: TextRun) => leaf.marks.includes("code");
 
 /** True while the tests run, where a value missing from the model must be seen as the failure it is. */
 const strict = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env?.NODE_ENV === "test";
@@ -419,7 +417,7 @@ const lastOf = (text: string) => (text === "" ? "" : Array.from(text.slice(-2)).
 function spreadSpaces(leaves: Leaf[], cell: boolean): Leaf[] {
     const out: Leaf[] = [];
     const shared = (leaf: TextRun, other: Leaf | undefined): TextRun => {
-        const next: TextRun = { kind: "text", text: "", marks: other?.kind === "text" ? leaf.marks.filter((mark) => mark !== "code" && mark !== "math" && other.marks.includes(mark)) : [] };
+        const next: TextRun = { kind: "text", text: "", marks: other?.kind === "text" ? leaf.marks.filter((mark) => mark !== "code" && other.marks.includes(mark)) : [] };
         if (other?.kind === "text" && other.color === leaf.color && leaf.color) next.color = leaf.color;
         if (other?.kind === "text" && other.size === leaf.size && leaf.size) next.size = leaf.size;
         return next;
@@ -525,7 +523,7 @@ function writeLeaves(all: Leaf[], context: Context, cell: boolean, before = " ",
         if (isSign(token)) return;
         const leaf = items[index]!;
         if (leaf.kind === "text" && typeof leaf.text !== "string") said(leaf.text, "a run's text");
-        else if (leaf.kind === "text") token.text = leaf.marks.includes("code") ? codeSpan(leaf.text) : leaf.marks.includes("math") ? `$${leaf.text}$` : escapeText(leaf.text, context, cell, beside(index - 1, -1), beside(index + 1, 1), [signNear(index - 1), signNear(index + 1)], label);
+        else if (leaf.kind === "text") token.text = leaf.marks.includes("code") ? codeSpan(leaf.text) : escapeText(leaf.text, context, cell, beside(index - 1, -1), beside(index + 1, 1), [signNear(index - 1), signNear(index + 1)], label);
         else if (leaf.kind === "image") token.text = imageText(leaf.src, leaf.alt, leaf.title);
         else if (leaf.kind === "break") token.text = cell ? "<br>" : "\\\n";
         else if (leaf.kind === "footnote") token.text = `[^${said(leaf.label, "a footnote's label")}]`;
@@ -592,7 +590,6 @@ function writeLeaves(all: Leaf[], context: Context, cell: boolean, before = " ",
 /** Writes runs as Markdown text, with `\n` for line breaks. */
 function writeRuns(runs: Run[], context: Context, cell: boolean): string {
     // a `$` is a dollar sign, as standard Markdown has it: maths in a line is not read, so nothing is escaped for it
-    context.dollars = false;
     let out = "";
     let leaves: Leaf[] = [];
     const flush = (after: string) => {
@@ -673,9 +670,8 @@ function escapeText(value: string, context: Context, cell: boolean, before: stri
             (char === "<" && (context.mdx || /[A-Za-z/!?]/.test(right))) ||
             (char === "&" && /^&(#\d+|#x[0-9a-f]+|[a-z][a-z0-9]*);/i.test(value.slice(index))) ||
             (context.mdx && (char === "{" || char === "}")) ||
-            // two `|` or two `=` that could hide or mark text, or one beside the signs of a spoiler or a mark;
-            // a known shortcode (`context.dollars` is no longer set)
-            (char === "$" && !!context.dollars) ||
+            // two `|` or two `=` that could hide or mark text, or one beside the signs of a spoiler or a
+            // mark; and a known shortcode that would be read as one
             (char === "|" && !cell && (touching("|") || (left !== "|" && right === "|" && third !== "|" && !(space(left) && space(third))))) ||
             (char === "=" && (touching("=") || (left !== "=" && right === "=" && third !== "=" && !(space(left) && space(third))))) ||
             (char === ":" && shortcode(value, index, left, after, () => {

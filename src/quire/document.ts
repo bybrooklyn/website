@@ -12,8 +12,11 @@
 /**
  * A way text can be marked. Underline is not Markdown and is written as `<u>`; superscript and
  * subscript as `<sup>` and `<sub>`. "mark" is `==highlighted==` text, and "spoiler" is `||hidden||`
- * text, as Discord has it. "math" is inline maths whose text is TeX; it is no longer read from `$...$`
- * (a `$` is a dollar sign, as standard Markdown has it) and is kept for documents that still hold it.
+ * text, as Discord has it. "math" was inline maths, read from `$...$` before a `$` became a dollar
+ * sign as standard Markdown has it; nothing makes it now and no saved file can hold it (every store
+ * keeps Markdown, where `$x$` reads as text). It stays in this list only while the export, Word and
+ * web page writers still name it; the model drops it as it tidies runs, and the writer writes such
+ * text plainly.
  */
 export type Mark = "bold" | "italic" | "strike" | "code" | "underline" | "mark" | "sup" | "sub" | "math" | "spoiler";
 
@@ -362,7 +365,7 @@ interface Piece {
     link?: LinkInfo;
 }
 
-const ORDER: Mark[] = ["code", "math", "spoiler", "bold", "italic", "strike", "underline", "mark", "sup", "sub"];
+const ORDER: Mark[] = ["code", "spoiler", "bold", "italic", "strike", "underline", "mark", "sup", "sub"];
 
 const leafLength = (leaf: Leaf) => (leaf.kind === "text" ? leaf.text.length : 1);
 
@@ -445,10 +448,7 @@ function insertRuns(runs: Run[], offset: number, value: string | Leaf, marks?: M
     const look = model?.kind === "text" ? model : undefined;
     const link = last?.link && sameLink(last.link, next?.link) ? last.link : undefined;
     if (typeof value !== "string") return fromPieces([...before, { leaf: value, link }, ...after]);
-    // maths is entered only from inside it: text typed at either edge of it stays outside
-    const inMath = (piece?: Piece) => piece?.leaf.kind === "text" && piece.leaf.marks.includes("math");
-    const edge = !(inMath(last) && inMath(next));
-    const leaf: TextRun = { kind: "text", text: value, marks: marks ? ORDER.filter((mark) => marks.includes(mark)) : look ? look.marks.filter((mark) => !(edge && mark === "math")) : [] };
+    const leaf: TextRun = { kind: "text", text: value, marks: marks ? ORDER.filter((mark) => marks.includes(mark)) : look ? ORDER.filter((mark) => look.marks.includes(mark)) : [] };
     for (const key of LOOKS) if (look?.[key]) leaf[key] = look[key];
     // text typed inside a note's words joins them; typed at either end it stays outside
     const left = last?.leaf.kind === "text" ? last.leaf.comments : undefined;

@@ -196,7 +196,7 @@ function symbolShortcut(state: State, typed: string, options: TypingOptions): St
     const { doc } = state;
     const at = state.selection.focus;
     const before = textAt(doc, at.path).slice(0, at.offset);
-    const quiet = (offset: number) => marksNear(doc, { path: at.path, offset }).some((mark) => mark === "code" || mark === "math");
+    const quiet = (offset: number) => marksNear(doc, { path: at.path, offset }).some((mark) => mark === "code");
     if (typed.length !== 1) return undefined;
     if (typed === ":") {
         const code = /:([a-z0-9_+-]+):$/.exec(before);
@@ -318,7 +318,7 @@ function inlineShortcut(state: State, typed: string): State | undefined {
         // the marks must be plain typed characters: no pictures in the stretch, nothing in code
         if (/[￼\n]/.test(before.slice(start))) continue;
         let plain = true;
-        for (let offset = start; offset < at.offset; offset++) if (marksNear(doc, { path: at.path, offset: offset + 1 }).some((each) => each === "code" || each === "math")) plain = false;
+        for (let offset = start; offset < at.offset; offset++) if (marksNear(doc, { path: at.path, offset: offset + 1 }).some((each) => each === "code")) plain = false;
         if (!plain) continue;
         let next = deleteText(doc, { start: { path: at.path, offset: at.offset - width }, end: at });
         next = deleteText(next, { start: { path: at.path, offset: start }, end: { path: at.path, offset: start + width } });
