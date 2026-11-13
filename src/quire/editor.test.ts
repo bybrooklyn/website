@@ -1069,10 +1069,19 @@ used("a .quire document's header, footer and page numbers are set from Insert or
     await tab.wait(650);
     await press(".quire-menu.open .quire-menu-line", "Header, footer and page numbers");
     await tab.wait(650);
+    // a dialog: two fields with their labels and a switch, and nothing changes until OK
+    expect(await tab.run("document.querySelector('dialog.quire-dialog[open] .quire-dialog-title')?.textContent")).toBe("Header and footer");
     await tab.type("My book");
     await tab.press("Tab");
     await tab.type("Draft");
-    await press(".quire-menu.open .quire-menu-line", "Page numbers");
+    await press("dialog.quire-dialog[open] .quire-switch", "Page numbers");
+    expect(await tab.run("document.querySelector('dialog.quire-dialog[open] .quire-switch').getAttribute('aria-pressed')")).toBe("true");
+    expect(await tab.run("q.editor.surface.getDocument().quire.page.header")).toBeUndefined();
+    // Enter in a field answers it, as OK does
+    await tab.run("document.querySelector('dialog.quire-dialog[open] input').focus()");
+    await tab.press("Enter");
+    await tab.wait(400);
+    expect(await tab.run("!!document.querySelector('dialog.quire-dialog')")).toBe(false);
     expect(await tab.run("q.editor.surface.getDocument().quire.page")).toEqual({ size: "A4", orientation: "portrait", margins: 25, header: "My book", footer: "Draft", numbers: true });
     const marks = await tab.run<{ heads: string[]; feet: string[]; numbers: string[] }>("({ heads: [...document.querySelectorAll('.quire-page-head')].map((each) => each.textContent), feet: [...document.querySelectorAll('.quire-page-foot > :first-child')].map((each) => each.textContent), numbers: [...document.querySelectorAll('.quire-page-number')].map((each) => each.textContent) })");
     expect(marks.heads.length).toBeGreaterThan(1);
@@ -1080,13 +1089,10 @@ used("a .quire document's header, footer and page numbers are set from Insert or
     expect(new Set(marks.feet)).toEqual(new Set(["Draft"]));
     expect(marks.numbers).toEqual(marks.heads.map((_, index) => String(index + 1)));
     expect(await tab.run("document.adoptedStyleSheets.some((sheet) => [...sheet.cssRules].some((rule) => rule.cssText.includes('My book') && rule.cssText.includes('counter(page)')))")).toBe(true);
-    await tab.press("Escape");
-    await tab.wait(300);
-    // each change is one step back: the numbers, then the footer typed, then the header
+    // the whole of it is one step back
     await tab.run("q.editor.surface.undo()");
-    expect(await tab.run("q.editor.surface.getDocument().quire.page.numbers")).toBeUndefined();
-    await tab.run("q.editor.surface.undo()");
-    expect(await tab.run("q.editor.surface.getDocument().quire.page.footer")).toBeUndefined();
+    expect(await tab.run("q.editor.surface.getDocument().quire.page.header")).toBeUndefined();
+    await tab.run("q.editor.surface.redo()");
     expect(await tab.run("q.editor.surface.getDocument().quire.page.header")).toBe("My book");
     // a double click on the header of the second page opens the same form there
     const head = await tab.run<{ x: number; y: number }>("(() => { const head = document.querySelectorAll('.quire-page-head')[1]; head.scrollIntoView({ block: 'center' }); const box = head.getBoundingClientRect(); return { x: box.left + box.width / 2, y: box.top + box.height / 2 }; })()");
@@ -1099,7 +1105,11 @@ used("a .quire document's header, footer and page numbers are set from Insert or
     await tab.wait(650);
     expect(await tab.run("document.activeElement.getAttribute('aria-label')")).toBe("Header, on every page");
     expect(await tab.run("document.activeElement.value")).toBe("My book");
+    // Escape leaves it as it was
+    await tab.type(" changed");
     await tab.press("Escape");
+    await tab.wait(400);
+    expect(await tab.run("q.editor.surface.getDocument().quire.page.header")).toBe("My book");
     expect(tab.errors).toEqual([]);
 });
 

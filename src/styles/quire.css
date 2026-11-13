@@ -3139,6 +3139,21 @@ body.quire-app,
     font-size: 0.85rem;
 }
 
+/* a field in a dialog's form: its label above it, and the field the dialog's width */
+.quire-form-row {
+    display: grid;
+    gap: 0.3rem;
+}
+
+.quire-form-row .quire-link-field {
+    box-sizing: border-box;
+    width: 100%;
+}
+
+.quire-dialog-body > .quire-switch {
+    justify-self: start;
+}
+
 /* page setup: each choice of a few is a row of buttons, the one chosen pressed */
 .quire-setup {
     display: grid;
