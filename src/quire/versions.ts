@@ -160,8 +160,11 @@ export function createKeeper(
     let last: string | undefined;
     let cancel: (() => void) | undefined;
     let busy: Promise<unknown> = Promise.resolve();
+    // once stopped, for a document that was left, no snapshot is taken: `text` reads whatever is shown now
+    let stopped = false;
 
     async function snapshot(opened = false): Promise<VersionInfo | undefined> {
+        if (stopped) return undefined;
         const current = text();
         if (last === undefined) {
             const newest = (await storage.list(name))[0];
@@ -181,6 +184,7 @@ export function createKeeper(
         opened: () => (busy = busy.then(() => snapshot(true))),
         /** Says the document was changed: a snapshot follows once editing has paused. */
         edited() {
+            if (stopped) return;
             cancel?.();
             cancel = wait(() => {
                 cancel = undefined;
@@ -191,7 +195,11 @@ export function createKeeper(
         now: () => (busy = busy.then(() => snapshot())),
         /** Resolves once every snapshot asked for is kept. */
         settled: () => busy,
-        stop: () => cancel?.(),
+        stop() {
+            stopped = true;
+            cancel?.();
+            cancel = undefined;
+        },
     };
 }
 

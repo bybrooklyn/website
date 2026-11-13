@@ -100,6 +100,19 @@ test("taking theirs when their version cannot be read keeps what was typed, wait
     expect(saver.unsaved()).toBe("mine");
 });
 
+test("a saver that was stopped, for a document left, takes nothing more to save", async () => {
+    const store = memoryStore();
+    const { id, mark } = await store.create("note", "a");
+    const time = clock();
+    const saver = createSaver(store, id, mark, { wait: time.wait });
+    saver.stop();
+    saver.changed("another document's words");
+    time.pass();
+    await saver.settled();
+    expect(store.files.get(id)!.text).toBe("a");
+    expect(saver.unsaved()).toBeUndefined();
+});
+
 test("a store that fails says why, and the text is still waiting to be saved", async () => {
     const store = memoryStore();
     const { id, mark } = await store.create("note", "x");

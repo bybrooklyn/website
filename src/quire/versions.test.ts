@@ -130,3 +130,26 @@ test("a snapshot's time reads as the hour today, and with its day before that", 
     expect(when(new Date(2026, 9, 3, 8, 0).getTime(), now)).toBe("3 Oct, 08:00");
     expect(when(new Date(2025, 9, 3, 8, 0).getTime(), now)).toBe("3 Oct 2025, 08:00");
 });
+
+test("a stopped keeper, for a document that was left, keeps no snapshot of what is shown after it", async () => {
+    const storage = memoryStorage();
+    let text = "the old document\n";
+    let pending: (() => void) | undefined;
+    const keeper = createKeeper(storage, "old", () => text, {
+        wait: (run) => {
+            pending = run;
+            return () => (pending = undefined);
+        },
+    });
+    await keeper.opened();
+    keeper.stop();
+    // the next document is drawn, and its change is told to the old keeper too
+    text = "the new document\n";
+    keeper.edited();
+    pending?.();
+    await keeper.now();
+    await keeper.settled();
+    const kept = await storage.list("old");
+    expect(kept.length).toBe(1);
+    expect(await storage.load(kept[0]!.id)).toBe("the old document\n");
+});

@@ -155,6 +155,8 @@ export function createSaver(
     };
     let cancel: (() => void) | undefined;
     let running: Promise<void> = Promise.resolve();
+    // once stopped, for a document that was left, nothing more is taken to be saved
+    let stopped = false;
     const listeners = new Set<(status: Status) => void>();
     const set = (next: Status) => {
         status = next;
@@ -197,6 +199,7 @@ export function createSaver(
     return {
         /** Says the text changed: it is saved once typing pauses, unless the store has refused and is waiting for a choice. */
         changed(next: Waiting) {
+            if (stopped) return;
             pending = next;
             if (status.state === "changed") return;
             if (status.state !== "saving") set({ state: "waiting" });
@@ -240,7 +243,11 @@ export function createSaver(
             return () => listeners.delete(listener);
         },
         settled: () => running,
-        stop: () => cancel?.(),
+        stop() {
+            stopped = true;
+            cancel?.();
+            cancel = undefined;
+        },
     };
 }
 

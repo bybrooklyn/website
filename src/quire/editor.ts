@@ -173,7 +173,9 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     const renameTo = (typed: string) => {
         const next = nameFor(name, typed);
         if (next === name) return;
-        renaming = renaming.then(() => rename(next));
+        // the name typed belongs to the document it was typed in, not to one opened before the rename comes round
+        const meant = { store, id };
+        renaming = renaming.then(() => (store === meant.store && id === meant.id ? rename(next) : undefined));
     };
     const title = createTitle({
         goOn: () => {
@@ -760,13 +762,17 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     let saver = store && id ? createSaver(store, id, options.mark ?? "") : undefined;
     let quiet = false;
     const conflict = createConflict(async (choice) => {
-        if (!saver) return;
-        if (choice === "mine") return void (await saver.choose("mine"));
+        const asked = saver;
+        if (!asked) return;
+        if (choice === "mine") return void (await asked.choose("mine"));
         // what was typed here is kept in the version history before theirs takes its place
         const mine = snapshot();
-        const theirs = await saver.choose("theirs");
+        const key = historyKey();
+        const theirs = await asked.choose("theirs");
         if (!theirs) return;
-        await versions.save(historyKey(), mine, { time: Date.now(), ...changes(theirs.text, snapshotParts(mine).markdown) });
+        await versions.save(key, mine, { time: Date.now(), ...changes(theirs.text, snapshotParts(mine).markdown) });
+        // their text is shown only if the writer is still in the document it belongs to
+        if (saver !== asked) return;
         quiet = true;
         surface.run(() => opened(theirs.text, theirs.quire ?? (surface.getDocument().quire ? emptyParts() : undefined), { mdx: surface.getDocument().mdx }));
         quiet = false;
@@ -796,8 +802,10 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         if (options.title && document.activeElement !== title.element) showTitle();
     });
     surface.on("change", ({ doc: now }) => {
+        // a document being put in place of another is not an edit of the one leaving
+        if (quiet) return;
         keeper.edited();
-        if (!quiet) saver?.changed(() => written(now, write));
+        saver?.changed(() => written(now, write));
     });
 
     // leaving the page with words not yet saved: they are saved if there is time, and the browser asks
@@ -839,6 +847,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
 
     /** Moves to a document: saves what is waiting in the old one, opens the new, and starts its saver and history. */
     async function open(next: Store, entry: Entry) {
+        clearTimeout(typing);
         await saver?.flush();
         saver?.stop();
         stopListening?.();
@@ -864,6 +873,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
 
     /** Lets the document go: what is waiting is saved, and the editor holds an empty page kept nowhere. */
     async function leave() {
+        clearTimeout(typing);
         await saver?.flush();
         saver?.stop();
         stopListening?.();
