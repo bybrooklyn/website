@@ -1296,6 +1296,42 @@
     padding-left: 0.1rem;
 }
 
+/* the card on a link and the chip under a pasted address, drawn as the selection bar is (link-card.ts);
+   on a narrow window the card's address gives up room, and the chip's choices go onto more lines */
+.quire-link-card {
+    box-sizing: border-box;
+    max-width: calc(100% - 1rem);
+}
+
+.quire-link-card .quire-select-row {
+    min-width: 0;
+}
+
+.quire-link-card .quire-link-choices {
+    flex-wrap: wrap;
+    row-gap: 0.15rem;
+}
+
+.quire-link-where {
+    flex: 0 1 auto;
+    min-width: 0;
+    padding-inline: 0.6rem 0.3rem;
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 0.85rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.quire-link-card a.quire-button {
+    text-decoration: none;
+}
+
+.quire-link-card .quire-link-words {
+    width: auto;
+    height: var(--press);
+}
+
 /* ---- a table's controls, grown at its top edge while the cursor is in it ---- */
 
 .quire-table-tools {

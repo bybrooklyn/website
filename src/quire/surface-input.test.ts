@@ -423,8 +423,10 @@ describe("pasting", () => {
         expect(await md(tab)).toBe("Read https://example.com/notes here\n");
         await tab.run(`quire.reset("")`);
         await tab.run("quire.select([0], 0)");
+        const told = tab.run<{ href: string; start: number; end: number }>(`new Promise((done) => quire.surface.on("address", (seen) => done({ href: seen.href, start: seen.start.offset, end: seen.end.offset })))`);
         await paste("https://example.com/notes");
         expect(await md(tab)).toBe("https://example.com/notes\n");
+        expect(await told).toEqual({ href: "https://example.com/notes", start: 0, end: 25 });
     });
 });
 

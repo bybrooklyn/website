@@ -26,6 +26,7 @@ import { remember } from "./most-used";
 import { createOutline } from "./outline";
 import { read } from "./read";
 import { createSelectBar } from "./select-bar";
+import { createLinkCard } from "./link-card";
 import { boxOf, definitionList, drawnBlock } from "./slash";
 import { createPalette } from "./palette";
 import { createEmojiPicker } from "./emoji-picker";
@@ -551,6 +552,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     host.addEventListener("keydown", zoomKey);
     surface.on("link", () => openLink(bar.seen("Link")));
     const selectBar = createSelectBar(surface, () => bar.element.getBoundingClientRect().bottom);
+    const linkCard = createLinkCard(surface, () => bar.element.getBoundingClientRect().bottom);
     const outlineView = createOutline(surface, () => bar.element.getBoundingClientRect().bottom, (open) => {
         host.classList.toggle("outlined", open);
     });
@@ -1127,6 +1129,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
             surface.destroy();
             for (const menu of [...bar.menus, links, row.menu, zooms, setups, about]) menu.box.remove();
             selectBar.element.remove();
+            linkCard.element.remove();
             palette.destroy();
             emojiList.close();
             tableTools.element.remove();

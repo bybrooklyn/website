@@ -200,10 +200,18 @@ typing, Backspace and Format commands change all of them (`matching.ts`). Insert
 empty anchor, `<a id="name"></a>`, drawn as a small flag, and the link field offers the headings (by the
 ids the site gives them) and the bookmarks (`bookmarks.ts`).
 
-**Links.** A web address pasted over selected words makes them the link, in one undo
+**Links** (`link-card.ts`). A web address pasted over selected words makes them the link, in one undo
 step, as Docs and GitHub do. What counts is one http, https or mailto address and nothing else around it
 (`webAddress`); `javascript:` and every other scheme are pasted as text, and Ctrl+Shift+V always pastes the
-text.
+text. An address pasted with nothing selected goes in as it is (a bare address is a link to any reader
+with GitHub's extension), and a chip grows from under it offering to show it otherwise: words guessed
+from the address in a small field, selected so they can be typed over at once, or a short form such as
+`github.com/anomalyco/rune`, or the address as it is. Nothing is fetched: a static page cannot read
+another site's title, so the words come from the address alone (`wordsFor`: the last part of the path
+that is words, a repository and its issue on GitHub and GitLab, "YouTube video", or the site's name). The
+chip takes no focus unless Tab or a press gives it one; typing, a press elsewhere, Escape or five seconds
+without the pointer on it send it away and leave the address. Choosing is an undo step of its own, so
+Ctrl+Z gives the bare address back.
 
 **Inserts and downloads** (`inserts.ts`, `export.ts`, `docx.ts`). Insert adds today's date, special
 characters and a table of contents. File, Download as gives Markdown, `.quire`, a web page, plain text and
