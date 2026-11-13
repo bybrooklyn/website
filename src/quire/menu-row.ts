@@ -53,7 +53,7 @@ export type Command =
     | "check" | "about" | "wordCount" | "shortcuts" | "searchMenus" | "forgetUsed"
     | "superscript" | "subscript" | "marked" | "typedSigns"
     | "downloadAs" | "notes" | "nextNote" | "previousNote" | "comment" | "date" | "symbols" | "contents" | "updateContents"
-    | "capitals";
+    | "capitals" | "lists";
 
 /** The menus of the row, for a document as it stands. A line's shortcut, if it has one, comes from the table in shortcuts.ts. */
 export function headings(state: RowState, act: RowActions): Heading[] {
@@ -165,6 +165,7 @@ export function headings(state: RowState, act: RowActions): Heading[] {
                 ...(state.rich ? line("justify", "Justify", { icon: "justify", pressed: state.align === "justify" }) : []),
                 ...line("indent", "Indent more", { icon: "indent" }),
                 ...line("outdent", "Indent less", { icon: "outdent" }),
+                ...line("lists", "Bullets and numbering", { icon: "bullet", hint: "›" }),
                 ...line("clear", "Clear formatting", { icon: "clear" }),
             ],
         },

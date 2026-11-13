@@ -10,7 +10,9 @@
 
 import { expect, test } from "bun:test";
 import { blockAt, blockPaths, changeKind, insertBlock, lengthOf, list, removeBlock, runsText, setLink, setStyle, table, toggleMark, type Block, type Document, type Kind, type Leaf, type Mark, type Position, type Run, type Selection } from "./document";
+import type { Action } from "./bar";
 import { recase } from "./capitals";
+import { continuePrevious, markWith, restartAt } from "./numbering";
 import { emojiOf } from "./emoji";
 import { createHistory, record } from "./history";
 import { caret, fragment, paste, step, tableOf, type Editor, type Input } from "./keys";
@@ -319,9 +321,19 @@ function change(editor: Editor, random: ReturnType<typeof generator>, time: numb
         // the commands from Docs' menus, each at a random place
         const anchor = somewhere(doc, random);
         const focus = random.next() < 0.3 ? anchor : somewhere(doc, random);
-        const how = random.pick(["lower", "upper", "title"] as const);
-        const state = recase(how)({ doc, selection: { anchor, focus } });
-        return { editor: { state, history: record(editor.history, editor.state, state, "format", time) }, what: `${how} case ${JSON.stringify([anchor, focus])}`, keyed: true };
+        const commands: [string, Action][] = [
+            ["lowercase", recase("lower")],
+            ["UPPERCASE", recase("upper")],
+            ["Title Case", recase("title")],
+            ["bullets with *", markWith("*")],
+            ["bullets with +", markWith("+")],
+            ["restart at 1", restartAt(1)],
+            ["restart at 7", restartAt(7)],
+            ["continue the list before", continuePrevious],
+        ];
+        const [what, command] = random.pick(commands);
+        const state = command({ doc, selection: { anchor, focus } });
+        return { editor: { state, history: record(editor.history, editor.state, state, "format", time) }, what: `${what} ${JSON.stringify([anchor, focus])}`, keyed: true };
     }
     if (roll < 0.97) {
         const path = random.pick(blockPaths(doc));

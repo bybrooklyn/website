@@ -29,6 +29,7 @@ window.q = {
     at(selector, words) {
         const found = [...document.querySelectorAll(selector)].find((each) => !words || each.textContent.includes(words) || each.getAttribute("aria-label")?.startsWith(words));
         if (!found) return null;
+        found.scrollIntoView({ block: "nearest" });
         const box = found.getBoundingClientRect();
         return { x: box.left + box.width / 2, y: box.top + box.height / 2 };
     },
@@ -61,7 +62,7 @@ const md = () => tab.run<string>("q.md()");
 
 async function press(selector: string, words?: string) {
     const point = await tab.run<{ x: number; y: number } | null>(`q.at(${JSON.stringify(selector)}, ${JSON.stringify(words ?? "")})`);
-    if (!point) throw new Error(`nothing to press: ${selector} ${words ?? ""}`);
+    if (!point) throw new Error(`nothing to press: ${selector} ${words ?? ""}, among ${await tab.run<string>("[...document.querySelectorAll('.quire-menu:popover-open .quire-menu-line')].map((each) => each.textContent).join(' / ')")}`);
     await tab.click(point.x, point.y);
     await tab.wait(40);
 }
@@ -99,4 +100,20 @@ used("Format, Capitalisation changes the selected words, keeping their bold, and
     await tab.wait(300);
     expect(await tab.run<boolean>("!!document.querySelector('.quire-menu:popover-open')")).toBe(false);
     expect(await tab.run<string>("document.activeElement.getAttribute('aria-label')")).toBe("Document");
+});
+
+used("Format, Bullets and numbering writes a list with another bullet, restarts its numbers and carries on the list before", async () => {
+    await reset("- one\n- two\n", [0, 1, 0], 1);
+    await menu("Format", "Bullets and numbering", "Written with a star");
+    expect(await md()).toBe("* one\n* two\n");
+    await tab.press("Escape");
+    await reset("1. a\n2. b\n3. c\n", [0, 2, 0], 1);
+    await menu("Format", "Bullets and numbering", "Restart numbering");
+    await tab.wait(400);
+    await tab.press("Backspace");
+    await tab.type("4");
+    await tab.press("Enter");
+    expect(await md()).toBe("1. a\n2. b\n\n4) c\n");
+    await menu("Format", "Bullets and numbering", "Continue previous list");
+    expect(await md()).toBe("1. a\n2. b\n3. c\n");
 });

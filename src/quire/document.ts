@@ -1242,6 +1242,41 @@ export function setListStart(doc: Document, path: number[], start: number): Docu
     return replace(doc, path, (block) => (block.kind === "list" ? [{ ...block, start, source: undefined }] : null));
 }
 
+/** The list a path is in, and which of its items: the deepest list on the path. */
+export function listAt(doc: Document, path: number[]): { list: number[]; item: number } | undefined {
+    return itemOf(doc, path);
+}
+
+/** Sets the sign a bulleted list is written with. All three read as the same bullet. */
+export function setListMarker(doc: Document, path: number[], marker: List["marker"]): Document {
+    return replace(doc, path, (block) => (block.kind === "list" && block.marker !== marker ? [{ ...block, marker, source: undefined }] : null));
+}
+
+/** Numbers the list at a path afresh from item `item`, starting at `start`, each of those items written with its new number: at its first item the list's own start changes; further down, the list is cut in two there. */
+export function restartList(doc: Document, path: number[], item: number, start: number): Document {
+    return replace(doc, path, (block, sep) => {
+        if (block.kind !== "list" || item >= block.items.length) return null;
+        const after: List = { ...block, items: block.items.slice(Math.max(0, item)).map((each) => ({ ...each, source: undefined })), start, source: undefined, gap: block.gap };
+        if (item <= 0) return [after];
+        const before = block.items.slice(0, item);
+        return [{ ...block, items: [...before.slice(0, -1), { ...before[before.length - 1]!, gap: "" }], source: undefined, gap: sep }, after];
+    });
+}
+
+/** Joins the list at a path onto the list just before it, when both are numbered or both are not, so that the two are one list of the first one's kind. */
+export function joinLists(doc: Document, path: number[]): Document {
+    return edit(doc, path, (blocks, index) => {
+        const before = blocks[index - 1];
+        const block = blocks[index];
+        if (before?.kind !== "list" || block?.kind !== "list" || before.style === "definition" || block.style === "definition" || (before.style === "number") !== (block.style === "number")) return blocks;
+        const last = { ...before.items[before.items.length - 1]!, gap: before.loose ? doc.eol + doc.eol : doc.eol };
+        // the items joined are written with their new numbers, and take the boxes of the list they join or lose theirs
+        const boxed = (each: ListItem): ListItem => (before.style === "task" ? { ...each, checked: each.checked ?? false } : before.style === block.style ? each : (({ checked: _checked, ...rest }) => rest)(each));
+        const items = [...before.items.slice(0, -1), last, ...block.items.map((each) => ({ ...boxed(each), source: undefined }))];
+        return spliceBlocks(blocks, index - 1, 2, [{ ...before, items, source: undefined, gap: block.gap }]);
+    });
+}
+
 /** Ticks or unticks a task item. An item with no box gains an empty one. */
 export function toggleTask(doc: Document, path: number[]): Document {
     const found = itemOf(doc, path);

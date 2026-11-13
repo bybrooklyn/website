@@ -244,14 +244,21 @@ export function composing(event: KeyboardEvent): boolean {
 
 /** A field for a link's address, with a button to set it and, for a link already there, one to take it off. Enter sets, Escape cancels. */
 export function linkForm(current: string | undefined, done: { set(href: string): void; remove(): void; cancel(): void }): HTMLElement {
+    const form = fieldForm({ value: current, label: "Link address", placeholder: "Paste or type an address", type: "url", button: "Set", said: "Set the link" }, { set: (href) => (href ? done.set(href) : current ? done.remove() : done.cancel()), cancel: done.cancel });
+    if (current) form.append(control("Remove the link", icon("trash"), () => done.remove()));
+    return form;
+}
+
+/** A field and its button, for a menu to hold: Enter or the button gives what was typed, trimmed, and Escape cancels. */
+export function fieldForm(options: { value?: string; label: string; placeholder?: string; type?: string; button: string; said?: string }, done: { set(value: string): void; cancel(): void }): HTMLElement {
     const form = make("div", "quire-link");
     const field = make("input", "quire-link-field");
-    field.type = "url";
-    field.value = current ?? "";
-    field.placeholder = "Paste or type an address";
-    field.setAttribute("aria-label", "Link address");
+    field.type = options.type ?? "text";
+    field.value = options.value ?? "";
+    field.placeholder = options.placeholder ?? "";
+    field.setAttribute("aria-label", options.label);
     field.spellcheck = false;
-    const set = () => (field.value.trim() ? done.set(field.value.trim()) : current ? done.remove() : done.cancel());
+    const set = () => done.set(field.value.trim());
     field.addEventListener("keydown", (event) => {
         event.stopPropagation();
         if (composing(event)) return;
@@ -263,8 +270,7 @@ export function linkForm(current: string | undefined, done: { set(href: string):
             done.cancel();
         }
     });
-    form.append(field, control("Set the link", "Set", set, "quire-button quire-link-set"));
-    if (current) form.append(control("Remove the link", icon("trash"), () => done.remove()));
+    form.append(field, control(options.said ?? options.button, options.button, set, "quire-button quire-link-set"));
     return form;
 }
 
