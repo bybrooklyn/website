@@ -101,6 +101,12 @@ What was found and fixed is in [`docs/AUDIT.md`](docs/AUDIT.md). Still open from
 
 - Have it seen and played; decide whether it is what was wanted and when it leaves draft.
 
+## Sending files between devices (Foxy's idea, rethought)
+
+- After the Quires are good. To be thought through again before anything is built: the existing Rust tool and its specification are not the plan.
+- What it is for: between the owner's own machines, phone to PC, and to a friend anywhere.
+- Finding each other with no server at all: a QR code shown and scanned both ways.
+
 ## Site
 
 - Spectrum: show the credit its license asks for somewhere a visitor sees it.
