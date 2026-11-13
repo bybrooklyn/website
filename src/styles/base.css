@@ -309,9 +309,30 @@ h1 + .lede,
     overflow: hidden;
 }
 
+/*
+ * Open and at rest, nothing is clipped, so the focus ring of a button at the fold's edge is seen
+ * whole. While it opens it clips as before: the animation holds overflow hidden for as long as it
+ * grows. Shutting clips at once, as the rule above says.
+ */
+.fold.open > * {
+    overflow: visible;
+    animation: fold-opening var(--grow) step-end;
+}
+
+@keyframes fold-opening {
+    from,
+    to {
+        overflow: hidden;
+    }
+}
+
 @media (prefers-reduced-motion: reduce) {
     .fold {
         transition: none;
+    }
+
+    .fold.open > * {
+        animation: none;
     }
 }
 
