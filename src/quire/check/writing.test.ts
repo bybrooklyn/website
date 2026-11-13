@@ -27,6 +27,11 @@ test("emoji, taken out", () => {
     expect(fires("Done 🎉\n", "writing-emoji")).toBe(1);
     expect(fires("Done.\n", "writing-emoji")).toBe(0);
     expect(fixed("Done 🎉\n", "writing-emoji")).toBe("Done\n");
+    // the whole emoji goes, with its skin tone, selectors and joiners: nothing is left behind
+    expect(fixed("Hello 👍🏽 done\n", "writing-emoji")).toBe("Hello done\n");
+    expect(fixed("Hello 🏳️‍⚧️ done\n", "writing-emoji")).toBe("Hello done\n");
+    expect(fixed("Go 🇬🇧 now\n", "writing-emoji")).toBe("Go now\n");
+    expect(fixed("Press 1️⃣ now\n", "writing-emoji")).toBe("Press now\n");
 });
 
 test("the keep-out words", () => {
@@ -44,6 +49,7 @@ test("\"not just X\" and \"not X, but Y\" framings", () => {
 test("a semicolon between two sentences, and not between the items of a series", () => {
     expect(fires("The site was slow for years and nobody knew; the fonts were eleven megabytes in all.\n", "writing-semicolon")).toBe(1);
     expect(fires("It has walls; pins; ropes and a motor.\n", "writing-semicolon")).toBe(0);
+    expect(fires("- Built the site for years and nobody knew; the fonts were eleven megabytes in all.\n", "writing-semicolon")).toBe(0);
     expect(fixed("The site was slow for years and nobody knew; the fonts were eleven megabytes in all.\n", "writing-semicolon")).toBe("The site was slow for years and nobody knew. The fonts were eleven megabytes in all.\n");
 });
 

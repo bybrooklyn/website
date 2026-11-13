@@ -31,6 +31,10 @@ test("a word written twice", () => {
     expect(marked("The The band.\n", "prose-repeat")).toEqual([" The"]);
     expect(marked("What it had had was gone. That that is true. The end. The start.\n", "prose-repeat")).toEqual([]);
     expect(marked("I went to Paris, Paris was big.\n", "prose-repeat")).toEqual([]);
+    // an object and the next clause's subject, and a clause that ends on its verb, are right twice
+    expect(marked("I told it it was a robot. She gave her her book. I told you you were right. What it is is a tool. All it was was luck.\n", "prose-repeat")).toEqual([]);
+    // the same words twice where nothing calls for it are still slips
+    expect(marked("It it was late. And it it went. The cat is is here. I saw the the end.\n", "prose-repeat")).toEqual([" it", " it", " is", " the"]);
     const doc = read("It was the the best.\n");
     const [one] = fired("It was the the best.\n", "prose-repeat");
     expect(one!.fixes[0]!.edit(doc, one!.range).blocks[0]).toMatchObject({ runs: [{ text: "It was the best." }] });
@@ -67,11 +71,14 @@ test("adverbs piled up", () => {
     expect(marked("She ran quickly. The only family early on.\n", "prose-adverbs")).toEqual([]);
 });
 
-test("a word spelled two ways in one document", () => {
-    const found = fired("The colour is red.\n\nThat color is blue. Another colour.\n", "prose-two-spellings");
-    expect(found.map((one) => one.message)).toEqual(["\"color\" is spelled \"colour\" elsewhere in this document."]);
-    expect(found[0]!.fixes[0]!.label).toBe("Use \"colour\"");
+test("a word spelled two ways in one document, where the country's dictionary holds both", () => {
+    const british = { settings: { ...DEFAULTS, dialect: "gb" as const }, speller: createSpeller(words, "gb") };
+    const found = check(read("We organise it.\n\nThey organize it. We organise more.\n"), british, all.filter((rule) => rule.id === "prose-two-spellings"));
+    expect(found.map((one) => one.message)).toEqual(["\"organize\" is spelled \"organise\" elsewhere in this document."]);
+    expect(found[0]!.fixes[0]!.label).toBe("Use \"organise\"");
     expect(fired("The colour and the hue.\n", "prose-two-spellings")).toEqual([]);
+    // in American spelling "colour" is the spelling rule's to mark; this rule saying so too would mark it twice, and its fix would put "colour" back
+    expect(fired("The colour is red.\n\nThat color is blue. Another colour.\n", "prose-two-spellings")).toEqual([]);
 });
 
 test("quotation marks and apostrophes of two kinds", () => {
@@ -102,9 +109,9 @@ test("on the site's own posts and pages, no rule that starts switched on cries w
     const counts: Record<string, number> = {};
     for (const file of await Array.fromAsync(new Glob("src/content/**/*.{md,mdx}").scan({ cwd: root }))) {
         const doc = read(await Bun.file(`${root}${file}`).text(), { mdx: file.endsWith(".mdx") });
-        for (const one of check(doc, { settings: DEFAULTS, speller }, rules)) counts[one.rule] = (counts[one.rule] ?? 0) + 1;
+        for (const one of check(doc, { settings: DEFAULTS, speller, document: file }, rules)) counts[one.rule] = (counts[one.rule] ?? 0) + 1;
     }
-    // what is left was looked at by hand: long sentences she wrote, semicolons in the résumé's lists, the keep-out word on her about page and "*arr"
+    // what is left was looked at by hand: long sentences she wrote, semicolons in the résumé's lists and "*arr" (her about page is hers, and left alone)
     // (ten, not five: her own writing grows, and a handful of long sentences across the whole site is not a rule crying wolf)
     for (const [rule, count] of Object.entries(counts)) expect([rule, count]).toEqual([rule, Math.min(count, 10)]);
 });

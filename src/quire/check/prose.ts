@@ -6,7 +6,7 @@
 // average sentence length the list shows at its head.
 
 import type { Document } from "../document";
-import { replaceWith, type Finding, type Hit, type Rule, type Unit } from "./engine";
+import { perUnit, replaceWith, type Finding, type Hit, type Rule, type Speller, type Unit } from "./engine";
 import { readingEase, syllables } from "./text";
 import { spoken } from "./writing";
 
@@ -19,7 +19,30 @@ const prose = (unit: Unit) => !unit.code && !!unit.runs;
 // ---- a word twice ----
 
 /** Words that are right written twice: "had had", "that that". */
-const TWICE = new Set(["had", "that", "is", "do", "bye", "so", "very", "ha", "no", "go", "really"]);
+const TWICE = new Set(["had", "that", "do", "bye", "so", "very", "ha", "no", "go", "really"]);
+/** Words right twice when a verb's object meets the next clause's subject: "I told it it was", "she gave her her book". */
+const OBJECTS = new Set(["it", "you", "her", "him", "them", "us"]);
+/** Words before such a pair that show it is a slip and not an object and a subject: a joining word, an article, the start of a clause. */
+const JOINS = new Set(["and", "but", "or", "nor", "so", "then", "because", "if", "when", "while", "that", "which", "the", "a", "an", "of", "to", "in", "on", "at", "for", "with", "as"]);
+/** Verbs right twice where a clause ends on them and the next begins with them: "what it is is", "what I do do". */
+const CLAUSES = new Set(["is", "was"]);
+
+/** True if the word written twice at `index` (the second) is right there. */
+function meantTwice(unit: Unit, index: number): boolean {
+    const word = unit.words[index]!.word.toLowerCase();
+    if (TWICE.has(word)) return true;
+    const before = unit.words[index - 2];
+    const sentence = unit.sentences.find((span) => span.from <= unit.words[index]!.from && span.to >= unit.words[index]!.to);
+    // the word before the pair must be in the same sentence, with only spaces between
+    const joined = before && (!sentence || before.from >= sentence.from) && /^[ \t]+$/.test(unit.read.text.slice(before.to, unit.words[index - 1]!.from));
+    if (OBJECTS.has(word)) return !!joined && !JOINS.has(before.word.toLowerCase());
+    if (CLAUSES.has(word)) {
+        // a clause that ends on the verb opens with a question word: "what it is is", "all it was was"
+        const opening = unit.words.slice(0, index - 1).filter((one) => !sentence || one.from >= sentence.from).slice(-4);
+        return opening.some((one) => /^(what|whatever|all|where|how|why|who|whoever)$/i.test(one.word));
+    }
+    return false;
+}
 
 const repeated: Rule = {
     id: "prose-repeat",
@@ -36,7 +59,7 @@ const repeated: Rule = {
             const one = unit.words[index - 1]!;
             const two = unit.words[index]!;
             const between = text.slice(one.to, two.from);
-            if (!/^[ \t]+$/.test(between) || one.word.toLowerCase() !== two.word.toLowerCase() || TWICE.has(two.word.toLowerCase()) || /\d/.test(two.word)) continue;
+            if (!/^[ \t]+$/.test(between) || one.word.toLowerCase() !== two.word.toLowerCase() || meantTwice(unit, index) || /\d/.test(two.word)) continue;
             out.push({ from: one.to, to: two.to, message: `"${two.word}" is written twice.`, fixes: [replaceWith("Take one out", "")] });
         }
         return out;
@@ -216,22 +239,27 @@ const twoWays: Rule = {
     label: "A word spelled two ways",
     why: "A document that says \"colour\" in one place and \"color\" in another reads as careless; pick one.",
     on: true,
+    prepare(unit, context) {
+        if (context.speller) spelledEither(unit, context.speller);
+    },
     document(_doc: Document, units, context) {
         const speller = context.speller;
         if (!speller) return [];
         const seen = new Map<string, { unit: Unit; from: number; to: number; word: string }[]>();
-        for (const unit of units) for (const word of unit.words) {
-            const key = word.word.toLowerCase().replace(/’/g, "'");
-            if (!seen.has(key)) seen.set(key, []);
-            seen.get(key)!.push({ unit, ...word });
-        }
+        const pairs = new Map<string, string>();
+        for (const unit of units)
+            for (const word of spelledEither(unit, speller)) {
+                if (!seen.has(word.key)) seen.set(word.key, []);
+                seen.get(word.key)!.push({ unit, ...word });
+                pairs.set(word.key, word.other);
+            }
         const out: Finding[] = [];
         const done = new Set<string>();
         for (const [key, places] of seen) {
             if (done.has(key)) continue;
-            const other = speller.variant(key);
-            const others = other ? seen.get(other) : undefined;
-            if (!other || !others) continue;
+            const other = pairs.get(key)!;
+            const others = seen.get(other);
+            if (!others) continue;
             done.add(key).add(other);
             // the spelling used less is the one marked, with the one used more as its fix
             const [fewer, more, word] = places.length > others.length ? [others, places, key] : [places, others, other];
@@ -240,6 +268,30 @@ const twoWays: Rule = {
         return out;
     },
 };
+
+/**
+ * The words of a unit that have another country's spelling the dictionary also holds, worked out once
+ * per unit while the units are checked, since asking for a word's other spelling is the slow part.
+ * (The checker makes its units afresh when the dictionary, the country or the words known change.)
+ * A spelling the country's dictionary does not hold is the spelling rule's to mark, not this one's:
+ * marking both would say it twice, and its fix would bring the other spelling back.
+ */
+const spelledEither = (() => {
+    const made = new WeakMap<Unit, { key: string; other: string; from: number; to: number; word: string }[]>();
+    return (unit: Unit, speller: Speller) => {
+        let found = made.get(unit);
+        if (!found) {
+            found = [];
+            for (const word of unit.words) {
+                const key = word.word.toLowerCase().replace(/’/g, "'");
+                const other = speller.variant(key);
+                if (other && speller.known(key) && speller.known(other)) found.push({ key, other, from: word.from, to: word.to, word: word.word });
+            }
+            made.set(unit, found);
+        }
+        return found;
+    };
+})();
 
 // ---- quotation marks and apostrophes ----
 
@@ -250,19 +302,12 @@ const marks: Rule = {
     label: "Quotation marks of two kinds",
     why: "Straight quotes (\" and ') in one place and curly ones (“ ” ’) in another look untidy; use one kind throughout.",
     on: true,
+    prepare(unit) {
+        quoteMarks(unit);
+    },
     document(_doc, units) {
-        type Mark = { unit: Unit; at: number; curly: boolean; char: string; apostrophe: boolean };
-        const found: Mark[] = [];
-        for (const unit of units) {
-            if (!prose(unit)) continue;
-            const text = unit.read.text;
-            for (let index = 0; index < text.length; index++) {
-                const char = text[index]!;
-                if (unit.read.quiet[index] || !/["'“”‘’]/.test(char)) continue;
-                const apostrophe = (char === "'" || char === "’") && /\p{L}/u.test(text[index - 1] ?? "") && /\p{L}/u.test(text[index + 1] ?? "");
-                found.push({ unit, at: index, curly: /[“”‘’]/.test(char), char, apostrophe });
-            }
-        }
+        const found: (QuoteMark & { unit: Unit })[] = [];
+        for (const unit of units) for (const mark of quoteMarks(unit)) found.push({ unit, ...mark });
         const out: Finding[] = [];
         for (const apostrophe of [true, false]) {
             const group = found.filter((mark) => mark.apostrophe === apostrophe);
@@ -278,6 +323,28 @@ const marks: Rule = {
         return out;
     },
 };
+
+/** A quotation mark or apostrophe in a unit. */
+interface QuoteMark {
+    at: number;
+    curly: boolean;
+    char: string;
+    apostrophe: boolean;
+}
+
+/** The quotation marks and apostrophes of a unit, found once per unit. */
+const quoteMarks = perUnit((unit): QuoteMark[] => {
+    if (!prose(unit)) return [];
+    const text = unit.read.text;
+    const found: QuoteMark[] = [];
+    for (let index = 0; index < text.length; index++) {
+        const char = text[index]!;
+        if (unit.read.quiet[index] || !/["'“”‘’]/.test(char)) continue;
+        const apostrophe = (char === "'" || char === "’") && /\p{L}/u.test(text[index - 1] ?? "") && /\p{L}/u.test(text[index + 1] ?? "");
+        found.push({ at: index, curly: /[“”‘’]/.test(char), char, apostrophe });
+    }
+    return found;
+});
 
 // ---- capitals ----
 

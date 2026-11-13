@@ -13,6 +13,7 @@
 //                  but for the few kinds in SAFE below
 
 import { Glob } from "bun";
+import { pageTells, TELL_NAMES, tellsIn } from "../src/quire/check/tells";
 import { at } from "./lib";
 
 /** The libraries the site has. A new one fails the lint: add it here on purpose or do without it. */
@@ -33,18 +34,11 @@ const ALONE = ["src/mote/", "src/quire/"];
 const UNTESTED = ["src/mote/stage.ts", "src/mote/solids.ts", "src/mote/sound.ts", "src/mote/index.ts"];
 /** Where every exported thing must have a sentence above it. Mote was written before this rule and is held to it only for what is added. */
 const SPOKEN = ["src/quire/"];
-/** Her own pages, in her own words, which the word rules do not second-guess. */
-const HERS = ["src/content/pages/about.mdx"];
 /** Stylesheets with colors that are not the theme's: the pride flags, print on white paper, the timeline's marks. */
 const OWN_COLORS = ["src/styles/base.css", "src/styles/resume.css", "src/styles/timeline.css"];
-/** Words and turns of phrase that read as written by a model (from her prose rules), and dashes used as punctuation. */
-const TELLS: [RegExp, string][] = [
-    [/[—–]/, "a dash used as punctuation"],
-    [/\p{Extended_Pictographic}/u, "an emoji"],
-    [/\b(journey|passion|crafted|delightful|seamless(ly)?|leverag(e|ing)|robust|elevate|effortless(ly)?|game.changer)\b/i, "a word from the keep-out list"],
-];
-/** A framing that reads as a model's in prose, though it is ordinary in a comment. */
-const FRAMING: [RegExp, string] = [/\b(not just|not only|isn't just|more than just)\b/i, "a 'not just X' framing"];
+// The words rules (dashes used as punctuation, emoji, the keep-out words, a "not just X" framing) and
+// her own pages that they leave alone are written once, in src/quire/check/tells.ts, which mdQuire's
+// checking reads too, so the editor and this linter give the same verdict.
 
 /** What looks like an address of her machines in a tracked file: an IPv4 address, a Tailscale name, a port after a host. */
 const PRIVATE: [RegExp, string][] = [
@@ -99,7 +93,7 @@ for (const file of sources) {
         // ---- words, in comments ----
         // a line comment, a comment of one line between /* or /** and */ (or the first line of a longer one), or a line inside one
         const comment = /(^|\s)\/\/\s(.*)$/.exec(line)?.[2] ?? /(^|\s)\/\*\*?\s(.*?)\s*(\*\/|$)/.exec(line)?.[2] ?? /^\s*\*\s(.*)$/.exec(line)?.[1];
-        if (comment) for (const [tell, what] of TELLS) if (tell.test(comment)) say(file, number, `${what} in a comment`);
+        if (comment) for (const tell of tellsIn(comment, false)) say(file, number, `${TELL_NAMES[tell]} in a comment`);
     });
 
     // ---- tests ----
@@ -108,14 +102,10 @@ for (const file of sources) {
 }
 
 // ---- words, in the text of pages ----
+// (drafts on hold are not published, so they are not held to them; her own pages are left alone by pageTells)
 for (const file of await files("src/content/**/*.mdx")) {
-    if (file.includes(".hold.") || HERS.includes(file)) continue;
-    let fenced = false;
-    (await read(file)).split("\n").forEach((line, index) => {
-        if (/^(```|~~~)/.test(line)) fenced = !fenced;
-        if (fenced || /^\s*(import |<|\|?\s*-{3})/.test(line)) return;
-        for (const [tell, what] of [...TELLS, FRAMING]) if (tell.test(line.replace(/`[^`]*`/g, "").replace(/\]\([^)]*\)/g, "]"))) say(file, index + 1, what);
-    });
+    if (file.includes(".hold.")) continue;
+    for (const { line, tell } of pageTells(file, await read(file))) say(file, line, TELL_NAMES[tell]);
 }
 
 // ---- private: what never goes on the site, in every file git tracks ----

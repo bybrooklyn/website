@@ -4,7 +4,8 @@
 // count is right, a click opens the popover from the word, a fix is one undo step, ignoring and
 // adding to the dictionary take the underline away, the list jumps to its findings, F8 goes to the
 // next, the settings switch a kind off, a word still being typed is not underlined, and a key typed
-// in a 5,000-line document with checking on is painted in under 16 ms. Skipped, with a notice, on a
+// in a 5,000-line document with checking on is painted in under 16 ms, and a dictionary that does not
+// load leaves spelling to the browser and says so. Skipped, with a notice, on a
 // machine with no Chromium.
 
 import { afterAll, beforeAll, expect, test } from "bun:test";
@@ -61,6 +62,8 @@ window.q = {
 let folder = "";
 let tab: Browser;
 let server: ReturnType<typeof Bun.serve> | undefined;
+/** Set to make the dictionary fail to load, as on a first visit offline. */
+let dictionaryFails = false;
 
 beforeAll(async () => {
     if (!live) return;
@@ -75,7 +78,7 @@ beforeAll(async () => {
         port: 0,
         async fetch(request) {
             let path = new URL(request.url).pathname;
-            if (path === "/quire/words-en.dat") return new Response(Bun.file(`${root}/public/quire/words-en.dat`));
+            if (path === "/quire/words-en.dat") return dictionaryFails ? new Response("gone", { status: 404 }) : new Response(Bun.file(`${root}/public/quire/words-en.dat`));
             if (path.startsWith("/site/")) {
                 path = path.slice(5);
                 if (path.endsWith("/")) path += "index.html";
@@ -174,6 +177,19 @@ used("a click opens the popover from the word, and a fix is one undo step", asyn
     expect(await md()).toBe(TEXT);
     await tab.run("q.surface.redo()");
     expect(await md()).toBe("Teh cat sat on the mat. It was the the best.\n\nA [link](#nowhere) here.\n");
+});
+
+used("a right click on an underlined word opens its popover in place of the browser's menu", async () => {
+    const point = await tab.run<{ x: number; y: number }>("q.word('Teh')");
+    const opened = await tab.run<boolean>(`!q.surface.element.dispatchEvent(new MouseEvent("contextmenu", { clientX: ${point.x}, clientY: ${point.y}, bubbles: true, cancelable: true }))`);
+    expect(opened).toBe(true);
+    await until("!!document.querySelector('.quire-check-pop.open')");
+    expect(await popped()).toContain("\"Teh\" is not in the dictionary.");
+    await tab.press("Escape");
+    await tab.wait(300);
+    // anywhere else the browser's menu is left alone
+    const plain = await tab.run<{ x: number; y: number }>("q.word('cat')");
+    expect(await tab.run<boolean>(`q.surface.element.dispatchEvent(new MouseEvent("contextmenu", { clientX: ${plain.x}, clientY: ${plain.y}, bubbles: true, cancelable: true }))`)).toBe(true);
 });
 
 used("ignoring and adding to the dictionary take the underline away", async () => {
@@ -286,6 +302,23 @@ used("with checking on, a 5,000-line document is checked in idle time and a key 
     // checked again after typing, the underlines are still there
     expect((await marked()).spelling).toBeGreaterThan(300);
 }, 60_000);
+
+used("when the dictionary does not load, the browser's own spelling is switched back on and the list says spelling is unavailable", async () => {
+    dictionaryFails = true;
+    try {
+        await tab.run("localStorage.setItem('quire-check', JSON.stringify({ on: true, settings: { kinds: { spelling: true, prose: true, markdown: true, link: true } } }))");
+        await tab.open(`http://localhost:${server!.port}/`, 300);
+        await tab.run("q.reset('A wrod here.\\n')");
+        await until("!!document.querySelector('.quire-check-count.shown')");
+        await until("q.surface.element.spellcheck === true");
+        await press(".quire-check-count");
+        await until("!!document.querySelector('.quire-check-list.open')");
+        expect(await tab.run<string>("document.querySelector('.quire-check-list.open .quire-check-unavailable')?.textContent ?? ''")).toBe("Spelling is unavailable: the dictionary did not load, so the browser's own spelling is on.");
+        await tab.press("Escape");
+    } finally {
+        dictionaryFails = false;
+    }
+});
 
 test.skipIf(!built)("in the built page, the checking code and the dictionary are fetched only when checking is first used", async () => {
     await tab.open(`http://localhost:${server!.port}/site/mdquire/`, 800);

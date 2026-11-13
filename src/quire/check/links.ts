@@ -35,8 +35,17 @@ export function addressKind(href: string): "anchor" | "site" | "relative" | "els
     return "relative";
 }
 
+/** Percent escapes read as letters, or the text as written where one is malformed ("50%", "file%.md"), which must never stop checking. */
+export function decoded(text: string, part = false): string {
+    try {
+        return part ? decodeURIComponent(text) : decodeURI(text);
+    } catch {
+        return text;
+    }
+}
+
 /** The address of the file itself, without its query or anchor. */
-export const fileOf = (href: string) => decodeURI(href.replace(/[?#].*$/, ""));
+export const fileOf = (href: string) => decoded(href.replace(/[?#].*$/, ""));
 
 const linkMissing: Rule = {
     id: "link-missing",
@@ -45,6 +54,9 @@ const linkMissing: Rule = {
     label: "Links and pictures that point at nothing",
     why: "A link to a file that is not there, a heading that is not in the document or a page the site does not have is a dead end for the reader.",
     on: true,
+    prepare(unit) {
+        if (unit.runs) inlines(unit.runs);
+    },
     document(_doc: Document, units: Unit[], context) {
         const out: Finding[] = [];
         let made: Set<string> | undefined;
@@ -57,7 +69,7 @@ const linkMissing: Rule = {
                 let message: string | undefined;
                 if (kind === "anchor") {
                     made ??= anchors(units);
-                    const anchor = decodeURIComponent(one.href.slice(1));
+                    const anchor = decoded(one.href.slice(1), true);
                     // a footnote's own anchors and an empty # are the page's, not a heading's
                     if (anchor && !/^(fn|user-content-)/.test(anchor) && !made.has(anchor)) message = `This document has no heading for #${anchor}.`;
                 } else if ((kind === "relative" || kind === "site") && context.exists) {

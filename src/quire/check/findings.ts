@@ -37,16 +37,25 @@ export interface Ignored {
     findings: string[];
 }
 
-/** The key a single finding is ignored by: its rule and the text it covers. */
+/** The key a single finding is ignored by: its rule and the text it covers, which `around` gives with a little of the text either side. */
 export const findingKey = (finding: Finding, text: string) => `${finding.rule}:${text}`;
 
-/** The findings to show: none that are ignored, and no spelling on the word the cursor is still typing. */
+/** What a finding covers with up to a dozen letters either side, joined so that the parts cannot run together: ignoring one dash, or one space at a line's end, then ignores that one and not every one like it. */
+export function around(unitText: string, from: number, to: number): string {
+    return `${unitText.slice(Math.max(0, from - 12), from)}\u0000${unitText.slice(from, to)}\u0000${unitText.slice(to, to + 12)}`;
+}
+
+/** The findings to show: none that are ignored, and no spelling on the word the cursor is still typing. `text` gives what a finding covers, as `around` makes it. */
 export function shownFindings(findings: Finding[], ignored: Ignored, text: (finding: Finding) => string, typing?: Position): Finding[] {
     const words = new Set(ignored.words.map((word) => word.toLowerCase()));
     const keys = new Set(ignored.findings);
     return findings.filter((one) => {
         if (one.word && words.has(one.word.toLowerCase())) return false;
-        if (keys.size && keys.has(findingKey(one, text(one)))) return false;
+        if (keys.size) {
+            const said = text(one);
+            // a key kept before keys had the text either side is still honoured: what was ignored stays ignored
+            if (keys.has(findingKey(one, said)) || keys.has(findingKey(one, said.split("\u0000")[1] ?? said))) return false;
+        }
         // a word being typed is not finished: its end is where the cursor is
         if (typing && one.kind === "spelling" && samePath(one.range.start.path, typing.path) && typing.offset >= one.range.start.offset && typing.offset <= one.range.end.offset) return false;
         return true;

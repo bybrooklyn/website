@@ -12,19 +12,16 @@ import type { Position } from "../document";
 import { control, flowMenu, make } from "../ui";
 import { createChecker, KINDS, ruleOn, type Context, type Finding, type Fix, type Job, type Rule, type Unit } from "./engine";
 import { loadDictionary, type Dictionary } from "./dictionary";
-import { byKind, findingAt, findingKey, KIND_NAMES, loadIgnored, loadOwn, loadPrefs, nextFinding, saveIgnored, saveOwn, savePrefs, shownFindings, type Ignored } from "./findings";
-import { LINKS } from "./links";
-import { MARKDOWN } from "./markdown";
+import { around, byKind, findingAt, findingKey, KIND_NAMES, loadIgnored, loadOwn, loadPrefs, nextFinding, saveIgnored, saveOwn, savePrefs, shownFindings, type Ignored } from "./findings";
 import type { CheckingHost } from "./mount";
-import { PROSE, readability } from "./prose";
-import { createSpeller, SPELLING } from "./spelling";
-import { WRITING } from "./writing";
-
-/** Every rule, in the order the settings list them. */
-export const RULES: Rule[] = [...SPELLING, ...MARKDOWN, ...LINKS, ...WRITING, ...PROSE];
+import { readability } from "./prose";
+import { RULES } from "./rules";
+import { createSpeller } from "./spelling";
 
 /** Most findings of one kind the list draws; the rest are counted. */
 const LISTED = 150;
+/** The most time, in milliseconds, one slice of checking may hold the page. */
+const BUDGET = 8;
 
 type Highlights = Map<string, unknown>;
 type Marker = new (...ranges: globalThis.Range[]) => unknown;
@@ -42,6 +39,8 @@ export function createChecking(host: CheckingHost & { keep: CheckingHost["keep"]
     let ignored: Ignored = loadIgnored(keep, ignoredFor);
     let dictionary: Dictionary | undefined;
     let loading: Promise<void> | undefined;
+    /** True when the dictionary did not load: spelling is left to the browser's own checker. */
+    let unavailable = false;
     const checker = createChecker(RULES);
     let findings: Finding[] = [];
     let shown: Finding[] = [];
@@ -49,6 +48,8 @@ export function createChecking(host: CheckingHost & { keep: CheckingHost["keep"]
     let units: Unit[] = [];
     let checked: unknown;
     const spellcheckWas = surface.element.spellcheck;
+    // under ?debug a rule that throws says so in the console; otherwise it is quietly left out
+    const debug = typeof location !== "undefined" && new URLSearchParams(location.search).has("debug");
 
     // ---- where links lead: asked of the store in the background, and remembered ----
     const answers = new Map<string, boolean | undefined>();
@@ -72,6 +73,8 @@ export function createChecking(host: CheckingHost & { keep: CheckingHost["keep"]
         settings: prefs.settings,
         speller: dictionary && prefs.settings.kinds.spelling ? createSpeller(dictionary, prefs.settings.dialect, own, new Set(ignored.words)) : undefined,
         exists: host.where().store?.exists ? exists : undefined,
+        document: host.where().id,
+        failed: debug ? (id, error) => console.warn(`Checking: the rule ${id} failed and reported nothing.`, error) : undefined,
     });
 
     // ---- the count, at the end of the bar ----
@@ -93,12 +96,14 @@ export function createChecking(host: CheckingHost & { keep: CheckingHost["keep"]
     let job: Job | undefined;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let waiting = false;
+    // a slice of checking never takes more than BUDGET, however long the browser says it is idle, so a key pressed meanwhile waits no longer than that
     const idle = (run: (left: () => number) => void) => {
-        if (typeof requestIdleCallback === "function") requestIdleCallback((deadline) => run(() => deadline.timeRemaining()), { timeout: 400 });
-        else setTimeout(() => {
-            const end = performance.now() + 8;
-            run(() => end - performance.now());
-        }, 16);
+        const slice = (more: () => number) => {
+            const end = performance.now() + BUDGET;
+            run(() => Math.min(more(), end - performance.now()));
+        };
+        if (typeof requestIdleCallback === "function") requestIdleCallback((deadline) => slice(() => deadline.timeRemaining()), { timeout: 400 });
+        else setTimeout(() => slice(() => Infinity), 16);
     };
     const step = (left: () => number) => {
         waiting = false;
@@ -124,6 +129,8 @@ export function createChecking(host: CheckingHost & { keep: CheckingHost["keep"]
             if (documentKey() !== ignoredFor) {
                 ignoredFor = documentKey();
                 ignored = loadIgnored(keep, ignoredFor);
+                // what was asked of the last document's store is not kept, so the answers do not pile up for every document opened
+                answers.clear();
                 checker.forget();
             }
             checked = surface.getDocument();
@@ -147,6 +154,8 @@ export function createChecking(host: CheckingHost & { keep: CheckingHost["keep"]
     }
 
     const textOf = (finding: Finding) => (texts.get(finding.range.start.path.join()) ?? "").slice(finding.range.start.offset, finding.range.end.offset);
+    /** What a finding covers with a little either side, the key it is ignored by. */
+    const keyOf = (finding: Finding) => around(texts.get(finding.range.start.path.join()) ?? "", finding.range.start.offset, finding.range.end.offset);
     // where the cursor was left by the last key typed: a word there is still being written
     let typed: Position | undefined;
     let typing = false;
@@ -170,7 +179,7 @@ export function createChecking(host: CheckingHost & { keep: CheckingHost["keep"]
         }
     }
     function refresh() {
-        shown = prefs.on ? shownFindings(findings, ignored, textOf, typingAt()) : [];
+        shown = prefs.on ? shownFindings(findings, ignored, keyOf, typingAt()) : [];
         paint();
         number.textContent = String(shown.length);
         count.setAttribute("aria-label", `Checking: ${shown.length === 0 ? "nothing found" : shown.length === 1 ? "one thing found" : `${shown.length} things found`}`);
@@ -184,9 +193,12 @@ export function createChecking(host: CheckingHost & { keep: CheckingHost["keep"]
     function apply() {
         savePrefs(keep, prefs);
         const spelling = prefs.on && prefs.settings.kinds.spelling;
-        // the browser's own spelling marks would sit on top of these
-        surface.element.spellcheck = spelling ? false : spellcheckWas;
+        // the browser's own spelling marks would sit on top of these; with no dictionary, the browser's are all there is
+        surface.element.spellcheck = spelling && !unavailable ? false : unavailable || spellcheckWas;
         if (spelling && !dictionary && !loading) {
+            // switching spelling on again after a failure tries again
+            unavailable = false;
+            surface.element.spellcheck = false;
             loading = loadDictionary(host.dictionary ?? "/quire/words-en.dat").then(
                 (loaded) => {
                     dictionary = loaded;
@@ -195,6 +207,9 @@ export function createChecking(host: CheckingHost & { keep: CheckingHost["keep"]
                 },
                 () => {
                     loading = undefined;
+                    unavailable = true;
+                    if (prefs.on && prefs.settings.kinds.spelling) surface.element.spellcheck = true;
+                    refresh();
                 },
             );
         }
@@ -256,7 +271,7 @@ export function createChecking(host: CheckingHost & { keep: CheckingHost["keep"]
         } else
             more.append(
                 action("Ignore", () => {
-                    ignored = { ...ignored, findings: [...ignored.findings, findingKey(finding, textOf(finding))] };
+                    ignored = { ...ignored, findings: [...ignored.findings, findingKey(finding, keyOf(finding))] };
                     saveIgnored(keep, ignoredFor, ignored);
                     refresh();
                 }),
@@ -298,6 +313,15 @@ export function createChecking(host: CheckingHost & { keep: CheckingHost["keep"]
         const found = findingAt(shown, focus);
         if (found && found.range.end.offset - found.range.start.offset <= 60) openPop(found, false);
     };
+    // a right click on an underline opens its popover: with these marks on, the browser's own menu has no spelling to offer
+    const onMenu = (event: MouseEvent) => {
+        if (!prefs.on) return;
+        const inside = (box: DOMRect) => event.clientX >= box.left && event.clientX <= box.right && event.clientY >= box.top && event.clientY <= box.bottom;
+        const found = shown.find((one) => one.range.end.offset - one.range.start.offset <= 60 && [...(surface.rangeOf(one.range.start, one.range.end)?.getClientRects() ?? [])].some(inside));
+        if (!found) return;
+        event.preventDefault();
+        openPop(found, true);
+    };
     const onKey = (event: KeyboardEvent) => {
         if (!prefs.on) return;
         if (event.key === "F8" && !event.ctrlKey && !event.altKey && !event.metaKey) {
@@ -314,9 +338,12 @@ export function createChecking(host: CheckingHost & { keep: CheckingHost["keep"]
     };
     surface.element.addEventListener("click", onClick);
     surface.element.addEventListener("keydown", onKey);
+    surface.element.addEventListener("contextmenu", onMenu);
     surface.element.addEventListener("beforeinput", onInput);
     const stops = [
         surface.on("change", () => {
+            // a check under way is of the text as it was: it is given up, and what it found in each block so far is kept
+            job = undefined;
             if (pop.isOpen()) pop.close(false);
             typed = typing ? surface.getSelection().focus : undefined;
             typing = false;
@@ -326,7 +353,7 @@ export function createChecking(host: CheckingHost & { keep: CheckingHost["keep"]
         surface.on("select", () => {
             if (!prefs.on || !typed) return;
             idle(() => {
-                if (shownFindings(findings, ignored, textOf, typingAt()).length !== shown.length) refresh();
+                if (shownFindings(findings, ignored, keyOf, typingAt()).length !== shown.length) refresh();
             });
         }),
     ];
@@ -338,6 +365,7 @@ export function createChecking(host: CheckingHost & { keep: CheckingHost["keep"]
         const head = make("div", "quire-check-head");
         head.append(make("p", "quire-check-title", shown.length ? `${shown.length} ${shown.length === 1 ? "thing" : "things"} to look at` : "Nothing to look at"));
         if (score.words) head.append(make("p", "quire-check-score", `Reading ease ${score.ease}, ${score.sentence} words a sentence`));
+        if (unavailable && prefs.settings.kinds.spelling) head.append(make("p", "quire-check-score quire-check-unavailable", "Spelling is unavailable: the dictionary did not load, so the browser's own spelling is on."));
         body.append(head);
         for (const group of byKind(shown)) {
             const section = make("section", "quire-check-group");
@@ -462,6 +490,7 @@ export function createChecking(host: CheckingHost & { keep: CheckingHost["keep"]
             for (const stop of stops) stop();
             surface.element.removeEventListener("click", onClick);
             surface.element.removeEventListener("keydown", onKey);
+            surface.element.removeEventListener("contextmenu", onMenu);
             surface.element.removeEventListener("beforeinput", onInput);
             surface.element.spellcheck = spellcheckWas;
             for (const menu of [list, pop, settingsMenu]) menu.box.remove();

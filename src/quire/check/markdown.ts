@@ -20,8 +20,17 @@ export interface Inline {
     pictured?: boolean;
 }
 
+/** The inlines of each list of runs, found once while the runs are unchanged: three rules on the whole document ask for them. */
+const inlinesOf = new WeakMap<Run[], Inline[]>();
+
 /** The links, pictures and footnote references in runs, in order. */
 export function inlines(runs: Run[]): Inline[] {
+    let out = inlinesOf.get(runs);
+    if (!out) inlinesOf.set(runs, (out = findInlines(runs)));
+    return out;
+}
+
+function findInlines(runs: Run[]): Inline[] {
     const out: Inline[] = [];
     let at = 0;
     const leafLength = (run: Run) => (run.kind === "text" ? run.text.length : run.kind === "link" ? 0 : 1);
@@ -174,7 +183,7 @@ const bareUrl: Rule = {
     },
 };
 
-/** True when the letter at an offset is in code, by its runs. */
+/** True when the letter at an offset is in code or maths, by its runs. */
 function isCode(unit: Unit, offset: number): boolean {
     let at = 0;
     const walk = (runs: Run[]): boolean | undefined => {
@@ -185,7 +194,7 @@ function isCode(unit: Unit, offset: number): boolean {
                 continue;
             }
             const length = run.kind === "text" ? run.text.length : 1;
-            if (offset < at + length) return run.kind === "text" && run.marks.includes("code");
+            if (offset < at + length) return run.kind === "text" && (run.marks.includes("code") || run.marks.includes("math"));
             at += length;
         }
         return undefined;
@@ -278,7 +287,10 @@ const listMarker: Rule = {
                     return { ...next, blocks: [...next.blocks.slice(0, index - 1), { ...one, items, gap: two.gap, source: undefined }, ...next.blocks.slice(index + 1)] };
                 },
             };
-            return { rule: this.id, kind: this.kind, severity: this.severity, range: { start: { path: start, offset: 0 }, end: { path: start, offset: 1 } }, message: `This list changes from ${was} to ${now}, which starts a new list.`, fixes: path.length === 1 ? [fix] : [] };
+            // a list right after with the first one's bullet would be joined to the one made, which is more than the fix says
+            const after = path.length === 1 ? doc.blocks[path[0]! + 1] : undefined;
+            const joins = after?.kind === "list" && after.style === first.style && (first.style === "number" ? after.delimiter === first.delimiter : after.marker === first.marker);
+            return { rule: this.id, kind: this.kind, severity: this.severity, range: { start: { path: start, offset: 0 }, end: { path: start, offset: 1 } }, message: `This list changes from ${was} to ${now}, which starts a new list.`, fixes: path.length === 1 && !joins ? [fix] : [] };
         });
     },
 };
@@ -323,6 +335,9 @@ const footnotes: Rule = {
     label: "Footnotes with no text",
     why: "A footnote reference with no definition shows its label as plain text.",
     on: true,
+    prepare(unit) {
+        if (unit.runs) inlines(unit.runs);
+    },
     document(doc, units) {
         const defined = new Set<string>();
         const walk = (blocks: Block[]) => blocks.forEach((block) => {
@@ -347,6 +362,9 @@ const footnoteUnused: Rule = {
     label: "Footnote text never used",
     why: "A footnote's text with nothing pointing to it is not shown at all.",
     on: true,
+    prepare(unit) {
+        if (unit.runs) inlines(unit.runs);
+    },
     document(doc, units) {
         const used = new Set<string>();
         for (const unit of units) if (unit.runs) for (const one of inlines(unit.runs)) if (one.kind === "footnote") used.add(one.href.toLowerCase());

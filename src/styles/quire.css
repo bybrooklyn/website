@@ -141,11 +141,21 @@
         --ground 0.45s var(--ease);
 }
 
+/* Faint words that are still meant to be read (a field's placeholder, "Type / for blocks", a code block's
+   language): the muted ink with its lightness moved only as far as 4.5:1 needs, on the darkest ground
+   such a field sits on (a raised menu here, the paper's grey on the light paper). */
+:root {
+    --quire-faint: oklch(from var(--muted) 0.63 c h);
+}
+
 /* C's inks, for the light paper: the site's ink turned dark, the accent deepened to read on it */
 .look-paper .quire-paper {
     --paper: oklch(0.965 0.009 300);
     --ink: oklch(0.24 0.04 300);
     --muted: oklch(0.47 0.045 300);
+    --quire-faint: oklch(from var(--muted) 0.51 c h);
+    /* the browser's own parts on the light sheet (scrollbars of code, checkboxes, fields) are drawn light too */
+    color-scheme: light;
     --accent: oklch(0.52 0.19 300);
     --rule: oklch(0.82 0.025 300);
     --surface: oklch(0.925 0.014 300);
@@ -358,8 +368,10 @@
     caret-color: var(--accent);
 }
 
-.quire-title::placeholder {
-    color: color-mix(in oklch, var(--muted), transparent 45%);
+.quire-title::placeholder,
+[class*="quire-"]::placeholder,
+.quire-comp-field input::placeholder {
+    color: var(--quire-faint);
     opacity: 1;
 }
 
@@ -376,7 +388,7 @@
     content: attr(data-hint);
     position: absolute;
     inset: 0 auto auto 0;
-    color: color-mix(in oklch, var(--muted), transparent 40%);
+    color: var(--quire-faint);
     white-space: nowrap;
     pointer-events: none;
     user-select: none;
@@ -457,10 +469,6 @@
     caret-color: transparent;
 }
 
-.quire > :first-child {
-    margin-top: 0;
-}
-
 /* blocks out of sight are not laid out on every key, which keeps a long document quick to type in;
    each remembers its size once it has been seen, so the page does not jump */
 .quire > * {
@@ -470,14 +478,6 @@
 
 .quire > .quire-fresh {
     content-visibility: visible;
-}
-
-/* A block that may be skipped while out of sight is drawn only inside its own box. A top heading's lines are
-   as tall as its letters, so the tail of a g or a y hung below the box and was cut off: the box is made that
-   much deeper, and the space under it that much less, so nothing moves. */
-.quire h1 {
-    padding-bottom: 0.22em;
-    margin-bottom: calc(var(--line) - 0.22em);
 }
 
 /* A tight list's items hold their paragraphs without the space between paragraphs. */
@@ -521,14 +521,6 @@
     margin: calc(var(--line) * 1.5) 0;
 }
 
-.quire ul:has(> .quire-task) {
-    padding-left: 0.25rem;
-}
-
-.quire .quire-task {
-    list-style: none;
-}
-
 .quire-box {
     display: inline-block;
     width: 0.9em;
@@ -546,10 +538,6 @@
 .quire-box[data-checked="true"] {
     border-color: var(--accent);
     background: var(--accent);
-}
-
-.quire-task > p {
-    display: inline;
 }
 
 .quire-atom {
@@ -1101,7 +1089,6 @@
 }
 
 .quire-link-field:focus {
-    outline: none;
     border-color: var(--accent);
 }
 
@@ -1179,7 +1166,9 @@
     gap: 0.15rem;
 }
 
+/* the find bar clips what leaves it as it grows, so its fields' rings are drawn just inside */
 .quire-find-field {
+    --ring-offset: -0.125rem;
     flex: 1 1 13rem;
     width: 13rem;
     min-width: 3rem;
@@ -1349,7 +1338,6 @@
 }
 
 .quire-alt:focus {
-    outline: none;
     border-color: var(--accent);
     background: var(--ground);
     color: var(--ink);
@@ -1419,7 +1407,9 @@
     padding-left: 1.5rem;
 }
 
+/* the panel has no room round its links on a wide window and clips what leaves it: the ring is drawn just inside */
 .quire-outline-link {
+    --ring-offset: -0.125rem;
     display: block;
     width: 100%;
     padding: 0.3rem 0 0.3rem 0.75rem;
@@ -1672,7 +1662,11 @@
 .quire-history-item:hover,
 .quire-history-item:focus-visible {
     background: color-mix(in oklch, var(--ink) 8%, transparent);
-    outline: none;
+}
+
+/* the ring is drawn just inside a row, which fills the panel's width */
+.quire-history-item {
+    --ring-offset: -0.125rem;
 }
 
 .quire-history-summary {
@@ -2360,10 +2354,6 @@ body.quire-app,
 .quire-card-open:focus-visible .quire-mini {
     translate: 0 -0.2rem;
     border-color: var(--accent);
-}
-
-.quire-card-open:focus-visible {
-    outline: none;
 }
 
 .quire-mini .quire-mini-page {
@@ -3113,8 +3103,10 @@ body.quire-app,
     font-size: 0.82rem;
     font-variant-numeric: tabular-nums;
     opacity: 0;
+    /* its least width grows with it too, or it would stand at its full width at once and push the tools beside it */
     transition:
         max-width 0.4s var(--ease),
+        min-width 0.4s var(--ease),
         padding 0.4s var(--ease),
         opacity 0.25s ease;
 }
@@ -3473,4 +3465,61 @@ body.quire-app,
 
 .prose.quire ul:has(> .quire-task) > li:not(.quire-task) > p:first-of-type {
     display: block;
+}
+
+/* A list's marks hang to the left of its items, in its own padding. A block that may be skipped while out
+   of sight is painted only inside its box (content-visibility above), and a number of two digits or more
+   ("10.", "100.", "1000.") is wider than that padding, so the front of it was cut off. A list at the top
+   level has its box reach further left, with its margin less by as much, so that its marks are wholly
+   inside it and nothing moves. (Lists inside a list, a quote or a callout have their marks inside the
+   box of the block they are in.) */
+.prose.quire > :is(ul, ol) {
+    --mark-room: 2.5em;
+    margin-left: calc(var(--mark-room) * -1);
+}
+
+.prose.quire > ul {
+    padding-left: calc(1em + var(--mark-room));
+}
+
+.prose.quire > ol {
+    padding-left: calc(1.45em + var(--mark-room));
+}
+
+.prose.quire > ul:has(> .quire-task) {
+    padding-left: calc(1.2em + var(--mark-room));
+}
+
+/* A block that may be skipped while out of sight is painted only inside its box, so what is wider than
+   the column was cut off rather than shown: a long web address or word, and on a phone a table of
+   several columns. Words that do not fit break where they must (in a cell too, so a table of a few
+   columns still fits and fills the width), and on a narrow window a table of four columns or more
+   scrolls sideways inside its own block, with a shadow at the edge where more of it is, so the page
+   itself never scrolls sideways. */
+.prose.quire :is(p, li, h1, h2, h3, h4, h5, h6, dt, dd, blockquote) {
+    overflow-wrap: break-word;
+}
+
+.prose.quire > table:not(:has(tr > :nth-child(4))) :is(td, th) {
+    overflow-wrap: anywhere;
+}
+
+@media (max-width: 48rem) {
+    .prose.quire > table:has(tr > :nth-child(4)) {
+        display: block;
+        overflow-x: auto;
+        background:
+            linear-gradient(to right, var(--ground) 40%, transparent) left / 1.5rem 100% no-repeat local,
+            linear-gradient(to left, var(--ground) 40%, transparent) right / 1.5rem 100% no-repeat local,
+            radial-gradient(farthest-side at 0 50%, color-mix(in oklch, var(--ink) 30%, transparent), transparent) left / 0.6rem 100% no-repeat scroll,
+            radial-gradient(farthest-side at 100% 50%, color-mix(in oklch, var(--ink) 30%, transparent), transparent) right / 0.6rem 100% no-repeat scroll;
+    }
+}
+
+/* A button or field that cannot be used now looks it: faded, and not lit by the pointer. Without this the
+   editor's own colour for buttons hid the browser's grey, and a disabled button looked pressable. */
+.quire-button:disabled,
+.quire-link-field:disabled {
+    opacity: 0.5;
+    pointer-events: none;
 }

@@ -50,3 +50,18 @@ test("a suggestion put in keeps the word's place", () => {
     const fixed = one!.suggest!()[0]!.edit(doc, one!.range);
     expect(fixed.blocks[0]).toMatchObject({ kind: "paragraph", runs: [{ kind: "text", text: "I receive letters." }] });
 });
+
+test("emoji, their selectors and skin tones are never words to spell, and an accent typed as a mark is the same word as one typed whole", () => {
+    expect(spelled("Hello 🏳️‍⚧️ there ❤️ and 👍🏽 done ℹ️.\n")).toEqual([]);
+    expect(spelled("A café and a cafe\u0301 by a cafe\u0301.\n")).toEqual([]);
+    expect(spelled("A cafe\u0301z.\n")).toEqual(["cafe\u0301z"]);
+    // the document keeps the letters as typed: the finding covers them, and nothing is changed by looking
+    const [one] = found("A cafe\u0301z.\n");
+    expect(one!.range.end.offset - one!.range.start.offset).toBe(6);
+    expect(one!.suggest!().map((fix) => fix.label)).toContain("café");
+});
+
+test("words in paths, file names, hashtags and handles are not spelled", () => {
+    expect(spelled("Open index.html, package.json and foo.tar.gz in /home/me/src/quire or C:\\Users\\me\\Dcuments, see example.com/foo and #opensource or @somebody.\n")).toEqual([]);
+    expect(spelled("A plain wrod / and a slash.\n")).toEqual(["wrod"]);
+});
