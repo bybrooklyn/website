@@ -33,7 +33,7 @@ import { createTableTools } from "./tables";
 import { createPictureTools } from "./picture-tools";
 import { createCommentMargin, keptNotes, moveNotes } from "./comment-margin";
 import { addContents, dateText, findContents, specialGrid, typeIn, typeSpecial, updateContents } from "./inserts";
-import { colorHex, countRows, gatherPictures, markdownFor, pageHtml, plainText, readingStyles } from "./export";
+import { colorHex, countRows, gatherPictures, heldElsewhere, markdownFor, pageHtml, plainText, readingStyles, type Picture } from "./export";
 import { docx } from "./docx";
 import { aboutPanel, control, flowMenu, keySymbols, linkForm, make, type MenuItem } from "./ui";
 import { openDialog } from "./dialog";
@@ -314,6 +314,10 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     // ---- Download as: each kind of file the document can be given as ----
     const downloads = flowMenu("Download as");
     const shownPictures = () => gatherPictures(surface.getDocument(), async (src) => (store && id && store.show ? store.show(id, src) : undefined));
+    /** Says when a download leaves out pictures it did not fetch, those from elsewhere on the web among them. */
+    const sayElsewhere = (pictures: Map<string, Picture>) => {
+        if (heldElsewhere(surface.getDocument(), pictures).length) bar.setStatus("Downloaded", "Pictures from elsewhere on the web were not fetched, so the download does not hold them", "quiet");
+    };
     const downloadAsQuire = async () => {
         const doc = surface.getDocument();
         if (doc.quire) return downloadQuire();
@@ -326,9 +330,25 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     const downloadLines = (): MenuItem[] => [
         { label: "Markdown", hint: surface.getDocument().mdx ? ".mdx" : ".md", run: () => give(new Blob([markdownFor(surface.getDocument())], { type: "text/markdown" }), `${stem()}${surface.getDocument().mdx ? ".mdx" : ".md"}`) },
         { label: "mdQuire", hint: ".quire", run: () => void downloadAsQuire() },
-        { label: "Web page", hint: ".html", run: async () => give(new Blob([pageHtml(surface.getDocument(), { title: shownName(name), styles: await readingStyles(), pictures: await shownPictures() })], { type: "text/html" }), `${stem()}.html`) },
+        {
+            label: "Web page",
+            hint: ".html",
+            run: async () => {
+                const pictures = await shownPictures();
+                give(new Blob([pageHtml(surface.getDocument(), { title: shownName(name), styles: await readingStyles(), pictures })], { type: "text/html" }), `${stem()}.html`);
+                sayElsewhere(pictures);
+            },
+        },
         { label: "Plain text", hint: ".txt", run: () => give(new Blob([plainText(surface.getDocument())], { type: "text/plain" }), `${stem()}.txt`) },
-        { label: "Word", hint: ".docx", run: async () => give(new Blob([(await docx(surface.getDocument(), { pictures: await shownPictures(), hex: colorHex, title: shownName(name) })) as BlobPart], { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" }), `${stem()}.docx`) },
+        {
+            label: "Word",
+            hint: ".docx",
+            run: async () => {
+                const pictures = await shownPictures();
+                give(new Blob([(await docx(surface.getDocument(), { pictures, hex: colorHex, title: shownName(name) })) as BlobPart], { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" }), `${stem()}.docx`);
+                sayElsewhere(pictures);
+            },
+        },
         // a browser cannot write a PDF itself: its print dialog can, with the page set up already given to it
         { label: "PDF, through the print dialog", hint: "Ctrl+P", run: () => print() },
     ];

@@ -14,6 +14,7 @@ import { emojiOf } from "./emoji";
 import { isContentsMark, slug } from "./inserts";
 import { isPageBreak } from "./document";
 import { write } from "./write";
+import { cleanHtml, cleanTag, safeAddress, safeValue } from "./html";
 
 // ---- Markdown ----
 
@@ -143,25 +144,50 @@ function dataAddress(picture: Picture): string {
     return `data:${picture.type};base64,${btoa(binary)}`;
 }
 
-/** True for inline HTML that a browser can show as it is: a lowercase tag or an entity, not a component or an expression of MDX. */
-const plainHtml = (html: string) => /^(<\/?[a-z][\w-]*(\s[^>]*)?\/?>|&#?\w+;)$/.test(html.trim());
+/** True for HTML that MDX would read as a component or an expression rather than plain HTML. */
+const component = (html: string) => /^<\/?[A-Z]|[{}]/.test(html.trim());
 
-/** The body of a web page for a document. */
+/**
+ * The policy the downloaded page carries: it may show only pictures held inside it and its own
+ * styles and fonts, and run nothing, so that nothing written in a document can run or fetch anything
+ * when the page is opened, from a disk or anywhere else.
+ */
+export const PAGE_POLICY = "default-src 'none'; img-src data:; style-src 'unsafe-inline'; font-src data:; base-uri 'none'; form-action 'none'";
+
+/** The body of a web page for a document. `address` gives a picture's bytes as an address held in the page, where they were gathered. */
 function pageBody(doc: Document, address: (src: string) => string): string {
     const seen = new Map<string, number>();
+    /** A picture held in the page; one that is not (from elsewhere on the web, or not found) is a link to where it is, so that opening the page fetches nothing. */
+    const picture = (src: string, alt: string, width = "") => {
+        const held = safeAddress(address(src), "picture");
+        if (held?.startsWith("data:")) return `<img src="${escape(held)}" alt="${escape(alt)}"${width}>`;
+        const link = safeAddress(src);
+        const words = escape(alt || src);
+        return link === undefined ? words : `<a class="picture-link" href="${escape(link)}">${words}</a>`;
+    };
     const leaf = (run: Leaf): string => {
         if (run.kind === "break") return "<br>";
-        if (run.kind === "image") return `<img src="${escape(address(run.src))}" alt="${escape(run.alt)}">`;
+        if (run.kind === "image") return picture(run.src, run.alt);
         if (run.kind === "footnote") return `<sup><a href="#note-${escape(run.label)}" id="back-${escape(run.label)}">${escape(run.label)}</a></sup>`;
-        if (run.kind === "html") return plainHtml(run.html) ? run.html : escape(run.html);
+        if (run.kind === "html") return doc.mdx && component(run.html) ? escape(run.html) : cleanTag(run.html);
         if (run.kind === "emoji") return escape(emojiOf(run.name) ?? `:${run.name}:`);
         // inline maths is given as its TeX, which any reader of the page can read and a maths script can lay out
         let html = run.marks.includes("math") ? `<code class="math">$${escape(run.text)}$</code>` : escape(run.text);
         for (const [mark, tag] of [...TAGS].reverse()) if (run.marks.includes(mark as never)) html = `<${tag}>${html}</${tag}>`;
-        const style = [run.color && `color:${run.color}`, run.size && `font-size:${run.size}`, run.highlight && `background:color-mix(in oklch, ${run.highlight} 45%, transparent)`].filter(Boolean).join(";");
+        // a colour, size or highlight from a file is used only if it is plainly one, so it cannot add a rule or an address
+        const [color, size, highlight] = [safeValue(run.color), safeValue(run.size), safeValue(run.highlight)];
+        const style = [color && `color:${color}`, size && `font-size:${size}`, highlight && `background:color-mix(in oklch, ${highlight} 45%, transparent)`].filter(Boolean).join(";");
         return style ? `<span style="${escape(style)}">${html}</span>` : html;
     };
-    const runs = (list: Run[]): string => list.map((run) => (run.kind === "link" ? `<a href="${escape(address(run.href))}"${run.title ? ` title="${escape(run.title)}"` : ""}>${run.runs.map(leaf).join("")}</a>` : leaf(run))).join("");
+    const runs = (list: Run[]): string =>
+        list
+            .map((run) => {
+                if (run.kind !== "link") return leaf(run);
+                const href = safeAddress(run.href);
+                const inner = run.runs.map(leaf).join("");
+                return href === undefined ? inner : `<a href="${escape(href)}"${run.title ? ` title="${escape(run.title)}"` : ""}>${inner}</a>`;
+            })
+            .join("");
     const aligned = (align?: string) => (align ? ` style="text-align:${align}"` : "");
     const blocks = (list: Block[]): string =>
         list
@@ -193,17 +219,18 @@ function pageBody(doc: Document, address: (src: string) => string): string {
                         return `<table>\n<thead><tr>${block.header.map((cells, column) => cell("th", cells, column)).join("")}</tr></thead>\n<tbody>\n${block.rows.map((row) => `<tr>${row.map((cells, column) => cell("td", cells, column)).join("")}</tr>`).join("\n")}\n</tbody>\n</table>`;
                     }
                     case "image": {
-                        const width = block.width !== undefined ? ` style="width:${block.width}%"` : "";
+                        const width = block.width !== undefined && Number.isFinite(Number(block.width)) ? ` style="width:${Number(block.width)}%"` : "";
                         const side = block.align === "left" ? "margin-inline:0 auto" : block.align === "right" ? "margin-inline:auto 0" : "margin-inline:auto";
-                        const picture = `<img src="${escape(address(block.src))}" alt="${escape(block.alt)}"${width}>`;
-                        return `<figure style="text-align:${block.align ?? "center"}"><div style="display:block;${side};width:fit-content;max-width:100%">${picture}</div>${block.caption ? `<figcaption>${escape(block.caption)}</figcaption>` : ""}</figure>`;
+                        const align = block.align === "left" || block.align === "right" ? block.align : "center";
+                        return `<figure style="text-align:${align}"><div style="display:block;${side};width:fit-content;max-width:100%">${picture(block.src, block.alt, width)}</div>${block.caption ? `<figcaption>${escape(block.caption)}</figcaption>` : ""}</figure>`;
                     }
                     case "divider":
                         return "<hr>";
                     case "raw":
                         if (isPageBreak(block)) return '<div style="break-after: page"></div>';
                         if (isContentsMark(block) || /^(import|export)\b/.test(block.text)) return "";
-                        return /^<[a-z]/.test(block.text.trim()) && !doc.mdx && !/<(script|iframe|object|embed)\b|\son\w+=/i.test(block.text) ? block.text : `<pre class="kept">${escape(block.text)}</pre>`;
+                        // HTML written in a Markdown file is shown, through the allow-list; an MDX file's is its own, and is shown as written
+                        return /^<[a-z]/.test(block.text.trim()) && !doc.mdx ? cleanHtml(block.text) : `<pre class="kept">${escape(block.text)}</pre>`;
                 }
             })
             .filter(Boolean)
@@ -224,7 +251,7 @@ export function pageHtml(doc: Document, options: { title: string; styles?: strin
     const titled = doc.blocks.some((block) => block.kind === "heading" && block.level === 1);
     const body = `${titled ? "" : `<h1>${escape(options.title)}</h1>\n`}${pageBody(doc, address)}`;
     const frame = "body { box-sizing: border-box; max-width: calc(var(--measure, 38rem) + 4rem); margin: 0 auto; padding: 3rem 2rem 5rem; background: var(--ground, Canvas); color: var(--ink, CanvasText); } figure img { max-width: 100%; height: auto; } figcaption { text-align: center; font-style: italic; color: var(--muted, gray); } .footnote { font-size: 0.9em; color: var(--muted, gray); } pre.kept { opacity: 0.7; white-space: pre-wrap; } @media print { body { max-width: none; padding: 0; background: none; color: black; } }";
-    return `<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1">\n<title>${escape(options.title)}</title>\n<style>\n${options.styles ?? ""}\n${frame}\n</style>\n</head>\n<body>\n<main class="prose">\n${body}\n</main>\n</body>\n</html>\n`;
+    return `<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<meta http-equiv="Content-Security-Policy" content="${PAGE_POLICY}">\n<meta name="viewport" content="width=device-width, initial-scale=1">\n<title>${escape(options.title)}</title>\n<style>\n${options.styles ?? ""}\n${frame}\n</style>\n</head>\n<body>\n<main class="prose">\n${body}\n</main>\n</body>\n</html>\n`;
 }
 
 // ---- what the browser gives ----
@@ -245,12 +272,23 @@ export function pictureAddresses(doc: Document): string[] {
     return [...found];
 }
 
-/** The pictures a document shows, fetched as bytes with their size; `show` gives where one kept by a store is seen from. A picture that cannot be fetched is left out, and stays an address. */
+/** The pictures a document's web page or Word file would leave as addresses: those from elsewhere, or not found, rather than held inside it. */
+export function heldElsewhere(doc: Document, pictures: Map<string, Picture>): string[] {
+    return pictureAddresses(doc).filter((src) => !pictures.has(src));
+}
+
+/**
+ * The pictures a document shows, fetched as bytes with their size; `show` gives where one kept by a
+ * store is seen from. Only those a store keeps, and those held in their own address, are fetched:
+ * a picture from elsewhere on the web is never asked for, so that downloading a document does not
+ * tell another site it was (a tracking picture), and it stays an address.
+ */
 export async function gatherPictures(doc: Document, show: (src: string) => Promise<string | undefined>): Promise<Map<string, Picture>> {
     const out = new Map<string, Picture>();
     for (const src of pictureAddresses(doc)) {
         try {
-            const from = (await show(src)) ?? src;
+            const from = (await show(src)) ?? (/^data:image\//i.test(src) ? src : undefined);
+            if (from === undefined) continue;
             const answer = await fetch(from);
             if (!answer.ok) continue;
             const blob = await answer.blob();
