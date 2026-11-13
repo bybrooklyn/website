@@ -1,10 +1,10 @@
-// What reading a typed roll, adding it up and lining its numbers up are held to. Run with `bun run test`.
+// What reading a written roll, adding it up and lining its numbers up are held to. Run with `bun run test`.
 import { expect, test } from "bun:test";
 import { keptHistory, lineUp, numbers, read, row, tidy, total, type Roll } from "./rolls";
 
 const ok = (text: string) => read(text) as Roll;
 
-test("a typed roll is read into dice and a number", () => {
+test("a written roll is read into dice and a number", () => {
     expect(ok("2d6+3").dice).toEqual([6, 6]);
     expect(ok("2d6+3").plus).toBe(3);
     expect(ok("d20").dice).toEqual([20]);

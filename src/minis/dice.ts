@@ -1,4 +1,4 @@
-// Dice: a dice tower. Pick dice, or type a roll, and they go in at the top,
+// Dice: a dice tower. Pick dice, or open a link to a roll, and they go in at the top,
 // tumble down the ramps as real solids and roll out into the tray. When they
 // have come to rest the eye goes up over the tray and the number each one
 // landed on lights up, lifts off its die and joins a row, sorted by kind of
@@ -283,7 +283,7 @@ export default function dice(m: Mote): Scene {
         say(`${what}: ${result.total}`);
     };
 
-    // ---- under the tower: the dice to pick from, a typed roll, and what was rolled ----
+    // ---- under the tower: the dice to pick from, the roll they make, and what was rolled ----
     if (!m.preview) {
         const panel = m.panel();
         // The roll is made by pressing: a die adds one of itself, the small controls under it take one

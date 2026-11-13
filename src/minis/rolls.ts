@@ -1,4 +1,4 @@
-// What a typed roll means: "2d6+3", "4d6 drop lowest", "d20 adv", "d100".
+// What a roll written out means: "2d6+3", "4d6 drop lowest", "d20 adv", "d100".
 // Reading it and adding it up are kept apart from throwing the dice, so both can be tested.
 
 import { list, record, text } from "./checked";
@@ -30,7 +30,7 @@ const LONGEST = 500;
 /** A roll as it is read and kept: in small letters, with each run of spaces made one. */
 export const tidy = (text: string): string => text.toLowerCase().replace(/\s+/g, " ").trim();
 
-/** Reads a typed roll. Returns a sentence saying what is wrong if it cannot be read. */
+/** Reads a roll written out, as the buttons write it or a link carries it. Returns a sentence saying what is wrong if it cannot be read. */
 export function read(text: string): Roll | string {
     const written = tidy(text);
     if (!written) return "Type a roll, such as 2d6+3.";
