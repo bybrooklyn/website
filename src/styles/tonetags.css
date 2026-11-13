@@ -12,33 +12,32 @@
 }
 
 /* The search: a soft rounded field the width of the list, a magnifier at its start. Its edge takes the accent while it is typed in. */
-/* The search, and beside it at the right the words that copy a link to the page. */
+/* The search, and beside it at the right the button that copies a link to the page. */
 .tonetags-top {
     display: flex;
     align-items: center;
-    gap: 1.25rem;
+    gap: 0.75rem;
 }
 
-/* a thing to press is a word in the accent, underlined as a link is, as in the minis' panels */
+/* a button the height and shape of the field beside it, edged and tinted in the accent; it gives a little when pressed */
 .tonetags-copy {
     flex: none;
-    padding: 0;
-    border: 0;
-    background: none;
-    color: var(--accent);
+    align-self: stretch;
+    padding: 0 1.3rem;
+    border: 0.0625rem solid var(--accent);
+    border-radius: 2rem;
+    background: color-mix(in oklch, var(--accent) 14%, transparent);
+    color: var(--ink);
     font: inherit;
-    text-align: start;
-    text-decoration: underline 0.06em color-mix(in oklch, var(--accent) 45%, transparent);
-    text-underline-offset: 0.2em;
     white-space: nowrap;
     cursor: pointer;
     transition:
-        text-decoration-color 0.15s ease,
+        background-color 0.15s ease,
         scale 0.2s var(--ease);
 }
 
 .tonetags-copy:hover {
-    text-decoration-color: var(--accent);
+    background: color-mix(in oklch, var(--accent) 26%, transparent);
 }
 
 .tonetags-copy:active {
