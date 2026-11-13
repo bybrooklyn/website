@@ -516,11 +516,14 @@ export function flowMenu(label: string, options: { align?: "left" | "right"; cla
     function fill(content: MenuItem[] | HTMLElement) {
         items.replaceChildren();
         items.removeAttribute("role");
+        items.removeAttribute("aria-label");
         if (content instanceof HTMLElement) {
             items.append(content);
             return;
         }
         items.setAttribute("role", "menu");
+        // the name goes on the element that is the menu, so that it is said with the menu
+        items.setAttribute("aria-label", label);
         const apple = mac();
         content.forEach((item) => {
             if (item.note) {

@@ -239,6 +239,14 @@ used("a line that is on or off says so to a screen reader, one of a group as a r
     await settle();
 });
 
+used("the element that is the menu carries the menu's name", async () => {
+    await run("window.opened('top')");
+    await settle();
+    expect(await run<string | null>("window.menu.box.querySelector('[role=menu]').getAttribute('aria-label')")).toBe("A menu");
+    await run("window.menu.close()");
+    await settle();
+});
+
 used("closing, it is seen going back onto its control's edge, and opening another menu closes it", async () => {
     await run("window.opened('top')");
     await settle();
