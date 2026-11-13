@@ -1,9 +1,7 @@
 // Mote's 3D physics: solid things with flat faces that fall, tumble and come
-// to rest, and balls that roll. It is here for dice and for the Plinko table,
-// and has only what they need: solids that bulge everywhere, fixed slabs to
-// land on, balls, fixed round posts, friction and bounce. A ball touches
-// slabs, posts and other balls, not a die. Units are whatever the scene uses;
-// y points up.
+// to rest. It is here for the dice, and has only what they need: solids that
+// bulge everywhere, fixed slabs to land on, friction and bounce. Units are
+// whatever the scene uses; y points up.
 //
 //   const space = new Space();
 //   space.slab([0, -0.5, 0], [10, 0.5, 10]);          // a floor
@@ -47,8 +45,6 @@ export interface Solid {
     readonly edges: [number, number][];
     readonly runs: V3[];
     readonly far: number;
-    /** For a ball or a post, how thick it is around its one point or between its two. 0 for a solid of flat faces. */
-    readonly round: number;
     readonly mass: number;
     /** 1 / mass and 1 / how hard it is to turn: both 0 for something that does not move, or is asleep. */
     im: number;
@@ -196,7 +192,6 @@ function make(mesh: Mesh, at: V3, q: Quat, fixed: boolean, stuff: Stuff): Solid 
         p: add(at, spin(q, middle)), q, v: [0, 0, 0], w: [0, 0, 0],
         points, faces: mesh.faces, normals, edges, runs,
         far: Math.max(...points.map(size)),
-        round: 0,
         mass,
         im: fixed ? 0 : 1 / mass,
         ii: fixed ? 0 : 1 / ((2 / 3) * around * (stuff.density ?? 1)),
@@ -285,74 +280,6 @@ function faceToFace(ref: Solid, face: number, inc: Solid, margin: number): [V3, 
         spots = kept;
     }
     return spots;
-}
-
-/** A ball or a post: one point or two, with a radius, and no faces. */
-function rounded(at: V3, points: V3[], radius: number, mass: number, turning: number, stuff: Stuff): Solid {
-    const solid: Solid = {
-        id: ++count,
-        p: at, q: [0, 0, 0, 1], v: [0, 0, 0], w: [0, 0, 0],
-        points, faces: [], normals: [], edges: [], runs: [],
-        far: Math.max(...points.map(size)) + radius,
-        round: radius,
-        mass,
-        im: mass ? 1 / mass : 0,
-        ii: turning ? 1 / turning : 0,
-        friction: stuff.friction ?? 0.4,
-        bounce: stuff.bounce ?? 0,
-        damping: 0, spinDamping: 0, quiet: 0,
-        wp: [], wn: [], wr: [], offsets: [], dp: [0, 0, 0], dq: [0, 0, 0, 1],
-    };
-    place(solid);
-    return solid;
-}
-
-/**
- * The point of a solid's core nearest to `c`: a ball's middle, the line down a post, or the surface
- * of a slab. Inside a slab there is no nearest point, so it gives the way out through the nearest
- * face and how far that is.
- */
-function nearest(s: Solid, c: V3): { at: V3; out?: [n: V3, deep: number] } | undefined {
-    if (s.round) {
-        if (s.wp.length === 1) return { at: s.wp[0]! };
-        const [from, to] = [s.wp[0]!, s.wp[1]!];
-        const along = sub(to, from);
-        return { at: add(from, mul(along, Math.max(0, Math.min(1, dot(sub(c, from), along) / dot(along, along))))) };
-    }
-    // a slab: along each of its three ways, as far as it reaches and no further
-    if (s.faces.length !== 6) return undefined;
-    let at = s.p;
-    let out: [V3, number] | undefined;
-    let within = true;
-    for (const face of [1, 3, 4]) {
-        const n = s.wn[face]!;
-        const half = s.offsets[face]! - dot(n, s.p);
-        const t = dot(sub(c, s.p), n);
-        if (Math.abs(t) > half) within = false;
-        else if (!out || half - Math.abs(t) < out[1]) out = [mul(n, Math.sign(t) || 1), half - Math.abs(t)];
-        at = add(at, mul(n, Math.max(-half, Math.min(half, t))));
-    }
-    return within ? { at: c, out } : { at };
-}
-
-/** Where a ball touches a slab, a post or another ball. Anything else with a ball does not touch. */
-function touchRound(a: Solid, b: Solid, margin: number): Found {
-    const [ball, other] = a.round && a.wp.length === 1 ? [a, b] : [b, a];
-    if (!ball.round || ball.wp.length !== 1) return undefined;
-    const near = nearest(other, ball.p);
-    if (!near) return undefined;
-    let [way, gap]: [V3, number] = [[0, 1, 0], 0];
-    if (near.out) [way, gap] = [near.out[0], -near.out[1] - ball.round];
-    else {
-        const from = sub(ball.p, near.at);
-        const far = size(from);
-        if (far < 1e-9) return undefined;
-        [way, gap] = [mul(from, 1 / far), far - ball.round - other.round];
-    }
-    if (gap > margin) return undefined;
-    // halfway across the gap, from the other's surface toward the ball
-    const at = add(ball.p, mul(way, -ball.round - gap / 2));
-    return { n: ball === a ? mul(way, -1) : way, spots: [[at, gap]] };
 }
 
 function touch(a: Solid, b: Solid, margin: number): Found {
@@ -474,24 +401,6 @@ export class Space {
         return made;
     }
 
-    /** A ball that rolls: where its middle is, and its radius. */
-    ball(at: V3, radius: number, stuff: Stuff = {}): Solid {
-        const mass = (4 / 3) * Math.PI * radius ** 3 * (stuff.density ?? 1);
-        const made = rounded(at, [[0, 0, 0]], radius, mass, 0.4 * mass * radius * radius, stuff);
-        // A ball touches at one point, which cannot stop it spinning on the spot. This stands for what does: the give of the table under it.
-        made.spinDamping = 0.6;
-        this.solids.push(made);
-        return made;
-    }
-
-    /** A round post that does not move, from one end to the other. */
-    post(from: V3, to: V3, radius: number, stuff: Stuff = {}): Solid {
-        const middle = mul(add(from, to), 0.5);
-        const made = rounded(middle, [sub(from, middle), sub(to, middle)], radius, 0, 0, stuff);
-        this.solids.push(made);
-        return made;
-    }
-
     /** Moves everything on by `dt` seconds, in steps of 1 / `rate`. A time that is not ahead is ignored, and more than a second is taken as a second. */
     step(dt: number): void {
         if (!(dt > 0)) return;
@@ -545,7 +454,7 @@ export class Space {
                     for (let f = 0; f < box.wn.length && !out; f++) out = dot(box.wn[f]!, ball.p) - box.offsets[f]! > ball.far + margin;
                     if (out) continue;
                 }
-                const found = a.round || b.round ? touchRound(a, b, margin) : touch(a, b, margin);
+                const found = touch(a, b, margin);
                 if (!found) continue;
                 // something asleep is woken by anything that reaches it while moving
                 for (const [lying, other] of [[a, b], [b, a]] as const) {
