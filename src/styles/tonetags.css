@@ -1,9 +1,9 @@
-/* The tone tags page (src/pages/tonetags.astro): what they are, a box to search in, a strip of the everyday ones, and all of them A to Z in tight columns. */
+/* The tone tags page (src/pages/tonetags.astro): a field to search in, a strip of the everyday ones, and all of them A to Z in tight columns. */
 
 .tonetags {
     --grow: 0.28s;
     --fade: 0.18s;
-    margin-block: calc(var(--line) * 1.5) calc(var(--line) * 2);
+    margin-block: 0 calc(var(--line) * 2);
 }
 
 /* The columns take the page's whole width, the room a post keeps for its contents list included, so that meanings sit on one line. */
@@ -11,28 +11,55 @@
     grid-column: 1 / -1;
 }
 
-/* The box is a line to type on, as the minis' are: a rule under the words, the accent when it is being typed on. */
-.tonetags-find input {
-    width: 100%;
-    max-width: var(--measure);
-    padding: 0.4rem 0;
-    border: 0;
-    border-bottom: 0.0625rem solid var(--rule);
-    border-radius: 0;
-    background: none;
-    color: var(--ink);
-    font: inherit;
-    font-size: 1.15rem;
+/* The search: a soft rounded field the width of the list, a magnifier at its start. Its edge takes the accent while it is typed in. */
+.tonetags-find {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    padding: 0.55rem 1.1rem;
+    border: 0.0625rem solid var(--rule);
+    border-radius: 2rem;
+    background: var(--surface);
     transition: border-color 0.15s ease;
 }
 
+.tonetags-find:focus-within {
+    border-color: var(--accent);
+}
+
+.tonetags-find svg {
+    flex: none;
+    width: 1.05rem;
+    height: 1.05rem;
+    fill: none;
+    stroke: var(--muted);
+    stroke-width: 1.5;
+    stroke-linecap: round;
+}
+
+.tonetags-find input {
+    flex: 1;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--ink);
+    font: inherit;
+    font-size: 1.1rem;
+}
+
+/* the field's own edge shows where the keyboard is, so the box inside it needs no ring of its own */
 .tonetags-find input:focus {
     outline: none;
-    border-bottom-color: var(--accent);
 }
 
 .tonetags-find input::placeholder {
-    color: color-mix(in oklch, var(--muted) 70%, transparent);
+    color: color-mix(in oklch, var(--muted) 75%, transparent);
+}
+
+/* the browser's own cross for clearing a search box is left out: it is a different blue on every browser */
+.tonetags-find input::-webkit-search-cancel-button {
+    display: none;
 }
 
 /* How many were found: room is kept for the line, so the list under it does not jump when it speaks. */

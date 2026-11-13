@@ -2,7 +2,7 @@
 // /tonetags/: what tone tags mean, with a search. A tone tag is a short mark after a message,
 // behind a slash, that says how the message is meant. It opens like a project (its words are
 // src/content/projects/tone-tags.mdx, which says `opens: /tonetags/`): the thing at the top, then
-// what it is.
+// what it is (in a line, its summary).
 //
 // The whole list is written here, A to Z in columns under a strip of the most used, so the page
 // reads without scripts.
@@ -12,7 +12,7 @@ import "../styles/content";
 import "../styles/blog.css";
 import "../styles/projects.css";
 import "../styles/tonetags.css";
-import { getEntry, render } from "astro:content";
+import { getEntry } from "astro:content";
 import PrevNext from "../components/PrevNext.astro";
 import Opened from "../layouts/Opened.astro";
 import { getProjects, projectPage } from "../lib/projects";
@@ -21,7 +21,6 @@ import { tags } from "../tonetags/tags";
 
 const project = (await getEntry("projects", "tone-tags"))!;
 const { name, summary, language } = project.data;
-const { Content } = await render(project);
 const projects = await getProjects();
 const at = projects.findIndex((each) => each.id === project.id);
 const previous = projects[at - 1];
@@ -42,14 +41,10 @@ const all = placed.toSorted((a, b) => a.tag.forms[0]!.localeCompare(b.tag.forms[
             <p class="lede">{summary}</p>
         </header>
 
-        {/* What a tone tag is, who it helps, and that nobody has to learn them: the project's own words, first, for whoever has never seen one. */}
-        <div class="prose tonetags-about">
-            <Content />
-        </div>
-
         <div class="tonetags" data-tonetags>
             <label class="tonetags-find">
                 <span class="unseen">Search the tags</span>
+                <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5"></circle><path d="M10.5 10.5 14 14"></path></svg>
                 <input type="search" placeholder="/j, or what you mean: not angry at you" autocomplete="off" autocapitalize="off" spellcheck="false" />
             </label>
             <p class="tonetags-count note" aria-live="polite"></p>
