@@ -119,13 +119,13 @@ export function createCaret(root: HTMLElement, frame: HTMLElement, colours: read
         }
         return true;
     };
-    const place = () => {
+    const place = (atOnce = false) => {
         clearTimeout(rest);
         clearInterval(ticking);
         // blinked off when a key is pressed, it is back at once and whole, not faded in
         const blinkedOff = element.classList.contains("off");
         element.classList.remove("off");
-        if (!move(blinkedOff)) return;
+        if (!move(blinkedOff || atOnce)) return;
         colour();
         if (still()) return;
         // still for a moment, it starts to blink: off, then on in the next colour
@@ -147,8 +147,8 @@ export function createCaret(root: HTMLElement, frame: HTMLElement, colours: read
     const follow = () => {
         if (fresh) {
             fresh = false;
-            place();
-        } else move();
+            place(true);
+        } else move(true);
         if (performance.now() > until) {
             waiting = false;
             return;
@@ -162,10 +162,29 @@ export function createCaret(root: HTMLElement, frame: HTMLElement, colours: read
         waiting = true;
         requestAnimationFrame(follow);
     };
-    const moved = () => soon(true);
+    // The caret is put in its place in the same instant the text changes or the cursor moves, not a frame later:
+    // waiting for the next frame left it a letter behind the words while typing. Typed text takes it there at
+    // once; the cursor moved by a key or a press slides it the short way. Then it is followed for a moment, as
+    // what is above it settles.
+    let typedAt = -Infinity;
+    const typed = () => {
+        typedAt = performance.now();
+        place(true);
+        soon(false);
+    };
+    const moved = () => {
+        // the cursor's own move that follows a keystroke is part of the typing
+        place(performance.now() - typedAt < 100);
+        soon(false);
+    };
     const carried = () => soon(false);
     document.addEventListener("selectionchange", moved);
-    root.addEventListener("input", moved);
+    root.addEventListener("input", typed);
+    // The editor writes the text itself, and the browser reports the cursor's move a frame or two later. A change
+    // to the text is heard here straight after it is made, before anything is drawn, so the caret is drawn with
+    // the letter and not after it.
+    const written = new MutationObserver(typed);
+    written.observe(root, { childList: true, subtree: true, characterData: true });
     root.addEventListener("focus", moved);
     root.addEventListener("blur", moved);
     addEventListener("resize", carried);
@@ -181,6 +200,7 @@ export function createCaret(root: HTMLElement, frame: HTMLElement, colours: read
             document.removeEventListener("selectionchange", moved);
             removeEventListener("resize", carried);
             watcher.disconnect();
+            written.disconnect();
             element.remove();
         },
     };

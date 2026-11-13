@@ -156,8 +156,8 @@
     /* it fades as it blinks and slides the little way to where it is next; caret.ts puts it somewhere new at once */
     transition:
         opacity 0.12s ease,
-        translate 0.07s ease-out,
-        height 0.07s ease-out;
+        translate 0.05s ease-out,
+        height 0.05s ease-out;
 }
 
 @media (prefers-reduced-motion: reduce) {
