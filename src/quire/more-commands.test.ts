@@ -137,6 +137,22 @@ used("Edit, Select all matching text selects every place the words appear: typin
     expect(await md()).toBe("The cat sat. A cat ran.\n\nOne cat.\n");
 });
 
+used("Insert, Bookmark puts a named place drawn as a flag, and the link field offers it and the headings to link to", async () => {
+    await reset("## Start here\n\nThe middle part.\n\nSee it.\n", [1], 4);
+    await menu("Insert", "Bookmark");
+    await tab.wait(300);
+    expect(await tab.run<string>("document.activeElement.value")).toBe("the-middle-part");
+    await tab.press("Enter");
+    expect(await md()).toBe('## Start here\n\nThe <a id="the-middle-part"></a>middle part.\n\nSee it.\n');
+    expect(await tab.run<string>("document.querySelector('.quire-bookmark').title")).toBe("Bookmark: the-middle-part");
+    await tab.run("q.select([2], 4, [2], 6)");
+    await tab.press("k", { ctrl: true });
+    await tab.wait(650);
+    expect(await tab.run<string[]>("[...document.querySelectorAll('.quire-link-places .quire-menu-label')].map((each) => each.textContent)")).toEqual(["Start here", "the-middle-part"]);
+    await press(".quire-link-places .quire-menu-line", "the-middle-part");
+    expect(await md()).toBe('## Start here\n\nThe <a id="the-middle-part"></a>middle part.\n\nSee [it](#the-middle-part).\n');
+});
+
 used("Format, Bullets and numbering writes a list with another bullet, restarts its numbers and carries on the list before", async () => {
     await reset("- one\n- two\n", [0, 1, 0], 1);
     await menu("Format", "Bullets and numbering", "Written with a star");

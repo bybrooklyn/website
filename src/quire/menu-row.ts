@@ -53,7 +53,7 @@ export type Command =
     | "check" | "about" | "wordCount" | "shortcuts" | "searchMenus" | "forgetUsed"
     | "superscript" | "subscript" | "marked" | "typedSigns"
     | "downloadAs" | "notes" | "nextNote" | "previousNote" | "comment" | "date" | "symbols" | "contents" | "updateContents"
-    | "capitals" | "lists" | "title" | "subtitle" | "selectMatching";
+    | "capitals" | "lists" | "title" | "subtitle" | "selectMatching" | "bookmark";
 
 /** The menus of the row, for a document as it stands. A line's shortcut, if it has one, comes from the table in shortcuts.ts. */
 export function headings(state: RowState, act: RowActions): Heading[] {
@@ -130,6 +130,7 @@ export function headings(state: RowState, act: RowActions): Heading[] {
                 ...line("number", "Numbered list", { icon: "number" }),
                 ...line("task", "Checklist", { icon: "task" }),
                 ...line("link", "Link", { icon: "link" }),
+                ...line("bookmark", "Bookmark"),
             ],
         },
         {

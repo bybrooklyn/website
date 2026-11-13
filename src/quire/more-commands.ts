@@ -5,8 +5,9 @@
 //   const actions = { ...theOthers, ...moreCommands(surface, { doing, word: (index) => row.words[index]! }) };
 
 import { setStyleOf, type Action } from "./bar";
+import { addBookmark, suggestedName } from "./bookmarks";
 import { recase, type Case } from "./capitals";
-import type { List } from "./document";
+import { blockAt, type List } from "./document";
 import type { RowActions } from "./menu-row";
 import { continuePrevious, listHere, markWith, restartAt } from "./numbering";
 import type { Surface } from "./surface";
@@ -62,7 +63,23 @@ export function moreCommands(surface: Surface, options: MoreOptions): RowActions
         // Markdown reads all three as the same bullet, and the site draws them alike: only the character saved changes
         return [...MARKERS.map(([marker, label]): MenuItem => ({ label, hint: marker, group: "marker", pressed: here.list.marker === marker, run: doing(markWith(marker)) })), note("All three are drawn alike, as Markdown reads them"), carry];
     };
+    const marking = flowMenu("Bookmark");
+    const bookmark = () => {
+        const state = { doc: surface.getDocument(), selection: surface.getSelection() };
+        // a heading is a place a link can go to already, by its own id
+        if (blockAt(state.doc, state.selection.focus.path)?.kind === "heading") return marking.open(word(3), [note("A heading is a place to link to already")], true);
+        const form = fieldForm({ value: suggestedName(state), label: "Bookmark name", button: "Add", said: "Add the bookmark" }, {
+            set: (typed) => {
+                marking.close(false);
+                doing(addBookmark(typed || suggestedName(state)))();
+            },
+            cancel: () => marking.close(true),
+        });
+        marking.open(word(3), form);
+        form.querySelector("input")?.select();
+    };
     return {
+        bookmark,
         capitals: () => capitals.open(format(), CASES.map(([how, label]) => ({ label, run: doing(recase(how)) })), true),
         lists: () => lists.open(format(), listLines(), true),
         // Markdown has no title: the document's is the line above the writing, its name, and Title goes there

@@ -55,6 +55,7 @@ import { createZoom, pageRule, percent, setPage, setupItems } from "./paper";
 import type { Page } from "./document";
 import { moreCommands } from "./more-commands";
 import { createMatching } from "./matching";
+import { places } from "./bookmarks";
 
 /** What the editor is given by the page. */
 export interface EditorOptions {
@@ -287,7 +288,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
                 finish();
             },
             cancel: finish,
-        });
+        }, places(surface.getDocument()));
         links.open(from, form);
         form.querySelector("input")?.focus({ preventScroll: true });
     };

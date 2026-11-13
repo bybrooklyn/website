@@ -48,6 +48,7 @@ import { emojiOf } from "./emoji";
 import { highlight, LANGUAGE_NAMES } from "./highlight";
 import { maths } from "./maths";
 import { namesIn } from "./check/names";
+import { bookmarkName } from "./bookmarks";
 
 /** What the host gives the surface. `onImage` stores a pasted or dropped picture and gives back its address. */
 export interface SurfaceOptions {
@@ -245,6 +246,14 @@ function drawLeaf(leaf: Leaf, how: Drawing = plainDrawing): Node {
         atom.contentEditable = "false";
         atom.dataset.atom = "";
         atom.textContent = leaf.kind === "footnote" ? `[${leaf.label}]` : leaf.html;
+        // a bookmark is drawn as a small quiet flag, its name said on it
+        const name = leaf.kind === "html" ? bookmarkName(leaf.html) : undefined;
+        if (name !== undefined) {
+            atom.className = "quire-atom quire-bookmark";
+            atom.textContent = "⚑";
+            atom.title = `Bookmark: ${name}`;
+            atom.setAttribute("aria-label", `Bookmark ${name}`);
+        }
         return atom;
     }
     let node: Node = leaf.marks.includes("math") ? drawMath(leaf.text) : !leaf.marks.includes("code") && (/[→←⇒]/.test(leaf.text) || (how.join && leaf.text.includes("=="))) ? joined(leaf.text, how.join) : named(leaf.text);

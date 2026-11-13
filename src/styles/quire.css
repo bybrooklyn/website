@@ -552,6 +552,19 @@
     font-size: 0.85em;
 }
 
+/* a bookmark, `<a id>`: a small flag in the text, never printed */
+.quire-bookmark {
+    margin-inline: 0.1em;
+    font-size: 0.75em;
+    vertical-align: 0.3em;
+}
+
+@media print {
+    .quire-bookmark {
+        display: none;
+    }
+}
+
 .quire-footnote {
     display: flex;
     gap: 0.5rem;
@@ -1108,6 +1121,19 @@
 .quire-link-set {
     padding-inline: 0.8rem;
     color: var(--accent);
+}
+
+/* the document's headings and bookmarks under the link field, to link to by name */
+.quire-link-places {
+    max-height: 14rem;
+    margin-top: 0.35rem;
+    overflow-y: auto;
+}
+
+.quire-link-places-head {
+    margin: 0.2rem 0.45rem;
+    color: var(--muted);
+    font-size: 0.8rem;
 }
 
 /* ---- the selection bar ----

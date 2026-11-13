@@ -11,6 +11,7 @@
 import { expect, test } from "bun:test";
 import { blockAt, blockPaths, changeKind, insertBlock, lengthOf, list, removeBlock, runsText, setLink, setStyle, table, toggleMark, type Block, type Document, type Kind, type Leaf, type Mark, type Position, type Run, type Selection } from "./document";
 import type { Action } from "./bar";
+import { addBookmark } from "./bookmarks";
 import { recase } from "./capitals";
 import { continuePrevious, markWith, restartAt } from "./numbering";
 import { sortHere } from "./tables";
@@ -333,6 +334,7 @@ function change(editor: Editor, random: ReturnType<typeof generator>, time: numb
             ["continue the list before", continuePrevious],
             ["sort A to Z", sortHere(false)],
             ["sort Z to A", sortHere(true)],
+            ["bookmark", addBookmark("a place")],
         ];
         const [what, command] = random.pick(commands);
         const state = command({ doc, selection: { anchor, focus } });
