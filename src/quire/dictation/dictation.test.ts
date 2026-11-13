@@ -7,7 +7,7 @@
 // if nothing is listening there, and stops it again.
 
 import { afterAll, beforeAll, expect, setDefaultTimeout, test } from "bun:test";
-import { spawn, type ChildProcess } from "node:child_process";
+import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { existsSync } from "node:fs";
 import { browser, chromium, type Browser } from "../../../scripts/browser";
 import { at } from "../../../scripts/lib";
@@ -31,6 +31,9 @@ beforeAll(async () => {
 });
 afterAll(async () => {
     if (ready) await tab.close();
+    // Astro's preview carries on as a service of its own after the command that started it is gone, and refuses
+    // to start a second: left running, later runs were served an old build. It is stopped by Astro's own command.
+    if (server) spawnSync("bunx", ["astro", "preview", "stop"], { cwd: at("."), stdio: "ignore" });
     server?.kill();
 });
 
