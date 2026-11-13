@@ -3401,6 +3401,13 @@ body.quire-app,
     margin-top: calc(var(--line) * 0.2);
 }
 
+/* a loose list (blank lines between its items in the file) has its items a line apart, as the paragraphs
+   inside an item are: else an item's second paragraph, or its code, stood a line below its first and
+   almost touching the next item */
+.prose.quire :not(.quire-tight) > li + li {
+    margin-top: var(--line);
+}
+
 .prose.quire li > :is(ul, ol) {
     margin-block: calc(var(--line) * 0.2) 0;
 }

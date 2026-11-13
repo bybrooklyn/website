@@ -1463,6 +1463,26 @@ used("a line of space lies above a picture and below the words written under it"
     expect(gaps.map(({ name, gap }) => ({ name, near: Math.abs(gap - 1) <= 0.05 }))).toEqual(gaps.map(({ name }) => ({ name, near: true })));
 });
 
+used("in a loose list the items are a line apart, as the paragraphs and code inside an item are; a tight list's items are close", async () => {
+    await reset("- A loose item.\n\n  Its second paragraph.\n\n- The next item.\n\n1. With code:\n\n   ```\n   code\n   ```\n\n2. Next.\n\nWords.\n\n- tight\n- items\n", [0, 0, 0], 0);
+    await tab.run("document.activeElement.blur()");
+    await tab.wait(300);
+    const seen = await tab.run<number[]>(`(() => {
+        const line = parseFloat(getComputedStyle(document.querySelector('.prose.quire')).lineHeight);
+        const inner = (e) => { const b = e.getBoundingClientRect(); const s = getComputedStyle(e); return { top: b.top + parseFloat(s.paddingTop), bottom: b.bottom - parseFloat(s.paddingBottom) }; };
+        const [loose, numbered, , tight] = document.querySelectorAll('.prose.quire > *');
+        const gap = (a, b) => +((b.top - a.bottom) / line).toFixed(2);
+        const items = (list) => [...list.children];
+        return [
+            gap(inner(items(loose)[0].children[0]), inner(items(loose)[0].children[1])),
+            gap(inner(items(loose)[0].children[1]), inner(items(loose)[1].children[0])),
+            gap(items(numbered)[0].querySelector('pre').getBoundingClientRect(), inner(items(numbered)[1].children[0])),
+            gap(inner(items(tight)[0]), inner(items(tight)[1])),
+        ];
+    })()`);
+    expect(seen).toEqual([1, 1, 1, 0.2]);
+});
+
 used("a faint \"Type / for blocks\" fades in on the empty line the cursor is on, goes when typing starts, and an empty document is never blank", async () => {
     // how much of the hint is seen on a line: none when the line has no hint at all
     const shown = (index: number) => tab.run<number>(`(() => { const style = getComputedStyle(document.querySelectorAll('.quire > *')[${index}], '::before'); return style.content === 'none' ? 0 : parseFloat(style.opacity) || 0; })()`);
