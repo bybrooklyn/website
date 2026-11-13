@@ -148,3 +148,49 @@ test("a callout's kind is chosen from a menu of the five, not stepped round by p
     await tab.wait(300);
     expect(await page!.md()).toBe("> [!WARNING]\n> Mind this.\n");
 });
+
+test("a folding section's arrow folds it away in the editor and back, changing nothing saved; closed for readers is a choice of its own", async () => {
+    if (skip("a folding section's arrow")) return;
+    const { tab } = page!;
+    const source = "<details>\n<summary>More</summary>\n\nHidden text.\n\n</details>\n\nAfter\n";
+    await page!.reset(source, [1], 0);
+    const bodyHeight = () => tab.run<number>("document.querySelector('.quire-fold-body').getBoundingClientRect().height");
+    expect(await bodyHeight()).toBeGreaterThan(10);
+    expect(await tab.run("document.querySelector('.quire-fold-readers').getAttribute('aria-pressed')")).toBe("true");
+    await page!.press(".quire-fold-turn");
+    // it closes over time, not in one step
+    await tab.wait(60);
+    const closing = await bodyHeight();
+    await tab.wait(400);
+    expect(closing).toBeGreaterThan(0);
+    expect(await bodyHeight()).toBe(0);
+    expect(await tab.run("document.querySelector('.quire-fold-turn').getAttribute('aria-expanded')")).toBe("false");
+    expect(await page!.md()).toBe(source);
+    // the choice for readers is saved and leaves it folded in the editor
+    await page!.press(".quire-fold-readers");
+    expect(await page!.md()).toBe("<details open>\n<summary>More</summary>\n\nHidden text.\n\n</details>\n\nAfter\n");
+    expect(await tab.run("document.querySelector('.quire-fold').classList.contains('folded')")).toBe(true);
+    await page!.press(".quire-fold-turn");
+    await tab.wait(400);
+    expect(await bodyHeight()).toBeGreaterThan(10);
+    // a caret put inside a folded section unfolds it
+    await page!.press(".quire-fold-turn");
+    await tab.wait(400);
+    await tab.run("q.select([0, 0], 3)");
+    await tab.wait(400);
+    expect(await bodyHeight()).toBeGreaterThan(10);
+});
+
+test("a folding section just inserted takes the keyboard into its summary, whose empty word is quiet", async () => {
+    if (skip("a new folding section's summary")) return;
+    const { tab } = page!;
+    await page!.reset("Line\n", [0], 4);
+    await page!.menuLine("Insert", "Folding section");
+    await tab.wait(100);
+    expect(await keyboard()).toBe("input.quire-summary");
+    expect(await tab.run("document.querySelector('.quire-summary').placeholder")).toBe("Summary");
+    await tab.type("Spoilers");
+    await tab.press("Enter");
+    await tab.type("x");
+    expect(await page!.md()).toBe("<details>\n<summary>Spoilers</summary>\n\nxLine\n\n</details>\n");
+});

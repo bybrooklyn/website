@@ -50,7 +50,7 @@ import { calloutName, languageLabel } from "./block-menus";
 import { maths } from "./maths";
 import { namesIn } from "./check/names";
 import { bookmarkName } from "./bookmarks";
-import { afterField, finishes, type FieldKind } from "./fields";
+import { afterField, finishes, freshFold, type FieldKind } from "./fields";
 
 /** What the host gives the surface. `onImage` stores a pasted or dropped picture and gives back its address. */
 export interface SurfaceOptions {
@@ -155,6 +155,8 @@ interface Drawing {
     mdx: boolean;
     join: boolean;
     later?: (holder: HTMLElement, block: Code) => void;
+    /** Whether the writer has folded a folding section away in the editor, which is the editor's own and never saved. */
+    folded?: (block: Block) => boolean;
 }
 
 const plainDrawing: Drawing = { mdx: false, join: true };
@@ -474,24 +476,32 @@ function draw(block: Block, inner: number[], how: Drawing = plainDrawing): HTMLE
         }
         case "quote":
             if (block.details) {
-                // a folding section: its summary as a field, whether it starts open as a button, and its blocks always shown to be written in
+                // a folding section: the arrow that folds it away in the editor, its summary as a field, and whether
+                // readers find it closed as a choice of its own, named in words
+                const folded = how.folded?.(block) ?? false;
                 const element = document.createElement("div");
-                element.className = `quire-fold${block.details.open ? " open" : ""}`;
+                element.className = `quire-fold${folded ? " folded" : ""}`;
                 const head = aside("div", "quire-fold-head");
                 const turn = document.createElement("button");
                 turn.type = "button";
                 turn.className = "quire-fold-turn";
                 turn.dataset.fold = inner.join(",");
-                turn.setAttribute("aria-pressed", String(block.details.open));
-                turn.setAttribute("aria-label", block.details.open ? "Starts open; press to start it closed" : "Starts closed; press to start it open");
-                turn.title = block.details.open ? "Starts open" : "Starts closed";
+                turn.setAttribute("aria-expanded", String(!folded));
+                turn.setAttribute("aria-label", "Fold the section");
+                turn.title = folded ? "Unfold" : "Fold";
                 const summary = document.createElement("input");
                 summary.className = "quire-summary";
                 summary.value = block.details.summary;
-                summary.placeholder = "What is folded away";
+                summary.placeholder = "Summary";
                 summary.setAttribute("aria-label", "The section's summary");
                 summary.dataset.summary = inner.join(",");
-                head.append(turn, summary);
+                const readers = document.createElement("button");
+                readers.type = "button";
+                readers.className = "quire-fold-readers";
+                readers.dataset.readers = inner.join(",");
+                readers.textContent = "Closed for readers";
+                readers.setAttribute("aria-pressed", String(!block.details.open));
+                head.append(turn, summary, readers);
                 const body = document.createElement("div");
                 body.className = "quire-fold-body";
                 block.blocks.forEach((child, j) => body.append(draw(child, [...inner, j], how)));
@@ -698,7 +708,20 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
 
     /** Whether typed arrows and signs become their characters, and `==` is shown joined: on unless the writer turned it off. */
     let symbols = true;
-    const drawing = (): Drawing => ({ mdx: editor.state.doc.mdx, join: symbols, later });
+    const drawing = (): Drawing => ({ mdx: editor.state.doc.mdx, join: symbols, later, folded: (block) => folds.has(block) });
+
+    /** The folding sections the writer has folded away in the editor, by their block; a section changed is drawn open again, so nothing is ever hidden by surprise. */
+    let folds = new WeakSet<Block>();
+
+    /** Folds a folding section away in the editor, or unfolds it, its drawing changed in place so that it moves. */
+    function fold(element: HTMLElement, block: Block, away: boolean) {
+        if (away) folds.add(block);
+        else folds.delete(block);
+        element.classList.toggle("folded", away);
+        const turn = element.querySelector<HTMLElement>(":scope > .quire-fold-head > .quire-fold-turn");
+        turn?.setAttribute("aria-expanded", String(!away));
+        if (turn) turn.title = away ? "Unfold" : "Fold";
+    }
 
     // a long code block is highlighted once typing in it pauses, the newest drawing of it only
     const waiting = new Map<HTMLElement, Code>();
@@ -732,6 +755,12 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
             // a code block with no language shows its quiet Plain text control while the caret is in it
             const code = holder.closest<HTMLElement>("pre.quire-code");
             if (code) now.push(code);
+            // a caret that lands inside a section folded away (by find, or the keys) unfolds it
+            for (let shut = holder.closest<HTMLElement>(".quire-fold.folded"); shut; shut = shut.parentElement?.closest<HTMLElement>(".quire-fold.folded") ?? null) {
+                const turn = shut.querySelector<HTMLElement>(":scope > .quire-fold-head > .quire-fold-turn");
+                const block = turn && blockAt(editor.state.doc, pathOf(turn, turn.dataset.fold));
+                if (block) fold(shut, block, false);
+            }
             for (const math of holder.querySelectorAll<HTMLElement>(".quire-math, .quire-spoiler")) {
                 const start = offsetIn(holder, math, 0);
                 if (focus.offset >= start && focus.offset <= start + units(math)) now.push(math);
@@ -922,6 +951,13 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
         markHere();
         placeSelection();
         if (changed) emit("change", { doc: editor.state.doc, before, kind: outcome && "state" in outcome && outcome.kind !== "move" ? outcome.kind : undefined });
+        // a folding section just made gives the keyboard to its summary first, once whatever made it has given the text back its focus
+        const made = changed && freshFold(before, editor.state.doc, editor.state.selection.focus.path);
+        if (made)
+            queueMicrotask(() => {
+                const summary = holderAt(editor.state.selection.focus.path)?.closest(".quire-fold")?.querySelector<HTMLInputElement>(":scope > .quire-fold-head > .quire-summary");
+                if (summary && document.activeElement === root) summary.focus({ preventScroll: true });
+            });
         announce();
         if (outcome && "state" in outcome && outcome.slash) emit("slash", { selection: editor.state.selection, rect: rect() });
     }
@@ -1318,11 +1354,34 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
     /** Presses a control drawn in the document, if the target is in one: a folding section's button sets whether it starts open, a task's box is ticked. True if it was one. A code block's language and a callout's kind open menus of their own (block-menus.ts). */
     function pressControl(target: HTMLElement): boolean {
         if (target.closest?.("[data-callout-kind], [data-lang]")) return true;
-        const fold = target.closest?.("[data-fold]") as HTMLElement | null;
-        if (fold && root.contains(fold)) {
-            const path = pathOf(fold, fold.dataset.fold);
+        const turn = target.closest?.("[data-fold]") as HTMLElement | null;
+        if (turn && root.contains(turn)) {
+            const block = blockAt(editor.state.doc, pathOf(turn, turn.dataset.fold));
+            const element = turn.closest<HTMLElement>(".quire-fold");
+            if (block?.kind === "quote" && block.details && element) {
+                const away = !element.classList.contains("folded");
+                fold(element, block, away);
+                // a caret inside what folds away goes to the first line after the section
+                const { focus } = editor.state.selection;
+                const path = pathOf(turn, turn.dataset.fold);
+                if (away && focus.path.length > path.length && path.every((step, k) => focus.path[k] === step)) {
+                    const at = afterField(editor.state.doc, path, "prop");
+                    commit(apply(editor, { state: { doc: editor.state.doc, selection: { anchor: at, focus: at } }, kind: "move" }, Date.now()));
+                }
+            }
+            return true;
+        }
+        const readers = target.closest?.("[data-readers]") as HTMLElement | null;
+        if (readers && root.contains(readers)) {
+            const path = pathOf(readers, readers.dataset.readers);
             const block = blockAt(editor.state.doc, path);
-            if (block?.kind === "quote" && block.details) run((doc) => setBox(doc, path, { details: { ...block.details!, open: !block.details!.open } }));
+            if (block?.kind === "quote" && block.details) {
+                const next = setBox(editor.state.doc, path, { details: { ...block.details, open: !block.details.open } });
+                // the choice for readers leaves the section folded or not in the editor as it was
+                const now = blockAt(next, path);
+                if (folds.has(block) && now) folds.add(now);
+                run(() => next);
+            }
             return true;
         }
         const box = target.closest?.("[data-box]") as HTMLElement | null;

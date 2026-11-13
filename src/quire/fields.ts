@@ -39,6 +39,21 @@ export function afterField(doc: Document, path: number[], kind: FieldKind): Posi
     return { path: before ?? paths[0] ?? [0], offset: 0 };
 }
 
+/**
+ * The folding section a change has just made round the caret, still with no summary, whose summary
+ * then takes the keyboard first, as the line that names what is folded; undefined if there is none.
+ */
+export function freshFold(before: Document, after: Document, caret: number[]): number[] | undefined {
+    for (let length = caret.length - 1; length >= 1; length--) {
+        const path = caret.slice(0, length);
+        const block = blockAt(after, path);
+        if (block?.kind !== "quote" || !block.details) continue;
+        const was = blockAt(before, path);
+        return block.details.summary === "" && !(was?.kind === "quote" && was.details) ? path : undefined;
+    }
+    return undefined;
+}
+
 /** Whether a key is the Enter that finishes a field, and not one an input method uses to choose a word. */
 export function finishes(event: KeyboardEvent): boolean {
     return event.key === "Enter" && !event.shiftKey && !event.isComposing && event.keyCode !== 229;

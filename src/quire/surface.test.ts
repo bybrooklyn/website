@@ -290,7 +290,7 @@ test.skipIf(!chromium())(
 );
 
 test.skipIf(!chromium())(
-    "a task's box and a folding section's button work from a screen reader's click as from the mouse, once each",
+    "a task's box and a folding section's choice for readers work from a screen reader's click as from the mouse, once each",
     async () => {
         const { tab, folder } = await open();
         try {
@@ -298,7 +298,7 @@ test.skipIf(!chromium())(
             // a click no pointer made, as a screen reader's activation sends
             const press = (selector: string) => tab.run(`document.querySelector(${JSON.stringify(selector)}).dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, detail: 0 }))`);
             await press("[data-box]");
-            await press("[data-fold]");
+            await press("[data-readers]");
             const md = await tab.run<string>("quire.markdown()");
             expect(md).toContain("- [x] task");
             expect(md).toContain("<details open>");

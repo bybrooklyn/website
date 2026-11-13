@@ -602,7 +602,7 @@
     margin-bottom: calc(var(--line) * 0.6);
 }
 
-/* ---- folding sections: a turning mark, the summary as a field, and the blocks, always there to write in ---- */
+/* ---- folding sections: a turning mark that folds the blocks away in the editor, the summary as a field, and whether readers find it closed ---- */
 
 .quire-fold {
     margin-block: var(--line);
@@ -640,7 +640,7 @@
     transition: transform 0.25s var(--ease);
 }
 
-.quire-fold.open .quire-fold-turn::before {
+.quire-fold:not(.folded) > .quire-fold-head .quire-fold-turn::before {
     transform: rotate(90deg);
 }
 
@@ -661,8 +661,61 @@
     font-weight: 650;
 }
 
+/* the empty summary's word is quiet and plain, so it is not read as words already written */
+.quire-summary::placeholder {
+    color: var(--quire-faint);
+    font-weight: 400;
+}
+
+/* whether readers find it closed: a quiet choice in words, filled while it is on */
+.quire-fold-readers {
+    flex: none;
+    padding: 0.15em 0.6em;
+    border: 0.0625rem solid var(--rule);
+    border-radius: 0.35em;
+    background: none;
+    color: var(--muted);
+    font: inherit;
+    font-size: 0.8em;
+    cursor: pointer;
+    transition:
+        background 0.2s var(--ease),
+        color 0.2s var(--ease);
+}
+
+.quire-fold-readers:hover {
+    color: var(--ink);
+}
+
+.quire-fold-readers[aria-pressed="true"] {
+    background: color-mix(in oklch, var(--accent) 18%, transparent);
+    border-color: color-mix(in oklch, var(--accent) 45%, var(--rule));
+    color: var(--ink);
+}
+
 .quire-fold-body {
     padding: calc(var(--line) * 0.5) 1rem;
+    interpolate-size: allow-keywords;
+    transition:
+        height 0.25s var(--ease),
+        padding 0.25s var(--ease),
+        visibility 0s 0s;
+}
+
+/* folded away in the editor, the blocks close up under the summary; once closed they cannot take the caret */
+.quire-fold.folded > .quire-fold-head {
+    border-bottom-color: transparent;
+}
+
+.quire-fold.folded > .quire-fold-body {
+    height: 0;
+    padding-block: 0;
+    overflow: hidden;
+    visibility: hidden;
+    transition:
+        height 0.25s var(--ease),
+        padding 0.25s var(--ease),
+        visibility 0s 0.25s;
 }
 
 .quire-fold-body > :first-child {
@@ -854,6 +907,10 @@
     .quire-callout,
     .quire-callout-kind,
     .quire-fold-turn::before,
+    .quire-fold-body,
+    .quire-fold.folded > .quire-fold-body,
+    .quire-fold-readers,
+    .quire-lang-corner,
     .quire-comp-field input {
         transition: none;
     }
