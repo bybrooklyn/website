@@ -96,7 +96,8 @@ async function notePhoto(file: string, title: string, note: string): Promise<voi
 
 async function newPost(title: string): Promise<string> {
     const path = `src/content/blog/${slug(title)}.mdx`;
-    if (!slug(title)) throw new Error("That title has no letters or numbers in it.");
+    // The file name is made from the Latin letters and numbers in the title; a title in another script has none.
+    if (!slug(title)) throw new Error("The post's file name is made from the title's letters a to z and numbers, and this title has none. Give it a title with some, and change it afterwards if you like.");
     if (await exists(path)) return path;
     await Bun.write(
         at(path),

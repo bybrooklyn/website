@@ -141,6 +141,12 @@ used("a new post is made by the server's own endpoint, its frontmatter edited as
     expect(expected.split("\n").filter((line) => line.startsWith("date:") || line.startsWith("#"))).toEqual(before.split("\n").filter((line) => line.startsWith("date:") || line.startsWith("#")));
 });
 
+used("a title with no letters a to z or numbers is refused with that reason, not as a title with no letters", async () => {
+    const made = await fetch(new URL("/api/new", address), { method: "POST", headers: { "x-edit-key": key, "content-type": "application/json" }, body: JSON.stringify({ title: "日本語" }) });
+    expect(made.status).toBe(500);
+    expect(((await made.json()) as { error: string }).error).toContain("a to z");
+});
+
 used("the raw frontmatter is behind a switch, and the real page beside the text can be hidden and shown", async () => {
     await press(".edit-front-swap");
     await tab.wait(400);
