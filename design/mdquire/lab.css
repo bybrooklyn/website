@@ -84,7 +84,6 @@ body.lab {
 /* "by" is a word of the name like the others: the same size, only quieter */
 .lab-by-word {
     color: var(--muted);
-    font-style: italic;
 }
 
 .lab-by .flags {
