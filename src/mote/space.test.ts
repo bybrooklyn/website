@@ -159,3 +159,16 @@ test("a step of no number or of minus a second is ignored, one of forever is kep
         expect(die.p[1]).toBeLessThan(after);
     }
 });
+
+test("a held solid stays held when something falls onto it, until it is let go", () => {
+    const space = new Space();
+    space.slab([0, -0.5, 0], [10, 0.5, 10]);
+    const held = space.solid(cube(), [0, 4, 0]);
+    space.hold(held);
+    space.solid(cube(), [0, 7, 0]);
+    for (let i = 0; i < 120; i++) space.step(TICK);
+    expect(held.p[1]).toBeCloseTo(4, 5);
+    space.wake(held);
+    for (let i = 0; i < 120; i++) space.step(TICK);
+    expect(held.p[1]).toBeLessThan(2);
+});

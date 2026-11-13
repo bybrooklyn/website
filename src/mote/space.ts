@@ -51,6 +51,8 @@ export interface Solid {
     ii: number;
     /** Asleep: lying still, and left out of the work until something moving reaches it. What it weighs is kept here meanwhile. */
     rest?: [im: number, ii: number];
+    /** Held by `hold`: kept where it is, and not woken by what touches it, until `wake`. */
+    held?: boolean;
     friction: number;
     bounce: number;
     /** How quickly it slows by itself, per second, moving and turning. */
@@ -422,9 +424,11 @@ export class Space {
         if (!solid.im) return;
         solid.rest = [solid.im, solid.ii];
         [solid.im, solid.ii] = [0, 0];
+        solid.held = true;
     }
 
     wake(solid: Solid): void {
+        solid.held = false;
         if (!solid.rest) return;
         [solid.im, solid.ii] = solid.rest;
         solid.rest = undefined;
@@ -456,9 +460,9 @@ export class Space {
                 }
                 const found = touch(a, b, margin);
                 if (!found) continue;
-                // something asleep is woken by anything that reaches it while moving
+                // something asleep is woken by anything that reaches it while moving; something held is not
                 for (const [lying, other] of [[a, b], [b, a]] as const) {
-                    if (lying.rest && other.im && size(other.v) + size(other.w) * other.far > 8 * this.slow) {
+                    if (lying.rest && !lying.held && other.im && size(other.v) + size(other.w) * other.far > 8 * this.slow) {
                         [lying.im, lying.ii] = lying.rest;
                         lying.rest = undefined;
                         lying.quiet = 0;
