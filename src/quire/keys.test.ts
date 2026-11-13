@@ -508,3 +508,10 @@ test("the cursor lands in a cell, never on a table: after pasting a table, and a
     below.key("Backspace");
     expect(below.cursor).toEqual({ path: [0, 1, 0], offset: 1 });
 });
+
+test("Normal text on an item's line takes it out of the list, and the selection goes with the text", () => {
+    const normal = editor("- a\n- b\n", [0, 1, 0], 0);
+    normal.key("0", { mod: true, alt: true });
+    expect(normal.markdown).toBe("- a\n\nb\n");
+    expect(normal.cursor).toEqual({ path: [1], offset: 0 });
+});

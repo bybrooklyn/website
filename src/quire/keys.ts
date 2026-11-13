@@ -402,6 +402,31 @@ function endOf(doc: Document, path: number[]): [number[], number] {
     return [at, lengthOf(doc, at)];
 }
 
+/** Where a position goes when its document changes from `before` to `after`: the same place in reading order, the same cell of a table, never past the end of its text. */
+function follow(before: Document, after: Document, position: Position): Position {
+    if (before === after) return position;
+    const table = tableOf(before, position.path);
+    if (table) {
+        const moved = sameLeaf(before, table, after);
+        const found = blockAt(after, moved);
+        const row = position.path[position.path.length - 2]!;
+        const column = position.path[position.path.length - 1]!;
+        if (found?.kind === "table") {
+            const path = [...moved, Math.min(row, found.rows.length), Math.min(column, found.header.length - 1)];
+            return { path, offset: Math.min(position.offset, lengthOf(after, path)) };
+        }
+        const [path, offset] = endOf(after, moved);
+        return { path, offset };
+    }
+    const path = sameLeaf(before, position.path, after);
+    const block = blockAt(after, path);
+    if (block?.kind === "table") {
+        const [cell, offset] = endOf(after, path);
+        return { path: cell, offset };
+    }
+    return { path, offset: Math.min(position.offset, lengthOf(after, path)) };
+}
+
 function forwardDelete(state: State, word: boolean): Outcome {
     if (!collapsed(state.selection)) return backspace(state, word);
     const { doc } = state;
@@ -556,7 +581,8 @@ export function mark(state: State, which: Mark): Outcome {
 function blockKind(state: State, level: number): Outcome {
     const at = state.selection.focus;
     const next = changeKind(state.doc, at.path, level === 0 ? { kind: "paragraph" } : { kind: "heading", level: level as Level });
-    return done(next, state.selection, "format");
+    // Normal text on an item's line takes it out of its list, so the selection follows the text
+    return done(next, { anchor: follow(state.doc, next, state.selection.anchor), focus: follow(state.doc, next, state.selection.focus) }, "format");
 }
 
 // ---- the whole ----
