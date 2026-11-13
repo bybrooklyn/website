@@ -40,6 +40,51 @@
     background: color-mix(in oklch, var(--accent) 26%, transparent);
 }
 
+.tonetags-copy-rest {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.3em;
+}
+
+/* "website" is always there, drawn shut between "copy" and "link"; it opens out when the button is pointed at or reached by keyboard */
+.tonetags-copy-more {
+    display: grid;
+    grid-template-columns: 0fr;
+    margin-inline: -0.15em;
+    opacity: 0;
+    transition:
+        grid-template-columns 0.3s var(--ease),
+        margin 0.3s var(--ease),
+        opacity 0.2s ease;
+}
+
+.tonetags-copy-more > span {
+    min-width: 0;
+    overflow: hidden;
+}
+
+.tonetags-copy:is(:hover, :focus-visible) .tonetags-copy-more {
+    grid-template-columns: 1fr;
+    margin-inline: 0;
+    opacity: 1;
+}
+
+/* once it has copied it says so for a moment, in place of its own words */
+.tonetags-copy-done,
+.tonetags-copy[data-copied] .tonetags-copy-rest {
+    display: none;
+}
+
+.tonetags-copy[data-copied] .tonetags-copy-done {
+    display: inline;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .tonetags-copy-more {
+        transition: none;
+    }
+}
+
 .tonetags-copy:active {
     scale: 0.96;
 }

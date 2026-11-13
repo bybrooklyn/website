@@ -4,7 +4,7 @@
 // folds away while a search is on. The matching itself is in src/tonetags/tags.ts.
 
 import { find, tags } from "../tonetags/tags";
-import { copyText } from "./copy";
+import { copyMarked } from "./copy";
 
 const root = document.querySelector<HTMLElement>("[data-tonetags]");
 if (root) {
@@ -41,7 +41,7 @@ if (root) {
     copy.addEventListener("click", () => {
         const here = new URL(location.pathname, location.origin);
         if (box.value.trim()) here.searchParams.set("q", box.value.trim());
-        copyText(copy, here.href, { rest: "copy link", done: "link copied", failed: "could not copy" });
+        copyMarked(copy, here.href);
     });
     // a tag in the address is looked up at once: /tonetags/?q=srs
     const asked = new URLSearchParams(location.search).get("q");

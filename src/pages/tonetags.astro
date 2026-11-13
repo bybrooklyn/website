@@ -49,7 +49,13 @@ const all = placed.toSorted((a, b) => a.tag.forms[0]!.localeCompare(b.tag.forms[
                     <input type="search" placeholder="/j, or what you mean: not angry at you" autocomplete="off" autocapitalize="off" spellcheck="false" />
                 </label>
                 {/* copies this page's address, with what is being searched for in it, to send to someone */}
-                <button type="button" class="tonetags-copy">copy link</button>
+                <button type="button" class="tonetags-copy" aria-label="Copy website link">
+                    {/* "copy link" at rest; "website" opens out between the two words when it is pointed at or reached by keyboard */}
+                    <span class="tonetags-copy-rest" aria-hidden="true">
+                        copy<span class="tonetags-copy-more"><span>website</span></span>link
+                    </span>
+                    <span class="tonetags-copy-done" aria-hidden="true">link copied</span>
+                </button>
             </div>
             <p class="tonetags-count note" aria-live="polite"></p>
 
