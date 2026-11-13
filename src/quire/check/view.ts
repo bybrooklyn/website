@@ -311,6 +311,15 @@ export function createChecking(host: CheckingHost & { keep: CheckingHost["keep"]
         const found = findingAt(shown, focus);
         if (found && found.range.end.offset - found.range.start.offset <= 60) openPop(found, false);
     };
+    // a right click on an underline opens its popover: with these marks on, the browser's own menu has no spelling to offer
+    const onMenu = (event: MouseEvent) => {
+        if (!prefs.on) return;
+        const inside = (box: DOMRect) => event.clientX >= box.left && event.clientX <= box.right && event.clientY >= box.top && event.clientY <= box.bottom;
+        const found = shown.find((one) => one.range.end.offset - one.range.start.offset <= 60 && [...(surface.rangeOf(one.range.start, one.range.end)?.getClientRects() ?? [])].some(inside));
+        if (!found) return;
+        event.preventDefault();
+        openPop(found, true);
+    };
     const onKey = (event: KeyboardEvent) => {
         if (!prefs.on) return;
         if (event.key === "F8" && !event.ctrlKey && !event.altKey && !event.metaKey) {
@@ -327,6 +336,7 @@ export function createChecking(host: CheckingHost & { keep: CheckingHost["keep"]
     };
     surface.element.addEventListener("click", onClick);
     surface.element.addEventListener("keydown", onKey);
+    surface.element.addEventListener("contextmenu", onMenu);
     surface.element.addEventListener("beforeinput", onInput);
     const stops = [
         surface.on("change", () => {
@@ -478,6 +488,7 @@ export function createChecking(host: CheckingHost & { keep: CheckingHost["keep"]
             for (const stop of stops) stop();
             surface.element.removeEventListener("click", onClick);
             surface.element.removeEventListener("keydown", onKey);
+            surface.element.removeEventListener("contextmenu", onMenu);
             surface.element.removeEventListener("beforeinput", onInput);
             surface.element.spellcheck = spellcheckWas;
             for (const menu of [list, pop, settingsMenu]) menu.box.remove();
