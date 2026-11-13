@@ -476,6 +476,9 @@ function endOf(doc: Document, path: number[]): [number[], number] {
     return [at, lengthOf(doc, at)];
 }
 
+/** The start of the text at a path; for a table, its first cell. */
+const startOf = (doc: Document, path: number[]): number[] => (blockAt(doc, path)?.kind === "table" ? [...path, 0, 0] : path);
+
 /** Where a position goes when its document changes from `before` to `after`: the same place in reading order, the same cell of a table, never past the end of its text. */
 function follow(before: Document, after: Document, position: Position): Position {
     if (before === after) return position;
@@ -519,7 +522,8 @@ function forwardDelete(state: State, word: boolean): Outcome {
     if (following.kind === "divider" || following.kind === "image" || isPageBreak(following)) return done(removeBlock(doc, nextPath), state.selection, "delete");
     if (block.kind === "paragraph" && length === 0) {
         const next = removeBlock(doc, at.path);
-        return done(next, caret(sameLeaf(doc, nextPath, next), 0), "delete");
+        // the empty line is gone, so what followed it is now one place earlier in reading order
+        return done(next, caret(startOf(next, sameLeaf(doc, nextPath, next, -1)), 0), "delete");
     }
     const next = joinBlock(doc, nextPath);
     return next === doc ? done(doc, state.selection, "move") : done(next, caret(sameLeaf(doc, at.path, next), at.offset), "delete");
@@ -756,7 +760,8 @@ export function paste(state: State, blocks: Block[]): State {
     }
     const index = indexOf(doc, at.path);
     const fresh = blocks.map((each) => ({ ...each, source: undefined }));
-    if (!textual(block) || (block?.kind === "paragraph" && runsLength(block.runs) === 0)) {
+    // an empty line (Enter on it would leave its list, not split it) is taken over by what is pasted
+    if (!textual(block) || runsLength((block as { runs: Run[] }).runs) === 0) {
         // after a picture or divider, or in place of an empty paragraph
         let next = doc;
         let path = at.path;

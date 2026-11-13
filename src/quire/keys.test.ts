@@ -3,7 +3,7 @@
 // with the one undo that gives back the characters typed. Run with `bun test src/quire`.
 
 import { expect, test } from "bun:test";
-import { blockPaths, documentOf, paragraph, removeBlock, runsText, type Block, type Run, type Selection } from "./document";
+import { blockAt, blockPaths, documentOf, paragraph, removeBlock, runsText, type Block, type Run, type Selection } from "./document";
 import { createHistory } from "./history";
 import { activeBlock, activeMarks, caret, characterReach, fragment, paste, step, type Editor, type Input } from "./keys";
 import { read } from "./read";
@@ -597,4 +597,17 @@ test("Backspace and Delete take a whole character as a reader sees one, never ha
     const forward = editor("éx\n", [0], 0);
     forward.key("Delete");
     expect(forward.markdown).toBe("x\n");
+});
+
+test("the selection lands on real text after pasting onto an empty heading in a list, and after Delete on an empty line before a table", () => {
+    const heading = editor("- a\n- #\n", [0, 1, 0], 0);
+    expect(heading.state.doc.blocks[0]?.kind).toBe("list");
+    const pasted = paste(heading.state, read("- x\n\ntail text\n").blocks);
+    const cursor = pasted.selection.focus;
+    expect(runsText((blockAt(pasted.doc, cursor.path) as { runs: Run[] }).runs).length).toBeGreaterThanOrEqual(cursor.offset);
+    expect(write(pasted.doc)).toBe("- a\n- - x\n\n  tail text\n");
+    const before = editor("x\n\n| a |\n|---|\n| 1 |\n", [0], 1);
+    before.key("Backspace");
+    before.key("Delete");
+    expect(before.cursor).toEqual({ path: [0, 0, 0], offset: 0 });
 });
