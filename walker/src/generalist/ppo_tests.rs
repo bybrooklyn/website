@@ -171,6 +171,16 @@ fn learner_advantages(learner: &Learner) -> Vec<f32> {
 }
 
 #[test]
+fn more_minibatches_asked_than_there_are_samples_is_a_minibatch_of_one_each() {
+    let settings = Settings { steps: 2, minibatches: 64, ..toy() };
+    let mut task = Reach::new(4, 1);
+    let mut learner = Learner::new(settings, 2, 1, 4, 3);
+    learner.begin(&mut task);
+    learner.update(&mut task);
+    assert!(learner.weights.iter().all(|w| w.is_finite()));
+}
+
+#[test]
 fn a_number_that_is_not_finite_never_gets_into_what_is_learned() {
     // a running mean is not spoiled by one row with a NaN or an infinity in it
     let mut running = Running::new(2);

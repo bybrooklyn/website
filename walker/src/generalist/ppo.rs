@@ -662,7 +662,8 @@ impl Learner {
     pub fn epochs(&mut self) {
         for _ in 0..self.settings.epochs {
             self.shuffle();
-            for which in 0..self.settings.minibatches {
+            // never more minibatches than samples, each of which is then a minibatch of its own
+            for which in 0..self.settings.minibatches.min(self.samples()) {
                 self.gradient(which);
                 self.apply(None);
             }
