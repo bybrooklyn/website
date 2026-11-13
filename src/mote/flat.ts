@@ -608,47 +608,47 @@ export class Flat {
         let now = new Map<number, Manifold>();
         let woke = false;
         const find = () => {
-          manifolds = [];
-          now = new Map();
-          woke = false;
-          for (let i = 0; i < bodies.length; i++) {
-            const a = bodies[i]!;
-            if (!a.points.length) continue;
-            for (let j = i + 1; j < bodies.length; j++) {
-                const b = bodies[j]!;
-                if ((!live(a) && !live(b)) || !b.points.length || (a.family && a.family === b.family)) continue;
-                const closing = Math.hypot(b.vx - a.vx, b.vy - a.vy) + Math.abs(a.w) * a.far + Math.abs(b.w) * b.far;
-                // Anything that could reach it this step is found now, so that nothing fast gets through anything.
-                const margin = MARGIN + Math.min(closing * dt, 400);
-                const reach = a.far + b.far + margin;
-                if ((b.x - a.x) ** 2 + (b.y - a.y) ** 2 > reach * reach) continue;
-                const key = pair(a, b);
-                if (this.#through.has(key)) continue;
-                const found = touch(a, b, margin);
-                if (!found) continue;
-                // Something asleep is woken by anything that reaches it while moving. Something lying still
-                // against it does not wake it: the two would only keep each other up.
-                if (a.im && b.im && (a.asleep || b.asleep) && closing > 2 * SLOW) {
-                    wake(a);
-                    wake(b);
-                    woke = true;
+            manifolds = [];
+            now = new Map();
+            woke = false;
+            for (let i = 0; i < bodies.length; i++) {
+                const a = bodies[i]!;
+                if (!a.points.length) continue;
+                for (let j = i + 1; j < bodies.length; j++) {
+                    const b = bodies[j]!;
+                    if ((!live(a) && !live(b)) || !b.points.length || (a.family && a.family === b.family)) continue;
+                    const closing = Math.hypot(b.vx - a.vx, b.vy - a.vy) + Math.abs(a.w) * a.far + Math.abs(b.w) * b.far;
+                    // Anything that could reach it this step is found now, so that nothing fast gets through anything.
+                    const margin = MARGIN + Math.min(closing * dt, 400);
+                    const reach = a.far + b.far + margin;
+                    if ((b.x - a.x) ** 2 + (b.y - a.y) ** 2 > reach * reach) continue;
+                    const key = pair(a, b);
+                    if (this.#through.has(key)) continue;
+                    const found = touch(a, b, margin);
+                    if (!found) continue;
+                    // Something asleep is woken by anything that reaches it while moving. Something lying still
+                    // against it does not wake it: the two would only keep each other up.
+                    if (a.im && b.im && (a.asleep || b.asleep) && closing > 2 * SLOW) {
+                        wake(a);
+                        wake(b);
+                        woke = true;
+                    }
+                    const before = this.#was.get(key);
+                    const manifold: Manifold = {
+                        a, b, key, nx: found.nx, ny: found.ny,
+                        friction: Math.sqrt(a.friction * b.friction),
+                        bounce: Math.max(a.bounce, b.bounce),
+                        stiff: !a.im || !b.im,
+                        sides: 0,
+                        spots: found.spots.map(([x, y, gap, id]): Spot => {
+                            const old = before?.spots.find((spot) => spot.id === id);
+                            return { id, ax: x - a.x, ay: y - a.y, bx: x - b.x, by: y - b.y, gap, cax: 0, cay: 0, cbx: 0, cby: 0, adjusted: 0, normalMass: 0, tangentMass: 0, sides: 0, speed: 0, springy: false, push: old?.push ?? 0, rub: old?.rub ?? 0, closing: 0, most: 0 };
+                        }),
+                    };
+                    manifolds.push(manifold);
+                    now.set(key, manifold);
                 }
-                const before = this.#was.get(key);
-                const manifold: Manifold = {
-                    a, b, key, nx: found.nx, ny: found.ny,
-                    friction: Math.sqrt(a.friction * b.friction),
-                    bounce: Math.max(a.bounce, b.bounce),
-                    stiff: !a.im || !b.im,
-                    sides: 0,
-                    spots: found.spots.map(([x, y, gap, id]): Spot => {
-                        const old = before?.spots.find((spot) => spot.id === id);
-                        return { id, ax: x - a.x, ay: y - a.y, bx: x - b.x, by: y - b.y, gap, cax: 0, cay: 0, cbx: 0, cby: 0, adjusted: 0, normalMass: 0, tangentMass: 0, sides: 0, speed: 0, springy: false, push: old?.push ?? 0, rub: old?.rub ?? 0, closing: 0, most: 0 };
-                    }),
-                };
-                manifolds.push(manifold);
-                now.set(key, manifold);
             }
-          }
         };
         find();
         // A pile that was woken is looked at again as a whole, so that it is held together from the first moment.
