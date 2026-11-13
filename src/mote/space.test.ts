@@ -1,10 +1,10 @@
 // What "correct" means for Mote's 3D physics, measured. Run with `bun run test`.
 
 import { expect, test } from "bun:test";
+import { TICK } from "./stage";
 import { Space, angled, inside } from "./space";
 import { cube, twenty, type Mesh, type V3 } from "./solids";
 
-const TICK = 1 / 120;
 const run = (space: Space, seconds: number, each?: (time: number) => void) => {
     for (let time = 0; time < seconds - 1e-9; time += TICK) {
         space.step(TICK);
