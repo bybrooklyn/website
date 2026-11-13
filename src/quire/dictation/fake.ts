@@ -38,7 +38,7 @@ export interface TestControls {
     downloadTime: number;
     /** False makes cancelling come too late, so that the made-up download finishes anyway. */
     cancellable: boolean;
-    /** How many times the made-up microphone was opened, and closed (a second close of the same one counts too). */
+    /** How many times the made-up microphone was opened, and closed. */
     opened(): number;
     closed(): number;
     /** Takes the microphone away, as unplugging it or withdrawing its permission does. */
@@ -51,6 +51,8 @@ export interface TestControls {
     stopped(): number;
     /** Counts one stop; the page calls it. */
     stop(): void;
+    /** How many times the made-up engine was ended. */
+    disposed(): number;
     /** How slowly the made-up recognizer works, in milliseconds per call. */
     delay: number;
     /** The document as Markdown. */
@@ -72,6 +74,7 @@ export function createFake(): { provider: Provider; microphone: (onFrame: (frame
     let opened = 0;
     let closed = 0;
     let stopped = 0;
+    let disposed = 0;
     let lost: (() => void) | undefined;
     /** The answers waiting, each with a way to fail it. */
     const waiting = new Set<(error: Error) => void>();
@@ -85,6 +88,7 @@ export function createFake(): { provider: Provider; microphone: (onFrame: (frame
         pending: () => waiting.size,
         stopped: () => stopped,
         stop: () => void stopped++,
+        disposed: () => disposed,
         delay: 40,
         microphoneOpen: () => feed !== undefined,
         downloaded: () => [...kept],
@@ -166,6 +170,9 @@ export function createFake(): { provider: Provider; microphone: (onFrame: (frame
             await new Promise((done) => setTimeout(done, 60));
             return { recognizer, ms: 60 };
         },
+        dispose() {
+            disposed++;
+        },
         async remove(tier) {
             kept.delete(tier.id);
         },
@@ -175,7 +182,9 @@ export function createFake(): { provider: Provider; microphone: (onFrame: (frame
         feed = onFrame;
         opened++;
         let open = true;
+        // as the real one, closing twice is the same as once
         const close = () => {
+            if (!open) return;
             closed++;
             open = false;
             feed = undefined;

@@ -334,7 +334,14 @@ export function createDictation(surface: Surface, options: DictationOptions = {}
         /** The model is let go a little after dictation stops (or fails to start), which gives back the memory it held. */
         function scheduleRelease() {
             clearTimeout(release);
-            if (gone) return;
+            // taken down: the model and the worker go now, once nothing is being written
+            if (gone) {
+                if (session) return;
+                recognizer?.dispose();
+                recognizer = undefined;
+                provider.dispose();
+                return;
+            }
             release = setTimeout(() => {
                 if (session) return;
                 recognizer?.dispose();
@@ -727,11 +734,14 @@ export function createDictation(surface: Surface, options: DictationOptions = {}
             stats: () => ({ backend: recognizer?.backend ?? "", loadMs, speed: session?.speed() ?? lastSpeed, mode: session?.mode() ?? "none", message }),
             state: () => state,
             destroy() {
+                gone = true;
                 starting++;
-                clearTimeout(release);
                 releaseMic();
-                void session?.stop("button");
-                recognizer?.dispose();
+                if (state === "downloading") provider.cancel();
+                // The last phrase is still recognized and written before the model goes: the session's end lets it go
+                // (scheduleRelease, from ended). With no session it goes now, and so does a load that ends later.
+                if (session) void session.stop("button");
+                else scheduleRelease();
                 surface.element.removeEventListener("keydown", onKey, true);
                 document.removeEventListener("visibilitychange", onHidden);
                 removeEventListener("pagehide", onLeave);

@@ -212,6 +212,28 @@ test.skipIf(!ready)(
     240000,
 );
 
+test.skipIf(!ready)("taking dictation down closes the microphone at once, still writes the last phrase, then ends the engine; a download under way is cancelled", async () => {
+    await fresh();
+    await listening();
+    await run("window.dictationTest.speak(3000, 0.2)");
+    await run("window.dictation.destroy()");
+    expect(await run("window.dictationTest.microphoneOpen()")).toBe(false);
+    await until("window.dictationTest.markdown() !== ''", "the last phrase written");
+    expect(await markdown()).toBe("Hello there my dear friend.");
+    await until("window.dictationTest.disposed() === 1", "the engine ended");
+    expect(await run("window.dictationTest.pending()")).toBe(0);
+    await fresh();
+    await run("window.dictationTest.downloadTime = 1500");
+    await press(button("Start dictation"));
+    await choose();
+    await press(".quire-dictation-download");
+    await until("window.dictation.state() === 'downloading'", "downloading");
+    await run("window.dictation.destroy()");
+    await tab.wait(1800);
+    expect(await run("window.dictationTest.downloaded().length")).toBe(0);
+    expect(await run("window.dictationTest.opened()")).toBe(0);
+});
+
 test.skipIf(!ready)("after the download it listens, shows provisional words that are not in the document, then settles them as one undo step", async () => {
     await fresh();
     await listening();

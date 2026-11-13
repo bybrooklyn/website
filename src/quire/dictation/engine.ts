@@ -49,6 +49,8 @@ export interface Provider {
     load(tier: Tier, words: string[]): Promise<{ recognizer: Recognizer; ms: number }>;
     /** Deletes a tier's files from this browser. */
     remove(tier: Tier): Promise<void>;
+    /** Ends the engine and gives back all it holds (a download under way, a model loaded), for when dictation is taken down. */
+    dispose(): void;
 }
 
 const FOLDER = "mdquire-dictation";
@@ -212,6 +214,9 @@ export function createProvider(): Provider {
             const answer = await request<Extract<Answer, { type: "loaded" }>>((id) => ({ type: "load", id, tier: tier.id, words }), (each) => (each.type === "loaded" ? each : undefined));
             if (worker !== mine) throw new Error("The speech engine stopped");
             return { ms: answer.ms, recognizer: recognizerOn(mine, answer) };
+        },
+        dispose() {
+            if (worker) lose(worker, "The speech engine was let go");
         },
         async remove(tier) {
             if (worker) lose(worker, "The model was removed");
