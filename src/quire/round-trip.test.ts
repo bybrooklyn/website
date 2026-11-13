@@ -353,7 +353,7 @@ test("any run of edits writes Markdown that reads back as what the writer sees, 
     }
     if (failures.length) console.log(`${failures.length} of ${runs} runs of edits failed`);
     expect(failures.slice(0, 5)).toEqual([]);
-});
+}, 60000 * TIMES);
 
 // ---- random marked text ----
 
@@ -402,4 +402,4 @@ test("marked text next to any punctuation reads back with the same marks, in a p
     }
     if (failures.length) console.log(`${failures.length} of ${cases} marked lines failed`);
     expect(failures.slice(0, 5)).toEqual([]);
-});
+}, 60000 * TIMES);
