@@ -3101,8 +3101,10 @@ body.quire-app,
     font-size: 0.82rem;
     font-variant-numeric: tabular-nums;
     opacity: 0;
+    /* its least width grows with it too, or it would stand at its full width at once and push the tools beside it */
     transition:
         max-width 0.4s var(--ease),
+        min-width 0.4s var(--ease),
         padding 0.4s var(--ease),
         opacity 0.25s ease;
 }
