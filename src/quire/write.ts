@@ -100,9 +100,10 @@ function refreshed(block: Block, context: Context): Block {
 
 /** Writes blocks one after another. `inside` is true in a list item, quote or footnote, where the last block ends with nothing. */
 function writeBlocks(all: Block[], context: Context, inside: boolean): string {
-    // an empty paragraph has no Markdown form, so a fresh one is left out, and so is the empty line an
+    // an empty paragraph (or one of spaces) has no Markdown form, so a fresh one is left out, and so is the empty line an
     // empty item, quote or footnote is read with, once something else stands beside it
-    const blocks = all.filter((block) => !(block.kind === "paragraph" && block.runs.length === 0 && (block.source === undefined || (block.source === "" && all.length > 1))));
+    const empty = (block: Block) => block.kind === "paragraph" && block.runs.every((run) => run.kind === "text" && run.text.trim() === "" && !run.marks.includes("code"));
+    const blocks = all.filter((block) => !(empty(block) && (block.source === undefined || (block.source === "" && all.length > 1))));
     if (blocks.length && blocks.length < all.length && all[all.length - 1] !== blocks[blocks.length - 1]) blocks[blocks.length - 1] = { ...blocks[blocks.length - 1]!, gap: all[all.length - 1]!.gap };
     const texts: string[] = [];
     blocks.forEach((block, index) => {
@@ -438,10 +439,17 @@ function writeLeaves(all: Leaf[], context: Context, cell: boolean, before = " ",
     const items: (Leaf | undefined)[] = [];
     const stack: Sign[] = [];
     let pairs = 0;
+    // a mark closes before the spaces it ends on, as `**bold **` does not read back
+    const spaces = (index: number) => {
+        const leaf = items[index];
+        return leaf?.kind === "text" && !literal(leaf) && /^\s+$/.test(leaf.text);
+    };
     const close = () => {
         const sign = stack.pop()!;
-        tokens.push({ key: sign.key, open: false, pair: sign.pair, html: false });
-        items.push(undefined);
+        let at = tokens.length;
+        while (at > 0 && spaces(at - 1)) at--;
+        tokens.splice(at, 0, { key: sign.key, open: false, pair: sign.pair, html: false });
+        items.splice(at, 0, undefined);
     };
     for (const leaf of leaves) {
         // pictures, breaks and HTML sit inside whatever marks are open around them, and a mark never
