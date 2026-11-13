@@ -60,6 +60,9 @@ export interface Dialog {
     close(): Promise<void>;
 }
 
+/** One of the three corners (quire.css), read as a length, as the browser's motions want one. */
+const corner = (name: "--quire-round" | "--quire-round-large") => getComputedStyle(document.documentElement).getPropertyValue(name).trim() || (name === "--quire-round" ? "0.75rem" : "1.25rem");
+
 /** How long the dialog takes: it opens on the menus' slight spring, a little slower as it travels further, and closes on the site's easing. */
 export const DIALOG = { open: 320, close: 200, change: 260 };
 
@@ -174,7 +177,7 @@ export function openDialog(from: HTMLElement | undefined, parts: DialogParts): D
             moving.push(
                 skin.animate([{ inset: px(from) }, { inset: "0px" }], { duration: DIALOG.change, easing: EASE }),
                 // what is inside is shown as far as the skin has reached, so that nothing new stands outside it
-                inner.animate([{ clipPath: `inset(${px(from.map((each) => Math.max(0, each)))} round 1.1rem)` }, { clipPath: "inset(0px round 1.1rem)" }], { duration: DIALOG.change, easing: EASE }),
+                inner.animate([{ clipPath: `inset(${px(from.map((each) => Math.max(0, each)))} round ${corner("--quire-round-large")})` }, { clipPath: `inset(0px round ${corner("--quire-round-large")})` }], { duration: DIALOG.change, easing: EASE }),
             );
             if (!made || !was) return;
             // what replaced the pressed thing grows out of where it was, in its colour, which fades as it goes
@@ -184,7 +187,7 @@ export function openDialog(from: HTMLElement | undefined, parts: DialogParts): D
             inner.append(sweep);
             const local = (box: Box) => ({ left: `${box.left - after.left}px`, top: `${box.top - after.top}px`, width: `${box.width}px`, height: `${box.height}px` });
             const gone = () => sweep.remove();
-            sweep.animate([{ ...local(was), borderRadius: radius, opacity: 1 }, { ...local(to), borderRadius: "0.75rem", opacity: 0 }], { duration: DIALOG.change + 80, easing: EASE, fill: "both" }).finished.then(gone, gone);
+            sweep.animate([{ ...local(was), borderRadius: radius, opacity: 1 }, { ...local(to), borderRadius: corner("--quire-round"), opacity: 0 }], { duration: DIALOG.change + 80, easing: EASE, fill: "both" }).finished.then(gone, gone);
             made.animate([{ opacity: 0 }, { opacity: 1 }], { duration: DIALOG.change, delay: DIALOG.change * 0.3, easing: EASE, fill: "backwards" });
         },
         close() {

@@ -171,7 +171,7 @@
     align-items: center;
     gap: 0.15rem;
     padding: 0.2rem;
-    border-radius: 0.6rem;
+    border-radius: var(--quire-round);
     background: var(--surface);
     box-shadow: 0 0.5rem 1.5rem -0.5rem oklch(0.04 0.02 300 / 0.8);
     pointer-events: auto;
@@ -242,7 +242,7 @@
     position: absolute;
     inset: 0;
     border: 0.0625rem solid var(--rule);
-    border-radius: calc(var(--radius) * 2);
+    border-radius: var(--quire-round-large);
     background: var(--surface);
     box-shadow: 0 1rem 2.5rem -1rem oklch(0.04 0.02 300 / 0.7);
 }
@@ -287,7 +287,7 @@
     width: 100%;
     padding: 0.35rem 0.5rem;
     border: 0.0625rem solid var(--rule);
-    border-radius: 0.5rem;
+    border-radius: var(--quire-round-small);
     background: var(--ground);
     color: var(--ink);
     font: inherit;
@@ -465,7 +465,7 @@
 .quire-note {
     box-sizing: border-box;
     padding: 0.55rem 0.7rem 0.45rem;
-    border-radius: 0.6rem;
+    border-radius: var(--quire-round);
     background: var(--panel);
     box-shadow: 0 0 0 0.0625rem var(--panel-rule);
     color: var(--ink);
@@ -562,7 +562,7 @@
     min-height: 4.5rem;
     padding: 0.4rem 0.5rem;
     border: 0.0625rem solid var(--rule);
-    border-radius: 0.45rem;
+    border-radius: var(--quire-round-small);
     background: var(--ground);
     color: var(--ink);
     font: inherit;
@@ -640,7 +640,7 @@
     width: 100%;
     padding: 0.4rem 0.6rem;
     border: 0.0625rem solid var(--rule);
-    border-radius: 0.5rem;
+    border-radius: var(--quire-round-small);
     background: var(--ground);
     color: var(--ink);
     font: inherit;
@@ -672,7 +672,7 @@
 .quire-special {
     aspect-ratio: 1;
     border: 0;
-    border-radius: 0.4rem;
+    border-radius: var(--quire-round-small);
     background: transparent;
     color: var(--ink);
     font: inherit;
@@ -807,7 +807,7 @@
         inset: auto 0 0 !important;
         width: 100%;
         margin: 0;
-        border-radius: 12px 12px 0 0;
+        border-radius: var(--quire-round) var(--quire-round) 0 0;
         position-area: none !important;
     }
 

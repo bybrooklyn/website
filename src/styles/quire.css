@@ -684,7 +684,7 @@
     min-width: var(--press);
     height: var(--press);
     padding: 0 var(--inset);
-    border-radius: 0.5rem;
+    border-radius: var(--quire-round-small);
     color: var(--ink);
     white-space: nowrap;
     transition:
@@ -807,7 +807,7 @@
     width: 2.6rem;
     height: 1.7rem;
     border: 0.0625rem solid var(--rule);
-    border-radius: 0.35rem;
+    border-radius: var(--quire-round-small);
     background: transparent;
     color: var(--ink);
     font: inherit;
@@ -897,7 +897,7 @@
     padding: 0;
     overflow: hidden;
     border: 0;
-    border-radius: 10px;
+    border-radius: var(--quire-round);
     background: var(--panel-raised);
     box-shadow:
         0 0.75rem 2rem oklch(0.05 0.02 300 / 0.55),
@@ -964,7 +964,7 @@
     width: 100%;
     min-height: 2.1rem;
     padding: 0.3rem 0.8rem 0.3rem 0.45rem;
-    border-radius: calc(10px - 0.35rem);
+    border-radius: var(--quire-round-small);
     color: var(--ink);
     text-align: left;
     white-space: nowrap;
@@ -1013,7 +1013,7 @@
     margin: 6px 0;
     padding: 0.3rem 0.55rem;
     border: 0;
-    border-radius: 0.4rem;
+    border-radius: var(--quire-round-small);
     background: var(--panel-raised);
     box-shadow: 0 0.3rem 0.9rem oklch(0.05 0.02 300 / 0.5);
     color: var(--ink);
@@ -1090,7 +1090,7 @@
     max-width: 1rem;
     margin-inline: 0.2rem;
     border: 0.0625rem solid var(--rule);
-    border-radius: 0.5rem;
+    border-radius: var(--quire-round-small);
     background: var(--ink);
 }
 
@@ -1106,7 +1106,7 @@
     height: 2.1rem;
     padding: 0 0.75rem;
     border: 0.0625rem solid var(--rule);
-    border-radius: 1.05rem;
+    border-radius: var(--quire-round-small);
     background: var(--ground);
     color: var(--ink);
     font: inherit;
@@ -1145,7 +1145,7 @@
     display: flex;
     padding: 0.2rem;
     border: 0.0625rem solid color-mix(in oklch, var(--accent) 55%, var(--rule));
-    border-radius: 1.25rem;
+    border-radius: var(--quire-round);
     background: var(--surface);
     font-family: var(--font-text);
     font-size: 0.95rem;
@@ -1189,7 +1189,7 @@
     /* the width it is placed in, which leaves out any room kept for a scrollbar, as 100vw does not */
     max-width: calc(100% - 1rem);
     box-sizing: border-box;
-    border-radius: 1.1rem;
+    border-radius: var(--quire-round);
     transform-origin: 100% 0;
 }
 
@@ -1310,7 +1310,7 @@
     align-items: center;
     padding: 0.15rem;
     border: 0.0625rem solid var(--rule);
-    border-radius: 1.2rem;
+    border-radius: var(--quire-round);
     background: var(--surface);
     font-family: var(--font-text);
     line-height: 1;
@@ -1387,7 +1387,7 @@
     width: min(18rem, 100vw - 2rem);
     padding: 0.9rem 0.6rem 1rem 1rem;
     border: 0.0625rem solid var(--rule);
-    border-radius: calc(var(--radius) * 2);
+    border-radius: var(--quire-round-large);
     background: var(--surface);
     overflow: hidden auto;
     font-family: var(--font-text);
@@ -1680,7 +1680,7 @@
     width: 100%;
     padding: 0.55rem 0.6rem;
     border: 0;
-    border-radius: 0.7rem;
+    border-radius: var(--quire-round-small);
     background: transparent;
     color: var(--ink);
     font: inherit;
@@ -2894,7 +2894,7 @@ body.quire-app,
     align-items: center;
     height: 1.85rem;
     padding: 0 var(--inset);
-    border-radius: 0.45rem;
+    border-radius: var(--quire-round-small);
     color: var(--muted);
     line-height: 1;
     transition:
@@ -2961,7 +2961,7 @@ body.quire-app,
     position: absolute;
     inset: 0;
     border: 0.0625rem solid color-mix(in oklch, var(--rule) 68%, var(--accent));
-    border-radius: 1.1rem;
+    border-radius: var(--quire-round-large);
     background: var(--surface);
     box-shadow: 0 1.5rem 3rem -1rem oklch(0.05 0.02 300 / 0.7);
 }
@@ -3118,7 +3118,7 @@ body.quire-app,
     overflow: hidden;
     min-height: 2.6rem;
     padding: 0 1.4rem;
-    border-radius: 1.3rem;
+    border-radius: var(--quire-round-small);
     background: var(--accent);
     color: var(--ground);
     font-weight: 600;
@@ -3158,7 +3158,7 @@ body.quire-app,
 :is(.quire-dialog, .quire-history, .quire-conflict) .quire-dialog-dismiss {
     min-height: 2.6rem;
     padding: 0 1rem;
-    border-radius: 1.3rem;
+    border-radius: var(--quire-round-small);
     color: var(--muted);
     transition:
         background 0.15s ease,
@@ -3498,7 +3498,7 @@ body.quire-app,
     gap: 0.1rem;
     padding: 0.35rem 0.5rem;
     border: 0;
-    border-radius: 0.6rem;
+    border-radius: var(--quire-round-small);
     background: none;
     color: var(--ink);
     font: inherit;
