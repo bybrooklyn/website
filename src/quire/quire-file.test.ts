@@ -25,11 +25,46 @@ test("a .quire file unzipped by the system is a plain Markdown document with its
 });
 
 test("what is packed unpacks the same, pictures with a type they can be shown with", async () => {
-    const bundle = await unpackQuire(await packQuire({ markdown: "Words.\n", parts, pictures: new Map([["a.webp", new Blob(["webp"])]]) }));
+    const webp = "RIFF\u0000\u0000\u0000\u0000WEBPVP8 ";
+    const bundle = await unpackQuire(await packQuire({ markdown: "Words.\n", parts, pictures: new Map([["a.webp", new Blob([webp])]]) }));
     expect(bundle.markdown).toBe("Words.\n");
     expect(bundle.parts).toEqual(parts);
     expect(bundle.pictures.get("a.webp")?.type).toBe("image/webp");
-    expect(await bundle.pictures.get("a.webp")?.text()).toBe("webp");
+    expect(await bundle.pictures.get("a.webp")?.text()).toBe(webp);
+});
+
+test("a picture inside is given the type its bytes say, so an HTML page or SVG named as a photograph is never shown as a page", async () => {
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0]);
+    const bundle = await unpackQuire(
+        await writeZip([
+            { name: "document.md", data: "Hi.\n" },
+            { name: "pictures/real.jpg", data: png },
+            { name: "pictures/page.png", data: "<html><script>alert(1)</script></html>" },
+            { name: "pictures/drawing.png", data: '<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"/>' },
+            { name: "pictures/drawing.svg", data: '<?xml version="1.0"?>\n<svg xmlns="http://www.w3.org/2000/svg"></svg>' },
+        ]),
+    );
+    expect(bundle.pictures.get("real.jpg")?.type).toBe("image/png");
+    expect(bundle.pictures.get("page.png")?.type).toBe("application/octet-stream");
+    expect(bundle.pictures.get("drawing.png")?.type).toBe("application/octet-stream");
+    expect(bundle.pictures.get("drawing.svg")?.type).toBe("image/svg+xml");
+});
+
+test("only pictures whose names stay in their folder are taken from a .quire file, and a broken escape in an address does not throw", async () => {
+    const bundle = await unpackQuire(await writeZip([{ name: "document.md", data: "Hi.\n" }, { name: "pictures/..-evil.png", data: "a" }, { name: "pictures/c:evil.png", data: "e" }, { name: "pictures/ok-1.png", data: "b" }, { name: "pictures/.hidden.png", data: "c" }, { name: "pictures/a b.png", data: "d" }]));
+    expect([...bundle.pictures.keys()]).toEqual(["ok-1.png", "a b.png"]);
+    const shelf = pictureShelf();
+    expect(() => shelf.show("a.quire", "pictures/%zz.png")).not.toThrow();
+});
+
+test("style.json and notes.json cannot change what every object has, whatever keys they hold", async () => {
+    const hostile = '{"__proto__": {"polluted": "yes"}, "constructor": {"prototype": {"polluted": "yes"}}, "quire": 1, "blocks": [{"__proto__": {"polluted": "yes"}, "path": [0]}], "runs": [{"path": [0], "from": 0, "to": 1, "__proto__": {"polluted": "yes"}, "color": "red"}]}';
+    const notes = '{"__proto__": {"polluted": "yes"}, "comments": [{"__proto__": {"polluted": "yes"}, "id": "a", "path": [0], "from": 0, "to": 2, "quote": "Hi", "text": "x"}]}';
+    const bundle = await unpackQuire(await writeZip([{ name: "document.md", data: "Hi there.\n" }, { name: "style.json", data: hostile }, { name: "notes.json", data: notes }]));
+    const doc = opened(bundle.markdown, bundle.parts);
+    written(doc, write);
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+    expect((Object.prototype as Record<string, unknown>).polluted).toBeUndefined();
 });
 
 test("a .quire zipped from a folder, or without its JSON files, still opens; one without document.md is refused", async () => {

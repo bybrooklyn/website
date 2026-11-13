@@ -32,6 +32,24 @@ export function snapWidth(percent: number): { width: number; snap?: string } {
     return { width: Math.round(kept) };
 }
 
+/**
+ * A picture's real kind, read from its first bytes rather than its name: PNG, JPEG, GIF, WebP, AVIF
+ * or BMP. A file named `.svg` that is an SVG is one too, shown only ever as a picture. Anything else
+ * (an HTML page or a script with a picture's name) is plain bytes, which a browser never draws as a
+ * page.
+ */
+export function pictureType(bytes: Uint8Array, name = ""): string {
+    const at = (offset: number, text: string) => [...text].every((char, index) => bytes[offset + index] === char.charCodeAt(0));
+    if (bytes[0] === 0x89 && at(1, "PNG\r\n")) return "image/png";
+    if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "image/jpeg";
+    if (at(0, "GIF87a") || at(0, "GIF89a")) return "image/gif";
+    if (at(0, "RIFF") && at(8, "WEBP")) return "image/webp";
+    if (at(4, "ftypavif") || at(4, "ftypavis")) return "image/avif";
+    if (at(0, "BM") && bytes.length > 26) return "image/bmp";
+    if (/\.svg$/i.test(name) && /^(\ufeff)?\s*(<\?xml[^>]*>\s*)?(<!--[\s\S]*?-->\s*)*(<!DOCTYPE svg[^>]*>\s*)?<svg[\s>]/i.test(new TextDecoder().decode(bytes.subarray(0, 2048)))) return "image/svg+xml";
+    return "application/octet-stream";
+}
+
 /** Text made safe inside an HTML attribute or element; braces too, which MDX would read as code. */
 function escape(text: string): string {
     return text.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\{/g, "&#123;").replace(/\}/g, "&#125;");
