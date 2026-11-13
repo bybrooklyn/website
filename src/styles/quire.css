@@ -3296,23 +3296,33 @@ body.quire-app,
 /* ---- end of checking ---- */
 
 /* ---- the rhythm of the writing ----
-   Sizes are a published post's (prose.css and base.css). The space between blocks is not: as the
-   owner chose ("Even, like Docs"), one line lies between any two blocks, a heading that starts a new
-   section after other writing has a little more above it (1.4 lines), a heading straight after a
-   heading has no more than a line, and under a heading is one line. Margins collapse, so each block
+   Sizes are a published post's (prose.css and base.css). The space between blocks is not: half a
+   line lies between any two blocks (--gap), so that Enter does not look like two, a heading that
+   starts a new section after other writing has more above it (1.25 lines), a heading straight after
+   a heading has no more than the half line, and under a heading is half a line. The first paragraph
+   is the size of the rest, where a post's opening is larger. Margins collapse, so each block
    says only the least it wants above and below and the larger of two neighbours' wins. A heading's
    last line has its tails kept inside its box by padding (a block out of sight is painted only inside
    its box, see content-visibility above), and its margin is less by as much. */
+.prose.quire {
+    --gap: calc(var(--line) * 0.5);
+}
+
+.prose.quire > p:first-child {
+    font-size: inherit;
+    line-height: inherit;
+}
+
 .prose.quire > *,
 .prose.quire :where(blockquote, :not(.quire-tight) > li, .quire-fold-body) > :where(p, ul, ol, pre, table, blockquote, .quire-drawn, .quire-terms, .quire-comp, .quire-image, .quire-divider) {
-    margin-block: 0 var(--line);
+    margin-block: 0 var(--gap);
 }
 
 .prose.quire :is(h1, h2, h3, h4, h5, h6) {
     /* room inside the box for the tails below and the accents above (a top heading is set solid, its line its size) */
     --tail: 0.22em;
     --crown: 0.08em;
-    margin-block: calc(var(--line) - var(--crown)) calc(var(--line) - var(--tail));
+    margin-block: calc(var(--gap) - var(--crown)) calc(var(--gap) - var(--tail));
     padding-block: var(--crown) var(--tail);
 }
 
@@ -3327,11 +3337,11 @@ body.quire-app,
 }
 
 .prose.quire > :not(h1, h2, h3, h4, h5, h6) + :is(h1, h2, h3, h4, h5, h6) {
-    margin-top: calc(var(--line) * 1.4 - var(--crown));
+    margin-top: calc(var(--line) * 1.25 - var(--crown));
 }
 
 /* a table's edge to the eye is its first row's words, which stand a quarter line down in their cells
-   (prose.css): it is drawn that much higher, the margins collapsing, so the line of space above is one line */
+   (prose.css): it is drawn that much higher, the margins collapsing, so the space above is the half line */
 .prose.quire table {
     margin-top: calc(var(--line) * -0.25);
 }
@@ -3345,12 +3355,12 @@ body.quire-app,
     margin-bottom: 0;
 }
 
-/* a divider is its line and the one line either side, as every other block */
+/* a divider is its line and the half line either side, as every other block */
 .prose.quire .quire-divider hr {
     margin: 0;
 }
 
-/* a heading straight after a heading: the one line is the first's margin and the room under its tails */
+/* a heading straight after a heading: the half line is the first's margin and the room under its tails */
 .prose.quire :is(h1, h2, h3, h4, h5, h6) + :is(h1, h2, h3, h4, h5, h6) {
     margin-top: calc(var(--crown) * -1);
 }
@@ -3383,11 +3393,11 @@ body.quire-app,
     margin-top: calc(var(--line) * 0.2);
 }
 
-/* a loose list (blank lines between its items in the file) has its items a line apart, as the paragraphs
+/* a loose list (blank lines between its items in the file) has its items half a line apart, as the paragraphs
    inside an item are: else an item's second paragraph, or its code, stood a line below its first and
    almost touching the next item */
 .prose.quire :not(.quire-tight) > li + li {
-    margin-top: var(--line);
+    margin-top: var(--gap);
 }
 
 .prose.quire li > :is(ul, ol) {

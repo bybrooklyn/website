@@ -1516,13 +1516,13 @@ used("the text is set as a published post's size and line, at the measure, with 
             pp: box(1).top - box(0).bottom, ph: box(2).top - box(1).bottom + parseFloat(getComputedStyle(kids[2]).paddingTop), hp: box(3).top - box(2).bottom + parseFloat(getComputedStyle(kids[2]).paddingBottom),
         };
     })()`);
-    // sizes are prose.css's; the gaps are "Even, like Docs": a line between paragraphs, 1.4 lines above a heading that starts a section, a line under it
+    // sizes are prose.css's; the gaps are half a line between paragraphs, 1.25 lines above a heading that starts a section, half a line under it
     expect(Math.abs(seen.size - seen.text)).toBeLessThan(0.5);
     expect(Math.abs(seen.height - seen.line)).toBeLessThan(0.5);
     expect(seen.width).toBeLessThanOrEqual(seen.measure + 0.5);
-    expect(Math.abs(seen.pp - seen.line)).toBeLessThan(1);
-    expect(Math.abs(seen.ph - 1.4 * seen.line)).toBeLessThan(1);
-    expect(Math.abs(seen.hp - seen.line)).toBeLessThan(1);
+    expect(Math.abs(seen.pp - 0.5 * seen.line)).toBeLessThan(1);
+    expect(Math.abs(seen.ph - 1.25 * seen.line)).toBeLessThan(1);
+    expect(Math.abs(seen.hp - 0.5 * seen.line)).toBeLessThan(1);
 });
 
 /** The space between each pair of neighbouring blocks, in lines, from what the eye sees as each one's edge: a box's border, a table's first words and last rule, a drawing, a picture and the words under it, or the lines of text. */
@@ -1547,13 +1547,13 @@ const seenGaps = () =>
         return kids.slice(1).map((kid, index) => ({ name: kids[index].tagName.toLowerCase() + ' to ' + kid.tagName.toLowerCase() + (kid.className ? '.' + kid.className.split(' ')[0] : ''), gap: +((edges(kid).top - edges(kids[index]).bottom) / line).toFixed(2) }));
     })()`);
 
-used("a line of space lies between a paragraph and a drawing of maths or a flowchart, as between any two blocks", async () => {
+used("half a line of space lies between a paragraph and a drawing of maths or a flowchart, as between any two blocks", async () => {
     await reset("Words.\n\n```mermaid\nflowchart LR\n  A --> B\n```\n\nWords.\n\n$$\nx + y\n$$\n\nWords.\n", [0], 0);
     await tab.run("document.activeElement.blur()");
     await tab.wait(300);
     const gaps = await seenGaps();
-    // a line, and for maths a little more for the room its letters keep above them
-    expect(gaps.map(({ name, gap }) => ({ name, near: gap >= 0.95 && gap <= (name.includes("quire-drawn") ? 1.3 : 1.05) }))).toEqual(gaps.map(({ name }) => ({ name, near: true })));
+    // half a line, and for maths a little more for the room its letters keep above them
+    expect(gaps.map(({ name, gap }) => ({ name, gap, near: gap >= 0.45 && gap <= (name.includes("quire-drawn") ? 0.8 : 0.55) }))).toEqual(gaps.map(({ name, gap }) => ({ name, gap, near: true })));
 });
 
 used("the source of maths or a flowchart folded to its first line has as much room under that line as over it", async () => {
@@ -1578,24 +1578,24 @@ used("the source of maths or a flowchart folded to its first line has as much ro
     }
 });
 
-used("a line of space lies above a table's first words and below its last rule, after a paragraph, a heading or code", async () => {
+used("half a line of space lies above a table's first words and below its last rule, after a paragraph, a heading or code", async () => {
     await reset("Words.\n\n| a | b |\n| --- | --- |\n| 1 | 2 |\n\n## A heading\n\n| a | b |\n| --- | --- |\n| 1 | 2 |\n\n```\ncode\n```\n\n| a | b |\n| --- | --- |\n| 1 | 2 |\n\nWords.\n", [0], 0);
     await tab.run("document.activeElement.blur()");
     await tab.wait(300);
     const gaps = (await seenGaps()).filter(({ name }) => name.includes("table"));
-    expect(gaps.map(({ name, gap }) => ({ name, near: Math.abs(gap - (name.endsWith("h2") ? 1.4 : 1)) <= 0.05 }))).toEqual(gaps.map(({ name }) => ({ name, near: true })));
+    expect(gaps.map(({ name, gap }) => ({ name, near: Math.abs(gap - (name.endsWith("h2") ? 1.25 : 0.5)) <= 0.05 }))).toEqual(gaps.map(({ name }) => ({ name, near: true })));
 });
 
-used("a line of space lies above a picture and below the words written under it", async () => {
+used("half a line of space lies above a picture and below the words written under it", async () => {
     const tiny = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
     await reset(`Words.\n\n![A small picture](${tiny})\n\nWords.\n\n![](${tiny})\n\n---\n\nWords.\n`, [0], 0);
     await tab.run("document.activeElement.blur()");
     await tab.wait(300);
     const gaps = await seenGaps();
-    expect(gaps.map(({ name, gap }) => ({ name, near: Math.abs(gap - 1) <= 0.05 }))).toEqual(gaps.map(({ name }) => ({ name, near: true })));
+    expect(gaps.map(({ name, gap }) => ({ name, near: Math.abs(gap - 0.5) <= 0.05 }))).toEqual(gaps.map(({ name }) => ({ name, near: true })));
 });
 
-used("in a loose list the items are a line apart, as the paragraphs and code inside an item are; a tight list's items are close", async () => {
+used("in a loose list the items are half a line apart, as the paragraphs and code inside an item are; a tight list's items are close", async () => {
     await reset("- A loose item.\n\n  Its second paragraph.\n\n- The next item.\n\n1. With code:\n\n   ```\n   code\n   ```\n\n2. Next.\n\nWords.\n\n- tight\n- items\n", [0, 0, 0], 0);
     await tab.run("document.activeElement.blur()");
     await tab.wait(300);
@@ -1612,7 +1612,7 @@ used("in a loose list the items are a line apart, as the paragraphs and code ins
             gap(inner(items(tight)[0]), inner(items(tight)[1])),
         ];
     })()`);
-    expect(seen).toEqual([1, 1, 1, 0.2]);
+    expect(seen).toEqual([0.5, 0.5, 0.5, 0.2]);
 });
 
 used("a faint \"Type / for blocks\" fades in on the empty line the cursor is on, goes when typing starts, and an empty document is never blank", async () => {
