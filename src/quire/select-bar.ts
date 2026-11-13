@@ -135,6 +135,11 @@ export function createSelectBar(surface: Surface, top: () => number = () => 0): 
         before.setEnd(range.startContainer, range.startOffset);
         let reach = -Infinity;
         for (const box of before.getClientRects()) if (box.height > 0 && box.bottom <= from + 1) reach = Math.max(reach, box.bottom);
+        // over the first block is what stands over the text itself, the document's title, which the bar covered
+        if (!(block as Element).previousElementSibling) {
+            const over = surface.element.previousElementSibling?.getBoundingClientRect();
+            if (over && over.height > 0 && over.bottom <= from + 1) reach = Math.max(reach, over.bottom);
+        }
         return reach;
     }
 

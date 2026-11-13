@@ -293,9 +293,9 @@ used("the selection bar grows out of a selection over time, marks it, and its li
     expect(opacities[0]).toBe(0);
     expect(opacities[opacities.length - 1]).toBe(1);
     expect(opacities.filter((value) => value > 0 && value < 1).length).toBeGreaterThan(1);
-    // it sits above the selection and does not cover it
-    const sides = await tab.run<{ bar: number; text: number }>("(() => { const r = getSelection().getRangeAt(0).getBoundingClientRect(); return { bar: document.querySelector('.quire-select-bar').getBoundingClientRect().bottom, text: r.top }; })()");
-    expect(sides.bar).toBeLessThanOrEqual(sides.text);
+    // it sits beside the selection, below it here as the title is above, and does not cover it
+    const sides = await tab.run<{ top: number; bottom: number; text: { top: number; bottom: number } }>("(() => { const r = getSelection().getRangeAt(0).getBoundingClientRect(); const bar = document.querySelector('.quire-select-bar').getBoundingClientRect(); return { top: bar.top, bottom: bar.bottom, text: { top: r.top, bottom: r.bottom } }; })()");
+    expect(sides.bottom <= sides.text.top || sides.top >= sides.text.bottom).toBe(true);
 
     await press(".quire-select-bar button", "Italic");
     expect(await md()).toBe("Some *words* to select here\n");
@@ -708,6 +708,17 @@ used("the selection bar never covers a heading over the selection, nor the line 
     const above = { top: seen.selection.top - seen.line, bottom: seen.selection.top - 2, left: seen.selection.left - 400, right: seen.selection.right + 400 };
     expect(overlaps(seen.bar, above)).toBe(false);
     expect(overlaps(seen.bar, seen.selection)).toBe(false);
+});
+
+used("the selection bar over the first line of the text never covers the document's title above it", async () => {
+    await reset("A first line of words to select.\n", [0], 2, [0], 7);
+    await tab.run(`(() => { const title = document.querySelector('.quire-title'); title.value = 'A title with tails, gjpqy'; title.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+    await tab.run("q.select([0], 2, [0], 7)");
+    await tab.wait(500);
+    const seen = await tab.run<{ bar: DOMRect; title: DOMRect; shown: boolean }>(`({ bar: document.querySelector('.quire-select-bar').getBoundingClientRect().toJSON(), title: document.querySelector('.quire-title').getBoundingClientRect().toJSON(), shown: document.querySelector('.quire-select-bar').classList.contains('shown') })`);
+    expect(seen.shown).toBe(true);
+    const overlaps = seen.bar.top < seen.title.bottom && seen.bar.bottom > seen.title.top && seen.bar.left < seen.title.right && seen.bar.right > seen.title.left;
+    expect(overlaps).toBe(false);
 });
 
 used("typing in the Markdown of a long document reaches the text once typing pauses", async () => {
