@@ -85,17 +85,67 @@ test("a picture sits at the left until moved; the strip puts it in the centre an
     expect(await page!.md()).toBe(`One line.\n\n![A wide picture](${picture})\n\nAnother line.\n`);
 });
 
-test("a caption is written in place under a picked picture and kept as a <figure>", async () => {
+/** Right-clicks the picture, as a mouse does, and waits for its menu. */
+async function rightClick() {
+    const { tab } = page!;
+    const box = await tab.run<{ x: number; y: number }>("q.box('.quire-image img')");
+    await tab.run(`document.querySelector('.quire-image img').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2, clientX: ${box.x + 30}, clientY: ${box.y + 30} }))`);
+    await tab.wait(400);
+}
+
+test("nothing stands under a picture; its menu opens at the pointer, its panel grows at the right, and a caption written there shows under it as a <figure>", async () => {
     if (skip()) return;
     const { tab } = page!;
     await start();
-    await page!.press(".quire-image img");
-    await tab.wait(400);
-    await page!.press(".quire-caption");
+    expect(await tab.run("document.querySelectorAll('.quire-image input, .quire-image figcaption').length")).toBe(0);
+    await rightClick();
+    const menu = await tab.run<{ x: number; y: number }>("q.box('.quire-picture-menu')");
+    const img = await tab.run<{ x: number; y: number }>("q.box('.quire-image img')");
+    expect(Math.abs(menu.x - (img.x + 30))).toBeLessThan(4);
+    expect(await tab.run("[...document.querySelectorAll('.quire-picture-menu .quire-menu-label')].map((each) => each.textContent)")).toEqual(["Caption", "Description", "Alignment", "Size", "Wrap text", "Replace", "Remove"]);
+    await page!.press(".quire-picture-menu .quire-menu-line", "Caption");
+    await tab.wait(30);
+    // it is growing a moment after, and stands at the right of the window once settled
+    expect(await tab.run<number>("document.querySelector('.quire-picture-skin').getAnimations().length")).toBe(1);
+    await tab.wait(500);
+    const panel = await tab.run<{ x: number; width: number }>("q.box('.quire-picture-panel')");
+    expect(panel.x + panel.width).toBeGreaterThan(1300 - 40);
+    expect(await tab.run("document.activeElement.classList.contains('quire-picture-field')")).toBe(true);
     await tab.type("Two colours");
     await tab.press("Enter");
     await tab.wait(30);
     expect(await page!.md()).toContain(`<figure><img src="${picture}" alt="A wide picture" /><figcaption>Two colours</figcaption></figure>`);
+    expect(await tab.run("document.querySelector('.quire-image figcaption').textContent")).toBe("Two colours");
+    // Escape closes the panel and gives the keyboard back to the picture
+    await tab.run("document.querySelector('.quire-picture-panel input').focus()");
+    await tab.press("Escape");
+    await tab.wait(300);
+    expect(await tab.run("document.activeElement.matches('figure.quire-image')")).toBe(true);
+    expect(await tab.run("document.querySelector('.quire-picture-panel').classList.contains('open')")).toBe(false);
+    await tab.run("q.surface.undo()");
+    expect(await page!.md()).toBe(`One line.\n\n![A wide picture](${picture})\n\nAnother line.\n`);
+});
+
+test("wrap text from the menu floats the picture with the words beside it, as one undo step, and the panel's sizes set its width", async () => {
+    if (skip()) return;
+    const { tab } = page!;
+    await start();
+    await rightClick();
+    await page!.press(".quire-picture-menu .quire-menu-line", "Wrap text");
+    await tab.wait(60);
+    expect(await page!.md()).toContain(`<img src="${picture}" alt="A wide picture" align="left" />`);
+    expect(await tab.run("getComputedStyle(document.querySelector('.quire-image')).float")).toBe("left");
+    await rightClick();
+    await page!.press(".quire-picture-menu .quire-menu-line", "Size");
+    await tab.wait(500);
+    await page!.press(".quire-picture-panel button", "Half width");
+    expect(await page!.md()).toContain(`<img src="${picture}" alt="A wide picture" width="50%" align="left" />`);
+    await page!.press(".quire-picture-panel button", "Picture to the right");
+    expect(await page!.md()).toContain(`<img src="${picture}" alt="A wide picture" width="50%" align="right" />`);
+    await tab.run("q.surface.undo()");
+    await tab.run("q.surface.undo()");
+    await tab.run("q.surface.undo()");
+    expect(await page!.md()).toBe(`One line.\n\n![A wide picture](${picture})\n\nAnother line.\n`);
 });
 
 test("a picture dragged below the last line lands there, and Delete takes a picked one away", async () => {

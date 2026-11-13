@@ -1323,36 +1323,6 @@
     background: color-mix(in oklch, var(--accent) 7%, transparent);
 }
 
-/* ---- a picture's alt text, written under it ---- */
-
-.quire-alt {
-    display: block;
-    width: 100%;
-    /* the picture block ends where these words do, not under the field's room round them, so the line of space after it is one line */
-    margin: 0.5rem 0 calc(-0.3rem - 0.0625rem);
-    padding: 0.3rem 0.5rem;
-    border: 0.0625rem solid transparent;
-    border-radius: 0.5rem;
-    background: transparent;
-    color: var(--muted);
-    font: inherit;
-    font-size: 0.9rem;
-    text-align: center;
-    transition:
-        border-color 0.2s ease,
-        background 0.2s ease;
-}
-
-.quire-alt:hover {
-    border-color: var(--rule);
-}
-
-.quire-alt:focus {
-    border-color: var(--accent);
-    background: var(--ground);
-    color: var(--ink);
-}
-
 /* ---- the outline ----
    On a narrow screen a panel that flows in from the left when asked for and goes back the same
    way; on a wide one a column beside the sheet, whose width flows shut when it is closed. */
@@ -2644,7 +2614,6 @@ body.quire-app,
     .quire-conflict,
     .quire-source,
     .quire-shelf,
-    .quire-alt,
     .quire-details,
     .quire-file,
     .quire-raw,

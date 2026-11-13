@@ -41,6 +41,7 @@ const PATHS: Record<string, string> = {
     left: '<path d="M5 6h14M5 10h9M5 14h14M5 18h9"/>',
     right: '<path d="M5 6h14M10 10h9M5 14h14M10 18h9"/>',
     trash: '<path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12"/>',
+    wrap: '<rect x="4" y="5" width="7" height="7" rx="1.2"/><path d="M14 6h6M14 11h6M4 16h16M4 20h11"/>',
     close: '<path d="m7 7 10 10M17 7 7 17"/>',
     outline: '<path d="M5 6h14M8 10h11M8 14h11M5 18h14"/>',
     highlight: '<path d="m14.5 4.5 5 5L11 18H6v-5z"/><path d="M4 21h16" opacity=".55"/>',

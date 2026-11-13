@@ -924,10 +924,6 @@ export function setLink(doc: Document, range: Range, href: string | null, title?
     return doc;
 }
 
-/** Sets a picture block's alt text, what it says to someone who cannot see it. */
-export function setImageAlt(doc: Document, path: number[], alt: string): Document {
-    return replace(doc, path, (block) => (block.kind === "image" && block.alt !== alt ? [{ ...block, alt, source: undefined }] : null));
-}
 
 /** Sets the text of a raw block, as a component's card does when one of its fields is changed. */
 export function setRaw(doc: Document, path: number[], value: string): Document {

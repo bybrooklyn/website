@@ -127,7 +127,6 @@ describe("composition in a field inside the document stays in the field", () => 
     const fields: [string, string, string, string][] = [
         ["a card's property", "<Callout kind={1} title=\"Hi\" />\n\nText\n", "[data-prop=title]", "<Callout kind={1} title=\"Hi\" />\n\nText\n"],
         ["a code block's language", "```js\nlet a;\n```\n\nText\n", "[data-lang]", "```js\nlet a;\n```\n\nText\n"],
-        ["a picture's alt text", "![dot](data:image/gif;base64,R0lGODlhAQABAAAAACw=)\n\nText\n", "[data-alt]", "![dot](data:image/gif;base64,R0lGODlhAQABAAAAACw=)\n\nText\n"],
         ["a folding section's summary", "<details>\n<summary>Fold</summary>\n\nInside\n\n</details>\n\nText\n", "[data-summary]", "<details>\n<summary>Fold</summary>\n\nInside\n\n</details>\n\nText\n"],
     ];
     for (const [what, markdown, selector, same] of fields) {

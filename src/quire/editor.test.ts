@@ -418,14 +418,18 @@ used("a short column beside a long one keeps its words whole, and a long address
     await tab.resize(1300, 900);
 });
 
-used("a picture shows with its alt text written under it, which can be changed in place", async () => {
+used("a picture shows with nothing under it, and its description is written in its panel, opened from the menu a right-click gives", async () => {
     await reset("![A tower](/tower.png)\n");
     expect(await tab.run("document.querySelector('.quire-image img').getAttribute('src')")).toBe("/tower.png");
-    await press(".quire-alt");
-    await tab.run("document.querySelector('.quire-alt').select()");
+    expect(await tab.run("document.querySelector('.quire-image').children.length")).toBe(1);
+    const at = await tab.run<{ x: number; y: number }>("(() => { const b = document.querySelector('.quire-image img').getBoundingClientRect(); return { x: b.left + 8, y: b.top + 8 }; })()");
+    await tab.run(`document.querySelector('.quire-image img').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2, clientX: ${at.x}, clientY: ${at.y} }))`);
+    await tab.wait(400);
+    await press(".quire-picture-menu .quire-menu-line", "Description");
+    await tab.wait(400);
+    await tab.run("document.querySelector('.quire-picture-panel input:focus').select()");
     await tab.type("A tall tower");
     await tab.press("Enter");
-    await tab.run("document.querySelector('.quire-alt').blur()");
     await tab.wait(50);
     expect(await md()).toBe("![A tall tower](/tower.png)\n");
 });
@@ -1504,7 +1508,7 @@ const seenGaps = () =>
         const edges = (e) => {
             if (e.tagName === 'TABLE') return { top: inner(e.querySelector('th, td')).top, bottom: outer(e).bottom };
             if (e.classList.contains('quire-drawn')) return { top: outer(e.querySelector('.quire-preview > *')).top, bottom: outer(e.querySelector('pre')).bottom };
-            if (e.classList.contains('quire-image')) { const words = [...e.querySelectorAll('.quire-caption, .quire-alt')].filter((each) => each.getBoundingClientRect().height > 2).pop(); return { top: outer(e.querySelector('img')).top, bottom: words ? inner(words).bottom : outer(e.querySelector('img')).bottom }; }
+            if (e.classList.contains('quire-image')) { const words = e.querySelector('.quire-caption'); return { top: outer(e.querySelector('img')).top, bottom: words ? inner(words).bottom : outer(e.querySelector('img')).bottom }; }
             if (e.classList.contains('quire-divider')) return outer(e.querySelector('hr'));
             // a block drawn as a box (code, a callout, a folding section) has its border for its edge
             const style = getComputedStyle(e);

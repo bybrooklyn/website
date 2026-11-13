@@ -33,7 +33,7 @@
 // `quire-task` on a task item and `quire-box` on its box (`data-checked`),
 // `quire-atom` on an inline HTML span or footnote reference.
 
-import { blockAt, blockPaths, changeKind, documentOf, image as imageBlock, isPageBreak, lengthOf, markdownOnly, paragraph, setBox, setImageAlt, setRaw, toggleTask, type Block, type Code, type Document, type Leaf, type Mark, type Position, type Run, type Selection } from "./document";
+import { blockAt, blockPaths, changeKind, documentOf, image as imageBlock, isPageBreak, lengthOf, markdownOnly, paragraph, setBox, setRaw, toggleTask, type Block, type Code, type Document, type Leaf, type Mark, type Position, type Run, type Selection } from "./document";
 import { createHistory, redo as redoStep, undo as undoStep, type ChangeKind, type State } from "./history";
 import { readHtml, writeHtml } from "./html";
 import { drawPicture } from "./picture-tools";
@@ -954,7 +954,7 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
 
     // ---- events ----
 
-    /** True for an event from a field inside the document, such as a picture's alt text, which is the field's own. */
+    /** True for an event from a field inside the document, such as a code block's language, which is the field's own. */
     const fromField = (event: Event) => event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement;
 
     /**
@@ -1460,13 +1460,10 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
         commit(apply(editor, { state, kind }, Date.now()));
     }
 
-    /** A field inside the document was changed: a picture's alt text, a code block's language, a folding section's summary, or a component's property. */
+    /** A field inside the document was changed: a code block's language, a folding section's summary, or a component's property. */
     function onAltChange(event: Event) {
         const field = event.target as HTMLInputElement;
-        if (field.matches?.("[data-alt]")) {
-            const path = pathOf(field, field.dataset.alt);
-            run((doc) => setImageAlt(doc, path, field.value));
-        } else if (field.matches?.("[data-lang]")) {
+        if (field.matches?.("[data-lang]")) {
             const path = pathOf(field, field.dataset.lang);
             run((doc) => changeKind(doc, path, { kind: "code", language: field.value.trim() }));
         } else if (field.matches?.("[data-summary]")) {
