@@ -165,3 +165,29 @@ test("a repository is read from owner/name or its address, and folders are made 
     expect(folderPath("/src/content/blog/")).toBe("src/content/blog");
     expect(folderPath("../a/./b")).toBe("a/b");
 });
+
+test("the token goes only to api.github.com, in the Authorization header, and never into an address or a message, whatever GitHub answers", async () => {
+    const token = "github_pat_SECRET_never_shown_1234";
+    const settings = { ...SETTINGS, token };
+    const seen: { url: string; auth: string | null }[] = [];
+    for (const status of [200, 201, 400, 401, 403, 404, 409, 422, 429, 500, 502, 0]) {
+        const fetcher = async (url: string, init?: RequestInit) => {
+            seen.push({ url, auth: new Headers(init?.headers).get("Authorization") });
+            // a network failure whose own words carry the address and the header, as some do
+            if (status === 0) throw new Error(`failed to fetch ${url} with Bearer ${token}`);
+            return new Response(JSON.stringify({ message: `echo ${token}`, content: { sha: "s" }, sha: "s", content_: "" }), { status });
+        };
+        const store = githubStore(settings, fetcher);
+        const tries = [store.list(), store.open("a.md"), store.save("a.md", "x", "s"), store.create("b.md", "y"), store.rename("a.md", "c.md"), store.remove("a.md"), store.savePicture("a.md", new Blob(["p"]), "p.png"), store.exists!("a.md", "p.png"), store.show!("a.md", "p.png"), store.markOf!("a.md")];
+        for (const each of await Promise.allSettled(tries)) {
+            const said = each.status === "rejected" ? String(each.reason) : JSON.stringify(each.value ?? null);
+            expect(said).not.toContain(token);
+        }
+    }
+    expect(seen.length).toBeGreaterThan(50);
+    for (const call of seen) {
+        expect(call.url.startsWith("https://api.github.com/")).toBe(true);
+        expect(call.url).not.toContain(token);
+        expect(call.auth).toBe(`Bearer ${token}`);
+    }
+});
