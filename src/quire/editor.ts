@@ -26,7 +26,8 @@ import { remember } from "./most-used";
 import { createOutline } from "./outline";
 import { read } from "./read";
 import { createSelectBar } from "./select-bar";
-import { boxOf, createSlash, definitionList, drawnBlock } from "./slash";
+import { boxOf, definitionList, drawnBlock } from "./slash";
+import { createPalette } from "./palette";
 import { createEmojiPicker } from "./emoji-picker";
 import { createSaver, fileName, said, type Entry, type Opened, type Status, type Store } from "./store";
 import { altGraph, createSurface, type Surface } from "./surface";
@@ -599,7 +600,6 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     outlineAsKept();
     const widening = typeof matchMedia !== "undefined" ? matchMedia("(min-width: 64rem)") : undefined;
     widening?.addEventListener("change", outlineAsKept);
-    const slash = createSlash(surface, bar.pickImage);
     const emojiList = createEmojiPicker(surface);
     const tableTools = createTableTools(surface, () => bar.element.getBoundingClientRect().bottom);
     const pictureTools = createPictureTools(surface, { keep: keepPicture, margin: host });
@@ -723,6 +723,8 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
                 forgetUsed: () => (remember(), bar.setStatus("Forgotten", "What you use most is forgotten: the slash menu opens on its first five again")),
                 tools: () => dictation.items(row.words[5]!),
     };
+    // the command palette: the menus' lines and what fits where the cursor is, from the bottom left corner or a slash on an empty line (palette.ts)
+    const palette = createPalette(surface, { menus: () => row.headings(), table: tableTools.lines, picture: pictureTools.lines, pickImage: bar.pickImage, corner: host });
     const row = createMenuRow(() =>
         headings(
             { rich: !!surface.getDocument().quire, contents: !!findContents(surface.getDocument()), paged: pages.paged(), look, outline: outlineView.isOpen(), markdown: host.classList.contains("markdown"), words: countWords(surface.getDocument()), align: aligned(surface.getDocument(), surface.getSelection().focus.path), symbols: surface.symbols() },
@@ -1111,7 +1113,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
             surface.destroy();
             for (const menu of [...bar.menus, links, row.menu, zooms, setups, about]) menu.box.remove();
             selectBar.element.remove();
-            slash.close();
+            palette.destroy();
             emojiList.close();
             tableTools.element.remove();
             pictureTools.destroy();

@@ -298,6 +298,8 @@ export interface MenuItem {
     stays?: boolean;
     /** Drawn quieter than the lines around it. */
     quiet?: boolean;
+    /** The command the line runs, by its name in the menus' table (menu-row.ts), for the command palette to count and to rank by where the cursor is. */
+    key?: string;
     run: () => void;
 }
 
@@ -352,6 +354,30 @@ export function keySymbols(hint: string, onMac = false): { shown: string; words:
     if (parts.length < 2 && !(hint in named)) return { shown: hint, words: "" };
     if (!parts.every((part, index) => isKey(part, index === parts.length - 1))) return { shown: hint, words: "" };
     return { shown: parts.map((part) => named[part]?.[0] ?? part.toUpperCase()).join(""), words: parts.map((part) => named[part]?.[1] ?? signs[part] ?? part.toUpperCase()).join(" ") };
+}
+
+/** A line of a menu drawn as a button: its icon, its words, and its shortcut as the keys' symbols, said in words when pointed at and to a screen reader. What pressing it does is the caller's. */
+export function menuLine(item: MenuItem, apple = mac()): HTMLButtonElement {
+    const line = make("button", "quire-menu-line");
+    line.type = "button";
+    // a line that is on or off is said to be so: one of a group is a radio, one alone a checkbox
+    line.setAttribute("role", item.pressed === undefined ? "menuitem" : item.group ? "menuitemradio" : "menuitemcheckbox");
+    if (item.pressed !== undefined) line.setAttribute("aria-checked", String(item.pressed));
+    if (item.pressed) line.classList.add("pressed");
+    if (item.quiet) line.classList.add("quiet");
+    if (item.group) line.dataset.group = item.group;
+    if (item.icon) line.append(typeof item.icon === "string" ? icon(item.icon) : item.icon);
+    line.append(make("span", "quire-menu-label", item.label));
+    if (item.hint) {
+        const { shown, words } = keySymbols(item.hint, apple);
+        const hint = make("span", "quire-menu-hint", shown);
+        if (words) {
+            hint.title = words;
+            hint.setAttribute("aria-label", words);
+        }
+        line.append(hint);
+    }
+    return line;
 }
 
 /** A menu that grows out from under the control that opened it. */
@@ -569,26 +595,7 @@ export function flowMenu(label: string, options: { align?: "left" | "right"; cla
                 items.append(make("p", "quire-menu-note", item.label));
                 return;
             }
-            const line = make("button", "quire-menu-line");
-            line.type = "button";
-            // a line that is on or off is said to be so: one of a group is a radio, one alone a checkbox
-            line.setAttribute("role", item.pressed === undefined ? "menuitem" : item.group ? "menuitemradio" : "menuitemcheckbox");
-            if (item.pressed !== undefined) line.setAttribute("aria-checked", String(item.pressed));
-            if (item.pressed) line.classList.add("pressed");
-            if (item.quiet) line.classList.add("quiet");
-            if (item.group) line.dataset.group = item.group;
-            if (item.icon) line.append(typeof item.icon === "string" ? icon(item.icon) : item.icon);
-            line.append(make("span", "quire-menu-label", item.label));
-            if (item.hint) {
-                // a shortcut is drawn as its keys' symbols, and said in words when pointed at and to a screen reader
-                const { shown, words } = keySymbols(item.hint, apple);
-                const hint = make("span", "quire-menu-hint", shown);
-                if (words) {
-                    hint.title = words;
-                    hint.setAttribute("aria-label", words);
-                }
-                line.append(hint);
-            }
+            const line = menuLine(item, apple);
             line.addEventListener("mousedown", (event) => event.preventDefault());
             line.addEventListener("click", () => {
                 if (item.group)

@@ -1,4 +1,4 @@
-// The browser driver every browser test stands on: that it leaves nothing behind. Held true: a
+// The browser driver every browser test stands on: that it leaves nothing behind, and that it sends a modifier alone as a keyboard does. Held true: a
 // closed browser leaves no Chromium process and no profile folder; one that fails to start is
 // cleaned up at once, not at the end of the run; when Chromium dies, calls waiting on it fail
 // instead of hanging; and many browsers in one run do not pile up signal handlers. Skipped, with
@@ -93,6 +93,18 @@ used("many browsers in one run add one set of signal handlers, not one each", as
     tabs.push(await browser({ width: 300, height: 200 }), await browser({ width: 300, height: 200 }));
     expect(counted()).toEqual(first);
     await Promise.all(tabs.map((tab) => tab.close()));
+});
+
+used("a modifier pressed alone goes down held and comes up let go, with no character, as a keyboard sends it", async () => {
+    const tab = await browser({ width: 300, height: 200 });
+    try {
+        await tab.open("data:text/html,<p>keys</p>", 50);
+        await tab.run(`window.seen = []; for (const type of ["keydown", "keyup"]) addEventListener(type, (event) => seen.push([type, event.key, event.code, event.ctrlKey].join(" ")))`);
+        await tab.press("Control");
+        expect(await tab.run<string[]>("seen")).toEqual(["keydown Control ControlLeft true", "keyup Control ControlLeft false"]);
+    } finally {
+        await tab.close();
+    }
 });
 
 if (!live) console.warn("browser.test.ts: no Chromium on this machine, so the driver was not tried.");

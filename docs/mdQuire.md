@@ -59,13 +59,36 @@ shelf says so in one line.
 **Around the writing.** The home screen, find and replace
 (`find.ts`), zoom and page setup (`paper.ts`), page view with page breaks, headers, footers and page
 numbers (`pages.ts`), version history kept in the browser (`versions.ts`), tables (`tables.ts`), an
-outline of the headings (`outline.ts`), a slash menu on an empty line (`slash.ts`) and a bar over
-selected text (`select-bar.ts`). The slash menu opens on the five things the writer makes most and a
+outline of the headings (`outline.ts`), a command palette (`palette.ts`, below) and a bar over
+selected text (`select-bar.ts`).
+
+**The command palette** (`palette.ts`). Two quick taps of Ctrl, or the quiet round button resting in
+the window's bottom left corner, grow it up out of that corner: a search field with the caret in it, and
+under it seven lines, first what fits where the cursor is (a table's controls in a table, a picked
+picture's menu on a picture, the formatting with words selected, the list commands in a list), then what
+the writer uses most. Typing searches every command by its name, its other words and its menu, and the
+headings, offered as "Go to:" lines; among answers as good, what fits where the cursor is comes first.
+Each line shows its shortcut; Enter runs the first, the arrows move, Escape or another double tap sends
+it back to the corner, and running a command gives the writing back where it was first. A tap is a press
+and release of Ctrl with no other key between, each press and the wait between them within 350 ms; Ctrl
+held for a shortcut, a click or the wheel, AltGr (sent as Ctrl and Alt on Windows) and typing with an input
+method never count. On a Mac Cmd taps as well as Ctrl. It opens only from the writing, never over a field,
+a menu or a dialog. On a phone it spans the window's foot. The button sits 0.75rem in from the corner and
+is 2.25rem across; anything else at the bottom left starts 3.5rem in. No command is listed in it: its
+lines are the menus' own (with their shortcuts from `shortcuts.ts`), found also by the slash items' words,
+and a table's controls and a picture's menu while they are there, so a new command is in it with no more
+work.
+
+The slash is the palette's second way in. A `/` typed at the start of an empty line opens the same list
+at the caret, with the things that can be put in there (`slash.ts`): the five the writer makes most and a
 quiet last line, More, that grows it open to the rest; before anything is counted the five are Heading 2,
-Bulleted list, Checklist, Picture and Code block. What is made is counted however it was made (the slash
-menu, the bar, a menu, a shortcut, a typed Markdown mark) by comparing the document before and after each
-change that makes things (`most-used.ts`). The counts stay in the browser's own storage, are never sent,
-and Tools, Forget what I use most, clears them.
+Bulleted list, Checklist, Picture and Code block. Typing after the slash narrows it, Backspace over the
+slash closes it and leaves the line empty, and Escape leaves what was typed. A slash anywhere else is a
+slash. The site's components are offered only in an `.mdx` file. What is made is counted however it was
+made (the palette, the bar, a menu, a shortcut, a typed Markdown mark) by comparing the document before
+and after each change that makes things (`most-used.ts`), and what is picked from the palette is counted
+as well. The counts stay in the browser's own storage, are never sent, and Tools, Forget what I use most,
+clears them.
 
 **Checking** (`check/`). Markdown tidiness, the site's writing rules (written once in `check/tells.ts`,
 which `scripts/lint.ts` imports, so the two give the same verdict), links and pictures that lead nowhere, spelling

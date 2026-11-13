@@ -16,7 +16,7 @@ export interface Browser {
     click(x: number, y: number): Promise<void>;
     /** Presses the mouse at one place, moves it in `steps` even steps to another with the button held, and lets go there. */
     drag(from: { x: number; y: number }, to: { x: number; y: number }, steps?: number): Promise<void>;
-    /** Presses one key as the keyboard would, with modifiers held: "Enter", "Backspace", "Tab", "ArrowLeft", or a letter for a chord. */
+    /** Presses one key as the keyboard would, with modifiers held: "Enter", "Backspace", "Tab", "ArrowLeft", a letter for a chord, or a modifier alone ("Control"). */
     press(key: string, held?: { shift?: boolean; ctrl?: boolean; alt?: boolean; meta?: boolean }): Promise<void>;
     /** Types text one key at a time, each a real key press. */
     type(text: string): Promise<void>;
@@ -195,18 +195,20 @@ export async function browser({ width = 1200, height = 800, scale = 1, port = 0,
     }
     const mouse = (type: string, x: number, y: number, held = type === "mousePressed") => send("Input.dispatchMouseEvent", { type, x, y, button: "left", buttons: held ? 1 : 0, clickCount: 1 });
     // the keys that are not characters, with the numbers Chromium needs as well as their names to act on them
-    const named: Record<string, [number, string?]> = { Enter: [13, "\r"], Backspace: [8], Tab: [9], Delete: [46], Escape: [27], " ": [32, " "], PageUp: [33], PageDown: [34], Home: [36], End: [35], ArrowLeft: [37], ArrowUp: [38], ArrowRight: [39], ArrowDown: [40] };
+    const named: Record<string, [number, string?]> = { Control: [17], Shift: [16], Alt: [18], Meta: [91], Enter: [13, "\r"], Backspace: [8], Tab: [9], Delete: [46], Escape: [27], " ": [32, " "], PageUp: [33], PageDown: [34], Home: [36], End: [35], ArrowLeft: [37], ArrowUp: [38], ArrowRight: [39], ArrowDown: [40] };
     const press = async (key: string, held: { shift?: boolean; ctrl?: boolean; alt?: boolean; meta?: boolean } = {}) => {
         const modifiers = (held.alt ? 1 : 0) | (held.ctrl ? 2 : 0) | (held.meta ? 4 : 0) | (held.shift ? 8 : 0);
         const known = named[key];
         const letter = /^[a-z]$/i.test(key);
-        const code = key === " " ? "Space" : known ? key : letter ? `Key${key.toUpperCase()}` : /^\d$/.test(key) ? `Digit${key}` : "";
+        // a modifier pressed alone is held while it is down, as a keyboard says it is, and is known by its left key
+        const own = ({ Alt: 1, Control: 2, Meta: 4, Shift: 8 } as Record<string, number>)[key] ?? 0;
+        const code = key === " " ? "Space" : own ? `${key}Left` : known ? key : letter ? `Key${key.toUpperCase()}` : /^\d$/.test(key) ? `Digit${key}` : "";
         const keyCode = known ? known[0] : key.toUpperCase().charCodeAt(0);
         const chord = modifiers & ~8;
         // Enter and space also type a character, which is what presses a button
         const text = known ? known[1] : chord ? undefined : held.shift ? key.toUpperCase() : key;
         const shown = held.shift && letter ? key.toUpperCase() : key;
-        await send("Input.dispatchKeyEvent", { type: text ? "keyDown" : "rawKeyDown", key: shown, code, windowsVirtualKeyCode: keyCode, nativeVirtualKeyCode: keyCode, modifiers, ...(text && { text, unmodifiedText: text }) });
+        await send("Input.dispatchKeyEvent", { type: text ? "keyDown" : "rawKeyDown", key: shown, code, windowsVirtualKeyCode: keyCode, nativeVirtualKeyCode: keyCode, modifiers: modifiers | own, ...(text && { text, unmodifiedText: text }) });
         await send("Input.dispatchKeyEvent", { type: "keyUp", key: shown, code, windowsVirtualKeyCode: keyCode, nativeVirtualKeyCode: keyCode, modifiers });
     };
 

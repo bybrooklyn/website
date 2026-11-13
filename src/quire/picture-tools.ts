@@ -496,7 +496,7 @@ export function createPictureTools(surface: Surface, options: PictureOptions = {
     function onOutside(event: PointerEvent) {
         if (!picked) return;
         const target = event.target as HTMLElement;
-        if (target.closest?.("figure.quire-picked, .quire-frame, .quire-picture-panel, .quire-picture-menu")) return;
+        if (target.closest?.("figure.quire-picked, .quire-frame, .quire-picture-panel, .quire-picture-menu, .quire-palette, .quire-palette-button")) return;
         unpick();
     }
     /** When the menu was last opened from the keyboard, whose own menu event may follow. */
@@ -549,6 +549,8 @@ export function createPictureTools(surface: Surface, options: PictureOptions = {
     return {
         /** The path of the picked picture, if one is. */
         picked: () => picked,
+        /** The lines of the picked picture's menu, for the command palette; none when no picture is picked. */
+        lines: () => (picked ? lines() : []),
         pick,
         unpick,
         destroy() {

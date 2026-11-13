@@ -1,22 +1,21 @@
-// The slash menu: "/" typed on an empty line opens a menu at the cursor of the blocks that can be
-// made there. Typing after the slash narrows it; the arrow keys and Enter choose; Escape closes it
-// and leaves the slash as typed. Choosing takes the slash and what followed it away and makes the
-// block. The menu grows out of the cursor as the bar's menus grow out of their buttons.
+// What the slash makes: "/" typed on an empty line opens the command palette (palette.ts) at the
+// cursor on the blocks that can be made there. Typing after the slash narrows them; the arrow keys
+// and Enter choose; Escape closes it and leaves the slash as typed. Choosing takes the slash and
+// what followed it away and makes the block.
 //
 // Opened with nothing typed, it shows the five things the writer makes most (most-used.ts) and a
 // last line, More, that grows it open to the rest. Typing after the slash looks through them all,
-// the most made first among those that match as well.
+// the most made first among those that match as well. The items' words are also what the palette
+// finds the menus' commands by.
 //
-// The items, how typing narrows them and what choosing does are pure and tested; the rest is DOM.
+// The items, how typing narrows them and what choosing does are pure and tested here.
 
 import { addDivider, addTable, setStyleOf, toggleList, toggleSubtext, type Action } from "./bar";
 import { importFor, TEMPLATES } from "./components";
 import { blockAt, changeKind, deleteText, insertBlock, insertText, makeBox, moveBlock, paragraph, removeBlock, runsText, setRaw, textAt, type Details, type Document } from "./document";
 import type { State } from "./history";
 import { caret, pageBreakAt, sameLeaf } from "./keys";
-import { counted, made, opening, ranked, remember, remembered, type Counts } from "./most-used";
-import type { Surface } from "./surface";
-import { flowMenu, make, markActive, unmarkActive, type MenuItem } from "./ui";
+import { opening, ranked, type Counts } from "./most-used";
 
 /** One thing the slash menu can make. `image` asks the host for a picture instead of running an action. An item for `mdx` is offered in MDX files alone. */
 export interface SlashItem {
@@ -151,131 +150,4 @@ export function chooseSlash(state: State, item: SlashItem): State {
     const length = block?.kind === "paragraph" ? runsText(block.runs).length : 0;
     const cleared: State = { doc: deleteText(state.doc, { start: { path, offset: 0 }, end: { path, offset: length } }), selection: caret(path, 0) };
     return item.action ? item.action(cleared) : cleared;
-}
-
-/** Builds the slash menu for a surface. `pickImage` asks the host for a picture to put where the slash was. */
-export function createSlash(surface: Surface, pickImage: () => void): { close(): void } {
-    // the menu grows from where the cursor is: a box the size of the cursor, never seen, is what it grows out of
-    const anchor = make("span", "quire-anchor");
-    anchor.setAttribute("aria-hidden", "true");
-    document.body.append(anchor);
-    const menu = flowMenu("Make a block", {
-        className: "quire-slash",
-        onClose: () => {
-            open = false;
-            unmarkActive(surface.element);
-        },
-    });
-    let open = false;
-    let active = 0;
-    let shown: SlashItem[] = [];
-    /** True while the menu shows its first five and More, before anything is typed after the slash or More is pressed. */
-    let folded = false;
-    const FOLD = 5;
-    const rows = () => (folded ? shown.slice(0, FOLD) : shown);
-
-    // whatever made something (the slash menu, the bar, a menu, a shortcut, a typed Markdown mark) is counted, here alone
-    surface.on("change", ({ doc, before, kind }) => {
-        if (!before || (kind !== "format" && kind !== "shortcut")) return;
-        const keys = made(before, doc).filter((key) => SLASH_KEYS.includes(key));
-        if (keys.length) remember(counted(remembered(SLASH_KEYS), keys));
-    });
-
-    const choose = (item: SlashItem) => {
-        menu.close(false);
-        surface.run((doc, selection) => chooseSlash({ doc, selection }, item));
-        if (!item.action) pickImage();
-        surface.focus();
-    };
-
-    /** More grows the menu open to everything, the five staying where they are. */
-    const unfold = () => {
-        folded = false;
-        menu.more(lines());
-        mark();
-        surface.focus();
-    };
-
-    function lines(): MenuItem[] {
-        if (shown.length === 0) return [{ label: "Nothing by that name", run: () => menu.close(false) }];
-        const items: MenuItem[] = rows().map((item) => ({ label: item.label, icon: item.icon, hint: item.key.startsWith("heading") ? `H${item.key.slice(-1)}` : undefined, run: () => choose(item) }));
-        return folded ? [...items, { label: "More", icon: "chevron", quiet: true, stays: true, run: unfold }] : items;
-    }
-
-    function mark() {
-        markActive(menu, surface.element, active);
-    }
-
-    function render(rect: DOMRect | null) {
-        if (rect) {
-            anchor.style.left = `${rect.left}px`;
-            anchor.style.top = `${rect.top}px`;
-            anchor.style.height = `${Math.max(rect.height, 16)}px`;
-        }
-        menu.open(anchor, lines());
-        open = true;
-        mark();
-    }
-
-    surface.on("slash", ({ rect }) => {
-        shown = filterSlash("", surface.getDocument().mdx, remembered(SLASH_KEYS));
-        folded = shown.length > FOLD;
-        active = 0;
-        render(rect);
-    });
-
-    // typing after the slash narrows the menu; leaving the line or the slash closes it
-    surface.on("change", ({ doc }) => {
-        if (!open) return;
-        const { path, offset } = surface.getSelection().focus;
-        const query = slashQuery(doc, path, offset);
-        if (query === undefined) return menu.close(false);
-        // typing looks through everything, and once it has the menu stays open to everything
-        if (query.trim()) folded = false;
-        shown = filterSlash(query, doc.mdx, remembered(SLASH_KEYS));
-        active = Math.min(active, Math.max(0, lines().length - 1));
-        render(null);
-    });
-    surface.on("select", ({ selection }) => {
-        if (open && slashQuery(surface.getDocument(), selection.focus.path, selection.focus.offset) === undefined) menu.close(false);
-    });
-
-    // as the page scrolls, the cursor's place moves, and the menu, tied to it, with it
-    addEventListener(
-        "scroll",
-        () => {
-            if (!open) return;
-            const selection = getSelection();
-            const rect = selection?.rangeCount ? selection.getRangeAt(0).getBoundingClientRect() : undefined;
-            if (rect && (rect.width || rect.height)) {
-                anchor.style.left = `${rect.left}px`;
-                anchor.style.top = `${rect.top}px`;
-            }
-        },
-        { passive: true },
-    );
-
-    // while it is open its keys come before the editor's
-    surface.element.addEventListener(
-        "keydown",
-        (event) => {
-            if (!open || event.isComposing) return;
-            const count = shown.length ? lines().length : 0;
-            if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-                if (count) active = (active + (event.key === "ArrowDown" ? 1 : count - 1)) % count;
-                mark();
-            } else if (event.key === "Enter" || event.key === "Tab") {
-                const item = rows()[active];
-                if (item) choose(item);
-                else if (folded) unfold();
-                else menu.close(false);
-            } else if (event.key === "Escape") menu.close(false);
-            else return;
-            event.preventDefault();
-            event.stopImmediatePropagation();
-        },
-        true,
-    );
-
-    return { close: () => menu.close(false) };
 }

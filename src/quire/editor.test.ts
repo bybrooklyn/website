@@ -327,25 +327,25 @@ used("the slash menu grows at the cursor, narrows as you type, and makes a headi
     await tab.run("localStorage.removeItem('quire-most-used')");
     await reset("Above\n", [0], 5);
     await tab.press("Enter");
-    const watching = tab.run<number[]>("q.watch('.quire-slash.open', 'height', 600)");
+    const watching = tab.run<number[]>("q.watch('.quire-palette.open', 'height', 600)");
     await tab.type("/");
     const heights = (await watching).filter((value) => value !== null && !Number.isNaN(value));
     expect(new Set(heights.map(Math.round)).size).toBeGreaterThan(4);
-    const lines = () => tab.run<string[]>("[...document.querySelectorAll('.quire-slash.open .quire-menu-label')].map((label) => label.textContent)");
+    const lines = () => tab.run<string[]>("[...document.querySelectorAll('.quire-palette.open .quire-menu-label')].map((label) => label.textContent)");
     expect(await lines()).toEqual(["Heading 2", "Bulleted list", "Checklist", "Picture", "Code block", "More"]);
     // More grows it open to everything: the twelve blocks, then callouts, folding sections, definition lists, maths, diagrams and subtext; the site's components are offered in MDX files alone
-    const growing = tab.run<number[]>("q.watch('.quire-slash.open', 'height', 400)");
-    await press(".quire-slash.open .quire-menu-line", "More");
+    const growing = tab.run<number[]>("q.watch('.quire-palette.open', 'height', 400)");
+    await press(".quire-palette.open .quire-menu-line", "More");
     const grown = (await growing).filter((value) => value !== null && !Number.isNaN(value));
     expect(new Set(grown.map(Math.round)).size).toBeGreaterThan(4);
     expect(await lines()).toHaveLength(18);
     expect((await lines()).slice(0, 5)).toEqual(["Heading 2", "Bulleted list", "Checklist", "Picture", "Code block"]);
     // it opens at the cursor
-    const near = await tab.run<{ menu: number; caret: number }>("(() => ({ menu: document.querySelector('.quire-slash').getBoundingClientRect().top, caret: getSelection().getRangeAt(0).getBoundingClientRect().bottom }))()");
+    const near = await tab.run<{ menu: number; caret: number }>("(() => ({ menu: document.querySelector('.quire-palette').getBoundingClientRect().top, caret: getSelection().getRangeAt(0).getBoundingClientRect().bottom }))()");
     expect(Math.abs(near.menu - near.caret)).toBeLessThan(30);
     await tab.type("head");
     await tab.wait(50);
-    expect(await tab.run("[...document.querySelectorAll('.quire-slash.open .quire-menu-line')].map((line) => line.textContent)")).toEqual(["Heading 1H1", "Heading 2H2", "Heading 3H3"]);
+    expect(await tab.run("[...document.querySelectorAll('.quire-palette.open .quire-menu-line')].map((line) => line.textContent)")).toEqual(["Heading 1H1", "Heading 2H2", "Heading 3H3"]);
     await tab.press("ArrowDown");
     await tab.press("Enter");
     await tab.type("Made");
@@ -357,14 +357,14 @@ used("the slash menu grows at the cursor, narrows as you type, and makes a headi
     await tab.press("Escape");
     await tab.wait(50);
     expect(await md()).toBe("Above\n\n## Made\n\n/ta\n");
-    expect(await tab.run("!!document.querySelector('.quire-slash.open')")).toBe(false);
+    expect(await tab.run("!!document.querySelector('.quire-palette.open')")).toBe(false);
 
     // a table, chosen with the mouse
     await reset("Above\n", [0], 5);
     await tab.press("Enter");
     await tab.type("/tab");
     await tab.wait(650);
-    await press(".quire-slash.open .quire-menu-line", "Table");
+    await press(".quire-palette.open .quire-menu-line", "Table");
     await tab.type("x");
     expect(await md()).toBe("Above\n\n| x   |     |     |\n| --- | --- | --- |\n|     |     |     |\n|     |     |     |\n");
 });
@@ -666,7 +666,7 @@ async function everythingAppearing(): Promise<Record<string, number[]>> {
     await reset("Above\n", [0], 5);
     await tab.press("Enter");
     // a menu grows rather than fades: its height is watched
-    seen["slash menu"] = await appearing(".quire-slash", () => tab.type("/"), 600, "height");
+    seen["slash menu"] = await appearing(".quire-palette", () => tab.type("/"), 600, "height");
     await tab.press("Escape");
     await reset("Text\n", [0], 0);
     await button("More");
