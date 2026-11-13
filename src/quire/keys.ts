@@ -56,7 +56,7 @@ import {
 } from "./document";
 import { record, redo, seal, undo, type ChangeKind, type History, type State } from "./history";
 import { readTag } from "./components";
-import { emojiOf } from "./emoji";
+import { emojiOf, shortcodeAt } from "./emoji";
 import { symbolFor } from "./symbols";
 import { LINE_MARK, PAIRS } from "./vocabulary";
 
@@ -202,6 +202,8 @@ function symbolShortcut(state: State, typed: string, options: TypingOptions): St
         const code = /:([a-z0-9_+-]+):$/.exec(before);
         if (!code || !emojiOf(code[1]!) || /[￼\n]/.test(code[0])) return undefined;
         const start = at.offset - code[0].length;
+        // only a shortcode standing as a word of its own, not in a word or a web address (emoji.ts)
+        if (shortcodeAt(textAt(doc, at.path), start) !== code[1]) return undefined;
         for (let offset = start + 1; offset <= at.offset; offset++) if (quiet(offset)) return undefined;
         const next = insertAtom(deleteText(doc, { start: { path: at.path, offset: start }, end: at }), { path: at.path, offset: start }, { kind: "emoji", name: code[1]! });
         return { doc: next, selection: caret(at.path, start + 1) };

@@ -611,3 +611,14 @@ test("the selection lands on real text after pasting onto an empty heading in a 
     before.key("Delete");
     expect(before.cursor).toEqual({ path: [0, 0, 0], offset: 0 });
 });
+
+test("a typed shortcode becomes an emoji only as a word of its own, not inside a word or a web address", () => {
+    for (const typed of ["tag:cat:", "http://a.b/:fire:"]) {
+        const e = editor("");
+        e.type(typed);
+        expect(e.markdown).toBe(`${typed}\n`);
+    }
+    const e = editor("");
+    e.type("a :cat:");
+    expect(e.state.doc.blocks[0]).toMatchObject({ runs: [{ kind: "text", text: "a " }, { kind: "emoji", name: "cat" }] });
+});

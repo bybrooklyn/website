@@ -6,7 +6,7 @@
 
 import { asPicture } from "./pictures";
 import { tidyRuns, type Align, type Block, type Document, type Leaf, type Level, type ListItem, type ListStyle, type Mark, type Paragraph, type Run, type TextRun } from "./document";
-import { emojiOf } from "./emoji";
+import { addresses, shortcodeAt } from "./emoji";
 
 /** How to read a file. MDX turns on imports, exports, components and `{expressions}`, and turns off indented code. */
 export interface ReadOptions {
@@ -927,6 +927,7 @@ export function parseInline(text: string, options: ReadOptions = {}): Run[] {
 const runsFrom = (text: string, context: Context) => tidyRuns(inline(text, context));
 
 function inline(text: string, context: Context): Run[] {
+    const address = addresses(text);
     const tokens: Token[] = [];
     let buffer = "";
     const flush = () => {
@@ -983,10 +984,11 @@ function inline(text: string, context: Context): Run[] {
             continue;
         }
         if (char === ":") {
-            const code = /^:([a-z0-9_+-]+):/.exec(rest);
-            if (code && emojiOf(code[1]!)) {
-                push({ kind: "emoji", name: code[1]! });
-                index += code[0].length;
+            // a shortcode standing as a word of its own, not in a word and not in a web address (emoji.ts)
+            const name = shortcodeAt(text, index, !!address?.[index]);
+            if (name) {
+                push({ kind: "emoji", name });
+                index += name.length + 2;
                 continue;
             }
         }
@@ -1130,6 +1132,12 @@ function inline(text: string, context: Context): Run[] {
                 index += entity[0].length;
                 continue;
             }
+        }
+        // inside a web address `==` and `||` are part of the address
+        if ((char === "=" || char === "|") && address?.[index]) {
+            buffer += char;
+            index++;
+            continue;
         }
         if (char === "*" || char === "_" || char === "~" || char === "=" || (char === "|" && !context.cell)) {
             let count = 0;

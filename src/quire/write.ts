@@ -5,7 +5,7 @@
 
 import { pictureHtml, sized } from "./pictures";
 import type { Align, Block, Document, Leaf, LinkRun, List, ListItem, Run, TextRun } from "./document";
-import { emojiOf } from "./emoji";
+import { emojiOf, inAddress } from "./emoji";
 import { definedLabels, followed, normalLabel, referring, standsApart } from "./read";
 
 interface Context {
@@ -501,7 +501,11 @@ function writeLeaves(all: Leaf[], context: Context, cell: boolean, before = " ",
         else if (leaf.kind === "image") token.text = imageText(leaf.src, leaf.alt, leaf.title);
         else if (leaf.kind === "break") token.text = cell ? "<br>" : "\\\n";
         else if (leaf.kind === "footnote") token.text = `[^${said(leaf.label, "a footnote's label")}]`;
-        else if (leaf.kind === "emoji") token.text = `:${said(leaf.name, "an emoji's name")}:`;
+        else if (leaf.kind === "emoji") {
+            // a shortcode against a letter or digit would not be read as one (emoji.ts), so there the emoji itself is written
+            const glued = /[\p{L}\p{N}]/u.test(beside(index - 1, -1)) || /[\p{L}\p{N}]/u.test(beside(index + 1, 1));
+            token.text = glued && emojiOf(leaf.name) ? emojiOf(leaf.name)! : `:${said(leaf.name, "an emoji's name")}:`;
+        }
         else if (leaf.kind === "html") token.text = said(leaf.html, "inline HTML");
         else said(undefined, `a run of kind ${String((leaf as { kind?: unknown } | undefined)?.kind)}`);
     });
@@ -604,6 +608,14 @@ function codeSpan(value: string): string {
     return fence + pad + value + pad + fence;
 }
 
+/** True if a known shortcode starts at `index` in text and would be read as one: not against a letter or digit on either side, nor in a web address (emoji.ts). */
+function shortcode(value: string, index: number, left: string, after: string): boolean {
+    const name = /^:([a-z0-9_+-]+):/.exec(value.slice(index, index + 64))?.[1];
+    if (name === undefined || emojiOf(name) === undefined) return false;
+    const word = /[\p{L}\p{N}]/u;
+    return !word.test(left) && !word.test(value[index + name.length + 2] ?? after) && !inAddress(value, index);
+}
+
 /**
  * Escapes what would otherwise be read as Markdown in plain text. `before` and `after` are the
  * characters written beside it, `signs` the characters of a mark's signs touching it on either side,
@@ -633,7 +645,7 @@ function escapeText(value: string, context: Context, cell: boolean, before: stri
             (char === "$" && !!context.dollars) ||
             (char === "|" && !cell && (touching("|") || (left !== "|" && right === "|" && third !== "|" && !(space(left) && space(third))))) ||
             (char === "=" && (touching("=") || (left !== "=" && right === "=" && third !== "=" && !(space(left) && space(third))))) ||
-            (char === ":" && emojiOf(/^:([a-z0-9_+-]+):/.exec(value.slice(index))?.[1] ?? "") !== undefined);
+            (char === ":" && shortcode(value, index, left, after));
         out += risky ? `\\${char}` : char;
     }
     return out;

@@ -360,3 +360,13 @@ test("new text takes the line ending most of the file has, so one stray CRLF in 
     const added = insertText(read("a\n\nb\n\nc\n\nd\r\n"), { path: [0], offset: 1 }, "x");
     expect(write(added)).toBe("ax\n\nb\n\nc\n\nd\r\n");
 });
+
+test("a shortcode is an emoji only as a word of its own: not inside a word, and not inside a web address, where pipes and equals signs mark nothing either", () => {
+    const runs = (source: string) => (read(source).blocks[0] as Paragraph).runs.map((run) => (run.kind === "text" ? [run.text, run.marks] : `${run.kind}:${run.kind === "emoji" ? run.name : ""}`));
+    for (const source of ["see http://a.b/:smile:/x", "tag:cat:dog", "a:100:b", "https://x.com/p:fire:", "10:30:45", "http://x.y/a||b||c", "www.x.com/==a=="]) expect(runs(`${source}\n`)).toEqual([[source, []]]);
+    expect(runs("a :smile: b\n")).toEqual([["a ", []], "emoji:smile", [" b", []]]);
+    expect(runs("(:smile:)\n")).toEqual([["(", []], "emoji:smile", [")", []]]);
+    // what is written for each reads back as itself, an emoji glued to a word as the emoji itself
+    const doc = insertText(read("tag:cat:dog and a :smile: b\n"), { path: [0], offset: 0 }, "z");
+    expect(write(doc)).toBe("ztag:cat:dog and a :smile: b\n");
+});

@@ -565,3 +565,50 @@ export const EMOJI_WORDS: Record<string, string[]> = {
 export function emojiOf(name: string): string | undefined {
     return Object.hasOwn(EMOJI, name) ? EMOJI[name] : undefined;
 }
+
+/** How far back a web address is looked for: far longer than any address written by hand. */
+const REACH = 2048;
+
+/**
+ * Which characters of a line sit in a web address: a run of text with no space in it, from where it
+ * holds `://` or from its start if it starts with `www.`. Worked out in one pass, for the reader,
+ * which asks of many characters; undefined when the line holds no address at all.
+ */
+export function addresses(text: string): Uint8Array | undefined {
+    if (!text.includes("://") && !text.includes("www.")) return undefined;
+    const out = new Uint8Array(text.length);
+    let start = 0;
+    let inside = false;
+    for (let index = 0; index < text.length; index++) {
+        if (/\s/.test(text[index]!)) {
+            start = index + 1;
+            inside = false;
+            continue;
+        }
+        if (!inside && ((index === start && text.startsWith("www.", index)) || (text[index] === ":" && text.startsWith("://", index) && index > start))) inside = true;
+        if (inside) out[index] = 1;
+    }
+    return out;
+}
+
+/** True if the character at `index` sits in a web address (see `addresses`), looking back no further than any address reaches. */
+export function inAddress(text: string, index: number): boolean {
+    let start = index;
+    while (start > 0 && index - start < REACH && !/\s/.test(text[start - 1]!)) start--;
+    const token = text.slice(start, index + 1);
+    return token.includes("://") || token.startsWith("www.");
+}
+
+/**
+ * The name of a known shortcode, `:smile:`, starting at `index`, if it stands as a word of its own:
+ * no letter or digit just before or after it, so that `tag:cat:dog` and `a:100:b` stay text, and not
+ * inside a web address, where `:fire:` is part of the address. `address` may be given when it is known.
+ */
+export function shortcodeAt(text: string, index: number, address?: boolean): string | undefined {
+    const match = /^:([a-z0-9_+-]+):/.exec(text.slice(index, index + 64));
+    if (!match || emojiOf(match[1]!) === undefined) return undefined;
+    const word = /[\p{L}\p{N}]/u;
+    if (word.test(text[index - 1] ?? "") || word.test(text[index + match[0].length] ?? "")) return undefined;
+    if (address ?? inAddress(text, index)) return undefined;
+    return match[1];
+}
