@@ -805,4 +805,32 @@
     .quire-palette-form {
         width: 100%;
     }
+
+/* ---- Google Drive's dialog (src/quire/drive-place.ts): the passphrase fields under the words, and
+   the quieter lines about what Google sees and where the passphrase is kept ---- */
+
+.quire-drive-row {
+    display: grid;
+    gap: 0.25rem;
+}
+
+.quire-drive-label {
+    color: var(--muted);
+    font-size: 0.85rem;
+}
+
+.quire-drive-row .quire-link-field {
+    box-sizing: border-box;
+    width: 100%;
+}
+
+.quire-dialog-body > .quire-drive-quiet {
+    color: var(--muted);
+    font-size: 0.88rem;
+}
+
+.quire-dialog-body > .quire-drive-said {
+    min-height: 1.2em;
+    color: var(--accent);
+    font-size: 0.9rem;
 }

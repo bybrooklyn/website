@@ -36,8 +36,57 @@ the text. Undo, selection and paste are its own. Markdown typed as you go turns 
 **Stores.** A document can live in the browser (`store-browser.ts`), in a file opened and downloaded
 (`store-files.ts`), in a real file or folder on the computer where the browser allows it
 (`store-folder.ts`), in a GitHub repository (`store-github.ts`, with a fine-grained token kept only in this
-browser and sent only to GitHub), or on the site's own writing server under `bun run edit`. A save whose
-document changed elsewhere is refused, and nothing is written over it (`conflict.ts`).
+browser and sent only to GitHub), in Google Drive locked with a passphrase (`store-drive.ts`, below), or on
+the site's own writing server under `bun run edit`. A save whose document changed elsewhere is refused, and
+nothing is written over it (`conflict.ts`).
+
+**Google Drive, locked.** Documents can be kept in her Google Drive, locked in the browser with a
+passphrase before they are sent, so that Drive holds only scrambled files. They cannot be opened in Google
+Docs or by Google. The parts:
+
+- `vault.ts` locks and opens bytes with the browser's own Web Crypto: AES-256-GCM, a fresh random 96-bit
+  nonce for every file written, and the key made from the passphrase by PBKDF2-HMAC-SHA-256 at 600,000
+  iterations over a random 16-byte salt kept with the vault. Argon2 would be stronger against guessing, but
+  Web Crypto does not have it and no library is added. The key is a `CryptoKey` the page cannot read back
+  out, held in memory only; the passphrase is never kept and is asked for once in each tab. Every file
+  starts with a header ("MQ", a version byte, the iterations, the salt, the nonce) so that the numbers can be
+  raised later. The header and a label naming the file's purpose are authenticated with the contents.
+- A small `lock` file holds a known sentence, locked. It is opened first: if it does not open, the
+  passphrase is wrong, and that is what the writer is told. If it opens and a document does not, the
+  document is said to be damaged or changed outside mdQuire. There is no recovery if the passphrase is lost.
+- Names are not sent. Each document and each picture is a file named with 32 random hex digits and locked
+  under that name as its label, so that a file put in another's place does not open. Real names, which file
+  holds each document, and the pictures' names are in one locked `index` file. All of it is in a folder
+  named `mdQuire` that the app makes.
+- `drive.ts` is the few Drive API v3 calls, behind an interface with a Drive kept in memory
+  (`memoryDrive`) for tests and for the page `/mdquire-drive-try/`, which runs the whole app on it with no
+  Google account.
+- Saving. Drive v3 documents no conditional write (`files.update` takes no `If-Match`), so a save is checked
+  twice: before writing, the file's `headRevisionId` must still be the mark; after writing, the revision just
+  before the new one must be the mark. If another device or tab saved in the moment between, its revision
+  is put back on top and the save is reported as changed elsewhere, with their text. For this every write
+  sets "keep forever" on its revision (Drive lets only such revisions be downloaded), and the one before is
+  let go once a later save is in place. The index is changed the same way, and a change refused because the
+  index changed elsewhere is made again on the newer one, so two devices making documents at once both keep
+  theirs.
+- `google-sign-in.ts` signs in with no script of Google's and no server, by the OAuth 2.0 flow for
+  JavaScript web apps: a small window at `accounts.google.com/o/oauth2/v2/auth` with
+  `response_type=token`, a random `state` that is checked, and the scope `drive.file` alone (the app sees
+  only the files it made). Google sends the window back to `/mdquire/drive/`, which hands the token to the
+  tab that asked over a `BroadcastChannel` (the pages are cross-origin isolated, so the window cannot reach
+  its opener) and closes. The token lasts about an hour and is kept in the tab's `sessionStorage` only; when
+  it runs out, a refused call asks the writer to sign in again, and what she typed waits to be saved.
+- `drive-place.ts` is the dialog: what Google can see, Sign in with Google, then the passphrase (twice for a
+  new vault). `drive-config.ts` holds the client ID; while it is empty the place says "Google Drive is not set
+  up yet." and does nothing. The page policy allows `https://www.googleapis.com` in `connect-src` and nothing
+  else for it; the sign-in window is a page of its own and needs nothing in the policy.
+
+**What Google can still see.** That she uses mdQuire (it is the app named on the sign-in screen and on every
+request), when she signs in, the number of files in the folder, the size of each (a document's file is its
+text's size plus a few dozen bytes, so length is not hidden), when each was made and when each changes, and which
+files change together. It cannot read names, text, notes, styles or pictures, and it cannot tell which file
+is a picture and which a document except by size and timing. It could delete or roll back files: a rolled
+back or swapped file is found and refused, not shown as hers, but a deletion is not prevented.
 
 **The `.quire` file.** A zip (`zip.ts`, written here) holding `document.md` (plain Markdown, readable by
 anything), `style.json` (colour, size, typeface, highlight, alignment, spacing, picture sizes and the page,
@@ -194,6 +243,39 @@ soft line break turns only that line into an item.
 - When the page and its project page stop being hidden.
 - What two typed equals signs should become, if anything; the arrows and the other signs above are built.
 
+## Setting up Google Drive
+
+Done once in the Google Cloud console (console.cloud.google.com), signed in as herself. Checked against
+Google's pages "Configure the OAuth consent screen" and "Create access credentials" in November 2026; the
+console's menus move from time to time.
+
+1. Make a project: the project list at the top, New project, a name such as "mdQuire", Create. Choose it.
+2. Switch on the Drive API: Menu, APIs and services, Library, search "Google Drive API", Enable.
+3. The consent screen: Menu, Google Auth platform, Branding. Press Get started if it is not configured
+   yet. App name "mdQuire", her email as the support email, Next. Audience: External, Next. Her email as the
+   contact, Next. Agree to the user data policy, Continue, Create.
+4. Test users: Google Auth platform, Audience. Leave the publishing status at Testing. Under Test users,
+   Add users, her own Google address, Save. Only test users can sign in while it is in testing.
+5. The scope: Google Auth platform, Data access, Add or remove scopes, tick
+   `https://www.googleapis.com/auth/drive.file` ("See, edit, create and delete only the specific Google
+   Drive files you use with this app"), Update, Save. It is a non-sensitive scope, so no review by Google
+   is needed for it.
+6. The client ID: Google Auth platform, Clients, Create client. Application type: Web application. Name:
+   "mdQuire". Authorised JavaScript origins, Add URI, each of:
+   - `https://bybrooklyn.dev`
+   - `http://localhost` with the port `bun run dev` prints (4321 unless changed)
+   Authorised redirect URIs, Add URI, each of (exactly, with the slash at the end):
+   - `https://bybrooklyn.dev/mdquire/drive/`
+   - the same local address followed by `/mdquire/drive/`
+   Create. No client secret is used.
+7. Copy the client ID (it ends in `.apps.googleusercontent.com`) into `GOOGLE_CLIENT_ID` in
+   `src/quire/drive-config.ts`. It is public, not a secret. `bun test src/quire` checks its shape.
+8. Build and open mdQuire. Google Drive appears among the places; signing in shows Google's warning that the
+   app is not verified, which is expected for an app in testing; Continue.
+
+A preview deploy at another address needs that address added in step 6 as an origin and, with
+`/mdquire/drive/`, as a redirect URI.
+
 ## How to run and test
 
 ```sh
@@ -220,4 +302,12 @@ for byte. The browser tests need a Chromium and skip, with a notice, without one
   can use threads; anything they load from elsewhere must allow it.
 - The page policy allows `blob:` for pictures (`astro.config.ts`), for pictures kept in the browser or in
   a `.quire` zip and for reading them back into a download. Whether that stays as it is is open.
+- Google Drive has been tried only against the Drive kept in memory, never against Google: there is no
+  client ID yet. Not yet seen working: the sign-in window and its return to `/mdquire/drive/` under the
+  pages' cross-origin isolation, Drive's answers to CORS requests from an isolated page, whether every
+  upload makes a new revision with "keep forever" honoured, whether `revisions.list` shows a revision at once
+  after a write, the limit of 200 revisions kept forever, and uploads near 5 MB. A file over 5 MB is refused
+  (Google's guide gives that limit for the two upload kinds used); a resumable upload would lift it.
+- The Drive conflict check after a write narrows the moment two saves can cross to almost nothing, but Drive
+  offers no compare-and-swap, so it cannot close it entirely; what crossed is put back and shown, not lost.
 - Until `mdquire-writer` is merged, `main` reads `$...$` and `~text~` differently from the decided rule.

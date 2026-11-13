@@ -27,7 +27,7 @@
 # "require-corp" rather than "credentialless" because Safari does not know the second and would
 # stay on one thread. It costs these pages nothing the page policy did not already take: images,
 # scripts, styles and fonts may only come from the site itself (the <meta> policy), and the model
-# and the GitHub store are fetched with CORS, which both answer.
+# and the GitHub and Google Drive stores are fetched with CORS, which all three answer.
 /mdquire/*
   Cross-Origin-Opener-Policy: same-origin
   Cross-Origin-Embedder-Policy: require-corp
