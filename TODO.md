@@ -30,7 +30,6 @@ the project's file in [`docs/`](docs/README.md); what has been done is in [`CHAN
 
 ### The minis and Mote
 
-- Generalist: keep or take out the small reward for one foot down, a rule about how to move ([generalist](docs/generalist.md#open)).
 - Generalist: the page text, and its changed controls line, to review; whether the page opens on practice (as now) or on evolution.
 - Generalist: the world's checker proves a path for a body that hops, and practice has no hop. Practised creatures bound and get past. Decide whether the checker should use what the body can do.
 - Generalist: the ramp of costs counts each worker's own steps, so with four workers it takes about four times as many steps in all.
@@ -76,8 +75,9 @@ What was found and fixed is in [`docs/AUDIT.md`](docs/AUDIT.md). Still open from
 - What two typed equals signs should become, if anything.
 
 ## Generalist
+- Next round, when the machine is quiet: hold a walk at ten minutes of practice and through whole worlds (the strict test stays). To try: a lean cost between 1 and 2, a small spin cost, a cost for standing at obstacles, several learner seeds in the page. It ships only when it does.
+- Accepted: progress paid up to walking pace only, a cost for leaning, no rhythm sense for two legs, older saved two-legged learners forgotten.
 
-- Get two legs to walk with a foot always down, without a rule about how to move.
 - The teacher that evolves worlds (after ACCEL).
 - Curiosity, food and energy: tiredness and recovery, never dying of hunger.
 - The risky bet: a fixed brain that adds and cuts connections paid for in energy, its rule found by evolution.
