@@ -2841,6 +2841,89 @@ body.quire-app,
     line-height: 1.5;
 }
 
+/* the keyboard shortcuts (Ctrl+/): a search over two quiet columns, the keys in the menus' own symbols; the list scrolls, the search stays */
+.quire-dialog.quire-keys-dialog {
+    width: min(38rem, 100vw - 2rem);
+}
+
+.quire-keys-dialog .quire-dialog-in {
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    height: min(40rem, 100dvh - 2rem);
+    overflow: hidden;
+}
+
+.quire-keys-dialog .quire-dialog-body {
+    grid-template-rows: auto minmax(0, 1fr);
+    min-height: 0;
+}
+
+.quire-keys-search {
+    box-sizing: border-box;
+    width: 100%;
+}
+
+.quire-keys {
+    min-height: 0;
+    overflow: auto;
+    padding-right: 0.25rem;
+}
+
+.quire-keys-head {
+    margin: 0.9rem 0 0.3rem;
+    color: var(--muted);
+    font-family: var(--font-text);
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.quire-keys-head:first-child {
+    margin-top: 0;
+}
+
+.quire-keys-table,
+.quire-count {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.92rem;
+    line-height: 1.35;
+}
+
+.quire-keys-table td {
+    padding: 0.28rem 0;
+    border-bottom: 0.0625rem solid color-mix(in oklch, var(--rule) 55%, transparent);
+    vertical-align: top;
+}
+
+.quire-keys-keys {
+    width: 7.5rem;
+    padding-right: 1rem !important;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.quire-keys-none {
+    color: var(--muted);
+}
+
+.quire-count th,
+.quire-count td {
+    padding: 0.3rem 0;
+    text-align: left;
+    font-weight: 400;
+}
+
+.quire-count td,
+.quire-count-head th:not(:first-child) {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.quire-count-head th {
+    color: var(--muted);
+    font-size: 0.8rem;
+}
+
 .quire-dialog-actions {
     display: flex;
     justify-content: flex-end;

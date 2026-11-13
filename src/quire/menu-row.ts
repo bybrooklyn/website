@@ -10,6 +10,7 @@
 // stand and what each command does.
 
 import type { Align } from "./document";
+import { keysFor } from "./shortcuts";
 import { flowMenu, make, moveIndex, type MenuItem } from "./ui";
 
 /** A word of the row, and the lines of its menu. */
@@ -38,23 +39,28 @@ export interface RowState {
 }
 
 /** What each command does, given by the editor. A command not given is left out. */
-export type RowActions = Partial<Record<Command, () => void>> & { file?: () => MenuItem[] };
+export type RowActions = Partial<Record<Command, () => void>> & { file?: () => MenuItem[]; tools?: () => MenuItem[] };
 
 /** Every command the row can hold. */
 export type Command =
     | "turnRich" | "download" | "downloadQuire" | "print" | "history" | "pageSetup" | "zoom"
-    | "undo" | "redo" | "selectAll" | "link" | "find" | "replace"
-    | "outline" | "markdown" | "pageView" | "lookNone" | "lookPaper"
+    | "undo" | "redo" | "selectAll" | "link" | "find" | "replace" | "pastePlain"
+    | "outline" | "markdown" | "pageView" | "lookNone" | "lookPaper" | "zoomIn" | "zoomOut" | "zoomReset"
     | "table" | "picture" | "divider" | "code" | "footnote" | "bullet" | "number" | "task" | "pageBreak" | "headerFooter"
-    | "bold" | "italic" | "underline" | "strike" | "inline" | "paragraph" | "heading1" | "heading2" | "heading3" | "quote"
-    | "color" | "size" | "font" | "highlight" | "spacing" | "left" | "center" | "right" | "justify"
-    | "check" | "about"
+    | "callout" | "details" | "definitions" | "maths" | "diagram"
+    | "bold" | "italic" | "underline" | "strike" | "inline" | "paragraph" | "heading1" | "heading2" | "heading3" | "heading4" | "heading5" | "heading6" | "quote" | "subtext" | "spoiler"
+    | "color" | "size" | "font" | "highlight" | "spacing" | "left" | "center" | "right" | "justify" | "indent" | "outdent" | "bigger" | "smaller" | "clear"
+    | "check" | "about" | "wordCount" | "shortcuts" | "searchMenus"
     | "superscript" | "subscript" | "marked" | "typedSigns"
     | "downloadAs" | "notes" | "nextNote" | "previousNote" | "comment" | "date" | "symbols" | "contents" | "updateContents";
 
-/** The menus of the row, for a document as it stands. */
+/** The menus of the row, for a document as it stands. A line's shortcut, if it has one, comes from the table in shortcuts.ts. */
 export function headings(state: RowState, act: RowActions): Heading[] {
-    const line = (command: Command, label: string, extra: Partial<MenuItem> = {}): MenuItem[] => (act[command] ? [{ label, run: act[command]!, ...extra }] : []);
+    const line = (command: Command, label: string, extra: Partial<MenuItem> = {}): MenuItem[] => {
+        if (!act[command]) return [];
+        const keys = keysFor(command);
+        return [{ label, run: act[command]!, ...(keys && !extra.hint ? { hint: keys } : {}), ...extra }];
+    };
     return [
         {
             label: "File",
@@ -66,18 +72,19 @@ export function headings(state: RowState, act: RowActions): Heading[] {
                 ...line("downloadAs", "Download as", { hint: "›" }),
                 ...line("history", "Version history"),
                 ...(state.rich ? line("pageSetup", "Page setup", { hint: "›" }) : []),
-                ...line("print", "Print", { hint: "Ctrl+P" }),
+                ...line("print", "Print"),
             ],
         },
         {
             label: "Edit",
             items: () => [
-                ...line("undo", "Undo", { icon: "undo", hint: "Ctrl+Z" }),
-                ...line("redo", "Redo", { icon: "redo", hint: "Ctrl+Shift+Z" }),
-                ...line("selectAll", "Select all", { hint: "Ctrl+A" }),
-                ...line("find", "Find", { icon: "search", hint: "Ctrl+F" }),
-                ...line("replace", "Find and replace", { hint: "Ctrl+H" }),
-                ...line("link", "Link", { icon: "link", hint: "Ctrl+K" }),
+                ...line("undo", "Undo", { icon: "undo" }),
+                ...line("redo", "Redo", { icon: "redo" }),
+                ...line("selectAll", "Select all"),
+                ...line("pastePlain", "Paste without formatting"),
+                ...line("find", "Find", { icon: "search" }),
+                ...line("replace", "Find and replace"),
+                ...line("link", "Link", { icon: "link" }),
             ],
         },
         {
@@ -93,6 +100,9 @@ export function headings(state: RowState, act: RowActions): Heading[] {
                 ...line("lookPaper", "Light paper", { pressed: state.look === "paper", group: "look" }),
                 ...line("pageView", "Page view", { pressed: !!state.paged }),
                 ...line("zoom", "Zoom", { hint: "›" }),
+                ...line("zoomIn", "Zoom in"),
+                ...line("zoomOut", "Zoom out"),
+                ...line("zoomReset", "Zoom back to the usual"),
             ],
         },
         {
@@ -102,48 +112,73 @@ export function headings(state: RowState, act: RowActions): Heading[] {
                 ...line("picture", "Picture", { icon: "image" }),
                 ...line("divider", "Horizontal line", { icon: "divider" }),
                 ...line("code", "Code block", { icon: "code" }),
+                ...line("callout", "Callout", { icon: "quote" }),
+                ...line("details", "Folding section", { icon: "chevron" }),
+                ...line("definitions", "Definition list", { icon: "indent" }),
+                ...line("maths", "Maths"),
+                ...line("diagram", "Diagram"),
                 ...line("footnote", "Footnote", { icon: "footnote" }),
-                ...line("pageBreak", "Page break", { icon: "pagebreak", hint: "Ctrl+Enter" }),
+                ...line("pageBreak", "Page break", { icon: "pagebreak" }),
                 ...line("date", "Date"),
                 ...line("symbols", "Special characters", { hint: "›" }),
                 ...(state.contents ? line("updateContents", "Update the table of contents") : line("contents", "Table of contents")),
-                ...line("comment", "Comment", { hint: "Ctrl+Alt+M" }),
+                ...line("comment", "Comment"),
                 ...(state.rich ? line("headerFooter", "Header, footer and page numbers", { hint: "›" }) : []),
                 ...line("bullet", "Bulleted list", { icon: "bullet" }),
                 ...line("number", "Numbered list", { icon: "number" }),
                 ...line("task", "Checklist", { icon: "task" }),
-                ...line("link", "Link", { icon: "link", hint: "Ctrl+K" }),
+                ...line("link", "Link", { icon: "link" }),
             ],
         },
         {
             label: "Format",
             items: () => [
-                ...line("bold", "Bold", { hint: "Ctrl+B" }),
-                ...line("italic", "Italic", { hint: "Ctrl+I" }),
-                ...line("underline", "Underline", { hint: "Ctrl+U" }),
-                ...line("strike", "Strikethrough", { hint: "Ctrl+Shift+X" }),
-                ...line("inline", "Inline code", { icon: "code", hint: "Ctrl+E" }),
-                ...line("marked", "Marked", { hint: "Ctrl+Shift+H" }),
-                ...line("superscript", "Superscript", { hint: "Ctrl+." }),
-                ...line("subscript", "Subscript", { hint: "Ctrl+," }),
-                ...line("paragraph", "Paragraph", { hint: "Ctrl+Alt+0" }),
-                ...line("heading1", "Heading 1", { hint: "Ctrl+Alt+1" }),
-                ...line("heading2", "Heading 2", { hint: "Ctrl+Alt+2" }),
-                ...line("heading3", "Heading 3", { hint: "Ctrl+Alt+3" }),
+                ...line("bold", "Bold"),
+                ...line("italic", "Italic"),
+                ...line("underline", "Underline"),
+                ...line("strike", "Strikethrough"),
+                ...line("inline", "Inline code", { icon: "code" }),
+                ...line("marked", "Marked"),
+                ...line("spoiler", "Spoiler"),
+                ...line("superscript", "Superscript"),
+                ...line("subscript", "Subscript"),
+                ...line("paragraph", "Normal text"),
+                ...line("heading1", "Heading 1"),
+                ...line("heading2", "Heading 2"),
+                ...line("heading3", "Heading 3"),
+                ...line("heading4", "Heading 4"),
+                ...line("heading5", "Heading 5"),
+                ...line("heading6", "Heading 6"),
+                ...line("subtext", "Subtext"),
                 ...line("quote", "Quote", { icon: "quote" }),
                 ...line("color", "Text color", { hint: "›" }),
                 ...line("size", "Text size", { hint: "›" }),
+                ...line("bigger", "Larger text"),
+                ...line("smaller", "Smaller text"),
                 // what a Markdown file cannot keep is not offered for one
                 ...(state.rich ? [...line("font", "Typeface", { hint: "›" }), ...line("highlight", "Highlight", { icon: "highlight", hint: "›" }), ...line("spacing", "Line spacing", { icon: "spacing", hint: "›" })] : []),
                 ...line("left", "Align left", { icon: "left", pressed: (state.align ?? "left") === "left" }),
                 ...line("center", "Centre", { icon: "center", pressed: state.align === "center" }),
                 ...line("right", "Align right", { icon: "right", pressed: state.align === "right" }),
                 ...(state.rich ? line("justify", "Justify", { icon: "justify", pressed: state.align === "justify" }) : []),
+                ...line("indent", "Indent more", { icon: "indent" }),
+                ...line("outdent", "Indent less", { icon: "outdent" }),
+                ...line("clear", "Clear formatting", { icon: "clear" }),
             ],
         },
         {
             label: "Tools",
-            items: () => [{ label: `${state.words.toLocaleString("en")} ${state.words === 1 ? "word" : "words"}`, note: true, run: () => {} }, ...line("history", "Version history"), ...line("check", "Checking", { hint: "›" }), ...line("typedSigns", "Typed signs, -> to →", { pressed: state.symbols !== false }), ...line("about", "About mdQuire")],
+            items: () => [
+                { label: `${state.words.toLocaleString("en")} ${state.words === 1 ? "word" : "words"}`, note: true, run: () => {} },
+                ...line("wordCount", "Word count"),
+                ...line("history", "Version history"),
+                ...line("check", "Checking", { hint: "›" }),
+                ...line("typedSigns", "Typed signs, -> to →", { pressed: state.symbols !== false }),
+                ...line("searchMenus", "Search the menus", { icon: "search" }),
+                ...line("shortcuts", "Keyboard shortcuts"),
+                ...(act.tools?.() ?? []),
+                ...line("about", "About mdQuire"),
+            ],
         },
     ];
 }

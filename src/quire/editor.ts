@@ -11,28 +11,31 @@
 //
 // Without a store the editor writes nowhere, as in the tests of its parts.
 
-import { addCode, addDivider, addFootnote, addTable, align, aligned, createBar, link as linkAction, linkAt, setStyleOf, toggle, toggleList, type Action } from "./bar";
-import { createMenuRow, headings } from "./menu-row";
-import { blockPaths, countWords, lengthOf } from "./document";
+import { addCode, addDivider, addFootnote, addTable, align, aligned, clearFormat, createBar, indentBy, link as linkAction, linkAt, setStyleOf, toggle, toggleList, toggleSubtext, type Action } from "./bar";
+import { createMenuRow, headings, type RowActions } from "./menu-row";
+import { blockPaths, countWords, documentOf, lengthOf } from "./document";
 import { createConflict } from "./conflict";
 import { createDictation } from "./dictation/dictation";
 import { type Document } from "./document";
-import { collapsed, pageBreakAt } from "./keys";
+import { collapsed, fragment, pageBreakAt } from "./keys";
 import { createPages } from "./pages";
 import { createMarkdownView } from "./markdown-view";
 import { createOutline } from "./outline";
 import { read } from "./read";
 import { createSelectBar } from "./select-bar";
-import { createSlash } from "./slash";
+import { boxOf, createSlash, definitionList, drawnBlock } from "./slash";
 import { createSaver, fileName, said, type Entry, type Status, type Store } from "./store";
 import { createSurface, type Surface } from "./surface";
 import { createTableTools } from "./tables";
 import { createPictureTools } from "./picture-tools";
 import { createCommentMargin, keptNotes } from "./comment-margin";
 import { addContents, dateText, findContents, specialGrid, typeIn, typeSpecial, updateContents } from "./inserts";
-import { colorHex, gatherPictures, markdownFor, pageHtml, plainText, readingStyles } from "./export";
+import { colorHex, countRows, gatherPictures, markdownFor, pageHtml, plainText, readingStyles } from "./export";
 import { docx } from "./docx";
-import { aboutPanel, control, flowMenu, linkForm, make, type MenuItem } from "./ui";
+import { aboutPanel, control, flowMenu, keySymbols, linkForm, make, type MenuItem } from "./ui";
+import { openDialog } from "./dialog";
+import { chordFrom, findShortcuts, shortcutFor } from "./shortcuts";
+import { findTyping } from "./vocabulary";
 import { changes, createHistoryPanel, createKeeper, memoryStorage, snapshotParts, snapshotText, type VersionStorage } from "./versions";
 import { write } from "./write";
 import { emptyParts, opened, packQuire, written, type Parts } from "./quire-file";
@@ -104,6 +107,8 @@ export type Look = "none" | "paper";
 
 /** Where the look chosen is kept, for every document. */
 const LOOK_KEY = "quire-look";
+/** True on a Mac, where Cmd does what Ctrl does elsewhere. */
+const MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
 
 /** Where typed signs being turned off is kept. */
 const SYMBOLS_KEY = "quire-symbols";
@@ -347,11 +352,6 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     const checking = mountChecking({ surface, bar: bar.element, where: () => ({ store, id, name }) });
     // ---- find and replace, from its button, the Edit menu, Ctrl+F and Ctrl+H ----
     const find = createFind(surface, paper, () => bar.element.getBoundingClientRect().bottom);
-    host.addEventListener("keydown", (event) => {
-        if (!(event.ctrlKey || event.metaKey) || event.altKey || event.shiftKey || (event.key !== "f" && event.key !== "h")) return;
-        event.preventDefault();
-        find.open(event.key === "h");
-    });
     // dictation: a microphone at the end of the bar after the three dots, the shortcut, and its lines in the three-dot menu (src/quire/dictation/)
     if (!dictation.why) dictation.mount(bar.element.querySelector<HTMLElement>(".quire-bar-end")!);
     // the rich view and the Markdown, side by side when there is room and one in place of the other when not
@@ -461,13 +461,11 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     };
     surface.on("change", showPage);
     showPage();
+    // Ctrl with + (as well as =) zooms in too, as a browser does
     host.addEventListener("keydown", (event) => {
-        if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
-        const by = event.key === "=" || event.key === "+" ? 1 : event.key === "-" ? -1 : event.key === "0" ? 0 : undefined;
-        if (by === undefined) return;
+        if (!(event.ctrlKey || event.metaKey) || event.altKey || event.key !== "+" || event.code === "Equal") return;
         event.preventDefault();
-        if (by === 0) zoom.reset();
-        else zoom.step(by);
+        zoom.step(1);
     });
     surface.on("link", () => openLink(bar.element.querySelector<HTMLElement>('[aria-label^="Link"]')!));
     const selectBar = createSelectBar(surface, () => bar.element.getBoundingClientRect().bottom);
@@ -518,11 +516,6 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     const notes = createCommentMargin(surface, { place: notesPlace });
     host.append(notes.element);
     notes.opened();
-    host.addEventListener("keydown", (event) => {
-        if (!(event.ctrlKey || event.metaKey) || !event.altKey || event.code !== "KeyM") return;
-        event.preventDefault();
-        notes.add(row.words[3]!);
-    });
 
     // ---- the menu row: every command by name, above the bar ----
     const doing = (action: Action) => () => {
@@ -530,10 +523,8 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         surface.focus();
     };
     const format = () => row.words[4]!;
-    const row = createMenuRow(() =>
-        headings(
-            { rich: !!surface.getDocument().quire, contents: !!findContents(surface.getDocument()), paged: pages.paged(), look, outline: outlineView.isOpen(), markdown: host.classList.contains("markdown"), words: countWords(surface.getDocument()), align: aligned(surface.getDocument(), surface.getSelection().focus.path), symbols: surface.symbols() },
-            {
+    /** Every command, by name: the menus, their search, the keyboard's shortcuts (shortcuts.ts) and the Ctrl+/ panel all run these. */
+    const actions: RowActions = {
                 file: options.fileItems,
                 turnRich: () => void makeRich(),
                 download,
@@ -609,9 +600,112 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
                 symbols: () => openSpecials(row.words[3]!),
                 contents: doing(addContents),
                 updateContents: () => (surface.run((doc) => updateContents(doc)), surface.focus()),
-            },
+                pastePlain: () => {
+                    // the menu line asks the clipboard for its text; a browser that will not give it says so, and Ctrl+Shift+V still does it
+                    void navigator.clipboard?.readText().then(
+                        (text) => (surface.pasteText(text), surface.focus()),
+                        () => bar.setStatus("Press Ctrl+Shift+V", "This browser did not let mdQuire read the clipboard: press Ctrl+Shift+V (Cmd+Shift+V on a Mac) to paste without formatting", "warn"),
+                    );
+                },
+                zoomIn: () => zoom.step(1),
+                zoomOut: () => zoom.step(-1),
+                zoomReset: () => zoom.reset(),
+                callout: doing(boxOf({ callout: "NOTE" })),
+                details: doing(boxOf({ details: { summary: "", open: false } })),
+                definitions: doing(definitionList),
+                maths: doing(drawnBlock("math")),
+                diagram: doing(drawnBlock("mermaid")),
+                heading4: doing(setStyleOf("heading4")),
+                heading5: doing(setStyleOf("heading5")),
+                heading6: doing(setStyleOf("heading6")),
+                subtext: doing(toggleSubtext),
+                spoiler: doing(toggle("spoiler")),
+                bigger: () => (bar.sizeBy(1), surface.focus()),
+                smaller: () => (bar.sizeBy(-1), surface.focus()),
+                indent: doing(indentBy(1)),
+                outdent: doing(indentBy(-1)),
+                clear: doing(clearFormat),
+                wordCount: () => showCount(row.words[5]!),
+                shortcuts: () => showShortcuts(row.words[5]!),
+                searchMenus: () => bar.search(),
+                tools: () => dictation.items(row.words[5]!),
+    };
+    const row = createMenuRow(() =>
+        headings(
+            { rich: !!surface.getDocument().quire, contents: !!findContents(surface.getDocument()), paged: pages.paged(), look, outline: outlineView.isOpen(), markdown: host.classList.contains("markdown"), words: countWords(surface.getDocument()), align: aligned(surface.getDocument(), surface.getSelection().focus.path), symbols: surface.symbols() },
+            actions,
         ),
     );
+    // ---- the keyboard's shortcuts: each runs its command from the one table (shortcuts.ts); the surface's own it has already taken ----
+    host.addEventListener("keydown", (event) => {
+        if (event.defaultPrevented || event.isComposing) return;
+        const found = shortcutFor(chordFrom(event, MAC));
+        if (!found?.command || found.surface) return;
+        // a field of the editor's own (the find bar, a menu's search) keeps the keys that edit text in it
+        const field = event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement;
+        if (field && ["selectAll", "pastePlain"].includes(found.command)) return;
+        const run = actions[found.command];
+        if (!run) return;
+        // Ctrl+Shift+V pastes through the browser's own paste, which the surface takes as plain text
+        if (found.command === "pastePlain") return;
+        event.preventDefault();
+        run();
+    });
+    // ---- the word count, Ctrl+Shift+C: a small dialog, as Docs has ----
+    const showCount = (from: HTMLElement) => {
+        const doc = surface.getDocument();
+        const all = plainText(doc);
+        const selection = surface.getSelection();
+        const picked = collapsed(selection) ? undefined : plainText(documentOf(fragment(doc, selection)));
+        const rows = countRows(all, picked);
+        const table = make("table", "quire-count");
+        for (const [label, whole, part] of rows) {
+            const tr = make("tr");
+            tr.append(make("th", "", label), make("td", "", whole.toLocaleString("en")));
+            if (picked !== undefined) tr.append(make("td", "", (part ?? 0).toLocaleString("en")));
+            table.append(tr);
+        }
+        if (picked !== undefined) {
+            const head = make("tr", "quire-count-head");
+            head.append(make("th"), make("th", "", "Document"), make("th", "", "Selected"));
+            table.prepend(head);
+        }
+        openDialog(from, { title: "Word count", body: [table], action: { label: "Done", press: (_, dialog) => void dialog.close() }, onClose: () => surface.focus() });
+    };
+    // ---- every shortcut and every piece of typing, Ctrl+/: a dialog with a search, grown from where it was asked for ----
+    const showShortcuts = (from: HTMLElement) => {
+        const field = make("input", "quire-link-field quire-keys-search");
+        field.type = "search";
+        field.placeholder = "Search the shortcuts and typing";
+        field.setAttribute("aria-label", "Search the shortcuts and typing");
+        const list = make("div", "quire-keys");
+        const fill = () => {
+            const found = findShortcuts(field.value);
+            const typed = findTyping(field.value);
+            list.replaceChildren();
+            const section = (title: string, rows: [string, string][]) => {
+                if (rows.length === 0) return;
+                list.append(make("h3", "quire-keys-head", title));
+                const table = make("table", "quire-keys-table");
+                for (const [keys, label] of rows) {
+                    const tr = make("tr");
+                    const { shown, words } = keySymbols(keys, MAC);
+                    const cell = make("td", "quire-keys-keys", shown);
+                    if (words) cell.title = words;
+                    tr.append(cell, make("td", "", label));
+                    table.append(tr);
+                }
+                list.append(table);
+            };
+            for (const menu of ["File", "Edit", "View", "Insert", "Format", "Tools", "In the text"] as const) section(menu === "In the text" ? "Keys in the text" : menu, found.filter((each) => each.menu === menu).map((each) => [each.keys, each.label]));
+            section("Typing", typed.map((each) => [each.typed, `${each.becomes}${each.origin === "extra" ? "" : `, as ${each.origin} has it`}`]));
+            if (!list.firstChild) list.append(make("p", "quire-keys-none", "Nothing has those words."));
+        };
+        field.addEventListener("input", fill);
+        fill();
+        openDialog(from, { title: "Keyboard shortcuts", body: [field, list], className: "quire-keys-dialog", action: { label: "Done", press: (_, dialog) => void dialog.close() }, onClose: () => surface.focus() });
+        field.focus({ preventScroll: true });
+    };
     // the menu words, on the top's first line after the trail
     place("menus").append(row.element);
 
@@ -762,6 +856,8 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
 
     return {
         surface,
+        /** Every command by name, as the menus, the shortcuts and the Ctrl+/ panel run them. */
+        commands: actions,
         paper,
         leave,
         getName: () => name,

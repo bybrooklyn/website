@@ -20,6 +20,7 @@ import { createEditor } from "${here}/editor.ts";
 import { read } from "${here}/read.ts";
 import { write } from "${here}/write.ts";
 import { closeOthers } from "${here}/ui.ts";
+import * as shortcuts from "${here}/shortcuts.ts";
 import { memoryStorage } from "${here}/versions.ts";
 import { browserStore, indexedTables } from "${here}/store-browser.ts";
 const host = document.querySelector("#host");
@@ -28,6 +29,7 @@ const editor = createEditor(host, read(""), { name: "Test", colors: [{ name: "Pi
 const surface = editor.surface;
 window.q = {
     editor,
+    shortcuts,
     reset(markdown, mdx) { closeOthers(); surface.setDocument(read(markdown, { mdx })); surface.focus(); },
     select(anchor, from, focus = anchor, to = from) { surface.setSelection({ anchor: { path: anchor, offset: from }, focus: { path: focus, offset: to } }); },
     md: () => write(surface.getDocument()),
@@ -1430,4 +1432,47 @@ used("typing, the caret is never a frame behind: on every frame it is within a p
     const behind = await tab.run<number[]>("(window.stopLooking = true, window.behind)");
     expect(behind.length).toBeGreaterThan(5);
     expect(Math.max(...behind)).toBeLessThanOrEqual(1);
+});
+
+used("every shortcut in the table that the surface does not keep runs its own command when its keys are pressed, and nothing else", async () => {
+    await tab.run(`q.reset("Some words here.\\n\\n- an item\\n")`);
+    const missed = await tab.run<string[]>(`(() => {
+        const { SHORTCUTS, chordOf } = q.shortcuts;
+        const commands = q.editor.commands;
+        const ran = [];
+        const kept = {};
+        // each command is swapped for one that says it ran, for as long as the keys are pressed
+        for (const name of Object.keys(commands)) { kept[name] = commands[name]; commands[name] = () => ran.push(name); }
+        const missed = [];
+        // Ctrl+Shift+V is the browser's own paste, which the surface takes as plain text
+        for (const each of SHORTCUTS.filter((shortcut) => shortcut.command && !shortcut.surface && shortcut.command !== "pastePlain")) {
+            ran.length = 0;
+            const chord = chordOf(each.keys);
+            const target = document.querySelector(".quire[contenteditable]");
+            target.focus();
+            target.dispatchEvent(new KeyboardEvent("keydown", { code: chord.code, key: chord.code, ctrlKey: chord.mod, shiftKey: chord.shift, altKey: chord.alt, bubbles: true, cancelable: true }));
+            if (ran.length !== 1 || ran[0] !== each.command) missed.push(each.keys + " ran " + JSON.stringify(ran));
+        }
+        Object.assign(commands, kept);
+        return missed;
+    })()`);
+    expect(missed).toEqual([]);
+});
+
+used("Ctrl+/ opens every shortcut and every piece of typing in a dialog, with a search that narrows it", async () => {
+    await tab.run(`q.reset("Words.\\n")`);
+    await tab.run(`document.querySelector(".quire[contenteditable]").dispatchEvent(new KeyboardEvent("keydown", { code: "Slash", key: "/", ctrlKey: true, bubbles: true, cancelable: true }))`);
+    await tab.wait(500);
+    const all = await tab.run<{ title: string; rows: number; typing: boolean }>(`({ title: document.querySelector("dialog[open] .quire-dialog-title")?.textContent, rows: document.querySelectorAll("dialog[open] .quire-keys tr").length, typing: [...document.querySelectorAll("dialog[open] .quire-keys-head")].some((head) => head.textContent === "Typing") })`);
+    expect(all.title).toBe("Keyboard shortcuts");
+    expect(all.typing).toBe(true);
+    expect(all.rows).toBeGreaterThan(60);
+    await tab.type("bullet");
+    await tab.wait(100);
+    const narrowed = await tab.run<string[]>(`[...document.querySelectorAll("dialog[open] .quire-keys tr")].map((row) => row.textContent)`);
+    expect(narrowed.length).toBeLessThan(6);
+    expect(narrowed.some((row) => row.includes("Bulleted list"))).toBe(true);
+    await tab.press("Escape");
+    await tab.press("Escape");
+    await tab.wait(400);
 });

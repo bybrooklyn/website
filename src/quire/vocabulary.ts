@@ -67,3 +67,10 @@ export const PAIRS = TYPING.flatMap((each) => (each.pair ? [each.pair] : []));
 
 /** What, typed at the start of a line and followed by a space, turns that line into a block. */
 export const LINE_MARK = new RegExp(`^(${TYPING.flatMap((each) => (each.line ? [each.line.source] : [])).join("|")}) $`);
+
+/** The lines of the table whose words have what was typed, for the Ctrl+/ panel's search. */
+export function findTyping(query: string): Typed[] {
+    const wanted = query.trim().toLowerCase();
+    if (!wanted) return TYPING;
+    return TYPING.filter((each) => [each.typed, each.becomes, each.saved, each.origin].some((words) => words.toLowerCase().includes(wanted)));
+}

@@ -31,6 +31,7 @@ import {
     setAlign,
     setLink,
     setSpacing,
+    setSubtext,
     setStyle,
     table,
     toggleMark,
@@ -55,7 +56,7 @@ import { closeOthers, control, dots, flowMenu, glyph, icon, make, moveIndex, sti
 export type Action = (state: State) => State;
 
 /** The kinds of block the style picker offers. */
-export type Style = "paragraph" | "heading1" | "heading2" | "heading3" | "quote" | "code";
+export type Style = "paragraph" | "heading1" | "heading2" | "heading3" | "heading4" | "heading5" | "heading6" | "quote" | "code";
 
 /** The style picker's lines, in order, with their names. */
 export const STYLES: [Style, string][] = [
@@ -63,6 +64,9 @@ export const STYLES: [Style, string][] = [
     ["heading1", "Heading 1"],
     ["heading2", "Heading 2"],
     ["heading3", "Heading 3"],
+    ["heading4", "Heading 4"],
+    ["heading5", "Heading 5"],
+    ["heading6", "Heading 6"],
     ["quote", "Quote"],
     ["code", "Code"],
 ];
@@ -84,7 +88,7 @@ function touched(doc: Document, selection: Selection): number[] {
 /** Which style the cursor's block has, as the style picker shows it. */
 export function currentStyle(doc: Document, path: number[]): Style {
     const block = activeBlock(doc, path);
-    if (block.kind === "heading") return block.level === 1 ? "heading1" : block.level === 2 ? "heading2" : "heading3";
+    if (block.kind === "heading") return `heading${block.level ?? 1}` as Style;
     if (block.kind === "code") return "code";
     if (block.quoted) return "quote";
     return "paragraph";
@@ -217,6 +221,25 @@ export function setStyleOf(style: Style): Action {
         return { doc, selection: follow(state.doc, state.selection, doc) };
     };
 }
+
+/** Makes the touched paragraphs subtext (`-# `, small and quiet), or ordinary text again if the cursor's already is. */
+export const toggleSubtext: Action = (state) => {
+    const here = blockAt(state.doc, state.selection.focus.path);
+    const on = !(here?.kind === "paragraph" && here.subtext);
+    let doc = state.doc;
+    for (const index of touched(state.doc, state.selection)) {
+        const path = blockPaths(doc)[index];
+        let block = path && blockAt(doc, path);
+        if (!path || !block) continue;
+        // a heading becomes a paragraph first, as Docs turns a heading into small text
+        if (on && block.kind === "heading") {
+            doc = changeKind(doc, path, { kind: "paragraph" });
+            block = blockAt(doc, path);
+        }
+        if (block?.kind === "paragraph") doc = setSubtext(doc, path, on);
+    }
+    return { doc, selection: follow(state.doc, state.selection, doc) };
+};
 
 /** Makes the touched blocks a list of a kind, or, if they already are one, plain paragraphs again. */
 export function toggleList(style: ListStyle): Action {
@@ -1022,6 +1045,17 @@ export function createBar(surface: Surface, options: BarOptions) {
             showSize();
         },
         rich: () => richOn,
+        /** Opens the search of the menus, from its button or, folded away, from the three dots, its field focused (Alt+/). */
+        search() {
+            if (searching.isOpen()) return searching.box.querySelector("input")?.focus({ preventScroll: true });
+            const from = searchButton.closest(".folded, .away") || searchButton.getBoundingClientRect().width === 0 ? moreButton : searchButton;
+            searching.open(from, searchForm());
+            searching.box.querySelector("input")?.focus({ preventScroll: true });
+        },
+        /** Makes the text one size larger or smaller, as the plus and minus beside the size do (Ctrl+Shift+. and Ctrl+Shift+,). */
+        sizeBy(by: -1 | 1) {
+            setSize(nextSize(sizeAt(), by, richOn));
+        },
         destroy() {
             surface.element.removeEventListener("keyup", paintKeys);
         },

@@ -14,7 +14,8 @@ test("the row has its six words, and each command is in its menu by name with it
     const seen = lines(true);
     expect(Object.keys(seen)).toEqual(["File", "Edit", "View", "Insert", "Format", "Tools"]);
     expect(seen.Edit).toEqual(["Undo Ctrl+Z", "Redo Ctrl+Shift+Z", "Select all Ctrl+A", "Link Ctrl+K"]);
-    expect(seen.Format).toEqual(["Bold Ctrl+B", "Italic Ctrl+I", "Underline Ctrl+U", "Strikethrough Ctrl+Shift+X", "Inline code Ctrl+E", "Paragraph Ctrl+Alt+0", "Heading 1 Ctrl+Alt+1", "Heading 2 Ctrl+Alt+2", "Heading 3 Ctrl+Alt+3", "Quote", "Text color ›", "Text size ›", "Typeface ›", "Highlight ›", "Line spacing ›", "Align left", "Centre", "Align right", "Justify"]);
+    // the shortcuts come from the one table (shortcuts.ts), as Docs has them
+    expect(seen.Format).toEqual(["Bold Ctrl+B", "Italic Ctrl+I", "Underline Ctrl+U", "Strikethrough Alt+Shift+5", "Inline code Ctrl+E", "Normal text Ctrl+Alt+0", "Heading 1 Ctrl+Alt+1", "Heading 2 Ctrl+Alt+2", "Heading 3 Ctrl+Alt+3", "Quote", "Text color ›", "Text size ›", "Typeface ›", "Highlight ›", "Line spacing ›", "Align left Ctrl+Shift+L", "Centre Ctrl+Shift+E", "Align right Ctrl+Shift+R", "Justify Ctrl+Shift+J"]);
     expect(seen.Insert).toContain("Table");
     expect(seen.Insert).toContain("Picture");
     expect(seen.Tools![0]).toBe("1,204 words");
@@ -24,8 +25,8 @@ test("the row has its six words, and each command is in its menu by name with it
 });
 
 test("what a Markdown file cannot keep is offered only for a .quire document, and turning one into a .quire only for Markdown", () => {
-    for (const kept of ["Typeface ›", "Highlight ›", "Line spacing ›", "Justify"]) expect(lines(false).Format).not.toContain(kept);
-    expect(lines(false).Format).toContain("Centre");
+    for (const kept of ["Typeface ›", "Highlight ›", "Line spacing ›", "Justify Ctrl+Shift+J"]) expect(lines(false).Format).not.toContain(kept);
+    expect(lines(false).Format).toContain("Centre Ctrl+Shift+E");
     expect(lines(false).File).toContain("Turn into a .quire document");
     expect(lines(false).File).toContain("Download .md");
     expect(lines(true).File).not.toContain("Turn into a .quire document");
