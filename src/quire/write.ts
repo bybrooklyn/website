@@ -653,7 +653,9 @@ function escapeText(value: string, context: Context, cell: boolean, before: stri
             (char === "|" && !cell && (touching("|") || (left !== "|" && right === "|" && third !== "|" && !(space(left) && space(third))))) ||
             (char === "=" && (touching("=") || (left !== "=" && right === "=" && third !== "=" && !(space(left) && space(third))))) ||
             (char === ":" && shortcode(value, index, left, after));
-        out += risky ? `\\${char}` : char;
+        // a no-break space would be invisible in the file, so it is written as the entity it is read from
+        if (char === " ") out += "&nbsp;";
+        else out += risky ? `\\${char}` : char;
     }
     return out;
 }

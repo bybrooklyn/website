@@ -283,3 +283,9 @@ test("items nested on one line are never written as `- - -`, which is a line acr
     const text = readsBack(made([outer, paragraph("after")]));
     expect(text).toBe("-\n  - -\n\nafter\n");
 });
+
+test("a no-break space is written as &nbsp;, not as an invisible character", () => {
+    const doc = insertText(read("a&nbsp;b\n"), { path: [0], offset: 3 }, "c");
+    expect(write(doc)).toBe("a&nbsp;bc\n");
+    expect(readsBack(made([paragraph("one two")]))).toBe("one&nbsp;two\n");
+});
