@@ -4,6 +4,7 @@
 // repository, which takes the list's place in the same box. What is shown is built here; app.ts
 // says what each choice does. Filtering a long list is pure and tested.
 
+import { enterGivesBack } from "./fields";
 import type { Entry } from "./store";
 import { control, icon, make } from "./ui";
 
@@ -38,6 +39,8 @@ export interface DocumentsView {
     open(entry: Entry): void;
     create(): void;
     rename(name: string): void;
+    /** Closes the list and gives the keyboard back to the writing, after Enter in the name. */
+    done?(): void;
     remove(entry: Entry): void;
     restore?(entry: Entry): void;
 }
@@ -60,12 +63,10 @@ export function documentsList(view: DocumentsView): HTMLElement {
     field.setAttribute("aria-label", "This document's name");
     field.addEventListener("keydown", (event) => {
         event.stopPropagation();
-        if (event.key === "Enter" && field.value.trim() && field.value.trim() !== view.name) view.rename(field.value.trim());
         if (event.key === "Escape") field.value = view.name;
     });
-    field.addEventListener("change", () => {
-        if (field.value.trim() && field.value.trim() !== view.name) view.rename(field.value.trim());
-    });
+    // Enter renames and gives the keyboard back to the writing (fields.ts); leaving the field renames too
+    enterGivesBack(field, (name) => name && name !== view.name && view.rename(name), () => view.done?.());
     naming.append(field);
     box.append(naming);
 

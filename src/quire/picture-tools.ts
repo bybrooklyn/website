@@ -18,6 +18,7 @@
 
 import { insetOf, DIALOG } from "./dialog";
 import { blockAt, removeBlock, setAlign, setImage, type Align, type Image } from "./document";
+import { enterGivesBack } from "./fields";
 import { landedAt, landings, moveBlockTo, snapWidth, staysPut } from "./pictures";
 import type { Operation, Surface } from "./surface";
 import { control, dots, EASE, flowMenu, icon, make, MOTION, springCurve, still, type Box, type MenuItem } from "./ui";
@@ -259,12 +260,11 @@ export function createPictureTools(surface: Surface, options: PictureOptions = {
         value.setAttribute("aria-labelledby", name.id);
         facts.append(name, value);
     };
-    /** A field that keeps what was written when it is left, or Enter is pressed, as one undo step. */
+    /** A field that keeps what was written when it is left, or Enter is pressed, as one undo step; Enter also closes the panel and gives the keyboard back to the picture (fields.ts). */
     const field = (placeholder: string, keep: (value: string) => void) => {
         const input = make("input", "quire-picture-field");
         input.placeholder = placeholder;
-        input.addEventListener("change", () => keep(input.value.trim()));
-        input.addEventListener("keydown", (event) => event.key === "Enter" && input.blur());
+        enterGivesBack(input, keep, () => closePanel(true));
         return input;
     };
     const caption = field("Words under the picture", (value) => change((path) => (doc) => setImage(doc, path, { caption: value || undefined })));

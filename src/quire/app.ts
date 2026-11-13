@@ -205,7 +205,12 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
             },
             rename: async (name) => {
                 await editor.rename(name);
-                await showDocuments();
+                // renamed with Enter, the list has closed already and is not opened again
+                if (menu.isOpen()) await showDocuments();
+            },
+            done: () => {
+                menu.close(false);
+                editor.surface.focus();
             },
             remove: async (entry) => {
                 const problem = await shown.remove(entry.id).then(() => undefined, (error) => `${entry.name} was not taken away: ${error instanceof Error ? error.message : String(error)}`);

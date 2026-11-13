@@ -117,8 +117,15 @@ test("nothing stands under a picture; its menu opens at the pointer, its panel g
     await tab.wait(30);
     expect(await page!.md()).toContain(`<figure><img src="${picture}" alt="A wide picture" /><figcaption>Two colours</figcaption></figure>`);
     expect(await tab.run("document.querySelector('.quire-image figcaption').textContent")).toBe("Two colours");
+    // Enter kept it, closed the panel and gave the keyboard back to the picture, never to the page's body
+    await tab.wait(300);
+    expect(await tab.run("document.activeElement.matches('figure.quire-image')")).toBe(true);
+    expect(await tab.run("document.querySelector('.quire-picture-panel').classList.contains('open')")).toBe(false);
     // Escape closes the panel and gives the keyboard back to the picture
-    await tab.run("document.querySelector('.quire-picture-panel input').focus()");
+    await rightClick();
+    await page!.press(".quire-picture-menu .quire-menu-line", "Description");
+    await tab.wait(500);
+    expect(await tab.run("document.activeElement.classList.contains('quire-picture-field')")).toBe(true);
     await tab.press("Escape");
     await tab.wait(300);
     expect(await tab.run("document.activeElement.matches('figure.quire-image')")).toBe(true);

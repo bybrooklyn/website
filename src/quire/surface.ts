@@ -49,6 +49,7 @@ import { highlight, LANGUAGE_NAMES } from "./highlight";
 import { maths } from "./maths";
 import { namesIn } from "./check/names";
 import { bookmarkName } from "./bookmarks";
+import { afterField, finishes, type FieldKind } from "./fields";
 
 /** What the host gives the surface. `onImage` stores a pasted or dropped picture and gives back its address. */
 export interface SurfaceOptions {
@@ -1000,7 +1001,10 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
     function onKeyDown(event: KeyboardEvent) {
         // a key is the writer's own move, never the cursor the browser puts in on focus
         restoring = 0;
-        if (fromField(event)) return;
+        if (fromField(event)) {
+            if (finishes(event) && event.target instanceof HTMLInputElement) fieldDone(event, event.target);
+            return;
+        }
         // Safari sends key 229 for keys that belong to a composition
         if (composing || event.isComposing || (event as { keyCode?: number }).keyCode === 229) return;
         // AltGr types a character (@, #, {, € on many layouts); it is never one of mdQuire's shortcuts
@@ -1486,22 +1490,46 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
         commit(apply(editor, { state, kind }, Date.now()), { state, kind });
     }
 
-    /** A field inside the document was changed: a code block's language, a folding section's summary, or a component's property. */
-    function onAltChange(event: Event) {
-        const field = event.target as HTMLInputElement;
+    /** A field inside the document was changed: a code block's language, a folding section's summary, or a component's property. Its block, and which kind of field it is, if it was one; a value the document already has changes nothing. */
+    function keepField(field: HTMLInputElement): { path: number[]; kind: FieldKind } | undefined {
         if (field.matches?.("[data-lang]")) {
             const path = pathOf(field, field.dataset.lang);
-            run((doc) => changeKind(doc, path, { kind: "code", language: field.value.trim() }));
-        } else if (field.matches?.("[data-summary]")) {
+            const block = blockAt(editor.state.doc, path);
+            if (block?.kind === "code" && block.language !== field.value.trim()) run((doc) => changeKind(doc, path, { kind: "code", language: field.value.trim() }));
+            return { path, kind: "code" };
+        }
+        if (field.matches?.("[data-summary]")) {
             const path = pathOf(field, field.dataset.summary);
             const block = blockAt(editor.state.doc, path);
-            if (block?.kind === "quote" && block.details) run((doc) => setBox(doc, path, { details: { ...block.details!, summary: field.value } }));
-        } else if (field.matches?.("[data-prop]")) {
+            if (block?.kind === "quote" && block.details && block.details.summary !== field.value) run((doc) => setBox(doc, path, { details: { ...block.details!, summary: field.value } }));
+            return { path, kind: "summary" };
+        }
+        if (field.matches?.("[data-prop]")) {
             const card = field.closest<HTMLElement>("[data-card]")!;
             const path = pathOf(card, card.dataset.card);
             const block = blockAt(editor.state.doc, path);
-            if (block?.kind === "raw") run((doc) => setRaw(doc, path, setProp(block.text, field.dataset.prop!, field.type === "checkbox" ? field.checked : field.value)));
+            if (block?.kind === "raw") {
+                const text = setProp(block.text, field.dataset.prop!, field.type === "checkbox" ? field.checked : field.value);
+                if (text !== block.text) run((doc) => setRaw(doc, path, text));
+            }
+            return { path, kind: "prop" };
         }
+        return undefined;
+    }
+
+    function onAltChange(event: Event) {
+        keepField(event.target as HTMLInputElement);
+    }
+
+    /** Enter in a field inside the document: what was typed is kept, and the caret goes back into the writing where the field belongs (fields.ts). */
+    function fieldDone(event: KeyboardEvent, field: HTMLInputElement) {
+        const kept = keepField(field);
+        if (!kept) return;
+        event.preventDefault();
+        const at = afterField(editor.state.doc, kept.path, kept.kind);
+        commit(apply(editor, { state: { doc: editor.state.doc, selection: { anchor: at, focus: at } }, kind: "move" }, Date.now()));
+        root.focus({ preventScroll: true });
+        placeSelection();
     }
 
     /** Keeps a selection where it is if it still points somewhere, or moves it to the first text. */
