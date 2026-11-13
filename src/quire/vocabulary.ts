@@ -59,7 +59,7 @@ export const TYPING: Typed[] = [
     { typed: "^superscript^", becomes: "Superscript", saved: "<sup>superscript</sup>", origin: "extra", example: ["x ^2^", "x <sup>2</sup>\n"], pair: { mark: "sup", pattern: /(^|[^^[])\^([^^\s]+)\^$/, width: 1 } },
     { typed: ":smile: (a known name between colons)", becomes: "Emoji", saved: ":smile:", origin: "extra" },
     { typed: ": and two letters", becomes: "A list of emoji to choose from; Tab or Enter puts one in, anything else leaves the text as typed", saved: "the emoji's name between colons", origin: "extra" },
-    { typed: "-> <- => != <= >= ... (c) and others", becomes: "Arrows and signs (Tools, Typed signs)", saved: "the character", origin: "extra" },
+    { typed: "-> <- => != <= >=, then any other character", becomes: "Arrows and signs (Tools, Typed signs)", saved: "the character", origin: "extra" },
 ];
 
 /** The inline pairs keys.ts completes, double signs before single ones. */

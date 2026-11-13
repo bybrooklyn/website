@@ -1,5 +1,5 @@
-// Maths, laid out by mdQuire's own code in HTML and CSS: a modest part of TeX, as `$...$` in a line
-// and `$$...$$` (or a `math` fence) as a block. What it lays out:
+// Maths, laid out by mdQuire's own code in HTML and CSS: a modest part of TeX, written as a block,
+// between `$$` lines or in a `math` fence (a `$` in a line is a dollar sign). What it lays out:
 //
 //   letters (in italic), digits, + - = < > and the like, brackets
 //   x^2, x_i, x_i^2, with a single character or a {group}

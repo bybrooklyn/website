@@ -45,7 +45,7 @@ export function read(source: string, options: ReadOptions = {}): Document {
     const eol = crlf * 2 > ended ? "\r\n" : "\n";
     let frontmatter: string | null = null;
     let at = 0;
-    // frontmatter opens on the first line and closes on the first line that is only `---`, never on one that merely starts with it
+    // frontmatter opens on the first line and closes on the first line that is only `---` or `...` (as YAML has it), never on one that merely starts with it
     if (lines.length > 1 && /^---[ \t]*$/.test(lines[0]!.text)) {
         const close = lines.findIndex((line, index) => index > 0 && /^(---|\.\.\.)[ \t]*$/.test(line.text));
         if (close > 0) {
