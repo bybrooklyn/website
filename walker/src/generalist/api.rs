@@ -198,7 +198,8 @@ pub extern "C" fn show_drop() {
 #[unsafe(no_mangle)]
 pub extern "C" fn land_ground(until: f32, from: u32) -> *const f32 {
     match page() {
-        Some(page) => give(page.ground(until.min(1.0e6), from as usize)),
+        // a NaN would otherwise pass min() as 1e6 metres of world to make
+        Some(page) => give(page.ground(if until.is_finite() { until.min(1.0e6) } else { 0.0 }, from as usize)),
         None => give(&[]),
     }
 }
@@ -484,7 +485,7 @@ pub extern "C" fn net_work(rounds: u32, backward: u32) -> u32 {
             net.backward(&weights, &input, rows, &mut work, &mut grads, None);
         }
     }
-    rounds * rows as u32
+    rounds.saturating_mul(rows as u32)
 }
 
 /// What the show's creature was rewarded and charged for since the last call, five f32: its run's own
