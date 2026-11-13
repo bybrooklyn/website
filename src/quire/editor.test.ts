@@ -1415,6 +1415,33 @@ used("the text is set as a published post's size and line, at the measure, with 
     expect(Math.abs(seen.hp - seen.line)).toBeLessThan(1);
 });
 
+/** The space between each pair of neighbouring blocks, in lines, from what the eye sees as each one's edge: a box's border, a table's first words and last rule, a drawing, a picture and the words under it, or the lines of text. */
+const seenGaps = () =>
+    tab.run<{ name: string; gap: number }[]>(`(() => {
+        const prose = document.querySelector('.prose.quire');
+        const line = parseFloat(getComputedStyle(prose).lineHeight);
+        const inner = (e) => { const b = e.getBoundingClientRect(); const s = getComputedStyle(e); return { top: b.top + parseFloat(s.paddingTop) + parseFloat(s.borderTopWidth), bottom: b.bottom - parseFloat(s.paddingBottom) - parseFloat(s.borderBottomWidth) }; };
+        const outer = (e) => e.getBoundingClientRect();
+        const edges = (e) => {
+            if (e.tagName === 'TABLE') return { top: inner(e.querySelector('th, td')).top, bottom: outer(e).bottom };
+            if (e.classList.contains('quire-drawn')) return { top: outer(e.querySelector('.quire-preview > *')).top, bottom: outer(e.querySelector('pre')).bottom };
+            if (e.classList.contains('quire-image')) { const words = [...e.querySelectorAll('.quire-caption, .quire-alt')].filter((each) => each.getBoundingClientRect().height > 2).pop(); return { top: outer(e.querySelector('img')).top, bottom: words ? inner(words).bottom : outer(e.querySelector('img')).bottom }; }
+            if (e.classList.contains('quire-divider')) return outer(e.querySelector('hr'));
+            return inner(e);
+        };
+        const kids = [...prose.children];
+        return kids.slice(1).map((kid, index) => ({ name: kids[index].tagName.toLowerCase() + ' to ' + kid.tagName.toLowerCase() + (kid.className ? '.' + kid.className.split(' ')[0] : ''), gap: +((edges(kid).top - edges(kids[index]).bottom) / line).toFixed(2) }));
+    })()`);
+
+used("a line of space lies between a paragraph and a drawing of maths or a flowchart, as between any two blocks", async () => {
+    await reset("Words.\n\n```mermaid\nflowchart LR\n  A --> B\n```\n\nWords.\n\n$$\nx + y\n$$\n\nWords.\n", [0], 0);
+    await tab.run("document.activeElement.blur()");
+    await tab.wait(300);
+    const gaps = await seenGaps();
+    // a line, and for maths a little more for the room its letters keep above them
+    expect(gaps.map(({ name, gap }) => ({ name, near: gap >= 0.95 && gap <= (name.includes("quire-drawn") ? 1.3 : 1.05) }))).toEqual(gaps.map(({ name }) => ({ name, near: true })));
+});
+
 used("a faint \"Type / for blocks\" fades in on the empty line the cursor is on, goes when typing starts, and an empty document is never blank", async () => {
     // how much of the hint is seen on a line: none when the line has no hint at all
     const shown = (index: number) => tab.run<number>(`(() => { const style = getComputedStyle(document.querySelectorAll('.quire > *')[${index}], '::before'); return style.content === 'none' ? 0 : parseFloat(style.opacity) || 0; })()`);
