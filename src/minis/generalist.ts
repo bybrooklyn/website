@@ -204,7 +204,7 @@ export default function generalist(m: Mote): Scene {
     /** Puts a brain on show, from the start. */
     const take = (brain: Float32Array) => {
         if (!engine || brain.length !== engine.weights_length()) return;
-        new Float32Array(engine.memory.buffer, engine.weights_room(), brain.length).set(brain);
+        write(engine, engine.weights_room(), brain);
         engine.weights_load();
         [shown, furthest] = [true, Math.max(furthest, engine.best_distance())];
         last = undefined;
