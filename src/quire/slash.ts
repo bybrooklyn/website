@@ -3,6 +3,10 @@
 // and leaves the slash as typed. Choosing takes the slash and what followed it away and makes the
 // block. The menu grows out of the cursor as the bar's menus grow out of their buttons.
 //
+// Opened with nothing typed, it shows the five things the writer makes most (most-used.ts) and a
+// last line, More, that grows it open to the rest. Typing after the slash looks through them all,
+// the most made first among those that match as well.
+//
 // The items, how typing narrows them and what choosing does are pure and tested; the rest is DOM.
 
 import { addDivider, addTable, setStyleOf, toggleList, toggleSubtext, type Action } from "./bar";
@@ -10,6 +14,7 @@ import { importFor, TEMPLATES } from "./components";
 import { blockAt, changeKind, deleteText, insertBlock, insertText, makeBox, moveBlock, paragraph, removeBlock, runsText, setRaw, textAt, type Details, type Document } from "./document";
 import type { State } from "./history";
 import { caret, pageBreakAt, sameLeaf } from "./keys";
+import { counted, made, opening, ranked, remember, remembered, type Counts } from "./most-used";
 import type { Surface } from "./surface";
 import { flowMenu, make, markActive, unmarkActive, type MenuItem } from "./ui";
 
@@ -112,15 +117,22 @@ export const SLASH_ITEMS: SlashItem[] = [
     { key: "playhere", label: "PlayHere", icon: "file", words: ["component", "game", "embed", "play"], action: component("PlayHere"), mdx: true },
 ];
 
-/** The items whose name or other words start with what was typed after the slash, those whose name starts with it first; the site's components only for an MDX file. */
-export function filterSlash(query: string, mdx = true): SlashItem[] {
+/** Every item's key, the things the slash menu counts. */
+export const SLASH_KEYS = SLASH_ITEMS.map((item) => item.key);
+
+/**
+ * The items whose name or other words start with what was typed after the slash, those whose name
+ * starts with it first, and among those the most made first; with nothing typed, all of them as the
+ * menu opens on them (most-used.ts). The site's components only for an MDX file.
+ */
+export function filterSlash(query: string, mdx = true, counts: Counts = {}): SlashItem[] {
     const items = SLASH_ITEMS.filter((item) => mdx || !item.mdx);
     const wanted = query.trim().toLowerCase();
-    if (!wanted) return items;
+    if (!wanted) return opening(items, counts);
     const starts = (word: string) => word.toLowerCase().startsWith(wanted);
     const byName = items.filter((item) => item.label.toLowerCase().split(/\s+/).some(starts) || starts(item.label));
     const byWord = items.filter((item) => !byName.includes(item) && item.words.some(starts));
-    return [...byName, ...byWord];
+    return [...ranked(byName, counts), ...ranked(byWord, counts)];
 }
 
 /** What was typed after the slash, if the cursor's block is a paragraph that starts with one; undefined when the menu should close. */
@@ -157,6 +169,17 @@ export function createSlash(surface: Surface, pickImage: () => void): { close():
     let open = false;
     let active = 0;
     let shown: SlashItem[] = [];
+    /** True while the menu shows its first five and More, before anything is typed after the slash or More is pressed. */
+    let folded = false;
+    const FOLD = 5;
+    const rows = () => (folded ? shown.slice(0, FOLD) : shown);
+
+    // whatever made something (the slash menu, the bar, a menu, a shortcut, a typed Markdown mark) is counted, here alone
+    surface.on("change", ({ doc, before, kind }) => {
+        if (!before || (kind !== "format" && kind !== "shortcut")) return;
+        const keys = made(before, doc).filter((key) => SLASH_KEYS.includes(key));
+        if (keys.length) remember(counted(remembered(SLASH_KEYS), keys));
+    });
 
     const choose = (item: SlashItem) => {
         menu.close(false);
@@ -165,9 +188,18 @@ export function createSlash(surface: Surface, pickImage: () => void): { close():
         surface.focus();
     };
 
+    /** More grows the menu open to everything, the five staying where they are. */
+    const unfold = () => {
+        folded = false;
+        menu.more(lines());
+        mark();
+        surface.focus();
+    };
+
     function lines(): MenuItem[] {
         if (shown.length === 0) return [{ label: "Nothing by that name", run: () => menu.close(false) }];
-        return shown.map((item) => ({ label: item.label, icon: item.icon, hint: item.key.startsWith("heading") ? `H${item.key.slice(-1)}` : undefined, run: () => choose(item) }));
+        const items: MenuItem[] = rows().map((item) => ({ label: item.label, icon: item.icon, hint: item.key.startsWith("heading") ? `H${item.key.slice(-1)}` : undefined, run: () => choose(item) }));
+        return folded ? [...items, { label: "More", icon: "chevron", quiet: true, stays: true, run: unfold }] : items;
     }
 
     function mark() {
@@ -186,7 +218,8 @@ export function createSlash(surface: Surface, pickImage: () => void): { close():
     }
 
     surface.on("slash", ({ rect }) => {
-        shown = filterSlash("", surface.getDocument().mdx);
+        shown = filterSlash("", surface.getDocument().mdx, remembered(SLASH_KEYS));
+        folded = shown.length > FOLD;
         active = 0;
         render(rect);
     });
@@ -197,8 +230,10 @@ export function createSlash(surface: Surface, pickImage: () => void): { close():
         const { path, offset } = surface.getSelection().focus;
         const query = slashQuery(doc, path, offset);
         if (query === undefined) return menu.close(false);
-        shown = filterSlash(query, doc.mdx);
-        active = Math.min(active, Math.max(0, shown.length - 1));
+        // typing looks through everything, and once it has the menu stays open to everything
+        if (query.trim()) folded = false;
+        shown = filterSlash(query, doc.mdx, remembered(SLASH_KEYS));
+        active = Math.min(active, Math.max(0, lines().length - 1));
         render(null);
     });
     surface.on("select", ({ selection }) => {
@@ -225,12 +260,14 @@ export function createSlash(surface: Surface, pickImage: () => void): { close():
         "keydown",
         (event) => {
             if (!open || event.isComposing) return;
+            const count = shown.length ? lines().length : 0;
             if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-                if (shown.length) active = (active + (event.key === "ArrowDown" ? 1 : shown.length - 1)) % shown.length;
+                if (count) active = (active + (event.key === "ArrowDown" ? 1 : count - 1)) % count;
                 mark();
             } else if (event.key === "Enter" || event.key === "Tab") {
-                const item = shown[active];
+                const item = rows()[active];
                 if (item) choose(item);
+                else if (folded) unfold();
                 else menu.close(false);
             } else if (event.key === "Escape") menu.close(false);
             else return;

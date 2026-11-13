@@ -1028,6 +1028,12 @@
     pointer-events: none;
 }
 
+/* a line that asks for more of the menu, More in the slash menu, said quietly */
+.quire-menu-line.quiet {
+    color: var(--muted);
+    font-size: 0.85rem;
+}
+
 .quire-menu-line.pressed {
     color: var(--accent);
 }
