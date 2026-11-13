@@ -529,7 +529,9 @@ export function flowMenu(label: string, options: { align?: "left" | "right"; cla
             }
             const line = make("button", "quire-menu-line");
             line.type = "button";
-            line.setAttribute("role", "menuitem");
+            // a line that is on or off is said to be so: one of a group is a radio, one alone a checkbox
+            line.setAttribute("role", item.pressed === undefined ? "menuitem" : item.group ? "menuitemradio" : "menuitemcheckbox");
+            if (item.pressed !== undefined) line.setAttribute("aria-checked", String(item.pressed));
             if (item.pressed) line.classList.add("pressed");
             if (item.group) line.dataset.group = item.group;
             if (item.icon) line.append(typeof item.icon === "string" ? icon(item.icon) : item.icon);
@@ -546,7 +548,11 @@ export function flowMenu(label: string, options: { align?: "left" | "right"; cla
             }
             line.addEventListener("mousedown", (event) => event.preventDefault());
             line.addEventListener("click", () => {
-                if (item.group) for (const other of items.querySelectorAll<HTMLElement>(`[data-group="${item.group}"]`)) other.classList.toggle("pressed", other === line);
+                if (item.group)
+                    for (const other of items.querySelectorAll<HTMLElement>(`[data-group="${item.group}"]`)) {
+                        other.classList.toggle("pressed", other === line);
+                        if (other.hasAttribute("aria-checked")) other.setAttribute("aria-checked", String(other === line));
+                    }
                 else menu.close(false);
                 item.run();
             });

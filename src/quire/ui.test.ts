@@ -228,6 +228,17 @@ used("the Enter that picks an input method's word in a field is the input method
     expect(set).toEqual(["https://example.com/日本"]);
 });
 
+used("a line that is on or off says so to a screen reader, one of a group as a radio, and moves with the choice", async () => {
+    await run("window.menu.open(document.getElementById('top'), [{ label: 'Plain', run() {} }, { label: 'Outline', pressed: true, run() {} }, { label: 'No page', pressed: true, group: 'look', run() {} }, { label: 'Paper', pressed: false, group: 'look', run() {} }])");
+    await settle();
+    const said = () => run<string[]>("[...window.menu.box.querySelectorAll('.quire-menu-line')].map((line) => line.getAttribute('role') + ' ' + line.getAttribute('aria-checked'))");
+    expect(await said()).toEqual(["menuitem null", "menuitemcheckbox true", "menuitemradio true", "menuitemradio false"]);
+    await run("window.menu.box.querySelectorAll('.quire-menu-line')[3].click()");
+    expect(await said()).toEqual(["menuitem null", "menuitemcheckbox true", "menuitemradio false", "menuitemradio true"]);
+    await run("window.menu.close()");
+    await settle();
+});
+
 used("closing, it is seen going back onto its control's edge, and opening another menu closes it", async () => {
     await run("window.opened('top')");
     await settle();
