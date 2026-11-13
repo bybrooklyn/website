@@ -1,16 +1,19 @@
-// Links in the writing. A web address pasted over selected words links them (surface.ts asks
-// webAddress what counts as one), and a chip grows from under an address just pasted on its own,
-// offering to show it as words guessed from it or in a short form. It is drawn as the selection bar
-// is (select-bar.ts) so that the two feel like one thing.
+// Links in the writing: the small card that grows from a link when the pointer rests on it or the
+// cursor is in it (where it goes, then Open or Go to, Copy, Edit and Remove), and the chip that grows
+// from under an address just pasted on its own, offering to show it as words guessed from it or in a
+// short form. Both are drawn as the selection bar is (select-bar.ts) so that the three feel like one
+// thing, and Alt+Enter with the cursor in a link opens it.
 //
 // What counts as a web address and the words guessed from one are pure and tested; nothing is
 // fetched, as a page on a static site cannot read another site's. The rest is DOM.
 
 import { changeText, setLink, textAt, type Document, type Position, type Range } from "./document";
 import type { State } from "./history";
-import { caret } from "./keys";
+import { linkAt } from "./bar";
+import { places } from "./bookmarks";
+import { caret, collapsed } from "./keys";
 import type { Surface } from "./surface";
-import { composing, control, make, placeNear } from "./ui";
+import { composing, control, make, placeNear, still } from "./ui";
 
 /** The address, trimmed, when a pasted text is one web address and nothing else: http, https or mailto, never another scheme such as javascript:. */
 export function webAddress(text: string): string | undefined {
@@ -109,15 +112,16 @@ export function showAs(doc: Document, range: Range, href: string, words: string)
     return { doc: setLink(written, { start: range.start, end }, href), selection: caret(end.path, end.offset) };
 }
 
-/** Builds the chip for a surface. `top` gives how far down the window the main bar reaches. */
-export function createLinkCard(surface: Surface, top: () => number = () => 0): { element: HTMLElement; hide(): void } {
+/** Builds the card and the chip for a surface. `edit` opens the link field from a control; `top` gives how far down the window the main bar reaches. */
+export function createLinkCard(surface: Surface, edit: (from: HTMLElement) => void, top: () => number = () => 0): { element: HTMLElement; hide(): void } {
     const pop = make("div", "quire-select-bar quire-link-card");
     pop.setAttribute("role", "group");
     pop.inert = true;
     document.body.append(pop);
 
-    let shown: { range: Range; href: string } | undefined;
+    let shown: { kind: "card" | "chip"; range: Range; href: string; pointer: boolean } | undefined;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    let lastDoc = surface.getDocument();
     const later = (run: () => void, ms: number) => {
         clearTimeout(timer);
         timer = setTimeout(run, ms);
@@ -143,10 +147,10 @@ export function createLinkCard(surface: Surface, top: () => number = () => 0): {
         pop.style.transformOrigin = `${rect.left + rect.width / 2 - at.left}px ${at.side === "below" ? "0" : "100%"}`;
     }
 
-    function show(range: Range, href: string, content: HTMLElement) {
+    function show(kind: "card" | "chip", range: Range, href: string, content: HTMLElement, pointer = false) {
         const growing = !shown;
-        shown = { range, href };
-        pop.setAttribute("aria-label", "Show the address as");
+        shown = { kind, range, href, pointer };
+        pop.setAttribute("aria-label", kind === "card" ? "Link" : "Show the address as");
         pop.replaceChildren(content);
         // it starts where it will be, so that it grows there rather than sliding in
         if (growing) pop.classList.add("placing");
@@ -163,6 +167,56 @@ export function createLinkCard(surface: Surface, top: () => number = () => 0): {
         shown = undefined;
         pop.classList.remove("shown");
         pop.inert = true;
+    }
+
+    /** Opens a link: a heading or bookmark of this document is gone to; a web address opens in a new tab. */
+    function follow(href: string) {
+        if (href.startsWith("#")) {
+            const path = places(surface.getDocument()).find((place) => place.href === href)?.path;
+            if (!path) return;
+            hide();
+            surface.setSelection(caret(path, 0));
+            surface.elementAt(path)?.scrollIntoView({ behavior: still() ? "auto" : "smooth", block: "center" });
+            surface.focus();
+        } else if (webAddress(href)) opener(href).click();
+    }
+
+    const opener = (href: string) => {
+        const open = make("a", "quire-button quire-link-word", "Open");
+        open.href = href;
+        open.target = "_blank";
+        open.rel = "noopener noreferrer";
+        open.title = "Open in a new tab (Alt+Enter)";
+        return open;
+    };
+
+    function card(range: Range, href: string, pointer: boolean) {
+        const row = make("div", "quire-select-row");
+        const where = make("span", "quire-link-where", cutMiddle(href, 40));
+        where.title = href;
+        row.append(where, make("span", "quire-select-rule"));
+        const place = href.startsWith("#") ? places(surface.getDocument()).find((each) => each.href === href) : undefined;
+        if (place) row.append(control(`Go to ${place.label} (Alt+Enter)`, word("Go to"), () => follow(href)));
+        else if (webAddress(href)) {
+            const open = opener(href);
+            open.addEventListener("click", () => hide());
+            row.append(open);
+        }
+        row.append(
+            control("Copy the address", word("Copy"), (button) => {
+                void navigator.clipboard?.writeText(href).then(() => (button.firstElementChild!.textContent = "Copied"));
+            }),
+            control("Edit the link (Ctrl+K)", word("Edit"), (button) => {
+                // the link field works on the link the cursor is in
+                surface.setSelection(caret(range.start.path, range.start.offset + 1));
+                edit(button);
+            }),
+            control("Remove the link, keeping its words", word("Remove"), () => {
+                surface.run((doc) => setLink(doc, range, null));
+                back();
+            }),
+        );
+        show("card", range, href, row, pointer);
     }
 
     function chip(range: Range, href: string) {
@@ -189,31 +243,71 @@ export function createLinkCard(surface: Surface, top: () => number = () => 0): {
         row.append(make("span", "quire-link-where", "Show as"), field);
         if (short !== field.value) row.append(control(`Show it as ${shortFor(href, 200)}`, word(short), () => choose(shortFor(href, 200))));
         row.append(control("Leave the address as it is", word(cutMiddle(href, 24)), () => back(range.end)));
-        show(range, href, row);
+        show("chip", range, href, row);
         later(hide, 5000);
     }
 
+    /** The link the cursor is in, if it is in one with nothing selected. */
+    const here = () => {
+        const selection = surface.getSelection();
+        return collapsed(selection) ? linkAt(surface.getDocument(), selection.focus) : undefined;
+    };
+
+    /** True when the card is up for this very link already. */
+    const showing = (link: { range: Range; href: string }) => shown?.kind === "card" && shown.href === link.href && JSON.stringify(shown.range) === JSON.stringify(link.range);
+
     surface.on("address", ({ href, start, end }) => chip({ start, end }, href));
     surface.on("change", () => shown && !pop.contains(document.activeElement) && hide());
-    // a few seconds without the pointer on it sends it away
-    pop.addEventListener("pointerout", (event) => shown && !pop.contains(event.relatedTarget as Node) && later(hide, 3000));
+    surface.on("select", () => {
+        const doc = surface.getDocument();
+        const edited = doc !== lastDoc;
+        lastDoc = doc;
+        if (shown?.kind === "chip" || pop.contains(document.activeElement) || document.querySelector(".quire-menu:popover-open")) return;
+        const found = !edited && document.activeElement === surface.element ? here() : undefined;
+        if (!found) return shown?.pointer || hide();
+        // a card the pointer brought stays while the cursor is in its link
+        if (showing(found)) shown!.pointer = false;
+        else later(() => card(found.range, found.href, false), 250);
+    });
+
+    // the pointer resting on a link for a moment, and leaving it and the card for a moment
+    surface.element.addEventListener("pointerover", (event) => {
+        const link = (event.target as Element).closest?.<HTMLAnchorElement>("a[href]");
+        const at = link && surface.positionAt(link, 0);
+        const found = at && linkAt(surface.getDocument(), { path: at.path, offset: at.offset + 1 });
+        if (event.pointerType === "touch" || !found || shown?.kind === "chip") return;
+        if (showing(found)) clearTimeout(timer);
+        else later(() => card(found.range, found.href, true), 500);
+    });
+    const leave = (event: PointerEvent) => {
+        if (pop.contains(event.relatedTarget as Node) || (event.relatedTarget as Element | null)?.closest?.("a[href]")) return;
+        if (!shown) clearTimeout(timer);
+        else if (shown.kind === "chip") later(hide, 3000);
+        else if (shown.pointer && !pop.contains(document.activeElement)) later(hide, 400);
+    };
+    surface.element.addEventListener("pointerout", leave);
+    pop.addEventListener("pointerout", leave);
     pop.addEventListener("pointerover", () => clearTimeout(timer));
     pop.addEventListener("focusin", () => clearTimeout(timer));
     pop.addEventListener("keydown", (event) => {
-        if (event.key === "Escape") back(shown?.range.end);
+        if (event.key === "Escape") back(shown?.kind === "chip" ? shown.range.end : undefined);
     });
 
-    // typing sends it away, and Tab goes into its field
+    // typing sends it away; with the cursor in a link Alt+Enter opens it, and with the chip up Tab goes into its field
     surface.element.addEventListener(
         "keydown",
         (event) => {
-            if (event.key === "Tab" && shown && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) {
+            const plain = !event.ctrlKey && !event.metaKey && !event.shiftKey;
+            const link = event.key === "Enter" && event.altKey && plain ? here() : undefined;
+            if (link || (event.key === "Tab" && plain && !event.altKey && shown?.kind === "chip")) {
                 event.preventDefault();
                 event.stopImmediatePropagation();
-                pop.querySelector("input")?.focus();
+                if (link) follow(link.href);
+                else pop.querySelector("input")?.focus();
                 return;
             }
-            if (!/^(Shift|Control|Alt|Meta|AltGraph|CapsLock)$/.test(event.key)) hide();
+            if (/^(Shift|Control|Alt|Meta|AltGraph|CapsLock)$/.test(event.key) || (shown?.kind === "card" && /^(Arrow|Home|End|Page)/.test(event.key))) return;
+            hide();
         },
         true,
     );

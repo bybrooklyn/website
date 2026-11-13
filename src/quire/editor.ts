@@ -552,7 +552,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     host.addEventListener("keydown", zoomKey);
     surface.on("link", () => openLink(bar.seen("Link")));
     const selectBar = createSelectBar(surface, () => bar.element.getBoundingClientRect().bottom);
-    const linkCard = createLinkCard(surface, () => bar.element.getBoundingClientRect().bottom);
+    const linkCard = createLinkCard(surface, openLink, () => bar.element.getBoundingClientRect().bottom);
     const outlineView = createOutline(surface, () => bar.element.getBoundingClientRect().bottom, (open) => {
         host.classList.toggle("outlined", open);
     });

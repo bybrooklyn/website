@@ -211,7 +211,13 @@ another site's title, so the words come from the address alone (`wordsFor`: the 
 that is words, a repository and its issue on GitHub and GitLab, "YouTube video", or the site's name). The
 chip takes no focus unless Tab or a press gives it one; typing, a press elsewhere, Escape or five seconds
 without the pointer on it send it away and leave the address. Choosing is an undo step of its own, so
-Ctrl+Z gives the bare address back.
+Ctrl+Z gives the bare address back. Resting the pointer on a link for half a second, or the cursor being
+in one, grows a card from under it, drawn as the selection bar is: where the link goes (cut in the
+middle when long), Open (a new tab, `rel="noopener noreferrer"`, offered only for web addresses), or Go
+to for a heading or bookmark of the document, then Copy, Edit (the link field) and Remove (the words
+stay). It sits below the link's line so it never covers the line being typed, and typing sends it away
+until the cursor moves. With the cursor in a link Alt+Enter opens it (Docs' key; in mdQuire it was a
+plain new paragraph), and Ctrl+K edits it as before.
 
 **Inserts and downloads** (`inserts.ts`, `export.ts`, `docx.ts`). Insert adds today's date, special
 characters and a table of contents. File, Download as gives Markdown, `.quire`, a web page, plain text and

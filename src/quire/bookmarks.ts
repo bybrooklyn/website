@@ -19,26 +19,28 @@ export function bookmarkName(html: string): string | undefined {
     return found && found[0] === html ? found[1] : undefined;
 }
 
-/** A place a link can go to: what it is called in the list, and the link. */
+/** A place a link can go to: what it is called in the list, the link, and the block it is in. */
 export interface Place {
     label: string;
     href: string;
     kind: "heading" | "bookmark";
+    path: number[];
 }
 
-/** Every bookmark's name, in reading order. */
-function bookmarks(doc: Document): string[] {
-    const names: string[] = [];
+/** Every bookmark's name and its block, in reading order. */
+function bookmarks(doc: Document): { name: string; path: number[] }[] {
+    const names: { name: string; path: number[] }[] = [];
+    let path: number[] = [];
     const visit = (runs: Run[]) => {
         for (const run of runs) {
             if (run.kind === "link") visit(run.runs);
             else if (run.kind === "html") {
                 const name = bookmarkName(run.html);
-                if (name) names.push(name);
+                if (name) names.push({ name, path });
             }
         }
     };
-    for (const path of blockPaths(doc)) {
+    for (path of blockPaths(doc)) {
         const block = blockAt(doc, path);
         if (block?.kind === "paragraph" || block?.kind === "heading") visit(block.runs);
         else if (block?.kind === "table") [block.header, ...block.rows].forEach((row) => row.forEach(visit));
@@ -51,8 +53,8 @@ export function places(doc: Document): Place[] {
     const seen = new Map<string, number>();
     const headings = outline(doc)
         .filter((entry) => entry.text)
-        .map((entry): Place => ({ label: entry.text, href: `#${slug(entry.text, seen)}`, kind: "heading" }));
-    return [...headings, ...bookmarks(doc).map((name): Place => ({ label: name, href: `#${name}`, kind: "bookmark" }))];
+        .map((entry): Place => ({ label: entry.text, href: `#${slug(entry.text, seen)}`, kind: "heading", path: entry.path }));
+    return [...headings, ...bookmarks(doc).map(({ name, path }): Place => ({ label: name, href: `#${name}`, kind: "bookmark", path }))];
 }
 
 /** A name for a bookmark made from words: as a heading's id is made, and numbered when a heading or bookmark has it already. */

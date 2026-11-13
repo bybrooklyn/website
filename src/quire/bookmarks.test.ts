@@ -21,12 +21,12 @@ test("a bookmark is written as an empty anchor and read back as one thing in the
     expect(bookmarkName('<a href="/x"></a>')).toBeUndefined();
 });
 
-test("the places to link to are the headings by the site's ids, then the bookmarks", () => {
+test("the places to link to are the headings by the site's ids, then the bookmarks, each with its block", () => {
     const doc = read('# Hello, World!\n\n## Hello, World!\n\nA line <a id="here"></a>.\n\n## \n');
     expect(places(doc)).toEqual([
-        { label: "Hello, World!", href: "#hello-world", kind: "heading" },
-        { label: "Hello, World!", href: "#hello-world-1", kind: "heading" },
-        { label: "here", href: "#here", kind: "bookmark" },
+        { label: "Hello, World!", href: "#hello-world", kind: "heading", path: [0] },
+        { label: "Hello, World!", href: "#hello-world-1", kind: "heading", path: [1] },
+        { label: "here", href: "#here", kind: "bookmark", path: [2] },
     ]);
 });
 
