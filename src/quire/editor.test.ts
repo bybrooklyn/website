@@ -10,6 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { withoutSpeech } from "../../scripts/dictation-stubs";
 import { browser, chromium, type Browser } from "../../scripts/browser";
+import sharp from "sharp";
 
 const here = import.meta.dir;
 const styles = `${here}/../styles`;
@@ -1278,6 +1279,27 @@ used("a file opened from the computer, changed and not downloaded, makes the bro
     // downloaded, it is kept, and closing is quiet again
     await tab.run("q.editor.commands.download()");
     expect(await tab.run("q.asksOnClose()")).toBe(false);
+});
+
+used("a photograph put into a document is kept without where it was taken, even in a store that publishes", async () => {
+    const photo = await sharp({ create: { width: 6, height: 4, channels: 3, background: { r: 10, g: 120, b: 200 } } })
+        .withMetadata({ orientation: 6 })
+        .withExifMerge({ IFD0: { Make: "PhoneMaker" }, IFD3: { GPSLatitudeRef: "N", GPSLatitude: "51/1 30/1 1234/100" } })
+        .jpeg()
+        .toBuffer();
+    expect(photo.includes("PhoneMaker")).toBe(true);
+    await Bun.write(`${folder}/holiday.jpg`, photo);
+    await tab.run("q.useBrowser()");
+    const id = await tab.run<string>(`q.openIn("Trip", "Away.\\n")`);
+    await tab.files([`${folder}/holiday.jpg`]);
+    await menuLine("Insert", "Picture");
+    await tab.wait(400);
+    const kept = await tab.run<number[]>(`q.store.pictures(${JSON.stringify(id)}).then((all) => all.get("holiday.jpg").arrayBuffer()).then((buffer) => [...new Uint8Array(buffer)])`);
+    const bytes = Buffer.from(kept);
+    expect(bytes.includes("PhoneMaker")).toBe(false);
+    expect(bytes.includes(Buffer.from([0x88, 0x25]))).toBe(false);
+    expect((await sharp(bytes).metadata()).orientation).toBe(6);
+    expect(new Uint8Array(await sharp(bytes).raw().toBuffer())).toEqual(new Uint8Array(await sharp(photo).raw().toBuffer()));
 });
 
 used("a note on a Markdown file is kept for it even when another document is opened at once", async () => {

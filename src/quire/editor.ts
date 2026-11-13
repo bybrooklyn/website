@@ -42,6 +42,8 @@ import { findTyping } from "./vocabulary";
 import { changes, createHistoryPanel, createKeeper, memoryStorage, moveVersions, snapshotParts, snapshotText, type VersionStorage } from "./versions";
 import { write } from "./write";
 import { emptyParts, opened, packQuire, written, type Parts } from "./quire-file";
+import { pictureType, withoutMetadata } from "./pictures";
+import { crc32 } from "./zip";
 import { PAGE } from "./styling";
 import { createCaret, FLAG, FLAG_ON_PAPER } from "./caret";
 import { createDetails } from "./details";
@@ -146,8 +148,23 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     paper.append(text);
     host.append(column);
 
+    /** A picture as it comes into a document: where and when it was taken cut out of it (pictures.ts), and its type read from its bytes. */
+    const cleaned = async (picked: File) => {
+        const bytes = withoutMetadata(new Uint8Array(await picked.arrayBuffer()), crc32);
+        const sniffed = pictureType(bytes, picked.name);
+        // a phone's HEIC, which this cannot read through, keeps the type it came with
+        const type = sniffed === "application/octet-stream" && /^image\/hei[cf]$/.test(picked.type) ? picked.type : sniffed;
+        return new File([bytes as BlobPart], picked.name || "picture.png", { type });
+    };
     // pictures are kept by the document's store, beside the document
-    const keepPicture = async (file: File) => {
+    const keepPicture = async (picked: File) => {
+        let file: File;
+        try {
+            file = await cleaned(picked);
+        } catch (error) {
+            bar.setStatus("No picture", `The picture was not added: ${error instanceof Error ? error.message : String(error)}`, "warn");
+            throw error;
+        }
         if (store && id) {
             try {
                 if (!store.can.pictures) throw new Error("pictures cannot be kept here");
