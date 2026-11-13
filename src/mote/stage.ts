@@ -37,7 +37,7 @@ export interface Mote {
     height: number;
     /** Seconds stepped so far. */
     time: number;
-    /** Shown small in a list, not to be played: no pointer, no keys. A scene can use this to leave out its words and move by itself. */
+    /** Shown small in a list, not to be played: it takes no keyboard focus, and the list's styles let no pointer reach it. A scene can use this to leave out its words and move by itself. */
     readonly preview: boolean;
     pointer: Pointer;
     /** One of the page's colors, such as "--accent", as a value a canvas accepts. */
