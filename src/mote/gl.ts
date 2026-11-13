@@ -271,14 +271,18 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
 
     const program = (vertex: string, fragment: string): Program => {
         const made = g.createProgram();
-        for (const [kind, source] of [[g.VERTEX_SHADER, vertex], [g.FRAGMENT_SHADER, fragment]] as const) {
+        const shaders = ([[g.VERTEX_SHADER, vertex], [g.FRAGMENT_SHADER, fragment]] as const).map(([kind, source]) => {
             const shader = g.createShader(kind)!;
             g.shaderSource(shader, source);
             g.compileShader(shader);
             if (!g.getShaderParameter(shader, g.COMPILE_STATUS)) throw new Error(g.getShaderInfoLog(shader) ?? "A shader did not compile.");
             g.attachShader(made, shader);
-        }
+            return shader;
+        });
         g.linkProgram(made);
+        // the program keeps what it needs of its shaders once linked
+        for (const shader of shaders) g.deleteShader(shader);
+        if (!g.getProgramParameter(made, g.LINK_STATUS)) throw new Error(g.getProgramInfoLog(made) ?? "A program did not link.");
         const names = new Map<string, WebGLUniformLocation | null>();
         return { made, at: (name: string) => names.get(name) ?? (names.set(name, g.getUniformLocation(made, name)), names.get(name)!) };
     };
