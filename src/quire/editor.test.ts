@@ -956,7 +956,7 @@ used("a .quire document's header, footer and page numbers are set from Insert or
     expect(new Set(marks.heads)).toEqual(new Set(["My book"]));
     expect(new Set(marks.feet)).toEqual(new Set(["Draft"]));
     expect(marks.numbers).toEqual(marks.heads.map((_, index) => String(index + 1)));
-    expect(await tab.run("[...document.querySelectorAll('head style')].some((style) => style.textContent.includes('@top-center { content: \"My book\"') && style.textContent.includes('counter(page)'))")).toBe(true);
+    expect(await tab.run("document.adoptedStyleSheets.some((sheet) => [...sheet.cssRules].some((rule) => rule.cssText.includes('My book') && rule.cssText.includes('counter(page)')))")).toBe(true);
     await tab.press("Escape");
     await tab.wait(300);
     // each change is one step back: the numbers, then the footer typed, then the header

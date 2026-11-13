@@ -85,18 +85,18 @@ test("one file on its own can be written, and says plainly what it cannot do", a
 });
 
 test("a .quire file in a folder is listed, opened, and written back in place as a zip with its pictures inside", async () => {
-    const bytes = await packQuire({ markdown: "Old.\n", parts: { style: '{"quire":1}', notes: "{}" }, pictures: new Map([["a.png", new Blob(["a"])]]) });
+    const bytes = await packQuire({ markdown: "Old.\n\n![a](pictures/a.png)\n", parts: { style: '{"quire":1}', notes: "{}" }, pictures: new Map([["a.png", new Blob(["a"])]]) });
     const root = memoryFolder("site", { "letters/to-sam.quire": new Blob([bytes as BlobPart]) }, ticking());
     const store = folderStore(root);
     expect((await store.list()).map((entry) => entry.id)).toEqual(["letters/to-sam.quire"]);
     const opened = await store.open("letters/to-sam.quire");
-    expect(opened).toMatchObject({ text: "Old.\n", quire: { style: '{"quire":1}' } });
+    expect(opened).toMatchObject({ text: "Old.\n\n![a](pictures/a.png)\n", quire: { style: '{"quire":1}' } });
     expect(await store.savePicture("letters/to-sam.quire", new Blob(["b"]), "b.png")).toBe("pictures/b.png");
-    const saved = await store.save("letters/to-sam.quire", "New.\n\n![b](pictures/b.png)\n", opened.mark, { style: '{"quire":1,"count":2}', notes: "{}" });
+    const saved = await store.save("letters/to-sam.quire", "New.\n\n![a](pictures/a.png)\n\n![b](pictures/b.png)\n", opened.mark, { style: '{"quire":1,"count":2}', notes: "{}" });
     expect(saved.ok).toBe(true);
     const file = await (await (await root.getDirectoryHandle("letters")).getFileHandle("to-sam.quire")).getFile();
     const back = await unpackQuire(new Uint8Array(await file.arrayBuffer()));
-    expect(back.markdown).toBe("New.\n\n![b](pictures/b.png)\n");
+    expect(back.markdown).toBe("New.\n\n![a](pictures/a.png)\n\n![b](pictures/b.png)\n");
     expect(back.parts.style).toBe('{"quire":1,"count":2}');
     expect([...back.pictures.keys()]).toEqual(["a.png", "b.png"]);
     // nothing was written beside it
@@ -129,7 +129,7 @@ test("one .quire file on its own keeps its pictures inside it", async () => {
     const opened = await store.open("only.quire");
     expect(store.can.pictures).toBe(true);
     await store.savePicture("only.quire", new Blob(["c"]), "c.png");
-    expect((await store.save("only.quire", "Hi.\n", opened.mark)).ok).toBe(true);
+    expect((await store.save("only.quire", "Hi.\n\n![c](pictures/c.png)\n", opened.mark)).ok).toBe(true);
     const file = await ((await folder.getFileHandle("only.quire")) as FileHandle).getFile();
     expect([...(await unpackQuire(new Uint8Array(await file.arrayBuffer()))).pictures.keys()]).toEqual(["c.png"]);
 });
@@ -183,4 +183,12 @@ test("a write that fails half way is abandoned: the file keeps what it had, and 
     expect(abandoned).toBe(true);
     expect(content).toBe("kept words");
     expect(saver.unsaved()).toBe("new words");
+});
+
+test("a file renamed to the name it already has keeps it, rather than becoming name-2", async () => {
+    const root = memoryFolder("site", { "posts/my-post.md": "words", "posts/other.md": "x" }, ticking());
+    const store = folderStore(root);
+    expect(await store.rename("posts/my-post.md", "My Post.md")).toBe("posts/my-post.md");
+    expect((await store.open("posts/my-post.md")).text).toBe("words");
+    expect(await store.rename("posts/my-post.md", "Other")).toBe("posts/other-2.md");
 });

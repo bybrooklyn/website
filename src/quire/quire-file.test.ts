@@ -26,8 +26,8 @@ test("a .quire file unzipped by the system is a plain Markdown document with its
 
 test("what is packed unpacks the same, pictures with a type they can be shown with", async () => {
     const webp = "RIFF\u0000\u0000\u0000\u0000WEBPVP8 ";
-    const bundle = await unpackQuire(await packQuire({ markdown: "Words.\n", parts, pictures: new Map([["a.webp", new Blob([webp])]]) }));
-    expect(bundle.markdown).toBe("Words.\n");
+    const bundle = await unpackQuire(await packQuire({ markdown: "Words.\n\n![A](pictures/a.webp)\n", parts, pictures: new Map([["a.webp", new Blob([webp])]]) }));
+    expect(bundle.markdown).toBe("Words.\n\n![A](pictures/a.webp)\n");
     expect(bundle.parts).toEqual(parts);
     expect(bundle.pictures.get("a.webp")?.type).toBe("image/webp");
     expect(await bundle.pictures.get("a.webp")?.text()).toBe(webp);

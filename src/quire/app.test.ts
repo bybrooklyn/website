@@ -96,7 +96,7 @@ beforeAll(async () => {
     await Bun.write(`${folder}/post.md`, "# A post\n\nFrom a file.\n");
     // a .quire file with a styled word, its style addressed as styling.ts says
     const style = { quire: 1, page: { size: "A5", orientation: "portrait", margins: 20 }, count: 2, blocks: [{ block: 0, hash: hash("A letter"), align: "center" }], runs: [{ block: 1, hash: hash("Dear Sam, hello."), from: 10, to: 15, quote: "hello", before: "Dear Sam, ", color: "#d52d00", font: "serif" }] };
-    await Bun.write(`${folder}/letter.quire`, await packQuire({ markdown: "# A letter\n\nDear Sam, hello.\n", parts: { style: JSON.stringify(style), notes: "{}" }, pictures: new Map([["dot.png", new Blob([DOT])]]) }));
+    await Bun.write(`${folder}/letter.quire`, await packQuire({ markdown: "# A letter\n\nDear Sam, hello.\n\n![A dot](pictures/dot.png)\n", parts: { style: JSON.stringify(style), notes: "{}" }, pictures: new Map([["dot.png", new Blob([DOT])]]) }));
     tab = await browser({ width: 1300, height: 900 });
     // the page is served over http, as the site is, so that its database and storage are its own
     await load();
@@ -347,7 +347,7 @@ used("a .quire file opens with its look, is written in, and downloads as a .quir
     await press(".quire-menu.open .quire-menu-line", "Download.quire");
     await tab.wait(400);
     const bundle = await unpackQuire(new Uint8Array(Object.values(await tab.run<Record<string, number>>("q.bytes['letter.quire']"))));
-    expect(bundle.markdown).toBe("# Old. A letter\n\nDear Sam, hello.\n");
+    expect(bundle.markdown).toBe("# Old. A letter\n\nDear Sam, hello.\n\n![A dot](pictures/dot.png)\n");
     const style = JSON.parse(bundle.parts.style);
     expect(style.page).toEqual({ size: "A5", orientation: "portrait", margins: 20 });
     expect(style.runs[0]).toMatchObject({ quote: "hello", color: "#d52d00", font: "serif" });
@@ -379,12 +379,12 @@ used("a .quire file written in place through file handles keeps its look and pic
         const store = q.oneFileStore(handle);
         const opened = await store.open("in-place.quire");
         await store.savePicture("in-place.quire", new Blob(["x"], { type: "image/png" }), "x.png");
-        await store.save("in-place.quire", "Hi there.\\n", opened.mark, { style: '{"quire":1}', notes: "{}" });
+        await store.save("in-place.quire", "Hi there.\\n\\n![x](pictures/x.png)\\n", opened.mark, { style: '{"quire":1}', notes: "{}" });
         const back = await q.unpackQuire(new Uint8Array(await (await handle.getFile()).arrayBuffer()));
         await root.removeEntry("in-place.quire");
         return { markdown: back.markdown, style: back.parts.style, pictures: [...back.pictures.keys()] };
     })()`);
-    expect(result).toEqual({ markdown: "Hi there.\n", style: '{"quire":1}', pictures: ["x.png"] });
+    expect(result).toEqual({ markdown: "Hi there.\n\n![x](pictures/x.png)\n", style: '{"quire":1}', pictures: ["x.png"] });
 });
 
 used("the folder store writes real file handles, here the browser's private file system", async () => {
