@@ -21,8 +21,10 @@ const marks = [
     <header class="lab-top">
         <div class="lab-top-in">
             <div class="lab-mark">
+                {/* her name and the flags first, where they are on every page, then the stroke and the editor's name, as a page's trail reads */}
+                <span class="lab-by"><a class="lab-name" href="/">charlotte</a><Flags /></span>
+                <span class="lab-by-word" aria-hidden="true">/</span>
                 <a class="lab-word" href="/mdquire/" aria-label="mdQuire: all documents">mdQuire</a>
-                <span class="lab-by"><span class="lab-by-word" aria-hidden="true">/</span> <a class="lab-name" href="/">charlotte</a><Flags /></span>
             </div>
             <div class="lab-menus" role="menubar" aria-label="Menus">
                 {["File", "Edit", "View", "Insert", "Format", "Tools"].map((word) => (
