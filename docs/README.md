@@ -8,6 +8,7 @@ open, how to run and test it, and its known weak spots.
 - [site.md](site.md): the site itself, its pages, the rules for what goes on them, caching and deploying.
 - [publishing.md](publishing.md): writing in the browser, drafts, held posts, photos and share pictures.
 - [mdQuire.md](mdQuire.md): the Markdown word processor at `/mdquire/`, also behind `bun run edit`.
+- [spelling.md](spelling.md): mdQuire's spelling check as it is, measured, and the questions for its rebuild.
 - [imgQuire.md](imgQuire.md): an image editor to sit beside mdQuire; nothing built.
 - [cutout.md](cutout.md): a background remover, a page of its own and a tool of imgQuire; nothing built.
 - [mote.md](mote.md): the small engine the minis run on, with no third-party libraries.

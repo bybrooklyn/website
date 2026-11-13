@@ -117,7 +117,7 @@ title size. *In progress.*
 
 **Shortcuts.** Google Docs' everyday keyboard shortcuts.
 
-**Spelling.** To be improved, with a word list of its own.
+**Spelling.** To be improved, with a word list of its own. How it works now, its numbers and the questions to settle are in `spelling.md`.
 
 The items marked in progress are on the branch `mdquire-writer`, a writer's pass not yet merged into
 `main`. It also makes lists look as Docs draws them and makes a list mark typed after a soft line break
