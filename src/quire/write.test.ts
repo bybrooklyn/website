@@ -3,7 +3,7 @@
 // and centring included. Run with `bun test src/quire`.
 
 import { expect, test } from "bun:test";
-import { code, divider, heading, image, list, paragraph, setAlign, setStyle, table, tidyRuns, toggleMark, type Block, type Document, type Paragraph, type Run } from "./document";
+import { changeKind, code, divider, heading, image, list, paragraph, removeBlock, setAlign, setStyle, table, tidyRuns, toggleMark, type Block, type Document, type Paragraph, type Run } from "./document";
 import { read } from "./read";
 import { write } from "./write";
 
@@ -189,4 +189,24 @@ test("in a table cell pipes are the cell's edges: no spoiler is made there, and 
     // the reader agrees: a pipe in a cell is never a spoiler, and two backslashes before a pipe are a backslash and an edge
     const read1 = read("| a \\|\\|b\\|\\| | c\\\\| d |\n|---|---|---|\n").blocks[0];
     expect(read1?.kind === "table" && read1.header.map((cell) => cell.map((run) => (run.kind === "text" ? [run.text, run.marks] : run.kind)))).toEqual([[["a ||b||", []]], [["c\\", []]], [["d", []]]]);
+});
+
+test("blocks brought together by an edit are kept apart as they read: two lists stay two, a line across the page at the top stays one, and an item stays an item", () => {
+    // the paragraph between two lists of one sign goes: the second list takes the other sign
+    for (const source of ["- a\n\ntext\n\n- b\n", "* a\n\ntext\n\n* b\n", "1. a\n\ntext\n\n1. b\n", "1) a\n\ntext\n\n3) b\n", "- [ ] a\n\ntext\n\n- b\n"]) {
+        const joined = removeBlock(read(source), [1]);
+        const back = read(write(joined));
+        expect({ source, lists: back.blocks.map((block) => block.kind === "list" && [block.items.length, block.start]) }).toEqual({ source, lists: joined.blocks.map((block) => block.kind === "list" && [block.items.length, block.start]) });
+    }
+    // with the first paragraph gone, a page with two lines across it does not open with frontmatter
+    const top = removeBlock(read("text\n\n---\n\nmore\n\n---\n\nend\n"), [0]);
+    expect(write(top)).toBe("***\n\nmore\n\n---\n\nend\n");
+    expect(read(write(top)).frontmatter).toBeNull();
+    expect(write(removeBlock(read("text\n\n---\n\nmore\n"), [0]))).toBe("---\n\nmore\n");
+    // a line across the page made a bullet is an item holding one, not a line written `- ---`
+    const made1 = changeKind(read("a\n\n---\n"), [1], { kind: "list", style: "bullet" });
+    expect(write(made1)).toBe("a\n\n- ***\n");
+    expect(read(write(made1)).blocks[1]?.kind).toBe("list");
+    // two blocks the file had together keep the single line ending between them
+    for (const source of ["text\n- a\n", "# h\ntext\n", "<!-- c -->\ntext\n", "> q\n>\ntext\n", "- a\n  ```\n  x\n  ```\ntext\n", "| a |\n|---|\n# h\n"]) expect(write(read(source))).toBe(source);
 });

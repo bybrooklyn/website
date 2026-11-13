@@ -465,3 +465,24 @@ test("Delete at the end of an item before an empty one joins them and never writ
         expect(each.markdown).not.toMatch(/undefined|NaN|null|\[object Object\]/);
     }
 });
+
+test("lists edited into new shapes are written so that they read back as the same lists, whatever stood there before", () => {
+    // what a list reads back as: its nesting, and each item's text
+    const shape = (markdown: string): unknown => {
+        const of = (blocks: Block[]): unknown => blocks.map((block) => (block.kind === "list" ? { list: block.style, start: block.start, items: block.items.map((item) => of(item.blocks)) } : block.kind === "paragraph" ? runsText(block.runs) : block.kind));
+        return of(read(markdown).blocks);
+    };
+    // Enter then Tab at the end of an item starts an empty item under it, not a heading
+    const bullet = editor("- a\n", [0, 0, 0], 1);
+    bullet.key("Enter");
+    bullet.key("Tab");
+    expect(shape(bullet.markdown)).toEqual([{ list: "bullet", start: 1, items: [["a", { list: "bullet", start: 1, items: [[""]] }]] }]);
+    const number = editor("1. a\n", [0, 0, 0], 1);
+    number.key("Enter");
+    number.key("Tab");
+    expect(shape(number.markdown)).toEqual([{ list: "number", start: 1, items: [["a", { list: "number", start: 1, items: [[""]] }]] }]);
+    // Backspace at the start of a nested list's first item leaves two lines of text that stay two
+    const nested = editor("- two\n  - nested\n  - nested two\n- three\n", [0, 0, 1, 0, 0], 0);
+    nested.key("Backspace");
+    expect(shape(nested.markdown)).toEqual([{ list: "bullet", start: 1, items: [["two", "nested", { list: "bullet", start: 1, items: [["nested two"]] }], ["three"]] }]);
+});

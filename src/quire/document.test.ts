@@ -305,7 +305,7 @@ test("a table, picture, divider or code block is inserted after a block", () => 
 
     const inItem = insertBlock(doc, [2, 0, 0], code("y"));
     kept(doc, inItem, 8);
-    expect(written(inItem, 2)).toBe("* one\n\n  ```\n  y\n  ```\n* two\n  * two and a half\n* three");
+    expect(written(inItem, 2)).toBe("* one\n  ```\n  y\n  ```\n* two\n  * two and a half\n* three");
 });
 
 test("table rows and columns are added and removed, and cells and alignment are set", () => {

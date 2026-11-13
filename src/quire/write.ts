@@ -6,6 +6,7 @@
 import { pictureHtml, sized } from "./pictures";
 import type { Align, Block, Document, Leaf, List, Run, TextRun } from "./document";
 import { emojiOf } from "./emoji";
+import { followed, standsApart } from "./read";
 
 interface Context {
     eol: string;
@@ -35,33 +36,51 @@ function said(value: unknown, what: string): string {
 /** Writes a whole document. */
 export function write(doc: Document): string {
     const context: Context = { eol: doc.eol, mdx: doc.mdx };
-    return doc.bom + (doc.frontmatter ?? "") + doc.lead + writeBlocks(doc.blocks, context, false, false);
+    let body = writeBlocks(doc.blocks, context, false);
+    // a `---` on the first line opens frontmatter when another such line comes later, so a line across
+    // the page that has come to the top is written `***` when it would be read so
+    if (doc.frontmatter === null && doc.lead === "" && doc.blocks[0]?.kind === "divider" && /^---[ \t]*(?=\r?\n|$)/.test(body) && /\n(?:---|\.\.\.)[ \t]*(?:\r?\n|$)/.test(body)) body = body.replace(/^---[ \t]*/, "***");
+    return doc.bom + (doc.frontmatter ?? "") + doc.lead + body;
 }
 
 const lineEndings = (gap: string) => (gap.match(/\n/g) ?? []).length;
 
-/** Whether two neighbours need a blank line between them so that they read back as two blocks. */
-function needsBlank(before: Block, after: Block, tight: boolean): boolean {
-    if (before.kind === "heading" || after.kind === "heading") return false;
-    if (tight && after.kind === "list") return false;
-    return true;
+/** The sign a list's items start with, as far as telling two lists apart goes: a bullet's character, or a number's delimiter. */
+const signOf = (list: List) => (list.style === "number" ? list.delimiter : list.marker);
+
+/**
+ * A list written straight after another of the same sign would be read back as part of it, blank
+ * line or not, so the second takes another sign: `*` after `-`, `-` after `*` or `+`, `)` after `.`
+ * and `.` after `)`. Its items keep their text and take the new sign.
+ */
+function otherSign(list: List): List {
+    if (list.style === "number") return { ...list, delimiter: list.delimiter === "." ? ")" : ".", source: undefined };
+    return { ...list, marker: list.marker === "-" ? "*" : "-", source: undefined };
 }
 
 /** Writes blocks one after another. `inside` is true in a list item, quote or footnote, where the last block ends with nothing. */
-function writeBlocks(all: Block[], context: Context, tight: boolean, inside: boolean): string {
+function writeBlocks(all: Block[], context: Context, inside: boolean): string {
     // an empty paragraph has no Markdown form, so a fresh one is left out
     const blocks = all.filter((block) => !(block.source === undefined && block.kind === "paragraph" && block.runs.length === 0));
     if (blocks.length && blocks.length < all.length && all[all.length - 1] !== blocks[blocks.length - 1]) blocks[blocks.length - 1] = { ...blocks[blocks.length - 1]!, gap: all[all.length - 1]!.gap };
+    const texts: string[] = [];
+    blocks.forEach((block, index) => {
+        const before = blocks[index - 1];
+        if (block.kind === "list" && before?.kind === "list" && block.style !== "definition" && before.style !== "definition" && (before.style === "number") === (block.style === "number") && signOf(before) === signOf(block)) blocks[index] = otherSign(block);
+        const each = blocks[index]!;
+        texts.push(each.source ?? said(writeBlock(each, context), `a block of kind ${String(each?.kind)}`));
+    });
     let out = "";
     blocks.forEach((block, index) => {
-        out += block.source ?? said(writeBlock(block, context), `a block of kind ${String(block?.kind)}`);
+        out += texts[index];
         const next = blocks[index + 1];
         let gap = block.gap;
         if (!next) gap = inside ? "" : gap;
-        else if (block.source === undefined || next.source === undefined || lineEndings(gap) === 0) {
-            // a gap beside a fresh block keeps the two apart
+        // two blocks read one after the other keep the gap the file had; any other two are given one
+        // line ending if the second still reads as a block of its own after it, and a blank line if not
+        else if (!(block.source !== undefined && next.source !== undefined && followed.get(block) === next && lineEndings(gap) > 0)) {
             if (lineEndings(gap) === 0) gap = context.eol;
-            if (lineEndings(gap) < 2 && needsBlank(block, next, tight)) gap = context.eol + context.eol;
+            if (lineEndings(gap) < 2 && !standsApart(block, texts[index]!, texts[index + 1]!)) gap = context.eol + context.eol;
         }
         out += gap;
     });
@@ -110,7 +129,7 @@ function writeBlock(block: Block, context: Context): string {
         case "list":
             return listText(block, context);
         case "quote": {
-            const inner = writeBlocks(block.blocks, context, false, true);
+            const inner = writeBlocks(block.blocks, context, true);
             if (block.details) {
                 const { summary, open } = block.details;
                 return `<details${open ? " open" : ""}>${eol}<summary>${summary.replace(/[\r\n]+/g, " ")}</summary>${eol}${eol}${inner === "" ? "" : inner + eol + eol}</details>`;
@@ -122,7 +141,7 @@ function writeBlock(block: Block, context: Context): string {
             return prefixLines(inner, "> ", "> ", ">");
         }
         case "footnote":
-            return prefixLines(writeBlocks(block.blocks, context, false, true), `[^${said(block.label, "a footnote's label")}]: `, "    ", "");
+            return prefixLines(writeBlocks(block.blocks, context, true), `[^${said(block.label, "a footnote's label")}]: `, "    ", "");
         case "raw":
             return said(block.text, "a raw block's text");
     }
@@ -137,14 +156,18 @@ function listText(list: List, context: Context): string {
         let text: string;
         if (list.style === "definition") text = item.source ?? definitionText(item.blocks, context);
         else if (item.source !== undefined) {
-            // only the first number of a numbered list counts, so it alone is kept right
+            // only the first number of a numbered list counts, so it alone is kept right; a list written
+            // afresh gives every item its sign, which differs only when it took another (otherSign)
             text = index === 0 && list.style === "number" ? item.source.replace(/^( {0,3})\d{1,9}(?=[.)])/, `$1${list.start}`) : item.source;
+            if (list.source === undefined) text = list.style === "number" ? text.replace(/^( {0,3}\d{1,9})[.)]/, `$1${list.delimiter}`) : text.replace(/^( {0,3})[-*+]/, `$1${list.marker}`);
         } else {
             // a box belongs to an item, not to its list: a plain bullet among checklist items keeps its bullet
             const box = item.checked !== undefined ? `[${item.checked ? "x" : " "}]` : "";
-            const inner = writeBlocks(item.blocks, context, !list.loose, true);
+            const inner = writeBlocks(item.blocks, context, true);
             const head = `${marker} ${box ? `${box} ` : ""}`;
             text = inner === "" ? head.trimEnd() : prefixLines(inner, head, " ".repeat(marker.length + 1), "");
+            // `- ---` is a line across the page, not an item holding one: the item's line is written `***`
+            text = text.replace(/^- ---(?=\r?\n|$)/, "- ***");
         }
         out += text;
         if (index < list.items.length - 1) out += lineEndings(item.gap) > 0 && (item.source !== undefined || lineEndings(item.gap) >= lineEndings(sep)) ? item.gap : sep;

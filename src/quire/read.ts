@@ -173,6 +173,62 @@ function interrupts(line: string): boolean {
 
 // ---- blocks ----
 
+/** For each block read, the block read straight after it among its neighbours: two blocks that still stand together keep the gap the file had between them (write.ts). */
+export const followed = new WeakMap<Block, Block>();
+
+/**
+ * True if a block written as `afterText`, on the line straight after a block written as
+ * `beforeText`, is read as a block of its own and not as more of the one before. These are the
+ * reader's own rules for where each kind of block ends, so that the writer can choose between one
+ * line ending and a blank line.
+ */
+export function standsApart(before: Block, beforeText: string, afterText: string): boolean {
+    const head = beforeText.slice(0, beforeText.search(/\r?\n|$/));
+    const last = beforeText.slice(beforeText.lastIndexOf("\n") + 1).replace(/\r$/, "");
+    const first = afterText.slice(0, afterText.search(/\r?\n|$/));
+    if (blank(first)) return true;
+    const shallow = indentOf(first) < 4;
+    const cuts = shallow && interrupts(first);
+    const item = shallow ? itemStart(first) : undefined;
+    switch (before.kind) {
+        case "heading":
+        case "divider":
+            return true;
+        case "code":
+            // only indented code runs on into an indented line
+            return shallow || FENCE.test(head.trimStart()) || head.trimStart().startsWith("$$");
+        case "paragraph":
+        case "image":
+        case "table":
+            // a block written inside `<div align>` ends at its `</div>`; a picture written as HTML runs to a blank line
+            if (/^<div align="(left|center|right)">$/.test(head)) return true;
+            if (head.startsWith("<")) return false;
+            return cuts && (before.kind === "table" || !SETEXT.test(first.trim()));
+        case "list":
+        case "footnote": {
+            if (before.kind === "list" && before.style === "definition") return cuts || !!item || !DETAIL.test(afterText.split(/\r?\n/)[1] ?? "");
+            const own = itemStart(head);
+            if (before.kind === "list" && item && own && sameList(item.marker, own.marker)) return false;
+            // a line after a blank one, after a fence or after an item with nothing in it is not a lazy continuation
+            if (blank(last) || FENCE.test(last.trimStart()) || (own && indentOf(last) === own.before && /^ {0,3}([-*+]|\d{1,9}[.)])[ \t]*$/.test(last))) return true;
+            return cuts || !!item || FOOTNOTE.test(first.trimStart());
+        }
+        case "quote":
+            if (before.details) return true;
+            if (shallow && first.trimStart().startsWith(">")) return false;
+            if (/^ {0,3}>[ \t]*$/.test(last)) return true;
+            return cuts || !!item;
+        case "raw": {
+            // a comment ends at its `-->`, and <pre>, <script>, <style> and <textarea> at their closing tag; anything else runs to a blank line
+            if (/^ {0,3}<!--/.test(head)) return last.includes("-->");
+            const name = /^\s*<([A-Za-z][\w.:-]*)/.exec(head)?.[1]?.toLowerCase();
+            if (name === "pre" || name === "script" || name === "style" || name === "textarea") return last.toLowerCase().includes(`</${name}>`);
+            return false;
+        }
+    }
+    return false;
+}
+
 function parseBlocks(lines: Line[], context: Context): { lead: string; blocks: Block[] } {
     let at = 0;
     while (at < lines.length && blank(lines[at]!.text)) at++;
@@ -184,6 +240,8 @@ function parseBlocks(lines: Line[], context: Context): { lead: string; blocks: B
         while (next < lines.length && blank(lines[next]!.text)) next++;
         block.source = joinSource(lines.slice(at, end));
         block.gap = lines[end - 1]!.eol + joinFull(lines.slice(end, next));
+        const before = blocks[blocks.length - 1];
+        if (before) followed.set(before, block);
         blocks.push(block);
         at = next;
     }
