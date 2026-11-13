@@ -18,6 +18,9 @@ straight out of the module's memory.
 - `src/learn.rs`: the goals a walker can be rewarded for, the judge that scores a run step by step,
   and evolution with a seeded random generator, run in slices.
 - `src/show.rs`: one brain running in real time, and a whole generation at once.
+- `src/envs.rs`: many walkers stepped together, for a learner that chooses their actions.
+- `src/math.rs`: the module's own sine, square root, logarithm and the rest, the same on every machine.
+- `src/memory.rs`: the module's own memory allocator, in the browser.
 - `src/api.rs`: the functions the page calls, listed below.
 
 ## Building and testing
@@ -28,12 +31,14 @@ cargo test            # in walker/: the physics, the body, the brain and the lea
 bun test src/minis/walker.test.ts   # the built module, from the page's side
 ```
 
-`bun run wasm` builds the module twice, optimised for speed: with WebAssembly SIMD as
+`bun run wasm` builds the Walker's module twice, optimised for speed: with WebAssembly SIMD as
 `walker.wasm`, and without it as `walker-scalar.wasm`, for a browser too old for SIMD (Safari
 before 16.4). The page checks which one the browser can run when it loads. The two give the same
-numbers to the bit. It fails if either is over 512 KiB, or if the physics built alone
+numbers to the bit. It builds the generalist's the same two ways, and the physics alone once, only
+to measure it. It fails if any module is over 512 KiB, or if the physics built alone
 (`cargo build --no-default-features`) is over 80 KiB. The built modules are committed, so the site
-builds without Rust.
+builds without Rust. `cargo test` passes with any of those feature sets: none, `--features walker`
+or `--features generalist` (each with `--no-default-features`), and both, the default.
 
 `cargo run --release --example speed` says how fast training goes natively for each number of legs
 and each size of brain, and how a run's time divides between the physics, the brain and the rest.
@@ -48,6 +53,12 @@ is good until the next call that changes the same thing. Before `create`, functi
 null pointer, or minus infinity.
 
 There is one walker per module instance. Two walkers need two instances.
+
+A few functions are used today only by the module's own test from the page's side
+(`src/minis/walker.test.ts`), which checks through them that the built module behaves as the
+native one: `history_length`, `history_best`, `history_mean`, `run_seconds`, `show_score`,
+`show_seconds`, `show_fallen`, `live_attempt`, `live_best_score`, `live_stop` and `crowd_stop`,
+as well as the `envs_` functions below.
 
 ## The walker's functions
 
@@ -66,14 +77,16 @@ All numbers are metres, kilograms, seconds and radians, with y up and angles ant
   is how far a run goes, in metres (see Run length); 0 or less means runs of the goal's own time in
   training and an endless walk on screen. Returns the number of weights in one brain,
   or 0 if `legs` is not 1, 2 or 4.
-- `run_seconds() -> f32` How long a run of the goal's own time lasts: 4 s for going fast, 20 s on the
-  course, 10 s for the others.
+- `run_seconds() -> f32` How long a training run lasts: `seconds` if it was given, else the goal's
+  own time, 4 s for going fast, 20 s on the course and 10 s for the others, but never less than 10 s
+  with no set length. A run of a set length may have longer (see Run length).
 
 ### Run length
 
 A run of a set length ends when the body has gone that far, earning 1 for each second it had to
 spare, or when it has had as long as a pace of 0.4 m/s allows (and no less than the goal's own
-time). Its distance counts no further than its length. With no set length, training scores runs
+time), but never more than 120 s: a run of 50 m has 120 s rather than 125, and one of 100 m
+120 s rather than 250, so a walker slower than 0.83 m/s does not finish it. Its distance counts no further than its length. With no set length, training scores runs
 of the goal's own time, but never less than ten seconds, and the walk on screen is endless: it is the same run for those first
 seconds, then goes on with the same brain while the walker stays up. So training still compares
 brains on runs of one length, and what is seen is where the best of them goes after that.
@@ -160,7 +173,8 @@ its feet taking turns earns 0.4: for two legs exactly one foot down, for four on
 down and the other up, for one leg its foot down in the second half of each stride and up in the
 first. Each second of a foot sliding along the ground faster than 0.3 m/s costs 0.5, and each
 change in the brain's outputs from one step to the next costs 0.002 for its size, for every goal,
-a jumper's too, so the legs swing rather than twitch. Then, by goal:
+a jumper's too, so the legs swing rather than twitch. (Only the first 24 outputs are counted, which
+leaves out one: the rhythm output of a jumper with four legs.) Then, by goal:
 
 - **Go far** (0): the distance the body went forward in 10 s, plus 0.25 for each second on its feet
   and 0.5 for each second in the air going forward (which is how a one-legged walker gets anywhere).
@@ -242,8 +256,9 @@ of 64 about doubles that. A large brain has more to learn and gets there slower.
 - `show_push(x: f32, y: f32, impulse_x: f32, impulse_y: f32) -> i32` Pushes the body nearest the
   point (x, y), at that point, with an impulse in newton seconds (the walker weighs about 10 kg, so
   20 is a firm shove). Returns the body's number.
-- `body_count() -> u32` The number of bodies: the torso first, then each leg's upper and lower part.
-  5 for two legs, 9 for four.
+- `body_count() -> u32` The number of bodies: the torso first, then each leg's upper and lower part,
+  then, for a carrier, the two rims of its back and the parcel. 3 for one leg, 5 for two, 9 for four,
+  and three more for a carrier.
 - `show_bodies() -> *const f32` Six f32 for each body: x, y, angle, kind (0 circle, 1 capsule,
   2 box), and two sizes: a circle's radius and 0, a capsule's half length (without its round ends)
   and radius, a box's half width and half height. A capsule lies along its own x axis.
@@ -279,7 +294,7 @@ of 64 about doubles that. A large brain has more to learn and gets there slower.
   ahead of the body by 0.12 s of its speed, plus more or less as it is faster or slower than it
   wants to be; on the ground the leg gives while the body comes down, then straightens hard, while
   the hip, held only lightly so the push does not spin the body, turns the body back toward
-  upright. Its six outputs set the speed it wants (0.3 to 1.5 m/s), how much the foot placement
+  upright. Its six outputs set the speed it wants (0.4 to 1.2 m/s), how much the foot placement
   answers to speed, a trim to where the foot goes, how far the leg straightens and folds, and how
   firmly the body is turned upright. Its leg is light, its hip at the middle of its body, and its
   body six times as hard to tip as a plain block of its size, as a rider holding a pogo stick's bar
@@ -296,8 +311,8 @@ of 64 about doubles that. A large brain has more to learn and gets there slower.
   but the output biases, which hold the legs at a built-in stride that walks with no feedback (for
   four legs the average outputs of a long run's best walker, for two the best of four thousand
   strides tried at random), so it steps from the start. An attempt that goes under 0.2 m in four
-  seconds is over. Natively, from a fixed seed, two legs go 8.4 m on the first attempt and 8.7 m by
-  the sixtieth; four legs 7.3 m, then 12.4 m.
+  seconds is over. Natively, from seed 9, two legs go 8.4 m on the first attempt and 8.7 m by
+  the sixtieth; four legs 7.3 m, then 12.6 m.
 - `live_step(seconds: f32) -> u32` Moves the attempt on. When it ends (a fall, a stop, or the end of
   its run) it is kept or not, and the next attempt starts at once. Returns the attempt's number.
 - `live_attempt() -> u32`, `live_best_score() -> f32`, `live_best_distance() -> f32`,
@@ -321,7 +336,7 @@ of 64 about doubles that. A large brain has more to learn and gets there slower.
 ## The physics alone
 
 Built with `cargo build --release --target wasm32-unknown-unknown --no-default-features`, the module
-holds only the physics, with these functions instead (about 36 KiB):
+holds only the physics, with these functions instead (about 37 KiB):
 
 - `physics_reset(gravity_x: f32, gravity_y: f32)` Empties the world and sets its gravity.
 - `physics_body(kind: u32, a: f32, b: f32, x: f32, y: f32, angle: f32, density: f32, friction: f32, restitution: f32, group: u32) -> u32`

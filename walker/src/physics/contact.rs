@@ -73,11 +73,11 @@ pub(crate) fn motion(bodies: &[Body], index: u32) -> Motion {
 }
 
 pub(crate) fn keep(bodies: &mut [Body], index: u32, motion: Motion) {
-    if let Some(body) = bodies.get_mut(index as usize) {
-        if body.inverse_mass > 0.0 {
-            body.velocity = motion.velocity;
-            body.spin = motion.spin;
-        }
+    if let Some(body) = bodies.get_mut(index as usize)
+        && body.inverse_mass > 0.0
+    {
+        body.velocity = motion.velocity;
+        body.spin = motion.spin;
     }
 }
 

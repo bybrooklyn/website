@@ -133,7 +133,7 @@ mod tests {
             let mut brains: Vec<Brain> = (0..6).map(|i| Brain::with(trainer.layout, trainer.weights(i))).collect();
             let (mut observations, mut actions, mut rewards, mut done) = (vec![0.0; 6 * senses], vec![0.0; 6 * wide], vec![0.0; 6], vec![0.0; 6]);
             envs.observe(&mut observations);
-            let mut summed = vec![envs.scores.clone(), vec![0.0; 6]].concat();
+            let mut summed = [envs.scores.clone(), vec![0.0; 6]].concat();
             let mut ended: Vec<Option<(f32, f32)>> = vec![None; 6];
             while ended.iter().any(Option::is_none) {
                 for (i, brain) in brains.iter_mut().enumerate() {

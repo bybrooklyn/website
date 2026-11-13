@@ -21,6 +21,29 @@ generalist = ["creature"]
 # What both share: the body, the brain and evolution.
 creature = []
 
+# The fingerprint test and the examples use parts of the crate that only some features build, so
+# `cargo test` compiles with any of the feature sets `bun run wasm` builds: none, `walker` or
+# `generalist`, as well as both.
+[[test]]
+name = "unchanged"
+required-features = ["walker"]
+
+[[example]]
+name = "speed"
+required-features = ["creature"]
+
+[[example]]
+name = "baseline"
+required-features = ["generalist"]
+
+[[example]]
+name = "compare"
+required-features = ["generalist"]
+
+[[example]]
+name = "practice"
+required-features = ["generalist"]
+
 [profile.release]
 opt-level = 3
 lto = true

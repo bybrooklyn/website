@@ -12,7 +12,10 @@ use crate::math::{Vec2, clamp};
 
 /// How close two surfaces must come before they are treated as touching, in metres.
 pub const AHEAD: f32 = 0.02;
-/// The overlap the solver leaves alone, so that resting things do not flicker in and out of contact.
+/// A small distance, in metres. Surfaces nearer than twice this count as touching (`Body::touching`),
+/// and one outline must part two shapes by a tenth of it more than the other before the side cut
+/// against changes, so the choice does not flip between steps. The solver does not use it: it pushes
+/// every overlap out.
 pub const SLOP: f32 = 0.005;
 
 #[derive(Clone, Copy, Debug, Default)]

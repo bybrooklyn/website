@@ -114,12 +114,12 @@ pub extern "C" fn ground_set(pieces: u32) -> u32 {
     let ground: Vec<Segment> = if pieces == 0 {
         flat_ground()
     } else {
-        walker.ground_room.chunks_exact(4).take(pieces).map(|p| Segment { a: Vec2::new(p[0], p[1]), b: Vec2::new(p[2], p[3]) }).collect()
+        walker.ground_room.as_chunks::<4>().0.iter().take(pieces).map(|p| Segment { a: Vec2::new(p[0], p[1]), b: Vec2::new(p[2], p[3]) }).collect()
     };
     walker.trainer.set_ground(&ground);
-    show_reset();
+    restart_show(walker);
     if walker.crowd.is_some() {
-        crowd_reset();
+        restart_crowd(walker);
     }
     1
 }
@@ -146,7 +146,7 @@ pub extern "C" fn evaluate_room(count: u32) -> *mut f32 {
 #[unsafe(no_mangle)]
 pub extern "C" fn evaluate(count: u32) -> u32 {
     let Some(walker) = walker() else { return 0 };
-    let length = (walker.trainer.layout.weights() * count as usize).min(walker.evaluate_room.len());
+    let length = (walker.trainer.layout.weights() * count.min(1000) as usize).min(walker.evaluate_room.len());
     let brains = length / walker.trainer.layout.weights();
     walker.evaluated.clear();
     walker.evaluated.resize(2 * brains, 0.0);
@@ -310,7 +310,7 @@ pub extern "C" fn weights_load() -> u32 {
     if !walker.trainer.load(&weights) {
         return 0;
     }
-    show_reset();
+    restart_show(walker);
     1
 }
 
@@ -318,7 +318,14 @@ pub extern "C" fn weights_load() -> u32 {
 /// first generation is finished).
 #[unsafe(no_mangle)]
 pub extern "C" fn show_reset() {
-    let Some(walker) = walker() else { return };
+    if let Some(walker) = walker() {
+        restart_show(walker);
+    }
+}
+
+/// What `show_reset` does, for the functions that already hold the walker: taking it a second time
+/// while the first is still in use would be two changeable references to one place.
+fn restart_show(walker: &mut Walker) {
     let trainer = &walker.trainer;
     let weights = if trainer.best_score > f32::NEG_INFINITY { &trainer.best[..] } else { trainer.weights(0) };
     walker.show = show_of(trainer, weights);
@@ -337,7 +344,7 @@ pub extern "C" fn weights_swap() -> u32 {
     if walker.show.judge.endless && !walker.show.judge.over {
         walker.show.pending = Some(weights);
     } else {
-        show_reset();
+        restart_show(walker);
     }
     1
 }
@@ -347,7 +354,7 @@ pub extern "C" fn weights_swap() -> u32 {
 #[unsafe(no_mangle)]
 pub extern "C" fn show_ground_extend(pieces: u32) {
     let Some(walker) = walker() else { return };
-    let pieces: Vec<Segment> = walker.ground_room.chunks_exact(4).take(pieces as usize).map(|p| Segment { a: Vec2::new(p[0], p[1]), b: Vec2::new(p[2], p[3]) }).collect();
+    let pieces: Vec<Segment> = walker.ground_room.as_chunks::<4>().0.iter().take(pieces as usize).map(|p| Segment { a: Vec2::new(p[0], p[1]), b: Vec2::new(p[2], p[3]) }).collect();
     walker.show.extend(&pieces);
 }
 
@@ -421,7 +428,7 @@ pub extern "C" fn live_best_weights() -> *const f32 {
 pub extern "C" fn live_stop() {
     if let Some(walker) = walker() {
         walker.live = None;
-        show_reset();
+        restart_show(walker);
     }
 }
 
@@ -565,7 +572,11 @@ pub extern "C" fn show_weights() -> *const f32 {
 /// start. Returns how many walkers there are.
 #[unsafe(no_mangle)]
 pub extern "C" fn crowd_reset() -> u32 {
-    let Some(walker) = walker() else { return 0 };
+    walker().map_or(0, restart_crowd)
+}
+
+/// What `crowd_reset` does, for a function that already holds the walker, as `restart_show` is.
+fn restart_crowd(walker: &mut Walker) -> u32 {
     let trainer = &walker.trainer;
     let crowd = Crowd::new(&trainer.start, &trainer.creature, trainer.layout, &trainer.population, trainer.judge());
     let count = crowd.worlds.len() as u32;
@@ -589,7 +600,7 @@ pub extern "C" fn crowd_room(count: u32) -> *mut f32 {
 #[unsafe(no_mangle)]
 pub extern "C" fn crowd_start(count: u32) -> u32 {
     let Some(walker) = walker() else { return 0 };
-    let length = (walker.trainer.layout.weights() * count as usize).min(walker.crowd_room.len());
+    let length = (walker.trainer.layout.weights() * count.min(1000) as usize).min(walker.crowd_room.len());
     let trainer = &walker.trainer;
     let crowd = Crowd::new(&trainer.start, &trainer.creature, trainer.layout, &walker.crowd_room[..length], trainer.judge());
     let count = crowd.worlds.len() as u32;

@@ -159,3 +159,38 @@ fn a_resting_box_stays_at_rest_when_the_world_is_moved_back_and_its_ground_is_tr
     assert!((after.position.y - before.position.y).abs() < 1e-4 && after.velocity.length() < 1e-3);
     assert_eq!(world.ground().len(), 2);
 }
+
+#[test]
+fn time_that_is_not_a_number_or_less_than_none_is_refused_and_the_world_goes_on() {
+    let mut world = World::new();
+    flat(&mut world);
+    world.add_body(Body::new(Shape::Circle { radius: 0.1 }, Vec2::new(0.0, 2.0), 0.0, 1.0));
+    for bad in [f32::NAN, f32::NEG_INFINITY, -1e30, -0.5] {
+        assert_eq!(world.advance(bad), 0, "{bad} takes no step");
+        assert_eq!(world.advance(STEP), 1, "and after {bad} a step's time still takes a step");
+    }
+    // a huge or endless time takes the most steps one call allows, and nothing is owed after it
+    assert_eq!(world.advance(f32::INFINITY), MOST_STEPS);
+    assert_eq!(world.advance(1e30), MOST_STEPS);
+    assert_eq!(world.advance(0.0), 0);
+    assert_eq!(world.advance(STEP), 1);
+    assert!(world.bodies[0].position.y.is_finite());
+}
+
+#[test]
+fn a_push_that_is_not_a_number_is_ignored_and_the_body_stays_whole() {
+    let mut world = World::new();
+    flat(&mut world);
+    world.add_body(Body::new(Shape::Box { half_width: 0.2, half_height: 0.2 }, Vec2::new(0.0, 0.5), 0.0, 1.0));
+    let before = world.bodies[0];
+    for (at, impulse) in [(Vec2::new(0.0, 0.5), Vec2::new(f32::NAN, 0.0)), (Vec2::new(0.0, 0.5), Vec2::new(0.0, f32::INFINITY)), (Vec2::new(f32::NAN, 0.5), Vec2::new(1.0, 0.0))] {
+        world.bodies[0].push(at, impulse);
+        assert_eq!(world.bodies[0].velocity.x.to_bits(), before.velocity.x.to_bits());
+        assert_eq!(world.bodies[0].spin.to_bits(), before.spin.to_bits());
+    }
+    run(&mut world, 0.5);
+    assert!(world.bodies[0].position.x.is_finite() && world.bodies[0].position.y.is_finite());
+    // a finite push still pushes
+    world.bodies[0].push(Vec2::new(0.0, 0.3), Vec2::new(1.0, 0.0));
+    assert!(world.bodies[0].velocity.x > 0.5);
+}
