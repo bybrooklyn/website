@@ -29,6 +29,12 @@ the project's file in [`docs/`](docs/README.md); what has been done is in [`CHAN
 - A spoiler cannot be written inside a table cell, where pipes are cell edges. One that arrives there is written as its words. Confirm.
 - Backspace removes the last accent of a letter; Delete removes the whole letter. Confirm.
 - Whether the GitHub token moves from `localStorage` to `sessionStorage`.
+- Where mdQuire differs from what a Docs user expects: a blank document starts in the body and not the title; a code fence typed with a language puts the language into the code; Enter in a table cell moves down a row; the status reads "Not saved" while typing; the outline does not scroll to keep the current heading in view; arrow down past a picture lands at the end of the next line. Decide which to change.
+- The first paragraph is drawn 12% larger, as the opening paragraph of a post is. Keep or drop.
+- Right-to-left paragraphs are laid out left to right.
+- "Pink" appears twice in Text colour, and the typeface control reads "The page's …".
+- The Format menu needs scrolling at 1300 by 800, and long menus run to the window's very bottom.
+- About fifteen panels are sized by the window's full width, so in a narrow desktop window with classic scrollbars they meet the left edge.
 - Dictation: the model files are to be pinned to a revision and checked by digest; the hashes are to be read from Hugging Face and written into `models.ts`.
 
 ### The minis and Mote
@@ -52,6 +58,7 @@ the project's file in [`docs/`](docs/README.md); what has been done is in [`CHAN
 - mdQuire in Firefox and Safari; on a phone; with an input method on a real device; AltGr on Windows; with a screen reader.
 - Word files from mdQuire, opened in Word.
 - mdQuire's table of contents: its links against the site's real heading ids.
+- mdQuire: every action on a shelf card, and cut and paste between two documents.
 - Frame rates on a real graphics card. Everything was measured with software drawing.
 - That the live site's headers match `public/_headers`.
 

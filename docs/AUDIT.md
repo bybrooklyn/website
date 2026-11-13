@@ -157,6 +157,22 @@ was done, what was found, what was changed, and what was left and why. What is s
 - Closing the first-launch dialog cancels the download, and a finished download never opens the microphone.
 - No sound and no transcript leaves the browser. The only requests are for the model and the runtime.
 
+### mdQuire seen whole (19 fixes)
+
+After the fixes above, the editor was looked at as one thing: both looks and page view, at 1500, 1300, 1024
+and 390 wide, with the browser at 150% and zoom at 200% and 50%. About 120 states.
+
+- The caret stands where the browser's own does, within a pixel, in 23 places. It sat low on an empty line
+  and to the right in headings.
+- Every neighbouring pair of blocks is one line apart. Maths, flowcharts, tables, pictures and loose lists
+  had broken that.
+- Tables: short columns keep their words whole, the controls stay under the editor's top, and a table at
+  the end of a document can be left from the keyboard.
+- Things that could not be seen can be: the link field from Ctrl+K when its button is folded away, the
+  search of the menus on a phone, the find bar on a narrow window, the title under the selection bar.
+- Paragraphs and headings pasted from Google Docs stay apart.
+- Not looked at: every action on a shelf card, and cut between two documents.
+
 ## Left, and why
 
 - **Results that are relied on.** A body moving faster than about 16 m/s can pass through a thin platform.
@@ -174,5 +190,5 @@ was done, what was found, what was changed, and what was left and why. What is s
 ## The state at the end
 
 - `main` holds everything above. Nothing is deployed.
-- With every fix merged, the whole suite passes on `main`: 1,215 tests in 130 files, none failing, with the
+- With every fix merged, the whole suite passes on `main`: 1,231 tests in 130 files, none failing, with the
   lint, the type check and the build clean. It was 731 tests before the audit.
