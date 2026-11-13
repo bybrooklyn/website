@@ -324,6 +324,14 @@
     }
 }
 
+/* the post title's size, worked out where the window's width is the editor's (outside the sheet, which
+   a zoom scales) and handed down as a length, so that the zoomed title grows exactly as the rest does */
+@property --title-size { syntax: "<length>"; inherits: true; initial-value: 4rem; }
+
+.quire-editor {
+    --title-size: clamp(2.5rem, 1.5rem + 4vw, 4.25rem);
+}
+
 /* the title, the first line on the page: the size a published post's title has (base.css's h1, which
    Post.astro gives the title), so that no heading is ever bigger than it; faint "Untitled" when empty.
    A field cuts what hangs outside it, so its line is a little taller than the post's, the tails of
@@ -339,7 +347,7 @@
     color: var(--ink);
     font-family: var(--font-head);
     font-weight: var(--head-weight);
-    font-size: clamp(2.5rem, 1.5rem + 4vw, 4.25rem);
+    font-size: var(--title-size);
     line-height: 1.12;
     letter-spacing: -0.02em;
     text-wrap: balance;
