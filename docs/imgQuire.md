@@ -82,6 +82,14 @@ All of it is to be simple and easy first, with the depth underneath.
   browsers with no account and nothing stored. Foxy's nine-digit code needs a rendezvous that a browser
   cannot do alone until Foxy's web client exists; when it does, imgQuire is to use it.
 
+- **Where pictures come from, besides paste and files.** An Immich server of the owner's own: signed in
+  to with her Immich account (its own sign-in, not a pasted key), the address and session kept in the
+  browser only and never in the repository; albums browsed, searched and pulled in. Any folder on the
+  machine as a library: a grid, dates, search by name and by the text found in the pictures (a folder
+  that Syncthing keeps is one of these). Ideas are to be taken from Immich's own interface.
+- **Writing AVIF and JPEG XL.** Browsers write only PNG, JPEG and WebP, so the standard open encoders are
+  built to WebAssembly and each is loaded only when its format is picked. This is the one exception to
+  writing everything by hand, and they are to be made as fast and small as they can be.
 - **Working it.** The steps are hidden until wanted: a "steps" button grows the list open at the side.
   Single keys pick a tool (C crop, R redact, A arrow, T text, B box, G grade, E export), Enter applies,
   Escape leaves, and the palette is mdQuire's. The first Ctrl+C asks whether to copy the picture as it
@@ -108,6 +116,8 @@ exported as an animated picture or a small video.
 - A pride flag assembler as a mini on imgQuire's engine: mix flags, fade one into another, edit stripes,
   and use a flag as a mask of a shape or a picture.
 - Other Quires, for another day: vidQuire.
+- Foxy's idea, rebuilt for the web in TypeScript and much changed: two devices, a short code or a QR code,
+  and a file goes straight across with no account.
 
 ## Open
 
