@@ -202,6 +202,26 @@ fn whole_loss(learner: &Learner) -> f64 {
 #[test]
 fn the_gradient_of_the_whole_loss_is_what_nudging_shows() {
     let settings = Settings { hidden: 8, steps: 8, minibatches: 2, entropy_weight: 0.01, ..toy() };
+    let clipped = gradient_against_nudging(settings, 0.0, 1e-2);
+    // every ratio starts at 1, so here the clipped branch is never the one taken
+    assert_eq!(clipped, 0.0);
+}
+
+#[test]
+fn the_gradient_is_what_nudging_shows_where_ratios_are_clipped_too() {
+    // the weights moved after the rollout, as epochs move them, so some ratios are past 1 +- clip
+    // and the loss there is flat; with the trunk shared between the policy and the value as well
+    for shared in [false, true] {
+        let settings = Settings { hidden: 8, steps: 16, minibatches: 2, entropy_weight: 0.01, shared, ..toy() };
+        let clipped = gradient_against_nudging(settings, 0.6, 1e-3);
+        assert!(clipped > 0.2 && clipped < 0.9, "shared {shared}: {clipped} of the samples clipped");
+    }
+}
+
+/// Holds the gradient of the whole loss over a minibatch to finite differences of step `h`, the
+/// weights moved by up to `moved` after the rollout was collected. Gives the share of the samples
+/// whose ratio was clipped.
+fn gradient_against_nudging(settings: Settings, moved: f32, h: f32) -> f32 {
     let mut task = Reach::new(4, 11);
     let mut learner = Learner::new(settings, 2, 1, 4, 3);
     // weights away from where they start, so the policy's means and spreads are not all alike
@@ -211,10 +231,13 @@ fn the_gradient_of_the_whole_loss_is_what_nudging_shows() {
     }
     learner.begin(&mut task);
     learner.collect(&mut task);
+    for w in learner.weights.iter_mut() {
+        *w += moved * (2.0 * random.unit() - 1.0);
+    }
     learner.shuffle();
     learner.gradient(1);
+    let clipped = learner.report.clipped;
     let grads = learner.grads.clone();
-    let h = 1e-2f32;
     for k in 0..learner.weights.len() {
         let kept = learner.weights[k];
         learner.weights[k] = kept + h;
@@ -228,4 +251,5 @@ fn the_gradient_of_the_whole_loss_is_what_nudging_shows() {
         let error = (grads[k] as f64 - wanted).abs();
         assert!(error < 2e-3 + 2e-2 * wanted.abs(), "weight {k}: gradient {}, nudging {wanted}", grads[k]);
     }
+    clipped
 }
