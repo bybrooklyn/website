@@ -38,7 +38,7 @@ import { blockAt, blockPaths, documentOf, image as imageBlock, isPageBreak, leng
 import { createHistory, redo as redoStep, undo as undoStep, type ChangeKind, type State } from "./history";
 import { readHtml, writeHtml } from "./html";
 import { drawPicture } from "./picture-tools";
-import { isContentsMark } from "./inserts";
+import { isContentsMark, updateContents } from "./inserts";
 import { activeBlock, activeMarks, apply, caret, collapsed, fragment, paste, step, type Editor, type Input, type Outcome } from "./keys";
 import { read } from "./read";
 import { write } from "./write";
@@ -574,6 +574,14 @@ function draw(block: Block, inner: number[], how: Drawing = plainDrawing): HTMLE
                 element.className = "quire-contents-mark";
                 element.contentEditable = "false";
                 element.dataset.label = "Table of contents";
+                // it does not follow the headings by itself, so it says where to make it do so, as Docs' table has its own refresh
+                const update = document.createElement("button");
+                update.type = "button";
+                update.className = "quire-contents-update";
+                update.dataset.contents = "";
+                update.textContent = "Update";
+                update.setAttribute("aria-label", "Update the table of contents");
+                element.append(update);
                 return element;
             }
             if (isPageBreak(block)) {
@@ -1368,6 +1376,11 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
     /** Presses a control drawn in the document, if the target is in one: a folding section's button sets whether it starts open, a task's box is ticked. True if it was one. A code block's language and a callout's kind open menus of their own (block-menus.ts). */
     function pressControl(target: HTMLElement): boolean {
         if (target.closest?.("[data-callout-kind], [data-lang]")) return true;
+        const update = target.closest?.("[data-contents]") as HTMLElement | null;
+        if (update && root.contains(update)) {
+            run((doc) => updateContents(doc), "structure");
+            return true;
+        }
         const turn = target.closest?.("[data-fold]") as HTMLElement | null;
         if (turn && root.contains(turn)) {
             const block = blockAt(editor.state.doc, pathOf(turn, turn.dataset.fold));

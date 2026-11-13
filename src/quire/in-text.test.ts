@@ -335,6 +335,20 @@ test("an empty definition list says which line is the term and which the definit
     expect(await tab.run("[...document.querySelectorAll('.quire-drawn .quire-lang')].map((each) => each.tagName + ' ' + each.textContent)")).toEqual(["SPAN Maths", "SPAN Diagram"]);
 });
 
+test("a table of contents has its own Update, which brings it up to the headings", async () => {
+    if (skip("the table of contents' Update")) return;
+    const { tab } = page!;
+    await page!.reset("## One\n\nText.\n", [1], 0);
+    await page!.menuLine("Insert", "Table of contents");
+    await tab.wait(100);
+    const before = await page!.md();
+    expect(before).toContain("[One]");
+    await tab.run(`q.reset(${JSON.stringify(before.replace("## One", "## One renamed"))})`);
+    await page!.press(".quire-contents-update");
+    await tab.wait(50);
+    expect(await page!.md()).toContain("[One renamed]");
+});
+
 test("a folding section just inserted takes the keyboard into its summary, whose empty word is quiet", async () => {
     if (skip("a new folding section's summary")) return;
     const { tab } = page!;

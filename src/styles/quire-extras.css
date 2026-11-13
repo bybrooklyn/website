@@ -703,8 +703,28 @@
     text-transform: uppercase;
 }
 
-.quire-contents-mark::after {
+.quire-contents-mark::before {
     content: attr(data-label);
+}
+
+/* its own Update, quiet after the label */
+.quire-contents-update {
+    margin-left: 0.6rem;
+    padding: 0.05rem 0.45rem;
+    border: 0.0625rem solid var(--rule);
+    border-radius: 0.35rem;
+    background: none;
+    color: var(--muted);
+    font: inherit;
+    letter-spacing: normal;
+    text-transform: none;
+    cursor: pointer;
+    transition: color 0.15s ease;
+}
+
+.quire-contents-update:hover,
+.quire-contents-update:focus-visible {
+    color: var(--ink);
 }
 
 @media print {
