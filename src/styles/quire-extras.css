@@ -1,0 +1,591 @@
+/* mdQuire's pictures, notes and inserts: the frame round a picked picture with its handles and
+   strip (src/quire/picture-tools.ts), the writer's notes marked on her text and set in the margin
+   beside it (comments.ts), the grid of special characters (inserts.ts), and the setup of the page
+   for print as PDF (export.ts). Loaded after quire.css, whose tokens it uses. Everything here that
+   is not always there grows in from where it was asked for and goes back there, and holds still
+   under prefers-reduced-motion. */
+
+/* ---- a picture: its width, its alignment and its caption ---- */
+
+.quire-image {
+    position: relative;
+}
+
+/* a picked picture's frame and strip reach past its edges, which a block skipped while out of sight would cut off */
+.quire > .quire-picked,
+.quire > :has(.quire-picked) {
+    content-visibility: visible;
+}
+
+.quire-image[data-align="left"] img {
+    margin-inline: 0 auto;
+}
+
+.quire-image[data-align="right"] img {
+    margin-inline: auto 0;
+}
+
+.quire-image img {
+    transition: opacity 0.2s ease;
+    touch-action: none;
+}
+
+/* the caption is shown when it has words, and grows in under a picked picture to be written */
+.quire-caption {
+    display: block;
+    box-sizing: border-box;
+    width: 100%;
+    max-height: 2.2rem;
+    margin-top: 0.4rem;
+    padding: 0.2rem 0.5rem;
+    border: 0.0625rem solid transparent;
+    border-radius: 0.5rem;
+    background: transparent;
+    color: var(--ink);
+    font: inherit;
+    font-size: 0.95rem;
+    font-style: italic;
+    text-align: center;
+    overflow: hidden;
+    transition:
+        max-height 0.3s var(--ease),
+        margin 0.3s var(--ease),
+        padding 0.3s var(--ease),
+        opacity 0.2s ease,
+        border-color 0.2s ease;
+}
+
+.quire-caption:placeholder-shown:not(:focus) {
+    max-height: 0;
+    margin-top: 0;
+    padding-block: 0;
+    opacity: 0;
+}
+
+.quire-picked .quire-caption:placeholder-shown {
+    max-height: 2.2rem;
+    margin-top: 0.4rem;
+    padding-block: 0.2rem;
+    opacity: 1;
+}
+
+.quire-caption:hover {
+    border-color: var(--rule);
+}
+
+.quire-caption:focus {
+    outline: none;
+    border-color: var(--accent);
+    background: var(--ground);
+}
+
+/* ---- the frame round a picked picture ---- */
+
+.quire-frame {
+    position: absolute;
+    z-index: 2;
+    box-sizing: border-box;
+    border: 0.125rem solid var(--accent);
+    border-radius: 0.25rem;
+    pointer-events: none;
+    opacity: 0;
+    scale: 0.97;
+    transition:
+        opacity 0.18s ease,
+        scale 0.3s var(--ease);
+}
+
+.quire-frame.shown {
+    opacity: 1;
+    scale: 1;
+}
+
+.quire-frame.resizing {
+    transition: opacity 0.18s ease;
+}
+
+.quire-handle {
+    position: absolute;
+    width: 0.85rem;
+    height: 0.85rem;
+    border: 0.125rem solid var(--accent);
+    border-radius: 50%;
+    background: var(--ground);
+    pointer-events: auto;
+    touch-action: none;
+    transition: scale 0.2s var(--ease);
+}
+
+.quire-handle:hover,
+.quire-frame.resizing .quire-handle {
+    scale: 1.25;
+}
+
+.quire-handle[data-corner="nw"] {
+    top: -0.5rem;
+    left: -0.5rem;
+    cursor: nwse-resize;
+}
+
+.quire-handle[data-corner="ne"] {
+    top: -0.5rem;
+    right: -0.5rem;
+    cursor: nesw-resize;
+}
+
+.quire-handle[data-corner="sw"] {
+    bottom: -0.5rem;
+    left: -0.5rem;
+    cursor: nesw-resize;
+}
+
+.quire-handle[data-corner="se"] {
+    right: -0.5rem;
+    bottom: -0.5rem;
+    cursor: nwse-resize;
+}
+
+/* while resizing, how wide it is in the middle of the picture, and the snap's name when it is drawn to one */
+.quire-frame-label {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    padding: 0.2rem 0.6rem;
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--ink);
+    font-size: 0.8rem;
+    white-space: nowrap;
+    opacity: 0;
+    translate: -50% -50%;
+    scale: 0.9;
+    transition:
+        opacity 0.15s ease,
+        scale 0.25s var(--ease),
+        background-color 0.2s ease;
+}
+
+.quire-frame-label.shown {
+    opacity: 1;
+    scale: 1;
+}
+
+.quire-frame-label.snapped {
+    background: var(--accent);
+    color: var(--ground);
+}
+
+/* the strip over the picture: alignment, its own size, and taking it away */
+.quire-picture-strip {
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + 0.5rem);
+    display: flex;
+    align-items: center;
+    gap: 0.15rem;
+    padding: 0.2rem;
+    border-radius: 0.6rem;
+    background: var(--surface);
+    box-shadow: 0 0.5rem 1.5rem -0.5rem oklch(0.04 0.02 300 / 0.8);
+    pointer-events: auto;
+    transform-origin: right bottom;
+    scale: 0.85;
+    transition: scale 0.3s var(--ease);
+}
+
+.quire-frame.shown .quire-picture-strip {
+    scale: 1;
+}
+
+.quire-frame.low .quire-picture-strip {
+    top: calc(100% + 0.5rem);
+    bottom: auto;
+    transform-origin: right top;
+}
+
+.quire-own-size {
+    width: auto;
+    padding-inline: 0.5rem;
+    font-size: 0.8rem;
+    white-space: nowrap;
+    transition:
+        opacity 0.2s ease,
+        max-width 0.3s var(--ease),
+        padding 0.3s var(--ease);
+    max-width: 6rem;
+    overflow: hidden;
+}
+
+.quire-own-size.absent {
+    max-width: 0;
+    padding-inline: 0;
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* the picture being moved: it lifts off where it was pressed and follows the pointer; a line shows where it lands */
+.quire-image.quire-moving img {
+    opacity: 0.35;
+}
+
+.quire-lifted {
+    position: fixed;
+    z-index: 30;
+    border-radius: 0.375rem;
+    pointer-events: none;
+    box-shadow: 0 1rem 2.5rem -0.75rem oklch(0.04 0.02 300 / 0.9);
+    opacity: 0.92;
+    transition:
+        scale 0.25s var(--ease),
+        opacity 0.2s ease;
+}
+
+.quire-lifted.up {
+    scale: 0.6;
+}
+
+.quire-lifted.down {
+    opacity: 0;
+    scale: 0.5;
+}
+
+.quire-drop-line {
+    position: fixed;
+    z-index: 29;
+    height: 0.1875rem;
+    margin-top: -0.09rem;
+    border-radius: 999px;
+    background: var(--accent);
+    pointer-events: none;
+    opacity: 0;
+    scale: 0.3 1;
+    transition:
+        opacity 0.15s ease,
+        scale 0.25s var(--ease),
+        top 0.12s var(--ease);
+}
+
+.quire-drop-line.shown {
+    opacity: 1;
+    scale: 1 1;
+}
+
+/* ---- the writer's notes ---- */
+
+/* the words a note is on, faintly; the one being looked at, a little more */
+::highlight(quire-note) {
+    background-color: color-mix(in oklch, var(--accent) 16%, transparent);
+}
+
+::highlight(quire-note-now) {
+    background-color: color-mix(in oklch, var(--accent) 34%, transparent);
+}
+
+/* in the right margin on a wide window, beside their words, in place of the document's details */
+.quire-notes {
+    grid-column: 3;
+    grid-row: 2;
+    position: relative;
+    justify-self: start;
+    box-sizing: border-box;
+    width: max(0px, min(17rem, (100cqw - var(--mid)) / 2 - 2rem));
+    margin: calc(var(--above) * 0) 0 0 1.25rem;
+    font-size: 0.85rem;
+    line-height: 1.4;
+}
+
+.quire-editor.noted .quire-details {
+    opacity: 0;
+    visibility: hidden;
+    transition:
+        opacity 0.2s ease,
+        visibility 0s 0.2s;
+}
+
+.quire-editor.markdown .quire-notes {
+    display: none;
+}
+
+@media (max-width: 64rem) {
+    .quire-notes {
+        display: none;
+    }
+}
+
+.quire-notes-cards {
+    position: relative;
+    margin-top: var(--above);
+}
+
+.quire-notes-cards > * {
+    position: absolute;
+    left: 0;
+    right: 0;
+}
+
+.quire-note {
+    box-sizing: border-box;
+    padding: 0.55rem 0.7rem 0.45rem;
+    border-radius: 0.6rem;
+    background: var(--panel);
+    box-shadow: 0 0 0 0.0625rem var(--panel-rule);
+    color: var(--ink);
+    transform-origin: left top;
+    transition:
+        opacity 0.25s ease,
+        scale 0.35s var(--ease),
+        translate 0.35s var(--ease),
+        box-shadow 0.2s ease;
+}
+
+.quire-notes-cards > .quire-note.arriving {
+    opacity: 0;
+    scale: 0.92;
+    translate: -0.75rem 0;
+}
+
+.quire-note.now {
+    box-shadow:
+        0 0 0 0.0625rem var(--accent),
+        0 0.75rem 1.5rem -0.75rem oklch(0.04 0.02 300 / 0.8);
+    translate: -0.35rem 0;
+}
+
+.quire-note.gone {
+    opacity: 0.8;
+}
+
+.quire-note p {
+    margin: 0;
+}
+
+.quire-note-text {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.quire-note-quote {
+    margin-bottom: 0.25rem !important;
+    padding-left: 0.5rem;
+    border-left: 0.125rem solid var(--accent);
+    color: var(--muted);
+    font-style: italic;
+}
+
+.quire-note-meta,
+.quire-note-gone {
+    margin-top: 0.2rem !important;
+    color: var(--muted);
+    font-size: 0.75rem;
+}
+
+.quire-note-gone {
+    color: var(--ink);
+}
+
+/* what can be done with a note shows when it is pointed at or looked at, and in the list */
+.quire-note-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.15rem;
+    max-height: 0;
+    margin-top: 0;
+    overflow: hidden;
+    opacity: 0;
+    transition:
+        max-height 0.3s var(--ease),
+        margin 0.3s var(--ease),
+        opacity 0.2s ease;
+}
+
+.quire-note:is(:hover, :focus-within, .now, .gone) .quire-note-actions,
+.quire-notes-list .quire-note-actions,
+.quire-note-form .quire-note-actions {
+    max-height: 2.5rem;
+    margin-top: 0.35rem;
+    opacity: 1;
+}
+
+.quire-note-button {
+    width: auto;
+    padding-inline: 0.55rem;
+    font-size: 0.8rem;
+}
+
+.quire-note-keep {
+    background: var(--accent);
+    color: var(--ground);
+}
+
+.quire-note-field {
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 4.5rem;
+    padding: 0.4rem 0.5rem;
+    border: 0.0625rem solid var(--rule);
+    border-radius: 0.45rem;
+    background: var(--ground);
+    color: var(--ink);
+    font: inherit;
+    resize: vertical;
+}
+
+.quire-note-field:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.quire-notes-resolved {
+    width: auto;
+    padding-inline: 0.6rem;
+    color: var(--muted);
+    font-size: 0.8rem;
+}
+
+/* the list of every note, from View on any window and the only way on a narrow one */
+.quire-notes-list {
+    display: grid;
+    gap: 0.5rem;
+    width: min(22rem, calc(100vw - 2rem));
+    max-height: 70vh;
+    padding: 0.5rem;
+    overflow: auto;
+    font-size: 0.85rem;
+    line-height: 1.4;
+}
+
+.quire-notes-head {
+    display: flex;
+    align-items: center;
+    gap: 0.2rem;
+    color: var(--muted);
+}
+
+.quire-notes-count {
+    flex: 1;
+    padding-left: 0.25rem;
+}
+
+.quire-notes-back .quire-icon {
+    rotate: 90deg;
+}
+
+.quire-notes-on .quire-icon {
+    rotate: -90deg;
+}
+
+.quire-notes-empty,
+.quire-notes-where {
+    margin: 0;
+    padding: 0 0.25rem;
+    color: var(--muted);
+    font-size: 0.8rem;
+}
+
+/* ---- special characters ---- */
+
+.quire-specials {
+    display: grid;
+    gap: 0.4rem;
+    width: min(20rem, calc(100vw - 2rem));
+    padding: 0.5rem;
+}
+
+.quire-specials-search {
+    box-sizing: border-box;
+    width: 100%;
+    padding: 0.4rem 0.6rem;
+    border: 0.0625rem solid var(--rule);
+    border-radius: 0.5rem;
+    background: var(--ground);
+    color: var(--ink);
+    font: inherit;
+    font-size: 0.9rem;
+}
+
+.quire-specials-search:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.quire-specials-groups {
+    max-height: 18rem;
+    overflow: auto;
+}
+
+.quire-specials-group,
+.quire-specials-none {
+    margin: 0.35rem 0.15rem 0.2rem;
+    color: var(--muted);
+    font-size: 0.75rem;
+}
+
+.quire-specials-grid {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 0.15rem;
+}
+
+.quire-special {
+    aspect-ratio: 1;
+    border: 0;
+    border-radius: 0.4rem;
+    background: transparent;
+    color: var(--ink);
+    font: inherit;
+    font-size: 1.05rem;
+    cursor: pointer;
+    transition:
+        background-color 0.15s ease,
+        scale 0.2s var(--ease);
+}
+
+.quire-special:hover,
+.quire-special:focus-visible {
+    outline: none;
+    background: color-mix(in oklch, var(--accent) 22%, transparent);
+    scale: 1.12;
+}
+
+/* ---- the marker of a table of contents ---- */
+
+.quire-contents-mark + ul {
+    margin-top: 0.35rem;
+}
+
+.quire-contents-mark {
+    margin-block: var(--line) 0;
+    color: var(--muted);
+    font-size: 0.7rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.quire-contents-mark::after {
+    content: attr(data-label);
+}
+
+@media print {
+    .quire-frame,
+    .quire-caption:placeholder-shown,
+    .quire-notes,
+    .quire-contents-mark {
+        display: none;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .quire-frame,
+    .quire-handle,
+    .quire-frame-label,
+    .quire-picture-strip,
+    .quire-caption,
+    .quire-lifted,
+    .quire-drop-line,
+    .quire-own-size,
+    .quire-note,
+    .quire-note-actions,
+    .quire-special {
+        transition: none;
+    }
+}

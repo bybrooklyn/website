@@ -36,6 +36,8 @@
 import { blockAt, blockPaths, documentOf, image as imageBlock, isPageBreak, markdownOnly, paragraph, setImageAlt, toggleTask, type Block, type Document, type Leaf, type Mark, type Position, type Run, type Selection } from "./document";
 import { createHistory, redo as redoStep, undo as undoStep, type ChangeKind, type State } from "./history";
 import { readHtml, writeHtml } from "./html";
+import { drawPicture } from "./picture-tools";
+import { isContentsMark } from "./inserts";
 import { activeBlock, activeMarks, apply, caret, collapsed, fragment, paste, step, type Editor, type Input, type Outcome } from "./keys";
 import { read } from "./read";
 import { write } from "./write";
@@ -222,6 +224,14 @@ function draw(block: Block, inner: number[]): HTMLElement {
         }
         case "code":
         case "raw": {
+            if (isContentsMark(block)) {
+                // the marker of a table of contents (inserts.ts): a quiet label over the list it heads
+                const element = document.createElement("div");
+                element.className = "quire-contents-mark";
+                element.contentEditable = "false";
+                element.dataset.label = "Table of contents";
+                return element;
+            }
             if (isPageBreak(block)) {
                 // the end of a page: a marked line on screen, where the pages (pages.ts) start the next sheet
                 const element = document.createElement("div");
@@ -255,24 +265,8 @@ function draw(block: Block, inner: number[]): HTMLElement {
             });
             return table;
         }
-        case "image": {
-            const figure = document.createElement("figure");
-            figure.className = "quire-image";
-            figure.contentEditable = "false";
-            if (block.align) figure.style.textAlign = block.align;
-            const picture = document.createElement("img");
-            picture.src = block.src;
-            picture.alt = block.alt;
-            // the alt text sits under the picture, written in place; it is kept when the field is left
-            const alt = document.createElement("input");
-            alt.className = "quire-alt";
-            alt.value = block.alt;
-            alt.placeholder = "Describe the picture";
-            alt.setAttribute("aria-label", "What the picture shows");
-            alt.dataset.alt = inner.join(",");
-            figure.append(picture, alt);
-            return figure;
-        }
+        case "image":
+            return drawPicture(block, inner);
         case "divider": {
             const element = document.createElement("div");
             element.className = "quire-divider";
@@ -358,7 +352,7 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
     }
 
     function firstText(doc: Document): number[] {
-        return blockPaths(doc).find((path) => ["paragraph", "heading", "code", "raw"].includes(blockAt(doc, path)?.kind ?? "") && !isPageBreak(blockAt(doc, path))) ?? [0];
+        return blockPaths(doc).find((path) => ["paragraph", "heading", "code", "raw"].includes(blockAt(doc, path)?.kind ?? "") && !isPageBreak(blockAt(doc, path)) && !isContentsMark(blockAt(doc, path))) ?? [0];
     }
 
     function emit<K extends keyof SurfaceEvents>(name: K, detail: SurfaceEvents[K]) {

@@ -4,6 +4,7 @@
 // markers and all. What a block means is read the way CommonMark and GFM read it, closely enough to
 // edit; what is not understood becomes a raw block, kept as its text.
 
+import { asPicture } from "./pictures";
 import { tidyRuns, type Align, type Block, type Document, type Leaf, type Level, type ListItem, type ListStyle, type Mark, type Run, type TextRun } from "./document";
 
 /** How to read a file. MDX turns on imports, exports, components and `{expressions}`, and turns off indented code. */
@@ -227,7 +228,11 @@ function readBlock(lines: Line[], at: number, context: Context): [Block, number]
             while (end < lines.length && !lines[end]!.text.includes("-->")) end++;
             return raw(Math.min(end + 1, lines.length));
         }
-        if (text.startsWith("<") && htmlStarts(text, context)) return raw(elementEnd(lines, at));
+        if (text.startsWith("<") && htmlStarts(text, context)) {
+            // a resized or captioned picture is HTML of one exact form, read back as the picture (pictures.ts)
+            const [block, end] = raw(elementEnd(lines, at));
+            return [asPicture(block), end];
+        }
         if (context.mdx && /^(import|export)(?=[\s{*])/.test(line)) return raw(untilBlank(lines, at));
         if (context.mdx && text.startsWith("{")) return raw(untilBlank(lines, braceEnd(lines, at)));
         if (text.startsWith(">")) return readQuote(lines, at, context);

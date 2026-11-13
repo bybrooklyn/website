@@ -24,6 +24,8 @@ export interface TextRun {
     size?: string;
     font?: string;
     highlight?: string;
+    /** The writer's own notes on this text, by their ids (comments.ts). Never written into the Markdown. */
+    comments?: string[];
 }
 
 /** How text looks beyond its marks: what setStyle changes, and what a `.quire` document keeps in its style.json. */
@@ -158,6 +160,10 @@ export interface Image extends Kept {
     alt: string;
     title?: string;
     align?: Align;
+    /** How wide it is drawn, as a percentage of the text's width; unset, it is drawn at its own size (pictures.ts says how it is written). */
+    width?: number;
+    /** Words shown under it. */
+    caption?: string;
 }
 
 /** A line across the page, `---`. */
@@ -191,6 +197,19 @@ export interface Document {
     mdx: boolean;
     /** Present when the document is a `.quire` one: what it keeps beyond Markdown that is not on its blocks and runs. */
     quire?: QuireExtras;
+    /** The writer's notes, each marked on its text by id (comments.ts). Never written into the Markdown. */
+    comments?: Comment[];
+}
+
+/** A note the writer keeps on some of her text: what it says, and whether it is dealt with. */
+export interface Comment {
+    id: string;
+    text: string;
+    resolved?: boolean;
+    /** When it was written, in milliseconds. */
+    created: number;
+    /** The words it was on, kept for when they are gone. */
+    quote: string;
 }
 
 /** A page's paper, as page setup chooses it. Margins are in millimetres. The header and footer are a line each, repeated on every page, and `numbers` puts the page's number in the footer. */
@@ -326,7 +345,8 @@ function pieces(runs: Run[]): Piece[] {
 
 const sameLink = (a?: LinkInfo, b?: LinkInfo) => a === b || (!!a && !!b && a.href === b.href && a.title === b.title && a.ref === b.ref);
 const sameMarks = (a: Mark[], b: Mark[]) => a.length === b.length && a.every((mark) => b.includes(mark));
-const sameFormat = (a: TextRun, b: TextRun) => sameMarks(a.marks, b.marks) && LOOKS.every((key) => a[key] === b[key]);
+const sameNotes = (a?: string[], b?: string[]) => (a?.length ?? 0) === (b?.length ?? 0) && (!a || a.every((id) => b!.includes(id)));
+const sameFormat = (a: TextRun, b: TextRun) => sameMarks(a.marks, b.marks) && LOOKS.every((key) => a[key] === b[key]) && sameNotes(a.comments, b.comments);
 
 /** Pieces back into runs: neighbouring text with the same marks joins, and neighbours in the same link are grouped into one. */
 function fromPieces(list: Piece[]): Run[] {
@@ -388,6 +408,11 @@ function insertRuns(runs: Run[], offset: number, value: string | Leaf, marks?: M
     if (typeof value !== "string") return fromPieces([...before, { leaf: value, link }, ...after]);
     const leaf: TextRun = { kind: "text", text: value, marks: marks ? ORDER.filter((mark) => marks.includes(mark)) : look ? [...look.marks] : [] };
     for (const key of LOOKS) if (look?.[key]) leaf[key] = look[key];
+    // text typed inside a note's words joins them; typed at either end it stays outside
+    const left = last?.leaf.kind === "text" ? last.leaf.comments : undefined;
+    const right = next?.leaf.kind === "text" ? next.leaf.comments : undefined;
+    const inside = left?.filter((id) => right?.includes(id));
+    if (inside?.length) leaf.comments = inside;
     return fromPieces([...before, { leaf, link }, ...after]);
 }
 
@@ -843,6 +868,25 @@ export function setLink(doc: Document, range: Range, href: string | null, title?
 /** Sets a picture block's alt text, what it says to someone who cannot see it. */
 export function setImageAlt(doc: Document, path: number[], alt: string): Document {
     return replace(doc, path, (block) => (block.kind === "image" && block.alt !== alt ? [{ ...block, alt, source: undefined }] : null));
+}
+
+/** Changes a picture block's alt text, width or caption; a width or caption of undefined takes it away. */
+export function setImage(doc: Document, path: number[], change: { alt?: string; width?: number | undefined; caption?: string | undefined }): Document {
+    return replace(doc, path, (block) => {
+        if (block.kind !== "image") return null;
+        const next: Image = { ...block, source: undefined };
+        if (change.alt !== undefined) next.alt = change.alt;
+        if ("width" in change) {
+            if (change.width === undefined) delete next.width;
+            else next.width = change.width;
+        }
+        if ("caption" in change) {
+            if (!change.caption) delete next.caption;
+            else next.caption = change.caption;
+        }
+        const same = next.alt === block.alt && next.width === block.width && next.caption === block.caption;
+        return same ? null : [next];
+    });
 }
 
 /** Sets how a paragraph, heading or picture sits across the page; null puts it back to the usual left. */

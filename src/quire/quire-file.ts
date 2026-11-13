@@ -3,7 +3,7 @@
 //   name.quire
 //     document.md     the words, plain Markdown, readable alone by anything
 //     style.json      the look of text and blocks, and the page (styling.ts says how it is addressed)
-//     notes.json      comments and suggestions, the writer's own
+//     notes.json      the writer's own notes on her text (comments.ts), one to a line
 //     pictures/       the pictures the document shows, written in it as `pictures/name.png`
 //
 // Unzipped, the folder is an ordinary Markdown document with its pictures beside it. A zip whose
@@ -16,6 +16,7 @@
 import { type Document } from "./document";
 import { read } from "./read";
 import { collect, readStyle, restore, type StyleFile } from "./styling";
+import { notesData, withNotes } from "./comments";
 import { readZip, writeZip, ZipError } from "./zip";
 import { freeName } from "./store";
 
@@ -83,7 +84,7 @@ export function styleText(style: StyleFile): string {
 export function written(doc: Document, plain: (doc: Document) => string): { text: string; quire?: Parts } {
     if (!doc.quire) return { text: plain(doc) };
     const { markdown, style } = collect(doc);
-    return { text: markdown, quire: { style: styleText(style), notes: `${JSON.stringify(doc.quire.notes ?? { quire: 1 })}\n` } };
+    return { text: markdown, quire: { style: styleText(style), notes: notesText(notesData(doc, doc.quire.notes)) } };
 }
 
 /** A document as opened from a store: read from its text, and with its parts put back if it is a `.quire` one. */
@@ -96,7 +97,17 @@ export function opened(text: string, quire: Parts | undefined, options: { mdx?: 
     } catch {
         notes = null;
     }
-    return restore({ ...doc, quire: { page: readStyle(quire.style).page, notes } }, readStyle(quire.style));
+    const styled = restore({ ...doc, quire: { page: readStyle(quire.style).page, notes } }, readStyle(quire.style));
+    // the writer's notes are marked on their words again (comments.ts)
+    return withNotes(styled, notes).doc;
+}
+
+/** notes.json as text, one note to a line, so that it reads plainly and changes show line by line. */
+export function notesText(data: Record<string, unknown>): string {
+    const { comments, ...rest } = data;
+    const list = Array.isArray(comments) && comments.length ? `[\n${comments.map((each) => `    ${JSON.stringify(each)}`).join(",\n")}\n  ]` : "[]";
+    const head = Object.entries(rest).map(([key, value]) => `  ${JSON.stringify(key)}: ${JSON.stringify(value)},\n`).join("");
+    return `{\n${head}  "comments": ${list}\n}\n`;
 }
 
 /** Pictures kept for `.quire` documents held open by a store that writes them as zip files, until they are saved into one. */

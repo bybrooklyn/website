@@ -3,6 +3,7 @@
 // bullets, `**` and `*`, fenced code, padded tables. Color and size become a `<span style>`,
 // underline `<u>`, and alignment a `<div align>` around the block, the forms the reader reads back.
 
+import { pictureHtml, sized } from "./pictures";
 import type { Align, Block, Document, Leaf, List, Run, TextRun } from "./document";
 
 interface Context {
@@ -71,7 +72,7 @@ function writeBlock(block: Block, context: Context): string {
             return aligned("#".repeat(block.level) + (content ? ` ${content}` : ""), block.align);
         }
         case "image":
-            return aligned(imageText(block.src, block.alt, block.title), block.align);
+            return aligned(sized(block) ? pictureHtml(block) : imageText(block.src, block.alt, block.title), block.align);
         case "divider":
             return "---";
         case "code": {

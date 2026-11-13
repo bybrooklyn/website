@@ -31,6 +31,8 @@ export interface RowState {
     words: number;
     /** How the cursor's block sits across the page, shown as pressed in Format. */
     align?: Align;
+    /** True when the document has a table of contents, which Insert then offers to make again. */
+    contents?: boolean;
 }
 
 /** What each command does, given by the editor. A command not given is left out. */
@@ -44,7 +46,8 @@ export type Command =
     | "table" | "picture" | "divider" | "code" | "footnote" | "bullet" | "number" | "task" | "pageBreak" | "headerFooter"
     | "bold" | "italic" | "underline" | "strike" | "inline" | "paragraph" | "heading1" | "heading2" | "heading3" | "quote"
     | "color" | "size" | "font" | "highlight" | "spacing" | "left" | "center" | "right" | "justify"
-    | "check" | "about";
+    | "check" | "about"
+    | "downloadAs" | "notes" | "nextNote" | "previousNote" | "comment" | "date" | "symbols" | "contents" | "updateContents";
 
 /** The menus of the row, for a document as it stands. */
 export function headings(state: RowState, act: RowActions): Heading[] {
@@ -57,6 +60,7 @@ export function headings(state: RowState, act: RowActions): Heading[] {
                 ...(state.rich ? [] : line("turnRich", "Turn into a .quire document", { icon: "file" })),
                 ...(state.rich ? line("downloadQuire", "Download", { hint: ".quire" }) : []),
                 ...line("download", state.rich ? "Download as Markdown" : "Download", { hint: ".md" }),
+                ...line("downloadAs", "Download as", { hint: "›" }),
                 ...line("history", "Version history"),
                 ...(state.rich ? line("pageSetup", "Page setup", { hint: "›" }) : []),
                 ...line("print", "Print", { hint: "Ctrl+P" }),
@@ -78,6 +82,9 @@ export function headings(state: RowState, act: RowActions): Heading[] {
             items: () => [
                 ...line("outline", "Outline", { icon: "outline", pressed: state.outline }),
                 ...line("markdown", "The Markdown beside the page", { pressed: state.markdown }),
+                ...line("notes", "Notes", { hint: "›" }),
+                ...line("nextNote", "Next note"),
+                ...line("previousNote", "Previous note"),
                 // the two looks are a choice: the menu stays open while the page eases from one to the other
                 ...line("lookNone", "No page", { pressed: (state.look ?? "none") === "none", group: "look" }),
                 ...line("lookPaper", "Light paper", { pressed: state.look === "paper", group: "look" }),
@@ -94,6 +101,10 @@ export function headings(state: RowState, act: RowActions): Heading[] {
                 ...line("code", "Code block", { icon: "code" }),
                 ...line("footnote", "Footnote", { icon: "footnote" }),
                 ...line("pageBreak", "Page break", { icon: "pagebreak", hint: "Ctrl+Enter" }),
+                ...line("date", "Date"),
+                ...line("symbols", "Special characters", { hint: "›" }),
+                ...(state.contents ? line("updateContents", "Update the table of contents") : line("contents", "Table of contents")),
+                ...line("comment", "Comment", { hint: "Ctrl+Alt+M" }),
                 ...(state.rich ? line("headerFooter", "Header, footer and page numbers", { hint: "›" }) : []),
                 ...line("bullet", "Bulleted list", { icon: "bullet" }),
                 ...line("number", "Numbered list", { icon: "number" }),

@@ -83,14 +83,16 @@ export default defineConfig({
         csp: {
             directives: [
                 "default-src 'self'",
-                "img-src 'self' data:",
+                // blob: is a picture mdQuire keeps in this browser or in a .quire zip, shown from the page's own memory
+                "img-src 'self' data: blob:",
                 "media-src 'self'",
                 "font-src 'self'",
                 // Project pages ask GitHub for a repository's current stars, forks and last push.
                 // Dictation fetches its speech model from Hugging Face, which sends the large files on
                 // from its own content network (the .hf.co hosts). Nothing else is added for it:
                 // ONNX Runtime's .wasm file and the workers are served from the site itself.
-                "connect-src 'self' https://api.github.com https://huggingface.co https://*.hf.co",
+                // blob: lets mdQuire read back such a picture, to put it inside a web page or Word file it is downloaded as
+                "connect-src 'self' blob: https://api.github.com https://huggingface.co https://*.hf.co",
                 "frame-src https:",
                 "object-src 'none'",
                 "base-uri 'self'",

@@ -27,6 +27,11 @@ import { createSlash } from "./slash";
 import { createSaver, fileName, said, type Entry, type Status, type Store } from "./store";
 import { createSurface, type Surface } from "./surface";
 import { createTableTools } from "./tables";
+import { createPictureTools } from "./picture-tools";
+import { createCommentMargin, keptNotes } from "./comment-margin";
+import { addContents, dateText, findContents, specialGrid, typeIn, typeSpecial, updateContents } from "./inserts";
+import { colorHex, gatherPictures, markdownFor, pageHtml, plainText, readingStyles } from "./export";
+import { docx } from "./docx";
 import { aboutPanel, control, flowMenu, linkForm, make, type MenuItem } from "./ui";
 import { changes, createHistoryPanel, createKeeper, memoryStorage, snapshotParts, snapshotText, type VersionStorage } from "./versions";
 import { write } from "./write";
@@ -138,7 +143,9 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         if (options.onImage) return options.onImage(file);
         return URL.createObjectURL(file);
     };
-    const surface = createSurface(text, doc, { onImage: keepPicture, picture: async (address) => (store && id && store.show ? store.show(id, address) : undefined) });
+    /** Where a Markdown file's notes are kept in this browser: its place and name. */
+    const notesPlace = () => (store && id ? `${store.label}:${id}` : undefined);
+    const surface = createSurface(text, keptNotes(doc, notesPlace()).doc, { onImage: keepPicture, picture: async (address) => (store && id && store.show ? store.show(id, address) : undefined) });
     const caret = createCaret(surface.element, paper, FLAG);
 
     // ---- the title, the first line on the sheet: the document's name ----
@@ -275,6 +282,32 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         }
         await create(target, stem(), copy.text, copy.quire);
         surface.focus();
+    };
+    // ---- Download as: each kind of file the document can be given as ----
+    const downloads = flowMenu("Download as");
+    const shownPictures = () => gatherPictures(surface.getDocument(), async (src) => (store && id && store.show ? store.show(id, src) : undefined));
+    const downloadAsQuire = async () => {
+        const doc = surface.getDocument();
+        if (doc.quire) return downloadQuire();
+        // a Markdown document goes into the zip as it is, with its notes, as a .quire document of its own
+        const { text: markdown, quire } = written({ ...doc, mdx: false, quire: { page: PAGE, notes: null } }, write);
+        const pictures = (store && id && (await store.pictures?.(id).catch(() => undefined))) || new Map<string, Blob>();
+        give(new Blob([(await packQuire({ markdown, parts: quire ?? emptyParts(), pictures })) as BlobPart], { type: "application/zip" }), `${stem()}.quire`);
+    };
+    const downloadLines = (): MenuItem[] => [
+        { label: "Markdown", hint: surface.getDocument().mdx ? ".mdx" : ".md", run: () => give(new Blob([markdownFor(surface.getDocument())], { type: "text/markdown" }), `${stem()}${surface.getDocument().mdx ? ".mdx" : ".md"}`) },
+        { label: "mdQuire", hint: ".quire", run: () => void downloadAsQuire() },
+        { label: "Web page", hint: ".html", run: async () => give(new Blob([pageHtml(surface.getDocument(), { title: shownName(name), styles: await readingStyles(), pictures: await shownPictures() })], { type: "text/html" }), `${stem()}.html`) },
+        { label: "Plain text", hint: ".txt", run: () => give(new Blob([plainText(surface.getDocument())], { type: "text/plain" }), `${stem()}.txt`) },
+        { label: "Word", hint: ".docx", run: async () => give(new Blob([(await docx(surface.getDocument(), { pictures: await shownPictures(), hex: colorHex, title: shownName(name) })) as BlobPart], { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" }), `${stem()}.docx`) },
+        // a browser cannot write a PDF itself: its print dialog can, with the page set up already given to it
+        { label: "PDF, through the print dialog", hint: "Ctrl+P", run: () => print() },
+    ];
+    // ---- special characters: a grid that stays open while characters are typed from it ----
+    const specials = flowMenu("Special characters", { className: "quire-specials-menu" });
+    const openSpecials = (from: HTMLElement) => {
+        specials.open(from, specialGrid(typeSpecial(surface)));
+        specials.box.querySelector<HTMLInputElement>("input")?.focus({ preventScroll: true });
     };
     const more = (): MenuItem[] => [
         ...(surface.getDocument().quire ? [] : [{ label: "Turn into a .quire document", icon: "file", run: () => void makeRich() }]),
@@ -471,6 +504,16 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     widening?.addEventListener("change", outlineAsKept);
     const slash = createSlash(surface, bar.pickImage);
     const tableTools = createTableTools(surface);
+    const pictureTools = createPictureTools(surface);
+    // the writer's notes: marked in the text, in the right margin on a wide window and a list on a narrow one
+    const notes = createCommentMargin(surface, { place: notesPlace });
+    host.append(notes.element);
+    notes.opened();
+    host.addEventListener("keydown", (event) => {
+        if (!(event.ctrlKey || event.metaKey) || !event.altKey || event.code !== "KeyM") return;
+        event.preventDefault();
+        notes.add(row.words[3]!);
+    });
 
     // ---- the menu row: every command by name, above the bar ----
     const doing = (action: Action) => () => {
@@ -480,7 +523,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     const format = () => row.words[4]!;
     const row = createMenuRow(() =>
         headings(
-            { rich: !!surface.getDocument().quire, paged: pages.paged(), look, outline: outlineView.isOpen(), markdown: host.classList.contains("markdown"), words: countWords(surface.getDocument()), align: aligned(surface.getDocument(), surface.getSelection().focus.path) },
+            { rich: !!surface.getDocument().quire, contents: !!findContents(surface.getDocument()), paged: pages.paged(), look, outline: outlineView.isOpen(), markdown: host.classList.contains("markdown"), words: countWords(surface.getDocument()), align: aligned(surface.getDocument(), surface.getSelection().focus.path) },
             {
                 file: options.fileItems,
                 turnRich: () => void makeRich(),
@@ -537,6 +580,15 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
                 highlight: () => bar.pickers.highlight(format()),
                 check: () => checking.open(row.words[5]!),
                 about: () => showAbout(row.words[5]!),
+                downloadAs: () => downloads.open(row.words[0]!, downloadLines(), true),
+                notes: () => notes.list(row.words[2]!),
+                nextNote: () => notes.next(1),
+                previousNote: () => notes.next(-1),
+                comment: () => notes.add(row.words[3]!),
+                date: doing((state) => typeIn(state, dateText(new Date()))),
+                symbols: () => openSpecials(row.words[3]!),
+                contents: doing(addContents),
+                updateContents: () => (surface.run((doc) => updateContents(doc)), surface.focus()),
             },
         ),
     );
@@ -653,8 +705,9 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         name = entry.name;
         bar.setName(name);
         quiet = true;
-        surface.setDocument(opened(found.text, found.quire, { mdx: /\.mdx$/i.test(entry.id) || /\.mdx$/i.test(entry.name) }));
+        surface.setDocument(keptNotes(opened(found.text, found.quire, { mdx: /\.mdx$/i.test(entry.id) || /\.mdx$/i.test(entry.name) }), notesPlace()).doc);
         quiet = false;
+        notes.opened();
         showTitle();
         saver = createSaver(next, entry.id, found.mark);
         stopListening = saver.on(showStatus);
@@ -681,6 +734,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         quiet = true;
         surface.setDocument(read(""));
         quiet = false;
+        notes.opened();
         showTitle();
         keeper = createKeeper(memoryStorage(), "", snapshot);
         bar.setStatus("", "Nothing is open");
@@ -721,6 +775,9 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
             selectBar.element.remove();
             slash.close();
             tableTools.element.remove();
+            pictureTools.destroy();
+            notes.destroy();
+            for (const menu of [downloads, specials]) menu.box.remove();
             keeper.stop();
             saver?.stop();
             history.element.remove();
