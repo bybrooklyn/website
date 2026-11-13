@@ -67,11 +67,14 @@ test("adverbs piled up", () => {
     expect(marked("She ran quickly. The only family early on.\n", "prose-adverbs")).toEqual([]);
 });
 
-test("a word spelled two ways in one document", () => {
-    const found = fired("The colour is red.\n\nThat color is blue. Another colour.\n", "prose-two-spellings");
-    expect(found.map((one) => one.message)).toEqual(["\"color\" is spelled \"colour\" elsewhere in this document."]);
-    expect(found[0]!.fixes[0]!.label).toBe("Use \"colour\"");
+test("a word spelled two ways in one document, where the country's dictionary holds both", () => {
+    const british = { settings: { ...DEFAULTS, dialect: "gb" as const }, speller: createSpeller(words, "gb") };
+    const found = check(read("We organise it.\n\nThey organize it. We organise more.\n"), british, all.filter((rule) => rule.id === "prose-two-spellings"));
+    expect(found.map((one) => one.message)).toEqual(["\"organize\" is spelled \"organise\" elsewhere in this document."]);
+    expect(found[0]!.fixes[0]!.label).toBe("Use \"organise\"");
     expect(fired("The colour and the hue.\n", "prose-two-spellings")).toEqual([]);
+    // in American spelling "colour" is the spelling rule's to mark; this rule saying so too would mark it twice, and its fix would put "colour" back
+    expect(fired("The colour is red.\n\nThat color is blue. Another colour.\n", "prose-two-spellings")).toEqual([]);
 });
 
 test("quotation marks and apostrophes of two kinds", () => {

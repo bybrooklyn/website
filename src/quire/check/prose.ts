@@ -231,7 +231,8 @@ const twoWays: Rule = {
             if (done.has(key)) continue;
             const other = speller.variant(key);
             const others = other ? seen.get(other) : undefined;
-            if (!other || !others) continue;
+            // a spelling this country's dictionary does not hold is the spelling rule's to mark, not this one's: marking both would say it twice, and its fix would bring the other spelling back
+            if (!other || !others || !speller.known(key) || !speller.known(other)) continue;
             done.add(key).add(other);
             // the spelling used less is the one marked, with the one used more as its fix
             const [fewer, more, word] = places.length > others.length ? [others, places, key] : [places, others, other];

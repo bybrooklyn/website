@@ -28,7 +28,8 @@ export interface Read {
     quiet: Uint8Array;
 }
 
-const ADDRESS = /\b(?:https?:\/\/|www\.)[^\s<>()]+[^\s<>().,;:!?'"’”]|\b[\w.+-]+@[\w-]+\.[\w.-]+\w/g;
+// an address takes brackets that pair up inside it (Foo_(bar)), as GitHub does, and never the stop or bracket after it
+const ADDRESS = /\b(?:https?:\/\/|www\.)(?:[^\s<>()]|\([^\s<>()]*\))*(?:[^\s<>().,;:!?'"’”]|\([^\s<>()]*\))|\b[\w.+-]+@[\w-]+\.[\w.-]+\w/g;
 
 /** Reads runs: their text, quiet where they are code, pictures, HTML or a web address. */
 export function readRuns(runs: Run[]): Read {

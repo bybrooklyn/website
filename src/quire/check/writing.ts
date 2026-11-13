@@ -33,12 +33,12 @@ function matches(unit: Unit, pattern: RegExp, hit: (match: RegExpMatchArray, tex
 }
 
 /** A full stop in place of a mark, the next word given its capital: "a; b" to "a. B". */
-function stopFix(match: RegExpMatchArray, text: string, label = "Use a full stop"): Hit["fixes"] {
+function stopFix(match: RegExpMatchArray, text: string, label = "Use a full stop", stop = ". "): Hit["fixes"] {
     const end = match.index! + match[0].length;
     const next = text[end];
-    if (!next || !/\p{Ll}/u.test(next)) return [replaceWith(label, ". ")];
+    if (!next || !/\p{Ll}/u.test(next)) return [replaceWith(label, stop)];
     // the fix covers the next letter too, so it is written again as a capital
-    return [{ label, edit: (doc, range) => replaceWith(label, `. ${next.toUpperCase()}`).edit(doc, { start: range.start, end: { ...range.end, offset: range.end.offset + 1 } }) }];
+    return [{ label, edit: (doc, range) => replaceWith(label, `${stop}${next.toUpperCase()}`).edit(doc, { start: range.start, end: { ...range.end, offset: range.end.offset + 1 } }) }];
 }
 
 const dash: Rule = {
@@ -55,6 +55,8 @@ const dash: Rule = {
             // a dash between two numbers is a range of them, and not punctuation
             if (/\d/.test(text[from - 1] ?? "") && /\d/.test(text[to] ?? "")) return undefined;
             if (from === 0 || to === text.length) return undefined;
+            // after a stop already there ("2000. -- aside"), the stop is the one used and no comma is offered: a second mark would sit beside it
+            if (/[.!?…]/.test(text[from - 1] ?? "")) return { from, to, message: "A dash used as punctuation.", fixes: stopFix(match, text, "Use a full stop", " ") };
             return { from, to, message: "A dash used as punctuation.", fixes: [...stopFix(match, text)!, replaceWith("Use a comma", ", ")] };
         });
     },

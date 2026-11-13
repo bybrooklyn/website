@@ -278,7 +278,10 @@ const listMarker: Rule = {
                     return { ...next, blocks: [...next.blocks.slice(0, index - 1), { ...one, items, gap: two.gap, source: undefined }, ...next.blocks.slice(index + 1)] };
                 },
             };
-            return { rule: this.id, kind: this.kind, severity: this.severity, range: { start: { path: start, offset: 0 }, end: { path: start, offset: 1 } }, message: `This list changes from ${was} to ${now}, which starts a new list.`, fixes: path.length === 1 ? [fix] : [] };
+            // a list right after with the first one's bullet would be joined to the one made, which is more than the fix says
+            const after = path.length === 1 ? doc.blocks[path[0]! + 1] : undefined;
+            const joins = after?.kind === "list" && after.style === first.style && (first.style === "number" ? after.delimiter === first.delimiter : after.marker === first.marker);
+            return { rule: this.id, kind: this.kind, severity: this.severity, range: { start: { path: start, offset: 0 }, end: { path: start, offset: 1 } }, message: `This list changes from ${was} to ${now}, which starts a new list.`, fixes: path.length === 1 && !joins ? [fix] : [] };
         });
     },
 };
