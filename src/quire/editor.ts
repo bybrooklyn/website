@@ -54,6 +54,7 @@ import { createTitle, nameFor, shownName, type OwnTitle } from "./title";
 import { createZoom, pageRule, percent, setPage, setupItems } from "./paper";
 import type { Page } from "./document";
 import { moreCommands } from "./more-commands";
+import { createMatching } from "./matching";
 
 /** What the editor is given by the page. */
 export interface EditorOptions {
@@ -611,8 +612,16 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     notes.opened();
 
     // ---- the menu row: every command by name, above the bar ----
+    // with every match selected (Edit, Select all matching text) a command goes on each; a Format key does too
+    const matching = createMatching(surface, { command: (event) => !!formatKey(event), told: (count) => bar.setStatus(`${count} selected`, `${count} places are selected: typing or a Format command changes every one, and Escape leaves them`, "quiet") });
+    const formatKey = (event: KeyboardEvent) => {
+        const found = shortcutFor(chordFrom(event, MAC));
+        const run = found?.menu === "Format" && found.command ? actions[found.command] : undefined;
+        run?.();
+        return run;
+    };
     const doing = (action: Action) => () => {
-        surface.run((doc, selection) => action({ doc, selection }));
+        surface.run((doc, selection) => matching.apply(action, { doc, selection }));
         surface.focus();
     };
     const format = () => row.words[4]!;
@@ -725,6 +734,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
                 forgetUsed: () => (remember(), bar.setStatus("Forgotten", "What you use most is forgotten: the slash menu opens on its first five again")),
                 tools: () => dictation.items(row.words[5]!),
                 ...moreCommands(surface, { doing, word: (index) => row.words[index]!, title: () => title.focus() }),
+                selectMatching: () => matching.start(),
     };
     const row = createMenuRow(() =>
         headings(

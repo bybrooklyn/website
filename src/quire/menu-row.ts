@@ -53,7 +53,7 @@ export type Command =
     | "check" | "about" | "wordCount" | "shortcuts" | "searchMenus" | "forgetUsed"
     | "superscript" | "subscript" | "marked" | "typedSigns"
     | "downloadAs" | "notes" | "nextNote" | "previousNote" | "comment" | "date" | "symbols" | "contents" | "updateContents"
-    | "capitals" | "lists" | "title" | "subtitle";
+    | "capitals" | "lists" | "title" | "subtitle" | "selectMatching";
 
 /** The menus of the row, for a document as it stands. A line's shortcut, if it has one, comes from the table in shortcuts.ts. */
 export function headings(state: RowState, act: RowActions): Heading[] {
@@ -82,6 +82,7 @@ export function headings(state: RowState, act: RowActions): Heading[] {
                 ...line("undo", "Undo", { icon: "undo" }),
                 ...line("redo", "Redo", { icon: "redo" }),
                 ...line("selectAll", "Select all"),
+                ...line("selectMatching", "Select all matching text"),
                 ...line("pastePlain", "Paste without formatting"),
                 ...line("find", "Find", { icon: "search" }),
                 ...line("replace", "Find and replace"),

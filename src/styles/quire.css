@@ -1237,6 +1237,11 @@
     background-color: color-mix(in oklch, var(--accent) 28%, transparent);
 }
 
+/* every place selected by Select all matching text, drawn as the selection is */
+::highlight(quire-matching) {
+    background-color: color-mix(in oklch, var(--accent), transparent 72%);
+}
+
 ::highlight(quire-found-now) {
     background-color: var(--accent);
     color: var(--ground);
