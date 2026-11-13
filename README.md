@@ -30,6 +30,10 @@ Other scripts: `langs` (language bar), `projects` (facts from GitHub), and `pyth
 
 Anything marked `draft: true` is left out of production builds.
 
+## Docs
+
+Each project's notes (what is built, what is decided, what is open) are in [`docs/`](docs/README.md). What changed, by day, is in [`CHANGELOG.md`](CHANGELOG.md), and what is still to do in [`TODO.md`](TODO.md).
+
 ## License
 
 The code is under an MIT-style license with three added conditions; see `LICENSE.md`. Everything on the pages (writing, photographs, resume) is under CC BY-NC 4.0.

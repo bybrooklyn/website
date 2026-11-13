@@ -1,7 +1,7 @@
 # The generalist: what already exists
 
 A literature search, 12 Nov 2026, before anything is built or called new. Her choice: "Safe base, one
-risky bet", and "A proper literature search first". Her decisions are in `minis.md`, idea 26.
+risky bet", and "A proper literature search first". The decisions are in `docs/generalist.md`.
 
 ## How to read this
 

@@ -1,0 +1,149 @@
+# The generalist
+
+A draft mini at `/minis/generalist/`: a creature that sees, learns and gets about a generated world by
+itself, in the visitor's browser. It is a second mini on the Walker's Rust engine (`walker.md`), with its own
+module, and the start of a longer piece of work toward a creature that learns general ways of moving and
+doing things, all written from scratch in that engine. An article about it is planned.
+
+## Where the code is
+
+- `walker/src/generalist/`: the engine side, behind the crate's `generalist` feature. `walker/README.md`,
+  section "The generalist", is the full reference, with every measurement.
+- `public/wasm/generalist.wasm` (and its scalar twin): the built module, 299 KiB with SIMD.
+- `src/minis/generalist.ts`: the page's scene; `src/minis/roaming.ts`: what the page and its workers share;
+  `src/scripts/generalist-worker.ts` (evolution) and `src/scripts/generalist-practice.ts` (practice).
+- `src/content/minis/generalist.mdx`: the mini's words. It is marked `draft: true`.
+- `design/generalist/LITERATURE.md`: the literature search behind the plans below, with what is new and what
+  is already published.
+
+## Built
+
+- **Worlds** from a recipe of six numbers: a seed (a word or a number), a difficulty, and how much of each
+  of four kinds of thing (ground features, hazards, boxes to push, things that move). The recipe is in the
+  address, so a world is a link. Every piece laid is checked to be crossable by the creature's reach.
+- **The body**: the Walker's two- and four-legged creatures, with a hop for evolution.
+- **Sight**: sixteen rays from its eye, held level, each saying how near the first thing is and what kind it
+  is. A greyscale picture strip from the same world is made and tested but given to no brain yet.
+- **Learning by evolution**, as the Walker's, and **learning by practice**: proximal policy optimisation
+  written from scratch, with its own network and hand-written backward pass. Practice runs in up to four
+  workers in the browser, every run in a fresh world of the visitor's kind, measured on held-out worlds.
+  Practice has no hop.
+- **How it moves** is shaped by costs: on the motors' work, on time in the air with nothing ahead to clear,
+  and on a fall. For two legs, posture terms (a run ends at the first touch of the body; costs for a knee
+  down; a bonus for being carried tall) and a small reward for each second with exactly one foot down.
+- **The page**: a wide mini, the world on the left and a column on the right with the controls, then the
+  brain drawn live beside the world from the first second, what it senses, and the reward words (forward,
+  up, effort, in the air for nothing, fell). The page opens on practice: a creature that knows nothing,
+  learning from the first second; nothing trained is shipped. What is learned is kept in the browser and
+  taken up again next visit; "start over" forgets it.
+- **Measures**: a gait measure that says whether a run counts as walking; a comparison of evolution and
+  practice on the same compute (practice goes three to six times as far through unseen worlds for about
+  half the motors' work); a test of practising on easy worlds first, which gained nothing by the end.
+
+## Decided, not yet built
+
+The order of work: speed, then the world and the rays, then practice, then the teacher, then curiosity and
+needs, then the small vision encoder and the picture experiment. The first three are done.
+
+**The constraint: nothing cruel is done to the creature.** No broken legs and no blinding. Adaptation is
+shown by changing the world while it lives: the ground (slippery, sticky, bouncy, soft), gravity and wind,
+day and night (it sees less far in the dark), and things dropped in front of it (a box, a wall, food, a gap).
+
+**What moves it.** Both curiosity (a reward for reaching and seeing what it has not before) and needs
+(energy that runs down, food to find). Out of energy it gets tired and recovers: muscles weaken, it slows,
+and connections it cannot pay for go quiet until it eats. It never dies of hunger. It rests to recover; the
+means to practise in imagination (a world model) are there from the start, and whether and how it uses them
+is left for it to find.
+
+**How it moves.** No rule about how to move: costs on wasted effort and on leaving the ground when there is
+nothing to clear. (The reward for one foot down is a rule of that kind; see Open.)
+
+**Sight.** Rays first; a picture later, as its own experiment. A very small vision encoder, made in the Rust
+engine, is shipped as a base to learn on, since sight is slow to learn. It is trained once on the owner's
+machine, on pictures the world generator draws; the run is to be agreed with the owner before it starts,
+since it uses the processor for a while. Nothing else is trained ahead.
+
+**Where it learns.** Only in the visitor's browser, so it must learn fast and efficiently. The graphics card
+for the brain's arithmetic (WebGPU) and buffers handed over without copying are to be added and measured
+(SIMD is in already). Shared memory between workers would need the page isolated by two headers, as
+mdQuire's pages are; that is to be agreed before it is added for this page.
+
+**The teacher.** A teacher that evolves worlds to stay at the edge of what the creature can do, after ACCEL.
+
+**The brain.** A cap on the number of neurons, with growth and change going mostly into connections.
+Kinds of neuron wanted: rhythm neurons the brain conducts; connections that change during a run by a
+learned rule; neurons with their own memory and timing; mood neurons that turn the rest up or down; and
+kinds of neuron the model builds itself. A visitor shapes the brain with a few sliders within limits (how
+much memory, how much rhythm, how many connections it may afford), and the brain is laid out from them.
+Changing its shape keeps what it can: existing neurons and connections keep their learning, new ones start
+blank.
+
+**The risky bet, then the safe base.** First: a brain of a fixed number of neurons that adds and cuts
+connections while it lives, each paid for in energy from the food it finds, the rule for adding and cutting
+having three or four numbers found by evolution while practice trains the weights. Then, if that works:
+neurons whose whole rule is an evolved program with practice inside. The safe base, all four parts: memory,
+rhythm and mood neurons; self-adjusting connections, shown by changing the world; curiosity, food and energy;
+the teacher.
+
+**Culture.** Each new creature watches the last one's best runs, then practises. It was arrived at
+independently and is also published (Cook, Lu, Hughes, Leibo and Foerster, NeurIPS 2024); the article says
+both, with the paper named.
+
+**Senses.** Eyes it moves, sharp in the middle (a neuron for looking around); touch on the feet, body and
+arms; hearing or smell (things give off a signal that fades with distance).
+
+**Doing.** Find food and stay alive; use things (push a box to a ledge, ride a platform, press a switch);
+play (stretches with no task, rewarded for trying new things); meet another one.
+
+**Two creatures.** Rivals for the same food and helpers with things one cannot do alone, with no rule about
+which. They can communicate by a voice of a few tones, fainter with distance, and by seeing each other's
+bodies. The page draws the calls, plays them as soft sounds, and writes a plain guess at what a call tends to
+mean, marked as a guess.
+
+**Saving.** A creature downloads as a small file and loads again.
+
+**The page.** It opens on a newborn falling over. The brain is drawn live beside the world from the first
+second: no narration, no marked firsts, no speed-up control. World on the left, a column on the right with
+the controls folding open from its top, then the brain, the senses and the energy.
+
+**The article.** Numbers are kept from the start. First a short story of building it (how a walking toy
+turned into this, what broke, what surprised), then a technical write-up kept simple: methods, numbers,
+comparisons and the commands to rerun them. Claims are narrow and honest: each says what was searched, and
+everything else is known methods rebuilt from scratch, compared fairly, playable in a tab. Already known and
+not to be claimed: hard 2D parkour was reported open in 2021; training walkers in a browser has been done
+(rlsim, rl-forge, on TensorFlow.js); comparing evolution with reinforcement learning in general is
+well-trodden.
+
+## Open
+
+- **Whether the reward for one foot down stays.** It went in to make two legs take turns, and it is a rule
+  about how to move, which the decision above rules out. It may be taken out.
+- **The page text** (`src/content/minis/generalist.mdx`) still says it learns by evolution and that better
+  learning comes next; its controls line was changed and has not been reviewed.
+- **Whether the page opens on practice or on evolution.** It opens on practice today.
+- **Two legs stand and alternate but do not yet walk.** They stay on their feet, upright, one leg then the
+  other, but each stride is a high kick and a wide split; by the gait measure it is not walking. Four legs
+  trot and bound. How to get a walk without a rule about how to move is open.
+
+## How to run and test
+
+```sh
+bun run wasm                                            # builds generalist.wasm with the Walker's module
+cd walker && cargo test                                 # both minis; tests/unchanged.rs holds the Walker as it was
+bun test src/minis/generalist.test.ts                   # the built module against the native engine, to the bit
+cd walker && cargo run --release --example practice     # practice, with its learning curve
+cd walker && sh examples/compare.sh                     # evolution against practice (about an hour and a half)
+```
+
+## Known weak spots
+
+- Neither body walks with a foot always down; the costs make bounding dearer without making it rare, and
+  stronger costs leave a learner that gives up.
+- How far it gets in the one world on show swings from run to run, since a policy better on average can be
+  worse at the first thing in that world.
+- A learner is about 24,000 numbers and does not fit in a link, so a link carries the world and not the brain.
+- Practice uses four workers at most; with more, each has too few creatures and learns less per step.
+- Rhythm neurons, mirroring and memory neurons were tried and taken out again. The commit
+  `walker/README.md` names for them, `61c47e5`, is only on the branch `generalist-gait`, so it is lost if
+  that branch is deleted without a tag.
+- Centred actions and a curriculum are in the code and unused.

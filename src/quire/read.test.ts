@@ -13,7 +13,7 @@ const root = `${import.meta.dir}/../../`;
 /** Every Markdown file the round trip is checked on: all of the site's content, and the notes at the top of the repo. */
 async function siteFiles(): Promise<string[]> {
     const content = await Array.fromAsync(new Glob("src/content/**/*.{md,mdx}").scan({ cwd: root }));
-    return [...content.sort(), "README.md", "minis.md", "STYLE.md", "src/mote/README.md"];
+    return [...content.sort(), "README.md", "docs/minis.md", "STYLE.md", "src/mote/README.md"];
 }
 
 /** A document with every source cleared, so that every block is written fresh. */
