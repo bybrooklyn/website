@@ -371,6 +371,9 @@ export default function comet(m: Mote): Scene {
 
     // ---- the keyboard: arrows aim and set strength, Enter or Space launches, R tries again, Escape lets go ----
     if (!m.preview) {
+        // A touch the system takes away (a gesture, an alert) is not a letting go, though the stage hands it on as one:
+        // heard first, on the way down to the canvas, it drops the pull, so no shot is fired and counted.
+        m.canvas.parentElement?.addEventListener("pointercancel", () => (pulling = undefined), { capture: true });
         m.canvas.addEventListener("keydown", (event) => {
             if (event.metaKey || event.ctrlKey || event.altKey) return;
             const by = (event.shiftKey ? 10 : 1) * (event.repeat ? 2 : 1);
