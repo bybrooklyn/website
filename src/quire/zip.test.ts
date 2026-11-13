@@ -6,7 +6,7 @@ import { expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { crc32, readZip, writeZip, ZipError } from "./zip";
+import { crc32, LIMITS, readZip, writeZip, ZipError } from "./zip";
 
 const text = (bytes: Uint8Array | undefined) => new TextDecoder().decode(bytes);
 const folder = () => mkdtempSync(join(tmpdir(), "quire-zip-"));
@@ -60,4 +60,60 @@ test("something that is not a zip, or a damaged one, is refused in plain words",
     const bytes = await writeZip([{ name: "a.txt", data: "hello there", store: true }]);
     bytes[30 + "a.txt".length] = "j".charCodeAt(0);
     expect(readZip(bytes)).rejects.toThrow("a.txt is damaged");
+});
+
+/** Where each line of a zip's directory starts, so a test can change what it says. */
+function directoryLines(bytes: Uint8Array): number[] {
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const found: number[] = [];
+    for (let at = 0; at + 4 <= bytes.length; at++) if (view.getUint32(at, true) === 0x02014b50) found.push(at);
+    return found;
+}
+const view = (bytes: Uint8Array) => new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+
+test("a zip that says it unpacks to more than the limits is refused before anything is unpacked", async () => {
+    // one entry larger than a document's file may be
+    const one = await writeZip([{ name: "document.md", data: "x".repeat(100) }]);
+    view(one).setUint32(directoryLines(one)[0]! + 24, LIMITS.entry + 1, true);
+    await expect(readZip(one)).rejects.toThrow("document.md is too big to open here");
+    // several that come to more than the whole may
+    const many = await writeZip([1, 2, 3].map((each) => ({ name: `pictures/${each}.png`, data: "y".repeat(50) })));
+    for (const line of directoryLines(many)) view(many).setUint32(line + 24, 100 * 1024 * 1024, true);
+    await expect(readZip(many)).rejects.toThrow("this zip unpacks to more than can be opened here");
+    // more files than a document has
+    const crowd = await writeZip([{ name: "a.txt", data: "a" }]);
+    const tail = crowd.length - 22;
+    view(crowd).setUint16(tail + 8, LIMITS.entries + 1, true);
+    view(crowd).setUint16(tail + 10, LIMITS.entries + 1, true);
+    await expect(readZip(crowd)).rejects.toThrow(`more than ${LIMITS.entries} files`);
+});
+
+test("a squeezed file that unpacks to more than it said is stopped as soon as it passes that, not unpacked whole", async () => {
+    // twenty megabytes of zeros squeeze to a few kilobytes; the directory says ten bytes
+    const bomb = await writeZip([{ name: "document.md", data: new Uint8Array(20 * 1024 * 1024) }]);
+    for (const line of directoryLines(bomb)) view(bomb).setUint32(line + 24, 10, true);
+    expect(bomb.length).toBeLessThan(100_000);
+    const started = performance.now();
+    await expect(readZip(bomb)).rejects.toThrow("document.md is damaged");
+    expect(performance.now() - started).toBeLessThan(2000);
+});
+
+test("names that would reach outside the zip, two files of one name, and odd names are refused", async () => {
+    for (const name of ["../evil.txt", "pictures/../../evil.png", "/etc/passwd", "\\evil.txt", "pictures\\..\\evil.png", "C:/evil.txt", "pictures/a\u0000b.png", "./document.md"]) {
+        const bytes = await writeZip([{ name: "document.md", data: "hi" }, { name, data: "x" }]);
+        await expect(readZip(bytes)).rejects.toThrow("outside itself");
+    }
+    const twice = await writeZip([{ name: "document.md", data: "first" }, { name: "document.md", data: "second" }]);
+    await expect(readZip(twice)).rejects.toThrow("two files named document.md");
+});
+
+test("a zip cut short, pointing past its end, packed some other way is refused in plain words", async () => {
+    const whole = await writeZip([{ name: "document.md", data: "Some words, said again and again. ".repeat(20) }, { name: "b.txt", data: "b", store: true }]);
+    for (const cut of [10, 40, whole.length - 30, whole.length - 1]) await expect(readZip(whole.subarray(0, cut))).rejects.toBeInstanceOf(ZipError);
+    const far = whole.slice();
+    view(far).setUint32(directoryLines(far)[1]! + 42, far.length + 1000, true);
+    await expect(readZip(far)).rejects.toThrow("this zip is damaged");
+    const other = whole.slice();
+    view(other).setUint16(directoryLines(other)[0]! + 10, 12, true);
+    await expect(readZip(other)).rejects.toThrow("packed in a way this cannot open");
 });

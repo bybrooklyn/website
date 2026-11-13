@@ -19,6 +19,7 @@ import { collect, readStyle, restore, type StyleFile } from "./styling";
 import { notesData, withNotes } from "./comments";
 import { readZip, writeZip, ZipError } from "./zip";
 import { freeName } from "./store";
+import { pictureType } from "./pictures";
 
 /** What a `.quire` document carries beside its Markdown: style.json and notes.json, as text. */
 export interface Parts {
@@ -39,9 +40,17 @@ export const isQuire = (name: string) => /\.quire$/i.test(name);
 /** The parts of a document that has no styling yet. */
 export const emptyParts = (): Parts => ({ style: "", notes: "" });
 
-/** Packs a document into the bytes of a `.quire` file. Pictures are stored as they are, being squeezed already. */
+/** True when the document's text still shows a picture of this name. */
+const shown = (markdown: string, name: string) => markdown.includes(`pictures/${name}`) || markdown.includes(`pictures/${encodeURI(name)}`) || markdown.includes(`pictures/${encodeURIComponent(name)}`);
+
+/**
+ * Packs a document into the bytes of a `.quire` file. Pictures are stored as they are, being
+ * squeezed already, and only those its text still shows: a photograph taken out of the writing
+ * does not travel on inside the file given to someone.
+ */
 export async function packQuire(bundle: Bundle, date?: Date): Promise<Uint8Array> {
-    const pictures = await Promise.all([...bundle.pictures].map(async ([name, blob]) => ({ name: `pictures/${name}`, data: new Uint8Array(await blob.arrayBuffer()), store: true })));
+    const kept = [...bundle.pictures].filter(([name]) => shown(bundle.markdown, name));
+    const pictures = await Promise.all(kept.map(async ([name, blob]) => ({ name: `pictures/${name}`, data: new Uint8Array(await blob.arrayBuffer()), store: true })));
     return writeZip(
         [
             { name: "document.md", data: bundle.markdown },
@@ -63,16 +72,14 @@ export async function unpackQuire(bytes: Uint8Array): Promise<Bundle> {
     const pictures = new Map<string, Blob>();
     for (const [name, data] of files) {
         const inside = name.startsWith(`${folder}pictures/`) ? name.slice(folder.length + "pictures/".length) : "";
-        if (inside && !inside.includes("/")) pictures.set(inside, new Blob([data as BlobPart], { type: pictureType(inside) }));
+        // only names that stay in their folder: nothing a reader unpacking the file again could take as a way out of it
+        if (PICTURE_NAME.test(inside)) pictures.set(inside, new Blob([data as BlobPart], { type: pictureType(data, inside) }));
     }
     return { markdown: text("document.md"), parts: { style: text("style.json"), notes: text("notes.json") }, pictures };
 }
 
-/** A picture's type from its name, so that it shows when taken out of the zip. */
-function pictureType(name: string): string {
-    const ending = /\.([a-z0-9]+)$/i.exec(name)?.[1]?.toLowerCase();
-    return ({ png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", avif: "image/avif", svg: "image/svg+xml" } as Record<string, string>)[ending ?? ""] ?? "application/octet-stream";
-}
+/** The names a picture inside a `.quire` file may have: no folder, no backslash, drive or control character, not starting with a dot. */
+const PICTURE_NAME = /^[^./\\:\u0000-\u001f\u007f][^/\\:\u0000-\u001f\u007f]*$/;
 
 /** style.json as text, one style to a line, so that it reads plainly and changes show line by line. */
 export function styleText(style: StyleFile): string {
@@ -131,7 +138,13 @@ export function pictureShelf() {
         /** The address a picture written as `pictures/name` can be shown from. */
         show(id: string, address: string) {
             const name = /^(?:\.\/)?pictures\/([^/]+)$/.exec(address)?.[1];
-            const picture = name ? shelf(id).get(decodeURIComponent(name)) ?? shelf(id).get(name) : undefined;
+            let plain = name;
+            try {
+                plain = name && decodeURIComponent(name);
+            } catch {
+                // an address with a broken escape in it is looked up as it is written
+            }
+            const picture = name ? (shelf(id).get(plain!) ?? shelf(id).get(name)) : undefined;
             if (!picture || typeof URL.createObjectURL !== "function") return undefined;
             const key = `${id}/${name}`;
             if (!urls.has(key)) urls.set(key, URL.createObjectURL(picture));

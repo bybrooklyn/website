@@ -4,7 +4,7 @@
 
 import { expect, test } from "bun:test";
 import { documentOf, type Block } from "./document";
-import { readHtml, writeHtml } from "./html";
+import { cleanHtml, cleanTag, readHtml, safeAddress, writeHtml } from "./html";
 import { read } from "./read";
 import { write } from "./write";
 
@@ -49,4 +49,43 @@ test("blocks written as HTML for the clipboard read back as the same blocks", ()
     const html = writeHtml(blocks);
     expect(html).toContain("<h1>Heading</h1>");
     expect(markdown(readHtml(html))).toBe(markdown(read(source).blocks.map((block) => ({ ...block, source: undefined }))));
+});
+
+test("a pasted address is read as a browser reads it: a tab, line break, control character or entity inside the scheme does not hide javascript:", () => {
+    const html = '<p><a href="java&#9;script:alert(1)">a</a> <a href="\u0001javascript:alert(2)">b</a> <a href="jav&#x0A;ascript:alert(3)">c</a> <a href=" JAVASCRIPT:alert(4)">d</a> <a href="vbscript:x">e</a> <img src="java&#10;script:1" alt="f"> <a href="https://ok.example/a:b">g</a> <a href="./notes:1.md">h</a></p>';
+    const out = markdown(readHtml(html));
+    expect(out).not.toMatch(/script/i);
+    expect(out).toContain("[g](https://ok.example/a:b)");
+    expect(out).toContain("[h](./notes:1.md)");
+});
+
+test("the one sanitiser keeps ordinary addresses and refuses the rest, after decoding and taking out what a browser ignores", () => {
+    for (const good of ["https://example.com", "http://a.example/x?y=1#z", "mailto:me@example.com", "#top", "/blog/", "./a.png", "../b/c.md", "pictures/cat.png", "notes.md?x=a:b"]) expect({ good, kept: safeAddress(good) }).toEqual({ good, kept: good });
+    for (const bad of ["javascript:alert(1)", "java\tscript:1", "java&#9;script:1", "java&amp;#9;script:1", "\u0000javascript:1", " javascript:1", "JaVaScRiPt:1", "vbscript:1", "data:text/html,x", "file:///etc/passwd", "c:\\windows", "%6Aavascript:1"]) expect({ bad, kept: safeAddress(bad) }).toEqual({ bad, kept: undefined });
+    expect(safeAddress("data:image/png;base64,AAAA", "picture")).toBe("data:image/png;base64,AAAA");
+    expect(safeAddress("data:image/svg+xml;base64,AAAA", "picture")).toBeUndefined();
+    expect(safeAddress("data:image/png;base64,AAAA", "link")).toBeUndefined();
+    expect(safeAddress("mailto:a@b.c", "picture")).toBeUndefined();
+});
+
+test("HTML written in a document keeps only plain elements and attributes; script, embedding, handlers, styles with addresses and remote pictures go", () => {
+    expect(cleanHtml('<p class="a" onclick="x()">Hi <b>there</b><script>alert(1)</script></p>')).toBe('<p class="a">Hi <b>there</b></p>');
+    expect(cleanHtml('<a href="javascript:alert(1)" title="t">x</a><a href="https://a.example">y</a>')).toBe('<a title="t">x</a><a href="https://a.example">y</a>');
+    expect(cleanHtml('<img src="https://evil.example/p.gif" alt="pixel"><img src="./cat.png" alt="cat">')).toBe('pixel<img src="./cat.png" alt="cat">');
+    expect(cleanHtml('<div style="color:red">a</div><div style="background:url(x)">b</div><div style="color:u\\72l(x)">c</div>')).toBe('<div style="color:red">a</div><div>b</div><div>c</div>');
+    expect(cleanHtml("<svg><script>alert(1)</script></svg><iframe src=x></iframe><form><input></form>ok")).toBe("ok");
+    expect(cleanTag("<script>")).toBe("&lt;script&gt;");
+    expect(cleanTag('<img src=x onerror="alert(1)">')).toBe('<img src="x">');
+    expect(cleanTag('<a href="java&#9;script:alert(1)">')).toBe("<a>");
+    expect(cleanTag("</b>")).toBe("</b>");
+    expect(cleanTag("&amp;")).toBe("&amp;");
+});
+
+test("copied as HTML, a document's link or picture with a hostile address is copied as its words, and a colour cannot add a rule", () => {
+    const html = writeHtml(read("[x](javascript:alert(1)) ![p](javascript:alert(2)) [ok](https://a.example)\n").blocks);
+    expect(html).not.toMatch(/javascript/i);
+    expect(html).toContain('<a href="https://a.example">ok</a>');
+    const styled = writeHtml([{ kind: "paragraph", gap: "", runs: [{ kind: "text", text: "w", marks: [], color: "red;background:url(https://evil.example/c.gif)", size: "2em" }] }]);
+    expect(styled).not.toContain("evil.example");
+    expect(styled).toContain('style="font-size:2em"');
 });

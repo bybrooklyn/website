@@ -47,7 +47,10 @@ export interface Store {
     save(id: string, text: string, mark: string, quire?: Parts): Promise<Saved>;
     /** Makes a document; given parts, it is made as a `.quire` document. */
     create(name: string, text: string, quire?: Parts): Promise<{ id: string; mark: string }>;
+    /** Renames a document and gives its id afterwards, which is a new one where the id is a path. */
     rename(id: string, name: string): Promise<string>;
+    /** The mark of the version kept now, where a rename changes the id and so the saver needs it afresh. */
+    markOf?(id: string): Promise<string>;
     /** Takes a document away; where the store can, to somewhere it can be brought back from. */
     remove(id: string): Promise<void>;
     /** Keeps a picture beside a document and gives the address to write in it, relative to the document. */
@@ -97,8 +100,11 @@ export function fileName(name: string, ending = ".md"): string {
         .replace(/-+/g, "-")
         .replace(/^[-.]+|[-.]+$/g, "")
         .toLowerCase();
-    const base = plain || "untitled";
-    return /\.(md|mdx|markdown|txt|quire)$/i.test(base) ? base : `${base}${ending}`;
+    const known = /\.(md|mdx|markdown|txt|quire)$/i.exec(plain)?.[0] ?? "";
+    // a name a disk can hold: not too long for it, and not one Windows keeps for itself (con, nul, com1)
+    let stem = plain.slice(0, plain.length - known.length).slice(0, 100).replace(/[-.]+$/, "") || "untitled";
+    if (/^(con|prn|aux|nul|com\d|lpt\d)$/i.test(stem)) stem = `${stem}-file`;
+    return `${stem}${known || ending}`;
 }
 
 /** A name not yet in use among others, with a number added if it is. */
@@ -124,8 +130,13 @@ export function relative(from: string, to: string): string {
 export async function copyDocument(store: Store, id: string, name: string): Promise<{ id: string; mark: string }> {
     const found = await store.open(id);
     const made = await store.create(name, found.text, found.quire);
-    if (found.quire && store.pictures) for (const [each, picture] of await store.pictures(id)) await store.savePicture(made.id, picture, each);
-    return made;
+    const pictures = found.quire && store.pictures ? await store.pictures(id) : new Map<string, Blob>();
+    if (pictures.size === 0) return made;
+    for (const [each, picture] of pictures) await store.savePicture(made.id, picture, each);
+    // a store that writes a `.quire` file whole (a folder) holds the pictures only until the next save, so the copy is saved once more with them
+    const saved = await store.save(made.id, found.text, made.mark, found.quire);
+    if (!saved.ok) throw new StoreError(saved.changed ? "the copy changed while it was being made" : saved.message);
+    return { id: made.id, mark: saved.mark };
 }
 
 /** What is waiting to be saved: the text or the writing, or a way to make it once it is needed. */
@@ -155,6 +166,8 @@ export function createSaver(
     };
     let cancel: (() => void) | undefined;
     let running: Promise<void> = Promise.resolve();
+    // once stopped, for a document that was left, nothing more is taken to be saved
+    let stopped = false;
     const listeners = new Set<(status: Status) => void>();
     const set = (next: Status) => {
         status = next;
@@ -197,6 +210,7 @@ export function createSaver(
     return {
         /** Says the text changed: it is saved once typing pauses, unless the store has refused and is waiting for a choice. */
         changed(next: Waiting) {
+            if (stopped) return;
             pending = next;
             if (status.state === "changed") return;
             if (status.state !== "saving") set({ state: "waiting" });
@@ -212,13 +226,21 @@ export function createSaver(
         /** After a refusal: keep mine writes it over theirs; take theirs gives their text to show, mine having been kept by the caller. */
         async choose(choice: "mine" | "theirs"): Promise<Opened | undefined> {
             if (status.state !== "changed") return undefined;
-            const theirs = status.theirs ?? (await store.open(id).catch(() => undefined));
+            const refused = status.theirs;
             if (choice === "mine") {
+                const theirs = refused ?? (await store.open(id).catch(() => undefined));
                 running = running.then(() => save(theirs?.mark));
                 await running;
                 return undefined;
             }
-            if (theirs) mark = theirs.mark;
+            // their version is read afresh where it can be, so that a store keeping pictures beside it takes theirs too
+            const theirs = (await store.open(id).catch(() => undefined)) ?? refused;
+            if (!theirs) {
+                // nothing to put in its place: what was typed stays, waiting, and the writer is told
+                set({ state: "failed", message: "their version could not be read, so yours is kept here and is still to be saved" });
+                return undefined;
+            }
+            mark = theirs.mark;
             pending = undefined;
             set({ state: "saved" });
             return theirs;
@@ -232,7 +254,11 @@ export function createSaver(
             return () => listeners.delete(listener);
         },
         settled: () => running,
-        stop: () => cancel?.(),
+        stop() {
+            stopped = true;
+            cancel?.();
+            cancel = undefined;
+        },
     };
 }
 

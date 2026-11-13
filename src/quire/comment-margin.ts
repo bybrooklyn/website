@@ -44,6 +44,19 @@ export function writtenWhen(created: number, now = Date.now()): string {
 /** The marks of the notes in the text: every open note's words, and the one being looked at. */
 const MARKS = { all: "quire-note", now: "quire-note-now" };
 
+/** Moves a Markdown file's notes kept in this browser to the place it has after a rename. */
+export function moveNotes(from: string, to: string) {
+    if (from === to) return;
+    try {
+        const kept = localStorage.getItem(KEY + from);
+        if (kept === null) return;
+        localStorage.setItem(KEY + to, kept);
+        localStorage.removeItem(KEY + from);
+    } catch {
+        // a browser that keeps nothing had nothing to move
+    }
+}
+
 /** Builds the notes' margin and list for a surface. */
 export function createCommentMargin(surface: Surface, options: { place: () => string | undefined }) {
     const margin = make("aside", "quire-notes");
@@ -54,7 +67,6 @@ export function createCommentMargin(surface: Surface, options: { place: () => st
     let current: string | undefined;
     let draft: { range: Range; card: HTMLElement } | undefined;
     let editing: string | undefined;
-    let lostOnOpen = 0;
     let spans = new Map<string, Span[]>();
     const highlights = typeof CSS !== "undefined" && "highlights" in CSS ? (CSS as unknown as { highlights: Map<string, unknown> }).highlights : undefined;
     const Highlight = (globalThis as unknown as { Highlight?: new (...ranges: globalThis.Range[]) => unknown }).Highlight;
@@ -202,7 +214,6 @@ export function createCommentMargin(surface: Surface, options: { place: () => st
         for (const comment of all) box.append(card(comment, true));
         if (all.length === 0 && !draft) box.append(make("p", "quire-notes-empty", "No notes yet. Select some words and choose Insert, Comment."));
         if (!doc().quire) box.append(make("p", "quire-notes-where", "A Markdown file cannot hold notes, so these are kept in this browser only."));
-        if (lostOnOpen) box.append(make("p", "quire-notes-where", lostOnOpen === 1 ? "The words of one note could not be found when it was opened." : `The words of ${lostOnOpen} notes could not be found when it was opened.`));
         return box;
     }
     let listFrom: HTMLElement | undefined;
@@ -239,9 +250,13 @@ export function createCommentMargin(surface: Surface, options: { place: () => st
 
     // ---- keeping a Markdown file's notes in this browser ----
     let saving: ReturnType<typeof setTimeout> | undefined;
+    // the document and its place as they were when the notes changed: written to that place even if another is open by the time it is written
+    let waiting: { now: Document; place: string | undefined } | undefined;
     function keepInBrowser() {
-        const now = doc();
-        const place = options.place();
+        clearTimeout(saving);
+        if (!waiting) return;
+        const { now, place } = waiting;
+        waiting = undefined;
         if (now.quire || !place) return;
         try {
             if (now.comments?.length) localStorage.setItem(KEY + place, JSON.stringify(notesData(now)));
@@ -259,6 +274,7 @@ export function createCommentMargin(surface: Surface, options: { place: () => st
             cancelAnimationFrame(drawing);
             drawing = requestAnimationFrame(redraw);
             clearTimeout(saving);
+            waiting = { now, place: options.place() };
             saving = setTimeout(keepInBrowser, 400);
         }),
         surface.on("select", ({ selection }) => {
@@ -319,9 +335,10 @@ export function createCommentMargin(surface: Surface, options: { place: () => st
         list: showList,
         /** True when the notes have room in the margin. */
         roomy,
-        /** Called when a document has been opened: notes found again but with their words gone are counted for the list. */
-        opened(lost = 0) {
-            lostOnOpen = lost;
+        /** Writes now a Markdown file's notes waiting to be kept in this browser: before the document is left, renamed or the page closed. */
+        keep: keepInBrowser,
+        /** Called when a document has been opened: nothing is looked at or being written yet. */
+        opened() {
             current = undefined;
             draft = undefined;
             editing = undefined;

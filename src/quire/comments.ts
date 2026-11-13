@@ -274,9 +274,19 @@ function findPart(texts: (string | undefined)[], hashes: (string | undefined)[],
         const text = texts[number];
         if (text === undefined) continue;
         for (let at = text.indexOf(quote); at >= 0; at = text.indexOf(quote, at + 1)) {
-            if (text.slice(0, at).endsWith(before)) return { number, from: at, to: at + quote.length };
-            loose ??= { number, from: at, to: at + quote.length };
+            // words found whole, not inside a longer word ("is" in "This"), unless the characters before them say where they are
+            const whole = wholeWords(text, at, quote);
+            if (text.slice(0, at).endsWith(before) && (before !== "" || whole)) return { number, from: at, to: at + quote.length };
+            if (whole) loose ??= { number, from: at, to: at + quote.length };
         }
     }
     return loose && quote.trim().length >= 4 ? loose : undefined;
+}
+
+/** True when words found at `at` in a text are not part of a longer word on either side. */
+function wholeWords(text: string, at: number, quote: string): boolean {
+    const letter = /[\p{L}\p{N}_]/u;
+    const startsWord = letter.test(quote[0] ?? "");
+    const endsWord = letter.test(quote[quote.length - 1] ?? "");
+    return !(startsWord && letter.test(text[at - 1] ?? "")) && !(endsWord && letter.test(text[at + quote.length] ?? ""));
 }

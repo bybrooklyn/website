@@ -81,6 +81,38 @@ test("taking theirs gives their text and their mark, so the next save goes on fr
     expect(store.files.get(id)!.text).toBe("theirs, then mine");
 });
 
+test("taking theirs when their version cannot be read keeps what was typed, waiting, and does not say it is saved", async () => {
+    const store = memoryStore();
+    const { id, mark } = await store.create("note", "original");
+    const time = clock();
+    const saver = createSaver(store, id, mark, { wait: time.wait });
+    // refused with nothing of theirs given, and theirs cannot be read afterwards (GitHub after a 409, the file gone)
+    store.save = async () => ({ ok: false, changed: true });
+    store.open = async () => {
+        throw new Error("not there");
+    };
+    saver.changed("mine");
+    time.pass();
+    await saver.settled();
+    expect(await saver.choose("theirs")).toBeUndefined();
+    expect(saver.status().state).toBe("failed");
+    expect(said(saver.status())).not.toBe("Saved");
+    expect(saver.unsaved()).toBe("mine");
+});
+
+test("a saver that was stopped, for a document left, takes nothing more to save", async () => {
+    const store = memoryStore();
+    const { id, mark } = await store.create("note", "a");
+    const time = clock();
+    const saver = createSaver(store, id, mark, { wait: time.wait });
+    saver.stop();
+    saver.changed("another document's words");
+    time.pass();
+    await saver.settled();
+    expect(store.files.get(id)!.text).toBe("a");
+    expect(saver.unsaved()).toBeUndefined();
+});
+
 test("a store that fails says why, and the text is still waiting to be saved", async () => {
     const store = memoryStore();
     const { id, mark } = await store.create("note", "x");
@@ -160,4 +192,11 @@ test("an address in a document is found beside it, and one that leaves the store
     expect(besideDocument("one.md", "https://example.com")).toBeUndefined();
     expect(besideDocument("one.md", "/blog/x/")).toBeUndefined();
     expect(besideDocument("one.md", "#top")).toBeUndefined();
+});
+
+test("a file name is never too long for a disk, nor one Windows keeps for itself", () => {
+    expect(fileName("a".repeat(300)).length).toBe(103);
+    expect(fileName("Con")).toBe("con-file.md");
+    expect(fileName("nul.mdx")).toBe("nul-file.mdx");
+    expect(fileName("console")).toBe("console.md");
 });

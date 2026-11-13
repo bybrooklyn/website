@@ -6,6 +6,7 @@
 import { expect, test } from "bun:test";
 import { packQuire, unpackQuire } from "./quire-file";
 import { canOpen, folderStore, memoryFolder, oneFileStore, type FileHandle } from "./store-folder";
+import { copyDocument, createSaver } from "./store";
 
 /** A clock that moves on a millisecond each time it is read, as a disk's would between writes. */
 const ticking = () => {
@@ -52,6 +53,18 @@ test("new files get plain free names, renaming moves the file, and pictures go b
     expect((await (await (await root.getDirectoryHandle("posts")).getFileHandle("my-cat.png")).getFile()).size).toBe(3);
 });
 
+test("after a rename the file's mark is given at its new place, and saving goes on there with no conflict", async () => {
+    const store = folderStore(memoryFolder("site", { "posts/old.md": "words" }, ticking()));
+    await store.open("posts/old.md");
+    const moved = await store.rename("posts/old.md", "Better Name");
+    const mark = await store.markOf!(moved);
+    const saver = createSaver(store, moved, mark, { wait: (run) => (run(), () => {}) });
+    saver.changed("words, and more");
+    await saver.settled();
+    expect(saver.status().state).toBe("saved");
+    expect((await store.open(moved)).text).toBe("words, and more");
+});
+
 test("a file taken away is moved into the trash folder beside it, not lost", async () => {
     const root = memoryFolder("site", { "posts/gone.md": "keep me" }, ticking());
     const store = folderStore(root);
@@ -72,24 +85,41 @@ test("one file on its own can be written, and says plainly what it cannot do", a
 });
 
 test("a .quire file in a folder is listed, opened, and written back in place as a zip with its pictures inside", async () => {
-    const bytes = await packQuire({ markdown: "Old.\n", parts: { style: '{"quire":1}', notes: "{}" }, pictures: new Map([["a.png", new Blob(["a"])]]) });
+    const bytes = await packQuire({ markdown: "Old.\n\n![a](pictures/a.png)\n", parts: { style: '{"quire":1}', notes: "{}" }, pictures: new Map([["a.png", new Blob(["a"])]]) });
     const root = memoryFolder("site", { "letters/to-sam.quire": new Blob([bytes as BlobPart]) }, ticking());
     const store = folderStore(root);
     expect((await store.list()).map((entry) => entry.id)).toEqual(["letters/to-sam.quire"]);
     const opened = await store.open("letters/to-sam.quire");
-    expect(opened).toMatchObject({ text: "Old.\n", quire: { style: '{"quire":1}' } });
+    expect(opened).toMatchObject({ text: "Old.\n\n![a](pictures/a.png)\n", quire: { style: '{"quire":1}' } });
     expect(await store.savePicture("letters/to-sam.quire", new Blob(["b"]), "b.png")).toBe("pictures/b.png");
-    const saved = await store.save("letters/to-sam.quire", "New.\n\n![b](pictures/b.png)\n", opened.mark, { style: '{"quire":1,"count":2}', notes: "{}" });
+    const saved = await store.save("letters/to-sam.quire", "New.\n\n![a](pictures/a.png)\n\n![b](pictures/b.png)\n", opened.mark, { style: '{"quire":1,"count":2}', notes: "{}" });
     expect(saved.ok).toBe(true);
     const file = await (await (await root.getDirectoryHandle("letters")).getFileHandle("to-sam.quire")).getFile();
     const back = await unpackQuire(new Uint8Array(await file.arrayBuffer()));
-    expect(back.markdown).toBe("New.\n\n![b](pictures/b.png)\n");
+    expect(back.markdown).toBe("New.\n\n![a](pictures/a.png)\n\n![b](pictures/b.png)\n");
     expect(back.parts.style).toBe('{"quire":1,"count":2}');
     expect([...back.pictures.keys()]).toEqual(["a.png", "b.png"]);
     // nothing was written beside it
     expect((await store.list()).length).toBe(1);
     expect(await store.rename("letters/to-sam.quire", "To Alex.md")).toBe("letters/to-alex.quire");
     expect(await store.create("Fresh", "x", { style: "", notes: "" }).then((made) => made.id)).toBe("fresh.quire");
+});
+
+test("a .quire file duplicated in a folder keeps its pictures on disk, and after it is opened again", async () => {
+    const bytes = await packQuire({ markdown: "![A cat](pictures/cat.png)\n", parts: { style: '{"quire":1}', notes: "{}" }, pictures: new Map([["cat.png", new Blob(["meow"])]]) });
+    const root = memoryFolder("site", { "letter.quire": new Blob([bytes as BlobPart]) }, ticking());
+    const store = folderStore(root);
+    const copy = await copyDocument(store, "letter.quire", "Letter copy");
+    const file = await (await root.getFileHandle(copy.id)).getFile();
+    const onDisk = await unpackQuire(new Uint8Array(await file.arrayBuffer()));
+    expect([...onDisk.pictures.keys()]).toEqual(["cat.png"]);
+    expect(await onDisk.pictures.get("cat.png")!.text()).toBe("meow");
+    // a fresh store, as after a reload, finds them too
+    const again = folderStore(root);
+    await again.open(copy.id);
+    expect([...(await again.pictures!(copy.id)).keys()]).toEqual(["cat.png"]);
+    // and the copy's mark is the one now on disk, so it can be saved
+    expect((await again.save(copy.id, "More.\n", copy.mark)).ok).toBe(true);
 });
 
 test("one .quire file on its own keeps its pictures inside it", async () => {
@@ -99,7 +129,7 @@ test("one .quire file on its own keeps its pictures inside it", async () => {
     const opened = await store.open("only.quire");
     expect(store.can.pictures).toBe(true);
     await store.savePicture("only.quire", new Blob(["c"]), "c.png");
-    expect((await store.save("only.quire", "Hi.\n", opened.mark)).ok).toBe(true);
+    expect((await store.save("only.quire", "Hi.\n\n![c](pictures/c.png)\n", opened.mark)).ok).toBe(true);
     const file = await ((await folder.getFileHandle("only.quire")) as FileHandle).getFile();
     expect([...(await unpackQuire(new Uint8Array(await file.arrayBuffer()))).pictures.keys()]).toEqual(["c.png"]);
 });
@@ -117,4 +147,61 @@ test("the folder store says whether an address in a document leads to a file or 
     expect(await store.exists!("posts/one.md", "nowhere/dog.png")).toBe(false);
     expect(await store.exists!("posts/one.md", "../../out.md")).toBeUndefined();
     expect(await store.exists!("posts/one.md", "https://example.com/")).toBeUndefined();
+});
+
+test("a write that fails half way is abandoned: the file keeps what it had, and the save says it failed", async () => {
+    let content = "kept words";
+    let abandoned = false;
+    const handle: FileHandle = {
+        kind: "file",
+        name: "note.md",
+        async getFile() {
+            return new File([content], "note.md", { lastModified: 5 });
+        },
+        async createWritable() {
+            let copy = "";
+            return {
+                async write(data: string | Blob) {
+                    copy = typeof data === "string" ? data.slice(0, 3) : "";
+                    throw new Error("the disk is full");
+                },
+                async close() {
+                    content = copy;
+                },
+                async abort() {
+                    abandoned = true;
+                },
+            };
+        },
+    };
+    const store = oneFileStore(handle);
+    const opened = await store.open("note.md");
+    const saver = createSaver(store, "note.md", opened.mark, { wait: (run) => (run(), () => {}) });
+    saver.changed("new words");
+    await saver.settled();
+    expect(saver.status()).toEqual({ state: "failed", message: "the disk is full" });
+    expect(abandoned).toBe(true);
+    expect(content).toBe("kept words");
+    expect(saver.unsaved()).toBe("new words");
+});
+
+test("a file renamed to the name it already has keeps it, rather than becoming name-2", async () => {
+    const root = memoryFolder("site", { "posts/my-post.md": "words", "posts/other.md": "x" }, ticking());
+    const store = folderStore(root);
+    expect(await store.rename("posts/my-post.md", "My Post.md")).toBe("posts/my-post.md");
+    expect((await store.open("posts/my-post.md")).text).toBe("words");
+    expect(await store.rename("posts/my-post.md", "Other")).toBe("posts/other-2.md");
+});
+
+test("a file the browser will not let be used is said as such, not as gone from the folder", async () => {
+    const root = memoryFolder("site", { "a.md": "a" });
+    const refuse = (name: string) => async () => {
+        throw Object.assign(new Error("refused"), { name });
+    };
+    root.getFileHandle = refuse("NotAllowedError");
+    expect(await folderStore(root).open("a.md").then(() => "", String)).toContain("permission to use a.md was not given");
+    root.getFileHandle = refuse("NoModificationAllowedError");
+    expect(await folderStore(root).open("a.md").then(() => "", String)).toContain("a.md is in use elsewhere");
+    root.getFileHandle = refuse("NotFoundError");
+    expect(await folderStore(root).open("a.md").then(() => "", String)).toContain("a.md is not in the folder any more");
 });

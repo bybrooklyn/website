@@ -3,6 +3,11 @@
 // underline, strike, code and pictures by address. Everything else is dropped, its text kept where
 // it has text, and nothing pasted is ever kept as HTML. Copying writes the selected blocks as
 // plain HTML for other programs.
+//
+// The one sanitiser for HTML that leaves mdQuire is here too, used by paste, copy and the web page
+// download (export.ts): `safeAddress` lets through only ordinary addresses, checked as a browser
+// would read them; `cleanHtml` and `cleanTag` keep only a short list of plain elements and
+// attributes from HTML written in a document, so that nothing in it can run or fetch anything.
 
 import { tidyRuns, type Align, type Block, type Leaf, type ListItem, type Mark, type Run } from "./document";
 import { emojiOf } from "./emoji";
@@ -103,13 +108,114 @@ function parse(html: string): Element {
 
 const styleOf = (element: Element) => (element.attributes.style ?? "").toLowerCase();
 
-/** Only addresses that lead somewhere ordinary are kept: no `javascript:`, no `data:`. */
-function safe(href: string | undefined): string | undefined {
-    if (!href) return undefined;
-    const trimmed = href.trim();
-    if (/^(https?:|mailto:|\/|#|\.{0,2}\/)/i.test(trimmed) || !/^[a-z][a-z0-9+.-]*:/i.test(trimmed)) return trimmed;
+// ---- the sanitiser ----
+
+/** What a browser leaves out of an address before it reads its scheme: control characters, spaces and the like anywhere in it. */
+const UNSEEN = /[\u0000-\u0020\u007f-\u00a0\u00ad\u1680\u180e\u2000-\u200f\u2028-\u202f\u205f-\u2064\u3000\ufeff]/g;
+/** Pictures a page may hold inside itself: the ordinary kinds of picture, and never SVG, which can carry script. */
+const DATA_PICTURE = /^data:image\/(png|jpeg|gif|webp|avif|bmp)[;,]/;
+
+/**
+ * An address, if it leads somewhere ordinary: the web (`http:`, `https:`), `mailto:` for a link, a
+ * place in the page or beside it, and for a picture a picture held in the address itself (`data:`
+ * of an ordinary picture kind, when `data` allows it). Anything else (`javascript:`, `vbscript:`,
+ * `data:text/html`, `file:`) gives undefined. The scheme is read as a browser reads it: entities
+ * decoded, and tabs, line breaks, control characters and spaces taken out first, so that
+ * `java&#9;script:` is seen for what it is.
+ */
+export function safeAddress(address: string | undefined, kind: "link" | "picture" = "link", data = true): string | undefined {
+    if (!address) return undefined;
+    let seen = address;
+    // decoded until it no longer changes: stricter than a browser, which decodes once
+    for (let times = 0; times < 4; times++) {
+        const next = decode(seen);
+        if (next === seen) break;
+        seen = next;
+    }
+    seen = seen.replace(UNSEEN, "").toLowerCase();
+    const scheme = /^([a-z][a-z0-9+.-]*):/.exec(seen)?.[1];
+    const kept = address.trim();
+    if (scheme === undefined) return seen.includes(":") && !/^[^:]*[/?#]/.test(seen) ? undefined : kept;
+    if (scheme === "http" || scheme === "https") return kept;
+    if (scheme === "mailto" && kind === "link") return kept;
+    if (scheme === "data" && kind === "picture" && data && DATA_PICTURE.test(seen)) return kept;
     return undefined;
 }
+
+/** True for an address on another site, which a page showing it would fetch from there. */
+export function remote(address: string): boolean {
+    return /^(https?:)?\/\//i.test(address.replace(UNSEEN, ""));
+}
+
+/** The elements HTML written in a document may keep when it leaves mdQuire: text and its structure, nothing that runs, fetches, embeds or asks. */
+const ALLOWED = new Set("a abbr b bdi bdo blockquote br caption center cite code col colgroup dd del details dfn div dl dt em figcaption figure h1 h2 h3 h4 h5 h6 hr i img ins kbd li mark ol p pre q rp rt ruby s samp small span strong sub summary sup table tbody td tfoot th thead time tr u ul var wbr".split(" "));
+/** The attributes any of them may keep, and those only some may. */
+const EVERYWHERE = new Set(["title", "lang", "dir", "class", "id", "align", "style"]);
+const OWN: Record<string, string[]> = { a: ["href"], img: ["src", "alt", "width", "height"], td: ["colspan", "rowspan"], th: ["colspan", "rowspan", "scope"], col: ["span"], colgroup: ["span"], ol: ["start", "reversed", "type"], li: ["value"], details: ["open"], time: ["datetime"] };
+
+/** A style attribute's value, if it can only change how text looks: no address, no expression, no escapes to hide them. */
+export function safeStyle(style: string): string | undefined {
+    if (!/^[\w\s#%.,:;()'"!/+-]*$/.test(style)) return undefined;
+    if (/url\s*\(|expression|@import|image-set|image\s*\(|element\s*\(|binding|behavior|javascript|src\s*\(/i.test(style)) return undefined;
+    return style;
+}
+
+/** A CSS value for one property (a colour, a size), if it is plainly one: a word, a number, a hex colour, or one colour function. */
+export function safeValue(value: string | undefined): string | undefined {
+    if (!value) return undefined;
+    const plain = value.trim();
+    if (/^[#\w.%\s-]+$/.test(plain)) return plain;
+    if (/^(rgb|rgba|hsl|hsla|hwb|lab|lch|oklab|oklch|color)\([\w\s.,%#/+-]*\)$/i.test(plain)) return plain;
+    return undefined;
+}
+
+/** An element's attributes as written out, keeping only those on the list, with addresses and styles checked. */
+function cleanAttributes(name: string, attributes: Record<string, string>): string {
+    let out = "";
+    for (const [key, value] of Object.entries(attributes)) {
+        if (!EVERYWHERE.has(key) && !OWN[name]?.includes(key)) continue;
+        const kept = key === "href" ? safeAddress(value, "link") : key === "src" ? safeAddress(value, "picture") : key === "style" ? safeStyle(value) : value;
+        // a picture is never fetched from elsewhere by a page written from a document
+        if (kept === undefined || (key === "src" && remote(kept))) continue;
+        out += ` ${key}="${escape(kept)}"`;
+    }
+    return out;
+}
+
+/** HTML written in a document, made safe to put into a page: only the allowed elements and attributes, every text escaped. */
+export function cleanHtml(html: string): string {
+    const write = (nodes: Node[]): string =>
+        nodes
+            .map((node) => {
+                if (typeof node === "string") return escape(node);
+                const inner = write(node.children);
+                if (!ALLOWED.has(node.name)) return inner;
+                if (node.name === "img" && !cleanAttributes("img", node.attributes).includes(" src=")) return node.attributes.alt ? escape(node.attributes.alt) : "";
+                return VOID.has(node.name) ? `<${node.name}${cleanAttributes(node.name, node.attributes)}>` : `<${node.name}${cleanAttributes(node.name, node.attributes)}>${inner}</${node.name}>`;
+            })
+            .join("");
+    return write(parse(html).children);
+}
+
+/** One tag or character reference written in a line of a document, as `cleanHtml` would keep it, or escaped to show as text. */
+export function cleanTag(html: string): string {
+    const plain = html.trim();
+    if (/^&(#\d{1,7}|#x[0-9a-f]{1,6}|[a-z][a-z0-9]{1,31});$/i.test(plain)) return plain;
+    const tag = /^<(\/?)([a-z][\w-]*)((?:\s+[^\s"'>/=]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+))?)*)\s*\/?>$/i.exec(plain);
+    const name = tag?.[2]!.toLowerCase();
+    if (!tag || !name || !ALLOWED.has(name)) return escape(html);
+    if (tag[1]) return VOID.has(name) ? "" : `</${name}>`;
+    const attributes: Record<string, string> = {};
+    for (const match of tag[3]!.matchAll(/([^\s"'>/=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+)))?/g)) attributes[match[1]!.toLowerCase()] = decode(match[2] ?? match[3] ?? match[4] ?? "");
+    if (name === "img") {
+        const kept = cleanAttributes(name, attributes);
+        return kept.includes(" src=") ? `<img${kept}>` : escape(attributes.alt ?? "");
+    }
+    return `<${name}${cleanAttributes(name, attributes)}>`;
+}
+
+/** Only addresses that lead somewhere ordinary are kept from a paste: no `javascript:`, no `data:`. */
+const safe = (href: string | undefined, kind: "link" | "picture" = "link") => safeAddress(href, kind, false);
 
 interface Look {
     marks: Mark[];
@@ -144,7 +250,7 @@ function inline(nodes: Node[], look: Look): Run[] {
             if (text) push({ kind: "text", text, marks: [...look.marks] });
         } else if (node.name === "br") push({ kind: "break" });
         else if (node.name === "img") {
-            const src = safe(node.attributes.src);
+            const src = safe(node.attributes.src, "picture");
             if (src) push({ kind: "image", src, alt: node.attributes.alt ?? "", ...(node.attributes.title ? { title: node.attributes.title } : {}) });
         } else if (node.name === "input") continue;
         else if (node.name === "a") {
@@ -261,18 +367,29 @@ const TAGS: [Mark, string][] = [
 function runsHtml(runs: Run[]): string {
     return runs
         .map((run): string => {
-            if (run.kind === "link") return `<a href="${escape(run.href)}"${run.title ? ` title="${escape(run.title)}"` : ""}>${runsHtml(run.runs)}</a>`;
+            if (run.kind === "link") {
+                const href = safeAddress(run.href);
+                return href === undefined ? runsHtml(run.runs) : `<a href="${escape(href)}"${run.title ? ` title="${escape(run.title)}"` : ""}>${runsHtml(run.runs)}</a>`;
+            }
             if (run.kind === "break") return "<br>";
-            if (run.kind === "image") return `<img src="${escape(run.src)}" alt="${escape(run.alt)}">`;
+            if (run.kind === "image") return picture(run.src, run.alt);
             if (run.kind === "footnote") return `<sup>[${escape(run.label)}]</sup>`;
             if (run.kind === "html") return escape(run.html);
             if (run.kind === "emoji") return emojiOf(run.name) ?? `:${escape(run.name)}:`;
             let html = escape(run.marks.includes("math") ? `$${run.text}$` : run.text);
             for (const [mark, tag] of [...TAGS].reverse()) if (run.marks.includes(mark)) html = `<${tag}>${html}</${tag}>`;
-            const style = [run.color && `color:${run.color}`, run.size && `font-size:${run.size}`].filter(Boolean).join(";");
+            const color = safeValue(run.color);
+            const size = safeValue(run.size);
+            const style = [color && `color:${color}`, size && `font-size:${size}`].filter(Boolean).join(";");
             return style ? `<span style="${escape(style)}">${html}</span>` : html;
         })
         .join("");
+}
+
+/** A picture for the clipboard, or its words where its address is not an ordinary one. */
+function picture(src: string, alt: string): string {
+    const address = safeAddress(src, "picture");
+    return address === undefined ? escape(alt) : `<img src="${escape(address)}" alt="${escape(alt)}">`;
 }
 
 /** Writes blocks as plain HTML, for the clipboard. */
@@ -307,7 +424,7 @@ export function writeHtml(list: Block[]): string {
                     return `<table><thead>${head}</thead><tbody>${rows.join("")}</tbody></table>`;
                 }
                 case "image":
-                    return `<p${align}><img src="${escape(block.src)}" alt="${escape(block.alt)}"></p>`;
+                    return `<p${align}>${picture(block.src, block.alt)}</p>`;
                 case "divider":
                     return "<hr>";
                 case "raw":

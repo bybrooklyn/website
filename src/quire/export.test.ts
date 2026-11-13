@@ -5,7 +5,7 @@
 
 import { expect, test } from "bun:test";
 import { setImage, type Document } from "./document";
-import { markdownFor, pageHtml, pictureAddresses, plainText, type Picture } from "./export";
+import { gatherPictures, heldElsewhere, markdownFor, pageHtml, pictureAddresses, plainText, type Picture } from "./export";
 import { opened, written } from "./quire-file";
 import { read } from "./read";
 import { write } from "./write";
@@ -71,4 +71,97 @@ test("every further kind downloads as Markdown byte for byte, as plain text with
 test("every picture a document shows is found, in blocks, lines, lists and tables", () => {
     const doc = read("![a](one.png)\n\nText ![b](two.png).\n\n- ![c](three.png)\n\n| x |\n| - |\n| ![d](four.png) |\n");
     expect(pictureAddresses(doc).sort()).toEqual(["four.png", "one.png", "three.png", "two.png"]);
+});
+
+/** What a document from someone else might hold to run script or fetch from elsewhere when its web page is opened: the audit's cases, and more. */
+const HOSTILE = [
+    "[click](javascript:alert(1))",
+    "[tab](<java\tscript:alert(1)>)",
+    "[entity](java&#9;script:alert(1))",
+    "[upper](JaVaScRiPt:alert(1))",
+    "[data](data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==)",
+    "[vb](vbscript:msgbox(1))",
+    "hello <script>alert(1)</script> world",
+    "hello <img src=x onerror=alert(1)> world",
+    "a <a href=\"javascript:alert(1)\" onclick=\"alert(2)\">link</a> b",
+    "a <span style=\"background:url(https://evil.example/s.gif)\">styled</span> b",
+    "a <iframe src=\"https://evil.example\"></iframe> b",
+    "<svg/onload=alert(1)>",
+    "<img/src=x/onerror=alert(2)>",
+    '<a href="javascript:alert(3)">z</a>',
+    '<a href="java&#x09;script:alert(4)">t</a>',
+    "<style>@import url(https://evil.example/x.css)</style>",
+    '<meta http-equiv=refresh content="0;url=https://evil.example">',
+    '<img src="https://evil.example/p.gif">',
+    '<img src="//evil.example/q.gif">',
+    "<div onmouseover=\"alert(1)\">over</div>",
+    '<object data="https://evil.example/o"></object>',
+    '<embed src="https://evil.example/e">',
+    '<form action="https://evil.example"><input name="x"></form>',
+    "<math><mi xlink:href=\"javascript:alert(1)\">m</mi></math>",
+    '<base href="https://evil.example/">',
+    '<link rel="stylesheet" href="https://evil.example/l.css">',
+    '<div style="width: expression(alert(1))">expr</div>',
+    '<p style="color:red;background-image:u\\72l(https://evil.example/b.gif)">escaped</p>',
+    "![](https://evil.example/pixel.gif)",
+    "![tracker](//evil.example/pixel2.gif)",
+].join("\n\n") + "\n";
+
+/** Every way in the written page that would run script or ask the network for something, as a list of what was found. */
+function dangers(html: string): string[] {
+    const found: string[] = [];
+    const body = html.slice(html.indexOf("<body>"));
+    for (const [what, pattern] of [
+        ["script element", /<script/i],
+        ["event handler", /<[^>]+\son\w+\s*=/i],
+        ["javascript address", /(href|src|action|data)\s*=\s*"[^"]*(script|data:text)/i],
+        ["embedding element", /<(iframe|object|embed|svg|math|form|input|base|link|meta|style)\b/i],
+        ["picture from elsewhere", /<img[^>]+src="(https?:)?\/\//i],
+        ["address in a style", /style="[^"]*(url|expression|\\)/i],
+    ] as const)
+        if (pattern.test(body)) found.push(what);
+    return found;
+}
+
+test("the downloaded web page runs nothing from the document and fetches nothing: hostile HTML, addresses and styles are escaped or left out", () => {
+    const html = pageHtml(read(HOSTILE), { title: "Hostile" });
+    expect(dangers(html)).toEqual([]);
+    // the page carries its own policy, first in its head, which forbids script and every fetch but its own pictures and fonts
+    expect(html).toMatch(/<head>\n<meta charset="utf-8">\n<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:;/);
+    // plain HTML that is harmless is still shown, and the words of what was not are kept as text
+    const safe = pageHtml(read('Some <b>bold</b> and <a href="https://example.com" title="t">a link</a>.\n\n<div align="center"><em>Centred</em></div>\n'), { title: "t" });
+    expect(safe).toContain("<b>bold</b>");
+    expect(safe).toContain('<a href="https://example.com" title="t">a link</a>');
+    expect(safe).toContain('<div align="center"><em>Centred</em></div>');
+    expect(html).toContain("&lt;script&gt;");
+    // a picture from elsewhere is a link to where it is, not shown
+    expect(html).toContain('<a class="picture-link" href="https://evil.example/pixel.gif">');
+});
+
+test("a colour, size or highlight from a file is used only if it is plainly one, so the page asks nothing of another site", () => {
+    let doc = read("Words.\n");
+    const hostile = "red 45%, transparent), url(https://evil.example/p.gif) no-repeat, color-mix(in oklch, red";
+    doc = { ...doc, blocks: [{ kind: "paragraph", gap: "", runs: [{ kind: "text", text: "Words.", marks: [], color: "red;background:url(https://evil.example/c.gif)", size: "1em", highlight: hostile }] }] } as Document;
+    const html = pageHtml(doc, { title: "t" });
+    expect(html).not.toContain("evil.example");
+    expect(html).toContain('style="font-size:1em"');
+    expect(dangers(html)).toEqual([]);
+});
+
+test("pictures from elsewhere on the web are never fetched to make a download; only those a store keeps or held in their own address", async () => {
+    const asked: string[] = [];
+    const real = globalThis.fetch;
+    globalThis.fetch = (async (address: string) => {
+        asked.push(String(address));
+        return new Response(new Uint8Array([137, 80, 78, 71]), { headers: { "content-type": "image/png" } });
+    }) as typeof fetch;
+    try {
+        const doc = read("![kept](pictures/kept.png)\n\n![tracker](https://evil.example/pixel.gif)\n\n![other](//evil.example/two.gif)\n");
+        const pictures = await gatherPictures(doc, async (src) => (src === "pictures/kept.png" ? "blob:kept" : undefined)).catch(() => new Map());
+        expect(asked).toEqual(["blob:kept"]);
+        // (with no browser here to measure it the kept picture is left out too; in a browser it is held)
+        expect(heldElsewhere(doc, pictures)).toEqual(expect.arrayContaining(["//evil.example/two.gif", "https://evil.example/pixel.gif"]));
+    } finally {
+        globalThis.fetch = real;
+    }
 });

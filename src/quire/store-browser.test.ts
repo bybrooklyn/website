@@ -4,7 +4,8 @@
 // version history beside them. Run with `bun test src/quire`.
 
 import { expect, test } from "bun:test";
-import { browserStore, memoryTables } from "./store-browser";
+import { browserStore, indexedTables, memoryTables } from "./store-browser";
+import { createSaver } from "./store";
 
 test("a document made in the browser with parts is a .quire one, its style and notes saved beside its text, its pictures given back for a download", async () => {
     const store = browserStore(memoryTables());
@@ -85,4 +86,158 @@ test("a document made without parts is plain Markdown and stays so when saved; o
     expect((await store.open(post.id)).quire).toBeUndefined();
     await tables.put("documents", { id: "old", name: "Old", text: "x", mark: 1, modified: 1 });
     expect((await store.open("old")).quire).toEqual({ style: "", notes: "" });
+});
+
+/**
+ * A stand-in for the browser's IndexedDB, just enough for the store: requests succeed a moment after
+ * they are made, and the transaction commits a moment after its last request, or, when asked,
+ * fails at that point as a full disk makes a real one fail after its requests have succeeded.
+ */
+function standInIndexedDB() {
+    const tables = new Map<string, Map<string, unknown>>();
+    const state = { failAtCommit: false };
+    const soon = (run: () => void) => setTimeout(run, 0);
+    // as in a real database, a transaction that writes waits for the one before it to finish
+    let turn: Promise<void> = Promise.resolve();
+    const database = {
+        objectStoreNames: { contains: (name: string) => tables.has(name) },
+        createObjectStore: (name: string) => tables.set(name, new Map()),
+        close() {},
+        transaction(name: string, mode = "readonly") {
+            const table = tables.get(name)!;
+            const writes: [string, unknown][] = [];
+            let waiting = 0;
+            let finished = false;
+            let release = () => {};
+            const gate = mode === "readwrite" ? turn : Promise.resolve();
+            if (mode === "readwrite") turn = new Promise((done) => (release = done));
+            const transaction: Record<string, unknown> & { oncomplete?: () => void; onabort?: () => void; error: unknown } = {
+                error: null,
+                abort() {
+                    if (finished) throw new Error("InvalidStateError");
+                    finished = true;
+                    release();
+                    transaction.error = { name: "AbortError" };
+                    soon(() => transaction.onabort?.());
+                },
+                objectStore: () => store,
+            };
+            const settle = () =>
+                soon(() => {
+                    if (finished || waiting > 0) return;
+                    finished = true;
+                    release();
+                    if (state.failAtCommit && writes.length) {
+                        transaction.error = { name: "QuotaExceededError" };
+                        return transaction.onabort?.();
+                    }
+                    for (const [key, value] of writes) value === undefined ? table.delete(key) : table.set(key, structuredClone(value));
+                    transaction.oncomplete?.();
+                });
+            const request = (answer: () => unknown) => {
+                const made: { result?: unknown; onsuccess?: () => void } = {};
+                waiting++;
+                void gate.then(() =>
+                    soon(() => {
+                        made.result = answer();
+                        waiting--;
+                        made.onsuccess?.();
+                        settle();
+                    }),
+                );
+                return made;
+            };
+            const store = {
+                get: (id: string) => request(() => writes.findLast(([key]) => key === id)?.[1] ?? table.get(id)),
+                getAll: () => request(() => [...table.values()]),
+                put: (row: { id: string }) => request(() => (writes.push([row.id, row]), row.id)),
+                delete: (id: string) => request(() => writes.push([id, undefined])),
+            };
+            return transaction;
+        },
+    };
+    const factory = {
+        open() {
+            const opening: { result?: unknown; onupgradeneeded?: () => void; onsuccess?: () => void } = {};
+            soon(() => {
+                opening.result = database;
+                opening.onupgradeneeded?.();
+                opening.onsuccess?.();
+            });
+            return opening;
+        },
+    };
+    return { factory: factory as unknown as IDBFactory, state, tables };
+}
+
+test("a write to the browser's storage is done only when its transaction commits; one that fails at the end is a failure, not saved", async () => {
+    const stand = standInIndexedDB();
+    const store = browserStore(await indexedTables("quire", stand.factory));
+    const made = await store.create("Draft", "first");
+    expect((await store.open(made.id)).text).toBe("first");
+    stand.state.failAtCommit = true;
+    await expect(store.save(made.id, "second", made.mark)).rejects.toThrow("this browser has no more room");
+    stand.state.failAtCommit = false;
+    expect((await store.open(made.id)).text).toBe("first");
+    // and the saver says so, keeping the words waiting
+    stand.state.failAtCommit = true;
+    const saver = createSaver(store, made.id, made.mark, { wait: (run) => (run(), () => {}) });
+    saver.changed("second");
+    await saver.settled();
+    expect(saver.status()).toEqual({ state: "failed", message: "this browser has no more room" });
+    expect(saver.unsaved()).toBe("second");
+});
+
+test("two tabs saving one document on the same mark: the second is refused as changed elsewhere, never silently written over the first", async () => {
+    const tables = memoryTables();
+    const first = browserStore(tables);
+    const second = browserStore(tables);
+    const made = await first.create("Shared", "original");
+    const [one, two] = await Promise.all([first.save(made.id, "from the first tab", made.mark), second.save(made.id, "from the second tab", made.mark)]);
+    expect([one.ok, two.ok]).toEqual([true, false]);
+    expect(two).toMatchObject({ changed: true, theirs: { text: "from the first tab" } });
+    expect((await first.open(made.id)).text).toBe("from the first tab");
+    // over the browser's own database too, with one transaction for the check and the write
+    const stand = standInIndexedDB();
+    const tabA = browserStore(await indexedTables("quire", stand.factory));
+    const tabB = browserStore(await indexedTables("quire", stand.factory));
+    const doc = await tabA.create("Shared", "original");
+    const results = await Promise.all([tabA.save(doc.id, "A", doc.mark), tabB.save(doc.id, "B", doc.mark)]);
+    expect(results.filter((each) => each.ok).length).toBe(1);
+    expect(results.filter((each) => !each.ok && each.changed).length).toBe(1);
+});
+
+test("a rename made while a save is on its way keeps the saved text", async () => {
+    const store = browserStore(memoryTables());
+    const made = await store.create("Draft", "before");
+    await Promise.all([store.rename(made.id, "Renamed"), store.save(made.id, "after", made.mark)]);
+    expect(await store.open(made.id)).toMatchObject({ text: "after", mark: "2" });
+    expect((await store.list())[0]!.name).toBe("Renamed");
+});
+
+test("a request the browser refuses at once is said in plain words too, and a store's own reason as it is", async () => {
+    const stand = standInIndexedDB();
+    const store = browserStore(await indexedTables("quire", stand.factory));
+    const made = await store.create("Draft", "first");
+    const real = stand.factory.open;
+    // the database's put refuses at once, as Chrome does when there is no room
+    const tables = await indexedTables("quire", {
+        open() {
+            const opening = real.call(stand.factory, "quire") as { onsuccess?: () => void; result?: { transaction: (name: string, mode: string) => { objectStore: () => Record<string, unknown> } } };
+            const done = () => {
+                const database = opening.result!;
+                const transaction = database.transaction.bind(database);
+                database.transaction = (name: string, mode: string) => {
+                    const made = transaction(name, mode);
+                    const store = made.objectStore();
+                    made.objectStore = () => ({ ...store, put: () => { throw Object.assign(new Error("full"), { name: "QuotaExceededError" }); } });
+                    return made;
+                };
+            };
+            const wrapped = { set onsuccess(run: () => void) { opening.onsuccess = () => (done(), run()); }, get result() { return opening.result; }, set onupgradeneeded(run: () => void) { (opening as { onupgradeneeded?: () => void }).onupgradeneeded = run; }, set onerror(_run: () => void) {} };
+            return wrapped;
+        },
+    } as unknown as IDBFactory);
+    await expect(browserStore(tables).save(made.id, "second", made.mark)).rejects.toThrow("this browser has no more room");
+    await expect(browserStore(tables).save("nothing", "x", "1")).rejects.toThrow("this document is no longer kept here");
 });

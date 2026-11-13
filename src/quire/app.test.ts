@@ -72,6 +72,8 @@ HTMLAnchorElement.prototype.click = function () {
 };
 
 window.q = { repo, calls, downloads, bytes, write, folderStore, oneFileStore, setStyle, packQuire, unpackQuire };
+// a browser that keeps nothing, as some private windows are
+if (location.search.includes("no-storage")) indexedDB.open = () => { throw new DOMException("The user denied permission to access the database.", "SecurityError"); };
 startApp(document.querySelector("#host"), { database: ${JSON.stringify(database)}, fetcher, sample: "# A sample\\n", top: document.querySelector(".quire-top") }).then((app) => {
     window.q.app = app;
     window.q.md = () => write(app.editor.surface.getDocument());
@@ -94,7 +96,7 @@ beforeAll(async () => {
     await Bun.write(`${folder}/post.md`, "# A post\n\nFrom a file.\n");
     // a .quire file with a styled word, its style addressed as styling.ts says
     const style = { quire: 1, page: { size: "A5", orientation: "portrait", margins: 20 }, count: 2, blocks: [{ block: 0, hash: hash("A letter"), align: "center" }], runs: [{ block: 1, hash: hash("Dear Sam, hello."), from: 10, to: 15, quote: "hello", before: "Dear Sam, ", color: "#d52d00", font: "serif" }] };
-    await Bun.write(`${folder}/letter.quire`, await packQuire({ markdown: "# A letter\n\nDear Sam, hello.\n", parts: { style: JSON.stringify(style), notes: "{}" }, pictures: new Map([["dot.png", new Blob([DOT])]]) }));
+    await Bun.write(`${folder}/letter.quire`, await packQuire({ markdown: "# A letter\n\nDear Sam, hello.\n\n![A dot](pictures/dot.png)\n", parts: { style: JSON.stringify(style), notes: "{}" }, pictures: new Map([["dot.png", new Blob([DOT])]]) }));
     tab = await browser({ width: 1300, height: 900 });
     // the page is served over http, as the site is, so that its database and storage are its own
     await load();
@@ -127,6 +129,20 @@ async function load() {
     for (let tries = 0; tries < 100 && !(await tab.run("!!window.q?.md")); tries++) await tab.wait(50);
 }
 const md = () => tab.run<string>("q.md()");
+
+used("a browser that keeps nothing still opens mdQuire, and says a document is kept in this tab only", async () => {
+    await tab.open(`http://localhost:${server().port}/page.html?no-storage`, 100);
+    for (let tries = 0; tries < 100 && !(await tab.run("!!window.q?.md")); tries++) await tab.wait(50);
+    expect(await tab.run("!!window.q.app")).toBe(true);
+    await tab.run(`q.app.editor.create(q.app.browser, "Kept here", "Words.\\n").then(() => q.app.editor.surface.focus())`);
+    await tab.run(`q.app.editor.surface.pasteText("More words")`);
+    await tab.wait(1400);
+    expect(await tab.run<string>("document.querySelector('.quire-status').getAttribute('aria-label')")).toContain("kept in this tab only");
+    expect(await tab.run(`(() => { const event = new Event("beforeunload", { cancelable: true }); dispatchEvent(event); return event.defaultPrevented; })()`)).toBe(true);
+    // back to the page as the other tests have it, with nothing waiting to be downloaded
+    await tab.run("q.app.editor.commands.download()");
+    await load();
+});
 const status = () => tab.run<string>("document.querySelector('.quire-status').getAttribute('aria-label')");
 
 async function press(selector: string, words = "") {
@@ -214,6 +230,15 @@ used("the documents list flows out of the name: a new document, a rename, one ta
     await tab.wait(300);
     expect(await tab.run("[...document.querySelectorAll('.quire-documents-list .quire-menu-line')].map((line) => line.textContent).sort()")).toEqual(["Plans", "Untitled"]);
     await tab.press("Escape");
+});
+
+used("a damaged .quire chosen from the computer is not opened, and the status says why", async () => {
+    const before = await md();
+    // the file chooser gives a file that is not a zip, though it is named as a .quire
+    await tab.run(`(() => { const chooser = [...document.querySelectorAll("input.quire-file")].find((input) => input.accept.includes(".quire")); const files = new DataTransfer(); files.items.add(new File(["this is not a zip at all"], "damaged.quire")); chooser.files = files.files; chooser.dispatchEvent(new Event("change")); })()`);
+    await tab.wait(300);
+    expect(await status()).toContain("damaged.quire was not opened: this is not a zip file");
+    expect(await md()).toBe(before);
 });
 
 used("a file is opened from the computer, and downloaded again with its own name and what was written", async () => {
@@ -322,7 +347,7 @@ used("a .quire file opens with its look, is written in, and downloads as a .quir
     await press(".quire-menu.open .quire-menu-line", "Download.quire");
     await tab.wait(400);
     const bundle = await unpackQuire(new Uint8Array(Object.values(await tab.run<Record<string, number>>("q.bytes['letter.quire']"))));
-    expect(bundle.markdown).toBe("# Old. A letter\n\nDear Sam, hello.\n");
+    expect(bundle.markdown).toBe("# Old. A letter\n\nDear Sam, hello.\n\n![A dot](pictures/dot.png)\n");
     const style = JSON.parse(bundle.parts.style);
     expect(style.page).toEqual({ size: "A5", orientation: "portrait", margins: 20 });
     expect(style.runs[0]).toMatchObject({ quote: "hello", color: "#d52d00", font: "serif" });
@@ -354,12 +379,12 @@ used("a .quire file written in place through file handles keeps its look and pic
         const store = q.oneFileStore(handle);
         const opened = await store.open("in-place.quire");
         await store.savePicture("in-place.quire", new Blob(["x"], { type: "image/png" }), "x.png");
-        await store.save("in-place.quire", "Hi there.\\n", opened.mark, { style: '{"quire":1}', notes: "{}" });
+        await store.save("in-place.quire", "Hi there.\\n\\n![x](pictures/x.png)\\n", opened.mark, { style: '{"quire":1}', notes: "{}" });
         const back = await q.unpackQuire(new Uint8Array(await (await handle.getFile()).arrayBuffer()));
         await root.removeEntry("in-place.quire");
         return { markdown: back.markdown, style: back.parts.style, pictures: [...back.pictures.keys()] };
     })()`);
-    expect(result).toEqual({ markdown: "Hi there.\n", style: '{"quire":1}', pictures: ["x.png"] });
+    expect(result).toEqual({ markdown: "Hi there.\n\n![x](pictures/x.png)\n", style: '{"quire":1}', pictures: ["x.png"] });
 });
 
 used("the folder store writes real file handles, here the browser's private file system", async () => {

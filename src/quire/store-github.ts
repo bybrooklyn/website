@@ -10,7 +10,7 @@
 // into their folder, and written in the document by a path relative to it. Nothing else is asked
 // of the network. Tested against a mock of the API.
 
-import { besideDocument, freeName, relative, type Saved, type Store, StoreError } from "./store";
+import { besideDocument, fileName, freeName, relative, type Saved, type Store, StoreError } from "./store";
 import { markdownFile } from "./store-files";
 
 /** What the repository store is told once, and keeps in this browser. */
@@ -76,6 +76,15 @@ function fromBase64(text: string): Uint8Array {
     return Uint8Array.from(atob(text.replace(/\s+/g, "")), (char) => char.charCodeAt(0));
 }
 
+/** A file's bytes as text, refused if they are not UTF-8: read with replacement characters, saving would write those back over what it held. */
+export function utf8(bytes: Uint8Array, path: string): string {
+    try {
+        return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    } catch {
+        throw new StoreError(`${path} is not UTF-8 text, and saving it here would change it, so it is not opened`);
+    }
+}
+
 /** The store over a repository. `fetcher` is the network, given so that tests can stand in for GitHub. */
 export function githubStore(settings: GithubSettings, fetcher: Fetcher = (url, init) => fetch(url, init)): Store {
     const folder = folderPath(settings.folder);
@@ -96,6 +105,9 @@ export function githubStore(settings: GithubSettings, fetcher: Fetcher = (url, i
             throw new StoreError("GitHub could not be reached");
         }
         if (answer.status === 401) throw new StoreError("GitHub refused the token; it may have run out or been taken back");
+        // GitHub answers 403 (or 429) both for a token that may not do this and for too many requests; its headers tell them apart
+        const limited = answer.status === 429 || (answer.status === 403 && (answer.headers.get("x-ratelimit-remaining") === "0" || answer.headers.has("retry-after")));
+        if (limited) throw new StoreError("GitHub has had too many requests for now; it will be tried again after the next change, or try again in a few minutes");
         if (answer.status === 403) throw new StoreError("the token may not do this; it needs read and write access to this repository's contents");
         return answer;
     }
@@ -113,13 +125,14 @@ export function githubStore(settings: GithubSettings, fetcher: Fetcher = (url, i
             if (!blob.ok) throw new StoreError(`GitHub answered ${blob.status}`);
             bytes = fromBase64(((await blob.json()) as { content: string }).content);
         }
-        return { text: new TextDecoder().decode(bytes), sha: file.sha };
+        return { text: utf8(bytes, path), sha: file.sha };
     }
 
-    async function put(path: string, bytes: Uint8Array, message: string, sha?: string): Promise<{ status: number; sha?: string }> {
+    async function put(path: string, bytes: Uint8Array, message: string, sha?: string): Promise<{ status: number; sha?: string; message?: string }> {
         const answer = await ask("PUT", contents(path), { message, content: toBase64(bytes), branch, ...(sha ? { sha } : {}) });
         if (answer.ok) return { status: answer.status, sha: ((await answer.json()) as { content: { sha: string } }).content.sha };
-        return { status: answer.status };
+        const said = await answer.json().then((body: { message?: string }) => body?.message, () => undefined);
+        return { status: answer.status, message: typeof said === "string" ? said : undefined };
     }
 
     async function names(path: string): Promise<string[]> {
@@ -150,22 +163,28 @@ export function githubStore(settings: GithubSettings, fetcher: Fetcher = (url, i
         async save(id, text, mark): Promise<Saved> {
             const done = await put(id, new TextEncoder().encode(text), `Edit ${nameOf(id)}`, mark);
             if (done.sha) return { ok: true, mark: done.sha };
-            // a SHA that no longer matches: someone saved it elsewhere
-            if (done.status === 409 || done.status === 422) {
+            // a SHA that no longer matches: someone saved it elsewhere. GitHub also answers 422 for a path or a file it will not take, which is a failure, not a conflict
+            if (done.status === 409 || (done.status === 422 && /sha/i.test(done.message ?? ""))) {
                 const theirs = await read(id).catch(() => undefined);
                 return { ok: false, changed: true, theirs: theirs && { text: theirs.text, mark: theirs.sha } };
             }
-            return { ok: false, message: done.status === 404 ? `${id} or its branch is not there` : `GitHub answered ${done.status}` };
+            return { ok: false, message: done.status === 404 ? `${id} or its branch is not there` : done.status === 422 ? "GitHub would not take this file (it may be too large)" : `GitHub answered ${done.status}` };
         },
         async create(name, text) {
-            const path = inFolder(freeName(name, await names(folder)));
+            // a plain file name, as the folder store makes: a title with a slash in it must not become a folder
+            const path = inFolder(freeName(fileName(name), await names(folder)));
             const done = await put(path, new TextEncoder().encode(text), `Add ${nameOf(path)}`);
             if (!done.sha) throw new StoreError(`GitHub answered ${done.status}`);
             return { id: path, mark: done.sha };
         },
+        async markOf(id) {
+            const answer = await ask("GET", `${contents(id)}?ref=${encodeURIComponent(branch)}`);
+            if (!answer.ok) throw new StoreError(answer.status === 404 ? `${id} is not in ${settings.owner}/${settings.repo} on ${branch}` : `GitHub answered ${answer.status}`);
+            return ((await answer.json()) as { sha: string }).sha;
+        },
         async rename(id, name) {
             const file = await read(id);
-            const path = inFolder(freeName(name, (await names(folder)).filter((each) => each !== nameOf(id))));
+            const path = inFolder(freeName(fileName(name, /\.mdx$/i.test(id) ? ".mdx" : ".md"), (await names(folder)).filter((each) => each !== nameOf(id))));
             if (path === id) return id;
             const made = await put(path, new TextEncoder().encode(file.text), `Rename ${nameOf(id)} to ${nameOf(path)}`);
             if (!made.sha) throw new StoreError(`GitHub answered ${made.status}`);

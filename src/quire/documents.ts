@@ -194,7 +194,13 @@ export function repositoryForm(form: RepositoryForm): HTMLElement {
         event.preventDefault();
         said.textContent = "Connecting";
         connect.disabled = true;
-        const problem = await form.connect({ repository: repository.value, branch: branch.value, folder: folder.value, pictures: pictures.value, token: token.value });
+        let problem: string | undefined;
+        try {
+            problem = await form.connect({ repository: repository.value, branch: branch.value, folder: folder.value, pictures: pictures.value, token: token.value });
+        } catch (error) {
+            // whatever went wrong, the button comes back and the reason is said
+            problem = error instanceof Error ? error.message : String(error);
+        }
         connect.disabled = false;
         said.textContent = problem ?? "";
     });

@@ -119,3 +119,14 @@ test("notes are found again after document.md was changed elsewhere; one whose w
     expect(withNotes(read(TEXT), "nonsense").doc.comments).toBeUndefined();
     expect(withNotes(read(TEXT), { comments: [{ id: 3 }, null] }).doc.comments).toBeUndefined();
 });
+
+test("a note's words are found again whole, not inside a longer word, when the block they were in has changed", () => {
+    const note = (quote: string, before: string, from: number) => ({ comments: [{ id: "a", text: "c", parts: [{ block: 0, hash: "changed", from, to: from + quote.length, quote, before }] }] });
+    // a note on "is" at the start of its paragraph, which has since gained words before it
+    const { doc } = withNotes(read("This is it.\n"), note("is", "", 0));
+    expect(words(doc, "a")).toEqual([{ path: [0], from: 5, to: 7 }]);
+    // a short quote whose words before it are gone is not put just anywhere
+    expect(spansOf(withNotes(read("Thistle.\n"), note("is", "The cat sat. Th", 12)).doc).has("a")).toBe(false);
+    // a longer one is found whole
+    expect(words(withNotes(read("Elsewhere the quick fox ran.\n"), note("quick fox", "Gone ", 5)).doc, "a")).toEqual([{ path: [0], from: 14, to: 23 }]);
+});

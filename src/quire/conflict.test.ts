@@ -29,3 +29,16 @@ test("a line only one side has is shown against nothing on the other", () => {
         { theirs: "theirs", same: false },
     ]);
 });
+
+test("two long texts too big to compare line against line are shown one after the other at once, without building the table", () => {
+    const mine = Array.from({ length: 12_000 }, (_, index) => `mine ${index}`).join("\n");
+    const theirs = Array.from({ length: 12_000 }, (_, index) => `theirs ${index}`).join("\n");
+    Bun.gc(true);
+    const before = process.memoryUsage().rss;
+    const started = performance.now();
+    const rows = sideBySide(mine, theirs);
+    expect(performance.now() - started).toBeLessThan(200);
+    // the table for these would be 144 million cells, most of a gigabyte
+    expect(process.memoryUsage().rss - before).toBeLessThan(100_000_000);
+    expect(rows.length).toBe(24_000);
+});

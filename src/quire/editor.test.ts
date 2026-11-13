@@ -10,6 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { withoutSpeech } from "../../scripts/dictation-stubs";
 import { browser, chromium, type Browser } from "../../scripts/browser";
+import sharp from "sharp";
 
 const here = import.meta.dir;
 const styles = `${here}/../styles`;
@@ -23,18 +24,30 @@ import { closeOthers } from "${here}/ui.ts";
 import * as shortcuts from "${here}/shortcuts.ts";
 import { memoryStorage } from "${here}/versions.ts";
 import { browserStore, indexedTables } from "${here}/store-browser.ts";
+import { folderStore, memoryFolder } from "${here}/store-folder.ts";
+import { addComment } from "${here}/comments.ts";
+import { filesStore } from "${here}/store-files.ts";
 const host = document.querySelector("#host");
 const storage = memoryStorage();
 const editor = createEditor(host, read(""), { name: "Test", colors: [{ name: "Pink", value: "salmon" }], onImage: async () => "/picture.png", versions: storage });
 const surface = editor.surface;
 window.q = {
     editor,
+    storage,
     shortcuts,
     reset(markdown, mdx) { closeOthers(); surface.setDocument(read(markdown, { mdx })); surface.focus(); },
     select(anchor, from, focus = anchor, to = from) { surface.setSelection({ anchor: { path: anchor, offset: from }, focus: { path: focus, offset: to } }); },
     md: () => write(surface.getDocument()),
     /** The browser store, over a database of the test's own. */
     async useBrowser() { window.q.store = browserStore(await indexedTables("quire-test")); return true; },
+    /** A file opened from the computer, kept in this tab until it is downloaded. */
+    async useFile(name, text) { window.q.store = filesStore(); const entry = await window.q.store.add(new File([text], name)); await editor.open(window.q.store, entry); surface.focus(); return entry.id; },
+    /** Whether closing the page now would make the browser ask first. */
+    asksOnClose() { const event = new Event("beforeunload", { cancelable: true }); dispatchEvent(event); return event.defaultPrevented; },
+    /** Adds a note on the first words of the first paragraph. */
+    note(text, to = 4) { surface.run((doc) => addComment(doc, { start: { path: [0], offset: 0 }, end: { path: [0], offset: to } }, text).doc); },
+    /** A folder on a disk kept in memory, with these files in it. */
+    useFolder(files) { window.q.store = folderStore(memoryFolder("notes", files)); return true; },
     async openIn(name, text) { const made = await window.q.store.create(name, text); await editor.open(window.q.store, { id: made.id, name }); surface.focus(); return made.id; },
     async kept(id) { return (await window.q.store.open(id)).text; },
     async saveElsewhere(id, text) { const opened = await window.q.store.open(id); return window.q.store.save(id, text, opened.mark); },
@@ -744,6 +757,71 @@ used("a document changed elsewhere is not written over: the conflict is shown, a
     expect(await tab.run("q.status()")).toBe("Saved");
 });
 
+used("after a rename in a folder every later save goes to the new file, with no conflict, and the history follows", async () => {
+    await tab.run(`q.useFolder({ "plans.md": "Plans\\n" })`);
+    await tab.run(`q.editor.open(q.store, { id: "plans.md", name: "plans.md" }).then(() => q.editor.surface.focus())`);
+    await tab.run("q.select([0], 5)");
+    await tab.type(" one");
+    await tab.wait(1400);
+    expect(await tab.run("q.status()")).toBe("Saved");
+    await tab.run(`q.editor.rename("Better Plans")`);
+    expect(await tab.run("q.editor.current().id")).toBe("better-plans.md");
+    await tab.run("q.editor.surface.focus()");
+    await tab.run("q.select([0], 9)");
+    await tab.type(" two");
+    await tab.wait(1400);
+    expect(await tab.run("q.status()")).toBe("Saved");
+    expect(await tab.run(`q.kept("better-plans.md")`)).toBe("Plans one two\n");
+    expect(await tab.run("q.store.list().then((list) => list.map((entry) => entry.id))")).toEqual(["better-plans.md"]);
+    expect(await tab.run(`q.storage.list("notes:better-plans.md").then((list) => list.length > 0)`)).toBe(true);
+    expect(await tab.run(`q.storage.list("notes:plans.md").then((list) => list.length)`)).toBe(0);
+});
+
+used("words that could not be saved keep the writer in the document: she is told, and stays, tries again or leaves them knowingly", async () => {
+    await tab.run("q.useBrowser()");
+    const other = await tab.run<string>(`q.store.create("Other", "The other one\\n").then((made) => made.id)`);
+    const id = await tab.run<string>(`q.openIn("Kept", "Words\\n")`);
+    // saving fails from now on, as a full disk or a dropped network does
+    await tab.run(`(() => { window.realSave = q.store.save; q.store.save = async () => ({ ok: false, message: "the disk is full" }); })()`);
+    await tab.run("q.select([0], 5)");
+    await tab.type(" more");
+    await tab.wait(1400);
+    expect(await tab.run("q.status()")).toBe("Not saved: the disk is full");
+    const going = `(window.went = undefined, q.editor.open(q.store, { id: ${JSON.stringify(other)}, name: "Other" }).then((moved) => (window.went = moved)), true)`;
+    await tab.run(going);
+    await tab.wait(700);
+    expect(await tab.run<string>("document.querySelector('dialog.quire-dialog[open]')?.textContent ?? ''")).toContain("have not been saved: the disk is full");
+    // staying keeps the words and the document
+    await press("dialog.quire-dialog[open] button", "Stay");
+    await tab.wait(400);
+    expect(await tab.run("window.went")).toBe(false);
+    expect(await md()).toBe("Words more\n");
+    expect(await tab.run("q.editor.current().id")).toBe(id);
+    // trying again, once saving works, saves them and goes on
+    await tab.run(going);
+    await tab.wait(700);
+    await tab.run("q.store.save = window.realSave");
+    await press("dialog.quire-dialog[open] button", "Try again");
+    await tab.wait(600);
+    expect(await tab.run("window.went")).toBe(true);
+    expect(await tab.run(`q.kept(${JSON.stringify(id)})`)).toBe("Words more\n");
+    expect(await md()).toBe("The other one\n");
+    // leaving them knowingly: they are not saved, but they are in the version history
+    await tab.run(`q.store.save = async () => ({ ok: false, message: "the disk is full" })`);
+    await tab.run("q.select([0], 13)");
+    await tab.type(" changed");
+    await tab.wait(1400);
+    await tab.run("(window.went = undefined, q.editor.leave().then((left) => (window.went = left)), true)");
+    await tab.wait(700);
+    await press("dialog.quire-dialog[open] button", "Leave without saving");
+    await tab.wait(400);
+    expect(await tab.run("window.went")).toBe(true);
+    expect(await tab.run(`q.kept(${JSON.stringify(other)})`)).toBe("The other one\n");
+    const kept = await tab.run<string>(`q.storage.list("This browser:${other}").then((list) => q.storage.load(list[0].id))`);
+    expect(kept).toContain("The other one changed");
+    await tab.run("q.store.save = window.realSave");
+});
+
 /** Opens a 5,000-line document and types in its middle, in a look or in page view: it opens in under a second and each key is shown in under 16 ms. */
 async function speed(mode: "no page" | "light paper" | "page view") {
     await pageView(mode === "page view");
@@ -878,7 +956,7 @@ used("a .quire document's header, footer and page numbers are set from Insert or
     expect(new Set(marks.heads)).toEqual(new Set(["My book"]));
     expect(new Set(marks.feet)).toEqual(new Set(["Draft"]));
     expect(marks.numbers).toEqual(marks.heads.map((_, index) => String(index + 1)));
-    expect(await tab.run("[...document.querySelectorAll('head style')].some((style) => style.textContent.includes('@top-center { content: \"My book\"') && style.textContent.includes('counter(page)'))")).toBe(true);
+    expect(await tab.run("document.adoptedStyleSheets.some((sheet) => [...sheet.cssRules].some((rule) => rule.cssText.includes('My book') && rule.cssText.includes('counter(page)')))")).toBe(true);
     await tab.press("Escape");
     await tab.wait(300);
     // each change is one step back: the numbers, then the footer typed, then the header
@@ -1190,6 +1268,52 @@ used("the title is the first line on the sheet: it renames as typed, the bar fol
     expect(await tab.run<string>(`q.store.list().then((all) => all.find((entry) => entry.id === ${JSON.stringify(id)})?.name)`)).toBe("Untitled");
 });
 
+used("a file opened from the computer, changed and not downloaded, makes the browser ask before the page closes", async () => {
+    await tab.run(`q.useFile("letter.md", "Dear Sam\\n")`);
+    expect(await tab.run("q.asksOnClose()")).toBe(false);
+    await tab.run("q.select([0], 8)");
+    await tab.type(",");
+    await tab.wait(1400);
+    expect(await tab.run("q.status()")).toContain("Download it to keep it");
+    expect(await tab.run("q.asksOnClose()")).toBe(true);
+    // downloaded, it is kept, and closing is quiet again
+    await tab.run("q.editor.commands.download()");
+    expect(await tab.run("q.asksOnClose()")).toBe(false);
+});
+
+used("a photograph put into a document is kept without where it was taken, even in a store that publishes", async () => {
+    const photo = await sharp({ create: { width: 6, height: 4, channels: 3, background: { r: 10, g: 120, b: 200 } } })
+        .withMetadata({ orientation: 6 })
+        .withExifMerge({ IFD0: { Make: "PhoneMaker" }, IFD3: { GPSLatitudeRef: "N", GPSLatitude: "51/1 30/1 1234/100" } })
+        .jpeg()
+        .toBuffer();
+    expect(photo.includes("PhoneMaker")).toBe(true);
+    await Bun.write(`${folder}/holiday.jpg`, photo);
+    await tab.run("q.useBrowser()");
+    const id = await tab.run<string>(`q.openIn("Trip", "Away.\\n")`);
+    await tab.files([`${folder}/holiday.jpg`]);
+    await menuLine("Insert", "Picture");
+    await tab.wait(400);
+    const kept = await tab.run<number[]>(`q.store.pictures(${JSON.stringify(id)}).then((all) => all.get("holiday.jpg").arrayBuffer()).then((buffer) => [...new Uint8Array(buffer)])`);
+    const bytes = Buffer.from(kept);
+    expect(bytes.includes("PhoneMaker")).toBe(false);
+    expect(bytes.includes(Buffer.from([0x88, 0x25]))).toBe(false);
+    expect((await sharp(bytes).metadata()).orientation).toBe(6);
+    expect(new Uint8Array(await sharp(bytes).raw().toBuffer())).toEqual(new Uint8Array(await sharp(photo).raw().toBuffer()));
+});
+
+used("a note on a Markdown file is kept for it even when another document is opened at once", async () => {
+    await tab.run("q.useBrowser()");
+    const other = await tab.run<string>(`q.store.create("other.md", "Elsewhere.\\n").then((made) => made.id)`);
+    const id = await tab.run<string>(`q.openIn("plain.md", "Some words here.\\n")`);
+    await tab.run(`q.note("Check this")`);
+    // well within the 400 ms the notes wait before they are written
+    await tab.run(`q.editor.open(q.store, { id: ${JSON.stringify(other)}, name: "other.md" })`);
+    const kept = await tab.run<string | null>(`localStorage.getItem("quire-notes:This browser:${id}")`);
+    expect(kept).toContain("Check this");
+    expect(await tab.run(`localStorage.getItem("quire-notes:This browser:${other}")`)).toBeNull();
+});
+
 used("a file's title is its name without the extension, and renaming it keeps the extension", async () => {
     await tab.run("q.useBrowser()");
     const id = await tab.run<string>(`q.openIn("notes.md", "Text.\\n")`);
@@ -1390,7 +1514,9 @@ used("page setup, from the zoom control, gives a .quire document's sheet its pap
     expect(await tab.run("[...document.querySelectorAll('.quire-menu.open .quire-menu-line.pressed')].map((line) => line.textContent)")).toEqual(["A5", "Landscape", "Normal"]);
     expect(await tab.run("q.editor.surface.getDocument().quire.page")).toEqual({ size: "A5", orientation: "landscape", margins: 25 });
     expect(await shape()).toBeCloseTo(210 / 148, 1);
-    expect(await tab.run("[...document.querySelectorAll('head style')].some((style) => style.textContent.includes('size: A5 landscape; margin: 25mm'))")).toBe(true);
+    // print is given the page as a stylesheet adopted through the CSSOM, which the page's policy allows, not a <style> added at run time, which it refuses
+    expect(await tab.run("document.adoptedStyleSheets.some((sheet) => [...sheet.cssRules].some((rule) => rule.cssText.includes('@media print') && rule.cssText.toLowerCase().includes('size: a5 landscape; margin: 25mm')))")).toBe(true);
+    expect(await tab.run("[...document.querySelectorAll('head style')].some((style) => style.textContent.includes('size: A5'))")).toBe(false);
     await tab.press("Escape");
     // each choice is one step back
     await tab.run("q.editor.surface.undo(); q.editor.surface.undo()");
