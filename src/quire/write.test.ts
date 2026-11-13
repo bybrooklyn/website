@@ -204,9 +204,9 @@ test("blocks brought together by an edit are kept apart as they read: two lists 
     expect(write(top)).toBe("***\n\nmore\n\n---\n\nend\n");
     expect(read(write(top)).frontmatter).toBeNull();
     expect(write(removeBlock(read("text\n\n---\n\nmore\n"), [0]))).toBe("---\n\nmore\n");
-    // a line across the page made a bullet is an item holding one, not a line written `- ---`
+    // a line across the page made a bullet is an item holding one, not a line written `- ---`, and items nested on one line are not `- - -`
     const made1 = changeKind(read("a\n\n---\n"), [1], { kind: "list", style: "bullet" });
-    expect(write(made1)).toBe("a\n\n- ***\n");
+    expect(write(made1)).toBe("a\n\n-\n  ---\n");
     expect(read(write(made1)).blocks[1]?.kind).toBe("list");
     // two blocks the file had together keep the single line ending between them
     for (const source of ["text\n- a\n", "# h\ntext\n", "<!-- c -->\ntext\n", "> q\n>\ntext\n", "- a\n  ```\n  x\n  ```\ntext\n", "| a |\n|---|\n# h\n"]) expect(write(read(source))).toBe(source);
@@ -274,4 +274,12 @@ test("a link's address reads back exactly as it is, angle brackets and backslash
 test("a reference link in a block nobody touched is written with its address once its definition is taken out", () => {
     const doc = removeBlock(read("see [a][r]\n\n- an [item][r]\n\n> [r]\n\nplain\n\n[r]: http://r\n"), [4]);
     expect(write(doc)).toBe("see [a](http://r)\n\n- an [item](http://r)\n\n> [r](http://r)\n\nplain\n");
+});
+
+test("items nested on one line are never written as `- - -`, which is a line across the page", () => {
+    const inner = list("bullet", [""]);
+    const middle: Block = { ...list("bullet", []), items: [{ blocks: [inner], gap: "" }] };
+    const outer: Block = { ...list("bullet", []), items: [{ blocks: [middle], gap: "" }] };
+    const text = readsBack(made([outer, paragraph("after")]));
+    expect(text).toBe("-\n  - -\n\nafter\n");
 });

@@ -248,9 +248,11 @@ function listText(list: List, context: Context): string {
             const box = item.checked !== undefined ? `[${item.checked ? "x" : " "}]` : "";
             const inner = writeBlocks(item.blocks, context, true);
             const head = `${marker} ${box ? `${box} ` : ""}`;
-            text = inner === "" ? head.trimEnd() : prefixLines(inner, head, " ".repeat(marker.length + 1), "");
-            // `- ---` is a line across the page, not an item holding one: the item's line is written `***`
-            text = text.replace(/^- ---(?=\r?\n|$)/, "- ***");
+            const indent = " ".repeat(marker.length + 1);
+            text = inner === "" ? head.trimEnd() : prefixLines(inner, head, indent, "");
+            // an item whose first line would read as a line across the page (`- ---`, or items nested on
+            // one line, `- - -`) starts its text on the line after its bullet
+            if (inner !== "" && /^(?:(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|(?:_[ \t]*){3,})$/.test(text.slice(0, text.search(/\r?\n|$/)))) text = head.trimEnd() + eol + prefixLines(inner, indent, indent, "");
         }
         out += text;
         if (index < list.items.length - 1) out += lineEndings(item.gap) > 0 && (item.source !== undefined || lineEndings(item.gap) >= lineEndings(sep)) ? item.gap : sep;
