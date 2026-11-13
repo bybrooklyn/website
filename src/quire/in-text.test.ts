@@ -252,6 +252,21 @@ test("the bar over selected words covers neither them nor the line above or belo
     expect(covers(bar, chosen.top, chosen.bottom, chosen.line - 1)).toBe(false);
 });
 
+test("the bar over selected words holds bold, italic, underline, strikethrough, link and comment, then the three block buttons", async () => {
+    if (skip("the selection bar's buttons")) return;
+    const { tab } = page!;
+    await page!.reset("Some words here.\n", [0], 5, [0], 10);
+    await tab.wait(400);
+    expect(await tab.run("[...document.querySelectorAll('.quire-select-bar.shown button')].map((each) => each.getAttribute('aria-label'))")).toEqual(["Bold", "Italic", "Underline", "Strikethrough", "Link", "Comment", "Turn into a heading", "Turn into a quote", "Turn into a list"]);
+    await page!.press(".quire-select-bar button", "Underline");
+    expect(await page!.md()).toBe("Some <u>words</u> here.\n");
+    await page!.press(".quire-select-bar button", "Comment");
+    await tab.wait(300);
+    expect(await tab.run("document.activeElement.classList.contains('quire-note-field')")).toBe(true);
+    await tab.press("Escape");
+    await tab.wait(200);
+});
+
 test("find stepping to a match brings no bar over it", async () => {
     if (skip("find without the selection bar")) return;
     const { tab } = page!;

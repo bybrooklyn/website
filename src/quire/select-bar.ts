@@ -1,5 +1,5 @@
-// The small bar that grows out of the top edge of selected text: bold, italic, strike, code, link,
-// and turn the block into a heading, a quote or a list. It follows the selection, never covers it
+// The small bar that grows out of the top edge of selected text: bold, italic, underline, strike,
+// link, comment, and turn the block into a heading, a quote or a list. It follows the selection, never covers it
 // nor the line above or below it while there is room (strips.ts), stays inside the window and below
 // the main bar, and shrinks away when the selection collapses. A selection made while the keyboard
 // is elsewhere, as find makes on each match, brings no bar.
@@ -29,12 +29,19 @@ export function barFor(doc: Document, selection: Selection, marks: Mark[]): { sh
     const style = currentStyle(doc, selection.focus.path);
     return {
         show,
-        pressed: { bold: now.bold, italic: now.italic, strike: now.strike, code: now.code, link: !!linkAt(doc, start), heading: style.startsWith("heading"), quote: style === "quote", list: now.bullet },
+        pressed: { bold: now.bold, italic: now.italic, underline: now.underline, strike: now.strike, link: !!linkAt(doc, start), heading: style.startsWith("heading"), quote: style === "quote", list: now.bullet },
     };
 }
 
-/** Builds the selection bar for a surface. `top` gives how far down the window the main bar reaches, which it keeps clear of. */
-export function createSelectBar(surface: Surface, top: () => number = () => 0): { element: HTMLElement; hide(): void } {
+/** A speech bubble, drawn as mdQuire's line icons are (ui.ts), for the bar's Comment. */
+function commentIcon(): SVGSVGElement {
+    const svg = icon("");
+    svg.innerHTML = '<path d="M5 6.5A1.5 1.5 0 0 1 6.5 5h11A1.5 1.5 0 0 1 19 6.5v8a1.5 1.5 0 0 1-1.5 1.5H10l-4 3.5V16h-.5A.5.5 0 0 1 5 15.5z"/>';
+    return svg;
+}
+
+/** Builds the selection bar for a surface. `top` gives how far down the window the main bar reaches, which it keeps clear of; `comment` starts a comment on the selected words, growing from the button pressed. */
+export function createSelectBar(surface: Surface, top: () => number = () => 0, comment?: (from: HTMLElement) => void): { element: HTMLElement; hide(): void } {
     const bar = make("div", "quire-select-bar");
     bar.setAttribute("role", "toolbar");
     bar.setAttribute("aria-label", "Selected text");
@@ -60,11 +67,14 @@ export function createSelectBar(surface: Surface, top: () => number = () => 0): 
         buttons.set(key, button);
         row.append(button);
     };
+    // the main bar's marks in its order, then a link and a comment, as Docs offers them on selected words
     add("bold", "Bold", glyph("B", "bold"), doing(toggle("bold")));
     add("italic", "Italic", glyph("I", "italic"), doing(toggle("italic")));
+    add("underline", "Underline", glyph("U", "underline"), doing(toggle("underline")));
     add("strike", "Strikethrough", glyph("S", "strike"), doing(toggle("strike")));
-    add("code", "Inline code", icon("code"), doing(toggle("code")));
     add("link", "Link", icon("link"), () => openLink());
+    // a comment is made, not switched on, so its button has no pressed state
+    if (comment) row.append(control("Comment", commentIcon(), (button) => comment(button)));
     row.append(make("span", "quire-select-rule"));
     add("heading", "Turn into a heading", icon("heading"), doing((state) => setStyleOf(currentStyle(state.doc, state.selection.focus.path).startsWith("heading") ? "paragraph" : "heading2")(state)));
     add("quote", "Turn into a quote", icon("quote"), doing(setStyleOf("quote")));
