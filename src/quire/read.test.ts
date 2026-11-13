@@ -370,3 +370,17 @@ test("a shortcode is an emoji only as a word of its own: not inside a word, and 
     const doc = insertText(read("tag:cat:dog and a :smile: b\n"), { path: [0], offset: 0 }, "z");
     expect(write(doc)).toBe("ztag:cat:dog and a :smile: b\n");
 });
+
+test("an autolink alone on its line is a paragraph holding a link, not HTML", () => {
+    for (const [source, href] of [
+        ["<http://x.y>\n", "http://x.y"],
+        ["<a@b.co>\n", "mailto:a@b.co"],
+        ["<mailto:a@b.c>\n", "mailto:a@b.c"],
+    ]) {
+        const block = read(source!).blocks[0];
+        expect({ source, kind: block?.kind, href: block?.kind === "paragraph" && block.runs[0]?.kind === "link" && block.runs[0].href }).toEqual({ source, kind: "paragraph", href });
+        same(source!);
+    }
+    expect(read("<div>\n").blocks[0]?.kind).toBe("raw");
+    expect(read("<my-tag attr>\n").blocks[0]?.kind).toBe("raw");
+});

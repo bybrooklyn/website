@@ -169,6 +169,8 @@ function htmlStarts(text: string, context: Context): boolean {
     const name = /^<\/?([A-Za-z][\w.:-]*)/.exec(text)?.[1];
     if (!name) return false;
     if (context.mdx && (/^[A-Z]/.test(name) || name.includes("."))) return true;
+    // CommonMark's tag name is letters, digits and `-`: `<http://x.y>` and `<a@b.co>` alone on a line are autolinks, not HTML
+    if (!/^<\/?[A-Za-z][A-Za-z0-9-]*(?=[\s/>]|$)/.test(text)) return false;
     // a whole tag alone on its line, or a tag whose attributes run on to the next line
     const end = tagEnd(text, 0);
     return end < 0 || blank(text.slice(end));
