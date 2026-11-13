@@ -40,7 +40,8 @@ import { docx } from "./docx";
 import { aboutPanel, control, flowMenu, keySymbols, linkForm, make, type MenuItem } from "./ui";
 import { openDialog } from "./dialog";
 import { chordFrom, findShortcuts, shortcutFor } from "./shortcuts";
-import { findTyping } from "./vocabulary";
+import { findTyping, readOff } from "./vocabulary";
+import { openTyping } from "./typing-panel";
 import { changes, createHistoryPanel, createKeeper, memoryStorage, moveVersions, snapshotParts, snapshotText, type VersionStorage } from "./versions";
 import { write } from "./write";
 import { emptyParts, opened, packQuire, written, type Parts } from "./quire-file";
@@ -127,6 +128,8 @@ const MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator
 
 /** Where typed signs being turned off is kept. */
 const SYMBOLS_KEY = "quire-symbols";
+/** Where the rest of what typing turns into, switched off in Typing preferences, is kept: a list of the typing table's ids. */
+const TYPING_KEY = "quire-typing-off";
 
 /** Where the outline being open or shut on a wide window is kept. */
 const OUTLINE_KEY = "quire-outline";
@@ -190,6 +193,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     // typed signs are on unless the writer turned them off, for every document
     try {
         if (localStorage.getItem(SYMBOLS_KEY) === "off") surface.setSymbols(false);
+        surface.setTyping(readOff(localStorage.getItem(TYPING_KEY)));
     } catch {
         // a browser keeping nothing has them on
     }
@@ -750,14 +754,23 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
                 marked: doing(toggle("mark")),
                 superscript: doing(toggle("sup")),
                 subscript: doing(toggle("sub")),
-                typedSigns: () => {
-                    surface.setSymbols(!surface.symbols());
-                    try {
-                        localStorage.setItem(SYMBOLS_KEY, surface.symbols() ? "on" : "off");
-                    } catch {
-                        // kept for this visit only
-                    }
-                },
+                typing: () =>
+                    openTyping(row.words[5]!, {
+                        // the arrows and signs are the switch that was there first, kept where it always was
+                        off: () => new Set([...surface.typingOff(), ...(surface.symbols() ? [] : ["signs"])]),
+                        set: (off) => {
+                            surface.setSymbols(!off.has("signs"));
+                            off.delete("signs");
+                            surface.setTyping(off);
+                            try {
+                                localStorage.setItem(SYMBOLS_KEY, surface.symbols() ? "on" : "off");
+                                localStorage.setItem(TYPING_KEY, JSON.stringify([...off]));
+                            } catch {
+                                // kept for this visit only
+                            }
+                        },
+                        onClose: () => surface.focus(),
+                    }),
                 downloadAs: () => downloads.open(row.words[0]!, downloadLines(), true),
                 notes: () => notes.list(row.words[2]!),
                 nextNote: () => notes.next(1),
@@ -813,7 +826,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     };
     const row = createMenuRow(() =>
         headings(
-            { rich: !!surface.getDocument().quire, contents: !!findContents(surface.getDocument()), paged: pages.paged(), look, outline: outlineView.isOpen(), markdown: host.classList.contains("markdown"), words: countWords(surface.getDocument()), full, counting: counter.shown(), align: aligned(surface.getDocument(), surface.getSelection().focus.path), symbols: surface.symbols() },
+            { rich: !!surface.getDocument().quire, contents: !!findContents(surface.getDocument()), paged: pages.paged(), look, outline: outlineView.isOpen(), markdown: host.classList.contains("markdown"), words: countWords(surface.getDocument()), full, counting: counter.shown(), align: aligned(surface.getDocument(), surface.getSelection().focus.path) },
             actions,
         ),
     );

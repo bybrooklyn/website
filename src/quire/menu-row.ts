@@ -32,8 +32,6 @@ export interface RowState {
     words: number;
     /** How the cursor's block sits across the page, shown as pressed in Format. */
     align?: Align;
-    /** Whether typed arrows and signs become their characters, shown as pressed in Tools. */
-    symbols?: boolean;
     /** True when the document has a table of contents, which Insert then offers to make again. */
     contents?: boolean;
     /** True in full screen, with the top folded away. */
@@ -55,10 +53,10 @@ export type Command =
     | "bold" | "italic" | "underline" | "strike" | "inline" | "paragraph" | "heading1" | "heading2" | "heading3" | "heading4" | "heading5" | "heading6" | "quote" | "subtext" | "spoiler"
     | "color" | "size" | "font" | "highlight" | "spacing" | "left" | "center" | "right" | "justify" | "indent" | "outdent" | "bigger" | "smaller" | "clear"
     | "check" | "about" | "wordCount" | "shortcuts" | "searchMenus" | "forgetUsed"
-    | "superscript" | "subscript" | "marked" | "typedSigns"
+    | "superscript" | "subscript" | "marked"
     | "downloadAs" | "notes" | "nextNote" | "previousNote" | "comment" | "date" | "symbols" | "contents" | "updateContents"
     | "makeCopy" | "rename" | "fileDetails" | "cut" | "copy" | "paste" | "delete"
-    | "fullScreen" | "liveCount";
+    | "fullScreen" | "liveCount" | "typing";
 
 /** The menus of the row, for a document as it stands. A line's shortcut, if it has one, comes from the table in shortcuts.ts. */
 export function headings(state: RowState, act: RowActions): Heading[] {
@@ -188,7 +186,7 @@ export function headings(state: RowState, act: RowActions): Heading[] {
                 ...line("wordCount", "Word count"),
                 ...line("history", "Version history"),
                 ...line("check", "Checking", { hint: "›" }),
-                ...line("typedSigns", "Typed signs, -> to →", { pressed: state.symbols !== false }),
+                ...line("typing", "Typing preferences"),
                 ...line("searchMenus", "Search the menus", { icon: "search" }),
                 ...line("shortcuts", "Keyboard shortcuts"),
                 ...line("forgetUsed", "Forget what I use most"),

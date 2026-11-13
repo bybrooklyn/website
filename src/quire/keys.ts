@@ -59,7 +59,7 @@ import { record, redo, seal, undo, type ChangeKind, type History, type State } f
 import { readTag } from "./components";
 import { inAddress, shortcodeAt } from "./emoji";
 import { runBefore, symbolFor } from "./symbols";
-import { LINE_MARK, PAIRS } from "./vocabulary";
+import { LINE_MARK, lineMarkOf, TYPING } from "./vocabulary";
 
 /** A piece of input: text typed (or given by the keyboard of a phone), or a named key with its modifiers. `mod` is Ctrl, or Cmd on a Mac. */
 export type Input = { type: "text"; text: string } | { type: "key"; key: string; shift?: boolean; mod?: boolean; alt?: boolean; word?: boolean };
@@ -183,9 +183,10 @@ export function sameLeaf(before: Document, path: number[], after: Document, shif
 
 // ---- typing ----
 
-/** What typing may do besides putting in the text: `symbols` turns typed pairs such as `->` into their character. */
+/** What typing may do besides putting in the text: `symbols` turns typed pairs such as `->` into their character; `off` holds the rows of the typing table (vocabulary.ts, by id) switched off, which stay as typed. */
 export interface TypingOptions {
     symbols?: boolean;
+    off?: ReadonlySet<string>;
 }
 
 /** True for a block typing cannot go into, so that it starts a paragraph after: a picture, a divider, a component's card. */
@@ -205,7 +206,10 @@ function type(state: State, text: string, options: TypingOptions = {}): Outcome 
     if (state.marks) after.marks = state.marks;
     const slash = text === "/" && block?.kind === "paragraph" && runsLength(block.runs) === 0;
     const inText = textual(block) || !!tableOf(doc, at.path);
-    const shortcut = textual(block) ? blockShortcut(after, text) ?? inlineShortcut(after, text) : inText ? inlineShortcut(after, text) : undefined;
+    // a line mark switched off in Typing preferences stays as typed
+    const line = textual(block) && options.off?.size ? textAt(typed, at.path).slice(0, at.offset + text.length) : "";
+    const lineOff = !!options.off?.has(lineMarkOf(line.slice(line.lastIndexOf("\n") + 1)) ?? "");
+    const shortcut = textual(block) ? (lineOff ? undefined : blockShortcut(after, text)) ?? inlineShortcut(after, text, options) : inText ? inlineShortcut(after, text, options) : undefined;
     if (shortcut) return { state: shortcut, kind: "shortcut", literal: after };
     const longer = inText ? longerRun(after, text, options) : undefined;
     if (longer) return { state: longer, kind: "type", slash: false };
@@ -222,6 +226,7 @@ function symbolShortcut(state: State, typed: string, options: TypingOptions): St
     const quiet = (offset: number) => marksNear(doc, { path: at.path, offset }).some((mark) => mark === "code");
     if (typed.length !== 1) return undefined;
     if (typed === ":") {
+        if (options.off?.has("emoji")) return undefined;
         const code = /:([a-z0-9_+-]+):$/.exec(before);
         if (!code || /[￼\n]/.test(code[0])) return undefined;
         const start = at.offset - code[0].length;
@@ -340,14 +345,14 @@ function startAt(doc: Document, path: number[], start: number): Document {
 }
 
 /** The pairs of the typing table (vocabulary.ts), `**bold**` to `^sup^`, turned into their mark when the closing sign is typed. */
-function inlineShortcut(state: State, typed: string): State | undefined {
+function inlineShortcut(state: State, typed: string, options: TypingOptions = {}): State | undefined {
     // text committed by an input method may be several characters: the last one is the closing mark
     const last = typed.slice(-1);
     if (!last || !"*_`~=^|".includes(last)) return undefined;
     const { doc } = state;
     const at = state.selection.focus;
     const before = textAt(doc, at.path).slice(0, at.offset);
-    for (const { pattern, mark, width } of PAIRS) {
+    for (const { pattern, mark, width } of TYPING.flatMap((each) => (each.pair && !options.off?.has(each.id) ? [each.pair] : []))) {
         const match = pattern.exec(before);
         if (!match) continue;
         const start = match.index + match[1]!.length;
@@ -575,7 +580,7 @@ function forwardDelete(state: State, word: boolean): Outcome {
 
 // ---- Enter, Shift+Enter, Tab ----
 
-function enter(state: State): Outcome {
+function enter(state: State, options: TypingOptions = {}): Outcome {
     const { doc, at } = clear(state);
     const table = tableOf(doc, at.path);
     if (table) {
@@ -597,7 +602,7 @@ function enter(state: State): Outcome {
     const block = blockAt(doc, at.path);
     if (!block) return null;
     // Enter at the end of a line that is only three backticks and perhaps a language makes the code block
-    const fence = block.kind === "paragraph" && at.offset === runsLength(block.runs) ? FENCE.exec(runsText(block.runs)) : null;
+    const fence = !options.off?.has("fence") && block.kind === "paragraph" && at.offset === runsLength(block.runs) ? FENCE.exec(runsText(block.runs)) : null;
     if (fence) {
         const emptied = deleteText(doc, { start: { path: at.path, offset: 0 }, end: at });
         const next = changeKind(emptied, at.path, { kind: "code", language: fence[1]! });
@@ -746,7 +751,7 @@ export function handle(state: State, input: Input, options: TypingOptions = {}):
     }
     if (key === "Backspace") return backspace(state, word || alt);
     if (key === "Delete") return forwardDelete(state, word || alt);
-    if (key === "Enter") return shift ? softBreak(state) : enter(state);
+    if (key === "Enter") return shift ? softBreak(state) : enter(state, options);
     if (key === "Tab") return tab(state, shift);
     return null;
 }

@@ -8,14 +8,65 @@ import { createHistory } from "./history";
 import { caret, step, type Editor } from "./keys";
 import { read } from "./read";
 import { write } from "./write";
-import { LINE_MARK, PAIRS, TYPING } from "./vocabulary";
+import { GROUPS, LINE_MARK, lineMarkOf, PAIRS, readOff, TYPING } from "./vocabulary";
 
-function typeInto(text: string) {
+function typeInto(text: string, off?: Set<string>) {
     let editor: Editor = { state: { doc: documentOf([paragraph()]), selection: caret([0], 0) }, history: createHistory() };
     let time = 0;
-    for (const char of text) editor = step(editor, char === "\n" ? { type: "key", key: "Enter" } : { type: "text", text: char }, (time += 10)).editor;
+    for (const char of text) editor = step(editor, char === "\n" ? { type: "key", key: "Enter" } : { type: "text", text: char }, (time += 10), { off }).editor;
     return { editor, time };
 }
+
+test("a row switched off in Typing preferences leaves its example as typed, and the others still work", () => {
+    for (const each of TYPING) {
+        if (!each.example) continue;
+        const [typed, markdown] = each.example;
+        const kept = typeInto(typed, new Set([each.id])).editor.state.doc;
+        // as typed: one paragraph holding exactly the characters, nothing made of them
+        const block = kept.blocks[0] as { kind: string; runs: Run[] };
+        expect({ id: each.id, kind: block.kind, text: runsText(block.runs) }).toEqual({ id: each.id, kind: "paragraph", text: typed.replace(/\n.*/s, "") });
+        expect(write(kept)).not.toBe(markdown);
+        // with some other row off, it still converts
+        const other = TYPING.find((row) => row.id !== each.id)!.id;
+        expect({ id: each.id, written: write(typeInto(typed, new Set([other])).editor.state.doc) }).toEqual({ id: each.id, written: markdown });
+    }
+});
+
+test("a line is known by the row it is about to become, and only by a whole mark", () => {
+    expect(lineMarkOf("## ")).toBe("heading");
+    expect(lineMarkOf("* ")).toBe("bullet");
+    expect(lineMarkOf("12) ")).toBe("number");
+    expect(lineMarkOf("i. ")).toBe("letters");
+    expect(lineMarkOf("[x] ")).toBe("task");
+    expect(lineMarkOf("[] ")).toBe("emptyTask");
+    expect(lineMarkOf(">>> ")).toBe("quoteRest");
+    expect(lineMarkOf("-# ")).toBe("subtext");
+    expect(lineMarkOf("```rust ")).toBe("fence");
+    expect(lineMarkOf("---")).toBe("divider");
+    expect(lineMarkOf("$$")).toBe("maths");
+    expect(lineMarkOf("<DETAILS>")).toBe("details");
+    expect(lineMarkOf("words ")).toBeUndefined();
+    expect(lineMarkOf("#nospace")).toBeUndefined();
+});
+
+test("every row has its own id, and every row is in one group", () => {
+    expect(new Set(TYPING.map((each) => each.id)).size).toBe(TYPING.length);
+    expect(GROUPS.flatMap((group) => group.rows)).toHaveLength(TYPING.length);
+    expect(readOff('["bold","nothing"]')).toEqual(new Set(["bold"]));
+    expect(readOff("not json")).toEqual(new Set());
+    expect(readOff(null)).toEqual(new Set());
+});
+
+test("with a fence switched off, Enter after three backticks makes a new line, not code", () => {
+    const doc = typeInto("```\n", new Set(["fence"])).editor.state.doc;
+    expect(doc.blocks.map((block) => block.kind)).toEqual(["paragraph", "paragraph"]);
+});
+
+test("with emoji names switched off, a name between colons stays as typed", () => {
+    const block = typeInto("a :smile:", new Set(["emoji"])).editor.state.doc.blocks[0] as { runs: Run[] };
+    expect(block.runs.map((run) => run.kind)).toEqual(["text"]);
+    expect(runsText(block.runs)).toBe("a :smile:");
+});
 
 test("every example in the typing table writes the Markdown the table says", () => {
     for (const each of TYPING) {

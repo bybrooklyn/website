@@ -13,6 +13,8 @@ export type Origin = "Markdown" | "GitHub" | "extra";
 
 /** One thing typing does. */
 export interface Typed {
+    /** Its name, by which it is switched off in Tools, Typing preferences, and kept so in this browser. */
+    id: string;
     /** What is typed, as the panel shows it. */
     typed: string;
     /** What it becomes. */
@@ -31,35 +33,35 @@ export interface Typed {
 /** The whole of what typing turns into something, in the order the panel lists it. */
 export const TYPING: Typed[] = [
     // ---- at the start of a line ----
-    { typed: "# to ###### then a space", becomes: "Heading 1 to 6", saved: "# Heading", origin: "Markdown", example: ["## Small", "## Small\n"], line: /#{1,6}/ },
-    { typed: "- or * or + then a space", becomes: "Bulleted list", saved: "- item", origin: "Markdown", example: ["* item", "- item\n"], line: /[-*+]/ },
-    { typed: "1. or 1) then a space", becomes: "Numbered list, from that number", saved: "1. item", origin: "Markdown", example: ["3. third", "3. third\n"], line: /\d{1,9}[.)]/ },
-    { typed: "a. or i. then a space", becomes: "Numbered list (a file keeps numbers; nested numbers are drawn as letters, then roman numerals)", saved: "1. item", origin: "extra", example: ["a. first", "1. first\n"], line: /[aAiI][.)]/ },
-    { typed: "[ ] or [x] then a space", becomes: "Checklist, empty or ticked", saved: "- [ ] item", origin: "GitHub", example: ["[x] done", "- [x] done\n"], line: /\[[ xX]\]/ },
-    { typed: "[] then a space", becomes: "Checklist", saved: "- [ ] item", origin: "extra", example: ["[] to do", "- [ ] to do\n"], line: /\[\]/ },
-    { typed: "> then a space", becomes: "Quote", saved: "> quoted", origin: "Markdown", example: ["> quoted", "> quoted\n"], line: />/ },
-    { typed: ">>> then a space", becomes: "Quote of everything after, to the end", saved: "> each line", origin: "extra", example: [">>> one\ntwo", "> one\n>\n> two\n"] },
-    { typed: "-# then a space", becomes: "Subtext: small quiet text", saved: "-# text", origin: "extra", example: ["-# small print", "-# small print\n"] },
-    { typed: "[!NOTE] then a space", becomes: "Callout (NOTE, TIP, IMPORTANT, WARNING, CAUTION)", saved: "> [!NOTE]", origin: "GitHub" },
-    { typed: "``` then a space or Enter; ```rust for a language", becomes: "Code block", saved: "```", origin: "Markdown", example: ["``` ", "```\n```\n"] },
-    { typed: "$$ on an empty line", becomes: "Block of maths", saved: "$$", origin: "extra" },
-    { typed: "--- on an empty line", becomes: "Horizontal line", saved: "---", origin: "Markdown" },
-    { typed: ": then a space, under a line", becomes: "Definition of the line above", saved: ": definition", origin: "extra" },
-    { typed: "<details> on an empty line", becomes: "Folding section", saved: "<details>", origin: "Markdown" },
+    { id: "heading", typed: "# to ###### then a space", becomes: "Heading 1 to 6", saved: "# Heading", origin: "Markdown", example: ["## Small", "## Small\n"], line: /#{1,6}/ },
+    { id: "bullet", typed: "- or * or + then a space", becomes: "Bulleted list", saved: "- item", origin: "Markdown", example: ["* item", "- item\n"], line: /[-*+]/ },
+    { id: "number", typed: "1. or 1) then a space", becomes: "Numbered list, from that number", saved: "1. item", origin: "Markdown", example: ["3. third", "3. third\n"], line: /\d{1,9}[.)]/ },
+    { id: "letters", typed: "a. or i. then a space", becomes: "Numbered list (a file keeps numbers; nested numbers are drawn as letters, then roman numerals)", saved: "1. item", origin: "extra", example: ["a. first", "1. first\n"], line: /[aAiI][.)]/ },
+    { id: "task", typed: "[ ] or [x] then a space", becomes: "Checklist, empty or ticked", saved: "- [ ] item", origin: "GitHub", example: ["[x] done", "- [x] done\n"], line: /\[[ xX]\]/ },
+    { id: "emptyTask", typed: "[] then a space", becomes: "Checklist", saved: "- [ ] item", origin: "extra", example: ["[] to do", "- [ ] to do\n"], line: /\[\]/ },
+    { id: "quote", typed: "> then a space", becomes: "Quote", saved: "> quoted", origin: "Markdown", example: ["> quoted", "> quoted\n"], line: />/ },
+    { id: "quoteRest", typed: ">>> then a space", becomes: "Quote of everything after, to the end", saved: "> each line", origin: "extra", example: [">>> one\ntwo", "> one\n>\n> two\n"] },
+    { id: "subtext", typed: "-# then a space", becomes: "Subtext: small quiet text", saved: "-# text", origin: "extra", example: ["-# small print", "-# small print\n"] },
+    { id: "callout", typed: "[!NOTE] then a space", becomes: "Callout (NOTE, TIP, IMPORTANT, WARNING, CAUTION)", saved: "> [!NOTE]", origin: "GitHub" },
+    { id: "fence", typed: "``` then a space or Enter; ```rust for a language", becomes: "Code block", saved: "```", origin: "Markdown", example: ["``` ", "```\n```\n"] },
+    { id: "maths", typed: "$$ on an empty line", becomes: "Block of maths", saved: "$$", origin: "extra" },
+    { id: "divider", typed: "--- on an empty line", becomes: "Horizontal line", saved: "---", origin: "Markdown" },
+    { id: "definition", typed: ": then a space, under a line", becomes: "Definition of the line above", saved: ": definition", origin: "extra" },
+    { id: "details", typed: "<details> on an empty line", becomes: "Folding section", saved: "<details>", origin: "Markdown" },
     // ---- in a line, once the closing sign is typed ----
-    { typed: "**bold**", becomes: "Bold", saved: "**bold**", origin: "Markdown", example: ["a **b**", "a **b**\n"], pair: { mark: "bold", pattern: /(^|[^*])\*\*([^*\s](?:[^*]*[^*\s])?)\*\*$/, width: 2 } },
-    { typed: "__bold__", becomes: "Bold", saved: "**bold**", origin: "Markdown", example: ["a __b__", "a **b**\n"], pair: { mark: "bold", pattern: /(^|[^_\p{L}\p{N}])__([^_\s](?:[^_]*[^_\s])?)__$/u, width: 2 } },
-    { typed: "~~strike~~", becomes: "Strikethrough", saved: "~~strike~~", origin: "GitHub", example: ["a ~~b~~", "a ~~b~~\n"], pair: { mark: "strike", pattern: /(^|[^~])~~([^~\s](?:[^~]*[^~\s])?)~~$/, width: 2 } },
-    { typed: "||spoiler||", becomes: "Spoiler, hidden until pressed", saved: "||spoiler||", origin: "extra", example: ["a ||b||", "a ||b||\n"], pair: { mark: "spoiler", pattern: /(^|[^|])\|\|([^|\s](?:[^|]*[^|\s])?)\|\|$/, width: 2 } },
-    { typed: "==marked==", becomes: "Marked", saved: "==marked==", origin: "extra", example: ["a ==b==", "a ==b==\n"], pair: { mark: "mark", pattern: /(^|[^=])==([^=\s](?:[^=]*[^=\s])?)==$/, width: 2 } },
-    { typed: "*italic*", becomes: "Italic", saved: "*italic*", origin: "Markdown", example: ["a *b*", "a *b*\n"], pair: { mark: "italic", pattern: /(^|[^*])\*([^*\s](?:[^*]*[^*\s])?)\*$/, width: 1 } },
-    { typed: "_italic_", becomes: "Italic", saved: "*italic*", origin: "Markdown", example: ["a _b_", "a *b*\n"], pair: { mark: "italic", pattern: /(^|[^_\p{L}\p{N}])_([^_\s](?:[^_]*[^_\s])?)_$/u, width: 1 } },
-    { typed: "~strike~", becomes: "Strikethrough", saved: "~~strike~~", origin: "GitHub", example: ["a ~b~", "a ~~b~~\n"], pair: { mark: "strike", pattern: /(^|[^~])~([^~\s](?:[^~]*[^~\s])?)~$/, width: 1 } },
-    { typed: "`code`", becomes: "Code in the line", saved: "`code`", origin: "Markdown", example: ["a `b`", "a `b`\n"], pair: { mark: "code", pattern: /(^|[^`])`([^`]+)`$/, width: 1 } },
-    { typed: "^superscript^", becomes: "Superscript", saved: "<sup>superscript</sup>", origin: "extra", example: ["x ^2^", "x <sup>2</sup>\n"], pair: { mark: "sup", pattern: /(^|[^^[])\^([^^\s]+)\^$/, width: 1 } },
-    { typed: ":smile: (a known name between colons)", becomes: "Emoji", saved: ":smile:", origin: "extra" },
-    { typed: ": and two letters", becomes: "A list of emoji to choose from; Tab or Enter puts one in, anything else leaves the text as typed", saved: "the emoji's name between colons", origin: "extra" },
-    { typed: "-> <- => != <= >=", becomes: "Arrows and signs (Tools, Typed signs)", saved: "the character", origin: "extra" },
+    { id: "bold", typed: "**bold**", becomes: "Bold", saved: "**bold**", origin: "Markdown", example: ["a **b**", "a **b**\n"], pair: { mark: "bold", pattern: /(^|[^*])\*\*([^*\s](?:[^*]*[^*\s])?)\*\*$/, width: 2 } },
+    { id: "boldUnder", typed: "__bold__", becomes: "Bold", saved: "**bold**", origin: "Markdown", example: ["a __b__", "a **b**\n"], pair: { mark: "bold", pattern: /(^|[^_\p{L}\p{N}])__([^_\s](?:[^_]*[^_\s])?)__$/u, width: 2 } },
+    { id: "strikeDouble", typed: "~~strike~~", becomes: "Strikethrough", saved: "~~strike~~", origin: "GitHub", example: ["a ~~b~~", "a ~~b~~\n"], pair: { mark: "strike", pattern: /(^|[^~])~~([^~\s](?:[^~]*[^~\s])?)~~$/, width: 2 } },
+    { id: "spoiler", typed: "||spoiler||", becomes: "Spoiler, hidden until pressed", saved: "||spoiler||", origin: "extra", example: ["a ||b||", "a ||b||\n"], pair: { mark: "spoiler", pattern: /(^|[^|])\|\|([^|\s](?:[^|]*[^|\s])?)\|\|$/, width: 2 } },
+    { id: "marked", typed: "==marked==", becomes: "Marked", saved: "==marked==", origin: "extra", example: ["a ==b==", "a ==b==\n"], pair: { mark: "mark", pattern: /(^|[^=])==([^=\s](?:[^=]*[^=\s])?)==$/, width: 2 } },
+    { id: "italic", typed: "*italic*", becomes: "Italic", saved: "*italic*", origin: "Markdown", example: ["a *b*", "a *b*\n"], pair: { mark: "italic", pattern: /(^|[^*])\*([^*\s](?:[^*]*[^*\s])?)\*$/, width: 1 } },
+    { id: "italicUnder", typed: "_italic_", becomes: "Italic", saved: "*italic*", origin: "Markdown", example: ["a _b_", "a *b*\n"], pair: { mark: "italic", pattern: /(^|[^_\p{L}\p{N}])_([^_\s](?:[^_]*[^_\s])?)_$/u, width: 1 } },
+    { id: "strike", typed: "~strike~", becomes: "Strikethrough", saved: "~~strike~~", origin: "GitHub", example: ["a ~b~", "a ~~b~~\n"], pair: { mark: "strike", pattern: /(^|[^~])~([^~\s](?:[^~]*[^~\s])?)~$/, width: 1 } },
+    { id: "code", typed: "`code`", becomes: "Code in the line", saved: "`code`", origin: "Markdown", example: ["a `b`", "a `b`\n"], pair: { mark: "code", pattern: /(^|[^`])`([^`]+)`$/, width: 1 } },
+    { id: "sup", typed: "^superscript^", becomes: "Superscript", saved: "<sup>superscript</sup>", origin: "extra", example: ["x ^2^", "x <sup>2</sup>\n"], pair: { mark: "sup", pattern: /(^|[^^[])\^([^^\s]+)\^$/, width: 1 } },
+    { id: "emoji", typed: ":smile: (a known name between colons)", becomes: "Emoji", saved: ":smile:", origin: "extra" },
+    { id: "emojiList", typed: ": and two letters", becomes: "A list of emoji to choose from; Tab or Enter puts one in, anything else leaves the text as typed", saved: "the emoji's name between colons", origin: "extra" },
+    { id: "signs", typed: "-> <- => != <= >=", becomes: "Arrows and signs", saved: "the character", origin: "extra" },
 ];
 
 /** The inline pairs keys.ts completes, double signs before single ones. */
@@ -67,6 +69,47 @@ export const PAIRS = TYPING.flatMap((each) => (each.pair ? [each.pair] : []));
 
 /** What, typed at the start of a line and followed by a space, turns that line into a block. */
 export const LINE_MARK = new RegExp(`^(${TYPING.flatMap((each) => (each.line ? [each.line.source] : [])).join("|")}) $`);
+
+/** A line mark as the line stands once its last sign is typed, by the id of its row: what `lineMarkOf` reads. */
+const LINE_WHOLE: [string, RegExp][] = [
+    ["heading", /^#{1,6} $/],
+    ["bullet", /^[-*+] $/],
+    ["number", /^\d{1,9}[.)] $/],
+    ["letters", /^[aAiI][.)] $/],
+    ["task", /^\[[ xX]\] $/],
+    ["emptyTask", /^\[\] $/],
+    ["quote", /^> $/],
+    ["quoteRest", /^>>> $/],
+    ["subtext", /^-# $/],
+    ["callout", /^\[![A-Za-z]+\] $/],
+    ["fence", /^```[\w+#.-]* $/],
+    ["maths", /^\$\$$/],
+    ["divider", /^---$/],
+    ["definition", /^: $/],
+    ["details", /^<details>$/i],
+];
+
+/** Which row of the table a line is about to become, read from the line as it stands once its last sign is typed; undefined if it is none. */
+export function lineMarkOf(line: string): string | undefined {
+    return LINE_WHOLE.find(([, whole]) => whole.test(line))?.[0];
+}
+
+/** The rows of the table grouped by where their meaning comes from, in the order Typing preferences shows them. */
+export const GROUPS: { origin: Origin; title: string; all: string; rows: Typed[] }[] = [
+    { origin: "Markdown", title: "Markdown's own marks", all: "All Markdown marks", rows: TYPING.filter((each) => each.origin === "Markdown") },
+    { origin: "GitHub", title: "GitHub's marks", all: "All GitHub marks", rows: TYPING.filter((each) => each.origin === "GitHub") },
+    { origin: "extra", title: "mdQuire's extras", all: "All mdQuire extras", rows: TYPING.filter((each) => each.origin === "extra") },
+];
+
+/** The ids switched off, as kept in this browser: a list written as JSON, anything else read as nothing switched off. */
+export function readOff(kept: string | null): Set<string> {
+    try {
+        const list: unknown = JSON.parse(kept ?? "[]");
+        return new Set(Array.isArray(list) ? list.filter((each): each is string => TYPING.some((row) => row.id === each)) : []);
+    } catch {
+        return new Set();
+    }
+}
 
 /** The lines of the table whose words have what was typed, for the Ctrl+/ panel's search. */
 export function findTyping(query: string): Typed[] {

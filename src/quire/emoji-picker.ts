@@ -83,7 +83,8 @@ export function createEmojiPicker(surface: Surface): { close(): void } {
     const look = () => {
         const { path, offset } = surface.getSelection().focus;
         const query = emojiQuery(surface.getDocument(), path, offset);
-        shown = query === undefined || startOf() === dismissed ? [] : matchEmoji(query);
+        // switched off in Typing preferences, no list comes
+        shown = query === undefined || startOf() === dismissed || surface.typingOff().has("emojiList") ? [] : matchEmoji(query);
         if (shown.length === 0) return menu.close(false);
         active = Math.min(active, shown.length - 1);
         const selection = getSelection();
