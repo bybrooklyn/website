@@ -4,7 +4,7 @@
 // underline `<u>`, and alignment a `<div align>` around the block, the forms the reader reads back.
 
 import { pictureHtml, sized } from "./pictures";
-import type { Align, Block, Document, Leaf, LinkRun, List, Run, TextRun } from "./document";
+import type { Align, Block, Document, Leaf, LinkRun, List, ListItem, Run, TextRun } from "./document";
 import { emojiOf } from "./emoji";
 import { definedLabels, followed, normalLabel, standsApart } from "./read";
 
@@ -68,8 +68,9 @@ function otherSign(list: List): List {
 
 /** Writes blocks one after another. `inside` is true in a list item, quote or footnote, where the last block ends with nothing. */
 function writeBlocks(all: Block[], context: Context, inside: boolean): string {
-    // an empty paragraph has no Markdown form, so a fresh one is left out
-    const blocks = all.filter((block) => !(block.source === undefined && block.kind === "paragraph" && block.runs.length === 0));
+    // an empty paragraph has no Markdown form, so a fresh one is left out, and so is the empty line an
+    // empty item, quote or footnote is read with, once something else stands beside it
+    const blocks = all.filter((block) => !(block.kind === "paragraph" && block.runs.length === 0 && (block.source === undefined || (block.source === "" && all.length > 1))));
     if (blocks.length && blocks.length < all.length && all[all.length - 1] !== blocks[blocks.length - 1]) blocks[blocks.length - 1] = { ...blocks[blocks.length - 1]!, gap: all[all.length - 1]!.gap };
     const texts: string[] = [];
     blocks.forEach((block, index) => {
@@ -160,7 +161,35 @@ function writeBlock(block: Block, context: Context): string {
     }
 }
 
+/**
+ * Whether a definition list can keep an item: a term with words, then at least one definition, each
+ * one line of text. An item edited past that (its definitions joined into its term, a list pasted in)
+ * is written as the blocks it holds, standing between the definition lists before and after it.
+ */
+const definable = (item: ListItem) =>
+    item.source !== undefined ||
+    (item.blocks.length >= 2 && item.blocks.every((block) => block.kind === "paragraph" && !block.subtext && !block.align && !block.runs.some((run) => run.kind === "break")) && (item.blocks[0] as { runs: Run[] }).runs.some((run) => run.kind !== "text" || run.text.trim() !== ""));
+
 function listText(list: List, context: Context): string {
+    if (list.style === "definition" && !list.items.every(definable)) {
+        // the items it can keep stay lists of their own; the others are written as their blocks
+        const parts: string[] = [];
+        let kept: ListItem[] = [];
+        const flush = () => {
+            if (kept.length) parts.push(listText({ ...list, items: kept.map((item, index) => (index === kept.length - 1 ? { ...item, gap: "" } : item)) }, context));
+            kept = [];
+        };
+        for (const item of list.items) {
+            if (definable(item)) kept.push(item);
+            else {
+                flush();
+                const blocks = writeBlocks(item.blocks, context, true);
+                if (blocks !== "") parts.push(blocks);
+            }
+        }
+        flush();
+        return parts.join(context.eol + context.eol);
+    }
     const eol = context.eol;
     const sep = list.loose ? eol + eol : eol;
     let out = "";
@@ -192,9 +221,9 @@ function listText(list: List, context: Context): string {
 function definitionText(blocks: Block[], context: Context): string {
     return blocks
         .map((block, index) => {
-            let line = block.source ?? (block.kind === "paragraph" || block.kind === "heading" ? writeRuns(block.runs, context, false).replace(/[ \t]*\n[ \t]*/g, " ").trim() : writeBlock(block, context).replace(/\r?\n/g, " "));
-            // a term must not read as a definition, or as the start of some other block
-            if (index === 0 && block.source === undefined) line = /^(:|#{1,6}(\s|$)|>|[-+*](\s|$))/.test(line) ? `\\${line}` : line.replace(/^(\d{1,9})([.)])(?=\s|$)/, "$1\\$2");
+            if (block.source !== undefined) return index === 0 ? block.source : `: ${block.source}`;
+            // each is one line; a term must not read as a definition, or as the start of some other block
+            const line = paragraphText(block.kind === "paragraph" ? block.runs : [], context).replace(/[ \t]*\r?\n[ \t]*/g, " ");
             return index === 0 ? line : `: ${line}`;
         })
         .join(context.eol);

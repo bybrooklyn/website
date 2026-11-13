@@ -91,6 +91,12 @@ const leafOf = (doc: Document, path: number[]) => tableOf(doc, path) ?? path;
 const indexOf = (doc: Document, path: number[]) => blockPaths(doc).findIndex((each) => samePath(each, leafOf(doc, path)));
 const textual = (block?: Block) => block?.kind === "paragraph" || block?.kind === "heading";
 
+/** True if the block at a path is a term or definition of a definition list. */
+function inDefinition(doc: Document, path: number[]): boolean {
+    const owner = inItem(doc, path) ? blockAt(doc, path.slice(0, -2)) : undefined;
+    return owner?.kind === "list" && owner.style === "definition";
+}
+
 /** True if the block at a path sits directly in a list item. */
 function inItem(doc: Document, path: number[]): boolean {
     return path.length >= 3 && blockAt(doc, path.slice(0, -2))?.kind === "list";
@@ -514,8 +520,8 @@ function softBreak(state: State): Outcome {
     const block = blockAt(doc, at.path);
     if (block?.kind === "code" || block?.kind === "raw") return done(insertText(doc, at, "\n"), caret(at.path, at.offset + 1), "type");
     if (!textual(block) && !tableOf(doc, at.path)) return null;
-    // a heading is one line in Markdown: a break in it could not be kept
-    if (block?.kind === "heading") return done(state.doc, state.selection, "move");
+    // a heading, and a term or definition, is one line in Markdown: a break in it could not be kept
+    if (block?.kind === "heading" || inDefinition(doc, at.path)) return done(state.doc, state.selection, "move");
     return done(insertAtom(doc, at, { kind: "break" }), caret(at.path, at.offset + 1), "type");
 }
 
@@ -536,6 +542,8 @@ function tab(state: State, back: boolean): Outcome {
         return done(grown, caret(cell, lengthOf(grown, cell)), grown === doc ? "move" : "structure");
     }
     const block = blockAt(doc, at.path);
+    // a definition list does not nest
+    if (inDefinition(doc, at.path)) return done(doc, state.selection, "move");
     if (inItem(doc, at.path)) {
         const next = back ? outdent(doc, at.path) : indent(doc, at.path);
         const selection: Selection = { anchor: { path: sameLeaf(doc, state.selection.anchor.path, next), offset: state.selection.anchor.offset }, focus: { path: sameLeaf(doc, at.path, next), offset: at.offset } };
@@ -653,15 +661,27 @@ export function apply(editor: Editor, outcome: Outcome, time: number): Editor {
 
 const leafCount = (block: Block): number => (block.kind === "list" ? block.items.reduce((sum, item) => sum + item.blocks.reduce((inner, each) => inner + leafCount(each), 0), 0) : block.kind === "quote" || block.kind === "footnote" ? block.blocks.reduce((sum, each) => sum + leafCount(each), 0) : 1);
 
+/** The words of a block and of every block in it, a line for each, for pasting where only a line of text can go. */
+function wordsOf(block: Block): string {
+    if (textual(block)) return runsText((block as { runs: Run[] }).runs);
+    if (block.kind === "code") return block.code;
+    if (block.kind === "raw") return block.text;
+    if (block.kind === "list") return block.items.flatMap((item) => item.blocks.map(wordsOf)).filter((each) => each !== "").join("\n");
+    if (block.kind === "quote" || block.kind === "footnote") return block.blocks.map(wordsOf).filter((each) => each !== "").join("\n");
+    if (block.kind === "table") return [block.header, ...block.rows].map((row) => row.map(runsText).join(" ")).join("\n");
+    return block.kind === "image" ? block.alt : "";
+}
+
 /** Puts pasted blocks at the cursor, in place of what is selected. A single paragraph goes into the line; more are set between the two halves of the block. */
 export function paste(state: State, blocks: Block[]): State {
     const { doc, at } = clear(state);
     if (blocks.length === 0) return { doc, selection: caret(at.path, at.offset) };
     const block = blockAt(doc, at.path);
-    const plain = blocks.map((each) => (textual(each) ? runsText((each as { runs: Run[] }).runs) : each.kind === "code" ? each.code : each.kind === "raw" ? each.text : "")).join("\n");
+    const plain = blocks.map(wordsOf).filter((each) => each !== "").join("\n");
     if (block?.kind === "code" || block?.kind === "raw") return { doc: insertText(doc, at, plain), selection: caret(at.path, at.offset + plain.length) };
     const first = blocks[0]!;
-    if (tableOf(doc, at.path) || (blocks.length === 1 && first.kind === "paragraph" && textual(block))) {
+    // a cell, a term and a definition each take one line of text: pasted blocks go in as their words
+    if (tableOf(doc, at.path) || inDefinition(doc, at.path) || (blocks.length === 1 && first.kind === "paragraph" && textual(block))) {
         const runs = blocks.length === 1 && textual(first) ? (first as { runs: Run[] }).runs : [{ kind: "text" as const, text: plain.replace(/\n/g, " "), marks: [] }];
         return { doc: insertRunsAt(doc, at, runs), selection: caret(at.path, at.offset + runsLength(runs)) };
     }

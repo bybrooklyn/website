@@ -515,3 +515,22 @@ test("Normal text on an item's line takes it out of the list, and the selection 
     expect(normal.markdown).toBe("- a\n\nb\n");
     expect(normal.cursor).toEqual({ path: [1], offset: 0 });
 });
+
+test("a definition list keeps a line of text for each term and definition: no other kind is made in it, and an item edited past that is written as its blocks", () => {
+    for (const key of ["1", "2"]) {
+        const e = editor("Term\n: def\n", [0, 0, 1], 0);
+        e.key(key, { mod: true, alt: true });
+        expect(e.markdown).toBe("Term\n: def\n");
+    }
+    const tab = editor("Term\n: def\n\nTwo\n: more\n", [0, 1, 0], 0);
+    tab.key("Tab");
+    tab.key("Enter", { shift: true });
+    expect(tab.markdown).toBe("Term\n: def\n\nTwo\n: more\n");
+    // Delete at the end of a term joins its only definition into it: the item is a paragraph now
+    const joined = editor("Term\n: def\n\nTwo\n: more\n", [0, 0, 0], 4);
+    joined.key("Delete");
+    expect(joined.markdown).toBe("Termdef\n\nTwo\n: more\n");
+    // blocks pasted into a definition go in as their words
+    const pasted = paste({ doc: read("Term\n: def\n"), selection: caret([0, 0, 1], 3) }, read("- a\n- b\n\n# c\n").blocks);
+    expect(write(pasted.doc)).toBe("Term\n: defa b c\n");
+});

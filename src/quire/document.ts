@@ -1043,6 +1043,8 @@ export function changeKind(doc: Document, path: number[], to: Kind): Document {
     if (!block) return doc;
     const parent = parentOf(doc, path);
     const runs = runsOf(block);
+    // a definition list holds a line of text for each term and definition, and nothing else
+    if (parent.kind === "item" && (blockAt(doc, parent.list) as List).style === "definition" && to.kind !== "paragraph") return doc;
 
     if (to.kind === "paragraph" || to.kind === "heading") {
         if (to.kind === "paragraph" && block.kind === "paragraph") {
