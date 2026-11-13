@@ -51,6 +51,30 @@ Nothing.
   that the right tools are offered.
 - Its working name is imgQuire, as part of a Quire suite with mdQuire.
 
+## Chosen features
+
+All of it is to be simple and easy first, with the depth underneath.
+
+- **Redacting.** Click a word to hide exactly that text (the text reader finds the words). On arrival,
+  what looks private is found and offered: emails, phone numbers, addresses of machines, keys and tokens,
+  names, street addresses, faces, number plates. Hiding one thing offers every other copy of it, across a
+  batch too. Selecting something brings up the same small bar and right-click menu that mdQuire has for
+  selected words, fitted to pictures.
+- **Colour and fixing.** Grading a part of the picture (painted, a gradient, or a thing a model found: the
+  sky, a person, the background) as well as the whole. Curves, colour wheels, a colour's own hue and
+  saturation, with a histogram and waveform. Looks that are saved, applied to other pictures and to a
+  batch, and written and read as `.cube` files. One-press fixes: levels, white balance, the horizon,
+  perspective, a colour cast, each a step to tune afterwards. Repairing what compression took: blocks and
+  ringing from a JPEG removed, and detail restored.
+- **Knowing the picture.** A panel of facts on arrival: size, format, colour profile, camera, lens, date,
+  place, whether it was edited, its main colours, what a model sees in it. All metadata read and written
+  (EXIF, IPTC, XMP): a date fixed, author and licence set, alt text and a caption kept in the file,
+  everything stripped or only the location. Text in a picture selected and copied as text on a page is.
+- **Marking and making.** Arrows, boxes, numbered steps, a highlighter, a magnifier, a spotlight, all
+  editable later. Caption text with an outline, speech bubbles, stickers, a thing cut from one picture
+  and put on another. Named sizes, templates, grids and collages, shapes, guides that snap. Many typefaces
+  to choose from.
+
 ## Ideas noted
 
 - From Foxy, the owner's file transfer tool: send a photograph from the phone to the PC with a short code
