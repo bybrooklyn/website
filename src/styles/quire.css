@@ -460,8 +460,12 @@
     content-visibility: visible;
 }
 
+/* A block that may be skipped while out of sight is drawn only inside its own box. A top heading's lines are
+   as tall as its letters, so the tail of a g or a y hung below the box and was cut off: the box is made that
+   much deeper, and the space under it that much less, so nothing moves. */
 .quire h1 {
-    margin-bottom: var(--line);
+    padding-bottom: 0.22em;
+    margin-bottom: calc(var(--line) - 0.22em);
 }
 
 /* A tight list's items hold their paragraphs without the space between paragraphs. */
