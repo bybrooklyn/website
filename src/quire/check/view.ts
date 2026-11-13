@@ -129,6 +129,8 @@ export function createChecking(host: CheckingHost & { keep: CheckingHost["keep"]
             if (documentKey() !== ignoredFor) {
                 ignoredFor = documentKey();
                 ignored = loadIgnored(keep, ignoredFor);
+                // what was asked of the last document's store is not kept, so the answers do not pile up for every document opened
+                answers.clear();
                 checker.forget();
             }
             checked = surface.getDocument();
