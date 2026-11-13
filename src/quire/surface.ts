@@ -998,10 +998,12 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
         if (MAC && event.ctrlKey && !mod) return;
         if (mod && key === "a" && !event.shiftKey && !event.altKey) {
             // Select All is the model's: the browser's own selects nothing at all when the document begins or ends with a block that cannot be written in
-            event.preventDefault();
+            // the key is left to go on, so that the editor's own Select All command (shortcuts.ts) still hears it
             const paths = blockPaths(editor.state.doc);
             const last = paths[paths.length - 1] ?? [0];
             commit(apply(editor, { state: { doc: editor.state.doc, selection: { anchor: { path: paths[0] ?? [0], offset: 0 }, focus: { path: last, offset: lengthOf(editor.state.doc, last) } } }, kind: "move" }, Date.now()));
+            // and should the browser then make its own selection (no one else took the key), the model's is put back over it
+            restoring = performance.now() + 100;
             return;
         }
         syncSelection();
