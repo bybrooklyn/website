@@ -10,6 +10,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { browser, chromium, type Browser } from "../../scripts/browser";
+import { altGraph, shortcutKey } from "./surface";
 
 const here = import.meta.dir;
 
@@ -367,6 +368,74 @@ describe("every kind of input that changes text either changes the model or is c
         expect(dropped).toBe(false);
         expect(await md(tab)).toBe("```js\nlet a;\n```\n\nText here\n");
     });
+});
+
+describe("keyboard layouts", () => {
+    inPage("AltGr types its character on French, Spanish and German layouts; Ctrl+Alt+digit is still a heading on a US layout", async (tab) => {
+        await tab.run(`quire.reset("Text\\n")`);
+        await tab.run("quire.select([0], 4)");
+        // Windows reports AltGr as Ctrl and Alt; the key is the character it types
+        const typed: [string, string][] = [
+            ["@", "Digit0"], // French AltGr+0
+            ["#", "Digit3"], // French AltGr+3
+            ["{", "Digit4"], // French AltGr+4
+            ["|", "Digit1"], // Spanish AltGr+1
+            ["~", "Digit4"], // Spanish AltGr+4
+            ["²", "Digit2"], // German AltGr+2
+            ["€", "KeyE"], // German AltGr+E
+            ["µ", "KeyM"], // German AltGr+M
+        ];
+        for (const [key, code] of typed) {
+            expect(await tab.run<boolean>(`quire.key({ key: ${JSON.stringify(key)}, code: ${JSON.stringify(code)}, ctrlKey: true, altKey: true })`)).toBe(false);
+        }
+        expect(await md(tab)).toBe("Text\n");
+        // a US layout's Ctrl+Alt+2 is Heading 2
+        expect(await tab.run<boolean>(`quire.key({ key: "2", code: "Digit2", ctrlKey: true, altKey: true })`)).toBe(true);
+        expect(await md(tab)).toBe("## Text\n");
+        // on AZERTY Ctrl+Alt with the key in the digit row's place of 1 types nothing of its own here, and is still found by its place
+        expect(await tab.run<boolean>(`quire.key({ key: "&", code: "Digit1", ctrlKey: true, altKey: false })`)).toBe(false);
+    });
+
+    inPage("letters are matched by the letter the key types: Dvorak's Ctrl+X is not bold, and its Ctrl+B is", async (tab) => {
+        await tab.run(`quire.reset("word\\n")`);
+        await tab.run("quire.select([0], 0, 4)");
+        // Dvorak: the key that types x sits where QWERTY has b
+        expect(await tab.run<boolean>(`quire.key({ key: "x", code: "KeyB", ctrlKey: true })`)).toBe(false);
+        expect(await md(tab)).toBe("word\n");
+        // and the key that types b sits where QWERTY has n
+        expect(await tab.run<boolean>(`quire.key({ key: "b", code: "KeyN", ctrlKey: true })`)).toBe(true);
+        expect(await md(tab)).toBe("**word**\n");
+        // AZERTY: Ctrl+Shift with the key that types a full stop there (Shift and the semicolon key) is superscript
+        await tab.run(`quire.reset("word\\n")`);
+        await tab.run("quire.select([0], 0, 4)");
+        expect(await tab.run<boolean>(`quire.key({ key: ".", code: "Comma", ctrlKey: true, shiftKey: true })`)).toBe(true);
+        expect(await md(tab)).toBe("<sup>word</sup>\n");
+        // a Russian layout: the key in B's place types и, and is bold by its place
+        await tab.run(`quire.reset("word\\n")`);
+        await tab.run("quire.select([0], 0, 4)");
+        expect(await tab.run<boolean>(`quire.key({ key: "и", code: "KeyB", ctrlKey: true })`)).toBe(true);
+        expect(await md(tab)).toBe("**word**\n");
+    });
+});
+
+test("AltGr is told from a shortcut on every layout imitated", () => {
+    const press = (key: string, code: string, held: { ctrl?: boolean; alt?: boolean; meta?: boolean; graph?: boolean } = {}) => ({ key, code, ctrlKey: !!held.ctrl, altKey: !!held.alt, metaKey: !!held.meta, getModifierState: (name: string) => name === "AltGraph" && !!held.graph });
+    // US: Ctrl+Alt+1 is a shortcut; French, Spanish, German AltGr is typing
+    expect(altGraph(press("1", "Digit1", { ctrl: true, alt: true }), false)).toBe(false);
+    expect(altGraph(press("@", "Digit0", { ctrl: true, alt: true }), false)).toBe(true);
+    expect(altGraph(press("|", "Digit1", { ctrl: true, alt: true }), false)).toBe(true);
+    expect(altGraph(press("€", "KeyE", { ctrl: true, alt: true }), false)).toBe(true);
+    // Linux and others say AltGraph outright
+    expect(altGraph(press("@", "KeyQ", { graph: true }), false)).toBe(true);
+    // a Mac's Option is not AltGr
+    expect(altGraph(press("¡", "Digit1", { ctrl: true, alt: true }), true)).toBe(false);
+    // letters by what they type, digits with Alt by their place, the rest by character
+    expect(shortcutKey(press("x", "KeyB", { ctrl: true }), true)).toBe("x");
+    expect(shortcutKey(press("B", "KeyB", { ctrl: true }), true)).toBe("b");
+    expect(shortcutKey(press("и", "KeyB", { ctrl: true }), true)).toBe("b");
+    expect(shortcutKey(press("¡", "Digit1", { meta: true, alt: true }), true)).toBe("1");
+    expect(shortcutKey(press(".", "Comma", { ctrl: true }), true)).toBe(".");
+    expect(shortcutKey(press("Enter", "Enter", { ctrl: true }), true)).toBe("Enter");
 });
 
 if (!chromium()) console.warn("surface-input.test.ts: no Chromium on this machine, so input methods and layouts were not tried.");

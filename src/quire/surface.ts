@@ -102,6 +102,35 @@ export interface Surface {
 }
 
 const MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
+
+/** The parts of a key press the surface reads to tell a shortcut from typing. */
+type Pressed = Pick<KeyboardEvent, "key" | "code" | "ctrlKey" | "altKey" | "metaKey"> & { getModifierState?: (key: string) => boolean };
+
+/**
+ * Whether a key press is AltGr typing a character, which is never a shortcut. Windows reports AltGr
+ * as Ctrl and Alt held together, so on French, Spanish, German and many other layouts @, #, {, [, |,
+ * \, ~ and € arrive as Ctrl+Alt with a digit or letter; what tells them apart from a shortcut is that
+ * the key then types a character that is not a plain letter or digit.
+ */
+export function altGraph(event: Pressed, mac = MAC): boolean {
+    if (event.getModifierState?.("AltGraph")) return true;
+    return !mac && event.ctrlKey && event.altKey && !event.metaKey && [...event.key].length === 1 && !/^[a-z0-9]$/i.test(event.key);
+}
+
+/**
+ * The key a shortcut is matched by. A letter is the letter the key types on this layout, so that
+ * Ctrl+B is bold where the key that types b is (Dvorak, AZERTY); on a layout with no Latin letters
+ * (Cyrillic, Greek, Hebrew) it is the letter of the key's place. With Alt a digit is the key's place
+ * in the digit row, since on some layouts (AZERTY) the digits are typed with Shift. Anything else
+ * (Enter, a full stop, a comma) is the key's own name or character.
+ */
+export function shortcutKey(event: Pressed, mod: boolean): string {
+    if (!mod) return event.key;
+    if (/^[a-z]$/i.test(event.key)) return event.key.toLowerCase();
+    if (/^Key[A-Z]$/.test(event.code) && !/^[ -~]$/.test(event.key)) return event.code.slice(3).toLowerCase();
+    if (event.altKey && /^Digit[0-9]$/.test(event.code)) return event.code.slice(5);
+    return event.key;
+}
 const TAGS: [Mark, string][] = [
     ["bold", "strong"],
     ["italic", "em"],
@@ -942,18 +971,20 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
         if (fromField(event)) return;
         // Safari sends key 229 for keys that belong to a composition
         if (composing || event.isComposing || (event as { keyCode?: number }).keyCode === 229) return;
+        // AltGr types a character (@, #, {, € on many layouts); it is never one of mdQuire's shortcuts
+        if (altGraph(event)) return;
         const mod = MAC ? event.metaKey : event.ctrlKey;
+        const key = shortcutKey(event, mod);
         // Ctrl+Shift+V pastes, through the paste event, without formatting
-        if (mod && event.shiftKey && event.code === "KeyV") plainNext = true;
-        let key = event.key;
-        if (mod && /^Key[A-Z]$/.test(event.code)) key = event.code.slice(3).toLowerCase();
-        if (mod && /^Digit[0-9]$/.test(event.code)) key = event.code.slice(5);
+        if (mod && event.shiftKey && key === "v") plainNext = true;
         if (!mod && !["Enter", "Backspace", "Delete", "Tab"].includes(key)) return;
         if (MAC && event.ctrlKey && !mod) return;
         syncSelection();
         const word = (key === "Backspace" || key === "Delete") && (MAC ? event.altKey : event.ctrlKey);
         if ((key === "Backspace" || key === "Delete") && !word && !mod && !event.altKey) wholeCharacter(key === "Delete");
-        if (send({ type: "key", key, shift: event.shiftKey, mod: mod && !word, alt: event.altKey && !word, word })) event.preventDefault();
+        // a full stop or comma that this layout types with Shift is still Ctrl and that character
+        const shift = event.shiftKey && key !== "." && key !== ",";
+        if (send({ type: "key", key, shift, mod: mod && !word, alt: event.altKey && !word, word })) event.preventDefault();
     }
 
     function selectTargetRange(event: InputEvent): boolean {
