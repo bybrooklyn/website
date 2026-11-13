@@ -2006,7 +2006,8 @@ used("Ctrl+/ opens every shortcut and every piece of typing in a dialog, with a 
     const narrowed = await tab.run<string[]>(`[...document.querySelectorAll("dialog[open] .quire-keys tr")].map((row) => row.textContent)`);
     expect(narrowed.length).toBeLessThan(6);
     expect(narrowed.some((row) => row.includes("Bulleted list"))).toBe(true);
-    await tab.press("Escape");
+    // one Escape closes it, words in the search or not, as every dialog
     await tab.press("Escape");
     await tab.wait(400);
+    expect(await tab.run("!!document.querySelector('dialog.quire-dialog')")).toBe(false);
 });

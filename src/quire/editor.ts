@@ -804,10 +804,11 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     };
     // ---- every shortcut and every piece of typing, Ctrl+/: a dialog with a search, grown from where it was asked for ----
     const showShortcuts = (from: HTMLElement) => {
+        // a plain field, not a search one, so that Escape closes the dialog at once rather than first clearing what was typed
         const field = make("input", "quire-link-field quire-keys-search");
-        field.type = "search";
-        field.placeholder = "Search the shortcuts and typing";
-        field.setAttribute("aria-label", "Search the shortcuts and typing");
+        field.type = "text";
+        field.placeholder = "Search shortcuts";
+        field.setAttribute("aria-label", "Search shortcuts");
         const list = make("div", "quire-keys");
         const fill = () => {
             const found = findShortcuts(field.value);
