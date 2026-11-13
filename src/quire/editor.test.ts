@@ -1716,7 +1716,7 @@ used("find grows from the sheet's top right with Ctrl+F, marks every match and t
     await press(".quire-find button", "Match case");
     expect(await count()).toBe("1 of 3");
     // the replace line grows open; one replaced, then all, each one undo step
-    await press(".quire-find button", "Replace");
+    await press(".quire-find button", "Show replace");
     await tab.wait(450);
     await tab.run("document.querySelector('.quire-find-replace input').focus()");
     await tab.type("dog");
@@ -1739,10 +1739,21 @@ used("find grows from the sheet's top right with Ctrl+F, marks every match and t
     expect(await tab.run("getComputedStyle(document.querySelector('.quire-find')).visibility")).toBe("hidden");
     expect(await tab.run("CSS.highlights.has('quire-found')")).toBe(false);
     expect(await tab.run("document.activeElement === document.querySelector('.quire')")).toBe(true);
-    // Ctrl+H opens it with the replace line, and the Edit menu has both
+    // Ctrl+H opens it with the replace line, the caret in Find as Docs has it
     await tab.press("h", { ctrl: true });
     await tab.wait(450);
     expect(await tab.run("document.querySelector('.quire-find').classList.contains('replacing')")).toBe(true);
+    expect(await tab.run("document.activeElement.getAttribute('aria-label')")).toBe("Find");
+    // going from match to match draws no selection bar over the text
+    await tab.press("Enter");
+    await tab.wait(300);
+    expect(await tab.run("document.querySelector('.quire-select-bar')?.classList.contains('shown') ?? false")).toBe(false);
+    await tab.press("Escape");
+    await tab.wait(300);
+    // Ctrl+F opens find alone, even after the replace line was open
+    await tab.press("f", { ctrl: true });
+    await tab.wait(450);
+    expect(await tab.run("document.querySelector('.quire-find').classList.contains('replacing')")).toBe(false);
     await tab.press("Escape");
     expect(tab.errors).toEqual([]);
 });
