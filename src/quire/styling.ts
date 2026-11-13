@@ -1,6 +1,6 @@
 // What a `.quire` document keeps beside its Markdown, in style.json: the look of text and blocks
-// that Markdown cannot say (color, size, font, highlight, alignment, line spacing, a picture's
-// width, caption and whether the text flows round it) and the page.
+// that Markdown cannot say (color, size, font, highlight, alignment, line spacing, a subtitle, a
+// picture's width, caption and whether the text flows round it) and the page.
 // Its document.md is plain Markdown with none of that in it, readable by anything.
 //
 // Each style is addressed to a block by where it stood (its number among the blocks that hold no
@@ -36,6 +36,8 @@ export interface BlockStyle extends Anchor {
     width?: number;
     caption?: string;
     wrap?: boolean;
+    /** A paragraph that is a subtitle. */
+    subtitle?: boolean;
 }
 
 /** A look on part of a block's text: offsets into it (or into one of a table's cells), the words, and what comes before them. */
@@ -115,6 +117,7 @@ function strip(blocks: Block[]): Block[] {
             case "paragraph":
             case "heading": {
                 const { align: _align, spacing: _spacing, ...rest } = block;
+                if (rest.kind === "paragraph") delete rest.subtitle;
                 return { ...rest, runs: plainRuns(block.runs) };
             }
             case "image": {
@@ -148,6 +151,11 @@ export function collect(doc: Document): { markdown: string; style: StyleFile } {
             const last = style.blocks[style.blocks.length - 1];
             if (last?.block === number) last.spacing = block.spacing;
             else style.blocks.push({ ...anchor, hash: sign(), spacing: block.spacing });
+        }
+        if (block.kind === "paragraph" && block.subtitle) {
+            const last = style.blocks[style.blocks.length - 1];
+            if (last?.block === number) last.subtitle = true;
+            else style.blocks.push({ ...anchor, hash: sign(), subtitle: true });
         }
         if (block.kind === "image" && (block.width !== undefined || block.caption || block.wrap)) {
             const last = style.blocks[style.blocks.length - 1];
@@ -193,7 +201,7 @@ export function readStyle(text: string | undefined): StyleFile {
         quire: 1,
         page: kept,
         count: number(raw.count) ? raw.count! : 0,
-        blocks: (Array.isArray(raw.blocks) ? raw.blocks : []).filter((each) => anchored(each) && (["left", "center", "right", "justify"].includes(each.align as string) || number(each.spacing) || (number(each.width) && each.width! >= 1 && each.width! <= 100) || (typeof each.caption === "string" && each.caption !== "") || each.wrap === true)),
+        blocks: (Array.isArray(raw.blocks) ? raw.blocks : []).filter((each) => anchored(each) && (["left", "center", "right", "justify"].includes(each.align as string) || number(each.spacing) || (number(each.width) && each.width! >= 1 && each.width! <= 100) || (typeof each.caption === "string" && each.caption !== "") || each.wrap === true || each.subtitle === true)),
         runs: (Array.isArray(raw.runs) ? raw.runs : []).filter((each) => anchored(each) && number(each.from) && number(each.to) && typeof each.quote === "string" && each.quote.length > 0 && LOOKS.some((key) => typeof each[key] === "string")),
     };
 }
@@ -247,6 +255,7 @@ export function restore(doc: Document, style: StyleFile): Document {
             if (next.kind === "image" && typeof each.width === "number" && each.width >= 1 && each.width <= 100) next.width = Math.round(each.width);
             if (next.kind === "image" && typeof each.caption === "string" && each.caption) next.caption = each.caption;
             if (next.kind === "image" && each.wrap === true) next.wrap = true;
+            if (next.kind === "paragraph" && each.subtitle === true) next.subtitle = true;
             return next;
         });
     }

@@ -4,7 +4,7 @@
 // `bun test src/quire/styling.test.ts`.
 
 import { expect, test } from "bun:test";
-import { blockAt, setAlign, setStyle, type Document, type Paragraph, type TextRun } from "./document";
+import { blockAt, markdownOnly, setAlign, setStyle, setSubtitle, type Document, type Paragraph, type TextRun } from "./document";
 import { read } from "./read";
 import { collect, hash, readStyle, restore } from "./styling";
 
@@ -132,4 +132,14 @@ test("styled words looked for again are found whole, never inside a longer word"
     expect(red.map((run) => run.text)).toEqual(["is"]);
     expect(runs(back, [0]).map((run) => run.text).join("")).toBe("This line: is it red.");
     expect(runs(back, [0])[0]!.text.startsWith("This line: ")).toBe(true);
+});
+
+test("a subtitle is kept in style.json, never in the Markdown, and a Markdown file has none", () => {
+    const doc = setSubtitle(read("A line under the title\n\nThe writing.\n"), [0], true);
+    const { markdown, style } = collect(doc);
+    expect(markdown).toBe("A line under the title\n\nThe writing.\n");
+    expect(style.blocks).toEqual([{ block: 0, hash: hash("A line under the title"), subtitle: true }]);
+    const back = restore(read(markdown), readStyle(JSON.stringify(style)));
+    expect((blockAt(back, [0]) as Paragraph).subtitle).toBe(true);
+    expect((markdownOnly(doc.blocks)[0] as Paragraph).subtitle).toBeUndefined();
 });

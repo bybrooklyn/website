@@ -34,6 +34,7 @@ import {
     setLink,
     setSpacing,
     setSubtext,
+    setSubtitle,
     splitBlock,
     setStyle,
     table,
@@ -59,11 +60,13 @@ import { closeOthers, composing, control, dots, flowMenu, glyph, icon, make, mov
 export type Action = (state: State) => State;
 
 /** The kinds of block the style picker offers. */
-export type Style = "paragraph" | "heading1" | "heading2" | "heading3" | "heading4" | "heading5" | "heading6" | "quote" | "code";
+export type Style = "paragraph" | "title" | "subtitle" | "heading1" | "heading2" | "heading3" | "heading4" | "heading5" | "heading6" | "quote" | "code";
 
 /** The style picker's lines, in order, with their names. */
 export const STYLES: [Style, string][] = [
     ["paragraph", "Paragraph"],
+    ["title", "Title"],
+    ["subtitle", "Subtitle"],
     ["heading1", "Heading 1"],
     ["heading2", "Heading 2"],
     ["heading3", "Heading 3"],
@@ -94,7 +97,8 @@ export function currentStyle(doc: Document, path: number[]): Style {
     if (block.kind === "heading") return `heading${block.level ?? 1}` as Style;
     if (block.kind === "code") return "code";
     if (block.quoted) return "quote";
-    return "paragraph";
+    const here = blockAt(doc, path);
+    return here?.kind === "paragraph" && here.subtitle ? "subtitle" : "paragraph";
 }
 
 /** Whether the cursor's block is centred. */
@@ -198,7 +202,7 @@ export function size(value: string | null): Action {
 
 // ---- kinds of block ----
 
-/** Makes the touched blocks a paragraph, a heading, a quote or code. Quote, pressed in a quote, takes the quote off. */
+/** Makes the touched blocks a paragraph, a subtitle, a heading, a quote or code. Quote, pressed in a quote, takes the quote off. Title changes nothing here: the title is the line above the writing, which the editor goes to. */
 export function setStyleOf(style: Style): Action {
     return (state) => {
         let doc = state.doc;
@@ -218,7 +222,9 @@ export function setStyleOf(style: Style): Action {
                 }
             }
             else if (style === "code") doc = changeKind(doc, path, { kind: "code", language: "" });
-            else if (style === "paragraph") doc = block.kind === "paragraph" ? (inQuote ? changeKind(doc, path, { kind: "paragraph" }) : doc) : changeKind(doc, path, { kind: "paragraph" });
+            else if (style === "title") continue;
+            else if (style === "subtitle") doc = setSubtitle(block.kind === "paragraph" ? doc : changeKind(doc, path, { kind: "paragraph" }), path, true);
+            else if (style === "paragraph") doc = block.kind === "paragraph" ? (block.subtitle ? setSubtitle(doc, path, false) : inQuote ? changeKind(doc, path, { kind: "paragraph" }) : doc) : changeKind(doc, path, { kind: "paragraph" });
             else doc = changeKind(doc, path, { kind: "heading", level: Number(style.slice(-1)) as Level });
         }
         return { doc, selection: follow(state.doc, state.selection, doc) };
@@ -537,6 +543,8 @@ export interface BarOptions {
     onZoom?: (from: HTMLElement) => void;
     /** Every command by name, for the search of the menus. */
     commands?: () => MenuItem[];
+    /** Goes to the title, the line above the writing, as the style Title does. */
+    onTitle?: () => void;
 }
 
 /** One control of the bar, or a few that go together: how soon it folds into the three dots when the bar is too narrow (0 never, then 1 first), and what it puts there. */
@@ -728,7 +736,9 @@ export function createBar(surface: Surface, options: BarOptions) {
     const styleLabel = make("span", "quire-style-label", "Paragraph");
     const styleLines = (): MenuItem[] => {
         const now = currentStyle(surface.getDocument(), surface.getSelection().focus.path);
-        return STYLES.map(([style, label]) => ({ label, pressed: style === now, icon: sample(style), run: doing(setStyleOf(style)) }));
+        // a subtitle is kept only by a .quire document
+        const offered = STYLES.filter(([style]) => style !== "subtitle" || !!surface.getDocument().quire);
+        return offered.map(([style, label]) => ({ label, pressed: style === now, icon: sample(style), run: style === "title" ? () => options.onTitle?.() : doing(setStyleOf(style)) }));
     };
     const styleButton = opener(styles, "Style", styleLabel, styleLines);
     styleButton.classList.add("quire-style");
@@ -1152,7 +1162,7 @@ export function createBar(surface: Surface, options: BarOptions) {
 
 /** A small sample of what a style looks like, for its line in the picker. */
 function sample(style: Style): HTMLElement {
-    const shown = make("span", `quire-style-sample quire-style-${style}`, style === "code" ? "{ }" : style === "quote" ? "“" : style === "paragraph" ? "¶" : `H${style.slice(-1)}`);
+    const shown = make("span", `quire-style-sample quire-style-${style}`, style === "code" ? "{ }" : style === "quote" ? "“" : style === "paragraph" ? "¶" : style === "title" ? "T" : style === "subtitle" ? "S" : `H${style.slice(-1)}`);
     shown.setAttribute("aria-hidden", "true");
     return shown;
 }

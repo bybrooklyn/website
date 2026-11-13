@@ -4,7 +4,7 @@
 //
 //   const actions = { ...theOthers, ...moreCommands(surface, { doing, word: (index) => row.words[index]! }) };
 
-import type { Action } from "./bar";
+import { setStyleOf, type Action } from "./bar";
 import { recase, type Case } from "./capitals";
 import type { List } from "./document";
 import type { RowActions } from "./menu-row";
@@ -16,6 +16,8 @@ import { fieldForm, flowMenu, type MenuItem } from "./ui";
 export interface MoreOptions {
     doing: (action: Action) => () => void;
     word: (index: number) => HTMLElement;
+    /** Goes to the title, the line above the writing that is the document's name. */
+    title: () => void;
 }
 
 /** The three capitalisations, in Docs' order and its words. */
@@ -63,5 +65,8 @@ export function moreCommands(surface: Surface, options: MoreOptions): RowActions
     return {
         capitals: () => capitals.open(format(), CASES.map(([how, label]) => ({ label, run: doing(recase(how)) })), true),
         lists: () => lists.open(format(), listLines(), true),
+        // Markdown has no title: the document's is the line above the writing, its name, and Title goes there
+        title: options.title,
+        subtitle: doing(setStyleOf("subtitle")),
     };
 }

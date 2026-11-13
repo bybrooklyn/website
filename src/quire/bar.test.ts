@@ -86,6 +86,16 @@ test("the style picker makes headings, quotes, code and paragraphs, and shows wh
     expect(md(run(setStyleOf("heading3"), at("One\n\nTwo\n", { anchor: { path: [0], offset: 1 }, focus: { path: [1], offset: 1 } })))).toBe("### One\n\n### Two\n");
 });
 
+test("Subtitle makes a heading or paragraph a subtitle, shown as the style, Normal text takes it off, and Title changes nothing in the writing", () => {
+    const subtitled = run(setStyleOf("subtitle"), at("## Under\n", caret([0], 2)));
+    expect((subtitled.doc.blocks[0] as Paragraph).subtitle).toBe(true);
+    expect(currentStyle(subtitled.doc, [0])).toBe("subtitle");
+    expect(md(subtitled)).toBe("Under\n");
+    expect((run(setStyleOf("paragraph"), subtitled).doc.blocks[0] as Paragraph).subtitle).toBeUndefined();
+    const plain = at("Words\n", caret([0], 1));
+    expect(run(setStyleOf("title"), plain).doc).toBe(plain.doc);
+});
+
 test("the list buttons make lists of all the touched paragraphs, and pressed again take them off", () => {
     const listed = run(toggleList("bullet"), at("One\n\nTwo\n", { anchor: { path: [0], offset: 0 }, focus: { path: [1], offset: 3 } }));
     expect(md(listed)).toBe("- One\n- Two\n");

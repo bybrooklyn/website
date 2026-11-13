@@ -402,6 +402,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         onZoom: (from) => (zooms.isOpen() ? zooms.close(true) : zooms.open(from, zoomLines(() => from), document.activeElement === from)),
         // every command of the menus, by name, for the search of them
         commands: () => row.headings().flatMap((heading) => heading.items()),
+        onTitle: () => title.focus(),
         more,
     });
     // checking (src/quire/check/): underlines, a count at the bar's end, and its settings from Tools
@@ -723,7 +724,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
                 // the slash menu opens on the first five again
                 forgetUsed: () => (remember(), bar.setStatus("Forgotten", "What you use most is forgotten: the slash menu opens on its first five again")),
                 tools: () => dictation.items(row.words[5]!),
-                ...moreCommands(surface, { doing, word: (index) => row.words[index]! }),
+                ...moreCommands(surface, { doing, word: (index) => row.words[index]!, title: () => title.focus() }),
     };
     const row = createMenuRow(() =>
         headings(

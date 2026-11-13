@@ -102,6 +102,24 @@ used("Format, Capitalisation changes the selected words, keeping their bold, and
     expect(await tab.run<string>("document.activeElement.getAttribute('aria-label')")).toBe("Document");
 });
 
+used("Format, Title goes to the title line; Subtitle is offered for a .quire document alone and draws the line as one", async () => {
+    await reset("Some words\n", [0], 2);
+    await menu("Format", "Title");
+    await tab.wait(300);
+    expect(await tab.run<string>("document.activeElement.className")).toBe("quire-title");
+    await tab.press("Escape");
+    await reset("Some words\n", [0], 2);
+    await press(".quire-menu-row .quire-row-word", "Format");
+    await tab.wait(650);
+    expect(await tab.run<string[]>("[...document.querySelectorAll('.quire-menu:popover-open .quire-menu-line')].map((each) => each.querySelector('.quire-menu-label')?.textContent)")).not.toContain("Subtitle");
+    await tab.press("Escape");
+    await reset("Under the title\n\nThe writing.\n", [0], 2, [0], 2, true);
+    await menu("Format", "Subtitle");
+    expect(await tab.run<string>("document.querySelector('.quire p').className")).toBe("quire-subtitle");
+    expect(await md()).toBe("Under the title\n\nThe writing.\n");
+    expect(await tab.run<string>("document.querySelector('.quire-style-label').textContent")).toBe("Subtitle");
+});
+
 used("Format, Bullets and numbering writes a list with another bullet, restarts its numbers and carries on the list before", async () => {
     await reset("- one\n- two\n", [0, 1, 0], 1);
     await menu("Format", "Bullets and numbering", "Written with a star");

@@ -53,7 +53,7 @@ export type Command =
     | "check" | "about" | "wordCount" | "shortcuts" | "searchMenus" | "forgetUsed"
     | "superscript" | "subscript" | "marked" | "typedSigns"
     | "downloadAs" | "notes" | "nextNote" | "previousNote" | "comment" | "date" | "symbols" | "contents" | "updateContents"
-    | "capitals" | "lists";
+    | "capitals" | "lists" | "title" | "subtitle";
 
 /** The menus of the row, for a document as it stands. A line's shortcut, if it has one, comes from the table in shortcuts.ts. */
 export function headings(state: RowState, act: RowActions): Heading[] {
@@ -145,6 +145,8 @@ export function headings(state: RowState, act: RowActions): Heading[] {
                 ...line("subscript", "Subscript"),
                 ...line("capitals", "Capitalisation", { hint: "›" }),
                 ...line("paragraph", "Normal text"),
+                ...line("title", "Title"),
+                ...(state.rich ? line("subtitle", "Subtitle") : []),
                 ...line("heading1", "Heading 1"),
                 ...line("heading2", "Heading 2"),
                 ...line("heading3", "Heading 3"),

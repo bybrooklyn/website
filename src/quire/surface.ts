@@ -424,7 +424,7 @@ function draw(block: Block, inner: number[], how: Drawing = plainDrawing): HTMLE
         case "heading": {
             const element = holderOf(document.createElement(block.kind === "paragraph" ? "p" : `h${block.level}`), inner);
             if (block.align) element.style.textAlign = block.align;
-            if (block.kind === "paragraph" && block.subtext) element.className = "quire-subtext";
+            if (block.kind === "paragraph" && (block.subtext || block.subtitle)) element.className = block.subtitle ? "quire-subtitle" : "quire-subtext";
             if (block.spacing) element.style.setProperty("--spacing", String(block.spacing));
             fillRuns(element, block.runs, how);
             return element;

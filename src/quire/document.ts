@@ -121,6 +121,8 @@ export interface Paragraph extends Kept {
     spacing?: number;
     /** Small, quiet text, written `-# text` as Discord has it. */
     subtext?: boolean;
+    /** A subtitle, larger than the text and quieter. Markdown has none, so only a `.quire` document keeps it, in its style.json. */
+    subtitle?: boolean;
 }
 
 /** A heading, `#` to `######`. */
@@ -488,6 +490,7 @@ export function markdownOnly(blocks: Block[]): Block[] {
             case "heading": {
                 const { spacing: _spacing, ...rest } = block;
                 const next = { ...rest, runs: plain(block.runs) };
+                if (next.kind === "paragraph") delete next.subtitle;
                 if (next.align === "justify") delete next.align;
                 return next;
             }
@@ -1223,6 +1226,15 @@ export function setSubtext(doc: Document, path: number[], on: boolean): Document
         if (on) next.subtext = true;
         else delete next.subtext;
         return [next];
+    });
+}
+
+/** Makes the paragraph at a path a subtitle (no longer subtext), or ordinary text again. Only a `.quire` document keeps it. */
+export function setSubtitle(doc: Document, path: number[], on: boolean): Document {
+    return replace(doc, path, (block) => {
+        if (block.kind !== "paragraph" || !!block.subtitle === on) return null;
+        const { subtitle: _subtitle, subtext: _subtext, ...rest } = block;
+        return [on ? { ...rest, subtitle: true, source: undefined } : { ...rest, source: undefined }];
     });
 }
 
