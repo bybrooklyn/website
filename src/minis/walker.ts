@@ -45,6 +45,7 @@ import {
     presetOf,
     read,
     start as startEngine,
+    tenths,
     valid,
     workersFor,
     write,
@@ -471,12 +472,12 @@ export default function walker(m: Mote): Scene {
                 : !engine
                 ? "Loading the walker."
                 : live()
-                  ? `Attempt ${attempt}, ${doing()}, furthest ${distance.toFixed(1)} m`
+                  ? `Attempt ${attempt}, ${doing()}, furthest ${tenths(distance)} m`
                   : !shown
                     ? `Generation 0, ${doing()}, ${runs} of ${POPULATION} tried`
                     : endless()
-                      ? `Generation ${generation}, ${doing()}, walked ${distance.toFixed(1)} m`
-                      : `Generation ${generation}, ${doing()}, furthest ${distance.toFixed(1)} m`;
+                      ? `Generation ${generation}, ${doing()}, walked ${tenths(distance)} m`
+                      : `Generation ${generation}, ${doing()}, furthest ${tenths(distance)} m`;
             const text = m.time < notice.until && notice.text ? notice.text : `${now}${paused ? ", paused" : ""}`;
             if (status.textContent !== text) status.textContent = text;
             // the status is hidden from a screen reader, so this one is said aloud as well
