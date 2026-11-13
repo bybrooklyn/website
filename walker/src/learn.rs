@@ -685,23 +685,6 @@ impl Trainer {
         judge.outcome(&self.creature, &self.world)
     }
 
-    /// A child of one brain: each weight nudged at random with the usual chance, and at least one.
-    pub fn mutate(&mut self, parent: &[f32]) -> Vec<f32> {
-        let mut child = parent.to_vec();
-        let mut nudged = false;
-        for weight in &mut child {
-            if self.random.unit() < self.settings.nudge_chance {
-                *weight += self.settings.nudge_size * self.random.bell();
-                nudged = true;
-            }
-        }
-        if !nudged && !child.is_empty() {
-            let at = self.random.below(child.len());
-            child[at] += self.settings.nudge_size * self.random.bell();
-        }
-        child
-    }
-
     /// Scores the generation and makes the next one from it.
     fn breed(&mut self) {
         let order = self.ranking();

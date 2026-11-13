@@ -123,11 +123,6 @@ impl Body {
         self.inverse_mass > 0.0
     }
 
-    /// The velocity of a point fixed to the body.
-    pub fn velocity_at(&self, point: Vec2) -> Vec2 {
-        self.velocity + (point - self.position).spun(self.spin)
-    }
-
     /// The body's outline where it is now.
     pub fn placed(&self) -> Outline {
         self.outline.placed(self.position, self.rotation)
