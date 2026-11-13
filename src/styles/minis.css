@@ -929,8 +929,11 @@
         aspect-ratio: 4 / 3;
     }
 
+    /* It keeps room for three lines from the first, the most its sentence takes on a phone once its
+       numbers have grown, so nothing under it moves down as they do. */
     .mini-stage[data-mini="generalist"] .walker-status {
         grid-area: status;
+        min-height: calc(3lh + 0.8rem + 0.0625rem);
         padding-block: 0.6rem 0.2rem;
         border-top: 0.0625rem solid var(--rule);
     }
