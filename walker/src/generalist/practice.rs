@@ -236,21 +236,26 @@ impl Way {
         change
     }
 
-    /// What was settled on; walker/README.md ("How it moves") gives the measurements. Each joint is
-    /// aimed straight at an angle; no hop, so leaving the ground is its legs' own doing, and costs:
-    /// 0.002 for each joule of the motors' work and 2 for each second in the air with nothing to
-    /// clear, brought in over its first 4 million steps, and 3 for a fall, as a fall into a gap costs.
+    /// What was settled on; walker/README.md ("How it moves" and "How two legs came to walk") gives
+    /// the measurements. Each joint is aimed straight at an angle; no hop, so leaving the ground is its
+    /// legs' own doing, and costs: 0.002 for each joule of the motors' work and 2 for each second in
+    /// the air with nothing to clear, brought in over its first 4 million steps, and 3 for a fall, as a
+    /// fall into a gap costs.
+    ///
     /// Two legs are held to their posture as well: 1 for each second of each knee down, 0.5 for each
-    /// second carried tall, 0.5 for each second with one foot down going forward, and a run that ends
-    /// at the first touch of its body once the costs are all in (until then it may be down for a
-    /// second, less and less).
+    /// second carried tall, 1 for each second of the body's lean squared, and a run that ends at the
+    /// first touch of its body once the costs are all in (until then it may be down for a second, less
+    /// and less). They are asked to go about rather than race: progress is paid up to 1 m/s and no
+    /// faster, and a run that gets nowhere for five seconds costs 3, as a fall does. A landing costs
+    /// 0.05 for each metre a second the foot comes down at. They sense no rhythm, and nothing rewards
+    /// how their feet take turns.
     pub fn of(legs: u32) -> Way {
         let mut shaping = Shaping { alive: 0.25, energy: 0.002, air: 2.0, tall: false, smooth: 0.0, fall: 3.0, knee: 0.0, upright: 0.0, down: 1.0, turns: 0.0, pace: 0.0, impact: 0.0, spin: 0.0, bob: 0.0, swing: 0.0, torque: 0.0, stall: 0.0, lean: 0.0 };
         // two legs went on their belly and knees in lunges without these (README, "How it moves")
         if legs == 2 {
-            shaping = Shaping { knee: 1.0, upright: 0.5, down: 0.0, turns: 0.5, ..shaping };
+            shaping = Shaping { knee: 1.0, upright: 0.5, down: 0.0, lean: 1.0, pace: 1.0, stall: 3.0, impact: 0.05, ..shaping };
         }
-        Way { legs, direct: true, skip: 4, seconds: 30.0, shaping, hop: false, ramp: 4_000_000, ease: 1.0, strength: 1.0, hip: 0.0, clock: true }
+        Way { legs, direct: true, skip: 4, seconds: 30.0, shaping, hop: false, ramp: 4_000_000, ease: 1.0, strength: 1.0, hip: 0.0, clock: legs != 2 }
     }
 }
 

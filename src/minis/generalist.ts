@@ -41,11 +41,32 @@ const keptKey = (recipe: Recipe) => {
     return [recipe.legs, difficulty, ...amounts].join(" ");
 };
 
+/**
+ * The store's version. At 2 two legs began to practise for a pace, without sensing a rhythm (walker/README.md,
+ * "How two legs came to walk"), so a two-legged learner kept before is the same size but learned for another
+ * task: opening the store at 2 forgets those, and keeps four-legged ones, which practise as they did.
+ */
+const KEEPING_VERSION = 2;
+
 /** Opens the browser's store for kept learners. */
 function store(): Promise<IDBDatabase> {
     return new Promise((opened, failed) => {
-        const asked = indexedDB.open(KEEPING, 1);
-        asked.onupgradeneeded = () => asked.result.createObjectStore("kept");
+        const asked = indexedDB.open(KEEPING, KEEPING_VERSION);
+        asked.onupgradeneeded = (event) => {
+            if (event.oldVersion < 1) {
+                asked.result.createObjectStore("kept");
+                return;
+            }
+            const kept = asked.transaction?.objectStore("kept");
+            const walking = kept?.openCursor();
+            if (!walking) return;
+            walking.onsuccess = () => {
+                const at = walking.result;
+                if (!at) return;
+                if (String(at.key).startsWith("2 ")) at.delete();
+                at.continue();
+            };
+        };
         asked.onsuccess = () => opened(asked.result);
         asked.onerror = () => failed(asked.error);
     });

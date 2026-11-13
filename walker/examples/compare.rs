@@ -41,7 +41,7 @@ use walker::generalist::ppo::Settings;
 use walker::generalist::practice::{Measured, Practice, Shaping, Way, held_out, measure};
 use walker::generalist::recipe::Recipe;
 
-const MARKS: [u64; 7] = [1_000_000, 2_000_000, 5_000_000, 10_000_000, 20_000_000, 30_000_000, 50_000_000];
+const MARKS: [u64; 8] = [1_000_000, 2_000_000, 5_000_000, 10_000_000, 20_000_000, 30_000_000, 40_000_000, 50_000_000];
 
 fn main() {
     let mut method = String::from("practice");
