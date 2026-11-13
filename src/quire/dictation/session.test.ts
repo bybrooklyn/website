@@ -360,6 +360,46 @@ describe("the microphone", () => {
     });
 });
 
+describe("every way out of a session", () => {
+    /** Ways a session can end, each from the middle of a phrase, with the recognizer and editor it needs. */
+    const ways: [string, (session: Session) => void | Promise<void>, { failing?: "transcribe" | "finish" | "write"; live?: boolean }][] = [
+        ["the button", (session) => void session.stop("button"), {}],
+        ["a page that is hidden or left", (session) => void session.stop("hidden"), {}],
+        ["a microphone taken away", (session) => void session.stop("lost"), {}],
+        ["quiet after speech", () => {}, {}],
+        ["an error in recognizing", () => {}, { failing: "transcribe" }],
+        ["an error while writing into the document", () => {}, { failing: "write" }],
+        ["the worker dying under a live phrase", () => {}, { failing: "finish", live: true }],
+    ];
+    for (const [what, end, how] of ways) {
+        test(`${what}: the microphone is let go once, stop resolves, and onStop is called once`, async () => {
+            const editor = target();
+            if (how.failing === "write")
+                editor.run = () => {
+                    throw new Error("boom");
+                };
+            const base = how.live ? streaming() : recognizer();
+            const dead = () => Promise.reject(new Error("The speech engine stopped"));
+            const heard: Recognizer = {
+                ...base,
+                transcribe: how.failing === "transcribe" || how.failing === "finish" ? dead : base.transcribe,
+                ...(how.live ? { stream: () => ({ ...(base as ReturnType<typeof streaming>).stream(), finish: dead }) } : {}),
+            };
+            const released: number[] = [];
+            const stops: Reason[] = [];
+            const session = startSession({ target: editor, recognizer: heard, commands: () => true, custom: () => nothing(), onRelease: () => released.push(1), onStop: (reason) => stops.push(reason) });
+            await drive(session, [...quiet(300), ...frames(2900, 0.2)]);
+            await end(session);
+            await drive(session, [...quiet(3500)]);
+            await session.stop("button");
+            await session.stop("button");
+            expect(released.length).toBe(1);
+            expect(stops.length).toBe(1);
+            if (how.failing) expect(stops[0]).toBe("error");
+        });
+    }
+});
+
 describe("a throw while a phrase is settled", () => {
     test("in the editor's writing ends the session: stop resolves and onStop is called once", async () => {
         const editor = target();

@@ -177,6 +177,41 @@ test.skipIf(!ready)("closing the dialog during a download cancels it, and a down
     expect(await run("window.dictationTest.microphoneOpen()")).toBe(false);
 });
 
+test.skipIf(!ready)(
+    "every way out of dictation closes the microphone once, leaves no answer waiting, and says it stopped once",
+    async () => {
+        const ways: [string, string][] = [
+            ["the button", "window.dictation.toggle()"],
+            ["a press again while it is starting", "window.dictation.toggle(); window.dictation.toggle()"],
+            ["an error in recognizing", "window.dictationTest.fail = 'error'; window.dictationTest.quiet(1200)"],
+            ["the worker dying", "window.dictationTest.fail = 'dead'; window.dictationTest.quiet(1200)"],
+            ["the tab hidden", "Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true }); document.dispatchEvent(new Event('visibilitychange'))"],
+            ["the page being left", "dispatchEvent(new Event('pagehide'))"],
+            ["the microphone's permission withdrawn", "window.dictationTest.takeAway()"],
+            ["quiet after speech", "window.dictationTest.quiet(3500)"],
+            ["the spoken command", "window.dictationTest.quiet(1000).then(() => window.dictationTest.speak(1500, 0.5)).then(() => window.dictationTest.quiet(1000))"],
+        ];
+        for (const [what, how] of ways) {
+            await fresh();
+            await listening();
+            // in the middle of a phrase, so that there is something left to recognize as it ends
+            await run("window.dictationTest.speak(2400, 0.2)");
+            if (what === "a press again while it is starting") {
+                await run("window.dictation.toggle()");
+                await until("window.dictation.state() === 'off'", `${what}: off before`);
+                await run("window.dictationTest.quiet(100)");
+            }
+            const stoppedBefore = await run<number>("window.dictationTest.stopped()");
+            await run(how);
+            await until("window.dictation.state() === 'off'", `${what}: off`, 8000);
+            await tab.wait(300);
+            const after = await run<{ open: boolean; opened: number; closed: number; pending: number; stopped: number }>("({ open: window.dictationTest.microphoneOpen(), opened: window.dictationTest.opened(), closed: window.dictationTest.closed(), pending: window.dictationTest.pending(), stopped: window.dictationTest.stopped() })");
+            expect({ what, ...after, stopped: after.stopped - stoppedBefore }).toEqual({ what, open: false, opened: after.opened, closed: after.opened, pending: 0, stopped: 1 });
+        }
+    },
+    240000,
+);
+
 test.skipIf(!ready)("after the download it listens, shows provisional words that are not in the document, then settles them as one undo step", async () => {
     await fresh();
     await listening();

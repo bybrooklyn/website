@@ -74,8 +74,8 @@ export interface Target {
     undo(): void;
 }
 
-/** Why a session ended. */
-export type Reason = "button" | "silence" | "nothing" | "command" | "error";
+/** Why a session ended: "hidden" when the page was hidden or left, "lost" when the microphone was taken away. */
+export type Reason = "button" | "silence" | "nothing" | "command" | "error" | "hidden" | "lost";
 
 /** What a session is given. */
 export interface SessionOptions {

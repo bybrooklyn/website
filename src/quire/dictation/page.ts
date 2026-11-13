@@ -26,7 +26,7 @@ async function start(host: HTMLElement) {
     const bar = host.querySelector<HTMLElement>("#dictation-bar")!;
     const paper = host.querySelector<HTMLElement>("#dictation-paper")!;
     const surface = createSurface(paper, documentOf([paragraph()]));
-    const dictation = createDictation(surface, { provider: fake?.provider, microphone: fake?.microphone, silence: fake ? 2500 : undefined });
+    const dictation = createDictation(surface, { provider: fake?.provider, microphone: fake?.microphone, silence: fake ? 2500 : undefined, onStopped: fake ? () => fake.controls.stop() : undefined });
     window.dictation = dictation;
     window.dictationDoc = () => write(surface.getDocument()).trim();
     if (dictation.why) {
