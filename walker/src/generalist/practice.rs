@@ -72,6 +72,9 @@ pub struct Shaping {
     /// For a run that ends because it got nowhere for five seconds, as a fall costs: standing still
     /// is not a way to keep out of trouble.
     pub stall: f32,
+    /// For each second of the body's lean, squared (radians from upright): a posture term, as the
+    /// knee and upright terms are.
+    pub lean: f32,
 }
 
 /// The parts of a step's reward, for a reader: the run's own (progress less hazards and twitching),
@@ -117,6 +120,10 @@ pub fn shaped(run: &mut Run, shaping: Shaping, actions: &[f32]) -> Parts {
     let torso = &world.bodies[creature.torso as usize];
     if shaping.spin != 0.0 {
         parts.effort -= shaping.spin * STEP * torso.spin * torso.spin;
+    }
+    if shaping.lean != 0.0 {
+        let angle = torso.angle();
+        parts.posture -= shaping.lean * STEP * angle * angle;
     }
     if shaping.bob != 0.0 {
         parts.effort -= shaping.bob * STEP * torso.velocity.y * torso.velocity.y;
@@ -238,7 +245,7 @@ impl Way {
     /// at the first touch of its body once the costs are all in (until then it may be down for a
     /// second, less and less).
     pub fn of(legs: u32) -> Way {
-        let mut shaping = Shaping { alive: 0.25, energy: 0.002, air: 2.0, tall: false, smooth: 0.0, fall: 3.0, knee: 0.0, upright: 0.0, down: 1.0, turns: 0.0, pace: 0.0, impact: 0.0, spin: 0.0, bob: 0.0, swing: 0.0, torque: 0.0, stall: 0.0 };
+        let mut shaping = Shaping { alive: 0.25, energy: 0.002, air: 2.0, tall: false, smooth: 0.0, fall: 3.0, knee: 0.0, upright: 0.0, down: 1.0, turns: 0.0, pace: 0.0, impact: 0.0, spin: 0.0, bob: 0.0, swing: 0.0, torque: 0.0, stall: 0.0, lean: 0.0 };
         // two legs went on their belly and knees in lunges without these (README, "How it moves")
         if legs == 2 {
             shaping = Shaping { knee: 1.0, upright: 0.5, down: 0.0, turns: 0.5, ..shaping };
@@ -292,6 +299,9 @@ pub struct Worlds {
     pub joules: f64,
     /// How each creature moves, step by step, when measuring.
     pub watches: Option<Vec<Watch>>,
+    /// The same, watching only while nothing ahead asks for anything but walking (`clear_ahead`):
+    /// how it moves on open ground, with what it does at each thing in its way left out.
+    pub open_watches: Option<Vec<Watch>>,
 }
 
 impl Worlds {
@@ -309,7 +319,7 @@ impl Worlds {
         let runs = seeds.iter().map(|&seed| make(recipe, way, seed)).collect::<Option<Vec<Run>>>()?;
         let (senses, actions) = (runs.first()?.senses(), runs.first()?.body.actions());
         let count = runs.len();
-        Some(Worlds { recipe, way, stream: 0, spare: (0..count).map(|_| World::new()).collect(), going: vec![true; count], active: Vec::with_capacity(count), made: vec![0; count], renew: false, held: vec![0.0; count * actions], senses, actions, finished: Vec::new(), steps: 0, tally: (0, 0), goal: f32::INFINITY, idle_air: 0, joules: 0.0, watches: None, runs })
+        Some(Worlds { recipe, way, stream: 0, spare: (0..count).map(|_| World::new()).collect(), going: vec![true; count], active: Vec::with_capacity(count), made: vec![0; count], renew: false, held: vec![0.0; count * actions], senses, actions, finished: Vec::new(), steps: 0, tally: (0, 0), goal: f32::INFINITY, idle_air: 0, joules: 0.0, watches: None, open_watches: None, runs })
     }
 
     /// Whether creature i is still going (only a creature alone can stop).
@@ -363,6 +373,14 @@ impl Worlds {
                 #[cfg(not(target_arch = "wasm32"))]
                 if let Some(watches) = &mut self.watches {
                     watches[i].after_step(&run.body.creature, &run.stage.world, idle);
+                }
+                #[cfg(not(target_arch = "wasm32"))]
+                if let Some(watches) = &mut self.open_watches {
+                    if clear_ahead(run) {
+                        watches[i].pause();
+                    } else {
+                        watches[i].after_step(&run.body.creature, &run.stage.world, idle);
+                    }
                 }
                 self.joules += run.body.creature.effort(&run.stage.world) as f64;
                 rewards[i] += parts.run + parts.up + parts.effort + parts.air + parts.fall + parts.posture;
@@ -438,6 +456,8 @@ pub struct Measured {
     pub joules_per_metre: f32,
     /// How it moved (`gait`).
     pub gait: Gait,
+    /// How it moved on open ground alone (`Worlds::open_watches`).
+    pub open_gait: Gait,
 }
 
 impl Measured {
@@ -450,6 +470,7 @@ impl Measured {
 pub fn measure(recipe: Recipe, way: Way, seeds: &[u32], mut act: impl FnMut(usize, &[f32], &mut [f32])) -> Measured {
     let Some(mut worlds) = Worlds::alone(recipe, way, seeds) else { return Measured::default() };
     worlds.watches = Some(vec![Watch::default(); seeds.len()]);
+    worlds.open_watches = Some(vec![Watch::default(); seeds.len()]);
     let (count, senses, wide) = (seeds.len(), worlds.senses, worlds.actions);
     let (mut sensed, mut actions, mut rewards, mut ends, mut last) = (vec![0.0; count * senses], vec![0.0; count * wide], vec![0.0; count], vec![GOING; count], vec![0.0; count * senses]);
     worlds.observe(&mut sensed);
@@ -464,7 +485,8 @@ pub fn measure(recipe: Recipe, way: Way, seeds: &[u32], mut act: impl FnMut(usiz
     let distances: Vec<f32> = worlds.runs.iter().map(|run| run.judge.furthest).collect();
     let metres = distances.iter().sum::<f32>().max(0.01);
     let gait = Gait::of(worlds.watches.as_deref().unwrap_or(&[]));
-    Measured { idle_air: worlds.idle_air as f32 / worlds.steps.max(1) as f32, joules_per_metre: (worlds.joules / metres as f64) as f32, distances, gait }
+    let open_gait = Gait::of(worlds.open_watches.as_deref().unwrap_or(&[]));
+    Measured { idle_air: worlds.idle_air as f32 / worlds.steps.max(1) as f32, joules_per_metre: (worlds.joules / metres as f64) as f32, distances, gait, open_gait }
 }
 
 /// A learner practising in fresh worlds of a recipe's kind: what the page runs, and the native runs
@@ -530,6 +552,7 @@ impl Practice {
             way.shaping.bob = self.shaping.bob * along;
             way.shaping.swing = self.shaping.swing * along;
             way.shaping.torque = self.shaping.torque * along;
+            way.shaping.lean = self.shaping.lean * along;
             // the time it may be down shortens from the run's own second to what is asked
             way.shaping.down = 1.0 + (self.shaping.down - 1.0) * along;
         }

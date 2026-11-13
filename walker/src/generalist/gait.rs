@@ -45,6 +45,9 @@ pub struct Watch {
     lifted: Vec<u32>,
     last: Vec<u64>,
     pub gaps: Vec<(u64, f64, f64)>,
+    /// For every foot, whether its next landing starts its count of strides afresh, after a stretch
+    /// not watched (`pause`).
+    fresh: Vec<bool>,
 }
 
 impl Watch {
@@ -56,6 +59,7 @@ impl Watch {
             self.lifted = vec![0; legs];
             self.last = vec![0; legs];
             self.gaps = vec![(0, 0.0, 0.0); legs];
+            self.fresh = vec![false; legs];
         }
         self.steps += 1;
         let torso = &world.bodies[creature.torso as usize];
@@ -80,7 +84,7 @@ impl Watch {
             }
             if down {
                 if self.lifted[k] >= LIFTED {
-                    if self.landings[k] > 0 {
+                    if self.landings[k] > 0 && !self.fresh[k] {
                         let gap = (self.steps - self.last[k]) as f64;
                         let (count, sum, squares) = &mut self.gaps[k];
                         *count += 1;
@@ -89,6 +93,7 @@ impl Watch {
                     }
                     self.landings[k] += 1;
                     self.last[k] = self.steps;
+                    self.fresh[k] = false;
                 }
                 self.lifted[k] = 0;
             } else {
@@ -99,6 +104,13 @@ impl Watch {
             let (a, b) = (world.bodies[creature.legs[0].lower as usize].touching, world.bodies[creature.legs[1].lower as usize].touching);
             self.both += u64::from(a && b);
         }
+    }
+}
+
+impl Watch {
+    /// Leaves a stretch out: the time between the landings either side of it is not a stride.
+    pub fn pause(&mut self) {
+        self.fresh.iter_mut().for_each(|fresh| *fresh = true);
     }
 }
 

@@ -103,11 +103,9 @@ fn main() {
             u8::from(g.walks(legs as usize))
         );
     };
-    let flat_name = format!("{method}-flat");
-    let flat_say = |steps: u64, measured: Measured| {
-        let g = measured.gait;
+    let also = |kind: &str, steps: u64, measured: &Measured, g: walker::generalist::gait::Gait| {
         println!(
-            "{flat_name} {legs} {difficulty} {seed} {steps} {:.1} {:.2} 0 0 {:.3} {:.0} low={:.3} belly={:.3} height={:.2}/{:.2} pitch={:.2}/{:.2} together={:.2} cadence={:.2} balance={:.2} variation={:.2} walks={}",
+            "{method}-{kind} {legs} {difficulty} {seed} {steps} {:.1} {:.2} 0 0 {:.3} {:.0} low={:.3} belly={:.3} height={:.2}/{:.2} pitch={:.2}/{:.2} together={:.2} cadence={:.2} balance={:.2} variation={:.2} walks={}",
             started.elapsed().as_secs_f32(), measured.mean(), measured.idle_air, measured.joules_per_metre, g.low, g.belly, g.height, g.height_spread, g.pitch, g.pitch_spread, g.together, g.cadence, g.balance, g.variation, u8::from(g.walks(legs as usize))
         );
     };
@@ -159,6 +157,7 @@ fn main() {
                 "swing" => way.shaping.swing = value,
                 "torque" => way.shaping.torque = value,
                 "stall" => way.shaping.stall = value,
+                "lean" => way.shaping.lean = value,
                 "smooth" => way.shaping.smooth = value,
                 "hip" => way.hip = value,
                 "clock" => way.clock = on,
@@ -186,6 +185,7 @@ fn main() {
             assert!(practice.load(&state, &running), "the kept learner does not fit this way");
             let own = practice.evaluate(&[1])[0];
             let measured = practice.measure(&seeds);
+            also("open", practice.worlds.steps, &measured, measured.open_gait);
             say(practice.worlds.steps, measured, own);
             return;
         }
@@ -198,6 +198,7 @@ fn main() {
             }
             let own = practice.evaluate(&[1])[0];
             let measured = practice.measure(&seeds);
+            also("open", practice.worlds.steps, &measured, measured.open_gait);
             say(practice.worlds.steps, measured, own);
             // the same policy on level ground with nothing on it, where a stride has no reason to vary
             if flat {
@@ -205,7 +206,7 @@ fn main() {
                 practice.recipe = Recipe { amounts: [0.0; 4], ..recipe };
                 let measured = practice.measure(&seeds);
                 practice.recipe = recipe;
-                flat_say(practice.worlds.steps, measured);
+                also("flat", practice.worlds.steps, &measured, measured.gait);
             }
         }
     }
