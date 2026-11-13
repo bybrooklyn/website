@@ -1111,7 +1111,7 @@ mod tests {
     fn a_ball_on_the_back_stays_there_while_the_walker_stands_and_falls_off_when_it_tips() {
         for legs in [1, 2, 4] {
             let settings = Settings { goal: Goal::Carry, ..Settings::default() };
-            let mut trainer = Trainer::new(Description { legs, carry: false, leap: false }, settings, &flat_ground(), 1).unwrap();
+            let trainer = Trainer::new(Description { legs, carry: false, leap: false }, settings, &flat_ground(), 1).unwrap();
             assert_eq!(trainer.description.senses(), Description { legs, carry: false, leap: false }.senses() + 2);
             let creature = trainer.creature.clone();
             let mut world = trainer.start.clone();
@@ -1120,16 +1120,17 @@ mod tests {
                 world.step();
             }
             assert!(!creature.dropped(&world), "{legs} legs: the ball fell off a walker standing still");
-            // tipped well over, the ball rolls off
+            // tipped well over, the ball rolls off; four legs, heavier and wider, take a harder shove (at
+            // 40 it rocks back and keeps the ball; 60 is enough)
             let torso = creature.torso as usize;
             let at = world.bodies[torso].position + Vec2::new(0.0, 0.3);
-            world.bodies[torso].push(at, Vec2::new(-40.0, 0.0));
+            let shove = if legs == 4 { 80.0 } else { 40.0 };
+            world.bodies[torso].push(at, Vec2::new(-shove, 0.0));
             let dropped = (0..240).any(|_| {
                 world.step();
                 creature.dropped(&world)
             });
-            assert!(dropped || legs == 4, "{legs} legs: a hard shove did not drop the ball");
-            let _ = &mut trainer;
+            assert!(dropped, "{legs} legs: a hard shove did not drop the ball");
         }
     }
 }
