@@ -35,7 +35,9 @@ import {
     removeBlock,
     runsLength,
     runsText,
+    quoteRest,
     setListStart,
+    setSubtext,
     sliceRuns,
     splitBlock,
     textAt,
@@ -56,6 +58,7 @@ import { record, redo, seal, undo, type ChangeKind, type History, type State } f
 import { readTag } from "./components";
 import { emojiOf } from "./emoji";
 import { symbolFor } from "./symbols";
+import { LINE_MARK, PAIRS } from "./vocabulary";
 
 /** A piece of input: text typed (or given by the keyboard of a phone), or a named key with its modifiers. `mod` is Ctrl, or Cmd on a Mac. */
 export type Input = { type: "text"; text: string } | { type: "key"; key: string; shift?: boolean; mod?: boolean; alt?: boolean; word?: boolean };
@@ -220,7 +223,7 @@ function blockShortcut(state: State, typed: string): State | undefined {
     // a marker typed after a soft line break (Shift+Enter) is for that line alone: the paragraph is
     // split at the break and only the new line becomes the list item, heading or quote
     const lineStart = before.lastIndexOf("\n") + 1;
-    if (lineStart > 0 && typed === " " && !inItem(doc, at.path) && LINE_MARKER.test(before.slice(lineStart))) {
+    if (lineStart > 0 && typed === " " && !inItem(doc, at.path) && LINE_MARK.test(before.slice(lineStart))) {
         const cut = deleteText(doc, { start: { path: at.path, offset: lineStart - 1 }, end: { path: at.path, offset: lineStart } });
         const split = splitBlock(cut, { path: at.path, offset: lineStart - 1 });
         return blockShortcut({ doc: split, selection: caret(nextSibling(at.path), at.offset - lineStart) }, typed);
@@ -252,6 +255,9 @@ function blockShortcut(state: State, typed: string): State | undefined {
             const above = index > 0 ? blockAt(doc, [...at.path.slice(0, -1), index - 1]) : undefined;
             if (above?.kind === "paragraph" || (above?.kind === "list" && above.style === "definition")) return land(makeDefinition(strip(), at.path));
         }
+        // `-# ` makes small quiet text; `>>> ` quotes this line and everything after it, as Discord does
+        if (before === "-# " && !block.subtext) return land(setSubtext(strip(), at.path, true));
+        if (before === ">>> " && !inQuote(doc, at.path) && !inItem(doc, at.path)) return land(quoteRest(strip(), at.path));
         if (inItem(doc, at.path)) return undefined;
         if (/^[-*+] $/.test(before)) return land(changeKind(strip(), at.path, { kind: "list", style: "bullet" }));
         const number = /^(\d{1,9}|[aAiI])[.)] $/.exec(before);
@@ -276,9 +282,6 @@ function blockShortcut(state: State, typed: string): State | undefined {
     return undefined;
 }
 
-/** What, typed at the start of a line, turns that line into a block: a heading's hashes, a list's mark, a box, a quote. */
-const LINE_MARKER = /^(#{1,6}|[-*+]|\d{1,9}[.)]|[aAiI][.)]|\[[ xX]?\]|>) $/;
-
 /** Sets where the numbered list holding a path starts, when the path's item is its only one (a list just made). */
 function startAt(doc: Document, path: number[], start: number): Document {
     const owner = blockAt(doc, path.slice(0, -2));
@@ -286,26 +289,15 @@ function startAt(doc: Document, path: number[], start: number): Document {
     return setListStart(doc, path.slice(0, -2), start);
 }
 
-const INLINE: [RegExp, Mark, number][] = [
-    [/(^|[^*])\*\*([^*\s](?:[^*]*[^*\s])?)\*\*$/, "bold", 2],
-    [/(^|[^~])~~([^~\s](?:[^~]*[^~\s])?)~~$/, "strike", 2],
-    [/(^|[^=])==([^=\s](?:[^=]*[^=\s])?)==$/, "mark", 2],
-    [/(^|[^*])\*([^*\s](?:[^*]*[^*\s])?)\*$/, "italic", 1],
-    [/(^|[^`])`([^`]+)`$/, "code", 1],
-    [/(^|[^~])~([^~\s]+)~$/, "sub", 1],
-    [/(^|[^^[])\^([^^\s]+)\^$/, "sup", 1],
-    [/(^|[^$\\])\$([^$\s](?:[^$]*[^$\s])?)\$$/, "math", 1],
-];
-
-/** `**bold**`, `*italic*`, `` `code` ``, `~~strike~~`, `==marked==`, `^sup^`, `~sub~` and `$maths$`, turned into the mark when the closing mark is typed. */
+/** The pairs of the typing table (vocabulary.ts), `**bold**` to `^sup^`, turned into their mark when the closing sign is typed. */
 function inlineShortcut(state: State, typed: string): State | undefined {
     // text committed by an input method may be several characters: the last one is the closing mark
     const last = typed.slice(-1);
-    if (!last || !"*`~=^$".includes(last)) return undefined;
+    if (!last || !"*_`~=^|".includes(last)) return undefined;
     const { doc } = state;
     const at = state.selection.focus;
     const before = textAt(doc, at.path).slice(0, at.offset);
-    for (const [pattern, mark, width] of INLINE) {
+    for (const { pattern, mark, width } of PAIRS) {
         const match = pattern.exec(before);
         if (!match) continue;
         const start = match.index + match[1]!.length;
@@ -355,6 +347,7 @@ function backspace(state: State, word: boolean): Outcome {
     if (tableOf(doc, at.path) || !block) return done(doc, state.selection, "move");
     // at the start of a block: a heading, list item or quote first becomes a plain paragraph
     if (block.kind === "heading") return done(changeKind(doc, at.path, { kind: "paragraph" }), state.selection, "structure");
+    if (block.kind === "paragraph" && block.subtext) return done(setSubtext(doc, at.path, false), state.selection, "structure");
     // at the start of a later item, as in Docs, the bullet goes and the text stays where it was, as a
     // line of the item above (a hard break in it); Backspace again joins the two lines
     const owner = inItem(doc, at.path) ? blockAt(doc, at.path.slice(0, -2)) : undefined;

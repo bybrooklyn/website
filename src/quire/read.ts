@@ -588,6 +588,12 @@ function readParagraph(lines: Line[], at: number, context: Context): [Block, num
         }
         end++;
     }
+    // `-# text`, Discord's small quiet text: a paragraph whose first line starts so (standard Markdown gives `-#` no meaning)
+    const subtext = /^ {0,3}-#[ \t]+(?=\S)/.exec(lines[at]!.text);
+    if (subtext) {
+        const rest = [{ ...lines[at]!, text: lines[at]!.text.slice(subtext[0].length) }, ...lines.slice(at + 1, end)];
+        return [{ kind: "paragraph", runs: runsFrom(paragraphText(rest), context), subtext: true, gap: "" }, end];
+    }
     const runs = runsFrom(paragraphText(lines.slice(at, end)), context);
     const only = runs[0];
     if (runs.length === 1 && only?.kind === "image") {
@@ -669,25 +675,6 @@ function codeSpanEnd(text: string, from: number): { end: number; ticks: number }
         index += run;
     }
     return { end: -1, ticks };
-}
-
-/**
- * Where inline maths that opens with the `$` at `from` closes, as Pandoc reads it: the opening `$`
- * has a character other than a space after it, the closing one has one before it and no digit
- * after it, and neither is doubled or escaped. So "$5 and $10" stays text. -1 if it does not close.
- */
-export function mathEnd(text: string, from: number): number {
-    if (text[from + 1] === "$" || text[from - 1] === "$" || /^\s?$/.test(text[from + 1] ?? "")) return -1;
-    for (let index = from + 2; index < text.length; index++) {
-        const char = text[index]!;
-        if (char === "\\") index++;
-        else if (char === "\n") return -1;
-        else if (char === "$") {
-            if (/\s/.test(text[index - 1]!) || /\d/.test(text[index + 1] ?? "") || text[index + 1] === "$") return -1;
-            return index;
-        }
-    }
-    return -1;
 }
 
 /** The index of the `]` that closes the `[` at `from`, skipping escapes, code spans and nested brackets. */
@@ -879,17 +866,6 @@ function inline(text: string, context: Context): Run[] {
             index = span.end;
             continue;
         }
-        if (char === "$") {
-            const end = mathEnd(text, index);
-            if (end > 0) {
-                push(textRun(text.slice(index + 1, end), ["math"]));
-                index = end + 1;
-                continue;
-            }
-            buffer += text[index + 1] === "$" ? "$$" : "$";
-            index += text[index + 1] === "$" ? 2 : 1;
-            continue;
-        }
         if (char === ":") {
             const code = /^:([a-z0-9_+-]+):/.exec(rest);
             if (code && emojiOf(code[1]!)) {
@@ -1026,11 +1002,11 @@ function inline(text: string, context: Context): Run[] {
                 continue;
             }
         }
-        if (char === "*" || char === "_" || char === "~" || char === "=") {
+        if (char === "*" || char === "_" || char === "~" || char === "=" || char === "|") {
             let count = 0;
             while (text[index + count] === char) count++;
-            // `==marked==` takes exactly two signs; one, or three and more, are only text
-            if ((char === "~" && count > 2) || (char === "=" && count !== 2)) {
+            // `==marked==` and `||spoiler||` take exactly two signs; one, or three and more, are only text
+            if ((char === "~" && count > 2) || ((char === "=" || char === "|") && count !== 2)) {
                 buffer += char.repeat(count);
                 index += count;
                 continue;
@@ -1093,12 +1069,12 @@ function emphasis(tokens: Token[]) {
             for (let open = close - 1; open >= 0; open--) {
                 const opener = tokens[open]!;
                 if (!isDelimiter(opener) || opener.char !== closer.char || !opener.open || opener.count === 0) continue;
-                const paired = closer.char === "~" || closer.char === "=";
+                const paired = closer.char === "~" || closer.char === "=" || closer.char === "|";
                 if (paired) {
                     if (opener.count !== closer.count) continue;
                 } else if ((opener.close || closer.open) && (opener.length + closer.length) % 3 === 0 && !(opener.length % 3 === 0 && closer.length % 3 === 0)) continue;
                 const use = paired ? closer.count : opener.count >= 2 && closer.count >= 2 ? 2 : 1;
-                const mark: Mark = closer.char === "=" ? "mark" : closer.char === "~" ? "strike" : use === 2 ? "bold" : "italic";
+                const mark: Mark = closer.char === "=" ? "mark" : closer.char === "|" ? "spoiler" : closer.char === "~" ? "strike" : use === 2 ? "bold" : "italic";
                 for (let k = open + 1; k < close; k++) {
                     const token = tokens[k]!;
                     // a run left unpaired inside the emphasis is plain text, and takes the mark too

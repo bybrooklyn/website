@@ -108,6 +108,7 @@ const TAGS: [Mark, string][] = [
     ["mark", "mark"],
     ["sup", "sup"],
     ["sub", "sub"],
+    ["spoiler", "span"],
 ];
 
 /** A code block longer than this many characters is drawn as plain text at once and highlighted a moment after typing stops, so that a key in it stays quick. */
@@ -195,6 +196,8 @@ function drawLeaf(leaf: Leaf, how: Drawing = plainDrawing): Node {
     for (const [mark, tag] of [...TAGS].reverse()) {
         if (!leaf.marks.includes(mark)) continue;
         const wrap = document.createElement(tag);
+        // a spoiler is drawn dimmed with a dotted edge, so that it can still be read and written in here
+        if (mark === "spoiler") wrap.className = "quire-spoiler";
         wrap.append(node);
         node = wrap;
     }
@@ -366,6 +369,7 @@ function draw(block: Block, inner: number[], how: Drawing = plainDrawing): HTMLE
         case "heading": {
             const element = holderOf(document.createElement(block.kind === "paragraph" ? "p" : `h${block.level}`), inner);
             if (block.align) element.style.textAlign = block.align;
+            if (block.kind === "paragraph" && block.subtext) element.className = "quire-subtext";
             if (block.spacing) element.style.setProperty("--spacing", String(block.spacing));
             fillRuns(element, block.runs, how);
             return element;
@@ -654,7 +658,7 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
         if (holder) {
             const box = holder.closest<HTMLElement>(".quire-drawn");
             if (box) now.push(box);
-            for (const math of holder.querySelectorAll<HTMLElement>(".quire-math")) {
+            for (const math of holder.querySelectorAll<HTMLElement>(".quire-math, .quire-spoiler")) {
                 const start = offsetIn(holder, math, 0);
                 if (focus.offset >= start && focus.offset <= start + units(math)) now.push(math);
             }

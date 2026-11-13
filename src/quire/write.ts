@@ -6,7 +6,6 @@
 import { pictureHtml, sized } from "./pictures";
 import type { Align, Block, Document, Leaf, List, Run, TextRun } from "./document";
 import { emojiOf } from "./emoji";
-import { mathEnd } from "./read";
 
 interface Context {
     eol: string;
@@ -71,7 +70,7 @@ function writeBlock(block: Block, context: Context): string {
     const aligned = (inner: string, align?: string) => (align ? `<div align="${align}">${eol}${eol}${inner}${eol}${eol}</div>` : inner);
     switch (block.kind) {
         case "paragraph":
-            return aligned(paragraphText(block.runs, context), block.align);
+            return aligned((block.subtext ? "-# " : "") + paragraphText(block.runs, context), block.align);
         case "heading": {
             let content = writeRuns(block.runs, context, false).replace(/[ \t]*\n[ \t]*/g, " ").trim();
             // a heading that ends in #s would lose them as a closing sequence
@@ -188,7 +187,7 @@ function paragraphText(runs: Run[], context: Context): string {
         .map((raw, index) => {
             let line = raw.replace(/^[ \t]+/, "");
             if (!line.endsWith("\\")) line = line.replace(/[ \t]+$/, "");
-            if (/^(#{1,6}(\s|$)|>|[-+*_](\s|$)|(=+|-+)\s*$|:[ \t])/.test(line)) line = `\\${line}`;
+            if (/^(#{1,6}(\s|$)|>|[-+*_](\s|$)|-#\s|(=+|-+)\s*$|:[ \t])/.test(line)) line = `\\${line}`;
             line = line.replace(/^(\d{1,9})([.)])(?=\s|$)/, "$1\\$2");
             if (index === 0 && context.mdx && /^(import|export)\b/.test(line)) line = `&#${line.charCodeAt(0)};${line.slice(1)}`;
             return line;
@@ -196,15 +195,15 @@ function paragraphText(runs: Run[], context: Context): string {
         .join(context.eol);
 }
 
-type Key = "style" | "underline" | "strike" | "bold" | "italic" | "mark" | "sup" | "sub";
+type Key = "style" | "underline" | "strike" | "bold" | "italic" | "mark" | "sup" | "sub" | "spoiler";
 
-const OPEN: Record<Exclude<Key, "style">, string> = { underline: "<u>", strike: "~~", bold: "**", italic: "*", mark: "==", sup: "<sup>", sub: "<sub>" };
-const CLOSE: Record<Exclude<Key, "style">, string> = { underline: "</u>", strike: "~~", bold: "**", italic: "*", mark: "==", sup: "</sup>", sub: "</sub>" };
+const OPEN: Record<Exclude<Key, "style">, string> = { underline: "<u>", strike: "~~", bold: "**", italic: "*", mark: "==", sup: "<sup>", sub: "<sub>", spoiler: "||" };
+const CLOSE: Record<Exclude<Key, "style">, string> = { underline: "</u>", strike: "~~", bold: "**", italic: "*", mark: "==", sup: "</sup>", sub: "</sub>", spoiler: "||" };
 
 function keysOf(leaf: TextRun): string[] {
     const keys: string[] = [];
     if (leaf.color || leaf.size) keys.push(`style:${leaf.color ?? ""}|${leaf.size ?? ""}`);
-    for (const key of ["underline", "sup", "sub", "strike", "mark", "bold", "italic"] as Key[]) if (leaf.marks.includes(key as TextRun["marks"][number])) keys.push(key);
+    for (const key of ["underline", "sup", "sub", "spoiler", "strike", "mark", "bold", "italic"] as Key[]) if (leaf.marks.includes(key as TextRun["marks"][number])) keys.push(key);
     return keys;
 }
 
@@ -270,21 +269,8 @@ function writeLeaves(all: Leaf[], context: Context, cell: boolean): string {
 
 /** Writes runs as Markdown text, with `\n` for line breaks. */
 function writeRuns(runs: Run[], context: Context, cell: boolean): string {
-    // a `$` is left as it is unless, read back as the reader reads it, it would open or close maths
-    let plain = "";
-    const ours: boolean[] = [];
-    for (const leaf of runs.flatMap((run) => (run.kind === "link" ? run.runs : [run]))) {
-        const piece = leaf.kind !== "text" || leaf.marks.includes("code") ? "x" : leaf.marks.includes("math") ? `$${leaf.text}$` : leaf.text;
-        for (const char of piece) ours.push(char === "$" && leaf.kind === "text" && !literal(leaf));
-        plain += piece;
-    }
+    // a `$` is a dollar sign, as standard Markdown has it: maths in a line is not read, so nothing is escaped for it
     context.dollars = false;
-    for (let index = plain.indexOf("$"); index >= 0 && !context.dollars; index = plain.indexOf("$", index + 1)) {
-        const end = mathEnd(plain, index);
-        if (end < 0) continue;
-        if (ours[index] || ours[end]) context.dollars = true;
-        index = end;
-    }
     let out = "";
     let leaves: Leaf[] = [];
     const flush = () => {
@@ -332,8 +318,9 @@ function escapeText(value: string, context: Context, cell: boolean, previous?: L
             (char === "&" && /^&(#\d+|#x[0-9a-f]+|[a-z][a-z0-9]*);/i.test(value.slice(index))) ||
             (context.mdx && (char === "{" || char === "}")) ||
             (cell && char === "|") ||
-            // a `$` that could pair with another as maths, two `=` that could mark text, a known shortcode
+            // two `|` or two `=` that could hide or mark text, a known shortcode (`context.dollars` is no longer set)
             (char === "$" && !!context.dollars) ||
+            (char === "|" && left !== "|" && right === "|" && (index + 2 < value.length ? value[index + 2] : after) !== "|" && !(space(left) && space(index + 2 < value.length ? value[index + 2]! : after))) ||
             (char === "=" && left !== "=" && right === "=" && (index + 2 < value.length ? value[index + 2] : after) !== "=" && !(space(left) && space(index + 2 < value.length ? value[index + 2]! : after))) ||
             (char === ":" && emojiOf(/^:([a-z0-9_+-]+):/.exec(value.slice(index))?.[1] ?? "") !== undefined);
         out += risky ? `\\${char}` : char;

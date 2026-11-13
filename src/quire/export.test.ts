@@ -65,7 +65,7 @@ test("every further kind downloads as Markdown byte for byte, as plain text with
     const page = decoded(pageHtml(doc, { title: "Kinds" }).replace(/<[^>]+>/g, ""));
     for (const word of KEPT) expect({ word, kept: page.includes(word) }).toEqual({ word, kept: true });
     const html = pageHtml(doc, { title: "Kinds" });
-    for (const part of ['<blockquote class="callout callout-warning">', "<dl>", "<dt>Apple</dt>", "<dd>Definition words.</dd>", "<sub>2</sub>", "<sup>2</sup>", "<mark>marked words</mark>", '<code class="math">', "<details>", "<summary>Summary words</summary>"]) expect(html).toContain(part);
+    for (const part of ['<blockquote class="callout callout-warning">', "<dl>", "<dt>Apple</dt>", "<dd>Definition words.</dd>", "<sub>2</sub>", "<sup>2</sup>", "<mark>marked words</mark>", '<code class="language-math">', "<details>", "<summary>Summary words</summary>"]) expect(html).toContain(part);
 });
 
 test("every picture a document shows is found, in blocks, lines, lists and tables", () => {
