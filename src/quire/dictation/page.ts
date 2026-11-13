@@ -35,6 +35,7 @@ async function start(host: HTMLElement) {
         line.textContent = dictation.why;
         bar.replaceWith(line);
     } else dictation.mount(bar);
-    if (fake) window.dictationTest = { ...fake.controls, markdown: () => write(surface.getDocument()).trim(), provisional: () => document.querySelector(".quire-ghost")?.textContent ?? "" };
+    // the made-up engine's own controls, so that a test setting how long a download takes sets it for the engine
+    if (fake) window.dictationTest = Object.assign(fake.controls, { markdown: () => write(surface.getDocument()).trim(), provisional: () => document.querySelector(".quire-ghost")?.textContent ?? "" });
     paper.focus();
 }

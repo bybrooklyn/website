@@ -30,6 +30,8 @@ export interface Tier {
     name: string;
     /** One line for the panel on what it is good for. */
     note: string;
+    /** Who it suits, in a few words, for its card on the first launch. */
+    who: string;
     engine: Engine;
     /** The Hugging Face repository the files come from. */
     repo: string;
@@ -52,6 +54,7 @@ export const TIERS: Tier[] = [
         id: "main",
         name: "Accurate",
         note: "The most accurate, and quick on a graphics card. Parakeet Ultra.",
+        who: "For a computer with a graphics card",
         engine: "parakeet",
         mels: 128,
         card: true,
@@ -68,6 +71,7 @@ export const TIERS: Tier[] = [
         id: "light",
         name: "Light",
         note: "Half the size, nearly as accurate. Parakeet Redux.",
+        who: "For most laptops and desktops",
         engine: "parakeet",
         mels: 128,
         repo: "Olicorne/parakeet-tdt-0.6b-v3-redux-onnx",
@@ -83,6 +87,7 @@ export const TIERS: Tier[] = [
         id: "tiny",
         name: "Tiny",
         note: "For phones and slow connections. Moonshine tiny, English only.",
+        who: "For phones, tablets and slow connections",
         engine: "moonshine",
         repo: "onnx-community/moonshine-tiny-ONNX",
         files: [

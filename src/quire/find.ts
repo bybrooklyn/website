@@ -8,7 +8,7 @@
 
 import { blockAt, blockPaths, deleteText, insertText, textAt, type Document, type Position } from "./document";
 import { type Surface } from "./surface";
-import { control, glyph, icon, make, still } from "./ui";
+import { control, glyph, icon, make, originFor, still } from "./ui";
 
 /** How to look: matching capitals or not, and whole words only or not. */
 export interface FindOptions {
@@ -253,6 +253,9 @@ export function createFind(surface: Surface, sheet: HTMLElement, top: () => numb
         }
         if (replacing) showReplace(true);
         place();
+        // it grows out of what was pressed (the bar's button, a menu's line), or from the sheet's corner when asked for from the keyboard
+        const width = bar.offsetWidth;
+        bar.style.transformOrigin = originFor({ left: document.documentElement.clientWidth - parseFloat(bar.style.right) - width, top: parseFloat(bar.style.top), width, height: bar.offsetHeight }, "100% 0");
         void bar.offsetWidth;
         bar.classList.add("shown");
         bar.inert = false;

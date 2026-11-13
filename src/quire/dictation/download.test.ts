@@ -10,6 +10,7 @@ const tier: Tier = {
     id: "tiny",
     name: "Test",
     note: "",
+    who: "",
     engine: "moonshine",
     repo: "owner/repo",
     license: "MIT",

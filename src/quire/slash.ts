@@ -126,7 +126,7 @@ export function createSlash(surface: Surface, pickImage: () => void): { close():
         if (open && slashQuery(surface.getDocument(), selection.focus.path, selection.focus.offset) === undefined) menu.close(false);
     });
 
-    // as the page scrolls, the menu keeps to the cursor
+    // as the page scrolls, the cursor's place moves, and the menu, tied to it, with it
     addEventListener(
         "scroll",
         () => {
@@ -137,7 +137,6 @@ export function createSlash(surface: Surface, pickImage: () => void): { close():
                 anchor.style.left = `${rect.left}px`;
                 anchor.style.top = `${rect.top}px`;
             }
-            menu.follow();
         },
         { passive: true },
     );

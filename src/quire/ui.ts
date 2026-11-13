@@ -4,7 +4,7 @@
 // pressed and covers nothing, growing out from under it on a slight spring, its lines arriving one
 // after another; closing, it draws back onto the control plainly. Nothing here simply appears.
 //
-// The functions that only count (moveIndex, placeNear, menuPlace, keySymbols) are pure and tested. Their styles are in
+// The functions that only count (moveIndex, placeNear, keySymbols) are pure and tested. Their styles are in
 // src/styles/quire.css.
 
 /** True when the visitor has asked for less motion. */
@@ -74,8 +74,89 @@ export function glyph(letter: string, look: string): HTMLElement {
     return make("span", `quire-glyph quire-glyph-${look}`, letter);
 }
 
+/** A press: where in the window, and when. */
+export interface Press {
+    x: number;
+    y: number;
+    at: number;
+}
+
+/**
+ * Where something opening now grows from, as a transform-origin inside its own box: the point
+ * that was just pressed (within half a second), so that it flows out of what was pressed; or,
+ * opened from the keyboard, `otherwise`.
+ */
+export function originAt(box: Box, press: Press | undefined, now: number, otherwise: string): string {
+    if (!press || now - press.at > 500) return otherwise;
+    return `${Math.round(press.x - box.left)}px ${Math.round(press.y - box.top)}px`;
+}
+
+let lastPress: Press | undefined;
+if (typeof document !== "undefined") document.addEventListener("pointerdown", (event) => (lastPress = { x: event.clientX, y: event.clientY, at: performance.now() }), true);
+
+/** Where something opening now in `box` grows from (originAt, with the last press on the page). */
+export const originFor = (box: Box, otherwise: string): string => originAt(box, lastPress, performance.now(), otherwise);
+
+/**
+ * The controls' tooltips, drawn by mdQuire rather than the browser so that they grow out of the
+ * control and go back into it: a small label under the control (above it at the window's foot),
+ * tied to it by anchor positioning, after the pointer has rested on it for half a second, or at
+ * once while moving along from one that was just shown. The control's `title` is what it says;
+ * it is taken off while the label is up so that the browser's own does not show as well. Touch
+ * has no resting pointer and no tooltip.
+ */
+let tipping = false;
+function tips() {
+    if (tipping || typeof document === "undefined") return;
+    tipping = true;
+    const tip = make("div", "quire-tip");
+    tip.popover = "manual";
+    tip.setAttribute("aria-hidden", "true");
+    let over: HTMLElement | undefined;
+    let waiting: ReturnType<typeof setTimeout> | undefined;
+    let shownAt = 0;
+    const hide = () => {
+        clearTimeout(waiting);
+        if (over) {
+            if (over.dataset.tip !== undefined) over.title = over.dataset.tip;
+            delete over.dataset.tip;
+            over.style.removeProperty("anchor-name");
+            over = undefined;
+        }
+        if (!tip.matches(":popover-open")) return;
+        shownAt = performance.now();
+        if (still()) return tip.hidePopover();
+        const gone = () => tip.matches(":popover-open") && !over && tip.hidePopover();
+        tip.animate([{ opacity: 1, scale: 1 }, { opacity: 0, scale: 0.7 }], { duration: 110, easing: EASE, fill: "forwards" }).finished.then(gone, gone);
+    };
+    document.addEventListener("pointerover", (event) => {
+        if (event.pointerType === "touch") return;
+        const found = (event.target as Element | null)?.closest?.<HTMLElement>(".quire-button[title], .quire-size-field[title], .quire-status[title]");
+        if (found === over) return;
+        hide();
+        if (!found || !found.title || found.classList.contains("open")) return;
+        over = found;
+        found.dataset.tip = found.title;
+        found.removeAttribute("title");
+        // moving along a row of controls, the next one's label comes at once
+        const warm = performance.now() - shownAt < 400;
+        waiting = setTimeout(() => {
+            if (over !== found || !found.isConnected) return;
+            tip.textContent = found.dataset.tip ?? "";
+            if (!tip.isConnected) document.body.append(tip);
+            found.style.setProperty("anchor-name", "--quire-tip");
+            for (const each of tip.getAnimations()) each.cancel();
+            tip.showPopover();
+            const up = tip.getBoundingClientRect().top < found.getBoundingClientRect().top;
+            if (!still()) tip.animate([{ opacity: 0, scale: 0.7, transformOrigin: up ? "50% 100%" : "50% 0" }, { opacity: 1, scale: 1, transformOrigin: up ? "50% 100%" : "50% 0" }], { duration: 180, easing: springCurve(MOTION.bounce) });
+        }, warm ? 60 : 500);
+    });
+    for (const name of ["pointerdown", "scroll", "keydown"]) addEventListener(name, hide, { capture: true, passive: true });
+}
+
 /** A button with a label for screen readers (shown as its tooltip too) that leaves the document's selection where it is when pressed. */
 export function control(label: string, content: string | Node, press: (button: HTMLButtonElement) => void, className = "quire-button"): HTMLButtonElement {
+    tips();
     const button = make("button", className);
     button.type = "button";
     button.setAttribute("aria-label", label);
@@ -90,6 +171,7 @@ export function control(label: string, content: string | Node, press: (button: H
 
 /** Three dots that run together into a cross while their menu is open, as the viewer's do. */
 export function dots(label: string): HTMLButtonElement {
+    tips();
     const button = make("button", "quire-button quire-dots");
     button.type = "button";
     button.setAttribute("aria-label", label);
@@ -250,39 +332,17 @@ export function keySymbols(hint: string, onMac = false): { shown: string; words:
     return { shown: parts.map((part) => named[part]?.[0] ?? part.toUpperCase()).join(""), words: parts.map((part) => named[part]?.[1] ?? part.toUpperCase()).join(" ") };
 }
 
-/**
- * Where an open menu goes: just under its control, its left edge on the control's, or its right
- * edge on the control's right when there is no room to the right; above the control when there is
- * not room below and more above. It keeps `margin` from the window's edges, and when it is taller
- * than its room it is cut to the room (and scrolls inside itself).
- */
-export function menuPlace(control: Box, size: { width: number; height: number }, window: { width: number; height: number }, align: "left" | "right" = "left", margin = 8, gap = 4): Box & { up: boolean } {
-    const below = window.height - margin - (control.top + control.height + gap);
-    const above = control.top - gap - margin;
-    const up = size.height > below && above > below;
-    const height = Math.max(0, Math.min(size.height, up ? above : below));
-    const width = Math.min(size.width, window.width - margin * 2);
-    let left = align === "right" || control.left + width > window.width - margin ? control.left + control.width - width : control.left;
-    left = Math.min(Math.max(left, margin), window.width - margin - width);
-    const top = up ? control.top - gap - height : control.top + control.height + gap;
-    return { left: Math.round(left), top: Math.round(top), width: Math.round(width), height: Math.round(height), up };
-}
-
 /** A menu that grows out from under the control that opened it. */
 export interface Menu {
     box: HTMLElement;
     open(trigger: HTMLElement, items: MenuItem[] | HTMLElement, focusFirst?: boolean): void;
     close(returnFocus?: boolean): void;
     isOpen(): boolean;
-    /** Puts the menu again where its control is, as the page scrolls. */
-    follow(): void;
 }
-
-const openMenus = new Set<Menu>();
 
 /** Closes every open menu but one. */
 export function closeOthers(keep?: Menu) {
-    for (const menu of openMenus) if (menu !== keep) menu.close(false);
+    for (const open of document.querySelectorAll<HTMLElement>(".quire-menu:popover-open")) if (open !== keep?.box) open.hidePopover();
 }
 
 /** Every motion of a menu stopped, keeping where it was drawn. */
@@ -292,28 +352,57 @@ const halt = (animations: Animation[]) => {
 };
 
 /**
+ * A press on the control whose menu is open must not count as a press outside it, which would close
+ * the menu only for the press to open it again. The browser leaves a press on a popover's own button
+ * alone, so the control is made that button while its menu is open; the button's own opening and
+ * closing is held back here, as each control says itself what its press does.
+ */
+let held = false;
+function holdButtons() {
+    if (held || typeof document === "undefined") return;
+    held = true;
+    const hold = (event: Event) => {
+        const button = (event.target as Element | null)?.closest?.("button");
+        if (button?.popoverTargetElement?.classList.contains("quire-menu")) event.preventDefault();
+    };
+    // looked at first, for a menu already open, and last, for one the press itself has just opened
+    document.addEventListener("click", hold, true);
+    addEventListener("click", hold);
+}
+
+let menus = 0;
+
+/**
  * Makes a menu, the one kind every menu in mdQuire is, as the lab chose it: it drops below the
- * control pressed and covers nothing, the control staying in its row, lit. One box, fixed to the
- * window, grows out from under the control's bottom edge, as wide as the control at first, to the
- * menu's size; what is inside is laid out at its final place and held still while the edges pass
- * over it, so nothing slides or stretches. It opens in 200 ms on a slight spring, its lines arriving
- * one after another, and closes back onto the control's edge in 140 ms on the site's easing. With
- * no room below it grows upward from the control's top edge instead, and with no room to the right
- * it keeps to the control's right edge. Opened from another control while open (the menu words, as
- * the pointer moves along them), it slides across to its new place and becomes that one's menu.
- * Under reduced motion it is simply open or shut. Its look is the lab's "raised": a slightly lighter
- * surface with a soft shadow, no line and no glow (quire.css).
+ * control pressed and covers nothing, the control staying in its row, lit. The browser does the
+ * keeping: the menu is a popover, so it is drawn over everything, a press outside it or Escape
+ * closes it, and opening one closes the others; and it is tied to its control by CSS anchor
+ * positioning, which puts it under the control (or to the left where there is no room; above or
+ * below is chosen here) and keeps it there as the page scrolls. What the browser does not do is the motion: the box grows
+ * out of the control's bottom edge, as wide as the control at first, to the menu's size, its corner
+ * held on the control so that what is inside stays still while the edges pass over it. It opens in
+ * 200 ms on a slight spring, its lines arriving one after another, and closes back onto the
+ * control's edge in 140 ms on the site's easing. Opened from another control while open (the menu
+ * words, as the pointer moves along them), it slides across and becomes that one's menu. Under
+ * reduced motion it is simply open or shut. Its look is the lab's "raised" (quire.css).
  */
 export function flowMenu(label: string, options: { align?: "left" | "right"; className?: string; onClose?: () => void; onSide?: (by: -1 | 1) => void } = {}): Menu {
+    holdButtons();
+    const name = `--quire-menu-${++menus}`;
     const box = make("div", `quire-menu ${options.className ?? ""}`.trim());
+    box.popover = "auto";
+    box.style.setProperty("position-anchor", name);
     const items = make("div", "quire-menu-items");
     box.append(items);
     box.setAttribute("aria-label", label);
     items.inert = true;
     let trigger: HTMLElement | undefined;
     let opened = false;
-    /** Where the box ends, and whether it grew upward. */
+    let giveFocus = false;
+    /** The menu's size as it ends, and whether it went above its control. */
     let final: (Box & { up: boolean }) | undefined;
+    /** The copy of the box that is seen going back into the control after the browser has put the menu away. */
+    let leaving: HTMLElement | undefined;
     const moving: Animation[] = [];
 
     const lines = () => [...items.querySelectorAll<HTMLElement>("button, input, a[href]")];
@@ -324,24 +413,41 @@ export function flowMenu(label: string, options: { align?: "left" | "right"; cla
     /** The control's edge the menu grows from and goes back to: a line as wide as the control, at its bottom (or its top, for a menu above it). */
     const edgeOf = (control: Box, up: boolean): Box => ({ left: control.left, top: up ? control.top - 4 : control.top + control.height + 4, width: control.width, height: 0 });
     const frame = (at: Box) => ({ left: `${at.left}px`, top: `${at.top}px`, width: `${at.width}px`, height: `${at.height}px` });
+    /** Ties the menu to a control, or unties it, by the control's anchor name (a control can hold several menus' names). */
+    const tie = (control: HTMLElement, on: boolean) => {
+        const names = control.style.getPropertyValue("anchor-name").split(",").map((each) => each.trim()).filter((each) => each && each !== name);
+        if (on) names.push(name);
+        if (names.length) control.style.setProperty("anchor-name", names.join(", "));
+        else control.style.removeProperty("anchor-name");
+        if (control instanceof HTMLButtonElement) control.popoverTargetElement = on ? box : null;
+    };
 
-    /** Works out where the menu goes and puts the box there, as it ends. */
+    /**
+     * Lets the browser choose where the menu goes, then holds it there: the side it chose is fixed
+     * while the menu is open, so that it does not jump to the other side as it grows or as the page
+     * scrolls. The inside keeps its own width, at least the control's.
+     */
     function place(): Box & { up: boolean } {
         const control = boxOf(trigger!);
-        // the inside keeps its own width (at least the control's), so that the box can follow it when it changes
-        items.style.maxHeight = "";
-        items.style.width = "";
         items.style.minWidth = "";
         if (control.width > (parseFloat(getComputedStyle(items).minWidth) || 0)) items.style.minWidth = `${control.width}px`;
-        const size = { width: items.offsetWidth, height: items.offsetHeight };
-        const at = menuPlace(control, size, { width: innerWidth, height: innerHeight }, options.align);
-        if (at.width < size.width) items.style.width = `${at.width}px`;
-        // a menu taller than its room scrolls inside itself
-        if (at.height < size.height) items.style.maxHeight = `${at.height}px`;
-        Object.assign(box.style, frame(at));
-        box.classList.toggle("up", at.up);
-        final = at;
-        return at;
+        // above or below is chosen here, as the browser would take the side with more room even for a menu that fits below:
+        // it goes above only when it does not fit below and there is more room above
+        const below = innerHeight - control.top - control.height;
+        const up = items.scrollHeight + 12 > below && control.top > below;
+        const block = up ? "top" : "bottom";
+        box.style.setProperty("position-area", `${block} ${options.align === "right" ? "span-left" : "span-right"}`);
+        box.style.setProperty("position-try-fallbacks", `flip-inline, ${block}`);
+        box.classList.remove("up", "left", "middle");
+        const at = boxOf(box);
+        const side = Math.abs(at.left - control.left) < 1 ? "span-right" : Math.abs(at.left + at.width - control.left - control.width) < 1 ? "span-left" : "center";
+        box.style.setProperty("position-area", side === "center" ? (up ? "top" : "bottom") : `${up ? "top" : "bottom"} ${side}`);
+        box.style.setProperty("position-try-fallbacks", "none");
+        box.classList.toggle("up", up);
+        box.classList.toggle("left", side === "span-left");
+        box.classList.toggle("middle", side === "center");
+        final = { ...at, up };
+        return final;
     }
 
     let typed = "";
@@ -385,25 +491,10 @@ export function flowMenu(label: string, options: { align?: "left" | "right"; cla
         }
     }
     box.addEventListener("keydown", onKey);
-    // what is in the menu may grow or shrink while it is open (a message under a form, say): the box follows, without moving
-    let building = false;
-    if (typeof ResizeObserver !== "undefined")
-        new ResizeObserver(() => {
-            if (!opened || building || moving.length) return;
-            place();
-        }).observe(items);
-
-    // a menu opened with the mouse leaves focus in the text, and Escape there must still close it
-    function escape(event: KeyboardEvent) {
-        if (event.key === "Escape" && opened && !box.contains(document.activeElement)) menu.close(document.activeElement === trigger);
-    }
-
-    function outside(event: PointerEvent) {
-        if (!opened) return;
-        const target = event.target as Node;
-        if (box.contains(target) || trigger?.contains(target)) return;
-        menu.close(false);
-    }
+    // however the menu is put away (a press outside, Escape, another menu opening, or close()), it is told here while it is still drawn
+    box.addEventListener("beforetoggle", (event) => {
+        if ((event as ToggleEvent).newState === "closed") closed();
+    });
 
     /** Fills the menu with its lines, or with an element of its own (a form, the about panel). */
     function fill(content: MenuItem[] | HTMLElement) {
@@ -447,15 +538,16 @@ export function flowMenu(label: string, options: { align?: "left" | "right"; cla
         });
     }
 
-    /** The box's edges move from `from` to where the menu ends, the inside held still at its end. */
+    /** The box grows from `from` (the control's edge, or where it was drawn when sliding over from a neighbour) to its own size; its place is the browser's, and only its size and, sliding, its offset move. */
     function grow(from: Box, sliding: boolean) {
         const at = final!;
-        const time = still() ? 0 : MOTION.open;
+        if (still()) return;
+        const time = MOTION.open;
         const curve = sliding ? EASE : springCurve(MOTION.bounce);
-        moving.push(
-            box.animate([frame(from), frame(at)], { duration: time, easing: curve, fill: "both" }),
-            items.animate([{ translate: `${at.left - from.left}px ${at.top - from.top}px` }, { translate: "0px 0px" }], { duration: time, easing: curve, fill: "both" }),
-        );
+        // the inside is laid out at its full height while the box is smaller, so that the lines stay still
+        items.style.height = `${items.offsetHeight}px`;
+        items.style.flexShrink = "0";
+        moving.push(box.animate([{ width: `${from.width}px`, height: `${from.height}px`, translate: sliding ? `${from.left - at.left}px ${from.top - at.top}px` : "0 0" }, { width: `${at.width}px`, height: `${at.height}px`, translate: "0 0" }], { duration: time, easing: curve, fill: "both" }));
         const shown = [...items.children] as HTMLElement[];
         // sliding to a neighbour's menu, its lines come in together as the box moves across
         if (sliding) moving.push(items.animate([{ opacity: 0 }, { opacity: 1 }], { duration: time * 0.75, easing: EASE, fill: "both" }));
@@ -463,18 +555,62 @@ export function flowMenu(label: string, options: { align?: "left" | "right"; cla
         else
             shown.forEach((line, index) => {
                 const order = at.up ? shown.length - 1 - index : index;
-                moving.push(line.animate([{ opacity: 0, translate: `0 ${at.up ? 4 : -4}px` }, { opacity: 1, translate: "0 0" }], { duration: still() ? 0 : Math.max(time * 0.75, 90), delay: still() ? 0 : time * 0.2 + order * MOTION.stagger, easing: EASE, fill: "both" }));
+                moving.push(line.animate([{ opacity: 0, translate: `0 ${at.up ? 4 : -4}px` }, { opacity: 1, translate: "0 0" }], { duration: Math.max(time * 0.75, 90), delay: time * 0.2 + order * MOTION.stagger, easing: EASE, fill: "both" }));
             });
-        // once it has all arrived the motions are let go, the box drawn by its own place and size
+        // once it has all arrived the motions are let go, and the box is as large as what is in it
         void Promise.all(moving.map((each) => each.finished)).then(
             () => {
                 if (!opened) return;
                 halt(moving);
-                // what changed inside while it moved is caught up with
-                place();
+                items.style.height = items.style.flexShrink = "";
             },
             () => {},
         );
+    }
+
+    /** The menu has been put away: the control is let go, and a copy of the box, holding what was inside, draws back onto the control's edge. */
+    function closed() {
+        if (!opened) return;
+        opened = false;
+        const was = boxOf(box);
+        const scrolled = items.scrollTop;
+        const inside = box.contains(document.activeElement);
+        halt(moving);
+        items.style.height = items.style.flexShrink = "";
+        box.classList.remove("open", "sliding");
+        items.inert = true;
+        const control = trigger;
+        if (control) {
+            control.setAttribute("aria-expanded", "false");
+            control.classList.remove("open");
+            if (control instanceof HTMLButtonElement) control.popoverTargetElement = null;
+        }
+        if (control?.isConnected && (giveFocus || inside)) control.focus({ preventScroll: true });
+        giveFocus = false;
+        options.onClose?.();
+        const at = final;
+        if (!control?.isConnected || !at || still() || !was.width) return;
+        leaving?.remove();
+        const copy = box.cloneNode(false) as HTMLElement;
+        copy.removeAttribute("popover");
+        copy.removeAttribute("aria-label");
+        copy.classList.add("closing");
+        copy.inert = true;
+        copy.append(items);
+        document.body.append(copy);
+        items.scrollTop = scrolled;
+        leaving = copy;
+        const back = edgeOf(boxOf(control), at.up);
+        const shrink = copy.animate([frame(was), frame(back)], { duration: MOTION.close, easing: EASE, fill: "both" });
+        items.animate([{ opacity: 1 }, { opacity: 0 }], { duration: MOTION.close, easing: EASE, fill: "both" });
+        const gone = () => {
+            if (leaving !== copy) return;
+            for (const each of items.getAnimations()) each.cancel();
+            box.append(items);
+            copy.remove();
+            leaving = undefined;
+        };
+        void shrink.finished.then(gone, gone);
     }
 
     const menu: Menu = {
@@ -482,74 +618,48 @@ export function flowMenu(label: string, options: { align?: "left" | "right"; cla
         open(from, content, focusFirst = false) {
             if (!box.isConnected) document.body.append(box);
             closeOthers(menu);
+            // the copy still going back into its control gives back what it holds
+            if (leaving) {
+                leaving.remove();
+                leaving = undefined;
+                for (const each of items.getAnimations()) each.cancel();
+                box.append(items);
+            }
             // opened from another control while open, it slides across from where it is drawn now
             const sliding = opened && !!trigger && trigger !== from && !still();
             // filled again from the same control while open (a switch turned, a line asking again), it stays where it is
             const again = opened && trigger === from;
             const was = boxOf(box);
             halt(moving);
+            items.style.height = items.style.flexShrink = "";
             if (trigger && trigger !== from) {
                 trigger.setAttribute("aria-expanded", "false");
                 trigger.classList.remove("open");
+                tie(trigger, false);
             }
             trigger = from;
-            building = true;
+            tie(from, true);
             fill(content);
             box.classList.add("open");
-            box.classList.remove("closing");
             box.classList.toggle("sliding", sliding);
+            if (!opened) {
+                opened = true;
+                box.showPopover();
+            }
             const at = place();
-            building = false;
             if (!again) grow(sliding ? was : edgeOf(boxOf(from), at.up), sliding);
             items.inert = false;
-            opened = true;
-            openMenus.add(menu);
             from.setAttribute("aria-expanded", "true");
             from.classList.add("open");
-            document.addEventListener("pointerdown", outside, true);
-            document.addEventListener("keydown", escape, true);
             if (focusFirst) lines()[0]?.focus({ preventScroll: true });
         },
         close(returnFocus = false) {
             if (!opened) return;
-            opened = false;
-            openMenus.delete(menu);
-            const was = boxOf(box);
-            const inside = getComputedStyle(items).translate;
-            halt(moving);
-            box.classList.remove("open");
-            items.inert = true;
-            trigger?.setAttribute("aria-expanded", "false");
-            trigger?.classList.remove("open");
-            document.removeEventListener("pointerdown", outside, true);
-            document.removeEventListener("keydown", escape, true);
-            if (returnFocus) trigger?.focus({ preventScroll: true });
-            options.onClose?.();
-            // it draws back onto the control's edge, the inside held where it was, the lines fading first
-            const at = final;
-            if (!trigger || !at || still()) return;
-            const back = edgeOf(boxOf(trigger), at.up);
-            const time = MOTION.close;
-            const start = inside === "none" ? [0, 0] : inside.split(" ").map((part) => parseFloat(part) || 0);
-            box.classList.add("closing");
-            const shrink = box.animate([frame(was), frame(back)], { duration: time, easing: EASE, fill: "both" });
-            moving.push(
-                shrink,
-                items.animate([{ translate: `${start[0] ?? 0}px ${start[1] ?? 0}px`, opacity: 1 }, { translate: `${at.left - back.left}px ${at.top - back.top}px`, opacity: 0 }], { duration: time, easing: EASE, fill: "both" }),
-            );
-            void shrink.finished.then(
-                () => {
-                    if (opened) return;
-                    box.classList.remove("closing");
-                    halt(moving);
-                },
-                () => {},
-            );
+            giveFocus = returnFocus;
+            if (box.matches(":popover-open")) box.hidePopover();
+            else closed();
         },
         isOpen: () => opened,
-        follow() {
-            if (opened && !moving.length) place();
-        },
     };
     return menu;
 }

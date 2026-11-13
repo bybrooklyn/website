@@ -1,6 +1,6 @@
 // The dictation control in a real browser, on the built site's test page with its made-up engine
 // and microphone (`/mdquire-dictation/?fake`): no model is downloaded and no sound is recorded.
-// Checks the control's states, the confirmation before a download, provisional words that are not
+// Checks the control's states, the first launch's dialog before a download, provisional words that are not
 // in the document, settled text as undo steps, stopping itself after quiet, the spoken commands,
 // custom words, the shortcut, and that nothing appears without a transition. Needs `bun run build`
 // and a Chromium; skipped, with a notice, without either. It starts `astro preview` on port 4393
@@ -13,7 +13,8 @@ import { browser, chromium, type Browser } from "../../../scripts/browser";
 import { at } from "../../../scripts/lib";
 
 setDefaultTimeout(60000);
-const PORT = 4393;
+// another copy of the site being tested at once (a second checkout) can be given its own port
+const PORT = Number(process.env.DICTATION_PORT ?? 4393);
 const PAGE = `http://localhost:${PORT}/mdquire-dictation/?fake`;
 const ready = existsSync(at("dist/mdquire-dictation/index.html")) && !!chromium();
 let server: ChildProcess | undefined;
@@ -55,29 +56,66 @@ async function fresh() {
     await tab.open(PAGE, 400);
     await until("window.dictation && window.dictationTest", "the page is ready");
 }
-/** Turns dictation on through the confirmation and waits until it listens. */
+/** Turns dictation on through the first launch's dialog and waits until it listens. */
 async function listening() {
     await press(button("Start dictation"));
-    await until("document.querySelector('.quire-dictation-action.primary')", "the confirmation");
-    await press(".quire-dictation-action.primary");
+    await choose();
+    await press(".quire-dictation-download");
     await until("window.dictation.state() === 'listening'", "listening", 8000);
 }
+/** Presses the first launch's "Choose" and waits for the three cards. */
+async function choose() {
+    await until("document.querySelector('dialog.quire-dialog .quire-dialog-action')?.textContent === 'Choose'", "the Choose button");
+    await press("dialog.quire-dialog .quire-dialog-action");
+    await until("document.querySelectorAll('.quire-dictation-card').length === 3 && document.querySelector('.quire-dictation-download')", "the three cards");
+}
 
-test.skipIf(!ready)("the first press asks before downloading, says how big and that no sound leaves the machine, and does not download until told", async () => {
+test.skipIf(!ready)("the first press opens a dialog in the middle of the screen that says no sound leaves the machine, and does not download until told", async () => {
     await fresh();
     expect(tab.errors).toEqual([]);
     expect(await run<string>("document.querySelector('.quire-dictate').getAttribute('aria-pressed')")).toBe("false");
     await press(button("Start dictation"));
     await until("window.dictation.state() === 'asking'", "asking");
-    await until("document.querySelector('.quire-dictation-plain')", "the line");
-    const said = await text(".quire-dictation-plain");
-    expect(said).toContain("55 MB");
-    expect(said).toContain("no sound leaves it");
+    await until("document.querySelector('dialog.quire-dialog')?.open", "the dialog");
+    const about = await run<{ modal: boolean; name: string; middle: number; said: string }>(`(() => { const d = document.querySelector('dialog.quire-dialog'); const r = d.getBoundingClientRect(); return { modal: d.matches(':modal'), name: document.getElementById(d.getAttribute('aria-labelledby')).textContent, middle: Math.abs(r.left + r.width / 2 - innerWidth / 2), said: d.querySelector('.quire-dictation-plain').textContent }; })()`);
+    expect(about.modal).toBe(true);
+    expect(about.name).toBe("Dictation");
+    // the middle of the page, which keeps room for a scrollbar at its right
+    expect(about.middle).toBeLessThan(10);
+    expect(about.said).toContain("no sound leaves it");
     expect(await run("window.dictationTest.downloaded().length")).toBe(0);
     expect(await run("window.dictationTest.microphoneOpen()")).toBe(false);
+    // Not now closes it, back into the microphone, and nothing was downloaded
+    await run("[...document.querySelectorAll('.quire-dialog-dismiss')].find((each) => each.textContent === 'Not now').click()");
+    await until("!document.querySelector('dialog.quire-dialog')", "closed");
+    expect(await state()).toBe("off");
+    expect(await run<string>("document.activeElement.className")).toContain("quire-dictate");
 });
 
-test.skipIf(!ready)("the three models are offered with their sizes, and the choice is kept", async () => {
+test.skipIf(!ready)("Choose becomes the three models as cards, each with its size and who it suits, the chosen one picked, and a pick is kept", async () => {
+    await fresh();
+    await press(button("Start dictation"));
+    await choose();
+    const cards = await run<{ name: string; size: string; who: string; checked: string | null }[]>("[...document.querySelectorAll('.quire-dictation-card')].map((each) => ({ name: each.querySelector('.quire-dictation-card-name').firstChild.textContent, size: each.querySelector('.quire-dictation-card-size').textContent, who: each.querySelector('.quire-dictation-card-who').textContent, checked: each.getAttribute('aria-checked') }))");
+    expect(cards.map((each) => [each.name, each.size])).toEqual([["Accurate", "402 MB"], ["Light", "208 MB"], ["Tiny", "55 MB"]]);
+    for (const each of cards) expect(each.who.length).toBeGreaterThan(5);
+    // the page chose tiny before it opened
+    expect(cards.map((each) => each.checked)).toEqual(["false", "false", "true"]);
+    // one card says it suits this machine
+    expect(await run<number>("document.querySelectorAll('.quire-dictation-card-tag').length")).toBe(1);
+    await press(".quire-dictation-card[data-tier=light]");
+    expect(await run("localStorage.getItem('mdquire-dictation-tier')")).toBe("light");
+    expect(await run<string>("document.querySelector('.quire-dictation-card[aria-checked=true]').dataset.tier")).toBe("light");
+    // the arrow keys go between them, as in any group of choices
+    await run("document.querySelector('.quire-dictation-card[aria-checked=true]').focus()");
+    await tab.press("ArrowRight");
+    expect(await run<string>("document.activeElement.dataset.tier")).toBe("tiny");
+    expect(await run("localStorage.getItem('mdquire-dictation-tier')")).toBe("tiny");
+    await tab.press("Escape");
+    await until("!document.querySelector('dialog.quire-dialog')", "closed by Escape");
+});
+
+test.skipIf(!ready)("the three models are offered with their sizes in the panel too, and the choice is kept", async () => {
     await fresh();
     await press(button("Dictation settings"));
     await until("document.querySelectorAll('.quire-dictation-tier').length === 3", "three tiers");
@@ -88,19 +126,26 @@ test.skipIf(!ready)("the three models are offered with their sizes, and the choi
     expect(await run<string>("document.querySelector('.quire-dictation-tier[aria-checked=true] .quire-dictation-tier-name').textContent")).toBe("Light");
 });
 
-test.skipIf(!ready)("a download shows its progress, can be cancelled, and then carries on", async () => {
+test.skipIf(!ready)("a download shows its progress in the dialog, can be cancelled there, and then carries on", async () => {
     await fresh();
     await run("window.dictationTest.downloadTime = 3000");
     await press(button("Start dictation"));
-    await until("document.querySelector('.quire-dictation-action.primary')", "the confirmation");
-    await press(".quire-dictation-action.primary");
+    await choose();
+    await press(".quire-dictation-download");
     await until("window.dictation.state() === 'downloading'", "downloading");
-    await until("document.querySelector('.quire-dictation-count')?.textContent.includes(' of 55 MB')", "a progress line");
-    expect(await run<string>("document.querySelector('.quire-dictation-progress').style.getPropertyValue('--done')")).toMatch(/%$/);
-    await press(".quire-dictation-action:not(.primary)");
+    await until("document.querySelector('dialog.quire-dialog .quire-dictation-count')?.textContent.includes(' of 55 MB')", "a progress line in the dialog");
+    expect(await run<string>("document.querySelector('dialog.quire-dialog .quire-dictation-progress').style.getPropertyValue('--done')")).toMatch(/%$/);
+    await press(".quire-dictation-cancel");
     await until("window.dictation.state() === 'off'", "cancelled");
-    expect(await text(".quire-dictation-warn")).toContain("cancelled");
+    await until("document.querySelector('dialog.quire-dialog .quire-dictation-warn')", "the line saying so");
+    expect(await text("dialog.quire-dialog .quire-dictation-warn")).toContain("cancelled");
     expect(await run("window.dictationTest.downloaded().length")).toBe(0);
+    // the choice is offered again, and this time it downloads and listens, the dialog put away
+    await run("window.dictationTest.downloadTime = 300");
+    await press(".quire-dictation-download");
+    await until("window.dictation.state() === 'listening'", "listening", 8000);
+    await until("!document.querySelector('dialog.quire-dialog')", "the dialog put away");
+    await run("window.dictation.toggle()");
 });
 
 test.skipIf(!ready)("after the download it listens, shows provisional words that are not in the document, then settles them as one undo step", async () => {
@@ -217,10 +262,10 @@ test.skipIf(!ready)("nothing appears without a transition, and under reduced mot
     const calm = await run<string>("getComputedStyle(document.querySelector('.quire-ghost')).transitionDuration");
     expect(calm).toBe("0s");
     await tab.media({});
-    // the panel is the site's flowing menu, which grows from the button
-    if (!(await run<boolean>("!!document.querySelector('.quire-menu.open')"))) await press(button("Dictation settings"));
+    // the panel is the site's flowing menu, which grows from the button: it is moving as it opens
+    await press(button("Dictation settings"));
+    expect(await run<number>("document.querySelector('.quire-dictation-menu').getAnimations().length")).toBeGreaterThan(0);
     await until("document.querySelector('.quire-menu.open')", "the panel");
-    expect(await run<string>("getComputedStyle(document.querySelector('.quire-dictation-menu')).transitionDuration")).not.toBe("0s");
 });
 
 test.skipIf(!ready)("the control is absent, with a line saying why, where nothing can run it", async () => {

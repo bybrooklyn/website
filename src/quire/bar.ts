@@ -49,7 +49,7 @@ import {
 import type { State } from "./history";
 import { activeBlock, caret, collapsed, mark, pageBreakAt, rangeOf, sameLeaf, tableOf } from "./keys";
 import type { Surface } from "./surface";
-import { closeOthers, control, dots, flowMenu, glyph, icon, make, moveIndex, type Menu, type MenuItem } from "./ui";
+import { closeOthers, control, dots, flowMenu, glyph, icon, make, moveIndex, still, type Menu, type MenuItem } from "./ui";
 
 /** What a button does: from the state at the cursor to the next one. */
 export type Action = (state: State) => State;
@@ -707,7 +707,14 @@ export function createBar(surface: Surface, options: BarOptions) {
     });
     sizeField.addEventListener("change", () => setSize(typedSize(parseFloat(sizeField.value), richOn)));
     const showSize = () => {
-        if (document.activeElement !== sizeField) sizeField.value = String(sizeAt());
+        if (document.activeElement === sizeField) return;
+        const was = parseFloat(sizeField.value);
+        const now = sizeAt();
+        if (was === now) return;
+        sizeField.value = String(now);
+        // the new number rolls in from the side it went: up from below for larger, down from above for smaller
+        // (its box stays still: only the number inside moves, pushed by the padding, and comes clear)
+        if (!Number.isNaN(was) && !still()) sizeField.animate([now > was ? { paddingTop: "0.9em", color: "transparent" } : { paddingBottom: "0.9em", color: "transparent" }], { duration: 220, easing: "cubic-bezier(0.22, 1, 0.36, 1)" });
     };
     const sizeLines = (): MenuItem[] => {
         const now = sizeAt();
@@ -977,8 +984,6 @@ export function createBar(surface: Surface, options: BarOptions) {
         all[next]!.scrollIntoView({ block: "nearest", inline: "nearest" });
     });
     const menus = [searching, styles, fonts, sizes, colors, highlights, spacings, more];
-    // a menu drawn under a sticky bar keeps to its button as the page scrolls
-    addEventListener("scroll", () => menus.forEach((menu) => menu.follow()), { passive: true });
     strip.addEventListener("scroll", () => closeOthers(), { passive: true });
 
     return {

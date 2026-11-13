@@ -8,10 +8,13 @@
 //   dictation.why                       // set, with the reason, when this browser cannot dictate
 //
 // The button is a switch: pressed, it listens, and it switches itself off after a couple of seconds
-// of quiet. The first time, it asks before downloading the speech model, and says how big it is and
-// that no sound leaves the machine. The model, the microphone and the recognizing are in other files
+// of quiet. The first time, a dialog in the middle of the screen asks before downloading the speech
+// model: it says that no sound leaves the machine, and its "Choose" button becomes the three models
+// as cards, each with its size and who it suits, the one for this machine already picked; the
+// download's progress is shown there and can be cancelled. The model, the microphone and the recognizing are in other files
 // and are given in `options`, so that the browser tests can give a made-up one.
 
+import { filledButton, openDialog, type Dialog } from "../dialog";
 import { closeOthers, flowMenu, make, type Menu, type MenuItem } from "../ui";
 import type { Surface } from "../surface";
 import "./dictation.css";
@@ -236,8 +239,7 @@ export function createDictation(surface: Surface, options: DictationOptions = {}
                 const wanted = tier();
                 if (!(await provider.cached(wanted))) {
                     cached.set(wanted.id, false);
-                    setState("asking");
-                    openPanel(button);
+                    askFirst(button);
                     return;
                 }
                 cached.set(wanted.id, true);
@@ -277,9 +279,10 @@ export function createDictation(surface: Surface, options: DictationOptions = {}
                 },
                 onStop: (reason) => void ended(reason),
             });
-            surface.focus();
-            // the panel is put away so that the words being written can be seen
+            // the panel and the first launch's dialog are put away so that the words being written can be seen
             box?.close(false);
+            void asking?.close();
+            surface.focus();
             setState("listening");
             live.textContent = "Dictation is on";
         }
@@ -334,9 +337,13 @@ export function createDictation(surface: Surface, options: DictationOptions = {}
             } catch (error) {
                 const stopped = (error as { cancelled?: boolean }).cancelled;
                 say(stopped ? "The download was cancelled. What arrived is kept, and it carries on from there next time." : `The download failed: ${(error as Error).message}. What arrived is kept, and it carries on from there next time.`);
-                return void setState("off");
+                setState("off");
+                // the first launch's dialog goes back to the choice, saying what happened
+                if (asking?.isOpen()) asking.change(() => choosing(asking!), askBar?.parentElement ?? undefined);
+                return;
             }
             cached.set(wanted.id, true);
+            if (askCount) askCount.textContent = "Getting it ready";
             void navigator.storage?.persist?.().catch(() => {});
             await refresh();
             await start();
@@ -352,8 +359,9 @@ export function createDictation(surface: Surface, options: DictationOptions = {}
         let bar: HTMLElement | undefined;
         let text: HTMLElement | undefined;
         function updateProgress() {
-            if (bar) bar.style.setProperty("--done", `${Math.min(100, (progress.bytes / Math.max(1, progress.total)) * 100).toFixed(1)}%`);
-            if (text) text.textContent = `${megabytes(progress.bytes)} of ${megabytes(progress.total)}`;
+            const done = `${Math.min(100, (progress.bytes / Math.max(1, progress.total)) * 100).toFixed(1)}%`;
+            for (const each of [bar, askBar]) each?.style.setProperty("--done", done);
+            for (const each of [text, askCount]) if (each) each.textContent = `${megabytes(progress.bytes)} of ${megabytes(progress.total)}`;
         }
 
         function line(className: string, words: string) {
@@ -392,12 +400,7 @@ export function createDictation(surface: Surface, options: DictationOptions = {}
             }
             parts.push(choices);
 
-            if (state === "asking") {
-                parts.push(line("quire-dictation-plain", `Dictation needs a speech model of ${megabytes(sizeOf(wanted))}, downloaded once and kept in this browser. It runs on your own machine and no sound leaves it.`));
-                const row = make("div", "quire-dictation-row");
-                row.append(action("Download and start", () => void download(), "quire-dictation-action primary"), action("Not now", () => setState("off")));
-                parts.push(row);
-            } else if (state === "downloading") {
+            if (state === "downloading") {
                 parts.push(line("quire-dictation-plain", "Downloading the speech model."));
                 bar = make("div", "quire-dictation-progress");
                 bar.setAttribute("role", "progressbar");
@@ -528,19 +531,128 @@ export function createDictation(surface: Surface, options: DictationOptions = {}
             if (message) parts.push(line("quire-dictation-warn", message));
         }
 
+        // ---- the first launch: a dialog in the middle of the screen ----
+        let asking: Dialog | undefined;
+        let askBar: HTMLElement | undefined;
+        let askCount: HTMLElement | undefined;
+        const intro = () => line("quire-dictation-plain", "Dictation writes down what you say. It needs a speech model, downloaded once and kept in this browser. It runs on your own machine and no sound leaves it.");
+        const probe = () => {
+            if (probed) return;
+            probed = true;
+            void detect().then((found) => {
+                card = found.kind === "webgpu";
+                render();
+                for (const each of asking?.body.querySelectorAll<HTMLElement>("[data-tier]") ?? []) each.querySelector(".quire-dictation-card-where")!.textContent = `Runs on the ${placeOf(tierOf(each.dataset.tier!), { gpu: card })}`;
+            });
+        };
+
+        /** Asks before the first download: a line and a "Choose" button, which becomes the three models. */
+        function askFirst(from: HTMLElement) {
+            closeOthers();
+            setState("asking");
+            probe();
+            asking = openDialog(from, {
+                title: "Dictation",
+                className: "quire-dictation-dialog",
+                body: [intro()],
+                dismiss: "Not now",
+                action: { label: "Choose", press: (pressed, dialog) => dialog.change(() => choosing(dialog), pressed) },
+                onClose: () => {
+                    asking = askBar = askCount = undefined;
+                    if (state === "asking") setState("off");
+                },
+            });
+        }
+
+        /** The three models as cards, the one chosen pressed, the arrow keys going between them. */
+        function cards(): HTMLElement {
+            const group = make("div", "quire-dictation-cards");
+            group.setAttribute("role", "radiogroup");
+            group.setAttribute("aria-label", "Speech model");
+            const suits = defaultTier(deviceNow());
+            const all = TIERS.map((each) => {
+                const choice = make("button", "quire-dictation-card");
+                choice.type = "button";
+                choice.dataset.tier = each.id;
+                choice.setAttribute("role", "radio");
+                const name = make("span", "quire-dictation-card-name", each.name);
+                if (each.id === suits) name.append(make("span", "quire-dictation-card-tag", "Suits this machine"));
+                choice.append(name, make("span", "quire-dictation-card-size", cached.get(each.id) ? "On this device" : megabytes(sizeOf(each))), make("span", "quire-dictation-card-who", each.who), make("span", "quire-dictation-card-where", `Runs on the ${placeOf(each, { gpu: card })}`));
+                choice.addEventListener("click", () => pick(each.id));
+                return choice;
+            });
+            const pick = (id: Tier["id"], focus = false) => {
+                tierId = id;
+                remember(KEPT.tier, tierId);
+                for (const each of all) {
+                    const on = each.dataset.tier === id;
+                    each.setAttribute("aria-checked", String(on));
+                    each.tabIndex = on ? 0 : -1;
+                    if (on && focus) each.focus();
+                }
+            };
+            group.addEventListener("keydown", (event) => {
+                const by = event.key === "ArrowRight" || event.key === "ArrowDown" ? 1 : event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 0;
+                if (!by) return;
+                event.preventDefault();
+                const at = TIERS.findIndex((each) => each.id === tierId);
+                pick(TIERS[(at + by + TIERS.length) % TIERS.length]!.id, true);
+            });
+            pick(tier().id);
+            group.append(...all);
+            return group;
+        }
+
+        /** The dialog with the three cards and the button that downloads the one picked. Gives back the cards, which grow out of what was pressed. */
+        function choosing(dialog: Dialog): HTMLElement {
+            const group = cards();
+            const parts: HTMLElement[] = [intro(), group];
+            if (message) parts.push(line("quire-dictation-warn", message));
+            dialog.body.replaceChildren(...parts);
+            askBar = askCount = undefined;
+            const quiet = make("button", "quire-dialog-dismiss", "Not now");
+            quiet.type = "button";
+            quiet.addEventListener("click", () => void dialog.close());
+            const go = filledButton(
+                "Download and start",
+                (pressed) => {
+                    dialog.change(() => downloading(dialog), pressed);
+                    void download();
+                },
+                "quire-dialog-action quire-dictation-download",
+            );
+            dialog.actions.replaceChildren(quiet, go);
+            go.focus({ preventScroll: true });
+            return group;
+        }
+
+        /** The download's progress in place of the buttons, with a way to cancel it. Gives back the progress, which grows out of the button. */
+        function downloading(dialog: Dialog): HTMLElement {
+            for (const each of dialog.body.querySelectorAll<HTMLButtonElement>(".quire-dictation-card")) each.disabled = true;
+            dialog.body.querySelector(".quire-dictation-warn")?.remove();
+            const row = make("div", "quire-dictation-progress-row");
+            askBar = make("div", "quire-dictation-progress");
+            askBar.setAttribute("role", "progressbar");
+            askBar.setAttribute("aria-label", "Downloading the speech model");
+            askBar.append(make("i"));
+            askCount = make("p", "quire-dictation-count");
+            const cancel = make("button", "quire-dialog-dismiss quire-dictation-cancel", "Cancel");
+            cancel.type = "button";
+            cancel.addEventListener("click", () => provider.cancel());
+            row.append(askBar, askCount, cancel);
+            dialog.actions.replaceChildren(row);
+            updateProgress();
+            cancel.focus({ preventScroll: true });
+            return row;
+        }
+
         function openPanel(from: HTMLElement) {
             closeOthers();
             box ??= flowMenu("Dictation", { className: "quire-dictation-menu" });
             view = "main";
             render();
             void refresh();
-            if (!probed) {
-                probed = true;
-                void detect().then((found) => {
-                    card = found.kind === "webgpu";
-                    render();
-                });
-            }
+            probe();
             box.open(from, panel);
         }
 
@@ -572,6 +684,7 @@ export function createDictation(surface: Surface, options: DictationOptions = {}
                 removeEventListener("resize", follow);
                 unselect();
                 box?.box.remove();
+                void asking?.close();
                 live.remove();
                 ghost.remove();
                 button.remove();

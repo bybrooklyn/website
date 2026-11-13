@@ -22,6 +22,11 @@
 @property --surface { syntax: "<color>"; inherits: true; initial-value: black; }
 @property --ground { syntax: "<color>"; inherits: true; initial-value: black; }
 
+:root {
+    /* the slight overshoot the panels and bars open on */
+    --quire-spring: cubic-bezier(0.3, 1.25, 0.4, 1);
+}
+
 .quire-editor {
     /* how far down the window the top row reaches, for what keeps clear of it */
     --stuck: calc(var(--line) + var(--press) + 1.25rem + 0.0625rem);
@@ -589,16 +594,13 @@
 
 /* a tool that does not fit folds away into the three dots, and one a Markdown file cannot keep is away; both unfold when they can */
 .quire-tool {
+    display: flex;
     flex: none;
     max-width: 16rem;
     overflow: clip;
     transition:
         max-width 0.4s var(--ease),
         opacity 0.25s ease;
-}
-
-.quire-tool {
-    display: flex;
 }
 
 .quire-tool > * {
@@ -843,15 +845,24 @@
 }
 
 /* ---- the menus: one kind for all of them (flowMenu in ui.ts) ----
-   It drops below the control pressed and covers nothing; ui.ts moves its edges out from the
-   control's edge and holds what is inside still. Its look is the lab's "raised": a slightly lighter
-   surface with a soft shadow, no line, no glow. Lines as large as the lab's. */
+   Each is a popover, drawn over everything, tied to its control by anchor positioning: under it,
+   its left edge on the control's, or to the left where there is no room (ui.ts sets the area and
+   its fallbacks; above or below is its choice), cut to the room and scrolling when it is taller,
+   and kept there by the browser as the page scrolls.
+   ui.ts moves its size out from the control's edge, its corner held on the control, so that what is
+   inside stays still. Its look is the lab's "raised": a slightly lighter surface with a soft shadow,
+   no line, no glow. Lines as large as the lab's. */
 
 .quire-menu {
     position: fixed;
-    z-index: 70;
+    inset: auto;
     box-sizing: border-box;
+    width: max-content;
+    max-height: calc(100% - 0.5rem);
+    margin: 4px 0;
+    padding: 0;
     overflow: hidden;
+    border: 0;
     border-radius: 10px;
     background: var(--panel-raised);
     box-shadow:
@@ -861,29 +872,46 @@
     font-family: var(--font-text);
     font-size: 0.95rem;
     line-height: 1.2;
-    visibility: hidden;
+    position-area: bottom span-right;
+}
+
+.quire-menu:popover-open,
+.quire-menu.closing {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+/* the inside is held to the corner the menu grows from */
+.quire-menu.up {
+    justify-content: flex-end;
+}
+
+.quire-menu.left {
+    align-items: flex-end;
+}
+
+.quire-menu.middle {
+    align-items: center;
+}
+
+/* the copy that goes back into the control once the browser has put the menu away */
+.quire-menu.closing {
+    z-index: 70;
+    margin: 0;
     pointer-events: none;
 }
 
-.quire-menu:is(.open, .closing) {
-    visibility: visible;
-}
-
-.quire-menu.open {
-    pointer-events: auto;
-}
-
 .quire-menu-items {
-    position: absolute;
-    top: 0;
-    left: 0;
     display: flex;
+    flex: 0 1 auto;
     flex-direction: column;
     gap: 0.05rem;
     box-sizing: border-box;
     width: max-content;
     min-width: 11rem;
     max-width: min(24rem, 100vw - 1rem);
+    min-height: 0;
     padding: 0.35rem;
     overflow-y: auto;
     overscroll-behavior: contain;
@@ -956,16 +984,37 @@
     gap: 1rem;
 }
 
+/* a control's tooltip (tips in ui.ts): a small label tied under the control, above it at the window's foot */
+.quire-tip {
+    position: fixed;
+    inset: auto;
+    margin: 6px 0;
+    padding: 0.3rem 0.55rem;
+    border: 0;
+    border-radius: 0.4rem;
+    background: var(--panel-raised);
+    box-shadow: 0 0.3rem 0.9rem oklch(0.05 0.02 300 / 0.5);
+    color: var(--ink);
+    font-family: var(--font-text);
+    font-size: 0.8rem;
+    line-height: 1.2;
+    white-space: nowrap;
+    pointer-events: none;
+    position-anchor: --quire-tip;
+    position-area: bottom;
+    position-try-fallbacks: flip-block, bottom span-left, bottom span-right;
+}
+
 /* the line the slash menu's arrow keys are on */
 .quire-menu-line.active {
     background: color-mix(in oklch, var(--accent) 18%, transparent);
 }
 
-/* where the slash menu grows from: the cursor's place, never itself seen */
+/* where the slash menu grows from: the cursor's place, never itself seen (but not hidden, as a menu tied to a hidden thing is hidden with it) */
 .quire-anchor {
     position: fixed;
     width: 0.125rem;
-    visibility: hidden;
+    opacity: 0;
     pointer-events: none;
 }
 
@@ -1305,7 +1354,7 @@
     border: 0.0625rem solid var(--rule);
     border-radius: calc(var(--radius) * 2);
     background: var(--surface);
-    overflow: auto;
+    overflow: hidden auto;
     font-family: var(--font-text);
     opacity: 0;
     translate: calc(-100% - 2rem) 0;
@@ -1321,7 +1370,7 @@
     translate: 0 0;
     visibility: visible;
     transition:
-        translate 0.5s cubic-bezier(0.3, 1.25, 0.4, 1),
+        translate 0.5s var(--quire-spring),
         opacity 0.15s ease,
         visibility 0s;
 }
@@ -1348,10 +1397,6 @@
     margin: 0;
     padding: 0;
     list-style: none;
-}
-
-.quire-outline {
-    overflow-x: hidden;
 }
 
 .quire-outline-item:not(.level-1) .quire-outline-link {
@@ -1496,7 +1541,7 @@
     translate: 0 0;
     visibility: visible;
     transition:
-        translate 0.5s cubic-bezier(0.3, 1.25, 0.4, 1),
+        translate 0.5s var(--quire-spring),
         opacity 0.15s ease,
         visibility 0s;
 }
@@ -1872,7 +1917,7 @@
     translate: 0 0;
     visibility: visible;
     transition:
-        translate 0.5s cubic-bezier(0.3, 1.25, 0.4, 1),
+        translate 0.5s var(--quire-spring),
         opacity 0.15s ease,
         width 0.45s var(--ease),
         visibility 0s;
@@ -2335,8 +2380,15 @@ body.quire-app,
     opacity: 0.6;
 }
 
+/* the margins' outline and details fade as the home screen comes in over them, while the page shrinks back into its picture, and come back as it goes */
+.quire-editor:has(> .quire-shelf.shown) > :is(.quire-outline, .quire-details) {
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
 /* behind the home screen the page is not there to be reached, nor to make the window scroll */
 .quire-editor.shelved > .quire-column,
+.quire-editor.shelved > .quire-details,
 .quire-editor.shelved > .quire-outline {
     visibility: hidden;
     max-height: 100vh;
@@ -2707,6 +2759,164 @@ body.quire-app,
     margin-left: 2rem;
 }
 
+/* ---- the dialog (dialog.ts) ----
+   The page darkens; a rounded square with the site's outline, its words, and a filled button at
+   the bottom. The skin is a layer of its own so that dialog.ts can move its edges out of the
+   control that was pressed without stretching its corners or its line. */
+
+.quire-dialog {
+    box-sizing: border-box;
+    width: min(30rem, 100vw - 2rem);
+    max-width: none;
+    max-height: calc(100dvh - 2rem);
+    padding: 0;
+    overflow: visible;
+    border: 0;
+    background: none;
+    color: var(--ink);
+    font-family: var(--font-text);
+}
+
+.quire-dialog::backdrop,
+.quire-dialog-shade {
+    background: oklch(0.08 0.03 300 / 0.62);
+}
+
+/* closing, the browser's dialog is already shut so that the page is live; what goes back into the control is drawn where it was */
+.quire-dialog.closing {
+    display: block;
+    position: fixed;
+    z-index: 91;
+    margin: 0;
+    pointer-events: none;
+}
+
+.quire-dialog-shade {
+    position: fixed;
+    inset: 0;
+    z-index: 90;
+    pointer-events: none;
+}
+
+.quire-dialog-skin {
+    position: absolute;
+    inset: 0;
+    border: 0.0625rem solid color-mix(in oklch, var(--rule) 68%, var(--accent));
+    border-radius: 1.1rem;
+    background: var(--surface);
+    box-shadow: 0 1.5rem 3rem -1rem oklch(0.05 0.02 300 / 0.7);
+}
+
+.quire-dialog-in {
+    position: relative;
+    display: grid;
+    gap: 0.9rem;
+    max-height: calc(100dvh - 2rem);
+    padding: 1.4rem 1.5rem 1.25rem;
+    overflow: auto;
+    box-sizing: border-box;
+}
+
+.quire-dialog-title {
+    margin: 0;
+    font-family: var(--font-head);
+    font-size: 1.35rem;
+    font-weight: var(--head-weight, 600);
+}
+
+.quire-dialog-body {
+    display: grid;
+    gap: 0.75rem;
+}
+
+.quire-dialog-body > p {
+    margin: 0;
+    line-height: 1.5;
+}
+
+.quire-dialog-actions {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.quire-dialog-actions:empty {
+    display: none;
+}
+
+.quire-dialog button {
+    white-space: nowrap;
+    border: 0;
+    background: none;
+    font: inherit;
+    cursor: pointer;
+}
+
+/* the filled button: a press spreads from where the finger or pointer came down */
+.quire-dialog .quire-dialog-action {
+    position: relative;
+    overflow: hidden;
+    min-height: 2.6rem;
+    padding: 0 1.4rem;
+    border-radius: 1.3rem;
+    background: var(--accent);
+    color: var(--ground);
+    font-weight: 600;
+    box-shadow: 0 0.15rem 0.5rem oklch(0.05 0.02 300 / 0.4);
+    transition:
+        background 0.15s ease,
+        box-shadow 0.2s var(--ease),
+        scale 0.2s var(--ease);
+}
+
+.quire-dialog .quire-dialog-action:hover {
+    background: color-mix(in oklch, var(--accent) 88%, var(--ink));
+    box-shadow: 0 0.3rem 0.9rem oklch(0.05 0.02 300 / 0.45);
+}
+
+.quire-dialog-action:active {
+    scale: 0.98;
+}
+
+.quire-dialog-action:focus-visible,
+.quire-dialog-dismiss:focus-visible {
+    outline: 0.125rem solid var(--ink);
+    outline-offset: 0.15rem;
+}
+
+.quire-dialog-action:disabled {
+    opacity: 0.5;
+}
+
+.quire-ripple {
+    position: absolute;
+    border-radius: 50%;
+    background: var(--ground);
+    pointer-events: none;
+}
+
+.quire-dialog .quire-dialog-dismiss {
+    min-height: 2.6rem;
+    padding: 0 1rem;
+    border-radius: 1.3rem;
+    color: var(--muted);
+    transition:
+        background 0.15s ease,
+        color 0.15s ease;
+}
+
+.quire-dialog-dismiss:hover {
+    background: color-mix(in oklch, var(--ink) 8%, transparent);
+    color: var(--ink);
+}
+
+/* what a pressed thing becomes grows out of it in its colour */
+.quire-dialog-sweep {
+    position: absolute;
+    pointer-events: none;
+}
+
 /* With less motion asked for, nothing of the editor moves: what opens is simply there, and what
    closes is simply gone. It is stated for all of it at once, so that no state slips through by
    being more particular than this rule. */
@@ -2716,6 +2926,8 @@ body.quire-app,
     .quire-editor *::before,
     .quire-menu,
     .quire-menu *,
+    .quire-dialog,
+    .quire-dialog *,
     .quire-select-bar,
     .quire-select-bar *,
     .quire-find,
@@ -2727,7 +2939,8 @@ body.quire-app,
     .quire-conflict,
     .quire-conflict *,
     .quire-top,
-    .quire-top * {
+    .quire-top *,
+    .quire-check-count {
         transition-duration: 0s !important;
         transition-delay: 0s !important;
     }
@@ -2963,12 +3176,6 @@ body.quire-app,
     background: var(--ground);
     color: var(--ink);
     font: inherit;
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .quire-check-count {
-        transition: none;
-    }
 }
 
 /* ---- end of checking ---- */
