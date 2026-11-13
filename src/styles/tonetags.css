@@ -14,30 +14,41 @@
 /* The search: a soft rounded field the width of the list, a magnifier at its start. Its edge takes the accent while it is typed in. */
 /* The search, and beside it at the right the button that copies a link to the page. */
 .tonetags-top {
+    /* how tall the field and the button are; the button at rest is as wide as this too, so that it is a circle */
+    --tall: 3rem;
     display: flex;
     align-items: center;
     gap: 0.75rem;
 }
 
-/* a button the height and shape of the field beside it, edged and tinted in the accent; it gives a little when pressed */
+/* A round button the height of the field beside it, with the field's own quiet edge and ground. At rest it is a circle round
+   the copy symbol; its edge takes the accent when it is pointed at, and it gives a little when pressed. */
 .tonetags-copy {
     flex: none;
-    align-self: stretch;
-    padding: 0 1.05rem;
-    border: 0.0625rem solid var(--accent);
-    border-radius: 2rem;
-    background: color-mix(in oklch, var(--accent) 14%, transparent);
+    box-sizing: border-box;
+    height: var(--tall);
+    min-width: var(--tall);
+    /* the symbol sits in the middle of the circle: half of what is left of the width once the symbol and the edges are taken out */
+    padding: 0 calc((var(--tall) - 1.1rem) / 2 - 0.0625rem);
+    border: 0.0625rem solid var(--rule);
+    border-radius: calc(var(--tall) / 2);
+    background: var(--surface);
     color: var(--ink);
     font: inherit;
     white-space: nowrap;
     cursor: pointer;
     transition:
-        background-color 0.15s ease,
+        border-color 0.15s ease,
         scale 0.2s var(--ease);
 }
 
-.tonetags-copy:hover {
-    background: color-mix(in oklch, var(--accent) 26%, transparent);
+.tonetags-copy:is(:hover, :focus-visible) {
+    border-color: var(--accent);
+}
+
+/* the field's and the button's edges show where the keyboard is; no second ring is drawn round the button */
+.tonetags-copy:focus-visible {
+    outline: none;
 }
 
 .tonetags-copy-rest {
@@ -107,10 +118,12 @@
 .tonetags-find {
     flex: 1;
     min-width: 0;
+    box-sizing: border-box;
+    height: var(--tall);
     display: flex;
     align-items: center;
     gap: 0.7rem;
-    padding: 0.55rem 1.1rem;
+    padding: 0 1.1rem;
     border: 0.0625rem solid var(--rule);
     border-radius: 2rem;
     background: var(--surface);
