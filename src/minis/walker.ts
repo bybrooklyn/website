@@ -146,6 +146,8 @@ export default function walker(m: Mote): Scene {
             engine.ground_set(beginning.length / 4);
             if (brain) take(brain);
             engine.show_reset();
+            // shown small in a list, nothing learns: a walker as it is before learning tries its legs, and tries again
+            if (m.preview) shown = true;
             // the worker starts from the same seed, so its first generation is this one
             if (showCrowd) engine.crowd_reset();
             if (live()) {
@@ -224,13 +226,17 @@ export default function walker(m: Mote): Scene {
         begin();
     };
 
-    try {
-        worker = hire();
-        worker.onmessage = (event: MessageEvent<Report>) => hear(event.data);
-        worker.onerror = () => trainHere();
-        staff(workersFor(effort, machine()) - 1);
-    } catch {
-        here = true;
+    // A preview in the list of minis hires no workers and trains nothing, here or anywhere.
+    if (m.preview) setup = { ...setup, way: "generation" };
+    else {
+        try {
+            worker = hire();
+            worker.onmessage = (event: MessageEvent<Report>) => hear(event.data);
+            worker.onerror = () => trainHere();
+            staff(workersFor(effort, machine()) - 1);
+        } catch {
+            here = true;
+        }
     }
 
     void fetch(engineAddress())
