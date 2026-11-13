@@ -1780,6 +1780,13 @@
         visibility 0s linear 0.35s;
 }
 
+/* put away, it takes no width at all: its padding and edge would otherwise reach past the window beside a zoomed sheet */
+.quire-editor:not(.markdown) .quire-source {
+    padding-inline: 0;
+    border-inline-width: 0;
+    translate: 0 0;
+}
+
 .quire-source:focus {
     outline: none;
     border-color: color-mix(in oklch, var(--accent) 55%, var(--panel-rule));
