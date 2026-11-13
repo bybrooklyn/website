@@ -17,7 +17,9 @@ import { ortFor } from "./parakeet/runtime";
 const say = (answer: Answer, transfer: Transferable[] = []) => (self as unknown as Worker).postMessage(answer, transfer);
 
 const FOLDER = "mdquire-dictation";
-let stop: AbortController | undefined;
+/** The downloads running, which a cancel stops, and the last of them, which the next waits for. */
+const stops = new Set<AbortController>();
+let downloading: Promise<unknown> = Promise.resolve();
 let recognize: ((samples: Float32Array) => Promise<{ text: string; words: { text: string; start: number; end: number }[] }>) | undefined;
 let release: (() => Promise<void>) | undefined;
 /** The Parakeet recognizer, if that is what is loaded, and the phrases being heard live (more than one while a finished phrase is still being worked out). */
@@ -73,7 +75,7 @@ async function bytesOf(tier: Tier, role: string): Promise<Uint8Array> {
     return new Uint8Array(await (await (await dir.getFileHandle(nameOf(file.path))).getFile()).arrayBuffer());
 }
 
-async function load(tier: Tier, words: string[]) {
+async function load(tier: Tier, words: string[], id: number) {
     const started = performance.now();
     let place: string;
     let live_ = false;
@@ -104,7 +106,7 @@ async function load(tier: Tier, words: string[]) {
         live_ = true;
         place = model.backend.kind === "webgpu" ? "the graphics card" : model.backend.threads > 1 ? `the processor, ${model.backend.threads} threads` : "the processor";
     }
-    say({ type: "loaded", ms: Math.round(performance.now() - started), backend: place, threads: 1, live: live_ });
+    say({ type: "loaded", id, ms: Math.round(performance.now() - started), backend: place, threads: 1, live: live_ });
 }
 
 self.onmessage = async (event: MessageEvent<Ask>) => {
@@ -112,14 +114,26 @@ self.onmessage = async (event: MessageEvent<Ask>) => {
     try {
         if (ask.type === "download") {
             const tier = tierOf(ask.tier);
-            stop = new AbortController();
-            await download(tier, storage(await folder(tier)), { signal: stop.signal, progress: (bytes) => say({ type: "progress", bytes }) });
-            say({ type: "downloaded" });
+            const stop = new AbortController();
+            stops.add(stop);
+            // one download at a time: two would open the same file twice, which the storage refuses
+            const run = downloading.then(async () => {
+                stop.signal.throwIfAborted();
+                await download(tier, storage(await folder(tier)), { signal: stop.signal, progress: (bytes) => say({ type: "progress", id: ask.id, bytes }) });
+            });
+            downloading = run.catch(() => undefined);
+            try {
+                await run;
+            } finally {
+                stops.delete(stop);
+            }
+            say({ type: "downloaded", id: ask.id });
         } else if (ask.type === "cancel") {
-            stop?.abort();
+            for (const stop of stops) stop.abort();
         } else if (ask.type === "load") {
-            await load(tierOf(ask.tier), ask.words);
-        } else if (ask.type === "recognize" && recognize) {
+            await load(tierOf(ask.tier), ask.words, ask.id);
+        } else if (ask.type === "recognize") {
+            if (!recognize) throw new Error("no model is loaded");
             const started = performance.now();
             const heard = await recognize(ask.samples);
             say({ type: "heard", id: ask.id, text: heard.text, words: heard.words, ms: performance.now() - started });
@@ -130,12 +144,20 @@ self.onmessage = async (event: MessageEvent<Ask>) => {
             if (made) live.set(ask.stream, made);
         } else if (ask.type === "stream-push" && live.has(ask.stream)) {
             const mine = live.get(ask.stream)!;
-            const update = await mine.push(ask.samples);
-            if (update && live.get(ask.stream) === mine) say({ type: "stream-update", stream: ask.stream, update: { words: update.words, tentative: update.tentative, ms: update.ms, seconds: update.seconds, behind: mine.behind() } });
+            try {
+                const update = await mine.push(ask.samples);
+                if (update && live.get(ask.stream) === mine) say({ type: "stream-update", stream: ask.stream, update: { words: update.words, tentative: update.tentative, ms: update.ms, seconds: update.seconds, behind: mine.behind() } });
+            } catch (error) {
+                // the phrase cannot go on live; the page is told, and recognizes its sound whole instead
+                live.delete(ask.stream);
+                throw error;
+            }
         } else if (ask.type === "stream-finish") {
             const mine = live.get(ask.stream);
             live.delete(ask.stream);
-            say({ type: "stream-done", id: ask.id, words: mine ? await mine.finish() : [] });
+            // a phrase that is not here (it failed, or no model was loaded) is a failure, so that the page recognizes its sound whole rather than writing nothing
+            if (!mine) throw new Error("the live phrase was lost");
+            say({ type: "stream-done", id: ask.id, words: await mine.finish() });
         } else if (ask.type === "stream-cancel") {
             live.delete(ask.stream);
         } else if (ask.type === "release") {
@@ -147,6 +169,6 @@ self.onmessage = async (event: MessageEvent<Ask>) => {
         }
     } catch (error) {
         const aborted = error instanceof DOMException && error.name === "AbortError";
-        say({ type: "failed", message: aborted ? "cancelled" : error instanceof Error ? error.message : String(error), cancelled: aborted, id: "id" in ask ? ask.id : undefined });
+        say({ type: "failed", message: aborted ? "cancelled" : error instanceof Error ? error.message : String(error), cancelled: aborted, id: "id" in ask ? ask.id : undefined, stream: "stream" in ask ? ask.stream : undefined });
     }
 };
