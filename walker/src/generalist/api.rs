@@ -166,7 +166,6 @@ number!(show_furthest, f32, 0.0, |page| page.show.judge.furthest);
 number!(show_score, f32, 0.0, |page| page.show.judge.score);
 number!(show_seconds, f32, 0.0, |page| page.show.judge.steps as f32 * crate::physics::STEP);
 number!(legs_length, u32, 0, |page| page.legs);
-number!(show_hop, u32, 0, |page| u32::from(matches!(page.show.body.hop, super::body::Hop::Crouch(_) | super::body::Hop::Spring(_))));
 list!(show_bodies, |page| page.bodies());
 list!(show_things, |page| page.things());
 list!(show_rays, |page| page.rays());

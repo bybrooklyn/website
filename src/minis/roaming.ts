@@ -41,7 +41,6 @@ export interface Engine {
     show_score(): number;
     show_seconds(): number;
     legs_length(): number;
-    show_hop(): number;
     show_bodies(): number;
     show_things(): number;
     show_rays(): number;

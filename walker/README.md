@@ -868,7 +868,7 @@ creature and its learning per module instance. A function that gives a list give
 - The show, the best brain so far walking the world from the start, playing the very run it was
   scored on unless it is touched: `show_reset()`, `show_step(seconds) -> steps`, `show_over()`,
   `show_end()` (how it ended: 0 going, 1 time, 2 down, 3 stalled, 4 hazard, 5 fell),
-  `show_distance()`, `show_furthest()`, `show_score()`, `show_seconds()`, `show_hop()` (1 mid-hop),
+  `show_distance()`, `show_furthest()`, `show_score()`, `show_seconds()`,
   `legs_length()`, `show_bodies()` (six f32 a body as the Walker's: the torso, then each leg's upper
   and lower part), `show_things()` (six f32 for each box, moving platform and see-saw plank made: 0, 1
   or 2 for which, x, y, angle, half width, half height), `show_rays()` (the eye's x and y, then for
