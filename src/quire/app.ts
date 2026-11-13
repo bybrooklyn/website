@@ -239,7 +239,11 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
                     return `It could not be opened: ${error instanceof Error ? error.message : String(error)}`;
                 }
                 const storage = local();
-                if (storage) keepSettings(next, storage);
+                try {
+                    if (storage) keepSettings(next, storage);
+                } catch {
+                    return "It could not be kept in this browser, which has no room or keeps nothing.";
+                }
                 settings = next;
                 github = store;
                 shown = store;
