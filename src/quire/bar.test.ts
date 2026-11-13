@@ -93,6 +93,11 @@ test("the list buttons make lists of all the touched paragraphs, and pressed aga
     expect(pressedAt(listed.doc, [0, 1, 0], []).bullet).toBe(true);
     expect(md(run(toggleList("bullet"), listed))).toBe("One\n\nTwo\n");
     expect(md(run(toggleList("number"), at("One\n", caret([0], 0))))).toBe("1. One\n");
+    // a cursor on a line made with Shift+Enter makes a list of that line alone, wherever the line is
+    expect(md(run(toggleList("bullet"), at("One\\\nTwo\n", caret([0], 4))))).toBe("One\n\n- Two\n");
+    expect(md(run(toggleList("bullet"), at("One\\\nTwo\n", caret([0], 1))))).toBe("- One\n\nTwo\n");
+    expect(md(run(toggleList("number"), at("One\\\nTwo\\\nThree\n", caret([0], 5))))).toBe("One\n\n1. Two\n\nThree\n");
+    expect(md(run(toggleList("bullet"), at("One\\\nTwo\n", { anchor: { path: [0], offset: 0 }, focus: { path: [0], offset: 7 } })))).toBe("- One\\\n  Two\n");
     expect(md(run(toggleList("task"), at("One\n", caret([0], 0))))).toBe("- [ ] One\n");
 });
 

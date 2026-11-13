@@ -18,6 +18,7 @@ import {
     changeKind,
     code as codeBlock,
     countWords,
+    deleteText,
     divider,
     image as imageBlock,
     indent,
@@ -28,10 +29,12 @@ import {
     paragraph,
     removeBlock,
     runsLength,
+    runsText,
     setAlign,
     setLink,
     setSpacing,
     setSubtext,
+    splitBlock,
     setStyle,
     table,
     toggleMark,
@@ -241,9 +244,34 @@ export const toggleSubtext: Action = (state) => {
     return { doc, selection: follow(state.doc, state.selection, doc) };
 };
 
-/** Makes the touched blocks a list of a kind, or, if they already are one, plain paragraphs again. */
+/**
+ * With only a cursor in a paragraph of several lines (Shift+Enter) that is not in a list, the
+ * paragraph cut so that the cursor's line is a paragraph of its own, as a mark typed at the start
+ * of such a line cuts it (keys.ts).
+ */
+function ownLine(state: State): State {
+    const at = state.selection.focus;
+    const block = blockAt(state.doc, at.path);
+    if (!collapsed(state.selection) || block?.kind !== "paragraph" || activeBlock(state.doc, at.path).list) return state;
+    const text = runsText(block.runs);
+    const start = at.offset > 0 ? text.lastIndexOf("\n", at.offset - 1) + 1 : 0;
+    const end = text.indexOf("\n", at.offset);
+    if (start === 0 && end < 0) return state;
+    let doc = state.doc;
+    let path = at.path;
+    const cut = (offset: number) => splitBlock(deleteText(doc, { start: { path, offset }, end: { path, offset: offset + 1 } }), { path, offset });
+    if (end >= 0) doc = cut(end);
+    if (start > 0) {
+        doc = cut(start - 1);
+        path = [...path.slice(0, -1), path[path.length - 1]! + 1];
+    }
+    return { doc, selection: caret(path, at.offset - start) };
+}
+
+/** Makes the touched blocks a list of a kind, or, if they already are one, plain paragraphs again. A cursor on one line of a paragraph of several makes a list of that line alone. */
 export function toggleList(style: ListStyle): Action {
-    return (state) => {
+    return (given) => {
+        const state = ownLine(given);
         const already = activeBlock(state.doc, state.selection.focus.path).list === style;
         let doc = state.doc;
         for (const index of touched(state.doc, state.selection)) {
