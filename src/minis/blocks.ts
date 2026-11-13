@@ -59,7 +59,20 @@ export default function blocks(m: Mote): Scene {
         });
         // clockwise from the top left: each upper corner's curve, a quarter turn at a time, then the floor's square ones
         walls = flat.wall(r < 2 ? [[0, 0], [w, 0], [w, h], [0, h]] : [...arc(r, r, Math.PI), ...arc(w - r, r, -Math.PI / 2), [w, h], [0, h]], true);
-        for (const block of pile) wake(block);
+        for (const block of pile) {
+            // a box made narrower or lower would leave the blocks beyond it with no wall around them, falling for ever: they are brought inside
+            block.x = Math.min(Math.max(block.x, block.far), Math.max(block.far, w - block.far));
+            block.y = Math.min(Math.max(block.y, block.far), Math.max(block.far, h - block.far));
+            wake(block);
+        }
+    };
+    /** Anything that has got out of the box all the same is taken away, so the pile can come to rest. */
+    const lost = () => {
+        for (const block of pile.filter((one) => one.y > m.height + SIZE * 4 || one.x < -SIZE * 4 || one.x > m.width + SIZE * 4)) {
+            pile.splice(pile.indexOf(block), 1);
+            colors.delete(block);
+            flat.remove(block);
+        }
     };
 
     enclose();
@@ -70,6 +83,7 @@ export default function blocks(m: Mote): Scene {
     return {
         step(dt) {
             flat.step(dt);
+            lost();
             // Shown small in a list, it drops a piece by itself every couple of seconds.
             if (m.preview && m.time - dropped > 2.2) {
                 dropped = m.time;
