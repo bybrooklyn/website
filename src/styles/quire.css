@@ -3515,3 +3515,11 @@ body.quire-app,
             radial-gradient(farthest-side at 100% 50%, color-mix(in oklch, var(--ink) 30%, transparent), transparent) right / 0.6rem 100% no-repeat scroll;
     }
 }
+
+/* A button or field that cannot be used now looks it: faded, and not lit by the pointer. Without this the
+   editor's own colour for buttons hid the browser's grey, and a disabled button looked pressable. */
+.quire-button:disabled,
+.quire-link-field:disabled {
+    opacity: 0.5;
+    pointer-events: none;
+}
