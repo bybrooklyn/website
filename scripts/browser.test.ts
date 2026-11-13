@@ -5,7 +5,7 @@
 // a notice, on a machine with no Chromium.
 
 import { expect, test } from "bun:test";
-import { readdirSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { browser, chromium } from "./browser";
@@ -13,63 +13,76 @@ import { browser, chromium } from "./browser";
 const live = !!chromium();
 const used = (name: string, run: () => Promise<void>) => test.skipIf(!live)(name, run, 30_000);
 
-const profiles = () => new Set(readdirSync(tmpdir()).filter((name) => name.startsWith("site-browser-")));
-/** The profile folder made since `before` was taken. */
-const made = (before: Set<string>) => [...profiles()].filter((name) => !before.has(name));
-/** The processes whose command line names a profile folder. */
-function using(profile: string): number[] {
-    const listed = Bun.spawnSync(["ps", "-eo", "pid=,args="]).stdout.toString().split("\n");
-    return listed.filter((line) => line.includes(join(tmpdir(), profile))).map((line) => Number(line.trim().split(/\s+/)[0]));
-}
+// Other runs on this machine may have browsers of their own open, so a browser is known as this
+// run's by its main process being a child of this one; its helpers are the rest of its process group.
+const listed = () =>
+    Bun.spawnSync(["ps", "-eo", "pid=,ppid=,pgid=,args="])
+        .stdout.toString()
+        .split("\n")
+        .map((line) => line.trim().split(/\s+/))
+        .filter((parts) => parts.length > 3)
+        .map(([pid, parent, group, ...args]) => ({ pid: Number(pid), parent: Number(parent), group: Number(group), args: args.join(" ") }));
+/** This run's browsers: the main process of each, and its profile folder. */
+const mine = () =>
+    listed()
+        .filter((one) => one.parent === process.pid && one.args.includes("--remote-debugging-port="))
+        .map((one) => ({ pid: one.pid, profile: /--user-data-dir=(\S+)/.exec(one.args)?.[1] ?? "" }));
+/** The browser this run started since `before` was taken. */
+const started = (before: { pid: number }[]) => mine().find((one) => !before.some((old) => old.pid === one.pid));
+/** The processes of a browser's group still there. */
+const group = (pid: number) => listed().filter((one) => one.group === pid);
 const until = async (held: () => boolean, ms = 3000) => {
     for (let waited = 0; waited < ms && !held(); waited += 50) await Bun.sleep(50);
     return held();
 };
 
 used("a closed browser leaves no Chromium process and no profile folder behind", async () => {
-    const before = profiles();
+    const before = mine();
     const tab = await browser({ width: 400, height: 300 });
     await tab.open("data:text/html,<p>here</p>", 50);
     expect(await tab.run("document.querySelector('p').textContent")).toBe("here");
-    const [profile] = made(before);
-    expect(profile).toBeDefined();
-    expect(using(profile!).length).toBeGreaterThan(1);
+    const opened = started(before)!;
+    expect(opened.profile).toStartWith(join(tmpdir(), "site-browser-"));
+    expect(group(opened.pid).length).toBeGreaterThan(1);
     await tab.close();
-    expect(using(profile!)).toEqual([]);
-    expect(profiles().has(profile!)).toBe(false);
+    expect(group(opened.pid)).toEqual([]);
+    expect(existsSync(opened.profile)).toBe(false);
     // closing twice is harmless
     await tab.close();
 });
 
 used("when Chromium dies, a call waiting on it fails at once instead of hanging", async () => {
-    const before = profiles();
+    const before = mine();
     const tab = await browser({ width: 400, height: 300 });
-    const [profile] = made(before);
+    const opened = started(before)!;
     const waiting = tab.run("new Promise(() => {})");
     await Bun.sleep(200);
-    for (const pid of using(profile!)) process.kill(pid, "SIGKILL");
-    const started = Date.now();
+    process.kill(-opened.pid, "SIGKILL");
+    const since = Date.now();
     expect(await waiting.then(() => "answered", (error: Error) => error.message)).toContain("closed");
-    expect(Date.now() - started).toBeLessThan(5000);
+    expect(Date.now() - since).toBeLessThan(5000);
     // and later calls fail too, rather than waiting for an answer that cannot come
     expect(await tab.run("1").then(() => "answered", () => "failed")).toBe("failed");
     await tab.close();
-    expect(profiles().has(profile!)).toBe(false);
+    expect(existsSync(opened.profile)).toBe(false);
 });
 
 used("a browser that does not come up is stopped and its folder taken away at once", async () => {
     // a port that answers as Chromium's would, with no page in it, so the start waits and gives up
     const decoy = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: () => Response.json([]) });
-    const before = profiles();
+    let opened: { pid: number; profile: string } | undefined;
+    const before = mine();
+    const watching = setInterval(() => (opened ??= started(before)), 100);
     const failed = await browser({ width: 400, height: 300, port: decoy.port! }).then(
         () => "",
         (error: Error) => error.message,
     );
+    clearInterval(watching);
     decoy.stop(true);
     expect(failed).toBe("Chromium did not start.");
-    const left = made(before);
-    expect(left).toEqual([]);
-    expect(await until(() => Bun.spawnSync(["ps", "-eo", "args="]).stdout.toString().includes(`--remote-debugging-port=${decoy.port} `) === false)).toBe(true);
+    expect(opened).toBeDefined();
+    expect(await until(() => group(opened!.pid).length === 0)).toBe(true);
+    expect(existsSync(opened!.profile)).toBe(false);
 });
 
 used("many browsers in one run add one set of signal handlers, not one each", async () => {
