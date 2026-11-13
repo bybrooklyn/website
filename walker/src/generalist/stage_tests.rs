@@ -6,7 +6,7 @@
 use alloc::rc::Rc;
 use alloc::vec::Vec;
 
-use super::land::{Hazard, Land, Mover};
+use super::land::{Hazard, Land, MOVER_HALF, Mover, PIVOT, PLANK};
 use super::recipe::{Kind, Piece, Recipe};
 use super::stage::{REBASE, Stage, Thing};
 use crate::body::{Creature, Description};
@@ -52,6 +52,63 @@ fn the_world_is_laid_ahead_and_dropped_behind_however_far_the_creature_goes() {
     let behind = |at: f32| land.geometry.loose.iter().filter(|l| l.centre.x < at).count();
     assert!(made[0] >= behind(1500.0 - 20.0), "every box along the way was made");
     assert!(made[1] > 10 && made[2] > 10);
+}
+
+/// Holds every body the stage believes it made to being there and of the sort it thinks, and the
+/// world to holding nothing else: `before` bodies of the creature's, then each thing's own.
+fn check_owned(stage: &Stage, before: usize, world: u32, along: f32) {
+    let at = (world, along);
+    let geometry = &stage.land.geometry;
+    let bodies = &stage.world.bodies;
+    let mut alive = before;
+    for made in &stage.made {
+        let body = made.body as usize;
+        assert!(body >= before && body < bodies.len(), "world and metre {at:?}: {made:?} points past the world's {} bodies", bodies.len());
+        match made.thing {
+            Thing::Loose => {
+                let half = geometry.loose[made.index].half;
+                assert_eq!(bodies[body].shape, Shape::Box { half_width: half, half_height: half }, "world and metre {at:?}: {made:?} is not its box");
+                alive += 1;
+            }
+            Thing::Mover => {
+                assert_eq!(bodies[body].shape, Shape::Box { half_width: MOVER_HALF.x, half_height: MOVER_HALF.y }, "world and metre {at:?}: {made:?} is not a moving platform");
+                assert!(bodies[body].kinematic, "world and metre {at:?}: {made:?} is not kinematic");
+                alive += 1;
+            }
+            Thing::Seesaw => {
+                let half = geometry.seesaws[made.index].half;
+                assert_eq!(bodies[body].shape, Shape::Box { half_width: half, half_height: PLANK }, "world and metre {at:?}: {made:?} is not its plank");
+                assert_eq!(bodies.get(body + 1).map(|pivot| pivot.shape), Some(Shape::Circle { radius: PIVOT }), "world and metre {at:?}: {made:?} has no pivot after its plank");
+                alive += 2;
+            }
+        }
+    }
+    assert_eq!(bodies.len(), alive, "world and metre {at:?}: the world holds bodies the stage does not know of");
+    let seesaws = stage.made.iter().filter(|made| made.thing == Thing::Seesaw).count();
+    assert_eq!(stage.world.joints.len(), seesaws, "world and metre {at:?}: one hinge for each see-saw and no other");
+}
+
+#[test]
+fn every_body_the_stage_made_is_there_and_is_what_it_thinks_and_nothing_is_left_behind() {
+    let mut seesaws = 0;
+    for world in 0..200u32 {
+        // the page's own recipe for half the worlds, everything at 1 for the rest, at every difficulty
+        let difficulty = (world % 10) as f32 / 9.0;
+        let amounts = if world % 2 == 0 { [0.6, 0.4, 0.4, 0.4] } else { [1.0; 4] };
+        let mut stage = Stage::new(Rc::new(Land::new(Recipe { seed: world + 1, difficulty, amounts }, 100.0)));
+        // a stand-in for the creature: one body made first, as the creature's are
+        let creature = stage.world.add_body(Body::new(Shape::Circle { radius: 0.2 }, Vec2::new(0.0, 30.0), 0.0, 0.0)) as usize;
+        let mut along = 0.0f32;
+        while along < 200.0 {
+            let x = along - stage.origin;
+            stage.keep(x);
+            check_owned(&stage, creature + 1, world, along);
+            stage.world.step();
+            along += 0.25;
+        }
+        seesaws += stage.land.geometry.seesaws.iter().filter(|seesaw| seesaw.pivot.x < 180.0).count();
+    }
+    assert!(seesaws > 200, "the worlds walked hold see-saws to take away ({seesaws})");
 }
 
 #[test]
