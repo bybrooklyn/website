@@ -40,13 +40,12 @@ test("a field is laid out with adding, multiplying, dividing and square roots on
 /** Every level from 1 to 12, for this many seeds each. */
 const SEEDS = 200;
 const made: Made[][] = [];
+/** The fields of a level, made the first time a test asks, so that any test can be run alone. */
+const fieldsAt = (level: number): Made[] => (made[level] ??= Array.from({ length: SEEDS }, (_, seed) => make(`s${seed}`, level)));
 
 test(`every one of ${SEEDS * 12} fields can be won by the launch it comes with, and the launches around it win too`, () => {
     for (let level = 1; level <= 12; level++) {
-        made[level] = [];
-        for (let seed = 0; seed < SEEDS; seed++) {
-            const one = make(`s${seed}`, level);
-            made[level]!.push(one);
+        for (const one of fieldsAt(level)) {
             const { field, solution } = one;
             const wins = (aim: number, notches: number) => fly(field, ...velocity(aim, notches)).ended === "won";
             expect(wins(solution.aim, solution.notches)).toBe(true);
@@ -62,7 +61,7 @@ test(`every one of ${SEEDS * 12} fields can be won by the launch it comes with, 
 
 test("nothing in a field overlaps, crowds the start or the hole, or stands at the edge", () => {
     for (const level of [1, 6, 12]) {
-        for (const { field } of made[level]!) {
+        for (const { field } of fieldsAt(level)) {
             const things = [...field.stars, ...field.gates];
             for (const one of things) {
                 expect(one.x - one.radius).toBeGreaterThan(20);
@@ -76,14 +75,14 @@ test("nothing in a field overlaps, crowds the start or the hole, or stands at th
             expect(Math.hypot(field.hole.x - field.start.x, field.hole.y - field.start.y)).toBeGreaterThanOrEqual(600);
         }
     }
-});
+}, 600_000);
 
 test("a level asks for more than the one before, and the fields show it: a narrower way in, past more stars, never straight at the hole", () => {
     const rows: string[] = [];
     const windows: number[] = [];
     for (let level = 1; level <= 12; level++) {
         const asked = plan(level);
-        const fields = made[level]!;
+        const fields = fieldsAt(level);
         const window = median(fields.map((one) => one.solution.window));
         const near = fields.reduce((sum, one) => sum + passes(one.field, one.solution), 0) / fields.length;
         const inBand = fields.filter((one) => one.solution.window >= asked.narrowest && one.solution.window <= asked.widest).length / fields.length;
@@ -107,7 +106,7 @@ test("a level asks for more than the one before, and the fields show it: a narro
     expect(windows[0]!).toBeGreaterThan(windows[3]!);
     expect(windows[3]!).toBeGreaterThan(windows[7]!);
     expect(windows[7]!).toBeGreaterThan(windows[11]!);
-});
+}, 600_000);
 
 test("every launch is a shot, a win keeps the fewest shots for that field and goes on to the next", () => {
     let run = begin("orion", 3);
