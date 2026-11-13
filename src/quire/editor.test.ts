@@ -1514,7 +1514,9 @@ used("page setup, from the zoom control, gives a .quire document's sheet its pap
     expect(await tab.run("[...document.querySelectorAll('.quire-menu.open .quire-menu-line.pressed')].map((line) => line.textContent)")).toEqual(["A5", "Landscape", "Normal"]);
     expect(await tab.run("q.editor.surface.getDocument().quire.page")).toEqual({ size: "A5", orientation: "landscape", margins: 25 });
     expect(await shape()).toBeCloseTo(210 / 148, 1);
-    expect(await tab.run("[...document.querySelectorAll('head style')].some((style) => style.textContent.includes('size: A5 landscape; margin: 25mm'))")).toBe(true);
+    // print is given the page as a stylesheet adopted through the CSSOM, which the page's policy allows, not a <style> added at run time, which it refuses
+    expect(await tab.run("document.adoptedStyleSheets.some((sheet) => [...sheet.cssRules].some((rule) => rule.cssText.includes('@media print') && rule.cssText.toLowerCase().includes('size: a5 landscape; margin: 25mm')))")).toBe(true);
+    expect(await tab.run("[...document.querySelectorAll('head style')].some((style) => style.textContent.includes('size: A5'))")).toBe(false);
     await tab.press("Escape");
     // each choice is one step back
     await tab.run("q.editor.surface.undo(); q.editor.surface.undo()");

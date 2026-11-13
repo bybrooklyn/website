@@ -513,14 +513,17 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
             zoom.refresh(false);
         }).observe(host);
     }
-    // print is given the paper and margins of the page set up
-    const printing = make("style");
-    document.head.append(printing);
+    // print is given the paper and margins of the page set up, in a stylesheet made in script: the page's
+    // policy refuses a <style> element added at run time, but not a sheet built through the CSSOM and adopted
+    const printing = typeof CSSStyleSheet === "function" && "adoptedStyleSheets" in document ? new CSSStyleSheet() : undefined;
+    if (printing) document.adoptedStyleSheets = [...document.adoptedStyleSheets, printing];
+    let printed = "";
     // looked at only when the page set up has changed, so that typing measures nothing
     const showPage = () => {
         const rule = `@media print { ${pageRule(pageNow())} }`;
-        if (printing.textContent === rule) return;
-        printing.textContent = rule;
+        if (printed === rule) return;
+        printed = rule;
+        printing?.replaceSync(rule);
         zoom.refresh();
     };
     surface.on("change", showPage);
@@ -1086,7 +1089,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
             widening?.removeEventListener("change", outlineAsKept);
             checking.destroy();
             pages.destroy();
-            printing.remove();
+            if (printing) document.adoptedStyleSheets = document.adoptedStyleSheets.filter((sheet) => sheet !== printing);
             find.destroy();
             bar.destroy();
             if (!options.top) top.remove();
