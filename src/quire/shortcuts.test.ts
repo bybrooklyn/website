@@ -7,7 +7,8 @@ import { expect, test } from "bun:test";
 import { documentOf, paragraph } from "./document";
 import { caret, handle } from "./keys";
 import { headings, type Command, type RowActions } from "./menu-row";
-import { chordFrom, chordOf, findShortcuts, keysFor, SHORTCUTS, shortcutFor } from "./shortcuts";
+import { chordFrom, chordOf, findShortcuts, keysFor, SHORTCUTS, shortcutFor, typing } from "./shortcuts";
+import { altGraph } from "./surface";
 
 test("no two shortcuts with a command share the same keys, unless they run the same command", () => {
     const seen = new Map<string, Command>();
@@ -55,4 +56,43 @@ test("the panel's search finds a shortcut by its words, its keys or its menu", (
     expect(findShortcuts("bullet").map((each) => each.keys)).toContain("Ctrl+Shift+8");
     expect(findShortcuts("ctrl+shift+7").map((each) => each.label)).toContain("Numbered list");
     expect(findShortcuts("").length).toBe(SHORTCUTS.length);
+});
+
+test("a shortcut is matched by the letter its key types on US, AZERTY, German, Spanish and Dvorak layouts, and AltGr or a Mac's Alt typing a character is never one", () => {
+    const press = (code: string, key: string, held: { ctrl?: boolean; meta?: boolean; shift?: boolean; alt?: boolean; altGraph?: boolean } = {}) => ({
+        code,
+        key,
+        ctrlKey: !!held.ctrl,
+        metaKey: !!held.meta,
+        shiftKey: !!held.shift,
+        altKey: !!held.alt,
+        getModifierState: (name: string) => name === "AltGraph" && !!held.altGraph,
+    });
+    const command = (event: ReturnType<typeof press>, mac = false) => shortcutFor(chordFrom(event, mac))?.command;
+    // bold is the key that types b, wherever it is
+    expect(command(press("KeyB", "b", { ctrl: true }))).toBe("bold"); // US
+    expect(command(press("KeyN", "b", { ctrl: true }))).toBe("bold"); // Dvorak: b is on the N key
+    expect(command(press("KeyB", "x", { ctrl: true }))).not.toBe("bold"); // Dvorak: the B key types x
+    expect(command(press("KeyQ", "a", { ctrl: true }))).toBe(command(press("KeyA", "a", { ctrl: true }))); // AZERTY: a is on the Q key
+    expect(command(press("KeyZ", "y", { ctrl: true }))).toBe(command(press("KeyY", "y", { ctrl: true }))); // German: y and z swap
+    // on a layout with no Latin letters the key's place is used
+    expect(command(press("KeyB", "и", { ctrl: true }))).toBe("bold");
+    // a digit with Shift or Alt is the key's place in the digit row
+    expect(command(press("Digit8", "*", { ctrl: true, shift: true }))).toBe("bullet"); // US: Shift+8 types *
+    expect(command(press("Digit8", "8", { ctrl: true, shift: true }))).toBe("bullet"); // AZERTY: Shift+8 types 8
+    expect(command(press("Digit1", "1", { ctrl: true, alt: true }))).toBe("heading1");
+    // and agrees with the surface's own rule (altGraph) for every press here
+    for (const [code, key] of [["Digit1", "&"], ["Digit2", "@"], ["KeyB", "b"], ["KeyE", "€"]] as const) expect(typing(press(code, key, { ctrl: true, alt: true }))).toBe(altGraph(press(code, key, { ctrl: true, alt: true }), false));
+    // AltGr typing a character: Windows reports it as Ctrl+Alt, or the browser says AltGraph
+    expect(command(press("Digit2", "@", { ctrl: true, alt: true }))).toBeUndefined(); // Spanish AltGr+2
+    expect(command(press("Digit0", "@", { ctrl: true, alt: true }))).toBeUndefined(); // AZERTY AltGr+0
+    expect(command(press("KeyQ", "@", { ctrl: true, alt: true }))).toBeUndefined(); // German AltGr+Q
+    expect(command(press("KeyE", "€", { ctrl: true, alt: true }))).toBeUndefined(); // German AltGr+E
+    expect(command(press("KeyF", "f", { ctrl: true, alt: true, altGraph: true }))).toBeUndefined();
+    expect(command(press("KeyF", "f", { ctrl: true, alt: true }))).toBe("footnote");
+    // on a Mac, Alt+Shift+digit and Alt+/ that type a character are typing
+    expect(command(press("Digit5", "ﬁ", { alt: true, shift: true }), true)).toBeUndefined();
+    expect(command(press("Slash", "÷", { alt: true }), true)).toBeUndefined();
+    expect(command(press("Slash", "/", { alt: true }))).toBe("searchMenus");
+    expect(command(press("Digit5", "%", { alt: true, shift: true }))).toBe("strike");
 });

@@ -99,12 +99,50 @@ export function chordOf(keys: string): Chord {
     return { mod: held.includes("Ctrl"), shift: held.includes("Shift"), alt: held.includes("Alt"), code };
 }
 
-/** The chord a key press makes; Ctrl is Cmd on a Mac. */
-export function chordFrom(event: { code: string; key?: string; ctrlKey: boolean; metaKey: boolean; shiftKey: boolean; altKey: boolean }, mac = false): Chord {
-    // a key with no place given (some on-screen keyboards, a key sent by a script) is known by its character
+/** A key press as the shortcut table reads it. */
+export interface Press {
+    code: string;
+    key?: string;
+    ctrlKey: boolean;
+    metaKey: boolean;
+    shiftKey: boolean;
+    altKey: boolean;
+    getModifierState?: (key: string) => boolean;
+}
+
+/**
+ * True if a key press is typing a character, never a shortcut, by the same rule as the surface's
+ * altGraph (surface.ts): AltGr, or on Windows and Linux Ctrl and Alt held together typing something
+ * that is not a plain letter or digit (@, #, {, [, | and € on many layouts). On a Mac, Alt without
+ * Cmd or Ctrl types a character too, so Alt+Shift+digit and Alt+/ that type one are typing.
+ */
+export function typing(event: Press, mac = false): boolean {
     const key = event.key ?? "";
-    const code = event.code || CODES[key] || (/^[a-z]$/i.test(key) ? `Key${key.toUpperCase()}` : /^\d$/.test(key) ? `Digit${key}` : key);
-    return { mod: mac ? event.metaKey : event.ctrlKey, shift: event.shiftKey, alt: event.altKey, code };
+    if (event.getModifierState?.("AltGraph")) return true;
+    if (!mac && event.ctrlKey && event.altKey && !event.metaKey && [...key].length === 1 && !/^[a-z0-9]$/i.test(key)) return true;
+    return mac && event.altKey && !event.metaKey && !event.ctrlKey && [...key].length === 1 && /^(Digit\d|Slash)$/.test(event.code) && !/^[0-9/]$/.test(key);
+}
+
+/**
+ * The chord a key press makes; Ctrl is Cmd on a Mac. As the surface matches its own keys
+ * (surface.ts, shortcutKey): a letter is the letter the key types, so Ctrl+B is bold where the key
+ * that types b is (Dvorak, AZERTY), and on a layout with no Latin letters the letter of the key's
+ * place; a digit is the key's place in the digit row when the key types something else (Shift on
+ * AZERTY, Shift on US); any other key is known by its character, or its place. A press that is
+ * typing (see `typing`) makes a chord that is no shortcut.
+ */
+export function chordFrom(event: Press, mac = false): Chord {
+    const key = event.key ?? "";
+    const held = { mod: mac ? event.metaKey : event.ctrlKey, shift: event.shiftKey, alt: event.altKey };
+    if (typing(event, mac)) return { ...held, code: "" };
+    let code: string;
+    if (/^[a-z]$/i.test(key)) code = `Key${key.toUpperCase()}`;
+    else if (/^Key[A-Z]$/.test(event.code) && !/^[ -~]$/.test(key)) code = event.code;
+    else if (/^\d$/.test(key)) code = `Digit${key}`;
+    else if (/^Digit\d$/.test(event.code)) code = event.code;
+    // a key with no place given (some on-screen keyboards, a key sent by a script) is known by its character
+    else code = CODES[key] ?? (event.code || key);
+    return { ...held, code };
 }
 
 const same = (a: Chord, b: Chord) => a.mod === b.mod && a.shift === b.shift && a.alt === b.alt && a.code === b.code;
