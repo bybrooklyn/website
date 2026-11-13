@@ -36,6 +36,8 @@ export interface RowState {
     symbols?: boolean;
     /** True when the document has a table of contents, which Insert then offers to make again. */
     contents?: boolean;
+    /** True in full screen, with the top folded away. */
+    full?: boolean;
 }
 
 /** What each command does, given by the editor. A command not given is left out. */
@@ -53,7 +55,8 @@ export type Command =
     | "check" | "about" | "wordCount" | "shortcuts" | "searchMenus" | "forgetUsed"
     | "superscript" | "subscript" | "marked" | "typedSigns"
     | "downloadAs" | "notes" | "nextNote" | "previousNote" | "comment" | "date" | "symbols" | "contents" | "updateContents"
-    | "makeCopy" | "rename" | "fileDetails" | "cut" | "copy" | "paste" | "delete";
+    | "makeCopy" | "rename" | "fileDetails" | "cut" | "copy" | "paste" | "delete"
+    | "fullScreen";
 
 /** The menus of the row, for a document as it stands. A line's shortcut, if it has one, comes from the table in shortcuts.ts. */
 export function headings(state: RowState, act: RowActions): Heading[] {
@@ -107,6 +110,7 @@ export function headings(state: RowState, act: RowActions): Heading[] {
                 ...line("lookNone", "No page", { pressed: (state.look ?? "none") === "none", group: "look" }),
                 ...line("lookPaper", "Light paper", { pressed: state.look === "paper", group: "look" }),
                 ...line("pageView", "Page view", { pressed: !!state.paged }),
+                ...line("fullScreen", "Full screen", { pressed: !!state.full }),
                 ...line("zoom", "Zoom", { hint: "›" }),
                 ...line("zoomIn", "Zoom in"),
                 ...line("zoomOut", "Zoom out"),

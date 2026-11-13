@@ -756,6 +756,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
                 symbols: () => openSpecials(row.words[3]!),
                 contents: doing(addContents),
                 updateContents: () => (surface.run((doc) => updateContents(doc)), surface.focus()),
+                fullScreen: () => fullScreen(!full),
                 makeCopy: () => void makeCopy(),
                 rename: renameHere,
                 fileDetails: () => showFacts(row.words[0]!),
@@ -800,7 +801,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     };
     const row = createMenuRow(() =>
         headings(
-            { rich: !!surface.getDocument().quire, contents: !!findContents(surface.getDocument()), paged: pages.paged(), look, outline: outlineView.isOpen(), markdown: host.classList.contains("markdown"), words: countWords(surface.getDocument()), align: aligned(surface.getDocument(), surface.getSelection().focus.path), symbols: surface.symbols() },
+            { rich: !!surface.getDocument().quire, contents: !!findContents(surface.getDocument()), paged: pages.paged(), look, outline: outlineView.isOpen(), markdown: host.classList.contains("markdown"), words: countWords(surface.getDocument()), full, align: aligned(surface.getDocument(), surface.getSelection().focus.path), symbols: surface.symbols() },
             actions,
         ),
     );
@@ -879,6 +880,38 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     // the menu words, on the top's first line after the trail
     place("menus").append(row.element);
 
+    // ---- full screen, from View or Ctrl+Shift+F: the top folds away and leaves the page; Escape ends it,
+    // and the pointer at the window's top edge opens the top again for as long as it stays up there ----
+    let full = false;
+    let unfolding: ReturnType<typeof setTimeout> | undefined;
+    const peek = (on: boolean) => {
+        top.classList.toggle("peek", on);
+        top.inert = full && !on;
+    };
+    const fullScreen = (on: boolean) => {
+        if (on === full) return;
+        full = on;
+        clearTimeout(unfolding);
+        top.classList.toggle("folded", on);
+        host.classList.toggle("full", on);
+        peek(false);
+        // opening again, what is in the top stays cut at its edge until the row has its height
+        top.classList.toggle("unfolding", !on);
+        if (!on) unfolding = setTimeout(() => top.classList.remove("unfolding"), 450);
+        surface.focus();
+    };
+    const fullKeys = (event: KeyboardEvent) => {
+        // an Escape meant for a dialog or a menu is theirs
+        if (!full || event.key !== "Escape" || event.defaultPrevented || (event.target instanceof Element && event.target.closest("dialog, [popover]"))) return;
+        fullScreen(false);
+    };
+    const fullPointer = (event: PointerEvent) => {
+        if (!full) return;
+        if (event.clientY <= 4) peek(true);
+        else if (top.classList.contains("peek") && event.clientY > top.getBoundingClientRect().bottom + 24 && !row.menu.isOpen() && !top.contains(document.activeElement)) peek(false);
+    };
+    addEventListener("keydown", fullKeys);
+    addEventListener("pointermove", fullPointer);
 
     // ---- version history: a snapshot on opening and after each pause in editing, kept by store and document ----
     const historyKey = () => (store && id ? `${store.label}:${id}` : name);
@@ -1139,6 +1172,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         id = undefined;
         name = "Untitled";
         bar.setName(name);
+        fullScreen(false);
         if (!wide()) outlineView.close();
         quiet = true;
         surface.setDocument(read(""));
@@ -1174,6 +1208,8 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
             if (shown !== undefined || plain) showMarkdown(plain || !!shown);
         },
         destroy() {
+            removeEventListener("keydown", fullKeys);
+            removeEventListener("pointermove", fullPointer);
             caret.destroy();
             details.destroy();
             widening?.removeEventListener("change", outlineAsKept);

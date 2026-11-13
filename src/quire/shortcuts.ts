@@ -37,6 +37,7 @@ export const SHORTCUTS: Shortcut[] = [
     { keys: "Ctrl+F", label: "Find", menu: "Edit", command: "find" },
     { keys: "Ctrl+H", label: "Find and replace", menu: "Edit", command: "replace" },
     { keys: "Ctrl+K", label: "Link", menu: "Edit", command: "link", surface: true },
+    { keys: "Ctrl+Shift+F", label: "Full screen", menu: "View", command: "fullScreen" },
     { keys: "Ctrl+=", label: "Zoom in", menu: "View", command: "zoomIn" },
     { keys: "Ctrl+-", label: "Zoom out", menu: "View", command: "zoomOut" },
     { keys: "Ctrl+0", label: "Zoom back to the usual", menu: "View", command: "zoomReset" },

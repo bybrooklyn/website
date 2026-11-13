@@ -742,3 +742,51 @@
     margin: 0;
     overflow-wrap: anywhere;
 }
+
+/* ---- full screen (View, Ctrl+Shift+F): the top folds up out of the way and leaves the page alone. Its
+   row closes to nothing as what is in it slides up and fades; the pointer at the window's top edge
+   opens it again for as long as it is there, and Escape ends it. ---- */
+
+.quire-top {
+    display: grid;
+    grid-template-rows: minmax(0, 1fr);
+    transition:
+        grid-template-rows 0.4s var(--ease),
+        border-color 0.3s ease;
+}
+
+.quire-top > .quire-top-in {
+    min-height: 0;
+    transition:
+        translate 0.4s var(--ease),
+        opacity 0.25s ease;
+}
+
+/* while folded, and while it opens again, what is in it is cut at its edge rather than spill over the page */
+.quire-top:is(.folded, .unfolding) {
+    overflow: clip;
+}
+
+.quire-top.folded:not(.peek) {
+    grid-template-rows: minmax(0, 0fr);
+    border-bottom-color: transparent;
+}
+
+.quire-top.folded:not(.peek) > .quire-top-in {
+    translate: 0 -1.5rem;
+    opacity: 0;
+}
+
+.quire-app .quire-editor.full,
+.quire-editor.full {
+    --stuck: 0px;
+}
+
+/* the outline and the facts in the margins fade with it, so that the page is all there is */
+.quire-editor.full > :is(.quire-outline, .quire-details) {
+    opacity: 0;
+    visibility: hidden;
+    transition:
+        opacity 0.25s ease,
+        visibility 0s 0.25s;
+}
