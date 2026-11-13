@@ -16,6 +16,8 @@ import { site } from "../src/data/site";
 import { accents, languageColors, otherLanguageColor, theme, type Oklch } from "../src/data/theme";
 import { css } from "../src/lib/color";
 import { cells, nameSize } from "../src/lib/drawn";
+import { make } from "../src/minis/fields";
+import { nearest } from "../src/minis/flight";
 import { browser, type Browser } from "./browser";
 import { at, frontmatter, listMdx, stem } from "./lib";
 
@@ -67,8 +69,19 @@ const shots: Record<string, { query?: string; script?: string; wait?: number; ac
     // some generations in, with the crowd and the brain showing
     walker: { wait: 14000, from: "bottom" },
     // learning some way into a world with everything in it, the ground and what it sees showing
+    // a comet on its way along the field's own winning shot, aimed with the arrow keys as a visitor would
+    comet: { query: "?seed=lumen&field=9", ...aimed("lumen", 9) },
     generalist: { query: "?seed=meadow&hard=50&ground=100&hazards=100&boxes=100&moving=100&off=&legs=2", wait: 20000, from: 0.72 },
 };
+
+/** The keys that aim a field's winning shot from where the aim starts, and launch it; and how long to wait for the comet to be well on its way. */
+function aimed(seed: string, level: number): { script: string; wait: number } {
+    const { field, solution } = make(seed, level);
+    let turn = (solution.aim - nearest(field.hole.x - field.start.x, field.hole.y - field.start.y) + 720) % 720;
+    if (turn > 360) turn -= 720;
+    const keys = ["Enter", ...Array<string>(Math.abs(turn)).fill(turn > 0 ? "ArrowRight" : "ArrowLeft"), ...Array<string>(Math.abs(solution.notches - 20)).fill(solution.notches > 20 ? "ArrowUp" : "ArrowDown"), "Enter"];
+    return { script: `(() => { const c = document.querySelector(".mini-stage canvas"); for (const key of ${JSON.stringify(keys)}) c.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true })); })()`, wait: Math.round((solution.steps / 120) * 700) };
+}
 
 function mini(id: string): Wanted["make"] {
     return async (tab) => {

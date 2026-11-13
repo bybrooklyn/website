@@ -40,6 +40,20 @@
     --panel-room: 24rem;
 }
 
+/* Comet's panel is a line of what happened, the count, and a row of words. */
+.mini-stage[data-mini="comet"] {
+    --panel-room: 10rem;
+}
+
+.mini-stage[data-mini="comet"] canvas {
+    cursor: crosshair;
+}
+
+.comet-counts {
+    margin: 0 0 0.8rem;
+    color: var(--muted);
+}
+
 /* A mini drawn in 3D has a second canvas for it, under the one that takes the mouse. */
 .mote canvas.mote-gl {
     position: absolute;

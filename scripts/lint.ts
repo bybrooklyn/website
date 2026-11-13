@@ -84,7 +84,7 @@ for (const file of sources) {
     });
 
     // ---- tests ----
-    const logic = (alone || /^src\/minis\/(tower|rolls|board)\.ts$/.test(file)) && !test && !UNTESTED.includes(file) && !SHELLS.includes(file);
+    const logic = (alone || /^src\/minis\/(tower|rolls|board|flight|fields)\.ts$/.test(file)) && !test && !UNTESTED.includes(file) && !SHELLS.includes(file);
     if (logic && !(await Bun.file(at(file.replace(/\.ts$/, ".test.ts"))).exists())) say(file, 1, "has no test beside it");
 }
 

@@ -5,6 +5,7 @@
 //   panel.append(sound.button);
 //   sound.knock(0.6, 900);      // how hard, from 0 to 1, and how high, in hertz
 //   sound.tone(660, 0.25);      // a clear note, and how long it rings
+//   sound.glide(180, 40, 0.9);  // a note that slides from one pitch to another as it dies away
 
 import type { Mote } from "./stage";
 
@@ -13,6 +14,8 @@ export interface Sounds {
     knock(hard: number, pitch?: number): void;
     /** A clear note that dies away. */
     tone(pitch: number, seconds?: number, loud?: number): void;
+    /** A note that slides from one pitch to another while it dies away: a swoop up, or a fall. */
+    glide(from: number, to: number, seconds?: number, loud?: number): void;
     /** Turns the sound on and off. */
     readonly button: HTMLButtonElement;
 }
@@ -85,6 +88,17 @@ export function sounds(m: Mote): Sounds {
             const wave = audio.createOscillator();
             wave.type = "sine";
             wave.frequency.value = pitch;
+            wave.connect(fading(audio, loud, seconds));
+            wave.start();
+            wave.stop(audio.currentTime + seconds);
+        },
+        glide(from, to, seconds = 0.4, loud = 0.12) {
+            const audio = ready();
+            if (!audio) return;
+            const wave = audio.createOscillator();
+            wave.type = "sine";
+            wave.frequency.setValueAtTime(from, audio.currentTime);
+            wave.frequency.exponentialRampToValueAtTime(to, audio.currentTime + seconds);
             wave.connect(fading(audio, loud, seconds));
             wave.start();
             wave.stop(audio.currentTime + seconds);
