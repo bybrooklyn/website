@@ -534,3 +534,13 @@ test("a definition list keeps a line of text for each term and definition: no ot
     const pasted = paste({ doc: read("Term\n: def\n"), selection: caret([0, 0, 1], 3) }, read("- a\n- b\n\n# c\n").blocks);
     expect(write(pasted.doc)).toBe("Term\n: defa b c\n");
 });
+
+test("Shift+Enter at the end of a paragraph, saved before anything is typed after it, leaves no stray backslash in the file", () => {
+    for (const [source, path, offset] of [["text\n", [0], 4], ["- item\n", [0, 0, 0], 4], ["> quote\n", [0, 0], 5]] as const) {
+        const e = editor(source, [...path], offset);
+        e.key("Enter", { shift: true });
+        expect(e.markdown).toBe(source);
+        e.type("more");
+        expect(e.markdown).not.toBe(source);
+    }
+});

@@ -266,7 +266,13 @@ const titleText = (title?: string) => (title === undefined ? "" : ` "${title.rep
 const imageText = (src: string, alt: string, title?: string) => `![${alt.replace(/[[\]\\]/g, "\\$&")}](${destination(src)}${titleText(title)})`;
 
 /** A paragraph's text, with each line kept from reading as the start of another block. */
-function paragraphText(runs: Run[], context: Context): string {
+function paragraphText(all: Run[], context: Context): string {
+    // a line break at the very end of a paragraph has no Markdown form (its backslash would be read as
+    // text), so it is left out, as are the spaces after it
+    let end = all.length;
+    while (end > 0 && (all[end - 1]!.kind === "break" || (all[end - 1]!.kind === "text" && (all[end - 1] as TextRun).text.trim() === "" && !(all[end - 1] as TextRun).marks.includes("code")))) end--;
+    if (!all.slice(end).some((run) => run.kind === "break")) end = all.length;
+    const runs = end < all.length ? all.slice(0, end) : all;
     const lines = writeRuns(runs, context, false).split("\n");
     return lines
         .map((raw, index) => {
