@@ -426,8 +426,12 @@ impl World {
     }
 
     /// Moves the world on by `seconds` of time, in whole steps, keeping what is left over for next
-    /// time. Returns the number of steps taken.
+    /// time. Returns the number of steps taken. Time that is not a number, or less than none, is
+    /// refused: kept, it would leave the remainder never again a whole step and the world stopped.
     pub fn advance(&mut self, seconds: f32) -> u32 {
+        if seconds.is_nan() || seconds < 0.0 {
+            return 0;
+        }
         self.leftover += seconds;
         let mut taken = 0;
         while self.leftover >= STEP && taken < MOST_STEPS {

@@ -68,8 +68,12 @@ impl Show {
     }
 
     /// Moves on by `seconds` in whole steps, the brain thinking before each, and returns the steps.
-    /// Once the run is over it stands still.
+    /// Once the run is over it stands still. Time that is not a number, or less than none, is refused,
+    /// as `World::advance` refuses it.
     pub fn step(&mut self, seconds: f32) -> u32 {
+        if seconds.is_nan() || seconds < 0.0 {
+            return 0;
+        }
         self.leftover += seconds;
         let mut taken = 0;
         while self.leftover >= STEP && taken < MOST_STEPS && !self.judge.over {
@@ -173,7 +177,11 @@ impl Crowd {
         crowd
     }
 
+    /// Moves every walker on by `seconds` in whole steps, as `Show::step` does, and returns the steps.
     pub fn step(&mut self, seconds: f32) -> u32 {
+        if seconds.is_nan() || seconds < 0.0 {
+            return 0;
+        }
         self.leftover += seconds;
         let mut taken = 0;
         while self.leftover >= STEP && taken < MOST_STEPS {
@@ -231,6 +239,23 @@ mod tests {
             assert_eq!(show.step(1.0), 0, "an ended run stands still");
             assert!(steps > 0);
         }
+    }
+
+    #[test]
+    fn a_show_and_a_crowd_refuse_time_that_is_not_a_number_or_less_than_none_and_go_on() {
+        let trainer = Trainer::new(Description { legs: 2, carry: false, leap: false }, Settings { population: 4, ..Settings::default() }, &flat_ground(), 3).unwrap();
+        let mut show = Show::new(&trainer.start, &trainer.creature, trainer.layout, trainer.weights(0), trainer.judge());
+        let mut crowd = Crowd::new(&trainer.start, &trainer.creature, trainer.layout, &trainer.population, trainer.judge());
+        for bad in [f32::NAN, f32::NEG_INFINITY, -1e30, -0.5] {
+            assert_eq!(show.step(bad), 0, "{bad} takes no step");
+            assert_eq!(crowd.step(bad), 0, "{bad} takes no step");
+            assert_eq!(show.step(1.0 / 60.0), 1, "and after {bad} a step's time still takes a step");
+            assert_eq!(crowd.step(1.0 / 60.0), 1);
+        }
+        assert_eq!(show.step(f32::INFINITY), MOST_STEPS);
+        assert_eq!(crowd.step(f32::INFINITY), MOST_STEPS);
+        assert_eq!(show.step(1.0 / 60.0), 1, "nothing is owed after an endless time");
+        assert_eq!(crowd.step(1.0 / 60.0), 1);
     }
 
     #[test]

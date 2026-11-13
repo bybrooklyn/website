@@ -159,3 +159,20 @@ fn a_resting_box_stays_at_rest_when_the_world_is_moved_back_and_its_ground_is_tr
     assert!((after.position.y - before.position.y).abs() < 1e-4 && after.velocity.length() < 1e-3);
     assert_eq!(world.ground().len(), 2);
 }
+
+#[test]
+fn time_that_is_not_a_number_or_less_than_none_is_refused_and_the_world_goes_on() {
+    let mut world = World::new();
+    flat(&mut world);
+    world.add_body(Body::new(Shape::Circle { radius: 0.1 }, Vec2::new(0.0, 2.0), 0.0, 1.0));
+    for bad in [f32::NAN, f32::NEG_INFINITY, -1e30, -0.5] {
+        assert_eq!(world.advance(bad), 0, "{bad} takes no step");
+        assert_eq!(world.advance(STEP), 1, "and after {bad} a step's time still takes a step");
+    }
+    // a huge or endless time takes the most steps one call allows, and nothing is owed after it
+    assert_eq!(world.advance(f32::INFINITY), MOST_STEPS);
+    assert_eq!(world.advance(1e30), MOST_STEPS);
+    assert_eq!(world.advance(0.0), 0);
+    assert_eq!(world.advance(STEP), 1);
+    assert!(world.bodies[0].position.y.is_finite());
+}
