@@ -296,7 +296,10 @@ async function handle(request: Request): Promise<Response> {
         const src = query("src");
         const file = src.startsWith("/") ? resolve(at("public"), `.${src}`) : resolve(dirname(at(query("file"))), src);
         const type = TYPES[extname(file).toLowerCase()];
-        return inside(file, "src", "public") && type && (await Bun.file(file).exists()) ? new Response(Bun.file(file), { headers: { "content-type": type } }) : json({ error: "No such picture." }, 404);
+        // An SVG can hold a script. Opened in a tab of its own it would run on this origin and could
+        // ask the server for anything, so it is served sandboxed, with no script and nothing fetched.
+        const guarded = { "content-type": type ?? "", "content-security-policy": "sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src data:", "x-content-type-options": "nosniff" };
+        return inside(file, "src", "public") && type && (await Bun.file(file).exists()) ? new Response(Bun.file(file), { headers: guarded }) : json({ error: "No such picture." }, 404);
     }
     if (url.pathname === "/api/files") return json(await files());
     if (url.pathname === "/api/exists") {

@@ -191,4 +191,12 @@ used("the server answers whether a link in a post leads to a file beside it or a
     expect((await dictionary.arrayBuffer()).byteLength).toBeGreaterThan(100_000);
 });
 
+used("a picture is served sandboxed, so a script inside an SVG cannot run with the editor's key", async () => {
+    const answer = await fetch(`${address.replace(/\/\?k=.*$/, "")}/api/asset?file=src/content/blog/blocks.mdx&src=/mdquire/icon.svg`, { headers: { "x-edit-key": key } });
+    expect(answer.headers.get("content-type")).toBe("image/svg+xml");
+    expect(answer.headers.get("content-security-policy")).toStartWith("sandbox;");
+    expect(answer.headers.get("content-security-policy")).toContain("default-src 'none'");
+    expect(answer.headers.get("x-content-type-options")).toBe("nosniff");
+});
+
 if (!live) console.warn("edit.test.ts: no Chromium on this machine, so the editor was not used.");
