@@ -7,7 +7,7 @@ export const site = {
     location: "New Jersey, USA",
     /** The languages she speaks, in her words (12 Nov 2026: "i speak english only, and i have plans to learn another language"). */
     speaks: "English only. I plan to learn another.",
-    /** Why there is no LinkedIn, in her words (12 Nov 2026), on the about page; the first sentence alone is on the resume. */
+    /** Why there is no LinkedIn, in her words (12 Nov 2026), on the about page. */
     linkedin: {
         short: "I don't have a LinkedIn and won't make one.",
         why: "It's a monopoly, and it's trying to make people pay to get discovered. I think I should be hired for me, not because I have a glowing LinkedIn page that I pay for.",

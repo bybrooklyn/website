@@ -299,6 +299,13 @@ see and learn and walk and do things on its own"; "all of this from scratch in o
 Order: speed, then the world and the rays, then PPO, then the teacher, then curiosity and needs, then
 the small vision encoder and the picture experiment.
 
+## Decided on 12 Nov 2026 about what had waited
+
+- **The gravity game** (idea 16) is the one she still wants, and soon. Ask before designing it.
+- **The site stays static.** No likes on photos and no guestbook (idea 17 is dropped).
+- The 404 page with falling blocks, photo captions and the wiki were not picked: they wait.
+- LinkedIn is said on the about page only, not on the resume.
+
 ## Next, as she chose on 11 Nov
 
 1. Plan the word processor (idea 13), with questions.
