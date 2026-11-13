@@ -187,6 +187,9 @@ fn main() {
             let measured = practice.measure(&seeds);
             also("open", practice.worlds.steps, &measured, measured.open_gait);
             say(practice.worlds.steps, measured, own);
+            practice.recipe = Recipe { amounts: [0.0; 4], ..recipe };
+            let measured = practice.measure(&seeds);
+            also("flat", practice.worlds.steps, &measured, measured.gait);
             return;
         }
         for &mark in &marks {
