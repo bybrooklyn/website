@@ -8,15 +8,12 @@ the project's file in [`docs/`](docs/README.md); what has been done is in [`CHAN
 ### The site and what it publishes
 
 - Deploy: when. The live site is several days of work behind `main`, and none of the audit's fixes are live.
-- The about page, the resume and one post name where the owner studies, works and volunteers, which together narrow down a place. Keep, or cut the place names and rebuild so the resume's PDF changes too.
-- Git history is public and holds a personal email address in early commits and every photograph ever added, removed ones included. Clearing it means rewriting history again.
 - The drafts preview address is public unless Cloudflare Access is put in front of it.
 - The site says it does not track, while visitors' browsers ask GitHub for star counts. Reword, or fetch the counts at build time only.
 - The setup page lists a download stack that a reader may take as piracy.
 - The Terrustia recording shows a game server's port (the game's default).
 - The code and engines of draft minis ship in the live build though their pages are not listed.
 - Posts have no style for a `#` heading in the body, so the site draws it as large as the title. mdQuire now draws it smaller. Decide whether posts get the same rule.
-- Sentences in content that are no longer true: `dice.mdx` (typing a roll; there is no text box), `generalist.mdx` (learning by evolution, twice), `plinko.mdx` (what its settings change), `mote.mdx` (how many things the minis page has).
 - The share picture of the colophon post is out of date and is to be made again.
 - A guard on `bun run deploy` that refuses a branch other than `main` or uncommitted changes.
 - Page policy: whether the `blob:` allowance for pictures stays as it is ([mdQuire](docs/mdQuire.md#known-weak-spots)).
@@ -26,11 +23,8 @@ the project's file in [`docs/`](docs/README.md); what has been done is in [`CHAN
 
 - About thirty new sentences a writer can see were written during the audit (the "Not saved" dialog, errors from the stores, errors on opening a damaged file, one about spelling being unavailable) and the wording of dictation's first-launch dialog. All are to be read and approved or reworded.
 - Spelling: everything in [spelling](docs/spelling.md): American, British or both; on or off by default; a personal dictionary; names; a bigger word list.
-- A spoiler cannot be written inside a table cell, where pipes are cell edges. One that arrives there is written as its words. Confirm.
-- Backspace removes the last accent of a letter; Delete removes the whole letter. Confirm.
 - Whether the GitHub token moves from `localStorage` to `sessionStorage`.
-- Where mdQuire differs from what a Docs user expects: a blank document starts in the body and not the title; a code fence typed with a language puts the language into the code; Enter in a table cell moves down a row; the status reads "Not saved" while typing; the outline does not scroll to keep the current heading in view; arrow down past a picture lands at the end of the next line. Decide which to change.
-- The first paragraph is drawn 12% larger, as the opening paragraph of a post is. Keep or drop.
+- Where mdQuire differs from what a Docs user expects: a blank document starts in the body and not the title; Enter in a table cell moves down a row; the status reads "Not saved" while typing; the outline does not scroll to keep the current heading in view; arrow down past a picture lands at the end of the next line. Decide which to change.
 - Right-to-left paragraphs are laid out left to right.
 - "Pink" appears twice in Text colour, and the typeface control reads "The page's …".
 - The Format menu needs scrolling at 1300 by 800, and long menus run to the window's very bottom.
