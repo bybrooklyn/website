@@ -3489,6 +3489,19 @@ body.quire-app,
     font-size: 0.82rem;
 }
 
+/* the same words found again are one line, saying how many times */
+.quire-check-times {
+    margin-left: 0.5rem;
+    color: var(--muted);
+    font-family: var(--font-text);
+}
+
+/* the settings, a dialog: the form takes the dialog's width, and the list of rules scrolls inside it */
+.quire-dialog.quire-check-settings .quire-check-form {
+    width: auto;
+    padding: 0;
+}
+
 .quire-check-set {
     display: flex;
     flex-direction: column;
@@ -3528,7 +3541,7 @@ body.quire-app,
     width: 6rem;
     padding: 0.2rem 0.4rem;
     border: 0.0625rem solid var(--rule);
-    border-radius: 0.5rem;
+    border-radius: var(--quire-round-small);
     background: var(--ground);
     color: var(--ink);
     font: inherit;

@@ -67,6 +67,18 @@ export function byKind(findings: Finding[]): { kind: Kind; findings: Finding[] }
     return KINDS.map((kind) => ({ kind, findings: findings.filter((one) => one.kind === kind) })).filter((group) => group.findings.length);
 }
 
+/** Findings of one rule on the same words, in their order, gathered into one line of the list: "teh" found three times is one line saying so. `words` gives what a finding covers. */
+export function sameTogether(findings: Finding[], words: (finding: Finding) => string): Finding[][] {
+    const lines = new Map<string, Finding[]>();
+    for (const one of findings) {
+        const key = `${one.rule}\u0000${words(one).replace(/\s+/g, " ").trim().toLowerCase()}`;
+        const line = lines.get(key);
+        if (line) line.push(one);
+        else lines.set(key, [one]);
+    }
+    return [...lines.values()];
+}
+
 /** What each kind is called in the list and the settings. */
 export const KIND_NAMES: Record<Kind, string> = { spelling: "Spelling", markdown: "Markdown tidiness", link: "Links and pictures", prose: "Writing" };
 

@@ -4,7 +4,7 @@
 // spelling is on. After that the browser remembers it was on, and the editor loads it on opening.
 //
 //   const checking = mountChecking({ surface, bar: bar.element, where: () => ({ store, id, name }) });
-//   checking.open(from)     opens the settings from a control, switching checking on the first time
+//   checking.open(from)     opens what was found from a control, switching checking on the first time
 //   checking.destroy()
 
 import type { Surface } from "../surface";
@@ -42,13 +42,13 @@ export function browserKeep(): Keep | undefined {
 /** Joins checking to the editor, loading it now only if it was on the last time. */
 export function mountChecking(host: CheckingHost): Checking {
     const keep = host.keep ?? browserKeep();
-    let view: Promise<{ openSettings(from: HTMLElement, switchOn: boolean): void; destroy(): void }> | undefined;
+    let view: Promise<{ openResults(from: HTMLElement): void; destroy(): void }> | undefined;
     let gone = false;
     const load = () => (view ??= import("./view").then(({ createChecking }) => createChecking({ ...host, keep })));
     if (loadPrefs(keep).on) void load();
     return {
         open(from) {
-            void load().then((shown) => !gone && shown.openSettings(from, true));
+            void load().then((shown) => !gone && shown.openResults(from));
         },
         destroy() {
             gone = true;

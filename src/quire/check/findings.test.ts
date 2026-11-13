@@ -4,7 +4,7 @@
 
 import { expect, test } from "bun:test";
 import { DEFAULTS, type Finding } from "./engine";
-import { around, byKind, compare, findingAt, findingKey, loadIgnored, loadOwn, loadPrefs, nextFinding, saveIgnored, saveOwn, savePrefs, shownFindings, type Keep } from "./findings";
+import { around, byKind, compare, sameTogether, findingAt, findingKey, loadIgnored, loadOwn, loadPrefs, nextFinding, saveIgnored, saveOwn, savePrefs, shownFindings, type Keep } from "./findings";
 
 const finding = (path: number[], from: number, to: number, kind: Finding["kind"] = "spelling", word?: string): Finding => ({ rule: kind === "spelling" ? "spelling" : "prose-repeat", kind, severity: "mistake", range: { start: { path, offset: from }, end: { path, offset: to } }, message: "", fixes: [], word });
 const at = (path: number[], offset: number) => ({ path, offset });
@@ -80,4 +80,11 @@ test("ignoring one finding ignores that one, not every finding of its rule with 
     expect(shownFindings([first, second], { words: [], findings: [findingKey(first, key(first))] }, key)).toEqual([second]);
     // a key kept with only the words, before keys had the text either side
     expect(shownFindings([first, second], { words: [], findings: ["writing-dash: — "] }, key)).toEqual([]);
+});
+
+test("the same words found by one rule are one line of the list, in the order first found, whatever their case", () => {
+    const text = ["teh", "Teh", "wrod", "teh"];
+    const found = [finding([0], 0, 3), finding([1], 0, 3), finding([2], 0, 4), finding([3], 0, 3)];
+    const lines = sameTogether(found, (one) => text[one.range.start.path[0]!]!);
+    expect(lines.map((line) => line.map((one) => one.range.start.path[0]))).toEqual([[0, 1, 3], [2]]);
 });
