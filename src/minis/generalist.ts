@@ -112,6 +112,8 @@ export default function generalist(m: Mote): Scene {
     let holding = false;
     let pushing: { x: number; y: number } | undefined;
     let notice = { text: "", until: 0 };
+    /** Why learning has stopped, said in the status line in place of how it goes, if it has. */
+    let stopped = "";
 
     const tell = (order: Order | PracticeOrder) => worker?.postMessage(order);
 
@@ -146,6 +148,7 @@ export default function generalist(m: Mote): Scene {
             [camera.x, camera.y, last, holding, pushing] = [0, 0.5, undefined, false, undefined];
         }
         made = { kind: "begin", setup: id, legs: recipe.legs, seed, difficulty, amounts, brainSeed };
+        stopped = "";
         if (how === "practice") {
             practice = { seconds: 0, steps: 0, reached: 0, here: -1, speed: 0, waited: [0, 0], hard: 0 };
             policy = undefined;
@@ -209,7 +212,7 @@ export default function generalist(m: Mote): Scene {
 
     const hear = (report: Report | PracticeReport) => {
         if (report.kind === "practised") return hearPractice(report);
-        if (report.kind === "failed") return how === "practice" ? undefined : learnHere();
+        if (report.kind === "failed") return how === "practice" ? practiceStopped() : learnHere();
         if (report.setup !== id) return;
         [generation, runs] = [report.generation, report.runs];
         if (report.brain) waiting = report.brain;
@@ -218,6 +221,12 @@ export default function generalist(m: Mote): Scene {
             waiting = undefined;
         }
         if (shown) note(generation, furthest);
+        changed();
+    };
+
+    /** Practice has no way to learn on the page itself, so when its worker fails the visitor is told. */
+    const practiceStopped = () => {
+        stopped = "Practice has stopped: something went wrong in it. Changing the world or starting over tries again";
         changed();
     };
 
@@ -272,7 +281,7 @@ export default function generalist(m: Mote): Scene {
         try {
             worker = hire();
             worker.onmessage = (event: MessageEvent<Report | PracticeReport>) => hear(event.data);
-            worker.onerror = () => (how === "practice" ? undefined : learnHere());
+            worker.onerror = () => (how === "practice" ? practiceStopped() : learnHere());
             staff(workersNow() - 1);
         } catch {
             here = how === "evolution";
@@ -568,7 +577,7 @@ export default function generalist(m: Mote): Scene {
             pause.textContent = paused ? "resume" : "pause";
             const practised = practice.seconds > 0 ? `Practised ${lasted(practice.seconds)}, ${counted(practice.steps)} steps` : "Starting to practise";
             const gets = practice.here >= 0 ? `. It gets ${practice.here.toFixed(1)} m in this world now, ${practice.reached.toFixed(1)} m on average in practice` : shown ? ". Watching its try in this world" : "";
-            const now = !engine ? "Loading." : how === "practice" ? `${practised}${gets}` : !shown ? `Generation 0, ${runs} of ${POPULATION} tried` : `Generation ${generation}, furthest ${furthest.toFixed(1)} m`;
+            const now = stopped ? stopped : !engine ? "Loading." : how === "practice" ? `${practised}${gets}` : !shown ? `Generation 0, ${runs} of ${POPULATION} tried` : `Generation ${generation}, furthest ${furthest.toFixed(1)} m`;
             const text = m.time < notice.until && notice.text ? notice.text : `${now}${paused ? ", paused" : ""}`;
             if (status.textContent !== text) status.textContent = text;
             drawChart();

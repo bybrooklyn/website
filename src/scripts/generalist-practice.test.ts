@@ -85,6 +85,23 @@ test("a kept learner of another size is refused before it is written, and practi
     }
 }, 30_000);
 
+test("a trap in the engine is told to the page, and that setup is not tried again", async () => {
+    const reports: Report[] = [];
+    const leader = new Worker(HARNESS, { type: "module", argv: ["faulty"] } as WorkerOptions);
+    leader.onmessage = (event: MessageEvent<Report>) => reports.push(event.data);
+    const beating = setInterval(() => leader.postMessage({ kind: "beat" } satisfies Order), 100);
+    try {
+        leader.postMessage({ kind: "begin", setup: 1, legs: 2, seed: 3, difficulty: 0.2, amounts: [0.6, 0.4, 0.4, 0.4], workers: 1, index: 0, learnerSeed: 1 } satisfies Order);
+        expect(await until(() => reports.some((report) => report.kind === "failed"), 10_000)).toBe(true);
+        await wait(1000);
+        expect(reports.filter((report) => report.kind === "practised").length).toBe(2);
+        expect(reports.filter((report) => report.kind === "failed").length).toBe(1);
+    } finally {
+        clearInterval(beating);
+        leader.terminate();
+    }
+}, 30_000);
+
 test("practice goes on, with its steps rising, after the world is changed twenty times while updates are in flight", async () => {
     const it = page();
     try {

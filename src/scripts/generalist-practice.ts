@@ -71,6 +71,8 @@ let paused = false;
 let gentle = false;
 let heard = 0;
 let working = false;
+/** The setup practice failed in, if it did; it is not tried again until the page begins another. */
+let failed = -1;
 let practised = { seconds: 0, steps: 0, shown: -Infinity, kept: 0 };
 let reached: number[] = [];
 let helpers: { port: MessagePort; waiting?: { asked: number; answered: (answer: Answer) => void } }[] = [];
@@ -167,27 +169,34 @@ async function shared(): Promise<void> {
 
 /** The leader's work: an update at a time while the page is drawing the mini, then a report. */
 async function practise(): Promise<void> {
-    if (working || !engine || setup < 0 || lead) return;
+    if (working || !engine || setup < 0 || lead || setup === failed) return;
     working = true;
-    while (engine && !paused && !quiet()) {
-        const began = performance.now();
-        const before = engine.practice_steps();
-        const which = setup;
-        helperSteps = 0;
-        if (helpers.length === 0) engine.practice_update();
-        else await shared();
-        if (which !== setup) break;
-        const took = (performance.now() - began) / 1000;
-        practised.seconds += took;
-        const steps = engine.practice_steps() - before + helperSteps;
-        practised.steps += steps;
-        reached.push(...list(engine, engine.practice_finished()));
-        if (reached.length > 200) reached = reached.slice(-200);
-        report(steps / took);
-        // gently, rest as long as the update took, so practice uses about half of one core
-        await new Promise((rested) => setTimeout(rested, gentle ? took * 1000 : 0));
+    try {
+        while (engine && !paused && !quiet()) {
+            const began = performance.now();
+            const before = engine.practice_steps();
+            const which = setup;
+            helperSteps = 0;
+            if (helpers.length === 0) engine.practice_update();
+            else await shared();
+            if (which !== setup) break;
+            const took = (performance.now() - began) / 1000;
+            practised.seconds += took;
+            const steps = engine.practice_steps() - before + helperSteps;
+            practised.steps += steps;
+            reached.push(...list(engine, engine.practice_finished()));
+            if (reached.length > 200) reached = reached.slice(-200);
+            report(steps / took);
+            // gently, rest as long as the update took, so practice uses about half of one core
+            await new Promise((rested) => setTimeout(rested, gentle ? took * 1000 : 0));
+        }
+    } catch (error) {
+        // a trap in the engine, or anything thrown: the page is told, and this setup is not tried again
+        failed = setup;
+        tell({ kind: "failed", why: String(error) });
+    } finally {
+        working = false;
     }
-    working = false;
 }
 
 function report(speed: number): void {
