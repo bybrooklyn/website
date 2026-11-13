@@ -3507,7 +3507,14 @@ body.quire-app,
     overflow-wrap: break-word;
 }
 
+/* A cell's words are kept whole: broken anywhere, a short column beside a long one was squeezed to a
+   letter or two and "Size" was drawn "Siz" over "e". What is long with no spaces (an address, a
+   name in code) still breaks anywhere, so it never makes the table wider than the column. */
 .prose.quire > table:not(:has(tr > :nth-child(4))) :is(td, th) {
+    overflow-wrap: break-word;
+}
+
+.prose.quire > table:not(:has(tr > :nth-child(4))) :is(td, th) :is(a, code) {
     overflow-wrap: anywhere;
 }
 

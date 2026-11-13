@@ -402,6 +402,22 @@ used("a long table's controls stay under the editor's top when the table is scro
     await tab.run("scrollTo({ top: 0, behavior: 'instant' })");
 });
 
+used("a short column beside a long one keeps its words whole, and a long address in a cell still breaks to fit", async () => {
+    for (const width of [1300, 390]) {
+        await tab.resize(width, 900);
+        await reset("| Name | Size | Description |\n| --- | --- | --- |\n| Small | 1,024 | A longer description of the thing, which goes on for a good few words so that it wraps onto lines. |\n\n| Where | Link |\n| --- | --- |\n| A page | <https://example.com/a/very/long/address/that/goes/on/and/on/without/any/spaces/at/all> |\n", [2], 0);
+        await tab.wait(200);
+        const seen = await tab.run<{ lines: number[]; wide: boolean }>(`(() => {
+            const lines = (cell) => { const range = document.createRange(); range.selectNodeContents(cell); return new Set([...range.getClientRects()].filter((box) => box.width > 0).map((box) => Math.round(box.top))).size; };
+            const [first, second] = document.querySelectorAll('.quire table');
+            const short = [...first.rows[0].cells, ...first.rows[1].cells].slice(0, 2).concat([first.rows[1].cells[0], first.rows[1].cells[1]]);
+            return { lines: short.map(lines), wide: second.getBoundingClientRect().width > document.querySelector('.prose.quire').getBoundingClientRect().width + 1 };
+        })()`);
+        expect({ width, ...seen }).toEqual({ width, lines: [1, 1, 1, 1], wide: false });
+    }
+    await tab.resize(1300, 900);
+});
+
 used("a picture shows with its alt text written under it, which can be changed in place", async () => {
     await reset("![A tower](/tower.png)\n");
     expect(await tab.run("document.querySelector('.quire-image img').getAttribute('src')")).toBe("/tower.png");
