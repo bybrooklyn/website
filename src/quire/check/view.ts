@@ -20,6 +20,8 @@ import { createSpeller } from "./spelling";
 
 /** Most findings of one kind the list draws; the rest are counted. */
 const LISTED = 150;
+/** The most time, in milliseconds, one slice of checking may hold the page. */
+const BUDGET = 8;
 
 type Highlights = Map<string, unknown>;
 type Marker = new (...ranges: globalThis.Range[]) => unknown;
@@ -94,12 +96,14 @@ export function createChecking(host: CheckingHost & { keep: CheckingHost["keep"]
     let job: Job | undefined;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let waiting = false;
+    // a slice of checking never takes more than BUDGET, however long the browser says it is idle, so a key pressed meanwhile waits no longer than that
     const idle = (run: (left: () => number) => void) => {
-        if (typeof requestIdleCallback === "function") requestIdleCallback((deadline) => run(() => deadline.timeRemaining()), { timeout: 400 });
-        else setTimeout(() => {
-            const end = performance.now() + 8;
-            run(() => end - performance.now());
-        }, 16);
+        const slice = (more: () => number) => {
+            const end = performance.now() + BUDGET;
+            run(() => Math.min(more(), end - performance.now()));
+        };
+        if (typeof requestIdleCallback === "function") requestIdleCallback((deadline) => slice(() => deadline.timeRemaining()), { timeout: 400 });
+        else setTimeout(() => slice(() => Infinity), 16);
     };
     const step = (left: () => number) => {
         waiting = false;
@@ -324,6 +328,8 @@ export function createChecking(host: CheckingHost & { keep: CheckingHost["keep"]
     surface.element.addEventListener("beforeinput", onInput);
     const stops = [
         surface.on("change", () => {
+            // a check under way is of the text as it was: it is given up, and what it found in each block so far is kept
+            job = undefined;
             if (pop.isOpen()) pop.close(false);
             typed = typing ? surface.getSelection().focus : undefined;
             typing = false;

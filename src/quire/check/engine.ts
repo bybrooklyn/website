@@ -120,6 +120,8 @@ export interface Rule {
     /** Whether it starts switched on. */
     on: boolean;
     unit?(unit: Unit, context: Context): Hit[];
+    /** Works out, for one unit, what the `document` part will need from it, while the units are checked a slice at a time, so that the `document` part is quick. */
+    prepare?(unit: Unit, context: Context): void;
     document?(doc: Document, units: Unit[], context: Context): Finding[];
 }
 
@@ -178,6 +180,20 @@ interface Kept {
     unit: Unit;
     hash: string;
     hits: { rule: Rule; hit: Hit }[];
+    /** The findings of the hits at the unit's place, made when first needed. */
+    found?: Finding[];
+}
+
+const samePath = (a: number[], b: number[]) => a.length === b.length && a.every((step, index) => step === b[index]);
+
+/** Works something out once for each unit and keeps it while the unit is unchanged: what a rule on the whole document needs from each unit, so that checking again does not read every unit again. */
+export function perUnit<T>(make: (unit: Unit) => T): (unit: Unit) => T {
+    const made = new WeakMap<Unit, T>();
+    return (unit) => {
+        let value = made.get(unit);
+        if (value === undefined) made.set(unit, (value = make(unit)));
+        return value;
+    };
 }
 
 /** What a rule gives back, or nothing if it throws: one rule that breaks never stops the others. */
@@ -193,7 +209,10 @@ function guarded<T>(rule: Rule, context: Context, run: () => T[]): T[] {
 function checkUnit(place: Place, rules: Rule[], context: Context, hash: string): Kept {
     const unit = makeUnit(place);
     const hits: Kept["hits"] = [];
-    for (const rule of rules) if (rule.unit) for (const hit of guarded(rule, context, () => rule.unit!(unit, context))) hits.push({ rule, hit });
+    for (const rule of rules) {
+        if (rule.unit) for (const hit of guarded(rule, context, () => rule.unit!(unit, context))) hits.push({ rule, hit });
+        if (rule.prepare) guarded(rule, context, () => (rule.prepare!(unit, context), []));
+    }
     return { unit, hash, hits };
 }
 
@@ -235,15 +254,37 @@ export function createChecker(rules: Rule[]) {
         units: () => units,
         start(doc: Document, context: Context): Job {
             const live = rules.filter((rule) => ruleOn(rule, context.settings));
-            const all: Place[] = [];
-            places(doc.blocks, [], all);
+            const whole = live.filter((rule) => rule.document);
+            // nothing is done until the job is first run, in the time it is given
+            let all: Place[] | undefined;
             const kept: Kept[] = [];
             const nextHash = new Map<string, Kept>();
             let index = 0;
+            let assembled = false;
+            let gathered = 0;
+            let next = 0;
+            let longest = 0;
+            const findings: Finding[] = [];
             return {
                 run(left) {
+                    // the first step of each run is always taken, so a run given no time (an idle callback that fired on its timeout) still moves on
+                    let first = true;
+                    let last = performance.now();
+                    const time = () => {
+                        const now = performance.now();
+                        longest = Math.max(longest, now - last);
+                        last = now;
+                        if (first) return !(first = false);
+                        // a step is begun only if there is time for one as long as the longest yet, so a slice ends inside its budget
+                        return left() > Math.max(1, longest);
+                    };
+                    if (!all) {
+                        if (!time()) return undefined;
+                        all = [];
+                        places(doc.blocks, [], all);
+                    }
                     for (; index < all.length; index++) {
-                        if (index % 8 === 0 && left() <= 1) return undefined;
+                        if (!time()) return undefined;
                         const place = all[index]!;
                         let entry = byObject.get(place.key);
                         if (!entry) {
@@ -251,20 +292,35 @@ export function createChecker(rules: Rule[]) {
                             entry = byHash.get(hash) ?? checkUnit(place, live, context, hash);
                             byObject.set(place.key, entry);
                         }
-                        if (entry.unit.block !== place.block || entry.unit.path.join() !== place.path.join()) {
+                        if (entry.unit.block !== place.block || !samePath(entry.unit.path, place.path)) {
                             // the same text somewhere else: the unit is the same, at its new place
-                            entry = { ...entry, unit: { ...entry.unit, path: place.path, block: place.block } };
+                            entry = { ...entry, unit: { ...entry.unit, path: place.path, block: place.block }, found: undefined };
                             byObject.set(place.key, entry);
                         }
                         nextHash.set(entry.hash, entry);
                         kept.push(entry);
                     }
-                    // only units still in the document are kept by their hash, so the map does not grow without end
-                    byHash = nextHash;
-                    units = kept.map((entry) => entry.unit);
-                    const findings: Finding[] = [];
-                    for (const entry of kept) for (const { rule, hit } of entry.hits) findings.push(found(rule, entry.unit.path, hit));
-                    for (const rule of live) if (rule.document) findings.push(...guarded(rule, context, () => rule.document!(doc, units, context)));
+                    if (!assembled) {
+                        if (!time()) return undefined;
+                        // only units still in the document are kept by their hash, so the map does not grow without end
+                        byHash = nextHash;
+                        units = kept.map((entry) => entry.unit);
+                        assembled = true;
+                    }
+                    // a unit's findings are made once for its place, and kept with it
+                    for (; gathered < kept.length; gathered++) {
+                        if (!time()) return undefined;
+                        const entry = kept[gathered]!;
+                        entry.found ??= entry.hits.map(({ rule, hit }) => found(rule, entry.unit.path, hit));
+                        for (const one of entry.found) findings.push(one);
+                    }
+                    // each rule on the whole document is a step of its own
+                    for (; next < whole.length; next++) {
+                        if (!time()) return undefined;
+                        const rule = whole[next]!;
+                        for (const one of guarded(rule, context, () => rule.document!(doc, units, context))) findings.push(one);
+                    }
+                    if (!time()) return undefined;
                     return inOrder(findings);
                 },
             };

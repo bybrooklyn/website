@@ -20,8 +20,17 @@ export interface Inline {
     pictured?: boolean;
 }
 
+/** The inlines of each list of runs, found once while the runs are unchanged: three rules on the whole document ask for them. */
+const inlinesOf = new WeakMap<Run[], Inline[]>();
+
 /** The links, pictures and footnote references in runs, in order. */
 export function inlines(runs: Run[]): Inline[] {
+    let out = inlinesOf.get(runs);
+    if (!out) inlinesOf.set(runs, (out = findInlines(runs)));
+    return out;
+}
+
+function findInlines(runs: Run[]): Inline[] {
     const out: Inline[] = [];
     let at = 0;
     const leafLength = (run: Run) => (run.kind === "text" ? run.text.length : run.kind === "link" ? 0 : 1);
@@ -326,6 +335,9 @@ const footnotes: Rule = {
     label: "Footnotes with no text",
     why: "A footnote reference with no definition shows its label as plain text.",
     on: true,
+    prepare(unit) {
+        if (unit.runs) inlines(unit.runs);
+    },
     document(doc, units) {
         const defined = new Set<string>();
         const walk = (blocks: Block[]) => blocks.forEach((block) => {
@@ -350,6 +362,9 @@ const footnoteUnused: Rule = {
     label: "Footnote text never used",
     why: "A footnote's text with nothing pointing to it is not shown at all.",
     on: true,
+    prepare(unit) {
+        if (unit.runs) inlines(unit.runs);
+    },
     document(doc, units) {
         const used = new Set<string>();
         for (const unit of units) if (unit.runs) for (const one of inlines(unit.runs)) if (one.kind === "footnote") used.add(one.href.toLowerCase());

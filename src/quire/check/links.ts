@@ -54,6 +54,9 @@ const linkMissing: Rule = {
     label: "Links and pictures that point at nothing",
     why: "A link to a file that is not there, a heading that is not in the document or a page the site does not have is a dead end for the reader.",
     on: true,
+    prepare(unit) {
+        if (unit.runs) inlines(unit.runs);
+    },
     document(_doc: Document, units: Unit[], context) {
         const out: Finding[] = [];
         let made: Set<string> | undefined;
