@@ -66,8 +66,8 @@ for (const file of sources) {
     lines.forEach((line, index) => {
         const number = index + 1;
         // ---- dependencies: code that stands alone ----
-        const from = /\bfrom\s+"([^"]+)"|import\("([^"]+)"\)/.exec(line);
-        const path = from?.[1] ?? from?.[2];
+        // `from "x"`, `import "x"` (for its effect alone), `import("x")` and `require("x")`, in either kind of quotes
+        const path = /\b(?:from|import|require)(?:\s+|\s*\(\s*)["']([^"']+)["']/.exec(line)?.[1];
         const speech = path !== undefined && SPEECH.some((name) => path === name || path.startsWith(`${name}/`)) && file.startsWith(SPEECH_HOME);
         if (alone && path && !test && !speech) {
             const depth = file.slice(alone.length).split("/").length - 1;
@@ -75,11 +75,12 @@ for (const file of sources) {
             if (!path.startsWith(".") || leaves) say(file, number, `imports ${path}, from outside ${alone}`);
         }
         // ---- comments: every exported thing in such a folder has a sentence above it ----
-        if (SPOKEN.some((folder) => file.startsWith(folder)) && !test && /^export (async )?(function|const|class|interface|type) /.test(line) && !/^\s*(\*\/|\/\/|\*)/.test(lines[index - 1] ?? "") && !/\*\/\s*$/.test(lines[index - 1] ?? "")) say(file, number, "exported with no sentence above it");
+        if (SPOKEN.some((folder) => file.startsWith(folder)) && !test && /^export (default\b|(async |declare |abstract )*(function|const|let|var|class|interface|type|enum) )/.test(line) && !/^\s*(\*\/|\/\/|\*)/.test(lines[index - 1] ?? "") && !/\*\/\s*$/.test(lines[index - 1] ?? "")) say(file, number, "exported with no sentence above it");
         // ---- leftovers ----
         if (file.startsWith("src/") && !test && /\bconsole\.log\(/.test(line)) say(file, number, "console.log left in");
         // ---- words, in comments ----
-        const comment = /(^|\s)(\/\/|\*)\s(.*)$/.exec(line)?.[3];
+        // a line comment, a comment of one line between /* or /** and */ (or the first line of a longer one), or a line inside one
+        const comment = /(^|\s)\/\/\s(.*)$/.exec(line)?.[2] ?? /(^|\s)\/\*\*?\s(.*?)\s*(\*\/|$)/.exec(line)?.[2] ?? /^\s*\*\s(.*)$/.exec(line)?.[1];
         if (comment) for (const [tell, what] of TELLS) if (tell.test(comment)) say(file, number, `${what} in a comment`);
     });
 
