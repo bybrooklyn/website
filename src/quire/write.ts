@@ -6,7 +6,7 @@
 import { pictureHtml, sized } from "./pictures";
 import type { Align, Block, Document, Leaf, LinkRun, List, ListItem, Run, TextRun } from "./document";
 import { emojiOf } from "./emoji";
-import { definedLabels, followed, normalLabel, standsApart } from "./read";
+import { definedLabels, followed, normalLabel, referring, standsApart } from "./read";
 
 interface Context {
     eol: string;
@@ -66,6 +66,38 @@ function otherSign(list: List): List {
     return { ...list, marker: list.marker === "-" ? "*" : "-", source: undefined };
 }
 
+/**
+ * True if a block still kept as its source holds a reference link whose definition is no longer in
+ * the document: written as its source, the link would read back as plain text. The reader marks
+ * the blocks that hold none, and only a source with a `[` in it can hold one, which keeps this quick.
+ */
+function lostReference(block: Block, context: Context): boolean {
+    if (block.source === undefined || referring.get(block) === false || !block.source.includes("[")) return false;
+    const lost = (runs: Run[]) => runs.some((run) => run.kind === "link" && run.ref !== undefined && (run.ref || run.label) !== undefined && !context.defined?.().has(normalLabel(run.ref || run.label!)));
+    switch (block.kind) {
+        case "paragraph":
+        case "heading":
+            return lost(block.runs);
+        case "table":
+            return [block.header, ...block.rows].some((row) => row.some(lost));
+        case "list":
+            return block.items.some((item) => item.blocks.some((inner) => lostReference(inner, context)));
+        case "quote":
+        case "footnote":
+            return block.blocks.some((inner) => lostReference(inner, context));
+        default:
+            return false;
+    }
+}
+
+/** A block with its source, and the sources of what holds a lost reference inside it, taken away, so that it is written afresh with the link's address. */
+function refreshed(block: Block, context: Context): Block {
+    if (!lostReference(block, context)) return block;
+    if (block.kind === "list") return { ...block, source: undefined, items: block.items.map((item) => (item.blocks.some((inner) => lostReference(inner, context)) ? { ...item, source: undefined, blocks: item.blocks.map((inner) => refreshed(inner, context)) } : item)) };
+    if (block.kind === "quote" || block.kind === "footnote") return { ...block, source: undefined, blocks: block.blocks.map((inner) => refreshed(inner, context)) };
+    return { ...block, source: undefined };
+}
+
 /** Writes blocks one after another. `inside` is true in a list item, quote or footnote, where the last block ends with nothing. */
 function writeBlocks(all: Block[], context: Context, inside: boolean): string {
     // an empty paragraph has no Markdown form, so a fresh one is left out, and so is the empty line an
@@ -76,6 +108,7 @@ function writeBlocks(all: Block[], context: Context, inside: boolean): string {
     blocks.forEach((block, index) => {
         const before = blocks[index - 1];
         if (block.kind === "list" && before?.kind === "list" && block.style !== "definition" && before.style !== "definition" && (before.style === "number") === (block.style === "number") && signOf(before) === signOf(block)) blocks[index] = otherSign(block);
+        if (lostReference(blocks[index]!, context)) blocks[index] = refreshed(blocks[index]!, context);
         const each = blocks[index]!;
         texts.push(each.source ?? said(writeBlock(each, context), `a block of kind ${String(each?.kind)}`));
     });

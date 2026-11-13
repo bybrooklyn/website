@@ -22,6 +22,8 @@ interface Context {
     mdx: boolean;
     /** Link reference definitions, by their label in lower case. */
     refs: Map<string, { href: string; title?: string }>;
+    /** How many reference links have been read, so that each block can be marked with whether it holds one. */
+    references?: number;
     /** The definitions found in definition blocks as the body is read, when they are being gathered. */
     found?: Map<string, { href: string; title?: string }>;
     /** Set while a table cell is read, where pipes are the cell's edges and make no spoiler, and `<br>` is a line break. */
@@ -183,6 +185,9 @@ function interrupts(line: string): boolean {
 
 // ---- blocks ----
 
+/** For each block read, whether it holds a reference link, `[text][label]` or `[label]`, which the writer must check is still defined (write.ts). */
+export const referring = new WeakMap<Block, boolean>();
+
 /** For each block read, the block read straight after it among its neighbours: two blocks that still stand together keep the gap the file had between them (write.ts). */
 export const followed = new WeakMap<Block, Block>();
 
@@ -245,7 +250,9 @@ function parseBlocks(lines: Line[], context: Context): { lead: string; blocks: B
     const lead = joinFull(lines.slice(0, at));
     const blocks: Block[] = [];
     while (at < lines.length) {
+        const counted = context.references ?? 0;
         const [block, end] = readBlock(lines, at, context);
+        referring.set(block, (context.references ?? 0) > counted);
         let next = end;
         while (next < lines.length && blank(lines[next]!.text)) next++;
         block.source = joinSource(lines.slice(at, end));
@@ -1035,6 +1042,7 @@ function inline(text: string, context: Context): Run[] {
                     if (reference.title !== undefined) run.title = reference.title;
                     if (reference.ref === "") run.label = label;
                     if (reference.shortcut) run.shortcut = true;
+                    context.references = (context.references ?? 0) + 1;
                     push(run);
                     index = reference.end;
                     continue;

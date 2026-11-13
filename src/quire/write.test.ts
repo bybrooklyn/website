@@ -269,3 +269,8 @@ test("a link's address reads back exactly as it is, angle brackets and backslash
         expect({ href, read: back?.kind === "paragraph" && back.runs[0]?.kind === "link" && back.runs[0].href }).toEqual({ href, read: href });
     }
 });
+
+test("a reference link in a block nobody touched is written with its address once its definition is taken out", () => {
+    const doc = removeBlock(read("see [a][r]\n\n- an [item][r]\n\n> [r]\n\nplain\n\n[r]: http://r\n"), [4]);
+    expect(write(doc)).toBe("see [a](http://r)\n\n- an [item](http://r)\n\n> [r](http://r)\n\nplain\n");
+});
