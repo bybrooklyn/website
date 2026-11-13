@@ -59,7 +59,8 @@
 /photos/*
   Cache-Control: public, max-age=300, must-revalidate
 
-# The Walker mini's engine keeps its name when it is rebuilt: a day, then check again.
+# The minis' engines keep their names when rebuilt, but the pages fetch them with a hash of the
+# file in the address (integrations/engine-versions.ts), so a rebuilt engine is a new address.
 /wasm/*
   Cache-Control: public, max-age=86400, stale-while-revalidate=604800
 
