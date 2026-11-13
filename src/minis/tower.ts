@@ -32,7 +32,7 @@ export type Tray = { left: number; right: number; deep: number; rim: number };
 /** The tray for this many dice: the usual one for a handful, longer and deeper for a crowd, so that each die has room to lie flat. */
 export const trayFor = (count: number): Tray => ({ ...TRAY, right: TRAY.right + Math.max(0, count - 20) * 0.11, deep: Math.max(TRAY.deep, 2.4 + count / 30) });
 /** How high the opening at the foot of the tower is. */
-export const OPENING = 4.2;
+const OPENING = 4.2;
 /** How thick a wall or a ramp is. */
 export const THICK = 0.16;
 
@@ -116,7 +116,7 @@ export interface Throw {
  * quickly that dies away. With these a die makes about eight whole turns on its way to rest, and never
  * fewer than three.
  */
-export const TUNE = { rub: 0.4, bounce: 0.5, spin: 30, damp: 0.03, floor: 2, apart: 1.4, push: 1 };
+const TUNE = { rub: 0.4, bounce: 0.5, spin: 30, damp: 0.03, floor: 2, apart: 1.4, push: 1 };
 
 /** How long after one die the next is let into the tower, in seconds. A stream goes down the ramps where a stack would wedge. */
 const BETWEEN = 0.11;

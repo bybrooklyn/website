@@ -60,7 +60,7 @@ export const PEG = 11;
 export const BALL = 14;
 /** From one peg to the next along a row, and from one row to the next. */
 export const ACROSS = 60;
-export const DOWN = 52;
+const DOWN = 52;
 export const BINS = 9;
 export const WIDTH = BINS * ACROSS;
 /** Above the first row, where the balls come in, and how deep the bins are. */
@@ -72,7 +72,7 @@ const PULL = 1150;
 const PATIENCE = 14;
 
 /** How long after one ball the next is let go, in seconds: unhurried for a short password, quicker for a long one. */
-export const pace = (length: number): number => Math.max(0.16, Math.min(0.45, 9 / length));
+const pace = (length: number): number => Math.max(0.16, Math.min(0.45, 9 / length));
 
 export interface Landing {
     /** Which bin, the ball that landed in it, and the character the bin showed. */
