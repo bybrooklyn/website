@@ -317,6 +317,14 @@ describe("a recognizer with a live stream", () => {
         expect(heard.first[1]!).toBeLessThanOrEqual(1.6 * RATE);
         expect(editor.text().split(/\s+/).filter((word) => /hello/i.test(word)).length).toBe(2);
     });
+    test("sound that never pauses is ended in phrases of thirty seconds, each in a stream of its own, so the phrase and its sound do not grow for ever", async () => {
+        const { editor, session, heard } = setup(streaming());
+        await drive(session, [...quiet(300), ...frames(70000, 0.2)]);
+        expect(heard.opened).toBeGreaterThanOrEqual(3);
+        expect(editor.steps).toBeGreaterThanOrEqual(2);
+        // the later streams start with no sound of the one before
+        expect(heard.first.slice(1).every((samples) => samples === 1600)).toBe(true);
+    });
     test("falls back to writing at the pause when the stream is far behind, and says so", async () => {
         const { editor, notes, session, heard } = setup(streaming(9));
         await drive(session, [...quiet(300), ...frames(3000, 0.2), ...quiet(1200)]);

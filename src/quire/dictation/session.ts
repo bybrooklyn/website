@@ -114,6 +114,8 @@ export const WINDOW = 10;
 export const LIVE_LIMIT = 0.45;
 /** A live stream whose newest words are more than this many seconds old when they are shown (sound waiting plus the step), twice running, cannot keep up. */
 export const BEHIND_LIMIT = 5;
+/** The longest a live phrase runs without a pause before it is ended, in seconds. */
+const LONGEST = 3 * WINDOW;
 /** Sound kept before speech starts, so that the first word is not clipped, in seconds. */
 const PRE_ROLL = 0.8;
 
@@ -223,7 +225,7 @@ export function startSession(options: SessionOptions): Session {
     }
 
     /** Opens a live stream for the phrase that has just begun, starting it with the sound kept from before the speech. */
-    function openLive() {
+    function openLive(preRoll = true) {
         if (!recognizer.stream || mode !== "live") return;
         const stream = recognizer.stream();
         live = stream;
@@ -241,7 +243,7 @@ export function startSession(options: SessionOptions): Session {
         });
         // Only the last stretch before the speech is the new phrase's. The buffer can still hold the end
         // of the one before, while that one is being finished, and giving it again would write it twice.
-        stream.push(buffer.slice(Math.max(0, length - Math.round((PRE_ROLL + 0.4) * RATE)), length));
+        if (preRoll) stream.push(buffer.slice(Math.max(0, length - Math.round((PRE_ROLL + 0.4) * RATE)), length));
     }
 
     /** Writes settled text at the cursor as one undoable step and carries out the commands in it. */
@@ -422,6 +424,12 @@ export function startSession(options: SessionOptions): Session {
                 void settleFirst(length);
             } else if (heard.event === "silence" || heard.event === "nothing") {
                 void finish(heard.event === "silence" ? "silence" : "nothing");
+            } else if (active && live && length > LONGEST * RATE && !busy) {
+                // Sound that never pauses (a television, a fan above the threshold) would keep one live phrase open, and
+                // all its sound, for as long as it lasts. At three windows the phrase is ended and the next goes on in a
+                // new stream, given none of the old sound, which the old one already holds.
+                void settleFirst(length);
+                openLive(false);
             } else if (active && length > WINDOW * RATE && !busy && !waiting && !live) {
                 // the window has grown too long: the first part is settled at its quietest moment
                 void settleFirst(quietest());
