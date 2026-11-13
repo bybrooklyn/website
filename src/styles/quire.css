@@ -993,22 +993,10 @@
         translate 0.4s var(--ease) calc(0.1s + var(--line-at, 0) * 0.04s);
 }
 
-/* About mdQuire: a few words, who made it, and the way to her site and the project */
-.quire-about {
-    width: min(19rem, 100vw - 3rem);
-    padding: 0.5rem 0.6rem 0.4rem;
-    white-space: normal;
-}
-
+/* About mdQuire, a dialog: a few words, who made it, and the way to her site and the project */
 .quire-about p {
     margin: 0 0 0.6rem;
-    line-height: 1.4;
-}
-
-.quire-about-name {
-    font-family: var(--font-head);
-    font-weight: var(--head-weight);
-    font-size: 1.3rem;
+    line-height: 1.5;
 }
 
 .quire-about-links {

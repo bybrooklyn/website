@@ -294,9 +294,8 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         form.querySelector("input")?.focus({ preventScroll: true });
     };
 
-    // ---- About mdQuire, from Tools and the three dots: a small panel that grows out of where it was asked for ----
-    const about = flowMenu("About mdQuire", { className: "quire-about-menu" });
-    const showAbout = (from: HTMLElement) => (about.isOpen() ? about.close(true) : about.open(from, aboutPanel()));
+    // ---- About mdQuire, from Tools and the three dots: something to read, so a dialog grown out of where it was asked for ----
+    const showAbout = (from: HTMLElement) => openDialog(from, { title: "About mdQuire", body: [aboutPanel()], action: { label: "Done", press: (_, dialog) => void dialog.close() }, onClose: () => surface.focus() });
 
     // ---- the three-dot menu ----
     const give = (file: Blob, fileName: string) => {
@@ -1125,7 +1124,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
             if (!options.top) top.remove();
             dictation.destroy();
             surface.destroy();
-            for (const menu of [...bar.menus, links, row.menu, zooms, setups, about]) menu.box.remove();
+            for (const menu of [...bar.menus, links, row.menu, zooms, setups]) menu.box.remove();
             selectBar.element.remove();
             palette.destroy();
             emojiList.close();

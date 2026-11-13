@@ -1788,23 +1788,26 @@ used("page setup, from the zoom control, gives a .quire document's sheet its pap
     expect(tab.errors).toEqual([]);
 });
 
-used("About mdQuire, in Tools and in the three dots, says what it is and who made it, with the way to her site and the project, and grows in", async () => {
+used("About mdQuire, in Tools and in the three dots, is a dialog that says what it is and who made it, with the way to her site and the project; it grows in, takes the keyboard, and Escape gives the text back", async () => {
     await reset("Text\n", [0], 0);
     await press(".quire-menu-row .quire-row-word", "Tools");
     await tab.wait(650);
-    const watching = tab.run<number[]>("q.watch('.quire-about-menu', 'height', 400)");
+    const watching = tab.run<number[]>("q.watch('.quire-dialog-skin', 'height', 400)");
     await press(".quire-menu.open .quire-menu-line", "About mdQuire");
     const heights = (await watching).filter((value) => !Number.isNaN(value));
     expect(new Set(heights.map(Math.round)).size).toBeGreaterThan(3);
-    const seen = await tab.run<{ text: string; links: string[] }>("(() => { const panel = document.querySelector('.quire-about-menu.open .quire-about'); return { text: panel.textContent, links: [...panel.querySelectorAll('a')].map((link) => link.getAttribute('href')) }; })()");
+    const seen = await tab.run<{ modal: boolean; title: string; text: string; links: string[]; inside: boolean }>("(() => { const dialog = document.querySelector('dialog.quire-dialog[open]'); const panel = dialog.querySelector('.quire-about'); return { modal: dialog.matches(':modal'), title: dialog.querySelector('.quire-dialog-title').textContent, text: panel.textContent, links: [...panel.querySelectorAll('a')].map((link) => link.getAttribute('href')), inside: dialog.contains(document.activeElement) }; })()");
+    expect(seen).toMatchObject({ modal: true, title: "About mdQuire", inside: true, links: ["/", "/projects/mdquire/"] });
     expect(seen.text).toContain("Charlotte made it");
-    expect(seen.links).toEqual(["/", "/projects/mdquire/"]);
     await tab.press("Escape");
-    await tab.wait(300);
+    await tab.wait(400);
+    expect(await tab.run("!!document.querySelector('dialog.quire-dialog')")).toBe(false);
+    expect(await tab.run("document.activeElement === q.editor.surface.element")).toBe(true);
     await choose("More", "About mdQuire");
     await tab.wait(400);
-    expect(await tab.run("!!document.querySelector('.quire-about-menu.open .quire-about')")).toBe(true);
+    expect(await tab.run("!!document.querySelector('dialog.quire-dialog[open] .quire-about')")).toBe(true);
     await tab.press("Escape");
+    await tab.wait(400);
 });
 
 used("typing, the caret is never a frame behind: on every frame it is within a pixel of the cursor's own place", async () => {
