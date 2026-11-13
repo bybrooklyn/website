@@ -100,6 +100,9 @@ body.opened:has(.strip:hover, .strip:focus-visible) .opened-panel {
 
 .opened-panel main {
     padding: calc(var(--line) * 1.5) var(--panel-gutter) calc(var(--line) * 2.5);
+    /* What would stick out past the panel's right edge (a source's name over a number near the end of
+       a line, laid out even while it is unseen) is cut there, instead of making the panel scroll sideways. */
+    overflow-x: clip;
 }
 
 .trail {
