@@ -17,6 +17,12 @@ Nothing.
 - It is free and has nothing in the way of the work.
 - It is a page of its own and also a tool inside imgQuire, built once as one piece used in both places.
 
+- Beyond drop, cut out and copy: a brush to fix what it got wrong (keep, remove); a new background (clear,
+  a colour, a blur of the old one, another picture, a flag); many pictures at once, as a zip; a click to
+  choose which subject is kept when there are several.
+- A model that picks out what is in a picture is allowed; the candidates are in
+  [imgQuire-models](imgQuire-models.md).
+
 ## Open
 
 - **What "nothing in the way" rules out.** Proposed: no account, no limit on how many pictures, no

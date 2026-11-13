@@ -75,6 +75,21 @@ All of it is to be simple and easy first, with the depth underneath.
   and put on another. Named sizes, templates, grids and collages, shapes, guides that snap. Many typefaces
   to choose from.
 
+- **Typefaces.** A bundled set of open-licensed faces, each loaded only when picked; a font file dropped
+  in and kept in the browser; and, as an option that is off until chosen, fetching from Google Fonts, which
+  is the one thing here that contacts another company's server.
+- **From the phone.** The PC shows a QR code, the phone scans it, and the photograph goes between the two
+  browsers with no account and nothing stored. Foxy's nine-digit code needs a rendezvous that a browser
+  cannot do alone until Foxy's web client exists; when it does, imgQuire is to use it.
+
+## The pride flag assembler
+
+A mini on imgQuire's engine. Flags mixed and faded: split, diagonal, a smooth fade from one into another,
+stripes interleaved. Stripes edited: colour, height, order, added and removed, with the symbols (the
+intersex ring, the progress chevron), and a flag of one's own saved. A flag as a mask: filling a shape,
+text, or the subject cut from a photograph, or a photograph showing through the flag's shape. Moving flags,
+exported as an animated picture or a small video.
+
 ## Ideas noted
 
 - From Foxy, the owner's file transfer tool: send a photograph from the phone to the PC with a short code
