@@ -3,7 +3,7 @@
 // and centring included. Run with `bun test src/quire`.
 
 import { expect, test } from "bun:test";
-import { changeKind, code, deleteText, divider, heading, image, insertText, list, paragraph, removeBlock, setAlign, setStyle, table, tidyRuns, toggleMark, type Block, type Document, type Paragraph, type Run } from "./document";
+import { changeKind, code, deleteText, divider, heading, image, insertText, list, paragraph, removeBlock, setAlign, setStyle, table, tidyRuns, toggleMark, type Block, type Document, type Paragraph, type Run, type TextRun } from "./document";
 import { read } from "./read";
 import { write } from "./write";
 
@@ -245,4 +245,12 @@ test("a mark beside punctuation is written so that CommonMark reads it as the ma
     // the reader takes the same HTML back as marks
     const back = read("<strong>a</strong><em>b</em><del>c</del><mark>d</mark>\n").blocks[0];
     expect(back?.kind === "paragraph" && back.runs.map((run) => run.kind === "text" && run.marks)).toEqual([["bold"], ["italic"], ["strike"], ["mark"]]);
+});
+
+test("two pieces of code side by side are written as one code span, never as two that read as one with backticks inside", () => {
+    const code = (text: string, more: Partial<TextRun> = {}): Run => ({ kind: "text", text, marks: ["code"], ...more });
+    // a note on part of the code is not written into the Markdown, so the two are written alike
+    expect(write(made([withRuns([code("ab", { comments: ["n1"] }), code("c")])]))).toBe("`abc`\n");
+    const doc = setStyle(read("`abc`\n"), { start: { path: [0], offset: 0 }, end: { path: [0], offset: 2 } }, { color: "red" });
+    expect(readsBack(doc)).toBe('<span style="color:red">`ab`</span>`c`\n');
 });

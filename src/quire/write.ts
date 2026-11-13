@@ -323,6 +323,17 @@ function spreadSpaces(leaves: Leaf[], cell: boolean): Leaf[] {
     return out;
 }
 
+/** Joins neighbouring code that is written alike, as two code spans side by side would be read as one span with backticks inside. */
+function joinCode(leaves: Leaf[], cell: boolean): Leaf[] {
+    const out: Leaf[] = [];
+    for (const leaf of leaves) {
+        const last = out[out.length - 1];
+        if (leaf.kind === "text" && last?.kind === "text" && leaf.marks.includes("code") && last.marks.includes("code") && keysOf(leaf, cell).join() === keysOf(last, cell).join()) out[out.length - 1] = { ...last, text: last.text + leaf.text };
+        else out.push(leaf);
+    }
+    return out;
+}
+
 /**
  * Writes the leaves of one stretch of text: outside links, or the words of one link. `before` and
  * `after` are the characters written just outside it, which decide whether a mark's signs at its
@@ -335,7 +346,7 @@ function spreadSpaces(leaves: Leaf[], cell: boolean): Leaf[] {
  * `<del>`, `<mark>`), and the text inside is never changed.
  */
 function writeLeaves(all: Leaf[], context: Context, cell: boolean, before = " ", after = " ", label = false): string {
-    const leaves = spreadSpaces(all, cell);
+    const leaves = spreadSpaces(joinCode(all, cell), cell);
     const tokens: Token[] = [];
     const items: (Leaf | undefined)[] = [];
     const stack: Sign[] = [];
