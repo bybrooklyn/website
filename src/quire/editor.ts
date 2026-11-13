@@ -136,6 +136,8 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     let name = options.name;
     let store = options.store;
     let id = options.id;
+    // true when the document lives only in this tab until it is downloaded (a file opened from the computer) and has changed since
+    let undownloaded = false;
     const versions = options.versions ?? memoryStorage();
     const column = make("div", "quire-column");
     const paper = make("div", "quire-paper");
@@ -284,11 +286,13 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     const stem = () => name.replace(/^.*\//, "").replace(/\.(md|mdx|markdown|txt|quire)$/i, "") || "Untitled";
     const download = () => {
         const doc = surface.getDocument();
+        if (!doc.quire) undownloaded = false;
         // a .quire document's Markdown is downloaded with its color, size and centring as small HTML, as a Markdown file keeps them
         const ending = doc.mdx ? ".mdx" : ".md";
         give(new Blob([write(doc)], { type: "text/markdown" }), /\.(md|mdx|markdown|txt)$/i.test(name) ? name.replace(/^.*\//, "") : `${stem()}${ending}`);
     };
     const downloadQuire = async () => {
+        undownloaded = false;
         const { text: markdown, quire } = written(surface.getDocument(), write);
         const pictures = (store && id && (await store.pictures?.(id).catch(() => undefined))) || new Map<string, Blob>();
         give(new Blob([(await packQuire({ markdown, parts: quire ?? emptyParts(), pictures })) as BlobPart], { type: "application/zip" }), `${stem()}.quire`);
@@ -313,6 +317,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     const downloadAsQuire = async () => {
         const doc = surface.getDocument();
         if (doc.quire) return downloadQuire();
+        undownloaded = false;
         // a Markdown document goes into the zip as it is, with its notes, as a .quire document of its own
         const { text: markdown, quire } = written({ ...doc, mdx: false, quire: { page: PAGE, notes: null } }, write);
         const pictures = (store && id && (await store.pictures?.(id).catch(() => undefined))) || new Map<string, Blob>();
@@ -812,6 +817,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     surface.on("change", ({ doc: now }) => {
         // a document being put in place of another is not an edit of the one leaving
         if (quiet) return;
+        if (store?.note) undownloaded = true;
         keeper.edited();
         if (moving) typedWhileMoving = true;
         else saver?.changed(() => written(now, write));
@@ -820,6 +826,8 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     // leaving the page with words not yet saved: they are saved if there is time, and the browser asks
     const leaving = (event: BeforeUnloadEvent) => {
         notes.keep();
+        // a file opened from the computer is kept only in this tab: closing it loses what was not downloaded
+        if (undownloaded) return event.preventDefault();
         if (saver?.unsaved() === undefined) return;
         void saver.flush();
         event.preventDefault();
@@ -976,6 +984,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         quiet = false;
         notes.opened();
         showTitle();
+        undownloaded = false;
         saver = createSaver(next, entry.id, found.mark);
         stopListening = saver.on(showStatus);
         showStatus(saver.status());

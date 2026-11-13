@@ -25,6 +25,7 @@ import { memoryStorage } from "${here}/versions.ts";
 import { browserStore, indexedTables } from "${here}/store-browser.ts";
 import { folderStore, memoryFolder } from "${here}/store-folder.ts";
 import { addComment } from "${here}/comments.ts";
+import { filesStore } from "${here}/store-files.ts";
 const host = document.querySelector("#host");
 const storage = memoryStorage();
 const editor = createEditor(host, read(""), { name: "Test", colors: [{ name: "Pink", value: "salmon" }], onImage: async () => "/picture.png", versions: storage });
@@ -38,6 +39,10 @@ window.q = {
     md: () => write(surface.getDocument()),
     /** The browser store, over a database of the test's own. */
     async useBrowser() { window.q.store = browserStore(await indexedTables("quire-test")); return true; },
+    /** A file opened from the computer, kept in this tab until it is downloaded. */
+    async useFile(name, text) { window.q.store = filesStore(); const entry = await window.q.store.add(new File([text], name)); await editor.open(window.q.store, entry); surface.focus(); return entry.id; },
+    /** Whether closing the page now would make the browser ask first. */
+    asksOnClose() { const event = new Event("beforeunload", { cancelable: true }); dispatchEvent(event); return event.defaultPrevented; },
     /** Adds a note on the first words of the first paragraph. */
     note(text, to = 4) { surface.run((doc) => addComment(doc, { start: { path: [0], offset: 0 }, end: { path: [0], offset: to } }, text).doc); },
     /** A folder on a disk kept in memory, with these files in it. */
@@ -1260,6 +1265,19 @@ used("the title is the first line on the sheet: it renames as typed, the bar fol
     await tab.press("Enter");
     await tab.wait(300);
     expect(await tab.run<string>(`q.store.list().then((all) => all.find((entry) => entry.id === ${JSON.stringify(id)})?.name)`)).toBe("Untitled");
+});
+
+used("a file opened from the computer, changed and not downloaded, makes the browser ask before the page closes", async () => {
+    await tab.run(`q.useFile("letter.md", "Dear Sam\\n")`);
+    expect(await tab.run("q.asksOnClose()")).toBe(false);
+    await tab.run("q.select([0], 8)");
+    await tab.type(",");
+    await tab.wait(1400);
+    expect(await tab.run("q.status()")).toContain("Download it to keep it");
+    expect(await tab.run("q.asksOnClose()")).toBe(true);
+    // downloaded, it is kept, and closing is quiet again
+    await tab.run("q.editor.commands.download()");
+    expect(await tab.run("q.asksOnClose()")).toBe(false);
 });
 
 used("a note on a Markdown file is kept for it even when another document is opened at once", async () => {
