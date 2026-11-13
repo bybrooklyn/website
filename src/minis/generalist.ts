@@ -55,11 +55,16 @@ function store(): Promise<IDBDatabase> {
 async function keeping<T>(what: (kept: IDBObjectStore) => IDBRequest<T>): Promise<T | undefined> {
     try {
         const db = await store();
-        return await new Promise<T | undefined>((done) => {
-            const asked = what(db.transaction("kept", "readwrite").objectStore("kept"));
-            asked.onsuccess = () => done(asked.result);
-            asked.onerror = () => done(undefined);
-        });
+        // each use opens the store and closes it after, rather than leaving a connection open every half minute
+        try {
+            return await new Promise<T | undefined>((done) => {
+                const asked = what(db.transaction("kept", "readwrite").objectStore("kept"));
+                asked.onsuccess = () => done(asked.result);
+                asked.onerror = () => done(undefined);
+            });
+        } finally {
+            db.close();
+        }
     } catch {
         return undefined;
     }
