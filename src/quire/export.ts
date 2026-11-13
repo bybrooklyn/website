@@ -15,6 +15,7 @@ import { isContentsMark, slug } from "./inserts";
 import { isPageBreak } from "./document";
 import { write } from "./write";
 import { cleanHtml, cleanTag, safeAddress, safeValue } from "./html";
+import { pictureType } from "./pictures";
 
 // ---- Markdown ----
 
@@ -299,7 +300,10 @@ export async function gatherPictures(doc: Document, show: (src: string) => Promi
                 image.onerror = () => (done({ width: 400, height: 300 }), URL.revokeObjectURL(url));
                 image.src = url;
             });
-            out.set(src, { bytes: new Uint8Array(await blob.arrayBuffer()), type: blob.type || "image/png", ...size });
+            // the type is read from the bytes, so that a JPEG kept with no type is not written into Word as a PNG
+            const bytes = new Uint8Array(await blob.arrayBuffer());
+            const read = pictureType(bytes, src);
+            out.set(src, { bytes, type: read === "application/octet-stream" ? blob.type || read : read, ...size });
         } catch {
             // a picture from somewhere that will not give it stays an address
         }
