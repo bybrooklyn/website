@@ -438,4 +438,100 @@ test("AltGr is told from a shortcut on every layout imitated", () => {
     expect(shortcutKey(press("Enter", "Enter", { ctrl: true }), true)).toBe("Enter");
 });
 
+describe("selections between the page and the model", () => {
+    inPage("Select All then typing replaces everything, with a block that cannot be written in at either end", async (tab) => {
+        for (const markdown of ["***\n\nOne\n\nTwo\n\n***\n", "![p](data:image/gif;base64,R0lGODlhAQABAAAAACw=)\n\nOne\n", "One\n\n<!-- toc -->\n\n- [One](#one)\n"]) {
+            await tab.run(`quire.reset(${JSON.stringify(markdown)})`);
+            await tab.press("a", { ctrl: true });
+            await tab.wait(30);
+            const last = await tab.run<number>("quire.surface.getDocument().blocks.length - 1");
+            const all = await tab.run<{ anchor: { path: number[]; offset: number }; focus: { path: number[] } }>("quire.selection()");
+            expect(all.anchor).toEqual({ path: [0], offset: 0 });
+            expect(all.focus.path[0]).toBe(last);
+            await tab.type("x");
+            await tab.wait(30);
+            expect(await md(tab)).not.toMatch(/One|Two/);
+            expect(await md(tab)).toContain("x");
+        }
+        await tab.run(`quire.reset("One\\n\\nTwo\\n")`);
+        await tab.press("a", { ctrl: true });
+        await tab.type("x");
+        expect(await md(tab)).toBe("x\n");
+        expect(await shown(tab)).toBe("x");
+    });
+
+    inPage("Shift and the arrows across a block that cannot be written in, then a key, leave valid text", async (tab) => {
+        await tab.run(`quire.reset("One\\n\\n***\\n\\nTwo\\n")`);
+        await tab.run("quire.select([0], 1)");
+        await tab.press("ArrowDown", { shift: true });
+        await tab.press("ArrowDown", { shift: true });
+        await tab.wait(50);
+        const selection = await tab.run<{ anchor: { path: number[] }; focus: { path: number[] } }>("quire.selection()");
+        expect(selection.anchor.path).toEqual([0]);
+        expect(selection.focus.path).toEqual([2]);
+        await tab.type("x");
+        await tab.wait(30);
+        // the second Shift+ArrowDown reaches the end of the last line
+        expect(await md(tab)).toBe("Ox\n");
+        expect(await shown(tab)).toBe("Ox");
+    });
+
+    inPage("a drag across blocks selects what it crossed, and a key replaces it", async (tab) => {
+        await tab.run(`quire.reset("First line\\n\\nSecond line\\n\\nThird line\\n")`);
+        const point = (path: number, offset: number) => tab.run<{ x: number; y: number }>(`(() => { const r = quire.surface.rangeOf({ path: [${path}], offset: ${offset} }, { path: [${path}], offset: ${offset} }).getBoundingClientRect(); return { x: r.left, y: r.top + r.height / 2 }; })()`);
+        await tab.drag(await point(0, 2), await point(2, 3));
+        await tab.wait(50);
+        expect(await tab.run("quire.selection()")).toEqual({ anchor: { path: [0], offset: 2 }, focus: { path: [2], offset: 3 } });
+        await tab.type("x");
+        await tab.wait(30);
+        expect(await md(tab)).toBe("Fixrd line\n");
+        expect(await shown(tab)).toBe("Fixrd line");
+    });
+
+    inPage("a triple click's selection, which the browser runs on to the start of the next block, replaces the one paragraph", async (tab) => {
+        await tab.run(`quire.reset("One two\\n\\nThree\\n")`);
+        // Chrome's triple click, imitated: the press with a count of three, then the selection it makes
+        await tab.run(`(() => {
+            const [first, second] = quire.element.children;
+            first.dispatchEvent(new MouseEvent("mousedown", { detail: 3, bubbles: true, cancelable: true }));
+            document.getSelection().setBaseAndExtent(first.firstChild, 0, second, 0);
+            first.dispatchEvent(new MouseEvent("mouseup", { detail: 3, bubbles: true }));
+        })()`);
+        await tab.wait(50);
+        await tab.type("x");
+        await tab.wait(30);
+        expect(await md(tab)).toBe("x\n\nThree\n");
+    });
+
+    inPage("in an empty block, in right-to-left text and over an emoji of several code points the page's cursor and the model's agree", async (tab) => {
+        await tab.run(`quire.reset("")`);
+        await tab.type("a");
+        await tab.press("Enter");
+        await tab.press("Enter");
+        await tab.type("b");
+        await tab.press("ArrowUp");
+        await tab.wait(30);
+        expect((await tab.run<{ focus: { path: number[]; offset: number } }>("quire.selection()")).focus).toEqual({ path: [1], offset: 0 });
+        await tab.type("m");
+        expect(await shown(tab)).toBe("a\nm\nb");
+        // right to left: the arrows move through the text in its own order, and the model follows
+        await tab.run(`quire.reset("שלום עולם\\n")`);
+        await tab.run("quire.select([0], 4)");
+        await tab.press("ArrowLeft");
+        await tab.wait(30);
+        const moved = await tab.run<{ model: number; page: number }>(`(() => { const s = document.getSelection(); const r = document.createRange(); r.setStart(quire.element.firstChild, 0); r.setEnd(s.focusNode, s.focusOffset); return { model: quire.selection().focus.offset, page: r.toString().length }; })()`);
+        expect(moved.model).toBe(moved.page);
+        expect(moved.model).not.toBe(4);
+        await tab.type("x");
+        expect(await md(tab)).toBe("שלום עולם".slice(0, moved.model) + "x" + "שלום עולם".slice(moved.model) + "\n");
+        // a joined emoji is selected and replaced whole
+        await tab.run(`quire.reset("a👨‍👩‍👧b\\n")`);
+        await tab.run("quire.select([0], 9)");
+        await tab.press("ArrowLeft", { shift: true });
+        await tab.wait(30);
+        await tab.type("x");
+        expect(await md(tab)).toBe("axb\n");
+    });
+});
+
 if (!chromium()) console.warn("surface-input.test.ts: no Chromium on this machine, so input methods and layouts were not tried.");

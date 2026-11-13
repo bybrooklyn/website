@@ -33,7 +33,7 @@
 // `quire-task` on a task item and `quire-box` on its box (`data-checked`),
 // `quire-atom` on an inline HTML span or footnote reference.
 
-import { blockAt, blockPaths, changeKind, documentOf, image as imageBlock, isPageBreak, markdownOnly, paragraph, setBox, setImageAlt, setRaw, toggleTask, type Block, type Code, type Document, type Leaf, type Mark, type Position, type Run, type Selection } from "./document";
+import { blockAt, blockPaths, changeKind, documentOf, image as imageBlock, isPageBreak, lengthOf, markdownOnly, paragraph, setBox, setImageAlt, setRaw, toggleTask, type Block, type Code, type Document, type Leaf, type Mark, type Position, type Run, type Selection } from "./document";
 import { createHistory, redo as redoStep, undo as undoStep, type ChangeKind, type State } from "./history";
 import { readHtml, writeHtml } from "./html";
 import { drawPicture } from "./picture-tools";
@@ -926,9 +926,24 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
         return true;
     }
 
+    /** True from a triple click's press until the next press. */
+    let tripled = false;
+
+    /**
+     * A triple click selects a paragraph and runs on to the start of the next block; typing over that
+     * would join the next block on, so such a selection ends at the end of its own paragraph.
+     */
+    function ownParagraph(selection: Selection): Selection {
+        const end = selection.focus;
+        if (!tripled || end.offset !== 0 || selection.anchor.offset !== 0 || end.path.length !== selection.anchor.path.length || end.path[end.path.length - 1]! === 0) return selection;
+        const own = [...end.path.slice(0, -1), end.path[end.path.length - 1]! - 1];
+        return own.join() === selection.anchor.path.join() ? { anchor: selection.anchor, focus: { path: own, offset: lengthOf(editor.state.doc, own) } } : selection;
+    }
+
     function syncSelection() {
-        const selection = readSelection();
-        if (!selection) return;
+        const read = readSelection();
+        if (!read) return;
+        const selection = ownParagraph(read);
         const same = JSON.stringify(selection) === JSON.stringify(editor.state.selection);
         if (same) return;
         // the cursor moved by hand: waiting marks are forgotten and typing starts a new undo step
@@ -979,6 +994,14 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
         if (mod && event.shiftKey && key === "v") plainNext = true;
         if (!mod && !["Enter", "Backspace", "Delete", "Tab"].includes(key)) return;
         if (MAC && event.ctrlKey && !mod) return;
+        if (mod && key === "a" && !event.shiftKey && !event.altKey) {
+            // Select All is the model's: the browser's own selects nothing at all when the document begins or ends with a block that cannot be written in
+            event.preventDefault();
+            const paths = blockPaths(editor.state.doc);
+            const last = paths[paths.length - 1] ?? [0];
+            commit(apply(editor, { state: { doc: editor.state.doc, selection: { anchor: { path: paths[0] ?? [0], offset: 0 }, focus: { path: last, offset: lengthOf(editor.state.doc, last) } } }, kind: "move" }, Date.now()));
+            return;
+        }
         syncSelection();
         const word = (key === "Backspace" || key === "Delete") && (MAC ? event.altKey : event.ctrlKey);
         if ((key === "Backspace" || key === "Delete") && !word && !mod && !event.altKey) wholeCharacter(key === "Delete");
@@ -993,7 +1016,7 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
         const anchor = toPosition(range.startContainer, range.startOffset);
         const focus = toPosition(range.endContainer, range.endOffset);
         if (!anchor || !focus) return false;
-        editor = { ...editor, state: { doc: editor.state.doc, selection: { anchor, focus } } };
+        editor = { ...editor, state: { doc: editor.state.doc, selection: ownParagraph({ anchor, focus }) } };
         return true;
     }
 
@@ -1227,6 +1250,7 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
     }
 
     function onMouseDown(event: MouseEvent) {
+        tripled = event.detail >= 3;
         const target = event.target as HTMLElement;
         // laid-out maths: pressing it puts the cursor at the end of its source, which then shows
         const shown = target.closest?.("[data-shown]") as HTMLElement | null;
