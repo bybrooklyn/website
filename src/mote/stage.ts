@@ -210,8 +210,10 @@ export function mote(host: HTMLElement, make: (m: Mote) => Scene, { label = "An 
         const scale = window.devicePixelRatio || 1;
         m.width = canvas.clientWidth;
         m.height = canvas.clientHeight;
-        canvas.width = Math.round(m.width * scale);
-        canvas.height = Math.round(m.height * scale);
+        // Setting a canvas's size clears it and makes it again, even to the size it is: only a change is set.
+        const [wide, high] = [Math.round(m.width * scale), Math.round(m.height * scale)];
+        if (canvas.width !== wide) canvas.width = wide;
+        if (canvas.height !== high) canvas.height = high;
     };
     fit();
     const scene = make(m);

@@ -560,8 +560,10 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
         },
         size(width, height) {
             const scale = Math.min(window.devicePixelRatio || 1, 2);
-            canvas.width = Math.max(1, Math.round(width * scale));
-            canvas.height = Math.max(1, Math.round(height * scale));
+            const [wide, high] = [Math.max(1, Math.round(width * scale)), Math.max(1, Math.round(height * scale))];
+            // only a change is set: setting a canvas's size, even to the one it has, makes its picture again
+            if (canvas.width !== wide) canvas.width = wide;
+            if (canvas.height !== high) canvas.height = high;
         },
         draw() {
             if (lost || g.isContextLost()) return;
