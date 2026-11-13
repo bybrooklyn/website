@@ -94,6 +94,9 @@ impl Page {
         self.shown_weights = weights;
         self.show.copy_from(&self.start);
         self.show.sense(&mut self.senses);
+        if let Some(policy) = &mut self.policy {
+            policy.forget();
+        }
         self.leftover = 0.0;
     }
 

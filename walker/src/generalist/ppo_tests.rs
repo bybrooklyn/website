@@ -6,7 +6,7 @@
 use alloc::vec;
 use alloc::vec::Vec;
 
-use super::ppo::{CUT, GOING, Learner, OVER, Running, Settings, Task};
+use super::ppo::{CUT, GOING, Learner, Mirror, OVER, Running, Settings, Task};
 use crate::learn::Random;
 
 /// Points on a line from -1 to 1, each to reach a mark. It senses where it is and where the mark is,
@@ -189,4 +189,208 @@ fn merged_running_numbers_are_the_numbers_of_all_of_it() {
         assert!((first.mean[k] - whole.mean[k]).abs() < 1e-9 && (first.spread(k) - whole.spread(k)).abs() < 1e-9);
     }
     assert_eq!(Running::from_numbers(&whole.numbers(), 2), Some(whole));
+}
+
+/// Two points on a line, each to reach its own mark, the same task both ways round: swapping the
+/// points (and their marks and actions) is its mirror image. Lopsided, the second point is always put
+/// back on its mark, so only the first is ever seen away from it.
+struct Pair {
+    reach: Reach,
+    lopsided: bool,
+}
+
+impl Pair {
+    fn new(points: usize, seed: u64, lopsided: bool) -> Pair {
+        let mut pair = Pair { reach: Reach::new(points, seed), lopsided };
+        pair.settle();
+        pair
+    }
+
+    fn settle(&mut self) {
+        if self.lopsided {
+            for j in (1..self.reach.count()).step_by(2) {
+                self.reach.at[j] = self.reach.mark[j];
+            }
+        }
+    }
+}
+
+impl Task for Pair {
+    fn count(&self) -> usize {
+        self.reach.count() / 2
+    }
+    fn senses(&self) -> usize {
+        4
+    }
+    fn actions(&self) -> usize {
+        2
+    }
+    fn observe(&mut self, into: &mut [f32]) {
+        let mut both = vec![0.0; 2 * self.reach.count()];
+        self.reach.observe(&mut both);
+        for i in 0..self.count() {
+            into[4 * i..4 * i + 4].copy_from_slice(&[both[4 * i], both[4 * i + 2], both[4 * i + 1], both[4 * i + 3]]);
+        }
+    }
+    fn step(&mut self, actions: &[f32], into: &mut [f32], rewards: &mut [f32], ends: &mut [u8], last: &mut [f32]) {
+        let n = self.reach.count();
+        let (mut both_rewards, mut both_ends, mut both_last, mut both_into) = (vec![0.0; n], vec![GOING; n], vec![0.0; 2 * n], vec![0.0; 2 * n]);
+        self.reach.step(actions, &mut both_into, &mut both_rewards, &mut both_ends, &mut both_last);
+        self.settle();
+        for i in 0..self.count() {
+            rewards[i] = both_rewards[2 * i] + both_rewards[2 * i + 1];
+            ends[i] = both_ends[2 * i];
+            last[4 * i..4 * i + 4].copy_from_slice(&[both_last[4 * i], both_last[4 * i + 2], both_last[4 * i + 1], both_last[4 * i + 3]]);
+        }
+        self.observe(into);
+    }
+}
+
+fn pair_mirror() -> Mirror {
+    Mirror { senses: vec![(1, 1.0), (0, 1.0), (3, 1.0), (2, 1.0)], actions: vec![1, 0] }
+}
+
+/// The whole loss an update goes down, as `gradient` reports it: the policy's, the value's weighed,
+/// less the entropy bonus.
+fn whole_loss(learner: &Learner) -> f64 {
+    let set = learner.settings;
+    let entropy: f32 = learner.weights[learner.at[4]..].iter().sum();
+    learner.report.policy_loss as f64 + set.value_weight as f64 * learner.report.value_loss as f64 - set.entropy_weight as f64 * entropy as f64 + learner.report.symmetry as f64
+}
+
+#[test]
+fn the_gradient_of_the_whole_loss_is_what_nudging_shows_with_a_mirror_and_memory_or_without() {
+    for (mirrored, memory) in [(false, 0), (true, 0), (false, 3), (true, 2)] {
+        let settings = Settings { hidden: 8, steps: 8, minibatches: 2, entropy_weight: 0.01, mirror: if mirrored { 1.0 } else { 0.0 }, memory, ..toy() };
+
+        let mut task = Pair::new(8, 11, false);
+        let mut learner = Learner::new(settings, 4, 2, 4, 3);
+        if mirrored {
+            learner.with_mirror(pair_mirror());
+        }
+        // weights away from where they start, so the policy's means and spreads are not all alike
+        let mut random = Random::new(5);
+        for w in learner.weights.iter_mut() {
+            *w += 0.1 * (2.0 * random.unit() - 1.0);
+        }
+        learner.begin(&mut task);
+        learner.collect(&mut task);
+        learner.shuffle();
+        learner.gradient(1);
+        let grads = learner.grads.clone();
+        let h = 1e-2f32;
+        let mut worst = 0.0f64;
+        for k in (0..learner.weights.len()).step_by(3) {
+            let kept = learner.weights[k];
+            learner.weights[k] = kept + h;
+            learner.gradient(1);
+            let up = whole_loss(&learner);
+            learner.weights[k] = kept - h;
+            learner.gradient(1);
+            let down = whole_loss(&learner);
+            learner.weights[k] = kept;
+            let wanted = (up - down) / (2.0 * h as f64);
+            let error = (grads[k] as f64 - wanted).abs();
+            worst = worst.max(error);
+            assert!(error < 2e-3 + 2e-2 * wanted.abs(), "mirror {mirrored}, memory {memory}, weight {k}: gradient {}, nudging {wanted}", grads[k]);
+        }
+        std::println!("mirror {mirrored}, memory {memory}: worst error {worst:e}");
+    }
+}
+
+#[test]
+fn a_mirror_teaches_what_was_only_ever_seen_the_other_way_round() {
+    // practised with only the first point ever away from its mark, how often the policy moves the
+    // second toward its mark when it is the one away
+    let learn = |mirrored: bool| {
+        let mut task = Pair::new(16, 5, true);
+        let mut learner = Learner::new(Settings { mirror: if mirrored { 1.0 } else { 0.0 }, ..toy() }, 4, 2, 8, 1);
+        if mirrored {
+            learner.with_mirror(pair_mirror());
+        }
+        learner.begin(&mut task);
+        for _ in 0..60 {
+            learner.update(&mut task);
+        }
+        let mut random = Random::new(17);
+        let mut right = 0;
+        for _ in 0..200 {
+            let (at, mark, other) = (2.0 * random.unit() - 1.0, 2.0 * random.unit() - 1.0, 2.0 * random.unit() - 1.0);
+            let mut acted = [0.0; 2];
+            learner.act(&[other, at, other, mark], &mut acted);
+            right += usize::from((acted[1] > 0.0) == (mark > at));
+        }
+        right as f32 / 200.0
+    };
+    let (without, with) = (learn(false), learn(true));
+    std::println!("the second point moved toward its mark {without} of the time without a mirror, {with} with");
+    assert!(with > 0.9 && with > without + 0.2, "{with} with a mirror against {without} without");
+}
+
+/// A sign shown once, at the first of five decisions, then hidden: each later decision earns what the
+/// action has of the sign (kept within -1 to 1). Only a learner that keeps something can do better than
+/// nothing after the first.
+struct Recall {
+    sign: Vec<f32>,
+    step: Vec<u32>,
+    random: Random,
+}
+
+impl Task for Recall {
+    fn count(&self) -> usize {
+        self.sign.len()
+    }
+    fn senses(&self) -> usize {
+        2
+    }
+    fn actions(&self) -> usize {
+        1
+    }
+    fn observe(&mut self, into: &mut [f32]) {
+        for i in 0..self.count() {
+            let first = self.step[i] == 0;
+            into[2 * i] = if first { self.sign[i] } else { 0.0 };
+            into[2 * i + 1] = if first { 1.0 } else { 0.0 };
+        }
+    }
+    fn step(&mut self, actions: &[f32], into: &mut [f32], rewards: &mut [f32], ends: &mut [u8], _: &mut [f32]) {
+        for i in 0..self.count() {
+            rewards[i] = if self.step[i] > 0 { self.sign[i] * actions[i].clamp(-1.0, 1.0) } else { 0.0 };
+            self.step[i] += 1;
+            ends[i] = GOING;
+            if self.step[i] == 5 {
+                ends[i] = OVER;
+                self.step[i] = 0;
+                self.sign[i] = if self.random.unit() < 0.5 { -1.0 } else { 1.0 };
+            }
+        }
+        self.observe(into);
+    }
+}
+
+#[test]
+fn memory_keeps_what_was_seen_once() {
+    let learn = |memory: usize| {
+        let mut task = Recall { sign: vec![1.0; 16], step: vec![0; 16], random: Random::new(3) };
+        let mut learner = Learner::new(Settings { memory, ..toy() }, 2, 1, 16, 1);
+        learner.begin(&mut task);
+        for _ in 0..80 {
+            learner.update(&mut task);
+        }
+        // acting without drawing, what each later decision earns on average
+        let mut earned = 0.0;
+        for sign in [-1.0, 1.0] {
+            learner.forget();
+            let mut action = [0.0];
+            learner.act(&[sign, 1.0], &mut action);
+            for _ in 0..4 {
+                learner.act(&[0.0, 0.0], &mut action);
+                earned += sign * action[0] / 8.0;
+            }
+        }
+        earned
+    };
+    let (without, with) = (learn(0), learn(4));
+    std::println!("earned each decision after the sign: {without} without memory, {with} with");
+    assert!(without.abs() < 0.2 && with > 0.6, "{with} with memory against {without} without");
 }

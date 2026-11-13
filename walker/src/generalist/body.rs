@@ -43,6 +43,18 @@ const HIP_TORQUE: f32 = 60.0;
 const KNEE_TORQUE: f32 = 50.0;
 const GAIN: f32 = 12.0;
 const TOP_SPEED: f32 = 8.0;
+/// The standing pose's hip and knee, the middle of each action when actions are centred on it: the
+/// hips half way between the built stance's leg forward (0.4) and back (-0.1), the knees as built.
+const STAND_HIP: f32 = 0.15;
+const STAND_KNEE: f32 = -0.3;
+/// A conducted rhythm's widest hip swing to each side and deepest knee lift, in radians, and how far
+/// its pace may be slowed or quickened, as a share of the legs' own pace.
+const RHYTHM_HIP: f32 = 0.8;
+const RHYTHM_KNEE: f32 = 1.2;
+const RHYTHM_PACE: f32 = 0.75;
+/// A conducted rhythm's actions for each leg: its pace, its hip's centre and swing, its knee's centre
+/// and lift.
+pub const RHYTHM_ACTIONS: usize = 5;
 
 /// How a body hops: how much harder its body is to tip than a plain block of its size; the line from
 /// hip to foot in the crouch, the spring and the air, in radians (more than 0 is the foot ahead of the
@@ -94,6 +106,24 @@ pub struct Body {
     /// muscles, which hold the body up and step but cannot throw it into the air. The hop keeps its
     /// own strength, so leaving the ground is a choice, made with the hop.
     pub strength: f32,
+    /// Aiming directly, whether the middle of each action is the standing pose rather than the middle
+    /// of the joint's range (a deep crouch, for the knee): -1 still reaches the lower limit and 1 the
+    /// upper, each side stretched to fit.
+    pub centre: bool,
+    /// Aiming directly, whether the actions conduct a rhythm rather than aim each joint: each leg keeps
+    /// a phase of its own (rhythm neurons), which goes round at a pace its first action sets; its hip
+    /// swings about a centre and its knee lifts as the leg swings forward, by as much as the others ask
+    /// (`RHYTHM_ACTIONS` for each leg). The legs start half a stride apart (four trot) and keep apart
+    /// only while their paces are alike, so taking turns is easy to keep and not forced.
+    pub rhythm: bool,
+    /// Each leg's phase, in turns, when conducting a rhythm.
+    pub phases: Vec<f32>,
+}
+
+/// Where an action from -1 to 1 aims a joint: -1 its lower limit, 1 its upper, 0 `middle`.
+fn toward(action: f32, lower: f32, middle: f32, upper: f32) -> f32 {
+    let action = clamp(action, -1.0, 1.0);
+    if action < 0.0 { middle + action * (middle - lower) } else { middle + action * (upper - middle) }
 }
 
 impl Body {
@@ -105,7 +135,7 @@ impl Body {
         let creature = Creature::build(world, Description { legs, carry: false, leap: false })?;
         let hopping = Hopping::of(legs);
         world.bodies[creature.torso as usize].inverse_inertia /= hopping.steadiness;
-        Some(Body { creature, hop: Hop::Ready, hopping, direct: false, ease: 1.0, aims: Vec::new(), strength: 1.0 })
+        Some(Body { creature, hop: Hop::Ready, hopping, direct: false, ease: 1.0, aims: Vec::new(), strength: 1.0, centre: false, rhythm: false, phases: Vec::new() })
     }
 
     pub fn legs(&self) -> usize {
@@ -113,9 +143,46 @@ impl Body {
     }
 
     /// How many numbers the brain gives it: three for each joint and one for the hop, or, direct, one
-    /// for each joint and one for the hop.
+    /// for each joint (or, conducting a rhythm, `RHYTHM_ACTIONS` for each leg) and one for the hop.
     pub fn actions(&self) -> usize {
-        if self.direct { self.creature.joints.len() + 1 } else { self.creature.description.outputs() + 1 }
+        if self.direct && self.rhythm {
+            RHYTHM_ACTIONS * self.legs() + 1
+        } else if self.direct {
+            self.creature.joints.len() + 1
+        } else {
+            self.creature.description.outputs() + 1
+        }
+    }
+
+    /// Each leg's phase at the start of a conducted rhythm: the legs' own rhythm's starts.
+    fn first_phases(&self) -> Vec<f32> {
+        self.creature.description.rhythm().1.to_vec()
+    }
+
+    /// The joint targets a conducted rhythm asks for now, one for each joint, after moving each leg's
+    /// phase on by a step at the pace asked.
+    fn conduct(&mut self, world: &World, actions: &[f32]) -> [f32; 8] {
+        if self.phases.len() != self.legs() {
+            self.phases = self.first_phases();
+        }
+        let pace = self.creature.description.rhythm().0;
+        let mut targets = [0.0; 8];
+        for leg in 0..self.legs() {
+            let a = &actions[RHYTHM_ACTIONS * leg..RHYTHM_ACTIONS * (leg + 1)];
+            let phase = &mut self.phases[leg];
+            *phase += STEP * pace * (1.0 + RHYTHM_PACE * clamp(a[0], -1.0, 1.0));
+            if *phase >= 1.0 {
+                *phase -= 1.0;
+            }
+            let (s, c) = crate::math::sin_cos(2.0 * crate::math::PI * *phase);
+            let (hip, knee) = (&world.joints[self.creature.joints[2 * leg] as usize], &world.joints[self.creature.joints[2 * leg + 1] as usize]);
+            let swing = RHYTHM_HIP * 0.5 * (clamp(a[2], -1.0, 1.0) + 1.0);
+            let lift = RHYTHM_KNEE * 0.5 * (clamp(a[4], -1.0, 1.0) + 1.0);
+            // the hip swings forward while the cosine is above nothing, and the knee lifts the foot then
+            targets[2 * leg] = clamp(toward(a[1], hip.lower, STAND_HIP, hip.upper) + swing * s, hip.lower, hip.upper);
+            targets[2 * leg + 1] = clamp(toward(a[3], knee.lower, STAND_KNEE, knee.upper) - lift * c.max(0.0), knee.lower, knee.upper);
+        }
+        targets
     }
 
     /// Whether a foot is on something.
@@ -128,12 +195,20 @@ impl Body {
         let walking = self.actions() - 1;
         if self.direct {
             // each action from -1 to 1 is an angle from the joint's lower limit to its upper
-            if self.aims.len() != walking {
+            if self.aims.len() != self.creature.joints.len() {
                 self.aims = self.creature.joints.iter().map(|&joint| world.joints[joint as usize].angle(&world.bodies)).collect();
             }
-            for i in 0..walking {
+            let conducted = if self.rhythm { self.conduct(world, actions) } else { [0.0; 8] };
+            for i in 0..self.creature.joints.len() {
                 let joint = &world.joints[self.creature.joints[i] as usize];
-                let wanted = joint.lower + 0.5 * (clamp(actions[i], -1.0, 1.0) + 1.0) * (joint.upper - joint.lower);
+                let middle = if i % 2 == 0 { STAND_HIP } else { STAND_KNEE };
+                let wanted = if self.rhythm {
+                    conducted[i]
+                } else if self.centre {
+                    toward(actions[i], joint.lower, middle, joint.upper)
+                } else {
+                    joint.lower + 0.5 * (clamp(actions[i], -1.0, 1.0) + 1.0) * (joint.upper - joint.lower)
+                };
                 self.aims[i] += self.ease * (wanted - self.aims[i]);
                 self.creature.aim(world, i, self.aims[i]);
                 let joint = &mut world.joints[self.creature.joints[i] as usize];
@@ -190,9 +265,15 @@ impl Body {
 
     /// How many numbers it feels of itself (`feel`): its body's angle, spin and speed forward and
     /// up; each joint's angle and speed; each foot on something or not; the rhythm's sine and
-    /// cosine; and whether it is hopping and whether it can hop.
+    /// cosine (each leg's, when it conducts a rhythm); and whether it is hopping and whether it can
+    /// hop.
     pub fn feelings(&self) -> usize {
-        4 + 2 * self.creature.joints.len() + self.legs() + 2 + 2
+        4 + 2 * self.creature.joints.len() + self.legs() + self.rhythms() + 2
+    }
+
+    /// How many numbers it feels of its rhythm.
+    fn rhythms(&self) -> usize {
+        if self.direct && self.rhythm { 2 * self.legs() } else { 2 }
     }
 
     /// What it feels of itself, written into `into`, `feelings()` long, each about one at most.
@@ -213,10 +294,26 @@ impl Body {
             into[at] = if world.bodies[leg.lower as usize].touching { 1.0 } else { 0.0 };
             at += 1;
         }
-        let (s, c) = crate::math::sin_cos(2.0 * crate::math::PI * self.creature.phase(world));
-        into[at] = s;
-        into[at + 1] = c;
-        into[at + 2] = if matches!(self.hop, Hop::Crouch(_) | Hop::Spring(_)) { 1.0 } else { 0.0 };
-        into[at + 3] = if self.hop == Hop::Ready { 1.0 } else { 0.0 };
+        if self.rhythms() == 2 {
+            let (s, c) = crate::math::sin_cos(2.0 * crate::math::PI * self.creature.phase(world));
+            into[at] = s;
+            into[at + 1] = c;
+        } else {
+            let first;
+            let phases = if self.phases.len() == self.legs() {
+                &self.phases
+            } else {
+                first = self.first_phases();
+                &first
+            };
+            for (k, &phase) in phases.iter().enumerate() {
+                let (s, c) = crate::math::sin_cos(2.0 * crate::math::PI * phase);
+                into[at + 2 * k] = s;
+                into[at + 2 * k + 1] = c;
+            }
+        }
+        at += self.rhythms();
+        into[at] = if matches!(self.hop, Hop::Crouch(_) | Hop::Spring(_)) { 1.0 } else { 0.0 };
+        into[at + 1] = if self.hop == Hop::Ready { 1.0 } else { 0.0 };
     }
 }

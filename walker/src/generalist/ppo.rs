@@ -82,6 +82,16 @@ pub struct Settings {
     pub spread_start: f32,
     /// Whether rewards are divided by the running spread of what they add up to.
     pub scale_rewards: bool,
+    /// Memory neurons: how many numbers the policy keeps from one decision to the next. Each is
+    /// written by an action of its own, drawn as the others are, so that PPO learns what to keep as it
+    /// learns what to do, with no gradient through time (Peshkin, Meuleau and Kaelbling, "Learning
+    /// policies with external memory", 1999); memory k moves `1 / (2 + 2k)` of the way to what is
+    /// written each decision, so the first follows quickly and the last keeps about a second. It is
+    /// sensed with the rest and starts at nothing in every run.
+    pub memory: usize,
+    /// How strongly the policy is taught to act in a body's mirror image as it acts, mirrored
+    /// (`Mirror`), where the task gives one: 0 not at all.
+    pub mirror: f32,
 }
 
 impl Default for Settings {
@@ -105,6 +115,8 @@ impl Default for Settings {
             most_norm: 0.5,
             spread_start: -1.0,
             scale_rewards: true,
+            mirror: 0.0,
+            memory: 0,
         }
     }
 }
@@ -174,6 +186,26 @@ impl Running {
     }
 }
 
+/// A body's mirror image: its left and right legs swapped. For each sense, which sense it is taken
+/// from in the mirror image and whether its sign turns over; for each action, which action it is
+/// taken from. A body that is the same both ways round should act in the mirror image as it acts,
+/// mirrored (Yu, Turk and Liu, "Learning Symmetric and Low-energy Locomotion", 2018): a quarter of
+/// each minibatch is also run mirrored, and the difference between the two, squared, is a loss.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Mirror {
+    pub senses: Vec<(u32, f32)>,
+    pub actions: Vec<u32>,
+}
+
+impl Mirror {
+    /// `from`'s senses, mirrored, into `into`.
+    pub fn senses(&self, from: &[f32], into: &mut [f32]) {
+        for (into, &(k, sign)) in into.iter_mut().zip(&self.senses) {
+            *into = sign * from[k as usize];
+        }
+    }
+}
+
 /// How the last update went, for a reader.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Report {
@@ -185,6 +217,8 @@ pub struct Report {
     pub clipped: f32,
     /// The average spread of the actions.
     pub spread: f32,
+    /// The mirror's loss: how unlike the policy is both ways round, weighed.
+    pub symmetry: f32,
 }
 
 /// Half the log of two pi, which every bell curve's log chance carries.
@@ -194,6 +228,7 @@ const SENSE_LIMIT: f32 = 10.0;
 
 pub struct Learner {
     pub settings: Settings,
+    /// What the task senses and does; the policy also senses and writes its memory after these.
     pub senses: usize,
     pub actions: usize,
     /// Creatures acting together.
@@ -249,6 +284,17 @@ pub struct Learner {
     /// Decisions made by all the creatures together.
     pub decisions: u64,
     pub report: Report,
+    /// The body's mirror image, if the policy is taught to act alike both ways round
+    /// (`Settings::mirror`).
+    pub mirror: Option<Mirror>,
+    mirrored_now: Vec<f32>,
+    /// Each creature's memory, the policy's input with what it senses, and the actions the task is
+    /// given (the policy's, without the writing of memory).
+    held: Vec<f32>,
+    joined: Vec<f32>,
+    doing: Vec<f32>,
+    /// The memory of each creature acting without drawing (`act_as`), the first for the show.
+    acted_memory: Vec<f32>,
 }
 
 impl Learner {
@@ -256,10 +302,11 @@ impl Learner {
     /// drawn from `seed`.
     pub fn new(settings: Settings, senses: usize, actions: usize, count: usize, seed: u64) -> Learner {
         let s = settings;
-        let mut sizes = vec![senses];
+        let (inputs, outputs) = (senses + s.memory, actions + s.memory);
+        let mut sizes = vec![inputs];
         sizes.extend(core::iter::repeat_n(s.hidden, s.layers));
         let trunk = Net::new(&sizes, s.squash, s.squash);
-        let head = Net::new(&[s.hidden, actions], s.squash, Squash::Plain);
+        let head = Net::new(&[s.hidden, outputs], s.squash, Squash::Plain);
         let value_trunk = (!s.shared).then(|| trunk.clone());
         let value_head = Net::new(&[s.hidden, 1], s.squash, Squash::Plain);
         let mut at = [0; 5];
@@ -267,7 +314,7 @@ impl Learner {
         at[2] = at[1] + head.weights();
         at[3] = at[2] + value_trunk.as_ref().map_or(0, Net::weights);
         at[4] = at[3] + value_head.weights();
-        let total = at[4] + actions;
+        let total = at[4] + outputs;
         let mut random = Random::new(seed);
         let mut weights = vec![0.0; total];
         // hidden layers at a gain of the square root of two, the policy's last layer small so it starts
@@ -291,7 +338,7 @@ impl Learner {
             acting: works(count),
             training: works(minibatch),
             showing: [trunk.work(1), head.work(1)],
-            shown_input: vec![0.0; senses],
+            shown_input: vec![0.0; inputs],
             trunk,
             head,
             value_trunk,
@@ -309,8 +356,8 @@ impl Learner {
             reward_scale: 1.0,
             random,
             now: vec![0.0; count * senses],
-            seen: vec![0.0; samples * senses],
-            taken: vec![0.0; samples * actions],
+            seen: vec![0.0; samples * inputs],
+            taken: vec![0.0; samples * outputs],
             chances: vec![0.0; samples],
             values: vec![0.0; samples + count],
             cut_values: vec![0.0; samples],
@@ -322,15 +369,75 @@ impl Learner {
             adding: vec![0.0; count],
             step_rewards: vec![0.0; count],
             step_ends: vec![0; count],
-            actions_now: vec![0.0; count * actions],
+            actions_now: vec![0.0; count * outputs],
             order: (0..samples as u32).collect(),
-            batch_in: vec![0.0; minibatch.max(count) * senses],
+            batch_in: vec![0.0; minibatch.max(count) * inputs],
             blame_hidden: vec![0.0; minibatch.max(count) * s.hidden],
             blame_value: vec![0.0; minibatch.max(count) * s.hidden],
             updates: 0,
             decisions: 0,
             report: Report::default(),
+            mirror: None,
+            mirrored_now: Vec::new(),
+            held: vec![0.0; count * s.memory],
+            joined: vec![0.0; count * inputs],
+            doing: vec![0.0; count * actions],
+            acted_memory: vec![0.0; s.memory],
         }
+    }
+
+    /// How many numbers the policy takes in (what is sensed, then its memory) and gives out (the
+    /// actions, then what it writes to memory).
+    pub fn inputs(&self) -> usize {
+        self.senses + self.settings.memory
+    }
+
+    pub fn outputs(&self) -> usize {
+        self.actions + self.settings.memory
+    }
+
+    /// `rows` of what was sensed, rescaled, joined each with its memory, into `joined`.
+    fn join(&self, sensed: &[f32], memory: &[f32], joined: &mut [f32]) {
+        let (s, m) = (self.senses, self.settings.memory);
+        for (r, row) in joined.chunks_exact_mut(s + m).enumerate() {
+            row[..s].copy_from_slice(&sensed[r * s..(r + 1) * s]);
+            row[s..].copy_from_slice(&memory[r * m..(r + 1) * m]);
+        }
+    }
+
+    /// Moves a memory toward what was written to it, each part at its own pace.
+    fn remember(memory: &mut [f32], written: &[f32]) {
+        for (k, (kept, &write)) in memory.iter_mut().zip(written).enumerate() {
+            *kept += (clamp(write, -1.0, 1.0) - *kept) / (2.0 + 2.0 * k as f32);
+        }
+    }
+
+    /// Forgets what every creature acting without drawing has kept, for runs starting again.
+    pub fn forget(&mut self) {
+        self.acted_memory.fill(0.0);
+    }
+
+    /// Teaches the policy to act alike both ways round, from the next rollout on: a quarter of each
+    /// minibatch is run again mirrored, and how unlike the two are is a loss. What is sensed is taken
+    /// in both ways round too, so the rescaling is the same both ways round and a rescaled sense can
+    /// be mirrored as it is.
+    pub fn with_mirror(&mut self, mirror: Mirror) {
+        assert!(mirror.senses.len() == self.senses && mirror.actions.len() == self.actions);
+        let mut mirror = mirror;
+        // memory is the same both ways round
+        mirror.senses.extend((self.senses..self.inputs()).map(|k| (k as u32, 1.0)));
+        mirror.actions.extend(self.actions as u32..self.outputs() as u32);
+        self.mirrored_now = vec![0.0; self.count * self.senses];
+        let rows = self.minibatch() + self.minibatch() / 4;
+        self.training = [self.trunk.work(rows), self.head.work(rows), self.training[2].clone(), self.training[3].clone()];
+        self.batch_in = vec![0.0; rows.max(self.count) * self.inputs()];
+        self.blame_hidden = vec![0.0; rows.max(self.count) * self.settings.hidden];
+        self.mirror = Some(mirror);
+    }
+
+    /// How many of each minibatch's samples are run mirrored too.
+    fn pairs(&self) -> usize {
+        if self.mirror.is_some() { self.minibatch() / 4 } else { 0 }
     }
 
     /// Samples in a rollout, and in a minibatch.
@@ -376,45 +483,62 @@ impl Learner {
     /// Collects a rollout: every creature acts `steps` times, drawing each action from the policy.
     /// Then works out each decision's advantage and the return the value should have guessed.
     pub fn collect(&mut self, task: &mut impl Task) {
-        let (n, s, a, steps) = (self.count, self.senses, self.actions, self.settings.steps);
+        let (n, s, steps) = (self.count, self.senses, self.settings.steps);
+        let (a, m, wide, outs) = (self.actions, self.settings.memory, self.inputs(), self.outputs());
         let (gamma, lambda) = (self.settings.gamma, self.settings.lambda);
         self.rollout_sensed.clear();
         self.rollout_returned.clear();
         let mut works = core::mem::replace(&mut self.acting, [Work::empty(), Work::empty(), Work::empty(), Work::empty()]);
         let spreads: Vec<f32> = self.weights[self.at[4]..].iter().map(|&log| exp(log)).collect();
+        let mut joined = core::mem::take(&mut self.joined);
         for t in 0..steps {
             for row in self.now.chunks_exact(s) {
                 self.rollout_sensed.add(row);
             }
+            if let Some(mirror) = &self.mirror {
+                // the mirror image is sensed too, so the rescaling is the same both ways round
+                for (row, into) in self.now.chunks_exact(s).zip(self.mirrored_now.chunks_exact_mut(s)) {
+                    mirror.senses(row, into);
+                }
+                for row in self.mirrored_now.chunks_exact(s) {
+                    self.rollout_sensed.add(row);
+                }
+            }
             let mut input = core::mem::take(&mut self.now);
             self.rescale(&mut input);
-            self.seen[t * n * s..(t + 1) * n * s].copy_from_slice(&input);
-            self.trunk.forward(&self.weights[..self.at[1]], &input, n, &mut works[0]);
+            self.join(&input, &self.held, &mut joined);
+            self.seen[t * n * wide..(t + 1) * n * wide].copy_from_slice(&joined);
+            self.trunk.forward(&self.weights[..self.at[1]], &joined, n, &mut works[0]);
             let (from, to) = two(&mut works, 0, 1);
             self.head.forward(&self.weights[self.at[1]..self.at[2]], from.output(), n, to);
             for i in 0..n {
                 let mut chance = 0.0;
-                for k in 0..a {
+                for k in 0..outs {
                     let noise = self.bell();
-                    let middle = works[1].output()[i * a + k];
-                    self.actions_now[i * a + k] = middle + spreads[k] * noise;
+                    let middle = works[1].output()[i * outs + k];
+                    self.actions_now[i * outs + k] = middle + spreads[k] * noise;
                     chance += -0.5 * noise * noise - self.weights[self.at[4] + k] - HALF_LOG_TAU;
                 }
                 self.chances[t * n + i] = chance;
+                self.doing[i * a..(i + 1) * a].copy_from_slice(&self.actions_now[i * outs..i * outs + a]);
             }
-            self.value_forward(&input, n, &mut works);
+            self.value_forward(&joined, n, &mut works);
             for i in 0..n {
                 self.values[t * n + i] = works[3].output()[i];
             }
             self.now = input;
-            self.taken[t * n * a..(t + 1) * n * a].copy_from_slice(&self.actions_now);
-            task.step(&self.actions_now, &mut self.now, &mut self.step_rewards, &mut self.step_ends, &mut self.last);
+            self.taken[t * n * outs..(t + 1) * n * outs].copy_from_slice(&self.actions_now);
+            task.step(&self.doing, &mut self.now, &mut self.step_rewards, &mut self.step_ends, &mut self.last);
             self.decisions += n as u64;
+            for i in 0..n {
+                Self::remember(&mut self.held[i * m..(i + 1) * m], &self.actions_now[i * outs + a..(i + 1) * outs]);
+            }
             if self.step_ends.contains(&CUT) {
                 let mut last = core::mem::take(&mut self.last);
                 self.rescale(&mut last);
-                self.trunk.forward(&self.weights[..self.at[1]], &last, n, &mut works[0]);
-                self.value_forward(&last, n, &mut works);
+                self.join(&last, &self.held, &mut joined);
+                self.trunk.forward(&self.weights[..self.at[1]], &joined, n, &mut works[0]);
+                self.value_forward(&joined, n, &mut works);
                 for i in 0..n {
                     self.cut_values[t * n + i] = works[3].output()[i];
                 }
@@ -426,6 +550,7 @@ impl Learner {
                 self.rollout_returned.add(&[self.adding[i]]);
                 if self.step_ends[i] != GOING {
                     self.adding[i] = 0.0;
+                    self.held[i * m..(i + 1) * m].fill(0.0);
                 }
                 self.rewards[t * n + i] = reward * self.reward_scale;
                 self.ends[t * n + i] = self.step_ends[i];
@@ -434,11 +559,13 @@ impl Learner {
         // the value of where each creature is now, to guess what comes after the rollout
         let mut input = self.now.clone();
         self.rescale(&mut input);
-        self.trunk.forward(&self.weights[..self.at[1]], &input, n, &mut works[0]);
-        self.value_forward(&input, n, &mut works);
+        self.join(&input, &self.held, &mut joined);
+        self.trunk.forward(&self.weights[..self.at[1]], &joined, n, &mut works[0]);
+        self.value_forward(&joined, n, &mut works);
         for i in 0..n {
             self.values[steps * n + i] = works[3].output()[i];
         }
+        self.joined = joined;
         self.acting = works;
         // generalised advantage estimation, from the end back
         for i in 0..n {
@@ -497,13 +624,22 @@ impl Learner {
 
     /// The gradient of the loss over minibatch `which` of the shuffled rollout, into `grads`.
     pub fn gradient(&mut self, which: usize) {
-        let (s, a, h) = (self.senses, self.actions, self.settings.hidden);
+        let (s, a, h) = (self.inputs(), self.outputs(), self.settings.hidden);
         let batch = self.minibatch();
         let set = self.settings;
         let picks: Vec<usize> = self.order[which * batch..(which + 1) * batch].iter().map(|&k| k as usize).collect();
         for (r, &k) in picks.iter().enumerate() {
             self.batch_in[r * s..(r + 1) * s].copy_from_slice(&self.seen[k * s..(k + 1) * s]);
         }
+        // the first few samples again, mirrored, after the rest
+        let pairs = self.pairs();
+        if let Some(mirror) = &self.mirror {
+            let (ours, theirs) = self.batch_in.split_at_mut(batch * s);
+            for p in 0..pairs {
+                mirror.senses(&ours[p * s..(p + 1) * s], &mut theirs[p * s..(p + 1) * s]);
+            }
+        }
+        let rows = batch + pairs;
         // advantages are rescaled within the minibatch to a mean of 0 and a spread of 1
         let mean = picks.iter().map(|&k| self.advantages[k]).sum::<f32>() / batch as f32;
         let spread = sqrt(picks.iter().map(|&k| (self.advantages[k] - mean) * (self.advantages[k] - mean)).sum::<f32>() / batch as f32) + 1e-8;
@@ -522,13 +658,13 @@ impl Learner {
         let (value_head_g, spread_g) = rest.split_at_mut(self.at[4] - self.at[3]);
         let spreads: Vec<f32> = log_spreads.iter().map(|&log| exp(log)).collect();
 
-        // the policy
-        self.trunk.forward(trunk_w, &input, batch, &mut works[0]);
+        // the policy, on the minibatch and the few mirrored after it
+        self.trunk.forward(trunk_w, &input, rows, &mut works[0]);
         let (from, to) = two(&mut works, 0, 1);
-        self.head.forward(head_w, from.output(), batch, to);
+        self.head.forward(head_w, from.output(), rows, to);
         let (mut policy_loss, mut moved, mut clipped) = (0.0, 0.0, 0.0);
-        let middles = works[1].output()[..batch * a].to_vec();
-        let blame = self.head.blame(&mut works[1], batch);
+        let middles = works[1].output()[..rows * a].to_vec();
+        let blame = self.head.blame(&mut works[1], rows);
         for (r, &k) in picks.iter().enumerate() {
             let advantage = (self.advantages[k] - mean) / spread;
             let mut chance = 0.0;
@@ -552,13 +688,28 @@ impl Learner {
                 spread_g[j] += slope * (z * z - 1.0);
             }
         }
+        // how unlike each mirrored sample's actions are its sample's, mirrored, squared and weighed
+        let mut symmetry = 0.0;
+        if let Some(mirror) = &self.mirror {
+            let weight = set.mirror / pairs.max(1) as f32;
+            for p in 0..pairs {
+                let (ours, theirs) = (p * a, (batch + p) * a);
+                for j in 0..a {
+                    let mine = ours + mirror.actions[j] as usize;
+                    let gap = middles[theirs + j] - middles[mine];
+                    symmetry += weight * gap * gap;
+                    blame[theirs + j] = 2.0 * weight * gap;
+                    blame[mine] -= 2.0 * weight * gap;
+                }
+            }
+        }
         // a wider spread is more entropy, which the loss rewards
         for g in spread_g.iter_mut() {
             *g -= set.entropy_weight;
         }
-        let blame_hidden = &mut self.blame_hidden[..batch * h];
+        let blame_hidden = &mut self.blame_hidden[..rows * h];
         let (from, to) = two(&mut works, 0, 1);
-        self.head.backward(head_w, from.output(), batch, to, head_g, Some(blame_hidden));
+        self.head.backward(head_w, from.output(), rows, to, head_g, Some(blame_hidden));
 
         // the value
         let mut value_loss = 0.0;
@@ -591,10 +742,10 @@ impl Learner {
                 }
             }
         }
-        self.trunk.blame(&mut works[0], batch).copy_from_slice(blame_hidden);
-        self.trunk.backward(trunk_w, &input, batch, &mut works[0], trunk_g, None);
+        self.trunk.blame(&mut works[0], rows).copy_from_slice(blame_hidden);
+        self.trunk.backward(trunk_w, &input, rows, &mut works[0], trunk_g, None);
 
-        self.report = Report { policy_loss, value_loss, moved, clipped, spread: spreads.iter().sum::<f32>() / a as f32 };
+        self.report = Report { policy_loss, value_loss, moved, clipped, spread: spreads.iter().sum::<f32>() / a as f32, symmetry };
         self.training = works;
         self.batch_in = input;
         self.weights = w;
@@ -649,18 +800,31 @@ impl Learner {
     }
 
     /// The policy's action for what one creature senses, without drawing: the middle of each curve,
-    /// kept within -1 to 1.
+    /// kept within -1 to 1. The creature on show is creature 0 (`act_as`).
     pub fn act(&mut self, senses: &[f32], into: &mut [f32]) {
+        self.act_as(0, senses, into);
+    }
+
+    /// The same for creature `i` of several acting at once, each with a memory of its own, which
+    /// `forget` clears.
+    pub fn act_as(&mut self, i: usize, senses: &[f32], into: &mut [f32]) {
+        let (s, m) = (self.senses, self.settings.memory);
+        if self.acted_memory.len() < (i + 1) * m {
+            self.acted_memory.resize((i + 1) * m, 0.0);
+        }
         let mut input = core::mem::take(&mut self.shown_input);
-        input.copy_from_slice(&senses[..self.senses]);
-        self.rescale(&mut input);
+        input[..s].copy_from_slice(&senses[..s]);
+        self.rescale(&mut input[..s]);
+        input[s..].copy_from_slice(&self.acted_memory[i * m..(i + 1) * m]);
         self.trunk.forward(&self.weights[..self.at[1]], &input, 1, &mut self.showing[0]);
         self.shown_input = input;
         let hidden = self.showing[0].output().to_vec();
         self.head.forward(&self.weights[self.at[1]..self.at[2]], &hidden, 1, &mut self.showing[1]);
-        for (out, &middle) in into.iter_mut().zip(self.showing[1].output()) {
+        let given = self.showing[1].output();
+        for (out, &middle) in into.iter_mut().zip(&given[..self.actions]) {
             *out = clamp(middle, -1.0, 1.0);
         }
+        Self::remember(&mut self.acted_memory[i * m..(i + 1) * m], &given[self.actions..]);
     }
 
     /// Everything learned, to keep: the weights, Adam's running averages, then the number of updates
@@ -710,7 +874,7 @@ impl Learner {
 
     /// The average spread of the actions now.
     pub fn spread(&self) -> f32 {
-        self.weights[self.at[4]..].iter().map(|&log| exp(log)).sum::<f32>() / self.actions as f32
+        self.weights[self.at[4]..].iter().map(|&log| exp(log)).sum::<f32>() / self.outputs() as f32
     }
 }
 
@@ -723,9 +887,9 @@ fn two(works: &mut [Work; 4], from: usize, to: usize) -> (&Work, &mut Work) {
 /// The policy, drawn: what it sensed, its hidden layers, and the middle of each action.
 impl super::mind::Drawn for Learner {
     fn columns(&self) -> Vec<usize> {
-        let mut columns = vec![self.senses];
+        let mut columns = vec![self.inputs()];
         columns.extend(core::iter::repeat_n(self.settings.hidden, self.settings.layers));
-        columns.push(self.actions);
+        columns.push(self.outputs());
         columns
     }
 
@@ -745,7 +909,7 @@ impl super::mind::Drawn for Learner {
             let layer = self.trunk.layers[column];
             self.weights[super::mind::layer_start(&self.trunk, column) + i * layer.outputs + j]
         } else {
-            self.weights[self.at[1] + i * self.actions + j]
+            self.weights[self.at[1] + i * self.outputs() + j]
         }
     }
 }

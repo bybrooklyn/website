@@ -87,6 +87,13 @@ fn main() {
             "tall" => way.shaping.tall = number != 0.0,
             "smooth" => way.shaping.smooth = number as f32,
             "fall" => way.shaping.fall = number as f32,
+            "knee" => way.shaping.knee = number as f32,
+            "upright" => way.shaping.upright = number as f32,
+            "down" => way.shaping.down = number as f32,
+            "centre" => way.centre = number != 0.0,
+            "rhythm" => way.rhythm = number != 0.0,
+            "mirror" => settings.mirror = number as f32,
+            "memory" => settings.memory = number as usize,
             _ => panic!("no setting called {name}"),
         }
     }
@@ -135,6 +142,8 @@ fn main() {
             let trained = if finished.is_empty() { 0.0 } else { finished.iter().sum::<f32>() / finished.len() as f32 };
             let idle = std::mem::take(&mut practice.worlds.idle_air) as f64 / (steps - last_steps).max(1) as f64;
             last_steps = steps;
+            let r = practice.learner.report;
+            println!("# moved {:.4} clipped {:.3} policy {:.4} value {:.4}", r.moved, r.clipped, r.policy_loss, r.value_loss);
             println!("{steps} {seconds:.1} {} {mean:.2} {trained:.2} {:.3} {:.1} {:.3} {joules:.0} {:.3} {:.0}", practice.learner.updates, practice.learner.spread(), practice.worlds.recipe.difficulty, idle, measured.idle_air, measured.joules_per_metre);
             next += every;
             if steps >= budget {
@@ -204,6 +213,7 @@ fn show(practice: &mut Practice, seed: u32) {
     let (mut sensed, mut actions, mut rewards, mut ends, mut last) = (vec![0.0; senses], vec![0.0; wide], vec![0.0; 1], vec![0u8; 1], vec![0.0; senses]);
     worlds.observe(&mut sensed);
     let mut decisions = 0;
+    practice.learner.forget();
     println!("# seconds  x  height  feet  idle-air  hop  actions");
     while worlds.going(0) {
         practice.learner.act(&sensed, &mut actions);
