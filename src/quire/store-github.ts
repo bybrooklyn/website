@@ -76,6 +76,15 @@ function fromBase64(text: string): Uint8Array {
     return Uint8Array.from(atob(text.replace(/\s+/g, "")), (char) => char.charCodeAt(0));
 }
 
+/** A file's bytes as text, refused if they are not UTF-8: read with replacement characters, saving would write those back over what it held. */
+export function utf8(bytes: Uint8Array, path: string): string {
+    try {
+        return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    } catch {
+        throw new StoreError(`${path} is not UTF-8 text, and saving it here would change it, so it is not opened`);
+    }
+}
+
 /** The store over a repository. `fetcher` is the network, given so that tests can stand in for GitHub. */
 export function githubStore(settings: GithubSettings, fetcher: Fetcher = (url, init) => fetch(url, init)): Store {
     const folder = folderPath(settings.folder);
@@ -116,7 +125,7 @@ export function githubStore(settings: GithubSettings, fetcher: Fetcher = (url, i
             if (!blob.ok) throw new StoreError(`GitHub answered ${blob.status}`);
             bytes = fromBase64(((await blob.json()) as { content: string }).content);
         }
-        return { text: new TextDecoder().decode(bytes), sha: file.sha };
+        return { text: utf8(bytes, path), sha: file.sha };
     }
 
     async function put(path: string, bytes: Uint8Array, message: string, sha?: string): Promise<{ status: number; sha?: string; message?: string }> {

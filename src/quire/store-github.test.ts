@@ -5,6 +5,7 @@
 // of any address but api.github.com, always with the token. Run with `bun test src/quire`.
 
 import { expect, test } from "bun:test";
+import { folderStore, memoryFolder } from "./store-folder";
 import { folderPath, forgetSettings, githubStore, keepSettings, readSettings, repository, SETTINGS_KEY, type GithubSettings } from "./store-github";
 
 const SETTINGS: GithubSettings = { owner: "someone", repo: "site", branch: "main", folder: "src/content/blog", pictures: "src/assets/blog", token: "test-token-not-real" };
@@ -211,4 +212,12 @@ test("a title with a slash, spaces or dots is made a plain file name in the fold
     expect(made.id).toBe("src/content/blog/why-a-b-tests.md");
     expect(await store.rename(made.id, "../../Up and out")).toBe("src/content/blog/up-and-out.md");
     expect(await store.rename("src/content/blog/first.mdx", "First again")).toBe("src/content/blog/first-again.mdx");
+});
+
+test("a file that is not UTF-8 is refused rather than opened with replacement characters that saving would write back", async () => {
+    const latin = new Uint8Array([0x43, 0x61, 0x66, 0xe9, 0x0a]);
+    const store = githubStore(SETTINGS, async () => new Response(JSON.stringify({ sha: "s", encoding: "base64", content: btoa(String.fromCharCode(...latin)), size: 5 }), { status: 200 }));
+    expect(await store.open("old.md").then(() => "", String)).toContain("old.md is not UTF-8 text");
+    const folder = folderStore(memoryFolder("site", { "old.md": new Blob([latin]) }));
+    expect(await folder.open("old.md").then(() => "", String)).toContain("old.md is not UTF-8 text");
 });

@@ -12,6 +12,7 @@
 import { isQuire, packQuire, pictureShelf, unpackQuire, type Parts } from "./quire-file";
 import { besideDocument, fileName, freeName, type Opened, type Store, StoreError } from "./store";
 import { openable } from "./store-files";
+import { utf8 } from "./store-github";
 
 /** The part of a file handle the store uses. */
 export interface FileHandle {
@@ -45,7 +46,7 @@ const SKIPPED = /^(\.|node_modules$|dist$|build$)/;
 
 /** What a file holds, as a store opens it: a `.quire` file unpacked, its pictures put on the shelf. */
 async function readFile(file: Blob & { lastModified: number; size: number }, id: string, shelf: ReturnType<typeof pictureShelf>, keep = true): Promise<Opened> {
-    if (!isQuire(id)) return { text: await file.text(), mark: markOf(file) };
+    if (!isQuire(id)) return { text: utf8(new Uint8Array(await file.arrayBuffer()), id), mark: markOf(file) };
     const bundle = await unpackQuire(new Uint8Array(await file.arrayBuffer()));
     if (keep) shelf.set(id, bundle.pictures);
     return { text: bundle.markdown, mark: markOf(file), quire: bundle.parts };
