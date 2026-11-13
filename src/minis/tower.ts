@@ -9,7 +9,6 @@ import { apply, cube, diamond, normals, pyramid, ten, twelve, twenty, type Mesh,
 export type Sides = 4 | 6 | 8 | 10 | 12 | 20;
 export const SIDES: Sides[] = [4, 6, 8, 10, 12, 20];
 
-/** How big a die is beside the tower. */
 /**
  * How big each die is: the distance from its middle to a corner, in millimetres, as in an ordinary set
  * (a 16 mm cube, a twenty-sided die 20 mm from face to face, and the rest to match), and how many of
@@ -32,7 +31,7 @@ export type Tray = { left: number; right: number; deep: number; rim: number };
 /** The tray for this many dice: the usual one for a handful, longer and deeper for a crowd, so that each die has room to lie flat. */
 export const trayFor = (count: number): Tray => ({ ...TRAY, right: TRAY.right + Math.max(0, count - 20) * 0.11, deep: Math.max(TRAY.deep, 2.4 + count / 30) });
 /** How high the opening at the foot of the tower is. */
-export const OPENING = 4.2;
+const OPENING = 4.2;
 /** How thick a wall or a ramp is. */
 export const THICK = 0.16;
 
@@ -108,7 +107,6 @@ export interface Throw {
     values(): number[];
 }
 
-/** How much the dice and the tower rub, and how much of its speed a die keeps when it hits something. */
 /**
  * How a throw goes. `rub` is how much the dice and the tower grip each other and `floor` how much the
  * tray's felt does; `bounce` is how much of its speed a die keeps when it hits something; `spin` is the
@@ -116,10 +114,12 @@ export interface Throw {
  * quickly that dies away. With these a die makes about eight whole turns on its way to rest, and never
  * fewer than three.
  */
-export const TUNE = { rub: 0.4, bounce: 0.5, spin: 30, damp: 0.03, floor: 2, apart: 1.4, push: 1 };
+const TUNE = { rub: 0.4, bounce: 0.5, spin: 30, damp: 0.03, floor: 2, apart: 1.4, push: 1 };
 
 /** How long after one die the next is let into the tower, in seconds. A stream goes down the ramps where a stack would wedge. */
 const BETWEEN = 0.11;
+/** How long past its turn a die waits for the top of the tower to be clear before it is let in anyway, in seconds. */
+const STUCK = 3;
 
 /** Lets these dice into the top of the tower one after another, each turned and spun its own way. `random` gives numbers from 0 to 1. */
 export function throwDice(kinds: Sides[], random: () => number = Math.random): Throw {
@@ -158,9 +158,11 @@ export function throwDice(kinds: Sides[], random: () => number = Math.random): T
         tray,
         slabs: still,
         step(dt) {
-            // the next die goes in once its turn has come and the one before has fallen clear of where it starts
+            // the next die goes in once its turn has come and the one before has fallen clear of where it starts;
+            // or, if one has stayed there, after a long wait all the same, so that the roll can still end
             const [next, start] = [dice[gone], starts[gone]];
-            if (next && start && waited >= gone * BETWEEN && dice.every((die) => die.waiting || Math.hypot(die.body.p[0] - start[0], die.body.p[1] - start[1], die.body.p[2] - start[2]) > 1.5)) {
+            const clear = () => dice.every((die) => die.waiting || Math.hypot(die.body.p[0] - start![0], die.body.p[1] - start![1], die.body.p[2] - start![2]) > 1.5);
+            if (next && start && waited >= gone * BETWEEN && (waited >= gone * BETWEEN + STUCK || clear())) {
                 next.waiting = false;
                 next.body.p = start;
                 space.wake(next.body);

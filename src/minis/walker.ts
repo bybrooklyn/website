@@ -39,6 +39,7 @@ import {
     heightAt,
     lengthName,
     linkParts,
+    linkedSetup,
     machine,
     oldLink,
     presetOf,
@@ -76,7 +77,7 @@ export default function walker(m: Mote): Scene {
     // opened from a link to a walker: its setup and its trained brain
     const linked = fromLink((name) => m.link.get(name));
     let brainToLoad: Float32Array | undefined;
-    if (linked) [setup, brainToLoad] = [{ ...linked.setup, ground: setup.goal === COURSE_GOAL ? setup.ground : linked.setup.ground }, linked.brain];
+    if (linked) [setup, brainToLoad] = [linkedSetup(setup, linked.setup), linked.brain];
 
     let engine: Engine | undefined;
     let worker: Worker | undefined;
@@ -88,6 +89,8 @@ export default function walker(m: Mote): Scene {
     let made: Order | undefined;
     /** Training on this thread instead, where a worker could not be started. */
     let here = false;
+    /** The engine could not be loaded on this page. */
+    let unloaded = false;
     let id = 0;
     /** The ground the walk on screen is on, from its start, and what makes more of it. */
     let terrain = new Terrain(groundOf(setup));
@@ -143,8 +146,14 @@ export default function walker(m: Mote): Scene {
             engine.create(setup.legs, POPULATION, 0, seed, setup.hidden, setup.layers, setup.memory, setup.goal, setup.length);
             write(engine, engine.ground_room(beginning.length / 4), beginning);
             engine.ground_set(beginning.length / 4);
-            if (brain) take(brain);
+            if (brain && !take(brain)) {
+                // a link's brain that is the wrong size for its body is not loaded here or in the workers, and the notice says so
+                brain = undefined;
+                notice = { text: "That link's brain does not fit its walker, so learning starts fresh.", until: m.time + 7 };
+            }
             engine.show_reset();
+            // shown small in a list, nothing learns: a walker as it is before learning tries its legs, and tries again
+            if (m.preview) shown = true;
             // the worker starts from the same seed, so its first generation is this one
             if (showCrowd) engine.crowd_reset();
             if (live()) {
@@ -162,14 +171,15 @@ export default function walker(m: Mote): Scene {
         m.wake();
     };
 
-    /** Puts a brain on screen. The engine scores it on loading, by the run the screen will show. */
-    const take = (brain: Float32Array) => {
-        if (!engine || brain.length !== engine.weights_length()) return;
+    /** Puts a brain on screen, if it fits the body. The engine scores it on loading, by the run the screen will show. */
+    const take = (brain: Float32Array): boolean => {
+        if (!engine || brain.length !== engine.weights_length()) return false;
         write(engine, engine.weights_room(), brain);
         engine.weights_load();
         fresh();
         // the furthest a best brain has gone, which never goes down while the setup stays the same
         [shown, distance] = [true, Math.max(distance, engine.best_distance())];
+        return true;
     };
 
     const hear = (report: Report) => {
@@ -223,24 +233,41 @@ export default function walker(m: Mote): Scene {
         begin();
     };
 
-    try {
-        worker = hire();
-        worker.onmessage = (event: MessageEvent<Report>) => hear(event.data);
-        worker.onerror = () => trainHere();
-        staff(workersFor(effort, machine()) - 1);
-    } catch {
-        here = true;
+    // A preview in the list of minis hires no workers and trains nothing, here or anywhere.
+    if (m.preview) setup = { ...setup, way: "generation" };
+    else {
+        try {
+            worker = hire();
+            worker.onmessage = (event: MessageEvent<Report>) => hear(event.data);
+            worker.onerror = () => trainHere();
+            staff(workersFor(effort, machine()) - 1);
+        } catch {
+            here = true;
+        }
     }
 
     void fetch(engineAddress())
-        .then((answer) => answer.arrayBuffer())
+        .then((answer) => {
+            if (!answer.ok) throw new Error(`The engine could not be fetched: ${answer.status}.`);
+            return answer.arrayBuffer();
+        })
         .then(startEngine)
-        .then((made) => {
-            engine = made;
-            // with ?debug in the address, the engine can be reached from the console, to measure the walker on screen
-            if (m.debug) Object.assign(globalThis, { walkerEngine: made, walkerWorkers: () => (worker ? helpers.length + 1 : 0) });
-            begin(brainToLoad);
-        });
+        .then(
+            (made) => {
+                engine = made;
+                // with ?debug in the address, the engine can be reached from the console, to measure the walker on screen
+                if (m.debug) Object.assign(globalThis, { walkerEngine: made, walkerWorkers: () => (worker ? helpers.length + 1 : 0) });
+                begin(brainToLoad);
+            },
+            () => {
+                // offline, blocked or missing: nothing can be drawn, so the workers are let go and the visitor is told
+                staff(0);
+                worker?.terminate();
+                worker = undefined;
+                unloaded = true;
+                changed();
+            },
+        );
 
     /** Starts the latest generation from the start, beside the best as it starts again. */
     const crowd = () => {
@@ -311,10 +338,17 @@ export default function walker(m: Mote): Scene {
             return { block, shut, open: () => block.classList.contains("open") };
         };
         const describe = () => `${setup.legs} leg${setup.legs === 1 ? "" : "s"}, ${doing()}${setup.goal === COURSE_GOAL ? "" : `, on ${setup.ground.kind === "flat" ? "flat ground" : setup.ground.kind}`}, ${lengthName(setup.length)}`;
+        /**
+         * Sets one part of the address, only if it changes: each change is a `history.replaceState`, and
+         * Safari throws after a hundred of those in thirty seconds, which ten parts a change soon reach.
+         */
+        const link = (name: string, value: string | null) => {
+            if (m.link.get(name) !== value) m.link.set(name, value);
+        };
         const restart = () => {
             m.keep("walker", setup, 4);
             // a link to a shared walker no longer says what is on the screen
-            for (const name of LINK_NAMES) m.link.set(name, null);
+            for (const name of LINK_NAMES) link(name, null);
             notice = { text: `Learning again from the start: ${describe()}.`, until: m.time + 5 };
             said.textContent = notice.text;
             begin();
@@ -405,9 +439,8 @@ export default function walker(m: Mote): Scene {
         const share = el("button", { type: "button", class: "walker-share", textContent: "copy link to this walker", disabled: true, onclick: () => {
             if (!engine) return;
             const brain = read(engine, live() ? engine.live_best_weights() : engine.show_weights(), engine.weights_length());
-            let address = "";
-            for (const [name, value] of linkParts(setup, brain)) address = m.link.set(name, value);
-            copyText(share, address, { rest: "copy link to this walker", done: "link copied", failed: "the link is in the address bar" });
+            for (const [name, value] of linkParts(setup, brain)) link(name, value);
+            copyText(share, location.href, { rest: "copy link to this walker", done: "link copied", failed: "the link is in the address bar" });
         } });
 
         side.append(
@@ -433,7 +466,9 @@ export default function walker(m: Mote): Scene {
             pause.textContent = paused ? "resume" : "pause";
             share.disabled = !shown || (live() && attempt < 2);
             crowdBox.disabled = live() || endless();
-            const now = !engine
+            const now = unloaded
+                ? "The walker could not be loaded. Reloading the page may help."
+                : !engine
                 ? "Loading the walker."
                 : live()
                   ? `Attempt ${attempt}, ${doing()}, furthest ${distance.toFixed(1)} m`
@@ -444,6 +479,8 @@ export default function walker(m: Mote): Scene {
                       : `Generation ${generation}, ${doing()}, furthest ${distance.toFixed(1)} m`;
             const text = m.time < notice.until && notice.text ? notice.text : `${now}${paused ? ", paused" : ""}`;
             if (status.textContent !== text) status.textContent = text;
+            // the status is hidden from a screen reader, so this one is said aloud as well
+            if (unloaded && said.textContent !== now) said.textContent = now;
         };
 
         /** A canvas sized to its box, cleared, ready to draw on in CSS pixels. */
@@ -458,16 +495,22 @@ export default function walker(m: Mote): Scene {
             return { ctx, wide, high };
         };
 
+        /** The course never changes, so its first two laps are laid out once, the first time they are drawn. */
+        const span = 240;
+        let laid: { profile: number[]; low: number; top: number } | undefined;
         drawCourse = () => {
             if (!course.open()) return;
             const drawn = ready(map);
             if (!drawn) return;
             const { ctx, wide, high } = drawn;
             // the first two laps, squeezed into the picture, each stretch in its own tone
-            const span = 240;
-            const profile = new Terrain({ kind: "course", rough: 0 }).next(span);
-            let [low, top] = [0, 0];
-            for (let i = 1; i < profile.length; i += 2) [low, top] = [Math.min(low, profile[i]!), Math.max(top, profile[i]!)];
+            if (!laid) {
+                const profile = new Terrain({ kind: "course", rough: 0 }).next(span);
+                let [low, top] = [0, 0];
+                for (let i = 1; i < profile.length; i += 2) [low, top] = [Math.min(low, profile[i]!), Math.max(top, profile[i]!)];
+                laid = { profile, low, top };
+            }
+            const { profile, low, top } = laid;
             const x = (along: number) => 4 + ((wide - 8) * along) / span;
             const y = (height: number) => high - 6 - ((high - 14) * (height - low)) / Math.max(1, top - low);
             ctx.lineWidth = 2;
@@ -876,7 +919,7 @@ export default function walker(m: Mote): Scene {
             const push = { left: [-10, 0], right: [10, 0], up: [0, 12], down: [0, -10], action: [10, 4] }[name];
             engine.show_push(x - origin, y + 0.05, push[0]!, push[1]!);
         },
-        resting: () => !m.preview && paused && !!engine && (live() || engine.show_over() === 1),
+        resting: () => unloaded || (!m.preview && paused && !!engine && (live() || engine.show_over() === 1)),
         debug: () => [`${live() ? "learning live" : here ? "training on the page" : `training in ${helpers.length + 1} worker${helpers.length ? "s" : ""}, ${effort}`}, ${generation} generations, ${runs} runs, ${ground.length / 4} pieces of ground, moved back ${origin} m`],
         draw() {
             scale = Math.max(40, Math.min(m.height / 2.9, m.width / 3.8));

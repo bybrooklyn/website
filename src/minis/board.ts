@@ -8,6 +8,7 @@
 // character is as likely as every other, whatever the board does. The balls go one after another,
 // and the password is the characters in the order they landed.
 
+import { record, whole, within } from "./checked";
 import { Flat, send, speed, type Body } from "../mote/flat";
 
 export interface Settings {
@@ -59,7 +60,7 @@ export const PEG = 11;
 export const BALL = 14;
 /** From one peg to the next along a row, and from one row to the next. */
 export const ACROSS = 60;
-export const DOWN = 52;
+const DOWN = 52;
 export const BINS = 9;
 export const WIDTH = BINS * ACROSS;
 /** Above the first row, where the balls come in, and how deep the bins are. */
@@ -71,7 +72,7 @@ const PULL = 1150;
 const PATIENCE = 14;
 
 /** How long after one ball the next is let go, in seconds: unhurried for a short password, quicker for a long one. */
-export const pace = (length: number): number => Math.max(0.16, Math.min(0.45, 9 / length));
+const pace = (length: number): number => Math.max(0.16, Math.min(0.45, 9 / length));
 
 export interface Landing {
     /** Which bin, the ball that landed in it, and the character the bin showed. */
@@ -178,4 +179,20 @@ export function drop(settings: Settings, pick: (below: number) => number = fair,
         password: () => landings.map((landing) => landing.character).join(""),
     };
     return board;
+}
+
+/** Settings kept from an earlier visit, read back as sane values inside the limits; anything missing or not of its kind is the default. */
+export function keptSettings(value: unknown): Settings {
+    const kept = record(value) ?? {};
+    const yes = (name: "lower" | "upper" | "digits" | "symbols") => (typeof kept[name] === "boolean" ? (kept[name] as boolean) : DEFAULTS[name]);
+    return {
+        length: whole(kept.length, LIMITS.length[0], LIMITS.length[1], DEFAULTS.length),
+        lower: yes("lower"),
+        upper: yes("upper"),
+        digits: yes("digits"),
+        symbols: yes("symbols"),
+        rows: whole(kept.rows, LIMITS.rows[0], LIMITS.rows[1], DEFAULTS.rows),
+        bounce: within(kept.bounce, LIMITS.bounce[0], LIMITS.bounce[1], DEFAULTS.bounce),
+        gravity: within(kept.gravity, LIMITS.gravity[0], LIMITS.gravity[1], DEFAULTS.gravity),
+    };
 }

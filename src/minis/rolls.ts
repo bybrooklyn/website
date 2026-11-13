@@ -1,6 +1,7 @@
-// What a typed roll means: "2d6+3", "4d6 drop lowest", "d20 adv", "d100".
+// What a roll written out means: "2d6+3", "4d6 drop lowest", "d20 adv", "d100".
 // Reading it and adding it up are kept apart from throwing the dice, so both can be tested.
 
+import { list, record, text } from "./checked";
 import { SIDES, type Sides } from "./tower";
 
 /** The most dice the tower takes at once. */
@@ -23,19 +24,26 @@ export interface Roll {
     dice: Sides[];
 }
 
-/** Reads a typed roll. Returns a sentence saying what is wrong if it cannot be read. */
+/** The longest roll that is read, in characters once tidied: far more than sixty dice can need, so that a link cannot hand in a megabyte. */
+const LONGEST = 500;
+
+/** A roll as it is read and kept: in small letters, with each run of spaces made one. */
+export const tidy = (text: string): string => text.toLowerCase().replace(/\s+/g, " ").trim();
+
+/** Reads a roll written out, as the buttons write it or a link carries it. Returns a sentence saying what is wrong if it cannot be read. */
 export function read(text: string): Roll | string {
-    const tidy = text.toLowerCase().replace(/\s+/g, " ").trim();
-    if (!tidy) return "Type a roll, such as 2d6+3.";
+    const written = tidy(text);
+    if (!written) return "Type a roll, such as 2d6+3.";
+    if (written.length > LONGEST) return "That roll is too long to read.";
     const groups: Group[] = [];
     let plus = 0;
     // one piece at a time: a sign, then either dice (with what to drop) or a number
     const piece = /\s*([+-])?\s*(?:(\d*)d(\d+)((?:\s*(?:drop lowest|drop highest|dl|dh|kh|kl|adv(?:antage)?|dis(?:advantage)?)\s*\d*)*)|(\d+))/y;
     let reached = 0;
-    while (reached < tidy.length) {
+    while (reached < written.length) {
         piece.lastIndex = reached;
-        const found = piece.exec(tidy);
-        if (!found || found[0].length === 0) return `I can't read "${tidy.slice(reached).trim()}".`;
+        const found = piece.exec(written);
+        if (!found || found[0].length === 0) return `I can't read "${written.slice(reached).trim()}".`;
         reached = piece.lastIndex;
         const sign = found[1] === "-" ? -1 : 1;
         if (found[5] !== undefined) {
@@ -50,8 +58,9 @@ export function read(text: string): Roll | string {
             const many = Number(amount || 1);
             if (word === "drop lowest" || word === "dl") drop = many;
             else if (word === "drop highest" || word === "dh") drop = -many;
-            else if (word === "kh") drop = count - many;
-            else if (word === "kl") drop = -(count - many);
+            // keeping more than were rolled keeps them all, rather than dropping from the other end
+            else if (word === "kh") drop = Math.max(0, count - many);
+            else if (word === "kl") drop = -Math.max(0, count - many);
             else {
                 // advantage: roll twice and keep the better; disadvantage, the worse
                 count = Math.max(count, 2);
@@ -66,6 +75,23 @@ export function read(text: string): Roll | string {
     if (dice.length === 0) return "There are no dice in that.";
     if (dice.length > MOST) return `At most ${MOST} dice at once.`;
     return { groups, plus, dice };
+}
+
+/** A roll as the history keeps it: as it was written, what each die showed, and the total. */
+export interface Rolled {
+    what: string;
+    said: string;
+    total: number;
+}
+
+/** The rolls kept from an earlier visit, read back as at most thirty sane entries; any that is not one is left out. */
+export function keptHistory(value: unknown): Rolled[] {
+    return list(value, 30, (item) => {
+        const entry = record(item);
+        const [what, said] = [text(entry?.what, LONGEST, ""), text(entry?.said, LONGEST * 8, "")];
+        const sum = entry?.total;
+        return what && said && typeof sum === "number" && Number.isFinite(sum) ? { what, said, total: sum } : undefined;
+    });
 }
 
 /** Adds a roll up from what the dice showed, in the order of `roll.dice`. */

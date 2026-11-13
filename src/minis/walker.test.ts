@@ -4,7 +4,7 @@
 // link exactly, and each kind of ground is what it says. `bun run wasm` builds it; `bun test` runs this.
 
 import { expect, test } from "bun:test";
-import { COURSE, DEFAULT_SETUP, KINDS, PRESETS, Terrain, courseAt, decode, encode, engineAddress, fromLink, hasSimd, heightAt, linkParts, oldLink, pieces, presetOf, valid, workersFor, type Engine, type Setup } from "./walking";
+import { COURSE, COURSE_GOAL, DEFAULT_SETUP, KINDS, PRESETS, Terrain, courseAt, decode, encode, engineAddress, fromLink, hasSimd, heightAt, LONGEST_BRAIN, linkParts, linkedSetup, oldLink, pieces, presetOf, valid, workersFor, type Engine, type Setup } from "./walking";
 
 const path = new URL("../../public/wasm/walker.wasm", import.meta.url);
 const scalarPath = new URL("../../public/wasm/walker-scalar.wasm", import.meta.url);
@@ -224,6 +224,11 @@ test("a brain written into a link reads back exactly, and text that is not one r
     expect(Array.from(new Uint32Array(back.buffer))).toEqual(Array.from(new Uint32Array(weights.buffer)));
     expect(decode(new URLSearchParams(`brain=${text}`).get("brain")!)).toEqual(weights);
     for (const wrong of ["", "abc", "a+b/", "%%%", encode(Float32Array.of(Number.NaN, 1))]) expect(decode(wrong)).toBeNull();
+    // the largest brain there is fits in a link, and a link far longer than any brain is not read at all
+    const largest = encode(new Float32Array(17120).fill(0.5));
+    expect(largest.length).toBeLessThanOrEqual(LONGEST_BRAIN);
+    expect(decode(largest)?.length).toBe(17120);
+    expect(decode(encode(new Float32Array(1_000_000).fill(0.5)))).toBeNull();
 
     // a trained brain taken out of the engine goes through a link and back in unchanged
     const walker = await load();
@@ -310,6 +315,15 @@ test("a whole walker, its setup and its brain, goes through a link and back unch
     expect(fromLink((name) => address.searchParams.get(name))).toBeNull();
     expect(oldLink((name) => address.searchParams.get(name))).toBe(true);
     expect(oldLink(() => null)).toBe(false);
+});
+
+test("a linked walker walks on the ground in its link, whatever goal was kept from the last visit", () => {
+    const course: Setup = { ...DEFAULT_SETUP, goal: COURSE_GOAL };
+    const steps: Setup = { ...DEFAULT_SETUP, goal: 2, ground: { kind: "steps", rough: 70 } };
+    expect(linkedSetup(course, steps).ground).toEqual({ kind: "steps", rough: 70 });
+    expect(linkedSetup(DEFAULT_SETUP, steps).ground).toEqual({ kind: "steps", rough: 70 });
+    // a link to a walker on the course keeps the visitor's own ground for when they leave the course
+    expect(linkedSetup(steps, { ...course, ground: { kind: "flat", rough: 0 } }).ground).toEqual({ kind: "steps", rough: 70 });
 });
 
 test("the show plays the best brain's run exactly as it was scored, and stops where it stopped", async () => {

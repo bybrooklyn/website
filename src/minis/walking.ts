@@ -225,7 +225,7 @@ export function valid(setup: unknown): setup is Setup {
  * Which shape of brain a link holds. It goes up whenever a brain's weights stop meaning what they
  * meant, so an old link is recognised and set aside rather than read wrongly.
  */
-export const LINK_VERSION = 5;
+const LINK_VERSION = 5;
 
 /** A walker as the parts of a link: its setup and its brain. */
 export function linkParts(setup: Setup, brain: Float32Array): [string, string][] {
@@ -256,6 +256,9 @@ export function fromLink(get: (name: string) => string | null): { setup: Setup; 
     const brain = decode(get("brain") ?? "");
     return brain && valid(setup) ? { setup, brain } : null;
 }
+
+/** The setup a link to a walker opens: the link's own, ground and all. Only for the course, which brings its own ground, is the visitor's kept ground left as it was. */
+export const linkedSetup = (kept: Setup, linked: Setup): Setup => ({ ...linked, ground: linked.goal === COURSE_GOAL ? kept.ground : linked.ground });
 
 /** The ground runs from here to there, in metres, and is level around the start, where the walker is built. */
 const BEHIND = -20;
@@ -377,9 +380,12 @@ export function encode(weights: Float32Array): string {
     return btoa(text).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
-/** The weights back from a link, or null if the text is not a whole number of them, or any is not a number. */
+/** The longest brain a link may hold, in characters. The largest brain there is (four legs, four layers of 64, eight memories) is about 91,000. */
+export const LONGEST_BRAIN = 120_000;
+
+/** The weights back from a link, or null if the text is too long, is not a whole number of them, or any is not a number. */
 export function decode(text: string): Float32Array | null {
-    if (!/^[A-Za-z0-9_-]*$/.test(text)) return null;
+    if (text.length > LONGEST_BRAIN || !/^[A-Za-z0-9_-]*$/.test(text)) return null;
     let binary: string;
     try {
         binary = atob(text.replace(/-/g, "+").replace(/_/g, "/"));

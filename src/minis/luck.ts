@@ -1,8 +1,24 @@
 // The Dice mini's luck: every number each kind of die has shown, and what that says beside what
 // chance would give. Kept apart from the scene so that it can be tested.
 
+import { record, whole } from "./checked";
+
 /** For each kind of die, by its sides: how often each of its numbers has come up. A d100 is counted by tens. */
 export type Luck = Record<string, number[]>;
+
+/** The kinds of die the tower has, by sides. */
+const KINDS = [4, 6, 8, 10, 12, 20, 100];
+
+/** Luck kept from an earlier visit, read back only as whole counts, one for each face of a real die; anything else is left out. */
+export function keptLuck(value: unknown): Luck {
+    const luck: Luck = {};
+    for (const [sides, counts] of Object.entries(record(value) ?? {})) {
+        const faces = Number(sides) === 100 ? 10 : Number(sides);
+        if (!KINDS.includes(Number(sides)) || !Array.isArray(counts) || counts.length !== faces || !counts.every((count) => typeof count === "number")) continue;
+        luck[sides] = counts.map((count: number) => whole(count, 0, 1e9, 0));
+    }
+    return luck;
+}
 
 /** What is said about one kind of die. */
 export interface Fortune {

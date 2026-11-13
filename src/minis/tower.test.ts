@@ -42,8 +42,8 @@ test("every die comes to rest in the tray inside six seconds, and is never insid
         });
     }
     expect(longest).toBeLessThan(6);
-    // A die is about 0.8 across, corner to corner. Into the tower or the tray: never more than a thirtieth of that.
-    // (a twentieth, since the dice were made to spin three times as fast and ridges were put across the ramps)
+    // A die is about 0.8 across, corner to corner. Into the tower or the tray: never more than about an eighteenth of that, 0.045
+    // (once a thirtieth, before the dice were made to spin three times as fast and ridges were put across the ramps).
     expect(deepest).toBeLessThan(0.045);
     // Into another die: two that meet spinning fast can overlap by an eighth of that for a frame or two.
     // (it was a sixteenth while the dice fell as one stack; let in one after another, a die now lands on
@@ -68,3 +68,20 @@ for (const sides of SIDES) {
         expect(Math.min(...counts)).toBeGreaterThan(0);
     }, 180_000);
 }
+
+test("a die that stays near the top of the tower does not keep the rest of the roll out for ever", () => {
+    const thrown = throwDice([6, 6, 6], seeded(5));
+    let pinned = false;
+    for (let step = 0; step < 120 * 40 && !thrown.done(); step++) {
+        thrown.step(1 / 120);
+        // the first die, once in, is held fast just under where every later die is let in
+        const [first] = thrown.dice;
+        if (!pinned && first && !first.waiting) {
+            first.body.p = [-2.4, TOWER.top + 0.6, 0];
+            thrown.space.hold(first.body);
+            pinned = true;
+        }
+    }
+    expect(thrown.dice.every((die) => !die.waiting)).toBe(true);
+    expect(thrown.done()).toBe(true);
+});

@@ -7,13 +7,16 @@
 // either side of it win for a span the level allows (wide enough to be found by hand, narrow enough
 // not to be given away), the same direction still wins a notch weaker and a notch stronger, and
 // aiming straight at the hole does not win at any strength tried.
-// If a level's tries all fail, the field is made again with fewer things in it, down to the hole
-// alone, which a straight shot always reaches; so every field handed out can be won with one shot,
-// and `solution` says how.
+// If none of a level's tries passes all of that, the nearest of them that some launch wins is handed
+// out instead (its way in too wide or a little narrow, or, last of all, won by a straight shot, which
+// the tests find in fewer than one field in twenty). Only if no try at all could be won is the field
+// made again with fewer things in it, down to the hole alone, which a straight shot always reaches;
+// so every field handed out can be won with one shot, and `solution` says how.
 //
 // A level asks for more: more stars, then pushers, then wormholes, a smaller reach for the hole,
 // stars placed across the straight way in, and a narrower span of winning directions.
 
+import { record, text, whole } from "./checked";
 import { HIGH, TURNS, WIDE, advance, fly, launch, nearest, velocity, type Field, type Gate, type Star } from "./flight";
 
 /** A launch that wins, and how much room there is around it. */
@@ -47,7 +50,8 @@ export const NARROWEST = 1.5;
 
 /** What each level asks for. It stops growing at level 12. */
 export function plan(level: number): Plan {
-    const l = Math.max(1, Math.min(12, Math.floor(level)));
+    // anything that is not a number, as from a damaged store, is level 1: a plan of NaNs could never be met
+    const l = whole(level, 1, 12, 1);
     return {
         pullers: Math.min(6, 1 + Math.floor(l / 2)),
         pushers: l < 3 ? 0 : Math.min(4, Math.floor((l - 1) / 2)),
@@ -81,6 +85,8 @@ export function numbers(seed: number): () => number {
 /** How strongly a star of a given size pulls (or a pusher pushes): its mass for each cubed unit of radius. */
 const DENSE = 380;
 const HOLE_MASS = 2.4e7;
+/** A number times itself: multiplied, not raised to a power, which a browser may round in its own way (see flight.ts). */
+const square = (n: number) => n * n;
 
 /** Lays out a field to a plan. Nothing in it is checked yet. */
 export function layout(seed: string, level: number, wanted: Plan, attempt = 0): Field {
@@ -89,16 +95,16 @@ export function layout(seed: string, level: number, wanted: Plan, attempt = 0): 
     // the start near one side and the hole well across from it; which side is chosen too
     let start = { x: between(70, 150), y: between(90, HIGH - 90) };
     let hole = { x: between(720, 920), y: between(90, HIGH - 90) };
-    while ((hole.x - start.x) ** 2 + (hole.y - start.y) ** 2 < 600 * 600) hole = { x: between(720, 920), y: between(90, HIGH - 90) };
+    while (square(hole.x - start.x) + square(hole.y - start.y) < 600 * 600) hole = { x: between(720, 920), y: between(90, HIGH - 90) };
     if (random() < 0.5) [start, hole] = [{ x: WIDE - start.x, y: start.y }, { x: WIDE - hole.x, y: hole.y }];
     const stars: Star[] = [];
     const gates: Gate[] = [];
     /** Whether a round thing of radius r at (x, y) leaves room around the start, the hole, the edges and what is already placed. */
     const free = (x: number, y: number, r: number) =>
         x > r + 30 && x < WIDE - r - 30 && y > r + 30 && y < HIGH - r - 30 &&
-        (x - start.x) ** 2 + (y - start.y) ** 2 > (r + 75) ** 2 &&
-        (x - hole.x) ** 2 + (y - hole.y) ** 2 > (r + wanted.reach + 70) ** 2 &&
-        [...stars, ...gates].every((other) => (x - other.x) ** 2 + (y - other.y) ** 2 > (r + other.radius + 45) ** 2);
+        square(x - start.x) + square(y - start.y) > square(r + 75) &&
+        square(x - hole.x) + square(y - hole.y) > square(r + wanted.reach + 70) &&
+        [...stars, ...gates].every((other) => square(x - other.x) + square(y - other.y) > square(r + other.radius + 45));
     const place = (r: number, near?: () => [number, number]): [number, number] | undefined => {
         for (let tries = 0; tries < 60; tries++) {
             const [x, y] = near ? near() : [between(r + 30, WIDE - r - 30), between(r + 30, HIGH - r - 30)];
@@ -106,7 +112,7 @@ export function layout(seed: string, level: number, wanted: Plan, attempt = 0): 
         }
         return undefined;
     };
-    const [sx, sy, long] = [hole.x - start.x, hole.y - start.y, Math.sqrt((hole.x - start.x) ** 2 + (hole.y - start.y) ** 2)];
+    const [sx, sy, long] = [hole.x - start.x, hole.y - start.y, Math.sqrt(square(hole.x - start.x) + square(hole.y - start.y))];
     for (let i = 0; i < wanted.pullers + wanted.pushers; i++) {
         const pushes = i >= wanted.pullers;
         const r = pushes ? between(15, 22) : between(17, 30);
@@ -125,7 +131,7 @@ export function layout(seed: string, level: number, wanted: Plan, attempt = 0): 
         gates.push({ x: a[0], y: a[1], radius: 19, to: gates.length + 1, pair });
         const b = place(19, () => {
             const [x, y] = [between(50, WIDE - 50), between(50, HIGH - 50)];
-            return (x - a[0]) ** 2 + (y - a[1]) ** 2 > 320 * 320 ? [x, y] : [-1000, -1000];
+            return square(x - a[0]) + square(y - a[1]) > 320 * 320 ? [x, y] : [-1000, -1000];
         });
         if (!b) {
             gates.pop();
@@ -143,13 +149,6 @@ const STRENGTHS = [8, 12, 16, 20, 24, 28, 32, 36, 40];
 /** How far the span around a win is followed each way, in half degrees: past this a way in counts as wide enough anyway. */
 const FOLLOW = 70;
 
-/**
- * Searches a field for launches that win. Gives the one with the widest span of winning directions
- * around it (the middle of that span), or undefined if none was found; and how many of the launches
- * tried won.
- */
-export const solve = (field: Field): Searched => finish(solving(field));
-
 /** What a search of a field found. */
 export interface Searched {
     solution?: Solution;
@@ -159,7 +158,7 @@ export interface Searched {
     tried: number;
 }
 
-/** Runs a search, or the making of a field, to its end at once. */
+/** Runs the making of a field to its end at once. */
 function finish<T>(work: Generator<undefined, T>): T {
     for (;;) {
         const next = work.next();
@@ -167,7 +166,12 @@ function finish<T>(work: Generator<undefined, T>): T {
     }
 }
 
-/** `solve`, a row of strength at a time: it pauses after each, so that a page can spread the work over frames. */
+/**
+ * Searches a field for launches that win, a row of strength at a time, pausing after each so that a
+ * page can spread the work over frames. Gives the one with the widest span of winning directions
+ * around it (the middle of that span), or undefined if none was found; and how many of the launches
+ * tried won.
+ */
 export function* solving(field: Field): Generator<undefined, Searched> {
     const toward = nearest(field.hole.x - field.start.x, field.hole.y - field.start.y);
     const wins = (aim: number, notches: number) => {
@@ -248,7 +252,8 @@ export function* making(seed: string, level: number): Generator<undefined, Made>
             if (fewer === 0 && (!fallback || miss < fallback.miss)) fallback = { made, miss };
         }
         if (fallback) return { ...fallback.made, tries };
-        if (empty && fewer > 20) throw new Error(`No field could be made for ${seed} at level ${level}.`);
+        // by now every level has come down to the hole alone; the bound holds whatever was asked for
+        if (fewer > 20) throw new Error(`No field could be made for ${seed} at level ${level}.`);
     }
 }
 
@@ -282,7 +287,35 @@ export interface Run {
 /** The fewest shots each field of each seed has been won in: seed, then level. */
 export type Bests = Record<string, Record<string, number>>;
 
-export const begin = (seed: string, level = 1): Run => ({ seed, level: Math.max(1, Math.floor(level)), shots: 0, total: 0, won: 0 });
+/** The furthest field a run is counted to, and the most shots: far past any played, and still exact whole numbers. */
+export const MOST_LEVEL = 1_000_000;
+const MOST_SHOTS = 1_000_000_000;
+/** The longest seed, as a link's is cut to. */
+export const LONGEST_SEED = 40;
+
+export const begin = (seed: string, level = 1): Run => ({ seed, level: whole(level, 1, MOST_LEVEL, 1), shots: 0, total: 0, won: 0 });
+
+/** A run kept from an earlier visit, read back as sane whole numbers; undefined if it has no usable seed. */
+export function keptRun(value: unknown): Run | undefined {
+    const kept = record(value);
+    const seed = text(kept?.seed, LONGEST_SEED, "");
+    if (!kept || !seed) return undefined;
+    const shots = whole(kept.shots, 0, MOST_SHOTS, 0);
+    return { seed, level: whole(kept.level, 1, MOST_LEVEL, 1), shots, total: Math.max(shots, whole(kept.total, 0, MOST_SHOTS, 0)), won: whole(kept.won, 0, MOST_LEVEL, 0) };
+}
+
+/** Kept bests read back: whole numbers of shots, for short seeds and whole levels; anything else is left out. */
+export function keptBests(value: unknown): Bests {
+    const bests: Bests = {};
+    for (const [seed, levels] of Object.entries(record(value) ?? {})) {
+        if (!seed || seed.length > LONGEST_SEED) continue;
+        for (const [level, shots] of Object.entries(record(levels) ?? {})) {
+            if (!/^\d{1,7}$/.test(level) || typeof shots !== "number" || !Number.isFinite(shots)) continue;
+            (bests[seed] ??= {})[level] = whole(shots, 0, MOST_SHOTS, 0);
+        }
+    }
+    return bests;
+}
 
 /** Every launch is a shot, whether it wins or not. */
 export const shoot = (run: Run): Run => ({ ...run, shots: run.shots + 1, total: run.total + 1 });

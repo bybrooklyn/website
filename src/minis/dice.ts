@@ -1,4 +1,4 @@
-// Dice: a dice tower. Pick dice, or type a roll, and they go in at the top,
+// Dice: a dice tower. Pick dice, or open a link to a roll, and they go in at the top,
 // tumble down the ramps as real solids and roll out into the tray. When they
 // have come to rest the eye goes up over the tray and the number each one
 // landed on lights up, lifts off its die and joins a row, sorted by kind of
@@ -6,7 +6,7 @@
 // here it is drawn, by Mote's own 3D drawing (gl.ts), with the dice to pick
 // from and a history under it. A roll can be sent as a link: ?roll=2d6+3.
 
-import { fortune, tally, type Luck } from "./luck";
+import { fortune, keptLuck, tally, type Luck } from "./luck";
 import { gl, seat, type Color, type Mark, type Part } from "../mote/gl";
 import { apply, block, cross, mix3, mixTurn, nearness, normals, paint, plus, scaled, spun, turned, upright, type Mesh, type Turn, type V3 } from "../mote/solids";
 import { sounds } from "../mote/sound";
@@ -14,7 +14,7 @@ import { turn } from "../mote/space";
 import { el, gently, toward, type Mote, type Scene } from "../mote/stage";
 import { copyText } from "../scripts/copy";
 import { still } from "../scripts/opening";
-import { MOST, lineUp, numbers, read, row, total, type Roll } from "./rolls";
+import { MOST, keptHistory, lineUp, numbers, read, row, tidy, total, type Roll } from "./rolls";
 import { SHAPES, TOWER, slabs, throwDice, trayFor, type Sides, type Slab, type Throw, type Tray } from "./tower";
 
 export const label = "A dice tower. Dice dropped in at the top tumble down its ramps into a tray.";
@@ -145,6 +145,8 @@ export default function dice(m: Mote): Scene {
     let sum: Part | undefined;
     let lined = 0;
     const sound = m.preview ? undefined : sounds(m);
+    // only tapped, never dragged: a finger that lands on the tower can still scroll the page (the stylesheet stops that for the minis that are steered)
+    m.canvas.style.touchAction = "pan-y";
     /** How far along its flight the number in this place of the row is, from 0 to 1. Each sets off a moment after the one before. */
     const flown = (place: number) => Math.max(0, Math.min(1, (lined - place * Math.min(0.12, FLIGHT / lifted.length)) / FLIGHT));
     const lastIn = () => FLIGHT + (lifted.length - 1) * Math.min(0.12, FLIGHT / Math.max(1, lifted.length));
@@ -186,9 +188,10 @@ export default function dice(m: Mote): Scene {
     fit();
 
     // ---- what is kept between visits: the last rolls ----
-    let history = m.recall<{ what: string; said: string; total: number }[]>("dice", []);
+    // read back only as sane entries: a damaged store would otherwise stop the whole mini starting
+    let history = keptHistory(m.recall<unknown>("dice", []));
     /** Every number each kind of die has shown here, kept between visits: what "luck" is worked out from. */
-    let luck = m.recall<Luck>("dice-luck", {});
+    let luck: Luck = keptLuck(m.recall<unknown>("dice-luck", {}));
     /** The roll last sent down the tower, as it is written: what a link to it carries. */
     let last = "";
 
@@ -198,12 +201,14 @@ export default function dice(m: Mote): Scene {
         if (said) said.textContent = text;
     };
     let render = () => {};
-    const send = (text: string, what = text) => {
+    // what is kept, shown and linked is the roll as it was read, so a link's stray spaces and capitals are not
+    const send = (text: string, what = tidy(text)) => {
         const roll = read(text);
         if (typeof roll === "string") return say(roll);
         show(throwDice(roll.dice, chance));
         // a roll opened from a link is no longer the one in the address once another is made
-        if (m.link.get("roll") && m.link.get("roll") !== what) m.link.set("roll", null);
+        const linked = m.link.get("roll");
+        if (linked && tidy(linked) !== what) m.link.set("roll", null);
         waiting = { roll, what };
         last = what;
         say("Rolling…");
@@ -278,7 +283,7 @@ export default function dice(m: Mote): Scene {
         say(`${what}: ${result.total}`);
     };
 
-    // ---- under the tower: the dice to pick from, a typed roll, and what was rolled ----
+    // ---- under the tower: the dice to pick from, the roll they make, and what was rolled ----
     if (!m.preview) {
         const panel = m.panel();
         // The roll is made by pressing: a die adds one of itself, the small controls under it take one
@@ -405,7 +410,12 @@ export default function dice(m: Mote): Scene {
         press() {
             if (!thrown) send("d20");
         },
-        resting: () => !m.preview && (!thrown || (landed() && over === 1 && shine === 1 && lined >= lastIn())) && (view?.shade ?? 0) === (lifted.length > 0 && thrown ? 0.72 : 0),
+        // Space or Enter on the tower does what a click does, for a visitor on the keyboard.
+        keydown(name) {
+            if (name === "action" && !thrown) send("d20");
+        },
+        // (with no numbers lifted, as without WebGL, there is no row to wait for)
+        resting: () => !m.preview && (!thrown || (landed() && over === 1 && shine === 1 && (lifted.length === 0 || lined >= lastIn()))) && (view?.shade ?? 0) === (lifted.length > 0 && thrown ? 0.72 : 0),
         debug: () => (thrown ? [`${thrown.space.solids.filter((solid) => solid.im && solid.quiet < 0.4).length} of ${thrown.dice.length} dice moving`] : []),
         draw() {
             if (view) {

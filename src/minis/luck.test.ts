@@ -1,6 +1,6 @@
 // The Dice mini's luck: counting what was rolled, and the verdict on it.
 import { expect, test } from "bun:test";
-import { fortune, tally, verdict, type Luck } from "./luck";
+import { fortune, keptLuck, tally, verdict, type Luck } from "./luck";
 
 test("a number shown is counted under its die", () => {
     const luck: Luck = {};
@@ -33,4 +33,13 @@ test("kinds never rolled are left out, and the rest come smallest first", () => 
     tally(luck, 8, 3);
     tally(luck, 4, 2);
     expect(fortune(luck).map((one) => one.sides)).toEqual([4, 8]);
+});
+
+test("luck kept from an earlier visit is read back only as whole counts for real dice, and the rest is left out", () => {
+    expect(keptLuck({ 6: [1, 0, 0, 0, 0, 2], 100: Array.from({ length: 10 }, () => 1) })).toEqual({ 6: [1, 0, 0, 0, 0, 2], 100: Array.from({ length: 10 }, () => 1) });
+    // the wrong number of faces, counts that are not numbers, a die there is none of, a list where a record should be
+    expect(keptLuck({ 6: [1, 2], 8: [1, "x", 0, 0, 0, 0, 0, 0], 7: [1, 1, 1, 1, 1, 1, 1], 4: "abc", 20: Array.from({ length: 20 }, () => -2.5) })).toEqual({ 20: Array.from({ length: 20 }, () => 0) });
+    for (const value of [null, undefined, 3, "x", [], [[1]]]) expect(keptLuck(value)).toEqual({});
+    // whatever was kept, what is said about it can be worked out
+    expect(() => fortune(keptLuck({ 6: "abc", 8: [null], 12: {} }))).not.toThrow();
 });
