@@ -42,11 +42,15 @@ const all = placed.toSorted((a, b) => a.tag.forms[0]!.localeCompare(b.tag.forms[
         </header>
 
         <div class="tonetags" data-tonetags>
-            <label class="tonetags-find">
-                <span class="unseen">Search the tags</span>
-                <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5"></circle><path d="M10.5 10.5 14 14"></path></svg>
-                <input type="search" placeholder="/j, or what you mean: not angry at you" autocomplete="off" autocapitalize="off" spellcheck="false" />
-            </label>
+            <div class="tonetags-top">
+                <label class="tonetags-find">
+                    <span class="unseen">Search the tags</span>
+                    <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5"></circle><path d="M10.5 10.5 14 14"></path></svg>
+                    <input type="search" placeholder="/j, or what you mean: not angry at you" autocomplete="off" autocapitalize="off" spellcheck="false" />
+                </label>
+                {/* copies this page's address, with what is being searched for in it, to send to someone */}
+                <button type="button" class="tonetags-copy">copy link</button>
+            </div>
             <p class="tonetags-count note" aria-live="polite"></p>
 
             {/* the ones seen every day, in a strip; it folds away while something is being looked for */}
