@@ -215,6 +215,14 @@ h1 + .lede,
     border-top: 0.0625rem solid var(--rule);
 }
 
+/* Where the footer runs under the back-to-top button's corner, it ends a button's height higher, so
+   that its last line, and the link in it, are never under the button. */
+@media (max-width: 48rem) {
+    .site-footer {
+        padding-bottom: 2.75rem;
+    }
+}
+
 .site-footer p {
     margin: 0;
 }

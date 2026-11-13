@@ -172,6 +172,12 @@ export const COURSE_GOAL = 4;
 export const LENGTHS = [2, 5, 10, 25, 50, 100, 0];
 export const lengthName = (length: number) => (length === 0 ? "endless" : `${length} m`);
 
+/** A distance in metres to a tenth, as the status lines show it: a little way back that rounds to nothing is 0.0, never -0.0. */
+export const tenths = (metres: number): string => {
+    const shown = metres.toFixed(1);
+    return shown === "-0.0" ? "0.0" : shown;
+};
+
 /** The two ways of learning: a whole generation at a time, or one walker live. */
 export type Way = "generation" | "live";
 

@@ -4,7 +4,16 @@
 // link exactly, and each kind of ground is what it says. `bun run wasm` builds it; `bun test` runs this.
 
 import { expect, test } from "bun:test";
-import { COURSE, COURSE_GOAL, DEFAULT_SETUP, KINDS, PRESETS, Terrain, courseAt, decode, encode, engineAddress, fromLink, hasSimd, heightAt, LONGEST_BRAIN, linkParts, linkedSetup, oldLink, pieces, presetOf, valid, workersFor, type Engine, type Setup } from "./walking";
+import { COURSE, COURSE_GOAL, DEFAULT_SETUP, KINDS, PRESETS, Terrain, courseAt, decode, encode, engineAddress, fromLink, hasSimd, heightAt, LONGEST_BRAIN, linkParts, linkedSetup, oldLink, pieces, presetOf, tenths, valid, workersFor, type Engine, type Setup } from "./walking";
+
+test("a distance is shown to a tenth and never as minus zero", () => {
+    expect(tenths(-0.04)).toBe("0.0");
+    expect(tenths(-0)).toBe("0.0");
+    expect(tenths(0)).toBe("0.0");
+    expect(tenths(-0.05)).toBe("-0.1");
+    expect(tenths(-0.4)).toBe("-0.4");
+    expect(tenths(2.64)).toBe("2.6");
+});
 
 const path = new URL("../../public/wasm/walker.wasm", import.meta.url);
 const scalarPath = new URL("../../public/wasm/walker-scalar.wasm", import.meta.url);

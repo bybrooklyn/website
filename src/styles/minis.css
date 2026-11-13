@@ -557,14 +557,17 @@
     min-height: calc(clamp(16rem, 48svh, 26rem) + var(--panel-room));
 }
 
-/* One grid for the whole mini: the scene and the ground's strip on the left, the column on the right. */
+/* One grid for the whole mini: the scene and the ground's strip on the left, the column on the right.
+   The scene keeps its own height, so that on a laptop the walker is in the first screen; when the
+   column is taller, as it always is, the room left over goes under the strip, not into the scene. */
 .mini-stage[data-mini="walker"]:has(.walker-side) {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 18rem;
-    grid-template-rows: minmax(clamp(16rem, 48svh, 26rem), 1fr) auto;
+    grid-template-rows: clamp(16rem, 48svh, 26rem) auto 1fr;
     grid-template-areas:
         "scene side"
-        "ground side";
+        "ground side"
+        ". side";
     min-height: 0;
 }
 
@@ -574,8 +577,8 @@
 }
 
 /* Once laid out, the scene fills its place in the grid: lower than other minis, since sky above a
-   walker seen from the side says nothing, and taller when the column beside it is, as when the
-   brain is open. Placed absolutely, so its own size never feeds back into the grid's. */
+   walker seen from the side says nothing. Placed absolutely, so its own size never feeds back into
+   the grid's. */
 .mini-stage[data-mini="walker"]:has(.walker-side) > canvas {
     position: absolute;
     inset: 0;
@@ -926,8 +929,11 @@
         aspect-ratio: 4 / 3;
     }
 
+    /* It keeps room for three lines from the first, the most its sentence takes on a phone once its
+       numbers have grown, so nothing under it moves down as they do. */
     .mini-stage[data-mini="generalist"] .walker-status {
         grid-area: status;
+        min-height: calc(3lh + 0.8rem + 0.0625rem);
         padding-block: 0.6rem 0.2rem;
         border-top: 0.0625rem solid var(--rule);
     }

@@ -17,7 +17,7 @@ import { el, type Mote, type Scene } from "../mote/stage";
 import type { Kept, Order as PracticeOrder, Report as PracticeReport } from "../scripts/generalist-practice";
 import type { Order, Report } from "../scripts/generalist-worker";
 import { BRAIN, DEFAULT_RECIPE, KINDS, LEGS, POPULATION, SECONDS, SEEN, anotherSeed, brainColumns, counted, engineAddress, rewarded, engineRecipe, fromLink, lasted, linkParts, list, start as startEngine, valid, write, write64, type Engine, type Kind, type Recipe } from "./roaming";
-import { EFFORTS, machine, workersFor, type Effort } from "./walking";
+import { EFFORTS, machine, tenths, workersFor, type Effort } from "./walking";
 
 export const label = "A little creature with legs, seen from the side, finding its way over gaps, ledges, water and boxes in a world made from a seed. Faint lines from its eye show what it sees.";
 
@@ -589,8 +589,8 @@ export default function generalist(m: Mote): Scene {
         changed = () => {
             pause.textContent = paused ? "resume" : "pause";
             const practised = practice.seconds > 0 ? `Practised ${lasted(practice.seconds)}, ${counted(practice.steps)} steps` : "Starting to practise";
-            const gets = practice.here >= 0 ? `. It gets ${practice.here.toFixed(1)} m in this world now, ${practice.reached.toFixed(1)} m on average in practice` : shown ? ". Watching its try in this world" : "";
-            const now = stopped ? stopped : !engine ? "Loading." : how === "practice" ? `${practised}${gets}` : !shown ? `Generation 0, ${runs} of ${POPULATION} tried` : `Generation ${generation}, furthest ${furthest.toFixed(1)} m`;
+            const gets = practice.here >= 0 ? `. It gets ${tenths(practice.here)} m in this world now, ${tenths(practice.reached)} m on average in practice` : shown ? ". Watching its try in this world" : "";
+            const now = stopped ? stopped : !engine ? "Loading." : how === "practice" ? `${practised}${gets}` : !shown ? `Generation 0, ${runs} of ${POPULATION} tried` : `Generation ${generation}, furthest ${tenths(furthest)} m`;
             const text = m.time < notice.until && notice.text ? notice.text : `${now}${paused ? ", paused" : ""}`;
             if (status.textContent !== text) status.textContent = text;
             drawChart();
