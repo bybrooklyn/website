@@ -61,7 +61,8 @@ export async function sha256(bytes: Uint8Array): Promise<string> {
 /** Fetches every file of the tier that is not whole in the folder yet, telling `progress` the bytes of the tier that are in storage. */
 export async function download(tier: Tier, folder: Folder, how: { signal?: AbortSignal; progress: (bytes: number) => void; fetch?: typeof fetch }): Promise<void> {
     const get = how.fetch ?? fetch;
-    const ask = (file: ModelFile, from: number) => get(addressOf(tier, file), { signal: how.signal, headers: from > 0 ? { Range: `bytes=${from}-` } : {} });
+    // the model host is told which file is wanted and nothing of the page it is wanted from
+    const ask = (file: ModelFile, from: number) => get(addressOf(tier, file), { signal: how.signal, referrerPolicy: "no-referrer", headers: from > 0 ? { Range: `bytes=${from}-` } : {} });
     let finished = 0;
     for (const file of tier.files) {
         const name = nameOf(file.path);

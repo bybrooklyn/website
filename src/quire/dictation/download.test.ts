@@ -120,6 +120,16 @@ describe("download", () => {
         await download(tier, kept, { fetch: server({ ranges: false }).fetcher, progress: () => {} });
         expect([...kept.data.get(nameOf("a/one.bin"))!]).toEqual([...content("one.bin")]);
     });
+    test("asks without a referrer, so the model host learns nothing of the page", async () => {
+        const policies: (string | undefined)[] = [];
+        const inner = server().fetcher;
+        const watching = ((input: RequestInfo | URL, init?: RequestInit) => {
+            policies.push(init?.referrerPolicy);
+            return inner(input, init);
+        }) as typeof fetch;
+        await download(tier, folder(), { fetch: watching, progress: () => {} });
+        expect(policies).toEqual(["no-referrer", "no-referrer"]);
+    });
     test("leaves files that are already whole alone", async () => {
         const kept = folder();
         await download(tier, kept, { fetch: server().fetcher, progress: () => {} });
