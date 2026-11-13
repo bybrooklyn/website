@@ -805,6 +805,7 @@
     .quire-palette-form {
         width: 100%;
     }
+}
 
 /* ---- Google Drive's dialog (src/quire/drive-place.ts): the passphrase fields under the words, and
    the quieter lines about what Google sees and where the passphrase is kept ---- */
