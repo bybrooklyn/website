@@ -28,7 +28,7 @@ import { createSelectBar } from "./select-bar";
 import { boxOf, createSlash, definitionList, drawnBlock } from "./slash";
 import { createEmojiPicker } from "./emoji-picker";
 import { createSaver, fileName, said, type Entry, type Opened, type Status, type Store } from "./store";
-import { createSurface, type Surface } from "./surface";
+import { altGraph, createSurface, type Surface } from "./surface";
 import { createTableTools } from "./tables";
 import { createPictureTools } from "./picture-tools";
 import { createCommentMargin, keptNotes, moveNotes } from "./comment-margin";
@@ -728,7 +728,8 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     );
     // ---- the keyboard's shortcuts: each runs its command from the one table (shortcuts.ts); the surface's own it has already taken ----
     const shortcutKey = (event: KeyboardEvent) => {
-        if (event.defaultPrevented || event.isComposing) return;
+        // AltGr types a character (@ # { [ | on many layouts): it is never a shortcut
+        if (event.defaultPrevented || event.isComposing || altGraph(event)) return;
         const found = shortcutFor(chordFrom(event, MAC));
         if (!found?.command || found.surface) return;
         // a field of the editor's own (the find bar, a menu's search) keeps the keys that edit text in it
