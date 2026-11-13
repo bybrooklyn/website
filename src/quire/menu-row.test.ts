@@ -12,7 +12,7 @@ const lines = (rich: boolean, act = every) => Object.fromEntries(headings({ rich
 
 test("the row has its six words, and each command is in its menu by name with its shortcut", () => {
     const seen = lines(true);
-    expect(Object.keys(seen)).toEqual(["File", "Edit", "View", "Insert", "Format", "Tools"]);
+    expect(Object.keys(seen)).toEqual(["File", "Edit", "View", "Insert", "Format", "Tools", "Help"]);
     expect(seen.Edit).toEqual(["Undo Ctrl+Z", "Redo Ctrl+Shift+Z", "Select all Ctrl+A", "Link Ctrl+K"]);
     // the shortcuts come from the one table (shortcuts.ts), as Docs has them
     expect(seen.Format).toEqual(["Bold Ctrl+B", "Italic Ctrl+I", "Underline Ctrl+U", "Strikethrough Alt+Shift+5", "Inline code Ctrl+E", "Normal text Ctrl+Alt+0", "Heading 1 Ctrl+Alt+1", "Heading 2 Ctrl+Alt+2", "Heading 3 Ctrl+Alt+3", "Quote", "Text color ›", "Text size ›", "Typeface ›", "Highlight ›", "Line spacing ›", "Align left Ctrl+Shift+L", "Centre Ctrl+Shift+E", "Align right Ctrl+Shift+R", "Justify Ctrl+Shift+J"]);

@@ -1,4 +1,4 @@
-// The menu row: File, Edit, View, Insert, Format and Tools, above the bar in the site's top row.
+// The menu row: File, Edit, View, Insert, Format, Tools and Help, above the bar in the site's top row.
 // Every command mdQuire has is in it by name, with its shortcut beside it, so nothing has to be
 // known by its keys or its Markdown to be found. Its menus are the editor's own (flowMenu in
 // ui.ts): one box that flows open from the word pressed and, while open, slides along to the next
@@ -56,7 +56,7 @@ export type Command =
     | "superscript" | "subscript" | "marked"
     | "downloadAs" | "notes" | "nextNote" | "previousNote" | "comment" | "date" | "symbols" | "contents" | "updateContents"
     | "makeCopy" | "rename" | "fileDetails" | "cut" | "copy" | "paste" | "delete"
-    | "fullScreen" | "liveCount" | "typing";
+    | "fullScreen" | "liveCount" | "typing" | "help";
 
 /** The menus of the row, for a document as it stands. A line's shortcut, if it has one, comes from the table in shortcuts.ts. */
 export function headings(state: RowState, act: RowActions): Heading[] {
@@ -194,6 +194,10 @@ export function headings(state: RowState, act: RowActions): Heading[] {
                 ...line("about", "About mdQuire"),
             ],
         },
+        {
+            label: "Help",
+            items: () => [...line("help", "mdQuire help"), ...line("shortcuts", "Keyboard shortcuts"), ...line("about", "About mdQuire")],
+        },
     ];
 }
 
@@ -211,7 +215,7 @@ export function createMenuRow(menus: () => Heading[]) {
             menu.box.classList.remove("sliding");
         },
     });
-    const words = ["File", "Edit", "View", "Insert", "Format", "Tools"].map((label, index) => {
+    const words = ["File", "Edit", "View", "Insert", "Format", "Tools", "Help"].map((label, index) => {
         const word = make("button", "quire-row-word", label);
         word.type = "button";
         word.setAttribute("role", "menuitem");

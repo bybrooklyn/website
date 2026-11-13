@@ -42,6 +42,7 @@ import { openDialog } from "./dialog";
 import { chordFrom, findShortcuts, shortcutFor } from "./shortcuts";
 import { findTyping, readOff } from "./vocabulary";
 import { openTyping } from "./typing-panel";
+import { helpBody } from "./help";
 import { changes, createHistoryPanel, createKeeper, memoryStorage, moveVersions, snapshotParts, snapshotText, type VersionStorage } from "./versions";
 import { write } from "./write";
 import { emptyParts, opened, packQuire, written, type Parts } from "./quire-file";
@@ -754,6 +755,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
                 marked: doing(toggle("mark")),
                 superscript: doing(toggle("sup")),
                 subscript: doing(toggle("sub")),
+                help: () => openDialog(row.words[6]!, { title: "mdQuire help", body: helpBody(showShortcuts), className: "quire-help", action: { label: "Done", press: (_, dialog) => void dialog.close() }, onClose: () => surface.focus() }),
                 typing: () =>
                     openTyping(row.words[5]!, {
                         // the arrows and signs are the switch that was there first, kept where it always was
