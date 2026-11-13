@@ -1501,17 +1501,22 @@ used("the source of maths or a flowchart folded to its first line has as much ro
     await reset("Words.\n\n```mermaid\nflowchart LR\n  A --> B\n```\n\n$$\nx + y\n$$\n", [0], 0);
     await tab.run("document.activeElement.blur()");
     await tab.wait(600);
-    const seen = await tab.run<{ above: number; below: number }[]>(`[...document.querySelectorAll('.quire-drawn > pre')].map((pre) => {
+    const seen = await tab.run<{ above: number; below: number; more: boolean }[]>(`[...document.querySelectorAll('.quire-drawn > pre')].map((pre) => {
         const box = pre.getBoundingClientRect();
         const range = document.createRange();
         range.selectNodeContents(pre.querySelector('code'));
         const first = [...range.getClientRects()].find((each) => each.height > 0);
         const line = parseFloat(getComputedStyle(pre).lineHeight);
         const middle = first.top + first.height / 2;
-        return { above: Math.round(middle - line / 2 - box.top), below: Math.round(box.bottom - (middle + line / 2)) };
+        // and nothing of the second line shows in the room under the first
+        const shown = pre.querySelector('code').getBoundingClientRect();
+        return { above: Math.round(middle - line / 2 - box.top), below: Math.round(box.bottom - (middle + line / 2)), more: shown.bottom > middle + line / 2 + 1 };
     })`);
     expect(seen.length).toBe(2);
-    for (const { above, below } of seen) expect(Math.abs(above - below)).toBeLessThanOrEqual(2);
+    for (const { above, below, more } of seen) {
+        expect(Math.abs(above - below)).toBeLessThanOrEqual(2);
+        expect(more).toBe(false);
+    }
 });
 
 used("a line of space lies above a table's first words and below its last rule, after a paragraph, a heading or code", async () => {

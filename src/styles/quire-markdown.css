@@ -116,6 +116,13 @@
     opacity: 0.55;
 }
 
+/* only that first line shows: the room under it is the box's own, with nothing of the next line in it */
+.quire-drawn:not(.quire-editing, .quire-drawn-plain) > pre > code {
+    display: block;
+    max-height: 1lh;
+    overflow: hidden;
+}
+
 .quire-preview {
     display: flex;
     justify-content: center;
