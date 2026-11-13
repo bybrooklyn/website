@@ -86,11 +86,11 @@ impl Show {
             self.leftover -= STEP;
             taken += 1;
             // a new stride has begun: a better brain waiting takes over here, mid walk
-            if self.creature.phase(&self.world) as u32 != stride {
-                if let Some(weights) = self.pending.take() {
-                    self.brain.load(&weights);
-                    self.weights = weights;
-                }
+            if self.creature.phase(&self.world) as u32 != stride
+                && let Some(weights) = self.pending.take()
+            {
+                self.brain.load(&weights);
+                self.weights = weights;
             }
             if self.judge.endless {
                 self.keep_near();
@@ -107,7 +107,7 @@ impl Show {
     /// and once the walker passes `REBASE` everything moves back by that much.
     fn keep_near(&mut self) {
         let x = self.world.bodies[self.creature.torso as usize].position.x;
-        if self.world.steps % 60 == 0 {
+        if self.world.steps.is_multiple_of(60) {
             self.world.drop_ground_before(x - BEHIND);
         }
         if x > REBASE {

@@ -201,7 +201,7 @@ impl Judge {
         }
         // live, every few seconds: an attempt that has gone almost nowhere since the last look is over,
         // so a walker standing still does not take a long run's time while someone watches
-        if self.impatient && self.steps % STALL_STEPS == 0 {
+        if self.impatient && self.steps.is_multiple_of(STALL_STEPS) {
             let at = creature.distance(world);
             self.stalled = at - self.checked < STALL_DISTANCE;
             self.checked = at;

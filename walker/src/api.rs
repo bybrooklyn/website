@@ -114,7 +114,7 @@ pub extern "C" fn ground_set(pieces: u32) -> u32 {
     let ground: Vec<Segment> = if pieces == 0 {
         flat_ground()
     } else {
-        walker.ground_room.chunks_exact(4).take(pieces).map(|p| Segment { a: Vec2::new(p[0], p[1]), b: Vec2::new(p[2], p[3]) }).collect()
+        walker.ground_room.as_chunks::<4>().0.iter().take(pieces).map(|p| Segment { a: Vec2::new(p[0], p[1]), b: Vec2::new(p[2], p[3]) }).collect()
     };
     walker.trainer.set_ground(&ground);
     restart_show(walker);
@@ -354,7 +354,7 @@ pub extern "C" fn weights_swap() -> u32 {
 #[unsafe(no_mangle)]
 pub extern "C" fn show_ground_extend(pieces: u32) {
     let Some(walker) = walker() else { return };
-    let pieces: Vec<Segment> = walker.ground_room.chunks_exact(4).take(pieces as usize).map(|p| Segment { a: Vec2::new(p[0], p[1]), b: Vec2::new(p[2], p[3]) }).collect();
+    let pieces: Vec<Segment> = walker.ground_room.as_chunks::<4>().0.iter().take(pieces as usize).map(|p| Segment { a: Vec2::new(p[0], p[1]), b: Vec2::new(p[2], p[3]) }).collect();
     walker.show.extend(&pieces);
 }
 

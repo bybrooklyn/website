@@ -420,7 +420,7 @@ impl Creature {
         joint.speed = clamp(GAIN * (target - angle), -top, top);
         // a single leg has to throw the whole body up, so its knee is stronger
         let knee = if self.legs.len() == 1 { 1.8 * KNEE_TORQUE } else { KNEE_TORQUE };
-        joint.torque = if i % 2 == 0 { HIP_TORQUE } else { knee };
+        joint.torque = if i.is_multiple_of(2) { HIP_TORQUE } else { knee };
     }
 
     /// The work the motors did in the last step, in joules, counting work done braking as well.
