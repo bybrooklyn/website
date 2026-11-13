@@ -467,10 +467,6 @@
     caret-color: transparent;
 }
 
-.quire > :first-child {
-    margin-top: 0;
-}
-
 /* blocks out of sight are not laid out on every key, which keeps a long document quick to type in;
    each remembers its size once it has been seen, so the page does not jump */
 .quire > * {
@@ -480,14 +476,6 @@
 
 .quire > .quire-fresh {
     content-visibility: visible;
-}
-
-/* A block that may be skipped while out of sight is drawn only inside its own box. A top heading's lines are
-   as tall as its letters, so the tail of a g or a y hung below the box and was cut off: the box is made that
-   much deeper, and the space under it that much less, so nothing moves. */
-.quire h1 {
-    padding-bottom: 0.22em;
-    margin-bottom: calc(var(--line) - 0.22em);
 }
 
 /* A tight list's items hold their paragraphs without the space between paragraphs. */
@@ -531,14 +519,6 @@
     margin: calc(var(--line) * 1.5) 0;
 }
 
-.quire ul:has(> .quire-task) {
-    padding-left: 0.25rem;
-}
-
-.quire .quire-task {
-    list-style: none;
-}
-
 .quire-box {
     display: inline-block;
     width: 0.9em;
@@ -556,10 +536,6 @@
 .quire-box[data-checked="true"] {
     border-color: var(--accent);
     background: var(--accent);
-}
-
-.quire-task > p {
-    display: inline;
 }
 
 .quire-atom {
