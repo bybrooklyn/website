@@ -21,6 +21,7 @@ import { mkdir, stat } from "node:fs/promises";
 import { dirname, extname, relative, resolve } from "node:path";
 import { themeStyle } from "../src/lib/color";
 import { forEditor } from "./dictation-stubs";
+import { preview } from "./editor/preview";
 import { at, frontmatter, isDraft, listMdx, root, slug, stem, writeJson } from "./lib";
 
 const args = process.argv.slice(2);
@@ -138,17 +139,6 @@ async function routes(): Promise<Set<string>> {
         made.add(`/${page.replace(/(^|\/)index\.astro$/, "").replace(/\.astro$/, "/")}`.replace(/\/+$/, "/"));
     }
     return made;
-}
-
-let startedDev = false;
-
-async function devServer(): Promise<void> {
-    const up = () => fetch(DEV).then(() => true, () => false);
-    if (await up()) return;
-    // --background returns once the server is up; without it this would never come back.
-    await $`bunx astro dev --background`.cwd(root).nothrow().quiet();
-    startedDev = true;
-    for (let tries = 0; tries < 40 && !(await up()); tries++) await Bun.sleep(250);
 }
 
 // ---- publishing ----
@@ -388,16 +378,19 @@ const server = Bun.serve({
     },
 });
 
-// The preview beside the text is the site's own dev server.
-if (!args.includes("--no-preview")) await devServer();
+// The preview beside the text is the site's own dev server. However the editor ends (Ctrl+C, the
+// terminal closed, killed), the server is stopped if this is what started it, and never otherwise.
+const stopPreview = args.includes("--no-preview") ? () => {} : await preview(root, DEV);
+process.on("exit", stopPreview);
+for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"] as const) {
+    process.on(signal, () => {
+        stopPreview();
+        process.exit(0);
+    });
+}
 
 const address = `http://127.0.0.1:${server.port}/?k=${key}`;
 console.log(`\nThe editor is at:\n\n  ${address}\n\n${dryRun ? "Dry run: publishing will stop before the commit and the deploy.\n" : ""}Press Ctrl+C to stop.`);
-// Stopping the editor also stops the preview server, if this is what started it.
-process.on("SIGINT", async () => {
-    if (startedDev) await $`bunx astro dev stop`.cwd(root).nothrow().quiet();
-    process.exit(0);
-});
 
 if (!args.includes("--no-open")) {
     const opener = process.platform === "darwin" ? "open" : "xdg-open";
