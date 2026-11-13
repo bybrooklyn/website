@@ -23,7 +23,7 @@
 .tonetags-copy {
     flex: none;
     align-self: stretch;
-    padding: 0 1.3rem;
+    padding: 0 1.05rem;
     border: 0.0625rem solid var(--accent);
     border-radius: 2rem;
     background: color-mix(in oklch, var(--accent) 14%, transparent);
@@ -42,30 +42,45 @@
 
 .tonetags-copy-rest {
     display: inline-flex;
-    align-items: baseline;
-    gap: 0.3em;
+    align-items: center;
 }
 
-/* "website" is always there, drawn shut between "copy" and "link"; it opens out when the button is pointed at or reached by keyboard */
+.tonetags-copy svg {
+    flex: none;
+    width: 1.1rem;
+    height: 1.1rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+/* the words are always there, drawn shut beside the symbol; they open out when the button is pointed at or reached by keyboard */
 .tonetags-copy-more {
     display: grid;
     grid-template-columns: 0fr;
-    margin-inline: -0.15em;
     opacity: 0;
     transition:
         grid-template-columns 0.3s var(--ease),
-        margin 0.3s var(--ease),
         opacity 0.2s ease;
 }
 
 .tonetags-copy-more > span {
     min-width: 0;
     overflow: hidden;
+    white-space: nowrap;
+}
+
+/* the room between the symbol and the words opens with them */
+.tonetags-copy-more > span::before {
+    content: "";
+    display: inline-block;
+    width: 0.55em;
 }
 
 .tonetags-copy:is(:hover, :focus-visible) .tonetags-copy-more {
     grid-template-columns: 1fr;
-    margin-inline: 0;
     opacity: 1;
 }
 
