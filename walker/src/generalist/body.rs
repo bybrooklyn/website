@@ -18,6 +18,8 @@
 //! holds its legs in a hop was found by trying many ways (`body_tests`), keeping the steadiest that
 //! went forward.
 
+use alloc::vec::Vec;
+
 use crate::body::{Creature, Description};
 use crate::math::clamp;
 use crate::physics::{STEP, World};
@@ -78,6 +80,20 @@ pub struct Body {
     pub hop: Hop,
     /// How it hops, which a test may change to try others.
     pub hopping: Hopping,
+    /// Whether its actions aim each joint straight at an angle, rather than shaping its swing to the
+    /// legs' rhythm (for learning by practice, which tries both).
+    pub direct: bool,
+    /// Aiming directly, how much of the way from where each joint is aimed now to where it is asked
+    /// to be aimed it goes in a step of the physics: 1 at once, less to ease there, as a muscle does
+    /// rather than a motor. A joint flung at each new angle the instant it is asked throws the body
+    /// into the air; eased, it can step.
+    pub ease: f32,
+    /// Where each joint is aimed now, when aiming directly.
+    pub aims: Vec<f32>,
+    /// Aiming directly, how strong and how quick the joints are beside the Walker's: everyday
+    /// muscles, which hold the body up and step but cannot throw it into the air. The hop keeps its
+    /// own strength, so leaving the ground is a choice, made with the hop.
+    pub strength: f32,
 }
 
 impl Body {
@@ -89,16 +105,17 @@ impl Body {
         let creature = Creature::build(world, Description { legs, carry: false, leap: false })?;
         let hopping = Hopping::of(legs);
         world.bodies[creature.torso as usize].inverse_inertia /= hopping.steadiness;
-        Some(Body { creature, hop: Hop::Ready, hopping })
+        Some(Body { creature, hop: Hop::Ready, hopping, direct: false, ease: 1.0, aims: Vec::new(), strength: 1.0 })
     }
 
     pub fn legs(&self) -> usize {
         self.creature.legs.len()
     }
 
-    /// How many numbers the brain gives it: three for each joint and one for the hop.
+    /// How many numbers the brain gives it: three for each joint and one for the hop, or, direct, one
+    /// for each joint and one for the hop.
     pub fn actions(&self) -> usize {
-        self.creature.description.outputs() + 1
+        if self.direct { self.creature.joints.len() + 1 } else { self.creature.description.outputs() + 1 }
     }
 
     /// Whether a foot is on something.
@@ -108,8 +125,24 @@ impl Body {
 
     /// Moves the joints as the brain asks, `actions()` numbers from -1 to 1.
     pub fn drive(&mut self, world: &mut World, actions: &[f32]) {
-        let walking = self.creature.description.outputs();
-        self.creature.drive(world, &actions[..walking]);
+        let walking = self.actions() - 1;
+        if self.direct {
+            // each action from -1 to 1 is an angle from the joint's lower limit to its upper
+            if self.aims.len() != walking {
+                self.aims = self.creature.joints.iter().map(|&joint| world.joints[joint as usize].angle(&world.bodies)).collect();
+            }
+            for i in 0..walking {
+                let joint = &world.joints[self.creature.joints[i] as usize];
+                let wanted = joint.lower + 0.5 * (clamp(actions[i], -1.0, 1.0) + 1.0) * (joint.upper - joint.lower);
+                self.aims[i] += self.ease * (wanted - self.aims[i]);
+                self.creature.aim(world, i, self.aims[i]);
+                let joint = &mut world.joints[self.creature.joints[i] as usize];
+                joint.torque *= self.strength;
+                joint.speed *= self.strength;
+            }
+        } else {
+            self.creature.drive(world, &actions[..walking]);
+        }
         self.hop(world, clamp(actions[walking], -1.0, 1.0) > 0.5);
     }
 

@@ -5,7 +5,7 @@
 // creatures for a learner work. And what roaming.ts is held to: seeds and links.
 
 import { expect, test } from "bun:test";
-import { DEFAULT_RECIPE, KINDS, anotherSeed, engineRecipe, fromLink, linkParts, seedNumber, valid, type Engine } from "./roaming";
+import { DEFAULT_RECIPE, KINDS, anotherSeed, brainColumns, counted, rewarded, engineRecipe, fromLink, lasted, linkParts, seedNumber, valid, type Engine } from "./roaming";
 
 const path = new URL("../../public/wasm/generalist.wasm", import.meta.url);
 const scalarPath = new URL("../../public/wasm/generalist-scalar.wasm", import.meta.url);
@@ -128,6 +128,111 @@ test("many creatures step together, as fast as this runtime goes", async () => {
     console.log(`64 creatures stepped ${Math.round(steps / seconds)} times a second in the page's engine, here`);
 });
 
+/** The native engine's fingerprint of a small learner's state over two updates of practice (walker/src/generalist/practice_tests.rs). */
+const PRACTICE_FINGERPRINT = 0xb4ea800f279a20e8n;
+
+test("practice in the page's engine learns to the bit as natively, with SIMD and without", async () => {
+    for (const each of [path, scalarPath]) {
+        const engine = await load(each);
+        engine.create(2, 1, 0.5, 1, 1, 1, 1, 8, 8, 1, 0, 30, 1);
+        expect(engine.practice_create(2, 7, 3)).toBeGreaterThan(0);
+        let hash = 0xcbf29ce484222325n;
+        for (let update = 0; update < 2; update++) {
+            engine.practice_update();
+            hash = mix(hash, bits(engine, engine.practice_state()));
+        }
+        expect(hash).toBe(PRACTICE_FINGERPRINT);
+    }
+});
+
+test("an update shared out as the workers share it, with one worker, is the update done alone", async () => {
+    const alone = await load();
+    const shared = await load();
+    for (const engine of [alone, shared]) {
+        engine.create(4, 1, 0.3, 1, 1, 1, 1, 8, 8, 1, 0, 30, 1);
+        engine.practice_create(3, 2, 5);
+    }
+    for (let update = 0; update < 2; update++) {
+        alone.practice_update();
+        const share = new Float64Array(shared.memory.buffer, shared.practice_local(), shared.length()).slice();
+        const weights = new Float32Array(shared.memory.buffer, shared.practice_weights(), shared.length()).slice();
+        const shares = shared.practice_shares_room(1);
+        new Float64Array(shared.memory.buffer, shares, share.length).set(share);
+        const room = shared.practice_weights_room();
+        new Float32Array(shared.memory.buffer, room, weights.length).set(weights);
+        expect(shared.practice_finish(1)).toBe(1);
+    }
+    expect(shared.practice_updates()).toBe(2);
+    expect(bits(shared, shared.practice_state())).toEqual(bits(alone, alone.practice_state()));
+    expect(Array.from(new Float64Array(shared.memory.buffer, shared.practice_running(), shared.length()))).toEqual(Array.from(new Float64Array(alone.memory.buffer, alone.practice_running(), alone.length())));
+});
+
+test("a learner kept and taken back is the same learner, and drives the show", async () => {
+    const engine = await load();
+    engine.create(2, 4, 0.2, 1, 1, 1, 1, 8, 8, 1, 0, 30, 1);
+    engine.practice_create(2, 1, 1);
+    engine.practice_update();
+    const state = new Float32Array(engine.memory.buffer, engine.practice_state(), engine.length()).slice();
+    const running = new Float64Array(engine.memory.buffer, engine.practice_running(), engine.length()).slice();
+    const page = await load();
+    page.create(2, 4, 0.2, 1, 1, 1, 1, 8, 8, 1, 0, 30, 1);
+    const [stateRoom, runningRoom] = [page.state_room(0), page.running_room()];
+    new Float32Array(page.memory.buffer, stateRoom, state.length).set(state);
+    new Float64Array(page.memory.buffer, runningRoom, running.length).set(running);
+    expect(page.policy_load()).toBe(1);
+    for (let i = 0; i < 120; i++) page.show_step(1 / 60);
+    expect(page.show_seconds()).toBeGreaterThan(0.5);
+    // and the weights alone will do for the show; anything else is turned away
+    const weights = page.state_room(1);
+    const count = page.length();
+    const room = page.running_room();
+    new Float32Array(page.memory.buffer, weights, count).set(state.subarray(0, count));
+    new Float64Array(page.memory.buffer, room, running.length).set(running);
+    expect(page.policy_load()).toBe(1);
+    page.state_room(1);
+    const spoiled = page.running_room();
+    new Float64Array(page.memory.buffer, spoiled, running.length).fill(Number.NaN);
+    expect(page.policy_load()).toBe(0);
+});
+
+test("the brain on show is drawn as it thinks, evolution's or practice's", async () => {
+    const engine = await load();
+    engine.create(2, 4, 0.2, 1, 1, 1, 1, 8, 8, 1, 0, 30, 1);
+    engine.show_step(0.5);
+    // a dot for each ray, then the rest of what it senses; 8 neurons; 13 outputs for evolution's brain
+    const bred = brainColumns(new Float32Array(engine.memory.buffer, engine.brain_picture(), engine.length()).slice());
+    expect(bred?.lit.map((column) => column.length)).toEqual([16 + 18, 8, 13]);
+    engine.practice_create(2, 1, 1);
+    const state = new Float32Array(engine.memory.buffer, engine.practice_state(), engine.length()).slice();
+    const running = new Float64Array(engine.memory.buffer, engine.practice_running(), engine.length()).slice();
+    const [stateRoom, runningRoom] = [engine.state_room(0), engine.running_room()];
+    new Float32Array(engine.memory.buffer, stateRoom, state.length).set(state);
+    new Float64Array(engine.memory.buffer, runningRoom, running.length).set(running);
+    expect(engine.policy_load()).toBe(1);
+    for (let i = 0; i < 30; i++) engine.show_step(1 / 60);
+    const policy = brainColumns(new Float32Array(engine.memory.buffer, engine.brain_picture(), engine.length()).slice());
+    expect(policy?.lit.map((column) => column.length)).toEqual([16 + 18, 64, 64, 5]);
+    expect(policy?.flows.map((flow) => flow.length)).toEqual([34 * 64, 64 * 64, 64 * 5]);
+    expect(policy?.flows.every((flow) => flow.every(Number.isFinite) && flow.some((amount) => amount !== 0))).toBe(true);
+    expect(brainColumns(new Float32Array([2, 3, 1, 0, 0]))).toBeUndefined();
+});
+
+test("practice runs as fast as this runtime goes", async () => {
+    const engine = await load();
+    engine.create(2, 1, 0.5, 1, 1, 1, 1, 8, 8, 1, 0, 30, 1);
+    engine.practice_create(32, 1, 1);
+    const started = performance.now();
+    for (let update = 0; update < 3; update++) engine.practice_update();
+    const seconds = (performance.now() - started) / 1000;
+    const time = (backward: number) => {
+        const began = performance.now();
+        const rows = engine.net_work(40, backward);
+        return rows / ((performance.now() - began) / 1000);
+    };
+    console.log(`a 114-64-64-5 network: forward ${Math.round(time(0))} rows a second, forward and backward ${Math.round(time(1))}, in the page's engine, here`);
+    console.log(`practice: ${Math.round(engine.practice_steps() / seconds)} steps of the physics and ${(3 / seconds).toFixed(2)} updates a second in the page's engine, here`);
+});
+
 test("a seed is a number or a word, the same in every browser, and a world is a link", () => {
     expect(seedNumber("42")).toBe(42);
     expect(seedNumber(" 4294967295 ")).toBe(4294967295);
@@ -145,4 +250,19 @@ test("a seed is a number or a word, the same in every browser, and a world is a 
     expect(fromLink((name) => (name === "seed" ? "x" : name === "hard" ? "300" : null), DEFAULT_RECIPE)).toBeNull();
     expect(valid(DEFAULT_RECIPE)).toBe(true);
     expect(KINDS.length).toBe(4);
+});
+
+test("how long it has practised and how many steps are said in plain words", () => {
+    expect(lasted(42.7)).toBe("42 s");
+    expect(lasted(130)).toBe("2 min 10 s");
+    expect(lasted(7500)).toBe("2 h 5 min");
+    expect(counted(950)).toBe("950");
+    expect(counted(12_400)).toBe("12 thousand");
+    expect(counted(3_250_000)).toBe("3.3 million");
+});
+
+test("what the creature was rewarded and charged for is said in a few words, the biggest first", () => {
+    expect(rewarded([0.42, 0.12, -0.05, 0, 0])).toEqual([{ words: "forward +0.42", good: true }, { words: "up +0.12", good: true }, { words: "effort \u22120.05", good: false }]);
+    expect(rewarded([-2.9, 0, 0, -0.3, 1])[0]).toEqual({ words: "fell \u22123", good: false });
+    expect(rewarded([0.001, 0, 0, 0, 0])).toEqual([]);
 });

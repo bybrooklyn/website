@@ -547,6 +547,206 @@ quick (two legs about 17 generations a second on one core; in the page, with eig
 everything switched on reached 8.0 m in the world "meadow" at difficulty 0.1 and 15.2 m at 0.5, riding
 a moving platform over a gap on the way.
 
+### Learning by practice
+
+Gradient learning, written from scratch here: proximal policy optimisation (PPO) over a small
+network whose backward pass is written by hand. Three files:
+
+- `src/generalist/net.rs`: layers over flat lists of f32, a batch at a time; tanh, ReLU or nothing;
+  the backward pass of each layer; Adam. Weights are kept input by input, each input's row holding
+  its weight for every output, so one input times its row adds into sixteen outputs side by side
+  (SIMD), and four rows of a batch share a row of weights while it is in registers. Every sum is in
+  one fixed order, so the same weights and inputs give the same answer to the bit natively and in
+  every browser. Tests hold the gradient to finite differences, for every kind of squash.
+- `src/generalist/ppo.rs`: the learner. A policy gives the middle of a bell curve for each action,
+  with one learned spread per action whatever is sensed; a value network guesses the reward to
+  come. Generalised advantage estimation; the clipped objective, the value's error and an entropy
+  bonus; minibatch epochs; what is sensed rescaled by a running mean and spread, and rewards by the
+  running spread of their discounted sums, both kept with the weights; gradients shortened past a
+  length; a rate that falls. A run cut short by its time is valued where it was cut, not as if it
+  had ended. Every number is in `Settings`. Tested on a point that must reach a mark (it learns to),
+  on advantages worked out by hand, and on the same seed learning to the bit.
+- `src/generalist/practice.rs`: the worlds it practises in. Every run is in a fresh world of the
+  recipe's kind (its seed has the top bit set), so what is learned must hold in any world of that
+  kind; it is measured on held-out worlds, seeds 2 to 17, never practised in. World 1 is the one the
+  evolution baseline learned in.
+
+How fast the network goes, for a policy of 114 senses, two hidden layers of 64 and 13 actions, over
+batches of 512 (`cargo test --release net_speed -- --ignored --nocapture`, one core of a Ryzen 7
+9700X): forward 550,000 rows a second with tanh and 1,030,000 with ReLU (tanh's own exact function
+is half the cost); forward and backward 390,000 with tanh, 480,000 to 570,000 with ReLU, about 28
+to 40 billion operations a second. In the page's engine, in Bun's JavaScriptCore, a network of the
+two-legged policy's size (5 actions) runs forward on 750,000 rows a second and forward and backward
+on 470,000 (`src/minis/generalist.test.ts` prints it).
+
+### How it moves
+
+After watching evolution's creature the owner said it "just hops to move", and chose: "Let it find its
+own way, but not this". So there is no rule for how to move, and there are costs instead. What was
+measured, on flat ground and in worlds at difficulty 0.1, two legs unless said (`examples/practice.rs`
+prints, beside the learning curve, the share of time spent in the air with nothing ahead to clear and
+the motors' work for each metre, while practising and for the policy on show; `trace=1` prints how
+the policy moves through a held-out world, a line every tenth of a second):
+
+- **The body can step.** A stepping controller written by hand (`stepping` in
+  `src/generalist/practice_tests.rs`: hips swung as sines, knees bent as each leg swings forward, no
+  hop) walks the two-legged body 6.3 m in 10 s with a foot always down, at 93 J a metre, and the
+  four-legged one 13.8 m at 164 J a metre. Hopping in place of it, the hop asked for whenever it can
+  go, gets 2 m before the body goes over, at 180 to 1,100 J a metre for two legs and about 3,000 for
+  four. A test holds both bodies to stepping without leaving the ground at less than two thirds of
+  hopping's cost. Most hand-written swings do not stay up on two legs (2 of 432 for 10 s): it is a
+  hard body to walk without looking where it is going, which a policy does.
+- **What practice found with no costs:** it bounds. The policy's actions go to their ends and back,
+  so each joint is flung from one end of its range to the other, and the body leaves the ground about
+  a quarter of the time with nothing to clear (two legs 18 m in 15 million steps, 174 J a metre; four
+  legs gallop 42 m at 330 to 400 J a metre).
+- **The hop made it worse.** With the brain's hop (`Body::hop`) taken away, two legs practised as far
+  or further (19.5 m against 17.9 m, 154 J a metre against 174), and with the costs below the hop was
+  what it gave up on: it lunged, hopped and fell (2 m) where without the hop it went 28 m. So practice
+  has no hop: leaving the ground is its legs' own doing, and is charged for.
+- **The costs settled on** (`Way::of`): 0.002 for each joule of the motors' work; 2 for each second in
+  the air when its eyes show nothing within about a hop ahead to clear (`clear_ahead`: an edge, a box,
+  a hazard or a moving thing where its five nearest rays down land, or a wall within a metre); both
+  brought in over its first 4 million steps, so it can find how to move before it is charged for how;
+  and 3 for a fall that leaves it down, as a fall into a gap or a hazard costs, since without it the
+  cheapest thing under the costs was to lunge forward and fall. The first spread of its actions is
+  smaller (0.37 rather than 0.61), which learned further under every cost tried.
+- **What did not help:** joints that ease toward the angle asked rather than going at once (`ease`),
+  weaker everyday muscles (`strength`: with half strength it stopped leaving the ground but crawled on
+  bent legs, 4 to 6 m), a cost on jerky changes of action (`smooth`), the bonus for being up in
+  proportion to how tall it stands (`tall`), and stronger costs on the air (3 or 4 a second: it lunges
+  and falls). They are still there to be tried from `examples/practice.rs`.
+- **Stronger costs on the air, brought in slowly** (`examples/compare.rs` with `air=`, `ramp=` and
+  `fall=`, difficulty 0.1, 20 million steps, seeds 1 and 2, against the settled costs' 29 m and 48 m
+  with two and four legs, off the ground with nothing to clear 0.24 and 0.18 of the time): air 4
+  over 15 million steps gave two legs 16 m at 0.18, four legs 51 m at 0.15; air 3 over 10 million
+  with a fall costing 5 gave two legs 19 m at 0.14, four legs 51 m at 0.14 but 250 J a metre against
+  210. Two legs leave the ground less but go about two thirds as far, so the settled costs stay.
+
+Honestly, then: the frog's hop is gone, and the four-legged creature uses about two thirds of the
+energy for each metre it did with no costs while getting as far, but neither body has found a walk
+with a foot always down. Both still bound, leaving the ground about a fifth of the time on plain
+ground; the costs make that dearer without making it rare, and costs strong enough to forbid it leave
+a learner that gives up before it finds anything cheaper.
+
+### Practice in the browser
+
+On the page, "how it learns" chooses evolution or "by practice", and the page opens on practice: a
+creature that knows nothing, learning from the first second, since nothing trained is shipped. Its
+brain is drawn live at the top of the column beside the world (`src/generalist/mind.rs`): what it
+senses on the left (a dot for each ray of its eye, lit by how near what it meets is, then the body),
+its two hidden layers of 64, and what it does, each neuron lit by what it gave and, into each, the
+three connections passing it the most just then, as bright as they are beside the strongest in their
+layer. Any brain that can say its columns, what each gave and a weight between two neurons
+(`mind::Drawn`) is drawn the same way; evolution's is. Practice runs in up to four workers
+(`src/scripts/generalist-practice.ts`), each with its own copy of the module and a share of 32
+creatures, each run in a fresh world of the visitor's kind. Every update each worker collects a
+rollout and goes over it, then one leads: it averages every worker's weights in the workers' order and
+sends the average and every worker's running numbers back, so all go on from the same place. Only
+plain messages pass, no shared memory. Practice stops when the page is hidden or scrolled away (the
+page's drawing sends a beat each second, as for evolution). Every three seconds the page is sent the
+policy, and the creature on show is the newest policy acting without drawing, from the start of the
+visitor's world, each time its run ends. Above it, twice a second, small words say what it was just
+rewarded and charged for: forward, up, effort, in the air for nothing, fell. The status line says how
+long it has practised, how many steps, how far it gets in this world now and on average in practice.
+Everything learned is kept in the browser (IndexedDB) every half minute, for that body and that kind
+of world, and taken up again on the next visit; "start over" forgets it. A learner is about 24,000
+numbers, which does not fit in a link, so a link carries the world and not the brain.
+
+Measured in headless Chromium on this machine (Ryzen 7 9700X, 16 threads, four of them busy with
+other work), two legs, the page at 60 frames a second at every effort:
+
+| effort | workers | steps a second | updates a second |
+|---|---|---|---|
+| gentle | 1, resting as long as it works | 54,000 | 6.5 |
+| normal | 4 | 342,000 | 41.7 |
+| all it has | 4 | 335,000 | 40.9 |
+
+Normal and all it has are the same here, since practice uses four workers at most: with more, each
+has too few creatures and the average of their weights learns less for each step. An update is 8,192
+steps of the physics (32 creatures, 64 decisions, 4 steps each). Two minutes of practice at normal
+effort is about 40 million steps, ten minutes about 200 million, against 20 million in the comparison
+below.
+
+What a visitor sees, at normal effort in the world "meadow" with everything switched on (how far the
+policy gets in this world now, and on average in practice runs, from the status line; filmstrips were
+taken at 2 and 10 minutes):
+
+| | 1 min | 2 min | 5 min | 10 min |
+|---|---|---|---|---|
+| 2 legs, 10 of 100 hard | 7.5 m, 14.0 m | 5.2 m, 19.4 m | 10.4 m, 25.7 m | 1.3 m, 27.2 m |
+| 2 legs, 50 of 100 hard | 4.7 m, 11.7 m | 5.7 m, 14.6 m | 1.3 m, 14.3 m | 3.5 m, 16.1 m |
+| 4 legs, 10 of 100 hard | 44.0 m, 35.0 m | 44.3 m, 34.6 m | 33.2 m, 45.2 m | 44.0 m, 60.7 m |
+| 4 legs, 50 of 100 hard | 6.1 m, 26.1 m | 4.1 m, 24.3 m | 27.2 m, 25.6 m | 5.5 m, 30.1 m |
+
+How it moves, plainly. Two legs: after two minutes it runs a few steps crouched, then throws itself
+headlong over the first gap and lands on its belly on the moving platform; at 50 of 100 it leaps onto
+the platform and rides it, sitting. After ten minutes it goes on its belly and knees, its legs pushing
+it along in lunges that leave the ground (the words over it say "in the air for nothing" often), and
+in meadow it falls into the first gap, though in practice worlds it averages 27 m. It does not look
+alive in the way she asked. Four legs: from the first minute a quick scurrying run with its feet
+mostly down and short bounds between, 44 m through meadow; after ten minutes a bounding gallop, the
+hind legs pushing together, which takes it up small ledges. At 50 of 100 it stalls at a box and rears
+up on its hind legs at two minutes, and at ten leaps for the moving platform and tips off it. How far
+it gets in the one world on show swings from run to run, since a policy that is better on average can
+be worse at the first thing in this world.
+
+### Evolution against practice
+
+The same worlds and the same compute for both: each run learns for 20 million steps of the physics
+on one core, in worlds of the recipe's kind with everything switched on, and is measured at 1, 2, 5,
+10 and 20 million steps on the same sixteen held-out worlds (seeds 2 to 17), which neither ever
+learns in. Evolution learns as the page has it (32 brains of two layers of 16 with 4 memories, in
+the one world of seed 1, its rhythm-shaped actions every step, with its hop); practice learns with
+the settled `Settings` and `Way` (no hop, the costs above), in a fresh world every run. Five seeds
+each, 1 to 5, for brains and worlds alike. The distance is how far it gets on average through the
+held-out worlds, then the spread of that over the five seeds (their standard deviation); "air" is
+the share of its time off the ground with nothing ahead to clear, and J/m the motors' work for each
+metre, both in the held-out worlds at 20 million steps. Made with `sh examples/compare.sh`
+(`examples/compare.rs`), four runs at a time on a Ryzen 7 9700X with other work going on: 90 runs,
+93 minutes. The same seed learns the same way to the bit, so every number here comes out again.
+
+| legs | difficulty | evolution, 5 M | evolution, 20 M | practice, 5 M | practice, 20 M | 20 M took, evolution / practice | air, evolution / practice | J/m, evolution / practice |
+|---|---|---|---|---|---|---|---|---|
+| 2 | 0.1 | 4.1 ± 3.3 m | 4.6 ± 3.4 m | 14.8 ± 5.4 m | 26.1 ± 5.0 m | 224 / 184 s | 0.23 / 0.21 | 376 / 161 |
+| 2 | 0.3 | 2.5 ± 0.5 m | 4.3 ± 3.3 m | 11.6 ± 3.9 m | 17.2 ± 2.8 m | 226 / 186 s | 0.32 / 0.22 | 298 / 157 |
+| 2 | 0.5 | 2.1 ± 0.4 m | 2.5 ± 0.4 m | 9.4 ± 2.6 m | 12.1 ± 3.5 m | 238 / 191 s | 0.34 / 0.17 | 304 / 172 |
+| 2 | 0.8 | 2.5 ± 0.4 m | 2.4 ± 0.4 m | 8.2 ± 0.7 m | 10.6 ± 2.5 m | 242 / 190 s | 0.34 / 0.14 | 332 / 184 |
+| 4 | 0.1 | 9.3 ± 1.0 m | 10.5 ± 1.4 m | 39.0 ± 3.9 m | 44.0 ± 5.2 m | 324 / 225 s | 0.06 / 0.15 | 405 / 214 |
+| 4 | 0.3 | 8.2 ± 2.2 m | 7.8 ± 2.0 m | 23.8 ± 9.0 m | 35.2 ± 15.5 m | 324 / 227 s | 0.07 / 0.15 | 477 / 227 |
+| 4 | 0.5 | 6.6 ± 1.8 m | 7.5 ± 1.2 m | 22.7 ± 7.6 m | 28.9 ± 4.1 m | 354 / 229 s | 0.10 / 0.15 | 548 / 253 |
+| 4 | 0.8 | 5.1 ± 1.3 m | 5.9 ± 1.1 m | 13.4 ± 1.1 m | 16.4 ± 4.8 m | 366 / 232 s | 0.07 / 0.10 | 557 / 256 |
+
+Practice goes three to six times as far through worlds it has never seen, for the same steps and a
+little less time, and uses about half the motors' work for each metre. After 1 million steps the
+two are about level (two legs 2 to 4 m against 5 to 6 m; four legs 5 to 9 m against 4 to 7 m); by 5
+million practice is far ahead, and evolution gains little after that. Evolution does better in its
+own world, seed 1, than in the held-out ones (two legs 7 to 13 m there at 20 million, four legs 12
+to 22 m): it learns that world, not worlds like it. Practice never saw seed 1 either, and its
+distance there is sometimes above its held-out average and sometimes below.
+
+How each moves, honestly. Evolution's two-legged creature hops and lunges, off the ground a third of
+the time with nothing to clear; its four-legged one shuffles with its feet down (air 0.06) but at
+twice practice's cost a metre, and stops at the first hard piece. Practice's two-legged creature
+leaves the ground about a fifth of the time with nothing to clear, less as the worlds get harder,
+and goes low, on its knees and belly, pushing itself along in short lunges; its four-legged one
+runs crouched with its feet mostly down and short bounds between (air 0.10 to 0.15), which is the
+more alive of the two to watch. Neither has found a walk with a foot always down.
+
+**Does a brain practised on easy worlds do better on hard ones?** Practice that spent its first 10
+million steps in worlds of difficulty 0.1 and the next 10 million in 0.8, measured all along in
+held-out worlds of 0.8, against practice in 0.8 from the start (the rows above), five seeds each:
+
+| legs | at 10 M, easy only so far | at 10 M, hard from the start | at 20 M, easy then hard | at 20 M, hard from the start |
+|---|---|---|---|---|
+| 2 | 9.0 ± 1.8 m | 8.1 ± 1.1 m | 10.7 ± 0.7 m | 10.6 ± 2.5 m |
+| 4 | 15.2 ± 4.4 m | 15.7 ± 4.9 m | 15.8 ± 5.2 m | 16.4 ± 4.8 m |
+
+What it learns in easy worlds carries over whole: a brain that has never practised in a hard world
+does as well in hard ones as a brain that practised only there for as long. But it does no better,
+and practising first in easy worlds gains nothing by the end. So the page has no curriculum (one is
+in `Practice::with_curriculum`, unused).
+
 ### The generalist's functions
 
 In `public/wasm/generalist.wasm` (`src/generalist/api.rs`, the work in `src/generalist/page.rs`). One
@@ -582,9 +782,14 @@ creature and its learning per module instance. A function that gives a list give
   `envs_observations()`, `envs_rewards()`, `envs_done()`, `senses_length()`, `actions_length()`,
   `rays_length()`.
 
-The module is 190 KiB with SIMD (the Walker's is 127 KiB, the physics alone 37 KiB; what the
-generalist added to the Walker's own module is 1.3 KiB of physics it does not use, which the
-compiler mostly leaves out). `src/minis/generalist.test.ts` holds it to the native engine's
+The module is 295 KiB with SIMD, 287 KiB without (the Walker's is 127 KiB, the physics alone
+37 KiB; what the generalist added to the Walker's own module is 1.3 KiB of physics it does not use,
+which the compiler mostly leaves out). Learning by practice costs 94 KiB of that: before it the module
+was 190 KiB; the brain's picture costs 11 KiB more. The functions for practice (`practice_create`,
+`practice_update`, `practice_local`, `practice_weights`, `practice_shares_room`,
+`practice_weights_room`, `practice_finish`, `practice_state`, `practice_running`, `state_room`,
+`running_room`, `practice_load`, `policy_load`, `policy_off`, `show_rewards`, `brain_picture` and a
+few numbers) are described where they are, in `src/generalist/api.rs`. `src/minis/generalist.test.ts` holds it to the native engine's
 fingerprint of three creatures' 600 steps and three generations of evolution, to the bit, with SIMD
 and without.
 

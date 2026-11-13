@@ -203,6 +203,11 @@ impl Brain {
 
     /// Runs the senses and the memory through the network with the weights it was given (`load`).
     /// The answer is in `outputs`, and the memory is what it kept for next time.
+    /// What came in at the last step: what it sensed, then what it had kept.
+    pub fn incoming(&self) -> &[f32] {
+        &self.incoming
+    }
+
     pub fn think(&mut self, senses: &[f32]) {
         let Layout { inputs, hidden: size, layers, outputs, .. } = self.layout;
         self.incoming[..inputs].copy_from_slice(&senses[..inputs]);

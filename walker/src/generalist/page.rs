@@ -14,6 +14,8 @@ use super::envs::{Envs, Run, SECONDS};
 use super::evolve::Evolution;
 use super::eyes::{self, RAYS};
 use super::land::Hazard;
+use super::ppo::{Learner, Settings};
+use super::practice::{Practice, Way};
 use super::recipe::Recipe;
 use super::stage::Thing;
 use crate::brain::Brain;
@@ -44,6 +46,18 @@ pub struct Page {
     pub evaluate_room: Vec<f32>,
     pub evaluated: Vec<f32>,
     pub envs: Option<Stepped>,
+    /// Learning by practice in this module (a worker's), and the policy the show is driven by when
+    /// it shows practice rather than evolution, with the actions it holds between decisions.
+    pub practice: Option<Practice>,
+    pub policy: Option<Learner>,
+    held_actions: Vec<f32>,
+    pub running_out: Vec<f64>,
+    pub running_room: Vec<f64>,
+    pub state_room: Vec<f32>,
+    /// What the show's creature has been rewarded and charged for since the page last asked.
+    pub parts: super::practice::Parts,
+    /// The weights of evolution's brain on show, to draw it.
+    pub shown_weights: Vec<f32>,
 }
 
 /// Creatures stepped together for a learner, and the lists they read from and write into.
@@ -67,7 +81,7 @@ impl Page {
         let land = Rc::new(super::land::Land::new(recipe, super::envs::MADE));
         let start = Run::new(land, legs, seconds)?;
         let layout = evolution.layout;
-        let mut page = Page { recipe, legs, seconds, brain: Brain::new(layout), senses: vec![0.0; layout.inputs], show: start.clone(), start, evolution, leftover: 0.0, held: None, out: Vec::new(), weights_room: vec![0.0; layout.weights()], evaluate_room: Vec::new(), evaluated: Vec::new(), envs: None };
+        let mut page = Page { recipe, legs, seconds, brain: Brain::new(layout), senses: vec![0.0; layout.inputs], show: start.clone(), start, evolution, leftover: 0.0, held: None, out: Vec::new(), weights_room: vec![0.0; layout.weights()], evaluate_room: Vec::new(), evaluated: Vec::new(), envs: None, practice: None, policy: None, held_actions: Vec::new(), running_out: Vec::new(), running_room: Vec::new(), state_room: Vec::new(), parts: Default::default(), shown_weights: Vec::new() };
         page.show_reset();
         Some(page)
     }
@@ -77,6 +91,7 @@ impl Page {
     pub fn show_reset(&mut self) {
         let weights = if self.evolution.best_score > f32::NEG_INFINITY { self.evolution.best.clone() } else { self.evolution.weights(0).to_vec() };
         self.brain.load(&weights);
+        self.shown_weights = weights;
         self.show.copy_from(&self.start);
         self.show.sense(&mut self.senses);
         self.leftover = 0.0;
@@ -88,8 +103,19 @@ impl Page {
         self.leftover += seconds;
         let mut taken = 0;
         while self.leftover >= STEP && taken < MOST_STEPS && (!self.show.judge.over() || self.held.is_some()) {
-            self.brain.think(&self.senses);
-            let actions = self.brain.outputs.clone();
+            let actions = match &mut self.policy {
+                Some(policy) => {
+                    // a policy decides every few steps, as it practised, and its actions hold between
+                    if self.show.judge.steps % Way::of(self.legs).skip == 0 {
+                        policy.act(&self.senses, &mut self.held_actions);
+                    }
+                    self.held_actions.clone()
+                }
+                None => {
+                    self.brain.think(&self.senses);
+                    self.brain.outputs.clone()
+                }
+            };
             self.show.before_step(&actions);
             if let Some(hand) = self.held {
                 let world = &mut self.show.stage.world;
@@ -105,7 +131,22 @@ impl Page {
             self.show.stage.world.step();
             // while it is held its run does not go on being judged, so it is not ended in the air
             if self.held.is_none() {
-                self.show.judge.after_step(&self.show.stage, &self.show.body, &actions);
+                // the policy's run is judged as it practised, so the page can show what it is rewarded and charged for
+                if self.policy.is_some() {
+                    let parts = super::practice::shaped(&mut self.show, Way::of(self.legs).shaping, &actions);
+                    self.parts.run += parts.run;
+                    self.parts.up += parts.up;
+                    self.parts.effort += parts.effort;
+                    self.parts.air += parts.air;
+                    self.parts.fall += parts.fall;
+                    // a fall into a gap or a hazard is charged in the run's own reward; it is kept with the other falls, to be said as one
+                    if matches!(self.show.judge.end, super::envs::End::Hazard | super::envs::End::Fell) {
+                        self.parts.run += super::envs::HAZARD_COST;
+                        self.parts.fall -= super::envs::HAZARD_COST;
+                    }
+                } else {
+                    self.parts.run += self.show.judge.after_step(&self.show.stage, &self.show.body, &actions);
+                }
             }
             self.show.sense(&mut self.senses);
             self.leftover -= STEP;
@@ -253,6 +294,60 @@ impl Page {
             stepped.envs.step(&stepped.actions, &mut stepped.observations, &mut stepped.rewards, &mut stepped.done);
         }
         (stepped.envs.steps - before) as usize
+    }
+
+    /// Starts learning by practice here, `count` creatures in fresh worlds of this recipe's kind, the
+    /// first weights from `seed` and the worlds' seeds from `stream`. Returns the length of `state`.
+    pub fn practice_create(&mut self, count: usize, seed: u64, stream: u32) -> usize {
+        self.practice = Practice::new(self.recipe, Way::of(self.legs), Settings::default(), count.clamp(1, 256), seed, stream);
+        self.practice.as_ref().map_or(0, |practice| practice.learner.state().len())
+    }
+
+    /// The show driven by a policy, in the state and running numbers written into the rooms (weights
+    /// alone will do), from the start; or, if they do not fit, by evolution again. Returns 1 if taken.
+    pub fn policy_load(&mut self) -> bool {
+        let way = Way::of(self.legs);
+        let mut start = self.start.clone();
+        way.dress(&mut start.body);
+        let mut learner = Learner::new(Settings::default(), start.senses(), start.body.actions(), 1, 0);
+        if !learner.load(&self.state_room, &self.running_room) {
+            self.policy_off();
+            return false;
+        }
+        self.held_actions = vec![0.0; start.body.actions()];
+        self.start = start;
+        self.policy = Some(learner);
+        self.show_reset();
+        true
+    }
+
+    /// The show driven by evolution's best brain again.
+    pub fn policy_off(&mut self) {
+        if self.policy.take().is_some() {
+            self.start.body.direct = false;
+            self.start.body.ease = 1.0;
+            self.start.body.strength = 1.0;
+            self.show_reset();
+        }
+    }
+
+    /// Room for a learner's state, or a policy's weights, and for its running numbers.
+    pub fn rooms(&mut self) -> (usize, usize) {
+        let way = Way::of(self.legs);
+        let mut body = self.start.body.clone();
+        way.dress(&mut body);
+        let learner = Learner::new(Settings::default(), self.start.senses(), body.actions(), 1, 0);
+        (learner.state().len(), learner.running().len())
+    }
+
+    /// The brain driving the show, drawn as it last thought (`mind::picture`): the policy if practice
+    /// is on show, else evolution's brain.
+    pub fn brain_picture(&mut self) -> &[f32] {
+        match &self.policy {
+            Some(policy) => super::mind::picture(policy, &self.senses, &mut self.out),
+            None => super::mind::picture(&super::mind::Bred { brain: &self.brain, weights: &self.shown_weights }, &self.senses, &mut self.out),
+        }
+        &self.out
     }
 
     /// How many numbers a creature senses, and how many actions it takes.

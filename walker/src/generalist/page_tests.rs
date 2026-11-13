@@ -67,6 +67,57 @@ fn the_worlds_lists_come_out_as_it_is_made() {
     assert_eq!(page.things().len() % 6, 0);
 }
 
+/// The columns of a brain's picture, what each dot is lit by, and what flows between columns.
+fn columns(picture: &[f32]) -> (Vec<usize>, Vec<Vec<f32>>, Vec<Vec<f32>>) {
+    let count = picture[0] as usize;
+    let sizes: Vec<usize> = picture[1..=count].iter().map(|&n| n as usize).collect();
+    let mut at = 1 + count;
+    let lit = sizes.iter().map(|&n| { at += n; picture[at - n..at].to_vec() }).collect();
+    let flows = sizes.windows(2).map(|pair| { at += pair[0] * pair[1]; picture[at - pair[0] * pair[1]..at].to_vec() }).collect();
+    assert_eq!(at, picture.len());
+    (sizes, lit, flows)
+}
+
+#[test]
+fn the_brain_is_drawn_as_it_thinks_whichever_way_it_learns() {
+    for legs in [2, 4] {
+        // evolution's brain: 8 neurons, no memory; each ray's six senses drawn as one dot
+        let mut page = page(legs);
+        page.show_step(0.5);
+        let senses = page.senses();
+        let (sizes, lit, flows) = columns(page.brain_picture());
+        assert_eq!(sizes, vec![senses - 16 * 5, 8, page.actions()], "{legs} legs");
+        // what flows into a hidden neuron, with its bias, is what it gave
+        let weights = page.shown_weights.clone();
+        for (j, &gave) in lit[1].iter().enumerate() {
+            let sum: f32 = flows[0][j * sizes[0]..(j + 1) * sizes[0]].iter().sum();
+            let bias = weights[senses * 8 + j];
+            assert!((crate::math::tanh(sum + bias) - gave).abs() < 1e-4, "neuron {j}: {sum} + {bias} against {gave}");
+        }
+
+        // the policy practice trains, on show
+        page.practice_create(4, 3, 3);
+        let learner = &page.practice.as_ref().unwrap().learner;
+        (page.state_room, page.running_room) = (learner.state(), learner.running());
+        assert!(page.policy_load());
+        for _ in 0..30 {
+            page.show_step(1.0 / 60.0);
+        }
+        let (sizes, lit, flows) = columns(page.brain_picture());
+        assert_eq!(sizes, vec![senses - 16 * 5, 64, 64, page.actions()]);
+        let policy = page.policy.as_ref().unwrap();
+        for (column, net_layer) in [(0, 0), (1, 1)] {
+            let start = super::mind::layer_start(&policy.trunk, net_layer);
+            let layer = policy.trunk.layers[net_layer];
+            for (j, &gave) in lit[column + 1].iter().enumerate() {
+                let sum: f32 = flows[column][j * sizes[column]..(j + 1) * sizes[column]].iter().sum();
+                let bias = policy.weights[start + layer.inputs * layer.outputs + j];
+                assert!((crate::math::tanh(sum + bias) - gave).abs() < 1e-3, "layer {column} neuron {j}");
+            }
+        }
+    }
+}
+
 #[test]
 fn creatures_stepped_for_a_learner_step() {
     let mut page = page(2);

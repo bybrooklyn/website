@@ -9,6 +9,7 @@
 use alloc::vec::Vec;
 
 use super::page::Page;
+use super::ppo::Running;
 use super::recipe::Recipe;
 use crate::Shared;
 use crate::math::Vec2;
@@ -271,3 +272,241 @@ macro_rules! stepped {
 stepped!(envs_observations, observations);
 stepped!(envs_rewards, rewards);
 stepped!(envs_done, done);
+
+// learning by practice
+/// A list of f64 for the page: its pointer, with its length kept for `length()`.
+fn give64(list: &[f64]) -> *const f64 {
+    *LENGTH.get() = list.len();
+    list.as_ptr()
+}
+
+/// Starts learning by practice in this module: `count` creatures in fresh worlds of this recipe's
+/// kind, the first weights from `seed`, the worlds' seeds from `stream`. Returns the length of
+/// `practice_state`, or 0.
+#[unsafe(no_mangle)]
+pub extern "C" fn practice_create(count: u32, seed: u32, stream: u32) -> u32 {
+    page().map_or(0, |page| page.practice_create(count as usize, seed as u64, stream) as u32)
+}
+
+/// One whole update alone: a rollout, then the epochs. Returns the number of updates.
+#[unsafe(no_mangle)]
+pub extern "C" fn practice_update() -> u32 {
+    match page().and_then(|page| page.practice.as_mut()) {
+        Some(practice) => {
+            practice.update();
+            practice.learner.updates
+        }
+        None => 0,
+    }
+}
+
+/// One update of this worker's own, for an update shared between workers: a rollout and the epochs
+/// over it. Gives what it sensed and what its rewards added up to, as running numbers (f64): this
+/// worker's share to send to the others with its weights (`practice_weights`).
+#[unsafe(no_mangle)]
+pub extern "C" fn practice_local() -> *const f64 {
+    let Some(page) = page() else { return give64(&[]) };
+    let Some(practice) = page.practice.as_mut() else { return give64(&[]) };
+    practice.ramp();
+    practice.learner.collect(&mut practice.worlds);
+    practice.learner.epochs();
+    practice.learner.updated();
+    page.running_out = practice.learner.rollout_sensed.numbers();
+    page.running_out.extend(practice.learner.rollout_returned.numbers());
+    give64(&page.running_out)
+}
+
+/// This worker's weights now.
+#[unsafe(no_mangle)]
+pub extern "C" fn practice_weights() -> *const f32 {
+    match page().and_then(|page| page.practice.as_ref()) {
+        Some(practice) => give(&practice.learner.weights),
+        None => give(&[]),
+    }
+}
+
+/// Room for every worker's share of running numbers, `workers` of them one after another, in the
+/// workers' order (f64).
+#[unsafe(no_mangle)]
+pub extern "C" fn practice_shares_room(workers: u32) -> *mut f64 {
+    let Some(page) = page() else { return core::ptr::null_mut() };
+    let senses = page.practice.as_ref().map_or(0, |practice| practice.learner.senses);
+    page.running_room.clear();
+    page.running_room.resize(workers as usize * (1 + 2 * senses + 3), 0.0);
+    *LENGTH.get() = page.running_room.len();
+    page.running_room.as_mut_ptr()
+}
+
+/// Ends an update shared between workers: takes the weights written into `practice_weights_room`
+/// (the average of every worker's) and every worker's share written into `practice_shares_room`.
+/// Returns 1, or 0 if they did not fit.
+#[unsafe(no_mangle)]
+pub extern "C" fn practice_finish(workers: u32) -> u32 {
+    let Some(page) = page() else { return 0 };
+    let Some(practice) = page.practice.as_mut() else { return 0 };
+    let senses = practice.learner.senses;
+    let (wide, width) = (1 + 2 * senses + 3, 1 + 2 * senses);
+    if page.state_room.len() != practice.learner.weights.len() || page.state_room.iter().any(|w| !w.is_finite()) || page.running_room.len() < workers as usize * wide {
+        return 0;
+    }
+    let mut sensed = Vec::new();
+    let mut returned = Vec::new();
+    for share in page.running_room.chunks_exact(wide).take(workers as usize) {
+        match (Running::from_numbers(&share[..width], senses), Running::from_numbers(&share[width..], 1)) {
+            (Some(s), Some(r)) => {
+                sensed.push(s);
+                returned.push(r);
+            }
+            _ => return 0,
+        }
+    }
+    practice.learner.weights.copy_from_slice(&page.state_room);
+    practice.learner.take_in(&sensed, &returned);
+    1
+}
+
+/// Room for weights, the average of every worker's.
+#[unsafe(no_mangle)]
+pub extern "C" fn practice_weights_room() -> *mut f32 {
+    let Some(page) = page() else { return core::ptr::null_mut() };
+    let length = page.practice.as_ref().map_or(0, |practice| practice.learner.weights.len());
+    page.state_room.clear();
+    page.state_room.resize(length, 0.0);
+    *LENGTH.get() = length;
+    page.state_room.as_mut_ptr()
+}
+
+number!(practice_updates, u32, 0, |page| page.practice.as_ref().map_or(0, |practice| practice.learner.updates));
+number!(practice_difficulty, f32, 0.0, |page| page.practice.as_ref().map_or(0.0, |practice| practice.worlds.recipe.difficulty));
+number!(practice_steps, f64, 0.0, |page| page.practice.as_ref().map_or(0.0, |practice| practice.worlds.steps as f64));
+
+/// How far each practice run that ended since the last call got, in metres; then forgotten.
+#[unsafe(no_mangle)]
+pub extern "C" fn practice_finished() -> *const f32 {
+    let Some(page) = page() else { return give(&[]) };
+    let Some(practice) = page.practice.as_mut() else { return give(&[]) };
+    page.out = core::mem::take(&mut practice.worlds.finished);
+    give(&page.out)
+}
+
+/// Everything this worker has learned, to keep or send (`Learner::state`).
+#[unsafe(no_mangle)]
+pub extern "C" fn practice_state() -> *const f32 {
+    let Some(page) = page() else { return give(&[]) };
+    match page.practice.as_ref() {
+        Some(practice) => {
+            page.out = practice.learner.state();
+            give(&page.out)
+        }
+        None => give(&[]),
+    }
+}
+
+/// The running numbers kept with what it has learned (f64).
+#[unsafe(no_mangle)]
+pub extern "C" fn practice_running() -> *const f64 {
+    let Some(page) = page() else { return give64(&[]) };
+    match page.practice.as_ref() {
+        Some(practice) => {
+            page.running_out = practice.learner.running();
+            give64(&page.running_out)
+        }
+        None => give64(&[]),
+    }
+}
+
+/// Room for a learner's state (or a policy's weights alone, `weights` 1), to write a kept or sent
+/// learner into before `practice_load` or `policy_load`.
+#[unsafe(no_mangle)]
+pub extern "C" fn state_room(weights: u32) -> *mut f32 {
+    let Some(page) = page() else { return core::ptr::null_mut() };
+    let (state, _) = page.rooms();
+    let length = if weights != 0 { (state - 2) / 3 } else { state };
+    page.state_room.clear();
+    page.state_room.resize(length, 0.0);
+    *LENGTH.get() = length;
+    page.state_room.as_mut_ptr()
+}
+
+/// Room for the running numbers kept with a learner (f64).
+#[unsafe(no_mangle)]
+pub extern "C" fn running_room() -> *mut f64 {
+    let Some(page) = page() else { return core::ptr::null_mut() };
+    let (_, running) = page.rooms();
+    page.running_room.clear();
+    page.running_room.resize(running, 0.0);
+    *LENGTH.get() = running;
+    page.running_room.as_mut_ptr()
+}
+
+/// Takes the learner written into the rooms as this worker's practice. Returns 1, or 0 if it did
+/// not fit.
+#[unsafe(no_mangle)]
+pub extern "C" fn practice_load() -> u32 {
+    let Some(page) = page() else { return 0 };
+    let (state, running) = (core::mem::take(&mut page.state_room), core::mem::take(&mut page.running_room));
+    let taken = page.practice.as_mut().is_some_and(|practice| practice.learner.load(&state, &running));
+    (page.state_room, page.running_room) = (state, running);
+    u32::from(taken)
+}
+
+/// The show driven, from the start, by the policy written into the rooms; returns 1, or 0 (and the
+/// show goes back to evolution) if it did not fit.
+#[unsafe(no_mangle)]
+pub extern "C" fn policy_load() -> u32 {
+    page().map_or(0, |page| u32::from(page.policy_load()))
+}
+
+/// The show driven by evolution's best brain again.
+#[unsafe(no_mangle)]
+pub extern "C" fn policy_off() {
+    if let Some(page) = page() {
+        page.policy_off();
+    }
+}
+
+/// Runs a network the size of a two-legged policy (114 in, two hidden layers of 64, 5 out) forward
+/// and backward over 512 rows, `rounds` times, so the page can time it. Returns the rows run.
+#[unsafe(no_mangle)]
+pub extern "C" fn net_work(rounds: u32, backward: u32) -> u32 {
+    use super::net::{Net, Squash};
+    let net = Net::new(&[114, 64, 64, 5], Squash::Tanh, Squash::Plain);
+    let mut weights = alloc::vec![0.0; net.weights()];
+    net.first(&mut weights, &mut crate::learn::Random::new(1), 1.0, 1.0);
+    let rows = 512;
+    let input: Vec<f32> = (0..rows * 114).map(|i| ((i * 7919) % 200) as f32 / 100.0 - 1.0).collect();
+    let mut work = net.work(rows);
+    let mut grads = alloc::vec![0.0; net.weights()];
+    for _ in 0..rounds {
+        net.forward(&weights, &input, rows, &mut work);
+        if backward != 0 {
+            net.blame(&mut work, rows).fill(0.01);
+            net.backward(&weights, &input, rows, &mut work, &mut grads, None);
+        }
+    }
+    rounds * rows as u32
+}
+
+/// What the show's creature was rewarded and charged for since the last call, five f32: its run's own
+/// reward (progress, less twitching and the cost of any fall: into a hazard, into a gap, or down on
+/// the ground), the bonus for being up, the cost of the motors' work, the cost of time in the air with
+/// nothing to clear, and 1 if it fell in that time, else 0. Then they start again from nothing.
+#[unsafe(no_mangle)]
+pub extern "C" fn show_rewards() -> *const f32 {
+    let Some(page) = page() else { return give(&[]) };
+    let parts = core::mem::take(&mut page.parts);
+    let fell = parts.fall < 0.0;
+    page.out.clear();
+    page.out.extend_from_slice(&[parts.run + parts.fall, parts.up, parts.effort, parts.air, if fell { 1.0 } else { 0.0 }]);
+    give(&page.out)
+}
+
+/// The brain driving the show, drawn as it last thought: the number of columns, the number of dots
+/// in each (what it senses, each ray's six numbers as one dot; its hidden layers; what it does), how
+/// lit each dot is, column after column, then for each column after the first what passes into each
+/// of its dots from each dot of the column before (`mind::picture`).
+#[unsafe(no_mangle)]
+pub extern "C" fn brain_picture() -> *const f32 {
+    let Some(page) = page() else { return give(&[]) };
+    give(page.brain_picture())
+}

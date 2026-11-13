@@ -11,6 +11,10 @@
 //! - `eyes`: a fan of rays from its eye, and a picture from the same world for later.
 //! - `envs`: many creatures in many worlds stepped together, for a learner, with the reward.
 //! - `evolve`: learning by evolution, as the Walker learns, its runs going through `envs`.
+//! - `ppo`: learning by practice, proximal policy optimisation over `net`.
+//! - `practice`: the worlds it practises in, fresh for every run, and measuring on held-out worlds.
+//! - `mind`: a brain drawn as it thinks, whichever way it learns.
+//! - `net`: a small network with its backward pass written by hand, and Adam, for gradient learning.
 //! - `page` and `api`: what the page reaches, and the plain functions it calls in `generalist.wasm`.
 //! - `stage`: a land put into the physics around one creature, laid ahead and dropped behind as it
 //!   goes, its boxes, moving platforms and see-saws made as it comes near.
@@ -25,7 +29,11 @@ pub mod envs;
 pub mod evolve;
 pub mod eyes;
 pub mod land;
+pub mod mind;
+pub mod net;
 pub mod page;
+pub mod ppo;
+pub mod practice;
 pub mod recipe;
 pub mod stage;
 
@@ -36,7 +44,13 @@ mod envs_tests;
 #[cfg(test)]
 mod eyes_tests;
 #[cfg(test)]
+mod net_tests;
+#[cfg(test)]
 mod page_tests;
+#[cfg(test)]
+mod ppo_tests;
+#[cfg(test)]
+mod practice_tests;
 #[cfg(test)]
 mod stage_tests;
 #[cfg(test)]

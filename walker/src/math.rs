@@ -183,6 +183,12 @@ fn atan2_exact(y: f32, x: f32) -> f32 {
     angle as f32
 }
 
+/// e to the power x, worked in double precision and rounded once, so it is the same on every
+/// machine. Gradient learning uses it for a policy's spread and the ratio of two chances.
+pub fn exp(x: f32) -> f32 {
+    exp64(clamp(x, -80.0, 80.0) as f64) as f32
+}
+
 /// e to the power x, for x between about -700 and 700.
 fn exp64(x: f64) -> f64 {
     let whole = nearest(x * core::f64::consts::LOG2_E);

@@ -59,6 +59,46 @@ export interface Engine {
     envs_observations(): number;
     envs_rewards(): number;
     envs_done(): number;
+    practice_create(count: number, seed: number, stream: number): number;
+    practice_update(): number;
+    practice_local(): number;
+    practice_weights(): number;
+    practice_shares_room(workers: number): number;
+    practice_weights_room(): number;
+    practice_finish(workers: number): number;
+    practice_updates(): number;
+    practice_steps(): number;
+    practice_difficulty(): number;
+    practice_finished(): number;
+    practice_state(): number;
+    practice_running(): number;
+    state_room(weights: number): number;
+    running_room(): number;
+    practice_load(): number;
+    policy_load(): number;
+    policy_off(): void;
+    net_work(rounds: number, backward: number): number;
+    show_rewards(): number;
+    /** The brain on show as it last thought, laid out as `brainColumns` reads it. */
+    brain_picture(): number;
+}
+
+/** A brain's picture from the engine (`brain_picture`): how lit each dot of each column is, and what flows into each dot from each dot of the column before, dot by dot of the later column. */
+export interface BrainColumns {
+    lit: Float32Array[];
+    flows: Float32Array[];
+}
+
+/** Reads a brain's picture: the number of columns, the size of each, every column's dots, then what flows between each pair. Views into the list, not copies. */
+export function brainColumns(picture: Float32Array): BrainColumns | undefined {
+    const count = picture[0] ?? 0;
+    if (count < 2) return undefined;
+    const sizes = Array.from(picture.subarray(1, 1 + count));
+    let at = 1 + count;
+    const take = (length: number) => picture.subarray(at, (at += length));
+    const lit = sizes.map((size) => take(size));
+    const flows = sizes.slice(1).map((size, k) => take(size * sizes[k]!));
+    return at === picture.length ? { lit, flows } : undefined;
 }
 
 /** Where the built engine is served from: built with WebAssembly SIMD, and without, for older browsers. */
@@ -79,6 +119,12 @@ export const list = (engine: Engine, pointer: number): Float32Array => new Float
 
 /** A copy of `length` f32 out of the engine's memory. */
 export const read = (engine: Engine, pointer: number, length: number): Float32Array => new Float32Array(engine.memory.buffer, pointer, length).slice();
+
+/** A copy of the list of f64 a call just gave (the running numbers kept with what practice learned). */
+export const list64 = (engine: Engine, pointer: number): Float64Array => new Float64Array(engine.memory.buffer, pointer, engine.length()).slice();
+
+/** Writes f64 into room the engine made. */
+export const write64 = (engine: Engine, pointer: number, values: ArrayLike<number>) => new Float64Array(engine.memory.buffer, pointer, values.length).set(values);
 
 /** Writes f32 into room the engine made. */
 export const write = (engine: Engine, pointer: number, values: ArrayLike<number>) => new Float32Array(engine.memory.buffer, pointer, values.length).set(values);
@@ -173,3 +219,29 @@ export function fromLink(get: (name: string) => string | null, otherwise: Recipe
 
 /** What each ray can see, as the engine numbers them. */
 export const SEEN = ["nothing", "ground", "edge", "box", "hazard", "moving", "food"] as const;
+
+/** A length of time in plain words: seconds, then minutes, then hours. */
+export function lasted(seconds: number): string {
+    if (seconds < 60) return `${Math.floor(seconds)} s`;
+    if (seconds < 3600) return `${Math.floor(seconds / 60)} min ${Math.floor(seconds % 60)} s`;
+    return `${Math.floor(seconds / 3600)} h ${Math.floor((seconds % 3600) / 60)} min`;
+}
+
+/** A count of steps in plain words. */
+export function counted(steps: number): string {
+    return steps >= 1e6 ? `${(steps / 1e6).toFixed(1)} million` : steps >= 1e3 ? `${Math.round(steps / 1e3)} thousand` : `${Math.round(steps)}`;
+}
+
+/** What the creature on show was just rewarded and charged for, in a few plain words each, from the engine's five numbers (`show_rewards`): the biggest first, the tiny left out. */
+export function rewarded(parts: ArrayLike<number>): { words: string; good: boolean }[] {
+    const [run = 0, up = 0, effort = 0, air = 0, fell = 0] = Array.from(parts);
+    const said: { words: string; good: boolean; size: number }[] = [];
+    const amount = (value: number) => `${value > 0 ? "+" : "\u2212"}${Math.abs(value).toFixed(2)}`;
+    if (fell) said.push({ words: "fell \u22123", good: false, size: 3 });
+    const forward = fell ? run + 3 : run;
+    if (Math.abs(forward) >= 0.01) said.push({ words: `${forward > 0 ? "forward" : "twitching"} ${amount(forward)}`, good: forward > 0, size: Math.abs(forward) });
+    if (up >= 0.01) said.push({ words: `up ${amount(up)}`, good: true, size: up });
+    if (effort <= -0.01) said.push({ words: `effort ${amount(effort)}`, good: false, size: -effort });
+    if (air <= -0.01) said.push({ words: `in the air for nothing ${amount(air)}`, good: false, size: -air });
+    return said.sort((a, b) => b.size - a.size).slice(0, 3).map(({ words, good }) => ({ words, good }));
+}

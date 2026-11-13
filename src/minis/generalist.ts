@@ -3,17 +3,19 @@
 //
 // The world is made from a recipe: a seed (a word or a number), how hard, and how much of each kind
 // of thing, each with a switch. The recipe is kept in the address, so a world is a link. The creature
-// learns by evolution, as the Walker does, in workers (src/scripts/generalist-worker.ts), each with
-// its own copy of the engine; this page runs one more copy that shows the best brain so far walking
-// the world, from the start, playing back the very run it was scored on. Its rays can be drawn, faint,
-// so a visitor sees what it sees. It can be picked up and dropped, or pushed.
+// learns by practice (src/scripts/generalist-practice.ts), or by evolution as the Walker does
+// (src/scripts/generalist-worker.ts), in workers each with its own copy of the engine; this page runs
+// one more copy that shows the newest policy, or the best brain so far, walking the world from the
+// start, with its brain drawn beside it as it thinks. Its rays can be drawn, faint, so a visitor sees
+// what it sees. It can be picked up and dropped, or pushed.
 //
 // The controls are in a column at the side, in the panel style the minis use. What this and the
 // worker share is in roaming.ts.
 
 import { el, type Mote, type Scene } from "../mote/stage";
+import type { Kept, Order as PracticeOrder, Report as PracticeReport } from "../scripts/generalist-practice";
 import type { Order, Report } from "../scripts/generalist-worker";
-import { BRAIN, DEFAULT_RECIPE, KINDS, LEGS, POPULATION, SECONDS, SEEN, anotherSeed, engineAddress, engineRecipe, fromLink, linkParts, list, start as startEngine, valid, type Engine, type Kind, type Recipe } from "./roaming";
+import { BRAIN, DEFAULT_RECIPE, KINDS, LEGS, POPULATION, SECONDS, SEEN, anotherSeed, brainColumns, counted, engineAddress, rewarded, engineRecipe, fromLink, lasted, linkParts, list, start as startEngine, valid, write, write64, type Engine, type Kind, type Recipe } from "./roaming";
 import { EFFORTS, machine, workersFor, type Effort } from "./walking";
 
 export const label = "A little creature with legs, seen from the side, finding its way over gaps, ledges, water and boxes in a world made from a seed. Faint lines from its eye show what it sees.";
@@ -28,12 +30,56 @@ const MOST_PUSH = 12;
 /** How near the body a press must be to pick the creature up, in metres. */
 const GRAB = 0.6;
 
+/** How the creature learns: by evolution, the best of many tries kept and varied, or by practice (PPO, in walker/src/generalist/ppo.rs). */
+type How = "evolution" | "practice";
+
+/** What practice has learned is kept in the browser between visits, one learner for each kind of world and body. */
+const KEEPING = "generalist-practice";
+const keptKey = (recipe: Recipe) => {
+    const { difficulty, amounts } = engineRecipe(recipe);
+    return [recipe.legs, difficulty, ...amounts].join(" ");
+};
+
+/** Opens the browser's store for kept learners. */
+function store(): Promise<IDBDatabase> {
+    return new Promise((opened, failed) => {
+        const asked = indexedDB.open(KEEPING, 1);
+        asked.onupgradeneeded = () => asked.result.createObjectStore("kept");
+        asked.onsuccess = () => opened(asked.result);
+        asked.onerror = () => failed(asked.error);
+    });
+}
+
+/** Does something with the store, and nothing if the browser will not keep anything. */
+async function keeping<T>(what: (kept: IDBObjectStore) => IDBRequest<T>): Promise<T | undefined> {
+    try {
+        const db = await store();
+        return await new Promise<T | undefined>((done) => {
+            const asked = what(db.transaction("kept", "readwrite").objectStore("kept"));
+            asked.onsuccess = () => done(asked.result);
+            asked.onerror = () => done(undefined);
+        });
+    } catch {
+        return undefined;
+    }
+}
+
 export default function generalist(m: Mote): Scene {
     const kept = m.recall<Recipe>("generalist", DEFAULT_RECIPE, 1);
     let recipe: Recipe = fromLink((name) => m.link.get(name), valid(kept) ? kept : DEFAULT_RECIPE) ?? (valid(kept) ? kept : DEFAULT_RECIPE);
     let effort: Effort = m.recall<Effort>("walker-effort", "normal");
     if (!EFFORTS.some((each) => each.effort === effort)) effort = "normal";
     let showRays = m.recall<boolean>("generalist-rays", true);
+    // practice first: the page opens on a creature that knows nothing, learning from the first second
+    let how: How = m.recall<How>("generalist-how", "practice") === "evolution" ? "evolution" : "practice";
+    /** How practice goes: how long and how many steps, how far its practice runs get, how far the shown creature got in its last run here, and the next policy to show. */
+    let practice = { seconds: 0, steps: 0, reached: 0, here: -1, speed: 0, waited: [0, 0], hard: 0 };
+    let policy: { weights: Float32Array; running: Float64Array } | undefined;
+    /** What the creature on show was just rewarded and charged for, said beside it, and when it was last read. */
+    let lately: { words: string; good: boolean }[] = [];
+    let heardRewards = 0;
+    /** A learner being forgotten ("start over"), which must be gone before the kept one is read again. */
+    let forgetting: Promise<unknown> = Promise.resolve();
 
     let engine: Engine | undefined;
     let worker: Worker | undefined;
@@ -64,7 +110,7 @@ export default function generalist(m: Mote): Scene {
     let pushing: { x: number; y: number } | undefined;
     let notice = { text: "", until: 0 };
 
-    const tell = (order: Order) => worker?.postMessage(order);
+    const tell = (order: Order | PracticeOrder) => worker?.postMessage(order);
 
     /** The world's lists as far as `until`, read again from where they were left. */
     const extend = (until: number) => {
@@ -89,11 +135,55 @@ export default function generalist(m: Mote): Scene {
             [camera.x, camera.y, last, holding, pushing] = [0, 0.5, undefined, false, undefined];
         }
         made = { kind: "begin", setup: id, legs: recipe.legs, seed, difficulty, amounts, brainSeed };
-        tell(made);
-        for (const helper of helpers) helper.postMessage(made);
-        tell({ kind: paused ? "pause" : "resume" });
+        if (how === "practice") {
+            practice = { seconds: 0, steps: 0, reached: 0, here: -1, speed: 0, waited: [0, 0], hard: 0 };
+            policy = undefined;
+            engine?.policy_off();
+            const setup = id;
+            // the learner kept for this kind of world, if there is one; workers start once it is read
+            void forgetting.then(() => keeping<Kept>((kept) => kept.get(keptKey(recipe)))).then((kept) => {
+                if (setup !== id) return;
+                if (kept) [practice.seconds, practice.steps] = [kept.seconds, kept.steps];
+                tell(practiceOrder(0, kept));
+                helpers.forEach((helper, k) => helper.postMessage(practiceOrder(k + 1)));
+                tell({ kind: paused ? "pause" : "resume" });
+            });
+        } else {
+            tell(made);
+            for (const helper of helpers) helper.postMessage(made);
+            tell({ kind: paused ? "pause" : "resume" });
+        }
         changed();
         m.wake();
+    };
+
+    /** What a practice worker is told to begin with: which of the workers it is, and for the first, the learner kept. */
+    const practiceOrder = (index: number, kept?: Kept): PracticeOrder => {
+        const { seed, difficulty, amounts } = engineRecipe(recipe);
+        return { kind: "begin", setup: id, legs: recipe.legs, seed, difficulty, amounts, workers: helpers.length + 1, index, learnerSeed: 1, kept };
+    };
+
+    /** Puts the newest policy from practice on show, from the start. */
+    const takePolicy = () => {
+        if (!engine || !policy) return;
+        const [stateRoom, runningRoom] = [engine.state_room(1), engine.running_room()];
+        if (engine.length() === policy.running.length) {
+            write(engine, stateRoom, policy.weights);
+            write64(engine, runningRoom, policy.running);
+            if (engine.policy_load() === 1) shown = true;
+        }
+        policy = undefined;
+        last = undefined;
+    };
+
+    const hearPractice = (report: PracticeReport) => {
+        if (report.kind === "failed" || report.setup !== id) return;
+        [practice.seconds, practice.steps, practice.reached, practice.speed, practice.waited, practice.hard] = [report.seconds, report.steps, report.reached, report.speed, report.waited, report.hard];
+        if (report.policy) policy = report.policy;
+        if (m.debug) Object.assign(globalThis, { generalistPractice: practice });
+        if (policy && !shown) takePolicy();
+        if (report.kept) void keeping((kept) => kept.put(report.kept, keptKey(recipe)));
+        changed();
     };
 
     /** Puts a brain on show, from the start. */
@@ -105,8 +195,9 @@ export default function generalist(m: Mote): Scene {
         last = undefined;
     };
 
-    const hear = (report: Report) => {
-        if (report.kind === "failed") return learnHere();
+    const hear = (report: Report | PracticeReport) => {
+        if (report.kind === "practised") return hearPractice(report);
+        if (report.kind === "failed") return how === "practice" ? undefined : learnHere();
         if (report.setup !== id) return;
         [generation, runs] = [report.generation, report.runs];
         if (report.brain) waiting = report.brain;
@@ -117,7 +208,7 @@ export default function generalist(m: Mote): Scene {
         changed();
     };
 
-    const hire = () => new Worker(new URL("../scripts/generalist-worker.ts", import.meta.url), { type: "module" });
+    const hire = () => (how === "practice" ? new Worker(new URL("../scripts/generalist-practice.ts", import.meta.url), { type: "module" }) : new Worker(new URL("../scripts/generalist-worker.ts", import.meta.url), { type: "module" }));
 
     /** Gives the first worker helpers, each joined to it by a channel of its own. The effort changes only how fast learning goes, never what is learned. */
     const staff = (count: number) => {
@@ -132,10 +223,12 @@ export default function generalist(m: Mote): Scene {
             helper.onerror = fail;
             const channel = new MessageChannel();
             helper.postMessage({ kind: "lead", port: channel.port2 } satisfies Order, [channel.port2]);
-            if (made) helper.postMessage(made);
+            if (how === "evolution" && made) helper.postMessage(made);
             ports.push(channel.port1);
             helpers.push(helper);
         }
+        // practice workers are told how many they are, so each knows its share of the creatures
+        if (how === "practice" && made) helpers.forEach((helper, k) => helper.postMessage(practiceOrder(k + 1)));
         worker.postMessage({ kind: "helpers", ports, gentle: effort === "gentle" } satisfies Order, ports);
     };
 
@@ -149,16 +242,31 @@ export default function generalist(m: Mote): Scene {
         begin();
     };
 
-    if (!m.preview) {
+    /**
+     * How many workers learn at the chosen effort. Practice uses at most four: each update is shared by
+     * averaging every worker's weights, and with more workers each has too few creatures; eight
+     * workers of four creatures learned no faster than one of thirty-two, four of eight 2.3 times as
+     * fast (walker/README.md, "In the browser").
+     */
+    const workersNow = () => Math.min(how === "practice" ? 4 : 16, workersFor(effort, machine()));
+
+    /** Hires the workers for how it learns now, letting any others go. */
+    const crew = () => {
+        staff(0);
+        worker?.terminate();
+        worker = undefined;
+        if (m.preview) return;
         try {
             worker = hire();
-            worker.onmessage = (event: MessageEvent<Report>) => hear(event.data);
-            worker.onerror = () => learnHere();
-            staff(workersFor(effort, machine()) - 1);
+            worker.onmessage = (event: MessageEvent<Report | PracticeReport>) => hear(event.data);
+            worker.onerror = () => (how === "practice" ? undefined : learnHere());
+            staff(workersNow() - 1);
         } catch {
-            here = true;
+            here = how === "evolution";
         }
-    } else here = true;
+    };
+    if (!m.preview) crew();
+    else here = true;
 
     void fetch(engineAddress())
         .then((answer) => answer.arrayBuffer())
@@ -171,6 +279,9 @@ export default function generalist(m: Mote): Scene {
 
     // ---- the controls, in a column at the side ----
     let changed = () => {};
+    let drawBrain = () => {};
+    /** The tick the brain was last drawn at; none yet. */
+    let brainAt = -1;
     if (!m.preview) {
         const host = m.canvas.parentElement!;
         const side = m.panel();
@@ -205,7 +316,8 @@ export default function generalist(m: Mote): Scene {
         };
 
         const describe = () => `${recipe.legs} legs, in the world "${recipe.seed}", ${recipe.hard} of 100 hard`;
-        const restart = () => {
+        const restart = (forget = false) => {
+            if (forget && how === "practice") forgetting = keeping((kept) => kept.delete(keptKey(recipe)));
             m.keep("generalist", recipe, 1);
             for (const [name, value] of linkParts(recipe)) m.link.set(name, value);
             notice = { text: `Learning again from the start: ${describe()}.`, until: m.time + 5 };
@@ -258,13 +370,115 @@ export default function generalist(m: Mote): Scene {
             changed();
             m.wake();
         } });
+        const explain = el("p", { class: "walker-explain" });
+        const explained = () => {
+            explain.textContent = how === "practice" ? "By practice, one creature tries again and again in a new world each time, and each try nudges every movement toward what turned out better than it expected." : "By evolution, many creatures try the same world, and the best are kept and varied.";
+        };
+        explained();
+        const hows = choices<How>("how", "how it learns", [{ value: "evolution", text: "evolution" }, { value: "practice", text: "by practice" }], () => how, (chosen) => {
+            how = chosen;
+            m.keep("generalist-how", how);
+            explained();
+            here = false;
+            made = undefined;
+            crew();
+            begin();
+        });
         const efforts = choices<Effort>("effort", "how hard learning works the computer", EFFORTS.map((each) => ({ value: each.effort, text: each.text })), () => effort, (chosen) => {
             effort = chosen;
             m.keep("walker-effort", effort);
-            staff(workersFor(effort, machine()) - 1);
+            staff(workersNow() - 1);
         });
 
+        // the brain, drawn live from the first second, so a visitor watches it grow as it learns
+        const brainPicture = el("canvas", { class: "walker-brain-picture generalist-brain" });
+        brainPicture.setAttribute("role", "img");
+        brainPicture.setAttribute("aria-label", "The creature's brain as it thinks: what it senses on the left (a dot for each ray of its eye, then its body), its neurons in the middle, and what it does on the right, lit by what passes through them.");
+        drawBrain = () => {
+            if (!engine) return;
+            const picture = brainColumns(list(engine, engine.brain_picture()));
+            const ctx = brainPicture.getContext("2d");
+            if (!picture || !ctx) return;
+            const ratio = window.devicePixelRatio || 1;
+            const [wide, high] = [brainPicture.clientWidth, brainPicture.clientHeight];
+            if (wide === 0) return;
+            if (brainPicture.width !== Math.round(wide * ratio) || brainPicture.height !== Math.round(high * ratio)) [brainPicture.width, brainPicture.height] = [Math.round(wide * ratio), Math.round(high * ratio)];
+            ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+            ctx.clearRect(0, 0, wide, high);
+            const { lit, flows } = picture;
+            const [left, right, top, bottom] = [10, wide - 10, 10, high - 22];
+            const gaps = lit.map((column) => Math.min((bottom - top) / Math.max(1, column.length - 1), 10));
+            const place = (column: number, row: number): [number, number] => [left + ((right - left) * column) / (lit.length - 1), (top + bottom) / 2 + (row - (lit[column]!.length - 1) / 2) * gaps[column]!];
+            const [accent, muted] = [m.color("--accent"), m.color("--muted")];
+            // into each neuron, the few connections passing the most to it now, each as bright as it is
+            // beside the strongest in its layer; drawn as a few paths, one for each brightness and sign
+            const LEVELS = 4;
+            const FEW = 3;
+            ctx.lineWidth = 1;
+            const best = new Int32Array(FEW);
+            flows.forEach((flow, k) => {
+                const [from, to] = [lit[k]!.length, lit[k + 1]!.length];
+                let strongest = 1e-6;
+                for (const amount of flow) strongest = Math.max(strongest, Math.abs(amount));
+                const paths = Array.from({ length: 2 * LEVELS }, () => new Path2D());
+                for (let j = 0; j < to; j++) {
+                    const row = j * from;
+                    best.fill(-1);
+                    for (let i = 0; i < from; i++) {
+                        const size = Math.abs(flow[row + i]!);
+                        for (let b = 0; b < FEW; b++) {
+                            if (best[b]! < 0 || size > Math.abs(flow[row + best[b]!]!)) {
+                                best.copyWithin(b + 1, b, FEW - 1);
+                                best[b] = i;
+                                break;
+                            }
+                        }
+                    }
+                    for (const i of best) {
+                        if (i < 0) continue;
+                        const amount = flow[row + i]!;
+                        const level = Math.min(LEVELS - 1, Math.floor((Math.abs(amount) / strongest) * LEVELS));
+                        const path = paths[level + (amount > 0 ? 0 : LEVELS)]!;
+                        path.moveTo(...place(k, i));
+                        path.lineTo(...place(k + 1, j));
+                    }
+                }
+                paths.forEach((path, p) => {
+                    ctx.globalAlpha = 0.12 + 0.55 * (((p % LEVELS) + 1) / LEVELS);
+                    ctx.strokeStyle = p < LEVELS ? accent : muted;
+                    ctx.stroke(path);
+                });
+            });
+            ctx.globalAlpha = 1;
+            // each neuron lit by what it gave
+            lit.forEach((values, column) => {
+                const size = Math.max(1.2, Math.min(3, gaps[column]! * 0.42));
+                values.forEach((value, row) => {
+                    const [x, y] = place(column, row);
+                    ctx.beginPath();
+                    ctx.arc(x, y, size, 0, Math.PI * 2);
+                    ctx.fillStyle = m.color("--ground");
+                    ctx.fill();
+                    ctx.globalAlpha = 0.25 + 0.75 * Math.min(1, Math.abs(value));
+                    ctx.fillStyle = value >= 0 ? accent : muted;
+                    ctx.fill();
+                    ctx.globalAlpha = 1;
+                });
+            });
+            ctx.fillStyle = muted;
+            ctx.font = `11px ${code}`;
+            ctx.textBaseline = "bottom";
+            ctx.textAlign = "left";
+            ctx.fillText("senses", 2, high - 3);
+            ctx.textAlign = "center";
+            ctx.fillText("neurons", wide / 2, high - 3);
+            ctx.textAlign = "right";
+            ctx.fillText("moves", wide - 2, high - 3);
+        };
+
         side.append(
+            group("brain"),
+            brainPicture,
             group("world"),
             ...row("seed", seed, another),
             ...row("how hard", hard.holder),
@@ -273,7 +487,9 @@ export default function generalist(m: Mote): Scene {
             ...row("legs", legs),
             ...row("eyes", el("label", {}, rays, "show what it sees")),
             group("learning"),
-            ...row("learning", pause, el("button", { type: "button", textContent: "start over", onclick: restart })),
+            ...row("how it learns", hows),
+            explain,
+            ...row("learning", pause, el("button", { type: "button", textContent: "start over", onclick: () => restart(true) })),
             ...row("effort", efforts),
         );
         // the world is a link from the first, so the address always says which world this is
@@ -281,7 +497,9 @@ export default function generalist(m: Mote): Scene {
 
         changed = () => {
             pause.textContent = paused ? "resume" : "pause";
-            const now = !engine ? "Loading." : !shown ? `Generation 0, ${runs} of ${POPULATION} tried` : `Generation ${generation}, furthest ${furthest.toFixed(1)} m`;
+            const practised = practice.seconds > 0 ? `Practised ${lasted(practice.seconds)}, ${counted(practice.steps)} steps` : "Starting to practise";
+            const gets = practice.here >= 0 ? `. It gets ${practice.here.toFixed(1)} m in this world now, ${practice.reached.toFixed(1)} m on average in practice` : shown ? ". Watching its try in this world" : "";
+            const now = !engine ? "Loading." : how === "practice" ? `${practised}${gets}` : !shown ? `Generation 0, ${runs} of ${POPULATION} tried` : `Generation ${generation}, furthest ${furthest.toFixed(1)} m`;
             const text = m.time < notice.until && notice.text ? notice.text : `${now}${paused ? ", paused" : ""}`;
             if (status.textContent !== text) status.textContent = text;
         };
@@ -552,6 +770,21 @@ export default function generalist(m: Mote): Scene {
         if (legs === 2) arm(1, m.color("--ink"));
     };
 
+    /** What it was just rewarded and charged for, in small words over it, so a visitor can see why it learns what it learns. */
+    const drawRewarded = (engine: Engine) => {
+        if (lately.length === 0) return;
+        const { ctx } = m;
+        const [x, y] = list(engine, engine.show_bodies());
+        const [sx, sy] = toScreen(x!, y!);
+        ctx.font = `11px ${code}`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "bottom";
+        lately.forEach((each, k) => {
+            ctx.fillStyle = m.color(each.good ? "--accent" : "--muted");
+            ctx.fillText(each.words, sx, sy - 0.55 * scale - k * 14);
+        });
+    };
+
     /** The flag at the furthest the best run has gone. */
     const drawFlag = () => {
         if (!shown || furthest <= 0) return;
@@ -587,7 +820,7 @@ export default function generalist(m: Mote): Scene {
                 beat = m.time;
                 tell({ kind: "beat" });
             }
-            if (here && !m.preview && !paused && ticks % 2 === 0) {
+            if (here && how === "evolution" && !m.preview && !paused && ticks % 2 === 0) {
                 const before = engine.best_score();
                 engine.train(1);
                 [generation, runs] = [engine.generation(), engine.generation_runs()];
@@ -597,12 +830,21 @@ export default function generalist(m: Mote): Scene {
                 }
             }
             if (shown || holding) engine.show_step(dt);
+            // twice a second, what it was rewarded and charged for since the last time
+            if (how === "practice" && m.time - heardRewards > 0.5) {
+                heardRewards = m.time;
+                const said = rewarded(list(engine, engine.show_rewards()));
+                if (said.length > 0 || engine.show_over()) lately = said;
+            }
             // at the end of its run the creature rests a moment, then starts again, with a better brain if there is one
             if (shown && engine.show_over() && !holding) {
                 ended += dt;
                 if (ended >= REST && !paused) {
                     ended = 0;
-                    if (waiting) take(waiting);
+                    if (how === "practice") practice.here = engine.show_furthest();
+                    if (how === "practice" && policy) takePolicy();
+                    else if (how === "practice") engine.show_reset();
+                    else if (waiting) take(waiting);
                     else engine.show_reset();
                     if (here) furthest = Math.max(furthest, engine.best_distance());
                     waiting = undefined;
@@ -657,7 +899,7 @@ export default function generalist(m: Mote): Scene {
             engine.show_push(x, y + 0.05, push[0]!, push[1]!);
         },
         resting: () => !m.preview && paused && !!engine && engine.show_over() === 1,
-        debug: () => [`${here ? "learning on the page" : `learning in ${helpers.length + 1} workers, ${effort}`}, generation ${generation}, ${ground.length / 4} pieces of ground made to ${reached.toFixed(0)} m`],
+        debug: () => [`${here ? "learning on the page" : `learning ${how === "practice" ? "by practice" : "by evolution"} in ${helpers.length + 1} workers, ${effort}`}, ${how === "practice" ? `${Math.round(practice.speed)} steps a second, an update ${practice.waited.map((ms) => ms.toFixed(0)).join(" ms working and ")} ms waiting` : `generation ${generation}`}, ${ground.length / 4} pieces of ground made to ${reached.toFixed(0)} m`],
         draw() {
             // about eight metres across, so what is coming can be seen as well as the creature
             scale = Math.max(34, Math.min(m.height / 4.2, m.width / 8));
@@ -667,6 +909,13 @@ export default function generalist(m: Mote): Scene {
             drawThings(engine);
             if (showRays && (shown || holding)) drawRays(engine);
             drawCreature(engine);
+            if (how === "practice") drawRewarded(engine);
+            // the brain beside it, at half the frame rate, which is as often as a policy decides; and always the
+            // first time, and when the creature is at rest, so its box is never left empty
+            if (brainAt < 0 || ticks - brainAt >= 2 || ticks === brainAt) {
+                brainAt = ticks;
+                drawBrain();
+            }
             if ((holding || pushing) && m.pointer.down) {
                 const { ctx } = m;
                 ctx.beginPath();

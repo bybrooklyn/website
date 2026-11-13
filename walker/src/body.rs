@@ -411,7 +411,7 @@ impl Creature {
         }
     }
 
-    fn aim(&self, world: &mut World, i: usize, target: f32) {
+    pub(crate) fn aim(&self, world: &mut World, i: usize, target: f32) {
         let index = self.joints[i] as usize;
         let angle = world.joints[index].angle(&world.bodies);
         let joint = &mut world.joints[index];

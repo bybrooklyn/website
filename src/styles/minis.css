@@ -610,6 +610,15 @@
     position: relative;
 }
 
+/* A sentence under a choice, saying in plain words what it means, across the column. */
+.walker-explain {
+    grid-column: 1 / -1;
+    margin: -0.3rem 0 0;
+    color: var(--muted);
+    font-size: 0.8rem;
+    line-height: 1.45;
+}
+
 .walker-label {
     color: var(--muted);
     font-size: 0.85rem;
@@ -677,6 +686,13 @@
     background: var(--ground);
     cursor: default;
     touch-action: auto;
+}
+
+/* The generalist's brain has two hidden layers of 64, so it is given more height, and the column's
+   whole width rather than one of its two columns. */
+.mote .mote-panel canvas.walker-brain-picture.generalist-brain {
+    grid-column: 1 / -1;
+    height: 15rem;
 }
 
 .mote .mote-panel canvas.walker-course-picture {
