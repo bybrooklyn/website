@@ -334,6 +334,7 @@ impl Page {
             self.start.body.direct = false;
             self.start.body.ease = 1.0;
             self.start.body.strength = 1.0;
+            self.start.body.clock = true;
             self.show_reset();
         }
     }

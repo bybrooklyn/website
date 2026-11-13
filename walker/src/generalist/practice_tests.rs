@@ -25,7 +25,7 @@ fn mix(hash: &mut u64, values: &[f32]) {
 }
 
 /// The fingerprint of a small learner's state after two updates, which the page's engine must give.
-pub const FINGERPRINT: u64 = 0x25ce_c97f_9917_3d31;
+pub const FINGERPRINT: u64 = 0x8731_a34e_fbe8_0f5c;
 
 fn fingerprint() -> u64 {
     let mut practice = Practice::new(recipe(0.5), Way::of(2), Settings::default(), 2, 7, 3).unwrap();

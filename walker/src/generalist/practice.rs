@@ -54,6 +54,27 @@ pub struct Shaping {
     /// For each second with its feet taking turns while it goes forward (`gait::taking_turns`, as the
     /// Walker counts it: for two legs exactly one foot down), in full from 0.6 m/s.
     pub turns: f32,
+    /// The fastest progress paid for, in metres a second (0: any): a metre gained quicker than this
+    /// earns only what this pace would have, so going about is asked for and racing is not.
+    pub pace: f32,
+    /// For each metre a second a foot is coming down at when it lands: a stamp costs, a foot set
+    /// down does not.
+    pub impact: f32,
+    /// For each second of the body's spin, squared (radians a second): rocking costs.
+    pub spin: f32,
+    /// For each second of the body's speed up or down, squared (metres a second): bobbing costs.
+    pub bob: f32,
+    /// For each second of each joint's speed, squared (radians a second), summed over the joints.
+    pub swing: f32,
+    /// For each second of each motor's torque, squared (newton metres), summed over the joints: the
+    /// usual stand-in for what a muscle burns, which grows faster than its force.
+    pub torque: f32,
+    /// For a run that ends because it got nowhere for five seconds, as a fall costs: standing still
+    /// is not a way to keep out of trouble.
+    pub stall: f32,
+    /// For each second of the body's lean, squared (radians from upright): a posture term, as the
+    /// knee and upright terms are.
+    pub lean: f32,
 }
 
 /// The parts of a step's reward, for a reader: the run's own (progress less hazards and twitching),
@@ -85,8 +106,38 @@ pub fn clear_ahead(run: &Run) -> bool {
 pub fn shaped(run: &mut Run, shaping: Shaping, actions: &[f32]) -> Parts {
     let world = &run.stage.world;
     let mut parts = Parts::default();
+    let creature = &run.body.creature;
+    if shaping.impact != 0.0 {
+        for (k, leg) in creature.legs.iter().enumerate() {
+            let foot = &world.bodies[leg.lower as usize];
+            let (falling, was_down) = run.feet[k];
+            if foot.touching && !was_down && falling < 0.0 {
+                parts.effort += shaping.impact * falling;
+            }
+            run.feet[k] = (foot.velocity.y, foot.touching);
+        }
+    }
+    let torso = &world.bodies[creature.torso as usize];
+    if shaping.spin != 0.0 {
+        parts.effort -= shaping.spin * STEP * torso.spin * torso.spin;
+    }
+    if shaping.lean != 0.0 {
+        let angle = torso.angle();
+        parts.posture -= shaping.lean * STEP * angle * angle;
+    }
+    if shaping.bob != 0.0 {
+        parts.effort -= shaping.bob * STEP * torso.velocity.y * torso.velocity.y;
+    }
+    if shaping.swing != 0.0 || shaping.torque != 0.0 {
+        let h = STEP / world.substeps.max(1) as f32;
+        for &joint in &creature.joints {
+            let joint = &world.joints[joint as usize];
+            let (speed, torque) = (joint.angular_speed(&world.bodies), joint.motor_torque(h));
+            parts.effort -= STEP * (shaping.swing * speed * speed + shaping.torque * torque * torque);
+        }
+    }
     if shaping.energy != 0.0 {
-        parts.effort = -shaping.energy * run.body.creature.effort(world);
+        parts.effort -= shaping.energy * run.body.creature.effort(world);
     }
     if shaping.air != 0.0 && run.body.creature.flying(world) && !clear_ahead(run) {
         parts.air = -shaping.air * STEP;
@@ -94,12 +145,19 @@ pub fn shaped(run: &mut Run, shaping: Shaping, actions: &[f32]) -> Parts {
     if shaping.knee != 0.0 {
         parts.posture -= shaping.knee * STEP * run.body.creature.kneeling(world) as f32;
     }
+    let before = run.judge.furthest;
     parts.run = run.judge.after_step(&run.stage, &run.body, actions);
+    if shaping.pace > 0.0 {
+        parts.run -= (run.judge.furthest - before - shaping.pace * STEP).max(0.0);
+    }
     if run.judge.end == End::Going && run.judge.seconds_down > 0.0 && run.judge.seconds_down > shaping.down {
         run.judge.end = End::Down;
     }
     if run.judge.end == End::Down {
         parts.fall = -shaping.fall;
+    }
+    if run.judge.end == End::Stalled && shaping.stall != 0.0 {
+        parts.fall = -shaping.stall;
     }
     if run.judge.seconds_down == 0.0 {
         let tallness = if shaping.tall { run.body.creature.tallness(&run.stage.world) } else { 1.0 };
@@ -134,6 +192,12 @@ pub struct Way {
     pub ease: f32,
     /// How strong and quick the joints are when aimed directly (`Body::strength`).
     pub strength: f32,
+    /// The furthest forward a hip may swing, in radians from the leg straight down (0: the body's
+    /// own limit, 1.3): a body that cannot kick high, rather than a rule against kicking.
+    pub hip: f32,
+    /// Whether it senses the legs' rhythm (the sine and cosine of a steady clock): a clock to step
+    /// to, which is a hint about how to move, so it can be taken away.
+    pub clock: bool,
 }
 
 impl Way {
@@ -142,6 +206,18 @@ impl Way {
         body.direct = self.direct;
         body.ease = self.ease;
         body.strength = self.strength;
+        body.clock = self.clock;
+    }
+
+    /// Dresses a run's body (`dress`) and sets its hips' reach forward, if this way changes it.
+    pub fn dress_run(&self, run: &mut Run) {
+        self.dress(&mut run.body);
+        if self.hip > 0.0 {
+            for joints in run.body.creature.joints.chunks(2) {
+                let hip = &mut run.stage.world.joints[joints[0] as usize];
+                hip.upper = self.hip;
+            }
+        }
     }
 
     /// Takes the actions asked into the actions held for the next decision, as practice and the show
@@ -160,21 +236,26 @@ impl Way {
         change
     }
 
-    /// What was settled on; walker/README.md ("How it moves") gives the measurements. Each joint is
-    /// aimed straight at an angle; no hop, so leaving the ground is its legs' own doing, and costs:
-    /// 0.002 for each joule of the motors' work and 2 for each second in the air with nothing to
-    /// clear, brought in over its first 4 million steps, and 3 for a fall, as a fall into a gap costs.
+    /// What was settled on; walker/README.md ("How it moves" and "How two legs came to walk") gives
+    /// the measurements. Each joint is aimed straight at an angle; no hop, so leaving the ground is its
+    /// legs' own doing, and costs: 0.002 for each joule of the motors' work and 2 for each second in
+    /// the air with nothing to clear, brought in over its first 4 million steps, and 3 for a fall, as a
+    /// fall into a gap costs.
+    ///
     /// Two legs are held to their posture as well: 1 for each second of each knee down, 0.5 for each
-    /// second carried tall, 0.5 for each second with one foot down going forward, and a run that ends
-    /// at the first touch of its body once the costs are all in (until then it may be down for a
-    /// second, less and less).
+    /// second carried tall, 1 for each second of the body's lean squared, and a run that ends at the
+    /// first touch of its body once the costs are all in (until then it may be down for a second, less
+    /// and less). They are asked to go about rather than race: progress is paid up to 1 m/s and no
+    /// faster, and a run that gets nowhere for five seconds costs 3, as a fall does. A landing costs
+    /// 0.05 for each metre a second the foot comes down at. They sense no rhythm, and nothing rewards
+    /// how their feet take turns.
     pub fn of(legs: u32) -> Way {
-        let mut shaping = Shaping { alive: 0.25, energy: 0.002, air: 2.0, tall: false, smooth: 0.0, fall: 3.0, knee: 0.0, upright: 0.0, down: 1.0, turns: 0.0 };
+        let mut shaping = Shaping { alive: 0.25, energy: 0.002, air: 2.0, tall: false, smooth: 0.0, fall: 3.0, knee: 0.0, upright: 0.0, down: 1.0, turns: 0.0, pace: 0.0, impact: 0.0, spin: 0.0, bob: 0.0, swing: 0.0, torque: 0.0, stall: 0.0, lean: 0.0 };
         // two legs went on their belly and knees in lunges without these (README, "How it moves")
         if legs == 2 {
-            shaping = Shaping { knee: 1.0, upright: 0.5, down: 0.0, turns: 0.5, ..shaping };
+            shaping = Shaping { knee: 1.0, upright: 0.5, down: 0.0, lean: 1.0, pace: 1.0, stall: 3.0, impact: 0.05, ..shaping };
         }
-        Way { legs, direct: true, skip: 4, seconds: 30.0, shaping, hop: false, ramp: 4_000_000, ease: 1.0, strength: 1.0 }
+        Way { legs, direct: true, skip: 4, seconds: 30.0, shaping, hop: false, ramp: 4_000_000, ease: 1.0, strength: 1.0, hip: 0.0, clock: legs != 2 }
     }
 }
 
@@ -223,6 +304,9 @@ pub struct Worlds {
     pub joules: f64,
     /// How each creature moves, step by step, when measuring.
     pub watches: Option<Vec<Watch>>,
+    /// The same, watching only while nothing ahead asks for anything but walking (`clear_ahead`):
+    /// how it moves on open ground, with what it does at each thing in its way left out.
+    pub open_watches: Option<Vec<Watch>>,
 }
 
 impl Worlds {
@@ -240,7 +324,7 @@ impl Worlds {
         let runs = seeds.iter().map(|&seed| make(recipe, way, seed)).collect::<Option<Vec<Run>>>()?;
         let (senses, actions) = (runs.first()?.senses(), runs.first()?.body.actions());
         let count = runs.len();
-        Some(Worlds { recipe, way, stream: 0, spare: (0..count).map(|_| World::new()).collect(), going: vec![true; count], active: Vec::with_capacity(count), made: vec![0; count], renew: false, held: vec![0.0; count * actions], senses, actions, finished: Vec::new(), steps: 0, tally: (0, 0), goal: f32::INFINITY, idle_air: 0, joules: 0.0, watches: None, runs })
+        Some(Worlds { recipe, way, stream: 0, spare: (0..count).map(|_| World::new()).collect(), going: vec![true; count], active: Vec::with_capacity(count), made: vec![0; count], renew: false, held: vec![0.0; count * actions], senses, actions, finished: Vec::new(), steps: 0, tally: (0, 0), goal: f32::INFINITY, idle_air: 0, joules: 0.0, watches: None, open_watches: None, runs })
     }
 
     /// Whether creature i is still going (only a creature alone can stop).
@@ -295,6 +379,14 @@ impl Worlds {
                 if let Some(watches) = &mut self.watches {
                     watches[i].after_step(&run.body.creature, &run.stage.world, idle);
                 }
+                #[cfg(not(target_arch = "wasm32"))]
+                if let Some(watches) = &mut self.open_watches {
+                    if clear_ahead(run) {
+                        watches[i].pause();
+                    } else {
+                        watches[i].after_step(&run.body.creature, &run.stage.world, idle);
+                    }
+                }
                 self.joules += run.body.creature.effort(&run.stage.world) as f64;
                 rewards[i] += parts.run + parts.up + parts.effort + parts.air + parts.fall + parts.posture;
                 if run.judge.over() {
@@ -324,7 +416,7 @@ impl Worlds {
 /// A creature at the start of a fresh world of the recipe's kind with this seed.
 fn make(recipe: Recipe, way: Way, seed: u32) -> Option<Run> {
     let mut run = Run::new(Rc::new(Land::new(Recipe { seed, ..recipe }, FIRST_MADE)), way.legs, way.seconds)?;
-    way.dress(&mut run.body);
+    way.dress_run(&mut run);
     Some(run)
 }
 
@@ -369,6 +461,8 @@ pub struct Measured {
     pub joules_per_metre: f32,
     /// How it moved (`gait`).
     pub gait: Gait,
+    /// How it moved on open ground alone (`Worlds::open_watches`).
+    pub open_gait: Gait,
 }
 
 impl Measured {
@@ -381,6 +475,7 @@ impl Measured {
 pub fn measure(recipe: Recipe, way: Way, seeds: &[u32], mut act: impl FnMut(usize, &[f32], &mut [f32])) -> Measured {
     let Some(mut worlds) = Worlds::alone(recipe, way, seeds) else { return Measured::default() };
     worlds.watches = Some(vec![Watch::default(); seeds.len()]);
+    worlds.open_watches = Some(vec![Watch::default(); seeds.len()]);
     let (count, senses, wide) = (seeds.len(), worlds.senses, worlds.actions);
     let (mut sensed, mut actions, mut rewards, mut ends, mut last) = (vec![0.0; count * senses], vec![0.0; count * wide], vec![0.0; count], vec![GOING; count], vec![0.0; count * senses]);
     worlds.observe(&mut sensed);
@@ -395,7 +490,8 @@ pub fn measure(recipe: Recipe, way: Way, seeds: &[u32], mut act: impl FnMut(usiz
     let distances: Vec<f32> = worlds.runs.iter().map(|run| run.judge.furthest).collect();
     let metres = distances.iter().sum::<f32>().max(0.01);
     let gait = Gait::of(worlds.watches.as_deref().unwrap_or(&[]));
-    Measured { idle_air: worlds.idle_air as f32 / worlds.steps.max(1) as f32, joules_per_metre: (worlds.joules / metres as f64) as f32, distances, gait }
+    let open_gait = Gait::of(worlds.open_watches.as_deref().unwrap_or(&[]));
+    Measured { idle_air: worlds.idle_air as f32 / worlds.steps.max(1) as f32, joules_per_metre: (worlds.joules / metres as f64) as f32, distances, gait, open_gait }
 }
 
 /// A learner practising in fresh worlds of a recipe's kind: what the page runs, and the native runs
@@ -456,6 +552,12 @@ impl Practice {
             way.shaping.energy = self.shaping.energy * along;
             way.shaping.air = self.shaping.air * along;
             way.shaping.knee = self.shaping.knee * along;
+            way.shaping.impact = self.shaping.impact * along;
+            way.shaping.spin = self.shaping.spin * along;
+            way.shaping.bob = self.shaping.bob * along;
+            way.shaping.swing = self.shaping.swing * along;
+            way.shaping.torque = self.shaping.torque * along;
+            way.shaping.lean = self.shaping.lean * along;
             // the time it may be down shortens from the run's own second to what is asked
             way.shaping.down = 1.0 + (self.shaping.down - 1.0) * along;
         }

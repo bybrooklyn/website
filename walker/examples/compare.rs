@@ -24,8 +24,17 @@
 //!
 //! The posture terms can be changed too: `knee=` (each second of a knee down), `upright=` (each second
 //! carried tall), `turns=` (each second with one foot down going forward), `down=` (seconds the body may
-//! be down before a run ends), `alive=`, `tall=1`; and `name=` labels the lines. `knee=0 upright=0
-//! turns=0 down=1` is how two legs practised before.
+//! be down before a run ends), `alive=`, `tall=1`; and `name=` labels the lines. `turns=0.5 clock=1
+//! pace=0 stall=0 impact=0 lean=0` is how two legs practised until 13 November 2026, and with
+//! `knee=0 upright=0 turns=0 down=1` as well, how they practised before the posture terms.
+//!
+//! The gait trials' settings too (walker/README.md, "How two legs came to walk"): `pace=` (the top
+//! speed paid for), `stall=`, `impact=`, `lean=`, `spin=`, `bob=`, `swing=`, `torque=`, `smooth=`, `hip=`,
+//! `clock=`, `skip=`, `ease=`, `strength=`, `seconds=`, and learning's `entropy=`, `rate=`, `spread=`,
+//! `gamma=`. `amounts=a,b,c,d` sets the world's four amounts (1 each unless given). Each mark prints
+//! an `open` line beside the main one, the gait on open ground in the same worlds, and with `flat=1` a
+//! `flat` line, on level ground with nothing on it. `kept=<path>` measures a learner the page kept
+//! (`<path>.state` and `<path>.running`, one number to a line) instead of practising.
 //!
 //! For the transfer measurement, `easy=0.1 switch=10000000` has practice spend its first ten million
 //! steps in worlds of difficulty 0.1 and the rest in worlds of the difficulty asked, while it is
@@ -41,7 +50,7 @@ use walker::generalist::ppo::Settings;
 use walker::generalist::practice::{Measured, Practice, Shaping, Way, held_out, measure};
 use walker::generalist::recipe::Recipe;
 
-const MARKS: [u64; 7] = [1_000_000, 2_000_000, 5_000_000, 10_000_000, 20_000_000, 30_000_000, 50_000_000];
+const MARKS: [u64; 8] = [1_000_000, 2_000_000, 5_000_000, 10_000_000, 20_000_000, 30_000_000, 40_000_000, 50_000_000];
 
 fn main() {
     let mut method = String::from("practice");
@@ -50,6 +59,9 @@ fn main() {
     let mut ramp: Option<u64> = None;
     let (mut easy, mut switch): (Option<f32>, u64) = (None, 0);
     let mut trials: Vec<(String, f32)> = Vec::new();
+    let mut kept: Option<String> = None;
+    let mut amounts = [1.0f32; 4];
+    let mut flat = false;
     for arg in std::env::args().skip(1) {
         let Some((name, value)) = arg.split_once('=') else { continue };
         match name {
@@ -64,11 +76,14 @@ fn main() {
             "fall" => fall = Some(value.parse().unwrap()),
             "easy" => easy = Some(value.parse().unwrap()),
             "switch" => switch = value.parse().unwrap(),
+            "amounts" => amounts = value.split(',').map(|n| n.parse().unwrap()).collect::<Vec<f32>>().try_into().unwrap(),
             "name" => method = value.to_string(),
+            "kept" => kept = Some(value.to_string()),
+            "flat" => flat = value == "1",
             _ => trials.push((name.to_string(), value.parse().unwrap_or_else(|_| panic!("{arg}")))),
         }
     }
-    let recipe = Recipe { seed: 1, difficulty, amounts: [1.0; 4] };
+    let recipe = Recipe { seed: 1, difficulty, amounts };
     let seeds = held_out(16);
     let marks: Vec<u64> = MARKS.iter().copied().filter(|&m| m <= budget).collect();
     if let Some(easy) = easy {
@@ -95,6 +110,12 @@ fn main() {
             g.balance,
             g.variation,
             u8::from(g.walks(legs as usize))
+        );
+    };
+    let also = |kind: &str, steps: u64, measured: &Measured, g: walker::generalist::gait::Gait| {
+        println!(
+            "{method}-{kind} {legs} {difficulty} {seed} {steps} {:.1} {:.2} 0 0 {:.3} {:.0} low={:.3} belly={:.3} height={:.2}/{:.2} pitch={:.2}/{:.2} together={:.2} cadence={:.2} balance={:.2} variation={:.2} walks={}",
+            started.elapsed().as_secs_f32(), measured.mean(), measured.idle_air, measured.joules_per_metre, g.low, g.belly, g.height, g.height_spread, g.pitch, g.pitch_spread, g.together, g.cadence, g.balance, g.variation, u8::from(g.walks(legs as usize))
         );
     };
     if method == "evolution" {
@@ -127,7 +148,7 @@ fn main() {
         way.shaping.air = air.unwrap_or(way.shaping.air);
         way.shaping.fall = fall.unwrap_or(way.shaping.fall);
         way.ramp = ramp.unwrap_or(way.ramp);
-        let settings = Settings::default();
+        let mut settings = Settings::default();
         for (name, value) in &trials {
             let (value, on) = (*value, *value != 0.0);
             match name.as_str() {
@@ -138,6 +159,25 @@ fn main() {
                 "turns" => way.shaping.turns = value,
                 "alive" => way.shaping.alive = value,
                 "tall" => way.shaping.tall = on,
+                "pace" => way.shaping.pace = value,
+                "impact" => way.shaping.impact = value,
+                "spin" => way.shaping.spin = value,
+                "bob" => way.shaping.bob = value,
+                "swing" => way.shaping.swing = value,
+                "torque" => way.shaping.torque = value,
+                "stall" => way.shaping.stall = value,
+                "lean" => way.shaping.lean = value,
+                "smooth" => way.shaping.smooth = value,
+                "hip" => way.hip = value,
+                "clock" => way.clock = on,
+                "skip" => way.skip = value as u32,
+                "ease" => way.ease = value,
+                "strength" => way.strength = value,
+                "seconds" => way.seconds = value,
+                "entropy" => settings.entropy_weight = value,
+                "rate" => settings.rate = value,
+                "spread" => settings.spread_start = value,
+                "gamma" => settings.gamma = value,
                 _ => panic!("no setting called {name}"),
             }
         }
@@ -145,6 +185,22 @@ fn main() {
         let first = Recipe { difficulty: easy.unwrap_or(difficulty), ..recipe };
         let mut practice = Practice::new(first, way, settings, 32, seed, seed as u32).unwrap();
         practice.recipe = recipe;
+        // a learner kept by the page, its state in `<kept>.state` and running numbers in
+        // `<kept>.running`, one number to a line: measured as it is rather than practised further
+        if let Some(path) = &kept {
+            let read = |path: &str| -> Vec<f64> { std::fs::read_to_string(path).unwrap().split_whitespace().map(|n| n.parse().unwrap()).collect() };
+            let state: Vec<f32> = read(&format!("{path}.state")).iter().map(|&n| n as f32).collect();
+            let running = read(&format!("{path}.running"));
+            assert!(practice.load(&state, &running), "the kept learner does not fit this way");
+            let own = practice.evaluate(&[1])[0];
+            let measured = practice.measure(&seeds);
+            also("open", practice.worlds.steps, &measured, measured.open_gait);
+            say(practice.worlds.steps, measured, own);
+            practice.recipe = Recipe { amounts: [0.0; 4], ..recipe };
+            let measured = practice.measure(&seeds);
+            also("flat", practice.worlds.steps, &measured, measured.gait);
+            return;
+        }
         for &mark in &marks {
             while practice.worlds.steps < mark {
                 if practice.worlds.steps >= switch {
@@ -154,7 +210,16 @@ fn main() {
             }
             let own = practice.evaluate(&[1])[0];
             let measured = practice.measure(&seeds);
+            also("open", practice.worlds.steps, &measured, measured.open_gait);
             say(practice.worlds.steps, measured, own);
+            // the same policy on level ground with nothing on it, where a stride has no reason to vary
+            if flat {
+                let recipe = practice.recipe;
+                practice.recipe = Recipe { amounts: [0.0; 4], ..recipe };
+                let measured = practice.measure(&seeds);
+                practice.recipe = recipe;
+                also("flat", practice.worlds.steps, &measured, measured.gait);
+            }
         }
     }
 }
