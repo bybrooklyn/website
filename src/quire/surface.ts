@@ -343,8 +343,8 @@ function aside<K extends keyof HTMLElementTagNameMap>(tag: K, className: string)
     return element;
 }
 
-/** A code block: its language, as a field with the languages offered, and its code, highlighted. */
-function drawCode(block: Code, inner: number[], how: Drawing): HTMLElement {
+/** A code block: its language, as a button whose menu offers the languages, and its code, highlighted. The source of maths or a diagram is named by `kind` instead, as a label, since a language chosen for it would turn it into plain code. */
+function drawCode(block: Code, inner: number[], how: Drawing, kind?: string): HTMLElement {
     const pre = document.createElement("pre");
     pre.className = "quire-code";
     pre.dataset.label = block.language;
@@ -353,8 +353,13 @@ function drawCode(block: Code, inner: number[], how: Drawing): HTMLElement {
         fillText(holder, block.code);
         how.later(holder, block);
     } else fillTokens(holder, block.code, block.language);
-    // the language as a quiet button whose menu is block-menus.ts's
     const corner = aside("span", "quire-lang-corner");
+    if (kind) {
+        corner.append(Object.assign(document.createElement("span"), { className: "quire-lang quire-lang-kind", textContent: kind }));
+        pre.append(corner, holder);
+        return pre;
+    }
+    // the language as a quiet button whose menu is block-menus.ts's
     const button = document.createElement("button");
     button.type = "button";
     button.className = "quire-lang";
@@ -367,6 +372,13 @@ function drawCode(block: Code, inner: number[], how: Drawing): HTMLElement {
     return pre;
 }
 
+/** What a block of maths or a diagram says in place of its drawing when it has none: what to write while it is empty, and why it is not drawn otherwise; a flowchart with a slip in it is not told that only flowcharts are drawn. */
+export function drawnNote(language: string, code: string): string {
+    if (code.trim() === "") return language === "math" ? "Type a formula below" : "A diagram, written below as a flowchart";
+    if (language === "math") return "Shown as written: this uses more TeX than mdQuire lays out";
+    return /^\s*(flowchart|graph)\b/.test(code) ? "Could not draw this flowchart" : "Shown as code: mdQuire draws flowcharts only";
+}
+
 /** Maths or a diagram: laid out above its source, which is what is saved and is edited as code. What cannot be laid out says so, and its source stays in full view. */
 function drawDrawn(block: Code, inner: number[], how: Drawing): HTMLElement {
     const box = document.createElement("div");
@@ -377,9 +389,9 @@ function drawDrawn(block: Code, inner: number[], how: Drawing): HTMLElement {
     if (html !== null) preview.innerHTML = html;
     else {
         box.classList.add("quire-drawn-plain");
-        preview.textContent = block.code.trim() === "" ? (block.language === "math" ? "Maths, written below in TeX" : "A diagram, written below as a flowchart") : block.language === "math" ? "Shown as written: this uses more TeX than mdQuire lays out" : "Shown as code: mdQuire draws flowcharts only";
+        preview.textContent = drawnNote(block.language, block.code);
     }
-    box.append(preview, drawCode(block, inner, how));
+    box.append(preview, drawCode(block, inner, how, block.language === "math" ? "Maths" : "Diagram"));
     return box;
 }
 
@@ -448,6 +460,8 @@ function draw(block: Block, inner: number[], how: Drawing = plainDrawing): HTMLE
                     item.blocks.forEach((child, j) => {
                         const holder = document.createElement(j === 0 ? "dt" : "dd");
                         holder.append(draw(child, [...inner, k, j], how));
+                        // an empty line says, faintly, which it is
+                        if (child.kind === "paragraph" && child.runs.length === 0) holder.dataset.empty = j === 0 ? "Term" : "Definition";
                         element.append(holder);
                     }),
                 );

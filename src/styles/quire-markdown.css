@@ -127,7 +127,7 @@
     mask: url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22black%22 stroke-width=%222.5%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22m6 9 6 6 6-6%22/%3E%3C/svg%3E') center / contain no-repeat;
 }
 
-.quire-lang:hover,
+.quire-lang:not(.quire-lang-kind):hover,
 .quire-lang.open,
 .quire-lang:focus-visible {
     border-color: var(--rule);
@@ -162,6 +162,23 @@
     transition:
         max-height 0.35s var(--ease),
         opacity 0.25s var(--ease);
+}
+
+/* its source is named Maths or Diagram, a label and not a menu, on a line of its own above it while it is shown whole */
+.quire-lang-kind {
+    cursor: default;
+}
+
+.quire-lang-kind::after {
+    content: none;
+}
+
+.quire-drawn:is(.quire-editing, .quire-drawn-plain) > pre {
+    padding-top: 1.9rem;
+}
+
+.quire-drawn:not(.quire-editing, .quire-drawn-plain) .quire-lang-corner {
+    opacity: 0;
 }
 
 .quire-drawn:not(.quire-editing, .quire-drawn-plain) > pre {
@@ -596,6 +613,21 @@
     margin: 0 0 0.35em 1.5rem;
     padding-left: 0.75rem;
     border-left: 0.0625rem solid var(--rule);
+}
+
+/* an empty term or definition says faintly which it is, so that the two lines can be told apart before anything is written */
+.quire-terms [data-empty] > p {
+    position: relative;
+}
+
+.quire-terms [data-empty] > p::before {
+    content: attr(data-empty);
+    position: absolute;
+    inset: 0 auto auto 0;
+    color: var(--quire-faint);
+    font-weight: 400;
+    pointer-events: none;
+    user-select: none;
 }
 
 .quire-terms:not(.quire-tight) dd:has(+ dt) {

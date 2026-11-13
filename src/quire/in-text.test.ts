@@ -322,6 +322,19 @@ test("a picked picture: no caret blinks beside it, no empty slot in its strip, a
     await tab.wait(300);
 });
 
+test("an empty definition list says which line is the term and which the definition; maths and a diagram are named, with no language to change", async () => {
+    if (skip("the definition list's and drawn blocks' words")) return;
+    const { tab } = page!;
+    await page!.reset("", [0], 0);
+    await page!.menuLine("Insert", "Definition list");
+    await tab.wait(100);
+    expect(await tab.run("[...document.querySelectorAll('.quire-terms [data-empty]')].map((each) => each.dataset.empty)")).toEqual(["Term", "Definition"]);
+    await tab.type("Word");
+    expect(await tab.run("[...document.querySelectorAll('.quire-terms [data-empty]')].map((each) => each.dataset.empty)")).toEqual(["Definition"]);
+    await page!.reset("$$\nx^2\n$$\n\n```mermaid\nflowchart LR\n  A --> B\n```\n", [0], 0);
+    expect(await tab.run("[...document.querySelectorAll('.quire-drawn .quire-lang')].map((each) => each.tagName + ' ' + each.textContent)")).toEqual(["SPAN Maths", "SPAN Diagram"]);
+});
+
 test("a folding section just inserted takes the keyboard into its summary, whose empty word is quiet", async () => {
     if (skip("a new folding section's summary")) return;
     const { tab } = page!;

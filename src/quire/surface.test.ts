@@ -8,6 +8,13 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { browser, chromium, type Browser } from "../../scripts/browser";
+import { drawnNote } from "./surface";
+
+test("an empty block of maths asks for a formula in plain words, and a flowchart with a slip in it is told it could not be drawn, not that only flowcharts are", () => {
+    expect(drawnNote("math", "")).toBe("Type a formula below");
+    expect(drawnNote("mermaid", "flowchart LR\n  A -->")).toBe("Could not draw this flowchart");
+    expect(drawnNote("mermaid", "sequenceDiagram\n  A->>B: hi")).toBe("Shown as code: mdQuire draws flowcharts only");
+});
 
 const here = import.meta.dir;
 
