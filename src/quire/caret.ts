@@ -70,9 +70,6 @@ export function caretBox(root: HTMLElement, frame: HTMLElement): { left: number;
     return { left: (rect.left - origin.left) / zoom - frame.clientLeft, top: (rect.top - origin.top) / zoom - frame.clientTop, height: rect.height / zoom };
 }
 
-/** How much of the text's height the caret stands: all of it, as the browser's own caret does. */
-const TALL = 1;
-
 /** The colour shown after `index` blinks, going round the list. */
 export function blinkColour(colours: readonly string[], index: number): string {
     return colours[((index % colours.length) + colours.length) % colours.length];
@@ -129,8 +126,8 @@ export function createCaret(root: HTMLElement, frame: HTMLElement, first: readon
         const was = element.classList.contains("shown");
         element.classList.toggle("shown", !!box);
         if (!box) return false;
-        // as tall as the text, as the browser's own caret is (TALL)
-        const tall = box.height * TALL;
+        // as tall as the text, as the browser's own caret is
+        const tall = box.height;
         const top = box.top + (box.height - tall) / 2;
         const far = !last || Math.abs(last.top - top) > tall / 2 || Math.abs(last.left - box.left) > tall * 2;
         last = { left: box.left, top, height: tall };

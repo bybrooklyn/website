@@ -794,7 +794,7 @@ export function createBar(surface: Surface, options: BarOptions) {
         tool(opener(highlights, "Highlight", icon("highlight"), highlightLines), FOLDS.colors, () => [{ label: "Highlight", icon: "highlight", hint: "›", run: () => highlights.open(moreButton, highlightLines(), true) }], true),
     );
 
-    // ---- link, picture (comment comes when comments do) ----
+    // ---- link, picture ----
     const chooser = make("input");
     chooser.type = "file";
     chooser.accept = "image/*";
