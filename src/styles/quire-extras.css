@@ -904,6 +904,7 @@
 
 .quire-top {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr);
     transition:
         grid-template-rows 0.4s var(--ease),
@@ -911,6 +912,8 @@
 }
 
 .quire-top > .quire-top-in {
+    /* as wide as it was before the top became a grid: a grid's item with auto margins would shrink to its words */
+    width: 100%;
     min-height: 0;
     transition:
         translate 0.4s var(--ease),
@@ -1028,7 +1031,8 @@
     padding-bottom: calc(var(--line) * 4 + 2.5rem);
 }
 
-html:has(.quire-editor.counting) {
+/* a class on the page itself (editor.ts), not `:has()`: a rule on the page that looks inside it is worked out again at every key, which cost a long document its 16 ms */
+html.quire-counting {
     scroll-padding-bottom: 3.5rem;
 }
 

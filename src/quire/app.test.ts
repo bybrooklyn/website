@@ -472,7 +472,7 @@ used("on a narrow window the menu words have a line of their own under the trail
     try {
         await tab.wait(600);
         const row = await tab.run<{ words: number; under: boolean; inside: boolean }>("(() => { const row = document.querySelector('.quire-menu-row').getBoundingClientRect(); const trail = document.querySelector('.quire-trail').getBoundingClientRect(); return { words: [...document.querySelectorAll('.quire-row-word')].filter((word) => word.getBoundingClientRect().width > 0).length, under: row.top >= trail.bottom - 1, inside: row.left >= 0 && document.documentElement.scrollWidth <= innerWidth }; })()");
-        expect(row).toEqual({ words: 6, under: true, inside: true });
+        expect(row).toEqual({ words: 7, under: true, inside: true });
         await press(".quire-row-word", "Format");
         await tab.wait(600);
         expect(await tab.run("[...document.querySelectorAll('.quire-row-menu.open .quire-menu-line')].map((line) => line.textContent)[0]")).toBe("Bold⌃B");

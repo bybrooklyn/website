@@ -606,7 +606,12 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         return { whole: plainText(doc), part: collapsed(selection) ? undefined : plainText(documentOf(fragment(doc, selection))), pages: pages.paged() ? pages.now() : undefined };
     });
     host.append(counter.element);
-    host.classList.toggle("counting", counter.shown());
+    /** Says on the editor, and on the page for its scrolling, whether the counter is shown. */
+    const counting = () => {
+        host.classList.toggle("counting", counter.shown());
+        document.documentElement.classList.toggle("quire-counting", counter.shown());
+    };
+    counting();
     surface.on("change", () => counter.update());
     surface.on("select", () => counter.update());
     // the outline and the details stand in the margins beside the sheet; when the sheet, zoomed or on a small
@@ -820,7 +825,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
                 contents: doing(addContents),
                 updateContents: () => (surface.run((doc) => updateContents(doc)), surface.focus()),
                 fullScreen: () => fullScreen(!full),
-                liveCount: () => (counter.show(!counter.shown()), host.classList.toggle("counting", counter.shown())),
+                liveCount: () => (counter.show(!counter.shown()), counting()),
                 makeCopy: () => void makeCopy(),
                 rename: renameHere,
                 fileDetails: () => showFacts(row.words[0]!),
@@ -1280,6 +1285,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
             caret.destroy();
             details.destroy();
             counter.destroy();
+            document.documentElement.classList.remove("quire-counting");
             widening?.removeEventListener("change", outlineAsKept);
             checking.destroy();
             pages.destroy();
