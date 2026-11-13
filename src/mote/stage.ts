@@ -115,18 +115,20 @@ export function paced(owed: number, seconds: number): { steps: number; owed: num
     return { steps, owed: left };
 }
 
+/** The arrows, Space and Enter by what they say; the letters by where they are, so that WASD is the same four keys on any keyboard. */
 const KEYS: Record<string, Key> = {
     ArrowLeft: "left",
     ArrowRight: "right",
     ArrowUp: "up",
     ArrowDown: "down",
-    a: "left",
-    d: "right",
-    w: "up",
-    s: "down",
+    KeyA: "left",
+    KeyD: "right",
+    KeyW: "up",
+    KeyS: "down",
     " ": "action",
     Enter: "action",
 };
+const named = (event: KeyboardEvent): Key | undefined => KEYS[event.key] ?? KEYS[event.code];
 
 /** Puts a mini in `host` and returns a function that takes it away again. */
 export function mote(host: HTMLElement, make: (m: Mote) => Scene, { label = "An interactive demo.", preview = false } = {}): () => void {
@@ -320,7 +322,7 @@ export function mote(host: HTMLElement, make: (m: Mote) => Scene, { label = "An 
     });
     // Keys only count while the mini has the keyboard, so the page still scrolls otherwise.
     canvas.addEventListener("keydown", (event) => {
-        const name = KEYS[event.key.length === 1 ? event.key.toLowerCase() : event.key];
+        const name = named(event);
         if (event.key === "Tab") delete canvas.dataset.touched;
         if (!name || event.metaKey || event.ctrlKey || event.altKey) return;
         event.preventDefault();
@@ -329,7 +331,7 @@ export function mote(host: HTMLElement, make: (m: Mote) => Scene, { label = "An 
         start();
     });
     canvas.addEventListener("keyup", (event) => {
-        const name = KEYS[event.key.length === 1 ? event.key.toLowerCase() : event.key];
+        const name = named(event);
         if (name) held.delete(name);
     });
     canvas.addEventListener("blur", () => {
