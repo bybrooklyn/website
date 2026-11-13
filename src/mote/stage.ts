@@ -75,6 +75,8 @@ export interface Scene {
     resting?(): boolean;
     /** Lines to show with `?debug` in the address, such as how many bodies are awake. It may also draw on `m.ctx`. */
     debug?(): string[];
+    /** The mini is being taken away: let go of what the scene made itself, such as a 3D view (`dispose`) or a canvas. */
+    destroy?(): void;
 }
 
 /** Makes an element, for a mini's panel: its tag, what to set on it, and what goes inside. */
@@ -365,6 +367,8 @@ export function mote(host: HTMLElement, make: (m: Mote) => Scene, { label = "An 
         document.removeEventListener("visibilitychange", shown);
         host.removeEventListener("pointerdown", touched, { capture: true });
         host.removeEventListener("keydown", touched, { capture: true });
+        scene.destroy?.();
+        host.querySelector(".mote-panel")?.remove();
         canvas.remove();
     };
 }
