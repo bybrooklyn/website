@@ -22,4 +22,4 @@ if (process.argv.includes("faulty")) {
 const early: MessageEvent[] = [];
 onmessage = (event: MessageEvent) => early.push(event);
 await import("./generalist-practice");
-for (const event of early) onmessage?.(event);
+for (const event of early) onmessage?.call(globalThis as unknown as Window, event);
