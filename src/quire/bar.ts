@@ -722,17 +722,23 @@ export function createBar(surface: Surface, options: BarOptions) {
     sizeField.inputMode = "numeric";
     sizeField.setAttribute("aria-label", "Text size");
     sizeField.title = "Text size";
+    // Enter applies the size and gives the text the focus back, and the field's change on losing the focus must not apply it again
+    let entered = false;
+    sizeField.addEventListener("focus", () => (entered = false));
     sizeField.addEventListener("keydown", (event) => {
         if (composing(event)) return;
         if (event.key === "Enter") {
             event.preventDefault();
+            entered = true;
             setSize(typedSize(parseFloat(sizeField.value), richOn));
         } else if (event.key === "Escape") {
             showSize();
             surface.focus();
         }
     });
-    sizeField.addEventListener("change", () => setSize(typedSize(parseFloat(sizeField.value), richOn)));
+    sizeField.addEventListener("change", () => {
+        if (!entered) setSize(typedSize(parseFloat(sizeField.value), richOn));
+    });
     const showSize = () => {
         if (document.activeElement === sizeField) return;
         const was = parseFloat(sizeField.value);
