@@ -85,8 +85,9 @@ const live = !!chromium();
 let folder = "";
 let tab: Browser;
 const page = `
-import { flowMenu, linkForm } from "${import.meta.dir}/ui.ts";
+import { control, flowMenu, linkForm } from "${import.meta.dir}/ui.ts";
 window.linkForm = linkForm;
+window.makeControl = control;
 const lines = (count) => Array.from({ length: count }, (_, at) => ({ label: "Line " + (at + 1), run: () => {} }));
 window.menu = flowMenu("A menu");
 window.other = flowMenu("Another");
@@ -245,6 +246,20 @@ used("the element that is the menu carries the menu's name", async () => {
     expect(await run<string | null>("window.menu.box.querySelector('[role=menu]').getAttribute('aria-label')")).toBe("A menu");
     await run("window.menu.close()");
     await settle();
+});
+
+used("a tooltip goes when the pointer leaves the window, and its control has its title back", async () => {
+    await run("(() => { const button = window.makeControl('Tipped', 'T', () => {}); button.id = 'tipped'; button.style.cssText = 'position:absolute;left:400px;top:500px;width:40px;height:30px'; document.body.append(button); })()");
+    await run("document.getElementById('tipped').dispatchEvent(new PointerEvent('pointerover', { bubbles: true, pointerType: 'mouse' }))");
+    await tab.wait(650);
+    expect(await run<boolean>("document.querySelector('.quire-tip')?.matches(':popover-open') ?? false")).toBe(true);
+    expect(await run<string | null>("document.getElementById('tipped').getAttribute('title')")).toBeNull();
+    // leaving the window: a pointerout with nowhere it went
+    await run("document.getElementById('tipped').dispatchEvent(new PointerEvent('pointerout', { bubbles: true, pointerType: 'mouse', relatedTarget: null }))");
+    await tab.wait(200);
+    expect(await run<boolean>("document.querySelector('.quire-tip').matches(':popover-open')")).toBe(false);
+    expect(await run<string | null>("document.getElementById('tipped').getAttribute('title')")).toBe("Tipped");
+    await run("document.getElementById('tipped').remove()");
 });
 
 used("closing, it is seen going back onto its control's edge, and opening another menu closes it", async () => {

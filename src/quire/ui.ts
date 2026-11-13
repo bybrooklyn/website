@@ -152,6 +152,9 @@ function tips() {
         }, warm ? 60 : 500);
     });
     for (const name of ["pointerdown", "scroll", "keydown"]) addEventListener(name, hide, { capture: true, passive: true });
+    // the pointer leaving the window, or the window going out of sight, takes the label away too, and gives the control its title back
+    document.addEventListener("pointerout", (event) => !event.relatedTarget && hide());
+    document.addEventListener("visibilitychange", hide);
 }
 
 /** A button with a label for screen readers (shown as its tooltip too) that leaves the document's selection where it is when pressed. */
