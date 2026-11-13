@@ -7,9 +7,11 @@
 // either side of it win for a span the level allows (wide enough to be found by hand, narrow enough
 // not to be given away), the same direction still wins a notch weaker and a notch stronger, and
 // aiming straight at the hole does not win at any strength tried.
-// If a level's tries all fail, the field is made again with fewer things in it, down to the hole
-// alone, which a straight shot always reaches; so every field handed out can be won with one shot,
-// and `solution` says how.
+// If none of a level's tries passes all of that, the nearest of them that some launch wins is handed
+// out instead (its way in too wide or a little narrow, or, last of all, won by a straight shot, which
+// the tests find in fewer than one field in twenty). Only if no try at all could be won is the field
+// made again with fewer things in it, down to the hole alone, which a straight shot always reaches;
+// so every field handed out can be won with one shot, and `solution` says how.
 //
 // A level asks for more: more stars, then pushers, then wormholes, a smaller reach for the hole,
 // stars placed across the straight way in, and a narrower span of winning directions.
