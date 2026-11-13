@@ -23,6 +23,8 @@ the project's file in [`docs/`](docs/README.md); what has been done is in [`CHAN
 
 - About thirty new sentences a writer can see were written during the audit (the "Not saved" dialog, errors from the stores, errors on opening a damaged file, one about spelling being unavailable) and the wording of dictation's first-launch dialog. All are to be read and approved or reworded.
 - Spelling: everything in [spelling](docs/spelling.md): American, British or both; on or off by default; a personal dictionary; names; a bigger word list.
+- A spoiler cannot be written inside a table cell, where pipes are cell edges. One that arrives there is written as its words. Confirm.
+- Backspace removes the last accent of a letter; Delete removes the whole letter. Confirm.
 - Whether the GitHub token moves from `localStorage` to `sessionStorage`.
 - Where mdQuire differs from what a Docs user expects: a blank document starts in the body and not the title; Enter in a table cell moves down a row; the status reads "Not saved" while typing; the outline does not scroll to keep the current heading in view; arrow down past a picture lands at the end of the next line. Decide which to change.
 - Right-to-left paragraphs are laid out left to right.
