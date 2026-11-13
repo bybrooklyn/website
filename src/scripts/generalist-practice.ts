@@ -40,12 +40,16 @@ export type Report =
     | { kind: "practised"; setup: number; updates: number; steps: number; seconds: number; reached: number; policy?: { weights: Float32Array; running: Float64Array }; kept?: Kept; speed: number; waited: number[]; hard: number }
     | { kind: "failed"; why: string };
 
-/** Between the leader and a helper. */
+/**
+ * Between the leader and a helper. Each carries the setup it is for, and anything for another setup
+ * is not acted on. A request for a helper's update carries a number of its own, which the answer
+ * gives back, and is always answered: by the update, or by "gone" if the helper is past that setup.
+ */
 type Work =
     | { kind: "start"; setup: number; state: Float32Array; running: Float64Array }
-    | { kind: "local"; setup: number }
+    | { kind: "local"; setup: number; asked: number }
     | { kind: "finish"; setup: number; shares: Float64Array; weights: Float32Array; workers: number };
-type Answer = { kind: "local"; setup: number; share: Float64Array; weights: Float32Array; steps: number } | { kind: "gone"; setup: number };
+type Answer = { kind: "local"; setup: number; asked: number; share: Float64Array; weights: Float32Array; steps: number } | { kind: "gone"; setup: number; asked: number };
 
 /** Creatures practising together in all the workers; each has its share. */
 export const CREATURES = 32;
@@ -69,7 +73,7 @@ let heard = 0;
 let working = false;
 let practised = { seconds: 0, steps: 0, shown: -Infinity, kept: 0 };
 let reached: number[] = [];
-let helpers: { port: MessagePort; waiting?: (answer: Answer) => void }[] = [];
+let helpers: { port: MessagePort; waiting?: { asked: number; answered: (answer: Answer) => void } }[] = [];
 let lead: MessagePort | undefined;
 /** Counts changes of helpers, so an update shared with helpers since let go of is given up. */
 let crew = 0;
@@ -78,6 +82,10 @@ let waited = [0, 0];
 /** Steps of the physics the helpers took in the last shared update. */
 let helperSteps = 0;
 const waitingWork: Work[] = [];
+/** Numbers the leader's requests, so an answer is taken only by the request it answers. */
+let asking = 0;
+/** How long the leader waits for a helper's answer before it gives the update up, in milliseconds. A helper still loading its engine can take a few seconds. */
+const PATIENCE = 30_000;
 
 const quiet = () => performance.now() - heard > 2500;
 
@@ -101,11 +109,21 @@ function load(state: Float32Array, running: Float64Array): boolean {
     return engine.practice_load() === 1;
 }
 
-/** Asks a helper for something and waits for its answer. */
-function ask(helper: (typeof helpers)[number], work: Work, moved: Transferable[] = []): Promise<Answer> {
+/** Asks a helper for its update and waits for the answer, or for so long that it is given up as gone. */
+function ask(helper: (typeof helpers)[number], forSetup: number): Promise<Answer> {
+    asking += 1;
+    const asked = asking;
     return new Promise((answered) => {
-        helper.waiting = answered;
-        helper.port.postMessage(work, moved);
+        const timer = setTimeout(() => helper.waiting?.answered({ kind: "gone", setup: forSetup, asked }), PATIENCE);
+        helper.waiting = {
+            asked,
+            answered: (answer) => {
+                clearTimeout(timer);
+                helper.waiting = undefined;
+                answered(answer);
+            },
+        };
+        helper.port.postMessage({ kind: "local", setup: forSetup, asked } satisfies Work);
     });
 }
 
@@ -120,15 +138,16 @@ function finish(shares: Float64Array, weights: Float32Array, workers: number): v
 /** One update shared among the leader and its helpers: each does an update of its own on its own rollout, then all take the average of their weights. */
 async function shared(): Promise<void> {
     if (!engine) return;
-    const team = crew;
-    const asked = Promise.all(helpers.map((helper) => ask(helper, { kind: "local", setup })));
+    // the setup and the helpers this update is for; if either changes while it waits, it is given up
+    const [team, which] = [crew, setup];
+    const asked = Promise.all(helpers.map((helper) => ask(helper, which)));
     const began = performance.now();
     const mine = list64(engine, engine.practice_local());
     const weights = list(engine, engine.practice_weights());
     const worked = performance.now();
     const theirs = await asked;
     waited = [worked - began, performance.now() - worked];
-    if (team !== crew || theirs.some((answer) => answer.kind !== "local")) return;
+    if (team !== crew || which !== setup || theirs.some((answer) => answer.kind !== "local" || answer.setup !== which)) return;
     const workers = helpers.length + 1;
     const shares = new Float64Array(mine.length * workers);
     shares.set(mine, 0);
@@ -140,7 +159,7 @@ async function shared(): Promise<void> {
         for (let i = 0; i < weights.length; i++) weights[i] = weights[i]! + answer.weights[i]!;
     });
     for (let i = 0; i < weights.length; i++) weights[i] = weights[i]! / workers;
-    for (const helper of helpers) helper.port.postMessage({ kind: "finish", setup, shares, weights, workers } satisfies Work);
+    for (const helper of helpers) helper.port.postMessage({ kind: "finish", setup: which, shares, weights, workers } satisfies Work);
     finish(shares, weights, workers);
 }
 
@@ -195,14 +214,18 @@ function help(work: Work): void {
         waitingWork.push(work);
         return;
     }
-    if (work.setup < setup) return;
+    if (work.setup < setup) {
+        // past that setup: a request is still answered, so the leader is never left waiting
+        if (work.kind === "local") lead?.postMessage({ kind: "gone", setup: work.setup, asked: work.asked } satisfies Answer);
+        return;
+    }
     if (work.kind === "start") load(work.state, work.running);
     else if (work.kind === "finish") finish(work.shares, work.weights, work.workers);
     else {
         const before = engine.practice_steps();
         const share = list64(engine, engine.practice_local());
         const weights = list(engine, engine.practice_weights());
-        lead?.postMessage({ kind: "local", setup, share, weights, steps: engine.practice_steps() - before } satisfies Answer, [share.buffer, weights.buffer]);
+        lead?.postMessage({ kind: "local", setup, asked: work.asked, share, weights, steps: engine.practice_steps() - before } satisfies Answer, [share.buffer, weights.buffer]);
     }
 }
 
@@ -227,15 +250,14 @@ onmessage = async (event: MessageEvent<Order>) => {
         for (const helper of helpers) {
             helper.port.close();
             // an update waiting on a helper let go of is given up; the new helpers start from the leader's weights
-            helper.waiting?.({ kind: "gone", setup: -1 });
+            helper.waiting?.answered({ kind: "gone", setup: -1, asked: helper.waiting.asked });
         }
         crew += 1;
         gentle = order.gentle;
         helpers = order.ports.map((port) => ({ port }));
+        // an answer to a request given up (by time, or by a change of setup) is let go
         for (const helper of helpers) helper.port.onmessage = (message: MessageEvent<Answer>) => {
-            const waiting = helper.waiting;
-            helper.waiting = undefined;
-            waiting?.(message.data);
+            if (helper.waiting?.asked === message.data.asked) helper.waiting.answered(message.data);
         };
         startHelpers();
     } else {
