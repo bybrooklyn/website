@@ -581,8 +581,8 @@ on 470,000 (`src/minis/generalist.test.ts` prints it).
 
 ### How it moves
 
-After watching evolution's creature the owner said it "just hops to move", and chose: "Let it find its
-own way, but not this". So there is no rule for how to move, and there are costs instead. What was
+Evolution's creature gets about only by hopping. The aim for practice is a creature that finds its own
+way of moving, and not that one. So there is no rule for how to move, and there are costs instead. What was
 measured, on flat ground and in worlds at difficulty 0.1, two legs unless said (`examples/practice.rs`
 prints, beside the learning curve, the share of time spent in the air with nothing ahead to clear and
 the motors' work for each metre, while practising and for the policy on show; `trace=1` prints how
@@ -785,8 +785,8 @@ How it moves, plainly. Two legs: after two minutes it runs a few steps crouched,
 headlong over the first gap and lands on its belly on the moving platform; at 50 of 100 it leaps onto
 the platform and rides it, sitting. After ten minutes it goes on its belly and knees, its legs pushing
 it along in lunges that leave the ground (the words over it say "in the air for nothing" often), and
-in meadow it falls into the first gap, though in practice worlds it averages 27 m. It does not look
-alive in the way she asked. Four legs: from the first minute a quick scurrying run with its feet
+in meadow it falls into the first gap, though in practice worlds it averages 27 m. It does not yet look
+alive, which is the aim. Four legs: from the first minute a quick scurrying run with its feet
 mostly down and short bounds between, 44 m through meadow; after ten minutes a bounding gallop, the
 hind legs pushing together, which takes it up small ledges. At 50 of 100 it stalls at a box and rears
 up on its hind legs at two minutes, and at ten leaps for the moving platform and tips off it. How far
