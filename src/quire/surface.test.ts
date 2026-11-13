@@ -241,4 +241,26 @@ test.skipIf(!chromium())(
     60_000,
 );
 
+test.skipIf(!chromium())(
+    "a surface taken away leaves no timer behind: a long code block's late highlighting does not run after destroy",
+    async () => {
+        const { tab, folder } = await open();
+        try {
+            await tab.run(`quire.reset(${JSON.stringify("```js\n" + "let a = 1;\n".repeat(700) + "```\n")})`);
+            await tab.run(`quire.surface.setSelection({ anchor: { path: [0], offset: 3 }, focus: { path: [0], offset: 3 } })`);
+            await tab.type("x");
+            const spans = () => tab.run<number>("document.querySelectorAll('#editor code span').length");
+            expect(await spans()).toBe(0);
+            await tab.run("quire.surface.destroy()");
+            await tab.wait(400);
+            expect(await spans()).toBe(0);
+            expect(tab.errors).toEqual([]);
+        } finally {
+            await tab.close();
+            await rm(folder, { recursive: true, force: true });
+        }
+    },
+    60_000,
+);
+
 if (!chromium()) console.warn("surface.test.ts: no Chromium on this machine, so the surface was not typed in.");

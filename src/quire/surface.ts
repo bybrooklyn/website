@@ -1518,6 +1518,8 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
         },
         destroy() {
             for (const [target, name, handler] of handlers) target.removeEventListener(name, handler);
+            clearTimeout(painting);
+            waiting.clear();
             root.contentEditable = "false";
         },
     };
