@@ -9,15 +9,24 @@ import type { ProjectFacts } from "../src/lib/projects";
 import { at, frontmatter, listMdx, stem, writeJson } from "./lib";
 
 const folder = "src/content/projects";
+/** What gh says when GitHub answers 404. */
+const notFound = (said: string) => /\bNot Found\b|HTTP 404/.test(said);
+function stop(asked: string, said: string): never {
+    console.error(`GitHub did not answer for ${asked}, so src/data/project-facts.json was left as it was.\n${said.trim()}`);
+    process.exit(1);
+}
 const facts: Record<string, ProjectFacts> = {};
 
 for (const file of await listMdx(folder)) {
     const repo = frontmatter(await Bun.file(at(folder, file)).text(), "repo");
     if (!repo) continue;
 
-    // A project can be written up before its repository exists.
+    // A project can be written up before its repository exists: GitHub says it is not found. Any
+    // other failure (logged out, offline, rate limited) stops the run before the file is written,
+    // so that the facts already kept are not replaced by none.
     const found = await $`gh api repos/${repo}`.nothrow().quiet();
     if (found.exitCode !== 0) {
+        if (!notFound(found.stderr.toString())) stop(repo, found.stderr.toString());
         console.log(file, "(no repository yet)");
         continue;
     }
@@ -28,7 +37,9 @@ for (const file of await listMdx(folder)) {
         pushed_at: string;
         private: boolean;
     };
+    // A repository with no release is not found here either.
     const release = await $`gh api repos/${repo}/releases/latest --jq .tag_name`.nothrow().quiet();
+    if (release.exitCode !== 0 && !notFound(release.stderr.toString())) stop(`${repo}/releases/latest`, release.stderr.toString());
 
     const license = info.license?.spdx_id;
     facts[stem(file)] = {
