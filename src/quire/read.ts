@@ -221,7 +221,9 @@ export function standsApart(before: Block, beforeText: string, afterText: string
             return cuts && (before.kind === "table" || !SETEXT.test(first.trim()));
         case "list":
         case "footnote": {
-            if (before.kind === "list" && before.style === "definition") return cuts || !!item || !DETAIL.test(afterText.split(/\r?\n/)[1] ?? "");
+            // a definition list ends after its last definition, unless another term and definition follow;
+            // an item it could not keep is written as plain blocks (write.ts), which run on as a paragraph does
+            if (before.kind === "list" && before.style === "definition") return DETAIL.test(last) ? cuts || !!item || !DETAIL.test(afterText.split(/\r?\n/)[1] ?? "") : cuts && !SETEXT.test(first.trim());
             const own = itemStart(head);
             if (before.kind === "list" && item && own && sameList(item.marker, own.marker)) return false;
             // a line after a blank one, after a fence or after an item with nothing in it is not a lazy continuation
