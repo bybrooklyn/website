@@ -193,3 +193,10 @@ test("an address in a document is found beside it, and one that leaves the store
     expect(besideDocument("one.md", "/blog/x/")).toBeUndefined();
     expect(besideDocument("one.md", "#top")).toBeUndefined();
 });
+
+test("a file name is never too long for a disk, nor one Windows keeps for itself", () => {
+    expect(fileName("a".repeat(300)).length).toBe(103);
+    expect(fileName("Con")).toBe("con-file.md");
+    expect(fileName("nul.mdx")).toBe("nul-file.mdx");
+    expect(fileName("console")).toBe("console.md");
+});

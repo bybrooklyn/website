@@ -100,8 +100,11 @@ export function fileName(name: string, ending = ".md"): string {
         .replace(/-+/g, "-")
         .replace(/^[-.]+|[-.]+$/g, "")
         .toLowerCase();
-    const base = plain || "untitled";
-    return /\.(md|mdx|markdown|txt|quire)$/i.test(base) ? base : `${base}${ending}`;
+    const known = /\.(md|mdx|markdown|txt|quire)$/i.exec(plain)?.[0] ?? "";
+    // a name a disk can hold: not too long for it, and not one Windows keeps for itself (con, nul, com1)
+    let stem = plain.slice(0, plain.length - known.length).slice(0, 100).replace(/[-.]+$/, "") || "untitled";
+    if (/^(con|prn|aux|nul|com\d|lpt\d)$/i.test(stem)) stem = `${stem}-file`;
+    return `${stem}${known || ending}`;
 }
 
 /** A name not yet in use among others, with a number added if it is. */
