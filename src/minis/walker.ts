@@ -338,10 +338,17 @@ export default function walker(m: Mote): Scene {
             return { block, shut, open: () => block.classList.contains("open") };
         };
         const describe = () => `${setup.legs} leg${setup.legs === 1 ? "" : "s"}, ${doing()}${setup.goal === COURSE_GOAL ? "" : `, on ${setup.ground.kind === "flat" ? "flat ground" : setup.ground.kind}`}, ${lengthName(setup.length)}`;
+        /**
+         * Sets one part of the address, only if it changes: each change is a `history.replaceState`, and
+         * Safari throws after a hundred of those in thirty seconds, which ten parts a change soon reach.
+         */
+        const link = (name: string, value: string | null) => {
+            if (m.link.get(name) !== value) m.link.set(name, value);
+        };
         const restart = () => {
             m.keep("walker", setup, 4);
             // a link to a shared walker no longer says what is on the screen
-            for (const name of LINK_NAMES) m.link.set(name, null);
+            for (const name of LINK_NAMES) link(name, null);
             notice = { text: `Learning again from the start: ${describe()}.`, until: m.time + 5 };
             said.textContent = notice.text;
             begin();
@@ -432,9 +439,8 @@ export default function walker(m: Mote): Scene {
         const share = el("button", { type: "button", class: "walker-share", textContent: "copy link to this walker", disabled: true, onclick: () => {
             if (!engine) return;
             const brain = read(engine, live() ? engine.live_best_weights() : engine.show_weights(), engine.weights_length());
-            let address = "";
-            for (const [name, value] of linkParts(setup, brain)) address = m.link.set(name, value);
-            copyText(share, address, { rest: "copy link to this walker", done: "link copied", failed: "the link is in the address bar" });
+            for (const [name, value] of linkParts(setup, brain)) link(name, value);
+            copyText(share, location.href, { rest: "copy link to this walker", done: "link copied", failed: "the link is in the address bar" });
         } });
 
         side.append(
