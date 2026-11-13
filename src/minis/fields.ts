@@ -14,6 +14,7 @@
 // A level asks for more: more stars, then pushers, then wormholes, a smaller reach for the hole,
 // stars placed across the straight way in, and a narrower span of winning directions.
 
+import { record, text, whole } from "./checked";
 import { HIGH, TURNS, WIDE, advance, fly, launch, nearest, velocity, type Field, type Gate, type Star } from "./flight";
 
 /** A launch that wins, and how much room there is around it. */
@@ -47,7 +48,8 @@ export const NARROWEST = 1.5;
 
 /** What each level asks for. It stops growing at level 12. */
 export function plan(level: number): Plan {
-    const l = Math.max(1, Math.min(12, Math.floor(level)));
+    // anything that is not a number, as from a damaged store, is level 1: a plan of NaNs could never be met
+    const l = whole(level, 1, 12, 1);
     return {
         pullers: Math.min(6, 1 + Math.floor(l / 2)),
         pushers: l < 3 ? 0 : Math.min(4, Math.floor((l - 1) / 2)),
@@ -250,7 +252,8 @@ export function* making(seed: string, level: number): Generator<undefined, Made>
             if (fewer === 0 && (!fallback || miss < fallback.miss)) fallback = { made, miss };
         }
         if (fallback) return { ...fallback.made, tries };
-        if (empty && fewer > 20) throw new Error(`No field could be made for ${seed} at level ${level}.`);
+        // by now every level has come down to the hole alone; the bound holds whatever was asked for
+        if (fewer > 20) throw new Error(`No field could be made for ${seed} at level ${level}.`);
     }
 }
 
@@ -284,7 +287,35 @@ export interface Run {
 /** The fewest shots each field of each seed has been won in: seed, then level. */
 export type Bests = Record<string, Record<string, number>>;
 
-export const begin = (seed: string, level = 1): Run => ({ seed, level: Math.max(1, Math.floor(level)), shots: 0, total: 0, won: 0 });
+/** The furthest field a run is counted to, and the most shots: far past any played, and still exact whole numbers. */
+export const MOST_LEVEL = 1_000_000;
+const MOST_SHOTS = 1_000_000_000;
+/** The longest seed, as a link's is cut to. */
+export const LONGEST_SEED = 40;
+
+export const begin = (seed: string, level = 1): Run => ({ seed, level: whole(level, 1, MOST_LEVEL, 1), shots: 0, total: 0, won: 0 });
+
+/** A run kept from an earlier visit, read back as sane whole numbers; undefined if it has no usable seed. */
+export function keptRun(value: unknown): Run | undefined {
+    const kept = record(value);
+    const seed = text(kept?.seed, LONGEST_SEED, "");
+    if (!kept || !seed) return undefined;
+    const shots = whole(kept.shots, 0, MOST_SHOTS, 0);
+    return { seed, level: whole(kept.level, 1, MOST_LEVEL, 1), shots, total: Math.max(shots, whole(kept.total, 0, MOST_SHOTS, 0)), won: whole(kept.won, 0, MOST_LEVEL, 0) };
+}
+
+/** Kept bests read back: whole numbers of shots, for short seeds and whole levels; anything else is left out. */
+export function keptBests(value: unknown): Bests {
+    const bests: Bests = {};
+    for (const [seed, levels] of Object.entries(record(value) ?? {})) {
+        if (!seed || seed.length > LONGEST_SEED) continue;
+        for (const [level, shots] of Object.entries(record(levels) ?? {})) {
+            if (!/^\d{1,7}$/.test(level) || typeof shots !== "number" || !Number.isFinite(shots)) continue;
+            (bests[seed] ??= {})[level] = whole(shots, 0, MOST_SHOTS, 0);
+        }
+    }
+    return bests;
+}
 
 /** Every launch is a shot, whether it wins or not. */
 export const shoot = (run: Run): Run => ({ ...run, shots: run.shots + 1, total: run.total + 1 });

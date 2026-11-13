@@ -9,7 +9,8 @@
 import { sounds } from "../mote/sound";
 import { el, type Mote, type Scene } from "../mote/stage";
 import { copyText } from "../scripts/copy";
-import { begin, bestFor, make, making, numbers, hash, shoot, win, type Bests, type Made, type Run } from "./fields";
+import { wholeText } from "./checked";
+import { LONGEST_SEED, MOST_LEVEL, begin, bestFor, keptBests, keptRun, make, making, numbers, hash, shoot, win, type Bests, type Made, type Run } from "./fields";
 import { AIMS, FASTEST, HIGH, NOTCH, STEP, WEAKEST, WIDE, advance, launch, nearest, velocity, type Comet, type Field } from "./flight";
 
 export const label = "Comet, a game: pull back and let go to send a comet through a field of stars into a black hole.";
@@ -78,12 +79,13 @@ type Phase = "aim" | "fly" | "swallow" | "between";
 export default function comet(m: Mote): Scene {
     const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
     const sound = m.preview ? undefined : sounds(m);
-    let bests = m.recall<Bests>("comet-bests", {});
+    // what was kept is read back only as sane numbers, so that a damaged store cannot stop the game
+    let bests: Bests = keptBests(m.recall<unknown>("comet-bests", {}));
 
     // ---- which field: the address, or where this visitor left off, or a new sky ----
-    const kept = m.recall<Run | null>("comet-run", null);
+    const kept = keptRun(m.recall<unknown>("comet-run", null));
     const linked = m.link.get("seed");
-    let run: Run = m.preview ? begin("lumen", 6) : linked ? begin(linked.slice(0, 40), Number(m.link.get("field")) || 1) : kept ?? begin(christen());
+    let run: Run = m.preview ? begin("lumen", 6) : linked ? begin(linked.slice(0, LONGEST_SEED), wholeText(m.link.get("field"), 1, MOST_LEVEL, 1)) : kept ?? begin(christen());
     let made: Made = make(run.seed, run.level);
     let field: Field = made.field;
     /** The field before this one, shrinking into its hole while this one grows. */

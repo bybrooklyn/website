@@ -4,7 +4,7 @@
 
 import { expect, test } from "bun:test";
 import { HIGH, WIDE, fly, nearest, velocity } from "./flight";
-import { NARROWEST, begin, bestFor, hash, layout, make, making, numbers, passes, plan, shoot, win, type Made } from "./fields";
+import { NARROWEST, begin, bestFor, hash, keptBests, keptRun, layout, make, making, numbers, passes, plan, shoot, win, type Made } from "./fields";
 
 const median = (values: number[]) => [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)]!;
 
@@ -126,4 +126,45 @@ test("every launch is a shot, a win keeps the fewest shots for that field and go
     expect(bestFor(result.bests, "orion", 3)).toBe(1);
     expect(bestFor(result.bests, "orion", 4)).toBeUndefined();
     expect(begin("x", 0).level).toBe(1);
+});
+
+/** Makes a field a piece at a time, giving up after `ms`: a generator that never ends shows as not done, instead of freezing the test. */
+function within(seed: string, level: number, ms: number): Made | undefined {
+    const work = making(seed, level);
+    const deadline = performance.now() + ms;
+    while (performance.now() < deadline) {
+        const next = work.next();
+        if (next.done) return next.value;
+    }
+    return undefined;
+}
+
+test("a level that is not a sane number, as from a damaged store, still makes a field, and soon", () => {
+    for (const level of [Number("abc"), NaN, Infinity, -Infinity, -3, 0, 1e300, "abc" as unknown as number, null as unknown as number, undefined as unknown as number]) {
+        const made = within("x", level, 5000);
+        expect(made).toBeDefined();
+        expect(made!.field.stars.length + made!.field.gates.length).toBeGreaterThanOrEqual(0);
+    }
+    // a level from 1 to 12 is laid out as it always was
+    expect(plan(Number.NaN)).toEqual(plan(1));
+    expect(plan(Infinity)).toEqual(plan(1));
+    expect(plan(40)).toEqual(plan(12));
+}, 60_000);
+
+test("a kept run is read back only as sane whole numbers and a short seed, and a damaged one is left out", () => {
+    expect(keptRun({ seed: "orion", level: 3, shots: 2, total: 9, won: 2 })).toEqual({ seed: "orion", level: 3, shots: 2, total: 9, won: 2 });
+    expect(keptRun({ seed: "orion", level: "abc", shots: "x", total: null, won: -1 })).toEqual({ seed: "orion", level: 1, shots: 0, total: 0, won: 0 });
+    expect(keptRun({ seed: "orion", level: null, shots: 0, total: 0, won: 0 })!.level).toBe(1);
+    expect(keptRun({ seed: "orion", level: 2.7, shots: 1e300, total: 0, won: 0 })).toEqual({ seed: "orion", level: 2, shots: 1e9, total: 1e9, won: 0 });
+    for (const value of [null, undefined, 3, "orion", [], { level: 3 }, { seed: 4, level: 3 }, { seed: "", level: 3 }, { seed: "a".repeat(41), level: 3 }]) expect(keptRun(value)).toBeUndefined();
+    // a link's field of Infinity cannot become a level, nor be written down as null
+    expect(begin("x", Infinity).level).toBe(1);
+    expect(begin("x", NaN).level).toBe(1);
+    expect(JSON.parse(JSON.stringify(begin("x", Infinity))).level).toBe(1);
+});
+
+test("kept bests are read back as whole numbers of shots for short seeds, and anything else is left out", () => {
+    expect(keptBests({ orion: { 1: 3, 2: 5 } })).toEqual({ orion: { 1: 3, 2: 5 } });
+    expect(keptBests({ orion: { 1: "x", 2: 5, x: 3, 3: 2.5 }, ["a".repeat(41)]: { 1: 1 }, bad: 3, list: [1] })).toEqual({ orion: { 2: 5, 3: 2 } });
+    for (const value of [null, undefined, 3, "x", []]) expect(keptBests(value)).toEqual({});
 });
