@@ -42,7 +42,7 @@ export interface Mote {
     pointer: Pointer;
     /** One of the page's colors, such as "--accent", as a value a canvas accepts. */
     color(property: string): string;
-    /** Start the loop again after the scene came to rest. */
+    /** Start the loop again after the scene came to rest. For someone who asked for reduced motion, only once they have touched the mini. */
     wake(): void;
     /** A place under the canvas for ordinary buttons and text, for a mini that needs them. Made the first time it is asked for. */
     panel(): HTMLElement;
@@ -165,7 +165,7 @@ export function mote(host: HTMLElement, make: (m: Mote) => Scene, { label = "An 
             }
             return found;
         },
-        wake: () => start(),
+        wake: () => void (allowed && start()),
         panel() {
             let panel = host.querySelector<HTMLElement>(".mote-panel");
             if (!panel) {
@@ -240,7 +240,6 @@ export function mote(host: HTMLElement, make: (m: Mote) => Scene, { label = "An 
     };
 
     function start(): void {
-        allowed = true;
         if (frame || !visible || document.hidden) return;
         last = performance.now();
         owed = 0;
@@ -263,6 +262,13 @@ export function mote(host: HTMLElement, make: (m: Mote) => Scene, { label = "An 
         };
         frame = requestAnimationFrame(loop);
     }
+
+    // A press or a key anywhere in the mini, its buttons too, is the touch that lets it move under reduced motion.
+    const touched = () => {
+        allowed = true;
+    };
+    host.addEventListener("pointerdown", touched, { capture: true });
+    host.addEventListener("keydown", touched, { capture: true });
 
     /** When and where the last press was, to tell a double one. */
     let pressed = { at: -1000, x: 0, y: 0 };
@@ -344,6 +350,8 @@ export function mote(host: HTMLElement, make: (m: Mote) => Scene, { label = "An 
         resizer.disconnect();
         watcher.disconnect();
         document.removeEventListener("visibilitychange", shown);
+        host.removeEventListener("pointerdown", touched, { capture: true });
+        host.removeEventListener("keydown", touched, { capture: true });
         canvas.remove();
     };
 }
