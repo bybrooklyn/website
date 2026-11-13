@@ -154,10 +154,11 @@
     }
 }
 
-/* One tag: how it is written, then what it means right beside it, and never split between columns. */
+/* One tag: how it is written, then what it means right beside it, and never split between columns. The
+   one tag too long for the column (/gentle) widens its own row, rather than running into its meaning. */
 .tonetag {
     display: grid;
-    grid-template-columns: 3.6rem 1fr;
+    grid-template-columns: minmax(3.6rem, max-content) 1fr;
     align-items: baseline;
     gap: 0 0.5rem;
     padding: 0.08rem 0;
