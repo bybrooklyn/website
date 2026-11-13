@@ -152,7 +152,179 @@ describe("composition in a field inside the document stays in the field", () => 
     }
 });
 
+describe("composition in the text keeps the model and the page in step", () => {
+    inPage("Chrome on a desktop, for real: a word composed, given up with Escape, composed over a selection, and undone as one step", async (tab) => {
+        await tab.run(`quire.reset("Ab cd\\n")`);
+        await tab.run("quire.select([0], 2)");
+        await tab.compose(["n", "に", "にh", "にほ"], "日本");
+        await tab.wait(30);
+        expect(await md(tab)).toBe("Ab日本 cd\n");
+        expect(await shown(tab)).toBe("Ab日本 cd");
+        expect((await tab.run<{ focus: { offset: number } }>("quire.selection()")).focus.offset).toBe(4);
+        // one composed word is one step of undo
+        await tab.press("z", { ctrl: true });
+        expect(await md(tab)).toBe("Ab cd\n");
+        await tab.press("z", { ctrl: true, shift: true });
+        expect(await md(tab)).toBe("Ab日本 cd\n");
+        // over a selection inside the block: the composed text replaces it
+        await tab.run("quire.select([0], 5, 7)");
+        await tab.compose(["え", "えf"], "エフ");
+        await tab.wait(30);
+        expect(await md(tab)).toBe("Ab日本 エフ\n");
+        expect(await shown(tab)).toBe("Ab日本 エフ");
+    });
+
+    inPage("Chrome's order, imitated: given up with Escape, nothing is typed and the cursor stays", async (tab) => {
+        await tab.run(`quire.reset("Ab cd\\n")`);
+        await tab.run("quire.select([0], 2)");
+        await tab.run("quire.start(); quire.update('k'); quire.update('か'); quire.update(''); quire.end('')");
+        await tab.wait(30);
+        expect(await md(tab)).toBe("Ab cd\n");
+        expect(await shown(tab)).toBe("Ab cd");
+        expect((await tab.run<{ focus: { offset: number } }>("quire.selection()")).focus.offset).toBe(2);
+    });
+
+    inPage("Korean, imitated in Chrome's order: each update replaces the last syllable, and each syllable ends its own composition", async (tab) => {
+        await tab.run(`quire.reset("")`);
+        await tab.run("quire.select([0], 0)");
+        await tab.run("quire.start(); quire.update('ㅎ'); quire.update('하'); quire.update('한'); quire.end('한')");
+        await tab.run("quire.start(); quire.update('ㄱ'); quire.update('그'); quire.update('글'); quire.end('글')");
+        await tab.wait(30);
+        expect(await md(tab)).toBe("한글\n");
+        expect(await shown(tab)).toBe("한글");
+        expect((await tab.run<{ focus: { offset: number } }>("quire.selection()")).focus.offset).toBe(2);
+    });
+
+    inPage("Firefox's order, imitated: the last input arrives after compositionend, and nothing is doubled", async (tab) => {
+        await tab.run(`quire.reset("Ab\\n")`);
+        await tab.run("quire.select([0], 2)");
+        await tab.run("quire.start(); quire.update('c'); quire.update('cd'); quire.end('cd'); quire.element.dispatchEvent(new InputEvent('input', { inputType: 'insertCompositionText', data: 'cd', bubbles: true }))");
+        await tab.wait(30);
+        expect(await md(tab)).toBe("Abcd\n");
+        expect(await shown(tab)).toBe("Abcd");
+    });
+
+    inPage("iOS Safari's order, imitated: the composition's last insert comes after compositionend, cancelled or not, and nothing is doubled", async (tab) => {
+        await tab.run(`quire.reset("Ab\\n")`);
+        await tab.run("quire.select([0], 2)");
+        await tab.run("quire.start(); quire.update('c'); quire.update('cd'); quire.end('cd'); quire.after('insertFromComposition', 'cd', true)");
+        await tab.wait(30);
+        expect(await md(tab)).toBe("Abcd\n");
+        expect(await shown(tab)).toBe("Abcd");
+        // the same, where the browser will not let it be cancelled and writes it again: the page is put right from the model
+        await tab.run("quire.start(); quire.update('e'); quire.end('e'); quire.after('insertFromComposition', 'e', false)");
+        await tab.wait(30);
+        expect(await md(tab)).toBe("Abcde\n");
+        expect(await shown(tab)).toBe("Abcde");
+    });
+
+    inPage("Android, imitated: every key composes, a key is deleted by composing less, a word already written is composed again, and space commits", async (tab) => {
+        await tab.run(`quire.reset("Say end\\n")`);
+        await tab.run("quire.select([0], 4)");
+        // h, e, l typed, the l taken back by composing less, then space: the keyboard ends the composition and types the space
+        await tab.run("quire.start(); quire.update('h'); quire.update('he'); quire.update('hel'); quire.update('he'); quire.end('he')");
+        expect(await tab.run<boolean>("quire.input('insertText', ' ')")).toBe(true);
+        await tab.wait(30);
+        expect(await md(tab)).toBe("Say he end\n");
+        // the cursor put inside "hello" and a letter typed: the keyboard composes the whole word again
+        await tab.run(`quire.reset("hello world\\n")`);
+        await tab.run("quire.select([0], 3)");
+        await tab.run(`(() => {
+            quire.start();
+            const holder = quire.element.querySelector("p");
+            const word = document.createRange();
+            word.setStart(holder.firstChild, 0);
+            word.setEnd(holder.firstChild, 5);
+            window.word = word;
+        })()`);
+        await tab.run("(() => { const r = window.word; r.deleteContents(); const n = document.createTextNode('helplo'); r.insertNode(n); document.getSelection().setBaseAndExtent(n, 4, n, 4); quire.end('helplo'); })()");
+        await tab.wait(30);
+        expect(await md(tab)).toBe("helplo world\n");
+        expect(await shown(tab)).toBe("helplo world");
+        // a delete the keyboard will not let be cancelled: the browser deletes, and the model takes it from the page
+        await tab.run("quire.select([0], 6)");
+        await tab.run(`quire.input("deleteContentBackward", null, [{ path: [0], offset: 5 }, { path: [0], offset: 6 }], false, () => { const t = quire.element.querySelector("p").firstChild; t.deleteData(5, 1); document.getSelection().setBaseAndExtent(t, 5, t, 5); })`);
+        await tab.wait(30);
+        expect(await md(tab)).toBe("helpl world\n");
+        expect(await shown(tab)).toBe("helpl world");
+    });
+
+    inPage("a composition ended by a click elsewhere or by an arrow key keeps its text, once", async (tab) => {
+        await tab.run(`quire.reset("One\\n\\nTwo\\n")`);
+        await tab.run("quire.select([0], 3)");
+        await tab.compose(["s", "す"], "す");
+        await tab.run("quire.start(); quire.update('x'); quire.update('xy'); quire.end('xy'); quire.select([1], 0)");
+        await tab.wait(30);
+        expect(await md(tab)).toBe("Oneすxy\n\nTwo\n");
+        await tab.run("quire.start(); quire.update('z'); quire.end('z')");
+        await tab.press("ArrowRight");
+        await tab.wait(30);
+        expect(await md(tab)).toBe("Oneすxy\n\nzTwo\n");
+        expect(await shown(tab)).toBe("Oneすxy\nzTwo");
+    });
+
+    inPage("the editor's own late drawing of a long code block waits while a composition is under way", async (tab) => {
+        const code = "x".repeat(7000);
+        await tab.run(`quire.reset(${JSON.stringify("```js\n" + code + "\n```\n")})`);
+        await tab.run("quire.select([0], 3)");
+        await tab.type("a");
+        await tab.run("quire.start(); quire.update('か')");
+        await tab.wait(400);
+        await tab.run("quire.end('か')");
+        await tab.wait(400);
+        expect(await md(tab)).toBe("```js\nxxxaか" + code.slice(3) + "\n```\n");
+    });
+});
+
 describe("every kind of input that changes text either changes the model or is cancelled", () => {
+    inPage("the browser's Edit menu undoes and redoes through the editor's own history, and its Bold makes bold", async (tab) => {
+        await tab.run(`quire.reset("")`);
+        await tab.type("word");
+        await tab.run(`quire.input("historyUndo", null)`);
+        expect(await md(tab)).toBe("");
+        await tab.run(`quire.input("historyRedo", null)`);
+        expect(await md(tab)).toBe("word\n");
+        await tab.run("quire.select([0], 0, 4)");
+        await tab.run(`quire.input("formatBold", null)`);
+        expect(await md(tab)).toBe("**word**\n");
+    });
+
+    inPage("Shift+Enter is a line break and Enter a paragraph; the deletes of words and lines and a delete over blocks change the model", async (tab) => {
+        await tab.run(`quire.reset("one two\\n")`);
+        await tab.run("quire.select([0], 3)");
+        await tab.run(`quire.input("insertLineBreak", null)`);
+        await tab.run(`quire.input("insertParagraph", null)`);
+        expect(await tab.run<string[]>("quire.surface.getDocument().blocks.map((block) => block.runs.map((run) => run.kind === 'break' ? '|' : run.text).join(''))")).toEqual(["one|", " two"]);
+        await tab.run(`quire.reset("one two three\\n\\nfour\\n")`);
+        await tab.run("quire.select([0], 13)");
+        await tab.run(`quire.input("deleteWordBackward", null)`);
+        expect(await shown(tab)).toBe("one two \nfour");
+        expect(await tab.run<string>("quire.surface.getDocument().blocks[0].runs[0].text")).toBe("one two ");
+        await tab.run(`quire.input("deleteSoftLineBackward", null, [{ path: [0], offset: 0 }, { path: [0], offset: 8 }])`);
+        expect(await shown(tab)).toBe("\nfour");
+        expect(await tab.run<number>("quire.surface.getDocument().blocks[0].runs.length")).toBe(0);
+        await tab.run(`quire.reset("one\\n\\ntwo\\n")`);
+        await tab.run("quire.select([0], 1, 2, [1])");
+        await tab.run(`quire.input("deleteContent", null)`);
+        expect(await md(tab)).toBe("oo\n");
+        expect(await shown(tab)).toBe("oo");
+    });
+
+    inPage("an input type the surface does not make is cancelled, so the page never shows what the model does not have", async (tab) => {
+        await tab.run(`quire.reset("one\\n")`);
+        await tab.run("quire.select([0], 3)");
+        for (const type of ["insertTranspose", "insertFromPasteAsQuotation", "insertOrderedList", "formatJustifyCenter", "formatFontColor", "deleteByDrag", "insertFromDrop", "insertLink"]) {
+            expect(await tab.run<boolean>(`quire.input(${JSON.stringify(type)}, null)`)).toBe(true);
+        }
+        expect(await md(tab)).toBe("one\n");
+        // and one that could not be cancelled and changed a block the surface did not expect is drawn again from the model
+        await tab.run(`quire.reset("one\\n\\ntwo\\n")`);
+        await tab.run("quire.select([0], 3)");
+        await tab.run(`quire.input("insertOrderedList", null, null, false, () => { quire.element.children[1].textContent = "changed"; quire.element.append(document.createElement("ol")); })`);
+        expect(await md(tab)).toBe("one\n\ntwo\n");
+        expect(await shown(tab)).toBe("one\ntwo");
+    });
+
     inPage("copy, cut and a drop in a field inside the document are the field's own", async (tab) => {
         await tab.run(`quire.reset("\`\`\`js\\nlet a;\\n\`\`\`\\n\\nText here\\n")`);
         await tab.run("quire.select([1], 0, 4)");

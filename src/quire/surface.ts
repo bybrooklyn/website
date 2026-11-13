@@ -558,6 +558,17 @@ function draw(block: Block, inner: number[], how: Drawing = plainDrawing): HTMLE
 const isElement = (node: Node): node is HTMLElement => node.nodeType === 1;
 const isAtom = (node: Node) => isElement(node) && (node.tagName === "BR" ? !("filler" in node.dataset) : "atom" in node.dataset);
 
+/** The model text a DOM node stands for, an atom as one object character, so that its length is `units(node)`. */
+function textOf(node: Node): string {
+    if (node.nodeType === 3) return (node as Text).data;
+    if (!isElement(node)) return "";
+    if ("filler" in node.dataset || "shown" in node.dataset) return "";
+    if (isAtom(node)) return "￼";
+    let text = "";
+    for (const child of node.childNodes) text += textOf(child);
+    return text;
+}
+
 /** How much model text a DOM node stands for. */
 function units(node: Node): number {
     if (node.nodeType === 3) return (node as Text).length;
@@ -616,6 +627,7 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
     editor.state.selection = caret(firstText(editor.state.doc), 0);
     let composing = false;
     let composedAt: Selection | undefined;
+    let composedFrom: Before | undefined;
     const listeners = new Map<string, Set<(detail: never) => void>>();
 
     root.contentEditable = "true";
@@ -658,7 +670,9 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
     function later(holder: HTMLElement, block: Code) {
         waiting.set(holder, block);
         clearTimeout(painting);
-        painting = setTimeout(() => {
+        painting = setTimeout(function paint() {
+            // a block being composed in is not drawn under the input method; it waits for the composition to end
+            if (composing) return void (painting = setTimeout(paint, 250));
             let touched = false;
             for (const [element, code] of waiting) {
                 if (!element.isConnected) continue;
@@ -924,9 +938,106 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
         if (anchor && focus) editor = { ...editor, state: { doc: editor.state.doc, selection: { anchor, focus } } };
     }
 
+    // ---- what the browser changes itself ----
+
+    /** A block's text as drawn before the browser changed it itself: in a composition, or by an input the page could not cancel. */
+    interface Before {
+        path: number[];
+        holder: HTMLElement;
+        text: string;
+        selection: Selection;
+    }
+
+    function before(): Before | undefined {
+        const selection = editor.state.selection;
+        const holder = holderAt(selection.focus.path);
+        if (!holder || selection.anchor.path.join() !== selection.focus.path.join()) return undefined;
+        return { path: selection.focus.path, holder, text: textOf(holder), selection };
+    }
+
+    /**
+     * Takes what the browser wrote into a block into the model: the block's text now is compared with
+     * its text before, the stretch that differs is replaced through the model as typed text, and the
+     * block is drawn again from the model. The page's cursor says where the new text ends, so that
+     * typing a letter beside the same letter is put where it was typed. True if it could be taken.
+     */
+    function adopt(was: Before): boolean {
+        if (!root.contains(was.holder)) return false;
+        const after = textOf(was.holder);
+        const old = was.text;
+        const page = document.getSelection();
+        const end = page?.focusNode && was.holder.contains(page.focusNode) ? offsetIn(was.holder, page.focusNode, page.focusOffset) : after.length;
+        let tail = 0;
+        const most = Math.max(0, Math.min(old.length, after.length - end));
+        while (tail < most && old[old.length - 1 - tail] === after[after.length - 1 - tail]) tail++;
+        let head = 0;
+        while (head < Math.min(old.length, after.length) - tail && old[head] === after[head]) head++;
+        const added = after.slice(head, after.length - tail).replace(/￼/g, "");
+        const top = editor.state.doc.blocks[was.path[0]!];
+        if (top) drawn.delete(top);
+        render();
+        if (head === old.length - tail && added === "") {
+            // nothing changed (a composition given up with Escape): the cursor goes back where it was
+            editor = { ...editor, state: { ...editor.state, selection: was.selection } };
+            commit(editor);
+            return true;
+        }
+        editor = { ...editor, state: { doc: editor.state.doc, selection: { anchor: { path: was.path, offset: head }, focus: { path: was.path, offset: old.length - tail } } } };
+        if (added) send({ type: "text", text: added });
+        else send({ type: "key", key: "Backspace" });
+        return true;
+    }
+
+    /** Whether ?debug is in the page's address, to say in the console when the page and the model were found apart. */
+    const debugging = typeof location !== "undefined" && new URLSearchParams(location.search).has("debug");
+
+    /**
+     * After an input the surface did not make itself, the blocks it may have touched are compared
+     * with the model, and any that the page shows differently is drawn again from the model: the page
+     * can never be left showing text the document does not have.
+     */
+    function repair(event: Event) {
+        const blocks = editor.state.doc.blocks;
+        const near = new Set<number>();
+        const index = editor.state.selection.focus.path[0]!;
+        for (const at of [index - 1, index, index + 1]) if (at >= 0 && at < blocks.length) near.add(at);
+        for (const node of [document.getSelection()?.focusNode, document.getSelection()?.anchorNode, event.target as Node | null]) {
+            const top = node && root.contains(node) ? topOf(node) : undefined;
+            if (top) near.add([...root.children].indexOf(top));
+        }
+        let wrong = root.children.length !== blocks.length;
+        for (const at of near) {
+            const block = blocks[at];
+            const element = root.children[at] as HTMLElement | undefined;
+            if (!block || !element) continue;
+            if (drawn.get(block) === element && textOf(element) === textOf(draw(block, [], drawing()))) continue;
+            drawn.delete(block);
+            wrong = true;
+        }
+        if (!wrong) return;
+        if (debugging) console.warn(`mdQuire: the page showed text the document does not have, after "${(event as InputEvent).inputType ?? event.type}"; drawn again from the document`);
+        if (root.children.length !== blocks.length) {
+            drawn = new WeakMap();
+            root.replaceChildren();
+        }
+        render();
+        placeSelection();
+    }
+
+    /** A change the browser is making itself, since it would not let it be cancelled; it is taken into the model when the input arrives. */
+    let uncancelled: Before | undefined;
+
     function onBeforeInput(event: InputEvent) {
         if (fromField(event)) return;
-        if (composing || event.isComposing || event.inputType === "insertCompositionText" || event.inputType === "deleteCompositionText" || event.inputType === "insertFromComposition") return;
+        if (composing || event.isComposing || event.inputType === "insertCompositionText") return;
+        // the last of a composition after it ended (WebKit's order): the model already has the text
+        if ((event.inputType === "deleteCompositionText" || event.inputType === "insertFromComposition") && !event.cancelable) return;
+        if (!event.cancelable) {
+            // some phone keyboards' deletes and corrections cannot be cancelled: the browser makes them, and the model takes them after
+            syncSelection();
+            uncancelled = before();
+            return;
+        }
         event.preventDefault();
         syncSelection();
         const type = event.inputType;
@@ -991,18 +1102,24 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
     function onCompositionStart(event: CompositionEvent) {
         if (fromField(event)) return;
         syncSelection();
-        // what is selected goes first, so the composed text replaces it
-        if (!collapsed(editor.state.selection)) send({ type: "key", key: "Backspace" });
+        // a selection over more than one block goes first, through the model, so the composed text
+        // replaces it; a selection inside one block is left to the browser, whose composition replaces it
+        // there, and is taken from the page with the composed text when the composition ends
+        if (editor.state.selection.anchor.path.join() !== editor.state.selection.focus.path.join()) send({ type: "key", key: "Backspace" });
         composing = true;
+        composedFrom = before();
         composedAt = editor.state.selection;
     }
 
     function onCompositionEnd(event: CompositionEvent) {
         if (fromField(event)) return;
         composing = false;
+        const from = composedFrom;
         const at = composedAt ?? editor.state.selection;
+        composedFrom = undefined;
         composedAt = undefined;
-        // the browser wrote the composed text into the block itself: that block is drawn again from the model
+        // the browser wrote the composed text into the block itself: what changed there is taken into the model
+        if (from && adopt(from)) return;
         const top = editor.state.doc.blocks[at.focus.path[0]!];
         if (top) drawn.delete(top);
         render();
@@ -1013,11 +1130,11 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
 
     function onInput(event: Event) {
         if (composing || fromField(event)) return;
-        // the browser changed the page by some way not cancelled: everything is drawn again from the model
-        drawn = new WeakMap();
-        root.replaceChildren();
-        render();
-        placeSelection();
+        const was = uncancelled;
+        uncancelled = undefined;
+        if (was) adopt(was);
+        // the browser changed the page in a way the surface did not make: what differs is drawn again from the model
+        repair(event);
     }
 
     function onSelectionChange() {
