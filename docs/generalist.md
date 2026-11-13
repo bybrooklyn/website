@@ -9,7 +9,7 @@ doing things, all written from scratch in that engine. An article about it is pl
 
 - `walker/src/generalist/`: the engine side, behind the crate's `generalist` feature. `walker/README.md`,
   section "The generalist", is the full reference, with every measurement.
-- `public/wasm/generalist.wasm` (and its scalar twin): the built module, 299 KiB with SIMD.
+- `public/wasm/generalist.wasm` (and its scalar twin): the built module, 304 KiB with SIMD.
 - `src/minis/generalist.ts`: the page's scene; `src/minis/roaming.ts`: what the page and its workers share;
   `src/scripts/generalist-worker.ts` (evolution) and `src/scripts/generalist-practice.ts` (practice).
 - `src/content/minis/generalist.mdx`: the mini's words. It is marked `draft: true`.
@@ -30,13 +30,16 @@ doing things, all written from scratch in that engine. An article about it is pl
   Practice has no hop.
 - **How it moves** is shaped by costs: on the motors' work, on time in the air with nothing ahead to clear,
   and on a fall. For two legs, posture terms (a run ends at the first touch of the body; costs for a knee
-  down; a bonus for being carried tall) and a small reward for each second with exactly one foot down.
+  down and for leaning; a bonus for being carried tall), a cost on how hard a foot lands, progress paid up
+  to 1 m/s and no faster, and a cost for a run that gets nowhere. Two legs no longer sense the legs'
+  rhythm, and the reward for exactly one foot down is gone (13 November 2026).
 - **The page**: a wide mini, the world on the left and a column on the right with the controls, then the
   brain drawn live beside the world from the first second, what it senses, and the reward words (forward,
   up, effort, in the air for nothing, fell). The page opens on practice: a creature that knows nothing,
   learning from the first second; nothing trained is shipped. What is learned is kept in the browser and
   taken up again next visit; "start over" forgets it.
-- **Measures**: a gait measure that says whether a run counts as walking; a comparison of evolution and
+- **Measures**: a gait measure that says whether a run counts as walking, printed three ways (in the
+  held-out worlds as a whole, which is the test; on open ground in them; on level ground); a comparison of evolution and
   practice on the same compute (practice goes three to six times as far through unseen worlds for about
   half the motors' work); a test of practising on easy worlds first, which gained nothing by the end.
 
@@ -56,7 +59,8 @@ means to practise in imagination (a world model) are there from the start, and w
 is left for it to find.
 
 **How it moves.** No rule about how to move: costs on wasted effort and on leaving the ground when there is
-nothing to clear. (The reward for one foot down is a rule of that kind; see Open.)
+nothing to clear. The reward for one foot down was a rule of that kind and is gone; so is the steady
+rhythm two legs used to sense, a beat to step to.
 
 **Sight.** Rays first; a picture later, as its own experiment. A very small vision encoder, made in the Rust
 engine, is shipped as a base to learn on, since sight is slow to learn. It is trained once on the owner's
@@ -116,14 +120,25 @@ well-trodden.
 
 ## Open
 
-- **Whether the reward for one foot down stays.** It went in to make two legs take turns, and it is a rule
-  about how to move, which the decision above rules out. It may be taken out.
+- **The reward for one foot down is gone** (13 November 2026). Without it and with nothing else changed, the
+  feet stopped taking turns; it turned out the rhythm in the senses was what made two legs run, and with
+  that taken away and progress paid only up to 1 m/s, they take turns without the reward.
+- **Which choices to keep, for her to say.** Progress paid up to 1 m/s is a choice of task (go about, do
+  not race), not of gait, but it is what made running pointless. The cost on leaning is a posture term,
+  as the knee and carried-tall terms were. The cost on a hard landing is a cost. Taking the rhythm out of
+  two legs' senses removes a hint; four legs still sense it.
+- **Whether the gait test should count what it does at things in its way.** Two legs now walk by the test
+  on level ground (three seeds in four) and on open ground in the held-out worlds (two or three in four),
+  but not in those worlds as a whole: the strides there vary by 0.4 to 0.55 against 0.35, because waiting
+  at a moving platform or stepping short at an edge counts as a stride. The test is unchanged; the open
+  view is offered beside it.
 - **The page text** (`src/content/minis/generalist.mdx`) still says it learns by evolution and that better
   learning comes next; its controls line was changed and has not been reviewed.
 - **Whether the page opens on practice or on evolution.** It opens on practice today.
-- **Two legs stand and alternate but do not yet walk.** They stay on their feet, upright, one leg then the
-  other, but each stride is a high kick and a wide split; by the gait measure it is not walking. Four legs
-  trot and bound. How to get a walk without a rule about how to move is open.
+- **Two legs walk on open ground, not yet through a whole world by the test.** No high kick or split now:
+  a foot always down, upright, about 1 m/s (walker/README.md, "How two legs came to walk", has every
+  number). They go two thirds as far through held-out worlds as before (15 m against 25 in 30 s), since
+  they are asked for 1 m/s and slow at things. Four legs trot and bound, as before, to the bit.
 
 ## How to run and test
 
@@ -137,13 +152,14 @@ cd walker && sh examples/compare.sh                     # evolution against prac
 
 ## Known weak spots
 
-- Neither body walks with a foot always down; the costs make bounding dearer without making it rare, and
-  stronger costs leave a learner that gives up.
+- Four legs do not walk with a foot always down; they trot and bound. Two legs mostly do now, but one seed
+  in four still rocks or leans past the test's limits, and costs that hold the body stiller (on spin,
+  bobbing, or a lean cost of 2) leave some learners creeping or limping.
 - How far it gets in the one world on show swings from run to run, since a policy better on average can be
   worse at the first thing in that world.
 - A learner is about 24,000 numbers and does not fit in a link, so a link carries the world and not the brain.
 - Practice uses four workers at most; with more, each has too few creatures and learns less per step.
 - Rhythm neurons, mirroring and memory neurons were tried and taken out again. The commit
-  `walker/README.md` names for them, `61c47e5`, is only on the branch `generalist-gait`, so it is lost if
-  that branch is deleted without a tag.
-- Centred actions and a curriculum are in the code and unused.
+  `walker/README.md` names for them, `61c47e5`, is kept by the tag `gait-trials`.
+- Centred actions and a curriculum are in the code and unused, and so are the trial knobs of the gait work
+  (shorter hips, costs on spin, bobbing, joint speed and torque, easing, the top pace's other values).

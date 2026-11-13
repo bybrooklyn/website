@@ -503,7 +503,7 @@ The senses, in the order the brain takes them:
 | body | 4 | its angle (0 upright), its spin times 0.2, its speed forward and up, each times 0.25 |
 | joints | 2 for each | hip then knee, leg by leg: the angle, and the speed times 0.1 |
 | feet | 1 for each | 1 if on something, else 0 |
-| rhythm | 2 | the sine and cosine of the legs' rhythm |
+| rhythm | 2 | the sine and cosine of the legs' rhythm (0 and 0 for two legs practising: "How two legs came to walk") |
 | hop | 2 | 1 while it hops, else 0; 1 when it can hop, else 0 |
 
 So two legs sense 96 + 18 = 114 numbers and four legs 96 + 28 = 124.
@@ -696,7 +696,8 @@ to 3 (distance in the held-out worlds, then its spread over the seeds):
 | **posture and 0.5 for each second with one foot down going forward** | **22.6 ± 3.7 m** | **0.16** | **0.01** | **0.00** | **0.83** | **0.31** | **-0.26** | **0.86** | **0.53** |
 | posture and 1 for each second with one foot down | 20.7 ± 2.8 m | 0.15 | 0.02 | 0.00 | 0.82 | 0.32 | -0.27 | 0.77 | 0.53 |
 
-So two legs now practise with the posture terms and the bonus for one foot down (`Way::of(2)`): the
+So two legs practised, until 13 November 2026, with the posture terms and the bonus for one foot down
+(the bonus is gone now: "How two legs came to walk", below): the
 first touch of its body ends a run once the costs are all in (until then the second it may be down
 shrinks to nothing over the first 4 million steps), so belly and knees came off the ground (low 0.07 to
 0.01) and the body stopped rocking (its angle's spread 0.61 to 0.31 radians); the bonus, which is the
@@ -730,7 +731,7 @@ Tried and not kept, and taken out of the engine again (they are in the history, 
 Each of these had a test of its gradient against finite differences while it was in; the whole loss
 of PPO is still held to that (`ppo_tests`).
 
-What was kept, against the way before, as the comparison below measures it: 20 million steps, five
+What was kept then (it was replaced on 13 November 2026, below), against the way before, as the comparison below measures it: 20 million steps, five
 seeds, sixteen held-out worlds (`examples/compare.rs`; `knee=0 upright=0 turns=0 down=1` gives the
 way before, whose distances come out to the bit as in the table below). Four legs practise as they
 did, so theirs are the same runs both ways.
@@ -744,7 +745,7 @@ did, so theirs are the same runs both ways.
 | 4 | 0.1 | | 44.0 ± 4.7 m | 0.15 | 0.19 | 0.01 | 0.80 | 0.17 ± 0.24 | 0.07 | 0.73 | 0.61 |
 | 4 | 0.8 | | 16.4 ± 4.3 m | 0.10 | 0.27 | 0.02 | 0.76 | 0.13 ± 0.30 | 0.17 | 0.32 | 0.81 |
 
-Two legs now carry the body upright (it leaned back 0.4 radians on average before, now not at all)
+Two legs then carried the body upright (it leaned back 0.4 radians on average before, then not at all)
 and higher, belly and knees off the ground, their feet taking turns, in the air for nothing a third
 less, as far on easy worlds and a little less far on hard ones. By the thresholds above it does not
 yet walk: its strides are irregular (a spread of half their length), it rocks by a third of a radian,
@@ -753,12 +754,180 @@ and it is still in the air for nothing a seventh of the time. Four legs, whose k
 124,000 steps a second against 113,000 to 114,000 before (`examples/practice.rs`, two legs, 3 million
 steps, one core).
 
-On the page, in headless Chromium at normal effort in "meadow", 10 of 100 hard, everything on, after
+On the page, with that way, in headless Chromium at normal effort in "meadow", 10 of 100 hard, everything on, after
 two minutes of practice (49 million steps, 17.6 m on average in practice runs): two legs run on their
 feet, the body off the ground and upright, one leg then the other, but each stride is a high kick of
 the leg in front, held out nearly level, then a wide split; it looks like a goose step, not yet a
 walk. Four legs, the same as before, crouch at the start and leap for the first gap, landing on their
 nose before getting their feet under them again.
+
+### How two legs came to walk
+
+The aim: two legs that walk, by the gait measure above, with no rule about how to move, learned in
+the visitor's browser in a time a visitor will wait. The way above had two hints in it. The bonus for
+exactly one foot down is a rule about how to move, and the senses held the legs' rhythm, a steady
+clock (`Body::feel`), which is a hint of the same kind: a beat to step to. And it was paid for every
+metre however fast, so the cheapest thing was to run.
+
+**Three views of the gait.** The walk test (`Gait::walks`) is unchanged and is the one that counts.
+Beside it, `compare.rs` now prints two more views of the same policy:
+
+- **open**: the same sixteen held-out worlds, watched only while nothing ahead asks for more than
+  walking (`clear_ahead` false: no edge, box, hazard or moving thing where its five nearest rays down
+  land, no wall within a metre), the time between the landings either side of a stretch left out
+  (`Worlds::open_watches`, `Watch::pause`). It is how it walks on open ground, with what it does at
+  each thing in its way left out.
+- **flat**: level ground with nothing on it (`flat=1`). A recipe with nothing in it lays the same
+  ground whatever its seed, so this is one world, sixteen times.
+
+Every trial below was made with `examples/compare.rs` and its `name=value` settings, two legs,
+practising in worlds of difficulty 0.1 with everything on, measured in the held-out worlds of that
+kind, at 20 million steps, seeds 1 to 3 (1 to 4 where n is 4), four runs at a time on four cores of the
+Ryzen 7 9700X with other work going on. The columns are the held-out measures, averaged over the
+seeds (the lean is the size of the mean lean, then its spread), then how many seeds walk by the test
+in the held-out worlds, on open ground in them, and on level ground. "No hints" is the way above with
+the bonus for one foot down taken out and the rhythm felt as 0.
+
+| | n | distance | air | low | height | lean | together | balance | variation | walks: worlds, open, level |
+|---|---|---|---|---|---|---|---|---|---|---|
+| the way before | 4 | 24.9 ± 4.0 m | 0.12 | 0.01 | 0.85 | 0.16 / 0.34 | -0.35 | 0.80 | 0.44 | 0, 0, 0 of 4 |
+| without the bonus for one foot down | 3 | 28.8 ± 3.9 m | 0.20 | 0.01 | 0.83 | 0.23 / 0.26 | -0.12 | 0.75 | 0.52 | 0, -, - of 3 |
+| without it, hips that reach 0.7 rad forward, not 1.3 | 3 | 15.1 ± 9.0 m | 0.17 | 0.01 | 0.89 | 0.30 / 0.20 | -0.12 | 0.83 | 0.61 | 0, -, - of 3 |
+| without it, 0.5 for each m/s of a foot's landing | 3 | 3.8 ± 2.8 m | 0.15 | 0.03 | 0.91 | 0.16 / 0.30 | -0.18 | 0.48 | 3.27 | 0, -, - of 3 |
+| without it, 3e-5 for each N m of torque, squared, a second | 3 | 11.9 ± 8.4 m | 0.15 | 0.01 | 0.86 | 0.22 / 0.20 | 0.01 | 0.56 | 0.86 | 0, -, - of 3 |
+| without it, spin 0.05 and bobbing 0.5 a second, squared | 3 | 24.0 ± 9.6 m | 0.19 | 0.01 | 0.79 | 0.26 / 0.26 | -0.04 | 0.74 | 0.53 | 0, -, - of 3 |
+| without it, progress paid up to 1 m/s | 3 | 9.9 ± 9.4 m | 0.02 | 0.00 | 0.89 | 0.30 / 0.24 | -0.18 | 0.86 | 0.73 | 0, -, - of 3 |
+| without it, progress paid up to 0.7 m/s | 3 | 4.3 ± 2.3 m | 0.00 | 0.00 | 0.95 | 0.45 / 0.10 | -0.15 | 0.57 | 0.89 | 0, -, - of 3 |
+| no hints | 3 | 14.2 ± 6.7 m | 0.05 | 0.00 | 0.89 | 0.20 / 0.35 | -0.32 | 0.90 | 0.56 | 0, -, - of 3 |
+| no hints, the bonus for one foot down back | 3 | 21.0 ± 0.7 m | 0.16 | 0.01 | 0.88 | 0.08 / 0.36 | -0.27 | 0.71 | 0.48 | 0, -, 0 of 3 |
+| no hints, decisions held 8 steps, not 4 | 3 | 10.4 ± 8.8 m | 0.12 | 0.01 | 0.89 | 0.30 / 0.26 | -0.15 | 0.70 | 0.70 | 0, -, 0 of 3 |
+| no hints, joints eased 0.3 of the way a step | 3 | 15.1 ± 10.3 m | 0.08 | 0.02 | 0.88 | 0.19 / 0.26 | -0.20 | 0.63 | 0.78 | 0, -, 0 of 3 |
+| no hints, hips to 0.9 rad | 3 | 20.1 ± 4.4 m | 0.16 | 0.01 | 0.86 | 0.34 / 0.23 | -0.15 | 0.70 | 0.48 | 0, -, 1 of 3 |
+| no hints, landing 0.05 | 3 | 18.8 ± 6.6 m | 0.16 | 0.01 | 0.87 | 0.08 / 0.36 | -0.32 | 0.73 | 0.49 | 0, -, 0 of 3 |
+| no hints, spin 0.05 | 3 | 16.5 ± 2.8 m | 0.12 | 0.01 | 0.86 | 0.30 / 0.23 | -0.21 | 0.84 | 0.55 | 0, -, 1 of 3 |
+| **no hints, paid up to 1 m/s, 3 for a run that stalls ("pace")** | 4 | 20.1 ± 2.7 m | 0.05 | 0.00 | 0.88 | 0.18 / 0.33 | -0.36 | 0.84 | 0.55 | 0, 1, 0 of 4 |
+| no hints, paid up to 1.3 m/s, stalling 3 | 3 | 19.5 ± 0.2 m | 0.08 | 0.01 | 0.86 | 0.23 / 0.31 | -0.36 | 0.85 | 0.52 | 0, -, 0 of 3 |
+| pace, paid up to 0.8 m/s | 3 | 6.4 ± 4.3 m | 0.01 | 0.00 | 0.93 | 0.44 / 0.23 | -0.17 | 0.72 | 1.00 | 0, -, 0 of 3 |
+| pace, spin 0.01 | 4 | 14.5 ± 6.9 m | 0.05 | 0.00 | 0.88 | 0.29 / 0.27 | -0.34 | 0.82 | 0.60 | 0, 1, 2 of 4 |
+| pace, spin 0.02 | 4 | 8.8 ± 2.5 m | 0.01 | 0.00 | 0.89 | 0.50 / 0.26 | -0.32 | 0.93 | 0.62 | 0, 1, 1 of 4 |
+| pace, spin 0.05 | 3 | 8.0 ± 6.3 m | 0.02 | 0.00 | 0.91 | 0.38 / 0.13 | -0.15 | 0.50 | 3.51 | 0, -, 1 of 3 |
+| pace, spin 0.05, landing 0.05 | 3 | 7.7 ± 5.5 m | 0.02 | 0.00 | 0.89 | 0.50 / 0.24 | -0.21 | 0.95 | 0.49 | 0, -, 0 of 3 |
+| pace, bobbing 0.5 | 3 | 4.1 ± 2.4 m | 0.00 | 0.00 | 0.94 | 0.64 / 0.17 | -0.24 | 0.96 | 0.51 | 0, -, 0 of 3 |
+| pace, hips to 0.9 rad | 3 | 8.4 ± 5.4 m | 0.02 | 0.00 | 0.90 | 0.11 / 0.23 | -0.23 | 0.67 | 0.87 | 0, -, 2 of 3 |
+| pace, 0.002 for each joint's speed, squared | 3 | 15.5 ± 5.0 m | 0.05 | 0.01 | 0.88 | 0.38 / 0.27 | -0.33 | 0.85 | 0.65 | 0, -, 1 of 3 |
+| pace, torque 1e-5 | 3 | 15.2 ± 10.2 m | 0.05 | 0.00 | 0.86 | 0.31 / 0.24 | -0.28 | 0.82 | 0.68 | 0, 1, 1 of 3 |
+| pace, landing 0.05 | 3 | 16.8 ± 4.2 m | 0.04 | 0.01 | 0.87 | 0.30 / 0.33 | -0.29 | 0.89 | 0.52 | 0, -, 1 of 3 |
+| pace, landing 0.1 | 4 | 13.7 ± 3.3 m | 0.04 | 0.00 | 0.88 | 0.20 / 0.40 | -0.34 | 0.90 | 0.41 | 0, 0, 1 of 4 |
+| pace, spin 0.01, landing 0.05 | 4 | 9.4 ± 4.2 m | 0.01 | 0.00 | 0.91 | 0.49 / 0.25 | -0.24 | 0.85 | 0.80 | 0, 0, 1 of 4 |
+| pace, lean 0.5 a second, squared | 3 | 20.6 ± 1.4 m | 0.06 | 0.00 | 0.84 | 0.12 / 0.33 | -0.34 | 0.77 | 0.54 | 0, 0, 1 of 3 |
+| pace, lean 1 | 3 | 16.0 ± 5.5 m | 0.04 | 0.00 | 0.80 | 0.08 / 0.27 | -0.25 | 0.70 | 0.64 | 0, 2, 2 of 3 |
+| **pace, lean 1, landing 0.05 (kept)** | 3 | 11.3 ± 4.9 m | 0.04 | 0.00 | 0.83 | 0.16 / 0.25 | -0.30 | 0.75 | 0.54 | 0, 1, 3 of 3 |
+| pace, lean 1, bobbing 0.5 | 3 | 11.3 ± 5.1 m | 0.03 | 0.01 | 0.83 | 0.20 / 0.24 | -0.39 | 0.76 | 0.53 | 0, 0, 0 of 3 |
+| pace, lean 1, spin 0.02 | 3 | 10.8 ± 7.9 m | 0.04 | 0.00 | 0.87 | 0.09 / 0.21 | -0.25 | 0.71 | 0.80 | 0, 1, 1 of 3 |
+
+A dash is a view not yet printed when that trial was made. Then the likeliest, longer, at 30 million steps, seeds 1 to 4:
+
+| | n | distance | air | low | height | lean | together | balance | variation | walks: worlds, open, level |
+|---|---|---|---|---|---|---|---|---|---|---|
+| pace, lean 1 | 4 | 11.8 ± 6.2 m | 0.03 | 0.01 | 0.85 | 0.09 / 0.23 | -0.23 | 0.77 | 0.55 | 0, 2, 3 of 4 |
+| **pace, lean 1, landing 0.05 (kept)** | 4 | 15.1 ± 7.0 m | 0.03 | 0.00 | 0.84 | 0.17 / 0.27 | -0.38 | 0.89 | 0.45 | 0, 1, 2 of 4 |
+| pace, lean 0.5, spin 0.01 | 4 | 14.3 ± 4.5 m | 0.04 | 0.01 | 0.84 | 0.14 / 0.29 | -0.35 | 0.87 | 0.60 | 0, 1, 1 of 4 |
+
+And the kept way in the page's own kind of world ("meadow" as the page opens: 20 of 100 hard,
+ground 60, the rest 40), practising and measured there, seeds 1 to 4, beside two that hold the body
+stiller (each n seeds, the mark in the first column):
+
+| | n | distance | air | low | height | lean | together | balance | variation | walks: worlds, open, level |
+|---|---|---|---|---|---|---|---|---|---|---|
+| kept, 10 M | 4 | 13.9 ± 1.7 m | 0.06 | 0.01 | 0.85 | 0.20 / 0.27 | -0.33 | 0.88 | 0.46 | 0, 2, 1 of 4 |
+| kept, 20 M | 4 | 16.5 ± 1.7 m | 0.05 | 0.00 | 0.87 | 0.17 / 0.28 | -0.33 | 0.93 | 0.46 | 0, 3, 3 of 4 |
+| kept, 30 M | 4 | 14.4 ± 2.2 m | 0.03 | 0.00 | 0.89 | 0.24 / 0.28 | -0.43 | 0.94 | 0.42 | 0, 3, 3 of 4 |
+| kept, 40 M | 4 | 16.1 ± 2.8 m | 0.03 | 0.00 | 0.91 | 0.28 / 0.27 | -0.53 | 0.93 | 0.45 | 0, 2, 2 of 4 |
+| lean 2, 20 M | 4 | 10.6 ± 6.7 m | 0.02 | 0.00 | 0.85 | 0.12 / 0.15 | -0.24 | 0.63 | 2.61 | 1, 2, 2 of 4 |
+| lean 2, 30 M | 4 | 12.3 ± 7.3 m | 0.02 | 0.00 | 0.85 | 0.14 / 0.14 | -0.27 | 0.65 | 2.70 | 0, 2, 2 of 4 |
+| lean 1, spin 0.01, 30 M | 4 | 13.1 ± 5.2 m | 0.02 | 0.00 | 0.92 | 0.23 / 0.24 | -0.38 | 0.94 | 0.42 | 0, 2, 3 of 4 |
+
+What each thing did:
+
+- **The bonus for one foot down did what it was for.** Taken out, the feet stop taking turns (together
+  -0.35 to -0.12) and it is in the air for nothing a fifth of the time.
+- **The rhythm in its senses made it run.** With the rhythm felt as 0 and no bonus, the feet take turns
+  as much as with the bonus (-0.32), and it is in the air for nothing a twentieth of the time, against
+  a fifth with the rhythm. Put the bonus back with no rhythm, and it leaves the ground as before (0.16).
+- **Paid for any speed, it runs.** On level ground every policy paid however fast it went ran at 1.8 to
+  2.2 m/s, in the air for nothing 0.19 to 0.28 of its time. Paid only up to 1 m/s (a metre gained
+  quicker earns what 1 m/s would have, and nothing more), it stops leaving the ground; but alone it
+  learned to stand until the run ended for getting nowhere, since standing still earns the bonus for
+  being up and risks nothing. A cost of 3 for a run that stalls, as a fall costs, got it going.
+  Paid up to 0.8 or 0.7 m/s, it shuffles and stands even so.
+- **On level ground, that already walks in rhythm.** Paid up to 1 m/s with stalling charged, its strides
+  vary by a sixth of their length on level ground and a quarter on open ground, against a half in
+  the worlds as a whole; it falls short of the test by rocking (its lean's spread about 0.33) and, for
+  one seed in four, by leaning further than 0.35 on average.
+- **Leaning costs, so it stands up straighter.** 1 a second for the lean squared took the spread to 0.25
+  and two or three seeds in four to walking on level ground; 2 took it to 0.14, but of four seeds one
+  limped (one foot landing a third as often as the other) and one stood and crept. 1 with a cost of
+  0.01 on the body's spin did about as well as the kept way.
+- **A landing that stamps costs, so feet are set down.** At 0.05 for each m/s, the feet take turns more
+  cleanly (balance 0.97 on level ground) and the strides are steadier; at 0.5 it barely moves.
+- **Costs that hold the body still, too strong, end in a creep.** A cost on the body's spin of 0.02 or
+  more, on bobbing, on the joints' speed, or a top pace under 1 m/s: on level ground it shuffles,
+  leaning far forward or back (0.4 to 0.7 rad), and in the worlds it stops at the first thing in its
+  way (4 to 9 m).
+- **What made no walk:** shorter hips (0.7 or 0.9 rad forward, a body that cannot kick high: it bounds
+  as before with the bonus gone, and with a pace it shuffles), decisions held twice as long, joints
+  eased toward what is asked, torque squared. Not tried here: friction, mass and leg length, schedules
+  of entropy or rate (the policy is greedy when measured, and its spread was not what was wrong).
+
+**Kept** (`Way::of(2)`): the posture terms there were (knees, carried tall, a run ending at the first
+touch of the body), progress paid up to 1 m/s, 3 for a run that stalls, 1 a second for the lean
+squared, 0.05 for each m/s of a landing, the rhythm felt as 0 and no bonus for one foot down. Four legs
+practise as before, to the bit (the same lines from `compare.rs`, before and after).
+
+**Where it stands.** Natively, on level ground three seeds in four walk by the test at 20 million
+steps (in the page, about two minutes at normal effort on four cores, one on the whole machine), and
+two to three of four on open ground in held-out worlds of the page's kind: a foot always down, the
+body upright, the feet taking turns, strides regular to within a tenth to a quarter of their length,
+at about 1 m/s, using 150 J a metre on level ground. **By the test itself, in the held-out worlds as a
+whole, no native seed walks**, and only twice did anything walk there: lean 2, one seed in four, at 20
+million steps and not at 30, and the page's own learner at two minutes (below). Everything else
+passes there: what fails is the strides' variation, 0.40 to 0.55 against 0.35. Where one seed in four
+fails on level or open ground, it is by rocking, the lean's spread just over 0.35, or by leaning
+further than that on average.
+
+**Whether the test is right there.** It pools every stride of a run, so the time it spends waiting for
+a moving platform, or the short steps and the pause before stepping down a drop or up a ledge, count
+as strides of a walk that varies. In the held-out worlds at difficulty 0.1 to 0.2 there is something
+in its way about every 6 m. On open ground in the same worlds, the same policies' strides vary by
+0.23 to 0.29. So the thresholds are kept, the open and level views are printed beside them, and the
+test is not passed in the worlds as a whole. A measure of a walk that excuses what it does at things
+in its way, the open view, is offered as the measure of the gait, beside the whole; which is to count
+is the owner's choice.
+
+**What it cost.** It goes about two thirds as far through held-out worlds (15 to 16 m in 30 s against
+25), since it is asked for 1 m/s, the runs last 30 s, and it slows at things in its way and is
+charged nothing for being slow; on level ground it walks 30 m in 30 s.
+
+**In the page.** The built site (drafts shown) served locally, the mini opened fresh in headless
+Chromium as a visitor finds it ("meadow", 20 of 100 hard, normal effort, four workers), the browser
+held to four cores of the Ryzen 7 9700X (`taskset`), other work going on: practice ran at 175,000 to
+220,000 steps a second (on the whole machine it is about 340,000). The learner the page kept in the
+browser's store was read out at 2, 5 and 10 minutes and measured natively in sixteen held-out worlds of
+the page's kind (`compare.rs kept=`; the page's engine learns to the bit as the native one does, so the
+measure is of what was learned in the browser):
+
+| practised | steps | distance | air | lean | together | balance | variation | walks: worlds, open, level |
+|---|---|---|---|---|---|---|---|---|
+| 2 min | 23 M | 15.1 m | 0.04 | 0.21 / 0.34 | -0.46 | 0.91 | 0.34 | yes, no (lean's spread 0.35), yes |
+| 5 min | 52 M | 15.2 m | 0.04 | 0.19 / 0.36 | -0.43 | 0.91 | 0.38 | no, no, no (lean's spread 0.36) |
+| 10 min | 113 M | 15.5 m | 0.05 | 0.07 / 0.40 | -0.24 | 0.87 | 0.44 | no, no, no (lean's spread 0.37 to 0.41) |
+
+So in the page, from nothing, two legs walk by the test after two minutes, in the worlds as a whole and
+on level ground, and only just: the lean's spread is 0.34 against a limit of 0.35. With more practice
+it rocks a little more and falls just outside it, while still taking turns with a foot always down. The
+page learns from one seed only (the learner's seed is fixed), so this is one learner, beside the four
+seeds natively. The page's status line said it got 13 to 15 m in "meadow" and 11 to 16 m on average in
+practice runs, all ten minutes.
 
 ### Practice in the browser
 
@@ -785,7 +954,9 @@ long it has practised, how many steps, how far it gets in this world now and on 
 Everything learned is kept in the browser (IndexedDB) every half minute, for that body and that kind
 of world, and taken up again on the next visit; "start over" forgets it. What is kept holds the steps
 practised, so the costs brought in over the first 4 million steps go on from where they were; a
-learner kept before that was added, or of another size, is refused and practice starts afresh. A two-legged learner's
+learner kept before that was added, or of another size, is refused and practice starts afresh. The store is at
+version 2 since two legs were asked for a pace: opening it forgets two-legged learners kept before, which
+are the right size but learned for another task, and keeps four-legged ones. A two-legged learner's
 weights are 23,435 numbers, and all that is kept of it 70,309 (the weights, Adam's two running
 averages as long, its updates, Adam's steps and the steps practised), which does not fit in a link, so
 a link carries the world and not the brain.
@@ -929,7 +1100,8 @@ creature and its learning per module instance. A function that gives a list give
   `envs_observations()`, `envs_rewards()`, `envs_done()`, `senses_length()`, `actions_length()`,
   `rays_length()`.
 
-The module is 299 KiB with SIMD, 291 KiB without (295 and 287 before the posture terms for two legs,
+The module is 304 KiB with SIMD, 296 KiB without (299 and 291 before two legs were asked for a pace,
+with the costs on landing and leaning; 295 and 287 before the posture terms for two legs,
 which cost 2.8 KiB, and the bonus for taking turns, 1.2 KiB; the gait measures are left out of it; the Walker's is 127 KiB, the physics alone
 37 KiB; what the generalist added to the Walker's own module is 1.3 KiB of physics it does not use,
 which the compiler mostly leaves out). Learning by practice costs 94 KiB of that: before it the module
