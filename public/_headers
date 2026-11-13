@@ -53,9 +53,11 @@
 /assets/*
   Cache-Control: public, max-age=86400, stale-while-revalidate=604800
 
-# Photographs keep their name for good, so a week is safe.
+# Photographs are named by date or at random, not by what is in them, so a picture taken off the
+# site or replaced under the same name must not linger in browsers. Five minutes, then the browser
+# asks again, and the answer "not changed" costs almost nothing.
 /photos/*
-  Cache-Control: public, max-age=604800
+  Cache-Control: public, max-age=300, must-revalidate
 
 # The Walker mini's engine keeps its name when it is rebuilt: a day, then check again.
 /wasm/*
