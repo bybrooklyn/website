@@ -387,6 +387,20 @@ test("a right-click on words opens the text's own menu, whose lines do what the 
     expect(await keyboard()).toBe("writing");
 });
 
+test("Escape in a footnote just written goes back to just after its mark in the text", async () => {
+    if (skip("Escape from a footnote")) return;
+    const { tab } = page!;
+    await page!.reset("A claim.\n", [0], 7);
+    await page!.menuLine("Insert", "Footnote");
+    await tab.wait(100);
+    await tab.type("A source");
+    await tab.press("Escape");
+    await tab.wait(50);
+    expect(await caret()).toEqual({ path: [0], offset: 8 });
+    await tab.type(" More");
+    expect(await page!.md()).toBe("A claim[^1] More.\n\n[^1]: A source\n");
+});
+
 test("a folding section just inserted takes the keyboard into its summary, whose empty word is quiet", async () => {
     if (skip("a new folding section's summary")) return;
     const { tab } = page!;

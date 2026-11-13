@@ -103,7 +103,7 @@ export const SLASH_ITEMS: SlashItem[] = [
     { key: "table", label: "Table", icon: "table", words: ["grid", "columns", "rows"], action: addTable },
     { key: "image", label: "Picture", icon: "image", words: ["image", "photo", "img"] },
     { key: "pagebreak", label: "Page break", icon: "pagebreak", words: ["new page", "break"], action: pageBreakAt },
-    { key: "divider", label: "Divider", icon: "divider", words: ["rule", "line", "hr", "separator"], action: addDivider },
+    { key: "divider", label: "Horizontal line", icon: "divider", words: ["divider", "rule", "line", "hr", "separator"], action: addDivider },
     { key: "callout", label: "Callout", icon: "quote", words: ["note", "tip", "warning", "important", "caution", "admonition", "alert"], action: boxOf({ callout: "NOTE" }) },
     { key: "details", label: "Folding section", icon: "chevron", words: ["details", "collapse", "collapsible", "toggle", "summary", "hide"], action: boxOf({ details: { summary: "", open: false } }) },
     { key: "definitions", label: "Definition list", icon: "indent", words: ["terms", "glossary", "dl"], action: definitionList },

@@ -662,6 +662,23 @@ function downFromCode(state: State): Outcome {
     return done(insertBlock(state.doc, at.path, paragraph()), caret(after, 0), "structure");
 }
 
+/** Escape in a footnote's text goes back to just after its mark in the text, the way up to it there is no other way to see. */
+function fromFootnote(state: State): Outcome {
+    const at = state.selection.focus;
+    const note = blockAt(state.doc, at.path.slice(0, 1));
+    if (note?.kind !== "footnote" || at.path.length < 2) return null;
+    for (const path of blockPaths(state.doc)) {
+        const block = blockAt(state.doc, path);
+        if (!textual(block)) continue;
+        let offset = 0;
+        for (const run of (block as { runs: Run[] }).runs.flatMap((each) => (each.kind === "link" ? each.runs : [each]))) {
+            if (run.kind === "footnote" && run.label === note.label) return done(state.doc, caret(path, offset + 1), "move");
+            offset += run.kind === "text" ? run.text.length : 1;
+        }
+    }
+    return null;
+}
+
 function softBreak(state: State): Outcome {
     const { doc, at } = clear(state);
     const block = blockAt(doc, at.path);
@@ -766,6 +783,7 @@ export function handle(state: State, input: Input, options: TypingOptions = {}):
     if (key === "Enter") return shift ? softBreak(state) : enter(state);
     if (key === "Tab") return tab(state, shift);
     if (key === "ArrowDown" && !shift && !alt) return downFromCode(state);
+    if (key === "Escape" && !shift && !alt) return fromFootnote(state);
     return null;
 }
 

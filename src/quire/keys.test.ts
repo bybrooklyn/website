@@ -172,6 +172,16 @@ test("Enter in code is a newline, so a blank line can be typed, and only after t
     expect(e.markdown).toBe("```js\nlet a\nb\n\nc\n```\n\ntext\n");
 });
 
+test("Escape in a footnote's text goes back to just after its mark; anywhere else it is not the text's", () => {
+    const e = editor("One[^1] and **two[^2]**.\n\n[^1]: First.\n\n[^2]: Second.\n", [2, 0], 3);
+    e.key("Escape");
+    expect(e.cursor).toEqual({ path: [0], offset: 13 });
+    const first = editor("One[^1] and two.\n\n[^1]: First.\n", [1, 0], 0);
+    first.key("Escape");
+    expect(first.cursor).toEqual({ path: [0], offset: 4 });
+    expect(editor("Plain\n", [0], 2).key("Escape")).toBeNull();
+});
+
 test("the down arrow on the last line of a code block at the document's end makes a line under it; elsewhere it is the browser's", () => {
     const e = editor("```js\nlet a\nlet b\n```\n", [0], 3);
     // on the first line it is the browser's own move

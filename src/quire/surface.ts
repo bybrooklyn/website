@@ -1066,8 +1066,8 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
         const key = shortcutKey(event, mod);
         // Ctrl+Shift+V pastes, through the paste event, without formatting
         if (mod && event.shiftKey && key === "v") plainNext = true;
-        // the down arrow is looked at only to leave a code block at the document's end (keys.ts); elsewhere it stays the browser's
-        if (!mod && !["Enter", "Backspace", "Delete", "Tab", "ArrowDown"].includes(key)) return;
+        // the down arrow is looked at only to leave a code block at the document's end, and Escape only to go back from a footnote to its mark (keys.ts); elsewhere they stay the browser's and the bars'
+        if (!mod && !["Enter", "Backspace", "Delete", "Tab", "ArrowDown", "Escape"].includes(key)) return;
         if (MAC && event.ctrlKey && !mod) return;
         if (mod && key === "a" && !event.shiftKey && !event.altKey) {
             // Select All is the model's: the browser's own selects nothing at all when the document begins or ends with a block that cannot be written in
