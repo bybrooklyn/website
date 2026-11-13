@@ -109,7 +109,8 @@ test("nothing stands under a picture; its menu opens at the pointer, its panel g
     expect(await tab.run<number>("document.querySelector('.quire-picture-skin').getAnimations().length")).toBe(1);
     await tab.wait(500);
     const panel = await tab.run<{ x: number; width: number }>("q.box('.quire-picture-panel')");
-    expect(panel.x + panel.width).toBeGreaterThan(1300 - 40);
+    expect(panel.x + panel.width).toBeGreaterThan(1300 - 80);
+    expect(panel.x).toBeGreaterThan(1300 / 2);
     expect(await tab.run("document.activeElement.classList.contains('quire-picture-field')")).toBe(true);
     await tab.type("Two colours");
     await tab.press("Enter");

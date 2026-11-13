@@ -30,6 +30,11 @@
     touch-action: none;
 }
 
+/* the keyboard rests on a picture while its menu or panel is open; its frame already shows it */
+.quire-image:focus {
+    outline: none;
+}
+
 /* a picture the text flows round floats at its side; the few blocks after it are laid out with it
    (not skipped while out of sight, which would keep their lines from going round it) */
 .quire-image[data-wrap] {
@@ -185,6 +190,12 @@
     transform-origin: right top;
 }
 
+.quire-frame.start .quire-picture-strip {
+    right: auto;
+    left: 0;
+    transform-origin: left bottom;
+}
+
 .quire-own-size {
     width: auto;
     padding-inline: 0.5rem;
@@ -212,9 +223,10 @@
 .quire-picture-panel {
     position: fixed;
     top: calc(var(--stuck, 6rem) + var(--above, 1rem));
-    right: 1rem;
+    /* its right edge where the facts' is, on a window wide enough to have them */
+    right: max(1rem, var(--from, 1rem) - 0.9rem);
     z-index: 40;
-    width: min(15rem, 100vw - 2rem);
+    width: min(16rem, 100vw - 2rem);
     max-height: calc(100vh - var(--stuck, 6rem) - var(--above, 1rem) - 1rem);
     font-size: 0.85rem;
     line-height: 1.35;
@@ -289,10 +301,23 @@
 .quire-picture-size,
 .quire-picture-wrap,
 .quire-picture-action {
-    width: auto;
-    padding-inline: 0.55rem;
-    font-size: 0.8rem;
-    white-space: nowrap;
+    min-width: 0;
+    height: 1.9rem;
+    padding-inline: 0.5rem;
+}
+
+:is(.quire-picture-size, .quire-picture-wrap, .quire-picture-action) .quire-glyph {
+    font-family: inherit;
+    font-size: 0.85rem;
+}
+
+.quire-picture-wrap {
+    min-width: 3.2rem;
+    border: 0.0625rem solid var(--rule);
+}
+
+.quire-picture-wrap:disabled {
+    opacity: 0.45;
 }
 
 .quire-picture-actions {

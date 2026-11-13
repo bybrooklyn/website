@@ -150,8 +150,10 @@ export function createPictureTools(surface: Surface, options: PictureOptions = {
         if (document.activeElement !== described) described.value = block.alt;
         own.classList.toggle("absent", block.width === undefined);
         own.tabIndex = block.width === undefined ? -1 : 0;
-        // the strip goes under the picture when there is no room above it in the window
+        // the strip goes under the picture when there is no room above it in the window, and starts at its left edge when a narrow picture would push it out of the window
         frame.classList.toggle("low", picture.getBoundingClientRect().top < 120);
+        frame.classList.remove("start");
+        frame.classList.toggle("start", strip.getBoundingClientRect().left < 8);
     }
 
     /** Picks a picture: the frame grows round it. */
@@ -307,6 +309,9 @@ export function createPictureTools(surface: Surface, options: PictureOptions = {
         panel.classList.add("open");
         opened = true;
         focus?.focus({ preventScroll: true });
+        // on a phone the panel stands at the window's foot, so the picture is brought up above it
+        const figure = figureAt(picked);
+        if (figure && matchMedia("(max-width: 40rem)").matches) scrollBy({ top: figure.getBoundingClientRect().top - 140, behavior: still() ? "auto" : "smooth" });
     }
     /** Closes the panel back into the picture; with `refocus`, the keyboard goes back to the picture too. */
     function closePanel(refocus: boolean) {
@@ -331,11 +336,14 @@ export function createPictureTools(surface: Surface, options: PictureOptions = {
             halt();
         }, () => {});
     }
-    panel.addEventListener("keydown", (event) => {
-        if (event.key !== "Escape") return;
+    // Escape closes the panel wherever the keyboard is, as long as no menu took it first
+    const onEscape = (event: KeyboardEvent) => {
+        if (event.key !== "Escape" || !opened || menu.isOpen()) return;
         event.preventDefault();
+        event.stopPropagation();
         closePanel(true);
-    });
+    };
+    document.addEventListener("keydown", onEscape, true);
 
     // ---- resizing from a corner ----
     function resize(event: PointerEvent, corner: string) {
@@ -550,6 +558,7 @@ export function createPictureTools(surface: Surface, options: PictureOptions = {
             root.removeEventListener("keydown", onKey, true);
             root.removeEventListener("focusin", onFocus);
             document.removeEventListener("pointerdown", onOutside, true);
+            document.removeEventListener("keydown", onEscape, true);
             removeEventListener("resize", place);
             for (const each of [frame, dropLine, anchor, panel, menu.box]) each.remove();
         },
