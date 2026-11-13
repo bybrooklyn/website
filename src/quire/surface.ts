@@ -27,6 +27,8 @@
 //     "slash"    { selection, rect }               "/" was typed on an empty line
 //     "link"     { selection, rect }               the link shortcut was pressed; the bar asks for an
 //                                                  address and calls run with setLink
+//     "address"  { href, start, end }              a web address was pasted on its own with nothing
+//                                                  selected, and stands between start and end
 //
 // The host styles the element with these classes: `quire` on it, `quire-code` and `quire-raw` on
 // code and raw blocks (with the language or "raw" in `data-label`), `quire-image`, `quire-divider`,
@@ -34,12 +36,12 @@
 // `quire-task` on a task item and `quire-box` on its box (`data-checked`),
 // `quire-atom` on an inline HTML span or footnote reference.
 
-import { blockAt, blockPaths, changeKind, documentOf, image as imageBlock, isPageBreak, lengthOf, markdownOnly, paragraph, setBox, setRaw, toggleTask, type Block, type Code, type Document, type Leaf, type Mark, type Position, type Run, type Selection } from "./document";
+import { blockAt, blockPaths, changeKind, documentOf, image as imageBlock, isPageBreak, lengthOf, markdownOnly, paragraph, setBox, setLink, setRaw, textAt, toggleTask, type Block, type Code, type Document, type Leaf, type Mark, type Position, type Run, type Selection } from "./document";
 import { createHistory, redo as redoStep, undo as undoStep, type ChangeKind, type State } from "./history";
 import { readHtml, writeHtml } from "./html";
 import { drawPicture } from "./picture-tools";
 import { isContentsMark } from "./inserts";
-import { activeBlock, activeMarks, apply, caret, collapsed, fragment, paste, step, type Editor, type Input, type Outcome } from "./keys";
+import { activeBlock, activeMarks, apply, caret, collapsed, fragment, paste, rangeOf, step, type Editor, type Input, type Outcome } from "./keys";
 import { read } from "./read";
 import { write } from "./write";
 import { fieldsOf, KNOWN, readTag, setProp, type Tag } from "./components";
@@ -49,6 +51,7 @@ import { highlight, LANGUAGE_NAMES } from "./highlight";
 import { maths } from "./maths";
 import { namesIn } from "./check/names";
 import { bookmarkName } from "./bookmarks";
+import { webAddress } from "./link-card";
 
 /** What the host gives the surface. `onImage` stores a pasted or dropped picture and gives back its address. */
 export interface SurfaceOptions {
@@ -71,6 +74,7 @@ export interface SurfaceEvents {
     select: SelectionInfo;
     slash: { selection: Selection; rect: DOMRect | null };
     link: { selection: Selection; rect: DOMRect | null };
+    address: { href: string; start: Position; end: Position };
 }
 
 /** A change the bars ask for: given the document and selection, the new document or state. */
@@ -90,6 +94,8 @@ export interface Surface {
     elementAt(path: number[]): HTMLElement | undefined;
     /** The page's own range over a stretch of the text, to mark or measure it without selecting it. */
     rangeOf(start: Position, end: Position): globalThis.Range | undefined;
+    /** The place in the model of a place in the drawn page, such as a link's element. */
+    positionAt(node: Node, offset: number): Position | undefined;
     undo(): void;
     redo(): void;
     focus(): void;
@@ -1376,6 +1382,8 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
         if (plain) return insertPlain(text);
         const kind = blockAt(editor.state.doc, editor.state.selection.focus.path)?.kind;
         if (kind === "code" || kind === "raw") return insertBlocks([paragraph(text)]);
+        const address = webAddress(text);
+        if (address) return pasteAddress(address);
         const fromHtml = html ? readHtml(html) : [];
         if (fromHtml.length) return insertBlocks(fromHtml);
         if (!text) return;
@@ -1399,6 +1407,19 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
                 .filter((line) => line.trim() !== "")
                 .map((line) => paragraph(line)),
         );
+    }
+
+    /** A web address pasted over selected words links them, in one step; pasted with nothing selected, it goes in as it is and the listeners are told where. */
+    function pasteAddress(address: string) {
+        const { selection } = editor.state;
+        if (!collapsed(selection)) {
+            const linked = { state: { ...editor.state, doc: setLink(editor.state.doc, rangeOf(selection), address) }, kind: "paste" as const };
+            return commit(apply(editor, linked, Date.now()), linked);
+        }
+        insertBlocks([paragraph(address)]);
+        const end = editor.state.selection.focus;
+        const start = { path: end.path, offset: end.offset - address.length };
+        if (textAt(editor.state.doc, end.path).slice(start.offset, end.offset) === address) emit("address", { href: address, start, end });
     }
 
     function insertBlocks(blocks: Block[]) {
@@ -1577,6 +1598,7 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
             placeSelection();
         },
         symbols: () => symbols,
+        positionAt: (node, offset) => toPosition(node, offset),
         pasteText(text) {
             syncSelection();
             insertPlain(text);

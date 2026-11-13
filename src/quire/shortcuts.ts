@@ -78,6 +78,7 @@ export const SHORTCUTS: Shortcut[] = [
     { keys: "Shift+Enter", label: "A new line in the same paragraph", menu: "In the text" },
     { keys: "Ctrl+Backspace", label: "Delete the word before", menu: "In the text" },
     { keys: "Tab", label: "In a table, the next cell; after the last, a new row", menu: "In the text" },
+    { keys: "Alt+Enter", label: "With the cursor in a link, open it, or go to the heading it names", menu: "In the text" },
 ];
 
 /** A shortcut as the keyboard sends it: which modifiers and which key, by its place on the keyboard. */

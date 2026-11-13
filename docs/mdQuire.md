@@ -200,6 +200,25 @@ typing, Backspace and Format commands change all of them (`matching.ts`). Insert
 empty anchor, `<a id="name"></a>`, drawn as a small flag, and the link field offers the headings (by the
 ids the site gives them) and the bookmarks (`bookmarks.ts`).
 
+**Links** (`link-card.ts`). A web address pasted over selected words makes them the link, in one undo
+step, as Docs and GitHub do. What counts is one http, https or mailto address and nothing else around it
+(`webAddress`); `javascript:` and every other scheme are pasted as text, and Ctrl+Shift+V always pastes the
+text. An address pasted with nothing selected goes in as it is (a bare address is a link to any reader
+with GitHub's extension), and a chip grows from under it offering to show it otherwise: words guessed
+from the address in a small field, selected so they can be typed over at once, or a short form such as
+`github.com/anomalyco/rune`, or the address as it is. Nothing is fetched: a static page cannot read
+another site's title, so the words come from the address alone (`wordsFor`: the last part of the path
+that is words, a repository and its issue on GitHub and GitLab, "YouTube video", or the site's name). The
+chip takes no focus unless Tab or a press gives it one; typing, a press elsewhere, Escape or five seconds
+without the pointer on it send it away and leave the address. Choosing is an undo step of its own, so
+Ctrl+Z gives the bare address back. Resting the pointer on a link for half a second, or the cursor being
+in one, grows a card from under it, drawn as the selection bar is: where the link goes (cut in the
+middle when long), Open (a new tab, `rel="noopener noreferrer"`, offered only for web addresses), or Go
+to for a heading or bookmark of the document, then Copy, Edit (the link field) and Remove (the words
+stay). It sits below the link's line so it never covers the line being typed, and typing sends it away
+until the cursor moves. With the cursor in a link Alt+Enter opens it (Docs' key; in mdQuire it was a
+plain new paragraph), and Ctrl+K edits it as before.
+
 **Inserts and downloads** (`inserts.ts`, `export.ts`, `docx.ts`). Insert adds today's date, special
 characters and a table of contents. File, Download as gives Markdown, `.quire`, a web page, plain text and
 Word (a `.docx` written from scratch). PDF is the browser's print dialog with the page already set up.
