@@ -5,7 +5,7 @@
 import { expect, test } from "bun:test";
 import { blockPaths, documentOf, paragraph, removeBlock, runsText, type Block, type Run, type Selection } from "./document";
 import { createHistory } from "./history";
-import { activeBlock, activeMarks, caret, fragment, paste, step, type Editor, type Input } from "./keys";
+import { activeBlock, activeMarks, caret, characterReach, fragment, paste, step, type Editor, type Input } from "./keys";
 import { read } from "./read";
 import { write } from "./write";
 
@@ -567,4 +567,34 @@ test("taking away the only block leaves an empty line to write on", () => {
     const doc = removeBlock(read("only\n"), [0]);
     expect(doc.blocks.length).toBe(1);
     expect(blockPaths(doc)).toEqual([[0]]);
+});
+
+test("Backspace and Delete take a whole character as a reader sees one, never half an emoji, and Backspace takes a combining mark first", () => {
+    const cases: [string, number, boolean, number][] = [
+        ["x👨‍👩‍👧", 9, true, 8],
+        ["x🇫🇷", 5, true, 4],
+        ["🇫🇷🇩🇪", 8, true, 4],
+        ["a❤️", 3, true, 2],
+        ["👍🏽", 4, true, 4],
+        ["1️⃣", 3, true, 3],
+        ["🏴󠁧󠁢󠁥󠁮󠁧󠁿", 14, true, 14],
+        ["éx", 0, false, 2],
+        ["é̂", 3, true, 1],
+        ["x́", 2, true, 1],
+        ["ab", 2, true, 1],
+        ["ab", 0, false, 1],
+        ["👨‍👩‍👧x", 0, false, 8],
+    ];
+    for (const cutter of [new Intl.Segmenter(undefined, { granularity: "grapheme" }), null]) {
+        for (const [text, offset, back, width] of cases) expect({ text, offset, back, hand: cutter === null, width: characterReach(text, offset, back, cutter) }).toEqual({ text, offset, back, hand: cutter === null, width });
+    }
+    const e = editor("x👨‍👩‍👧 🇫🇷\n", [0], 14);
+    e.key("Backspace");
+    expect(e.markdown).toBe("x👨‍👩‍👧\n");
+    e.key("Backspace");
+    e.key("Backspace");
+    expect(e.markdown).toBe("x\n");
+    const forward = editor("éx\n", [0], 0);
+    forward.key("Delete");
+    expect(forward.markdown).toBe("x\n");
 });

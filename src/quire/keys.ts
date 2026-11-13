@@ -324,12 +324,80 @@ function inlineShortcut(state: State, typed: string): State | undefined {
 
 // ---- deleting ----
 
-/** How far back (or forward) one character or one word reaches from an offset, counting a surrogate pair as one. */
-function reach(text: string, offset: number, back: boolean, word: boolean): number {
-    if (!word) {
-        if (back) return offset >= 2 && /[\uDC00-\uDFFF]/.test(text[offset - 1]!) && /[\uD800-\uDBFF]/.test(text[offset - 2]!) ? 2 : 1;
-        return /[\uD800-\uDBFF]/.test(text[offset] ?? "") && /[\uDC00-\uDFFF]/.test(text[offset + 1] ?? "") ? 2 : 1;
+// ---- characters as a reader sees them ----
+
+/** The browser's own grapheme cutter, where it has one. */
+const SEGMENTER = typeof Intl !== "undefined" && "Segmenter" in Intl ? new Intl.Segmenter(undefined, { granularity: "grapheme" }) : null;
+
+/** How far to look either side of an offset for the character it is in: longer than any emoji sequence. */
+const WINDOW = 64;
+
+/**
+ * Where the character that starts at `from` ends, by hand, for a browser with no Intl.Segmenter:
+ * a code point, then the marks, variation selectors, skin tones and joined code points that belong
+ * to it, and a flag's two letters as one.
+ */
+function characterEnd(text: string, from: number): number {
+    const width = (at: number) => ((text.codePointAt(at) ?? 0) > 0xffff ? 2 : 1);
+    const point = (at: number) => text.codePointAt(at) ?? 0;
+    const regional = (code: number) => code >= 0x1f1e6 && code <= 0x1f1ff;
+    const first = point(from);
+    let end = from + width(from);
+    if (regional(first) && regional(point(end))) return end + width(end);
+    while (end < text.length) {
+        const next = point(end);
+        if (next === 0x200d && end + 1 < text.length) end += 1 + width(end + 1);
+        else if (/\p{M}/u.test(String.fromCodePoint(next)) || (next >= 0x1f3fb && next <= 0x1f3ff) || (next >= 0xe0020 && next <= 0xe007f)) end += width(end);
+        else break;
     }
+    return end;
+}
+
+/** The characters around an offset, as [start, end] pairs, from a little before it to a little after. */
+function charactersNear(text: string, offset: number, cutter: Intl.Segmenter | null = SEGMENTER): [number, number][] {
+    let start = Math.max(0, offset - WINDOW);
+    if (/[\uDC00-\uDFFF]/.test(text[start] ?? "")) start--;
+    const piece = text.slice(start, Math.min(text.length, offset + WINDOW));
+    const out: [number, number][] = [];
+    if (cutter) {
+        for (const each of cutter.segment(piece)) out.push([start + each.index, start + each.index + each.segment.length]);
+        return out;
+    }
+    for (let at = 0; at < piece.length; ) {
+        const end = characterEnd(piece, at);
+        out.push([start + at, start + end]);
+        at = end;
+    }
+    return out;
+}
+
+/**
+ * How many code units Backspace (`back`) or Delete takes from an offset: one character as a reader
+ * sees it, so that an emoji joined from several, a flag, a skin tone or a heart with its variation
+ * selector goes whole and never leaves half of itself behind. Backspace on a letter with combining
+ * marks takes its last mark only, as most writing tools do, so that a mark typed by mistake can be
+ * taken back; Delete takes the letter with its marks. `cutter` is for the tests, to try the
+ * hand-written rules where a browser has no Intl.Segmenter.
+ */
+export function characterReach(text: string, offset: number, back: boolean, cutter: Intl.Segmenter | null = SEGMENTER): number {
+    if (back ? offset <= 0 : offset >= text.length) return 1;
+    const near = charactersNear(text, offset, cutter);
+    if (!back) {
+        const found = near.find(([start, end]) => start <= offset && end > offset);
+        return found ? found[1] - offset : 1;
+    }
+    const found = near.find(([start, end]) => start < offset && end >= offset);
+    if (!found) return 1;
+    const cluster = text.slice(found[0], offset);
+    const points = Array.from(cluster);
+    const last = points[points.length - 1]!;
+    if (points.length > 1 && /\p{M}/u.test(last) && !/\p{Extended_Pictographic}|[\u{1F1E6}-\u{1F1FF}\u20E3]/u.test(cluster)) return last.length;
+    return offset - found[0];
+}
+
+/** How far back (or forward) one character or one word reaches from an offset. */
+function reach(text: string, offset: number, back: boolean, word: boolean): number {
+    if (!word) return characterReach(text, offset, back);
     let index = offset;
     const step = back ? -1 : 1;
     const at = () => text[back ? index - 1 : index] ?? "";
