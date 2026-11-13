@@ -24,6 +24,7 @@ import { createOutline } from "./outline";
 import { read } from "./read";
 import { createSelectBar } from "./select-bar";
 import { boxOf, createSlash, definitionList, drawnBlock } from "./slash";
+import { createEmojiPicker } from "./emoji-picker";
 import { createSaver, fileName, said, type Entry, type Status, type Store } from "./store";
 import { createSurface, type Surface } from "./surface";
 import { createTableTools } from "./tables";
@@ -512,6 +513,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     const widening = typeof matchMedia !== "undefined" ? matchMedia("(min-width: 64rem)") : undefined;
     widening?.addEventListener("change", outlineAsKept);
     const slash = createSlash(surface, bar.pickImage);
+    const emojiList = createEmojiPicker(surface);
     const tableTools = createTableTools(surface);
     const pictureTools = createPictureTools(surface);
     // the writer's notes: marked in the text, in the right margin on a wide window and a list on a narrow one
@@ -892,6 +894,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
             for (const menu of [...bar.menus, links, row.menu, zooms, setups, about]) menu.box.remove();
             selectBar.element.remove();
             slash.close();
+            emojiList.close();
             tableTools.element.remove();
             pictureTools.destroy();
             notes.destroy();
