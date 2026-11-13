@@ -42,8 +42,8 @@ test("every die comes to rest in the tray inside six seconds, and is never insid
         });
     }
     expect(longest).toBeLessThan(6);
-    // A die is about 0.8 across, corner to corner. Into the tower or the tray: never more than a thirtieth of that.
-    // (a twentieth, since the dice were made to spin three times as fast and ridges were put across the ramps)
+    // A die is about 0.8 across, corner to corner. Into the tower or the tray: never more than about an eighteenth of that, 0.045
+    // (once a thirtieth, before the dice were made to spin three times as fast and ridges were put across the ramps).
     expect(deepest).toBeLessThan(0.045);
     // Into another die: two that meet spinning fast can overlap by an eighth of that for a frame or two.
     // (it was a sixteenth while the dice fell as one stack; let in one after another, a die now lands on

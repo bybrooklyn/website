@@ -9,7 +9,6 @@ import { apply, cube, diamond, normals, pyramid, ten, twelve, twenty, type Mesh,
 export type Sides = 4 | 6 | 8 | 10 | 12 | 20;
 export const SIDES: Sides[] = [4, 6, 8, 10, 12, 20];
 
-/** How big a die is beside the tower. */
 /**
  * How big each die is: the distance from its middle to a corner, in millimetres, as in an ordinary set
  * (a 16 mm cube, a twenty-sided die 20 mm from face to face, and the rest to match), and how many of
@@ -108,7 +107,6 @@ export interface Throw {
     values(): number[];
 }
 
-/** How much the dice and the tower rub, and how much of its speed a die keeps when it hits something. */
 /**
  * How a throw goes. `rub` is how much the dice and the tower grip each other and `floor` how much the
  * tray's felt does; `bounce` is how much of its speed a die keeps when it hits something; `spin` is the
