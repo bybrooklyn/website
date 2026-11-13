@@ -743,13 +743,33 @@ h1 + .about {
     border-color: var(--accent);
 }
 
-/* The line to press, under the picture: written as a link is, with a triangle before it, and beside it where the game comes from. */
+/*
+ * The line to press, under the picture: written as a link is, with a triangle before it, and beside it
+ * where the game comes from. Once pressed it draws shut and the game is in the picture's place: its row
+ * of the grid goes from its whole height to none, so however far it wraps it is never cut short, and
+ * it clips only once it is shutting, so the button's focus ring is seen whole until then.
+ */
+.play-here {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
+    transition: grid-template-rows 0.4s var(--ease);
+}
+
+.play-here.playing {
+    grid-template-rows: auto 0fr;
+}
+
 .play-line {
     display: flex;
     flex-wrap: wrap;
     align-items: baseline;
     gap: 0.2rem 1.2rem;
+    min-height: 0;
     margin: calc(var(--line) * 0.5) 0 0;
+    transition:
+        opacity 0.25s ease,
+        margin 0.4s var(--ease);
 }
 
 .play-button {
@@ -771,23 +791,12 @@ h1 + .about {
     text-decoration-color: var(--accent);
 }
 
-/* once it is pressed the line draws shut, and the game is in the picture's place */
-.play-line {
-    max-height: 4rem;
-    overflow: hidden;
-    transition:
-        max-height 0.4s var(--ease),
-        opacity 0.25s ease,
-        margin 0.4s var(--ease);
-}
-
 .play-here.playing .play-line {
-    max-height: 0;
     margin-top: 0;
+    overflow: hidden;
     opacity: 0;
     visibility: hidden;
     transition:
-        max-height 0.4s var(--ease),
         opacity 0.25s ease,
         margin 0.4s var(--ease),
         visibility 0s 0.4s;
@@ -804,6 +813,7 @@ h1 + .about {
 }
 
 @media (prefers-reduced-motion: reduce) {
+    .play-here,
     .play-line,
     .play-here.playing .play-line {
         transition: none;
