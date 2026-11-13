@@ -27,13 +27,17 @@ const headings = Astro.props.headings.filter((heading) => heading.depth === 2 ||
                 <summary>
                     <a href="#main">{title}</a>
                 </summary>
-                <ol>
-                    {headings.map((heading) => (
-                        <li class:list={{ sub: heading.depth === 3 }}>
-                            <a href={`#${heading.slug}`}>{heading.text}</a>
-                        </li>
-                    ))}
-                </ol>
+                <div class="fold">
+                    <div>
+                        <ol>
+                            {headings.map((heading) => (
+                                <li class:list={{ sub: heading.depth === 3 }}>
+                                    <a href={`#${heading.slug}`}>{heading.text}</a>
+                                </li>
+                            ))}
+                        </ol>
+                    </div>
+                </div>
             </details>
         )
     }
@@ -60,11 +64,15 @@ const headings = Astro.props.headings.filter((heading) => heading.depth === 2 ||
                 {cite && (
                     <details class="cite">
                         <summary>cite this</summary>
-                        <p class="cite-text">{cite}</p>
-                        <p class="note">
-                            Free to quote and reuse with credit, not commercially (<a href="https://creativecommons.org/licenses/by-nc/4.0/">CC BY-NC 4.0</a>).
-                        </p>
-                        <button type="button" class="cite-copy" hidden>copy</button>
+                        <div class="fold">
+                            <div>
+                                <p class="cite-text">{cite}</p>
+                                <p class="note">
+                                    Free to quote and reuse with credit, not commercially (<a href="https://creativecommons.org/licenses/by-nc/4.0/">CC BY-NC 4.0</a>).
+                                </p>
+                                <button type="button" class="cite-copy" hidden>copy</button>
+                            </div>
+                        </div>
                     </details>
                 )}
             </div>
@@ -74,6 +82,29 @@ const headings = Astro.props.headings.filter((heading) => heading.depth === 2 ||
 
 <script>
     import { copyText } from "../scripts/copy";
+    import { still } from "../scripts/opening";
+
+    // "cite this" opens as a <details> does, so that it works without scripts, and then grows open
+    // with the site's fold; pressed again, the fold draws shut first and the <details> closes after.
+    const cite = document.querySelector<HTMLDetailsElement>("details.cite");
+    const citeFold = cite?.querySelector<HTMLElement>(".fold");
+    if (cite && citeFold) {
+        cite.addEventListener("toggle", () => {
+            if (!cite.open) return;
+            // laid out shut once, so that it grows from there
+            void citeFold.offsetHeight;
+            citeFold.classList.add("open");
+        });
+        cite.querySelector("summary")?.addEventListener("click", (event) => {
+            if (!cite.open) return;
+            event.preventDefault();
+            citeFold.classList.remove("open");
+            if (still.matches) cite.open = false;
+        });
+        citeFold.addEventListener("transitionend", (event) => {
+            if (event.target === citeFold && event.propertyName === "grid-template-rows" && !citeFold.classList.contains("open")) cite.open = false;
+        });
+    }
 
     // The copy button only appears where copying works.
     const copy = document.querySelector<HTMLButtonElement>(".cite-copy");
@@ -122,10 +153,20 @@ const headings = Astro.props.headings.filter((heading) => heading.depth === 2 ||
     if (contents) {
         // In the margin the list always shows. On a narrow screen it is folded away
         // by the stylesheet, so nothing moves as the page loads, and the title opens it.
+        // It grows open and draws shut with the site's fold. Shut, its links are out of the way of
+        // the keyboard and of screen readers, as they were when it was simply not shown.
         const beside = matchMedia("(min-width: 72rem)");
+        const fold = contents.querySelector<HTMLElement>(".fold");
+        const unfold = (open: boolean) => {
+            contents.classList.toggle("unfolded", open);
+            fold?.classList.toggle("open", open);
+            if (fold) fold.inert = !open && !beside.matches;
+        };
+        unfold(false);
+        beside.addEventListener("change", () => unfold(contents.classList.contains("unfolded")));
         contents.querySelector("summary")?.addEventListener("click", (event) => {
             event.preventDefault();
-            if (!beside.matches) contents.classList.toggle("unfolded");
+            if (!beside.matches) unfold(!contents.classList.contains("unfolded"));
         });
 
         const links = new Map<Element, HTMLAnchorElement>();

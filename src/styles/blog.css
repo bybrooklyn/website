@@ -197,18 +197,42 @@
         content: "▾";
     }
 
-    .contents:not(.unfolded) > ol {
-        display: none;
-    }
-
     @media (scripting: none) {
-        .contents:not(.unfolded) > ol {
-            display: block;
-        }
-
         .contents summary::before {
             content: none;
         }
+    }
+}
+
+/* The list, and what "cite this" holds, grow open and draw shut with the site's fold (base.css). The
+   list folds on a narrow screen only: in the margin, as without scripts, both are simply shown. */
+.contents > .fold,
+.cite .fold {
+    --grow: 0.3s;
+    --fade: 0.2s;
+}
+
+@media (min-width: 72rem) {
+    .contents > .fold {
+        grid-template-rows: 1fr;
+        opacity: 1;
+    }
+
+    .contents > .fold > * {
+        overflow: visible;
+    }
+}
+
+@media (scripting: none) {
+    .contents > .fold,
+    .cite .fold {
+        grid-template-rows: 1fr;
+        opacity: 1;
+    }
+
+    .contents > .fold > *,
+    .cite .fold > * {
+        overflow: visible;
     }
 }
 
