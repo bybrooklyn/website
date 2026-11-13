@@ -99,7 +99,10 @@ export function createTableTools(surface: Surface, top: () => number = () => 0):
         aligns.set(align, button);
         tools.append(button);
     }
-    tools.append(make("span", "quire-select-rule"), control("Sort the rows by this column, A to Z", "A→Z", doing(sortHere(false)), "quire-button quire-sort"), control("Sort the rows by this column, Z to A", "Z→A", doing(sortHere(true)), "quire-button quire-sort"));
+    // the two sorts go together, onto a line of their own where the window is too narrow for the strip
+    const sorts = make("span", "quire-table-sorts");
+    sorts.append(make("span", "quire-select-rule"), control("Sort the rows by this column, A to Z", "A→Z", doing(sortHere(false)), "quire-button quire-sort"), control("Sort the rows by this column, Z to A", "Z→A", doing(sortHere(true)), "quire-button quire-sort"));
+    tools.append(sorts);
 
     let shownFor: HTMLElement | undefined;
     const place = () => {

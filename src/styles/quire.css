@@ -1303,6 +1303,12 @@
     /* under the editor's top (40), so that scrolled up with the table it goes beneath the tools there, never over them */
     z-index: 39;
     display: flex;
+    /* on a phone the strip is wider than the window, and its sorting goes onto a second line */
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    box-sizing: border-box;
+    width: max-content;
+    max-width: calc(100vw - 1rem);
     align-items: center;
     padding: 0.15rem;
     border: 0.0625rem solid var(--rule);
@@ -1355,6 +1361,11 @@
 }
 
 /* sorting is said in letters, A→Z, a little smaller than the text */
+.quire-table-sorts {
+    display: flex;
+    align-items: center;
+}
+
 .quire-table-tools .quire-sort {
     font-size: 0.8rem;
 }
