@@ -89,6 +89,8 @@ export interface SessionOptions {
     onProvisional?: (text: string) => void;
     /** A line for the panel: how it is keeping up. */
     onNote?: (note: string) => void;
+    /** Called once, the moment the session stops taking sound and before the last phrase is settled from what was already heard: the microphone is closed here. */
+    onRelease?: () => void;
     onStop?: (reason: Reason) => void;
     /** Quiet times in milliseconds, for tests. */
     silence?: number;
@@ -356,6 +358,13 @@ export function startSession(options: SessionOptions): Session {
     function finish(reason: Reason): Promise<void> {
         if (ending) return ending;
         stopping = true;
+        // no more sound is taken from here, so the microphone goes at once and only the work on what was heard goes on
+        try {
+            options.onRelease?.();
+        } catch (error) {
+            failed = true;
+            note(`Dictation stopped: ${error instanceof Error ? error.message : String(error)}`);
+        }
         ending = (async () => {
             try {
                 if (active && length >= 3200) await settleFirst(length);

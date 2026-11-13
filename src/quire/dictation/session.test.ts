@@ -287,6 +287,45 @@ describe("a recognizer with a live stream", () => {
     });
 });
 
+describe("the microphone", () => {
+    /** A recognizer whose answers wait until the test lets them go. */
+    function held() {
+        const waiting: (() => void)[] = [];
+        const made = {
+            backend: "fake",
+            dispose() {},
+            transcribe: (samples: Float32Array) => new Promise<{ text: string; ms: number }>((done) => waiting.push(() => recognizer().transcribe(samples).then(done))),
+            release: () => waiting.splice(0).forEach((go) => go()),
+        };
+        return made;
+    }
+    test("is let go the moment stop is pressed, while the last phrase is still being recognized", async () => {
+        const heard = held();
+        const events: string[] = [];
+        const session = startSession({ target: target(), recognizer: heard, commands: () => true, custom: () => nothing(), onRelease: () => events.push("release"), onStop: () => events.push("stop") });
+        await drive(session, [...quiet(300), ...frames(2900, 0.2)]);
+        const stopped = session.stop("button");
+        expect(events).toEqual(["release"]);
+        heard.release();
+        await new Promise((done) => setTimeout(done, 0));
+        heard.release();
+        await stopped;
+        expect(events).toEqual(["release", "stop"]);
+    });
+    test("is let go when the session stops itself after quiet, before the phrase is written", async () => {
+        const heard = held();
+        const events: string[] = [];
+        const session = startSession({ target: target(), recognizer: heard, commands: () => true, custom: () => nothing(), onRelease: () => events.push("release"), onStop: () => events.push("stop") });
+        await drive(session, [...quiet(300), ...frames(2900, 0.2), ...quiet(3500)]);
+        expect(events).toEqual(["release"]);
+        heard.release();
+        await new Promise((done) => setTimeout(done, 10));
+        heard.release();
+        await session.stop("button");
+        expect(events).toEqual(["release", "stop"]);
+    });
+});
+
 describe("a throw while a phrase is settled", () => {
     test("in the editor's writing ends the session: stop resolves and onStop is called once", async () => {
         const editor = target();

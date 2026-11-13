@@ -1,6 +1,7 @@
 // Opens the microphone and hands the page its sound as 16 kHz mono frames, by way of the
 // AudioWorklet in capture-worklet.ts. Closing it stops the microphone, so the browser's recording
-// light goes out the moment dictation is switched off.
+// light goes out. Dictation closes it the moment it is switched off (by the button, by itself after
+// quiet, or by a spoken command), before the last phrase has finished being recognized.
 
 // the worklet is built as a file of its own and served from the site, which its policy needs
 import workletFile from "./capture-worklet.ts?worker&url";

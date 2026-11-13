@@ -262,7 +262,7 @@ export function createDictation(surface: Surface, options: DictationOptions = {}
                 say(error instanceof MicrophoneError || error instanceof Error ? error.message : "The microphone could not be opened.");
                 return void setState("off");
             }
-            if (mine !== starting) return void mic.close();
+            if (mine !== starting) return void releaseMic();
             recognizer.boost?.(wordsToLean());
             session = startSession({
                 target: surface,
@@ -277,6 +277,7 @@ export function createDictation(surface: Surface, options: DictationOptions = {}
                     note = text;
                     render();
                 },
+                onRelease: releaseMic,
                 onStop: (reason) => void ended(reason),
             });
             // the panel and the first launch's dialog are put away so that the words being written can be seen
@@ -287,11 +288,17 @@ export function createDictation(surface: Surface, options: DictationOptions = {}
             live.textContent = "Dictation is on";
         }
 
-        /** Dictation has stopped: the microphone is closed at once, the model a little later. */
+        /** Closes the microphone, once. The browser's recording light goes out here, the moment dictation is switched off, while the last phrase is still being recognized from the sound already heard. */
+        function releaseMic() {
+            const open = mic;
+            mic = undefined;
+            open?.close();
+        }
+
+        /** Dictation has stopped and the last phrase is written: the microphone is closed already, the model goes a little later. */
         async function ended(reason: string) {
             lastSpeed = session?.speed() ?? lastSpeed;
-            mic?.close();
-            mic = undefined;
+            releaseMic();
             session = undefined;
             button.style.setProperty("--level", "0");
             showWords("");
@@ -309,6 +316,7 @@ export function createDictation(surface: Surface, options: DictationOptions = {}
 
         function stop(reason: "button") {
             starting++;
+            releaseMic();
             if (session) void session.stop(reason);
             else void ended(reason);
         }
@@ -676,8 +684,8 @@ export function createDictation(surface: Surface, options: DictationOptions = {}
             destroy() {
                 starting++;
                 clearTimeout(release);
+                releaseMic();
                 void session?.stop("button");
-                mic?.close();
                 recognizer?.dispose();
                 surface.element.removeEventListener("keydown", onKey, true);
                 removeEventListener("scroll", follow, true);
