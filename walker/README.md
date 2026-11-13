@@ -386,7 +386,8 @@ are 1 m wide and come in twos. A moving platform is 1.2 m wide, starts at the le
 eases across and back. A see-saw's left end starts on the ground.
 
 Planning picks each piece's kind by the amounts, weighed against a fixed 0.3 for a stretch of level
-ground, so with everything at 1 about three pieces in four are something; then a piece of that kind
+ground, so with everything at 1 a piece is level ground 0.3 times in 4.3 and about 93 in 100 are
+something; then a piece of that kind
 evenly, at 60 to 100 percent of the hardest the table allows. Ups and downs lean back toward the
 start's height. Only plus, times and a seeded random generator are used, so the same recipe makes
 the same world to the bit, natively and in every browser, however far at a time it is made.
@@ -752,8 +753,10 @@ visitor's world, each time its run ends. Above it, twice a second, small words s
 rewarded and charged for: forward, up, effort, in the air for nothing, fell. The status line says how
 long it has practised, how many steps, how far it gets in this world now and on average in practice.
 Everything learned is kept in the browser (IndexedDB) every half minute, for that body and that kind
-of world, and taken up again on the next visit; "start over" forgets it. A learner is about 24,000
-numbers, which does not fit in a link, so a link carries the world and not the brain.
+of world, and taken up again on the next visit; "start over" forgets it. A two-legged learner's
+weights are 23,435 numbers, and all that is kept of it 70,309 (the weights, Adam's two running
+averages as long, its updates, Adam's steps and the steps practised), which does not fit in a link, so
+a link carries the world and not the brain.
 
 Measured in headless Chromium on this machine (Ryzen 7 9700X, 16 threads, four of them busy with
 other work), two legs, the page at 60 frames a second at every effort:

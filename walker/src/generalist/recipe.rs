@@ -19,7 +19,8 @@ pub const BOXES: usize = 2;
 pub const MOVING: usize = 3;
 
 /// How much level ground a planned stretch of nothing in particular weighs against each kind of
-/// thing at its full amount: at amounts of 1, about three pieces in four are something.
+/// thing at its full amount: at amounts of 1 a piece is level ground 0.3 times in 4.3, so about 93
+/// pieces in 100 are something.
 const LEVEL_WEIGHT: f32 = 0.3;
 
 #[derive(Clone, Copy, Debug, PartialEq)]

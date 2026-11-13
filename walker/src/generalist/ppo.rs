@@ -281,8 +281,8 @@ impl Learner {
         let total = at[4] + actions;
         let mut random = Random::new(seed);
         let mut weights = vec![0.0; total];
-        // hidden layers at a gain of the square root of two, the policy's last layer small so it starts
-        // near the middle of every action, the value's at one
+        // hidden layers at a gain of one for tanh and the square root of two for ReLU, the policy's last
+        // layer small so it starts near the middle of every action, the value's at one
         let gain = if s.squash == Squash::Relu { 1.414 } else { 1.0 };
         trunk.first(&mut weights[..at[1]], &mut random, gain, gain);
         head.first(&mut weights[at[1]..at[2]], &mut random, 0.01, 0.01);
