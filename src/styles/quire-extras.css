@@ -722,3 +722,23 @@
         transition: none;
     }
 }
+
+/* ---- File, Details: the facts of the document in a small dialog, a quiet word before each ---- */
+
+.quire-facts {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 0.45rem 1.25rem;
+    margin: 0;
+    font-size: 0.92rem;
+    line-height: 1.4;
+}
+
+.quire-facts dt {
+    color: var(--muted);
+}
+
+.quire-facts dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+}

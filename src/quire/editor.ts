@@ -19,7 +19,7 @@ import { blockPaths, countWords, documentOf, lengthOf } from "./document";
 import { createConflict } from "./conflict";
 import { createDictation } from "./dictation/dictation";
 import { type Document } from "./document";
-import { collapsed, fragment, pageBreakAt } from "./keys";
+import { collapsed, fragment, handle, pageBreakAt } from "./keys";
 import { createPages } from "./pages";
 import { createMarkdownView } from "./markdown-view";
 import { remember } from "./most-used";
@@ -28,13 +28,14 @@ import { read } from "./read";
 import { createSelectBar } from "./select-bar";
 import { boxOf, createSlash, definitionList, drawnBlock } from "./slash";
 import { createEmojiPicker } from "./emoji-picker";
-import { createSaver, fileName, said, type Entry, type Opened, type Status, type Store } from "./store";
+import { copyDocument, createSaver, fileName, said, type Entry, type Opened, type Status, type Store } from "./store";
+import { copyName } from "./shelf";
 import { altGraph, createSurface, type Surface } from "./surface";
 import { createTableTools } from "./tables";
 import { createPictureTools } from "./picture-tools";
 import { createCommentMargin, keptNotes, moveNotes } from "./comment-margin";
 import { addContents, dateText, findContents, specialGrid, typeIn, typeSpecial, updateContents } from "./inserts";
-import { colorHex, countRows, gatherPictures, heldElsewhere, markdownFor, pageHtml, plainText, readingStyles, type Picture } from "./export";
+import { colorHex, countRows, gatherPictures, heldElsewhere, markdownFor, pageHtml, pictureAddresses, plainText, readingStyles, type Picture } from "./export";
 import { docx } from "./docx";
 import { aboutPanel, control, flowMenu, keySymbols, linkForm, make, type MenuItem } from "./ui";
 import { openDialog } from "./dialog";
@@ -47,7 +48,7 @@ import { pictureType, withoutMetadata } from "./pictures";
 import { crc32 } from "./zip";
 import { PAGE } from "./styling";
 import { createCaret, FLAG, FLAG_ON_PAPER } from "./caret";
-import { createDetails } from "./details";
+import { createDetails, keptLine, lengthLine, sizeLine } from "./details";
 import { createFind } from "./find";
 import { mountChecking } from "./check/mount";
 import { createTitle, nameFor, shownName, type OwnTitle } from "./title";
@@ -614,6 +615,70 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         surface.focus();
     };
     const format = () => row.words[4]!;
+    // ---- File's Make a copy, Rename and Details, and Edit's Cut, Copy and Paste, which the keys already do ----
+    /** Makes a copy of the document beside it, its pictures with it, and opens the copy; where copies cannot be made, in this browser. */
+    const makeCopy = async () => {
+        if (!(await ready())) return;
+        const wanted = copyName(name);
+        try {
+            if (store?.can.create && id) {
+                const made = await copyDocument(store, id, wanted);
+                const entry = (await store.list().catch(() => [])).find((each) => each.id === made.id) ?? { id: made.id, name: wanted };
+                await open(store, entry);
+            } else if (options.richHome) {
+                const { text: markdown, quire } = written(surface.getDocument(), write);
+                await create(options.richHome, wanted, markdown, quire);
+            }
+            surface.focus();
+        } catch (error) {
+            bar.setStatus("No copy", `The copy was not made: ${error instanceof Error ? error.message : String(error)}`, "warn");
+        }
+    };
+    /** Rename goes to the title, its words selected, since typing there renames the document. */
+    const renameHere = () => {
+        if (title.element.readOnly) return bar.setStatus("Not renamed", "A document kept here cannot be renamed", "quiet");
+        title.focus();
+        title.element.select();
+    };
+    /** What is known about the document, in a small dialog: the margin's facts, with its size. */
+    const showFacts = (from: HTMLElement) => {
+        const doc = surface.getDocument();
+        const { text: markdown, quire } = written(doc, write);
+        const bytes = new Blob([markdown, quire?.style ?? "", quire?.notes ?? ""]).size;
+        const list = make("dl", "quire-facts");
+        const facts: [string, string][] = [
+            ["File", fileName(name, doc.quire ? ".quire" : doc.mdx ? ".mdx" : ".md")],
+            ["Kept", keptLine(store?.label, savedAt, Date.now())],
+            ["Size", sizeLine(bytes, doc.quire ? new Set(pictureAddresses(doc)).size : 0)],
+            ["Length", lengthLine(countWords(doc))],
+        ];
+        for (const [term, value] of facts) list.append(make("dt", "", term), make("dd", "", value));
+        openDialog(from, { title: "Details", body: [list], action: { label: "Done", press: (_, dialog) => void dialog.close() }, onClose: () => surface.focus() });
+    };
+    /** The keys' own cut and copy, asked for from a menu: the surface takes them as it takes the keys. */
+    const clip = (how: "cut" | "copy") => {
+        surface.focus();
+        const keys = `${MAC ? "Cmd" : "Ctrl"}+${how === "cut" ? "X" : "C"}`;
+        if (!document.execCommand(how)) bar.setStatus(`Press ${keys}`, `This browser did not let the menu ${how}: press ${keys}`, "quiet");
+    };
+    /** Paste from a menu asks the clipboard for what it holds; a browser that will not give it says so in the status, and the keys still paste. */
+    const pasteHere = async () => {
+        try {
+            const data = new DataTransfer();
+            for (const item of await navigator.clipboard.read()) {
+                for (const type of item.types) {
+                    const blob = await item.getType(type);
+                    if (type === "text/html" || type === "text/plain") data.setData(type, await blob.text());
+                    else if (type.startsWith("image/")) data.items.add(new File([blob], `picture.${type.slice(6)}`, { type }));
+                }
+            }
+            surface.focus();
+            surface.pasteData(data);
+        } catch {
+            const keys = MAC ? "Cmd+V" : "Ctrl+V";
+            bar.setStatus(`Press ${keys}`, `This browser did not let mdQuire read the clipboard: press ${keys} to paste`, "quiet");
+        }
+    };
     /** Every command, by name: the menus, their search, the keyboard's shortcuts (shortcuts.ts) and the Ctrl+/ panel all run these. */
     const actions: RowActions = {
                 file: options.fileItems,
@@ -691,6 +756,16 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
                 symbols: () => openSpecials(row.words[3]!),
                 contents: doing(addContents),
                 updateContents: () => (surface.run((doc) => updateContents(doc)), surface.focus()),
+                makeCopy: () => void makeCopy(),
+                rename: renameHere,
+                fileDetails: () => showFacts(row.words[0]!),
+                cut: () => clip("cut"),
+                copy: () => clip("copy"),
+                paste: () => void pasteHere(),
+                delete: doing((state) => {
+                    const outcome = handle(state, { type: "key", key: "Delete" });
+                    return outcome && "state" in outcome ? outcome.state : state;
+                }),
                 pastePlain: () => {
                     // the menu line asks the clipboard for its text; a browser that will not give it says so, and Ctrl+Shift+V still does it
                     void navigator.clipboard?.readText().then(
@@ -734,7 +809,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         // AltGr types a character (@ # { [ | on many layouts): it is never a shortcut
         if (event.defaultPrevented || event.isComposing || altGraph(event)) return;
         const found = shortcutFor(chordFrom(event, MAC));
-        if (!found?.command || found.surface) return;
+        if (!found?.command || found.surface || found.browser) return;
         // a field of the editor's own (the find bar, a menu's search) keeps the keys that edit text in it
         const field = event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement;
         if (field && ["selectAll", "pastePlain"].includes(found.command)) return;
@@ -803,6 +878,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     };
     // the menu words, on the top's first line after the trail
     place("menus").append(row.element);
+
 
     // ---- version history: a snapshot on opening and after each pause in editing, kept by store and document ----
     const historyKey = () => (store && id ? `${store.label}:${id}` : name);

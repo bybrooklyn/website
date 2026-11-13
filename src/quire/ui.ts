@@ -345,6 +345,7 @@ export function keySymbols(hint: string, onMac = false): { shown: string; words:
         Enter: ["↵", "Enter"],
         Tab: ["⇥", "Tab"],
         Backspace: ["⌫", "Backspace"],
+        Delete: ["⌦", "Delete"],
     };
     // signs are drawn as themselves and said by name
     const signs: Record<string, string> = { ".": "Full stop", ",": "Comma", "/": "Slash", "\\": "Backslash", "[": "Left bracket", "]": "Right bracket", "=": "Equals", "-": "Minus" };

@@ -100,6 +100,8 @@ export interface Surface {
     symbols(): boolean;
     /** Puts text in at the cursor as it is, each line a paragraph, with no formatting and no Markdown read from it. */
     pasteText(text: string): void;
+    /** Pastes what the clipboard held, as a paste with the keys would: pictures, a web page's formatting or Markdown read from the text. */
+    pasteData(data: DataTransfer): void;
 }
 
 const MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
@@ -1571,6 +1573,10 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
         pasteText(text) {
             syncSelection();
             insertPlain(text);
+        },
+        pasteData(data) {
+            syncSelection();
+            void takeData(data);
         },
         destroy() {
             for (const [target, name, handler] of handlers) target.removeEventListener(name, handler);

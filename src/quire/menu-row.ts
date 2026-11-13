@@ -52,7 +52,8 @@ export type Command =
     | "color" | "size" | "font" | "highlight" | "spacing" | "left" | "center" | "right" | "justify" | "indent" | "outdent" | "bigger" | "smaller" | "clear"
     | "check" | "about" | "wordCount" | "shortcuts" | "searchMenus" | "forgetUsed"
     | "superscript" | "subscript" | "marked" | "typedSigns"
-    | "downloadAs" | "notes" | "nextNote" | "previousNote" | "comment" | "date" | "symbols" | "contents" | "updateContents";
+    | "downloadAs" | "notes" | "nextNote" | "previousNote" | "comment" | "date" | "symbols" | "contents" | "updateContents"
+    | "makeCopy" | "rename" | "fileDetails" | "cut" | "copy" | "paste" | "delete";
 
 /** The menus of the row, for a document as it stands. A line's shortcut, if it has one, comes from the table in shortcuts.ts. */
 export function headings(state: RowState, act: RowActions): Heading[] {
@@ -66,6 +67,9 @@ export function headings(state: RowState, act: RowActions): Heading[] {
             label: "File",
             items: () => [
                 ...(act.file?.() ?? []),
+                ...line("makeCopy", "Make a copy"),
+                ...line("rename", "Rename"),
+                ...line("fileDetails", "Details"),
                 ...(state.rich ? [] : line("turnRich", "Turn into a .quire document", { icon: "file" })),
                 ...(state.rich ? line("downloadQuire", "Download", { hint: ".quire" }) : []),
                 ...line("download", state.rich ? "Download as Markdown" : "Download", { hint: ".md" }),
@@ -80,8 +84,12 @@ export function headings(state: RowState, act: RowActions): Heading[] {
             items: () => [
                 ...line("undo", "Undo", { icon: "undo" }),
                 ...line("redo", "Redo", { icon: "redo" }),
-                ...line("selectAll", "Select all"),
+                ...line("cut", "Cut"),
+                ...line("copy", "Copy"),
+                ...line("paste", "Paste"),
                 ...line("pastePlain", "Paste without formatting"),
+                ...line("selectAll", "Select all"),
+                ...line("delete", "Delete"),
                 ...line("find", "Find", { icon: "search" }),
                 ...line("replace", "Find and replace"),
                 ...line("link", "Link", { icon: "link" }),
