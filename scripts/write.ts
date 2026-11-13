@@ -257,6 +257,8 @@ const page = `<!doctype html>
 
 // ---- the server ----
 
+/** Whether a path on the disk is within one of the repo's folders named, and not reached out of one by `..`. */
+const inside = (file: string, ...folders: string[]) => folders.some((folder) => !relative(at(folder), file).startsWith(".."));
 const json = (data: unknown, status = 200) => Response.json(data, { status });
 const TYPES: Record<string, string> = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp", ".avif": "image/avif", ".gif": "image/gif", ".svg": "image/svg+xml", ".woff2": "font/woff2" };
 
@@ -293,18 +295,19 @@ async function handle(request: Request): Promise<Response> {
         // A picture named in a file: from public/ if it starts with a slash, else beside the file.
         const src = query("src");
         const file = src.startsWith("/") ? resolve(at("public"), `.${src}`) : resolve(dirname(at(query("file"))), src);
-        const inside = [at("src"), at("public")].some((folder) => !relative(folder, file).startsWith(".."));
         const type = TYPES[extname(file).toLowerCase()];
-        return inside && type && (await Bun.file(file).exists()) ? new Response(Bun.file(file), { headers: { "content-type": type } }) : json({ error: "No such picture." }, 404);
+        return inside(file, "src", "public") && type && (await Bun.file(file).exists()) ? new Response(Bun.file(file), { headers: { "content-type": type } }) : json({ error: "No such picture." }, 404);
     }
     if (url.pathname === "/api/files") return json(await files());
     if (url.pathname === "/api/exists") {
         // For checking in the editor: a page of the site if the address starts with a slash, else a file beside the document.
         const src = decodeURI(query("src").replace(/[?#].*$/, ""));
-        if (src.startsWith("/")) return json({ there: (await routes()).has(src.replace(/\/?$/, "/")) || (await Bun.file(resolve(at("public"), `.${src}`)).exists()) });
+        if (src.startsWith("/")) {
+            const file = resolve(at("public"), `.${src}`);
+            return json({ there: (await routes()).has(src.replace(/\/?$/, "/")) || (inside(file, "public") && (await Bun.file(file).exists())) });
+        }
         const file = resolve(dirname(at(query("file"))), src);
-        const inside = [at("src"), at("public")].some((folder) => !relative(folder, file).startsWith(".."));
-        return json({ there: inside && ((await Bun.file(file).exists()) || (await stat(file).then((found) => found.isDirectory(), () => false))) });
+        return json({ there: inside(file, "src", "public") && ((await Bun.file(file).exists()) || (await stat(file).then((found) => found.isDirectory(), () => false))) });
     }
     if (url.pathname === "/api/photos" && request.method === "GET") return json({ photos: await readPhotos() });
     if (url.pathname === "/api/file") {

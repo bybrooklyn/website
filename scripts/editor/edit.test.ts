@@ -178,6 +178,8 @@ used("the server answers whether a link in a post leads to a file beside it or a
     expect(await ask("../../content.config.ts")).toBe(true);
     expect(await ask("./nothing.png")).toBe(false);
     expect(await ask("../../../../etc/passwd")).toBe(false);
+    // an address from the top of the site is held inside public/ too, however many steps up it takes
+    expect(await ask("/../../../../../etc/passwd")).toBe(false);
     expect(await ask("/blog/blocks/")).toBe(true);
     expect(await ask("/blog/blocks")).toBe(true);
     expect(await ask("/mdquire/")).toBe(true);
