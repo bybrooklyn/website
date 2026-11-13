@@ -17,8 +17,8 @@
     content-visibility: visible;
 }
 
-.quire-image[data-align="left"] img {
-    margin-inline: 0 auto;
+.quire-image[data-align="center"] img {
+    margin-inline: auto;
 }
 
 .quire-image[data-align="right"] img {
@@ -30,52 +30,40 @@
     touch-action: none;
 }
 
-/* the caption is shown when it has words, and grows in under a picked picture to be written */
-.quire-caption {
-    display: block;
-    box-sizing: border-box;
+/* the keyboard rests on a picture while its menu or panel is open; its frame already shows it */
+.quire-image:focus {
+    outline: none;
+}
+
+/* a picture the text flows round floats at its side; the few blocks after it are laid out with it
+   (not skipped while out of sight, which would keep their lines from going round it) */
+.quire-image[data-wrap] {
+    float: left;
+    clear: both;
+    margin: 0.3rem 1.5rem 0.5rem 0;
+}
+
+.quire-image[data-wrap="right"] {
+    float: right;
+    margin: 0.3rem 0 0.5rem 1.5rem;
+}
+
+.quire-image[data-wrap] img {
     width: 100%;
-    max-height: 2.2rem;
-    margin-top: 0.4rem;
-    padding: 0.2rem 0.5rem;
-    border: 0.0625rem solid transparent;
-    border-radius: 0.5rem;
-    background: transparent;
-    color: var(--ink);
-    font: inherit;
+}
+
+.quire > [data-wrap] + *,
+.quire > [data-wrap] + * + *,
+.quire > [data-wrap] + * + * + * {
+    content-visibility: visible;
+}
+
+/* the caption is under the picture only once it has words; it is written in the panel */
+.quire-caption {
+    margin-top: 0.5rem;
+    color: var(--muted);
     font-size: 0.95rem;
     font-style: italic;
-    text-align: center;
-    overflow: hidden;
-    transition:
-        max-height 0.3s var(--ease),
-        margin 0.3s var(--ease),
-        padding 0.3s var(--ease),
-        opacity 0.2s ease,
-        border-color 0.2s ease;
-}
-
-.quire-caption:placeholder-shown:not(:focus) {
-    max-height: 0;
-    margin-top: 0;
-    padding-block: 0;
-    opacity: 0;
-}
-
-.quire-picked .quire-caption:placeholder-shown {
-    max-height: 2.2rem;
-    margin-top: 0.4rem;
-    padding-block: 0.2rem;
-    opacity: 1;
-}
-
-.quire-caption:hover {
-    border-color: var(--rule);
-}
-
-.quire-caption:focus {
-    border-color: var(--accent);
-    background: var(--ground);
 }
 
 /* ---- the frame round a picked picture ---- */
@@ -202,6 +190,12 @@
     transform-origin: right top;
 }
 
+.quire-frame.start .quire-picture-strip {
+    right: auto;
+    left: 0;
+    transform-origin: left bottom;
+}
+
 .quire-own-size {
     width: auto;
     padding-inline: 0.5rem;
@@ -220,6 +214,135 @@
     padding-inline: 0;
     opacity: 0;
     pointer-events: none;
+}
+
+/* ---- a picture's panel: quiet labelled lines at the right, as the document's facts there are
+   (.quire-details), on a skin that grows out of the menu line pressed and goes back into the picture;
+   on a phone it stands at the foot of the window ---- */
+
+.quire-picture-panel {
+    position: fixed;
+    top: calc(var(--stuck, 6rem) + var(--above, 1rem));
+    /* its right edge where the facts' is, on a window wide enough to have them */
+    right: max(1rem, var(--from, 1rem) - 0.9rem);
+    z-index: 40;
+    width: min(16rem, 100vw - 2rem);
+    max-height: calc(100vh - var(--stuck, 6rem) - var(--above, 1rem) - 1rem);
+    font-size: 0.85rem;
+    line-height: 1.35;
+    text-align: right;
+    visibility: hidden;
+}
+
+.quire-picture-panel.open {
+    visibility: visible;
+}
+
+.quire-picture-skin {
+    position: absolute;
+    inset: 0;
+    border: 0.0625rem solid var(--rule);
+    border-radius: calc(var(--radius) * 2);
+    background: var(--surface);
+    box-shadow: 0 1rem 2.5rem -1rem oklch(0.04 0.02 300 / 0.7);
+}
+
+.quire-picture-in {
+    position: relative;
+    max-height: inherit;
+    padding: 0.5rem 0.9rem 0.9rem;
+    overflow-y: auto;
+}
+
+.quire-picture-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-right: -0.4rem;
+}
+
+.quire-picture-title {
+    margin: 0;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--muted);
+}
+
+.quire-picture-facts dt {
+    margin-top: 0.75rem;
+    color: var(--muted);
+    font-size: 0.8rem;
+}
+
+.quire-picture-facts dd {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.15rem;
+    margin: 0.2rem 0 0;
+}
+
+.quire-picture-field {
+    box-sizing: border-box;
+    width: 100%;
+    padding: 0.35rem 0.5rem;
+    border: 0.0625rem solid var(--rule);
+    border-radius: 0.5rem;
+    background: var(--ground);
+    color: var(--ink);
+    font: inherit;
+}
+
+.quire-picture-field:focus {
+    border-color: var(--accent);
+    outline: none;
+}
+
+.quire-picture-size,
+.quire-picture-wrap,
+.quire-picture-action {
+    min-width: 0;
+    height: 1.9rem;
+    padding-inline: 0.5rem;
+}
+
+:is(.quire-picture-size, .quire-picture-wrap, .quire-picture-action) .quire-glyph {
+    font-family: inherit;
+    font-size: 0.85rem;
+}
+
+.quire-picture-wrap {
+    min-width: 3.2rem;
+    border: 0.0625rem solid var(--rule);
+}
+
+.quire-picture-wrap:disabled {
+    opacity: 0.45;
+}
+
+.quire-picture-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.3rem;
+    margin-top: 1rem;
+    padding-top: 0.6rem;
+    border-top: 0.0625rem solid var(--rule);
+}
+
+/* the facts give the panel their place while it is open */
+.quire-editor.picturing .quire-details {
+    opacity: 0;
+    visibility: hidden;
+}
+
+@media (max-width: 40rem) {
+    .quire-picture-panel {
+        top: auto;
+        bottom: 1rem;
+        left: 1rem;
+        width: auto;
+        max-height: 55vh;
+    }
 }
 
 /* the picture being moved: it lifts off where it was pressed and follows the pointer; a line shows where it lands */
@@ -261,7 +384,14 @@
     transition:
         opacity 0.15s ease,
         scale 0.25s var(--ease),
-        top 0.12s var(--ease);
+        top 0.2s var(--ease),
+        left 0.2s var(--ease),
+        width 0.2s var(--ease);
+}
+
+/* while a picture is dragged the text opens where it will land, and closes again behind it */
+.quire-making-room :is(p, h1, h2, h3, h4, h5, h6, li, ul, ol, blockquote, pre, table, figure, hr, div) {
+    transition: margin 0.2s var(--ease);
 }
 
 .quire-drop-line.shown {
@@ -569,7 +699,7 @@
 
 @media print {
     .quire-frame,
-    .quire-caption:placeholder-shown,
+    .quire-picture-panel,
     .quire-notes,
     .quire-contents-mark {
         display: none;
@@ -581,9 +711,10 @@
     .quire-handle,
     .quire-frame-label,
     .quire-picture-strip,
-    .quire-caption,
+    .quire-picture-panel,
     .quire-lifted,
     .quire-drop-line,
+    .quire-making-room *,
     .quire-own-size,
     .quire-note,
     .quire-note-actions,

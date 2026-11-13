@@ -200,6 +200,8 @@ export interface Image extends Kept {
     width?: number;
     /** Words shown under it. */
     caption?: string;
+    /** True when the text flows round it, beside it at the left (its alignment unset) or the right. */
+    wrap?: boolean;
 }
 
 /** A line across the page, `---`. */
@@ -922,10 +924,6 @@ export function setLink(doc: Document, range: Range, href: string | null, title?
     return doc;
 }
 
-/** Sets a picture block's alt text, what it says to someone who cannot see it. */
-export function setImageAlt(doc: Document, path: number[], alt: string): Document {
-    return replace(doc, path, (block) => (block.kind === "image" && block.alt !== alt ? [{ ...block, alt, source: undefined }] : null));
-}
 
 /** Sets the text of a raw block, as a component's card does when one of its fields is changed. */
 export function setRaw(doc: Document, path: number[], value: string): Document {
@@ -989,11 +987,17 @@ export function makeDefinition(doc: Document, path: number[]): Document {
 }
 
 /** Changes a picture block's alt text, width or caption; a width or caption of undefined takes it away. */
-export function setImage(doc: Document, path: number[], change: { alt?: string; width?: number | undefined; caption?: string | undefined }): Document {
+export function setImage(doc: Document, path: number[], change: { alt?: string; width?: number | undefined; caption?: string | undefined; wrap?: boolean; src?: string }): Document {
     return replace(doc, path, (block) => {
         if (block.kind !== "image") return null;
         const next: Image = { ...block, source: undefined };
         if (change.alt !== undefined) next.alt = change.alt;
+        if (change.src !== undefined) next.src = change.src;
+        // text flows round a picture at the left or the right; one in the centre is moved to the left for it
+        if (change.wrap) {
+            next.wrap = true;
+            if (next.align !== "right") delete next.align;
+        } else if (change.wrap === false) delete next.wrap;
         if ("width" in change) {
             if (change.width === undefined) delete next.width;
             else next.width = change.width;
@@ -1002,7 +1006,7 @@ export function setImage(doc: Document, path: number[], change: { alt?: string; 
             if (!change.caption) delete next.caption;
             else next.caption = change.caption;
         }
-        const same = next.alt === block.alt && next.width === block.width && next.caption === block.caption;
+        const same = next.alt === block.alt && next.width === block.width && next.caption === block.caption && next.wrap === block.wrap && next.src === block.src && next.align === block.align;
         return same ? null : [next];
     });
 }
@@ -1014,6 +1018,8 @@ export function setAlign(doc: Document, path: number[], align: Align | null): Do
         const next = { ...block, source: undefined };
         if (align) next.align = align;
         else delete next.align;
+        // text flows round a picture only at the left or the right
+        if (next.kind === "image" && (align === "center" || align === "justify")) delete next.wrap;
         return [next];
     });
 }

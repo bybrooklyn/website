@@ -186,7 +186,8 @@ function writeBlock(block: Block, context: Context): string {
             return aligned("#".repeat(Math.min(6, Math.max(1, Number(block.level) || 1))) + (content ? ` ${content}` : ""), block.align);
         }
         case "image":
-            return aligned(sized(block) ? pictureHtml(block) : imageText(block.src, block.alt, block.title), block.align);
+            // a picture the text flows round says its side on the <img> itself (pictures.ts)
+            return aligned(sized(block) ? pictureHtml(block) : imageText(block.src, block.alt, block.title), block.wrap ? undefined : block.align);
         case "divider":
             return "---";
         case "code": {

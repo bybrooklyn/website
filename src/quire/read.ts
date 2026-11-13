@@ -507,7 +507,8 @@ function readAligned(lines: Line[], at: number, context: Context): [Block, numbe
     while (last > first && blank(lines[last]!.text)) last--;
     const inner = parseInside(lines.slice(first, last + 1), context);
     const block = inner[0];
-    if (inner.length !== 1 || !block || (block.kind !== "paragraph" && block.kind !== "heading" && block.kind !== "image")) return undefined;
+    // a picture the text flows round keeps its side on itself, so the writer never puts one in a <div>
+    if (inner.length !== 1 || !block || (block.kind !== "paragraph" && block.kind !== "heading" && block.kind !== "image") || (block.kind === "image" && block.wrap)) return undefined;
     block.align = open[1] as Align;
     return [block, close + 1];
 }

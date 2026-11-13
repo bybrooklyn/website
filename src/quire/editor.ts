@@ -602,7 +602,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     const slash = createSlash(surface, bar.pickImage);
     const emojiList = createEmojiPicker(surface);
     const tableTools = createTableTools(surface, () => bar.element.getBoundingClientRect().bottom);
-    const pictureTools = createPictureTools(surface);
+    const pictureTools = createPictureTools(surface, { keep: keepPicture, margin: host });
     // the writer's notes: marked in the text, in the right margin on a wide window and a list on a narrow one
     const notes = createCommentMargin(surface, { place: notesPlace });
     host.append(notes.element);

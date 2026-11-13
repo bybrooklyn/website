@@ -211,8 +211,8 @@ export async function docx(doc: Document, options: DocxOptions = {}): Promise<Ui
                 }
                 case "image": {
                     const drawn = picture(block.src, block.alt, block.width);
-                    const shown = drawn ? paragraph(drawn, { align: block.align ?? "center" }) : paragraph(`<w:r><w:t xml:space="preserve">[Picture${block.alt ? `: ${xml(block.alt)}` : ""}]</w:t></w:r>`, { align: block.align ?? "center" });
-                    return block.caption ? [shown, paragraph(`<w:r><w:t xml:space="preserve">${xml(block.caption)}</w:t></w:r>`, { style: "Caption", align: block.align ?? "center" })] : [shown];
+                    const shown = drawn ? paragraph(drawn, { align: block.align }) : paragraph(`<w:r><w:t xml:space="preserve">[Picture${block.alt ? `: ${xml(block.alt)}` : ""}]</w:t></w:r>`, { align: block.align });
+                    return block.caption ? [shown, paragraph(`<w:r><w:t xml:space="preserve">${xml(block.caption)}</w:t></w:r>`, { style: "Caption", align: block.align })] : [shown];
                 }
                 case "divider":
                     return [paragraph("", { border: true })];
