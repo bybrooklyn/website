@@ -983,6 +983,8 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
     }
 
     function onKeyDown(event: KeyboardEvent) {
+        // a key is the writer's own move, never the cursor the browser puts in on focus
+        restoring = 0;
         if (fromField(event)) return;
         // Safari sends key 229 for keys that belong to a composition
         if (composing || event.isComposing || (event as { keyCode?: number }).keyCode === 229) return;
@@ -1241,7 +1243,10 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
 
     /** When the text was last pressed, so that the focus a press brings is told from focus given back by a menu or a dialog. */
     let pressedAt = -Infinity;
-    const onPress = () => (pressedAt = performance.now());
+    const onPress = () => {
+        pressedAt = performance.now();
+        restoring = 0;
+    };
 
     /** Until when the cursor the browser puts in on focus is not the writer's own move. */
     let restoring = 0;
