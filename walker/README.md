@@ -433,6 +433,14 @@ difficulty and check each whole: every one can be crossed. The table keeps withi
 planned piece has needed making easier; the checker is there for pieces given whole, by a link or a
 teacher.
 
+That reach is a hopping body's, which evolution's is; practice's body has no hop. Walking to the
+Walker's stride with no hop, two legs get up and over nothing and four legs walk up 0.12 m and over
+0.59 m, and with everything switched on 493 of 500 worlds, at every difficulty, hold a piece beyond
+that (`cargo test --release no_hop -- --ignored --nocapture`). Practised policies bound rather than
+walk to a stride, and get past such pieces (four legs average 44 m through held-out worlds at
+difficulty 0.1), so these pieces are in doubt for practice rather than impossible; how far a body
+with no hop can really get is not measured, and the checker still counts on a hop.
+
 ### The body
 
 The Walker's two- and four-legged creatures, their rounded bodies, eyes and feet as they were, with
@@ -558,7 +566,10 @@ network whose backward pass is written by hand. Three files:
   its weight for every output, so one input times its row adds into sixteen outputs side by side
   (SIMD), and four rows of a batch share a row of weights while it is in registers. Every sum is in
   one fixed order, so the same weights and inputs give the same answer to the bit natively and in
-  every browser. Tests hold the gradient to finite differences, for every kind of squash.
+  every browser. Tests hold the gradient to finite differences, for every kind of squash. Adam's
+  small number is 1e-5, added outside the square root (the usual is 1e-8): with gradients shortened
+  to a length of 0.5 over about 23,000 weights, it damps a weight whose gradient stays under about
+  1e-4.
 - `src/generalist/ppo.rs`: the learner. A policy gives the middle of a bell curve for each action,
   with one learned spread per action whatever is sensed; a value network guesses the reward to
   come. Generalised advantage estimation; the clipped objective, the value's error and an entropy
@@ -566,7 +577,9 @@ network whose backward pass is written by hand. Three files:
   running spread of their discounted sums, both kept with the weights; gradients shortened past a
   length; a rate that falls. A run cut short by its time is valued where it was cut, not as if it
   had ended. Every number is in `Settings`. Tested on a point that must reach a mark (it learns to),
-  on advantages worked out by hand, and on the same seed learning to the bit.
+  on advantages worked out by hand, and on the same seed learning to the bit. A sense, a running
+  number or a gradient that is not finite (a blow-up in the physics) is let go rather than learned
+  from.
 - `src/generalist/practice.rs`: the worlds it practises in. Every run is in a fresh world of the
   recipe's kind (its seed has the top bit set), so what is learned must hold in any world of that
   kind; it is measured on held-out worlds, seeds 2 to 17, never practised in. World 1 is the one the
@@ -749,11 +762,15 @@ sends the average and every worker's running numbers back, so all go on from the
 plain messages pass, no shared memory. Practice stops when the page is hidden or scrolled away (the
 page's drawing sends a beat each second, as for evolution). Every three seconds the page is sent the
 policy, and the creature on show is the newest policy acting without drawing, from the start of the
-visitor's world, each time its run ends. Above it, twice a second, small words say what it was just
+visitor's world, each time its run ends, its actions held between decisions by practice's own rule
+(`Way::hold`: each within -1 to 1, and no hop), so what is shown is what was practised; a test holds
+the show and practice to the same trajectory, to the bit. Above it, twice a second, small words say what it was just
 rewarded and charged for: forward, up, effort, in the air for nothing, fell. The status line says how
 long it has practised, how many steps, how far it gets in this world now and on average in practice.
 Everything learned is kept in the browser (IndexedDB) every half minute, for that body and that kind
-of world, and taken up again on the next visit; "start over" forgets it. A two-legged learner's
+of world, and taken up again on the next visit; "start over" forgets it. What is kept holds the steps
+practised, so the costs brought in over the first 4 million steps go on from where they were; a
+learner kept before that was added, or of another size, is refused and practice starts afresh. A two-legged learner's
 weights are 23,435 numbers, and all that is kept of it 70,309 (the weights, Adam's two running
 averages as long, its updates, Adam's steps and the steps practised), which does not fit in a link, so
 a link carries the world and not the brain.
