@@ -600,7 +600,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     widening?.addEventListener("change", outlineAsKept);
     const slash = createSlash(surface, bar.pickImage);
     const emojiList = createEmojiPicker(surface);
-    const tableTools = createTableTools(surface);
+    const tableTools = createTableTools(surface, () => bar.element.getBoundingClientRect().bottom);
     const pictureTools = createPictureTools(surface);
     // the writer's notes: marked in the text, in the right margin on a wide window and a list on a narrow one
     const notes = createCommentMargin(surface, { place: notesPlace });

@@ -387,6 +387,21 @@ used("a table's controls grow at its edge with the cursor in it, and add a row a
     expect(await tab.run("getComputedStyle(document.querySelector('.quire-table-tools')).visibility")).toBe("hidden");
 });
 
+used("a long table's controls stay under the editor's top when the table is scrolled up under it, never drawn over the tools there", async () => {
+    const rows = Array.from({ length: 30 }, (_, index) => `| ${index} | row |`).join("\n");
+    await reset(`${"Words.\n\n".repeat(12)}| a | b |\n| --- | --- |\n${rows}\n\nAfter.\n`, [12, 25, 1], 1);
+    await tab.press("ArrowLeft");
+    await tab.press("ArrowRight");
+    await tab.wait(400);
+    // the table's top is scrolled up past the editor's top, its lower rows still in sight
+    await tab.run(`(() => { const table = document.querySelector('.quire table'); scrollBy({ top: table.getBoundingClientRect().top - document.querySelector('.quire-top').getBoundingClientRect().bottom + 200, behavior: 'instant' }); })()`);
+    await tab.wait(400);
+    const seen = await tab.run<{ tools: number; top: number; table: number }>(`({ tools: document.querySelector('.quire-table-tools').getBoundingClientRect().top, top: document.querySelector('.quire-bar').getBoundingClientRect().bottom, table: document.querySelector('.quire table').getBoundingClientRect().top })`);
+    expect(seen.table).toBeLessThan(seen.top);
+    expect(seen.tools).toBeGreaterThanOrEqual(seen.top);
+    await tab.run("scrollTo({ top: 0, behavior: 'instant' })");
+});
+
 used("a picture shows with its alt text written under it, which can be changed in place", async () => {
     await reset("![A tower](/tower.png)\n");
     expect(await tab.run("document.querySelector('.quire-image img').getAttribute('src')")).toBe("/tower.png");

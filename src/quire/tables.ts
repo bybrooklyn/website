@@ -56,8 +56,11 @@ export function alignHere(align: Align): (state: State) => State {
     return (state) => within(state, ({ path, table, column }) => ({ ...state, doc: setColumnAlign(state.doc, path, column, table.align[column] === align ? null : align) }));
 }
 
-/** Builds the table controls for a surface. */
-export function createTableTools(surface: Surface): { element: HTMLElement } {
+/**
+ * Builds the table controls for a surface. `top` is how far down the window the editor's own top
+ * reaches: the controls stay under it, never drawn over the tools there.
+ */
+export function createTableTools(surface: Surface, top: () => number = () => 0): { element: HTMLElement } {
     const tools = make("div", "quire-table-tools");
     tools.setAttribute("role", "toolbar");
     tools.setAttribute("aria-label", "Table");
@@ -91,7 +94,10 @@ export function createTableTools(surface: Surface): { element: HTMLElement } {
         if (!shownFor) return;
         const box = shownFor.getBoundingClientRect();
         tools.style.left = `${Math.max(8, Math.min(box.right - tools.offsetWidth, innerWidth - tools.offsetWidth - 8))}px`;
-        tools.style.top = `${box.top - tools.offsetHeight - 6}px`;
+        // over the table's top edge; with that scrolled up under the editor's top, just below it, riding
+        // up with the table's foot and away under the top once the table has gone (quire.css stacks it lower)
+        const above = Math.max(box.top - tools.offsetHeight - 6, top() + 6);
+        tools.style.top = `${Math.min(above, box.bottom - tools.offsetHeight)}px`;
     };
     const update = () => {
         const focus = surface.getSelection().focus.path;
