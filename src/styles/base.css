@@ -123,6 +123,11 @@ pre {
     translate: 0 0;
 }
 
+/* The page's main part takes focus from the skip link and the to-top button, to move the keyboard there; it is not a control, so no ring. */
+#main:focus {
+    outline: none;
+}
+
 /* Small supporting text: dates, captions, counts. */
 .note {
     color: var(--muted);
