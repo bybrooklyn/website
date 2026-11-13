@@ -210,6 +210,14 @@ describe("spoken commands", () => {
         await drive(on(editor), [...quiet(300), ...frames(2900, 0.2), ...quiet(1000), ...frames(1500, 0.4), ...quiet(1000), ...frames(1500, 0.4), ...quiet(1000)]);
         expect(editor.text()).toBe("Mine.");
     });
+    test("a phrase that could not be written (the cursor where text cannot go) is not taken back by delete that, so the writer's work stays", async () => {
+        const editor = typed();
+        const run = editor.run;
+        // the editor writes nothing for a dictated phrase, as in a block that takes no text
+        editor.run = (operation, kind) => (kind === "paste" ? void operation(editor.getDocument(), editor.getSelection()) : run(operation, kind));
+        await drive(on(editor), [...quiet(300), ...frames(2900, 0.2), ...quiet(1000), ...frames(1500, 0.4), ...quiet(1000)]);
+        expect(editor.text()).toBe("Mine.");
+    });
     test("with commands off every word is written", async () => {
         const { editor, session } = make({ commands: false });
         await drive(session, [...quiet(300), ...frames(2900, 0.2), ...quiet(1000)]);

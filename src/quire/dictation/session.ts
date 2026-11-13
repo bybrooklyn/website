@@ -251,14 +251,16 @@ export function startSession(options: SessionOptions): Session {
         const state = { doc: target.getDocument(), selection: target.getSelection() };
         const steps = interpret(fixed, { before: textBefore(state, (path) => textAt(state.doc, path)), commands: options.commands() });
         let commands: ReturnType<typeof write>["commands"] = [];
+        const unchanged = state.doc;
         target.run((doc, selection) => {
             const done = write({ doc, selection }, steps, pending);
             pending = done.pending;
             commands = done.commands;
             return done.state;
         }, "paste");
-        const written = steps.some((step) => step.kind === "text" || step.kind === "line" || step.kind === "paragraph");
-        if (written) last = { text: fixed, after: target.getDocument() };
+        // Only a phrase that changed the document is one to take back. One that wrote nothing (the cursor in a block
+        // that takes no text) must not be, or "delete that" would undo the step before it, which is the writer's.
+        if (target.getDocument() !== unchanged) last = { text: fixed, after: target.getDocument() };
         for (const command of commands) {
             if (command === "undo") undoLast();
             else if (command === "delete") deleteLast();
