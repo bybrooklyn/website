@@ -227,3 +227,22 @@ test("a link found by its words keeps its form while they stay, and still names 
     const opened = deleteText(insertText(doc, { path: [0], offset: 2 }, "(y)"), { start: { path: [0], offset: 5 }, end: { path: [0], offset: 7 } });
     expect(write(opened).split("\n")[0]).toBe("[ab][](y)");
 });
+
+test("a mark beside punctuation is written so that CommonMark reads it as the mark: in signs where they flank the text, as HTML the reader takes where they would not", () => {
+    const one = (runs: Run[]) => readsBack(made([withRuns(runs)]));
+    expect(one([{ kind: "text", text: "word", marks: [] }, { kind: "text", text: "(see)", marks: ["bold"] }, { kind: "text", text: "more", marks: [] }])).toBe("word<strong>(see)</strong>more\n");
+    expect(one([{ kind: "text", text: "a ", marks: [] }, { kind: "text", text: "(see)", marks: ["bold"] }, { kind: "text", text: " b", marks: [] }])).toBe("a **(see)** b\n");
+    expect(one([{ kind: "text", text: "/", marks: ["italic"] }, { kind: "text", text: "Title", marks: [] }])).toBe("<em>/</em>Title\n");
+    expect(one([{ kind: "text", text: "b", marks: ["bold", "code"] }, { kind: "text", text: "b", marks: [] }])).toBe("<strong>`b`</strong>b\n");
+    expect(one([{ kind: "text", text: "a", marks: [] }, { kind: "text", text: ".", marks: ["strike"] }])).toBe("a<del>.</del>\n");
+    expect(one([{ kind: "text", text: "*", marks: ["italic"] }])).toBe("*\\**\n");
+    expect(one([{ kind: "text", text: "|", marks: ["spoiler"] }])).toBe("||\\|||\n");
+    expect(one([{ kind: "text", text: "a", marks: [] }, { kind: "text", text: "a", marks: ["italic", "mark"] }])).toBe("a==*a*==\n");
+    expect(one([{ kind: "text", text: "a", marks: ["mark"] }, { kind: "text", text: "(b)", marks: ["mark"] }])).toBe("==a(b)==\n");
+    expect(one([{ kind: "text", text: "**", marks: ["bold"] }, { kind: "text", text: "😀", marks: [] }])).toBe("**\\*\\***😀\n");
+    // a link's words end at a `]` and a picture starts at `![`, so those are escaped where they would
+    one([{ kind: "text", text: "wow!", marks: [] }, { kind: "link", href: "/x", runs: [{ kind: "text", text: "^a]b", marks: [] }] }]);
+    // the reader takes the same HTML back as marks
+    const back = read("<strong>a</strong><em>b</em><del>c</del><mark>d</mark>\n").blocks[0];
+    expect(back?.kind === "paragraph" && back.runs.map((run) => run.kind === "text" && run.marks)).toEqual([["bold"], ["italic"], ["strike"], ["mark"]]);
+});

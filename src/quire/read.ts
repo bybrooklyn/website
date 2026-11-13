@@ -869,6 +869,9 @@ function closingTag(text: string, from: number, name: string): { inner: number; 
     return undefined;
 }
 
+/** The HTML tags read as marks. */
+const TAG_MARKS: Record<string, Mark> = { u: "underline", sup: "sup", sub: "sub", strong: "bold", em: "italic", del: "strike", mark: "mark" };
+
 const STYLE = /^<span style="(?:color:([^;"<>]+?)(?:; font-size:([^;"<>]+?))?|font-size:([^;"<>]+?))">/;
 
 /** Reads the text of a paragraph, heading or cell into runs. */
@@ -1015,7 +1018,9 @@ function inline(text: string, context: Context): Run[] {
                 continue;
             }
             const style = STYLE.exec(rest);
-            const simple = /^<(u|sup|sub)>/.exec(rest);
+            // underline, superscript and subscript have no Markdown; the others are the HTML the writer gives a
+            // mark whose signs would not be read where they stand (write.ts)
+            const simple = /^<(u|sup|sub|strong|em|del|mark)>/.exec(rest);
             if (style || simple) {
                 const name = style ? "span" : simple![1]!;
                 const open = style ? style[0].length : simple![0].length;
@@ -1025,7 +1030,7 @@ function inline(text: string, context: Context): Run[] {
                     const runs = inline(text.slice(index + open, close.inner), context);
                     for (const run of runs) {
                         if (style) addStyle(run, { color: style[1], size: style[2] ?? style[3] });
-                        else addMark(run, name === "u" ? "underline" : (name as Mark));
+                        else addMark(run, TAG_MARKS[name]!);
                         tokens.push({ run });
                     }
                     index = close.end;
@@ -1089,12 +1094,15 @@ function inline(text: string, context: Context): Run[] {
                 index += count;
                 continue;
             }
-            const before = text[index - 1] ?? " ";
-            const after = text[index + count] ?? " ";
+            // the whole characters on either side, so that an emoji counts as the symbol it is
+            const before = index === 0 ? " " : /[\uDC00-\uDFFF]/.test(text[index - 1]!) && index >= 2 ? text.slice(index - 2, index) : text[index - 1]!;
+            const after = index + count >= text.length ? " " : String.fromCodePoint(text.codePointAt(index + count)!);
             const space = (value: string) => /\s/.test(value);
             const punctuation = (value: string) => UNICODE_PUNCTUATION.test(value);
-            const left = !space(after) && (!punctuation(after) || space(before) || punctuation(before));
-            const right = !space(before) && (!punctuation(before) || space(after) || punctuation(after));
+            // `==` and `||` mean nothing in standard Markdown, so they need only touch text on the inside
+            const loose = char === "=" || char === "|";
+            const left = loose ? !space(after) : !space(after) && (!punctuation(after) || space(before) || punctuation(before));
+            const right = loose ? !space(before) : !space(before) && (!punctuation(before) || space(after) || punctuation(after));
             flush();
             tokens.push({
                 char,
