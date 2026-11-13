@@ -1,9 +1,9 @@
 // What "correct" means for Mote's 2D physics, measured. Run with `bun run test`.
 
 import { expect, test } from "bun:test";
-import { Flat, SLOP, speed, wake, type Body } from "./flat";
+import { TICK } from "./stage";
+import { Flat, SLOP, inside, speed, wake, type Body } from "./flat";
 
-const TICK = 1 / 120;
 const run = (flat: Flat, seconds: number, each?: (time: number) => void) => {
     for (let time = 0; time < seconds - 1e-9; time += TICK) {
         flat.step(TICK);
@@ -366,10 +366,41 @@ test("pressing a tool down on the ground lifts the body that holds it", () => {
     expect(body.y).toBeLessThan(430);
 });
 
-test("the same start gives the same end", () => {
-    const [one, two] = [pile(), pile()];
-    one.blocks.forEach((block, index) => {
-        expect(block.x).toBe(two.blocks[index]!.x);
-        expect(block.y).toBe(two.blocks[index]!.y);
-    });
+test("what rested on something fixed falls when that is taken away", () => {
+    const flat = new Flat(1800);
+    const floor = flat.box(0, 100, 400, 40, { fixed: true });
+    flat.box(0, 400, 400, 40, { fixed: true });
+    // a pile of two on the floor: the upper one touches only the lower
+    const lower = flat.box(0, 60, 40, 40);
+    const upper = flat.box(0, 20, 40, 40);
+    run(flat, 3);
+    expect(lower.asleep && upper.asleep).toBe(true);
+    flat.remove(floor);
+    run(flat, 1);
+    expect(lower.y).toBeGreaterThan(300);
+    expect(upper.y).toBeGreaterThan(260);
+});
+
+test("a step of no number or of minus a second is ignored, one of forever is kept to a second, and the steps after work", () => {
+    for (const bad of [Number.NaN, -1, Infinity, 1e12]) {
+        const flat = new Flat(1800);
+        const ball = flat.ball(0, 0, 10);
+        flat.step(bad);
+        const after = ball.y;
+        flat.step(TICK);
+        expect(Number.isFinite(after)).toBe(true);
+        expect(ball.y).toBeGreaterThan(after);
+    }
+});
+
+test("a point is inside a bar only within its thickness of the line between its ends", () => {
+    const flat = new Flat();
+    // 110 long and 10 thick: its ends are round, of radius 5, about points 50 from its middle
+    const bar = flat.bar(0, 0, 110, 10);
+    expect(inside(bar, 0, 4)).toBe(true);
+    expect(inside(bar, 54, 0)).toBe(true);
+    expect(inside(bar, 54, 4)).toBe(false);
+    expect(inside(bar, 200, 0)).toBe(false);
+    expect(inside(bar, -56, 0)).toBe(false);
+    expect(flat.at(54, 4)).toBeUndefined();
 });

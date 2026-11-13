@@ -31,8 +31,6 @@ export interface Look {
     over?: boolean;
     /** How shiny: from 0, dull, to 1, a bright spot where the sun glances off it toward the eye. Dull unless said. */
     gloss?: number;
-    /** Only what is written on it is drawn, not its faces: for words on something round, written on an unseen box around it. */
-    bare?: boolean;
 }
 
 export interface Mark {
@@ -55,12 +53,31 @@ export interface Part {
     emit: number;
 }
 
+/**
+ * What a part is drawn from, on the graphics card: its faces and the words on them. Parts made from
+ * the same mesh with the same words share one, and it is freed once no part uses it.
+ */
+interface Shape {
+    faces: Float32Array;
+    words: Float32Array;
+    facesArray?: WebGLVertexArrayObject;
+    facesBuffer?: WebGLBuffer;
+    marksArray?: WebGLVertexArrayObject;
+    marksBuffer?: WebGLBuffer;
+    count: number;
+    markCount: number;
+    /** The cells of the sheet its words are written in. */
+    cells: number[];
+    /** How many parts are drawn from it now. */
+    users: number;
+    /** Where it is kept, to be found again and to be forgotten when freed. */
+    home: Map<string, Shape>;
+    key: string;
+}
+
 interface Drawn extends Part {
     look: Look;
-    faces: WebGLVertexArrayObject;
-    count: number;
-    marks?: WebGLVertexArrayObject;
-    markCount: number;
+    shape: Shape;
 }
 
 export interface View {
@@ -85,6 +102,8 @@ export interface View {
     color(css: string): Color;
     /** The face numbers and words are written in. */
     font: string;
+    /** Frees everything on the graphics card and lets the context go. The view draws nothing after. */
+    dispose(): void;
 }
 
 /** Where a word sits on a face: the face's middle, the way the face looks, the way the word's top points, and half the word's size. */
@@ -238,6 +257,9 @@ function box(left: number, right: number, bottom: number, top: number, near: num
 const placed = (at: V3, turn: Turn, by: number): M4 =>
     new Float32Array([turn[0][0] * by, turn[1][0] * by, turn[2][0] * by, 0, turn[0][1] * by, turn[1][1] * by, turn[2][1] * by, 0, turn[0][2] * by, turn[1][2] * by, turn[2][2] * by, 0, at[0], at[1], at[2], 1]);
 
+/** A shader program, and where each of its inputs is, looked up once. */
+type Program = { made: WebGLProgram; at(name: string): WebGLUniformLocation | null };
+
 /** Sets a canvas up for drawing in 3D. Returns nothing where the browser cannot. */
 export function gl(canvas: HTMLCanvasElement): View | undefined {
     // The picture's colors are kept already multiplied by how solid they are, which is what blending onto
@@ -245,65 +267,82 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
     const g = canvas.getContext("webgl2", { antialias: true, alpha: true, premultipliedAlpha: true });
     if (!g) return undefined;
 
-    const program = (vertex: string, fragment: string) => {
+    const program = (vertex: string, fragment: string): Program => {
         const made = g.createProgram();
-        for (const [kind, source] of [[g.VERTEX_SHADER, vertex], [g.FRAGMENT_SHADER, fragment]] as const) {
+        const shaders = ([[g.VERTEX_SHADER, vertex], [g.FRAGMENT_SHADER, fragment]] as const).map(([kind, source]) => {
             const shader = g.createShader(kind)!;
             g.shaderSource(shader, source);
             g.compileShader(shader);
             if (!g.getShaderParameter(shader, g.COMPILE_STATUS)) throw new Error(g.getShaderInfoLog(shader) ?? "A shader did not compile.");
             g.attachShader(made, shader);
-        }
+            return shader;
+        });
         g.linkProgram(made);
+        // the program keeps what it needs of its shaders once linked
+        for (const shader of shaders) g.deleteShader(shader);
+        if (!g.getProgramParameter(made, g.LINK_STATUS)) throw new Error(g.getProgramInfoLog(made) ?? "A program did not link.");
         const names = new Map<string, WebGLUniformLocation | null>();
         return { made, at: (name: string) => names.get(name) ?? (names.set(name, g.getUniformLocation(made, name)), names.get(name)!) };
     };
-    let main: ReturnType<typeof program>, depth: ReturnType<typeof program>, screen: ReturnType<typeof program>;
-    try {
-        main = program(VERTEX, FRAGMENT);
-        depth = program(DEPTH_VERTEX, DEPTH_FRAGMENT);
-        screen = program(SCREEN_VERTEX, SCREEN_FRAGMENT);
-    } catch (problem) {
-        console.error("Mote could not set up 3D drawing:", problem);
-        return undefined;
-    }
 
-    // where shadows are worked out: how far each thing is from the sun, seen from the sun
+    // What lives on the graphics card, and is lost with it: made here, and made again when the
+    // browser gives back a context it took away (as a phone may, from a page in the background).
     const SHADOW = 2048;
-    const shadow = g.createTexture();
-    g.bindTexture(g.TEXTURE_2D, shadow);
-    g.texImage2D(g.TEXTURE_2D, 0, g.DEPTH_COMPONENT24, SHADOW, SHADOW, 0, g.DEPTH_COMPONENT, g.UNSIGNED_INT, null);
-    g.texParameteri(g.TEXTURE_2D, g.TEXTURE_MIN_FILTER, g.LINEAR);
-    g.texParameteri(g.TEXTURE_2D, g.TEXTURE_MAG_FILTER, g.LINEAR);
-    g.texParameteri(g.TEXTURE_2D, g.TEXTURE_WRAP_S, g.CLAMP_TO_EDGE);
-    g.texParameteri(g.TEXTURE_2D, g.TEXTURE_WRAP_T, g.CLAMP_TO_EDGE);
-    g.texParameteri(g.TEXTURE_2D, g.TEXTURE_COMPARE_MODE, g.COMPARE_REF_TO_TEXTURE);
-    g.texParameteri(g.TEXTURE_2D, g.TEXTURE_COMPARE_FUNC, g.LEQUAL);
-    const frame = g.createFramebuffer();
-    g.bindFramebuffer(g.FRAMEBUFFER, frame);
-    g.framebufferTexture2D(g.FRAMEBUFFER, g.DEPTH_ATTACHMENT, g.TEXTURE_2D, shadow, 0);
-    g.bindFramebuffer(g.FRAMEBUFFER, null);
+    let main: Program, depth: Program, screen: Program;
+    let shadow: WebGLTexture, frame: WebGLFramebuffer, hides: WebGLRenderbuffer, marks: WebGLTexture;
+    let soft: { picture: WebGLTexture; onto: WebGLFramebuffer }[];
+    const setup = (): boolean => {
+        try {
+            main = program(VERTEX, FRAGMENT);
+            depth = program(DEPTH_VERTEX, DEPTH_FRAGMENT);
+            screen = program(SCREEN_VERTEX, SCREEN_FRAGMENT);
+        } catch (problem) {
+            console.error("Mote could not set up 3D drawing:", problem);
+            return false;
+        }
 
-    // what shines, drawn small and blurred: two pictures a quarter of the canvas each way, blurred from one into the other
-    const soft = [0, 1].map(() => {
-        const picture = g.createTexture();
-        g.bindTexture(g.TEXTURE_2D, picture);
-        for (const [name, value] of [[g.TEXTURE_MIN_FILTER, g.LINEAR], [g.TEXTURE_MAG_FILTER, g.LINEAR], [g.TEXTURE_WRAP_S, g.CLAMP_TO_EDGE], [g.TEXTURE_WRAP_T, g.CLAMP_TO_EDGE]] as const) g.texParameteri(g.TEXTURE_2D, name, value);
-        const onto = g.createFramebuffer();
-        g.bindFramebuffer(g.FRAMEBUFFER, onto);
-        g.framebufferTexture2D(g.FRAMEBUFFER, g.COLOR_ATTACHMENT0, g.TEXTURE_2D, picture, 0);
-        return { picture, onto };
-    });
-    const hides = g.createRenderbuffer();
-    // (bound and given a size before it is attached: a browser warns of one that never was)
-    g.bindRenderbuffer(g.RENDERBUFFER, hides);
-    g.renderbufferStorage(g.RENDERBUFFER, g.DEPTH_COMPONENT24, 1, 1);
-    g.bindFramebuffer(g.FRAMEBUFFER, soft[0]!.onto);
-    g.framebufferRenderbuffer(g.FRAMEBUFFER, g.DEPTH_ATTACHMENT, g.RENDERBUFFER, hides);
-    g.bindFramebuffer(g.FRAMEBUFFER, null);
+        // where shadows are worked out: how far each thing is from the sun, seen from the sun
+        shadow = g.createTexture();
+        g.bindTexture(g.TEXTURE_2D, shadow);
+        g.texImage2D(g.TEXTURE_2D, 0, g.DEPTH_COMPONENT24, SHADOW, SHADOW, 0, g.DEPTH_COMPONENT, g.UNSIGNED_INT, null);
+        g.texParameteri(g.TEXTURE_2D, g.TEXTURE_MIN_FILTER, g.LINEAR);
+        g.texParameteri(g.TEXTURE_2D, g.TEXTURE_MAG_FILTER, g.LINEAR);
+        g.texParameteri(g.TEXTURE_2D, g.TEXTURE_WRAP_S, g.CLAMP_TO_EDGE);
+        g.texParameteri(g.TEXTURE_2D, g.TEXTURE_WRAP_T, g.CLAMP_TO_EDGE);
+        g.texParameteri(g.TEXTURE_2D, g.TEXTURE_COMPARE_MODE, g.COMPARE_REF_TO_TEXTURE);
+        g.texParameteri(g.TEXTURE_2D, g.TEXTURE_COMPARE_FUNC, g.LEQUAL);
+        frame = g.createFramebuffer();
+        g.bindFramebuffer(g.FRAMEBUFFER, frame);
+        g.framebufferTexture2D(g.FRAMEBUFFER, g.DEPTH_ATTACHMENT, g.TEXTURE_2D, shadow, 0);
+        g.bindFramebuffer(g.FRAMEBUFFER, null);
+
+        // what shines, drawn small and blurred: two pictures a quarter of the canvas each way, blurred from one into the other
+        soft = [0, 1].map(() => {
+            const picture = g.createTexture();
+            g.bindTexture(g.TEXTURE_2D, picture);
+            for (const [name, value] of [[g.TEXTURE_MIN_FILTER, g.LINEAR], [g.TEXTURE_MAG_FILTER, g.LINEAR], [g.TEXTURE_WRAP_S, g.CLAMP_TO_EDGE], [g.TEXTURE_WRAP_T, g.CLAMP_TO_EDGE]] as const) g.texParameteri(g.TEXTURE_2D, name, value);
+            const onto = g.createFramebuffer();
+            g.bindFramebuffer(g.FRAMEBUFFER, onto);
+            g.framebufferTexture2D(g.FRAMEBUFFER, g.COLOR_ATTACHMENT0, g.TEXTURE_2D, picture, 0);
+            return { picture, onto };
+        });
+        hides = g.createRenderbuffer();
+        // (bound and given a size before it is attached: a browser warns of one that never was)
+        g.bindRenderbuffer(g.RENDERBUFFER, hides);
+        g.renderbufferStorage(g.RENDERBUFFER, g.DEPTH_COMPONENT24, 1, 1);
+        g.bindFramebuffer(g.FRAMEBUFFER, soft[0]!.onto);
+        g.framebufferRenderbuffer(g.FRAMEBUFFER, g.DEPTH_ATTACHMENT, g.RENDERBUFFER, hides);
+        g.bindFramebuffer(g.FRAMEBUFFER, null);
+        marks = g.createTexture();
+        [smallWide, smallHigh] = [0, 0];
+        stale = true;
+        return true;
+    };
     let [smallWide, smallHigh] = [0, 0];
+    let stale = true;
 
-    // what is written on faces: every different word once, side by side in one picture
+    // What is written on faces: every different word once, side by side in one picture. A cell no
+    // shape uses any more is written over by the next new word, the one longest unused first.
     const CELL = 128;
     const ACROSS = 12;
     const sheet = document.createElement("canvas");
@@ -311,8 +350,9 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
     sheet.height = CELL * ACROSS;
     const pen = sheet.getContext("2d")!;
     const written = new Map<string, number>();
-    const marks = g.createTexture();
-    let stale = true;
+    /** Each cell's word, how many shapes use it, and when the last of them was freed. */
+    const cells = Array.from({ length: ACROSS * ACROSS }, () => ({ key: undefined as string | undefined, word: "", onSign: false, users: 0, freed: 0 }));
+    let clock = 0;
 
     const parts: Drawn[] = [];
     let [eyeFrom, eyeTo, eyeDegrees]: [V3, V3, number] = [[0, 5, 20], [0, 0, 0], 30];
@@ -320,12 +360,14 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
     let toSun: V3 = [0, 1, 0];
     let levels: [number, number, number] = [1.6, 0.75, 0.3];
     const probe = document.createElement("canvas").getContext("2d", { willReadFrequently: true })!;
+    if (!setup()) return undefined;
 
-    const filled = (data: number[], sizes: number[]): WebGLVertexArrayObject => {
+    const filled = (data: Float32Array, sizes: number[]): [WebGLVertexArrayObject, WebGLBuffer] => {
         const array = g.createVertexArray();
+        const buffer = g.createBuffer();
         g.bindVertexArray(array);
-        g.bindBuffer(g.ARRAY_BUFFER, g.createBuffer());
-        g.bufferData(g.ARRAY_BUFFER, new Float32Array(data), g.STATIC_DRAW);
+        g.bindBuffer(g.ARRAY_BUFFER, buffer);
+        g.bufferData(g.ARRAY_BUFFER, data, g.STATIC_DRAW);
         const stride = sizes.reduce((sum, size) => sum + size, 0) * 4;
         let offset = 0;
         sizes.forEach((size, index) => {
@@ -334,40 +376,92 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
             offset += size * 4;
         });
         g.bindVertexArray(null);
-        return array;
+        return [array, buffer];
     };
 
-    /** The cell of the sheet a word is written in, writing it there the first time. A word on a sign is fitted to the cell's width. */
-    const cell = (word: string, onSign: boolean): [u: number, v: number] => {
+    /** Writes a word in a cell of the sheet. A word on a sign is fitted to the cell's width. */
+    const write = (at: number) => {
+        const { word, onSign } = cells[at]!;
+        const [x, y] = [(at % ACROSS) * CELL, Math.floor(at / ACROSS) * CELL];
+        pen.clearRect(x, y, CELL, CELL);
+        // on a sign every word is the same height, so that a row of numbers reads as one line
+        pen.font = `700 ${onSign ? 80 : word.length > 1 ? 74 : 88}px ${view.font}`;
+        pen.textAlign = "center";
+        pen.textBaseline = "middle";
+        pen.fillStyle = "#fff";
+        const wide = pen.measureText(word).width;
+        pen.save();
+        pen.translate(x + CELL / 2, y + CELL / 2 + 6);
+        if (onSign && wide > CELL - 12) pen.scale((CELL - 12) / wide, (CELL - 12) / wide);
+        pen.fillText(word, 0, 0);
+        pen.restore();
+        // a line under 6 and 9 on a face, so that they can be told apart whichever way up
+        if (!onSign && (word === "6" || word === "9")) pen.fillRect(x + 40, y + 108, 48, 7);
+        stale = true;
+    };
+    /** The cell of the sheet a word is written in, writing it there the first time. */
+    const cell = (word: string, onSign: boolean): [u: number, v: number, at: number] => {
         const key = onSign ? `sign ${word}` : word;
         let at = written.get(key);
         if (at === undefined) {
-            at = written.size;
+            // a cell never written in, or else the one whose word has gone unused longest
+            let free = -1;
+            for (let index = 0; index < cells.length; index++) {
+                const [one, best] = [cells[index]!, cells[free]];
+                if (one.users > 0) continue;
+                if (!best || (best.key !== undefined && (one.key === undefined || one.freed < best.freed))) free = index;
+            }
+            if (free < 0) console.error("Mote: more different words are shown at once than the sheet has room for, so one is shown in another's place.");
+            at = Math.max(0, free);
+            if (cells[at]!.key !== undefined) written.delete(cells[at]!.key!);
+            Object.assign(cells[at]!, { key, word, onSign });
             written.set(key, at);
-            const [x, y] = [(at % ACROSS) * CELL, Math.floor(at / ACROSS) * CELL];
-            // on a sign every word is the same height, so that a row of numbers reads as one line
-            pen.font = `700 ${onSign ? 80 : word.length > 1 ? 74 : 88}px ${view.font}`;
-            pen.textAlign = "center";
-            pen.textBaseline = "middle";
-            pen.fillStyle = "#fff";
-            const wide = pen.measureText(word).width;
-            pen.save();
-            pen.translate(x + CELL / 2, y + CELL / 2 + 6);
-            if (onSign && wide > CELL - 12) pen.scale((CELL - 12) / wide, (CELL - 12) / wide);
-            pen.fillText(word, 0, 0);
-            pen.restore();
-            // a line under 6 and 9 on a face, so that they can be told apart whichever way up
-            if (!onSign && (word === "6" || word === "9")) pen.fillRect(x + 40, y + 108, 48, 7);
-            stale = true;
+            write(at);
         }
-        return [(at % ACROSS) / ACROSS, Math.floor(at / ACROSS) / ACROSS];
+        cells[at]!.users++;
+        return [(at % ACROSS) / ACROSS, Math.floor(at / ACROSS) / ACROSS, at];
     };
-    const made = (look: Look, faces: number[], words: number[]): Drawn => {
-        const part: Drawn = {
-            at: [0, 0, 0], turn: upright(), hidden: false, lit: -1, shine: 0, scale: 1, emit: 0, look,
-            faces: filled(faces, [3, 3, 2]), count: faces.length / 8,
-            marks: words.length ? filled(words, [3, 3, 2, 1]) : undefined, markCount: words.length / 9,
-        };
+    /** Every shape on the graphics card, by the mesh (or a sign's words) it was made from and then by the words on it. */
+    const shapes = new Map<Mesh | string, Map<string, Shape>>();
+    /** Puts a shape's faces and words on the graphics card. */
+    const upload = (shape: Shape) => {
+        if (shape.count) [shape.facesArray, shape.facesBuffer] = filled(shape.faces, [3, 3, 2]);
+        if (shape.markCount) [shape.marksArray, shape.marksBuffer] = filled(shape.words, [3, 3, 2, 1]);
+    };
+    /** The shape for a mesh and the words on it, made only the first time. */
+    const shaped = (from: Mesh | string, key: string, make: () => [faces: number[], words: number[], cells: number[]]): Shape => {
+        let home = shapes.get(from);
+        if (!home) shapes.set(from, (home = new Map()));
+        let shape = home.get(key);
+        if (!shape) {
+            const [faces, words, used] = make();
+            shape = { faces: new Float32Array(faces), words: new Float32Array(words), count: faces.length / 8, markCount: words.length / 9, cells: used, users: 0, home, key };
+            upload(shape);
+            home.set(key, shape);
+        }
+        return shape;
+    };
+    /**
+     * Frees what no part uses. Done before a picture is drawn, not when a part is removed, so that a
+     * scene that takes its parts away and puts the same ones back finds them still there.
+     */
+    const sweep = () => {
+        for (const [from, home] of shapes) {
+            for (const shape of home.values()) {
+                if (shape.users > 0) continue;
+                if (shape.facesArray) g.deleteVertexArray(shape.facesArray);
+                if (shape.facesBuffer) g.deleteBuffer(shape.facesBuffer);
+                if (shape.marksArray) g.deleteVertexArray(shape.marksArray);
+                if (shape.marksBuffer) g.deleteBuffer(shape.marksBuffer);
+                for (const at of shape.cells) if (--cells[at]!.users === 0) cells[at]!.freed = ++clock;
+                home.delete(shape.key);
+            }
+            if (home.size === 0) shapes.delete(from);
+        }
+    };
+    const made = (look: Look, shape: Shape): Drawn => {
+        shape.users++;
+        const part: Drawn = { at: [0, 0, 0], turn: upright(), hidden: false, lit: -1, shine: 0, scale: 1, emit: 0, look, shape };
         parts.push(part);
         return part;
     };
@@ -376,6 +470,41 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
         const back = unit(minus(eyeFrom, eyeTo));
         const right = unit(cross(Math.abs(back[1]) > 0.999 ? [0, 0, -1] : [0, 1, 0], back));
         return [right, cross(back, right), back];
+    };
+
+    /** A mesh's faces as triangles, and the words on them, as the graphics card takes them. */
+    const geometry = (mesh: Mesh, look: Look): [faces: number[], words: number[], cells: number[]] => {
+        const faces: number[] = [];
+        const words: number[] = [];
+        const used: number[] = [];
+        const flat = mesh.faces.map((face) => unit(cross(minus(mesh.points[face[1]!]!, mesh.points[face[0]!]!), minus(mesh.points[face[2]!]!, mesh.points[face[0]!]!))));
+        // a smooth mesh is lit as if round: each corner faces the way the faces around it do, taken together
+        const round = mesh.smooth ? mesh.points.map((_, point) => unit(mesh.faces.reduce<V3>((sum, face, number) => (face.includes(point) ? plus(sum, flat[number]!) : sum), [0, 0, 0]))) : undefined;
+        mesh.faces.forEach((face, number) => {
+            const corners = face.map((corner) => mesh.points[corner]!);
+            const n = flat[number]!;
+            // each face as a fan of triangles, all facing the way the face does
+            for (let i = 1; i + 1 < corners.length; i++) for (const at of [0, i, i + 1]) faces.push(...corners[at]!, ...(round?.[face[at]!] ?? n), 0, 0);
+            const asked = look.marks?.(number);
+            if (!asked) return;
+            const { middle, room } = seat(mesh, number);
+            for (const mark of typeof asked === "string" ? [{ word: asked, group: number } as Mark] : asked) {
+                const [u, v, at] = cell(mark.word, false);
+                used.push(at);
+                // upright toward a corner of the face (its first, unless one is named), and a hair above the face;
+                // one that sits toward a corner is smaller, and part of the way out to it
+                const toward = minus(corners[mark.corner ?? 0]!, middle);
+                const up = unit(toward);
+                const right = cross(up, n);
+                const [size, out] = mark.corner === undefined ? [room, 0] : [room * 0.5, 0.42];
+                const corner = (x: number, y: number) => [
+                    ...([0, 1, 2].map((axis) => middle[axis]! + toward[axis]! * out + right[axis]! * x * size + up[axis]! * y * size + n[axis]! * 0.002)),
+                    ...n, u + ((x + 1) / 2) / ACROSS, v + ((1 - y) / 2) / ACROSS, mark.group,
+                ];
+                words.push(...corner(-1, -1), ...corner(1, -1), ...corner(1, 1), ...corner(-1, -1), ...corner(1, 1), ...corner(-1, 1));
+            }
+        });
+        return [faces, words, used];
     };
 
     const view: View = {
@@ -390,44 +519,23 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
             return [r! / 255, gg! / 255, b! / 255];
         },
         add(mesh, look) {
-            const faces: number[] = [];
-            const words: number[] = [];
-            const flat = mesh.faces.map((face) => unit(cross(minus(mesh.points[face[1]!]!, mesh.points[face[0]!]!), minus(mesh.points[face[2]!]!, mesh.points[face[0]!]!))));
-            // a smooth mesh is lit as if round: each corner faces the way the faces around it do, taken together
-            const round = mesh.smooth ? mesh.points.map((_, point) => unit(mesh.faces.reduce<V3>((sum, face, number) => (face.includes(point) ? plus(sum, flat[number]!) : sum), [0, 0, 0]))) : undefined;
-            mesh.faces.forEach((face, number) => {
-                const corners = face.map((corner) => mesh.points[corner]!);
-                const n = flat[number]!;
-                // each face as a fan of triangles, all facing the way the face does
-                for (let i = 1; i + 1 < corners.length; i++) for (const at of [0, i, i + 1]) faces.push(...corners[at]!, ...(round?.[face[at]!] ?? n), 0, 0);
-                const asked = look.marks?.(number);
-                if (!asked) return;
-                const { middle, room } = seat(mesh, number);
-                for (const mark of typeof asked === "string" ? [{ word: asked, group: number } as Mark] : asked) {
-                    const [u, v] = cell(mark.word, false);
-                    // upright toward a corner of the face (its first, unless one is named), and a hair above the face;
-                    // one that sits toward a corner is smaller, and part of the way out to it
-                    const toward = minus(corners[mark.corner ?? 0]!, middle);
-                    const up = unit(toward);
-                    const right = cross(up, n);
-                    const [size, out] = mark.corner === undefined ? [room, 0] : [room * 0.5, 0.42];
-                    const corner = (x: number, y: number) => [
-                        ...([0, 1, 2].map((axis) => middle[axis]! + toward[axis]! * out + right[axis]! * x * size + up[axis]! * y * size + n[axis]! * 0.002)),
-                        ...n, u + ((x + 1) / 2) / ACROSS, v + ((1 - y) / 2) / ACROSS, mark.group,
-                    ];
-                    words.push(...corner(-1, -1), ...corner(1, -1), ...corner(1, 1), ...corner(-1, -1), ...corner(1, 1), ...corner(-1, 1));
-                }
-            });
-            return made(look, faces, words);
+            // the words asked for on each face are part of what the shape is
+            const key = look.marks ? JSON.stringify(mesh.faces.map((_, number) => look.marks!(number) ?? 0)) : "";
+            return made(look, shaped(mesh, key, () => geometry(mesh, look)));
         },
         sign(words, color) {
-            const [u, v] = cell(words, true);
-            const corner = (x: number, y: number) => [x / 2, y / 2, 0, 0, 0, 1, u + ((x + 1) / 2) / ACROSS, v + ((1 - y) / 2) / ACROSS, 0];
-            return made({ color, ink: color, over: true, shaded: false }, [], [...corner(-1, -1), ...corner(1, -1), ...corner(1, 1), ...corner(-1, -1), ...corner(1, 1), ...corner(-1, 1)]);
+            const shape = shaped(`sign ${words}`, "", () => {
+                const [u, v, at] = cell(words, true);
+                const corner = (x: number, y: number) => [x / 2, y / 2, 0, 0, 0, 1, u + ((x + 1) / 2) / ACROSS, v + ((1 - y) / 2) / ACROSS, 0];
+                return [[], [...corner(-1, -1), ...corner(1, -1), ...corner(1, 1), ...corner(-1, -1), ...corner(1, 1), ...corner(-1, 1)], [at]];
+            });
+            return made({ color, ink: color, over: true, shaded: false }, shape);
         },
         remove(part) {
             const at = parts.indexOf(part as Drawn);
-            if (at >= 0) parts.splice(at, 1);
+            if (at < 0) return;
+            parts.splice(at, 1);
+            (part as Drawn).shape.users--;
         },
         look(from, to, degrees) {
             [eyeFrom, eyeTo, eyeDegrees] = [from, to, degrees];
@@ -459,10 +567,14 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
         },
         size(width, height) {
             const scale = Math.min(window.devicePixelRatio || 1, 2);
-            canvas.width = Math.max(1, Math.round(width * scale));
-            canvas.height = Math.max(1, Math.round(height * scale));
+            const [wide, high] = [Math.max(1, Math.round(width * scale)), Math.max(1, Math.round(height * scale))];
+            // only a change is set: setting a canvas's size, even to the one it has, makes its picture again
+            if (canvas.width !== wide) canvas.width = wide;
+            if (canvas.height !== high) canvas.height = high;
         },
         draw() {
+            if (lost || g.isContextLost()) return;
+            sweep();
             if (stale) {
                 g.bindTexture(g.TEXTURE_2D, marks);
                 g.texImage2D(g.TEXTURE_2D, 0, g.RGBA, g.RGBA, g.UNSIGNED_BYTE, sheet);
@@ -487,10 +599,10 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
             g.disable(g.BLEND);
             g.depthMask(true);
             for (const part of solid) {
-                if (part.look.casts === false || part.look.bare || part.count === 0) continue;
+                if (part.look.casts === false || part.shape.count === 0) continue;
                 g.uniformMatrix4fv(depth.at("model"), false, models.get(part)!);
-                g.bindVertexArray(part.faces);
-                g.drawArrays(g.TRIANGLES, 0, part.count);
+                g.bindVertexArray(part.shape.facesArray!);
+                g.drawArrays(g.TRIANGLES, 0, part.shape.count);
             }
 
             g.useProgram(main.made);
@@ -507,7 +619,8 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
             g.uniform1i(main.at("marks"), 1);
 
             const paint = (part: Drawn, marked: boolean) => {
-                if ((marked ? part.markCount : part.count) === 0 || (!marked && part.look.bare)) return;
+                const { shape } = part;
+                if ((marked ? shape.markCount : shape.count) === 0) return;
                 g.uniformMatrix4fv(main.at("model"), false, models.get(part)!);
                 g.uniform4f(main.at("color"), ...(marked ? (part.look.ink ?? [0.1, 0.06, 0.14]) : part.look.color), marked ? 1 : (part.look.alpha ?? 1));
                 g.uniform1i(main.at("marked"), marked ? 1 : 0);
@@ -516,8 +629,8 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
                 g.uniform1f(main.at("emit"), part.emit);
                 g.uniform1f(main.at("gloss"), part.look.gloss ?? 0);
                 g.uniform1i(main.at("shaded"), part.look.shaded === false ? 0 : 1);
-                g.bindVertexArray(marked ? part.marks! : part.faces);
-                g.drawArrays(g.TRIANGLES, 0, marked ? part.markCount : part.count);
+                g.bindVertexArray((marked ? shape.marksArray : shape.facesArray)!);
+                g.drawArrays(g.TRIANGLES, 0, marked ? shape.markCount : shape.count);
             };
             /** What is solid, then what is written on it, a hair nearer so that it is not lost in the face. */
             const solids = () => {
@@ -604,6 +717,42 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
             g.depthMask(true);
             g.bindVertexArray(null);
         },
+        dispose() {
+            canvas.removeEventListener("webglcontextlost", lose);
+            canvas.removeEventListener("webglcontextrestored", restore);
+            document.fonts?.removeEventListener("loadingdone", fonts);
+            for (const part of parts) part.shape.users--;
+            parts.length = 0;
+            sweep();
+            for (const one of [main, depth, screen]) g.deleteProgram(one.made);
+            for (const texture of [shadow, marks, ...soft.map((one) => one.picture)]) g.deleteTexture(texture);
+            for (const onto of [frame, ...soft.map((one) => one.onto)]) g.deleteFramebuffer(onto);
+            g.deleteRenderbuffer(hides);
+            lost = true;
+            g.getExtension("WEBGL_lose_context")?.loseContext();
+        },
     };
+
+    // A lost context is asked back (that is what preventing the default does), and when it comes
+    // back everything on the card is made again from what is kept here, and the picture drawn again.
+    let lost = false;
+    function lose(event: Event): void {
+        event.preventDefault();
+        lost = true;
+    }
+    function restore(): void {
+        if (!setup()) return;
+        for (const home of shapes.values()) for (const shape of home.values()) upload(shape);
+        lost = false;
+        view.draw();
+    }
+    // A word written before its font had come was written in another; when a font comes, every word is written again.
+    function fonts(): void {
+        cells.forEach((one, at) => one.key !== undefined && write(at));
+        if (!lost && parts.length) view.draw();
+    }
+    canvas.addEventListener("webglcontextlost", lose);
+    canvas.addEventListener("webglcontextrestored", restore);
+    document.fonts?.addEventListener("loadingdone", fonts);
     return view;
 }

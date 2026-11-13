@@ -37,12 +37,12 @@ export interface Mote {
     height: number;
     /** Seconds stepped so far. */
     time: number;
-    /** Shown small in a list, not to be played: no pointer, no keys. A scene can use this to leave out its words and move by itself. */
+    /** Shown small in a list, not to be played: it takes no keyboard focus, and the list's styles let no pointer reach it. A scene can use this to leave out its words and move by itself. */
     readonly preview: boolean;
     pointer: Pointer;
     /** One of the page's colors, such as "--accent", as a value a canvas accepts. */
     color(property: string): string;
-    /** Start the loop again after the scene came to rest. */
+    /** Start the loop again after the scene came to rest. For someone who asked for reduced motion, only once they have touched the mini. */
     wake(): void;
     /** A place under the canvas for ordinary buttons and text, for a mini that needs them. Made the first time it is asked for. */
     panel(): HTMLElement;
@@ -75,6 +75,8 @@ export interface Scene {
     resting?(): boolean;
     /** Lines to show with `?debug` in the address, such as how many bodies are awake. It may also draw on `m.ctx`. */
     debug?(): string[];
+    /** The mini is being taken away: let go of what the scene made itself, such as a 3D view (`dispose`) or a canvas. */
+    destroy?(): void;
 }
 
 /** Makes an element, for a mini's panel: its tag, what to set on it, and what goes inside. */
@@ -94,19 +96,41 @@ export const gently = (t: number): number => t * t * (3 - 2 * t);
 
 /** The loop moves in steps of this many seconds, whatever the screen's refresh rate. */
 export const TICK = 1 / 120;
+/** The most time a frame makes up, in seconds: after a pause the loop goes on from where it was and does not race to catch up. */
+const BEHIND = 0.05;
+/** A frame's time comes with a little jitter. Owed this little short of a whole step, the step is taken now and not a frame late. */
+const JITTER = 0.0004;
 
+/**
+ * How many steps a frame takes, from the seconds still owed from frames before and the seconds since
+ * the last frame, and what is owed after them. On a 60 Hz screen every frame takes two steps, and not
+ * now one and now three; on one at 240 Hz, one step every other frame.
+ */
+export function paced(owed: number, seconds: number): { steps: number; owed: number } {
+    // a clock that went backward, or a time that is not a number, gives no steps and is not carried on
+    let left = Math.min((Number.isFinite(owed) ? owed : 0) + (seconds > 0 ? seconds : 0), BEHIND);
+    let steps = 0;
+    while (left >= TICK - JITTER) {
+        steps++;
+        left -= TICK;
+    }
+    return { steps, owed: left };
+}
+
+/** The arrows, Space and Enter by what they say; the letters by where they are, so that WASD is the same four keys on any keyboard. */
 const KEYS: Record<string, Key> = {
     ArrowLeft: "left",
     ArrowRight: "right",
     ArrowUp: "up",
     ArrowDown: "down",
-    a: "left",
-    d: "right",
-    w: "up",
-    s: "down",
+    KeyA: "left",
+    KeyD: "right",
+    KeyW: "up",
+    KeyS: "down",
     " ": "action",
     Enter: "action",
 };
+const named = (event: KeyboardEvent): Key | undefined => KEYS[event.key] ?? KEYS[event.code];
 
 /** Puts a mini in `host` and returns a function that takes it away again. */
 export function mote(host: HTMLElement, make: (m: Mote) => Scene, { label = "An interactive demo.", preview = false } = {}): () => void {
@@ -145,7 +169,7 @@ export function mote(host: HTMLElement, make: (m: Mote) => Scene, { label = "An 
             }
             return found;
         },
-        wake: () => start(),
+        wake: () => void (allowed && start()),
         panel() {
             let panel = host.querySelector<HTMLElement>(".mote-panel");
             if (!panel) {
@@ -188,8 +212,10 @@ export function mote(host: HTMLElement, make: (m: Mote) => Scene, { label = "An 
         const scale = window.devicePixelRatio || 1;
         m.width = canvas.clientWidth;
         m.height = canvas.clientHeight;
-        canvas.width = Math.round(m.width * scale);
-        canvas.height = Math.round(m.height * scale);
+        // Setting a canvas's size clears it and makes it again, even to the size it is: only a change is set.
+        const [wide, high] = [Math.round(m.width * scale), Math.round(m.height * scale)];
+        if (canvas.width !== wide) canvas.width = wide;
+        if (canvas.height !== high) canvas.height = high;
     };
     fit();
     const scene = make(m);
@@ -220,22 +246,26 @@ export function mote(host: HTMLElement, make: (m: Mote) => Scene, { label = "An 
     };
 
     function start(): void {
-        allowed = true;
         if (frame || !visible || document.hidden) return;
         last = performance.now();
         owed = 0;
         const loop = (now: number) => {
             // Catch up in fixed steps, but never try to make up a long pause.
-            owed = Math.min(owed + (now - last) / 1000, 0.05);
-            last = now;
-            while (owed >= TICK) {
-                const before = m.debug ? performance.now() : 0;
-                scene.step?.(TICK);
-                if (m.debug) took += (performance.now() - before - took) * 0.05;
-                m.time += TICK;
-                owed -= TICK;
+            const due = paced(owed, (now - last) / 1000);
+            [owed, last] = [due.owed, now];
+            try {
+                for (let step = 0; step < due.steps; step++) {
+                    const before = m.debug ? performance.now() : 0;
+                    scene.step?.(TICK);
+                    if (m.debug) took += (performance.now() - before - took) * 0.05;
+                    m.time += TICK;
+                }
+                draw();
+            } catch (problem) {
+                // A scene that throws stops here, but not for good: the next touch or scroll starts it again.
+                frame = 0;
+                throw problem;
             }
-            draw();
             if (scene.resting?.()) {
                 frame = 0;
                 return;
@@ -245,12 +275,21 @@ export function mote(host: HTMLElement, make: (m: Mote) => Scene, { label = "An 
         frame = requestAnimationFrame(loop);
     }
 
+    // A press or a key anywhere in the mini, its buttons too, is the touch that lets it move under reduced motion.
+    const touched = () => {
+        allowed = true;
+    };
+    host.addEventListener("pointerdown", touched, { capture: true });
+    host.addEventListener("keydown", touched, { capture: true });
+
     /** When and where the last press was, to tell a double one. */
     let pressed = { at: -1000, x: 0, y: 0 };
     const place = (event: PointerEvent) => {
         [m.pointer.x, m.pointer.y] = [event.offsetX, event.offsetY];
     };
     canvas.addEventListener("pointerdown", (event) => {
+        // Only the main button presses: a right click, or a click with ctrl on a Mac, opens a menu and may never be let go.
+        if (event.pointerType === "mouse" && event.button !== 0) return;
         // a drag that starts on the canvas is the mini's, and must not begin selecting the page's text
         event.preventDefault();
         place(event);
@@ -277,6 +316,7 @@ export function mote(host: HTMLElement, make: (m: Mote) => Scene, { label = "An 
     };
     canvas.addEventListener("pointerup", up);
     canvas.addEventListener("pointercancel", up);
+    canvas.addEventListener("lostpointercapture", up);
     canvas.addEventListener("pointerenter", () => {
         m.pointer.inside = true;
         if (allowed) start();
@@ -286,7 +326,7 @@ export function mote(host: HTMLElement, make: (m: Mote) => Scene, { label = "An 
     });
     // Keys only count while the mini has the keyboard, so the page still scrolls otherwise.
     canvas.addEventListener("keydown", (event) => {
-        const name = KEYS[event.key.length === 1 ? event.key.toLowerCase() : event.key];
+        const name = named(event);
         if (event.key === "Tab") delete canvas.dataset.touched;
         if (!name || event.metaKey || event.ctrlKey || event.altKey) return;
         event.preventDefault();
@@ -295,7 +335,7 @@ export function mote(host: HTMLElement, make: (m: Mote) => Scene, { label = "An 
         start();
     });
     canvas.addEventListener("keyup", (event) => {
-        const name = KEYS[event.key.length === 1 ? event.key.toLowerCase() : event.key];
+        const name = named(event);
         if (name) held.delete(name);
     });
     canvas.addEventListener("blur", () => {
@@ -325,6 +365,10 @@ export function mote(host: HTMLElement, make: (m: Mote) => Scene, { label = "An 
         resizer.disconnect();
         watcher.disconnect();
         document.removeEventListener("visibilitychange", shown);
+        host.removeEventListener("pointerdown", touched, { capture: true });
+        host.removeEventListener("keydown", touched, { capture: true });
+        scene.destroy?.();
+        host.querySelector(".mote-panel")?.remove();
         canvas.remove();
     };
 }

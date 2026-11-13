@@ -3,7 +3,7 @@
 // spot or press Space: a single click on nothing does nothing, so reaching
 // for a block and missing does not add one.
 
-import { Flat, radius, send, trace, wake, type Body, type Mote, type P, type Scene, type Wall } from "../mote";
+import { Flat, radius, send, trace, type Body, type Mote, type P, type Scene, type Wall } from "../mote";
 
 const MOST = 60;
 const FLOOR = 6;
@@ -59,7 +59,6 @@ export default function blocks(m: Mote): Scene {
         });
         // clockwise from the top left: each upper corner's curve, a quarter turn at a time, then the floor's square ones
         walls = flat.wall(r < 2 ? [[0, 0], [w, 0], [w, h], [0, h]] : [...arc(r, r, Math.PI), ...arc(w - r, r, -Math.PI / 2), [w, h], [0, h]], true);
-        for (const block of pile) wake(block);
     };
 
     enclose();

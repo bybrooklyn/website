@@ -3,11 +3,11 @@
 // a hundred bodies is done well inside the 1/120 s it stands for. Run with `bun run test`.
 
 import { expect, test } from "bun:test";
+import { TICK } from "./stage";
 import { Flat } from "./flat";
 import { cube } from "./solids";
 import { Space } from "./space";
 
-const TICK = 1 / 120;
 /** Numbers that look random and are the same every time. */
 const dealer = (seed: number) => () => (seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 2 ** 32;
 

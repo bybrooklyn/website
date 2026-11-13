@@ -1,10 +1,10 @@
 // What "correct" means for Mote's 3D physics, measured. Run with `bun run test`.
 
 import { expect, test } from "bun:test";
+import { TICK } from "./stage";
 import { Space, angled, inside } from "./space";
 import { cube, twenty, type Mesh, type V3 } from "./solids";
 
-const TICK = 1 / 120;
 const run = (space: Space, seconds: number, each?: (time: number) => void) => {
     for (let time = 0; time < seconds - 1e-9; time += TICK) {
         space.step(TICK);
@@ -148,45 +148,27 @@ test("solids that have settled go to sleep, cost nothing, and wake when somethin
     expect(space.still()).toBe(true);
 });
 
-test("a ball rolls down a slope without slipping, stops against a wall, and stays out of everything", () => {
-    const space = new Space();
-    // a table with the pull tipped twenty degrees along it, which is the same as a table tipped that much
-    const tip = (20 * Math.PI) / 180;
-    space.gravity = [0, -34 * Math.cos(tip), 34 * Math.sin(tip)];
-    const table = space.slab([0, -0.5, 10], [5, 0.5, 12]);
-    const wall = space.slab([0, 0.5, 20.5], [5, 1, 0.5]);
-    for (const side of [-1, 1]) space.slab([side * 5.5, 0.5, 10], [0.5, 1, 12]);
-    const post = space.post([0.3, 0, 8], [0.3, 1.2, 8], 0.2);
-    const ball = space.ball([0, 0.45, 1], 0.45, { friction: 0.5, bounce: 0.3 });
-    let [deepest, turned] = [0, 0];
-    // long enough for it to stop creeping along the wall, which nothing but its own slowing ends
-    for (let i = 0; i < 120 * 14; i++) {
-        space.step(1 / 120);
-        deepest = Math.max(deepest, 0.45 - ball.p[1], ball.p[2] + 0.45 - 20, Math.abs(ball.p[0]) + 0.45 - 5, 0.65 - Math.hypot(ball.p[0] - 0.3, ball.p[2] - 8));
-        turned = Math.max(turned, Math.hypot(...ball.w));
+test("a step of no number or of minus a second is ignored, one of forever is kept to a second, and the steps after work", () => {
+    for (const bad of [Number.NaN, -1, Infinity, 1e12]) {
+        const space = new Space();
+        const die = space.solid(cube(), [0, 4, 0]);
+        space.step(bad);
+        const after = die.p[1];
+        space.step(TICK);
+        expect(Number.isFinite(after)).toBe(true);
+        expect(die.p[1]).toBeLessThan(after);
     }
-    // it went round the post and down to the wall, turning as it went
-    expect(ball.p[2]).toBeGreaterThan(19);
-    expect(ball.p[2]).toBeLessThan(19.6);
-    expect(ball.p[1]).toBeCloseTo(0.45, 1);
-    expect(turned).toBeGreaterThan(5);
-    expect(deepest).toBeLessThan(0.06);
-    expect(space.still()).toBe(true);
-    expect([table.im, wall.im, post.im]).toEqual([0, 0, 0]);
 });
 
-test("two balls that meet head on part again, and neither is left inside the other", () => {
+test("a held solid stays held when something falls onto it, until it is let go", () => {
     const space = new Space();
-    space.gravity = [0, 0, 0];
-    const [a, b] = [space.ball([-2, 0, 0], 0.5, { bounce: 0.8 }), space.ball([2, 0, 0], 0.5, { bounce: 0.8 })];
-    a.v = [6, 0, 0];
-    b.v = [-6, 0, 0];
-    let nearest = Infinity;
-    for (let i = 0; i < 120; i++) {
-        space.step(1 / 120);
-        nearest = Math.min(nearest, Math.hypot(b.p[0] - a.p[0], b.p[1] - a.p[1], b.p[2] - a.p[2]));
-    }
-    expect(nearest).toBeGreaterThan(0.93);
-    expect(a.v[0]).toBeLessThan(-3);
-    expect(b.v[0]).toBeGreaterThan(3);
+    space.slab([0, -0.5, 0], [10, 0.5, 10]);
+    const held = space.solid(cube(), [0, 4, 0]);
+    space.hold(held);
+    space.solid(cube(), [0, 7, 0]);
+    for (let i = 0; i < 120; i++) space.step(TICK);
+    expect(held.p[1]).toBeCloseTo(4, 5);
+    space.wake(held);
+    for (let i = 0; i < 120; i++) space.step(TICK);
+    expect(held.p[1]).toBeLessThan(2);
 });

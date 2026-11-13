@@ -136,7 +136,7 @@ export function paint(ctx: CanvasRenderingContext2D, mesh: Mesh, turn: Turn, loo
             ctx.lineWidth = 1.5;
             ctx.stroke();
         }
-        const words = face.toward > 0 ? look.label?.(face.number) : undefined;
+        const words = look.label?.(face.number);
         if (words) {
             // Written at the middle of the face, smaller the more the face is turned away.
             const middle = face.corners.reduce((sum, corner) => [sum[0] + flat[corner]![0], sum[1] + flat[corner]![1]], [0, 0]).map((sum) => sum / face.corners.length);
