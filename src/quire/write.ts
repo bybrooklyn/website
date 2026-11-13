@@ -43,7 +43,12 @@ export function write(doc: Document): string {
     return doc.bom + (doc.frontmatter ?? "") + doc.lead + body;
 }
 
-const lineEndings = (gap: string) => (gap.match(/\n/g) ?? []).length;
+/** How many line endings a gap holds, counted no further than two, which is all that matters. */
+function lineEndings(gap: string): number {
+    const first = gap.indexOf("\n");
+    if (first < 0) return 0;
+    return gap.indexOf("\n", first + 1) < 0 ? 1 : 2;
+}
 
 /** The sign a list's items start with, as far as telling two lists apart goes: a bullet's character, or a number's delimiter. */
 const signOf = (list: List) => (list.style === "number" ? list.delimiter : list.marker);
@@ -78,9 +83,12 @@ function writeBlocks(all: Block[], context: Context, inside: boolean): string {
         if (!next) gap = inside ? "" : gap;
         // two blocks read one after the other keep the gap the file had; any other two are given one
         // line ending if the second still reads as a block of its own after it, and a blank line if not
-        else if (!(block.source !== undefined && next.source !== undefined && followed.get(block) === next && lineEndings(gap) > 0)) {
-            if (lineEndings(gap) === 0) gap = context.eol;
-            if (lineEndings(gap) < 2 && !standsApart(block, texts[index]!, texts[index + 1]!)) gap = context.eol + context.eol;
+        else {
+            const endings = lineEndings(gap);
+            if (endings < 2 && !(endings === 1 && block.source !== undefined && next.source !== undefined && followed.get(block) === next)) {
+                if (endings === 0) gap = context.eol;
+                if (!standsApart(block, texts[index]!, texts[index + 1]!)) gap = context.eol + context.eol;
+            }
         }
         out += gap;
     });
