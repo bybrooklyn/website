@@ -73,20 +73,14 @@
     border: 0.0625rem solid transparent;
     border-radius: 0.35rem;
     background: transparent;
-    color: var(--muted);
+    color: var(--quire-faint);
     font: inherit;
     font-size: 0.75rem;
     text-align: right;
-    opacity: 0.7;
     transition:
         opacity 0.2s var(--ease),
         border-color 0.2s var(--ease),
         background 0.2s var(--ease);
-}
-
-.quire-lang::placeholder {
-    color: var(--muted);
-    opacity: 0.6;
 }
 
 .quire pre:hover .quire-lang,
@@ -450,6 +444,27 @@
 
 .quire-callout[data-callout="caution"] {
     --callout: color-mix(in oklch, oklch(0.78 0.15 350) 75%, var(--ink));
+}
+
+/* On the light paper the same hues, darkened only as far as a label needs to be read on its callout (4.5:1) */
+.look-paper .quire-callout[data-callout="note"] {
+    --callout: oklch(from color-mix(in oklch, oklch(0.78 0.12 250) 75%, var(--ink)) 0.51 c h);
+}
+
+.look-paper .quire-callout[data-callout="tip"] {
+    --callout: oklch(from color-mix(in oklch, oklch(0.84 0.12 165) 70%, var(--ink)) 0.49 c h);
+}
+
+.look-paper .quire-callout[data-callout="important"] {
+    --callout: oklch(from color-mix(in oklch, oklch(0.77 0.16 300) 80%, var(--ink)) 0.52 c h);
+}
+
+.look-paper .quire-callout[data-callout="warning"] {
+    --callout: oklch(from color-mix(in oklch, oklch(0.84 0.13 80) 70%, var(--ink)) 0.52 c h);
+}
+
+.look-paper .quire-callout[data-callout="caution"] {
+    --callout: oklch(from color-mix(in oklch, oklch(0.78 0.15 350) 75%, var(--ink)) 0.52 c h);
 }
 
 .quire-callout-head {

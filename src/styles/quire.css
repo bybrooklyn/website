@@ -141,11 +141,19 @@
         --ground 0.45s var(--ease);
 }
 
+/* Faint words that are still meant to be read (a field's placeholder, "Type / for blocks", a code block's
+   language): the muted ink with its lightness moved only as far as 4.5:1 needs, on the darkest ground
+   such a field sits on (a raised menu here, the paper's grey on the light paper). */
+:root {
+    --quire-faint: oklch(from var(--muted) 0.63 c h);
+}
+
 /* C's inks, for the light paper: the site's ink turned dark, the accent deepened to read on it */
 .look-paper .quire-paper {
     --paper: oklch(0.965 0.009 300);
     --ink: oklch(0.24 0.04 300);
     --muted: oklch(0.47 0.045 300);
+    --quire-faint: oklch(from var(--muted) 0.51 c h);
     --accent: oklch(0.52 0.19 300);
     --rule: oklch(0.82 0.025 300);
     --surface: oklch(0.925 0.014 300);
@@ -358,8 +366,10 @@
     caret-color: var(--accent);
 }
 
-.quire-title::placeholder {
-    color: color-mix(in oklch, var(--muted), transparent 45%);
+.quire-title::placeholder,
+[class*="quire-"]::placeholder,
+.quire-comp-field input::placeholder {
+    color: var(--quire-faint);
     opacity: 1;
 }
 
@@ -376,7 +386,7 @@
     content: attr(data-hint);
     position: absolute;
     inset: 0 auto auto 0;
-    color: color-mix(in oklch, var(--muted), transparent 40%);
+    color: var(--quire-faint);
     white-space: nowrap;
     pointer-events: none;
     user-select: none;
