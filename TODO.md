@@ -133,6 +133,10 @@ What was found and fixed is in [`docs/AUDIT.md`](docs/AUDIT.md). Still open from
 ## mdQuire, chosen on 13 November and not yet built
 
 - The menus in Google Docs' order and names, a sign on every line, long menus folded into groups, each thing in one menu only.
+  - View: Mode (Pageless or Pages) and Paper (Dark or Light) as two groups with a tick on the one in use; then Show outline, comments, Markdown and word count, each ticked when on; one Zoom line that opens to the side; Full screen.
+  - Shortcuts written as words (Ctrl+Shift+Z) everywhere on Linux and Windows; signs only on a Mac.
+  - One search: "Search the menus" leaves the bar, the palette does that job, and the magnifier means Find only.
+  - mdQuire's own things go where they would fit in Docs: blocks under Insert after Docs' own lines, marks under Format, Text, each with a sign.
 - In the bar, alignment (left, centre, right, justify) as one button that grows open in place, and the three lists as another.
 - Links: an address pasted over selected words links them; a pasted bare address gets a small chip to show it as words or a short form; resting on a link shows a card with open, copy, edit and remove.
 - Subtitle in a plain Markdown file too, kept as a `subtitle:` line in the frontmatter (today it exists only in a `.quire` document).
