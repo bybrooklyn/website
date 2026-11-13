@@ -128,8 +128,8 @@ test("a snapshot's time reads as the hour today, and with its day before that", 
     const now = new Date(2026, 10, 12, 15, 0).getTime();
     expect(when(new Date(2026, 10, 12, 9, 5).getTime(), now)).toBe("Today, 09:05");
     expect(when(new Date(2026, 10, 11, 22, 30).getTime(), now)).toBe("Yesterday, 22:30");
-    expect(when(new Date(2026, 9, 3, 8, 0).getTime(), now)).toBe("3 Oct, 08:00");
-    expect(when(new Date(2025, 9, 3, 8, 0).getTime(), now)).toBe("3 Oct 2025, 08:00");
+    expect(when(new Date(2026, 9, 3, 8, 0).getTime(), now)).toBe("Oct 3, 08:00");
+    expect(when(new Date(2025, 9, 3, 8, 0).getTime(), now)).toBe("Oct 3, 2025, 08:00");
 });
 
 test("a stopped keeper, for a document that was left, keeps no snapshot of what is shown after it", async () => {

@@ -397,7 +397,7 @@ export function createDictation(surface: Surface, options: DictationOptions = {}
                 });
             } catch (error) {
                 const stopped = (error as { cancelled?: boolean }).cancelled;
-                say(stopped ? "The download was cancelled. What arrived is kept, and it carries on from there next time." : `The download failed: ${(error as Error).message}. What arrived is kept, and it carries on from there next time.`);
+                say(stopped ? "The download was canceled. What arrived is kept, and it carries on from there next time." : `The download failed: ${(error as Error).message}. What arrived is kept, and it carries on from there next time.`);
                 setState("off");
                 // the first launch's dialog goes back to the choice, saying what happened
                 if (asking?.isOpen()) asking.change(() => choosing(asking!), askBar?.parentElement ?? undefined);

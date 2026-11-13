@@ -242,7 +242,9 @@ export function when(time: number, now: number): string {
     if (sameDay(date, today)) return `Today, ${hour}`;
     const yesterday = new Date(now - 86_400_000);
     if (sameDay(date, yesterday)) return `Yesterday, ${hour}`;
-    return `${date.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: date.getFullYear() === today.getFullYear() ? undefined : "numeric" })}, ${hour}`;
+    // the month first, as the site writes dates
+    const day = date.toLocaleDateString("en-US", { day: "numeric", month: "short", year: date.getFullYear() === today.getFullYear() ? undefined : "numeric" });
+    return `${day}, ${hour}`;
 }
 
 /** Builds the history panel for a surface. */
