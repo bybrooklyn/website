@@ -8,7 +8,6 @@
 //! a dot for each, so each ray's six are drawn as one dot, lit by how near what the ray meets is, and
 //! what passes from it is the sum of what passes from its six.
 
-use alloc::vec;
 use alloc::vec::Vec;
 
 use super::eyes::RAYS;
@@ -90,19 +89,16 @@ pub struct Bred<'a> {
 }
 
 impl Bred<'_> {
-    /// How many come in to, and go out of, each layer.
-    fn sizes(&self) -> Vec<usize> {
+    /// How many neurons column `k` has: what comes in, each hidden layer, then what goes out.
+    fn size(&self, k: usize) -> usize {
         let Layout { inputs, hidden, layers, outputs, memory } = self.brain.layout;
-        let mut sizes = vec![inputs + memory];
-        sizes.extend(core::iter::repeat_n(hidden, layers));
-        sizes.push(outputs + memory);
-        sizes
+        if k == 0 { inputs + memory } else if k <= layers { hidden } else { outputs + memory }
     }
 }
 
 impl Drawn for Bred<'_> {
     fn columns(&self) -> Vec<usize> {
-        self.sizes()
+        (0..self.brain.layout.layers + 2).map(|k| self.size(k)).collect()
     }
 
     fn gave(&self, column: usize, into: &mut Vec<f32>) {
@@ -118,9 +114,9 @@ impl Drawn for Bred<'_> {
         }
     }
 
+    // asked for every connection drawn, each frame, so it makes no list of its own
     fn weight(&self, column: usize, i: usize, j: usize) -> f32 {
-        let sizes = self.sizes();
-        let start: usize = sizes.windows(2).take(column).map(|pair| (pair[0] + 1) * pair[1]).sum();
-        self.weights.get(start + j * sizes[column] + i).copied().unwrap_or(0.0)
+        let start: usize = (0..column).map(|k| (self.size(k) + 1) * self.size(k + 1)).sum();
+        self.weights.get(start + j * self.size(column) + i).copied().unwrap_or(0.0)
     }
 }

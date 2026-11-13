@@ -9,7 +9,7 @@
 // tested with tables in memory; indexedTables gives the real ones.
 
 import { emptyParts, type Parts } from "./quire-file";
-import { freeName, StoreError, type Entry, type Store } from "./store";
+import { freeName, StoreError, type Entry, type Saved, type Store } from "./store";
 import type { VersionInfo, VersionStorage } from "./versions";
 
 /** A record in a table: anything with an id. */
@@ -23,6 +23,8 @@ export interface Tables {
     put<T extends Row>(table: string, row: T): Promise<void>;
     remove(table: string, id: string): Promise<void>;
     all<T extends Row>(table: string): Promise<T[]>;
+    /** Reads one record and writes what `update` makes of it in one step, so that nothing written between can be lost; `update` gives undefined to write nothing. */
+    change<T extends Row>(table: string, id: string, update: (row: T | undefined) => T | undefined): Promise<void>;
 }
 
 const TABLES = ["documents", "versions", "pictures"];
@@ -44,33 +46,113 @@ export function memoryTables(): Tables {
         async all<T extends Row>(name: string) {
             return [...table(name).values()] as T[];
         },
+        async change<T extends Row>(name: string, id: string, update: (row: T | undefined) => T | undefined) {
+            const found = table(name).get(id) as T | undefined;
+            const next = update(found && structuredClone(found));
+            if (next !== undefined) table(name).set(next.id, structuredClone(next));
+        },
     };
 }
 
-/** The browser's own tables, in an IndexedDB database. */
-export function indexedTables(name = "quire"): Promise<Tables> {
-    return new Promise((done, failed) => {
-        const opening = indexedDB.open(name, 1);
-        opening.onupgradeneeded = () => {
-            for (const table of TABLES) if (!opening.result.objectStoreNames.contains(table)) opening.result.createObjectStore(table, { keyPath: "id" });
-        };
-        opening.onerror = () => failed(new StoreError("This browser would not keep documents."));
-        opening.onsuccess = () => {
-            const database = opening.result;
-            const ask = <T>(table: string, mode: IDBTransactionMode, run: (store: IDBObjectStore) => IDBRequest<T>) =>
-                new Promise<T>((answer, refuse) => {
-                    const request = run(database.transaction(table, mode).objectStore(table));
-                    request.onsuccess = () => answer(request.result);
-                    request.onerror = () => refuse(new StoreError(request.error?.name === "QuotaExceededError" ? "this browser has no more room" : "this browser would not keep it"));
-                });
-            done({
-                get: (table, id) => ask(table, "readonly", (store) => store.get(id)),
-                put: async (table, row) => void (await ask(table, "readwrite", (store) => store.put(row))),
-                remove: async (table, id) => void (await ask(table, "readwrite", (store) => store.delete(id))),
-                all: (table) => ask(table, "readonly", (store) => store.getAll()),
-            } as Tables);
-        };
-    });
+/** What went wrong in the browser's storage, in plain words. */
+const refusal = (error: unknown) => new StoreError((error as DOMException | null)?.name === "QuotaExceededError" ? "this browser has no more room" : "this browser would not keep it");
+
+/**
+ * The browser's own tables, in an IndexedDB database. A write is done only once its transaction has
+ * committed: a request can succeed and its transaction still fail at the end (no more room, the
+ * storage cleared), and that is a failure. A connection the browser closes is opened again.
+ * `factory` is the browser's IndexedDB, given so that a test can stand in for it.
+ */
+export async function indexedTables(name = "quire", factory: IDBFactory = globalThis.indexedDB): Promise<Tables> {
+    const connect = () =>
+        new Promise<IDBDatabase>((done, failed) => {
+            let opening: IDBOpenDBRequest;
+            try {
+                opening = factory.open(name, 1);
+            } catch {
+                return failed(new StoreError("This browser would not keep documents."));
+            }
+            opening.onupgradeneeded = () => {
+                for (const table of TABLES) if (!opening.result.objectStoreNames.contains(table)) opening.result.createObjectStore(table, { keyPath: "id" });
+            };
+            opening.onerror = () => failed(new StoreError("This browser would not keep documents."));
+            opening.onsuccess = () => {
+                const made = opening.result;
+                // another tab upgrading the database, or the browser closing it: this connection goes, and the next call opens a new one
+                made.onversionchange = () => {
+                    made.close();
+                    stale = true;
+                };
+                made.onclose = () => (stale = true);
+                done(made);
+            };
+        });
+    let stale = false;
+    let database: Promise<IDBDatabase> = connect();
+    await database;
+    const reconnect = () => {
+        stale = false;
+        database = connect();
+    };
+    /** Runs some work in one transaction and gives what it gave once the transaction has committed. */
+    async function within<T>(table: string, mode: IDBTransactionMode, work: (store: IDBObjectStore, give: (value: T) => void, fail: (error: unknown) => void) => void, again = true): Promise<T> {
+        let connection: IDBDatabase;
+        let transaction: IDBTransaction;
+        try {
+            if (stale) reconnect();
+            connection = await database;
+            transaction = connection.transaction(table, mode);
+        } catch (error) {
+            // a closed connection is opened again, once
+            if (!again) throw refusal(error);
+            reconnect();
+            return within(table, mode, work, false);
+        }
+        return new Promise<T>((done, failed) => {
+            let value: T;
+            let thrown: unknown;
+            transaction.oncomplete = () => done(value);
+            // a store's own reason is said as it is; the browser's (a request refused at once, or the transaction at its end) in plain words
+            transaction.onabort = () => failed(thrown instanceof StoreError ? thrown : refusal(thrown ?? transaction.error));
+            const fail = (error: unknown) => {
+                thrown = error;
+                try {
+                    transaction.abort();
+                } catch {
+                    // already finished: it is failed below in any case
+                }
+            };
+            try {
+                work(transaction.objectStore(table), (given) => (value = given), fail);
+            } catch (error) {
+                fail(error);
+            }
+        });
+    }
+    /** Runs one request and gives its result, once the transaction has committed. */
+    const ask = <T>(table: string, mode: IDBTransactionMode, run: (store: IDBObjectStore) => IDBRequest<T>) =>
+        within<T>(table, mode, (store, give) => {
+            const request = run(store);
+            request.onsuccess = () => give(request.result);
+        });
+    return {
+        get: (table, id) => ask(table, "readonly", (store) => store.get(id)),
+        put: async (table, row) => void (await ask(table, "readwrite", (store) => store.put(row))),
+        remove: async (table, id) => void (await ask(table, "readwrite", (store) => store.delete(id))),
+        all: (table) => ask(table, "readonly", (store) => store.getAll()),
+        change: (table, id, update) =>
+            within<void>(table, "readwrite", (store, _give, fail) => {
+                const request = store.get(id);
+                request.onsuccess = () => {
+                    try {
+                        const next = update(request.result);
+                        if (next !== undefined) store.put(next);
+                    } catch (error) {
+                        fail(error);
+                    }
+                };
+            }),
+    } as Tables;
 }
 
 interface Kept extends Row {
@@ -125,11 +207,18 @@ const partsOf = (kept: Kept): Parts | undefined => (kept.markdown ? undefined : 
 /** The browser store, over the given tables. Its extra powers: the trash, and putting a document back from it. */
 export function browserStore(tables: Tables, now: () => number = Date.now): Store & { trash(): Promise<Entry[]>; restore(id: string): Promise<void>; versions: VersionStorage } {
     let made = 0;
+    const gone = () => new StoreError("this document is no longer kept here");
     const find = async (id: string) => {
         const kept = await tables.get<Kept>("documents", id);
-        if (!kept || kept.gone) throw new StoreError("this document is no longer kept here");
+        if (!kept || kept.gone) throw gone();
         return kept;
     };
+    /** Changes a kept document in one step with reading it, so that a save from another tab between the two is never written over. */
+    const change = (id: string, update: (kept: Kept) => Kept | undefined) =>
+        tables.change<Kept>("documents", id, (kept) => {
+            if (!kept || kept.gone) throw gone();
+            return update(kept);
+        });
     const names = async () => (await tables.all<Kept>("documents")).filter((each) => !each.gone).map((each) => each.name);
     const urls = new Map<string, string>();
     return {
@@ -147,11 +236,18 @@ export function browserStore(tables: Tables, now: () => number = Date.now): Stor
             return { text: kept.text, mark: String(kept.mark), quire: partsOf(kept) };
         },
         async save(id, text, mark, quire) {
-            const kept = await find(id);
-            if (String(kept.mark) !== mark) return { ok: false, changed: true, theirs: { text: kept.text, mark: String(kept.mark), quire: partsOf(kept) } };
-            const next = { ...kept, text, mark: kept.mark + 1, modified: now(), quire: kept.markdown ? undefined : (quire ?? kept.quire) };
-            await tables.put("documents", next);
-            return { ok: true, mark: String(next.mark) };
+            // the mark is checked and the text written in one transaction: two tabs saving on one mark cannot both win
+            let saved: Saved = { ok: false, message: "this browser would not keep it" };
+            await change(id, (kept) => {
+                if (String(kept.mark) !== mark) {
+                    saved = { ok: false, changed: true, theirs: { text: kept.text, mark: String(kept.mark), quire: partsOf(kept) } };
+                    return undefined;
+                }
+                const next = { ...kept, text, mark: kept.mark + 1, modified: now(), quire: kept.markdown ? undefined : (quire ?? kept.quire) };
+                saved = { ok: true, mark: String(next.mark) };
+                return next;
+            });
+            return saved;
         },
         // made without parts, a document is plain Markdown and stays so
         async create(name, text, quire) {
@@ -160,24 +256,25 @@ export function browserStore(tables: Tables, now: () => number = Date.now): Stor
             return { id, mark: "1" };
         },
         async rename(id, name) {
-            const kept = await find(id);
-            const taken = (await names()).filter((each) => each !== kept.name);
-            await tables.put("documents", { ...kept, name: freeName(name.trim() || kept.name, taken) });
+            const all = await names();
+            // the text and mark are read in the same step as the name is written, so a save made meanwhile stays
+            await change(id, (kept) => ({ ...kept, name: freeName(name.trim() || kept.name, all.filter((each) => each !== kept.name)) }));
             return id;
         },
         async remove(id) {
-            const kept = await find(id);
-            await tables.put("documents", { ...kept, gone: now() });
+            await change(id, (kept) => ({ ...kept, gone: now() }));
         },
         async trash() {
             const gone = (await tables.all<Kept>("documents")).filter((each) => each.gone);
             return gone.sort((a, b) => b.gone! - a.gone!).map((each) => ({ id: each.id, name: each.name, modified: each.gone }));
         },
         async restore(id) {
-            const kept = await tables.get<Kept>("documents", id);
-            if (!kept) throw new StoreError("this document is no longer kept here");
-            const { gone: _gone, ...back } = kept;
-            await tables.put("documents", { ...back, name: freeName(kept.name, await names()) });
+            const all = await names();
+            await tables.change<Kept>("documents", id, (kept) => {
+                if (!kept) throw gone();
+                const { gone: _gone, ...back } = kept;
+                return { ...back, name: freeName(kept.name, all) };
+            });
         },
         async savePicture(id, picture, name) {
             await find(id);

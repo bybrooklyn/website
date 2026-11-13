@@ -11,7 +11,7 @@ import { blockAt, changeKind, deleteText, insertBlock, insertText, makeBox, move
 import type { State } from "./history";
 import { caret, pageBreakAt, sameLeaf } from "./keys";
 import type { Surface } from "./surface";
-import { flowMenu, make, type MenuItem } from "./ui";
+import { flowMenu, make, markActive, unmarkActive, type MenuItem } from "./ui";
 
 /** One thing the slash menu can make. `image` asks the host for a picture instead of running an action. An item for `mdx` is offered in MDX files alone. */
 export interface SlashItem {
@@ -147,7 +147,13 @@ export function createSlash(surface: Surface, pickImage: () => void): { close():
     const anchor = make("span", "quire-anchor");
     anchor.setAttribute("aria-hidden", "true");
     document.body.append(anchor);
-    const menu = flowMenu("Make a block", { className: "quire-slash", onClose: () => (open = false) });
+    const menu = flowMenu("Make a block", {
+        className: "quire-slash",
+        onClose: () => {
+            open = false;
+            unmarkActive(surface.element);
+        },
+    });
     let open = false;
     let active = 0;
     let shown: SlashItem[] = [];
@@ -165,10 +171,7 @@ export function createSlash(surface: Surface, pickImage: () => void): { close():
     }
 
     function mark() {
-        menu.box.querySelectorAll(".quire-menu-line").forEach((line, index) => {
-            line.classList.toggle("active", index === active);
-            line.setAttribute("aria-selected", String(index === active));
-        });
+        markActive(menu, surface.element, active);
     }
 
     function render(rect: DOMRect | null) {

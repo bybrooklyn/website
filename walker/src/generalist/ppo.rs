@@ -130,8 +130,12 @@ impl Running {
         self.squares.fill(0.0);
     }
 
-    /// Takes in one more of each number.
+    /// Takes in one more of each number. A row with a number that is not finite (a blow-up in the
+    /// physics) is let go, so it cannot spoil the means for ever.
     pub fn add(&mut self, values: &[f32]) {
+        if values.iter().any(|x| !x.is_finite()) {
+            return;
+        }
         self.count += 1.0;
         for ((mean, squares), &x) in self.mean.iter_mut().zip(&mut self.squares).zip(values) {
             let x = x as f64;
@@ -189,6 +193,10 @@ pub struct Report {
 
 /// Half the log of two pi, which every bell curve's log chance carries.
 const HALF_LOG_TAU: f32 = 0.918_938_5;
+/// How many numbers `Learner::state` gives after the weights and Adam's two lists: the updates, Adam's
+/// steps, and the steps practised in two halves of `HALVES`.
+pub const KEPT_AFTER: usize = 4;
+const HALVES: u64 = 1 << 24;
 /// Sensed numbers, once rescaled, are kept within this of zero.
 const SENSE_LIMIT: f32 = 10.0;
 
@@ -246,6 +254,9 @@ pub struct Learner {
     blame_hidden: Vec<f32>,
     blame_value: Vec<f32>,
     pub updates: u32,
+    /// Steps of the physics its task had taken by its last update, kept with it so that what is
+    /// brought in by steps (`Practice::ramp`) goes on from where it was when it is taken back.
+    pub practised: u64,
     /// Decisions made by all the creatures together.
     pub decisions: u64,
     pub report: Report,
@@ -270,8 +281,8 @@ impl Learner {
         let total = at[4] + actions;
         let mut random = Random::new(seed);
         let mut weights = vec![0.0; total];
-        // hidden layers at a gain of the square root of two, the policy's last layer small so it starts
-        // near the middle of every action, the value's at one
+        // hidden layers at a gain of one for tanh and the square root of two for ReLU, the policy's last
+        // layer small so it starts near the middle of every action, the value's at one
         let gain = if s.squash == Squash::Relu { 1.414 } else { 1.0 };
         trunk.first(&mut weights[..at[1]], &mut random, gain, gain);
         head.first(&mut weights[at[1]..at[2]], &mut random, 0.01, 0.01);
@@ -328,6 +339,7 @@ impl Learner {
             blame_hidden: vec![0.0; minibatch.max(count) * s.hidden],
             blame_value: vec![0.0; minibatch.max(count) * s.hidden],
             updates: 0,
+            practised: 0,
             decisions: 0,
             report: Report::default(),
         }
@@ -351,7 +363,9 @@ impl Learner {
     fn rescale(&self, values: &mut [f32]) {
         for row in values.chunks_exact_mut(self.senses) {
             for ((x, &shift), &scale) in row.iter_mut().zip(&self.shift).zip(&self.scale) {
-                *x = clamp((*x - shift) * scale, -SENSE_LIMIT, SENSE_LIMIT);
+                // a NaN is taken as the mean, an infinity as the limit
+                let rescaled = (*x - shift) * scale;
+                *x = if rescaled.is_nan() { 0.0 } else { clamp(rescaled, -SENSE_LIMIT, SENSE_LIMIT) };
             }
         }
     }
@@ -394,10 +408,10 @@ impl Learner {
             self.head.forward(&self.weights[self.at[1]..self.at[2]], from.output(), n, to);
             for i in 0..n {
                 let mut chance = 0.0;
-                for k in 0..a {
+                for (k, &spread) in spreads.iter().enumerate().take(a) {
                     let noise = self.bell();
                     let middle = works[1].output()[i * a + k];
-                    self.actions_now[i * a + k] = middle + spreads[k] * noise;
+                    self.actions_now[i * a + k] = middle + spread * noise;
                     chance += -0.5 * noise * noise - self.weights[self.at[4] + k] - HALF_LOG_TAU;
                 }
                 self.chances[t * n + i] = chance;
@@ -609,6 +623,13 @@ impl Learner {
             None => core::mem::take(&mut self.grads),
         };
         let norm = length(&grads);
+        // a gradient that is not finite would make every weight NaN for good: that step is not taken
+        if !norm.is_finite() {
+            if self.grads.is_empty() {
+                self.grads = grads;
+            }
+            return;
+        }
         if norm > self.settings.most_norm {
             let shorten = self.settings.most_norm / norm;
             grads.iter_mut().for_each(|g| *g *= shorten);
@@ -641,7 +662,8 @@ impl Learner {
     pub fn epochs(&mut self) {
         for _ in 0..self.settings.epochs {
             self.shuffle();
-            for which in 0..self.settings.minibatches {
+            // never more minibatches than samples, each of which is then a minibatch of its own
+            for which in 0..self.settings.minibatches.min(self.samples()) {
                 self.gradient(which);
                 self.apply(None);
             }
@@ -664,12 +686,14 @@ impl Learner {
     }
 
     /// Everything learned, to keep: the weights, Adam's running averages, then the number of updates
-    /// and of Adam's steps.
+    /// and of Adam's steps, then the steps practised in two whole numbers of 24 bits each (low, then
+    /// high), so an f32 holds each exactly. `KEPT_AFTER` numbers follow the three lists.
     pub fn state(&self) -> Vec<f32> {
         let mut out = self.weights.clone();
         out.extend_from_slice(&self.adam.mean);
         out.extend_from_slice(&self.adam.square);
-        out.extend_from_slice(&[self.updates as f32, self.adam.steps as f32]);
+        let practised = self.practised.min(HALVES * HALVES - 1);
+        out.extend_from_slice(&[self.updates as f32, self.adam.steps as f32, (practised % HALVES) as f32, (practised / HALVES) as f32]);
         out
     }
 
@@ -681,11 +705,16 @@ impl Learner {
     }
 
     /// Takes back what `state` and `running` gave. A state of the weights alone is taken too, as a
-    /// policy to show, with Adam starting afresh. False, and nothing changed, if either does not fit.
+    /// policy to show, with Adam starting afresh. False, and nothing changed, if either does not fit;
+    /// a state kept before the steps practised were kept with it (two numbers shorter) does not.
     pub fn load(&mut self, state: &[f32], running: &[f64]) -> bool {
         let count = self.weights.len();
         let width = 1 + 2 * self.senses;
-        if !(state.len() == count || state.len() == 3 * count + 2) || state.iter().any(|x| !x.is_finite()) || running.len() != width + 3 {
+        if !(state.len() == count || state.len() == 3 * count + KEPT_AFTER) || state.iter().any(|x| !x.is_finite()) || running.len() != width + 3 {
+            return false;
+        }
+        let whole = |x: f32| (0.0..HALVES as f32).contains(&x) && x == (x as u64) as f32;
+        if state.len() > count && !state[3 * count + 2..].iter().all(|&x| whole(x)) {
             return false;
         }
         let (Some(sensed), Some(returned)) = (Running::from_numbers(&running[..width], self.senses), Running::from_numbers(&running[width..], 1)) else { return false };
@@ -696,6 +725,9 @@ impl Learner {
             self.adam.square.copy_from_slice(&state[2 * count..3 * count]);
             self.updates = state[3 * count] as u32;
             self.adam.restart_at(state[3 * count + 1] as u32);
+            self.practised = state[3 * count + 2] as u64 + state[3 * count + 3] as u64 * HALVES;
+        } else {
+            self.practised = 0;
         }
         self.sensed = sensed;
         self.returned = returned;

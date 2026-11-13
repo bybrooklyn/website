@@ -144,6 +144,22 @@ impl Way {
         body.strength = self.strength;
     }
 
+    /// Takes the actions asked into the actions held for the next decision, as practice and the show
+    /// both must, so what is shown is what was practised: each kept within -1 to 1, and the hop held
+    /// off if this way has none. Returns how much they changed, summed.
+    pub fn hold(&self, asked: &[f32], held: &mut [f32]) -> f32 {
+        let mut change = 0.0;
+        for (held, &action) in held.iter_mut().zip(asked) {
+            let action = action.clamp(-1.0, 1.0);
+            change += (action - *held).abs();
+            *held = action;
+        }
+        if !self.hop && let Some(hop) = held.last_mut() {
+            *hop = -1.0;
+        }
+        change
+    }
+
     /// What was settled on; walker/README.md ("How it moves") gives the measurements. Each joint is
     /// aimed straight at an angle; no hop, so leaving the ground is its legs' own doing, and costs:
     /// 0.002 for each joule of the motors' work and 2 for each second in the air with nothing to
@@ -239,19 +255,9 @@ impl Worlds {
         rewards.fill(0.0);
         let smooth = self.way.shaping.smooth;
         for (i, (held, asked)) in self.held.chunks_exact_mut(wide).zip(actions.chunks_exact(wide)).enumerate() {
-            let mut change = 0.0;
-            for (held, &action) in held.iter_mut().zip(asked) {
-                let action = action.clamp(-1.0, 1.0);
-                change += (action - *held).abs();
-                *held = action;
-            }
+            let change = self.way.hold(asked, held);
             if smooth != 0.0 && self.runs[i].judge.steps > 0 {
                 rewards[i] -= smooth * change;
-            }
-        }
-        if !self.way.hop {
-            for held in self.held.chunks_exact_mut(wide) {
-                held[wide - 1] = -1.0;
             }
         }
         ends.fill(GOING);
@@ -458,6 +464,7 @@ impl Practice {
     pub fn update(&mut self) {
         self.ramp();
         self.learner.update(&mut self.worlds);
+        self.learner.practised = self.worlds.steps;
         let Some(curriculum) = self.curriculum else { return };
         let (ended, reached) = self.worlds.tally;
         if ended >= curriculum.runs {
@@ -466,6 +473,17 @@ impl Practice {
             }
             self.worlds.tally = (0, 0);
         }
+    }
+
+    /// Takes back a learner kept with `Learner::state` and `running`, and the steps it had practised,
+    /// so its costs go on from where they were rather than coming in again from nothing. False, and
+    /// nothing changed, if it does not fit.
+    pub fn load(&mut self, state: &[f32], running: &[f64]) -> bool {
+        if !self.learner.load(state, running) {
+            return false;
+        }
+        self.worlds.steps = self.learner.practised;
+        true
     }
 
     /// How far the policy gets through each of these worlds, acting without drawing.

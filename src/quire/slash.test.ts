@@ -3,6 +3,10 @@
 // `bun test src/quire`.
 
 import { expect, test } from "bun:test";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { browser, chromium } from "../../scripts/browser";
 import { insertText, textAt } from "./document";
 import { caret } from "./keys";
 import { read } from "./read";
@@ -82,3 +86,56 @@ test("the site's components are offered in an MDX file alone, and made with the 
     const again = choose('import Terminal from "../../components/Terminal.astro";\n\n/term\n', [1], "terminal", true);
     expect(write(again.doc)).toBe('import Terminal from "../../components/Terminal.astro";\n\n<Terminal cast="" title="" />\n');
 });
+
+test.skipIf(!chromium())(
+    "with the slash menu or the emoji list open, the text points a screen reader at the active line, which moves with the arrows, and lets go when it closes",
+    async () => {
+        const folder = await mkdtemp(join(tmpdir(), "quire-slash-"));
+        const tab = await browser({ width: 1000, height: 800 });
+        try {
+            await Bun.write(
+                `${folder}/page.ts`,
+                `import { createSurface } from "${import.meta.dir}/surface.ts";
+                import { createSlash } from "${import.meta.dir}/slash.ts";
+                import { createEmojiPicker } from "${import.meta.dir}/emoji-picker.ts";
+                import { read } from "${import.meta.dir}/read.ts";
+                const sheet = document.querySelector("#sheet");
+                const surface = createSurface(sheet, read(""));
+                createSlash(surface, () => {});
+                createEmojiPicker(surface);
+                surface.focus();
+                window.surface = surface;`,
+            );
+            const built = await Bun.build({ entrypoints: [`${folder}/page.ts`], target: "browser" });
+            if (!built.success) throw new Error(built.logs.join("\n"));
+            await Bun.write(`${folder}/page.html`, `<!doctype html><meta charset="utf-8"><div id="sheet"></div><script type="module">${await built.outputs[0]!.text()}</script>`);
+            await tab.open(`file://${folder}/page.html`, 300);
+            const pointed = () => tab.run<{ id: string | null; role: string | null; text: string | null; list: string | null }>(`(() => { const id = surface.element.getAttribute("aria-activedescendant"); const line = id && document.getElementById(id); return { id, role: line ? line.getAttribute("role") : null, text: line ? line.textContent : null, list: surface.element.getAttribute("aria-controls") && document.getElementById(surface.element.getAttribute("aria-controls")).getAttribute("role") }; })()`);
+            await tab.type("/");
+            await tab.wait(100);
+            const first = await pointed();
+            expect(first.role).toBe("option");
+            expect(first.list).toBe("listbox");
+            await tab.press("ArrowDown");
+            const second = await pointed();
+            expect(second.role).toBe("option");
+            expect(second.text).not.toBe(first.text);
+            await tab.press("Escape");
+            await tab.wait(100);
+            expect((await pointed()).id).toBeNull();
+            // the emoji list, the same way
+            await tab.press("Backspace");
+            await tab.type(":smi");
+            await tab.wait(100);
+            expect((await pointed()).role).toBe("option");
+            await tab.press("Escape");
+            await tab.wait(100);
+            expect((await pointed()).id).toBeNull();
+            expect(tab.errors).toEqual([]);
+        } finally {
+            await tab.close();
+            await rm(folder, { recursive: true, force: true });
+        }
+    },
+    60_000,
+);

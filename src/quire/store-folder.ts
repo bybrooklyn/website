@@ -12,13 +12,14 @@
 import { isQuire, packQuire, pictureShelf, unpackQuire, type Parts } from "./quire-file";
 import { besideDocument, fileName, freeName, type Opened, type Store, StoreError } from "./store";
 import { openable } from "./store-files";
+import { utf8 } from "./store-github";
 
 /** The part of a file handle the store uses. */
 export interface FileHandle {
     kind: "file";
     name: string;
     getFile(): Promise<{ text(): Promise<string>; lastModified: number; size: number; type?: string } & Blob>;
-    createWritable(): Promise<{ write(data: string | Blob): Promise<void>; close(): Promise<void> }>;
+    createWritable(): Promise<{ write(data: string | Blob): Promise<void>; close(): Promise<void>; abort?(): Promise<void> }>;
     requestPermission?(options: { mode: "readwrite" }): Promise<string>;
 }
 
@@ -45,7 +46,7 @@ const SKIPPED = /^(\.|node_modules$|dist$|build$)/;
 
 /** What a file holds, as a store opens it: a `.quire` file unpacked, its pictures put on the shelf. */
 async function readFile(file: Blob & { lastModified: number; size: number }, id: string, shelf: ReturnType<typeof pictureShelf>, keep = true): Promise<Opened> {
-    if (!isQuire(id)) return { text: await file.text(), mark: markOf(file) };
+    if (!isQuire(id)) return { text: utf8(new Uint8Array(await file.arrayBuffer()), id), mark: markOf(file) };
     const bundle = await unpackQuire(new Uint8Array(await file.arrayBuffer()));
     if (keep) shelf.set(id, bundle.pictures);
     return { text: bundle.markdown, mark: markOf(file), quire: bundle.parts };
@@ -59,8 +60,15 @@ async function fileData(id: string, text: string, quire: Parts | undefined, shel
 
 async function write(handle: FileHandle, data: string | Blob) {
     if (handle.requestPermission && (await handle.requestPermission({ mode: "readwrite" })) !== "granted") throw new StoreError("permission to write the file was not given");
+    // the browser writes into a copy beside the file and puts it in the file's place only on close, so the file
+    // is never left half written; a write that fails is abandoned, which lets the copy go and keeps the file as it was
     const writable = await handle.createWritable();
-    await writable.write(data);
+    try {
+        await writable.write(data);
+    } catch (error) {
+        await writable.abort?.().catch(() => undefined);
+        throw error;
+    }
     await writable.close();
 }
 
@@ -78,7 +86,11 @@ export function folderStore(root: FolderHandle): Store {
     async function fileAt(path: string, create = false): Promise<FileHandle> {
         try {
             return await (await folderOf(path, create)).getFileHandle(parts(path).at(-1)!, { create });
-        } catch {
+        } catch (error) {
+            // a file gone is said so; permission refused or a file locked is said as what it is, not as gone
+            const kind = (error as { name?: string; message?: string })?.name ?? "";
+            if (kind === "NotAllowedError" || kind === "SecurityError") throw new StoreError(`permission to use ${path} was not given`);
+            if (kind === "NoModificationAllowedError" || kind === "InvalidStateError") throw new StoreError(`${path} is in use elsewhere and cannot be written now`);
             throw new StoreError(`${path} is not in the folder any more`);
         }
     }
@@ -125,12 +137,17 @@ export function folderStore(root: FolderHandle): Store {
             await write(handle, await fileData(path, text, quire, shelf));
             return { id: path, mark: markOf(await handle.getFile()) };
         },
+        async markOf(id) {
+            return markOf(await (await fileAt(id)).getFile());
+        },
         async rename(id, name) {
             const old = await fileAt(id);
             const body = await old.getFile();
             const folder = parts(id).slice(0, -1).join("/");
             const wanted = isQuire(id) ? fileName(name.replace(/\.(md|mdx|markdown|txt)$/i, ""), ".quire") : fileName(name, /\.mdx$/i.test(id) ? ".mdx" : ".md");
-            const path = freeName(folder ? `${folder}/${wanted}` : wanted, (await taken(id)).map((each) => (folder ? `${folder}/${each}` : each)));
+            // the file's own name is not taken by itself: renamed to what it is already called, it stays
+            const path = freeName(folder ? `${folder}/${wanted}` : wanted, (await taken(id)).filter((each) => each !== old.name).map((each) => (folder ? `${folder}/${each}` : each)));
+            if (path === id) return id;
             await write(await fileAt(path, true), body);
             await (await folderOf(id)).removeEntry(parts(id).at(-1)!);
             shelf.move(id, path);

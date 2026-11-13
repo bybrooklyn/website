@@ -33,7 +33,7 @@
 // `quire-task` on a task item and `quire-box` on its box (`data-checked`),
 // `quire-atom` on an inline HTML span or footnote reference.
 
-import { blockAt, blockPaths, changeKind, documentOf, image as imageBlock, isPageBreak, markdownOnly, paragraph, setBox, setImageAlt, setRaw, toggleTask, type Block, type Code, type Document, type Leaf, type Mark, type Position, type Run, type Selection } from "./document";
+import { blockAt, blockPaths, changeKind, documentOf, image as imageBlock, isPageBreak, lengthOf, markdownOnly, paragraph, setBox, setImageAlt, setRaw, toggleTask, type Block, type Code, type Document, type Leaf, type Mark, type Position, type Run, type Selection } from "./document";
 import { createHistory, redo as redoStep, undo as undoStep, type ChangeKind, type State } from "./history";
 import { readHtml, writeHtml } from "./html";
 import { drawPicture } from "./picture-tools";
@@ -102,6 +102,35 @@ export interface Surface {
 }
 
 const MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
+
+/** The parts of a key press the surface reads to tell a shortcut from typing. */
+type Pressed = Pick<KeyboardEvent, "key" | "code" | "ctrlKey" | "altKey" | "metaKey"> & { getModifierState?: (key: string) => boolean };
+
+/**
+ * Whether a key press is AltGr typing a character, which is never a shortcut. Windows reports AltGr
+ * as Ctrl and Alt held together, so on French, Spanish, German and many other layouts @, #, {, [, |,
+ * \, ~ and € arrive as Ctrl+Alt with a digit or letter; what tells them apart from a shortcut is that
+ * the key then types a character that is not a plain letter or digit.
+ */
+export function altGraph(event: Pressed, mac = MAC): boolean {
+    if (event.getModifierState?.("AltGraph")) return true;
+    return !mac && event.ctrlKey && event.altKey && !event.metaKey && [...event.key].length === 1 && !/^[a-z0-9]$/i.test(event.key);
+}
+
+/**
+ * The key a shortcut is matched by. A letter is the letter the key types on this layout, so that
+ * Ctrl+B is bold where the key that types b is (Dvorak, AZERTY); on a layout with no Latin letters
+ * (Cyrillic, Greek, Hebrew) it is the letter of the key's place. With Alt a digit is the key's place
+ * in the digit row, since on some layouts (AZERTY) the digits are typed with Shift. Anything else
+ * (Enter, a full stop, a comma) is the key's own name or character.
+ */
+export function shortcutKey(event: Pressed, mod: boolean): string {
+    if (!mod) return event.key;
+    if (/^[a-z]$/i.test(event.key)) return event.key.toLowerCase();
+    if (/^Key[A-Z]$/.test(event.code) && !/^[ -~]$/.test(event.key)) return event.code.slice(3).toLowerCase();
+    if (event.altKey && /^Digit[0-9]$/.test(event.code)) return event.code.slice(5);
+    return event.key;
+}
 const TAGS: [Mark, string][] = [
     ["bold", "strong"],
     ["italic", "em"],
@@ -558,6 +587,17 @@ function draw(block: Block, inner: number[], how: Drawing = plainDrawing): HTMLE
 const isElement = (node: Node): node is HTMLElement => node.nodeType === 1;
 const isAtom = (node: Node) => isElement(node) && (node.tagName === "BR" ? !("filler" in node.dataset) : "atom" in node.dataset);
 
+/** The model text a DOM node stands for, an atom as one object character, so that its length is `units(node)`. */
+function textOf(node: Node): string {
+    if (node.nodeType === 3) return (node as Text).data;
+    if (!isElement(node)) return "";
+    if ("filler" in node.dataset || "shown" in node.dataset) return "";
+    if (isAtom(node)) return "￼";
+    let text = "";
+    for (const child of node.childNodes) text += textOf(child);
+    return text;
+}
+
 /** How much model text a DOM node stands for. */
 function units(node: Node): number {
     if (node.nodeType === 3) return (node as Text).length;
@@ -616,6 +656,7 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
     editor.state.selection = caret(firstText(editor.state.doc), 0);
     let composing = false;
     let composedAt: Selection | undefined;
+    let composedFrom: Before | undefined;
     const listeners = new Map<string, Set<(detail: never) => void>>();
 
     root.contentEditable = "true";
@@ -658,7 +699,9 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
     function later(holder: HTMLElement, block: Code) {
         waiting.set(holder, block);
         clearTimeout(painting);
-        painting = setTimeout(() => {
+        painting = setTimeout(function paint() {
+            // a block being composed in is not drawn under the input method; it waits for the composition to end
+            if (composing) return void (painting = setTimeout(paint, 250));
             let touched = false;
             for (const [element, code] of waiting) {
                 if (!element.isConnected) continue;
@@ -689,16 +732,52 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
         lit = now;
     }
 
+    /** The block each drawn top-level element stands for, so that an element taken over by another block is no longer found for the old one. */
+    let owners = new WeakMap<HTMLElement, Block>();
+
+    /**
+     * Makes `into`, an element already in the page, look as `from`: its attributes and its children.
+     * A changed block is drawn this way into the element it had, when the two are the same kind of
+     * element: an element put in or taken out among the document's thousands of blocks makes the
+     * browser work out the style of its neighbours again (the stylesheet has rules that look at a
+     * block's neighbours), which cost about 8 ms a key in a 5,000-line document; a changed element
+     * costs only itself.
+     */
+    function takeOver(into: HTMLElement, from: HTMLElement) {
+        for (const name of into.getAttributeNames()) if (!from.hasAttribute(name)) into.removeAttribute(name);
+        for (const name of from.getAttributeNames()) if (into.getAttribute(name) !== from.getAttribute(name)) into.setAttribute(name, from.getAttribute(name)!);
+        into.replaceChildren(...from.childNodes);
+    }
+
     function render() {
         const fresh: HTMLElement[] = [];
-        const wanted = editor.state.doc.blocks.map((block) => {
+        const blocks = editor.state.doc.blocks;
+        const kept = new Set<Node>();
+        for (const block of blocks) {
+            const element = drawn.get(block);
+            if (element) kept.add(element);
+        }
+        let previous: HTMLElement | undefined;
+        const wanted = blocks.map((block) => {
             let element = drawn.get(block);
             if (!element) {
                 element = draw(block, [], drawing());
                 showPictures(element);
+                // the element that stood here before, if no block keeps it, is reused (pages.ts keeps a
+                // pushed element's measure by the element, so a pushed one is left alone)
+                const there = previous ? previous.nextSibling : root.firstChild;
+                if (there && isElement(there) && !kept.has(there) && there.tagName === element.tagName && !("push" in there.dataset)) {
+                    takeOver(there, element);
+                    const was = owners.get(there);
+                    if (was && drawn.get(was) === there) drawn.delete(was);
+                    element = there;
+                }
+                kept.add(element);
                 drawn.set(block, element);
+                owners.set(element, block);
                 fresh.push(element);
             }
+            previous = element;
             return element;
         });
         // a block drawn by an edit is laid out at once, so that what is measured next (the cursor's
@@ -847,9 +926,24 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
         return true;
     }
 
+    /** True from a triple click's press until the next press. */
+    let tripled = false;
+
+    /**
+     * A triple click selects a paragraph and runs on to the start of the next block; typing over that
+     * would join the next block on, so such a selection ends at the end of its own paragraph.
+     */
+    function ownParagraph(selection: Selection): Selection {
+        const end = selection.focus;
+        if (!tripled || end.offset !== 0 || selection.anchor.offset !== 0 || end.path.length !== selection.anchor.path.length || end.path[end.path.length - 1]! === 0) return selection;
+        const own = [...end.path.slice(0, -1), end.path[end.path.length - 1]! - 1];
+        return own.join() === selection.anchor.path.join() ? { anchor: selection.anchor, focus: { path: own, offset: lengthOf(editor.state.doc, own) } } : selection;
+    }
+
     function syncSelection() {
-        const selection = readSelection();
-        if (!selection) return;
+        const read = readSelection();
+        if (!read) return;
+        const selection = ownParagraph(read);
         const same = JSON.stringify(selection) === JSON.stringify(editor.state.selection);
         if (same) return;
         // the cursor moved by hand: waiting marks are forgotten and typing starts a new undo step
@@ -863,43 +957,200 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
     /** True for an event from a field inside the document, such as a picture's alt text, which is the field's own. */
     const fromField = (event: Event) => event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement;
 
+    /**
+     * A collapsed cursor about to be deleted from, widened to the whole character as a reader sees it
+     * (a flag, a family of emoji joined into one, a letter with an accent written after it), when that
+     * is more than the one code point or surrogate pair the model's own step removes.
+     */
+    function wholeCharacter(forward: boolean) {
+        const { focus } = editor.state.selection;
+        if (!collapsed(editor.state.selection) || typeof Intl === "undefined" || !("Segmenter" in Intl)) return;
+        const holder = holderAt(focus.path);
+        if (!holder) return;
+        const text = textOf(holder);
+        let start = 0;
+        let end = 0;
+        for (const { index, segment } of new Intl.Segmenter().segment(text)) {
+            start = index;
+            end = index + segment.length;
+            if (forward ? end > focus.offset : end >= focus.offset) break;
+        }
+        if (forward ? start !== focus.offset : end !== focus.offset) return;
+        const piece = text.slice(start, end);
+        const step = piece.codePointAt(0)! > 0xffff ? 2 : 1;
+        if (piece.length <= step) return;
+        editor = { ...editor, state: { doc: editor.state.doc, selection: { anchor: { path: focus.path, offset: start }, focus: { path: focus.path, offset: end } } } };
+    }
+
     function onKeyDown(event: KeyboardEvent) {
+        // a key is the writer's own move, never the cursor the browser puts in on focus
+        restoring = 0;
         if (fromField(event)) return;
         // Safari sends key 229 for keys that belong to a composition
         if (composing || event.isComposing || (event as { keyCode?: number }).keyCode === 229) return;
+        // AltGr types a character (@, #, {, € on many layouts); it is never one of mdQuire's shortcuts
+        if (altGraph(event)) return;
         const mod = MAC ? event.metaKey : event.ctrlKey;
+        const key = shortcutKey(event, mod);
         // Ctrl+Shift+V pastes, through the paste event, without formatting
-        if (mod && event.shiftKey && event.code === "KeyV") plainNext = true;
-        let key = event.key;
-        if (mod && /^Key[A-Z]$/.test(event.code)) key = event.code.slice(3).toLowerCase();
-        if (mod && /^Digit[0-9]$/.test(event.code)) key = event.code.slice(5);
+        if (mod && event.shiftKey && key === "v") plainNext = true;
         if (!mod && !["Enter", "Backspace", "Delete", "Tab"].includes(key)) return;
         if (MAC && event.ctrlKey && !mod) return;
+        if (mod && key === "a" && !event.shiftKey && !event.altKey) {
+            // Select All is the model's: the browser's own selects nothing at all when the document begins or ends with a block that cannot be written in
+            // the key is left to go on, so that the editor's own Select All command (shortcuts.ts) still hears it
+            const paths = blockPaths(editor.state.doc);
+            const last = paths[paths.length - 1] ?? [0];
+            commit(apply(editor, { state: { doc: editor.state.doc, selection: { anchor: { path: paths[0] ?? [0], offset: 0 }, focus: { path: last, offset: lengthOf(editor.state.doc, last) } } }, kind: "move" }, Date.now()));
+            // and should the browser then make its own selection (no one else took the key), the model's is put back over it
+            restoring = performance.now() + 100;
+            return;
+        }
         syncSelection();
         const word = (key === "Backspace" || key === "Delete") && (MAC ? event.altKey : event.ctrlKey);
-        if (send({ type: "key", key, shift: event.shiftKey, mod: mod && !word, alt: event.altKey && !word, word })) event.preventDefault();
+        if ((key === "Backspace" || key === "Delete") && !word && !mod && !event.altKey) wholeCharacter(key === "Delete");
+        // a full stop or comma that this layout types with Shift is still Ctrl and that character
+        const shift = event.shiftKey && key !== "." && key !== ",";
+        if (send({ type: "key", key, shift, mod: mod && !word, alt: event.altKey && !word, word })) event.preventDefault();
     }
 
-    function selectTargetRange(event: InputEvent) {
+    function selectTargetRange(event: InputEvent): boolean {
         const range = event.getTargetRanges?.()[0];
-        if (!range) return;
+        if (!range) return false;
         const anchor = toPosition(range.startContainer, range.startOffset);
         const focus = toPosition(range.endContainer, range.endOffset);
-        if (anchor && focus) editor = { ...editor, state: { doc: editor.state.doc, selection: { anchor, focus } } };
+        if (!anchor || !focus) return false;
+        editor = { ...editor, state: { doc: editor.state.doc, selection: ownParagraph({ anchor, focus }) } };
+        return true;
     }
+
+    /** The word the cursor is in or just after, selected: what a spelling fix replaces when the browser does not say which range it means. */
+    function selectWord() {
+        const { focus } = editor.state.selection;
+        const holder = holderAt(focus.path);
+        if (!collapsed(editor.state.selection) || !holder) return;
+        const text = textOf(holder);
+        const letter = /[\p{L}\p{M}\p{N}'’]/u;
+        let start = focus.offset;
+        let end = focus.offset;
+        while (start > 0 && letter.test(text[start - 1]!)) start--;
+        while (end < text.length && letter.test(text[end]!)) end++;
+        if (start < end) editor = { ...editor, state: { doc: editor.state.doc, selection: { anchor: { path: focus.path, offset: start }, focus: { path: focus.path, offset: end } } } };
+    }
+
+    // ---- what the browser changes itself ----
+
+    /** A block's text as drawn before the browser changed it itself: in a composition, or by an input the page could not cancel. */
+    interface Before {
+        path: number[];
+        holder: HTMLElement;
+        text: string;
+        selection: Selection;
+    }
+
+    function before(): Before | undefined {
+        const selection = editor.state.selection;
+        const holder = holderAt(selection.focus.path);
+        if (!holder || selection.anchor.path.join() !== selection.focus.path.join()) return undefined;
+        return { path: selection.focus.path, holder, text: textOf(holder), selection };
+    }
+
+    /**
+     * Takes what the browser wrote into a block into the model: the block's text now is compared with
+     * its text before, the stretch that differs is replaced through the model as typed text, and the
+     * block is drawn again from the model. The page's cursor says where the new text ends, so that
+     * typing a letter beside the same letter is put where it was typed. True if it could be taken.
+     */
+    function adopt(was: Before): boolean {
+        if (!root.contains(was.holder)) return false;
+        const after = textOf(was.holder);
+        const old = was.text;
+        const page = document.getSelection();
+        const end = page?.focusNode && was.holder.contains(page.focusNode) ? offsetIn(was.holder, page.focusNode, page.focusOffset) : after.length;
+        let tail = 0;
+        const most = Math.max(0, Math.min(old.length, after.length - end));
+        while (tail < most && old[old.length - 1 - tail] === after[after.length - 1 - tail]) tail++;
+        let head = 0;
+        while (head < Math.min(old.length, after.length) - tail && old[head] === after[head]) head++;
+        const added = after.slice(head, after.length - tail).replace(/￼/g, "");
+        const top = editor.state.doc.blocks[was.path[0]!];
+        if (top) drawn.delete(top);
+        render();
+        if (head === old.length - tail && added === "") {
+            // nothing changed (a composition given up with Escape): the cursor goes back where it was
+            editor = { ...editor, state: { ...editor.state, selection: was.selection } };
+            commit(editor);
+            return true;
+        }
+        editor = { ...editor, state: { doc: editor.state.doc, selection: { anchor: { path: was.path, offset: head }, focus: { path: was.path, offset: old.length - tail } } } };
+        if (added) send({ type: "text", text: added });
+        else send({ type: "key", key: "Backspace" });
+        return true;
+    }
+
+    /** Whether ?debug is in the page's address, to say in the console when the page and the model were found apart. */
+    const debugging = typeof location !== "undefined" && new URLSearchParams(location.search).has("debug");
+
+    /**
+     * After an input the surface did not make itself, the blocks it may have touched are compared
+     * with the model, and any that the page shows differently is drawn again from the model: the page
+     * can never be left showing text the document does not have.
+     */
+    function repair(event: Event) {
+        const blocks = editor.state.doc.blocks;
+        const near = new Set<number>();
+        const index = editor.state.selection.focus.path[0]!;
+        for (const at of [index - 1, index, index + 1]) if (at >= 0 && at < blocks.length) near.add(at);
+        for (const node of [document.getSelection()?.focusNode, document.getSelection()?.anchorNode, event.target as Node | null]) {
+            const top = node && root.contains(node) ? topOf(node) : undefined;
+            if (top) near.add([...root.children].indexOf(top));
+        }
+        let wrong = root.children.length !== blocks.length;
+        for (const at of near) {
+            const block = blocks[at];
+            const element = root.children[at] as HTMLElement | undefined;
+            if (!block || !element) continue;
+            if (drawn.get(block) === element && textOf(element) === textOf(draw(block, [], drawing()))) continue;
+            drawn.delete(block);
+            wrong = true;
+        }
+        if (!wrong) return;
+        if (debugging) console.warn(`mdQuire: the page showed text the document does not have, after "${(event as InputEvent).inputType ?? event.type}"; drawn again from the document`);
+        if (root.children.length !== blocks.length) {
+            drawn = new WeakMap();
+            root.replaceChildren();
+        }
+        render();
+        placeSelection();
+    }
+
+    /** A change the browser is making itself, since it would not let it be cancelled; it is taken into the model when the input arrives. */
+    let uncancelled: Before | undefined;
 
     function onBeforeInput(event: InputEvent) {
         if (fromField(event)) return;
-        if (composing || event.isComposing || event.inputType === "insertCompositionText" || event.inputType === "deleteCompositionText" || event.inputType === "insertFromComposition") return;
+        if (composing || event.isComposing || event.inputType === "insertCompositionText") return;
+        // the last of a composition after it ended (WebKit's order): the model already has the text
+        if ((event.inputType === "deleteCompositionText" || event.inputType === "insertFromComposition") && !event.cancelable) return;
+        if (!event.cancelable) {
+            // some phone keyboards' deletes and corrections cannot be cancelled: the browser makes them, and the model takes them after
+            syncSelection();
+            uncancelled = before();
+            return;
+        }
         event.preventDefault();
         syncSelection();
         const type = event.inputType;
         const text = event.data ?? event.dataTransfer?.getData("text/plain") ?? "";
         switch (type) {
             case "insertText":
+            case "insertFromYank":
             case "insertReplacementText": {
                 const range = event.getTargetRanges?.()[0];
-                if (type === "insertReplacementText" || (range && !range.collapsed)) selectTargetRange(event);
+                if (type === "insertReplacementText") {
+                    // a spelling fix: the range it replaces, or when none is given the word at the cursor
+                    if (!selectTargetRange(event)) selectWord();
+                } else if (range && !range.collapsed) selectTargetRange(event);
                 send({ type: "text", text });
                 return;
             }
@@ -910,9 +1161,11 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
                 send({ type: "key", key: "Enter", shift: true });
                 return;
             case "deleteContentBackward":
+                wholeCharacter(false);
                 send({ type: "key", key: "Backspace" });
                 return;
             case "deleteContentForward":
+                wholeCharacter(true);
                 send({ type: "key", key: "Delete" });
                 return;
             case "deleteWordBackward":
@@ -952,19 +1205,27 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
         // paste, drop and cut come through their own events; anything else is not let through
     }
 
-    function onCompositionStart() {
+    function onCompositionStart(event: CompositionEvent) {
+        if (fromField(event)) return;
         syncSelection();
-        // what is selected goes first, so the composed text replaces it
-        if (!collapsed(editor.state.selection)) send({ type: "key", key: "Backspace" });
+        // a selection over more than one block goes first, through the model, so the composed text
+        // replaces it; a selection inside one block is left to the browser, whose composition replaces it
+        // there, and is taken from the page with the composed text when the composition ends
+        if (editor.state.selection.anchor.path.join() !== editor.state.selection.focus.path.join()) send({ type: "key", key: "Backspace" });
         composing = true;
+        composedFrom = before();
         composedAt = editor.state.selection;
     }
 
     function onCompositionEnd(event: CompositionEvent) {
+        if (fromField(event)) return;
         composing = false;
+        const from = composedFrom;
         const at = composedAt ?? editor.state.selection;
+        composedFrom = undefined;
         composedAt = undefined;
-        // the browser wrote the composed text into the block itself: that block is drawn again from the model
+        // the browser wrote the composed text into the block itself: what changed there is taken into the model
+        if (from && adopt(from)) return;
         const top = editor.state.doc.blocks[at.focus.path[0]!];
         if (top) drawn.delete(top);
         render();
@@ -975,15 +1236,37 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
 
     function onInput(event: Event) {
         if (composing || fromField(event)) return;
-        // the browser changed the page by some way not cancelled: everything is drawn again from the model
-        drawn = new WeakMap();
-        root.replaceChildren();
-        render();
+        const was = uncancelled;
+        uncancelled = undefined;
+        if (was) adopt(was);
+        // the browser changed the page in a way the surface did not make: what differs is drawn again from the model
+        repair(event);
+    }
+
+    /** When the text was last pressed, so that the focus a press brings is told from focus given back by a menu or a dialog. */
+    let pressedAt = -Infinity;
+    const onPress = () => {
+        pressedAt = performance.now();
+        restoring = 0;
+    };
+
+    /** Until when the cursor the browser puts in on focus is not the writer's own move. */
+    let restoring = 0;
+
+    /** Focus given back to the text (a menu or dialog closing) puts back the model's selection, where the browser would put the cursor at the start. */
+    function onFocus() {
+        if (performance.now() - pressedAt < 500) return;
         placeSelection();
+        // the browser puts its own cursor in a moment after the focus event, and that is put back too
+        restoring = performance.now() + 100;
     }
 
     function onSelectionChange() {
         if (composing || document.activeElement instanceof HTMLInputElement || document.activeElement instanceof HTMLTextAreaElement) return;
+        if (performance.now() < restoring) {
+            restoring = 0;
+            return placeSelection();
+        }
         syncSelection();
     }
 
@@ -993,6 +1276,7 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
     }
 
     function onMouseDown(event: MouseEvent) {
+        tripled = event.detail >= 3;
         const target = event.target as HTMLElement;
         // laid-out maths: pressing it puts the cursor at the end of its source, which then shows
         const shown = target.closest?.("[data-shown]") as HTMLElement | null;
@@ -1003,30 +1287,41 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
             if (at) commit(apply(editor, { state: { doc: editor.state.doc, selection: { anchor: at, focus: at } }, kind: "move" }, Date.now()));
             return;
         }
-        // a callout's label steps to the next kind; a folding section's button sets whether it starts open
+        if (pressControl(target)) event.preventDefault();
+    }
+
+    /** Presses a control drawn in the document, if the target is in one: a callout's label steps to the next kind, a folding section's button sets whether it starts open, a task's box is ticked. True if it was one. */
+    function pressControl(target: HTMLElement): boolean {
         const kind = target.closest?.("[data-callout-kind]") as HTMLElement | null;
         if (kind && root.contains(kind)) {
-            event.preventDefault();
             const path = pathOf(kind, kind.dataset.calloutKind);
             const block = blockAt(editor.state.doc, path);
-            if (block?.kind !== "quote" || block.callout === undefined) return;
+            if (block?.kind !== "quote" || block.callout === undefined) return true;
             const next = CALLOUTS[(CALLOUTS.indexOf(block.callout.toUpperCase()) + 1) % CALLOUTS.length]!;
             run((doc) => setBox(doc, path, { callout: next }));
-            return;
+            return true;
         }
         const fold = target.closest?.("[data-fold]") as HTMLElement | null;
         if (fold && root.contains(fold)) {
-            event.preventDefault();
             const path = pathOf(fold, fold.dataset.fold);
             const block = blockAt(editor.state.doc, path);
             if (block?.kind === "quote" && block.details) run((doc) => setBox(doc, path, { details: { ...block.details!, open: !block.details!.open } }));
-            return;
+            return true;
         }
         const box = target.closest?.("[data-box]") as HTMLElement | null;
-        if (!box || !root.contains(box)) return;
-        event.preventDefault();
+        if (!box || !root.contains(box)) return false;
         const path = pathOf(box, box.dataset.box);
         run((doc) => toggleTask(doc, path));
+        return true;
+    }
+
+    /**
+     * A click that no pointer made (a screen reader's activation, or Enter or Space on a focused
+     * control) presses the control it is on; a pointer's click was already taken at its press.
+     */
+    function onClick(event: MouseEvent) {
+        if (event.detail !== 0 || !(event.target instanceof HTMLElement)) return;
+        if (pressControl(event.target)) event.preventDefault();
     }
 
     function looksLikeMarkdown(text: string): boolean {
@@ -1034,9 +1329,14 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
     }
 
     async function takeData(data: DataTransfer | null) {
+        // Ctrl+Shift+V asks for this paste alone to be plain, whichever way it goes
+        const plain = plainNext;
+        plainNext = false;
         if (!data) return;
         const files = [...data.files].filter((file) => file.type.startsWith("image/"));
-        if (files.length && options.onImage) {
+        // a copy from a spreadsheet, Word or Numbers carries a picture of itself beside its text: the text is what was meant
+        const words = data.types.includes("text/html") || data.types.includes("text/plain");
+        if (files.length && options.onImage && !words) {
             for (const file of files) {
                 // a store that cannot keep the picture says why, and nothing is put in the text
                 const address = await options.onImage(file).catch(() => undefined);
@@ -1048,10 +1348,7 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
         const html = data.getData("text/html");
         const text = data.getData("text/plain");
         // Ctrl+Shift+V: the text alone, nothing read from it
-        if (plainNext) {
-            plainNext = false;
-            return insertPlain(text);
-        }
+        if (plain) return insertPlain(text);
         const kind = blockAt(editor.state.doc, editor.state.selection.focus.path)?.kind;
         if (kind === "code" || kind === "raw") return insertBlocks([paragraph(text)]);
         const fromHtml = html ? readHtml(html) : [];
@@ -1103,18 +1400,22 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
     }
 
     function onCopy(event: ClipboardEvent) {
+        if (fromField(event)) return;
         copyTo(event);
     }
 
     function onCut(event: ClipboardEvent) {
+        if (fromField(event)) return;
         if (copyTo(event)) send({ type: "key", key: "Backspace" });
     }
 
     function onDragOver(event: DragEvent) {
+        if (fromField(event)) return;
         event.preventDefault();
     }
 
     function onDrop(event: DragEvent) {
+        if (fromField(event)) return;
         event.preventDefault();
         const place = (document as unknown as { caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null }).caretPositionFromPoint?.(event.clientX, event.clientY);
         // older Safari has only the older name
@@ -1134,9 +1435,12 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
         [root, "keydown", onKeyDown as EventListener],
         [root, "beforeinput", onBeforeInput as EventListener],
         [root, "input", onInput],
-        [root, "compositionstart", onCompositionStart],
+        [root, "compositionstart", onCompositionStart as EventListener],
         [root, "compositionend", onCompositionEnd as EventListener],
         [root, "mousedown", onMouseDown as EventListener],
+        [root, "pointerdown", onPress],
+        [root, "click", onClick as EventListener],
+        [root, "focus", onFocus],
         [root, "paste", onPaste as EventListener],
         [root, "copy", onCopy as EventListener],
         [root, "cut", onCut as EventListener],
@@ -1256,6 +1560,8 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
         },
         destroy() {
             for (const [target, name, handler] of handlers) target.removeEventListener(name, handler);
+            clearTimeout(painting);
+            waiting.clear();
             root.contentEditable = "false";
         },
     };

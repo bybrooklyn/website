@@ -129,7 +129,7 @@ test("many creatures step together, as fast as this runtime goes", async () => {
 });
 
 /** The native engine's fingerprint of a small learner's state over two updates of practice (walker/src/generalist/practice_tests.rs). */
-const PRACTICE_FINGERPRINT = 0xe3a59b12d99e1fc0n;
+const PRACTICE_FINGERPRINT = 0x25cec97f99173d31n;
 
 test("practice in the page's engine learns to the bit as natively, with SIMD and without", async () => {
     for (const each of [path, scalarPath]) {
@@ -224,13 +224,21 @@ test("practice runs as fast as this runtime goes", async () => {
     const started = performance.now();
     for (let update = 0; update < 3; update++) engine.practice_update();
     const seconds = (performance.now() - started) / 1000;
+    // three updates of 32 creatures, 64 decisions of 4 steps each: at most 24,576 steps, a few less where runs end mid-decision
+    expect(engine.practice_updates()).toBe(3);
+    expect(engine.practice_steps()).toBeLessThanOrEqual(3 * 32 * 64 * 4);
+    expect(engine.practice_steps()).toBeGreaterThan(0.8 * 3 * 32 * 64 * 4);
     const time = (backward: number) => {
         const began = performance.now();
         const rows = engine.net_work(40, backward);
+        expect(rows).toBe(40 * 512);
         return rows / ((performance.now() - began) / 1000);
     };
-    console.log(`a 114-64-64-5 network: forward ${Math.round(time(0))} rows a second, forward and backward ${Math.round(time(1))}, in the page's engine, here`);
+    const [forward, both] = [time(0), time(1)];
+    console.log(`a 114-64-64-5 network: forward ${Math.round(forward)} rows a second, forward and backward ${Math.round(both)}, in the page's engine, here`);
     console.log(`practice: ${Math.round(engine.practice_steps() / seconds)} steps of the physics and ${(3 / seconds).toFixed(2)} updates a second in the page's engine, here`);
+    // far under what it does (about 90,000 steps a second here), so only a slip of many times fails, not a busy machine
+    expect(engine.practice_steps() / seconds).toBeGreaterThan(5000);
 });
 
 test("a seed is a number or a word, the same in every browser, and a world is a link", () => {

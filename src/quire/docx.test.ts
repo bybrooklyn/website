@@ -116,3 +116,27 @@ test("every further kind is written into Word with every word kept: callouts, de
     expect(xml).toContain('<w:vertAlign w:val="superscript"/>');
     expect(xml).toContain('<w:highlight w:val="yellow"/>');
 });
+
+test("characters XML does not allow are taken out, every attribute is escaped, and no link points at a file, a share or a script", async () => {
+    const hostile = 'A form\u000cfeed, a vertical\u000btab, a \u0001 control, a \ufffe non-character, a lone \ud800 half & "quotes" <tags>.\n\n[file](file:///etc/passwd) [share](<\\\\server\\share>) [script](javascript:alert(1)) [tab](<java\tscript:alert(1)>) [web](https://example.com/?a="1"&b=<2>) [mail](mailto:me@example.com)\n\n![A "picture" <with> & quotes](https://evil.example/p.gif)\n';
+    const { all, decode } = await files(hostile);
+    for (const name of all.keys()) {
+        if (!name.endsWith(".xml") && !name.endsWith(".rels")) continue;
+        const text = decode(name);
+        expect({ name, formed: wellFormed(text) }).toEqual({ name, formed: true });
+        expect({ name, bad: /[\u0000-\u0008\u000b\u000c\u000e-\u001f\ufffe\uffff]/.test(text) }).toEqual({ name, bad: false });
+    }
+    const rels = decode("word/_rels/document.xml.rels");
+    const targets = [...rels.matchAll(/Target="([^"]*)"[^>]*TargetMode="External"/g)].map((match) => match[1]);
+    expect(targets).toEqual(["https://example.com/?a=&quot;1&quot;&amp;b=&lt;2&gt;", "mailto:me@example.com"]);
+    // nothing in the file is fetched from elsewhere when it is opened
+    expect(rels).not.toContain("evil.example");
+    expect(decode("word/document.xml")).not.toContain("r:link");
+    expect(decode("word/document.xml")).toContain("file");
+});
+
+test("a size or line spacing from a hostile file is held inside what Word reads", async () => {
+    expect(halfPoints("1e308px")).toBe(3276);
+    expect(halfPoints("0.0001pt")).toBe(2);
+    expect(halfPoints("abc")).toBeUndefined();
+});

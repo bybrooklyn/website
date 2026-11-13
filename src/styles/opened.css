@@ -77,6 +77,7 @@ body.opened {
     /* Inside the panel the raised and ruled colors step up with it. */
     --surface: var(--panel-raised);
     --rule: var(--panel-rule);
+    --field-edge: var(--panel-field-edge);
     --astro-code-background: var(--panel-raised);
     --panel-gutter: clamp(1.25rem, 5vw, 4rem);
 }
@@ -100,6 +101,9 @@ body.opened:has(.strip:hover, .strip:focus-visible) .opened-panel {
 
 .opened-panel main {
     padding: calc(var(--line) * 1.5) var(--panel-gutter) calc(var(--line) * 2.5);
+    /* What would stick out past the panel's right edge (a source's name over a number near the end of
+       a line, laid out even while it is unseen) is cut there, instead of making the panel scroll sideways. */
+    overflow-x: clip;
 }
 
 .trail {
@@ -144,7 +148,9 @@ body.opened:has(.strip:hover, .strip:focus-visible) .opened-panel {
         transition: none;
     }
 
-    body.opened:has(.strip:hover, .strip:focus-visible) .opened-panel {
+    body.opened:has(.strip:hover, .strip:focus-visible) .opened-panel,
+    .strip:hover .strip-button,
+    .strip:focus-visible .strip-button {
         translate: none;
     }
 }

@@ -38,7 +38,7 @@ use std::time::Instant;
 use walker::brain::Brain;
 use walker::generalist::evolve::Evolution;
 use walker::generalist::ppo::Settings;
-use walker::generalist::practice::{Measured, Practice, Way, held_out, measure};
+use walker::generalist::practice::{Measured, Practice, Shaping, Way, held_out, measure};
 use walker::generalist::recipe::Recipe;
 
 const MARKS: [u64; 7] = [1_000_000, 2_000_000, 5_000_000, 10_000_000, 20_000_000, 30_000_000, 50_000_000];
@@ -99,8 +99,11 @@ fn main() {
     };
     if method == "evolution" {
         let mut evolution = Evolution::new(recipe, legs, 32, 16, 2, 4, 30.0, seed).unwrap();
-        // evolution's brains shape each joint's swing to the rhythm, decide every step, and may hop
-        let way = Way { skip: 1, direct: false, hop: true, ..Way::of(legs) };
+        // evolution's brains shape each joint's swing to the rhythm, decide every step, and may hop; and
+        // they are measured by the rules they were bred under, the run's own (a second down ends it),
+        // not practice's for two legs (the first touch of the body ends it)
+        let shaping = Shaping { down: 1.0, ..Way::of(legs).shaping };
+        let way = Way { skip: 1, direct: false, hop: true, shaping, ..Way::of(legs) };
         let layout = evolution.layout;
         for &mark in &marks {
             while evolution.steps < mark {

@@ -70,9 +70,6 @@ export function caretBox(root: HTMLElement, frame: HTMLElement): { left: number;
     return { left: (rect.left - origin.left) / zoom - frame.clientLeft, top: (rect.top - origin.top) / zoom - frame.clientTop, height: rect.height / zoom };
 }
 
-/** How much of the text's height the caret stands: all of it, as the browser's own caret does. */
-const TALL = 1;
-
 /** The colour shown after `index` blinks, going round the list. */
 export function blinkColour(colours: readonly string[], index: number): string {
     return colours[((index % colours.length) + colours.length) % colours.length];
@@ -123,12 +120,14 @@ export function createCaret(root: HTMLElement, frame: HTMLElement, first: readon
      * fading in. True when it is shown.
      */
     const move = (whole = false, atOnce = false) => {
-        const box = document.activeElement === root || root.contains(document.activeElement) ? caretBox(root, frame) : null;
+        // a field inside the document (a code block's language, a picture's alt text) has its own caret; the text's is not drawn beside it
+        const field = document.activeElement instanceof HTMLInputElement || document.activeElement instanceof HTMLTextAreaElement;
+        const box = !field && (document.activeElement === root || root.contains(document.activeElement)) ? caretBox(root, frame) : null;
         const was = element.classList.contains("shown");
         element.classList.toggle("shown", !!box);
         if (!box) return false;
-        // as tall as the text, as the browser's own caret is (TALL)
-        const tall = box.height * TALL;
+        // as tall as the text, as the browser's own caret is
+        const tall = box.height;
         const top = box.top + (box.height - tall) / 2;
         const far = !last || Math.abs(last.top - top) > tall / 2 || Math.abs(last.left - box.left) > tall * 2;
         last = { left: box.left, top, height: tall };

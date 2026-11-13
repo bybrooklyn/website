@@ -197,18 +197,42 @@
         content: "▾";
     }
 
-    .contents:not(.unfolded) > ol {
-        display: none;
-    }
-
     @media (scripting: none) {
-        .contents:not(.unfolded) > ol {
-            display: block;
-        }
-
         .contents summary::before {
             content: none;
         }
+    }
+}
+
+/* The list, and what "cite this" holds, grow open and draw shut with the site's fold (base.css). The
+   list folds on a narrow screen only: in the margin, as without scripts, both are simply shown. */
+.contents > .fold,
+.cite .fold {
+    --grow: 0.3s;
+    --fade: 0.2s;
+}
+
+@media (min-width: 72rem) {
+    .contents > .fold {
+        grid-template-rows: 1fr;
+        opacity: 1;
+    }
+
+    .contents > .fold > * {
+        overflow: visible;
+    }
+}
+
+@media (scripting: none) {
+    .contents > .fold,
+    .cite .fold {
+        grid-template-rows: 1fr;
+        opacity: 1;
+    }
+
+    .contents > .fold > *,
+    .cite .fold > * {
+        overflow: visible;
     }
 }
 
@@ -273,10 +297,7 @@
     margin-top: calc(var(--line) * 0.3);
 }
 
-/*
- * The sources: numbered to match the small numbers in the text. One line
- * each, the name and then where it is, cut short where the column ends.
- */
+/* How many sources there are, quietly after the label. */
 .post-extra .label .count {
     margin-left: 0.35em;
     font-weight: 400;
@@ -289,6 +310,10 @@
     margin-bottom: calc(var(--line) * 0.3);
 }
 
+/*
+ * The sources: numbered to match the small numbers in the text. One line
+ * each, the name and then where it is, cut short where the column ends.
+ */
 .post-extra .sources {
     counter-reset: source;
     margin: 0 0 var(--line) -0.4em;
@@ -415,6 +440,13 @@
     transform: translate(-50%, 0);
 }
 
+/* without motion the name fades in where it stands, and does not rise into place */
+@media (prefers-reduced-motion: reduce) {
+    .prose .ref a[data-source]::after {
+        transition: opacity 0.15s ease;
+    }
+}
+
 @media print {
     .prose .ref {
         display: none;
@@ -497,13 +529,17 @@
         display: contents;
     }
 
+    /* It scrolls, so it clips: room round the inside, given back outside, lets the focus ring of a
+       link as wide as the column be seen whole, while the words stay where they were. */
     .post-side {
         grid-column: 2;
         grid-row: 1 / span 12;
         position: sticky;
-        top: calc(var(--line) * 1.5);
-        max-height: calc(100vh - var(--line) * 3);
+        top: calc(var(--line) * 1.5 - 0.4rem);
+        max-height: calc(100vh - var(--line) * 3 + 0.8rem);
         overflow-y: auto;
+        margin: -0.4rem;
+        padding: 0.4rem;
     }
 
     .contents {
@@ -528,10 +564,6 @@
         list-style: none;
         cursor: default;
         pointer-events: none;
-    }
-
-    .contents summary::-webkit-details-marker {
-        display: none;
     }
 
     /* In the margin the list is always open, and the title leads back to the top. */

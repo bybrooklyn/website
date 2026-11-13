@@ -8,7 +8,7 @@
 
 import { blockAt, blockPaths, deleteText, insertText, textAt, type Document, type Position } from "./document";
 import { type Surface } from "./surface";
-import { control, glyph, icon, make, originFor, still } from "./ui";
+import { composing, control, glyph, icon, make, originFor, still } from "./ui";
 
 /** How to look: matching capitals or not, and whole words only or not. */
 export interface FindOptions {
@@ -208,6 +208,7 @@ export function createFind(surface: Surface, sheet: HTMLElement, top: () => numb
 
     const keys = (event: KeyboardEvent) => {
         event.stopPropagation();
+        if (composing(event)) return;
         if (event.key === "Escape") {
             event.preventDefault();
             close(true);

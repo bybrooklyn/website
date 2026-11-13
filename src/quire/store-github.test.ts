@@ -5,6 +5,7 @@
 // of any address but api.github.com, always with the token. Run with `bun test src/quire`.
 
 import { expect, test } from "bun:test";
+import { folderStore, memoryFolder } from "./store-folder";
 import { folderPath, forgetSettings, githubStore, keepSettings, readSettings, repository, SETTINGS_KEY, type GithubSettings } from "./store-github";
 
 const SETTINGS: GithubSettings = { owner: "someone", repo: "site", branch: "main", folder: "src/content/blog", pictures: "src/assets/blog", token: "test-token-not-real" };
@@ -108,6 +109,16 @@ test("documents are made with free names, renamed and removed, each a commit say
     expect(github.calls.filter((call) => call.method !== "GET").map((call) => call.body?.message)).toEqual(["Add first-2.mdx", "Rename first-2.mdx to better.mdx", "Rename first-2.mdx to better.mdx", "Remove better.mdx"]);
 });
 
+test("after a rename the new file's SHA is the mark, so the next save goes to the new path with no conflict", async () => {
+    const github = mockGithub(POSTS);
+    const store = githubStore(SETTINGS, github.fetcher);
+    const moved = await store.rename("src/content/blog/first.mdx", "renamed.mdx");
+    const saved = await store.save(moved, "# First, renamed\n", await store.markOf!(moved));
+    expect(saved.ok).toBe(true);
+    expect(github.text(moved)).toBe("# First, renamed\n");
+    expect(github.files.has("src/content/blog/first.mdx")).toBe(false);
+});
+
 test("a picture is uploaded into its folder and written by a path relative to the document", async () => {
     const github = mockGithub(POSTS);
     const store = githubStore(SETTINGS, github.fetcher);
@@ -154,4 +165,59 @@ test("a repository is read from owner/name or its address, and folders are made 
     expect(repository("not a repository")).toBeUndefined();
     expect(folderPath("/src/content/blog/")).toBe("src/content/blog");
     expect(folderPath("../a/./b")).toBe("a/b");
+});
+
+test("the token goes only to api.github.com, in the Authorization header, and never into an address or a message, whatever GitHub answers", async () => {
+    const token = "github_pat_SECRET_never_shown_1234";
+    const settings = { ...SETTINGS, token };
+    const seen: { url: string; auth: string | null }[] = [];
+    for (const status of [200, 201, 400, 401, 403, 404, 409, 422, 429, 500, 502, 0]) {
+        const fetcher = async (url: string, init?: RequestInit) => {
+            seen.push({ url, auth: new Headers(init?.headers).get("Authorization") });
+            // a network failure whose own words carry the address and the header, as some do
+            if (status === 0) throw new Error(`failed to fetch ${url} with Bearer ${token}`);
+            return new Response(JSON.stringify({ message: `echo ${token}`, content: { sha: "s" }, sha: "s", content_: "" }), { status });
+        };
+        const store = githubStore(settings, fetcher);
+        const tries = [store.list(), store.open("a.md"), store.save("a.md", "x", "s"), store.create("b.md", "y"), store.rename("a.md", "c.md"), store.remove("a.md"), store.savePicture("a.md", new Blob(["p"]), "p.png"), store.exists!("a.md", "p.png"), store.show!("a.md", "p.png"), store.markOf!("a.md")];
+        for (const each of await Promise.allSettled(tries)) {
+            const said = each.status === "rejected" ? String(each.reason) : JSON.stringify(each.value ?? null);
+            expect(said).not.toContain(token);
+        }
+    }
+    expect(seen.length).toBeGreaterThan(50);
+    for (const call of seen) {
+        expect(call.url.startsWith("https://api.github.com/")).toBe(true);
+        expect(call.url).not.toContain(token);
+        expect(call.auth).toBe(`Bearer ${token}`);
+    }
+});
+
+test("too many requests is said as such, not as a token that may not do this; a file GitHub will not take is a failure, not a conflict", async () => {
+    const answer = (status: number, headers: Record<string, string> = {}, body: object = {}) => async () => new Response(JSON.stringify(body), { status, headers });
+    const limited = githubStore(SETTINGS, answer(403, { "x-ratelimit-remaining": "0" }));
+    expect(await limited.list().then(() => "", String)).toContain("too many requests");
+    expect(await githubStore(SETTINGS, answer(429, { "retry-after": "60" })).list().then(() => "", String)).toContain("too many requests");
+    expect(await githubStore(SETTINGS, answer(403)).list().then(() => "", String)).toContain("the token may not do this");
+    const big = await githubStore(SETTINGS, answer(422, {}, { message: "Invalid request. content is too large" })).save("a.md", "x", "sha1");
+    expect(big).toEqual({ ok: false, message: "GitHub would not take this file (it may be too large)" });
+    const stale = await githubStore(SETTINGS, answer(422, {}, { message: "sha wasn't supplied" })).save("a.md", "x", "sha1");
+    expect(stale).toMatchObject({ ok: false, changed: true });
+});
+
+test("a title with a slash, spaces or dots is made a plain file name in the folder, not a folder of its own", async () => {
+    const github = mockGithub(POSTS);
+    const store = githubStore(SETTINGS, github.fetcher);
+    const made = await store.create("Why A/B tests", "words");
+    expect(made.id).toBe("src/content/blog/why-a-b-tests.md");
+    expect(await store.rename(made.id, "../../Up and out")).toBe("src/content/blog/up-and-out.md");
+    expect(await store.rename("src/content/blog/first.mdx", "First again")).toBe("src/content/blog/first-again.mdx");
+});
+
+test("a file that is not UTF-8 is refused rather than opened with replacement characters that saving would write back", async () => {
+    const latin = new Uint8Array([0x43, 0x61, 0x66, 0xe9, 0x0a]);
+    const store = githubStore(SETTINGS, async () => new Response(JSON.stringify({ sha: "s", encoding: "base64", content: btoa(String.fromCharCode(...latin)), size: 5 }), { status: 200 }));
+    expect(await store.open("old.md").then(() => "", String)).toContain("old.md is not UTF-8 text");
+    const folder = folderStore(memoryFolder("site", { "old.md": new Blob([latin]) }));
+    expect(await folder.open("old.md").then(() => "", String)).toContain("old.md is not UTF-8 text");
 });

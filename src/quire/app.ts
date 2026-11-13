@@ -13,7 +13,7 @@ import { blockPaths, lengthOf } from "./document";
 import { read } from "./read";
 import { emptyParts, opened, type Parts } from "./quire-file";
 import { copyDocument, fileName, type Entry, type Store } from "./store";
-import { browserStore, indexedTables } from "./store-browser";
+import { browserStore, indexedTables, memoryTables } from "./store-browser";
 import { filesStore, OPENABLE } from "./store-files";
 import { canOpen, folderStore, oneFileStore, type FileHandle, type FolderHandle } from "./store-folder";
 import { folderPath, forgetSettings, githubStore, keepSettings, readSettings, repository, type Fetcher } from "./store-github";
@@ -47,7 +47,10 @@ function local(): Storage | undefined {
 
 /** Starts mdQuire on an element. */
 export async function startApp(host: HTMLElement, options: AppOptions = {}) {
-    const browser = browserStore(await indexedTables(options.database));
+    // a browser that keeps nothing (some private windows, site data blocked) still opens mdQuire: documents
+    // are then kept in this tab only, and the status says so, as it does for a file opened from the computer
+    const tables = await indexedTables(options.database).catch(() => undefined);
+    const browser = tables ? browserStore(tables) : { ...browserStore(memoryTables()), note: "This browser is not keeping documents, so this one is kept in this tab only: download it to keep it." };
     const files = filesStore();
     let folder: Store | undefined;
     let settings = readSettings(local());
@@ -74,7 +77,11 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
     const remember = (store: Store, entry: Entry) => {
         const place = keyOf(store);
         // a file or folder opened from the computer cannot be opened again without being chosen again
-        if (place === "browser" || place === "github") local()?.setItem(PLACE_KEY, JSON.stringify({ place, id: entry.id, name: entry.name }));
+        try {
+            if (place === "browser" || place === "github") local()?.setItem(PLACE_KEY, JSON.stringify({ place, id: entry.id, name: entry.name }));
+        } catch {
+            // a browser with no room keeps working; the document is only not opened again next time
+        }
     };
 
     // the documents list is shown for a place, which is the current document's until another is chosen
@@ -122,9 +129,9 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
         const picked = chooser.files?.[0];
         chooser.value = "";
         if (!picked) return;
-        const entry = await files.add(picked).catch(() => undefined);
+        const entry = await files.add(picked).catch((error) => void editor.say("Not opened", `${picked.name} was not opened: ${error instanceof Error ? error.message : String(error)}`));
         if (!entry) return;
-        await editor.open(files, entry);
+        if (!(await editor.open(files, entry))) return;
         await showEditor();
         editor.surface.focus();
     });
@@ -134,7 +141,7 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
         const [handle] = (await pickers.showOpenFilePicker?.({ types: [{ description: "Markdown and .quire documents", accept: { "text/markdown": [".md", ".mdx", ".markdown", ".txt"], "application/zip": [".quire"] } }] }).catch(() => [])) ?? [];
         if (!handle) return;
         const store = oneFileStore(handle);
-        await editor.open(store, { id: handle.name, name: handle.name });
+        if (!(await editor.open(store, { id: handle.name, name: handle.name }))) return;
         menu.close(false);
         await showEditor();
     };
@@ -191,8 +198,8 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
                 await showDocuments();
             },
             remove: async (entry) => {
-                await shown.remove(entry.id).catch(() => undefined);
-                await showDocuments();
+                const problem = await shown.remove(entry.id).then(() => undefined, (error) => `${entry.name} was not taken away: ${error instanceof Error ? error.message : String(error)}`);
+                await showDocuments(problem);
             },
             restore: async (entry) => {
                 await browser.restore(entry.id);
@@ -232,7 +239,11 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
                     return `It could not be opened: ${error instanceof Error ? error.message : String(error)}`;
                 }
                 const storage = local();
-                if (storage) keepSettings(next, storage);
+                try {
+                    if (storage) keepSettings(next, storage);
+                } catch {
+                    return "It could not be kept in this browser, which has no room or keeps nothing.";
+                }
                 settings = next;
                 github = store;
                 shown = store;
@@ -287,7 +298,7 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
     /** Opens a document from its picture on the home screen. */
     async function enter(store: Store, entry: Entry, from: HTMLElement) {
         const picture = boxOf(from);
-        await editor.open(store, entry);
+        if (!(await editor.open(store, entry))) return;
         await showEditor(picture);
         editor.surface.focus();
     }
@@ -295,7 +306,7 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
     /** Makes something new from a way of starting, and opens it from its picture. */
     async function startFrom(template: Template, from: HTMLElement) {
         const picture = boxOf(from);
-        await editor.create(browser, template.name, template.text, template.quire ? emptyParts() : undefined);
+        if (!(await editor.create(browser, template.name, template.text, template.quire ? emptyParts() : undefined))) return;
         await showEditor(picture);
         // the last line a template starts with stands in for what is written there, and is selected, so that typing takes its place
         const paths = blockPaths(editor.surface.getDocument());
@@ -326,7 +337,8 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
         if (shelf.shown()) return;
         menu.close(false);
         const current = editor.current();
-        await editor.flush();
+        // words that could not be saved keep the writer in the document until she chooses
+        if (!(await editor.ready())) return;
         await shelf.refresh();
         scrollTo({ top: 0, behavior: "instant" });
         options.top?.classList.add("away");
@@ -339,7 +351,13 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
             picture.style.visibility = "";
         }
         host.classList.add("shelved");
-        await editor.leave();
+        if (!(await editor.leave())) {
+            // typed while going home and not saved: back to the document
+            host.classList.remove("shelved");
+            options.top?.classList.remove("away");
+            shelf.hide();
+            return;
+        }
         local()?.removeItem(PLACE_KEY);
         shelf.element.querySelector<HTMLElement>(".quire-card-open")?.focus({ preventScroll: true });
     }

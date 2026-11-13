@@ -78,6 +78,33 @@ fn a_row_gets_the_same_answer_whatever_rows_are_beside_it() {
 }
 
 #[test]
+fn adam_taken_up_again_goes_on_as_if_it_had_stepped_and_never_hangs() {
+    let grads = [0.3f32, -1.0, 2.0];
+    let stepped = |adam: &mut Adam| {
+        let mut weights = vec![1.0f32; 3];
+        adam.step(&mut weights, &grads, 0.01);
+        weights.iter().map(|w| w.to_bits()).collect::<Vec<u32>>()
+    };
+    // taken up after 50 steps, it steps as one that took them
+    let mut walked = Adam::new(3);
+    let mut scratch = vec![0.0f32; 3];
+    for _ in 0..50 {
+        walked.step(&mut scratch, &[0.0; 3], 0.0);
+    }
+    let mut taken = Adam::new(3);
+    taken.restart_at(50);
+    assert_eq!(stepped(&mut taken), stepped(&mut walked));
+    // and a count of billions, from a spoiled saved state, is taken up at once, not counted out
+    let began = std::time::Instant::now();
+    let (mut far, mut farther) = (Adam::new(3), Adam::new(3));
+    far.restart_at(1_000_000);
+    farther.restart_at(u32::MAX - 1);
+    assert!(began.elapsed().as_secs_f32() < 0.5, "took {:?}", began.elapsed());
+    assert_eq!(farther.steps, u32::MAX - 1);
+    assert_eq!(stepped(&mut far), stepped(&mut farther));
+}
+
+#[test]
 fn adam_finds_the_bottom_of_a_bowl() {
     let centre = [3.0f32, -2.0, 0.5, 10.0];
     let mut x = vec![0.0f32; 4];

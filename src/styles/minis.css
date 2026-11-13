@@ -67,21 +67,20 @@
     height: 16rem;
     touch-action: pan-y;
     cursor: grab;
+    user-select: none;
+    -webkit-user-select: none;
 }
 
 .mote canvas:active {
     cursor: grabbing;
 }
 
-.mote canvas {
-    user-select: none;
-    -webkit-user-select: none;
-}
-
 .mote canvas:focus {
     outline: none;
 }
 
+/* The canvas fills a frame that clips (.mote), so the site's ring is drawn just inside its edge: the one
+   exception, with the type tester, that base.css names. */
 .mote canvas:focus-visible:not([data-touched]) {
     outline: 0.125rem solid var(--accent);
     outline-offset: -0.125rem;
@@ -220,23 +219,20 @@
 
 /* A line to type on is a line: a rule under the words, the accent when it is being typed on. */
 .mote-panel input[type="text"] {
+    min-width: 0;
+    flex: 1;
     padding: 0.2rem 0;
-    border-bottom: 0.0625rem solid var(--rule);
+    border-bottom: 0.0625rem solid var(--field-edge);
     transition: border-color 0.15s ease;
 }
 
+/* the rule takes the accent, and the keyboard has the site's ring as well (base.css) */
 .mote-panel input[type="text"]:focus {
-    outline: none;
     border-bottom-color: var(--accent);
 }
 
 .mote-panel input[type="text"]::placeholder {
     color: color-mix(in oklch, var(--muted) 70%, transparent);
-}
-
-.mote-panel input[type="text"] {
-    min-width: 0;
-    flex: 1;
 }
 
 .mote-panel h2 {
@@ -396,22 +392,13 @@
     color: var(--muted);
 }
 
-/* How many of that die are in the hand. */
-/* It grows in with the first press of its die and shrinks away when the hand is cleared. */
+/* How many of that die are in the hand. It grows in with the first press of its die and shrinks away when the hand is cleared. */
 .dice-count {
     scale: 0;
     opacity: 0;
     transition:
         scale 0.3s var(--ease),
         opacity 0.2s ease;
-}
-
-.dice-count.on {
-    scale: 1;
-    opacity: 1;
-}
-
-.dice-count {
     position: absolute;
     top: -0.4rem;
     right: -0.4rem;
@@ -424,6 +411,11 @@
     font-weight: 600;
     line-height: 1.4rem;
     text-align: center;
+}
+
+.dice-count.on {
+    scale: 1;
+    opacity: 1;
 }
 
 /* the main thing to press says where it leads, with the site's arrow */
@@ -443,8 +435,15 @@
 
     .dice-count,
     .plinko-word,
-    .mini-preview {
+    .mini-preview,
+    .mini-stage canvas {
         transition: none;
+    }
+
+    .mote-panel button {
+        transition:
+            color 0.15s ease,
+            text-decoration-color 0.15s ease;
     }
 
     .mini-list a:hover .mini-preview,
@@ -492,9 +491,15 @@
 
 /* The password's line opens when there is a password and draws shut when there is not. */
 .plinko-word {
+    display: block;
     max-height: 0;
+    margin: 0 0 0.5rem;
     opacity: 0;
     overflow: hidden;
+    font-family: var(--font-code);
+    font-size: 1.25rem;
+    overflow-wrap: anywhere;
+    user-select: all;
     transition:
         max-height 0.45s var(--ease),
         opacity 0.3s ease,
@@ -508,15 +513,6 @@
 
 .plinko-word:not(.shown) {
     margin-bottom: 0;
-}
-
-.plinko-word {
-    display: block;
-    margin: 0 0 0.5rem;
-    font-family: var(--font-code);
-    font-size: 1.25rem;
-    overflow-wrap: anywhere;
-    user-select: all;
 }
 
 .plinko-settings {
@@ -561,14 +557,17 @@
     min-height: calc(clamp(16rem, 48svh, 26rem) + var(--panel-room));
 }
 
-/* One grid for the whole mini: the scene and the ground's strip on the left, the column on the right. */
+/* One grid for the whole mini: the scene and the ground's strip on the left, the column on the right.
+   The scene keeps its own height, so that on a laptop the walker is in the first screen; when the
+   column is taller, as it always is, the room left over goes under the strip, not into the scene. */
 .mini-stage[data-mini="walker"]:has(.walker-side) {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 18rem;
-    grid-template-rows: minmax(clamp(16rem, 48svh, 26rem), 1fr) auto;
+    grid-template-rows: clamp(16rem, 48svh, 26rem) auto 1fr;
     grid-template-areas:
         "scene side"
-        "ground side";
+        "ground side"
+        ". side";
     min-height: 0;
 }
 
@@ -578,8 +577,8 @@
 }
 
 /* Once laid out, the scene fills its place in the grid: lower than other minis, since sky above a
-   walker seen from the side says nothing, and taller when the column beside it is, as when the
-   brain is open. Placed absolutely, so its own size never feeds back into the grid's. */
+   walker seen from the side says nothing. Placed absolutely, so its own size never feeds back into
+   the grid's. */
 .mini-stage[data-mini="walker"]:has(.walker-side) > canvas {
     position: absolute;
     inset: 0;
@@ -930,8 +929,11 @@
         aspect-ratio: 4 / 3;
     }
 
+    /* It keeps room for three lines from the first, the most its sentence takes on a phone once its
+       numbers have grown, so nothing under it moves down as they do. */
     .mini-stage[data-mini="generalist"] .walker-status {
         grid-area: status;
+        min-height: calc(3lh + 0.8rem + 0.0625rem);
         padding-block: 0.6rem 0.2rem;
         border-top: 0.0625rem solid var(--rule);
     }

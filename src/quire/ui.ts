@@ -152,6 +152,9 @@ function tips() {
         }, warm ? 60 : 500);
     });
     for (const name of ["pointerdown", "scroll", "keydown"]) addEventListener(name, hide, { capture: true, passive: true });
+    // the pointer leaving the window, or the window going out of sight, takes the label away too, and gives the control its title back
+    document.addEventListener("pointerout", (event) => !event.relatedTarget && hide());
+    document.addEventListener("visibilitychange", hide);
 }
 
 /** A button with a label for screen readers (shown as its tooltip too) that leaves the document's selection where it is when pressed. */
@@ -229,6 +232,15 @@ export function placeNear(target: Box, size: { width: number; height: number }, 
     return { left: Math.round(left), top: Math.round(top), side: chosen };
 }
 
+/**
+ * Whether a key belongs to an input method's composition: the Enter that picks a word in Chinese,
+ * Japanese or Korean, or the Escape that gives it up, is the input method's and not the field's.
+ * Safari ends the composition before that key arrives, so it is known there by its key code, 229.
+ */
+export function composing(event: KeyboardEvent): boolean {
+    return event.isComposing || event.keyCode === 229;
+}
+
 /** A field for a link's address, with a button to set it and, for a link already there, one to take it off. Enter sets, Escape cancels. */
 export function linkForm(current: string | undefined, done: { set(href: string): void; remove(): void; cancel(): void }): HTMLElement {
     const form = make("div", "quire-link");
@@ -241,6 +253,7 @@ export function linkForm(current: string | undefined, done: { set(href: string):
     const set = () => (field.value.trim() ? done.set(field.value.trim()) : current ? done.remove() : done.cancel());
     field.addEventListener("keydown", (event) => {
         event.stopPropagation();
+        if (composing(event)) return;
         if (event.key === "Enter") {
             event.preventDefault();
             set();
@@ -344,6 +357,35 @@ export interface Menu {
     isOpen(): boolean;
 }
 
+let optionCount = 0;
+
+/**
+ * Marks the active line of a list the arrow keys move through while the focus stays in the text
+ * (the slash menu, the emoji list): drawn lit, and said by a screen reader, the list being a listbox
+ * and the text pointing at its active option with aria-activedescendant.
+ */
+export function markActive(menu: Menu, owner: HTMLElement, active: number) {
+    const items = menu.box.querySelector<HTMLElement>(".quire-menu-items");
+    if (items) {
+        items.setAttribute("role", "listbox");
+        items.id ||= `quire-options-${++optionCount}`;
+        owner.setAttribute("aria-controls", items.id);
+    }
+    menu.box.querySelectorAll<HTMLElement>(".quire-menu-line").forEach((line, index) => {
+        line.id ||= `quire-option-${++optionCount}`;
+        line.setAttribute("role", "option");
+        line.classList.toggle("active", index === active);
+        line.setAttribute("aria-selected", String(index === active));
+        if (index === active) owner.setAttribute("aria-activedescendant", line.id);
+    });
+}
+
+/** Takes away what markActive told the text, once its list is closed. */
+export function unmarkActive(owner: HTMLElement) {
+    owner.removeAttribute("aria-activedescendant");
+    owner.removeAttribute("aria-controls");
+}
+
 /** Closes every open menu but one. */
 export function closeOthers(keep?: Menu) {
     for (const open of document.querySelectorAll<HTMLElement>(".quire-menu:popover-open")) if (open !== keep?.box) open.hidePopover();
@@ -401,6 +443,8 @@ export function flowMenu(label: string, options: { align?: "left" | "right"; cla
     box.setAttribute("aria-label", label);
     items.inert = true;
     let trigger: HTMLElement | undefined;
+    /** Where the keyboard was when the menu opened, if not on its control: a shortcut typed in the text opens a menu, and closing it goes back there. */
+    let came: HTMLElement | undefined;
     let opened = false;
     let giveFocus = false;
     /** The menu's size as it ends, and whether it went above its control. */
@@ -504,11 +548,14 @@ export function flowMenu(label: string, options: { align?: "left" | "right"; cla
     function fill(content: MenuItem[] | HTMLElement) {
         items.replaceChildren();
         items.removeAttribute("role");
+        items.removeAttribute("aria-label");
         if (content instanceof HTMLElement) {
             items.append(content);
             return;
         }
         items.setAttribute("role", "menu");
+        // the name goes on the element that is the menu, so that it is said with the menu
+        items.setAttribute("aria-label", label);
         const apple = mac();
         content.forEach((item) => {
             if (item.note) {
@@ -517,7 +564,9 @@ export function flowMenu(label: string, options: { align?: "left" | "right"; cla
             }
             const line = make("button", "quire-menu-line");
             line.type = "button";
-            line.setAttribute("role", "menuitem");
+            // a line that is on or off is said to be so: one of a group is a radio, one alone a checkbox
+            line.setAttribute("role", item.pressed === undefined ? "menuitem" : item.group ? "menuitemradio" : "menuitemcheckbox");
+            if (item.pressed !== undefined) line.setAttribute("aria-checked", String(item.pressed));
             if (item.pressed) line.classList.add("pressed");
             if (item.group) line.dataset.group = item.group;
             if (item.icon) line.append(typeof item.icon === "string" ? icon(item.icon) : item.icon);
@@ -534,7 +583,11 @@ export function flowMenu(label: string, options: { align?: "left" | "right"; cla
             }
             line.addEventListener("mousedown", (event) => event.preventDefault());
             line.addEventListener("click", () => {
-                if (item.group) for (const other of items.querySelectorAll<HTMLElement>(`[data-group="${item.group}"]`)) other.classList.toggle("pressed", other === line);
+                if (item.group)
+                    for (const other of items.querySelectorAll<HTMLElement>(`[data-group="${item.group}"]`)) {
+                        other.classList.toggle("pressed", other === line);
+                        if (other.hasAttribute("aria-checked")) other.setAttribute("aria-checked", String(other === line));
+                    }
                 else menu.close(false);
                 item.run();
             });
@@ -589,7 +642,9 @@ export function flowMenu(label: string, options: { align?: "left" | "right"; cla
             control.classList.remove("open");
             if (control instanceof HTMLButtonElement) control.popoverTargetElement = null;
         }
-        if (control?.isConnected && (giveFocus || inside)) control.focus({ preventScroll: true });
+        const returnTo = came?.isConnected ? came : control;
+        came = undefined;
+        if (returnTo?.isConnected && (giveFocus || inside)) returnTo.focus({ preventScroll: true });
         giveFocus = false;
         options.onClose?.();
         const at = final;
@@ -647,6 +702,8 @@ export function flowMenu(label: string, options: { align?: "left" | "right"; cla
             box.classList.add("open");
             box.classList.toggle("sliding", sliding);
             if (!opened) {
+                const now = document.activeElement;
+                came = now instanceof HTMLElement && now !== from && now !== document.body && !box.contains(now) ? now : undefined;
                 opened = true;
                 box.showPopover();
             }

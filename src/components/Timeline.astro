@@ -255,7 +255,9 @@ import "../styles/timeline.css";
         window.addEventListener("touchcancel", () => (touching = false));
 
         window.addEventListener("keydown", (event) => {
-            inputAt = performance.now();
+            // Only keys that scroll count as scrolling: Tab or Enter on a link moves the page to
+            // where focus went, and that is not to be held back.
+            if (["ArrowDown", "ArrowUp", "PageDown", "PageUp", "Home", "End", " "].includes(event.key)) inputAt = performance.now();
             if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
             if (event.target instanceof HTMLElement && event.target.closest("input, textarea, select, [contenteditable]")) return;
             // Space presses a focused button; it is not the timeline's to take
@@ -275,6 +277,23 @@ import "../styles/timeline.css";
                 event.preventDefault();
                 rest();
             }
+        });
+
+        // Focus going somewhere lets the page go there. Into a moment, by Tab or a screen reader,
+        // it shows that moment and rests the page on the timeline; anywhere else, any glide onto
+        // the timeline stops and the browser's own scroll to the focused thing is left alone.
+        document.addEventListener("focusin", (event) => {
+            const moment = event.target instanceof Element ? event.target.closest<HTMLElement>(".moment") : null;
+            const index = moment ? moments.indexOf(moment) : -1;
+            if (index >= 0) {
+                if (index !== current) show(index);
+                rest();
+                return;
+            }
+            cancelAnimationFrame(gliding);
+            gliding = 0;
+            inputAt = 0;
+            swallowing = false;
         });
 
         window.addEventListener("resize", measure);

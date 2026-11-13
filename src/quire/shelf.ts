@@ -14,7 +14,7 @@
 import { type Document } from "./document";
 import { read } from "./read";
 import { createSurface } from "./surface";
-import { dots, flowMenu, icon, make, still, type Box, type MenuItem } from "./ui";
+import { composing, dots, flowMenu, icon, make, still, type Box, type MenuItem } from "./ui";
 import { when } from "./versions";
 
 /** A way to start something new: what it is called, the name and text it starts with, and whether it is a `.quire` document. */
@@ -202,6 +202,7 @@ export function createShelf(options: ShelfOptions) {
         };
         field.addEventListener("keydown", (event) => {
             event.stopPropagation();
+            if (composing(event)) return;
             if (event.key === "Enter") void finish(true);
             if (event.key === "Escape") void finish(false);
         });

@@ -244,6 +244,3 @@ export function openDialog(from: HTMLElement | undefined, parts: DialogParts): D
     }
     return dialog;
 }
-
-/** The dialog open now, if there is one. */
-export const openNow = (): Dialog | undefined => current;

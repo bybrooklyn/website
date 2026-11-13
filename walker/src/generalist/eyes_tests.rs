@@ -33,7 +33,7 @@ fn a_ray_cast_the_quick_way_meets_what_casting_past_everything_meets() {
         let group = stage.world.bodies[body.creature.torso as usize].group;
         for _ in 0..2000 {
             let from = Vec2::new(-5.0 + 70.0 * random.unit(), -2.0 + 5.0 * random.unit());
-            let (s, c) = sin_cos(random.unit() * 6.283);
+            let (s, c) = sin_cos(random.unit() * core::f32::consts::TAU);
             let toward = Vec2::new(c, s);
             let skip = if random.unit() < 0.5 { group } else { 0 };
             let quick = stage.world.cast(from, toward, RANGE, skip);

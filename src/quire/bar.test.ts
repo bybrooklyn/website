@@ -3,6 +3,10 @@
 // Run with `bun test src/quire`.
 
 import { expect, test } from "bun:test";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { browser, chromium, type Browser } from "../../scripts/browser";
 import { addCode, addDivider, applyFormat, BASE_SIZE, clearFormat, FOLDS, formatAt, indentBy, nextSize, SIZE_STEPS, sizeNumber, sizeValue, typedSize, addFootnote, addImage, addTable, align, aligned, center, spacedAt, spacing, color, currentStyle, FLAGS, font, FONTS, highlight, link, linkAt, pressedAt, setStyleOf, size, toggle, toggleList, wordAt, type Action } from "./bar";
 import { collect } from "./styling";
 import { markdownOnly, type Paragraph, type TextRun } from "./document";
@@ -204,3 +208,103 @@ test("the tools fold in the order she gave: paint format, print, clear formattin
     const order = Object.entries(FOLDS).sort((a, b) => a[1] - b[1]).map(([name]) => name);
     expect(order.slice(0, 5)).toEqual(["paint", "print", "clear", "indent", "spacing"]);
 });
+
+// ---- the bar in a browser: a surface and its bar, with the site's styles ----
+
+/** Opens a page holding a surface with the markdown and its bar, and runs the body with it. */
+async function onPage(markdown: string, width: number, body: (tab: Browser) => Promise<void>) {
+    const folder = await mkdtemp(join(tmpdir(), "quire-bar-"));
+    const tab = await browser({ width, height: 800 });
+    try {
+        await Bun.write(
+            `${folder}/page.ts`,
+            `import { createSurface } from "${import.meta.dir}/surface.ts";
+            import { createBar } from "${import.meta.dir}/bar.ts";
+            import * as model from "${import.meta.dir}/document.ts";
+            import { read } from "${import.meta.dir}/read.ts";
+            import { write } from "${import.meta.dir}/write.ts";
+            const host = document.querySelector("#host");
+            const sheet = document.createElement("div");
+            host.append(sheet);
+            const surface = createSurface(sheet, read(${JSON.stringify(markdown)}));
+            const bar = createBar(surface, { name: "Test", commands: () => [{ label: "Alpha", run() {} }, { label: "Also", run() {} }, { label: "Another", run() {} }] });
+            host.prepend(bar.element, bar.statusLine);
+            Object.assign(window, { surface, bar, model, md: () => write(surface.getDocument()) });`,
+        );
+        const built = await Bun.build({ entrypoints: [`${folder}/page.ts`], target: "browser" });
+        if (!built.success) throw new Error(built.logs.join("\n"));
+        const styles = `${import.meta.dir}/../styles`;
+        const css = (await Promise.all(["tokens.css", "base.css", "quire.css"].map((name) => Bun.file(`${styles}/${name}`).text()))).join("\n");
+        await Bun.write(`${folder}/page.html`, `<!doctype html><meta charset="utf-8"><style>${css}</style><body class="quire-app"><div id="host"></div><script type="module">${await built.outputs[0]!.text()}</script></body>`);
+        await tab.open(`file://${folder}/page.html`, 300);
+        await body(tab);
+        expect(tab.errors).toEqual([]);
+    } finally {
+        await tab.close();
+        await rm(folder, { recursive: true, force: true });
+    }
+}
+
+const inBrowser = (name: string, run: () => Promise<void>) => test.skipIf(!chromium())(name, run, 60_000);
+
+inBrowser("the word count is made after a key, not inside it, and reads again only the block the key changed", () =>
+    onPage(Array.from({ length: 5000 }, (_, index) => "Paragraph " + index + " of five words.").join("\n\n") + "\n", 1200, async (tab) => {
+        const count = () => tab.run<string>("document.querySelector('.quire-count').textContent");
+        expect(await count()).toBe("25,000 words");
+        // the key's own work, from the change to the last listener, leaves the count as it was
+        const during = await tab.run<string>(`(() => {
+            surface.focus();
+            surface.setSelection({ anchor: { path: [2500], offset: 0 }, focus: { path: [2500], offset: 0 } });
+            surface.run((doc, selection) => model.insertText(doc, selection.focus, "two more "));
+            return document.querySelector(".quire-count").textContent;
+        })()`);
+        expect(during).toBe("25,000 words");
+        await tab.wait(300);
+        expect(await count()).toBe("25,002 words");
+    }),
+);
+
+inBrowser("the bar always has one Tab stop, even when the tool that held it folds away", () =>
+    onPage("Text\n", 760, async (tab) => {
+        await tab.wait(300);
+        const stops = () => tab.run<string[]>(`[...document.querySelectorAll(".quire-bar-strip button, .quire-bar-strip input")].filter((each) => each.tabIndex === 0 && !each.closest(".folded, .away")).map((each) => each.getAttribute("aria-label"))`);
+        expect(await tab.run<number>("document.querySelectorAll('.quire-tool.folded').length")).toBeGreaterThan(0);
+        expect((await stops()).length).toBe(1);
+    }),
+);
+
+inBrowser("ArrowDown from the search of the menus goes to the first result, not the second", () =>
+    onPage("Text\n", 1300, async (tab) => {
+        await tab.wait(200);
+        await tab.run("bar.search()");
+        await tab.wait(300);
+        await tab.type("a");
+        await tab.wait(50);
+        await tab.press("ArrowDown");
+        expect(await tab.run<string>("document.activeElement.textContent")).toBe("Alpha");
+    }),
+);
+
+inBrowser("a size typed in the field and Enter is one step of undo, not two", () =>
+    onPage("a word here\n", 1300, async (tab) => {
+        await tab.wait(200);
+        await tab.run("surface.focus(); surface.setSelection({ anchor: { path: [0], offset: 2 }, focus: { path: [0], offset: 6 } })");
+        const at = await tab.run<{ x: number; y: number; inert: boolean }>("(() => { const field = document.querySelector('.quire-size-field'); const box = field.getBoundingClientRect(); return { x: box.left + box.width / 2, y: box.top + box.height / 2, inert: !!field.closest('[inert]') }; })()");
+        expect(at.inert ? await tab.run<string>("[...document.querySelectorAll('[inert]')].map((each) => each.className + ' ' + each.offsetWidth).join(', ')") : "").toBe("");
+        await tab.click(at.x, at.y);
+        await tab.run("document.querySelector('.quire-size-field').select()");
+        await tab.type("20");
+        await tab.press("Enter");
+        await tab.wait(50);
+        expect(await tab.run<string>("md()")).toContain("font-size");
+        await tab.run("surface.undo()");
+        expect(await tab.run<string>("md()")).toBe("a word here\n");
+    }),
+);
+
+inBrowser("the word count is not a live region, so it is not read out at every pause in typing", () =>
+    onPage("Text\n", 1300, async (tab) => {
+        expect(await tab.run<string | null>("document.querySelector('.quire-count').getAttribute('aria-live')")).toBeNull();
+        expect(await tab.run<string | null>("document.querySelector('.quire-count').closest('[aria-live], [role=status]')?.className ?? null")).toBeNull();
+    }),
+);

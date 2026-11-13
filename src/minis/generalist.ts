@@ -17,7 +17,7 @@ import { el, type Mote, type Scene } from "../mote/stage";
 import type { Kept, Order as PracticeOrder, Report as PracticeReport } from "../scripts/generalist-practice";
 import type { Order, Report } from "../scripts/generalist-worker";
 import { BRAIN, DEFAULT_RECIPE, KINDS, LEGS, POPULATION, SECONDS, SEEN, anotherSeed, brainColumns, counted, engineAddress, rewarded, engineRecipe, fromLink, lasted, linkParts, list, start as startEngine, valid, write, write64, type Engine, type Kind, type Recipe } from "./roaming";
-import { EFFORTS, machine, workersFor, type Effort } from "./walking";
+import { EFFORTS, machine, tenths, workersFor, type Effort } from "./walking";
 
 export const label = "A little creature with legs, seen from the side, finding its way over gaps, ledges, water and boxes in a world made from a seed. Faint lines from its eye show what it sees.";
 
@@ -55,11 +55,16 @@ function store(): Promise<IDBDatabase> {
 async function keeping<T>(what: (kept: IDBObjectStore) => IDBRequest<T>): Promise<T | undefined> {
     try {
         const db = await store();
-        return await new Promise<T | undefined>((done) => {
-            const asked = what(db.transaction("kept", "readwrite").objectStore("kept"));
-            asked.onsuccess = () => done(asked.result);
-            asked.onerror = () => done(undefined);
-        });
+        // each use opens the store and closes it after, rather than leaving a connection open every half minute
+        try {
+            return await new Promise<T | undefined>((done) => {
+                const asked = what(db.transaction("kept", "readwrite").objectStore("kept"));
+                asked.onsuccess = () => done(asked.result);
+                asked.onerror = () => done(undefined);
+            });
+        } finally {
+            db.close();
+        }
     } catch {
         return undefined;
     }
@@ -112,6 +117,8 @@ export default function generalist(m: Mote): Scene {
     let holding = false;
     let pushing: { x: number; y: number } | undefined;
     let notice = { text: "", until: 0 };
+    /** Why learning has stopped, said in the status line in place of how it goes, if it has. */
+    let stopped = "";
 
     const tell = (order: Order | PracticeOrder) => worker?.postMessage(order);
 
@@ -146,6 +153,7 @@ export default function generalist(m: Mote): Scene {
             [camera.x, camera.y, last, holding, pushing] = [0, 0.5, undefined, false, undefined];
         }
         made = { kind: "begin", setup: id, legs: recipe.legs, seed, difficulty, amounts, brainSeed };
+        stopped = "";
         if (how === "practice") {
             practice = { seconds: 0, steps: 0, reached: 0, here: -1, speed: 0, waited: [0, 0], hard: 0 };
             policy = undefined;
@@ -201,7 +209,7 @@ export default function generalist(m: Mote): Scene {
     /** Puts a brain on show, from the start. */
     const take = (brain: Float32Array) => {
         if (!engine || brain.length !== engine.weights_length()) return;
-        new Float32Array(engine.memory.buffer, engine.weights_room(), brain.length).set(brain);
+        write(engine, engine.weights_room(), brain);
         engine.weights_load();
         [shown, furthest] = [true, Math.max(furthest, engine.best_distance())];
         last = undefined;
@@ -209,7 +217,7 @@ export default function generalist(m: Mote): Scene {
 
     const hear = (report: Report | PracticeReport) => {
         if (report.kind === "practised") return hearPractice(report);
-        if (report.kind === "failed") return how === "practice" ? undefined : learnHere();
+        if (report.kind === "failed") return how === "practice" ? practiceStopped() : learnHere();
         if (report.setup !== id) return;
         [generation, runs] = [report.generation, report.runs];
         if (report.brain) waiting = report.brain;
@@ -218,6 +226,12 @@ export default function generalist(m: Mote): Scene {
             waiting = undefined;
         }
         if (shown) note(generation, furthest);
+        changed();
+    };
+
+    /** Practice has no way to learn on the page itself, so when its worker fails the visitor is told. */
+    const practiceStopped = () => {
+        stopped = "Practice has stopped: something went wrong in it. Changing the world or starting over tries again";
         changed();
     };
 
@@ -272,7 +286,7 @@ export default function generalist(m: Mote): Scene {
         try {
             worker = hire();
             worker.onmessage = (event: MessageEvent<Report | PracticeReport>) => hear(event.data);
-            worker.onerror = () => (how === "practice" ? undefined : learnHere());
+            worker.onerror = () => (how === "practice" ? practiceStopped() : learnHere());
             staff(workersNow() - 1);
         } catch {
             here = how === "evolution";
@@ -282,12 +296,20 @@ export default function generalist(m: Mote): Scene {
     else here = true;
 
     void fetch(engineAddress())
-        .then((answer) => answer.arrayBuffer())
+        .then((answer) => {
+            if (!answer.ok) throw new Error(`the engine answered ${answer.status}`);
+            return answer.arrayBuffer();
+        })
         .then(startEngine)
         .then((started) => {
             engine = started;
             if (m.debug) Object.assign(globalThis, { generalistEngine: started });
             begin();
+        })
+        .catch(() => {
+            // offline, blocked or missing: said, rather than "Loading." for ever
+            stopped = "The creature could not be loaded. Reloading the page may help";
+            changed();
         });
 
     // ---- the controls: a strip under the world, and a column beside it ----
@@ -567,8 +589,8 @@ export default function generalist(m: Mote): Scene {
         changed = () => {
             pause.textContent = paused ? "resume" : "pause";
             const practised = practice.seconds > 0 ? `Practised ${lasted(practice.seconds)}, ${counted(practice.steps)} steps` : "Starting to practise";
-            const gets = practice.here >= 0 ? `. It gets ${practice.here.toFixed(1)} m in this world now, ${practice.reached.toFixed(1)} m on average in practice` : shown ? ". Watching its try in this world" : "";
-            const now = !engine ? "Loading." : how === "practice" ? `${practised}${gets}` : !shown ? `Generation 0, ${runs} of ${POPULATION} tried` : `Generation ${generation}, furthest ${furthest.toFixed(1)} m`;
+            const gets = practice.here >= 0 ? `. It gets ${tenths(practice.here)} m in this world now, ${tenths(practice.reached)} m on average in practice` : shown ? ". Watching its try in this world" : "";
+            const now = stopped ? stopped : !engine ? "Loading." : how === "practice" ? `${practised}${gets}` : !shown ? `Generation 0, ${runs} of ${POPULATION} tried` : `Generation ${generation}, furthest ${tenths(furthest)} m`;
             const text = m.time < notice.until && notice.text ? notice.text : `${now}${paused ? ", paused" : ""}`;
             if (status.textContent !== text) status.textContent = text;
             drawChart();
