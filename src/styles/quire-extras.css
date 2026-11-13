@@ -540,6 +540,8 @@
 .quire-note:is(:hover, :focus-within, .now, .gone) .quire-note-actions,
 .quire-notes-list .quire-note-actions,
 .quire-note-form .quire-note-actions {
+    justify-content: flex-end;
+    gap: 0.4rem;
     max-height: 2.5rem;
     margin-top: 0.35rem;
     opacity: 1;

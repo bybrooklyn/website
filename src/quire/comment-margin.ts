@@ -60,10 +60,10 @@ export function moveNotes(from: string, to: string) {
 /** Builds the notes' margin and list for a surface. */
 export function createCommentMargin(surface: Surface, options: { place: () => string | undefined }) {
     const margin = make("aside", "quire-notes");
-    margin.setAttribute("aria-label", "Notes");
+    margin.setAttribute("aria-label", "Comments");
     const cards = make("div", "quire-notes-cards");
     margin.append(cards);
-    const list = flowMenu("Notes", { className: "quire-notes-menu", align: "right" });
+    const list = flowMenu("Comments", { className: "quire-notes-menu", align: "right" });
     let current: string | undefined;
     let draft: { range: Range; card: HTMLElement } | undefined;
     let editing: string | undefined;
@@ -112,15 +112,15 @@ export function createCommentMargin(surface: Surface, options: { place: () => st
         if (said) element.append(make("p", "quire-note-meta", said));
         if (gone) element.append(make("p", "quire-note-gone", comment.quote ? `Its words, “${comment.quote.length > 60 ? `${comment.quote.slice(0, 60)}…` : comment.quote}”, are gone from the text. Undo brings them back.` : "Its words are gone from the text."));
         const actions = make("div", "quire-note-actions");
-        if (!gone) actions.append(control(comment.resolved ? "Reopen the note" : "Resolve the note", comment.resolved ? "Reopen" : "Resolve", () => keep((now) => changeComment(now, comment.id, { resolved: !comment.resolved })), "quire-button quire-note-button"));
+        if (!gone) actions.append(control(comment.resolved ? "Reopen the comment" : "Resolve the comment", comment.resolved ? "Reopen" : "Resolve", () => keep((now) => changeComment(now, comment.id, { resolved: !comment.resolved })), "quire-button quire-note-button"));
         if (!gone && !comment.resolved)
             actions.append(
-                control("Edit the note", "Edit", () => {
+                control("Edit the comment", "Edit", () => {
                     editing = comment.id;
                     redraw();
                 }, "quire-button quire-note-button"),
             );
-        actions.append(control("Delete the note", icon("trash"), () => keep((now) => deleteComment(now, comment.id))));
+        actions.append(control("Delete the comment", icon("trash"), () => keep((now) => deleteComment(now, comment.id))));
         element.append(actions);
         element.addEventListener("click", (event) => {
             if ((event.target as HTMLElement).closest("button, textarea")) return;
@@ -129,14 +129,14 @@ export function createCommentMargin(surface: Surface, options: { place: () => st
         return element;
     }
 
-    /** A field to write a note in: Ctrl+Enter or Keep keeps it, Escape or Cancel lets it go. */
+    /** A field to write a comment in: Ctrl+Enter or Comment keeps it, Escape or Cancel lets it go. */
     function field(value: string, done: (text: string) => void, cancel: () => void): HTMLElement {
         const form = make("div", "quire-note-form");
         const area = make("textarea", "quire-note-field");
         area.value = value;
         area.rows = 3;
-        area.placeholder = "Write a note";
-        area.setAttribute("aria-label", "Note");
+        area.placeholder = "Write a comment";
+        area.setAttribute("aria-label", "Comment");
         area.addEventListener("keydown", (event) => {
             event.stopPropagation();
             if (event.key === "Escape") {
@@ -148,7 +148,8 @@ export function createCommentMargin(surface: Surface, options: { place: () => st
             }
         });
         const buttons = make("div", "quire-note-actions");
-        buttons.append(control("Keep the note", "Keep", () => done(area.value.trim()), "quire-button quire-note-button quire-note-keep"), control("Cancel", "Cancel", cancel, "quire-button quire-note-button"));
+        // in every dialog's order: the quiet cancel, then the filled button, named as Docs names it, at the right
+        buttons.append(control("Cancel", "Cancel", cancel, "quire-button quire-note-button"), control("Comment", "Comment", () => done(area.value.trim()), "quire-button quire-note-button quire-note-keep"));
         form.append(area, buttons);
         requestAnimationFrame(() => area.isConnected && area.focus({ preventScroll: true }));
         return form;
@@ -182,7 +183,7 @@ export function createCommentMargin(surface: Surface, options: { place: () => st
         if (draft) made.push(draft.card);
         // with no open notes the margin is the details' again, and the resolved ones are in the list from View
         if (resolved > 0 && open.length > 0) {
-            const more = control("Show the resolved notes", `${resolved} resolved`, (button) => showList(button), "quire-button quire-notes-resolved");
+            const more = control("Show the resolved comments", `${resolved} resolved`, (button) => showList(button), "quire-button quire-notes-resolved");
             more.dataset.id = "resolved";
             made.push(more);
         }
@@ -207,13 +208,13 @@ export function createCommentMargin(surface: Surface, options: { place: () => st
         const head = make("div", "quire-notes-head");
         const all = inOrder(doc(), spans);
         const open = all.filter((each) => !each.resolved);
-        head.append(make("span", "quire-notes-count", open.length === 1 ? "1 open note" : `${open.length} open notes`));
-        head.append(control("Previous note", icon("chevron"), () => go(-1), "quire-button quire-notes-back"), control("Next note", icon("chevron"), () => go(1), "quire-button quire-notes-on"));
+        head.append(make("span", "quire-notes-count", open.length === 1 ? "1 open comment" : `${open.length} open comments`));
+        head.append(control("Previous comment", icon("chevron"), () => go(-1), "quire-button quire-notes-back"), control("Next comment", icon("chevron"), () => go(1), "quire-button quire-notes-on"));
         box.append(head);
         if (draft && !roomy()) box.append(draft.card);
         for (const comment of all) box.append(card(comment, true));
-        if (all.length === 0 && !draft) box.append(make("p", "quire-notes-empty", "No notes yet. Select some words and choose Insert, Comment."));
-        if (!doc().quire) box.append(make("p", "quire-notes-where", "A Markdown file cannot hold notes, so these are kept in this browser only."));
+        if (all.length === 0 && !draft) box.append(make("p", "quire-notes-empty", "No comments yet. Select some words and choose Insert, Comment."));
+        if (!doc().quire) box.append(make("p", "quire-notes-where", "A Markdown file cannot hold comments, so these are kept in this browser only."));
         return box;
     }
     let listFrom: HTMLElement | undefined;
