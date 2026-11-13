@@ -1133,12 +1133,6 @@ function inline(text: string, context: Context): Run[] {
                 continue;
             }
         }
-        // inside a web address `==` and `||` are part of the address
-        if ((char === "=" || char === "|") && address?.[index]) {
-            buffer += char;
-            index++;
-            continue;
-        }
         if (char === "*" || char === "_" || char === "~" || char === "=" || (char === "|" && !context.cell)) {
             let count = 0;
             while (text[index + count] === char) count++;
@@ -1162,7 +1156,8 @@ function inline(text: string, context: Context): Run[] {
                 char,
                 count,
                 length: count,
-                open: char === "_" ? left && (!right || punctuation(before)) : left,
+                // inside a web address `==` and `||` are part of the address: they may close a mark opened before it, never open one
+                open: char === "_" ? left && (!right || punctuation(before)) : loose && address?.[index] ? false : left,
                 close: char === "_" ? right && (!left || punctuation(after)) : right,
             });
             index += count;

@@ -502,8 +502,10 @@ function writeLeaves(all: Leaf[], context: Context, cell: boolean, before = " ",
         else if (leaf.kind === "break") token.text = cell ? "<br>" : "\\\n";
         else if (leaf.kind === "footnote") token.text = `[^${said(leaf.label, "a footnote's label")}]`;
         else if (leaf.kind === "emoji") {
-            // a shortcode against a letter or digit would not be read as one (emoji.ts), so there the emoji itself is written
-            const glued = /[\p{L}\p{N}]/u.test(beside(index - 1, -1)) || /[\p{L}\p{N}]/u.test(beside(index + 1, 1));
+            // a shortcode against a letter or digit, or on the end of a web address, would not be read as
+            // one (emoji.ts), so there the emoji itself is written
+            const prefix = before + tokens.slice(0, index).map((each) => (isSign(each) ? signText(each) : each.text)).join("");
+            const glued = /[\p{L}\p{N}]/u.test(beside(index - 1, -1)) || /[\p{L}\p{N}]/u.test(beside(index + 1, 1)) || inAddress(`${prefix}:`, prefix.length);
             token.text = glued && emojiOf(leaf.name) ? emojiOf(leaf.name)! : `:${said(leaf.name, "an emoji's name")}:`;
         }
         else if (leaf.kind === "html") token.text = said(leaf.html, "inline HTML");
@@ -543,6 +545,11 @@ function writeLeaves(all: Leaf[], context: Context, cell: boolean, before = " ",
             // a run that both closes one mark and opens another could be read either way
             if (opening.length && closing.length) for (const sign of opening) failing.add(sign.pair);
             if (opening.length && !opens) for (const sign of opening) failing.add(sign.pair);
+            // `==` and `||` written on the end of a web address are part of it, and open nothing (read.ts)
+            if (opening.length && loose && !isSpace(left)) {
+                const prefix = before + tokens.slice(0, index).map((token) => (isSign(token) ? signText(token) : token.text)).join("");
+                if (inAddress(prefix + char, prefix.length)) for (const sign of opening) failing.add(sign.pair);
+            }
             if (closing.length && !closes) for (const sign of closing) failing.add(sign.pair);
             index = end;
         }

@@ -579,14 +579,25 @@ export function addresses(text: string): Uint8Array | undefined {
     const out = new Uint8Array(text.length);
     let start = 0;
     let inside = false;
+    let depth = 0;
     for (let index = 0; index < text.length; index++) {
-        if (/\s/.test(text[index]!)) {
+        const char = text[index]!;
+        // an address ends at a space, and at what closes the link or tag it is written in: a `)` it
+        // did not open, `]`, `>`, a quote or a backtick
+        if (/\s/.test(char) || (inside && (/[\]<>"'`]/.test(char) || (char === ")" && depth === 0)))) {
             start = index + 1;
             inside = false;
             continue;
         }
-        if (!inside && ((index === start && text.startsWith("www.", index)) || (text[index] === ":" && text.startsWith("://", index) && index > start))) inside = true;
-        if (inside) out[index] = 1;
+        if (!inside && ((index === start && text.startsWith("www.", index)) || (char === ":" && text.startsWith("://", index) && index > start))) {
+            inside = true;
+            depth = 0;
+        }
+        if (inside) {
+            if (char === "(") depth++;
+            else if (char === ")") depth--;
+            out[index] = 1;
+        }
     }
     return out;
 }
@@ -595,8 +606,7 @@ export function addresses(text: string): Uint8Array | undefined {
 export function inAddress(text: string, index: number): boolean {
     let start = index;
     while (start > 0 && index - start < REACH && !/\s/.test(text[start - 1]!)) start--;
-    const token = text.slice(start, index + 1);
-    return token.includes("://") || token.startsWith("www.");
+    return addresses(text.slice(start, index + 1))?.[index - start] === 1;
 }
 
 /**
