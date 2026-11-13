@@ -56,7 +56,7 @@ import { createTitle, nameFor, shownName, type OwnTitle } from "./title";
 import { createZoom, pageRule, percent, setPage, setupItems } from "./paper";
 import type { Page } from "./document";
 import { moreCommands } from "./more-commands";
-import { createMatching } from "./matching";
+import { createMatching, matchingSpots } from "./matching";
 import { places } from "./bookmarks";
 
 /** What the editor is given by the page. */
@@ -616,8 +616,8 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     notes.opened();
 
     // ---- the menu row: every command by name, above the bar ----
-    // with every match selected (Edit, Select all matching text) a command goes on each; a Format key does too
-    const matching = createMatching(surface, { command: (event) => !!formatKey(event), told: (count) => bar.setStatus(`${count} selected`, `${count} places are selected: typing or a Format command changes every one, and Escape leaves them`, "quiet") });
+    // with every match selected (Edit, Select all occurrences) a command goes on each; a Format key does too
+    const matching = createMatching(surface, { command: (event) => !!formatKey(event), told: (count) => bar.setStatus(`${count} selected`, `${count} ${count === 1 ? "place is" : "places are"} selected: typing or a Format command changes every one, and Escape leaves them`, "quiet") });
     const formatKey = (event: KeyboardEvent) => {
         const found = shortcutFor(chordFrom(event, MAC));
         const run = found?.menu === "Format" && found.command ? actions[found.command] : undefined;
@@ -744,7 +744,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     const palette = createPalette(surface, { menus: () => row.headings(), table: tableTools.lines, picture: pictureTools.lines, pickImage: bar.pickImage, corner: host });
     const row = createMenuRow(() =>
         headings(
-            { rich: !!surface.getDocument().quire, contents: !!findContents(surface.getDocument()), paged: pages.paged(), look, outline: outlineView.isOpen(), markdown: host.classList.contains("markdown"), words: countWords(surface.getDocument()), align: aligned(surface.getDocument(), surface.getSelection().focus.path), symbols: surface.symbols() },
+            { rich: !!surface.getDocument().quire, contents: !!findContents(surface.getDocument()), matches: matchingSpots({ doc: surface.getDocument(), selection: surface.getSelection() }).length, paged: pages.paged(), look, outline: outlineView.isOpen(), markdown: host.classList.contains("markdown"), words: countWords(surface.getDocument()), align: aligned(surface.getDocument(), surface.getSelection().focus.path), symbols: surface.symbols() },
             actions,
         ),
     );

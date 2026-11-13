@@ -195,7 +195,7 @@ numbered list at a number (part way down, the list is cut in two and the second 
 delimiter, `1)`) and carries on the list before (`numbering.ts`). A table's strip sorts its rows by the
 cursor's column (`tables.ts`). The style list has Title, which goes to the title line, since that line
 is the document's name and Markdown has no title, and Subtitle, kept in a `.quire` document's style.json
-and not offered for Markdown. Edit, Select all matching text selects every place the words appear;
+and not offered for Markdown. Edit, Select all occurrences selects every place the words appear, in capitals or not;
 typing, Backspace and Format commands change all of them (`matching.ts`). Insert, Bookmark writes an
 empty anchor, `<a id="name"></a>`, drawn as a small flag, and the link field offers the headings (by the
 ids the site gives them) and the bookmarks (`bookmarks.ts`).

@@ -53,6 +53,13 @@ test("Insert has a page break with its shortcut, and for a .quire document the h
     expect(lines(false, act).Insert.some((line) => line.startsWith("Header, footer"))).toBe(false);
 });
 
+test("Select all occurrences is dimmed while the words appear in fewer than two places", () => {
+    const act: RowActions = { ...every, selectMatching: () => {} };
+    const line = (matches: number) => headings({ rich: true, matches, outline: true, markdown: false, words: 0 }, act)[1]!.items().find((item) => item.key === "selectMatching");
+    expect(line(1)?.disabled).toBe(true);
+    expect(line(3)?.disabled).toBeUndefined();
+});
+
 test("View has page view, pressed while it is on", () => {
     const act: RowActions = { ...every, pageView: () => {} };
     const view = (paged: boolean) => headings({ rich: true, paged, outline: false, markdown: false, words: 0 }, act)[2]!.items().find((item) => item.label === "Page view");
