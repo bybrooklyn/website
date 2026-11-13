@@ -96,6 +96,9 @@ export function githubStore(settings: GithubSettings, fetcher: Fetcher = (url, i
             throw new StoreError("GitHub could not be reached");
         }
         if (answer.status === 401) throw new StoreError("GitHub refused the token; it may have run out or been taken back");
+        // GitHub answers 403 (or 429) both for a token that may not do this and for too many requests; its headers tell them apart
+        const limited = answer.status === 429 || (answer.status === 403 && (answer.headers.get("x-ratelimit-remaining") === "0" || answer.headers.has("retry-after")));
+        if (limited) throw new StoreError("GitHub has had too many requests for now; it will be tried again after the next change, or try again in a few minutes");
         if (answer.status === 403) throw new StoreError("the token may not do this; it needs read and write access to this repository's contents");
         return answer;
     }
@@ -116,10 +119,11 @@ export function githubStore(settings: GithubSettings, fetcher: Fetcher = (url, i
         return { text: new TextDecoder().decode(bytes), sha: file.sha };
     }
 
-    async function put(path: string, bytes: Uint8Array, message: string, sha?: string): Promise<{ status: number; sha?: string }> {
+    async function put(path: string, bytes: Uint8Array, message: string, sha?: string): Promise<{ status: number; sha?: string; message?: string }> {
         const answer = await ask("PUT", contents(path), { message, content: toBase64(bytes), branch, ...(sha ? { sha } : {}) });
         if (answer.ok) return { status: answer.status, sha: ((await answer.json()) as { content: { sha: string } }).content.sha };
-        return { status: answer.status };
+        const said = await answer.json().then((body: { message?: string }) => body?.message, () => undefined);
+        return { status: answer.status, message: typeof said === "string" ? said : undefined };
     }
 
     async function names(path: string): Promise<string[]> {
@@ -150,12 +154,12 @@ export function githubStore(settings: GithubSettings, fetcher: Fetcher = (url, i
         async save(id, text, mark): Promise<Saved> {
             const done = await put(id, new TextEncoder().encode(text), `Edit ${nameOf(id)}`, mark);
             if (done.sha) return { ok: true, mark: done.sha };
-            // a SHA that no longer matches: someone saved it elsewhere
-            if (done.status === 409 || done.status === 422) {
+            // a SHA that no longer matches: someone saved it elsewhere. GitHub also answers 422 for a path or a file it will not take, which is a failure, not a conflict
+            if (done.status === 409 || (done.status === 422 && /sha/i.test(done.message ?? ""))) {
                 const theirs = await read(id).catch(() => undefined);
                 return { ok: false, changed: true, theirs: theirs && { text: theirs.text, mark: theirs.sha } };
             }
-            return { ok: false, message: done.status === 404 ? `${id} or its branch is not there` : `GitHub answered ${done.status}` };
+            return { ok: false, message: done.status === 404 ? `${id} or its branch is not there` : done.status === 422 ? "GitHub would not take this file (it may be too large)" : `GitHub answered ${done.status}` };
         },
         async create(name, text) {
             const path = inFolder(freeName(name, await names(folder)));

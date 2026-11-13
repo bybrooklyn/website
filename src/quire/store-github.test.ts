@@ -191,3 +191,15 @@ test("the token goes only to api.github.com, in the Authorization header, and ne
         expect(call.auth).toBe(`Bearer ${token}`);
     }
 });
+
+test("too many requests is said as such, not as a token that may not do this; a file GitHub will not take is a failure, not a conflict", async () => {
+    const answer = (status: number, headers: Record<string, string> = {}, body: object = {}) => async () => new Response(JSON.stringify(body), { status, headers });
+    const limited = githubStore(SETTINGS, answer(403, { "x-ratelimit-remaining": "0" }));
+    expect(await limited.list().then(() => "", String)).toContain("too many requests");
+    expect(await githubStore(SETTINGS, answer(429, { "retry-after": "60" })).list().then(() => "", String)).toContain("too many requests");
+    expect(await githubStore(SETTINGS, answer(403)).list().then(() => "", String)).toContain("the token may not do this");
+    const big = await githubStore(SETTINGS, answer(422, {}, { message: "Invalid request. content is too large" })).save("a.md", "x", "sha1");
+    expect(big).toEqual({ ok: false, message: "GitHub would not take this file (it may be too large)" });
+    const stale = await githubStore(SETTINGS, answer(422, {}, { message: "sha wasn't supplied" })).save("a.md", "x", "sha1");
+    expect(stale).toMatchObject({ ok: false, changed: true });
+});
