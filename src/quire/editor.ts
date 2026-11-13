@@ -819,6 +819,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
 
     // leaving the page with words not yet saved: they are saved if there is time, and the browser asks
     const leaving = (event: BeforeUnloadEvent) => {
+        notes.keep();
         if (saver?.unsaved() === undefined) return;
         void saver.flush();
         event.preventDefault();
@@ -875,6 +876,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     /** After a rename that gave the document a new id (a path in a folder or a repository): saving, its history and its notes go on from there. */
     async function follow(where: Store, from: string, to: string) {
         const before = `${where.label}:${from}`;
+        notes.keep();
         const mark = await (where.markOf ? where.markOf(to) : where.open(to).then((found) => found.mark)).catch(() => "");
         if (saver?.unsaved() !== undefined) typedWhileMoving = true;
         saver?.stop();
@@ -961,6 +963,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         // typed while the new one was being fetched
         if (saver?.unsaved() !== undefined && !(await ready())) return false;
         await keeper.now().catch(() => undefined);
+        notes.keep();
         saver?.stop();
         stopListening?.();
         keeper.stop();
@@ -988,6 +991,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         clearTimeout(typing);
         if (!(await ready())) return false;
         await keeper.now().catch(() => undefined);
+        notes.keep();
         saver?.stop();
         stopListening?.();
         keeper.stop();

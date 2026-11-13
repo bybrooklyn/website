@@ -252,9 +252,13 @@ export function createCommentMargin(surface: Surface, options: { place: () => st
 
     // ---- keeping a Markdown file's notes in this browser ----
     let saving: ReturnType<typeof setTimeout> | undefined;
+    // the document and its place as they were when the notes changed: written to that place even if another is open by the time it is written
+    let waiting: { now: Document; place: string | undefined } | undefined;
     function keepInBrowser() {
-        const now = doc();
-        const place = options.place();
+        clearTimeout(saving);
+        if (!waiting) return;
+        const { now, place } = waiting;
+        waiting = undefined;
         if (now.quire || !place) return;
         try {
             if (now.comments?.length) localStorage.setItem(KEY + place, JSON.stringify(notesData(now)));
@@ -272,6 +276,7 @@ export function createCommentMargin(surface: Surface, options: { place: () => st
             cancelAnimationFrame(drawing);
             drawing = requestAnimationFrame(redraw);
             clearTimeout(saving);
+            waiting = { now, place: options.place() };
             saving = setTimeout(keepInBrowser, 400);
         }),
         surface.on("select", ({ selection }) => {
@@ -332,6 +337,8 @@ export function createCommentMargin(surface: Surface, options: { place: () => st
         list: showList,
         /** True when the notes have room in the margin. */
         roomy,
+        /** Writes now a Markdown file's notes waiting to be kept in this browser: before the document is left, renamed or the page closed. */
+        keep: keepInBrowser,
         /** Called when a document has been opened: notes found again but with their words gone are counted for the list. */
         opened(lost = 0) {
             lostOnOpen = lost;

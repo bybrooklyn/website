@@ -24,6 +24,7 @@ import * as shortcuts from "${here}/shortcuts.ts";
 import { memoryStorage } from "${here}/versions.ts";
 import { browserStore, indexedTables } from "${here}/store-browser.ts";
 import { folderStore, memoryFolder } from "${here}/store-folder.ts";
+import { addComment } from "${here}/comments.ts";
 const host = document.querySelector("#host");
 const storage = memoryStorage();
 const editor = createEditor(host, read(""), { name: "Test", colors: [{ name: "Pink", value: "salmon" }], onImage: async () => "/picture.png", versions: storage });
@@ -37,6 +38,8 @@ window.q = {
     md: () => write(surface.getDocument()),
     /** The browser store, over a database of the test's own. */
     async useBrowser() { window.q.store = browserStore(await indexedTables("quire-test")); return true; },
+    /** Adds a note on the first words of the first paragraph. */
+    note(text, to = 4) { surface.run((doc) => addComment(doc, { start: { path: [0], offset: 0 }, end: { path: [0], offset: to } }, text).doc); },
     /** A folder on a disk kept in memory, with these files in it. */
     useFolder(files) { window.q.store = folderStore(memoryFolder("notes", files)); return true; },
     async openIn(name, text) { const made = await window.q.store.create(name, text); await editor.open(window.q.store, { id: made.id, name }); surface.focus(); return made.id; },
@@ -1257,6 +1260,18 @@ used("the title is the first line on the sheet: it renames as typed, the bar fol
     await tab.press("Enter");
     await tab.wait(300);
     expect(await tab.run<string>(`q.store.list().then((all) => all.find((entry) => entry.id === ${JSON.stringify(id)})?.name)`)).toBe("Untitled");
+});
+
+used("a note on a Markdown file is kept for it even when another document is opened at once", async () => {
+    await tab.run("q.useBrowser()");
+    const other = await tab.run<string>(`q.store.create("other.md", "Elsewhere.\\n").then((made) => made.id)`);
+    const id = await tab.run<string>(`q.openIn("plain.md", "Some words here.\\n")`);
+    await tab.run(`q.note("Check this")`);
+    // well within the 400 ms the notes wait before they are written
+    await tab.run(`q.editor.open(q.store, { id: ${JSON.stringify(other)}, name: "other.md" })`);
+    const kept = await tab.run<string | null>(`localStorage.getItem("quire-notes:This browser:${id}")`);
+    expect(kept).toContain("Check this");
+    expect(await tab.run(`localStorage.getItem("quire-notes:This browser:${other}")`)).toBeNull();
 });
 
 used("a file's title is its name without the extension, and renaming it keeps the extension", async () => {
