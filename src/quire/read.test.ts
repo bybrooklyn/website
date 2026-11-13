@@ -397,6 +397,8 @@ test("a hostile line of a hundred thousand characters is read, edited and writte
         `see http://x.y/${":smile:".repeat(14000)}`,
         `${"a:smile:".repeat(12000)}`,
         `| ${"a ".repeat(50000)}|\n|---|\n`,
+        `${">".repeat(20000)} x`,
+        `${"- ".repeat(20000)}x`,
     ];
     for (const line of lines) {
         const started = performance.now();

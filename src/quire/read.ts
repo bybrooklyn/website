@@ -22,8 +22,10 @@ interface Context {
     mdx: boolean;
     /** Link reference definitions, by their label in lower case. */
     refs: Map<string, { href: string; title?: string }>;
-    /** How many reference links have been read, so that each block can be marked with whether it holds one. */
+    /** How many reference links have been read, so that the document can be marked as holding them. */
     references?: number;
+    /** How deep inside lists, quotes and footnotes the reader is. */
+    depth?: number;
     /** The definitions found in definition blocks as the body is read, when they are being gathered. */
     found?: Map<string, { href: string; title?: string }>;
     /** Set while a table cell is read, where pipes are the cell's edges and make no spoiler, and `<br>` is a line break. */
@@ -280,8 +282,19 @@ function parseBlocks(lines: Line[], context: Context): { lead: string; blocks: B
 function parseInside(lines: Line[], context: Context): Block[] {
     if (lines.length === 0) return [];
     const copy = lines.map((line, index) => (index === lines.length - 1 ? { text: line.text, eol: "" } : line));
-    return parseBlocks(copy, context).blocks;
+    // boxes nested deeper than any writer nests them are kept as their text, so that a hostile file
+    // opens instead of running the reader out of stack
+    if ((context.depth ?? 0) >= DEEPEST) return [{ kind: "raw", text: copy.map((line) => line.text).join("\n"), source: joinSource(copy), gap: "" }];
+    context.depth = (context.depth ?? 0) + 1;
+    try {
+        return parseBlocks(copy, context).blocks;
+    } finally {
+        context.depth--;
+    }
 }
+
+/** How deep lists, quotes and footnotes are read inside one another before the rest is kept as text. */
+const DEEPEST = 100;
 
 function untilBlank(lines: Line[], from: number): number {
     let end = from;
