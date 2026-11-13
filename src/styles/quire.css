@@ -1326,7 +1326,8 @@
 .quire-alt {
     display: block;
     width: 100%;
-    margin-top: 0.5rem;
+    /* the picture block ends where these words do, not under the field's room round them, so the line of space after it is one line */
+    margin: 0.5rem 0 calc(-0.3rem - 0.0625rem);
     padding: 0.3rem 0.5rem;
     border: 0.0625rem solid transparent;
     border-radius: 0.5rem;

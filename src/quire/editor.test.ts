@@ -1454,6 +1454,15 @@ used("a line of space lies above a table's first words and below its last rule, 
     expect(gaps.map(({ name, gap }) => ({ name, near: Math.abs(gap - (name.endsWith("h2") ? 1.4 : 1)) <= 0.05 }))).toEqual(gaps.map(({ name }) => ({ name, near: true })));
 });
 
+used("a line of space lies above a picture and below the words written under it", async () => {
+    const tiny = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+    await reset(`Words.\n\n![A small picture](${tiny})\n\nWords.\n\n![](${tiny})\n\n---\n\nWords.\n`, [0], 0);
+    await tab.run("document.activeElement.blur()");
+    await tab.wait(300);
+    const gaps = await seenGaps();
+    expect(gaps.map(({ name, gap }) => ({ name, near: Math.abs(gap - 1) <= 0.05 }))).toEqual(gaps.map(({ name }) => ({ name, near: true })));
+});
+
 used("a faint \"Type / for blocks\" fades in on the empty line the cursor is on, goes when typing starts, and an empty document is never blank", async () => {
     // how much of the hint is seen on a line: none when the line has no hint at all
     const shown = (index: number) => tab.run<number>(`(() => { const style = getComputedStyle(document.querySelectorAll('.quire > *')[${index}], '::before'); return style.content === 'none' ? 0 : parseFloat(style.opacity) || 0; })()`);
