@@ -89,6 +89,8 @@ export default function walker(m: Mote): Scene {
     let made: Order | undefined;
     /** Training on this thread instead, where a worker could not be started. */
     let here = false;
+    /** The engine could not be loaded on this page. */
+    let unloaded = false;
     let id = 0;
     /** The ground the walk on screen is on, from its start, and what makes more of it. */
     let terrain = new Terrain(groundOf(setup));
@@ -240,14 +242,27 @@ export default function walker(m: Mote): Scene {
     }
 
     void fetch(engineAddress())
-        .then((answer) => answer.arrayBuffer())
+        .then((answer) => {
+            if (!answer.ok) throw new Error(`The engine could not be fetched: ${answer.status}.`);
+            return answer.arrayBuffer();
+        })
         .then(startEngine)
-        .then((made) => {
-            engine = made;
-            // with ?debug in the address, the engine can be reached from the console, to measure the walker on screen
-            if (m.debug) Object.assign(globalThis, { walkerEngine: made, walkerWorkers: () => (worker ? helpers.length + 1 : 0) });
-            begin(brainToLoad);
-        });
+        .then(
+            (made) => {
+                engine = made;
+                // with ?debug in the address, the engine can be reached from the console, to measure the walker on screen
+                if (m.debug) Object.assign(globalThis, { walkerEngine: made, walkerWorkers: () => (worker ? helpers.length + 1 : 0) });
+                begin(brainToLoad);
+            },
+            () => {
+                // offline, blocked or missing: nothing can be drawn, so the workers are let go and the visitor is told
+                staff(0);
+                worker?.terminate();
+                worker = undefined;
+                unloaded = true;
+                changed();
+            },
+        );
 
     /** Starts the latest generation from the start, beside the best as it starts again. */
     const crowd = () => {
@@ -440,7 +455,9 @@ export default function walker(m: Mote): Scene {
             pause.textContent = paused ? "resume" : "pause";
             share.disabled = !shown || (live() && attempt < 2);
             crowdBox.disabled = live() || endless();
-            const now = !engine
+            const now = unloaded
+                ? "The walker could not be loaded. Reloading the page may help."
+                : !engine
                 ? "Loading the walker."
                 : live()
                   ? `Attempt ${attempt}, ${doing()}, furthest ${distance.toFixed(1)} m`
@@ -451,6 +468,8 @@ export default function walker(m: Mote): Scene {
                       : `Generation ${generation}, ${doing()}, furthest ${distance.toFixed(1)} m`;
             const text = m.time < notice.until && notice.text ? notice.text : `${now}${paused ? ", paused" : ""}`;
             if (status.textContent !== text) status.textContent = text;
+            // the status is hidden from a screen reader, so this one is said aloud as well
+            if (unloaded && said.textContent !== now) said.textContent = now;
         };
 
         /** A canvas sized to its box, cleared, ready to draw on in CSS pixels. */
@@ -883,7 +902,7 @@ export default function walker(m: Mote): Scene {
             const push = { left: [-10, 0], right: [10, 0], up: [0, 12], down: [0, -10], action: [10, 4] }[name];
             engine.show_push(x - origin, y + 0.05, push[0]!, push[1]!);
         },
-        resting: () => !m.preview && paused && !!engine && (live() || engine.show_over() === 1),
+        resting: () => unloaded || (!m.preview && paused && !!engine && (live() || engine.show_over() === 1)),
         debug: () => [`${live() ? "learning live" : here ? "training on the page" : `training in ${helpers.length + 1} worker${helpers.length ? "s" : ""}, ${effort}`}, ${generation} generations, ${runs} runs, ${ground.length / 4} pieces of ground, moved back ${origin} m`],
         draw() {
             scale = Math.max(40, Math.min(m.height / 2.9, m.width / 3.8));
