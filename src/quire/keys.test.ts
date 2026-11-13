@@ -207,6 +207,24 @@ test("Tab moves to the next table cell, adding a row after the last, and Shift+T
     expect(editor("Plain\n").key("Tab")).toBeNull();
 });
 
+test("Enter in a table's last row adds a row, and Enter on that empty row leaves the table for a line under it, even at the document's end", () => {
+    const e = editor("| a | b |\n| - | - |\n| 1 | 2 |\n", [0, 1, 0], 1);
+    e.key("Enter");
+    expect(e.cursor).toEqual({ path: [0, 2, 0], offset: 0 });
+    e.key("Enter");
+    expect(e.cursor).toEqual({ path: [1], offset: 0 });
+    e.type("After");
+    expect(e.markdown).toBe("| a   | b   |\n| --- | --- |\n| 1   | 2   |\n\nAfter\n");
+    // a row with words in it is never taken away
+    const kept = editor("| a | b |\n| - | - |\n| 1 | 2 |\n|  | 3 |\n", [0, 2, 0], 0);
+    kept.key("Enter");
+    expect(kept.cursor).toEqual({ path: [0, 3, 0], offset: 0 });
+    // and a table keeps at least one row of its body
+    const one = editor("| a | b |\n| - | - |\n|  |  |\n", [0, 1, 0], 0);
+    one.key("Enter");
+    expect(one.cursor).toEqual({ path: [0, 2, 0], offset: 0 });
+});
+
 test("the mark shortcuts bold, italicise, underline, strike and code a selection, and toggle back", () => {
     const shortcuts: [string, { shift?: boolean }, string][] = [
         ["b", {}, "a **word** here\n"],

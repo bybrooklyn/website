@@ -10,6 +10,7 @@
 
 import {
     addRow,
+    removeRow,
     blockAt,
     blockPaths,
     changeKind,
@@ -567,6 +568,13 @@ function enter(state: State): Outcome {
         if (found.kind !== "table") return null;
         const row = at.path[at.path.length - 2]!;
         const column = at.path[at.path.length - 1]!;
+        // Enter on an empty last row (the one an Enter there just added) leaves the table for a new line
+        // under it, as Enter on an empty item leaves a list; without it a table that ended the document
+        // could not be left from the keyboard
+        if (row === found.rows.length && row > 1 && found.rows[row - 1]!.every((cell) => runsLength(cell) === 0)) {
+            const next = insertBlock(removeRow(doc, table, row - 1), table, paragraph());
+            return done(next, caret(nextSibling(table), 0), "structure");
+        }
         const grown = row >= found.rows.length ? addRow(doc, table, found.rows.length) : doc;
         const below = [...table, row + 1, column];
         return done(grown, caret(below, lengthOf(grown, below)), grown === doc ? "move" : "structure");
