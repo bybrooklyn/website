@@ -128,8 +128,12 @@ impl Body {
         self.outline.placed(self.position, self.rotation)
     }
 
-    /// A sudden push at a point, in newton seconds, as from a hand or a hit.
+    /// A sudden push at a point, in newton seconds, as from a hand or a hit. A push or a point that is
+    /// not finite is ignored: its NaN would stay in the body's speed for good.
     pub fn push(&mut self, at: Vec2, impulse: Vec2) {
+        if !(impulse.x.is_finite() && impulse.y.is_finite() && at.x.is_finite() && at.y.is_finite()) {
+            return;
+        }
         self.velocity += impulse * self.inverse_mass;
         self.spin += self.inverse_inertia * (at - self.position).cross(impulse);
     }
