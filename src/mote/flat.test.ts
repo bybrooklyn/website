@@ -373,3 +373,18 @@ test("the same start gives the same end", () => {
         expect(block.y).toBe(two.blocks[index]!.y);
     });
 });
+
+test("what rested on something fixed falls when that is taken away", () => {
+    const flat = new Flat(1800);
+    const floor = flat.box(0, 100, 400, 40, { fixed: true });
+    flat.box(0, 400, 400, 40, { fixed: true });
+    // a pile of two on the floor: the upper one touches only the lower
+    const lower = flat.box(0, 60, 40, 40);
+    const upper = flat.box(0, 20, 40, 40);
+    run(flat, 3);
+    expect(lower.asleep && upper.asleep).toBe(true);
+    flat.remove(floor);
+    run(flat, 1);
+    expect(lower.y).toBeGreaterThan(300);
+    expect(upper.y).toBeGreaterThan(260);
+});

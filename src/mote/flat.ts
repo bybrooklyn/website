@@ -487,6 +487,8 @@ export class Flat {
         } else {
             thing.gone = true;
             wake(thing);
+            // Something fixed sleeps with nothing, so what lay on it is woken by what touched it last.
+            for (const old of this.#was.values()) if (old.a === thing || old.b === thing) wake(old.a === thing ? old.b : old.a);
             this.bodies = this.bodies.filter((body) => body !== thing);
             for (const joint of this.#joints) if (joint.a === thing || joint.b === thing) this.remove(joint);
             if (this.hand.held === thing) this.hand.drop();
