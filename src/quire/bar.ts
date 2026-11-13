@@ -876,6 +876,9 @@ export function createBar(surface: Surface, options: BarOptions) {
 
     // ---- folding what does not fit ----
 
+    /** Gives the bar its Tab stop back when the control that held it has folded away (set once the stops are known, below). */
+    let keepStop: (() => void) | undefined;
+
     /** Folds the tools that do not fit, least used first, so that nothing wraps; on a narrow window nothing folds and the bar slides sideways instead. */
     function layout() {
         for (const each of tools) {
@@ -922,6 +925,7 @@ export function createBar(surface: Surface, options: BarOptions) {
         // the first group still shown has no rule before it, so that the line starts on the same edge as the one above
         const lead = groups.find((element) => !element.classList.contains("folded"));
         for (const element of groups) element.classList.toggle("lead", element === lead);
+        keepStop?.();
     }
     // laid out again when the room changes, when a tool's own width does (a label, a typeface arriving) and when the fonts have come
     let waiting = 0;
@@ -995,6 +999,11 @@ export function createBar(surface: Surface, options: BarOptions) {
         for (const each of strip.querySelectorAll<HTMLElement>("button, input")) each.tabIndex = each === current ? 0 : -1;
     };
     rove(stops()[0]!);
+    // the one Tab stop may be a tool that has just folded away; then the first one left takes it
+    keepStop = () => {
+        const all = stops();
+        if (all.length && !all.some((each) => each.tabIndex === 0)) rove(all[0]!);
+    };
     strip.addEventListener("focusin", (event) => {
         if (stops().includes(event.target as HTMLElement)) rove(event.target as HTMLElement);
     });
