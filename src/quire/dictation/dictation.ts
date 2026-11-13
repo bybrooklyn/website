@@ -14,13 +14,13 @@
 // download's progress is shown there and can be cancelled. The model, the microphone and the recognizing are in other files
 // and are given in `options`, so that the browser tests can give a made-up one.
 
-import { filledButton, openDialog, type Dialog } from "../dialog";
+import { filledButton, openDialog, switchButton, type Dialog } from "../dialog";
 import { closeOthers, flowMenu, make, type Menu, type MenuItem } from "../ui";
 import type { Surface } from "../surface";
 import "./dictation.css";
 import { canListen, MicrophoneError, openMicrophone, type Microphone } from "./capture";
 import { canStore, createProvider, type Provider } from "./engine";
-import { defaultTier, deviceNow, megabytes, placeOf, sizeOf, tierOf, TIERS, type Tier } from "./models";
+import { defaultTier, deviceNow, megabytes, placesSaid, sizeOf, tierOf, TIERS, type Tier } from "./models";
 import { detect } from "./parakeet/runtime";
 import { startSession, type Recognizer, type Session } from "./session";
 import { correct, load as loadWords, save as saveWords, type Custom } from "./words";
@@ -454,7 +454,7 @@ export function createDictation(surface: Surface, options: DictationOptions = {}
                 choice.setAttribute("role", "radio");
                 choice.setAttribute("aria-checked", String(each.id === tierId));
                 choice.disabled = state === "downloading" || state === "loading" || state === "listening";
-                choice.append(make("span", "quire-dictation-tier-name", each.name), make("span", "quire-dictation-tier-size", cached.get(each.id) ? "on this device" : megabytes(sizeOf(each))), make("span", "quire-dictation-tier-note", `${each.note} Runs on the ${placeOf(each, { gpu: card })}.`));
+                choice.append(make("span", "quire-dictation-tier-name", each.name), make("span", "quire-dictation-tier-size", cached.get(each.id) ? "on this device" : megabytes(sizeOf(each))), make("span", "quire-dictation-tier-note", each.note));
                 choice.addEventListener("click", () => {
                     tierId = each.id;
                     remember(KEPT.tier, tierId);
@@ -462,7 +462,7 @@ export function createDictation(surface: Surface, options: DictationOptions = {}
                 });
                 choices.append(choice);
             }
-            parts.push(choices);
+            parts.push(choices, line("quire-dictation-hint", placesSaid(TIERS, { gpu: card })));
 
             if (state === "downloading") {
                 parts.push(line("quire-dictation-plain", "Downloading the speech model."));
@@ -483,13 +483,8 @@ export function createDictation(surface: Surface, options: DictationOptions = {}
             if (message) parts.push(line("quire-dictation-warn", message));
 
             // spoken commands
-            const toggleCommands = make("button", "quire-dictation-switch");
-            toggleCommands.type = "button";
-            toggleCommands.setAttribute("role", "switch");
-            toggleCommands.setAttribute("aria-checked", String(commands));
-            toggleCommands.append(make("span", "quire-dictation-track"), make("span", "quire-dictation-label", "Spoken punctuation and commands"));
-            toggleCommands.addEventListener("click", () => {
-                commands = !commands;
+            const toggleCommands = switchButton("Spoken punctuation and commands", commands, (on) => {
+                commands = on;
                 remember(KEPT.commands, commands ? "on" : "off");
                 render();
             });
@@ -609,7 +604,8 @@ export function createDictation(surface: Surface, options: DictationOptions = {}
             void detect().then((found) => {
                 card = found.kind === "webgpu";
                 render();
-                for (const each of asking?.body.querySelectorAll<HTMLElement>("[data-tier]") ?? []) each.querySelector(".quire-dictation-card-where")!.textContent = `Runs on the ${placeOf(tierOf(each.dataset.tier!), { gpu: card })}`;
+                const where = asking?.body.querySelector(".quire-dictation-where");
+                if (where) where.textContent = placesSaid(TIERS, { gpu: card });
             });
         };
 
@@ -646,7 +642,7 @@ export function createDictation(surface: Surface, options: DictationOptions = {}
                 choice.setAttribute("role", "radio");
                 const name = make("span", "quire-dictation-card-name", each.name);
                 if (each.id === suits) name.append(make("span", "quire-dictation-card-tag", "Suits this machine"));
-                choice.append(name, make("span", "quire-dictation-card-size", cached.get(each.id) ? "On this device" : megabytes(sizeOf(each))), make("span", "quire-dictation-card-who", each.who), make("span", "quire-dictation-card-where", `Runs on the ${placeOf(each, { gpu: card })}`));
+                choice.append(name, make("span", "quire-dictation-card-size", cached.get(each.id) ? "On this device" : megabytes(sizeOf(each))), make("span", "quire-dictation-card-who", each.who));
                 choice.addEventListener("click", () => pick(each.id));
                 return choice;
             });
@@ -675,7 +671,8 @@ export function createDictation(surface: Surface, options: DictationOptions = {}
         /** The dialog with the three cards and the button that downloads the one picked. Gives back the cards, which grow out of what was pressed. */
         function choosing(dialog: Dialog): HTMLElement {
             const group = cards();
-            const parts: HTMLElement[] = [intro(), group];
+            // where they run is said once, under the cards, not on each
+            const parts: HTMLElement[] = [intro(), group, line("quire-dictation-where", placesSaid(TIERS, { gpu: card }))];
             if (message) parts.push(line("quire-dictation-warn", message));
             dialog.body.replaceChildren(...parts);
             askBar = askCount = undefined;

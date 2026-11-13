@@ -2,7 +2,7 @@
 // default tier follows the device.
 
 import { describe, expect, test } from "bun:test";
-import { addressOf, defaultTier, deviceNow, megabytes, placeOf, sizeOf, tierOf, TIERS } from "./models";
+import { addressOf, defaultTier, deviceNow, megabytes, placeOf, placesSaid, sizeOf, tierOf, TIERS } from "./models";
 
 describe("the tiers", () => {
     test("each has an encoder and a decoder, and the vocabulary its engine reads", () => {
@@ -84,4 +84,9 @@ describe("the default tier", () => {
             Object.defineProperty(globalThis, "navigator", { value: saved, configurable: true });
         }
     });
+});
+
+test("where the models run is said once for all of them, naming only those on the graphics card", () => {
+    expect(placesSaid(TIERS, { gpu: false })).toBe("On this machine they run on the processor.");
+    expect(placesSaid(TIERS, { gpu: true })).toBe("On this machine Accurate runs on the graphics card, the others on the processor.");
 });

@@ -240,56 +240,6 @@
     transition: width 0.3s var(--ease);
 }
 
-/* a switch */
-.quire-dictation-switch {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    padding: 0.2rem 0;
-    border: 0;
-    background: transparent;
-    color: var(--ink);
-    font: inherit;
-    text-align: left;
-    cursor: pointer;
-}
-
-.quire-dictation-switch:focus-visible {
-    outline: 0.125rem solid var(--accent);
-    outline-offset: 0.1rem;
-}
-
-.quire-dictation-track {
-    position: relative;
-    flex: none;
-    width: 2.1rem;
-    height: 1.2rem;
-    border-radius: 0.6rem;
-    background: color-mix(in oklch, var(--ink) 18%, transparent);
-    transition: background 0.25s var(--ease);
-}
-
-.quire-dictation-track::after {
-    content: "";
-    position: absolute;
-    top: 0.15rem;
-    left: 0.15rem;
-    width: 0.9rem;
-    height: 0.9rem;
-    border-radius: 50%;
-    background: var(--ink);
-    transition: translate 0.25s var(--ease);
-}
-
-.quire-dictation-switch[aria-checked="true"] .quire-dictation-track {
-    background: var(--accent);
-}
-
-.quire-dictation-switch[aria-checked="true"] .quire-dictation-track::after {
-    translate: 0.9rem 0;
-    background: var(--ground);
-}
-
 /* the custom words */
 .quire-dictation-line .quire-dictation-field {
     flex: 1 1 6rem;
@@ -373,7 +323,7 @@
 }
 
 .quire-dictation-card-who,
-.quire-dictation-card-where {
+.quire-dialog-body > .quire-dictation-where {
     color: var(--muted);
     font-size: 0.85rem;
     line-height: 1.35;
@@ -410,8 +360,8 @@
     .quire-ghost,
     .quire-dictation-tier,
     .quire-dictation-progress i,
-    .quire-dictation-track,
-    .quire-dictation-track::after {
+    .quire-switch,
+    .quire-switch-tick {
         transition: none;
     }
 }

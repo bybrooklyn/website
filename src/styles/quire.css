@@ -3306,6 +3306,8 @@ body.quire-app,
     .quire-history *,
     .quire-conflict,
     .quire-conflict *,
+    .quire-switch,
+    .quire-switch *,
     .quire-top,
     .quire-top *,
     .quire-check-count {
