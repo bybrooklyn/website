@@ -1562,7 +1562,7 @@
 
 .quire-history {
     position: fixed;
-    top: 1rem;
+    top: var(--quire-below-bar);
     right: 1rem;
     bottom: 1rem;
     z-index: 66;
@@ -1570,7 +1570,7 @@
     flex-direction: column;
     width: min(26rem, 100vw - 2rem);
     border: 0.0625rem solid var(--rule);
-    border-radius: calc(var(--radius) * 2);
+    border-radius: var(--quire-round-large);
     background: var(--surface);
     overflow: hidden;
     font-family: var(--font-text);
@@ -1725,18 +1725,32 @@
     font-size: 0.9rem;
 }
 
-.quire-restore {
-    margin: 0 0.6rem 1rem;
-    padding-inline: 1rem;
-    border: 0.0625rem solid var(--accent);
-    color: var(--accent);
+/* a version shown: when it was at the left, and restoring it, the panel's one filled button, at the right */
+.quire-history-chosen {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.6rem;
+    margin: 0 0.6rem 0.8rem;
+}
+
+.quire-history-chosen .quire-history-when {
+    margin: 0;
+}
+
+/* what a version added since the one before is tinted, as Docs colors the changes */
+.quire-history-text .quire-history-added {
+    margin-inline: -0.4rem;
+    padding-inline: 0.4rem;
+    border-radius: var(--quire-round-small);
+    background: color-mix(in oklch, var(--accent) 16%, transparent);
 }
 
 .quire-history-text {
     margin: 0 0.6rem;
     padding: 1rem 1.1rem;
     border: 0.0625rem solid var(--panel-rule);
-    border-radius: var(--radius);
+    border-radius: var(--quire-round);
     background: var(--panel);
     font-size: 0.92rem;
     line-height: 1.6;
@@ -3065,6 +3079,13 @@ body.quire-app,
     flex-wrap: wrap;
 }
 
+:is(.quire-dialog, .quire-history, .quire-conflict) :is(.quire-dialog-action, .quire-dialog-dismiss) {
+    border: 0;
+    background: none;
+    font: inherit;
+    cursor: pointer;
+}
+
 .quire-dialog button {
     white-space: nowrap;
     border: 0;
@@ -3074,7 +3095,7 @@ body.quire-app,
 }
 
 /* the filled button: a press spreads from where the finger or pointer came down */
-.quire-dialog .quire-dialog-action {
+:is(.quire-dialog, .quire-history, .quire-conflict) .quire-dialog-action {
     position: relative;
     overflow: hidden;
     min-height: 2.6rem;
@@ -3090,7 +3111,7 @@ body.quire-app,
         scale 0.2s var(--ease);
 }
 
-.quire-dialog .quire-dialog-action:hover {
+:is(.quire-dialog, .quire-history, .quire-conflict) .quire-dialog-action:hover {
     background: color-mix(in oklch, var(--accent) 88%, var(--ink));
     box-shadow: 0 0.3rem 0.9rem oklch(0.05 0.02 300 / 0.45);
 }
@@ -3116,7 +3137,7 @@ body.quire-app,
     pointer-events: none;
 }
 
-.quire-dialog .quire-dialog-dismiss {
+:is(.quire-dialog, .quire-history, .quire-conflict) .quire-dialog-dismiss {
     min-height: 2.6rem;
     padding: 0 1rem;
     border-radius: 1.3rem;

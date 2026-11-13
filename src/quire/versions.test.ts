@@ -6,7 +6,8 @@
 import { expect, test } from "bun:test";
 import { setStyle } from "./document";
 import { emptyParts, opened, written } from "./quire-file";
-import { changes, createKeeper, KEPT, memoryStorage, snapshotDocument, snapshotParts, snapshotText, thin, when } from "./versions";
+import { read } from "./read";
+import { addedBlocks, changes, createKeeper, KEPT, memoryStorage, snapshotDocument, snapshotParts, snapshotText, thin, when } from "./versions";
 import { write } from "./write";
 
 test("a .quire document's snapshot carries its styling, and restoring it brings back the typeface, highlight and spacing", () => {
@@ -172,4 +173,11 @@ test("one snapshot that cannot be kept (no more room) does not stop the ones aft
     await keeper.settled();
     expect((await storage.list("doc")).length).toBe(1);
     expect(await storage.load((await storage.list("doc"))[0]!.id)).toBe("two\n");
+});
+
+test("a version shown marks the blocks it added since the one before, a block there twice counting twice", () => {
+    expect(addedBlocks(read("One.\n\nTwo.\n"), read("One.\n\nNew.\n\nTwo.\n"))).toEqual([1]);
+    expect(addedBlocks(read("Same.\n"), read("Same.\n\nSame.\n"))).toEqual([1]);
+    expect(addedBlocks(undefined, read("First.\n\nSecond.\n"))).toEqual([0, 1]);
+    expect(addedBlocks(read("Gone.\n\nKept.\n"), read("Kept.\n"))).toEqual([]);
 });

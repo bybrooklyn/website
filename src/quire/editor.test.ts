@@ -557,6 +557,20 @@ used("a version is kept, listed with what changed, shown as it read, and restore
     await tab.wait(500);
     expect(await tab.run("document.querySelector('.quire-history-text').textContent")).toBe("First draft.");
     expect(await tab.run("document.querySelector('.quire-history-text').isContentEditable")).toBe(false);
+    // the panel is Version history, below the bar, and Escape steps back one level: to the list, then out
+    expect(await tab.run("document.querySelector('.quire-history-head .quire-outline-title').textContent")).toBe("Version history");
+    expect(await tab.run("document.querySelector('.quire-history').getBoundingClientRect().top >= document.querySelector('.quire-bar').getBoundingClientRect().bottom")).toBe(true);
+    await tab.press("Escape");
+    await tab.wait(400);
+    expect(await tab.run("document.querySelector('.quire-history').classList.contains('open') && !document.querySelector('.quire-history').classList.contains('previewing')")).toBe(true);
+    // the newer version shows what it added tinted
+    await press(".quire-history-list li:nth-child(1) .quire-history-item");
+    await tab.wait(500);
+    expect(await tab.run("[...document.querySelectorAll('.quire-history-text .quire-history-added')].map((each) => each.textContent)")).toEqual(["A second line."]);
+    await tab.press("Escape");
+    await tab.wait(400);
+    await press(".quire-history-list li:nth-child(2) .quire-history-item");
+    await tab.wait(500);
     await press(".quire-restore");
     await tab.wait(100);
     expect(await md()).toBe("First draft.\n");

@@ -534,6 +534,10 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         watcher.observe(element);
         watchers.push(watcher);
     };
+    // side panels start below the top's two lines (--quire-below-bar in quire.css), wherever they end on this window
+    const topEnd = () => document.documentElement.style.setProperty("--quire-top-bottom", `${Math.max(0, Math.round(top.getBoundingClientRect().bottom))}px`);
+    watch(top, topEnd);
+    topEnd();
     // only a change of width matters: the editor grows taller with every line typed
     let wideAt = 0;
     watch(markdown.element, () => zoom.refresh(false));
