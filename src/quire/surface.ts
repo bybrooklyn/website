@@ -33,7 +33,7 @@
 // `quire-task` on a task item and `quire-box` on its box (`data-checked`),
 // `quire-atom` on an inline HTML span or footnote reference.
 
-import { blockAt, blockPaths, documentOf, image as imageBlock, isPageBreak, markdownOnly, paragraph, setImageAlt, toggleTask, type Block, type Document, type Leaf, type Mark, type Position, type Run, type Selection } from "./document";
+import { blockAt, blockPaths, changeKind, documentOf, image as imageBlock, isPageBreak, markdownOnly, paragraph, setBox, setImageAlt, setRaw, toggleTask, type Block, type Code, type Document, type Leaf, type Mark, type Position, type Run, type Selection } from "./document";
 import { createHistory, redo as redoStep, undo as undoStep, type ChangeKind, type State } from "./history";
 import { readHtml, writeHtml } from "./html";
 import { drawPicture } from "./picture-tools";
@@ -41,6 +41,11 @@ import { isContentsMark } from "./inserts";
 import { activeBlock, activeMarks, apply, caret, collapsed, fragment, paste, step, type Editor, type Input, type Outcome } from "./keys";
 import { read } from "./read";
 import { write } from "./write";
+import { fieldsOf, KNOWN, readTag, setProp, type Tag } from "./components";
+import { diagram } from "./diagram";
+import { emojiOf } from "./emoji";
+import { highlight, LANGUAGE_NAMES } from "./highlight";
+import { maths } from "./maths";
 
 /** What the host gives the surface. `onImage` stores a pasted or dropped picture and gives back its address. */
 export interface SurfaceOptions {
@@ -87,6 +92,10 @@ export interface Surface {
     focus(): void;
     on<K extends keyof SurfaceEvents>(name: K, listener: (detail: SurfaceEvents[K]) => void): () => void;
     destroy(): void;
+    /** Turns typed arrows and signs (-> to an arrow, != to not equal) on or off, and with them `==` shown joined. On to begin with. */
+    setSymbols(on: boolean): void;
+    /** Whether typed arrows and signs become their characters. */
+    symbols(): boolean;
 }
 
 const MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
@@ -96,13 +105,77 @@ const TAGS: [Mark, string][] = [
     ["underline", "u"],
     ["strike", "s"],
     ["code", "code"],
+    ["mark", "mark"],
+    ["sup", "sup"],
+    ["sub", "sub"],
 ];
+
+/** A code block longer than this many characters is drawn as plain text at once and highlighted a moment after typing stops, so that a key in it stays quick. */
+const LONG_CODE = 6000;
+
+/** How blocks are drawn: whether the file is MDX (its components shown as cards), whether `==` and `===` are shown joined, and how a long code block is highlighted later. */
+interface Drawing {
+    mdx: boolean;
+    join: boolean;
+    later?: (holder: HTMLElement, block: Code) => void;
+}
+
+const plainDrawing: Drawing = { mdx: false, join: true };
 
 // ---- drawing ----
 
+/** Text with each `==` and `===` drawn joined into one sign, as a display matter only: the characters are the ones typed. */
+function joined(text: string): Node {
+    const parts = text.split(/((?<!=)={2,3}(?!=))/);
+    if (parts.length === 1) return document.createTextNode(text);
+    const span = document.createElement("span");
+    parts.forEach((part, index) => {
+        if (part === "") return;
+        if (index % 2 === 0) span.append(part);
+        else {
+            const sign = document.createElement("span");
+            sign.className = "quire-join";
+            sign.textContent = part;
+            span.append(sign);
+        }
+    });
+    return span;
+}
+
+/** Inline maths: its source, which is the text, and beside it the maths laid out, which counts as nothing. The source shows while the cursor is in it, or when the maths cannot be laid out. */
+function drawMath(source: string): HTMLElement {
+    const wrap = document.createElement("span");
+    wrap.className = "quire-math";
+    const text = document.createElement("span");
+    text.className = "quire-math-source";
+    text.textContent = source;
+    wrap.append(text);
+    const html = maths(source, false);
+    if (html === null) {
+        wrap.classList.add("quire-math-plain");
+        return wrap;
+    }
+    const shown = document.createElement("span");
+    shown.className = "quire-math-shown";
+    shown.contentEditable = "false";
+    shown.dataset.shown = "";
+    shown.innerHTML = html;
+    wrap.append(shown);
+    return wrap;
+}
+
 /** Draws one leaf of text: the text inside an element for each of its marks. */
-function drawLeaf(leaf: Leaf): Node {
+function drawLeaf(leaf: Leaf, how: Drawing = plainDrawing): Node {
     if (leaf.kind === "break") return document.createElement("br");
+    if (leaf.kind === "emoji") {
+        const atom = document.createElement("span");
+        atom.className = "quire-emoji";
+        atom.contentEditable = "false";
+        atom.dataset.atom = "";
+        atom.title = `:${leaf.name}:`;
+        atom.textContent = emojiOf(leaf.name) ?? `:${leaf.name}:`;
+        return atom;
+    }
     if (leaf.kind === "image") {
         const picture = document.createElement("img");
         picture.src = leaf.src;
@@ -118,7 +191,7 @@ function drawLeaf(leaf: Leaf): Node {
         atom.textContent = leaf.kind === "footnote" ? `[${leaf.label}]` : leaf.html;
         return atom;
     }
-    let node: Node = document.createTextNode(leaf.text);
+    let node: Node = leaf.marks.includes("math") ? drawMath(leaf.text) : how.join && !leaf.marks.includes("code") && leaf.text.includes("==") ? joined(leaf.text) : document.createTextNode(leaf.text);
     for (const [mark, tag] of [...TAGS].reverse()) {
         if (!leaf.marks.includes(mark)) continue;
         const wrap = document.createElement(tag);
@@ -149,16 +222,16 @@ function filler(): HTMLElement {
     return br;
 }
 
-function fillRuns(holder: HTMLElement, runs: Run[]) {
+function fillRuns(holder: HTMLElement, runs: Run[], how: Drawing = plainDrawing) {
     for (const run of runs) {
         if (run.kind !== "link") {
-            holder.append(drawLeaf(run));
+            holder.append(drawLeaf(run, how));
             continue;
         }
         const link = document.createElement("a");
         link.href = run.href;
         if (run.title) link.title = run.title;
-        for (const leaf of run.runs) link.append(drawLeaf(leaf));
+        for (const leaf of run.runs) link.append(drawLeaf(leaf, how));
         holder.append(link);
     }
     const last = runs[runs.length - 1];
@@ -175,18 +248,142 @@ const holderOf = (element: HTMLElement, inner: number[]) => {
     return element;
 };
 
+/** Fills a code holder with its code cut into tokens, each in a span its color comes from. */
+function fillTokens(holder: HTMLElement, code: string, language: string) {
+    holder.replaceChildren();
+    for (const token of highlight(code, language)) {
+        if (token.kind === "plain") {
+            holder.append(token.text);
+            continue;
+        }
+        const span = document.createElement("span");
+        span.className = `quire-t-${token.kind}`;
+        span.textContent = token.text;
+        holder.append(span);
+    }
+    if (code === "" || code.endsWith("\n")) holder.append(filler());
+}
+
+/** A small element that is not part of the text: what it holds is the surface's to show, not to edit. */
+function aside<K extends keyof HTMLElementTagNameMap>(tag: K, className: string): HTMLElementTagNameMap[K] {
+    const element = document.createElement(tag);
+    element.className = className;
+    element.contentEditable = "false";
+    return element;
+}
+
+/** A code block: its language, as a field with the languages offered, and its code, highlighted. */
+function drawCode(block: Code, inner: number[], how: Drawing): HTMLElement {
+    const pre = document.createElement("pre");
+    pre.className = "quire-code";
+    pre.dataset.label = block.language;
+    const holder = holderOf(document.createElement("code"), inner);
+    if (block.code.length > LONG_CODE && how.later) {
+        fillText(holder, block.code);
+        how.later(holder, block);
+    } else fillTokens(holder, block.code, block.language);
+    const corner = aside("span", "quire-lang-corner");
+    const field = document.createElement("input");
+    field.className = "quire-lang";
+    field.value = block.language;
+    field.placeholder = "language";
+    field.spellcheck = false;
+    field.setAttribute("list", "quire-languages");
+    field.setAttribute("aria-label", "The code's language");
+    field.dataset.lang = inner.join(",");
+    corner.append(field);
+    pre.append(corner, holder);
+    return pre;
+}
+
+/** Maths or a diagram: laid out above its source, which is what is saved and is edited as code. What cannot be laid out says so, and its source stays in full view. */
+function drawDrawn(block: Code, inner: number[], how: Drawing): HTMLElement {
+    const box = document.createElement("div");
+    box.className = "quire-drawn";
+    box.dataset.kind = block.language;
+    const preview = aside("div", "quire-preview");
+    const html = block.language === "math" ? maths(block.code, true) : diagram(block.code);
+    if (html !== null) preview.innerHTML = html;
+    else {
+        box.classList.add("quire-drawn-plain");
+        preview.textContent = block.code.trim() === "" ? (block.language === "math" ? "Maths, written below in TeX" : "A diagram, written below as a flowchart") : block.language === "math" ? "Shown as written: this uses more TeX than mdQuire lays out" : "Shown as code: mdQuire draws flowcharts only";
+    }
+    box.append(preview, drawCode(block, inner, how));
+    return box;
+}
+
+/** The names a callout's kind steps through when its label is pressed. */
+const CALLOUTS = ["NOTE", "TIP", "IMPORTANT", "WARNING", "CAUTION"];
+
+/** A component's tag as a card: its name, what it is, and a field for each property. */
+function drawCard(tag: Tag, inner: number[]): HTMLElement {
+    const card = aside("div", `quire-comp quire-comp-${tag.kind}`);
+    card.dataset.card = inner.join(",");
+    const head = document.createElement("div");
+    head.className = "quire-comp-head";
+    const name = document.createElement("span");
+    name.className = "quire-comp-name";
+    name.textContent = tag.kind === "close" ? `End of ${tag.name}` : tag.name;
+    head.append(name);
+    const about = KNOWN[tag.name]?.about;
+    if (about && tag.kind !== "close") {
+        const line = document.createElement("span");
+        line.className = "quire-comp-about";
+        line.textContent = about;
+        head.append(line);
+    }
+    card.append(head);
+    if (tag.kind === "close") return card;
+    const fields = document.createElement("div");
+    fields.className = "quire-comp-fields";
+    for (const field of fieldsOf(tag)) {
+        const label = document.createElement("label");
+        label.className = `quire-comp-field${field.flag ? " quire-comp-flag" : ""}${field.kind === "missing" ? " quire-comp-missing" : ""}`;
+        const word = document.createElement("span");
+        word.textContent = field.name;
+        const input = document.createElement("input");
+        input.dataset.prop = field.name;
+        if (field.flag) {
+            input.type = "checkbox";
+            input.checked = field.kind !== "missing";
+            label.append(input, word);
+        } else {
+            input.value = field.value;
+            input.spellcheck = false;
+            if (field.kind === "expression") input.classList.add("quire-comp-expression");
+            label.append(word, input);
+        }
+        fields.append(label);
+    }
+    card.append(fields);
+    return card;
+}
+
 /** Draws a block, `inner` being its path inside the top-level block it belongs to. */
-function draw(block: Block, inner: number[]): HTMLElement {
+function draw(block: Block, inner: number[], how: Drawing = plainDrawing): HTMLElement {
     switch (block.kind) {
         case "paragraph":
         case "heading": {
             const element = holderOf(document.createElement(block.kind === "paragraph" ? "p" : `h${block.level}`), inner);
             if (block.align) element.style.textAlign = block.align;
             if (block.spacing) element.style.setProperty("--spacing", String(block.spacing));
-            fillRuns(element, block.runs);
+            fillRuns(element, block.runs, how);
             return element;
         }
         case "list": {
+            if (block.style === "definition") {
+                // a definition list: each item's first block is its term, the rest its definitions
+                const element = document.createElement("dl");
+                element.className = `quire-terms${block.loose ? "" : " quire-tight"}`;
+                block.items.forEach((item, k) =>
+                    item.blocks.forEach((child, j) => {
+                        const holder = document.createElement(j === 0 ? "dt" : "dd");
+                        holder.append(draw(child, [...inner, k, j], how));
+                        element.append(holder);
+                    }),
+                );
+                return element;
+            }
             const element = document.createElement(block.style === "number" ? "ol" : "ul");
             if (block.style === "number" && block.start !== 1) element.setAttribute("start", String(block.start));
             if (!block.loose) element.className = "quire-tight";
@@ -203,12 +400,62 @@ function draw(block: Block, inner: number[]): HTMLElement {
                     box.setAttribute("aria-checked", String(item.checked));
                     li.append(box);
                 }
-                item.blocks.forEach((child, j) => li.append(draw(child, [...inner, k, j])));
+                item.blocks.forEach((child, j) => li.append(draw(child, [...inner, k, j], how)));
                 element.append(li);
             });
             return element;
         }
         case "quote":
+            if (block.details) {
+                // a folding section: its summary as a field, whether it starts open as a button, and its blocks always shown to be written in
+                const element = document.createElement("div");
+                element.className = `quire-fold${block.details.open ? " open" : ""}`;
+                const head = aside("div", "quire-fold-head");
+                const turn = document.createElement("button");
+                turn.type = "button";
+                turn.className = "quire-fold-turn";
+                turn.dataset.fold = inner.join(",");
+                turn.setAttribute("aria-pressed", String(block.details.open));
+                turn.setAttribute("aria-label", block.details.open ? "Starts open; press to start it closed" : "Starts closed; press to start it open");
+                turn.title = block.details.open ? "Starts open" : "Starts closed";
+                const summary = document.createElement("input");
+                summary.className = "quire-summary";
+                summary.value = block.details.summary;
+                summary.placeholder = "What is folded away";
+                summary.setAttribute("aria-label", "The section's summary");
+                summary.dataset.summary = inner.join(",");
+                head.append(turn, summary);
+                const body = document.createElement("div");
+                body.className = "quire-fold-body";
+                block.blocks.forEach((child, j) => body.append(draw(child, [...inner, j], how)));
+                element.append(head, body);
+                return element;
+            }
+            if (block.callout !== undefined) {
+                // a callout: its kind as a label that steps to the next kind when pressed, any title beside it
+                const element = document.createElement("blockquote");
+                element.className = "quire-callout";
+                element.dataset.callout = block.callout.toLowerCase();
+                const head = aside("div", "quire-callout-head");
+                const kind = document.createElement("button");
+                kind.type = "button";
+                kind.className = "quire-callout-kind";
+                kind.dataset.calloutKind = inner.join(",");
+                kind.textContent = block.callout.charAt(0).toUpperCase() + block.callout.slice(1).toLowerCase();
+                kind.title = "Press for another kind of callout";
+                head.append(kind);
+                if (block.title) {
+                    const title = document.createElement("span");
+                    title.className = "quire-callout-title";
+                    title.textContent = block.title;
+                    head.append(title);
+                }
+                element.append(head);
+                block.blocks.forEach((child, j) => element.append(draw(child, [...inner, j], how)));
+                return element;
+            }
+        // a plain quote is drawn as a footnote is, below
+        // falls through
         case "footnote": {
             const element = document.createElement(block.kind === "quote" ? "blockquote" : "div");
             if (block.kind === "footnote") {
@@ -219,11 +466,15 @@ function draw(block: Block, inner: number[]): HTMLElement {
                 label.textContent = `[${block.label}]`;
                 element.append(label);
             }
-            block.blocks.forEach((child, j) => element.append(draw(child, [...inner, j])));
+            block.blocks.forEach((child, j) => element.append(draw(child, [...inner, j], how)));
             return element;
         }
         case "code":
+            if (block.language === "math" || block.language === "mermaid") return drawDrawn(block, inner, how);
+            return drawCode(block, inner, how);
         case "raw": {
+            const tag = how.mdx ? readTag(block.text) : undefined;
+            if (tag) return drawCard(tag, inner);
             if (isContentsMark(block)) {
                 // the marker of a table of contents (inserts.ts): a quiet label over the list it heads
                 const element = document.createElement("div");
@@ -241,10 +492,10 @@ function draw(block: Block, inner: number[]): HTMLElement {
                 return element;
             }
             const pre = document.createElement("pre");
-            pre.className = block.kind === "code" ? "quire-code" : "quire-raw";
-            pre.dataset.label = block.kind === "code" ? block.language : "raw";
+            pre.className = "quire-raw";
+            pre.dataset.label = "raw";
             const holder = holderOf(document.createElement("code"), inner);
-            fillText(holder, block.kind === "code" ? block.code : block.text);
+            fillText(holder, block.text);
             pre.append(holder);
             return pre;
         }
@@ -255,7 +506,7 @@ function draw(block: Block, inner: number[]): HTMLElement {
             const cell = (row: HTMLTableRowElement, runs: Run[], r: number, c: number, tag: "th" | "td") => {
                 const element = holderOf(document.createElement(tag), [...inner, r, c]);
                 if (block.align[c]) element.style.textAlign = block.align[c]!;
-                fillRuns(element, runs);
+                fillRuns(element, runs, how);
                 row.append(element);
             };
             block.header.forEach((runs, c) => cell(head, runs, 0, c, "th"));
@@ -286,7 +537,7 @@ const isAtom = (node: Node) => isElement(node) && (node.tagName === "BR" ? !("fi
 function units(node: Node): number {
     if (node.nodeType === 3) return (node as Text).length;
     if (!isElement(node)) return 0;
-    if ("filler" in node.dataset) return 0;
+    if ("filler" in node.dataset || "shown" in node.dataset) return 0;
     if (isAtom(node)) return 1;
     let sum = 0;
     for (const child of node.childNodes) sum += units(child);
@@ -295,6 +546,9 @@ function units(node: Node): number {
 
 /** The offset in a holder's text of a DOM point inside it. */
 function offsetIn(holder: HTMLElement, node: Node, offset: number): number {
+    // a point inside laid-out maths counts as the end of its source, which is just before it
+    const shown = isElement(node) ? node.closest("[data-shown]") : node.parentElement?.closest("[data-shown]");
+    if (shown && holder.contains(shown)) return offsetIn(holder, shown.parentNode!, [...shown.parentNode!.childNodes].indexOf(shown as ChildNode));
     // a point inside an atom counts as just before or after it
     const atom = isElement(node) ? node.closest("[data-atom]") : node.parentElement?.closest("[data-atom]");
     if (atom && atom !== holder && holder.contains(atom)) return offsetIn(holder, atom.parentNode!, [...atom.parentNode!.childNodes].indexOf(atom as ChildNode)) + (offset > 0 ? 1 : 0);
@@ -361,12 +615,61 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
 
     // ---- drawing the document ----
 
+    // the languages a code block's field offers, once for the page
+    if (!document.getElementById("quire-languages")) {
+        const list = document.createElement("datalist");
+        list.id = "quire-languages";
+        for (const name of LANGUAGE_NAMES) list.append(new Option(name));
+        document.body.append(list);
+    }
+
+    /** Whether typed arrows and signs become their characters, and `==` is shown joined: on unless the writer turned it off. */
+    let symbols = true;
+    const drawing = (): Drawing => ({ mdx: editor.state.doc.mdx, join: symbols, later });
+
+    // a long code block is highlighted once typing in it pauses, the newest drawing of it only
+    const waiting = new Map<HTMLElement, Code>();
+    let painting: ReturnType<typeof setTimeout> | undefined;
+    function later(holder: HTMLElement, block: Code) {
+        waiting.set(holder, block);
+        clearTimeout(painting);
+        painting = setTimeout(() => {
+            let touched = false;
+            for (const [element, code] of waiting) {
+                if (!element.isConnected) continue;
+                fillTokens(element, code.code, code.language);
+                touched = true;
+            }
+            waiting.clear();
+            if (touched) placeSelection();
+        }, 250);
+    }
+
+    /** Lights what the cursor is in that shows its source only then: inline maths, and a block of maths or a diagram. */
+    let lit: HTMLElement[] = [];
+    function markHere() {
+        const now: HTMLElement[] = [];
+        const { focus } = editor.state.selection;
+        const holder = holderAt(focus.path);
+        if (holder) {
+            const box = holder.closest<HTMLElement>(".quire-drawn");
+            if (box) now.push(box);
+            for (const math of holder.querySelectorAll<HTMLElement>(".quire-math")) {
+                const start = offsetIn(holder, math, 0);
+                if (focus.offset >= start && focus.offset <= start + units(math)) now.push(math);
+            }
+        }
+        for (const element of lit) if (!now.includes(element)) element.classList.remove("quire-editing");
+        for (const element of now) element.classList.add("quire-editing");
+        lit = now;
+    }
+
     function render() {
         const fresh: HTMLElement[] = [];
         const wanted = editor.state.doc.blocks.map((block) => {
             let element = drawn.get(block);
             if (!element) {
-                element = draw(block, []);
+                element = draw(block, [], drawing());
                 showPictures(element);
                 drawn.set(block, element);
                 fresh.push(element);
@@ -501,6 +804,7 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
         const changed = next.state.doc !== editor.state.doc;
         editor = next;
         if (changed) render();
+        markHere();
         placeSelection();
         if (changed) emit("change", { doc: editor.state.doc });
         announce();
@@ -508,7 +812,7 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
     }
 
     function send(input: Input): boolean {
-        const { editor: next, outcome } = step(editor, input, Date.now());
+        const { editor: next, outcome } = step(editor, input, Date.now(), { symbols });
         if (!outcome) return false;
         if ("action" in outcome && outcome.action === "link") {
             emit("link", { selection: editor.state.selection, rect: rect() });
@@ -525,6 +829,7 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
         if (same) return;
         // the cursor moved by hand: waiting marks are forgotten and typing starts a new undo step
         editor = apply(editor, { state: { doc: editor.state.doc, selection }, kind: "move" }, Date.now());
+        markHere();
         announce();
     }
 
@@ -655,12 +960,45 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
         syncSelection();
     }
 
+    /** The model path a control inside a drawn block stands for, from the inner path it carries. */
+    function pathOf(element: HTMLElement, inner: string | undefined): number[] {
+        return [[...root.children].indexOf(topOf(element)!), ...(inner ? inner.split(",").map(Number) : [])];
+    }
+
     function onMouseDown(event: MouseEvent) {
-        const box = (event.target as HTMLElement).closest?.("[data-box]") as HTMLElement | null;
+        const target = event.target as HTMLElement;
+        // laid-out maths: pressing it puts the cursor at the end of its source, which then shows
+        const shown = target.closest?.("[data-shown]") as HTMLElement | null;
+        if (shown && root.contains(shown)) {
+            event.preventDefault();
+            const at = toPosition(shown.parentNode!, [...shown.parentNode!.childNodes].indexOf(shown));
+            root.focus({ preventScroll: true });
+            if (at) commit(apply(editor, { state: { doc: editor.state.doc, selection: { anchor: at, focus: at } }, kind: "move" }, Date.now()));
+            return;
+        }
+        // a callout's label steps to the next kind; a folding section's button sets whether it starts open
+        const kind = target.closest?.("[data-callout-kind]") as HTMLElement | null;
+        if (kind && root.contains(kind)) {
+            event.preventDefault();
+            const path = pathOf(kind, kind.dataset.calloutKind);
+            const block = blockAt(editor.state.doc, path);
+            if (block?.kind !== "quote" || block.callout === undefined) return;
+            const next = CALLOUTS[(CALLOUTS.indexOf(block.callout.toUpperCase()) + 1) % CALLOUTS.length]!;
+            run((doc) => setBox(doc, path, { callout: next }));
+            return;
+        }
+        const fold = target.closest?.("[data-fold]") as HTMLElement | null;
+        if (fold && root.contains(fold)) {
+            event.preventDefault();
+            const path = pathOf(fold, fold.dataset.fold);
+            const block = blockAt(editor.state.doc, path);
+            if (block?.kind === "quote" && block.details) run((doc) => setBox(doc, path, { details: { ...block.details!, open: !block.details!.open } }));
+            return;
+        }
+        const box = target.closest?.("[data-box]") as HTMLElement | null;
         if (!box || !root.contains(box)) return;
         event.preventDefault();
-        const top = topOf(box);
-        const path = [[...root.children].indexOf(top!), ...box.dataset.box!.split(",").map(Number)];
+        const path = pathOf(box, box.dataset.box);
         run((doc) => toggleTask(doc, path));
     }
 
@@ -773,12 +1111,25 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
         commit(apply(editor, { state, kind }, Date.now()));
     }
 
+    /** A field inside the document was changed: a picture's alt text, a code block's language, a folding section's summary, or a component's property. */
     function onAltChange(event: Event) {
         const field = event.target as HTMLInputElement;
-        if (!field.matches?.("[data-alt]")) return;
-        const top = topOf(field);
-        const path = [[...root.children].indexOf(top!), ...(field.dataset.alt ? field.dataset.alt.split(",").map(Number) : [])];
-        run((doc) => setImageAlt(doc, path, field.value));
+        if (field.matches?.("[data-alt]")) {
+            const path = pathOf(field, field.dataset.alt);
+            run((doc) => setImageAlt(doc, path, field.value));
+        } else if (field.matches?.("[data-lang]")) {
+            const path = pathOf(field, field.dataset.lang);
+            run((doc) => changeKind(doc, path, { kind: "code", language: field.value.trim() }));
+        } else if (field.matches?.("[data-summary]")) {
+            const path = pathOf(field, field.dataset.summary);
+            const block = blockAt(editor.state.doc, path);
+            if (block?.kind === "quote" && block.details) run((doc) => setBox(doc, path, { details: { ...block.details!, summary: field.value } }));
+        } else if (field.matches?.("[data-prop]")) {
+            const card = field.closest<HTMLElement>("[data-card]")!;
+            const path = pathOf(card, card.dataset.card);
+            const block = blockAt(editor.state.doc, path);
+            if (block?.kind === "raw") run((doc) => setRaw(doc, path, setProp(block.text, field.dataset.prop!, field.type === "checkbox" ? field.checked : field.value)));
+        }
     }
 
     /** Keeps a selection where it is if it still points somewhere, or moves it to the first text. */
@@ -843,6 +1194,17 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
             listeners.set(name, set);
             return () => set.delete(listener as (detail: never) => void);
         },
+        setSymbols(on) {
+            if (on === symbols) return;
+            symbols = on;
+            // the joined signs are drawn or not, so the document is drawn again
+            drawn = new WeakMap();
+            root.replaceChildren();
+            render();
+            markHere();
+            placeSelection();
+        },
+        symbols: () => symbols,
         destroy() {
             for (const [target, name, handler] of handlers) target.removeEventListener(name, handler);
             root.contentEditable = "false";

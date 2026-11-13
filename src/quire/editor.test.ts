@@ -76,7 +76,7 @@ beforeAll(async () => {
     if (!built.success) throw new Error(built.logs.join("\n"));
     // the site's own styles, with its theme's colors as the layout would set them
     const theme = ":root{--ground:oklch(0.16 0.035 300);--surface:oklch(0.21 0.045 300);--rule:oklch(0.32 0.055 300);--ink:oklch(0.93 0.02 300);--muted:oklch(0.73 0.045 300);--accent:oklch(0.77 0.16 300)} body{max-width:none;display:block;padding:1rem}";
-    const css = (await Promise.all(["tokens.css", "base.css", "prose.css", "quire.css", "quire-extras.css"].map((name) => Bun.file(`${styles}/${name}`).text()))).join("\n");
+    const css = (await Promise.all(["tokens.css", "base.css", "prose.css", "quire.css", "quire-markdown.css", "quire-extras.css"].map((name) => Bun.file(`${styles}/${name}`).text()))).join("\n");
     await Bun.write(`${folder}/page.html`, `<!doctype html><meta charset="utf-8"><style>${css}${theme}</style><div id="host"></div><script type="module">${await built.outputs[0]!.text()}</script>`);
     // a picture of one pixel, for the file chooser to give
     await Bun.write(`${folder}/tiny.png`, Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64"));
@@ -314,7 +314,8 @@ used("the slash menu grows at the cursor, narrows as you type, and makes a headi
     await tab.type("/");
     const heights = (await watching).filter((value) => value !== null && !Number.isNaN(value));
     expect(new Set(heights.map(Math.round)).size).toBeGreaterThan(4);
-    expect(await tab.run("document.querySelectorAll('.quire-slash.open .quire-menu-line').length")).toBe(12);
+    // the twelve blocks, then callouts, folding sections, definition lists, maths and diagrams; the site's components are offered in MDX files alone
+    expect(await tab.run("document.querySelectorAll('.quire-slash.open .quire-menu-line').length")).toBe(17);
     // it opens at the cursor
     const near = await tab.run<{ menu: number; caret: number }>("(() => ({ menu: document.querySelector('.quire-slash').getBoundingClientRect().top, caret: getSelection().getRangeAt(0).getBoundingClientRect().bottom }))()");
     expect(Math.abs(near.menu - near.caret)).toBeLessThan(30);

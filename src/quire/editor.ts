@@ -105,6 +105,9 @@ export type Look = "none" | "paper";
 /** Where the look chosen is kept, for every document. */
 const LOOK_KEY = "quire-look";
 
+/** Where typed signs being turned off is kept. */
+const SYMBOLS_KEY = "quire-symbols";
+
 /** Where the outline being open or shut on a wide window is kept. */
 const OUTLINE_KEY = "quire-outline";
 
@@ -147,6 +150,12 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     const notesPlace = () => (store && id ? `${store.label}:${id}` : undefined);
     const surface = createSurface(text, keptNotes(doc, notesPlace()).doc, { onImage: keepPicture, picture: async (address) => (store && id && store.show ? store.show(id, address) : undefined) });
     const caret = createCaret(surface.element, paper, FLAG);
+    // typed signs are on unless the writer turned them off, for every document
+    try {
+        if (localStorage.getItem(SYMBOLS_KEY) === "off") surface.setSymbols(false);
+    } catch {
+        // a browser keeping nothing has them on
+    }
 
     // ---- the title, the first line on the sheet: the document's name ----
     let renaming = Promise.resolve();
@@ -523,7 +532,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     const format = () => row.words[4]!;
     const row = createMenuRow(() =>
         headings(
-            { rich: !!surface.getDocument().quire, contents: !!findContents(surface.getDocument()), paged: pages.paged(), look, outline: outlineView.isOpen(), markdown: host.classList.contains("markdown"), words: countWords(surface.getDocument()), align: aligned(surface.getDocument(), surface.getSelection().focus.path) },
+            { rich: !!surface.getDocument().quire, contents: !!findContents(surface.getDocument()), paged: pages.paged(), look, outline: outlineView.isOpen(), markdown: host.classList.contains("markdown"), words: countWords(surface.getDocument()), align: aligned(surface.getDocument(), surface.getSelection().focus.path), symbols: surface.symbols() },
             {
                 file: options.fileItems,
                 turnRich: () => void makeRich(),
@@ -580,6 +589,17 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
                 highlight: () => bar.pickers.highlight(format()),
                 check: () => checking.open(row.words[5]!),
                 about: () => showAbout(row.words[5]!),
+                marked: doing(toggle("mark")),
+                superscript: doing(toggle("sup")),
+                subscript: doing(toggle("sub")),
+                typedSigns: () => {
+                    surface.setSymbols(!surface.symbols());
+                    try {
+                        localStorage.setItem(SYMBOLS_KEY, surface.symbols() ? "on" : "off");
+                    } catch {
+                        // kept for this visit only
+                    }
+                },
                 downloadAs: () => downloads.open(row.words[0]!, downloadLines(), true),
                 notes: () => notes.list(row.words[2]!),
                 nextNote: () => notes.next(1),

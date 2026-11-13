@@ -50,6 +50,24 @@ test("the web page stands alone: the reading styles inside it, pictures inlined,
     expect(html).not.toContain("<script>");
 });
 
+/** An MDX file with every further kind: a callout, a definition list, sub and sup, marked text, an emoji, maths in a line and as a block, a diagram, a folding section and a component. */
+const KINDS = 'import Figure from "../../components/Figure.astro";\n\n> [!WARNING] Mind the gap\n> Callout words.\n\nApple\n: Definition words.\n\nWater is H<sub>2</sub>O and E = mc<sup>2</sup>, ==marked words== :tada:\n\nArea $\\pi r^2$ inline.\n\n$$\n\\frac{a}{b}\n$$\n\n```mermaid\nflowchart TD\n  A[Start] --> B[Finish]\n```\n\n<details>\n<summary>Summary words</summary>\n\nFolded words.\n\n</details>\n\n<Figure src="/a.webp" alt="Card words" width={960} height={540} />\n';
+/** Words each download must keep, one or more for each kind. */
+const KEPT = ["Warning", "Mind the gap", "Callout words.", "Apple", "Definition words.", "Water is H", "mc", "marked words", "\u{1F389}", "\\pi r^2", "\\frac{a}{b}", "A[Start] --> B[Finish]", "Summary words", "Folded words.", "Card words"];
+const decoded = (html: string) => html.replace(/&gt;/g, ">").replace(/&lt;/g, "<").replace(/&quot;/g, '"').replace(/&amp;/g, "&");
+
+test("every further kind downloads as Markdown byte for byte, as plain text with every word, and as a web page with every word", () => {
+    const doc = read(KINDS, { mdx: true });
+    expect(markdownFor(doc)).toBe(KINDS);
+    const text = plainText(doc);
+    for (const word of KEPT) expect({ word, kept: text.includes(word) }).toEqual({ word, kept: true });
+    expect(text).toContain("Warning: Mind the gap");
+    const page = decoded(pageHtml(doc, { title: "Kinds" }).replace(/<[^>]+>/g, ""));
+    for (const word of KEPT) expect({ word, kept: page.includes(word) }).toEqual({ word, kept: true });
+    const html = pageHtml(doc, { title: "Kinds" });
+    for (const part of ['<blockquote class="callout callout-warning">', "<dl>", "<dt>Apple</dt>", "<dd>Definition words.</dd>", "<sub>2</sub>", "<sup>2</sup>", "<mark>marked words</mark>", '<code class="math">', "<details>", "<summary>Summary words</summary>"]) expect(html).toContain(part);
+});
+
 test("every picture a document shows is found, in blocks, lines, lists and tables", () => {
     const doc = read("![a](one.png)\n\nText ![b](two.png).\n\n- ![c](three.png)\n\n| x |\n| - |\n| ![d](four.png) |\n");
     expect(pictureAddresses(doc).sort()).toEqual(["four.png", "one.png", "three.png", "two.png"]);

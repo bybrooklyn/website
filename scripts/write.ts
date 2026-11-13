@@ -229,7 +229,7 @@ async function styles(): Promise<string> {
         ':root{--font-torrens:"Torrens Serif",Georgia,serif;--font-mono:"Drafting Mono",ui-monospace,monospace}',
         await sheet("fonts.css"),
     ].join("\n");
-    return [`:root{${themeStyle()}}`, fonts, await sheet("tokens.css"), await sheet("base.css"), await sheet("prose.css"), await sheet("quire.css"), await Bun.file(at("src/quire/dictation/dictation.css")).text(), await Bun.file(at("scripts/editor/editor.css")).text()].join("\n");
+    return [`:root{${themeStyle()}}`, fonts, await sheet("tokens.css"), await sheet("base.css"), await sheet("prose.css"), await sheet("quire.css"), await sheet("quire-markdown.css"), await sheet("quire-extras.css"), await Bun.file(at("src/quire/dictation/dictation.css")).text(), await Bun.file(at("scripts/editor/editor.css")).text()].join("\n");
 }
 
 const page = `<!doctype html>

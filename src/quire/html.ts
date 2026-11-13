@@ -5,6 +5,7 @@
 // plain HTML for other programs.
 
 import { tidyRuns, type Align, type Block, type Leaf, type ListItem, type Mark, type Run } from "./document";
+import { emojiOf } from "./emoji";
 
 // ---- reading ----
 
@@ -252,6 +253,9 @@ const TAGS: [Mark, string][] = [
     ["underline", "u"],
     ["strike", "s"],
     ["code", "code"],
+    ["mark", "mark"],
+    ["sup", "sup"],
+    ["sub", "sub"],
 ];
 
 function runsHtml(runs: Run[]): string {
@@ -262,7 +266,8 @@ function runsHtml(runs: Run[]): string {
             if (run.kind === "image") return `<img src="${escape(run.src)}" alt="${escape(run.alt)}">`;
             if (run.kind === "footnote") return `<sup>[${escape(run.label)}]</sup>`;
             if (run.kind === "html") return escape(run.html);
-            let html = escape(run.text);
+            if (run.kind === "emoji") return emojiOf(run.name) ?? `:${escape(run.name)}:`;
+            let html = escape(run.marks.includes("math") ? `$${run.text}$` : run.text);
             for (const [mark, tag] of [...TAGS].reverse()) if (run.marks.includes(mark)) html = `<${tag}>${html}</${tag}>`;
             const style = [run.color && `color:${run.color}`, run.size && `font-size:${run.size}`].filter(Boolean).join(";");
             return style ? `<span style="${escape(style)}">${html}</span>` : html;
@@ -281,12 +286,15 @@ export function writeHtml(list: Block[]): string {
                 case "heading":
                     return `<h${block.level}${align}>${runsHtml(block.runs)}</h${block.level}>`;
                 case "list": {
+                    if (block.style === "definition") return `<dl>${block.items.map((item) => item.blocks.map((child, index) => `<${index === 0 ? "dt" : "dd"}>${writeHtml([child])}</${index === 0 ? "dt" : "dd"}>`).join("")).join("")}</dl>`;
                     const tag = block.style === "number" ? "ol" : "ul";
                     const start = block.style === "number" && block.start !== 1 ? ` start="${block.start}"` : "";
                     const items = block.items.map((item) => `<li>${item.checked !== undefined ? `<input type="checkbox" disabled${item.checked ? " checked" : ""}> ` : ""}${writeHtml(item.blocks)}</li>`);
                     return `<${tag}${start}>${items.join("")}</${tag}>`;
                 }
                 case "quote":
+                    if (block.details) return `<details${block.details.open ? " open" : ""}><summary>${escape(block.details.summary)}</summary>${writeHtml(block.blocks)}</details>`;
+                    if (block.callout !== undefined) return `<blockquote><p><strong>${escape(block.callout.charAt(0) + block.callout.slice(1).toLowerCase())}</strong>${block.title ? ` ${escape(block.title)}` : ""}</p>${writeHtml(block.blocks)}</blockquote>`;
                     return `<blockquote>${writeHtml(block.blocks)}</blockquote>`;
                 case "footnote":
                     return `<div><sup>[${escape(block.label)}]</sup> ${writeHtml(block.blocks)}</div>`;

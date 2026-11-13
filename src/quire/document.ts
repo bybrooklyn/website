@@ -9,8 +9,12 @@
 
 // ---- runs ----
 
-/** A way text can be marked. Underline is not Markdown and is written as `<u>`. */
-export type Mark = "bold" | "italic" | "strike" | "code" | "underline";
+/**
+ * A way text can be marked. Underline is not Markdown and is written as `<u>`; superscript and
+ * subscript as `<sup>` and `<sub>`. "mark" is `==highlighted==` text, and "math" is inline maths,
+ * `$...$`, whose text is the TeX source.
+ */
+export type Mark = "bold" | "italic" | "strike" | "code" | "underline" | "mark" | "sup" | "sub" | "math";
 
 /** How a paragraph, heading or picture sits across the page. Written as `<div align="...">`; justified is for `.quire` documents alone. */
 export type Align = "left" | "center" | "right" | "justify";
@@ -64,8 +68,14 @@ export interface HtmlRun {
     html: string;
 }
 
+/** An emoji written as its shortcode, `:smile:`, and kept as that shortcode. Only names in emoji.ts are read as one. */
+export interface EmojiRun {
+    kind: "emoji";
+    name: string;
+}
+
 /** Anything that can sit inside a link. */
-export type Leaf = TextRun | ImageRun | BreakRun | FootnoteRun | HtmlRun;
+export type Leaf = TextRun | ImageRun | BreakRun | FootnoteRun | HtmlRun | EmojiRun;
 
 /** A link around some runs. `ref` is set for a reference link, `[text][ref]`. */
 export interface LinkRun {
@@ -110,8 +120,8 @@ export interface Heading extends Kept {
     spacing?: number;
 }
 
-/** The three kinds of list. A task list is a bulleted list whose items have boxes. */
-export type ListStyle = "bullet" | "number" | "task";
+/** The kinds of list. A task list is a bulleted list whose items have boxes. In a definition list each item is a term (its first block) and its definitions (the rest), written `Term` then `: definition` lines. */
+export type ListStyle = "bullet" | "number" | "task" | "definition";
 
 /** One item of a list: the blocks in it, and its box if it has one. */
 export interface ListItem {
@@ -132,17 +142,31 @@ export interface List extends Kept {
     items: ListItem[];
 }
 
-/** A quotation, holding blocks. */
+/**
+ * A quotation, holding blocks. Two other boxes of blocks are quotes too, so that everything that
+ * edits a quote edits them: a callout (`> [!NOTE]`, its kind as written in `callout` and any words
+ * after the marker in `title`), and a folding section (`<details>` with its `<summary>`).
+ */
 export interface Quote extends Kept {
     kind: "quote";
     blocks: Block[];
+    callout?: string;
+    title?: string;
+    details?: Details;
 }
 
-/** A fenced block of code. */
+/** A folding section's summary line, and whether it starts open. */
+export interface Details {
+    summary: string;
+    open: boolean;
+}
+
+/** A fenced block of code. A block of display maths written between `$$` lines is one too, its language "math" and `dollars` set. */
 export interface Code extends Kept {
     kind: "code";
     language: string;
     code: string;
+    dollars?: boolean;
 }
 
 /** A table: the heading row, each column's alignment, and the rows. Each cell holds runs. */
@@ -325,7 +349,7 @@ interface Piece {
     link?: LinkInfo;
 }
 
-const ORDER: Mark[] = ["code", "bold", "italic", "strike", "underline"];
+const ORDER: Mark[] = ["code", "math", "bold", "italic", "strike", "underline", "mark", "sup", "sub"];
 
 const leafLength = (leaf: Leaf) => (leaf.kind === "text" ? leaf.text.length : 1);
 
@@ -406,7 +430,10 @@ function insertRuns(runs: Run[], offset: number, value: string | Leaf, marks?: M
     const look = model?.kind === "text" ? model : undefined;
     const link = last?.link && sameLink(last.link, next?.link) ? last.link : undefined;
     if (typeof value !== "string") return fromPieces([...before, { leaf: value, link }, ...after]);
-    const leaf: TextRun = { kind: "text", text: value, marks: marks ? ORDER.filter((mark) => marks.includes(mark)) : look ? [...look.marks] : [] };
+    // maths is entered only from inside it: text typed at either edge of it stays outside
+    const inMath = (piece?: Piece) => piece?.leaf.kind === "text" && piece.leaf.marks.includes("math");
+    const edge = !(inMath(last) && inMath(next));
+    const leaf: TextRun = { kind: "text", text: value, marks: marks ? ORDER.filter((mark) => marks.includes(mark)) : look ? look.marks.filter((mark) => !(edge && mark === "math")) : [] };
     for (const key of LOOKS) if (look?.[key]) leaf[key] = look[key];
     // text typed inside a note's words joins them; typed at either end it stays outside
     const left = last?.leaf.kind === "text" ? last.leaf.comments : undefined;
@@ -770,7 +797,8 @@ export function splitBlock(doc: Document, at: Position): Document {
     const rest = sliceRuns(block.runs, at.offset);
     const second: Block = block.kind === "heading" && at.offset < length ? { ...block, runs: rest, source: undefined } : { kind: "paragraph", runs: rest, gap: block.gap };
     const parent = parentOf(doc, at.path);
-    if (parent.kind === "item") {
+    // in a definition list the new line is another definition of the same term
+    if (parent.kind === "item" && (blockAt(doc, parent.list) as List).style !== "definition") {
         const index = at.path[at.path.length - 1]!;
         const container = blockAt(doc, parent.list) as List;
         const item = container.items[parent.item]!;
@@ -870,6 +898,67 @@ export function setImageAlt(doc: Document, path: number[], alt: string): Documen
     return replace(doc, path, (block) => (block.kind === "image" && block.alt !== alt ? [{ ...block, alt, source: undefined }] : null));
 }
 
+/** Sets the text of a raw block, as a component's card does when one of its fields is changed. */
+export function setRaw(doc: Document, path: number[], value: string): Document {
+    return replace(doc, path, (block) => (block.kind === "raw" && block.text !== value ? [{ ...block, text: value, source: undefined }] : null));
+}
+
+/** Changes what kind of box a quote is: a callout's kind and title, or a folding section's summary and whether it starts open. Undefined leaves a part as it is, null takes it away. */
+export function setBox(doc: Document, path: number[], change: { callout?: string | null; title?: string | null; details?: Details | null }): Document {
+    return replace(doc, path, (block) => {
+        if (block.kind !== "quote") return null;
+        const next: Quote = { ...block, source: undefined };
+        for (const key of ["callout", "title", "details"] as const) {
+            const value = change[key];
+            if (value === null) delete next[key];
+            else if (value !== undefined) (next as unknown as Record<string, unknown>)[key] = value;
+        }
+        return [next];
+    });
+}
+
+/** Makes the block at a path a box of blocks: a callout of a kind ("NOTE", "TIP" and so on) or a folding section. The first block of a plain quote makes the quote a callout, as `> [!NOTE]` does; anything else is put inside a box of its own. */
+export function makeBox(doc: Document, path: number[], box: { callout: string } | { details: Details }): Document {
+    const block = blockAt(doc, path);
+    if (!block) return doc;
+    const parent = parentOf(doc, path);
+    const holder = parent.kind === "quote" ? blockAt(doc, parent.path) : undefined;
+    if (parent.kind === "quote" && "callout" in box && holder?.kind === "quote" && !holder.callout && !holder.details && path[path.length - 1] === 0) return setBox(doc, parent.path, { callout: box.callout });
+    return replace(doc, path, (found) => [{ kind: "quote", blocks: [{ ...found, gap: "" }], ...box, gap: found.gap }]);
+}
+
+/** Turns the empty definition at a path into the term of a new item after its own, as Enter on an empty definition does. */
+export function definitionToTerm(doc: Document, path: number[]): Document {
+    const found = itemOf(doc, path);
+    if (!found || found.list.length + 2 !== path.length) return doc;
+    const index = path[path.length - 1]!;
+    return editItems(doc, found.list, (items, sep) => {
+        const item = items[found.item]!;
+        const kept = item.blocks.filter((_, k) => k !== index);
+        const before: ListItem = { ...item, blocks: kept.map((block, k) => ({ ...block, gap: k === kept.length - 1 ? "" : block.gap || doc.eol })), source: undefined, gap: sep };
+        return spliceBlocks(items, found.item, 1, [before, { blocks: [paragraph()], gap: item.gap }]);
+    });
+}
+
+/** Makes the paragraph at a path a definition of the paragraph before it, which becomes its term; after a definition list, it joins that list's last term. */
+export function makeDefinition(doc: Document, path: number[]): Document {
+    const block = blockAt(doc, path);
+    if (block?.kind !== "paragraph") return doc;
+    return edit(doc, path, (blocks, index) => {
+        const before = blocks[index - 1];
+        const detail: Paragraph = { ...block, source: undefined, gap: "" };
+        if (before?.kind === "list" && before.style === "definition") {
+            const last = before.items[before.items.length - 1]!;
+            const items = [...before.items.slice(0, -1), { ...last, blocks: [...last.blocks.map((each) => ({ ...each, gap: each.gap || doc.eol })), detail], source: undefined }];
+            return spliceBlocks(blocks, index - 1, 2, [{ ...before, items, source: undefined, gap: block.gap }]);
+        }
+        if (before?.kind !== "paragraph") return blocks;
+        const term: Paragraph = { ...before, source: undefined, gap: doc.eol };
+        const made: List = { ...list("definition", []), items: [{ blocks: [term, detail], gap: "" }], gap: block.gap };
+        return spliceBlocks(blocks, index - 1, 2, [made]);
+    });
+}
+
 /** Changes a picture block's alt text, width or caption; a width or caption of undefined takes it away. */
 export function setImage(doc: Document, path: number[], change: { alt?: string; width?: number | undefined; caption?: string | undefined }): Document {
     return replace(doc, path, (block) => {
@@ -915,7 +1004,7 @@ export function setSpacing(doc: Document, path: number[], spacing: number | null
 // ---- changing what a block is ----
 
 /** What a block can be turned into. */
-export type Kind = { kind: "paragraph" } | { kind: "heading"; level: Level } | { kind: "list"; style: ListStyle } | { kind: "quote" } | { kind: "code"; language?: string };
+export type Kind = { kind: "paragraph" } | { kind: "heading"; level: Level } | { kind: "list"; style: ListStyle } | { kind: "quote" } | { kind: "code"; language?: string; dollars?: boolean };
 
 function runsOf(block: Block): Run[] | undefined {
     if (block.kind === "paragraph" || block.kind === "heading") return block.runs;
@@ -946,7 +1035,7 @@ export function changeKind(doc: Document, path: number[], to: Kind): Document {
     if (to.kind === "code") {
         if (block.kind === "code") return to.language === undefined || to.language === block.language ? doc : replace(doc, path, () => [{ ...block, language: to.language!, source: undefined }]);
         if (!runs) return doc;
-        return replace(doc, path, () => [{ kind: "code", language: to.language ?? "", code: runsText(runs), gap: block.gap }]);
+        return replace(doc, path, () => [{ kind: "code", language: to.language ?? "", code: runsText(runs), ...(to.dollars ? { dollars: true } : {}), gap: block.gap }]);
     }
     if (to.kind === "list") {
         // the first block of an item changes the whole list
@@ -971,7 +1060,8 @@ export function changeKind(doc: Document, path: number[], to: Kind): Document {
     if (parent.kind === "quote") return doc;
     return edit(doc, path, (blocks, index, sep) => {
         const before = blocks[index - 1];
-        if (before?.kind === "quote") {
+        // a callout or folding section before is a box of its own, which a plain quote does not join
+        if (before?.kind === "quote" && !before.callout && !before.details) {
             const inner = [...before.blocks.slice(0, -1), { ...before.blocks[before.blocks.length - 1]!, gap: sep }, { ...block, gap: "" }];
             return spliceBlocks(blocks, index - 1, 2, [{ ...before, blocks: inner, source: undefined, gap: block.gap }]);
         }

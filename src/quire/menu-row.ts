@@ -31,6 +31,8 @@ export interface RowState {
     words: number;
     /** How the cursor's block sits across the page, shown as pressed in Format. */
     align?: Align;
+    /** Whether typed arrows and signs become their characters, shown as pressed in Tools. */
+    symbols?: boolean;
     /** True when the document has a table of contents, which Insert then offers to make again. */
     contents?: boolean;
 }
@@ -47,6 +49,7 @@ export type Command =
     | "bold" | "italic" | "underline" | "strike" | "inline" | "paragraph" | "heading1" | "heading2" | "heading3" | "quote"
     | "color" | "size" | "font" | "highlight" | "spacing" | "left" | "center" | "right" | "justify"
     | "check" | "about"
+    | "superscript" | "subscript" | "marked" | "typedSigns"
     | "downloadAs" | "notes" | "nextNote" | "previousNote" | "comment" | "date" | "symbols" | "contents" | "updateContents";
 
 /** The menus of the row, for a document as it stands. */
@@ -120,6 +123,9 @@ export function headings(state: RowState, act: RowActions): Heading[] {
                 ...line("underline", "Underline", { hint: "Ctrl+U" }),
                 ...line("strike", "Strikethrough", { hint: "Ctrl+Shift+X" }),
                 ...line("inline", "Inline code", { icon: "code", hint: "Ctrl+E" }),
+                ...line("marked", "Marked", { hint: "Ctrl+Shift+H" }),
+                ...line("superscript", "Superscript", { hint: "Ctrl+." }),
+                ...line("subscript", "Subscript", { hint: "Ctrl+," }),
                 ...line("paragraph", "Paragraph", { hint: "Ctrl+Alt+0" }),
                 ...line("heading1", "Heading 1", { hint: "Ctrl+Alt+1" }),
                 ...line("heading2", "Heading 2", { hint: "Ctrl+Alt+2" }),
@@ -137,7 +143,7 @@ export function headings(state: RowState, act: RowActions): Heading[] {
         },
         {
             label: "Tools",
-            items: () => [{ label: `${state.words.toLocaleString("en")} ${state.words === 1 ? "word" : "words"}`, note: true, run: () => {} }, ...line("history", "Version history"), ...line("check", "Checking", { hint: "›" }), ...line("about", "About mdQuire")],
+            items: () => [{ label: `${state.words.toLocaleString("en")} ${state.words === 1 ? "word" : "words"}`, note: true, run: () => {} }, ...line("history", "Version history"), ...line("check", "Checking", { hint: "›" }), ...line("typedSigns", "Typed signs, -> to →", { pressed: state.symbols !== false }), ...line("about", "About mdQuire")],
         },
     ];
 }

@@ -14,6 +14,7 @@ import {
     blockPaths,
     changeKind,
     comparePositions,
+    definitionToTerm,
     deleteText,
     divider,
     indent,
@@ -24,6 +25,8 @@ import {
     isPageBreak,
     joinBlock,
     lengthOf,
+    makeBox,
+    makeDefinition,
     moveBlock,
     ordered,
     outdent,
@@ -49,6 +52,9 @@ import {
     type Selection,
 } from "./document";
 import { record, redo, seal, undo, type ChangeKind, type History, type State } from "./history";
+import { readTag } from "./components";
+import { emojiOf } from "./emoji";
+import { symbolFor } from "./symbols";
 
 /** A piece of input: text typed (or given by the keyboard of a phone), or a named key with its modifiers. `mod` is Ctrl, or Cmd on a Mac. */
 export type Input = { type: "text"; text: string } | { type: "key"; key: string; shift?: boolean; mod?: boolean; alt?: boolean; word?: boolean };
@@ -146,11 +152,19 @@ export function sameLeaf(before: Document, path: number[], after: Document, shif
 
 // ---- typing ----
 
-function type(state: State, text: string): Outcome {
+/** What typing may do besides putting in the text: `symbols` turns typed pairs such as `->` into their character. */
+export interface TypingOptions {
+    symbols?: boolean;
+}
+
+/** True for a block typing cannot go into, so that it starts a paragraph after: a picture, a divider, a component's card. */
+const solid = (doc: Document, block: Block) => (!textual(block) && block.kind !== "code" && block.kind !== "raw") || (block.kind === "raw" && doc.mdx && readTag(block.text) !== undefined);
+
+function type(state: State, text: string, options: TypingOptions = {}): Outcome {
     const { doc, at } = clear(state);
     const block = blockAt(doc, at.path);
     if (!block && !tableOf(doc, at.path)) return null;
-    if (block && !textual(block) && block.kind !== "code" && block.kind !== "raw") {
+    if (block && solid(doc, block)) {
         // typing on a picture or divider starts a paragraph after it
         const next = insertText(insertBlock(doc, at.path, paragraph()), { path: nextSibling(at.path), offset: 0 }, text);
         return done(next, caret(nextSibling(at.path), text.length), "type");
@@ -159,9 +173,34 @@ function type(state: State, text: string): Outcome {
     const after: State = { doc: typed, selection: caret(at.path, at.offset + text.length) };
     if (state.marks) after.marks = state.marks;
     const slash = text === "/" && block?.kind === "paragraph" && runsLength(block.runs) === 0;
-    const shortcut = textual(block) ? blockShortcut(after, text) ?? inlineShortcut(after, text) : tableOf(doc, at.path) ? inlineShortcut(after, text) : undefined;
+    const inText = textual(block) || !!tableOf(doc, at.path);
+    const shortcut = textual(block) ? blockShortcut(after, text) ?? inlineShortcut(after, text) : inText ? inlineShortcut(after, text) : undefined;
     if (shortcut) return { state: shortcut, kind: "shortcut", literal: after };
+    const symbol = inText ? symbolShortcut(after, text, options) : undefined;
+    if (symbol) return { state: symbol, kind: "symbol", literal: after };
     return { state: after, kind: "type", slash };
+}
+
+/** A typed pair that becomes its character (symbols.ts), or a known emoji shortcode once its closing colon is typed; never in code or maths. */
+function symbolShortcut(state: State, typed: string, options: TypingOptions): State | undefined {
+    const { doc } = state;
+    const at = state.selection.focus;
+    const before = textAt(doc, at.path).slice(0, at.offset);
+    const quiet = (offset: number) => marksNear(doc, { path: at.path, offset }).some((mark) => mark === "code" || mark === "math");
+    if (typed.length !== 1) return undefined;
+    if (typed === ":") {
+        const code = /:([a-z0-9_+-]+):$/.exec(before);
+        if (!code || !emojiOf(code[1]!) || /[￼\n]/.test(code[0])) return undefined;
+        const start = at.offset - code[0].length;
+        for (let offset = start + 1; offset <= at.offset; offset++) if (quiet(offset)) return undefined;
+        const next = insertAtom(deleteText(doc, { start: { path: at.path, offset: start }, end: at }), { path: at.path, offset: start }, { kind: "emoji", name: code[1]! });
+        return { doc: next, selection: caret(at.path, start + 1) };
+    }
+    if (!options.symbols) return undefined;
+    const symbol = symbolFor(before);
+    if (!symbol || quiet(at.offset) || quiet(at.offset - 1)) return undefined;
+    const next = insertText(deleteText(doc, { start: { path: at.path, offset: at.offset - 2 }, end: at }), { path: at.path, offset: at.offset - 2 }, symbol);
+    return { doc: next, selection: caret(at.path, at.offset - 1) };
 }
 
 const nextSibling = (path: number[]) => [...path.slice(0, -1), path[path.length - 1]! + 1];
@@ -186,13 +225,23 @@ function blockShortcut(state: State, typed: string): State | undefined {
             if (inItem(doc, at.path)) {
                 const owner = blockAt(doc, at.path.slice(0, -2));
                 if (owner?.kind !== "list") return undefined;
-                let next = toggleTask(strip(), at.path);
-                if (ticked) next = toggleTask(next, at.path);
+                // an item with no box gains an empty one, then is ticked if `[x]` was typed; one with a box is set to what was typed
+                const had = owner.items[at.path[at.path.length - 2]!]?.checked;
+                let next = had === undefined || had !== ticked ? toggleTask(strip(), at.path) : strip();
+                if (ticked && had === undefined) next = toggleTask(next, at.path);
                 return land(next);
             }
             let next = changeKind(strip(), at.path, { kind: "list", style: "task" });
             if (ticked) next = toggleTask(next, sameLeaf(doc, at.path, next));
             return land(next);
+        }
+        // `[!NOTE] ` makes a callout of that kind; `: ` under a line makes that line a term and this its definition
+        const callout = /^\[!([A-Za-z]+)\] $/.exec(before);
+        if (callout) return land(makeBox(strip(), at.path, { callout: callout[1]!.toUpperCase() }));
+        if (before === ": ") {
+            const index = at.path[at.path.length - 1]!;
+            const above = index > 0 ? blockAt(doc, [...at.path.slice(0, -1), index - 1]) : undefined;
+            if (above?.kind === "paragraph" || (above?.kind === "list" && above.style === "definition")) return land(makeDefinition(strip(), at.path));
         }
         if (inItem(doc, at.path)) return undefined;
         if (/^[-*+] $/.test(before)) return land(changeKind(strip(), at.path, { kind: "list", style: "bullet" }));
@@ -200,6 +249,9 @@ function blockShortcut(state: State, typed: string): State | undefined {
         if (before === "> " && !inQuote(doc, at.path)) return land(changeKind(strip(), at.path, { kind: "quote" }));
     }
     if (typed === "`" && text === "```") return land(changeKind(strip(), at.path, { kind: "code", language: "" }));
+    // `$$` on an empty line starts a block of maths, and `<details>` a folding section
+    if (typed === "$" && text === "$$") return land(changeKind(strip(), at.path, { kind: "code", language: "math", dollars: true }));
+    if (typed === ">" && /^<details>$/i.test(text)) return land(makeBox(strip(), at.path, { details: { summary: "", open: false } }));
     if (typed === "-" && text === "---") {
         let next = insertBlock(doc, at.path, divider());
         next = insertBlock(next, nextSibling(at.path), paragraph());
@@ -212,15 +264,19 @@ function blockShortcut(state: State, typed: string): State | undefined {
 const INLINE: [RegExp, Mark, number][] = [
     [/(^|[^*])\*\*([^*\s](?:[^*]*[^*\s])?)\*\*$/, "bold", 2],
     [/(^|[^~])~~([^~\s](?:[^~]*[^~\s])?)~~$/, "strike", 2],
+    [/(^|[^=])==([^=\s](?:[^=]*[^=\s])?)==$/, "mark", 2],
     [/(^|[^*])\*([^*\s](?:[^*]*[^*\s])?)\*$/, "italic", 1],
     [/(^|[^`])`([^`]+)`$/, "code", 1],
+    [/(^|[^~])~([^~\s]+)~$/, "sub", 1],
+    [/(^|[^^[])\^([^^\s]+)\^$/, "sup", 1],
+    [/(^|[^$\\])\$([^$\s](?:[^$]*[^$\s])?)\$$/, "math", 1],
 ];
 
-/** `**bold**`, `*italic*`, `` `code` `` and `~~strike~~`, turned into the mark when the closing mark is typed. */
+/** `**bold**`, `*italic*`, `` `code` ``, `~~strike~~`, `==marked==`, `^sup^`, `~sub~` and `$maths$`, turned into the mark when the closing mark is typed. */
 function inlineShortcut(state: State, typed: string): State | undefined {
     // text committed by an input method may be several characters: the last one is the closing mark
     const last = typed.slice(-1);
-    if (!last || !"*`~".includes(last)) return undefined;
+    if (!last || !"*`~=^$".includes(last)) return undefined;
     const { doc } = state;
     const at = state.selection.focus;
     const before = textAt(doc, at.path).slice(0, at.offset);
@@ -231,7 +287,7 @@ function inlineShortcut(state: State, typed: string): State | undefined {
         // the marks must be plain typed characters: no pictures in the stretch, nothing in code
         if (/[￼\n]/.test(before.slice(start))) continue;
         let plain = true;
-        for (let offset = start; offset < at.offset; offset++) if (marksNear(doc, { path: at.path, offset: offset + 1 }).includes("code")) plain = false;
+        for (let offset = start; offset < at.offset; offset++) if (marksNear(doc, { path: at.path, offset: offset + 1 }).some((each) => each === "code" || each === "math")) plain = false;
         if (!plain) continue;
         let next = deleteText(doc, { start: { path: at.path, offset: at.offset - width }, end: at });
         next = deleteText(next, { start: { path: at.path, offset: start }, end: { path: at.path, offset: start + width } });
@@ -360,6 +416,27 @@ function enter(state: State): Outcome {
         const next = insertBlock(doc, at.path, paragraph());
         return done(next, caret(nextSibling(at.path), 0), "structure");
     }
+    // in a definition list, Enter on an empty definition starts the next term
+    const owner = inItem(doc, at.path) ? blockAt(doc, at.path.slice(0, -2)) : undefined;
+    if (owner?.kind === "list" && owner.style === "definition" && block.kind === "paragraph" && runsLength(block.runs) === 0) {
+        // and on an empty term with nothing under it, leaves the list
+        if (at.path[at.path.length - 1] === 0) {
+            if (owner.items[at.path[at.path.length - 2]!]!.blocks.length > 1) return done(doc, state.selection, "move");
+            const next = changeKind(doc, at.path, { kind: "paragraph" });
+            return done(next, caret(sameLeaf(doc, at.path, next), 0), "structure");
+        }
+        const next = definitionToTerm(doc, at.path);
+        const term = [...at.path.slice(0, -2), at.path[at.path.length - 2]! + 1, 0];
+        return done(next, caret(term, 0), "structure");
+    }
+    // Enter on an empty last line of a quote, callout or folding section leaves it
+    if (block.kind === "paragraph" && runsLength(block.runs) === 0 && inQuote(doc, at.path)) {
+        const quote = blockAt(doc, at.path.slice(0, -1));
+        if (quote?.kind === "quote" && quote.blocks.length > 1 && at.path[at.path.length - 1] === quote.blocks.length - 1) {
+            const next = changeKind(doc, at.path, { kind: "paragraph" });
+            return done(next, caret(sameLeaf(doc, at.path, next), 0), "structure");
+        }
+    }
     const count = blockPaths(doc).length;
     let next = splitBlock(doc, at);
     const grew = blockPaths(next).length > count;
@@ -422,7 +499,7 @@ export function pageBreakAt(state: State): State {
 
 // ---- shortcuts ----
 
-const MARK_KEYS: Record<string, Mark> = { b: "bold", i: "italic", u: "underline", e: "code" };
+const MARK_KEYS: Record<string, Mark> = { b: "bold", i: "italic", u: "underline", e: "code", ".": "sup", ",": "sub" };
 
 /** Turns a mark on or off over the selection; with nothing selected, for the text typed next. */
 export function mark(state: State, which: Mark): Outcome {
@@ -443,8 +520,8 @@ function blockKind(state: State, level: number): Outcome {
 // ---- the whole ----
 
 /** What an input means in a state: the new state, an action, or null if the input is not mdQuire's. */
-export function handle(state: State, input: Input): Outcome {
-    if (input.type === "text") return input.text === "" ? null : type(state, input.text);
+export function handle(state: State, input: Input, options: TypingOptions = {}): Outcome {
+    if (input.type === "text") return input.text === "" ? null : type(state, input.text, options);
     const { key, shift = false, mod = false, alt = false, word = false } = input;
     if (mod) {
         const lower = key.toLowerCase();
@@ -453,6 +530,7 @@ export function handle(state: State, input: Input): Outcome {
         if (lower === "k") return { action: "link" };
         if (alt && /^[0-6]$/.test(key)) return blockKind(state, Number(key));
         if (shift && lower === "x") return mark(state, "strike");
+        if (shift && lower === "h") return mark(state, "mark");
         if (!shift && !alt && MARK_KEYS[lower]) return mark(state, MARK_KEYS[lower]!);
         if (key === "Enter" && !shift && !alt) return { state: pageBreakAt(state), kind: "structure" };
         if (key === "Backspace") return backspace(state, true);
@@ -473,8 +551,16 @@ export interface Editor {
 }
 
 /** Takes an input and keeps the history: a Markdown shortcut is two steps, the characters as typed and then what they became; undo and redo are done here. */
-export function step(editor: Editor, input: Input, time: number): { editor: Editor; outcome: Outcome } {
-    const outcome = handle(editor.state, input);
+export function step(editor: Editor, input: Input, time: number, options: TypingOptions = {}): { editor: Editor; outcome: Outcome } {
+    // one Backspace straight after a typed sign became its character puts the characters typed back
+    if (input.type === "key" && input.key === "Backspace" && !input.mod && !input.word && !input.alt && !input.shift) {
+        const last = editor.history.done[editor.history.done.length - 1];
+        if (last?.kind === "symbol" && last.after.doc === editor.state.doc && JSON.stringify(last.after.selection) === JSON.stringify(editor.state.selection)) {
+            const back = undo(editor.history);
+            if (back) return { editor: { state: back.state, history: back.history }, outcome: { action: "undo" } };
+        }
+    }
+    const outcome = handle(editor.state, input, options);
     return { editor: apply(editor, outcome, time), outcome };
 }
 

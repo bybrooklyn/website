@@ -3,6 +3,7 @@
 // `bun test src/quire`.
 
 import { expect, test } from "bun:test";
+import { insertText, textAt } from "./document";
 import { caret } from "./keys";
 import { read } from "./read";
 import { chooseSlash, filterSlash, SLASH_ITEMS, slashQuery } from "./slash";
@@ -18,7 +19,7 @@ test("with nothing typed after the slash every item is offered", () => {
 test("typing narrows the menu by name first, then by other words", () => {
     expect(keys("head")).toEqual(["heading1", "heading2", "heading3"]);
     expect(keys("h2")).toEqual(["heading2"]);
-    expect(keys("list")).toEqual(["bullet", "number"]);
+    expect(keys("list")).toEqual(["bullet", "number", "definitions"]);
     expect(keys("TAB")).toEqual(["table"]);
     expect(keys("todo")).toEqual(["task"]);
     expect(keys("pic")).toEqual(["image"]);
@@ -47,4 +48,37 @@ test("choosing takes away the slash and what followed it and makes the block", (
     expect(listed.doc.blocks[0]).toMatchObject({ kind: "list", style: "task" });
     const picture = chooseSlash({ doc: read("/pic\n"), selection: caret([0], 4) }, item("image"));
     expect(picture.doc.blocks[0]).toMatchObject({ kind: "paragraph", runs: [] });
+});
+
+const choose = (source: string, path: number[], key: string, mdx = false) => {
+    const doc = read(source, { mdx });
+    return chooseSlash({ doc, selection: caret(path, textAt(doc, path).length) }, SLASH_ITEMS.find((each) => each.key === key)!);
+};
+
+test("the further blocks are made from the slash menu, the cursor left where the writing goes", () => {
+    const callout = choose("/call\n", [0], "callout");
+    expect(callout.doc.blocks[0]).toMatchObject({ kind: "quote", callout: "NOTE" });
+    expect(callout.selection).toEqual(caret([0, 0], 0));
+    expect(write(insertText(callout.doc, callout.selection.focus, "Hi"))).toBe("> [!NOTE]\n> Hi\n");
+    const fold = choose("/fold\n", [0], "details");
+    expect(write(insertText(fold.doc, fold.selection.focus, "Hidden"))).toBe("<details>\n<summary></summary>\n\nHidden\n\n</details>\n");
+    const terms = choose("/def\n", [0], "definitions");
+    expect(terms.selection).toEqual(caret([0, 0, 0], 0));
+    expect(write(insertText(insertText(terms.doc, { path: [0, 0, 1], offset: 0 }, "Meaning"), terms.selection.focus, "Term"))).toBe("Term\n: Meaning\n");
+    const maths = choose("/math\n", [0], "maths");
+    expect(write(insertText(maths.doc, maths.selection.focus, "x^2"))).toBe("$$\nx^2\n$$\n");
+    const chart = choose("/dia\n", [0], "diagram");
+    expect(write(chart.doc)).toBe("```mermaid\nflowchart TD\n    A[Start] --> B[Next]\n```\n");
+});
+
+test("the site's components are offered in an MDX file alone, and made with the import they need", () => {
+    expect(filterSlash("", false).some((each) => each.mdx)).toBe(false);
+    expect(filterSlash("fig", true).map((each) => each.key)).toEqual(["figure"]);
+    const figure = choose('---\ntitle: x\n---\n\nimport Embed from "../../components/Embed.astro";\n\nText.\n\n/fig\n', [2], "figure", true);
+    expect(write(figure.doc)).toBe('---\ntitle: x\n---\n\nimport Embed from "../../components/Embed.astro";\nimport Figure from "../../components/Figure.astro";\n\nText.\n\n<Figure src="" alt="" width={960} height={540} />\n');
+    const timeline = choose("Text.\n\n/time\n", [1], "timeline", true);
+    expect(write(insertText(timeline.doc, timeline.selection.focus, "It began."))).toBe('import Timeline from "../../components/Timeline.astro";\nimport Moment from "../../components/Moment.astro";\n\nText.\n\n<Timeline>\n\n<Moment when="">\n\nIt began.\n\n</Moment>\n\n</Timeline>\n');
+    // a component already imported is not imported again
+    const again = choose('import Terminal from "../../components/Terminal.astro";\n\n/term\n', [1], "terminal", true);
+    expect(write(again.doc)).toBe('import Terminal from "../../components/Terminal.astro";\n\n<Terminal cast="" title="" />\n');
 });

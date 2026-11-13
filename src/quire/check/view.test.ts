@@ -69,7 +69,7 @@ beforeAll(async () => {
     const bundle = await Bun.build({ entrypoints: [`${folder}/page.ts`], target: "browser", plugins: [withoutSpeech], splitting: true, outdir: `${folder}/out` });
     if (!bundle.success) throw new Error(bundle.logs.join("\n"));
     const theme = ":root{--ground:oklch(0.16 0.035 300);--surface:oklch(0.21 0.045 300);--rule:oklch(0.32 0.055 300);--ink:oklch(0.93 0.02 300);--muted:oklch(0.73 0.045 300);--accent:oklch(0.77 0.16 300)} body{max-width:none;display:block;padding:1rem}";
-    const css = (await Promise.all(["tokens.css", "base.css", "prose.css", "quire.css", "quire-extras.css"].map((name) => Bun.file(`${root}/src/styles/${name}`).text()))).join("\n");
+    const css = (await Promise.all(["tokens.css", "base.css", "prose.css", "quire.css", "quire-markdown.css", "quire-extras.css"].map((name) => Bun.file(`${root}/src/styles/${name}`).text()))).join("\n");
     await Bun.write(`${folder}/out/index.html`, `<!doctype html><meta charset="utf-8"><style>${css}${theme}</style><div id="host"></div><script type="module" src="/page.js"></script>`);
     server = Bun.serve({
         port: 0,

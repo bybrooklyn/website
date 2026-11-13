@@ -1,0 +1,743 @@
+/* mdQuire's further Markdown, as the surface draws it (src/quire/surface.ts): highlighted code and
+   its language, callouts, definition lists, folding sections, the marks beyond bold and italic,
+   maths, diagrams, and the site's own components as cards. Kept apart from quire.css so that each
+   can change without the other. Colors are the site's tokens; on light paper quire.css gives the
+   same tokens their paper values, so nothing here needs a second set. */
+
+/* A plain bullet in a list that also has checklist items keeps its bullet, drawn where a box would be. */
+.quire ul:has(> .quire-task) > li:not(.quire-task) {
+    list-style: none;
+}
+
+.quire ul:has(> .quire-task) > li:not(.quire-task)::before {
+    content: "";
+    display: inline-block;
+    width: 0.9em;
+    height: 0.9em;
+    margin-right: 0.5em;
+    vertical-align: -0.1em;
+    background: radial-gradient(circle, var(--muted) 0 0.16em, transparent 0.17em) center / 0.9em 0.9em no-repeat;
+}
+
+.quire ul:has(> .quire-task) > li:not(.quire-task) > p:first-of-type {
+    display: inline;
+}
+
+/* ---- code: the colors the site's own code blocks use (tokens.css), and a little more ---- */
+
+.quire-t-keyword,
+.quire-t-tag,
+.quire-t-heading {
+    color: var(--accent);
+}
+
+.quire-t-string,
+.quire-t-attribute {
+    color: color-mix(in oklch, var(--accent) 55%, var(--ink));
+}
+
+.quire-t-number,
+.quire-t-constant,
+.quire-t-variable {
+    color: color-mix(in oklch, var(--accent) 75%, var(--ink));
+}
+
+.quire-t-comment {
+    color: var(--muted);
+    font-style: italic;
+}
+
+.quire-t-punctuation,
+.quire-t-operator {
+    color: var(--muted);
+}
+
+.quire-t-function,
+.quire-t-property {
+    color: var(--ink);
+    font-weight: 600;
+}
+
+.quire-t-type {
+    color: color-mix(in oklch, var(--accent) 40%, var(--ink));
+}
+
+.quire-t-emphasis {
+    font-style: italic;
+}
+
+.quire-t-inserted {
+    color: color-mix(in oklch, var(--ink) 55%, oklch(0.84 0.12 165));
+}
+
+.quire-t-deleted {
+    color: color-mix(in oklch, var(--ink) 50%, oklch(0.72 0.17 15));
+}
+
+/* the language sits in the block's corner as a quiet field, the languages offered as it is typed in */
+.quire pre.quire-code[data-label]:not([data-label=""])::after {
+    content: none;
+}
+
+.quire-lang-corner {
+    position: absolute;
+    top: 0.3rem;
+    right: 0.5rem;
+    font-family: var(--font-mono), monospace;
+}
+
+.quire-lang {
+    width: 7.5em;
+    padding: 0.1em 0.4em;
+    border: 0.0625rem solid transparent;
+    border-radius: 0.35rem;
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    font-size: 0.75rem;
+    text-align: right;
+    opacity: 0.7;
+    transition:
+        opacity 0.2s var(--ease),
+        border-color 0.2s var(--ease),
+        background 0.2s var(--ease);
+}
+
+.quire-lang::placeholder {
+    color: var(--muted);
+    opacity: 0.6;
+}
+
+.quire pre:hover .quire-lang,
+.quire-lang:focus {
+    opacity: 1;
+    border-color: var(--rule);
+}
+
+.quire-lang:focus {
+    outline: none;
+    background: var(--ground);
+    text-align: left;
+}
+
+/* ---- maths and diagrams ---- */
+
+/* a block of either: the drawing, and under it its source, which folds down to a line while the cursor is elsewhere */
+.quire-drawn {
+    margin-block: calc(var(--line) * 1.5);
+}
+
+.quire-drawn > pre {
+    margin-block: calc(var(--line) * 0.5) 0;
+    max-height: 60em;
+    transition:
+        max-height 0.35s var(--ease),
+        opacity 0.25s var(--ease);
+}
+
+.quire-drawn:not(.quire-editing, .quire-drawn-plain) > pre {
+    max-height: 2.9em;
+    overflow: hidden;
+    opacity: 0.55;
+}
+
+.quire-preview {
+    display: flex;
+    justify-content: center;
+    overflow-x: auto;
+    padding: calc(var(--line) * 0.5) 0;
+    user-select: none;
+}
+
+.quire-drawn-plain .quire-preview {
+    justify-content: flex-start;
+    padding: 0;
+    color: var(--muted);
+    font-size: 0.85rem;
+    font-style: italic;
+}
+
+/* inline maths: the maths laid out, and in its place its source between dollars while the cursor is in it */
+/* the source is a box that grows open; the laid-out maths stays inline, so it sits on the line's baseline */
+.quire-math-source {
+    display: inline-block;
+    max-width: 0;
+    overflow: hidden;
+    line-height: 1.3;
+    vertical-align: -0.3em;
+    opacity: 0;
+    white-space: pre;
+    font-family: var(--font-mono), monospace;
+    font-size: 0.85em;
+    color: var(--accent);
+    transition:
+        max-width 0.3s var(--ease),
+        opacity 0.2s var(--ease);
+}
+
+.quire-math-source::before,
+.quire-math-source::after {
+    content: "$";
+    color: var(--muted);
+}
+
+.quire-math.quire-editing > .quire-math-source,
+.quire-math-plain > .quire-math-source {
+    max-width: 100%;
+    opacity: 1;
+}
+
+.quire-math.quire-editing > .quire-math-shown {
+    display: inline-block;
+    max-width: 0;
+    overflow: hidden;
+    opacity: 0;
+}
+
+.quire-math-shown {
+    cursor: text;
+}
+
+/* an integral's limits sit at its top and foot */
+.qm-int + .qm-scripts {
+    margin-left: -0.1em;
+    line-height: 1.9;
+    vertical-align: middle;
+}
+
+/* the maths itself, laid out with boxes: a fraction is a column, a root a sign beside a lined box */
+.qm {
+    font-family: var(--font-torrens), Georgia, serif;
+    font-style: normal;
+    white-space: nowrap;
+    line-height: 1.2;
+}
+
+.qm-display {
+    font-size: 1.2em;
+}
+
+.qm i {
+    font-style: italic;
+}
+
+.qm-bin {
+    margin-inline: 0.22em;
+}
+
+.qm-rel {
+    margin-inline: 0.28em;
+}
+
+.qm-punct {
+    margin-right: 0.17em;
+}
+
+.qm-space {
+    display: inline-block;
+    width: calc(var(--space) * 1em);
+}
+
+.qm-fn,
+.qm-text {
+    font-style: normal;
+}
+
+.qm-fn {
+    margin-right: 0.17em;
+}
+
+.qm sup,
+.qm sub,
+.qm-sup,
+.qm-sub {
+    font-size: 0.7em;
+    line-height: 0;
+}
+
+.qm-scripts {
+    display: inline-flex;
+    flex-direction: column;
+    vertical-align: -0.45em;
+    font-size: 0.7em;
+    line-height: 1.05;
+    text-align: left;
+}
+
+.qm-scripts > .qm-sup,
+.qm-scripts > .qm-sub {
+    font-size: 1em;
+    line-height: 1.05;
+}
+
+.qm-frac {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    vertical-align: middle;
+    margin-inline: 0.1em;
+    font-size: 0.82em;
+}
+
+.qm-big-frac {
+    font-size: 1em;
+}
+
+.qm-num {
+    padding: 0 0.15em 0.08em;
+}
+
+.qm-den {
+    padding: 0.08em 0.15em 0;
+    border-top: 0.07em solid currentColor;
+    align-self: stretch;
+    text-align: center;
+}
+
+.qm-sqrt {
+    display: inline-flex;
+    align-items: flex-end;
+}
+
+.qm-index {
+    font-size: 0.6em;
+    margin-right: -0.4em;
+    align-self: flex-start;
+}
+
+.qm-radical {
+    font-size: 1.1em;
+}
+
+.qm-radicand {
+    padding: 0.08em 0.1em 0;
+    border-top: 0.07em solid currentColor;
+}
+
+.qm-big {
+    font-size: 1.35em;
+    vertical-align: -0.12em;
+}
+
+.qm-int {
+    font-style: italic;
+}
+
+.qm-limits {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    vertical-align: middle;
+    margin-inline: 0.12em;
+    line-height: 1;
+}
+
+.qm-over,
+.qm-under {
+    font-size: 0.7em;
+}
+
+.qm-overline {
+    border-top: 0.07em solid currentColor;
+}
+
+.qm-underline {
+    border-bottom: 0.07em solid currentColor;
+}
+
+.qm-accent {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    line-height: 0.9;
+}
+
+.qm-mark {
+    height: 0.4em;
+    font-size: 0.85em;
+}
+
+/* a flowchart in the site's colors */
+.quire-diagram {
+    max-width: 100%;
+    height: auto;
+    font-family: var(--font-torrens), Georgia, serif;
+    font-size: 13px;
+}
+
+.quire-diagram text {
+    fill: var(--ink);
+    text-anchor: middle;
+    dominant-baseline: central;
+}
+
+.qd-node > :first-child {
+    fill: var(--surface);
+    stroke: color-mix(in oklch, var(--accent) 60%, var(--rule));
+    stroke-width: 1.25;
+}
+
+.qd-diamond > :first-child {
+    fill: color-mix(in oklch, var(--accent) 12%, var(--surface));
+}
+
+.qd-edge {
+    fill: none;
+    stroke: var(--muted);
+    stroke-width: 1.25;
+}
+
+.qd-dotted {
+    stroke-dasharray: 3 4;
+}
+
+.qd-thick {
+    stroke-width: 2.5;
+    stroke: color-mix(in oklch, var(--accent) 70%, var(--muted));
+}
+
+.qd-head {
+    fill: var(--muted);
+}
+
+.qd-label rect {
+    fill: var(--ground);
+}
+
+.qd-label text {
+    fill: var(--muted);
+    font-size: 12px;
+}
+
+/* ---- callouts: GitHub's five kinds, each in one of the site's accents ---- */
+
+.quire .quire-callout {
+    --callout: var(--accent);
+    padding: calc(var(--line) * 0.5) 1rem calc(var(--line) * 0.5) 1.1rem;
+    border-left: 0.1875rem solid var(--callout);
+    border-radius: 0 var(--radius) var(--radius) 0;
+    background: color-mix(in oklch, var(--callout) 9%, transparent);
+    font-style: normal;
+    color: var(--ink);
+    transition:
+        background 0.3s var(--ease),
+        border-color 0.3s var(--ease);
+}
+
+.quire-callout[data-callout="note"] {
+    --callout: color-mix(in oklch, oklch(0.78 0.12 250) 75%, var(--ink));
+}
+
+.quire-callout[data-callout="tip"] {
+    --callout: color-mix(in oklch, oklch(0.84 0.12 165) 70%, var(--ink));
+}
+
+.quire-callout[data-callout="important"] {
+    --callout: color-mix(in oklch, oklch(0.77 0.16 300) 80%, var(--ink));
+}
+
+.quire-callout[data-callout="warning"] {
+    --callout: color-mix(in oklch, oklch(0.84 0.13 80) 70%, var(--ink));
+}
+
+.quire-callout[data-callout="caution"] {
+    --callout: color-mix(in oklch, oklch(0.78 0.15 350) 75%, var(--ink));
+}
+
+.quire-callout-head {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6em;
+    margin-bottom: 0.2em;
+    user-select: none;
+}
+
+.quire-callout-kind {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--callout);
+    font: inherit;
+    font-weight: 650;
+    cursor: pointer;
+    transition: color 0.3s var(--ease);
+}
+
+.quire-callout-kind::before {
+    content: "";
+    display: inline-block;
+    width: 0.55em;
+    height: 0.55em;
+    margin-right: 0.45em;
+    border-radius: 50%;
+    background: currentColor;
+    vertical-align: 0.05em;
+}
+
+.quire-callout-title {
+    color: var(--muted);
+}
+
+.quire-callout > p:last-child {
+    margin-bottom: 0;
+}
+
+/* ---- definition lists ---- */
+
+.quire-terms {
+    margin-block: var(--line);
+}
+
+.quire-terms dt {
+    font-weight: 650;
+}
+
+.quire-terms dt > p,
+.quire-terms dd > p {
+    margin-block: 0;
+}
+
+.quire-terms dd {
+    margin: 0 0 0.35em 1.5rem;
+    padding-left: 0.75rem;
+    border-left: 0.0625rem solid var(--rule);
+}
+
+.quire-terms:not(.quire-tight) dd:has(+ dt) {
+    margin-bottom: calc(var(--line) * 0.6);
+}
+
+/* ---- folding sections: a turning mark, the summary as a field, and the blocks, always there to write in ---- */
+
+.quire-fold {
+    margin-block: var(--line);
+    border: 0.0625rem solid var(--rule);
+    border-radius: var(--radius);
+}
+
+.quire-fold-head {
+    display: flex;
+    align-items: center;
+    gap: 0.4em;
+    padding: 0.35em 0.6em;
+    border-bottom: 0.0625rem solid var(--rule);
+}
+
+.quire-fold-turn {
+    width: 1.6em;
+    height: 1.6em;
+    padding: 0;
+    border: 0;
+    border-radius: 0.35em;
+    background: none;
+    color: var(--muted);
+    cursor: pointer;
+}
+
+.quire-fold-turn::before {
+    content: "";
+    display: block;
+    width: 0;
+    height: 0;
+    margin: auto;
+    border-block: 0.3em solid transparent;
+    border-left: 0.45em solid currentColor;
+    transition: transform 0.25s var(--ease);
+}
+
+.quire-fold.open .quire-fold-turn::before {
+    transform: rotate(90deg);
+}
+
+.quire-fold-turn:hover {
+    background: var(--surface);
+    color: var(--ink);
+}
+
+.quire-summary {
+    flex: 1;
+    min-width: 0;
+    padding: 0.15em 0.3em;
+    border: 0;
+    border-radius: 0.35em;
+    background: transparent;
+    color: var(--ink);
+    font: inherit;
+    font-weight: 650;
+}
+
+.quire-summary:focus {
+    outline: 0.0625rem solid var(--rule);
+}
+
+.quire-fold-body {
+    padding: calc(var(--line) * 0.5) 1rem;
+}
+
+.quire-fold-body > :first-child {
+    margin-top: 0;
+}
+
+.quire-fold-body > :last-child {
+    margin-bottom: 0;
+}
+
+/* ---- marks ---- */
+
+.quire mark {
+    padding: 0 0.12em;
+    border-radius: 0.2em;
+    background: color-mix(in oklch, var(--accent) 32%, transparent);
+    color: inherit;
+}
+
+.quire sup,
+.quire sub {
+    line-height: 0;
+}
+
+.quire-emoji {
+    font-style: normal;
+}
+
+/* `==` and `===` drawn as one joined sign; the characters are the ones typed */
+.quire-join {
+    letter-spacing: -0.16em;
+    padding-right: 0.16em;
+}
+
+/* ---- the site's components, as cards of fields ---- */
+
+.quire-comp {
+    margin-block: var(--line);
+    padding: 0.6em 0.9em 0.75em;
+    border: 0.0625rem solid var(--rule);
+    border-radius: var(--radius);
+    background: var(--surface);
+    font-size: 0.9rem;
+    line-height: 1.5;
+    white-space: normal;
+    user-select: none;
+}
+
+.quire-comp-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.25em 0.75em;
+}
+
+.quire-comp-name {
+    font-family: var(--font-mono), monospace;
+    color: var(--accent);
+}
+
+.quire-comp-name::before {
+    content: "<";
+    color: var(--muted);
+}
+
+.quire-comp-name::after {
+    content: ">";
+    color: var(--muted);
+}
+
+.quire-comp-about {
+    color: var(--muted);
+    font-style: italic;
+}
+
+.quire-comp-close {
+    padding-block: 0.3em;
+    background: transparent;
+    border-style: dashed;
+}
+
+.quire-comp-close .quire-comp-name::before {
+    content: "</";
+}
+
+.quire-comp-fields {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 14rem), 1fr));
+    gap: 0.4em 0.9em;
+    margin-top: 0.5em;
+}
+
+.quire-comp-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1em;
+    min-width: 0;
+    color: var(--muted);
+    font-size: 0.8rem;
+}
+
+.quire-comp-field input:not([type="checkbox"]) {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0.25em 0.45em;
+    border: 0.0625rem solid var(--rule);
+    border-radius: 0.35rem;
+    background: var(--ground);
+    color: var(--ink);
+    font: inherit;
+    font-size: 0.9rem;
+    transition: border-color 0.2s var(--ease);
+}
+
+.quire-comp-field input:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.quire-comp-missing input:not([type="checkbox"]) {
+    border-style: dashed;
+    background: transparent;
+}
+
+.quire-comp-expression {
+    font-family: var(--font-mono), monospace;
+}
+
+.quire-comp-flag {
+    flex-direction: row;
+    align-items: center;
+    gap: 0.4em;
+}
+
+.quire-comp-flag input {
+    accent-color: var(--accent);
+}
+
+.look-paper .quire-comp-flag input {
+    color-scheme: light;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .quire-drawn > pre,
+    .quire-math-source,
+    .quire-math-shown,
+    .quire-lang,
+    .quire-callout,
+    .quire-callout-kind,
+    .quire-fold-turn::before,
+    .quire-comp-field input {
+        transition: none;
+    }
+}
+
+@media print {
+    .quire-lang-corner,
+    .quire-fold-turn {
+        display: none;
+    }
+
+    .quire-drawn > pre {
+        display: none;
+    }
+
+    .quire-math-source {
+        display: none;
+    }
+}

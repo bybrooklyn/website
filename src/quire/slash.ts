@@ -6,20 +6,85 @@
 // The items, how typing narrows them and what choosing does are pure and tested; the rest is DOM.
 
 import { addDivider, addTable, setStyleOf, toggleList, type Action } from "./bar";
-import { blockAt, deleteText, runsText, type Document } from "./document";
+import { importFor, TEMPLATES } from "./components";
+import { blockAt, changeKind, deleteText, insertBlock, insertText, makeBox, moveBlock, paragraph, removeBlock, runsText, setRaw, textAt, type Details, type Document } from "./document";
 import type { State } from "./history";
-import { caret, pageBreakAt } from "./keys";
+import { caret, pageBreakAt, sameLeaf } from "./keys";
 import type { Surface } from "./surface";
 import { flowMenu, make, type MenuItem } from "./ui";
 
-/** One thing the slash menu can make. `image` asks the host for a picture instead of running an action. */
+/** One thing the slash menu can make. `image` asks the host for a picture instead of running an action. An item for `mdx` is offered in MDX files alone. */
 export interface SlashItem {
     key: string;
     label: string;
     icon: string;
     words: string[];
     action?: Action;
+    mdx?: boolean;
 }
+
+/** Makes the cursor's block a box: a callout or a folding section, the cursor staying in it. */
+const boxOf =
+    (box: { callout: string } | { details: Details }): Action =>
+    (state) => {
+        const path = state.selection.focus.path;
+        const doc = makeBox(state.doc, path, box);
+        return { doc, selection: caret(sameLeaf(state.doc, path, doc), 0) };
+    };
+
+/** Makes the cursor's empty line the term of a new definition list, with a definition under it to write. */
+const definitionList: Action = (state) => {
+    const path = state.selection.focus.path;
+    let doc = changeKind(state.doc, path, { kind: "list", style: "definition" });
+    const term = sameLeaf(state.doc, path, doc);
+    doc = insertBlock(doc, term, paragraph());
+    return { doc, selection: caret(term, 0) };
+};
+
+/** Makes the cursor's line a block of maths or a diagram, a diagram with a small flowchart to start from. */
+const drawnBlock =
+    (language: "math" | "mermaid"): Action =>
+    (state) => {
+        const path = state.selection.focus.path;
+        let doc = changeKind(state.doc, path, { kind: "code", language, dollars: language === "math" });
+        const at = sameLeaf(state.doc, path, doc);
+        const start = "flowchart TD\n    A[Start] --> B[Next]";
+        if (language === "mermaid" && textAt(doc, at) === "") doc = insertText(doc, { path: at, offset: 0 }, start);
+        return { doc, selection: caret(at, language === "mermaid" ? start.length : 0) };
+    };
+
+/**
+ * Puts one of the site's own components where the cursor's empty line is: its tags as cards, with a
+ * line to write in where the component holds Markdown, and the import it needs added to the file's
+ * imports if it is not there.
+ */
+export const component =
+    (name: string): Action =>
+    (state) => {
+        const path = state.selection.focus.path;
+        let doc = state.doc;
+        let at = path;
+        let slot: number[] | undefined;
+        for (const piece of TEMPLATES[name] ?? []) {
+            doc = insertBlock(doc, at, piece === null ? paragraph() : { kind: "raw", text: piece, gap: "" });
+            at = [...at.slice(0, -1), at[at.length - 1]! + 1];
+            if (piece === null) slot ??= at;
+        }
+        doc = removeBlock(doc, path);
+        const moved = (place: number[]) => [...place.slice(0, -1), place[place.length - 1]! - 1];
+        let cursor = slot ? moved(slot) : path;
+        for (const needed of name === "Timeline" ? ["Timeline", "Moment"] : [name]) {
+            const line = importFor(needed);
+            if (doc.blocks.some((block) => block.kind === "raw" && new RegExp(`^import\\s+${needed}\\b`, "m").test(block.text))) continue;
+            const last = doc.blocks.map((block, index) => (block.kind === "raw" && /^import\s/.test(block.text) ? index : -1)).filter((index) => index >= 0).pop();
+            if (last !== undefined) doc = setRaw(doc, [last], `${(doc.blocks[last] as { text: string }).text}${doc.eol}${line}`);
+            else {
+                doc = moveBlock(insertBlock(doc, [0], { kind: "raw", text: line, gap: "" }), [1], -1);
+                cursor = [cursor[0]! + 1, ...cursor.slice(1)];
+            }
+        }
+        return { doc, selection: caret(cursor, 0) };
+    };
 
 /** Everything the slash menu offers, in the order it shows them. */
 export const SLASH_ITEMS: SlashItem[] = [
@@ -35,15 +100,25 @@ export const SLASH_ITEMS: SlashItem[] = [
     { key: "image", label: "Picture", icon: "image", words: ["image", "photo", "img"] },
     { key: "pagebreak", label: "Page break", icon: "pagebreak", words: ["new page", "break"], action: pageBreakAt },
     { key: "divider", label: "Divider", icon: "divider", words: ["rule", "line", "hr", "separator"], action: addDivider },
+    { key: "callout", label: "Callout", icon: "quote", words: ["note", "tip", "warning", "important", "caution", "admonition", "alert"], action: boxOf({ callout: "NOTE" }) },
+    { key: "details", label: "Folding section", icon: "chevron", words: ["details", "collapse", "collapsible", "toggle", "summary", "hide"], action: boxOf({ details: { summary: "", open: false } }) },
+    { key: "definitions", label: "Definition list", icon: "indent", words: ["terms", "glossary", "dl"], action: definitionList },
+    { key: "maths", label: "Maths", icon: "plus", words: ["math", "equation", "formula", "latex", "tex"], action: drawnBlock("math") },
+    { key: "diagram", label: "Diagram", icon: "row", words: ["mermaid", "flowchart", "chart", "graph"], action: drawnBlock("mermaid") },
+    { key: "figure", label: "Figure", icon: "image", words: ["component", "caption", "video"], action: component("Figure"), mdx: true },
+    { key: "terminal", label: "Terminal", icon: "code", words: ["component", "cast", "recording"], action: component("Terminal"), mdx: true },
+    { key: "timeline", label: "Timeline", icon: "spacing", words: ["component", "moment", "dates"], action: component("Timeline"), mdx: true },
+    { key: "playhere", label: "PlayHere", icon: "file", words: ["component", "game", "embed", "play"], action: component("PlayHere"), mdx: true },
 ];
 
-/** The items whose name or other words start with what was typed after the slash, those whose name starts with it first. */
-export function filterSlash(query: string): SlashItem[] {
+/** The items whose name or other words start with what was typed after the slash, those whose name starts with it first; the site's components only for an MDX file. */
+export function filterSlash(query: string, mdx = true): SlashItem[] {
+    const items = SLASH_ITEMS.filter((item) => mdx || !item.mdx);
     const wanted = query.trim().toLowerCase();
-    if (!wanted) return SLASH_ITEMS;
+    if (!wanted) return items;
     const starts = (word: string) => word.toLowerCase().startsWith(wanted);
-    const byName = SLASH_ITEMS.filter((item) => item.label.toLowerCase().split(/\s+/).some(starts) || starts(item.label));
-    const byWord = SLASH_ITEMS.filter((item) => !byName.includes(item) && item.words.some(starts));
+    const byName = items.filter((item) => item.label.toLowerCase().split(/\s+/).some(starts) || starts(item.label));
+    const byWord = items.filter((item) => !byName.includes(item) && item.words.some(starts));
     return [...byName, ...byWord];
 }
 
@@ -107,7 +182,7 @@ export function createSlash(surface: Surface, pickImage: () => void): { close():
     }
 
     surface.on("slash", ({ rect }) => {
-        shown = SLASH_ITEMS;
+        shown = filterSlash("", surface.getDocument().mdx);
         active = 0;
         render(rect);
     });
@@ -118,7 +193,7 @@ export function createSlash(surface: Surface, pickImage: () => void): { close():
         const { path, offset } = surface.getSelection().focus;
         const query = slashQuery(doc, path, offset);
         if (query === undefined) return menu.close(false);
-        shown = filterSlash(query);
+        shown = filterSlash(query, doc.mdx);
         active = Math.min(active, Math.max(0, shown.length - 1));
         render(null);
     });

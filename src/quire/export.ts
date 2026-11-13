@@ -10,6 +10,7 @@
 //   await readingStyles()               the site's reading styles, from the page, fonts inlined
 
 import { markdownOnly, runsText, type Block, type Document, type Leaf, type Run } from "./document";
+import { emojiOf } from "./emoji";
 import { isContentsMark, slug } from "./inserts";
 import { isPageBreak } from "./document";
 import { write } from "./write";
@@ -56,7 +57,7 @@ export function markdownFor(doc: Document): string {
 export function plainText(doc: Document): string {
     const runs = (list: Run[]): string =>
         list
-            .map((run) => (run.kind === "link" ? runs(run.runs) : run.kind === "text" ? run.text : run.kind === "break" ? "\n" : run.kind === "image" ? (run.alt ? `[${run.alt}]` : "") : run.kind === "footnote" ? `[${run.label}]` : run.html))
+            .map((run) => (run.kind === "link" ? runs(run.runs) : run.kind === "text" ? (run.marks.includes("math") ? `$${run.text}$` : run.text) : run.kind === "break" ? "\n" : run.kind === "image" ? (run.alt ? `[${run.alt}]` : "") : run.kind === "footnote" ? `[${run.label}]` : run.kind === "emoji" ? (emojiOf(run.name) ?? `:${run.name}:`) : run.html))
             .join("");
     const blocks = (list: Block[], indent: string): string[] =>
         list.flatMap((block): string[] => {
@@ -65,6 +66,8 @@ export function plainText(doc: Document): string {
                 case "heading":
                     return [indent + runs(block.runs).replace(/\n/g, `\n${indent}`)];
                 case "list":
+                    // a definition list: each term on its line, its definitions indented under it
+                    if (block.style === "definition") return block.items.flatMap((item) => item.blocks.flatMap((child, index) => blocks([child], index === 0 ? indent : `${indent}    `)));
                     return [
                         block.items
                             .map((item, index) => {
@@ -74,8 +77,11 @@ export function plainText(doc: Document): string {
                             })
                             .join("\n"),
                     ];
-                case "quote":
-                    return blocks(block.blocks, `${indent}    `);
+                case "quote": {
+                    // a callout says its kind first, and a folding section its summary
+                    const head = block.callout !== undefined ? `${indent}${block.callout.charAt(0).toUpperCase()}${block.callout.slice(1).toLowerCase()}:${block.title ? ` ${block.title}` : ""}` : block.details ? `${indent}${block.details.summary}` : undefined;
+                    return [...(head !== undefined ? [head] : []), ...blocks(block.blocks, `${indent}    `)];
+                }
                 case "code":
                     return [block.code.split("\n").map((line) => indent + line).join("\n")];
                 case "table":
@@ -111,6 +117,9 @@ const TAGS: [string, string][] = [
     ["italic", "em"],
     ["strike", "s"],
     ["underline", "u"],
+    ["mark", "mark"],
+    ["sup", "sup"],
+    ["sub", "sub"],
 ];
 
 /** A picture's bytes as an address the page holds inside itself. */
@@ -131,7 +140,9 @@ function pageBody(doc: Document, address: (src: string) => string): string {
         if (run.kind === "image") return `<img src="${escape(address(run.src))}" alt="${escape(run.alt)}">`;
         if (run.kind === "footnote") return `<sup><a href="#note-${escape(run.label)}" id="back-${escape(run.label)}">${escape(run.label)}</a></sup>`;
         if (run.kind === "html") return plainHtml(run.html) ? run.html : escape(run.html);
-        let html = escape(run.text);
+        if (run.kind === "emoji") return escape(emojiOf(run.name) ?? `:${run.name}:`);
+        // inline maths is given as its TeX, which any reader of the page can read and a maths script can lay out
+        let html = run.marks.includes("math") ? `<code class="math">$${escape(run.text)}$</code>` : escape(run.text);
         for (const [mark, tag] of [...TAGS].reverse()) if (run.marks.includes(mark as never)) html = `<${tag}>${html}</${tag}>`;
         const style = [run.color && `color:${run.color}`, run.size && `font-size:${run.size}`, run.highlight && `background:color-mix(in oklch, ${run.highlight} 45%, transparent)`].filter(Boolean).join(";");
         return style ? `<span style="${escape(style)}">${html}</span>` : html;
@@ -149,12 +160,15 @@ function pageBody(doc: Document, address: (src: string) => string): string {
                         return `<h${block.level} id="${escape(id)}"${aligned(block.align)}>${runs(block.runs)}</h${block.level}>`;
                     }
                     case "list": {
+                        if (block.style === "definition") return `<dl>\n${block.items.map((item) => item.blocks.map((child, index) => `<${index === 0 ? "dt" : "dd"}>${blocks([child]).replace(/^<p>([\s\S]*?)<\/p>$/, "$1")}</${index === 0 ? "dt" : "dd"}>`).join("\n")).join("\n")}\n</dl>`;
                         const tag = block.style === "number" ? "ol" : "ul";
                         const start = block.style === "number" && block.start !== 1 ? ` start="${block.start}"` : "";
                         const items = block.items.map((item) => `<li>${item.checked !== undefined ? `<input type="checkbox" disabled${item.checked ? " checked" : ""}> ` : ""}${blocks(item.blocks).replace(/^<p>([\s\S]*?)<\/p>/, "$1")}</li>`);
                         return `<${tag}${start}>\n${items.join("\n")}\n</${tag}>`;
                     }
                     case "quote":
+                        if (block.details) return `<details${block.details.open ? " open" : ""}>\n<summary>${escape(block.details.summary)}</summary>\n${blocks(block.blocks)}\n</details>`;
+                        if (block.callout !== undefined) return `<blockquote class="callout callout-${escape(block.callout.toLowerCase())}">\n<p><strong>${escape(block.callout.charAt(0).toUpperCase() + block.callout.slice(1).toLowerCase())}</strong>${block.title ? ` ${escape(block.title)}` : ""}</p>\n${blocks(block.blocks)}\n</blockquote>`;
                         return `<blockquote>\n${blocks(block.blocks)}\n</blockquote>`;
                     case "footnote":
                         return `<div class="footnote" id="note-${escape(block.label)}"><sup>${escape(block.label)}</sup> ${blocks(block.blocks)}</div>`;

@@ -5,11 +5,18 @@
 
 import { pictureHtml, sized } from "./pictures";
 import type { Align, Block, Document, Leaf, List, Run, TextRun } from "./document";
+import { emojiOf } from "./emoji";
+import { mathEnd } from "./read";
 
 interface Context {
     eol: string;
     mdx: boolean;
+    /** Set while the runs being written hold dollar signs that could pair as maths, so that each is escaped. */
+    dollars?: boolean;
 }
+
+/** Text marked as maths or code is written as it is, inside its own delimiters, and never escaped. */
+const literal = (leaf: TextRun) => leaf.marks.includes("code") || leaf.marks.includes("math");
 
 /** Writes a whole document. */
 export function write(doc: Document): string {
@@ -76,6 +83,7 @@ function writeBlock(block: Block, context: Context): string {
         case "divider":
             return "---";
         case "code": {
+            if (block.dollars && block.language === "math" && !/^[ \t]*\$\$[ \t]*$/m.test(block.code)) return `$$${eol}${block.code.split("\n").join(eol)}${eol}$$`;
             const longest = Math.max(0, ...(block.code.match(/`+/g) ?? []).map((run) => run.length));
             const fence = block.language.includes("`") ? "~~~" : "`".repeat(Math.max(3, longest + 1));
             const body = block.code === "" ? "" : block.code.split("\n").join(eol) + eol;
@@ -85,8 +93,18 @@ function writeBlock(block: Block, context: Context): string {
             return tableText(block.header, block.align, block.rows, context);
         case "list":
             return listText(block, context);
-        case "quote":
-            return prefixLines(writeBlocks(block.blocks, context, false, true), "> ", "> ", ">");
+        case "quote": {
+            const inner = writeBlocks(block.blocks, context, false, true);
+            if (block.details) {
+                const { summary, open } = block.details;
+                return `<details${open ? " open" : ""}>${eol}<summary>${summary.replace(/[\r\n]+/g, " ")}</summary>${eol}${eol}${inner === "" ? "" : inner + eol + eol}</details>`;
+            }
+            if (block.callout !== undefined) {
+                const head = `[!${block.callout}]${block.title ? ` ${block.title.replace(/[\r\n]+/g, " ")}` : ""}`;
+                return prefixLines(inner === "" ? head : head + eol + inner, "> ", "> ", ">");
+            }
+            return prefixLines(inner, "> ", "> ", ">");
+        }
         case "footnote":
             return prefixLines(writeBlocks(block.blocks, context, false, true), `[^${block.label}]: `, "    ", "");
         case "raw":
@@ -101,11 +119,13 @@ function listText(list: List, context: Context): string {
     list.items.forEach((item, index) => {
         const marker = list.style === "number" ? `${list.start + index}${list.delimiter}` : list.marker;
         let text: string;
-        if (item.source !== undefined) {
+        if (list.style === "definition") text = item.source ?? definitionText(item.blocks, context);
+        else if (item.source !== undefined) {
             // only the first number of a numbered list counts, so it alone is kept right
             text = index === 0 && list.style === "number" ? item.source.replace(/^( {0,3})\d{1,9}(?=[.)])/, `$1${list.start}`) : item.source;
         } else {
-            const box = list.style === "task" || item.checked !== undefined ? `[${item.checked ? "x" : " "}]` : "";
+            // a box belongs to an item, not to its list: a plain bullet among checklist items keeps its bullet
+            const box = item.checked !== undefined ? `[${item.checked ? "x" : " "}]` : "";
             const inner = writeBlocks(item.blocks, context, !list.loose, true);
             const head = `${marker} ${box ? `${box} ` : ""}`;
             text = inner === "" ? head.trimEnd() : prefixLines(inner, head, " ".repeat(marker.length + 1), "");
@@ -114,6 +134,18 @@ function listText(list: List, context: Context): string {
         if (index < list.items.length - 1) out += lineEndings(item.gap) > 0 && (item.source !== undefined || lineEndings(item.gap) >= lineEndings(sep)) ? item.gap : sep;
     });
     return out;
+}
+
+/** A definition list's item: its term on a line, then each definition on a line after a colon. Each keeps its own text if it was not changed. */
+function definitionText(blocks: Block[], context: Context): string {
+    return blocks
+        .map((block, index) => {
+            let line = block.source ?? (block.kind === "paragraph" || block.kind === "heading" ? writeRuns(block.runs, context, false).replace(/[ \t]*\n[ \t]*/g, " ").trim() : writeBlock(block, context).replace(/\r?\n/g, " "));
+            // a term must not read as a definition, or as the start of some other block
+            if (index === 0 && block.source === undefined) line = /^(:|#{1,6}(\s|$)|>|[-+*](\s|$))/.test(line) ? `\\${line}` : line.replace(/^(\d{1,9})([.)])(?=\s|$)/, "$1\\$2");
+            return index === 0 ? line : `: ${line}`;
+        })
+        .join(context.eol);
 }
 
 function tableText(header: Run[][], align: (Align | null)[], rows: Run[][][], context: Context): string {
@@ -156,7 +188,7 @@ function paragraphText(runs: Run[], context: Context): string {
         .map((raw, index) => {
             let line = raw.replace(/^[ \t]+/, "");
             if (!line.endsWith("\\")) line = line.replace(/[ \t]+$/, "");
-            if (/^(#{1,6}(\s|$)|>|[-+*_](\s|$)|(=+|-+)\s*$)/.test(line)) line = `\\${line}`;
+            if (/^(#{1,6}(\s|$)|>|[-+*_](\s|$)|(=+|-+)\s*$|:[ \t])/.test(line)) line = `\\${line}`;
             line = line.replace(/^(\d{1,9})([.)])(?=\s|$)/, "$1\\$2");
             if (index === 0 && context.mdx && /^(import|export)\b/.test(line)) line = `&#${line.charCodeAt(0)};${line.slice(1)}`;
             return line;
@@ -164,12 +196,15 @@ function paragraphText(runs: Run[], context: Context): string {
         .join(context.eol);
 }
 
-type Key = "style" | "underline" | "strike" | "bold" | "italic";
+type Key = "style" | "underline" | "strike" | "bold" | "italic" | "mark" | "sup" | "sub";
+
+const OPEN: Record<Exclude<Key, "style">, string> = { underline: "<u>", strike: "~~", bold: "**", italic: "*", mark: "==", sup: "<sup>", sub: "<sub>" };
+const CLOSE: Record<Exclude<Key, "style">, string> = { underline: "</u>", strike: "~~", bold: "**", italic: "*", mark: "==", sup: "</sup>", sub: "</sub>" };
 
 function keysOf(leaf: TextRun): string[] {
     const keys: string[] = [];
     if (leaf.color || leaf.size) keys.push(`style:${leaf.color ?? ""}|${leaf.size ?? ""}`);
-    for (const key of ["underline", "strike", "bold", "italic"] as Key[]) if (leaf.marks.includes(key as TextRun["marks"][number])) keys.push(key);
+    for (const key of ["underline", "sup", "sub", "strike", "mark", "bold", "italic"] as Key[]) if (leaf.marks.includes(key as TextRun["marks"][number])) keys.push(key);
     return keys;
 }
 
@@ -179,22 +214,22 @@ function openKey(key: string): string {
         const parts = [color ? `color:${color}` : "", size ? `font-size:${size}` : ""].filter(Boolean);
         return `<span style="${parts.join("; ")}">`;
     }
-    return { underline: "<u>", strike: "~~", bold: "**", italic: "*" }[key as Exclude<Key, "style">];
+    return OPEN[key as Exclude<Key, "style">];
 }
 
-const closeKey = (key: string) => (key.startsWith("style:") ? "</span>" : { underline: "</u>", strike: "~~", bold: "**", italic: "*" }[key as Exclude<Key, "style">]);
+const closeKey = (key: string) => (key.startsWith("style:") ? "</span>" : CLOSE[key as Exclude<Key, "style">]);
 
 /** Moves spaces at the edges of marked text out of the marks they would break, as `** bold**` does not read back. */
 function spreadSpaces(leaves: Leaf[]): Leaf[] {
     const out: Leaf[] = [];
     const shared = (leaf: TextRun, other: Leaf | undefined): TextRun => {
-        const next: TextRun = { kind: "text", text: "", marks: other?.kind === "text" ? leaf.marks.filter((mark) => mark !== "code" && other.marks.includes(mark)) : [] };
+        const next: TextRun = { kind: "text", text: "", marks: other?.kind === "text" ? leaf.marks.filter((mark) => mark !== "code" && mark !== "math" && other.marks.includes(mark)) : [] };
         if (other?.kind === "text" && other.color === leaf.color && leaf.color) next.color = leaf.color;
         if (other?.kind === "text" && other.size === leaf.size && leaf.size) next.size = leaf.size;
         return next;
     };
     leaves.forEach((leaf, index) => {
-        if (leaf.kind !== "text" || leaf.marks.includes("code") || keysOf(leaf).length === 0) {
+        if (leaf.kind !== "text" || literal(leaf) || keysOf(leaf).length === 0) {
             out.push(leaf);
             return;
         }
@@ -213,7 +248,7 @@ function writeLeaves(all: Leaf[], context: Context, cell: boolean): string {
     leaves.forEach((leaf, index) => {
         // pictures, breaks and HTML sit inside whatever marks are open around them, and a mark never
         // opens on a space, where it would not read back: the space goes before it, unmarked
-        const blankText = leaf.kind === "text" && !leaf.marks.includes("code") && /^\s+$/.test(leaf.text);
+        const blankText = leaf.kind === "text" && !literal(leaf) && /^\s+$/.test(leaf.text);
         const want = leaf.kind === "text" ? keysOf(leaf) : [...stack];
         while (stack.some((key) => !want.includes(key))) out += closeKey(stack.pop()!);
         for (const key of blankText ? [] : want) {
@@ -222,10 +257,11 @@ function writeLeaves(all: Leaf[], context: Context, cell: boolean): string {
                 stack.push(key);
             }
         }
-        if (leaf.kind === "text") out += leaf.marks.includes("code") ? codeSpan(leaf.text, cell) : escapeText(leaf.text, context, cell, leaves[index - 1], leaves[index + 1]);
+        if (leaf.kind === "text") out += leaf.marks.includes("code") ? codeSpan(leaf.text, cell) : leaf.marks.includes("math") ? `$${cell ? leaf.text.replace(/\|/g, "\\|") : leaf.text}$` : escapeText(leaf.text, context, cell, leaves[index - 1], leaves[index + 1]);
         else if (leaf.kind === "image") out += imageText(leaf.src, leaf.alt, leaf.title);
         else if (leaf.kind === "break") out += cell ? "<br>" : "\\\n";
         else if (leaf.kind === "footnote") out += `[^${leaf.label}]`;
+        else if (leaf.kind === "emoji") out += `:${leaf.name}:`;
         else out += leaf.html;
     });
     while (stack.length) out += closeKey(stack.pop()!);
@@ -234,6 +270,21 @@ function writeLeaves(all: Leaf[], context: Context, cell: boolean): string {
 
 /** Writes runs as Markdown text, with `\n` for line breaks. */
 function writeRuns(runs: Run[], context: Context, cell: boolean): string {
+    // a `$` is left as it is unless, read back as the reader reads it, it would open or close maths
+    let plain = "";
+    const ours: boolean[] = [];
+    for (const leaf of runs.flatMap((run) => (run.kind === "link" ? run.runs : [run]))) {
+        const piece = leaf.kind !== "text" || leaf.marks.includes("code") ? "x" : leaf.marks.includes("math") ? `$${leaf.text}$` : leaf.text;
+        for (const char of piece) ours.push(char === "$" && leaf.kind === "text" && !literal(leaf));
+        plain += piece;
+    }
+    context.dollars = false;
+    for (let index = plain.indexOf("$"); index >= 0 && !context.dollars; index = plain.indexOf("$", index + 1)) {
+        const end = mathEnd(plain, index);
+        if (end < 0) continue;
+        if (ours[index] || ours[end]) context.dollars = true;
+        index = end;
+    }
     let out = "";
     let leaves: Leaf[] = [];
     const flush = () => {
@@ -263,7 +314,7 @@ function codeSpan(value: string, cell: boolean): string {
 
 /** Escapes what would otherwise be read as Markdown in plain text. */
 function escapeText(value: string, context: Context, cell: boolean, previous?: Leaf, following?: Leaf): string {
-    const edge = (leaf?: Leaf) => (leaf?.kind === "text" ? (leaf.marks.includes("code") ? "x" : leaf.text) : leaf ? "x" : " ");
+    const edge = (leaf?: Leaf) => (leaf?.kind === "text" ? (literal(leaf) ? "x" : leaf.text) : leaf ? "x" : " ");
     const before = edge(previous).slice(-1);
     const after = edge(following).slice(0, 1);
     let out = "";
@@ -280,7 +331,11 @@ function escapeText(value: string, context: Context, cell: boolean, previous?: L
             (char === "<" && (context.mdx || /[A-Za-z/!?]/.test(right))) ||
             (char === "&" && /^&(#\d+|#x[0-9a-f]+|[a-z][a-z0-9]*);/i.test(value.slice(index))) ||
             (context.mdx && (char === "{" || char === "}")) ||
-            (cell && char === "|");
+            (cell && char === "|") ||
+            // a `$` that could pair with another as maths, two `=` that could mark text, a known shortcode
+            (char === "$" && !!context.dollars) ||
+            (char === "=" && left !== "=" && right === "=" && (index + 2 < value.length ? value[index + 2] : after) !== "=" && !(space(left) && space(index + 2 < value.length ? value[index + 2]! : after))) ||
+            (char === ":" && emojiOf(/^:([a-z0-9_+-]+):/.exec(value.slice(index))?.[1] ?? "") !== undefined);
         out += risky ? `\\${char}` : char;
     }
     return out;

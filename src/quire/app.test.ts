@@ -89,7 +89,7 @@ beforeAll(async () => {
     const built = await Bun.build({ entrypoints: [`${folder}/page.ts`], target: "browser", plugins: [withoutSpeech] });
     if (!built.success) throw new Error(built.logs.join("\n"));
     const theme = ":root{--ground:oklch(0.16 0.035 300);--surface:oklch(0.21 0.045 300);--rule:oklch(0.32 0.055 300);--ink:oklch(0.93 0.02 300);--muted:oklch(0.73 0.045 300);--accent:oklch(0.77 0.16 300)}";
-    const css = (await Promise.all(["tokens.css", "base.css", "prose.css", "quire.css", "quire-extras.css"].map((name) => Bun.file(`${styles}/${name}`).text()))).join("\n");
+    const css = (await Promise.all(["tokens.css", "base.css", "prose.css", "quire.css", "quire-markdown.css", "quire-extras.css"].map((name) => Bun.file(`${styles}/${name}`).text()))).join("\n");
     await Bun.write(`${folder}/page.html`, `<!doctype html><meta charset="utf-8"><style>${css}${theme}</style><body class="quire-app"><header class="quire-top"><div class="quire-top-in"><div class="quire-top-line"><nav class="quire-trail"><div class="site-id"><a class="site-name" href="/">site</a></div><span class="quire-stroke">/</span><a class="quire-word" href="/mdquire/">mdQuire</a><span class="quire-stroke quire-name-stroke">/</span><span class="quire-name-home"></span></nav><div class="quire-menus-home"></div><div class="quire-status-home"></div></div><div class="quire-bar-home"></div></div></header><main id="main"><div id="host"></div></main><script type="module">${await built.outputs[0]!.text()}</script></body>`);
     await Bun.write(`${folder}/post.md`, "# A post\n\nFrom a file.\n");
     // a .quire file with a styled word, its style addressed as styling.ts says

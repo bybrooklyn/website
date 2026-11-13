@@ -19,6 +19,7 @@ import { runsText, type Align, type Block, type Document, type Leaf, type Page, 
 import type { Picture } from "./export";
 import { isContentsMark, slug } from "./inserts";
 import { isPageBreak } from "./document";
+import { emojiOf } from "./emoji";
 import { writeZip } from "./zip";
 
 /** Text made safe in XML. */
@@ -82,9 +83,12 @@ export async function docx(doc: Document, options: DocxOptions = {}): Promise<Ui
         if (run.kind === "image") return run.alt ? `<w:r><w:t xml:space="preserve">[${xml(run.alt)}]</w:t></w:r>` : "";
         if (run.kind === "footnote") return `<w:r><w:rPr><w:vertAlign w:val="superscript"/></w:rPr><w:t>${xml(run.label)}</w:t></w:r>`;
         if (run.kind === "html") return run.html.trim().startsWith("<") ? "" : `<w:r><w:t xml:space="preserve">${xml(run.html)}</w:t></w:r>`;
+        if (run.kind === "emoji") return `<w:r><w:t xml:space="preserve">${xml(emojiOf(run.name) ?? `:${run.name}:`)}</w:t></w:r>`;
         const props: string[] = [];
+        // inline maths is written as its TeX source between dollars, in the code face: Word is given the words, not a layout
+        const maths = run.marks.includes("math");
         if (extra) props.push(extra);
-        if (run.marks.includes("code")) props.push('<w:rFonts w:ascii="Consolas" w:hAnsi="Consolas" w:cs="Consolas"/>');
+        if (run.marks.includes("code") || maths) props.push('<w:rFonts w:ascii="Consolas" w:hAnsi="Consolas" w:cs="Consolas"/>');
         if (run.marks.includes("bold")) props.push("<w:b/>");
         if (run.marks.includes("italic")) props.push("<w:i/>");
         if (run.marks.includes("strike")) props.push("<w:strike/>");
@@ -92,11 +96,13 @@ export async function docx(doc: Document, options: DocxOptions = {}): Promise<Ui
         if (colour) props.push(`<w:color w:val="${colour}"/>`);
         const size = run.size && halfPoints(run.size);
         if (size) props.push(`<w:sz w:val="${size}"/><w:szCs w:val="${size}"/>`);
+        if (run.marks.includes("mark")) props.push('<w:highlight w:val="yellow"/>');
         // Word reads these in the order its schema gives: underline before shading
         if (run.marks.includes("underline")) props.push('<w:u w:val="single"/>');
         const mark = run.highlight && hex(run.highlight);
         if (mark) props.push(`<w:shd w:val="clear" w:color="auto" w:fill="${mark}"/>`);
-        const parts = run.text.split("\n");
+        if (run.marks.includes("sup") || run.marks.includes("sub")) props.push(`<w:vertAlign w:val="${run.marks.includes("sup") ? "superscript" : "subscript"}"/>`);
+        const parts = (maths ? `$${run.text}$` : run.text).split("\n");
         const text = parts.map((part) => `<w:t xml:space="preserve">${xml(part)}</w:t>`).join("<w:br/>");
         return `<w:r>${props.length ? `<w:rPr>${props.join("")}</w:rPr>` : ""}${text}</w:r>`;
     };
@@ -159,6 +165,13 @@ export async function docx(doc: Document, options: DocxOptions = {}): Promise<Ui
                     return [paragraph(`<w:bookmarkStart w:id="${mark}" w:name="${xml(name)}"/>${runs(block.runs)}<w:bookmarkEnd w:id="${mark}"/>`, { style: `Heading${block.level}`, align: block.align, spacing: block.spacing })];
                 }
                 case "list": {
+                    // a definition list: each term in bold, each of its definitions indented under it
+                    if (block.style === "definition")
+                        return block.items.flatMap((item) =>
+                            item.blocks.flatMap((child, index) =>
+                                index === 0 && (child.kind === "paragraph" || child.kind === "heading") ? [paragraph(runs(child.runs.map((run) => (run.kind === "text" ? { ...run, marks: [...run.marks, "bold" as const] } : run))), { style, indent })] : blocks([child], level, indent + 720, style),
+                            ),
+                        );
                     const num = numbering(block.style === "number", block.start);
                     return block.items.flatMap((item) =>
                         item.blocks.flatMap((child, index) => {
@@ -169,8 +182,12 @@ export async function docx(doc: Document, options: DocxOptions = {}): Promise<Ui
                         }),
                     );
                 }
-                case "quote":
-                    return blocks(block.blocks, level, indent, "Quote");
+                case "quote": {
+                    // a callout's kind and a folding section's summary head its blocks, in bold
+                    const head = block.callout !== undefined ? `${block.callout.charAt(0).toUpperCase()}${block.callout.slice(1).toLowerCase()}${block.title ? `: ${block.title}` : ""}` : block.details ? block.details.summary : undefined;
+                    const top = head !== undefined ? [paragraph(`<w:r><w:rPr><w:b/></w:rPr><w:t xml:space="preserve">${xml(head)}</w:t></w:r>`, { style: block.details ? style : "Quote", indent })] : [];
+                    return [...top, ...blocks(block.blocks, level, block.details ? indent + 360 : indent, block.details ? style : "Quote")];
+                }
                 case "code":
                     return [paragraph(`<w:r>${block.code.split("\n").map((line) => `<w:t xml:space="preserve">${xml(line)}</w:t>`).join("<w:br/>")}</w:r>`, { style: "Code", indent })];
                 case "table": {

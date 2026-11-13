@@ -144,3 +144,17 @@ test("a fresh block beside untouched ones is kept apart from them by a blank lin
     changed.blocks[0] = { ...doc.blocks[0]!, gap: "\n" };
     expect(write(changed)).toBe("First  \nline\nSecond line\n\nnew");
 });
+
+test("a list mixing bullets and checklist items keeps each bullet a bullet when an item is changed", () => {
+    for (const source of ["- [ ] a\n- b\n- [x] c\n", "- a\n- [ ] b\n", "- [x] done\n- plain\n", "- [ ] a\r\n- b\r\n"]) {
+        const doc = read(source);
+        const list = doc.blocks[0] as Extract<Block, { kind: "list" }>;
+        const want = source.split(/\r?\n/);
+        list.items.forEach((_, index) => {
+            const edited = write({ ...doc, blocks: [{ ...list, source: undefined, items: list.items.map((each, k) => (k === index ? { ...each, source: undefined } : each)) }] }).split(/\r?\n/);
+            // only the changed item is written fresh, and it keeps its box, or its lack of one
+            expect({ index, box: /\[[ x]\]/.test(edited[index]!) }).toEqual({ index, box: /\[[ x]\]/.test(want[index]!) });
+        });
+        expect(write({ ...doc, blocks: [{ ...list, source: undefined, items: list.items.map((each) => ({ ...each, source: undefined })) }] })).toBe(source);
+    }
+});

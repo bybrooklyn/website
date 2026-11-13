@@ -201,10 +201,10 @@ test("links of every kind are read with their address and title", () => {
     expect(read(source).blocks[1]!.kind).toBe("raw");
 });
 
-test("raw HTML blocks are kept whole, and Markdown between their tags is still read", () => {
+test("raw HTML blocks are kept whole, a folding section is read as one, and Markdown in it is still read", () => {
     const source = '<p align="center">\n  <img src="logo.png">\n</p>\n\n<details>\n<summary>More</summary>\n\nHidden *text*.\n\n</details>\n\n<pre>\nkept\n\nwith blank lines\n</pre>\n\n<!-- a\ncomment -->\n';
     same(source);
-    expect(read(source).blocks.map((block) => block.kind)).toEqual(["raw", "raw", "paragraph", "raw", "raw", "raw"]);
+    expect(read(source).blocks.map((block) => block.kind)).toEqual(["raw", "quote", "raw", "raw"]);
 });
 
 test("an MDX file keeps its imports, exports, components and expressions as raw blocks", () => {

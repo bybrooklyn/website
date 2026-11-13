@@ -12,8 +12,8 @@ export interface State {
     marks?: Mark[];
 }
 
-/** What sort of change a step is. Only "type" and "delete" steps gather into one. */
-export type ChangeKind = "type" | "delete" | "shortcut" | "format" | "structure" | "paste" | "replace";
+/** What sort of change a step is. Only "type" and "delete" steps gather into one. "symbol" is a typed arrow, sign or emoji, which one Backspace straight after takes back. */
+export type ChangeKind = "type" | "delete" | "shortcut" | "symbol" | "format" | "structure" | "paste" | "replace";
 
 interface Step {
     before: State;

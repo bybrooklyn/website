@@ -5,7 +5,8 @@
 // edit; what is not understood becomes a raw block, kept as its text.
 
 import { asPicture } from "./pictures";
-import { tidyRuns, type Align, type Block, type Document, type Leaf, type Level, type ListItem, type ListStyle, type Mark, type Run, type TextRun } from "./document";
+import { tidyRuns, type Align, type Block, type Document, type Leaf, type Level, type ListItem, type ListStyle, type Mark, type Paragraph, type Run, type TextRun } from "./document";
+import { emojiOf } from "./emoji";
 
 /** How to read a file. MDX turns on imports, exports, components and `{expressions}`, and turns off indented code. */
 export interface ReadOptions {
@@ -215,6 +216,10 @@ function readBlock(lines: Line[], at: number, context: Context): [Block, number]
     } else {
         const fence = FENCE.exec(text);
         if (fence) return readFence(lines, at, indent, fence);
+        const dollars = text.startsWith("$$") ? readDollars(lines, at, indent) : undefined;
+        if (dollars) return dollars;
+        const details = /^<details[\s>]/i.test(text) ? readDetails(lines, at, context) : undefined;
+        if (details) return details;
         const atx = ATX.exec(text);
         if (atx) {
             const content = atx[2]!.replace(/[ \t]+#+[ \t]*$/, "").replace(/^[ \t]*#+[ \t]*$/, "").trim();
@@ -247,8 +252,102 @@ function readBlock(lines: Line[], at: number, context: Context): [Block, number]
         }
         const table = readTable(lines, at, context);
         if (table) return table;
+        const terms = DETAIL.test(lines[at + 1]?.text ?? "") ? readDefinitions(lines, at, context) : undefined;
+        if (terms) return terms;
     }
     return readParagraph(lines, at, context);
+}
+
+/** A block of display maths between `$$` lines, or on one line as `$$ ... $$`; undefined if the `$$` never closes. */
+function readDollars(lines: Line[], at: number, indent: number): [Block, number] | undefined {
+    const text = stripIndent(lines[at]!.text, indent);
+    const one = /^\$\$(.*\S.*)\$\$[ \t]*$/.exec(text);
+    if (one) return [{ kind: "code", language: "math", code: one[1]!.trim(), dollars: true, gap: "" }, at + 1];
+    if (!/^\$\$[ \t]*$/.test(text)) return undefined;
+    let end = at + 1;
+    while (end < lines.length && !/^ {0,3}\$\$[ \t]*$/.test(lines[end]!.text)) end++;
+    if (end >= lines.length) return undefined;
+    const code = lines
+        .slice(at + 1, end)
+        .map((line) => stripIndent(line.text, indent))
+        .join("\n");
+    return [{ kind: "code", language: "math", code, dollars: true, gap: "" }, end + 1];
+}
+
+/**
+ * A folding section in the form GitHub shows: `<details>` (or `<details open>`), its `<summary>` on
+ * the same line or the next, a blank line, Markdown, a blank line and `</details>` on a line of its
+ * own. Sections inside it are counted, so the right closing line is found. Any other form is left
+ * to be read as HTML, kept as its text.
+ */
+function readDetails(lines: Line[], at: number, context: Context): [Block, number] | undefined {
+    const open = /^<details(\s+open(?:="")?)?\s*>[ \t]*(?:<summary>(.*?)<\/summary>[ \t]*)?$/i.exec(lines[at]!.text);
+    if (!open) return undefined;
+    let summary = open[2];
+    let first = at + 1;
+    if (summary === undefined) {
+        const line = /^[ \t]*<summary>(.*?)<\/summary>[ \t]*$/i.exec(lines[first]?.text ?? "");
+        if (!line) return undefined;
+        summary = line[1]!;
+        first++;
+    }
+    if (first >= lines.length || !blank(lines[first]!.text)) return undefined;
+    let depth = 1;
+    let close = first;
+    for (; close < lines.length; close++) {
+        const text = lines[close]!.text;
+        if (/^<details[\s>]/i.test(text)) depth++;
+        else if (/^<\/details>[ \t]*$/i.test(text) && --depth === 0) break;
+    }
+    if (close >= lines.length || !blank(lines[close - 1]!.text)) return undefined;
+    let start = first;
+    while (start < close && blank(lines[start]!.text)) start++;
+    let last = close - 1;
+    while (last >= start && blank(lines[last]!.text)) last--;
+    const blocks = last >= start ? parseInside(lines.slice(start, last + 1), context) : [];
+    return [{ kind: "quote", blocks: blocks.length ? blocks : [emptyKept()], details: { summary, open: !!open[1] }, gap: "" }, close + 1];
+}
+
+/** An empty paragraph that stands for nothing in the file, so that an empty box has a line to write on. */
+const emptyKept = (): Paragraph => ({ kind: "paragraph", runs: [], source: "", gap: "" });
+
+/** A definition's line: a colon at the start, then the definition. */
+const DETAIL = /^ {0,3}:[ \t]+(.*)$/;
+
+/**
+ * A definition list: a term on a line of its own, then one or more `: definition` lines; terms and
+ * their definitions follow one another, with or without blank lines between. Each term and each
+ * definition is one line. Each is kept with its own text, so a definition list written again after
+ * an edit changes only the item edited.
+ */
+function readDefinitions(lines: Line[], at: number, context: Context): [Block, number] | undefined {
+    const term = (text: string | undefined) => text !== undefined && !blank(text) && indentOf(text) < 4 && !interrupts(text) && !itemStart(text) && !DETAIL.test(text);
+    if (!term(lines[at]!.text)) return undefined;
+    const items: ListItem[] = [];
+    let loose = false;
+    let index = at;
+    for (;;) {
+        const head = lines[index]!;
+        const blocks: Block[] = [{ kind: "paragraph", runs: runsFrom(head.text.trim(), context), source: head.text, gap: head.eol }];
+        let end = index + 1;
+        for (let match = DETAIL.exec(lines[end]?.text ?? ""); match; match = DETAIL.exec(lines[end]?.text ?? "")) {
+            blocks.push({ kind: "paragraph", runs: runsFrom(match[1]!.trim(), context), source: match[1]!, gap: lines[end]!.eol });
+            end++;
+        }
+        blocks[blocks.length - 1]!.gap = "";
+        const item: ListItem = { blocks, source: joinSource(lines.slice(index, end)), gap: "" };
+        let next = end;
+        while (next < lines.length && blank(lines[next]!.text)) next++;
+        if (term(lines[next]?.text) && DETAIL.test(lines[next + 1]?.text ?? "")) {
+            item.gap = lines[end - 1]!.eol + joinFull(lines.slice(end, next));
+            if (next > end) loose = true;
+            items.push(item);
+            index = next;
+            continue;
+        }
+        items.push(item);
+        return [{ kind: "list", style: "definition", marker: "-", delimiter: ".", start: 1, loose, items, gap: "" }, end];
+    }
 }
 
 function readIndentedCode(lines: Line[], at: number): [Block, number] {
@@ -420,6 +519,14 @@ function readQuote(lines: Line[], at: number, context: Context): [Block, number]
             index++;
         } else break;
     }
+    // a callout, `> [!NOTE]`, with any words after the marker as its title
+    const callout = /^\[!([A-Za-z]+)\][ \t]*(.*)$/.exec(inner[0]?.text ?? "");
+    if (callout) {
+        const blocks = parseInside(inner.slice(1), context);
+        const block: Block = { kind: "quote", blocks: blocks.length ? blocks : [emptyKept()], callout: callout[1]!, gap: "" };
+        if (callout[2]) block.title = callout[2];
+        return [block, index];
+    }
     return [{ kind: "quote", blocks: parseInside(inner, context), gap: "" }, index];
 }
 
@@ -562,6 +669,25 @@ function codeSpanEnd(text: string, from: number): { end: number; ticks: number }
         index += run;
     }
     return { end: -1, ticks };
+}
+
+/**
+ * Where inline maths that opens with the `$` at `from` closes, as Pandoc reads it: the opening `$`
+ * has a character other than a space after it, the closing one has one before it and no digit
+ * after it, and neither is doubled or escaped. So "$5 and $10" stays text. -1 if it does not close.
+ */
+export function mathEnd(text: string, from: number): number {
+    if (text[from + 1] === "$" || text[from - 1] === "$" || /^\s?$/.test(text[from + 1] ?? "")) return -1;
+    for (let index = from + 2; index < text.length; index++) {
+        const char = text[index]!;
+        if (char === "\\") index++;
+        else if (char === "\n") return -1;
+        else if (char === "$") {
+            if (/\s/.test(text[index - 1]!) || /\d/.test(text[index + 1] ?? "") || text[index + 1] === "$") return -1;
+            return index;
+        }
+    }
+    return -1;
 }
 
 /** The index of the `]` that closes the `[` at `from`, skipping escapes, code spans and nested brackets. */
@@ -753,6 +879,25 @@ function inline(text: string, context: Context): Run[] {
             index = span.end;
             continue;
         }
+        if (char === "$") {
+            const end = mathEnd(text, index);
+            if (end > 0) {
+                push(textRun(text.slice(index + 1, end), ["math"]));
+                index = end + 1;
+                continue;
+            }
+            buffer += text[index + 1] === "$" ? "$$" : "$";
+            index += text[index + 1] === "$" ? 2 : 1;
+            continue;
+        }
+        if (char === ":") {
+            const code = /^:([a-z0-9_+-]+):/.exec(rest);
+            if (code && emojiOf(code[1]!)) {
+                push({ kind: "emoji", name: code[1]! });
+                index += code[0].length;
+                continue;
+            }
+        }
         if (char === "!" && text[index + 1] === "[") {
             const close = bracketEnd(text, index + 1);
             if (close > 0) {
@@ -816,17 +961,17 @@ function inline(text: string, context: Context): Run[] {
                 continue;
             }
             const style = STYLE.exec(rest);
-            const underline = rest.startsWith("<u>");
-            if (style || underline) {
-                const name = style ? "span" : "u";
-                const open = style ? style[0].length : 3;
+            const simple = /^<(u|sup|sub)>/.exec(rest);
+            if (style || simple) {
+                const name = style ? "span" : simple![1]!;
+                const open = style ? style[0].length : simple![0].length;
                 const close = closingTag(text, index + open, name);
                 if (close) {
                     flush();
                     const runs = inline(text.slice(index + open, close.inner), context);
                     for (const run of runs) {
                         if (style) addStyle(run, { color: style[1], size: style[2] ?? style[3] });
-                        else addMark(run, "underline");
+                        else addMark(run, name === "u" ? "underline" : (name as Mark));
                         tokens.push({ run });
                     }
                     index = close.end;
@@ -881,10 +1026,11 @@ function inline(text: string, context: Context): Run[] {
                 continue;
             }
         }
-        if (char === "*" || char === "_" || char === "~") {
+        if (char === "*" || char === "_" || char === "~" || char === "=") {
             let count = 0;
             while (text[index + count] === char) count++;
-            if (char === "~" && count > 2) {
+            // `==marked==` takes exactly two signs; one, or three and more, are only text
+            if ((char === "~" && count > 2) || (char === "=" && count !== 2)) {
                 buffer += char.repeat(count);
                 index += count;
                 continue;
@@ -947,11 +1093,12 @@ function emphasis(tokens: Token[]) {
             for (let open = close - 1; open >= 0; open--) {
                 const opener = tokens[open]!;
                 if (!isDelimiter(opener) || opener.char !== closer.char || !opener.open || opener.count === 0) continue;
-                if (closer.char === "~") {
+                const paired = closer.char === "~" || closer.char === "=";
+                if (paired) {
                     if (opener.count !== closer.count) continue;
                 } else if ((opener.close || closer.open) && (opener.length + closer.length) % 3 === 0 && !(opener.length % 3 === 0 && closer.length % 3 === 0)) continue;
-                const use = closer.char === "~" ? closer.count : opener.count >= 2 && closer.count >= 2 ? 2 : 1;
-                const mark: Mark = closer.char === "~" ? "strike" : use === 2 ? "bold" : "italic";
+                const use = paired ? closer.count : opener.count >= 2 && closer.count >= 2 ? 2 : 1;
+                const mark: Mark = closer.char === "=" ? "mark" : closer.char === "~" ? "strike" : use === 2 ? "bold" : "italic";
                 for (let k = open + 1; k < close; k++) {
                     const token = tokens[k]!;
                     // a run left unpaired inside the emphasis is plain text, and takes the mark too

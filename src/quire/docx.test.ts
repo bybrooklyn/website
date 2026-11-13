@@ -104,3 +104,15 @@ test("sizes are turned into Word's half points, the text's own being 12 points",
     expect(halfPoints("15pt")).toBe(30);
     expect(halfPoints("nonsense")).toBeUndefined();
 });
+
+test("every further kind is written into Word with every word kept: callouts, definitions, marks, maths, diagrams, folding sections and components", async () => {
+    const kinds = 'import Figure from "../../components/Figure.astro";\n\n> [!WARNING] Mind the gap\n> Callout words.\n\nApple\n: Definition words.\n\nWater is H<sub>2</sub>O and E = mc<sup>2</sup>, ==marked words== :tada:\n\nArea $\\pi r^2$ inline.\n\n$$\n\\frac{a}{b}\n$$\n\n```mermaid\nflowchart TD\n  A[Start] --> B[Finish]\n```\n\n<details>\n<summary>Summary words</summary>\n\nFolded words.\n\n</details>\n\n<Figure src="/a.webp" alt="Card words" width={960} height={540} />\n';
+    const all = await readZip(await docx(read(kinds, { mdx: true })));
+    const xml = new TextDecoder().decode(all.get("word/document.xml"));
+    expect(wellFormed(xml)).toBe(true);
+    const words = [...xml.matchAll(/<w:t[^>]*>([^<]*)<\/w:t>/g)].map((match) => match[1]!.replace(/&gt;/g, ">").replace(/&lt;/g, "<").replace(/&quot;/g, '"').replace(/&amp;/g, "&")).join("");
+    for (const word of ["Warning: Mind the gap", "Callout words.", "Apple", "Definition words.", "Water is H2O", "marked words", "\u{1F389}", "$\\pi r^2$", "\\frac{a}{b}", "A[Start] --> B[Finish]", "Summary words", "Folded words.", "Card words"]) expect({ word, kept: words.includes(word) }).toEqual({ word, kept: true });
+    expect(xml).toContain('<w:vertAlign w:val="subscript"/>');
+    expect(xml).toContain('<w:vertAlign w:val="superscript"/>');
+    expect(xml).toContain('<w:highlight w:val="yellow"/>');
+});
