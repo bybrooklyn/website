@@ -13,7 +13,7 @@ import { EMOJI, EMOJI_WORDS } from "./emoji";
 import type { State } from "./history";
 import { caret } from "./keys";
 import type { Surface } from "./surface";
-import { flowMenu, make, type MenuItem } from "./ui";
+import { flowMenu, make, markActive, unmarkActive, type MenuItem } from "./ui";
 
 /** What has been typed after a colon just before the cursor, two letters or more of a name; undefined when no list should be open. */
 export function emojiQuery(doc: Document, path: number[], offset: number): string | undefined {
@@ -55,7 +55,13 @@ export function createEmojiPicker(surface: Surface): { close(): void } {
     const anchor = make("span", "quire-anchor");
     anchor.setAttribute("aria-hidden", "true");
     document.body.append(anchor);
-    const menu = flowMenu("Emoji", { className: "quire-slash quire-emoji-list", onClose: () => (open = false) });
+    const menu = flowMenu("Emoji", {
+        className: "quire-slash quire-emoji-list",
+        onClose: () => {
+            open = false;
+            unmarkActive(surface.element);
+        },
+    });
     let open = false;
     let active = 0;
     let shown: { name: string; emoji: string }[] = [];
@@ -73,11 +79,7 @@ export function createEmojiPicker(surface: Surface): { close(): void } {
         surface.focus();
     };
     const lines = (): MenuItem[] => shown.map((each) => ({ label: `${each.emoji}  ${each.name.replace(/_/g, " ")}`, hint: `:${each.name}:`, run: () => choose(each.name) }));
-    const mark = () =>
-        menu.box.querySelectorAll(".quire-menu-line").forEach((line, index) => {
-            line.classList.toggle("active", index === active);
-            line.setAttribute("aria-selected", String(index === active));
-        });
+    const mark = () => markActive(menu, surface.element, active);
     const look = () => {
         const { path, offset } = surface.getSelection().focus;
         const query = emojiQuery(surface.getDocument(), path, offset);

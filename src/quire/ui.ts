@@ -354,6 +354,35 @@ export interface Menu {
     isOpen(): boolean;
 }
 
+let optionCount = 0;
+
+/**
+ * Marks the active line of a list the arrow keys move through while the focus stays in the text
+ * (the slash menu, the emoji list): drawn lit, and said by a screen reader, the list being a listbox
+ * and the text pointing at its active option with aria-activedescendant.
+ */
+export function markActive(menu: Menu, owner: HTMLElement, active: number) {
+    const items = menu.box.querySelector<HTMLElement>(".quire-menu-items");
+    if (items) {
+        items.setAttribute("role", "listbox");
+        items.id ||= `quire-options-${++optionCount}`;
+        owner.setAttribute("aria-controls", items.id);
+    }
+    menu.box.querySelectorAll<HTMLElement>(".quire-menu-line").forEach((line, index) => {
+        line.id ||= `quire-option-${++optionCount}`;
+        line.setAttribute("role", "option");
+        line.classList.toggle("active", index === active);
+        line.setAttribute("aria-selected", String(index === active));
+        if (index === active) owner.setAttribute("aria-activedescendant", line.id);
+    });
+}
+
+/** Takes away what markActive told the text, once its list is closed. */
+export function unmarkActive(owner: HTMLElement) {
+    owner.removeAttribute("aria-activedescendant");
+    owner.removeAttribute("aria-controls");
+}
+
 /** Closes every open menu but one. */
 export function closeOthers(keep?: Menu) {
     for (const open of document.querySelectorAll<HTMLElement>(".quire-menu:popover-open")) if (open !== keep?.box) open.hidePopover();
