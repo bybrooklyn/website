@@ -279,6 +279,12 @@ see and learn and walk and do things on its own"; "all of this from scratch in o
   bodies. The page draws the calls, plays them as soft sounds, and writes a plain guess at what a call
   tends to mean, marked as a guess.
 
+- **The article** (12 Nov 2026): "short bit about #1 then #3 but simple": a short story of building it
+  (how a walking toy turned into this, what broke, what surprised her, in her voice), then a technical
+  write-up kept simple: methods, numbers, comparisons, and the commands to rerun them.
+- **A visitor's first ten seconds:** "A newborn falling over": the page opens on a creature that knows
+  nothing, learning from the first second. No trained creature is shipped to open on.
+
 Order: speed, then the world and the rays, then PPO, then the teacher, then curiosity and needs, then
 the small vision encoder and the picture experiment.
 
