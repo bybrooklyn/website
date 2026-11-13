@@ -31,8 +31,6 @@ export interface Look {
     over?: boolean;
     /** How shiny: from 0, dull, to 1, a bright spot where the sun glances off it toward the eye. Dull unless said. */
     gloss?: number;
-    /** Only what is written on it is drawn, not its faces: for words on something round, written on an unseen box around it. */
-    bare?: boolean;
 }
 
 export interface Mark {
@@ -601,7 +599,7 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
             g.disable(g.BLEND);
             g.depthMask(true);
             for (const part of solid) {
-                if (part.look.casts === false || part.look.bare || part.shape.count === 0) continue;
+                if (part.look.casts === false || part.shape.count === 0) continue;
                 g.uniformMatrix4fv(depth.at("model"), false, models.get(part)!);
                 g.bindVertexArray(part.shape.facesArray!);
                 g.drawArrays(g.TRIANGLES, 0, part.shape.count);
@@ -622,7 +620,7 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
 
             const paint = (part: Drawn, marked: boolean) => {
                 const { shape } = part;
-                if ((marked ? shape.markCount : shape.count) === 0 || (!marked && part.look.bare)) return;
+                if ((marked ? shape.markCount : shape.count) === 0) return;
                 g.uniformMatrix4fv(main.at("model"), false, models.get(part)!);
                 g.uniform4f(main.at("color"), ...(marked ? (part.look.ink ?? [0.1, 0.06, 0.14]) : part.look.color), marked ? 1 : (part.look.alpha ?? 1));
                 g.uniform1i(main.at("marked"), marked ? 1 : 0);
