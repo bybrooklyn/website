@@ -314,12 +314,17 @@ if (typeof document !== "undefined") {
             probe.textContent = "0".repeat(50);
             probe.style.cssText = "position:absolute;visibility:hidden;font-size:100px";
             view.append(probe);
-            const wide = probe.getBoundingClientRect().width / 5000;
+            // its laid-out width, which the scaling of the frame on its way open does not shrink
+            const wide = probe.offsetWidth / 5000;
             probe.remove();
             const across = fit.clientWidth - 2 * Number.parseFloat(getComputedStyle(fit).paddingLeft);
-            // open, its lines must fit the window too: the window's height less the bar's, which is the frame's height less the screen's
+            // Open, its lines must fit the window too: the window's height less the bar, the frame's
+            // border and the padding around the grid. These are measured for what they are, not as
+            // the frame less the grid, which goes wrong once the grid is taller than the frame.
             const frame = host.querySelector<HTMLElement>(".terminal-window") ?? fit;
-            const down = host.classList.contains("open") ? (innerHeight * 0.92 - (frame.clientHeight - fit.clientHeight) - 2 * Number.parseFloat(getComputedStyle(fit).paddingTop)) / (cast.rows * 1.3) : Infinity;
+            const bar = (host.querySelector<HTMLElement>(".terminal-bar")?.offsetHeight ?? 0) + frame.offsetHeight - frame.clientHeight;
+            const padding = Number.parseFloat(getComputedStyle(fit).paddingTop) + Number.parseFloat(getComputedStyle(fit).paddingBottom);
+            const down = host.classList.contains("open") ? (innerHeight * 0.92 - bar - padding) / (cast.rows * 1.3) : Infinity;
             view.style.fontSize = `${Math.min(across / (cast.cols * wide), down, host.classList.contains("open") ? 22 : 15)}px`;
         };
 
