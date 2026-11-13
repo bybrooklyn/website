@@ -12,7 +12,10 @@
 // Suggestions are every word within two edits (a letter added, taken out, changed, or two swapped),
 // each edit weighed by how likely it is as a slip: a key beside the one meant, a vowel for a vowel, a
 // letter doubled or not, s for c, two letters swapped. They are ranked by that weight and then by how
-// common the word is (its SCOWL size). Two words run together ("alot") are offered apart.
+// common the word is (its SCOWL size). Two words run together ("alot") are offered apart when both are
+// among the commonest words. A word in withheld.ts (slurs, explicit words) is never offered.
+
+import { withheld } from "./withheld";
 
 /** A country's spelling: American or British. */
 export type Dialect = "us" | "gb";
@@ -225,18 +228,19 @@ export function readDictionary(text: string): Dictionary {
             const found = all.slice(starts[index], starts[index + 1]! - 1);
             // a name keeps its capital; a word takes the capitals of what was typed
             const shown = found === found.toLowerCase() ? shaped(found, word) : found;
-            if (shown === word) continue;
+            if (shown === word || withheld(found)) continue;
             const score = cost + Math.floor(sizes[index]! / 3) * 0.12 + (found[0]!.toLowerCase() !== small[0] ? 0.3 : 0) + (found !== found.toLowerCase() && word === small ? 0.4 : 0);
             if (!scored.has(shown) || scored.get(shown)! > score) scored.set(shown, score);
         }
-        // two words run together
+        // two words run together, offered apart only when both are among the commonest words: "a lot", not "public ally" or "occur ed"
+        const common = (part: string) => {
+            const index = find(part);
+            return index >= 0 && fits(index, dialect) && Math.floor(sizes[index]! / 3) === 0;
+        };
         for (let cut = 1; cut < small.length; cut++) {
             const left = small.slice(0, cut);
             const right = small.slice(cut);
-            if ((cut > 1 || left === "a") && right.length > 1 && has(left, dialect) && has(right, dialect)) {
-                const sizeOf = (part: string) => Math.floor(sizes[find(part)]! / 3);
-                scored.set(shaped(`${left} ${right}`, word), 0.9 + (sizeOf(left) + sizeOf(right)) * 0.12);
-            }
+            if ((cut > 1 || left === "a") && right.length > 1 && common(left) && common(right) && !withheld(`${left} ${right}`)) scored.set(shaped(`${left} ${right}`, word), 0.9);
         }
         return [...scored].sort((a, b) => a[1] - b[1]).slice(0, wanted).map(([found]) => found);
     };
