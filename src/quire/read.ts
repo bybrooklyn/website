@@ -621,27 +621,23 @@ function readFootnote(lines: Line[], at: number, match: RegExpExecArray, context
     return [{ kind: "footnote", label: match[1]!, blocks: orEmpty(parseInside(inner, context)), gap: "" }, end];
 }
 
-/** Splits a table row into cells on the pipes that are not escaped. A backslash escapes the backslash after it, so `\\|` is a backslash and then the cell's edge. */
+/** Splits a table row into cells on the pipes that are not escaped. Every `\|` is an escaped pipe, which is what lets the writer escape every pipe in a cell, text, code and all (write.ts). */
 function cells(row: string): string[] {
     let text = row.trim();
     if (text.startsWith("|")) text = text.slice(1);
+    if (text.endsWith("|") && !text.endsWith("\\|")) text = text.slice(0, -1);
     const out: string[] = [];
     let cell = "";
     for (let index = 0; index < text.length; index++) {
-        const char = text[index]!;
-        if (char === "\\" && text[index + 1] === "|") {
+        if (text[index] === "\\" && text[index + 1] === "|") {
             cell += "|";
             index++;
-        } else if (char === "\\" && text[index + 1] === "\\") {
-            cell += "\\\\";
-            index++;
-        } else if (char === "|") {
+        } else if (text[index] === "|") {
             out.push(cell.trim());
             cell = "";
-        } else cell += char;
+        } else cell += text[index];
     }
-    // a row closed by a pipe has nothing after it, which is not a cell
-    if (cell.trim() !== "" || !/\|\s*$/.test(text) || out.length === 0) out.push(cell.trim());
+    out.push(cell.trim());
     return out;
 }
 

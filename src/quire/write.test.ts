@@ -186,9 +186,10 @@ test("in a table cell pipes are the cell's edges: no spoiler is made there, and 
         [{ kind: "text", text: "one", marks: [] }, { kind: "break" }, { kind: "text", text: "two", marks: ["italic"] }],
     ];
     for (const runs of cells) readsBack(made([{ ...table(["h", "i"]), rows: [[runs, runs]] }]));
-    // the reader agrees: a pipe in a cell is never a spoiler, and two backslashes before a pipe are a backslash and an edge
-    const read1 = read("| a \\|\\|b\\|\\| | c\\\\| d |\n|---|---|---|\n").blocks[0];
-    expect(read1?.kind === "table" && read1.header.map((cell) => cell.map((run) => (run.kind === "text" ? [run.text, run.marks] : run.kind)))).toEqual([[["a ||b||", []]], [["c\\", []]], [["d", []]]]);
+    // the reader agrees: a pipe in a cell is never a spoiler
+    const read1 = read("| a \\|\\|b\\|\\| | d |\n|---|---|\n").blocks[0];
+    expect(read1?.kind === "table" && read1.header.map((cell) => cell.map((run) => (run.kind === "text" ? [run.text, run.marks] : run.kind)))).toEqual([[["a ||b||", []]], [["d", []]]]);
+    readsBack(made([{ ...table(["h"]), rows: [[[{ kind: "text", text: "~\\|", marks: ["code", "bold"] }]]] }]));
 });
 
 test("blocks brought together by an edit are kept apart as they read: two lists stay two, a line across the page at the top stays one, and an item stays an item", () => {
