@@ -1,7 +1,7 @@
 // What "correct" means for Mote's 2D physics, measured. Run with `bun run test`.
 
 import { expect, test } from "bun:test";
-import { Flat, SLOP, speed, wake, type Body } from "./flat";
+import { Flat, SLOP, inside, speed, wake, type Body } from "./flat";
 
 const TICK = 1 / 120;
 const run = (flat: Flat, seconds: number, each?: (time: number) => void) => {
@@ -399,4 +399,16 @@ test("a step of no number or of minus a second is ignored, one of forever is kep
         expect(Number.isFinite(after)).toBe(true);
         expect(ball.y).toBeGreaterThan(after);
     }
+});
+
+test("a point is inside a bar only within its thickness of the line between its ends", () => {
+    const flat = new Flat();
+    // 110 long and 10 thick: its ends are round, of radius 5, about points 50 from its middle
+    const bar = flat.bar(0, 0, 110, 10);
+    expect(inside(bar, 0, 4)).toBe(true);
+    expect(inside(bar, 54, 0)).toBe(true);
+    expect(inside(bar, 54, 4)).toBe(false);
+    expect(inside(bar, 200, 0)).toBe(false);
+    expect(inside(bar, -56, 0)).toBe(false);
+    expect(flat.at(54, 4)).toBeUndefined();
 });

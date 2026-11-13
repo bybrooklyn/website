@@ -391,6 +391,13 @@ function touch(a: Body, b: Body, margin: number): Found {
 /** Whether a point is inside a body. */
 export function inside(b: Body, x: number, y: number): boolean {
     if (b.points.length === 1) return Math.hypot(x - b.x, y - b.y) <= b.round;
+    if (b.points.length === 2) {
+        // a bar: within its rounding of the nearest point of the line between its ends, not of the line going on for ever
+        const [[px, py], [qx, qy]] = b.wp as [P, P];
+        const [dx, dy] = [qx - px, qy - py];
+        const along = Math.max(0, Math.min(1, ((x - px) * dx + (y - py) * dy) / (dx * dx + dy * dy || 1)));
+        return Math.hypot(x - px - dx * along, y - py - dy * along) <= b.round;
+    }
     return apart(b, { wp: [[x, y]] } as Body)[0] <= b.round;
 }
 
