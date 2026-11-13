@@ -8,6 +8,7 @@ open, how to run and test it, and its known weak spots.
 - [site.md](site.md): the site itself, its pages, the rules for what goes on them, caching and deploying.
 - [publishing.md](publishing.md): writing in the browser, drafts, held posts, photos and share pictures.
 - [mdQuire.md](mdQuire.md): the Markdown word processor at `/mdquire/`, also behind `bun run edit`.
+- [mdQuire-ux-audit.md](mdQuire-ux-audit.md): an audit of how mdQuire looks and behaves, finding by finding, with the changes that would most improve it.
 - [mdQuire-against-docs.md](mdQuire-against-docs.md): what Google Docs' menus have that mdQuire does not, each marked small, big or not fitting.
 - [AUDIT.md](AUDIT.md): the audit of 13 November 2026: what was read, found, fixed and left.
 - [spelling.md](spelling.md): mdQuire's spelling check as it is, measured, and the questions for its rebuild.

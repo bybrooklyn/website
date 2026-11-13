@@ -7,13 +7,11 @@ the project's file in [`docs/`](docs/README.md); what has been done is in [`CHAN
 
 ### The site and what it publishes
 
-- Deploy: when. The live site is several days of work behind `main`, and none of the audit's fixes are live.
 - The drafts preview address is public unless Cloudflare Access is put in front of it.
 - The site says it does not track, while visitors' browsers ask GitHub for star counts. Reword, or fetch the counts at build time only.
 - The setup page lists a download stack that a reader may take as piracy.
 - The Terrustia recording shows a game server's port (the game's default).
 - The code and engines of draft minis ship in the live build though their pages are not listed.
-- Posts have no style for a `#` heading in the body, so the site draws it as large as the title. mdQuire now draws it smaller. Decide whether posts get the same rule.
 - The share picture of the colophon post is out of date and is to be made again.
 - A guard on `bun run deploy` that refuses a branch other than `main` or uncommitted changes.
 - Page policy: whether the `blob:` allowance for pictures stays as it is ([mdQuire](docs/mdQuire.md#known-weak-spots)).
@@ -23,8 +21,6 @@ the project's file in [`docs/`](docs/README.md); what has been done is in [`CHAN
 
 - About thirty new sentences a writer can see were written during the audit (the "Not saved" dialog, errors from the stores, errors on opening a damaged file, one about spelling being unavailable) and the wording of dictation's first-launch dialog. All are to be read and approved or reworded.
 - Spelling: everything in [spelling](docs/spelling.md): American, British or both; on or off by default; a personal dictionary; names; a bigger word list.
-- A spoiler cannot be written inside a table cell, where pipes are cell edges. One that arrives there is written as its words. Confirm.
-- Backspace removes the last accent of a letter; Delete removes the whole letter. Confirm.
 - Whether the GitHub token moves from `localStorage` to `sessionStorage`.
 - Where mdQuire differs from what a Docs user expects: a blank document starts in the body and not the title; Enter in a table cell moves down a row; the status reads "Not saved" while typing; the outline does not scroll to keep the current heading in view; arrow down past a picture lands at the end of the next line. Decide which to change.
 - Right-to-left paragraphs are laid out left to right.
@@ -141,9 +137,13 @@ What was found and fixed is in [`docs/AUDIT.md`](docs/AUDIT.md). Still open from
 - In the bar, alignment (left, centre, right, justify) as one button that grows open in place, and the three lists as another.
 - Links: an address pasted over selected words links them; a pasted bare address gets a small chip to show it as words or a short form; resting on a link shows a card with open, copy, edit and remove.
 - Subtitle in a plain Markdown file too, kept as a `subtitle:` line in the frontmatter (today it exists only in a `.quire` document).
-- Suggesting mode, kept in the file as CriticMarkup.
+- Deploy after the menus and the bar are reworked. mdQuire and its project page are listed once the audit's findings are fixed.
+- The findings of the audit of how mdQuire looks and behaves ([mdQuire-ux-audit](docs/mdQuire-ux-audit.md)), starting with its ten changes.
+- Suggesting the next words while typing (not tracked changes).
+- Spelling: American, on by default, with a personal dictionary.
+- In the light paper look the list of documents sits on a light sheet too.
+- An emoji picker: a grid with search and what was used lately first.
 - New kinds to start from: meeting notes, a changelog entry, a project page.
-- An emoji picker to browse and search.
 - The shared core ([quire-core](docs/quire-core.md)): the app as a framework in `src/quire/`, each Quire a plug-in.
 
 ## imgQuire and the background remover
