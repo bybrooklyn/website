@@ -20,7 +20,7 @@ import { createSurface } from "${here}/surface.ts";
 import { read } from "${here}/read.ts";
 import { write } from "${here}/write.ts";
 const element = document.querySelector("#editor");
-const surface = createSurface(element, read(""));
+const surface = createSurface(element, read(""), { onImage: async (file) => file.name });
 let composed;
 const fire = (target, event) => (target.dispatchEvent(event), event.defaultPrevented);
 // Chrome's InputEvent knows only the input types Chrome sends; the others (Safari's insertFromComposition, deleteContent) are given to the event by hand
@@ -367,6 +367,37 @@ describe("every kind of input that changes text either changes the model or is c
         const dropped = await tab.run<boolean>(`(() => { const data = new DataTransfer(); data.setData("text/plain", "dropped"); const e = new DragEvent("drop", { dataTransfer: data, bubbles: true, cancelable: true }); document.activeElement.dispatchEvent(e); return e.defaultPrevented; })()`);
         expect(dropped).toBe(false);
         expect(await md(tab)).toBe("```js\nlet a;\n```\n\nText here\n");
+    });
+});
+
+describe("pasting", () => {
+    inPage("a copy from a spreadsheet or Word, which carries a picture of itself beside its text, pastes the text; a picture alone pastes the picture", async (tab) => {
+        const paste = (html: string, text: string, picture: boolean) =>
+            tab.run(`(() => {
+                const data = new DataTransfer();
+                if (${JSON.stringify(html)}) data.setData("text/html", ${JSON.stringify(html)});
+                if (${JSON.stringify(text)}) data.setData("text/plain", ${JSON.stringify(text)});
+                if (${picture}) data.items.add(new File([new Uint8Array([137, 80, 78, 71])], "copied.png", { type: "image/png" }));
+                quire.element.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
+            })()`);
+        await tab.run(`quire.reset("")`);
+        await paste("<table><tr><td>a</td><td>b</td></tr></table>", "a\tb", true);
+        await tab.wait(50);
+        expect(await md(tab)).not.toContain("copied");
+        expect(await md(tab)).toContain("a");
+        await tab.run(`quire.reset("")`);
+        await paste("", "", true);
+        await tab.wait(50);
+        expect(await md(tab)).toContain("copied.png");
+        // Ctrl+Shift+V before a paste that turns out to be a picture does not make the next paste plain
+        await tab.run(`quire.reset("")`);
+        await tab.press("v", { ctrl: true, shift: true });
+        await paste("", "", true);
+        await tab.wait(50);
+        await tab.run(`quire.reset("")`);
+        await paste("<p><strong>bold</strong></p>", "bold", false);
+        await tab.wait(50);
+        expect(await md(tab)).toBe("**bold**\n");
     });
 });
 

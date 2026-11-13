@@ -1327,9 +1327,14 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
     }
 
     async function takeData(data: DataTransfer | null) {
+        // Ctrl+Shift+V asks for this paste alone to be plain, whichever way it goes
+        const plain = plainNext;
+        plainNext = false;
         if (!data) return;
         const files = [...data.files].filter((file) => file.type.startsWith("image/"));
-        if (files.length && options.onImage) {
+        // a copy from a spreadsheet, Word or Numbers carries a picture of itself beside its text: the text is what was meant
+        const words = data.types.includes("text/html") || data.types.includes("text/plain");
+        if (files.length && options.onImage && !words) {
             for (const file of files) {
                 // a store that cannot keep the picture says why, and nothing is put in the text
                 const address = await options.onImage(file).catch(() => undefined);
@@ -1341,10 +1346,7 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
         const html = data.getData("text/html");
         const text = data.getData("text/plain");
         // Ctrl+Shift+V: the text alone, nothing read from it
-        if (plainNext) {
-            plainNext = false;
-            return insertPlain(text);
-        }
+        if (plain) return insertPlain(text);
         const kind = blockAt(editor.state.doc, editor.state.selection.focus.path)?.kind;
         if (kind === "code" || kind === "raw") return insertBlocks([paragraph(text)]);
         const fromHtml = html ? readHtml(html) : [];
