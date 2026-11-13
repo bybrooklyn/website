@@ -19,7 +19,30 @@ const prose = (unit: Unit) => !unit.code && !!unit.runs;
 // ---- a word twice ----
 
 /** Words that are right written twice: "had had", "that that". */
-const TWICE = new Set(["had", "that", "is", "do", "bye", "so", "very", "ha", "no", "go", "really"]);
+const TWICE = new Set(["had", "that", "do", "bye", "so", "very", "ha", "no", "go", "really"]);
+/** Words right twice when a verb's object meets the next clause's subject: "I told it it was", "she gave her her book". */
+const OBJECTS = new Set(["it", "you", "her", "him", "them", "us"]);
+/** Words before such a pair that show it is a slip and not an object and a subject: a joining word, an article, the start of a clause. */
+const JOINS = new Set(["and", "but", "or", "nor", "so", "then", "because", "if", "when", "while", "that", "which", "the", "a", "an", "of", "to", "in", "on", "at", "for", "with", "as"]);
+/** Verbs right twice where a clause ends on them and the next begins with them: "what it is is", "what I do do". */
+const CLAUSES = new Set(["is", "was"]);
+
+/** True if the word written twice at `index` (the second) is right there. */
+function meantTwice(unit: Unit, index: number): boolean {
+    const word = unit.words[index]!.word.toLowerCase();
+    if (TWICE.has(word)) return true;
+    const before = unit.words[index - 2];
+    const sentence = unit.sentences.find((span) => span.from <= unit.words[index]!.from && span.to >= unit.words[index]!.to);
+    // the word before the pair must be in the same sentence, with only spaces between
+    const joined = before && (!sentence || before.from >= sentence.from) && /^[ \t]+$/.test(unit.read.text.slice(before.to, unit.words[index - 1]!.from));
+    if (OBJECTS.has(word)) return !!joined && !JOINS.has(before.word.toLowerCase());
+    if (CLAUSES.has(word)) {
+        // a clause that ends on the verb opens with a question word: "what it is is", "all it was was"
+        const opening = unit.words.slice(0, index - 1).filter((one) => !sentence || one.from >= sentence.from).slice(-4);
+        return opening.some((one) => /^(what|whatever|all|where|how|why|who|whoever)$/i.test(one.word));
+    }
+    return false;
+}
 
 const repeated: Rule = {
     id: "prose-repeat",
@@ -36,7 +59,7 @@ const repeated: Rule = {
             const one = unit.words[index - 1]!;
             const two = unit.words[index]!;
             const between = text.slice(one.to, two.from);
-            if (!/^[ \t]+$/.test(between) || one.word.toLowerCase() !== two.word.toLowerCase() || TWICE.has(two.word.toLowerCase()) || /\d/.test(two.word)) continue;
+            if (!/^[ \t]+$/.test(between) || one.word.toLowerCase() !== two.word.toLowerCase() || meantTwice(unit, index) || /\d/.test(two.word)) continue;
             out.push({ from: one.to, to: two.to, message: `"${two.word}" is written twice.`, fixes: [replaceWith("Take one out", "")] });
         }
         return out;

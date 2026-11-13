@@ -31,6 +31,10 @@ test("a word written twice", () => {
     expect(marked("The The band.\n", "prose-repeat")).toEqual([" The"]);
     expect(marked("What it had had was gone. That that is true. The end. The start.\n", "prose-repeat")).toEqual([]);
     expect(marked("I went to Paris, Paris was big.\n", "prose-repeat")).toEqual([]);
+    // an object and the next clause's subject, and a clause that ends on its verb, are right twice
+    expect(marked("I told it it was a robot. She gave her her book. I told you you were right. What it is is a tool. All it was was luck.\n", "prose-repeat")).toEqual([]);
+    // the same words twice where nothing calls for it are still slips
+    expect(marked("It it was late. And it it went. The cat is is here. I saw the the end.\n", "prose-repeat")).toEqual([" it", " it", " is", " the"]);
     const doc = read("It was the the best.\n");
     const [one] = fired("It was the the best.\n", "prose-repeat");
     expect(one!.fixes[0]!.edit(doc, one!.range).blocks[0]).toMatchObject({ runs: [{ text: "It was the best." }] });
