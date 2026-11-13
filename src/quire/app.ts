@@ -9,6 +9,7 @@
 
 import { createEditor, type Editor } from "./editor";
 import { documentsList, repositoryForm, type Place } from "./documents";
+import { DRIVE_WORDS, drivePlace, type DriveOptions } from "./drive-place";
 import { blockPaths, lengthOf } from "./document";
 import { read } from "./read";
 import { emptyParts, opened, type Parts } from "./quire-file";
@@ -29,6 +30,8 @@ export interface AppOptions {
     fetcher?: Fetcher;
     /** The name of the browser database. */
     database?: string;
+    /** Google Drive: the client ID, and for the test page a Drive and a sign-in that stand in for Google's. */
+    drive?: DriveOptions;
     /** The page's top: its two lines, with places marked for the document's name, the menu words, how saving stands and the tools. */
     top?: HTMLElement;
 }
@@ -55,7 +58,9 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
     let folder: Store | undefined;
     let settings = readSettings(local());
     let github = settings ? githubStore(settings, options.fetcher) : undefined;
-    const keyOf = (store: Store) => (store === browser ? "browser" : store === github ? "github" : store === files ? "files" : "folder");
+    // Google Drive, locked with a passphrase in this tab (drive-place.ts); signing in again saves what waited
+    const drive = drivePlace({ ...options.drive, onSignedIn: () => void editor.flush() });
+    const keyOf = (store: Store) => (store === browser ? "browser" : store === github ? "github" : store === files ? "files" : store === drive.store() ? "drive" : "folder");
 
     // ---- where to start ----
     let start: { store: Store; entry: Entry; text: string; mark: string; quire?: Parts } | undefined;
@@ -107,6 +112,7 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
             ...(able.file ? [{ label: "Open a file to write in place", run: () => void openInPlace() }] : []),
             ...(able.folder ? [{ label: "Open a folder", run: () => ((from = editor.nameElement()), void openFolder()) }] : []),
             { label: github ? "Repository settings" : "Connect a repository", run: () => ((from = editor.nameElement()), showRepository()) },
+            ...(drive.state() !== "not set up" ? [{ label: "Google Drive", run: () => void openDrive(editor.nameElement()) }] : []),
         ],
         onOpen: remember,
         onName: (button) => {
@@ -173,6 +179,7 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
                 : { key: "github", label: "Connect a repository", choose: () => showRepository() },
         ];
         if (github) places.push({ key: "github-settings", label: "Repository settings", choose: () => showRepository() });
+        places.push(...drivePlaces());
         const list = documentsList({
             name: current.name,
             placeLabel: note ? `${shown.label}: ${note}` : shown.label,
@@ -185,12 +192,15 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
             trash: shown === browser ? await browser.trash() : undefined,
             open: async (entry) => {
                 menu.close(false);
-                await editor.open(shown, entry);
+                // opened from the list over the home screen, the home screen makes way
+                if (await editor.open(shown, entry)) await showEditor();
                 editor.surface.focus();
             },
             create: async () => {
                 menu.close(false);
-                await (shown === browser ? editor.create(browser, "Untitled", "", emptyParts()) : editor.create(shown, fileName("Untitled")));
+                // Google Drive keeps documents by name, as the browser does, and so makes `.quire` ones with a plain name
+                const made = shown === browser || shown === drive.store() ? editor.create(shown, "Untitled", "", emptyParts()) : editor.create(shown, fileName("Untitled"));
+                if (await made) await showEditor();
                 editor.surface.focus();
             },
             rename: async (name) => {
@@ -255,6 +265,39 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
         form.querySelector("input")?.focus({ preventScroll: true });
     }
 
+    // ---- Google Drive ----
+    /** Google Drive's lines among the places: not set up, to open, or open with a way to lock it. */
+    function drivePlaces(): Place[] {
+        if (drive.state() === "not set up") return [{ key: "drive", label: "", absent: DRIVE_WORDS.notSetUp, choose: () => {} }];
+        const open = drive.store();
+        const lines: Place[] = [open ? { key: "drive", label: "Google Drive", current: shown === open, choose: () => ((shown = open), void showDocuments()) } : { key: "drive", label: "Google Drive", choose: (button) => void openDrive(button) }];
+        if (open) lines.push({ key: "drive-out", label: "Lock Google Drive and sign out", choose: () => void signOutDrive() });
+        return lines;
+    }
+
+    /** Opens Google Drive (signing in and asking the passphrase if need be) and shows its documents. */
+    async function openDrive(button?: HTMLElement) {
+        const store = await drive.open(button);
+        if (!store) return;
+        shown = store;
+        from = button?.isConnected ? button : editor.nameElement();
+        // its documents are shown at once, with New document among them, from the shelf as from the editor
+        if (shelf.shown()) await shelf.refresh();
+        await showDocuments();
+    }
+
+    /** Locks Google Drive and signs out of it in this tab; a document open from there is left first. */
+    async function signOutDrive() {
+        const was = drive.store();
+        if (was && editor.current().store === was) {
+            const newest = (await browser.list())[0];
+            if (!(await (newest ? editor.open(browser, newest) : editor.create(browser, "Untitled", "", emptyParts())))) return;
+        }
+        drive.signOut();
+        shown = browser;
+        await placesChanged();
+    }
+
     /** After a place is connected or forgotten: the home screen shows it, or else the documents list does. */
     async function placesChanged() {
         if (!shelf.shown()) return showDocuments();
@@ -268,7 +311,7 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
         templates: templates(new Date()),
         start: (template, from) => void startFrom(template, from),
         cards: async () => {
-            const places = [browser, github, folder, files].filter((store): store is Store => !!store);
+            const places = [browser, github, drive.store(), folder, files].filter((store): store is Store => !!store);
             const lists = await Promise.all(places.map(async (store) => ({ store, entries: await store.list().catch(() => []) })));
             return recent(lists).map(({ store, id, name, modified }): Card => ({
                 key: keyFor(store, id),
@@ -290,6 +333,7 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
             { label: "Open a file", run: () => chooser.click() },
             ...(able.folder ? [{ label: "Open a folder", run: (button: HTMLElement) => ((from = button), void openFolder()) }] : []),
             { label: github ? "Repository settings" : "Connect a repository", run: (button: HTMLElement) => ((from = button), showRepository()) },
+            ...(drive.state() !== "not set up" ? [{ label: "Google Drive", run: (button: HTMLElement) => void openDrive(button) }] : []),
             ...(options.sample ? [{ label: "See a sample", run: (button: HTMLElement) => void startFrom({ key: "sample", label: "A sample", name: "A sample", text: options.sample!, quire: true }, button) }] : []),
         ],
     });

@@ -20,7 +20,8 @@ export interface Place {
     /** Why it cannot be chosen here, if it cannot. */
     absent?: string;
     current?: boolean;
-    choose: () => void;
+    /** Told the button that was pressed, for what grows out of it. */
+    choose: (button?: HTMLElement) => void;
 }
 
 /** What the documents list shows, and what to call for each thing in it. */
@@ -123,7 +124,7 @@ export function documentsList(view: DocumentsView): HTMLElement {
         const go = next(make("button", `quire-menu-line${place.current ? " pressed" : ""}`, place.label));
         go.type = "button";
         go.dataset.place = place.key;
-        go.addEventListener("click", () => place.choose());
+        go.addEventListener("click", () => place.choose(go));
         box.append(go);
     }
 
