@@ -19,6 +19,8 @@
     display: flex;
     align-items: center;
     gap: 0.5rem;
+    /* no wider than a line of reading: stretched to the columns' full width it ran out past where what is under it ends */
+    max-width: var(--measure);
 }
 
 /* A round button the height of the field beside it, with the field's own quiet edge and ground. At rest it is a circle round
