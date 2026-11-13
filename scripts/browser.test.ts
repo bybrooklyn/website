@@ -69,7 +69,8 @@ used("when Chromium dies, a call waiting on it fails at once instead of hanging"
 
 used("a browser that does not come up is stopped and its folder taken away at once", async () => {
     // a port that answers as Chromium's would, with no page in it, so the start waits and gives up
-    const decoy = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: () => Response.json([]) });
+    // (on every address of this computer: held on 127.0.0.1 alone, Chromium took the same port on ::1 and came up)
+    const decoy = Bun.serve({ port: 0, hostname: "::", fetch: () => Response.json([]) });
     let opened: { pid: number; profile: string } | undefined;
     const before = mine();
     const watching = setInterval(() => (opened ??= started(before)), 100);

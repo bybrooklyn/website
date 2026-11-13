@@ -87,7 +87,7 @@ goes back there, and nothing simply appears (`STYLE.md`).
 ## How to run and test
 
 ```sh
-bun run dev        # http://localhost:4321, drafts included
+bun run dev # the dev server, drafts included
 bun run check      # astro check, the share pictures, and the lint
 bun run test       # every test under src and scripts
 bun run build      # dist/, with the resume PDF printed and the policy checked
