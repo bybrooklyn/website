@@ -151,7 +151,7 @@ test("wrap text from the menu floats the picture with the words beside it, as on
     await tab.press("Escape");
     await tab.wait(300);
     await rightClick();
-    await page!.press(".quire-picture-menu .quire-menu-line", "Size");
+    await page!.press(".quire-picture-menu .quire-menu-line", "Picture options");
     await tab.wait(500);
     await page!.press(".quire-picture-panel button", "Half width");
     expect(await page!.md()).toContain(`<img src="${picture}" alt="A wide picture" width="50%" align="left" />`);
