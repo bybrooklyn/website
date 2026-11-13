@@ -311,9 +311,19 @@
     font-size: 0.85rem;
 }
 
-.quire-picture-wrap {
-    min-width: 3.2rem;
-    border: 0.0625rem solid var(--rule);
+/* the wrap switch stands beside its line's name, which says what it is: the tick alone is seen, the words are said */
+.quire-switch.quire-picture-wrap {
+    min-height: 1.9rem;
+    padding: 0 0.45rem;
+}
+
+.quire-picture-wrap .quire-switch-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
 }
 
 .quire-picture-wrap:disabled {
