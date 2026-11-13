@@ -544,3 +544,13 @@ test("Shift+Enter at the end of a paragraph, saved before anything is typed afte
         expect(e.markdown).not.toBe(source);
     }
 });
+
+test("a line break typed beside a line the file already broke stays one paragraph", () => {
+    const e = editor("Plain\nlines\n", [0], 5);
+    e.key("Enter", { shift: true });
+    expect(read(e.markdown).blocks.length).toBe(1);
+    const start = editor("Plain\nlines\n", [0], 5);
+    start.key("Backspace", { mod: true });
+    start.key("Enter", { shift: true });
+    expect(read(start.markdown).blocks.length).toBe(1);
+});

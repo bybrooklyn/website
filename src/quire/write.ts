@@ -276,7 +276,10 @@ function paragraphText(all: Run[], context: Context): string {
     while (end > 0 && (all[end - 1]!.kind === "break" || (all[end - 1]!.kind === "text" && (all[end - 1] as TextRun).text.trim() === "" && !(all[end - 1] as TextRun).marks.includes("code")))) end--;
     if (!all.slice(end).some((run) => run.kind === "break")) end = all.length;
     const runs = end < all.length ? all.slice(0, end) : all;
-    const lines = writeRuns(runs, context, false).split("\n");
+    // a blank line would end the paragraph, so a soft line break beside a hard one adds nothing
+    const lines = writeRuns(runs, context, false)
+        .split("\n")
+        .filter((line) => /[^ \t]/.test(line));
     return lines
         .map((raw, index) => {
             let line = raw.replace(/^[ \t]+/, "");
