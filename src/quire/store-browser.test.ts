@@ -97,20 +97,26 @@ function standInIndexedDB() {
     const tables = new Map<string, Map<string, unknown>>();
     const state = { failAtCommit: false };
     const soon = (run: () => void) => setTimeout(run, 0);
+    // as in a real database, a transaction that writes waits for the one before it to finish
+    let turn: Promise<void> = Promise.resolve();
     const database = {
         objectStoreNames: { contains: (name: string) => tables.has(name) },
         createObjectStore: (name: string) => tables.set(name, new Map()),
         close() {},
-        transaction(name: string) {
+        transaction(name: string, mode = "readonly") {
             const table = tables.get(name)!;
             const writes: [string, unknown][] = [];
             let waiting = 0;
             let finished = false;
+            let release = () => {};
+            const gate = mode === "readwrite" ? turn : Promise.resolve();
+            if (mode === "readwrite") turn = new Promise((done) => (release = done));
             const transaction: Record<string, unknown> & { oncomplete?: () => void; onabort?: () => void; error: unknown } = {
                 error: null,
                 abort() {
                     if (finished) throw new Error("InvalidStateError");
                     finished = true;
+                    release();
                     transaction.error = { name: "AbortError" };
                     soon(() => transaction.onabort?.());
                 },
@@ -120,6 +126,7 @@ function standInIndexedDB() {
                 soon(() => {
                     if (finished || waiting > 0) return;
                     finished = true;
+                    release();
                     if (state.failAtCommit && writes.length) {
                         transaction.error = { name: "QuotaExceededError" };
                         return transaction.onabort?.();
@@ -130,16 +137,18 @@ function standInIndexedDB() {
             const request = (answer: () => unknown) => {
                 const made: { result?: unknown; onsuccess?: () => void } = {};
                 waiting++;
-                soon(() => {
-                    made.result = answer();
-                    waiting--;
-                    made.onsuccess?.();
-                    settle();
-                });
+                void gate.then(() =>
+                    soon(() => {
+                        made.result = answer();
+                        waiting--;
+                        made.onsuccess?.();
+                        settle();
+                    }),
+                );
                 return made;
             };
             const store = {
-                get: (id: string) => request(() => table.get(id)),
+                get: (id: string) => request(() => writes.findLast(([key]) => key === id)?.[1] ?? table.get(id)),
                 getAll: () => request(() => [...table.values()]),
                 put: (row: { id: string }) => request(() => (writes.push([row.id, row]), row.id)),
                 delete: (id: string) => request(() => writes.push([id, undefined])),
@@ -177,4 +186,31 @@ test("a write to the browser's storage is done only when its transaction commits
     await saver.settled();
     expect(saver.status()).toEqual({ state: "failed", message: "this browser has no more room" });
     expect(saver.unsaved()).toBe("second");
+});
+
+test("two tabs saving one document on the same mark: the second is refused as changed elsewhere, never silently written over the first", async () => {
+    const tables = memoryTables();
+    const first = browserStore(tables);
+    const second = browserStore(tables);
+    const made = await first.create("Shared", "original");
+    const [one, two] = await Promise.all([first.save(made.id, "from the first tab", made.mark), second.save(made.id, "from the second tab", made.mark)]);
+    expect([one.ok, two.ok]).toEqual([true, false]);
+    expect(two).toMatchObject({ changed: true, theirs: { text: "from the first tab" } });
+    expect((await first.open(made.id)).text).toBe("from the first tab");
+    // over the browser's own database too, with one transaction for the check and the write
+    const stand = standInIndexedDB();
+    const tabA = browserStore(await indexedTables("quire", stand.factory));
+    const tabB = browserStore(await indexedTables("quire", stand.factory));
+    const doc = await tabA.create("Shared", "original");
+    const results = await Promise.all([tabA.save(doc.id, "A", doc.mark), tabB.save(doc.id, "B", doc.mark)]);
+    expect(results.filter((each) => each.ok).length).toBe(1);
+    expect(results.filter((each) => !each.ok && each.changed).length).toBe(1);
+});
+
+test("a rename made while a save is on its way keeps the saved text", async () => {
+    const store = browserStore(memoryTables());
+    const made = await store.create("Draft", "before");
+    await Promise.all([store.rename(made.id, "Renamed"), store.save(made.id, "after", made.mark)]);
+    expect(await store.open(made.id)).toMatchObject({ text: "after", mark: "2" });
+    expect((await store.list())[0]!.name).toBe("Renamed");
 });

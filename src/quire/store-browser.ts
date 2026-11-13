@@ -9,7 +9,7 @@
 // tested with tables in memory; indexedTables gives the real ones.
 
 import { emptyParts, type Parts } from "./quire-file";
-import { freeName, StoreError, type Entry, type Store } from "./store";
+import { freeName, StoreError, type Entry, type Saved, type Store } from "./store";
 import type { VersionInfo, VersionStorage } from "./versions";
 
 /** A record in a table: anything with an id. */
@@ -23,6 +23,8 @@ export interface Tables {
     put<T extends Row>(table: string, row: T): Promise<void>;
     remove(table: string, id: string): Promise<void>;
     all<T extends Row>(table: string): Promise<T[]>;
+    /** Reads one record and writes what `update` makes of it in one step, so that nothing written between can be lost; `update` gives undefined to write nothing. */
+    change<T extends Row>(table: string, id: string, update: (row: T | undefined) => T | undefined): Promise<void>;
 }
 
 const TABLES = ["documents", "versions", "pictures"];
@@ -43,6 +45,11 @@ export function memoryTables(): Tables {
         },
         async all<T extends Row>(name: string) {
             return [...table(name).values()] as T[];
+        },
+        async change<T extends Row>(name: string, id: string, update: (row: T | undefined) => T | undefined) {
+            const found = table(name).get(id) as T | undefined;
+            const next = update(found && structuredClone(found));
+            if (next !== undefined) table(name).set(next.id, structuredClone(next));
         },
     };
 }
@@ -132,6 +139,18 @@ export async function indexedTables(name = "quire", factory: IDBFactory = global
         put: async (table, row) => void (await ask(table, "readwrite", (store) => store.put(row))),
         remove: async (table, id) => void (await ask(table, "readwrite", (store) => store.delete(id))),
         all: (table) => ask(table, "readonly", (store) => store.getAll()),
+        change: (table, id, update) =>
+            within<void>(table, "readwrite", (store, _give, fail) => {
+                const request = store.get(id);
+                request.onsuccess = () => {
+                    try {
+                        const next = update(request.result);
+                        if (next !== undefined) store.put(next);
+                    } catch (error) {
+                        fail(error);
+                    }
+                };
+            }),
     } as Tables;
 }
 
@@ -187,11 +206,18 @@ const partsOf = (kept: Kept): Parts | undefined => (kept.markdown ? undefined : 
 /** The browser store, over the given tables. Its extra powers: the trash, and putting a document back from it. */
 export function browserStore(tables: Tables, now: () => number = Date.now): Store & { trash(): Promise<Entry[]>; restore(id: string): Promise<void>; versions: VersionStorage } {
     let made = 0;
+    const gone = () => new StoreError("this document is no longer kept here");
     const find = async (id: string) => {
         const kept = await tables.get<Kept>("documents", id);
-        if (!kept || kept.gone) throw new StoreError("this document is no longer kept here");
+        if (!kept || kept.gone) throw gone();
         return kept;
     };
+    /** Changes a kept document in one step with reading it, so that a save from another tab between the two is never written over. */
+    const change = (id: string, update: (kept: Kept) => Kept | undefined) =>
+        tables.change<Kept>("documents", id, (kept) => {
+            if (!kept || kept.gone) throw gone();
+            return update(kept);
+        });
     const names = async () => (await tables.all<Kept>("documents")).filter((each) => !each.gone).map((each) => each.name);
     const urls = new Map<string, string>();
     return {
@@ -209,11 +235,18 @@ export function browserStore(tables: Tables, now: () => number = Date.now): Stor
             return { text: kept.text, mark: String(kept.mark), quire: partsOf(kept) };
         },
         async save(id, text, mark, quire) {
-            const kept = await find(id);
-            if (String(kept.mark) !== mark) return { ok: false, changed: true, theirs: { text: kept.text, mark: String(kept.mark), quire: partsOf(kept) } };
-            const next = { ...kept, text, mark: kept.mark + 1, modified: now(), quire: kept.markdown ? undefined : (quire ?? kept.quire) };
-            await tables.put("documents", next);
-            return { ok: true, mark: String(next.mark) };
+            // the mark is checked and the text written in one transaction: two tabs saving on one mark cannot both win
+            let saved: Saved = { ok: false, message: "this browser would not keep it" };
+            await change(id, (kept) => {
+                if (String(kept.mark) !== mark) {
+                    saved = { ok: false, changed: true, theirs: { text: kept.text, mark: String(kept.mark), quire: partsOf(kept) } };
+                    return undefined;
+                }
+                const next = { ...kept, text, mark: kept.mark + 1, modified: now(), quire: kept.markdown ? undefined : (quire ?? kept.quire) };
+                saved = { ok: true, mark: String(next.mark) };
+                return next;
+            });
+            return saved;
         },
         // made without parts, a document is plain Markdown and stays so
         async create(name, text, quire) {
@@ -222,24 +255,25 @@ export function browserStore(tables: Tables, now: () => number = Date.now): Stor
             return { id, mark: "1" };
         },
         async rename(id, name) {
-            const kept = await find(id);
-            const taken = (await names()).filter((each) => each !== kept.name);
-            await tables.put("documents", { ...kept, name: freeName(name.trim() || kept.name, taken) });
+            const all = await names();
+            // the text and mark are read in the same step as the name is written, so a save made meanwhile stays
+            await change(id, (kept) => ({ ...kept, name: freeName(name.trim() || kept.name, all.filter((each) => each !== kept.name)) }));
             return id;
         },
         async remove(id) {
-            const kept = await find(id);
-            await tables.put("documents", { ...kept, gone: now() });
+            await change(id, (kept) => ({ ...kept, gone: now() }));
         },
         async trash() {
             const gone = (await tables.all<Kept>("documents")).filter((each) => each.gone);
             return gone.sort((a, b) => b.gone! - a.gone!).map((each) => ({ id: each.id, name: each.name, modified: each.gone }));
         },
         async restore(id) {
-            const kept = await tables.get<Kept>("documents", id);
-            if (!kept) throw new StoreError("this document is no longer kept here");
-            const { gone: _gone, ...back } = kept;
-            await tables.put("documents", { ...back, name: freeName(kept.name, await names()) });
+            const all = await names();
+            await tables.change<Kept>("documents", id, (kept) => {
+                if (!kept) throw gone();
+                const { gone: _gone, ...back } = kept;
+                return { ...back, name: freeName(kept.name, all) };
+            });
         },
         async savePicture(id, picture, name) {
             await find(id);
