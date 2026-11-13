@@ -22,6 +22,8 @@ interface Context {
     mdx: boolean;
     /** Link reference definitions, by their label in lower case. */
     refs: Map<string, { href: string; title?: string }>;
+    /** Set while a table cell is read, where pipes are the cell's edges and make no spoiler, and `<br>` is a line break. */
+    cell?: boolean;
 }
 
 /** Reads a whole file into a document. */
@@ -539,23 +541,27 @@ function readFootnote(lines: Line[], at: number, match: RegExpExecArray, context
     return [{ kind: "footnote", label: match[1]!, blocks: orEmpty(parseInside(inner, context)), gap: "" }, end];
 }
 
-/** Splits a table row into cells on the pipes that are not escaped. */
+/** Splits a table row into cells on the pipes that are not escaped. A backslash escapes the backslash after it, so `\\|` is a backslash and then the cell's edge. */
 function cells(row: string): string[] {
     let text = row.trim();
     if (text.startsWith("|")) text = text.slice(1);
-    if (text.endsWith("|") && !text.endsWith("\\|")) text = text.slice(0, -1);
     const out: string[] = [];
     let cell = "";
     for (let index = 0; index < text.length; index++) {
-        if (text[index] === "\\" && text[index + 1] === "|") {
+        const char = text[index]!;
+        if (char === "\\" && text[index + 1] === "|") {
             cell += "|";
             index++;
-        } else if (text[index] === "|") {
+        } else if (char === "\\" && text[index + 1] === "\\") {
+            cell += "\\\\";
+            index++;
+        } else if (char === "|") {
             out.push(cell.trim());
             cell = "";
-        } else cell += text[index];
+        } else cell += char;
     }
-    out.push(cell.trim());
+    // a row closed by a pipe has nothing after it, which is not a cell
+    if (cell.trim() !== "" || !/\|\s*$/.test(text) || out.length === 0) out.push(cell.trim());
     return out;
 }
 
@@ -566,14 +572,15 @@ function readTable(lines: Line[], at: number, context: Context): [Block, number]
     const header = cells(headRow);
     const marks = cells(rule);
     if (header.length !== marks.length) return undefined;
+    const inCell: Context = { ...context, cell: true };
     let end = at + 2;
     while (end < lines.length && !blank(lines[end]!.text) && !(indentOf(lines[end]!.text) < 4 && interrupts(lines[end]!.text))) end++;
     const align = marks.map((mark): Align | null => (mark.startsWith(":") && mark.endsWith(":") ? "center" : mark.endsWith(":") ? "right" : mark.startsWith(":") ? "left" : null));
     const rows = lines.slice(at + 2, end).map((line) => {
         const row = cells(line.text);
-        return header.map((_, column) => runsFrom(row[column] ?? "", context));
+        return header.map((_, column) => runsFrom(row[column] ?? "", inCell));
     });
-    return [{ kind: "table", header: header.map((cell) => runsFrom(cell, context)), align, rows, gap: "" }, end];
+    return [{ kind: "table", header: header.map((cell) => runsFrom(cell, inCell)), align, rows, gap: "" }, end];
 }
 
 function readParagraph(lines: Line[], at: number, context: Context): [Block, number] {
@@ -931,6 +938,14 @@ function inline(text: string, context: Context): Run[] {
                 }
             }
         }
+        if (char === "<" && context.cell) {
+            const lineBreak = /^<br\s*\/?>/i.exec(rest);
+            if (lineBreak) {
+                push({ kind: "break" });
+                index += lineBreak[0].length;
+                continue;
+            }
+        }
         if (char === "<") {
             const auto = /^<([A-Za-z][A-Za-z0-9+.-]{1,31}:[^\s<>]*)>/.exec(rest) ?? /^<([A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*)>/.exec(rest);
             if (auto) {
@@ -1005,7 +1020,7 @@ function inline(text: string, context: Context): Run[] {
                 continue;
             }
         }
-        if (char === "*" || char === "_" || char === "~" || char === "=" || char === "|") {
+        if (char === "*" || char === "_" || char === "~" || char === "=" || (char === "|" && !context.cell)) {
             let count = 0;
             while (text[index + count] === char) count++;
             // `==marked==` and `||spoiler||` take exactly two signs; one, or three and more, are only text

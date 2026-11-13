@@ -167,3 +167,26 @@ test("a block or run built wrongly is never written as the word undefined, null,
     expect(broken({ ...list("number", ["a"]), start: undefined })).toThrow();
     expect(broken({ kind: "code", code: null, language: "", gap: "" })).toThrow();
 });
+
+test("in a table cell pipes are the cell's edges: no spoiler is made there, and every pipe, backslash, code span, address and line break in a cell is written so that no text is lost", () => {
+    const doc = read("| a | b |\n|---|---|\n| 1 | 2 |\n");
+    const spoiled = toggleMark(doc, { start: { path: [0, 1, 0], offset: 0 }, end: { path: [0, 1, 0], offset: 1 } }, "spoiler");
+    expect(write(spoiled)).toBe("| a | b |\n|---|---|\n| 1 | 2 |\n");
+    const header = toggleMark(doc, { start: { path: [0, 0, 0], offset: 0 }, end: { path: [0, 0, 0], offset: 1 } }, "spoiler");
+    expect(write(header)).toBe(write(doc));
+    // a spoiler in a cell that came from elsewhere is written as its words
+    const kept = write(made([{ ...table(["h"]), rows: [[[{ kind: "text", text: "hidden", marks: ["spoiler"] }]]] }]));
+    expect(kept).toBe("| h      |\n| ------ |\n| hidden |\n");
+    const cells: Run[][] = [
+        [{ kind: "text", text: "a | b || c", marks: [] }],
+        [{ kind: "text", text: "x|y", marks: ["code"] }],
+        [{ kind: "link", href: "http://x.y/a|b", runs: [{ kind: "text", text: "l|nk", marks: ["bold"] }] }],
+        [{ kind: "text", text: "ends in \\", marks: [] }],
+        [{ kind: "text", text: "\\|", marks: [] }],
+        [{ kind: "text", text: "one", marks: [] }, { kind: "break" }, { kind: "text", text: "two", marks: ["italic"] }],
+    ];
+    for (const runs of cells) readsBack(made([{ ...table(["h", "i"]), rows: [[runs, runs]] }]));
+    // the reader agrees: a pipe in a cell is never a spoiler, and two backslashes before a pipe are a backslash and an edge
+    const read1 = read("| a \\|\\|b\\|\\| | c\\\\| d |\n|---|---|---|\n").blocks[0];
+    expect(read1?.kind === "table" && read1.header.map((cell) => cell.map((run) => (run.kind === "text" ? [run.text, run.marks] : run.kind)))).toEqual([[["a ||b||", []]], [["c\\", []]], [["d", []]]]);
+});

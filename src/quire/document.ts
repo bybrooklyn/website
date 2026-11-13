@@ -684,7 +684,9 @@ function editRuns(doc: Document, path: number[], change: (runs: Run[]) => Run[])
     const column = path[path.length - 1]!;
     return replace(doc, path.slice(0, -2), (found) => {
         if (found.kind !== "table") return null;
-        const swap = (cells: Run[][]) => cells.map((each, k) => (k === column ? change(each) : each));
+        // a cell cannot keep a spoiler: its pipes would be the cell's edges (write.ts), so none is made there
+        const plain = (runs: Run[]) => mapRuns(runs, 0, Infinity, (piece) => (piece.leaf.kind === "text" && piece.leaf.marks.includes("spoiler") ? { ...piece, leaf: { ...piece.leaf, marks: piece.leaf.marks.filter((mark) => mark !== "spoiler") } } : piece));
+        const swap = (cells: Run[][]) => cells.map((each, k) => (k === column ? plain(change(each)) : each));
         return [{ ...found, header: row === 0 ? swap(found.header) : found.header, rows: found.rows.map((each, k) => (k === row - 1 ? swap(each) : each)), source: undefined }];
     });
 }
@@ -862,7 +864,8 @@ function runsAt(doc: Document, path: number[]): Run[] | undefined {
 
 /** Turns a mark on over a range, or off if every character in it already has it. `force` turns it on or off regardless. */
 export function toggleMark(doc: Document, range: Range, mark: Mark, force?: boolean): Document {
-    const parts = covered(doc, range).filter((part) => runsAt(doc, part.path) && part.to > part.from);
+    // a table cell cannot keep a spoiler (write.ts), so none is made there
+    const parts = covered(doc, range).filter((part) => runsAt(doc, part.path) && part.to > part.from && !(mark === "spoiler" && cellAt(doc, part.path)));
     const texts = parts.flatMap((part) => middlePieces(runsAt(doc, part.path)!, part.from, part.to)).filter((piece) => piece.leaf.kind === "text");
     if (texts.length === 0) return doc;
     const on = force ?? !texts.every((piece) => (piece.leaf as TextRun).marks.includes(mark));

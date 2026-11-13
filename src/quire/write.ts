@@ -165,7 +165,10 @@ function definitionText(blocks: Block[], context: Context): string {
 }
 
 function tableText(header: Run[][], align: (Align | null)[], rows: Run[][][], context: Context): string {
-    const cell = (runs: Run[]) => writeRuns(runs, context, true).replace(/[ \t]*\n[ \t]*/g, " ").trim();
+    // in a row a pipe is the edge of a cell before it is anything else, so every pipe written inside a
+    // cell, in text, code, an address or HTML, is escaped; the reader takes the escapes off before it
+    // reads the cell's text, as GitHub does
+    const cell = (runs: Run[]) => writeRuns(runs, context, true).replace(/[ \t]*\n[ \t]*/g, " ").trim().replace(/\|/g, "\\|");
     const head = header.map(cell);
     const body = rows.map((row) => header.map((_, column) => cell(row[column] ?? [])));
     const widths = head.map((value, column) => Math.max(3, value.length, ...body.map((row) => row[column]!.length)));
@@ -217,10 +220,11 @@ type Key = "style" | "underline" | "strike" | "bold" | "italic" | "mark" | "sup"
 const OPEN: Record<Exclude<Key, "style">, string> = { underline: "<u>", strike: "~~", bold: "**", italic: "*", mark: "==", sup: "<sup>", sub: "<sub>", spoiler: "||" };
 const CLOSE: Record<Exclude<Key, "style">, string> = { underline: "</u>", strike: "~~", bold: "**", italic: "*", mark: "==", sup: "</sup>", sub: "</sub>", spoiler: "||" };
 
-function keysOf(leaf: TextRun): string[] {
+/** The marks and looks a run is written with. In a table cell a spoiler is not one of them: its pipes would be read as the cell's edges, and escaped they make no spoiler, so its text is written plain. */
+function keysOf(leaf: TextRun, cell = false): string[] {
     const keys: string[] = [];
     if (leaf.color || leaf.size) keys.push(`style:${leaf.color ?? ""}|${leaf.size ?? ""}`);
-    for (const key of ["underline", "sup", "sub", "spoiler", "strike", "mark", "bold", "italic"] as Key[]) if (leaf.marks.includes(key as TextRun["marks"][number])) keys.push(key);
+    for (const key of ["underline", "sup", "sub", "spoiler", "strike", "mark", "bold", "italic"] as Key[]) if (leaf.marks.includes(key as TextRun["marks"][number]) && !(cell && key === "spoiler")) keys.push(key);
     return keys;
 }
 
@@ -265,7 +269,7 @@ function writeLeaves(all: Leaf[], context: Context, cell: boolean): string {
         // pictures, breaks and HTML sit inside whatever marks are open around them, and a mark never
         // opens on a space, where it would not read back: the space goes before it, unmarked
         const blankText = leaf.kind === "text" && !literal(leaf) && /^\s+$/.test(leaf.text);
-        const want = leaf.kind === "text" ? keysOf(leaf) : [...stack];
+        const want = leaf.kind === "text" ? keysOf(leaf, cell) : [...stack];
         while (stack.some((key) => !want.includes(key))) out += closeKey(stack.pop()!);
         for (const key of blankText ? [] : want) {
             if (!stack.includes(key)) {
@@ -274,7 +278,7 @@ function writeLeaves(all: Leaf[], context: Context, cell: boolean): string {
             }
         }
         if (leaf.kind === "text" && typeof leaf.text !== "string") said(leaf.text, "a run's text");
-        else if (leaf.kind === "text") out += leaf.marks.includes("code") ? codeSpan(leaf.text, cell) : leaf.marks.includes("math") ? `$${cell ? leaf.text.replace(/\|/g, "\\|") : leaf.text}$` : escapeText(leaf.text, context, cell, leaves[index - 1], leaves[index + 1]);
+        else if (leaf.kind === "text") out += leaf.marks.includes("code") ? codeSpan(leaf.text) : leaf.marks.includes("math") ? `$${leaf.text}$` : escapeText(leaf.text, context, cell, leaves[index - 1], leaves[index + 1]);
         else if (leaf.kind === "image") out += imageText(leaf.src, leaf.alt, leaf.title);
         else if (leaf.kind === "break") out += cell ? "<br>" : "\\\n";
         else if (leaf.kind === "footnote") out += `[^${said(leaf.label, "a footnote's label")}]`;
@@ -309,12 +313,11 @@ function writeRuns(runs: Run[], context: Context, cell: boolean): string {
     return out;
 }
 
-function codeSpan(value: string, cell: boolean): string {
+function codeSpan(value: string): string {
     const longest = Math.max(0, ...(value.match(/`+/g) ?? []).map((run) => run.length));
     const fence = "`".repeat(longest + 1);
     const pad = value.startsWith("`") || value.endsWith("`") || (value.startsWith(" ") && value.endsWith(" ") && value.trim() !== "") ? " " : "";
-    const body = cell ? value.replace(/\|/g, "\\|") : value;
-    return fence + pad + body + pad + fence;
+    return fence + pad + value + pad + fence;
 }
 
 /** Escapes what would otherwise be read as Markdown in plain text. */
@@ -336,10 +339,9 @@ function escapeText(value: string, context: Context, cell: boolean, previous?: L
             (char === "<" && (context.mdx || /[A-Za-z/!?]/.test(right))) ||
             (char === "&" && /^&(#\d+|#x[0-9a-f]+|[a-z][a-z0-9]*);/i.test(value.slice(index))) ||
             (context.mdx && (char === "{" || char === "}")) ||
-            (cell && char === "|") ||
             // two `|` or two `=` that could hide or mark text, a known shortcode (`context.dollars` is no longer set)
             (char === "$" && !!context.dollars) ||
-            (char === "|" && left !== "|" && right === "|" && (index + 2 < value.length ? value[index + 2] : after) !== "|" && !(space(left) && space(index + 2 < value.length ? value[index + 2]! : after))) ||
+            (char === "|" && !cell && left !== "|" && right === "|" && (index + 2 < value.length ? value[index + 2] : after) !== "|" && !(space(left) && space(index + 2 < value.length ? value[index + 2]! : after))) ||
             (char === "=" && left !== "=" && right === "=" && (index + 2 < value.length ? value[index + 2] : after) !== "=" && !(space(left) && space(index + 2 < value.length ? value[index + 2]! : after))) ||
             (char === ":" && emojiOf(/^:([a-z0-9_+-]+):/.exec(value.slice(index))?.[1] ?? "") !== undefined);
         out += risky ? `\\${char}` : char;
