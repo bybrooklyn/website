@@ -141,7 +141,9 @@ export function folderStore(root: FolderHandle): Store {
             const body = await old.getFile();
             const folder = parts(id).slice(0, -1).join("/");
             const wanted = isQuire(id) ? fileName(name.replace(/\.(md|mdx|markdown|txt)$/i, ""), ".quire") : fileName(name, /\.mdx$/i.test(id) ? ".mdx" : ".md");
-            const path = freeName(folder ? `${folder}/${wanted}` : wanted, (await taken(id)).map((each) => (folder ? `${folder}/${each}` : each)));
+            // the file's own name is not taken by itself: renamed to what it is already called, it stays
+            const path = freeName(folder ? `${folder}/${wanted}` : wanted, (await taken(id)).filter((each) => each !== old.name).map((each) => (folder ? `${folder}/${each}` : each)));
+            if (path === id) return id;
             await write(await fileAt(path, true), body);
             await (await folderOf(id)).removeEntry(parts(id).at(-1)!);
             shelf.move(id, path);
