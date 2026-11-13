@@ -12,6 +12,7 @@ open, how to run and test it, and its known weak spots.
 - [AUDIT.md](AUDIT.md): the audit of 13 November 2026: what was read, found, fixed and left.
 - [spelling.md](spelling.md): mdQuire's spelling check as it is, measured, and the questions for its rebuild.
 - [imgQuire.md](imgQuire.md): an image editor to sit beside mdQuire; nothing built.
+- [quire-core.md](quire-core.md): the shared core every Quire is to be built on; nothing built.
 - [cutout.md](cutout.md): a background remover, a page of its own and a tool of imgQuire; nothing built.
 - [mote.md](mote.md): the small engine the minis run on, with no third-party libraries.
 - [minis.md](minis.md): the minis page and the small minis (Blocks, Dice, Plinko) and the terminal player.

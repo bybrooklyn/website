@@ -129,6 +129,15 @@ What was found and fixed is in [`docs/AUDIT.md`](docs/AUDIT.md). Still open from
 - Small games: something with the 3D solids, two people on one keyboard, a daily puzzle.
 - Terminal recordings of full-screen menus.
 
+## mdQuire, chosen on 13 November and not yet built
+
+- The menus in Google Docs' order and names, a sign on every line, long menus folded into groups, each thing in one menu only.
+- In the bar, alignment (left, centre, right, justify) as one button that grows open in place, and the three lists as another.
+- Suggesting mode, kept in the file as CriticMarkup.
+- New kinds to start from: meeting notes, a changelog entry, a project page.
+- An emoji picker to browse and search.
+- The shared core ([quire-core](docs/quire-core.md)): the app as a framework in `src/quire/`, each Quire a plug-in.
+
 ## imgQuire and the background remover
 
 - Settle the questions in [imgQuire](docs/imgQuire.md#open) and [cutout](docs/cutout.md#open) before building; first, what imgQuire's file is.
