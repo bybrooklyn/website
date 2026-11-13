@@ -50,8 +50,9 @@ export function read(text: string): Roll | string {
             const many = Number(amount || 1);
             if (word === "drop lowest" || word === "dl") drop = many;
             else if (word === "drop highest" || word === "dh") drop = -many;
-            else if (word === "kh") drop = count - many;
-            else if (word === "kl") drop = -(count - many);
+            // keeping more than were rolled keeps them all, rather than dropping from the other end
+            else if (word === "kh") drop = Math.max(0, count - many);
+            else if (word === "kl") drop = -Math.max(0, count - many);
             else {
                 // advantage: roll twice and keep the better; disadvantage, the worse
                 count = Math.max(count, 2);

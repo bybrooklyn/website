@@ -81,3 +81,32 @@ test("the numbers left out of a roll's sum are marked, and what is not marked ad
     const less = ok("d20 - d4");
     expect(numbers(less, [12, 3]).map((one) => one.sign)).toEqual([1, -1]);
 });
+
+test("keeping or dropping the highest or the lowest, for any number below, equal to or above the dice rolled, never turns into its opposite", () => {
+    // four dice showing 1, 6, 3 and 4: sorted, 1 3 4 6
+    const shown = [1, 6, 3, 4];
+    const sum = (list: number[]) => list.reduce((a, b) => a + b, 0);
+    const sorted = [...shown].sort((a, b) => a - b);
+    for (let many = 0; many <= 6; many++) {
+        // keeping more than were rolled keeps them all; keeping none drops every die
+        const highest = sum(sorted.slice(Math.max(0, 4 - many)));
+        const lowest = sum(sorted.slice(0, Math.min(4, many)));
+        for (const [word, expected] of [["kh", highest], ["kl", lowest]] as const) {
+            const roll = read(`4d6 ${word}${many}`);
+            if (many === 0) expect(typeof roll).toBe("string");
+            else expect(total(roll as Roll, shown).total).toBe(expected);
+        }
+        // dropping every die, or more, cannot be rolled
+        for (const [word, expected] of [["dl", sum(sorted.slice(many))], ["dh", sum(sorted.slice(0, 4 - many))]] as const) {
+            const roll = read(`4d6 ${word}${many}`);
+            if (many >= 4) expect(typeof roll).toBe("string");
+            else expect(total(roll as Roll, shown).total).toBe(expected);
+        }
+    }
+    expect(total(ok("2d6 kh3"), [2, 5]).total).toBe(7);
+    expect(total(ok("2d6 kl3"), [2, 5]).total).toBe(7);
+    expect(numbers(ok("2d6 kh3"), [2, 5]).some((one) => one.dropped)).toBe(false);
+    // a minus after the word is not a count: it is a number taken away
+    expect(total(ok("4d6 kh-1"), shown).total).toBe(6 - 1);
+    expect(total(ok("4d6 dl-1"), shown).total).toBe(13 - 1);
+});
