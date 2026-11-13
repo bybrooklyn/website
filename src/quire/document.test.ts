@@ -11,6 +11,10 @@ import {
     countWords,
     deleteText,
     divider,
+    documentOf,
+    isPageBreak,
+    pageBreak,
+    paragraph,
     getField,
     image,
     indent,
@@ -378,4 +382,11 @@ test("a frontmatter value can be written exactly as given, for a list, a date or
     expect(write(setField(doc, "draft", "true", true))).toBe("---\ndraft: true\ntags: [a]\n---\nBody\n");
     expect(write(setField(doc, "draft", "true"))).toBe('---\ndraft: "true"\ntags: [a]\n---\nBody\n');
     expect(write(setField(doc, "tags", "[a, b]", true))).toBe("---\ndraft: false\ntags: [a, b]\n---\nBody\n");
+});
+
+test("a page break is the HTML that makes one, known however it is spaced or quoted", () => {
+    expect(write(documentOf([paragraph("One"), pageBreak(), paragraph("Two")]))).toBe('One\n\n<div style="break-after: page"></div>\n\nTwo\n');
+    for (const html of ['<div style="break-after: page"></div>', "<div style='break-after:page;'></div>", '<div style="page-break-after: always"></div>']) expect(isPageBreak({ kind: "raw", text: html, gap: "" })).toBe(true);
+    expect(isPageBreak({ kind: "raw", text: "<div>break-after: page</div>", gap: "" })).toBe(false);
+    expect(read('<div style="break-after: page"></div>\n').blocks.map(isPageBreak)).toEqual([true]);
 });

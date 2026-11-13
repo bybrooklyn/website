@@ -1,5 +1,6 @@
 // The built /mdquire/ page beside the built home page: the site's name and flags sit in exactly the
-// same place and size on both, so that nothing jumps when the editor opens. It reads the site as
+// same place and size on both, so that nothing jumps when the editor opens; and its top is two lines
+// in one piece, aligned and whole when scrolled, its tools folding in order. It reads the site as
 // last built (`bun run build`) and is skipped, with a notice, when there is no build or no Chromium.
 
 import { afterAll, beforeAll, expect, test } from "bun:test";
@@ -57,38 +58,69 @@ test.skipIf(!live)(
     60_000,
 );
 
+/** Opens the editor on a blank page from the home screen, at a size. */
+async function blank(wide: number, high: number) {
+    await tab.resize(wide, high);
+    await tab.open(`http://localhost:${server!.port}/mdquire/`, 800);
+    await tab.run("document.querySelector('.quire-shelf.shown .quire-card-open')?.click()");
+    await tab.wait(1200);
+}
+
+/** Where the top's parts are: the middle of each on the first line, and where each line's first and last drawn thing starts and ends. */
+const top = () =>
+    tab.run<{ middles: Record<string, number>; first: [number, number]; second: [number, number]; height: number; folded: string[]; over: number; page: number }>(`(() => {
+        const box = (selector) => document.querySelector(selector).getBoundingClientRect();
+        const middle = (selector) => { const b = box(selector); return (b.top + b.bottom) / 2; };
+        const marks = [...document.querySelectorAll('.quire-bar-strip .quire-icon, .quire-bar-strip .quire-glyph')].filter((each) => each.getBoundingClientRect().width > 0 && !each.closest('.folded, .away'));
+        const strip = document.querySelector('.quire-bar-strip');
+        return {
+            middles: Object.fromEntries(['.site-name', '.quire-word', '.quire-name-text', '.quire-row-word', '.quire-status-line'].map((selector) => [selector, middle(selector)])),
+            first: [box('.site-name').left, box('.quire-status-line').right],
+            second: [marks[0].getBoundingClientRect().left, marks.at(-1).getBoundingClientRect().right],
+            height: box('.quire-top').height,
+            folded: [...document.querySelectorAll('.quire-tool.folded')].map((tool) => tool.firstElementChild.getAttribute('aria-label') ?? tool.firstElementChild.className),
+            over: strip.scrollWidth - strip.clientWidth,
+            page: document.documentElement.scrollWidth - innerWidth,
+        };
+    })()`);
+
 test.skipIf(!live)(
-    "the menu row and the bar are one piece centred on the site's name, with room above, and on scrolling only the bar stays, as tall as before",
+    "the top is two lines in one piece: the first centred on one middle, both lines on the same left and right edges, and on scrolling it is whole and the same height",
     async () => {
-        for (const [wide, high] of [[1300, 900], [2560, 1300]] as const) {
-            await tab.resize(wide, high);
-            await tab.open(`http://localhost:${server!.port}/mdquire/`, 800);
-            // with nothing open the bar is away: a blank page is opened from the home screen
-            await tab.run("document.querySelector('.quire-shelf.shown .quire-card-open')?.click()");
-            await tab.wait(800);
-            const at = await tab.run<{ rem: number; name: number; row: number[]; bar: number[] }>(`(() => { const box = (s) => { const r = document.querySelector(s).getBoundingClientRect(); return [r.top, r.bottom]; }; const name = box('.site-name'); return { rem: parseFloat(getComputedStyle(document.documentElement).fontSize), name: (name[0] + name[1]) / 2, row: box('.quire-menu-row'), bar: box('.quire-bar') }; })()`);
-            expect({ wide, above: at.row[0]! >= 0.5 * at.rem }).toEqual({ wide, above: true });
-            expect({ wide, centred: Math.abs((at.row[0]! + at.bar[1]!) / 2 - at.name) <= 2 }).toEqual({ wide, centred: true });
-            const stuck = await tab.run<{ height: number; bar: number; inert: boolean }>(`(async () => { document.querySelector('.quire-paper').style.minHeight = '6000px'; scrollTo({ top: 3000, behavior: 'instant' }); await new Promise((done) => setTimeout(done, 300)); const top = document.querySelector('.quire-top').getBoundingClientRect(); const bar = document.querySelector('.quire-bar').getBoundingClientRect(); return { height: top.bottom, bar: bar.height, inert: document.querySelector('.quire-menu-row').inert }; })()`);
-            expect({ wide, short: stuck.height <= stuck.bar + 1.3 * at.rem, inert: stuck.inert }).toEqual({ wide, short: true, inert: true });
+        for (const [wide, high] of [[2560, 1300], [1765, 1000], [1300, 900], [1024, 768]] as const) {
+            await blank(wide, high);
+            const at = await top();
+            const name = at.middles[".site-name"]!;
+            for (const [part, middle] of Object.entries(at.middles)) expect({ wide, part, middle: Math.abs(middle - name) <= 1 }).toEqual({ wide, part, middle: true });
+            // the tools' first icon starts where her name starts, and their last ends where the status ends, within the icons' own margin
+            expect({ wide, left: Math.abs(at.second[0] - at.first[0]) <= 3, right: Math.abs(at.second[1] - at.first[1]) <= 8 }).toEqual({ wide, left: true, right: true });
+            expect({ wide, over: at.over, page: at.page <= 0 }).toEqual({ wide, over: 0, page: true });
+            const stuck = await tab.run<{ height: number; top: number }>(`(async () => { document.querySelector('.quire-paper').style.minHeight = '6000px'; scrollTo({ top: 3000, behavior: 'instant' }); await new Promise((done) => setTimeout(done, 300)); const top = document.querySelector('.quire-top').getBoundingClientRect(); return { height: top.height, top: top.top }; })()`);
+            expect({ wide, height: Math.round(stuck.height), top: stuck.top }).toEqual({ wide, height: Math.round(at.height), top: 0 });
         }
     },
-    60_000,
+    120_000,
 );
 
 test.skipIf(!live)(
-    "at 1300 and 2560 wide every group of the bar is shown in a .quire document, none folded into the three dots and nothing scrolled out of sight",
+    "the tools fold into the three dots least used first, paint format before print before clear formatting, and the style, the marks and the alignments never",
     async () => {
-        for (const [wide, high] of [[1300, 900], [2560, 1300]] as const) {
-            await tab.resize(wide, high);
-            await tab.open(`http://localhost:${server!.port}/mdquire/`, 800);
-            await tab.run("document.querySelector('.quire-shelf.shown .quire-card-open')?.click()");
-            await tab.wait(900);
-            const bar = await tab.run<{ folded: number; over: number; rich: boolean }>(`(() => { const strip = document.querySelector('.quire-bar-strip'); return { folded: document.querySelectorAll('.quire-bar-group.folded').length, over: strip.scrollWidth - strip.clientWidth, rich: document.querySelector('.quire-editor').classList.contains('rich') }; })()`);
-            expect({ wide, ...bar }).toEqual({ wide, folded: 0, over: 0, rich: true });
+        const order = ["Paint format", "Print", "Clear formatting", "Indent less", "Line spacing", "Zoom"];
+        let before = -1;
+        for (const [wide, high] of [[2560, 1300], [1765, 1000], [1300, 900], [1024, 768]] as const) {
+            await blank(wide, high);
+            const at = await top();
+            const folded = at.folded.map((label) => label.replace(/[:(].*/, "").trim());
+            // what has folded is a run from the start of the order, never one later before one sooner
+            const seen = order.map((label) => folded.some((each) => each.startsWith(label) || (label === "Indent less" && each.includes("quire-tool-set"))));
+            expect({ wide, ordered: seen.every((on, index) => on || !seen.slice(index + 1).some(Boolean)) }).toEqual({ wide, ordered: true });
+            expect({ wide, kept: folded.filter((label) => /^(Style|Bold|Italic|Underline|Strikethrough|Align left|Centre|Align right|Justify)$/.test(label)) }).toEqual({ wide, kept: [] });
+            // narrower, no fewer fold
+            expect(at.folded.length).toBeGreaterThanOrEqual(before);
+            before = at.folded.length;
         }
     },
-    60_000,
+    120_000,
 );
 
 if (!live) console.warn("page.test.ts: skipped, as there is no Chromium or no built site (bun run build)");

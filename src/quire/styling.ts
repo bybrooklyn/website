@@ -170,13 +170,17 @@ export function readStyle(text: string | undefined): StyleFile {
     const page = (raw.page ?? {}) as Partial<Page>;
     const number = (value: unknown) => typeof value === "number" && Number.isFinite(value);
     const anchored = (value: Partial<Anchor>) => !!value && number(value.block) && typeof value.hash === "string";
+    const kept: Page = {
+        size: page.size === "Letter" || page.size === "A5" ? page.size : "A4",
+        orientation: page.orientation === "landscape" ? "landscape" : "portrait",
+        margins: number(page.margins) && page.margins! >= 5 && page.margins! <= 60 ? page.margins! : PAGE.margins,
+    };
+    // the header and footer are a line of plain text each
+    for (const key of ["header", "footer"] as const) if (typeof page[key] === "string" && page[key]!.trim()) kept[key] = page[key]!.replace(/\s+/g, " ").trim().slice(0, 200);
+    if (page.numbers === true) kept.numbers = true;
     return {
         quire: 1,
-        page: {
-            size: page.size === "Letter" || page.size === "A5" ? page.size : "A4",
-            orientation: page.orientation === "landscape" ? "landscape" : "portrait",
-            margins: number(page.margins) && page.margins! >= 5 && page.margins! <= 60 ? page.margins! : PAGE.margins,
-        },
+        page: kept,
         count: number(raw.count) ? raw.count! : 0,
         blocks: (Array.isArray(raw.blocks) ? raw.blocks : []).filter((each) => anchored(each) && (["left", "center", "right", "justify"].includes(each.align as string) || number(each.spacing))),
         runs: (Array.isArray(raw.runs) ? raw.runs : []).filter((each) => anchored(each) && number(each.from) && number(each.to) && typeof each.quote === "string" && each.quote.length > 0 && LOOKS.some((key) => typeof each[key] === "string")),

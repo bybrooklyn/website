@@ -22,6 +22,10 @@ export interface Heading {
 export interface RowState {
     /** True for a `.quire` document, which can have what a Markdown file cannot keep. */
     rich: boolean;
+    /** True in page view: the paper set up, as real pages. */
+    paged?: boolean;
+    /** The look of the writing: no page, or light paper. */
+    look?: "none" | "paper";
     outline: boolean;
     markdown: boolean;
     words: number;
@@ -36,11 +40,11 @@ export type RowActions = Partial<Record<Command, () => void>> & { file?: () => M
 export type Command =
     | "turnRich" | "download" | "downloadQuire" | "print" | "history" | "pageSetup" | "zoom"
     | "undo" | "redo" | "selectAll" | "link" | "find" | "replace"
-    | "outline" | "markdown"
-    | "table" | "picture" | "divider" | "code" | "footnote" | "bullet" | "number" | "task"
+    | "outline" | "markdown" | "pageView" | "lookNone" | "lookPaper"
+    | "table" | "picture" | "divider" | "code" | "footnote" | "bullet" | "number" | "task" | "pageBreak" | "headerFooter"
     | "bold" | "italic" | "underline" | "strike" | "inline" | "paragraph" | "heading1" | "heading2" | "heading3" | "quote"
     | "color" | "size" | "font" | "highlight" | "spacing" | "left" | "center" | "right" | "justify"
-    | "check";
+    | "check" | "about";
 
 /** The menus of the row, for a document as it stands. */
 export function headings(state: RowState, act: RowActions): Heading[] {
@@ -74,6 +78,10 @@ export function headings(state: RowState, act: RowActions): Heading[] {
             items: () => [
                 ...line("outline", "Outline", { icon: "outline", pressed: state.outline }),
                 ...line("markdown", "The Markdown beside the page", { pressed: state.markdown }),
+                // the two looks are a choice: the menu stays open while the page eases from one to the other
+                ...line("lookNone", "No page", { pressed: (state.look ?? "none") === "none", group: "look" }),
+                ...line("lookPaper", "Light paper", { pressed: state.look === "paper", group: "look" }),
+                ...line("pageView", "Page view", { pressed: !!state.paged }),
                 ...line("zoom", "Zoom", { hint: "›" }),
             ],
         },
@@ -85,6 +93,8 @@ export function headings(state: RowState, act: RowActions): Heading[] {
                 ...line("divider", "Horizontal line", { icon: "divider" }),
                 ...line("code", "Code block", { icon: "code" }),
                 ...line("footnote", "Footnote", { icon: "footnote" }),
+                ...line("pageBreak", "Page break", { icon: "pagebreak", hint: "Ctrl+Enter" }),
+                ...(state.rich ? line("headerFooter", "Header, footer and page numbers", { hint: "›" }) : []),
                 ...line("bullet", "Bulleted list", { icon: "bullet" }),
                 ...line("number", "Numbered list", { icon: "number" }),
                 ...line("task", "Checklist", { icon: "task" }),
@@ -116,7 +126,7 @@ export function headings(state: RowState, act: RowActions): Heading[] {
         },
         {
             label: "Tools",
-            items: () => [{ label: `${state.words.toLocaleString("en")} ${state.words === 1 ? "word" : "words"}`, note: true, run: () => {} }, ...line("history", "Version history"), ...line("check", "Checking", { hint: "›" })],
+            items: () => [{ label: `${state.words.toLocaleString("en")} ${state.words === 1 ? "word" : "words"}`, note: true, run: () => {} }, ...line("history", "Version history"), ...line("check", "Checking", { hint: "›" }), ...line("about", "About mdQuire")],
         },
     ];
 }
@@ -180,6 +190,8 @@ export function createMenuRow(menus: () => Heading[]) {
     return {
         element: row,
         menu,
+        /** The menus as they stand now, for the search of them. */
+        headings: menus,
         words,
         open,
         /** Opens a word's menu from somewhere else, as the three-dot menu does when the row has folded into it. */

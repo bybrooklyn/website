@@ -29,8 +29,8 @@ export interface AppOptions {
     fetcher?: Fetcher;
     /** The name of the browser database. */
     database?: string;
-    /** Where the page wants the bar: in its own top row, beside the site's name. */
-    barHome?: HTMLElement;
+    /** The page's top: its two lines, with places marked for the document's name, the menu words, how saving stands and the tools. */
+    top?: HTMLElement;
 }
 
 /** Where the writer was, remembered in this browser. */
@@ -89,7 +89,7 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
         mark: start?.mark,
         versions: browser.versions,
         colors: options.colors,
-        barHome: options.barHome,
+        top: options.top,
         richHome: browser,
         // the File menu's first lines: what the home screen and the documents list offer, by name
         fileItems: () => [
@@ -102,7 +102,6 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
             { label: github ? "Repository settings" : "Connect a repository", run: () => ((from = editor.nameElement()), showRepository()) },
         ],
         onOpen: remember,
-        onHome: () => void home(),
         onName: (button) => {
             if (menu.isOpen()) return menu.close(true);
             from = button;
@@ -310,10 +309,17 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
         if (!shelf.shown()) return;
         scrollTo({ top: 0, behavior: "instant" });
         host.classList.remove("shelved");
-        options.barHome?.classList.remove("away");
+        options.top?.classList.remove("away");
         shelf.hide();
         if (picture) await travel(editor.paper, picture, true);
     }
+
+    // "mdQuire" in the page's trail leads to the shelf: with a document open it goes there without leaving the page
+    options.top?.querySelector(".quire-word")?.addEventListener("click", (event) => {
+        if (shelf.shown() || (event as MouseEvent).ctrlKey || (event as MouseEvent).metaKey) return;
+        event.preventDefault();
+        void home();
+    });
 
     /** Leaves the document for the home screen: it is saved, and its page shrinks back into its picture there. */
     async function home() {
@@ -323,7 +329,7 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
         await editor.flush();
         await shelf.refresh();
         scrollTo({ top: 0, behavior: "instant" });
-        options.barHome?.classList.add("away");
+        options.top?.classList.add("away");
         shelf.show();
         const picture = current.store && current.id ? shelf.pictureOf(keyFor(current.store, current.id)) : undefined;
         if (picture) {
@@ -340,7 +346,7 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
 
     if (!start) {
         host.classList.add("shelved");
-        options.barHome?.classList.add("away");
+        options.top?.classList.add("away");
         await shelf.refresh();
         shelf.show();
         return { editor, browser, files, shelf };

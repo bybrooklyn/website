@@ -333,7 +333,11 @@ a:focus-visible,
 .play-button,
 .cite-copy,
 .photo-buttons button,
-.terminal-bar button {
+.terminal-bar button,
+.quire-button,
+.quire-row-word,
+.quire-menu-line,
+.quire-outline-link {
     border: 0;
     padding: 0;
     background: none;

@@ -155,11 +155,11 @@ body.no-preview #preview {
     visibility: visible;
 }
 
-/* the switch sits in the form's corner, over the sheet's own margin */
+/* the switch sits in the form's corner, in the space under the title */
 .edit-front-swap {
     justify-self: end;
     align-self: start;
-    margin-top: -2.6rem;
+    margin-top: -1.95rem;
     color: var(--muted);
     font-size: 0.8rem;
 }

@@ -17,21 +17,23 @@ import { blockPaths, countWords, lengthOf } from "./document";
 import { createConflict } from "./conflict";
 import { createDictation } from "./dictation/dictation";
 import { type Document } from "./document";
-import { collapsed } from "./keys";
+import { collapsed, pageBreakAt } from "./keys";
+import { createPages } from "./pages";
 import { createMarkdownView } from "./markdown-view";
 import { createOutline } from "./outline";
 import { read } from "./read";
 import { createSelectBar } from "./select-bar";
 import { createSlash } from "./slash";
-import { createSaver, said, type Entry, type Status, type Store } from "./store";
+import { createSaver, fileName, said, type Entry, type Status, type Store } from "./store";
 import { createSurface, type Surface } from "./surface";
 import { createTableTools } from "./tables";
-import { control, flowMenu, linkForm, make, type MenuItem } from "./ui";
+import { aboutPanel, control, flowMenu, linkForm, make, type MenuItem } from "./ui";
 import { changes, createHistoryPanel, createKeeper, memoryStorage, snapshotParts, snapshotText, type VersionStorage } from "./versions";
 import { write } from "./write";
 import { emptyParts, opened, packQuire, written, type Parts } from "./quire-file";
 import { PAGE } from "./styling";
-import { createCaret, FLAG } from "./caret";
+import { createCaret, FLAG, FLAG_ON_PAPER } from "./caret";
+import { createDetails } from "./details";
 import { createFind } from "./find";
 import { mountChecking } from "./check/mount";
 import { createTitle, nameFor, shownName, type OwnTitle } from "./title";
@@ -55,14 +57,12 @@ export interface EditorOptions {
     onOpen?: (store: Store, entry: Entry) => void;
     /** Opens the documents list from the name in the bar. */
     onName?: (from: HTMLElement) => void;
-    /** Leaves the document for the home screen, from a control at the start of the bar. */
-    onHome?: () => void;
     /** The page's own lines at the head of the File menu: new documents, opening files and folders. */
     fileItems?: () => MenuItem[];
     /** More lines for the three-dot menu, from the page. */
     more?: () => MenuItem[];
-    /** Where the page wants the bar: in its own top row, beside the site's name. Above the editor if not given. */
-    barHome?: HTMLElement;
+    /** The page's top, with places marked for the document's name, the menu words, how saving stands and the tools (src/pages/mdquire.astro). Made above the editor if not given. */
+    top?: HTMLElement;
     /** Takes a picture file when there is no store to keep it. */
     onImage?: (file: File) => Promise<string>;
     /** Where a Markdown document turned into a `.quire` one is made when its own store keeps no `.quire` documents; downloaded if not given. */
@@ -93,6 +93,18 @@ export interface Editor {
     view(options: { outline?: boolean; markdown?: boolean; plain?: boolean }): void;
     destroy(): void;
 }
+
+/** The two looks of the writing: A, no page, on the site's ground; C, light paper on the dark desk. */
+export type Look = "none" | "paper";
+
+/** Where the look chosen is kept, for every document. */
+const LOOK_KEY = "quire-look";
+
+/** Where the outline being open or shut on a wide window is kept. */
+const OUTLINE_KEY = "quire-outline";
+
+/** True when the window has room for the outline in the margin beside the writing. */
+const wide = () => typeof matchMedia !== "undefined" && matchMedia("(min-width: 64rem)").matches;
 
 /** A status in a word or two for the bar. */
 const short = (status: Status, note?: string) => (status.state === "saved" ? (note ? "Download" : "Saved") : status.state === "saving" ? "Saving" : status.state === "waiting" ? "Not saved" : status.state === "changed" ? "Changed" : "Not saved");
@@ -161,8 +173,9 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         },
     });
     paper.prepend(title.element);
-    /** Shows the title for the document as it is now. */
+    /** Shows the title for the document as it is now, and its name in the margin. */
     const showTitle = () => {
+        showDetails();
         const own = options.title?.read(surface.getDocument());
         if (own !== null && own !== undefined) title.show(own);
         else title.show(shownName(name) === "Untitled" ? "" : shownName(name), !options.title && (!store || !id || store.can.rename));
@@ -224,6 +237,10 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         form.querySelector("input")?.focus({ preventScroll: true });
     };
 
+    // ---- About mdQuire, from Tools and the three dots: a small panel that grows out of where it was asked for ----
+    const about = flowMenu("About mdQuire", { className: "quire-about-menu" });
+    const showAbout = (from: HTMLElement) => (about.isOpen() ? about.close(true) : about.open(from, aboutPanel()));
+
     // ---- the three-dot menu ----
     const give = (file: Blob, fileName: string) => {
         const anchor = make("a");
@@ -260,8 +277,6 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         surface.focus();
     };
     const more = (): MenuItem[] => [
-        // on a narrow window the menu row is here, a line for each of its words
-        ...(rowFolded() ? row.words.map((word, index) => ({ label: word.textContent ?? "", hint: "›", run: () => row.openFrom(bar.element.querySelector<HTMLElement>(".quire-dots")!, index) })) : []),
         ...(surface.getDocument().quire ? [] : [{ label: "Turn into a .quire document", icon: "file", run: () => void makeRich() }]),
         { label: host.classList.contains("markdown") ? "Hide the Markdown" : "Show the Markdown", run: () => showMarkdown(!host.classList.contains("markdown")) },
         { label: "Version history", run: () => void history.open() },
@@ -269,7 +284,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         ...dictation.items(dictation.more),
         ...(surface.getDocument().quire ? [{ label: "Download", hint: ".quire", run: () => void downloadQuire() }] : []),
         { label: surface.getDocument().quire ? "Download as Markdown" : "Download", hint: surface.getDocument().mdx ? ".mdx" : ".md", run: download },
-        { label: "Print", run: () => print() },
+        { label: "About mdQuire", run: () => showAbout(bar.element.querySelector<HTMLElement>(".quire-dots")!) },
     ];
 
     const bar = createBar(surface, {
@@ -277,10 +292,13 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         colors: options.colors,
         onImage: keepPicture,
         onName: (from) => options.onName?.(from),
-        onHome: options.onHome,
-        onOutline: () => (outlineView.isOpen() ? outlineView.close() : outlineView.open()),
         onLink: openLink,
         onFind: () => find.open(),
+        onPrint: () => print(),
+        onSpelling: (from) => checking.open(from),
+        onZoom: (from) => (zooms.isOpen() ? zooms.close(true) : zooms.open(from, zoomLines(() => from), document.activeElement === from)),
+        // every command of the menus, by name, for the search of them
+        commands: () => row.headings().flatMap((heading) => heading.items()),
         more,
     });
     // checking (src/quire/check/): underlines, a count at the bar's end, and its settings from Tools
@@ -292,12 +310,8 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         event.preventDefault();
         find.open(event.key === "h");
     });
-    // dictation: a microphone at the end of the bar, the shortcut, and its lines in the three-dot menu (src/quire/dictation/)
-    if (!dictation.why) {
-        const row = make("div", "quire-bar-group");
-        dictation.mount(row);
-        bar.element.querySelector(".quire-bar-strip")?.append(row);
-    }
+    // dictation: a microphone at the end of the bar after the three dots, the shortcut, and its lines in the three-dot menu (src/quire/dictation/)
+    if (!dictation.why) dictation.mount(bar.element.querySelector<HTMLElement>(".quire-bar-end")!);
     // the rich view and the Markdown, side by side when there is room and one in place of the other when not
     const markdown = createMarkdownView(surface);
     const panes = make("div", "quire-panes");
@@ -312,30 +326,85 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         if (getComputedStyle(paper).visibility === "hidden" || (shown && matchMedia("(max-width: 60rem)").matches)) (shown ? markdown.element : surface.element).focus({ preventScroll: true });
     };
     markdown.element.inert = true;
-    // the bar runs along the top of the whole editor; under it the outline's column and the page
-    if (options.barHome) {
-        options.barHome.append(bar.element);
-        host.classList.add("bar-away");
-    } else host.prepend(bar.element);
+    // the top: the page's own, or one made above the editor in the same shape; its places are filled below
+    const top = options.top ?? makeTop();
+    if (!options.top) host.prepend(top);
+    else host.classList.add("bar-away");
+    const place = (name: string) => top.querySelector<HTMLElement>(`.quire-${name}-home`)!;
+    place("name").append(bar.name);
+    place("status").append(bar.statusLine);
+    place("bar").append(bar.element);
     bar.element.querySelector('[aria-label="Outline"]')?.setAttribute("data-outline-control", "");
     column.append(panes);
 
     // ---- the paper and how near it is seen: a small control at the window's lower right, the View and File menus, and Ctrl with plus, minus and 0 ----
     const pageNow = (): Page => surface.getDocument().quire?.page ?? PAGE;
-    /** The width the sheet may fill: its column of the panes, which is half of them while the Markdown is beside it. */
-    const space = () => parseFloat(getComputedStyle(panes).gridTemplateColumns) || panes.clientWidth;
-    const zoomButton = control("Zoom and page", "100%", (button) => {
-        if (zooms.isOpen()) return zooms.close(true);
-        zooms.open(button, zoomLines(() => button), document.activeElement === button);
-    }, "quire-button quire-zoom");
-    zoomButton.setAttribute("aria-haspopup", "menu");
+    /** The width the page may fill in page view: the window less its gutters, and half of that while the Markdown is beside it. */
+    const space = () => {
+        const gutter = parseFloat(getComputedStyle(host).getPropertyValue("--edge")) || 16;
+        return (host.clientWidth - gutter * 2) / (host.classList.contains("markdown") ? 2 : 1);
+    };
     const zooms = flowMenu("Zoom", { align: "right" });
     const setups = flowMenu("Page setup", { align: "right" });
-    const zoom = createZoom(paper, column, space, pageNow, (now) => (zoomButton.firstElementChild!.textContent = percent(now)));
+    // the page as pages of that paper in page view, with the header, footer and numbers of a .quire document
+    const pages = createPages(paper, surface, { page: pageNow, rich: () => !!surface.getDocument().quire });
+    const zoom = createZoom(paper, column, space, pageNow, pages.paged, (now) => bar.setZoom(percent(now)));
+    // ---- the two looks, A (no page) and C (light paper), kept for every document; and page view, kept for each ----
+    const looked = (): Look => {
+        try {
+            return localStorage.getItem(LOOK_KEY) === "paper" ? "paper" : "none";
+        } catch {
+            return "none";
+        }
+    };
+    let look: Look = looked();
+    let easing: ReturnType<typeof setTimeout> | undefined;
+    /** Shows the writing in a look, easing from the one it was in; `keep` remembers it for every document. */
+    const showLook = (next: Look, keep = true) => {
+        look = next;
+        if (keep) {
+            host.classList.add("easing");
+            clearTimeout(easing);
+            easing = setTimeout(() => host.classList.remove("easing"), 600);
+        }
+        host.classList.toggle("look-paper", next === "paper");
+        caret.setColours(next === "paper" ? FLAG_ON_PAPER : FLAG);
+        if (keep) {
+            try {
+                localStorage.setItem(LOOK_KEY, next);
+            } catch {
+                // a browser keeping nothing still shows the look; it is only not remembered
+            }
+        }
+        // the page's width eases from one look to the other; the zoom looks again once it has
+        setTimeout(() => zoom.refresh(false), 500);
+    };
+    showLook(look, false);
+    const viewKey = () => `quire-view:${store && id ? `${store.label}:${id}` : name}`;
+    const rememberedView = () => {
+        try {
+            return localStorage.getItem(viewKey()) === "page";
+        } catch {
+            return false;
+        }
+    };
+    /** Shows the document in page view or in its look; `keep` remembers the choice for it. */
+    const showView = (paged: boolean, keep = true) => {
+        pages.set(paged);
+        host.classList.toggle("paged", paged);
+        if (keep) {
+            try {
+                localStorage.setItem(viewKey(), paged ? "page" : "writing");
+            } catch {
+                // a browser keeping nothing still shows the view; it is only not remembered
+            }
+        }
+        zoom.refresh();
+    };
+    showView(rememberedView(), false);
     const openSetup = (from: HTMLElement) => setups.open(from, setupItems(pageNow(), (change) => surface.run((doc) => setPage(doc, { ...pageNow(), ...change }))), true);
     /** The zoom's lines, and for a `.quire` document the page setup, which opens in its place. */
-    const zoomLines = (from: () => HTMLElement): MenuItem[] => [...zoom.items(), ...(surface.getDocument().quire ? [{ label: "Page setup", hint: "›", run: () => openSetup(from()) }] : [])];
-    column.append(zoomButton);
+    const zoomLines = (from: () => HTMLElement): MenuItem[] => [{ label: "Page view", pressed: pages.paged(), run: () => showView(!pages.paged()) }, ...zoom.items(), ...(surface.getDocument().quire ? [{ label: "Page setup", hint: "›", run: () => openSetup(from()) }] : [])];
     // as the Markdown opens beside the sheet, the sheet's column narrows and the sheet follows it
     if (typeof ResizeObserver !== "undefined") new ResizeObserver(() => zoom.refresh(false)).observe(markdown.element);
     // print is given the paper and margins of the page set up
@@ -361,10 +430,45 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     surface.on("link", () => openLink(bar.element.querySelector<HTMLElement>('[aria-label^="Link"]')!));
     const selectBar = createSelectBar(surface, () => bar.element.getBoundingClientRect().bottom);
     const outlineView = createOutline(surface, () => bar.element.getBoundingClientRect().bottom, (open) => {
-        bar.setOutline(open);
         host.classList.toggle("outlined", open);
     });
+    /** Opens or shuts the outline as the writer asks; on a wide window, where it is part of the look, it is kept as they left it. */
+    function toggleOutline() {
+        if (outlineView.isOpen()) outlineView.close();
+        else outlineView.open();
+        if (!wide()) return;
+        try {
+            localStorage.setItem(OUTLINE_KEY, outlineView.isOpen() ? "open" : "shut");
+        } catch {
+            // kept for this visit only
+        }
+    }
     host.insertBefore(outlineView.element, column);
+    // the document's file, length and where it is kept, in the right margin of the look with no page
+    const details = createDetails();
+    host.append(details.element);
+    let savedAt: number | undefined;
+    const showDetails = () => details.show({ file: fileName(name, surface.getDocument().quire ? ".quire" : surface.getDocument().mdx ? ".mdx" : ".md"), words: countWords(surface.getDocument()), place: store?.label, saved: savedAt });
+    let detailing: ReturnType<typeof setTimeout> | undefined;
+    surface.on("change", () => {
+        clearTimeout(detailing);
+        detailing = setTimeout(showDetails, 400);
+    });
+    // on a wide window the outline opens with the editor, unless the writer shut it last time; as the
+    // window narrows it goes, rather than become a panel over the page, and comes back as it widens
+    const outlineAsKept = () => {
+        let kept: string | null = null;
+        try {
+            kept = localStorage.getItem(OUTLINE_KEY);
+        } catch {
+            // nothing kept: the outline opens
+        }
+        if (!wide()) outlineView.close();
+        else if (kept !== "shut" && !outlineView.isOpen()) outlineView.open();
+    };
+    outlineAsKept();
+    const widening = typeof matchMedia !== "undefined" ? matchMedia("(min-width: 64rem)") : undefined;
+    widening?.addEventListener("change", outlineAsKept);
     const slash = createSlash(surface, bar.pickImage);
     const tableTools = createTableTools(surface);
 
@@ -376,7 +480,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     const format = () => row.words[4]!;
     const row = createMenuRow(() =>
         headings(
-            { rich: !!surface.getDocument().quire, outline: outlineView.isOpen(), markdown: host.classList.contains("markdown"), words: countWords(surface.getDocument()), align: aligned(surface.getDocument(), surface.getSelection().focus.path) },
+            { rich: !!surface.getDocument().quire, paged: pages.paged(), look, outline: outlineView.isOpen(), markdown: host.classList.contains("markdown"), words: countWords(surface.getDocument()), align: aligned(surface.getDocument(), surface.getSelection().focus.path) },
             {
                 file: options.fileItems,
                 turnRich: () => void makeRich(),
@@ -397,13 +501,18 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
                     surface.focus();
                 },
                 link: () => openLink(bar.element.querySelector<HTMLElement>('[aria-label^="Link"]') ?? format()),
-                outline: () => (outlineView.isOpen() ? outlineView.close() : outlineView.open()),
+                outline: () => (toggleOutline()),
                 markdown: () => showMarkdown(!host.classList.contains("markdown")),
+                pageView: () => showView(!pages.paged()),
+                lookNone: () => showLook("none"),
+                lookPaper: () => showLook("paper"),
                 table: doing(addTable),
                 picture: () => bar.pickImage(),
                 divider: doing(addDivider),
                 code: doing(addCode),
                 footnote: doing(addFootnote),
+                pageBreak: doing(pageBreakAt),
+                headerFooter: () => pages.edit(row.words[3]!),
                 bullet: doing(toggleList("bullet")),
                 number: doing(toggleList("number")),
                 task: doing(toggleList("task")),
@@ -427,24 +536,12 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
                 font: () => bar.pickers.font(format()),
                 highlight: () => bar.pickers.highlight(format()),
                 check: () => checking.open(row.words[5]!),
+                about: () => showAbout(row.words[5]!),
             },
         ),
     );
-    // in the site's top row the words sit above the bar; anywhere else they are the bar's own first line
-    (options.barHome ?? bar.element).prepend(row.element);
-    if (options.barHome) options.barHome.classList.add("has-menu-row");
-    // scrolled out of sight with the site's name, the row is in the three dots as on a narrow window
-    let rowAway = false;
-    /** True when the row cannot be reached where it is: folded on a narrow window, or scrolled away. */
-    const rowFolded = () => rowAway || (typeof matchMedia !== "undefined" && matchMedia("(max-width: 40rem)").matches);
-    const syncRow = () => (row.element.inert = rowFolded());
-    syncRow();
-    if (typeof matchMedia !== "undefined") matchMedia("(max-width: 40rem)").addEventListener("change", syncRow);
-    const rowSeen = typeof IntersectionObserver !== "undefined" && options.barHome ? new IntersectionObserver(([entry]) => {
-        rowAway = !!entry && entry.intersectionRatio < 0.99;
-        syncRow();
-    }, { threshold: [0.99] }) : undefined;
-    rowSeen?.observe(row.element);
+    // the menu words, on the top's first line after the trail
+    place("menus").append(row.element);
 
     // ---- version history: a snapshot on opening and after each pause in editing, kept by store and document ----
     const historyKey = () => (store && id ? `${store.label}:${id}` : name);
@@ -479,6 +576,8 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         quiet = false;
     }, () => surface.focus());
     const showStatus = (status: Status) => {
+        if (status.state === "saved") savedAt = Date.now();
+        showDetails();
         bar.setStatus(short(status, store?.note), said(status, store?.note), status.state === "changed" || status.state === "failed" ? "warn" : "quiet");
         if (status.state === "changed" && saver) conflict.open(saver.unsaved() ?? write(surface.getDocument()), status.theirs?.text);
     };
@@ -562,6 +661,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         showStatus(saver.status());
         keeper = createKeeper(versions, historyKey(), snapshot);
         void keeper.opened();
+        showView(rememberedView(), false);
         options.onOpen?.(next, entry);
     }
 
@@ -577,7 +677,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         id = undefined;
         name = "Untitled";
         bar.setName(name);
-        outlineView.close();
+        if (!wide()) outlineView.close();
         quiet = true;
         surface.setDocument(read(""));
         quiet = false;
@@ -607,13 +707,17 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         },
         destroy() {
             caret.destroy();
+            details.destroy();
+            widening?.removeEventListener("change", outlineAsKept);
             checking.destroy();
+            pages.destroy();
             printing.remove();
             find.destroy();
-            rowSeen?.disconnect();
+            bar.destroy();
+            if (!options.top) top.remove();
             dictation.destroy();
             surface.destroy();
-            for (const menu of [...bar.menus, links, row.menu, zooms, setups]) menu.box.remove();
+            for (const menu of [...bar.menus, links, row.menu, zooms, setups, about]) menu.box.remove();
             selectBar.element.remove();
             slash.close();
             tableTools.element.remove();
@@ -625,4 +729,15 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
             host.replaceChildren();
         },
     };
+}
+
+/** The top's two lines, for an editor on a page without one of its own: the places the page would mark, in the same shape. */
+function makeTop(): HTMLElement {
+    const top = make("div", "quire-top quire-top-own");
+    const inner = make("div", "quire-top-in");
+    const line = make("div", "quire-top-line");
+    line.append(make("span", "quire-name-home"), make("div", "quire-menus-home"), make("div", "quire-status-home"));
+    inner.append(line, make("div", "quire-bar-home"));
+    top.append(inner);
+    return top;
 }

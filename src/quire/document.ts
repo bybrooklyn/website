@@ -193,11 +193,14 @@ export interface Document {
     quire?: QuireExtras;
 }
 
-/** A page's paper, as page setup chooses it. Margins are in millimetres. */
+/** A page's paper, as page setup chooses it. Margins are in millimetres. The header and footer are a line each, repeated on every page, and `numbers` puts the page's number in the footer. */
 export interface Page {
     size: "A4" | "Letter" | "A5";
     orientation: "portrait" | "landscape";
     margins: number;
+    header?: string;
+    footer?: string;
+    numbers?: boolean;
 }
 
 /** What a `.quire` document holds besides its blocks: page setup, and its notes kept as they were read. */
@@ -249,6 +252,19 @@ export function code(value = "", language = ""): Code {
 /** A new divider. */
 export function divider(): Divider {
     return { kind: "divider", gap: "" };
+}
+
+/** How a page break is written: HTML that print, and most things that show Markdown, take as the end of a page. */
+export const PAGE_BREAK = '<div style="break-after: page"></div>';
+
+/** A new page break, kept in the Markdown as the HTML that makes one. */
+export function pageBreak(): Raw {
+    return { kind: "raw", text: PAGE_BREAK, gap: "" };
+}
+
+/** True for a block that is a page break, however its HTML is spaced or quoted. */
+export function isPageBreak(block: Block | undefined): boolean {
+    return block?.kind === "raw" && /^<div\s+style\s*=\s*["']\s*(break-after\s*:\s*page|page-break-after\s*:\s*always)\s*;?\s*["']\s*>\s*<\/div>$/i.test(block.text.trim());
 }
 
 /** A new picture block. */

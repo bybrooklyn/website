@@ -37,3 +37,18 @@ test("a command the editor does not give is left out, and the page's own lines l
     expect(seen.File).toEqual(["New document"]);
     expect(headings({ rich: false, outline: true, markdown: false, words: 0 }, every)[2]!.items()[0]!.pressed).toBe(true);
 });
+
+test("Insert has a page break with its shortcut, and for a .quire document the header, footer and page numbers", () => {
+    const act: RowActions = { ...every, pageBreak: () => {}, headerFooter: () => {} };
+    expect(lines(true, act).Insert).toContain("Page break Ctrl+Enter");
+    expect(lines(true, act).Insert).toContain("Header, footer and page numbers ›");
+    expect(lines(false, act).Insert).toContain("Page break Ctrl+Enter");
+    expect(lines(false, act).Insert).not.toContain("Header, footer and page numbers ›");
+});
+
+test("View has page view, pressed while it is on", () => {
+    const act: RowActions = { ...every, pageView: () => {} };
+    const view = (paged: boolean) => headings({ rich: true, paged, outline: false, markdown: false, words: 0 }, act)[2]!.items().find((item) => item.label === "Page view");
+    expect(view(false)?.pressed).toBe(false);
+    expect(view(true)?.pressed).toBe(true);
+});

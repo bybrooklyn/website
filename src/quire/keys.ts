@@ -21,10 +21,13 @@ import {
     insertBlock,
     insertRunsAt,
     insertText,
+    isPageBreak,
     joinBlock,
     lengthOf,
+    moveBlock,
     ordered,
     outdent,
+    pageBreak,
     paragraph,
     removeBlock,
     runsLength,
@@ -281,7 +284,7 @@ function backspace(state: State, word: boolean): Outcome {
     const previousPath = paths[index - 1];
     if (!previousPath) return done(doc, state.selection, "move");
     const previous = blockAt(doc, previousPath)!;
-    if (previous.kind === "divider" || previous.kind === "image") {
+    if (previous.kind === "divider" || previous.kind === "image" || isPageBreak(previous)) {
         const next = removeBlock(doc, previousPath);
         return done(next, caret(sameLeaf(doc, at.path, next, -1), 0), "delete");
     }
@@ -318,7 +321,7 @@ function forwardDelete(state: State, word: boolean): Outcome {
     const nextPath = paths[indexOf(doc, at.path) + 1];
     if (!nextPath) return done(doc, state.selection, "move");
     const following = blockAt(doc, nextPath)!;
-    if (following.kind === "divider" || following.kind === "image") return done(removeBlock(doc, nextPath), state.selection, "delete");
+    if (following.kind === "divider" || following.kind === "image" || isPageBreak(following)) return done(removeBlock(doc, nextPath), state.selection, "delete");
     if (block.kind === "paragraph" && length === 0) {
         const next = removeBlock(doc, at.path);
         return done(next, caret(sameLeaf(doc, nextPath, next), 0), "delete");
@@ -401,6 +404,22 @@ function tab(state: State, back: boolean): Outcome {
     return null;
 }
 
+/**
+ * Puts a page break at the cursor, as Ctrl+Enter does. In a paragraph or heading of its own the
+ * line is split there and the break goes between (before the line, at its start); anywhere else it
+ * goes after the block the cursor is in, with an empty line after it to write on.
+ */
+export function pageBreakAt(state: State): State {
+    const { doc, at } = clear(state);
+    const top = at.path[0]!;
+    if (at.path.length === 1 && textual(blockAt(doc, [top]))) {
+        if (at.offset === 0) return { doc: moveBlock(insertBlock(doc, [top], pageBreak()), [top + 1], -1), selection: caret([top + 1], 0) };
+        return { doc: insertBlock(splitBlock(doc, at), [top], pageBreak()), selection: caret([top + 2], 0) };
+    }
+    const placed = insertBlock(doc, [top], pageBreak());
+    return { doc: insertBlock(placed, [top + 1], paragraph()), selection: caret([top + 2], 0) };
+}
+
 // ---- shortcuts ----
 
 const MARK_KEYS: Record<string, Mark> = { b: "bold", i: "italic", u: "underline", e: "code" };
@@ -435,6 +454,7 @@ export function handle(state: State, input: Input): Outcome {
         if (alt && /^[0-6]$/.test(key)) return blockKind(state, Number(key));
         if (shift && lower === "x") return mark(state, "strike");
         if (!shift && !alt && MARK_KEYS[lower]) return mark(state, MARK_KEYS[lower]!);
+        if (key === "Enter" && !shift && !alt) return { state: pageBreakAt(state), kind: "structure" };
         if (key === "Backspace") return backspace(state, true);
         if (key === "Delete") return forwardDelete(state, true);
         return null;

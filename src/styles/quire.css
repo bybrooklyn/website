@@ -6,77 +6,153 @@
 
 /* ---- the editor's frame ---- */
 
-/* The bar runs along the top of the whole editor, with a rule under it. Under it, the outline's
-   column at the left edge (closed until asked for, its width flowing open) and the page, centred in
-   the room that is left. */
+/* Two looks, the writer's to choose in View (editor.ts keeps the choice). A, no page, the usual:
+   the writing on the site's own ground at her blog's measure, centred in the window, the outline
+   in the left margin and what is known about the document in the right. C, light paper: a page of
+   pale lavender with dark ink on the dark desk, as wide as the measure and a margin each side that
+   grows with the window, so that it is never small and never a slab. Page view (pages.ts) shows the
+   paper set up as real pages, in either look. One look eases into the other: the page's width,
+   margins, ground and inks all move together, and the text column inside keeps its width. */
+
+/* the inks move from one look to the other only when the browser knows they are colors */
+@property --ink { syntax: "<color>"; inherits: true; initial-value: white; }
+@property --muted { syntax: "<color>"; inherits: true; initial-value: gray; }
+@property --accent { syntax: "<color>"; inherits: true; initial-value: violet; }
+@property --rule { syntax: "<color>"; inherits: true; initial-value: gray; }
+@property --surface { syntax: "<color>"; inherits: true; initial-value: black; }
+@property --ground { syntax: "<color>"; inherits: true; initial-value: black; }
+
 .quire-editor {
-    --bar-height: 3.1rem;
+    /* how far down the window the top row reaches, for what keeps clear of it */
+    --stuck: calc(var(--line) + var(--press) + 1.25rem + 0.0625rem);
     --edge: clamp(0.75rem, 2vw, 1.5rem);
-    /* how far down the window what stays at the top reaches */
-    --stuck: calc(var(--bar-height) + 0.0625rem);
-    /* the sheet: plainly lighter than the ground, with a clear edge, and dark enough that the flag's red caret is 3 : 1 on it */
-    --sheet-ground: color-mix(in oklch, var(--panel-raised), var(--ink) 2%);
-    --sheet-edge: color-mix(in oklch, var(--panel-edge), var(--ink) 18%);
-    /* the editor takes the width it is given and never widens the page; long lines scroll inside it */
-    contain: inline-size;
+    /* C's page: the measure and a margin each side that grows with the window */
+    --margin: clamp(3rem, 2rem + 5vw, 9.5rem);
+    --sheet: calc(var(--measure) + var(--margin) * 2);
+    /* the page's width now and the margin inside it: A's here, C's and page view's below; each is
+       worked out where it is used, inside the editor, which is what 100cqw measures */
+    --page-now: min(var(--measure), 100cqw - var(--gutter) * 2);
+    --pad-now: 0px;
+    --above: calc(var(--line) * 2.5);
+    --mid: calc(var(--page-now) * var(--zoom, 1));
+    /* where the outline starts: the left edge of the site's column, unless that leaves it too little room beside the page */
+    --from: max(var(--gutter), min((100cqw - min(100cqw, var(--page) + var(--gutter) * 2)) / 2 + var(--gutter), (100cqw - var(--mid)) / 2 - 11rem));
+    /* the editor takes the width it is given and never widens the page; a page zoomed wider scrolls inside it */
+    container-type: inline-size;
     position: relative;
     display: grid;
-    grid-template-columns: [outline] 0 [page] minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
     grid-template-rows: auto 1fr;
     min-height: 100vh;
-    transition: grid-template-columns 0.45s var(--ease);
 }
 
-.quire-editor > .quire-bar {
+/* the page's width and margins ease only as the look changes, not as the window is resized (editor.ts sets this for a moment) */
+.quire-editor.easing .quire-column {
+    transition:
+        width 0.45s var(--ease),
+        padding 0.45s var(--ease);
+}
+
+.quire-editor.easing .quire-paper {
+    transition:
+        width 0.45s var(--ease),
+        padding 0.45s var(--ease),
+        min-height 0.45s var(--ease),
+        background-color 0.45s var(--ease),
+        box-shadow 0.45s var(--ease),
+        --ink 0.45s var(--ease),
+        --muted 0.45s var(--ease),
+        --accent 0.45s var(--ease),
+        --rule 0.45s var(--ease),
+        --surface 0.45s var(--ease),
+        --ground 0.45s var(--ease);
+}
+
+.quire-editor.look-paper {
+    --page-now: min(var(--sheet), 100cqw - var(--gutter) * 2);
+    --pad-now: var(--margin);
+    --above: calc(var(--line) * 1.5);
+}
+
+/* with the Markdown beside it, C's page gives up its margins before the two can leave the window */
+.quire-editor.look-paper.markdown:not(.paged) {
+    --page-now: min(var(--sheet), 100cqw - var(--gutter) * 2 - 17.25rem);
+}
+
+/* in page view the page is the paper set up, at its own size times the zoom */
+.quire-editor.paged {
+    --page-now: calc(var(--paper-w) * 1mm);
+    --pad-now: 0px;
+    --above: calc(var(--line) * 1.5);
+}
+
+/* the Markdown beside the page takes what is left of the window, up to a measure of its own */
+.quire-editor.markdown {
+    --source: clamp(16rem, 100cqw - var(--page-now) * var(--zoom, 1) - 1.25rem - var(--gutter) * 2, var(--measure));
+    --mid: calc(var(--page-now) * var(--zoom, 1) + 1.25rem + var(--source));
+}
+
+.quire-editor > .quire-top {
     grid-column: 1 / -1;
     grid-row: 1;
-}
-
-.quire-editor > .quire-outline {
-    grid-column: 1;
-    grid-row: 2;
 }
 
 .quire-column {
     grid-column: 2;
     grid-row: 2;
-    min-width: 0;
-    padding: calc(var(--line) * 1.5) var(--edge) calc(var(--line) * 3);
+    box-sizing: border-box;
+    width: min(var(--mid), 100cqw);
+    padding: var(--above) 0 calc(var(--line) * 4);
 }
 
-/* The sheet being written on: the paper page setup chose (paper.ts sets its size and margins in
-   millimetres), at its real size times the zoom, centred, at least one sheet tall and growing with
-   what is written. It is plainly lighter than the ground around it, with a clear edge and no glow.
-   A faint line marks where each further sheet would begin. The text fills it from top to bottom,
-   so a press anywhere on it writes. A new paper eases to its size. */
+/* The page being written on. In A it has no edge and no ground: it is the text column. In C it is
+   light paper, its corners barely eased, a fine dark line and a shadow under it. The text fills it
+   from top to bottom, so a press anywhere on it writes. */
 .quire-paper {
     --paper-w: 210;
     --paper-h: 297;
-    --margin: 25;
-    container-type: inline-size;
+    --margin-mm: 25;
     position: relative;
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
-    justify-self: safe center;
-    width: calc(var(--paper-w) * 1mm);
-    aspect-ratio: var(--paper-w) / var(--paper-h);
-    padding: calc(var(--margin) * 1mm);
+    width: var(--page-now);
+    padding: calc(var(--pad-now) * 0.7 + min(var(--pad-now), 1rem)) var(--pad-now) calc(var(--pad-now) + min(var(--pad-now), 2rem));
     zoom: var(--zoom, 1);
-    border: 0.0625rem solid var(--sheet-edge);
-    /* a sheet of paper: its corners are barely eased, not rounded */
-    border-radius: 0.125rem;
-    background:
-        repeating-linear-gradient(to bottom, transparent 0 calc(var(--paper-h) * 1mm - 0.0625rem), color-mix(in oklch, var(--panel-edge), transparent 45%) calc(var(--paper-h) * 1mm - 0.0625rem) calc(var(--paper-h) * 1mm)),
-        var(--sheet-ground);
+    border-radius: 0.1875rem;
+    background-color: transparent;
+    box-shadow:
+        0 0 0 0.0625rem transparent,
+        0 1.5rem 3rem -1.5rem transparent;
+    color: var(--ink);
     transition:
-        width 0.45s var(--ease),
-        aspect-ratio 0.45s var(--ease),
-        padding 0.45s var(--ease);
+        background-color 0.45s var(--ease),
+        box-shadow 0.45s var(--ease),
+        --ink 0.45s var(--ease),
+        --muted 0.45s var(--ease),
+        --accent 0.45s var(--ease),
+        --rule 0.45s var(--ease),
+        --surface 0.45s var(--ease),
+        --ground 0.45s var(--ease);
 }
 
-/* everything on the sheet keeps to the text's line: the title, the welcome, a post's fields */
-.quire-paper > :not(.quire-caret) {
+/* C's inks, for the light paper: the site's ink turned dark, the accent deepened to read on it */
+.look-paper .quire-paper {
+    --paper: oklch(0.965 0.009 300);
+    --ink: oklch(0.24 0.04 300);
+    --muted: oklch(0.47 0.045 300);
+    --accent: oklch(0.52 0.19 300);
+    --rule: oklch(0.82 0.025 300);
+    --surface: oklch(0.925 0.014 300);
+    --ground: var(--paper);
+    min-height: calc(100vh - var(--stuck) - var(--line) * 1.5 + 2px);
+    background-color: var(--paper);
+    box-shadow:
+        0 0 0 0.0625rem oklch(0.08 0.03 300 / 0.6),
+        0 1.5rem 3rem -1.5rem oklch(0.04 0.02 300 / 0.9);
+}
+
+.quire-paper > :not(.quire-caret, .quire-pages) {
     box-sizing: border-box;
     width: 100%;
     max-width: none;
@@ -87,19 +163,175 @@
     min-height: 0;
 }
 
-/* the title, the first line on the sheet: set as a published post's title, and faint "Untitled" when empty */
+/* The page as pages (pages.ts): the paper itself is see-through, and behind the text each page is a
+   sheet of its own with a gap under it, growing in when the text reaches it; its header and footer
+   sit in its margins, over the text's own layer so that a double click reaches them. In A a page is
+   the ground with a fine line round it; in C it is the light paper. */
+.quire-paper.paged {
+    --sheet-ground: var(--ground);
+    --sheet-edge: 0 0 0 0.0625rem var(--panel-rule);
+    isolation: isolate;
+    min-height: 0;
+    padding: calc(var(--margin-mm) * 1mm);
+    background-color: transparent;
+    box-shadow: none;
+}
+
+.look-paper .quire-paper.paged {
+    --sheet-ground: var(--paper);
+    --sheet-edge: 0 0 0 0.0625rem oklch(0.08 0.03 300 / 0.6), 0 1.5rem 3rem -1.5rem oklch(0.04 0.02 300 / 0.9);
+}
+
+.quire-page,
+.quire-page-head,
+.quire-page-foot {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: calc(var(--at) * (var(--page-h) + var(--page-gap)));
+}
+
+.quire-page {
+    z-index: -1;
+    height: var(--page-h);
+    border-radius: 0.1875rem;
+    background: var(--sheet-ground);
+    box-shadow: var(--sheet-edge);
+    opacity: 0;
+    translate: 0 0.75rem;
+    transition:
+        opacity 0.3s ease,
+        translate 0.45s var(--ease);
+}
+
+.quire-page.shown {
+    opacity: 1;
+    translate: 0 0;
+}
+
+.quire-page-head,
+.quire-page-foot {
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: var(--page-margin);
+    color: var(--muted);
+    font-size: 0.75rem;
+    pointer-events: none;
+}
+
+.quire-page-foot {
+    translate: 0 calc(var(--page-h) - var(--page-margin));
+}
+
+.quire-paper.marked :is(.quire-page-head, .quire-page-foot) {
+    pointer-events: auto;
+}
+
+.quire-page-number {
+    position: absolute;
+    right: var(--page-margin);
+}
+
+/* an empty header or footer says what it is while the pointer is over it */
+.quire-paper.marked :is(.quire-page-head:empty, .quire-page-foot > :empty:first-child)::before {
+    content: attr(data-empty);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.quire-paper.marked :is(.quire-page-head:hover, .quire-page-foot:hover > :first-child)::before {
+    opacity: 0.6;
+}
+
+/* the pages' height, and a piece of the text moved to the top of the next page, are the screen's; print lays out its own pages */
+@media screen {
+    .quire-paper.paged {
+        min-height: calc(var(--pages, 1) * (var(--page-h) + var(--page-gap)) - var(--page-gap));
+    }
+
+    .quire [data-push] {
+        margin-top: var(--push) !important;
+    }
+}
+
+.quire-break {
+    margin-block: var(--line);
+    border-top: 0.0625rem dashed var(--rule);
+    color: var(--muted);
+    font-size: 0.7rem;
+    text-align: center;
+}
+
+.quire-break::after {
+    content: attr(data-label);
+}
+
+.quire-page-form {
+    display: grid;
+    gap: 0.35rem;
+    padding: 0.35rem;
+}
+
+/* what is known about the document, quiet, in A's right margin while the text scrolls */
+.quire-details {
+    grid-column: 3;
+    grid-row: 2;
+    position: sticky;
+    top: calc(var(--stuck) + var(--above));
+    align-self: start;
+    justify-self: end;
+    width: max(0px, min(13rem, (100cqw - var(--mid)) / 2 - var(--from) - 1.5rem));
+    margin: var(--above) var(--from) 0 0;
+    font-size: 0.85rem;
+    line-height: 1.35;
+    text-align: right;
+    transition:
+        opacity 0.3s ease 0.15s,
+        visibility 0s;
+}
+
+.quire-details dt {
+    color: var(--muted);
+    font-size: 0.8rem;
+}
+
+.quire-details dd {
+    margin: 0 0 0.75rem;
+    overflow-wrap: anywhere;
+}
+
+/* in C the desk is there; the Markdown and page view want the room */
+.look-paper .quire-details,
+.quire-editor.markdown .quire-details,
+.quire-editor.paged .quire-details {
+    opacity: 0;
+    visibility: hidden;
+    transition:
+        opacity 0.2s ease,
+        visibility 0s 0.2s;
+}
+
+@media (max-width: 64rem) {
+    .quire-details {
+        display: none;
+    }
+}
+
+/* the title, the first line on the page: set as a published post's title, and faint "Untitled" when empty */
 .quire-title {
     display: block;
     box-sizing: border-box;
     width: 100%;
-    margin: 0 auto calc(var(--line) * 1.5);
+    margin: 0 0 calc(var(--line) * 1.25);
     padding: 0;
     border: 0;
     background: transparent;
     color: var(--ink);
     font-family: var(--font-head);
     font-weight: var(--head-weight);
-    font-size: clamp(2.25rem, 1.25rem + 4cqw, 4.25rem);
+    font-size: clamp(2.25rem, 1.5rem + 2vw, 3.4rem);
     line-height: 1.05;
     letter-spacing: -0.02em;
     text-wrap: balance;
@@ -141,29 +373,27 @@
     transition: opacity 0.4s ease 0.1s;
 }
 
-/* the caret, drawn (caret.ts): a bar of the line's height in the accent, the browser's own made clear */
+/* the caret, drawn (caret.ts): a thin square-ended line about as tall as the letters, in the flag's colors */
 .quire-caret {
     --caret: var(--accent);
     position: absolute;
     top: 0;
     left: -0.045rem;
     z-index: 2;
-    /* a thin square-ended line, as a text cursor is */
     width: max(0.09rem, 1.5px);
     background: var(--caret);
     pointer-events: none;
     opacity: 0;
-    /* it fades as it blinks and slides the little way to where it is next; caret.ts puts it somewhere new at once */
+    /* it fades as it blinks and slides the little way a key or a press moves it; caret.ts puts it in place at once while typing, and for a move to another line */
     transition:
         opacity 0.12s ease,
         translate 0.05s ease-out,
         height 0.05s ease-out;
 }
 
-@media (prefers-reduced-motion: reduce) {
-    .quire-caret {
-        transition: none;
-    }
+/* a flag color too faint on what it is drawn over has a hairline of the ink round it */
+.quire-caret.edged {
+    box-shadow: 0 0 0 0.0625rem color-mix(in oklch, var(--ink) 75%, transparent);
 }
 
 .quire-caret.shown {
@@ -175,7 +405,31 @@
 }
 
 .quire-paper ::selection {
-    background: color-mix(in oklch, var(--accent), transparent 55%);
+    background: color-mix(in oklch, var(--accent), transparent 72%);
+    color: var(--ink);
+}
+
+/* On a narrow window: A's text inside the window's gutter; C's page 0.75rem from each side with a
+   little margin inside it. There is no zoom, no outline column and no details. */
+@media (max-width: 40rem) {
+    .quire-editor.look-paper {
+        --margin: 1.25rem;
+        --page-now: calc(100cqw - 1.5rem);
+        --above: 0.75rem;
+    }
+
+    .look-paper .quire-paper {
+        padding-top: calc(var(--line) * 1.25);
+    }
+
+    /* page view's pages are the window's width less its gutters, in the paper's proportions */
+    .quire-editor.paged {
+        --page-now: calc(100cqw - var(--gutter) * 2);
+    }
+
+    .quire-paper.paged {
+        padding: 1.25rem;
+    }
 }
 
 /* ---- the surface ---- */
@@ -289,21 +543,18 @@
     font-size: 0.9rem;
 }
 
-/* ---- the bar ---- */
+/* ---- the tools ----
+   The top's second line (bar.ts), the lab's: buttons 2.1rem square with 0.5rem corners, each group
+   parted by a thin rule with a little space each side. A tool that does not fit folds into the three
+   dots, least used first; what a Markdown file cannot keep is away for one. On a narrow window the
+   line slides sideways instead, find, the dots and the microphone kept at its end. */
 
 .quire-bar {
-    /* its buttons do not make the page wider: what does not fit folds or scrolls */
     contain: inline-size;
-    position: sticky;
-    top: 0;
-    z-index: 40;
-    border-bottom: 0.0625rem solid var(--rule);
-    background: var(--ground);
+    min-width: 0;
     font-family: var(--font-text);
     font-size: 0.95rem;
     line-height: 1;
-    /* what is pinned at its end, background and fade, stays inside its rounded shape */
-    overflow: clip;
 }
 
 .quire-bar-strip {
@@ -311,8 +562,7 @@
     position: relative;
     display: flex;
     align-items: center;
-    height: var(--bar-height);
-    padding-left: var(--edge);
+    height: var(--press);
     overflow-x: auto;
     overflow-y: hidden;
     scrollbar-width: none;
@@ -323,48 +573,70 @@
     display: none;
 }
 
-.quire-bar-group {
+.quire-bar-group,
+.quire-tool-set {
     display: flex;
     flex: none;
     align-items: center;
-    gap: 0.05rem;
-    max-width: 30rem;
-    padding-inline: 0.15rem;
-    overflow: clip;
-    transition:
-        max-width 0.4s var(--ease),
-        padding 0.4s var(--ease),
-        opacity 0.25s ease,
-        border-color 0.25s ease;
-}
-
-/* a group that does not fit folds away into the three-dot menu, and unfolds when there is room */
-.quire-bar-group.folded {
-    max-width: 0;
-    padding-inline: 0;
-    opacity: 0;
-    border-left-color: transparent;
+    gap: 0.1rem;
 }
 
 .quire-bar-group + .quire-bar-group {
+    margin-left: 0.4rem;
+    padding-left: 0.4rem;
     border-left: 0.0625rem solid var(--rule);
 }
 
-/* the word count and the three dots keep to the bar's right end, even while the rest scrolls under them */
-.quire-bar-end {
+/* a tool that does not fit folds away into the three dots, and one a Markdown file cannot keep is away; both unfold when they can */
+.quire-tool {
+    flex: none;
+    max-width: 16rem;
+    overflow: clip;
+    transition:
+        max-width 0.4s var(--ease),
+        opacity 0.25s ease;
+}
+
+.quire-tool {
+    display: flex;
+}
+
+.quire-tool > * {
+    flex: none;
+}
+
+.quire-tool:is(.folded, .away) {
+    max-width: 0;
+    opacity: 0;
+}
+
+.quire-bar-group:is(.folded, .lead) {
+    margin-left: 0;
+    padding-left: 0;
+    border-left-color: transparent;
+}
+
+.quire-bar-group.folded {
+    gap: 0;
+    border-left-width: 0;
+}
+
+.quire-bar-group {
+    transition:
+        margin 0.4s var(--ease),
+        padding 0.4s var(--ease),
+        border-color 0.25s ease;
+}
+
+/* find, the three dots, the checking count and the microphone keep to the right end, even while the rest slides under them */
+.quire-bar-group.quire-bar-end {
     position: sticky;
     right: 0;
     z-index: 1;
-    gap: 0.35rem;
     margin-left: auto;
-    padding-right: var(--edge);
+    padding-left: 0.75rem;
     border-left: 0;
     background: var(--ground);
-    box-shadow: -0.75rem 0 0.75rem var(--ground);
-}
-
-.quire-bar-group + .quire-bar-end {
-    border-left: 0;
 }
 
 .quire-button {
@@ -373,23 +645,20 @@
     align-items: center;
     justify-content: center;
     gap: 0.3rem;
-    min-width: 2rem;
-    height: 2rem;
-    padding: 0 0.42rem;
-    border: 0;
-    border-radius: 1.05rem;
-    background: transparent;
+    min-width: var(--press);
+    height: var(--press);
+    padding: 0 var(--inset);
+    border-radius: 0.5rem;
     color: var(--ink);
-    font: inherit;
-    cursor: pointer;
+    white-space: nowrap;
     transition:
-        background 0.2s var(--ease),
-        color 0.2s var(--ease),
+        background 0.15s ease,
+        color 0.15s ease,
         scale 0.2s var(--ease);
 }
 
 .quire-button:hover {
-    background: color-mix(in oklch, var(--ink) 9%, transparent);
+    background: color-mix(in oklch, var(--ink) 8%, transparent);
 }
 
 .quire-button.pressed,
@@ -398,15 +667,16 @@
     color: var(--accent);
 }
 
-/* pressed, a button gives a little, as the viewer's dots do */
-.quire-button:active {
-    scale: 0.88;
+/* pressed, a button gives a little, as the viewer's dots do; one that opens a menu stays still, lit, over it */
+.quire-button:not([aria-haspopup]):active {
+    scale: 0.94;
 }
 
-.quire-button:focus-visible,
-.quire-menu-line:focus-visible {
-    outline: 0.125rem solid var(--accent);
-    outline-offset: -0.125rem;
+/* the focus ring is the site's (base.css), drawn inside where an edge would clip it */
+.quire-button,
+.quire-row-word,
+.quire-menu-line {
+    --ring-offset: -0.125rem;
 }
 
 .quire-icon {
@@ -419,7 +689,8 @@
     stroke-linejoin: round;
 }
 
-.quire-glyph {
+.quire-glyph,
+.quire-color-mark {
     font-family: var(--font-head);
     font-size: 1.05rem;
 }
@@ -441,62 +712,77 @@
     text-decoration: line-through;
 }
 
+/* the text colour's A, underlined in the colour at the cursor */
 .quire-color-mark {
-    font-family: var(--font-head);
-    font-size: 1.05rem;
     border-bottom: 0.18rem solid var(--accent);
     line-height: 1.1;
 }
 
-.quire-name {
-    gap: 0.35rem;
-    max-width: calc(12ch + 2.6rem);
-    padding-inline: 0.65rem 0.5rem;
-    font-family: var(--font-head);
-    font-size: 1.05rem;
-    font-weight: var(--head-weight);
-}
-
-.quire-name-text {
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-}
-
-.quire-name .quire-icon {
-    flex: none;
-    width: 0.9rem;
-    height: 0.9rem;
-    transition: rotate 0.3s var(--ease);
-}
-
-.quire-name.open .quire-icon {
-    rotate: 180deg;
+/* a button whose words change (the style, the typeface, the zoom) keeps its width, its chevron at the end */
+.quire-style,
+.quire-font,
+.quire-zoom {
+    justify-content: space-between;
+    font-variant-numeric: tabular-nums;
 }
 
 .quire-style {
-    min-width: 6.5rem;
-    justify-content: space-between;
+    min-width: 7rem;
 }
 
-.quire-style .quire-icon {
-    width: 0.95rem;
-    height: 0.95rem;
+.quire-font {
+    width: 7.5rem;
+}
+
+.quire-font-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.quire-zoom {
+    min-width: 4.4rem;
+}
+
+:is(.quire-style, .quire-font, .quire-zoom, .quire-name) .quire-icon {
+    flex: none;
+    width: 0.9rem;
+    height: 0.9rem;
+    color: var(--muted);
     transition: rotate 0.3s var(--ease);
 }
 
-.quire-style.open .quire-icon {
+:is(.quire-style, .quire-font, .quire-zoom, .quire-name).open .quire-icon {
     rotate: 180deg;
 }
 
-.quire-count {
-    max-width: 8rem;
-    color: var(--muted);
-    font-size: 0.85rem;
-    white-space: nowrap;
-    transition:
-        max-width 0.35s var(--ease),
-        opacity 0.25s ease;
+/* the size: minus, the number to type into, plus */
+.quire-size-step {
+    min-width: 1.6rem;
+    padding: 0;
+}
+
+.quire-size-step .quire-icon {
+    width: 0.95rem;
+    height: 0.95rem;
+}
+
+.quire-size-field {
+    box-sizing: border-box;
+    width: 2.6rem;
+    height: 1.7rem;
+    border: 0.0625rem solid var(--rule);
+    border-radius: 0.35rem;
+    background: transparent;
+    color: var(--ink);
+    font: inherit;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+    --ring-offset: -0.125rem;
+}
+
+/* paint format, held: the text shows it is waiting for where the format goes */
+.quire.painting {
+    cursor: copy;
 }
 
 .quire-file {
@@ -556,68 +842,79 @@
     opacity: 0;
 }
 
-/* ---- the menus that flow out of a control ----
-   One box, from the control's own size to the menu's, a little past it and back, as a drop does.
-   Closing, it draws back in without springing and fades as it arrives. */
+/* ---- the menus: one kind for all of them (flowMenu in ui.ts) ----
+   It drops below the control pressed and covers nothing; ui.ts moves its edges out from the
+   control's edge and holds what is inside still. Its look is the lab's "raised": a slightly lighter
+   surface with a soft shadow, no line, no glow. Lines as large as the lab's. */
 
 .quire-menu {
     position: fixed;
     z-index: 70;
-    width: var(--from-w, 2.1rem);
-    height: var(--from-h, 2.1rem);
-    border: 0.0625rem solid var(--rule);
-    border-radius: 1.05rem;
-    background: var(--surface);
+    box-sizing: border-box;
     overflow: hidden;
-    opacity: 0;
-    visibility: hidden;
-    pointer-events: none;
+    border-radius: 10px;
+    background: var(--panel-raised);
+    box-shadow:
+        0 0.75rem 2rem oklch(0.05 0.02 300 / 0.55),
+        0 0.15rem 0.4rem oklch(0.05 0.02 300 / 0.35);
+    color: var(--ink);
     font-family: var(--font-text);
     font-size: 0.95rem;
-    transition:
-        width 0.3s var(--ease),
-        height 0.3s var(--ease),
-        border-radius 0.3s ease,
-        opacity 0.18s ease 0.14s,
-        visibility 0s linear 0.32s;
+    line-height: 1.2;
+    visibility: hidden;
+    pointer-events: none;
+}
+
+.quire-menu:is(.open, .closing) {
+    visibility: visible;
 }
 
 .quire-menu.open {
-    width: var(--wide);
-    height: var(--high);
-    border-radius: 1rem;
-    border-color: color-mix(in oklch, var(--accent) 55%, var(--rule));
-    opacity: 1;
-    visibility: visible;
     pointer-events: auto;
-    transition:
-        width 0.55s cubic-bezier(0.3, 1.5, 0.4, 1),
-        height 0.55s cubic-bezier(0.3, 1.5, 0.4, 1) 0.04s,
-        border-radius 0.45s ease,
-        border-color 0.2s ease,
-        opacity 0.12s ease,
-        visibility 0s;
 }
 
 .quire-menu-items {
     position: absolute;
     top: 0;
     left: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.05rem;
+    box-sizing: border-box;
     width: max-content;
     min-width: 11rem;
-    max-width: min(22rem, 100vw - 1rem);
-    padding: 0.4rem;
+    max-width: min(24rem, 100vw - 1rem);
+    padding: 0.35rem;
     overflow-y: auto;
     overscroll-behavior: contain;
 }
 
-.quire-menu.from-right .quire-menu-items {
-    right: 0;
-    left: auto;
+/* a menu too tall for its room scrolls; its lines keep their height */
+.quire-menu-items > * {
+    flex-shrink: 0;
 }
 
-/* each line of the menu arrives a moment after the one above it, as each thing on the home screen does */
-.quire-menu-items > *,
+.quire-menu-line {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 2.1rem;
+    padding: 0.3rem 0.8rem 0.3rem 0.45rem;
+    border-radius: calc(10px - 0.35rem);
+    color: var(--ink);
+    text-align: left;
+    white-space: nowrap;
+    transition: background 0.15s ease;
+}
+
+.quire-menu-line:hover,
+.quire-menu-line:focus-visible {
+    background: color-mix(in oklch, var(--ink) 8%, transparent);
+}
+
+/* each thing on the home screen arrives a moment after the one before */
 .quire-shelf-inner > :not(ul),
 .quire-card {
     opacity: 0;
@@ -627,7 +924,6 @@
         translate 0.12s ease;
 }
 
-.quire-menu.open .quire-menu-items > *,
 .quire-shelf.shown .quire-shelf-inner > :not(ul),
 .quire-shelf.shown .quire-card {
     opacity: 1;
@@ -637,26 +933,27 @@
         translate 0.4s var(--ease) calc(0.1s + var(--line-at, 0) * 0.04s);
 }
 
-.quire-menu-line {
-    display: flex;
-    align-items: center;
-    gap: 0.7rem;
-    width: 100%;
-    min-height: 2.2rem;
-    padding: 0.3rem 0.8rem 0.3rem 0.55rem;
-    border: 0;
-    border-radius: 0.7rem;
-    background: transparent;
-    color: var(--ink);
-    font: inherit;
-    text-align: left;
-    cursor: pointer;
-    transition: background 0.15s ease;
+/* About mdQuire: a few words, who made it, and the way to her site and the project */
+.quire-about {
+    width: min(19rem, 100vw - 3rem);
+    padding: 0.5rem 0.6rem 0.4rem;
+    white-space: normal;
 }
 
-.quire-menu-line:hover,
-.quire-menu-line:focus-visible {
-    background: color-mix(in oklch, var(--ink) 9%, transparent);
+.quire-about p {
+    margin: 0 0 0.6rem;
+    line-height: 1.4;
+}
+
+.quire-about-name {
+    font-family: var(--font-head);
+    font-weight: var(--head-weight);
+    font-size: 1.3rem;
+}
+
+.quire-about-links {
+    display: flex;
+    gap: 1rem;
 }
 
 /* the line the slash menu's arrow keys are on */
@@ -679,7 +976,6 @@
 .quire-menu-line > .quire-icon,
 .quire-menu-line > .quire-style-sample,
 .quire-menu-line > .quire-swatch,
-.quire-menu-line > .quire-size-sample,
 .quire-menu-line > .quire-font-sample {
     flex: none;
     width: 1.4rem;
@@ -719,10 +1015,6 @@
     border: 0.0625rem solid var(--rule);
     border-radius: 0.5rem;
     background: var(--ink);
-}
-
-.quire-size-sample {
-    font-family: var(--font-head);
 }
 
 /* the field for a link's address, in a menu or the selection bar */
@@ -842,10 +1134,11 @@
     white-space: nowrap;
 }
 
-/* the replace line grows open under the find line */
+/* the replace line grows open under the find line; stretched, so that while shut it is no taller than its row */
 .quire-find-replace {
     display: grid;
     grid-template-rows: 0fr;
+    align-items: stretch;
     transition: grid-template-rows 0.4s var(--ease);
 }
 
@@ -1043,8 +1336,6 @@
 .quire-outline-title {
     color: var(--muted);
     font-size: 0.8rem;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
 }
 
 .quire-outline-close .quire-icon {
@@ -1063,54 +1354,39 @@
     overflow-x: hidden;
 }
 
-.quire-outline-item.level-2 {
-    padding-left: 0.8rem;
-}
-
-.quire-outline-item.level-3,
-.quire-outline-item.level-4,
-.quire-outline-item.level-5,
-.quire-outline-item.level-6 {
-    padding-left: 1.6rem;
+.quire-outline-item:not(.level-1) .quire-outline-link {
+    padding-left: 1.5rem;
 }
 
 .quire-outline-link {
     display: block;
     width: 100%;
-    padding: 0.32rem 0.6rem;
-    border: 0;
-    border-left: 0.125rem solid transparent;
-    border-radius: 0 0.5rem 0.5rem 0;
-    background: transparent;
+    padding: 0.3rem 0 0.3rem 0.75rem;
+    border-left: 0.125rem solid var(--rule);
     color: var(--muted);
-    font: inherit;
-    font-size: 0.9rem;
+    font-size: 0.85rem;
     line-height: 1.35;
     text-align: left;
     /* one line, never scrolling sideways: a long heading is cut short with an ellipsis */
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
-    cursor: pointer;
     transition:
         color 0.25s ease,
-        border-color 0.3s var(--ease),
-        background 0.25s ease;
+        border-color 0.3s var(--ease);
 }
 
-.quire-outline-link:hover {
+.quire-outline-link:hover,
+.quire-outline-link.current {
     color: var(--ink);
-    background: color-mix(in oklch, var(--ink) 6%, transparent);
 }
 
 .quire-outline-link.current {
     border-left-color: var(--accent);
-    color: var(--ink);
 }
 
-.quire-outline-link:focus-visible {
-    outline: 0.125rem solid var(--accent);
-    outline-offset: -0.125rem;
+.quire-outline-item + .quire-outline-item {
+    margin-top: 0.15rem;
 }
 
 .quire-outline-empty {
@@ -1130,24 +1406,26 @@
     opacity: 1;
 }
 
+/* On a wide window the outline is quiet in the left margin, from where the site's column starts, and
+   stays in sight as the text scrolls; opening and closing it fades it, and the page does not move.
+   C's page is wider, so its outline needs a wider window. */
 @media (min-width: 64rem) {
-    .quire-editor.outlined {
-        grid-template-columns: [outline] 15rem [page] minmax(0, 1fr);
-    }
-
     .quire-outline,
     .quire-outline.open {
+        grid-column: 1;
+        grid-row: 2;
         position: sticky;
-        top: var(--stuck);
+        top: calc(var(--stuck) + var(--above));
         bottom: auto;
         left: auto;
         z-index: 1;
         align-self: start;
-        width: auto;
-        max-height: calc(100vh - var(--stuck));
-        padding: calc(var(--line) * 1.5) 0.75rem 1rem var(--edge);
+        justify-self: start;
+        width: max(0px, min(13rem, (100cqw - var(--mid)) / 2 - var(--from) - 1.5rem));
+        max-height: calc(100vh - var(--stuck) - var(--above) - var(--line));
+        margin: var(--above) 0 0 var(--from);
+        padding: 0;
         border: 0;
-        border-right: 0.0625rem solid var(--rule);
         border-radius: 0;
         background: transparent;
         translate: none;
@@ -1158,16 +1436,33 @@
         visibility: hidden;
         transition:
             opacity 0.2s ease,
-            visibility 0s linear 0.3s;
+            visibility 0s linear 0.2s;
     }
 
     .quire-outline.open {
-        min-height: calc(100vh - var(--stuck));
         opacity: 1;
         visibility: visible;
         transition:
-            opacity 0.3s ease 0.12s,
+            opacity 0.3s ease 0.1s,
             visibility 0s;
+    }
+
+    /* in C the outline starts level with the page's text */
+    .look-paper .quire-outline {
+        top: calc(var(--stuck) + var(--above) + var(--margin) * 0.7 + 1rem);
+        margin-top: calc(var(--above) + var(--margin) * 0.7 + 1rem);
+    }
+
+    /* the outline's own heading is a quiet label, and the panel's close button is not needed beside the page */
+    .quire-outline-close {
+        display: none;
+    }
+}
+
+@media (min-width: 64rem) and (max-width: 80rem) {
+    .look-paper .quire-outline.open {
+        opacity: 0;
+        visibility: hidden;
     }
 }
 
@@ -1360,10 +1655,8 @@
    the one fading and moving aside as the other comes in. */
 
 .quire-panes {
-    width: min(60rem, 100%);
-    margin-inline: auto;
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 0fr);
+    grid-template-columns: max-content minmax(0, 0fr);
     column-gap: 0;
     align-items: start;
     transition:
@@ -1372,18 +1665,17 @@
 }
 
 .quire-editor.markdown .quire-panes {
-    width: 100%;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-columns: max-content minmax(0, 1fr);
     column-gap: 1.25rem;
+}
+
+/* a page zoomed wider than its room is scrolled along inside the editor (paper.ts says when) */
+.quire-column.wide {
+    overflow-x: auto;
 }
 
 /* side by side, the page and its Markdown are a matched pair: one row, the same top and bottom */
 @media (min-width: 60.01rem) {
-    /* a sheet zoomed wider than its room is scrolled along; on a narrower window the Markdown slides in from the side, and is not to be scrolled to */
-    .quire-column {
-        overflow-x: auto;
-    }
-
     .quire-editor.markdown .quire-panes {
         align-items: stretch;
     }
@@ -1402,12 +1694,12 @@
     width: 100%;
     min-width: 0;
     min-height: 60vh;
-    max-height: calc(100vh - var(--bar-height) - var(--line) * 2.5);
+    max-height: calc(100vh - var(--stuck) - var(--line) * 1.5);
     padding: calc(var(--line) * 0.9) 1.1rem;
-    /* the same sheet as the page beside it, so the two are a pair */
-    border: 0.0625rem solid var(--sheet-edge);
-    border-radius: calc(var(--radius) * 1.2);
-    background: var(--sheet-ground);
+    /* a quiet panel, a step up from the ground, so that it reads as the page's source and not a second page */
+    border: 0.0625rem solid var(--panel-rule);
+    border-radius: 0.1875rem;
+    background: var(--panel);
     color: var(--ink);
     font-family: var(--font-code);
     font-size: 0.82rem;
@@ -1439,6 +1731,10 @@
 }
 
 @media (max-width: 60rem) {
+    .quire-editor.markdown {
+        --mid: calc(var(--page-now) * var(--zoom, 1));
+    }
+
     .quire-panes,
     .quire-editor.markdown .quire-panes {
         grid-template-columns: minmax(0, 1fr);
@@ -1453,7 +1749,15 @@
         transition:
             opacity 0.25s ease,
             translate 0.4s var(--ease),
-            visibility 0s;
+            visibility 0s,
+            background-color 0.45s var(--ease),
+            box-shadow 0.45s var(--ease),
+            --ink 0.45s var(--ease),
+            --muted 0.45s var(--ease),
+            --accent 0.45s var(--ease),
+            --rule 0.45s var(--ease),
+            --surface 0.45s var(--ease),
+            --ground 0.45s var(--ease);
     }
 
     .quire-editor.markdown .quire-paper {
@@ -1495,31 +1799,26 @@
     font-size: 1.1rem;
 }
 
-/* on a phone the bar keeps room for its marks: a shorter name, and the word count goes into the three-dot menu */
-@media (max-width: 40rem) {
-    .quire-name {
-        max-width: calc(7ch + 2.4rem);
-    }
-
-    .quire-style {
-        min-width: 5.6rem;
-    }
-
-    .quire-count {
-        max-width: 0;
-        opacity: 0;
-        overflow: hidden;
-    }
-
+/* how saving stands and the word count, at the right of the top's first line: "Saved · 7 words" */
+.quire-status-line {
+    display: flex;
+    align-items: baseline;
+    gap: 0.4rem;
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.85rem;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+    white-space: nowrap;
 }
 
-/* how saving stands: a fixed slot, its words fading one into the next */
+.quire-status-dot {
+    opacity: 0.6;
+}
+
+/* the old words fade out where the new fade in, the two in one place */
 .quire-status {
     display: inline-grid;
-    width: 5.6rem;
-    color: var(--muted);
-    font-size: 0.82rem;
-    text-align: right;
 }
 
 .quire-status.warn {
@@ -1528,9 +1827,6 @@
 
 .quire-status-words {
     grid-area: 1 / 1;
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
     opacity: 0;
     transition: opacity 0.3s ease;
 }
@@ -1539,10 +1835,9 @@
     opacity: 1;
 }
 
-@media (max-width: 40rem) {
-    .quire-status {
-        width: 4.4rem;
-    }
+/* with nothing said about saving, the dot goes with it */
+.quire-status:has(.here:empty) + .quire-status-dot {
+    display: none;
 }
 
 /* ---- changed elsewhere: a panel that flows in from the right, wider when both are shown ---- */
@@ -1692,66 +1987,193 @@ body.quire-app {
     padding: 0;
 }
 
-/* The top row is the site's own: the same column as every page (--page and --gutter, as the body
-   has them), the name and flags at its left edge as high as on any page, and the bar beside them
-   where the site's menu would be, running to the column's right edge. On scrolling the row's top
-   goes up out of sight and the bar stays, with the rule under the whole width. */
+/* The top: two lines in one piece, on the site's column (--page and --gutter, as every page has
+   them), whole and the same height as the page scrolls, with one rule under the full width. The
+   first line is the trail, "charlotte [flags] / mdQuire / the document's name", her name and flags
+   exactly where every page has them (the name's line 1.25 lines down at the column's left edge),
+   then the menu words, and how saving stands at the right; everything on it is centred on the
+   name's line. The second line is the tools. Both lines start and end on the same edges: a control's
+   inner space is given back at either end, so the letters and icons line up, not the boxes. */
 .quire-top {
-    --bar-height: 3.1rem;
-    /* the bar's top above the name's line, so that it sits centred on the name */
-    --rise: calc((var(--bar-height) - var(--line)) / 2);
     position: sticky;
-    top: calc(var(--line) * -1.25 + var(--rise) + 0.4rem);
+    top: 0;
     z-index: 40;
     border-bottom: 0.0625rem solid var(--rule);
     background: var(--ground);
 }
 
-.quire-top-row {
-    box-sizing: border-box;
-    display: flex;
-    align-items: flex-start;
-    gap: 0.5rem 2rem;
-    max-width: calc(var(--page) + var(--gutter) * 2);
-    margin-inline: auto;
-    padding: calc(var(--line) * 1.25) var(--gutter) 0.5rem;
+body.quire-app,
+.quire-editor {
+    /* a control's height, and the space inside it before its text */
+    --press: 2.1rem;
+    --inset: 0.5rem;
 }
 
-.quire-top .site-id {
+.quire-top-in {
+    box-sizing: border-box;
+    max-width: calc(var(--page) + var(--gutter) * 2);
+    margin-inline: auto;
+    padding: calc(var(--line) * 1.25) var(--gutter) 0.45rem;
+}
+
+/* an editor on a page without a top of its own (the tests') makes one, without the room for her name */
+.quire-top-own .quire-top-in {
+    padding-top: 0.45rem;
+}
+
+.quire-top-line {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    height: var(--line);
+}
+
+.quire-trail {
+    display: flex;
+    flex: 0 1 auto;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+    white-space: nowrap;
+}
+
+.quire-trail .site-id {
     flex: none;
 }
 
-.quire-bar-home {
-    flex: 1;
+/* the strokes, "mdQuire" and the document's name, the size of her name in the heading face; the strokes quieter, as the site's trail has them */
+.quire-stroke,
+.quire-word,
+.quire-name {
+    flex: none;
+    font-family: var(--font-head);
+    font-weight: var(--head-weight);
+    font-size: 1.3em;
+}
+
+.quire-stroke {
+    color: var(--muted);
+}
+
+.quire-word {
+    color: var(--ink);
+    text-decoration: none;
+}
+
+.quire-word:hover {
+    color: var(--accent);
+}
+
+.quire-name-home {
+    display: flex;
     min-width: 0;
-    margin-top: calc(var(--rise) * -1);
 }
 
-/* in the top row the bar is one of its parts: no edge, rule or ground of its own */
-.quire-bar-home .quire-bar {
-    --edge: 0rem;
-    position: static;
-    border-bottom: 0;
-    background: var(--ground);
+/* the document's name, the trail's last step: it opens the documents list, and a long one ends in an ellipsis */
+.quire-name {
+    flex: 0 1 auto;
+    min-width: 0;
+    height: var(--press);
+    margin-left: calc(var(--inset) * -1);
 }
 
-.quire-app .quire-editor {
-    --stuck: calc(var(--bar-height) + 0.9rem + 0.0625rem);
+.quire-name-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
-/* on a narrow window the bar takes its own line under the name, and only it stays on scrolling */
-@media (max-width: 40rem) {
-    .quire-top-row {
+.quire-menus-home {
+    flex: none;
+    margin-left: calc(var(--inset) * -0.5);
+}
+
+.quire-status-home {
+    display: flex;
+    flex: none;
+    justify-content: flex-end;
+    margin-left: auto;
+}
+
+.quire-bar-home {
+    margin: 0.35rem calc((var(--press) - 1.15rem) / -2) 0;
+}
+
+/* with nothing open, what acts on a document fades away; the top keeps its height */
+.quire-top :is(.quire-name-stroke, .quire-name-home, .quire-menus-home, .quire-status-home, .quire-bar-home) {
+    transition:
+        opacity 0.3s ease,
+        visibility 0s;
+}
+
+.quire-top.away :is(.quire-name-stroke, .quire-name-home, .quire-menus-home, .quire-status-home, .quire-bar-home) {
+    opacity: 0;
+    visibility: hidden;
+    transition:
+        opacity 0.25s ease,
+        visibility 0s 0.25s;
+}
+
+/* Where the trail, the menu words and the status no longer fit on one line, the menu words have a
+   line of their own under the trail, sliding sideways under a finger when they do not fit. On a
+   narrow window the trail is the flags and the document's name, and the tools slide sideways too. */
+@media (max-width: 60rem) {
+    .quire-top-line {
         flex-wrap: wrap;
+        row-gap: 0.3rem;
+        column-gap: 0.75rem;
+        height: auto;
+    }
+
+    .quire-trail {
+        flex: 1 1 0;
+        height: var(--line);
+    }
+
+    .quire-menus-home {
+        order: 3;
+        flex: 1 0 100%;
+        min-width: 0;
+        margin-left: calc(var(--inset) * -1);
+        overflow-x: auto;
+        scrollbar-width: none;
     }
 
     .quire-bar-home {
-        flex-basis: 100%;
-        margin-top: 0;
+        margin-top: 0.2rem;
+    }
+}
+
+@media (max-width: 40rem) {
+    .quire-top-in {
+        padding-top: 0.75rem;
     }
 
-    .quire-top {
-        top: calc((var(--line) * 2.25 + 0.5rem) * -1 + 0.4rem);
+    .quire-trail {
+        height: var(--press);
+    }
+
+    .quire-trail :is(.site-name, .quire-word, .quire-word-stroke) {
+        display: none;
+    }
+
+    .quire-bar-group.quire-bar-end {
+        box-shadow: -0.75rem 0 0.75rem var(--ground);
+    }
+}
+
+.quire-app .quire-editor {
+    --stuck: calc(var(--line) * 2.25 + var(--press) + 0.8rem + 0.0625rem);
+}
+
+@media (max-width: 60rem) {
+    .quire-app .quire-editor {
+        --stuck: calc(var(--line) * 2.25 + var(--press) + 1.85rem + 1.1rem + 0.0625rem);
+    }
+}
+
+@media (max-width: 40rem) {
+    .quire-app .quire-editor {
+        --stuck: calc(var(--press) * 2 + 1.85rem + 2.05rem + 0.0625rem);
     }
 }
 
@@ -1825,9 +2247,9 @@ body.quire-app {
 .quire-mini {
     aspect-ratio: 1 / 1.41421;
     overflow: hidden;
-    border: 0.0625rem solid var(--sheet-edge);
-    border-radius: calc(var(--radius) * 0.8);
-    background: var(--sheet-ground);
+    border: 0.0625rem solid var(--panel-edge);
+    border-radius: 0.1875rem;
+    background: var(--panel-raised);
     opacity: 0;
     transition:
         opacity 0.3s ease,
@@ -1921,19 +2343,15 @@ body.quire-app {
     overflow: clip;
 }
 
-/* with nothing open the bar and the zoom have nothing to act on: they fade away, and on a narrow window the bar gives back its line */
-.quire-bar-home,
-.quire-editor > .quire-bar,
-.quire-zoom {
+/* with nothing open the tools have nothing to act on: they fade away */
+.quire-editor > .quire-top {
     transition:
         opacity 0.3s ease,
         translate 0.4s var(--ease),
         visibility 0s;
 }
 
-.quire-bar-home.away,
-.quire-editor.shelved > .quire-bar,
-.quire-editor.shelved .quire-zoom {
+.quire-editor.shelved > .quire-top {
     opacity: 0;
     translate: 0 -0.5rem;
     visibility: hidden;
@@ -2120,11 +2538,23 @@ body.quire-app {
     .quire-source,
     .quire-shelf,
     .quire-alt,
+    .quire-details,
     .quire-file,
     .quire-raw,
-    .quire-zoom,
+    .quire-pages,
     .quire-caret {
         display: none !important;
+    }
+
+    /* a page break ends the printed page, and is not itself seen */
+    .quire-break {
+        break-after: page;
+        margin: 0;
+        border: 0;
+    }
+
+    .quire-break::after {
+        content: none;
     }
 
     .quire > [data-hint]::before {
@@ -2237,61 +2667,34 @@ body.quire-app {
 .quire-swatch-mark { border-radius: 0.2rem; }
 .quire-font-sample { font-size: 1.05rem; line-height: 1; }
 
-/* The menu row: File, Edit, View, Insert, Format, Tools, in small words above the bar. In the
-   site's top row the words and the bar are one piece, centred together on the site's name, with
-   room above the words. On scrolling the words go up out of sight with the name and only the bar
-   stays, as tall as it was before there were words; the words are then in the three dots, as they
-   are on a narrow window, where the row folds away, shrinking as it goes. */
+/* The menu words: File, Edit, View, Insert, Format and Tools, on the top's first line after the
+   trail, as the lab has them. The word whose menu is open stays in the row, lit, its menu under it. */
 .quire-menu-row {
     display: flex;
     align-items: center;
-    gap: 0.05rem;
-    max-height: var(--row, 1.4rem);
-    overflow: hidden;
+    gap: 0.1rem;
     font-family: var(--font-text);
-    font-size: 0.85rem;
-    opacity: 1;
-    transition:
-        max-height 0.4s var(--ease),
-        opacity 0.25s ease;
-}
-
-.quire-top:has(.has-menu-row) {
-    --row: 1.4rem;
-    --row-gap: 0.3rem;
-    top: calc((var(--line) * 1.75 + (var(--row) + var(--row-gap) - var(--bar-height)) / 2 - 0.4rem) * -1);
-}
-
-.quire-bar-home.has-menu-row {
-    position: relative;
-    margin-top: calc(var(--rise) * -1 + (var(--row) + var(--row-gap)) / 2);
-}
-
-.quire-bar-home > .quire-menu-row {
-    position: absolute;
-    bottom: calc(100% + var(--row-gap));
-    left: 0;
+    font-size: 0.95rem;
 }
 
 .quire-row-word {
-    height: 1.4rem;
-    padding: 0 0.55rem;
-    border: 0;
-    border-radius: 0.75rem;
-    background: transparent;
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    height: 1.85rem;
+    padding: 0 var(--inset);
+    border-radius: 0.45rem;
     color: var(--muted);
-    font: inherit;
-    cursor: pointer;
+    line-height: 1;
     transition:
-        background 0.2s var(--ease),
-        color 0.2s var(--ease);
+        background 0.15s ease,
+        color 0.15s ease;
 }
 
 .quire-row-word:hover,
 .quire-row-word:focus-visible {
-    background: color-mix(in oklch, var(--ink) 9%, transparent);
+    background: color-mix(in oklch, var(--ink) 8%, transparent);
     color: var(--ink);
-    outline: none;
 }
 
 .quire-row-word.open {
@@ -2299,44 +2702,9 @@ body.quire-app {
     color: var(--accent);
 }
 
-/* in the row's menus every label starts at the same place, with an icon before it or not */
-.quire-row-menu .quire-menu-line > .quire-menu-label:first-child {
+/* in a menu where some lines have an icon, every label starts at the same place, with an icon before it or not */
+.quire-menu-items:has(> .quire-menu-line > :first-child:not(.quire-menu-label)) > .quire-menu-line > .quire-menu-label:first-child {
     margin-left: 2rem;
-}
-
-/* moving along the row, the open menu slides over to the next word rather than closing and opening */
-.quire-menu.quire-row-menu.open.sliding {
-    transition:
-        left 0.35s var(--ease),
-        right 0.35s var(--ease),
-        width 0.4s var(--ease),
-        height 0.4s var(--ease),
-        border-color 0.2s ease,
-        opacity 0.12s ease,
-        visibility 0s;
-}
-
-@media (max-width: 40rem) {
-    .quire-menu-row {
-        max-height: 0;
-        opacity: 0;
-    }
-
-    .quire-bar-home.has-menu-row {
-        margin-top: 0;
-    }
-
-    .quire-bar-home {
-        max-height: 4rem;
-    }
-
-    .quire-bar-home.away {
-        max-height: 0;
-    }
-
-    .quire-top:has(.has-menu-row) {
-        top: calc((var(--line) * 2.25 + 0.5rem) * -1 + 0.4rem);
-    }
 }
 
 /* With less motion asked for, nothing of the editor moves: what opens is simply there, and what
@@ -2358,39 +2726,10 @@ body.quire-app {
     .quire-history *,
     .quire-conflict,
     .quire-conflict *,
-    .quire-bar-home,
-    .quire-menu-row,
-    .quire-menu-row * {
+    .quire-top,
+    .quire-top * {
         transition-duration: 0s !important;
         transition-delay: 0s !important;
-    }
-}
-
-/* The zoom, a small control at the window's lower right that says how near the sheet is seen; on a
-   narrow window the sheet is the window's width with the text at its own size, and there is no zoom. */
-.quire-zoom {
-    position: fixed;
-    right: var(--edge);
-    bottom: var(--edge);
-    z-index: 3;
-    padding-inline: 0.6rem;
-    border: 0.0625rem solid var(--rule);
-    background: var(--ground);
-    font-size: 0.8rem;
-    font-variant-numeric: tabular-nums;
-}
-
-@media (max-width: 40rem) {
-    .quire-paper {
-        width: 100%;
-        aspect-ratio: 1 / 1.41421;
-        padding: var(--line) 1.25rem calc(var(--line) * 3);
-        zoom: 1;
-    }
-
-    .quire-zoom {
-        opacity: 0;
-        visibility: hidden;
     }
 }
 

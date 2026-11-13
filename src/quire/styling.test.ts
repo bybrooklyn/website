@@ -115,3 +115,9 @@ test("a color written as HTML by hand in document.md is read, and moved to style
     const changed = setStyle(doc, range([0], 0, 4), { size: "2em" });
     expect(collect(changed).markdown).toBe("Some red words.\n");
 });
+
+test("style.json keeps a header, a footer and page numbers as a line of plain text each, and drops what is not", () => {
+    const page = readStyle(JSON.stringify({ page: { size: "A5", header: "  My   book ", footer: 7, numbers: true } })).page;
+    expect(page).toEqual({ size: "A5", orientation: "portrait", margins: 25, header: "My book", numbers: true });
+    expect(readStyle(JSON.stringify({ page: { header: "", numbers: "yes" } })).page).toEqual({ size: "A4", orientation: "portrait", margins: 25 });
+});

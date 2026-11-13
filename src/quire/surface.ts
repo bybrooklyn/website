@@ -33,7 +33,7 @@
 // `quire-task` on a task item and `quire-box` on its box (`data-checked`),
 // `quire-atom` on an inline HTML span or footnote reference.
 
-import { blockAt, blockPaths, documentOf, image as imageBlock, markdownOnly, paragraph, setImageAlt, toggleTask, type Block, type Document, type Leaf, type Mark, type Position, type Run, type Selection } from "./document";
+import { blockAt, blockPaths, documentOf, image as imageBlock, isPageBreak, markdownOnly, paragraph, setImageAlt, toggleTask, type Block, type Document, type Leaf, type Mark, type Position, type Run, type Selection } from "./document";
 import { createHistory, redo as redoStep, undo as undoStep, type ChangeKind, type State } from "./history";
 import { readHtml, writeHtml } from "./html";
 import { activeBlock, activeMarks, apply, caret, collapsed, fragment, paste, step, type Editor, type Input, type Outcome } from "./keys";
@@ -222,6 +222,14 @@ function draw(block: Block, inner: number[]): HTMLElement {
         }
         case "code":
         case "raw": {
+            if (isPageBreak(block)) {
+                // the end of a page: a marked line on screen, where the pages (pages.ts) start the next sheet
+                const element = document.createElement("div");
+                element.className = "quire-break";
+                element.contentEditable = "false";
+                element.dataset.label = "Page break";
+                return element;
+            }
             const pre = document.createElement("pre");
             pre.className = block.kind === "code" ? "quire-code" : "quire-raw";
             pre.dataset.label = block.kind === "code" ? block.language : "raw";
@@ -350,7 +358,7 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
     }
 
     function firstText(doc: Document): number[] {
-        return blockPaths(doc).find((path) => ["paragraph", "heading", "code", "raw"].includes(blockAt(doc, path)?.kind ?? "")) ?? [0];
+        return blockPaths(doc).find((path) => ["paragraph", "heading", "code", "raw"].includes(blockAt(doc, path)?.kind ?? "") && !isPageBreak(blockAt(doc, path))) ?? [0];
     }
 
     function emit<K extends keyof SurfaceEvents>(name: K, detail: SurfaceEvents[K]) {

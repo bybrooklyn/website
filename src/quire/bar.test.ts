@@ -3,7 +3,7 @@
 // Run with `bun test src/quire`.
 
 import { expect, test } from "bun:test";
-import { addCode, addDivider, addFootnote, addImage, addTable, align, aligned, center, spacedAt, spacing, color, currentStyle, FLAGS, font, FONTS, highlight, link, linkAt, pressedAt, setStyleOf, size, toggle, toggleList, wordAt, type Action } from "./bar";
+import { addCode, addDivider, applyFormat, BASE_SIZE, clearFormat, FOLDS, formatAt, indentBy, nextSize, SIZE_STEPS, sizeNumber, sizeValue, typedSize, addFootnote, addImage, addTable, align, aligned, center, spacedAt, spacing, color, currentStyle, FLAGS, font, FONTS, highlight, link, linkAt, pressedAt, setStyleOf, size, toggle, toggleList, wordAt, type Action } from "./bar";
 import { collect } from "./styling";
 import { markdownOnly, type Paragraph, type TextRun } from "./document";
 import type { Selection } from "./document";
@@ -148,4 +148,59 @@ test("the text color menu offers both flags' colors, written as a color Markdown
     const state = at("a word here\n", span([0], 2, 6));
     expect(md(run(color(FLAGS[0]!.value), state))).toBe('a <span style="color:#5bcefa">word</span> here\n');
     expect(FLAGS.map((each) => each.name)).toContain("Dark rose");
+});
+
+test("the size is shown as a number: the text's own is 12, and the sizes a Markdown file keeps are 10, 15, 18 and 24", () => {
+    expect(sizeNumber(undefined)).toBe(BASE_SIZE);
+    expect(["0.85em", "1.25em", "1.5em", "2em"].map(sizeNumber)).toEqual([10, 15, 18, 24]);
+    // each number is kept as the size it stands for, the text's own as no size at all
+    for (const number of SIZE_STEPS) expect(sizeNumber(sizeValue(number) ?? undefined)).toBe(number);
+    expect(sizeValue(12)).toBeNull();
+    expect(sizeValue(14)).toBe("1.1667em");
+});
+
+test("minus and plus step a Markdown file through its sizes and a .quire document by one; a typed number goes to the nearest Markdown size", () => {
+    expect(nextSize(12, 1, false)).toBe(15);
+    expect(nextSize(12, -1, false)).toBe(10);
+    expect(nextSize(10, -1, false)).toBe(10);
+    expect(nextSize(24, 1, false)).toBe(24);
+    expect(nextSize(12, 1, true)).toBe(13);
+    expect(nextSize(6, -1, true)).toBe(6);
+    expect(typedSize(14, false)).toBe(15);
+    expect(typedSize(14, true)).toBe(14);
+    expect(typedSize(400, true)).toBe(96);
+});
+
+test("plus on a word writes the next size a Markdown file keeps", () => {
+    const state = at("a word here\n", span([0], 2, 6));
+    expect(md(run(size(sizeValue(nextSize(12, 1, false))), state))).toBe('a <span style="font-size:1.25em">word</span> here\n');
+});
+
+test("paint format copies the marks and look of the selection and gives exactly those to the next, links kept", () => {
+    const source = "**bold** and [a link](/x) here\n";
+    const copied = formatAt(read(source), { path: [0], offset: 0 }, true);
+    expect(copied.marks).toEqual(["bold"]);
+    const painted = run(applyFormat(copied), at(source, span([0], 9, 15)));
+    expect(md(painted)).toBe("**bold** and [**a link**](/x) here\n");
+    // painting plain text over bold text takes the bold off
+    expect(md(run(applyFormat({ marks: [] }), at("**all bold**\n", span([0], 0, 3))))).toBe("all **bold**\n");
+});
+
+test("clear formatting takes off marks and color and leaves the words and the link", () => {
+    const state = at('*a* <span style="color:#5bcefa">word</span> [link](/y)\n', span([0], 0, 11));
+    expect(md(run(clearFormat, state))).toBe("a word [link](/y)\n");
+});
+
+test("indent more puts a list item under the one before, indent less takes it back out, and outside a list nothing changes", () => {
+    const state = at("- one\n- two\n", caret([0, 1, 0], 1));
+    const deeper = run(indentBy(1), state);
+    expect(md(deeper)).toBe("- one\n  - two\n");
+    expect(md(run(indentBy(-1), deeper))).toBe("- one\n- two\n");
+    const plain = at("Just a line\n", caret([0], 2));
+    expect(run(indentBy(1), plain)).toBe(plain);
+});
+
+test("the tools fold in the order she gave: paint format, print, clear formatting, the indents, line spacing, before the rest", () => {
+    const order = Object.entries(FOLDS).sort((a, b) => a[1] - b[1]).map(([name]) => name);
+    expect(order.slice(0, 5)).toEqual(["paint", "print", "clear", "indent", "spacing"]);
 });

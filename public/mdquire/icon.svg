@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- mdQuire's tab mark: an italic Q in the site's accent on a dark rounded square -->
+  <rect width="64" height="64" rx="14" fill="#10091a"/>
+  <text x="31" y="47" text-anchor="middle" fill="#c49aff" font-family="Georgia, 'Times New Roman', 'DejaVu Serif', serif" font-style="italic" font-weight="600" font-size="46">Q</text>
+</svg>

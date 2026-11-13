@@ -3,7 +3,7 @@
 // twice; and fitting a sheet to the room it has. The sheet itself is used in editor.test.ts.
 
 import { expect, test } from "bun:test";
-import { fitZoom, pageRule, paperSize, percent, setPage, setupItems, stepZoom, ZOOMS } from "./paper";
+import { fitZoom, pageRule, wantedZoom, paperSize, percent, setPage, setupItems, stepZoom, ZOOMS } from "./paper";
 import { read } from "./read";
 import { PAGE } from "./styling";
 
@@ -52,4 +52,21 @@ test("page setup offers the three papers, both ways up and three margins, pressi
     items.find((item) => item.label === "A5")!.run();
     items.find((item) => item.label === "Narrow")!.run();
     expect(changes).toEqual([{ size: "A5" }, { margins: 12.7 }]);
+});
+
+test("print is given the header, footer and page number in the page's margin boxes, quoted safely", () => {
+    const rule = pageRule({ size: "A4", orientation: "portrait", margins: 25, header: 'Say "hi" \\ there', footer: "Foot", numbers: true });
+    expect(rule).toContain('@top-center { content: "Say \\"hi\\" \\\\ there";');
+    expect(rule).toContain('@bottom-center { content: "Foot";');
+    expect(rule).toContain("@bottom-right { content: counter(page);");
+    expect(rule.startsWith("@page { size: A4 portrait; margin: 25mm; ")).toBe(true);
+});
+
+test("in writing view the usual zoom is the text at its own size and there is no fitting; in page view the usual is the paper, less to fit", () => {
+    expect(wantedZoom("auto", 0.7, false)).toBe(1);
+    expect(wantedZoom("fit", 1.6, false)).toBe(1);
+    expect(wantedZoom(1.5, 0.7, false)).toBe(1.5);
+    expect(wantedZoom("auto", 0.7, true)).toBe(0.7);
+    expect(wantedZoom("auto", 1.6, true)).toBe(1);
+    expect(wantedZoom("fit", 1.6, true)).toBe(1.6);
 });

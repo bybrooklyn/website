@@ -8,7 +8,7 @@
 import { addDivider, addTable, setStyleOf, toggleList, type Action } from "./bar";
 import { blockAt, deleteText, runsText, type Document } from "./document";
 import type { State } from "./history";
-import { caret } from "./keys";
+import { caret, pageBreakAt } from "./keys";
 import type { Surface } from "./surface";
 import { flowMenu, make, type MenuItem } from "./ui";
 
@@ -33,6 +33,7 @@ export const SLASH_ITEMS: SlashItem[] = [
     { key: "code", label: "Code block", icon: "code", words: ["pre", "snippet"], action: setStyleOf("code") },
     { key: "table", label: "Table", icon: "table", words: ["grid", "columns", "rows"], action: addTable },
     { key: "image", label: "Picture", icon: "image", words: ["image", "photo", "img"] },
+    { key: "pagebreak", label: "Page break", icon: "pagebreak", words: ["new page", "break"], action: pageBreakAt },
     { key: "divider", label: "Divider", icon: "divider", words: ["rule", "line", "hr", "separator"], action: addDivider },
 ];
 

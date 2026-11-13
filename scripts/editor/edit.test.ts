@@ -89,7 +89,7 @@ async function press(selector: string, words = "") {
 
 /** Opens a file from the list that grows out of the name. */
 async function open(words: string) {
-    await press(".quire-bar .quire-name");
+    await press(".quire-name");
     await tab.wait(700);
     await press(".quire-documents-list .quire-menu-line", words);
     for (let tries = 0; tries < 60 && !(await tab.run(`document.querySelector('.quire-name-text').textContent.includes(${JSON.stringify(words)})`)); tries++) await tab.wait(50);
@@ -160,7 +160,7 @@ used("the raw frontmatter is behind a switch, and the real page beside the text 
 });
 
 used("the notes on photographs open in the text's place, a picture at a time", async () => {
-    await press(".quire-bar .quire-name");
+    await press(".quire-name");
     await tab.wait(700);
     await press(".quire-documents-list .quire-menu-line", "photo notes");
     await tab.wait(600);

@@ -1,12 +1,13 @@
-// The paper the sheet is drawn as, and how near it is seen. Page setup chooses the paper (A4,
-// Letter or A5, portrait or landscape) and its margins, which a `.quire` document keeps in its
-// style.json; the sheet on screen is that paper at its real size, and print is given the same
-// size and margins through an @page rule. Zoom then shows the sheet nearer or further, from half
-// to twice its size, or as wide as there is room for; it eases from one to the next about the
-// middle of what is in view, and holds still under reduced motion. On a narrow window the sheet is
-// the window's width with the text at its own size, as it was before there was paper.
+// The paper, and how near the sheet is seen. Page setup chooses the paper (A4, Letter or A5,
+// portrait or landscape) and its margins, which a `.quire` document keeps in its style.json; print
+// is always given that size and those margins through an @page rule. On screen the page is shown in
+// one of two looks (no page, or light paper, editor.ts), where the zoom makes the writing larger
+// and the page with it, as a pageless editor's does; or in page view (pages.ts), where the page is
+// the paper at its real size and the zoom shows it nearer or further, from half to twice its size,
+// or as wide as there is room for. Either way it eases from one zoom to the next about the middle of
+// what is in view, and holds still under reduced motion. On a narrow window there is no zoom.
 //
-//   const zoom = createZoom(paper, room, space, () => page);   // the sheet, what scrolls round it, the width it may fill
+//   const zoom = createZoom(paper, room, space, () => page, paged);   // the sheet, what scrolls round it, the width it may fill, and the view
 //   zoom.set(1.5); zoom.step(1); zoom.fit(); zoom.reset(); zoom.items()
 //
 // The sums (paper sizes, the @page rule, the zoom steps and fitting) are pure and tested.
@@ -34,9 +35,20 @@ export function paperSize(page: Page): { width: number; height: number } {
     return page.orientation === "landscape" ? { width: long, height: short } : { width: short, height: long };
 }
 
-/** The @page rule that gives print the page's paper and margins. */
+/** Text as a CSS string, safe inside `content:`. */
+const quoted = (text: string) => `"${text.replace(/[\\"]/g, (found) => `\\${found}`).replace(/\s+/g, " ")}"`;
+
+/**
+ * The @page rule that gives print the page's paper and margins, and its header, footer and page
+ * number in the page's margin boxes (which Chromium prints and Firefox, for now, leaves out).
+ */
 export function pageRule(page: Page): string {
-    return `@page { size: ${page.size} ${page.orientation}; margin: ${page.margins}mm; }`;
+    const boxes = [
+        page.header ? `@top-center { content: ${quoted(page.header)}; font-size: 9pt; color: dimgray; }` : "",
+        page.footer ? `@bottom-center { content: ${quoted(page.footer)}; font-size: 9pt; color: dimgray; }` : "",
+        page.numbers ? "@bottom-right { content: counter(page); font-size: 9pt; color: dimgray; }" : "",
+    ].filter(Boolean);
+    return `@page { size: ${page.size} ${page.orientation}; margin: ${page.margins}mm; ${boxes.length ? `${boxes.join(" ")} ` : ""}}`;
 }
 
 /** The document with another page setup; a Markdown file has none to keep, and is given back as it was. */
@@ -66,45 +78,70 @@ export const percent = (zoom: number): string => `${Math.round(zoom * 100)}%`;
 /** How large the sheet is shown when nothing else is asked for: a good deal bigger than the paper's own size, so that the page fills more of the window and the writing is easy to read. Less where the room is narrower. */
 export const USUAL = 1;
 
+/**
+ * The zoom wanted. In page view "fit" fills the room and the usual is the paper's own size unless the
+ * room is smaller; in either look the page is sized to the window already, so the usual is the text
+ * at its own size and there is no fitting.
+ */
+export function wantedZoom(mode: number | "fit" | "auto", fit: number, paged: boolean): number {
+    if (typeof mode === "number") return mode;
+    if (!paged) return USUAL;
+    return mode === "fit" ? fit : Math.min(USUAL, fit);
+}
+
 /** How many CSS pixels a millimetre is. */
 const MM = 96 / 25.4;
 
-/** Shows the sheet as its paper, near or far. `room` scrolls sideways when the sheet is wider than it; `space` is the width the sheet may fill. */
-export function createZoom(paper: HTMLElement, room: HTMLElement, space: () => number, page: () => Page, onChange?: (zoom: number) => void) {
-    // "fit" fills the room; "auto", the usual, is the paper's own size unless the room is smaller
+/**
+ * Shows the page near or far. `room` scrolls sideways when the page is wider than it; `space` is the
+ * width the page may fill in page view; `paged` says whether it is shown as pages of its paper. The
+ * zoom is set on the editor round the page, which makes its column as wide as the page zoomed.
+ */
+export function createZoom(paper: HTMLElement, room: HTMLElement, space: () => number, page: () => Page, paged: () => boolean, onChange?: (zoom: number) => void) {
     let mode: number | "fit" | "auto" = "auto";
     let shown = 1;
     const narrow = () => typeof matchMedia !== "undefined" && matchMedia("(max-width: 40rem)").matches;
     const wanted = () => {
         if (narrow()) return 1;
-        const fit = fitZoom(space(), paperSize(page()).width * MM);
-        return mode === "fit" ? fit : mode === "auto" ? Math.min(USUAL, fit) : mode;
+        return wantedZoom(mode, fitZoom(space(), paperSize(page()).width * MM), paged());
     };
+    /** Where the zoom and the paper's size are set: the editor round the page, whose column follows them, or the page itself. */
+    const scope = (): HTMLElement => paper.closest<HTMLElement>(".quire-editor") ?? paper;
 
     /** Shows the zoom asked for; when it changes, the sheet eases from its old size about the middle of the window. */
     function apply(animate: boolean) {
         const { width, height } = paperSize(page());
-        paper.style.setProperty("--paper-w", String(width));
-        paper.style.setProperty("--paper-h", String(height));
-        paper.style.setProperty("--margin", String(page().margins));
+        scope().style.setProperty("--paper-w", String(width));
+        scope().style.setProperty("--paper-h", String(height));
+        scope().style.setProperty("--margin-mm", String(page().margins));
         const next = wanted();
+        // only a sheet wider than its room scrolls; otherwise the Markdown sliding in from the side could be scrolled to
+        room.classList.toggle("wide", !narrow() && (paged() ? next * width * MM > space() + 1 : next > 1.25));
         if (next === shown) return onChange?.(next);
-        const before = paper.getBoundingClientRect();
-        // the point of the sheet in the middle of the window, in the sheet's own pixels
-        const middle = { x: (Math.min(innerWidth, before.right) + Math.max(0, before.left)) / 2, y: innerHeight / 2 };
-        const local = { x: (middle.x - before.left) / shown, y: (middle.y - before.top) / shown };
+        // the whole page grows, the caret on it too
+        const targets = [paper];
+        const middle = { x: innerWidth / 2, y: innerHeight / 2 };
+        // the point of each in the middle of the window, in its own pixels
+        const locals = targets.map((target) => {
+            const box = target.getBoundingClientRect();
+            return { x: (Math.min(box.right, Math.max(box.left, middle.x)) - box.left) / shown, y: (middle.y - box.top) / shown };
+        });
         const was = shown;
         shown = next;
-        paper.style.setProperty("--zoom", String(next));
-        // the window is scrolled so that the same point is in the middle again
-        const after = paper.getBoundingClientRect();
+        scope().style.setProperty("--zoom", String(next));
+        // the window is scrolled so that the same point of the last (the text) is in the middle again
+        const last = targets.length - 1;
+        const after = targets[last]!.getBoundingClientRect();
         // (at the very top of the page it stays at the top: the sheet grows downward from under the bar)
-        if (scrollY > 0) scrollBy({ top: after.top + local.y * next - middle.y, behavior: "instant" });
-        if (room.scrollWidth > room.clientWidth) room.scrollLeft += after.left + local.x * next - middle.x;
+        if (scrollY > 0) scrollBy({ top: after.top + locals[last]!.y * next - middle.y, behavior: "instant" });
+        if (room.scrollWidth > room.clientWidth) room.scrollLeft += after.left + locals[last]!.x * next - middle.x;
         onChange?.(next);
         if (!animate || still()) return;
-        // then drawn at its old size about that point, and let go to its new one
-        paper.animate([{ transform: `scale(${was / next})`, transformOrigin: `${local.x}px ${local.y}px` }, { transform: "none", transformOrigin: `${local.x}px ${local.y}px` }], { duration: 320, easing: "cubic-bezier(0.22, 1, 0.36, 1)" });
+        // then each is drawn at its old size about that point, and let go to its new one
+        targets.forEach((target, index) => {
+            const origin = `${locals[index]!.x}px ${locals[index]!.y}px`;
+            target.animate([{ transform: `scale(${was / next})`, transformOrigin: origin }, { transform: "none", transformOrigin: origin }], { duration: 320, easing: "cubic-bezier(0.22, 1, 0.36, 1)" });
+        });
     }
 
     const set = (next: number | "fit" | "auto") => {
@@ -128,8 +165,9 @@ export function createZoom(paper: HTMLElement, room: HTMLElement, space: () => n
         items: (): MenuItem[] => [
             { label: "Zoom in", icon: "plus", hint: "Ctrl+=", run: () => set(stepZoom(shown, 1)) },
             { label: "Zoom out", icon: "minus", hint: "Ctrl+-", run: () => set(stepZoom(shown, -1)) },
+            { label: paged() ? "Usual size (100%, or less to fit)" : "Usual size (100%)", pressed: mode === "auto" || (!paged() && mode === "fit"), hint: "Ctrl+0", run: () => set("auto") },
             ...[0.5, 0.75, 1, 1.25, 1.5, 2].map((each) => ({ label: percent(each), pressed: mode === each, run: () => set(each) })),
-            { label: "Fit the width", pressed: mode === "fit", run: () => set("fit") },
+            ...(paged() ? [{ label: "Fit the width", pressed: mode === "fit", run: () => set("fit") }] : []),
         ],
     };
 }

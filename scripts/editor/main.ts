@@ -57,7 +57,7 @@ const editor = createEditor(host, read(opened.text, { mdx: /\.mdx$/.test(first.i
     mark: opened.mark,
     versions,
     colors,
-    barHome: document.querySelector<HTMLElement>(".quire-bar-home") ?? undefined,
+    top: document.querySelector<HTMLElement>(".quire-top") ?? undefined,
     // a post's title is its frontmatter's; a file without one is titled by its name
     title: {
         read: (doc) => fields(doc).find(([field]) => field === "title")?.[1] ?? null,

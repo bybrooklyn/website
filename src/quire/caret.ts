@@ -13,6 +13,14 @@
 /** The lesbian flag, from the top: the caret's colours, one for each time it blinks back on. */
 export const FLAG = ["#D52D00", "#FF9A56", "#FFFFFF", "#D362A4", "#A30262"] as const;
 
+/**
+ * The same flag for the light paper. Its white cannot be seen on paper (1.1 : 1), so at that step
+ * the caret is the paper's own ink, oklch(0.24 0.04 300), which is 14.9 : 1 there. The rest stay the
+ * flag's: on the paper the orange is 1.9 : 1 and is drawn with the ink's hairline, as any colour
+ * under 3 : 1 is; the red, pink and rose are 4.5, 3.1 and 6.9 : 1.
+ */
+export const FLAG_ON_PAPER = ["#D52D00", "#FF9A56", "#221B2F", "#D362A4", "#A30262"] as const;
+
 /** A colour's red, green and blue, 0 to 255, from `#rrggbb`. */
 export function hexRgb(hex: string): [number, number, number] {
     const value = parseInt(hex.replace(/^#/, ""), 16);
@@ -69,27 +77,33 @@ export function blinkColour(colours: readonly string[], index: number): string {
 }
 
 /** Draws the caret for `root` inside `frame` (a positioned box holding it). */
-export function createCaret(root: HTMLElement, frame: HTMLElement, colours: readonly string[] = ["var(--accent)"]): { element: HTMLElement; place(): void; destroy(): void } {
+export function createCaret(root: HTMLElement, frame: HTMLElement, first: readonly string[] = ["var(--accent)"]): { element: HTMLElement; place(): void; setColours(next: readonly string[]): void; destroy(): void } {
     const element = document.createElement("div");
     element.className = "quire-caret";
     element.setAttribute("aria-hidden", "true");
     frame.append(element);
+    let colours = first;
     let blinks = 0;
     let rest: ReturnType<typeof setTimeout> | undefined;
     let ticking: ReturnType<typeof setInterval> | undefined;
     const still = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
-    // the sheet's colour, read once it is drawn, by painting it on a canvas, which understands every way a colour can be written
+    // what the caret is drawn over, read once it is drawn, by painting it on a canvas, which
+    // understands every way a colour can be written: the page's own ground, or in page view the
+    // pages behind the text, or where the page has none (A) the ground round it
     let sheet: [number, number, number] | undefined;
     const sheetColour = () => {
         if (sheet) return sheet;
         const paint = document.createElement("canvas").getContext("2d", { willReadFrequently: true });
         if (!paint) return undefined;
-        paint.fillStyle = getComputedStyle(frame).backgroundColor;
-        paint.fillRect(0, 0, 1, 1);
-        const [r, g, b, a] = paint.getImageData(0, 0, 1, 1).data;
-        if (a === 0) return undefined;
-        sheet = [r!, g!, b!];
-        return sheet;
+        const page = frame.querySelector<HTMLElement>(".quire-page");
+        for (let at: HTMLElement | null = frame, step = 0; at; at = step++ === 0 && page ? page : at === page ? frame.parentElement : at.parentElement) {
+            paint.clearRect(0, 0, 1, 1);
+            paint.fillStyle = getComputedStyle(at).backgroundColor;
+            paint.fillRect(0, 0, 1, 1);
+            const [r, g, b, a] = paint.getImageData(0, 0, 1, 1).data;
+            if (a! > 200) return (sheet = [r!, g!, b!]);
+        }
+        return undefined;
     };
     const colour = () => {
         const now = still() ? "var(--accent)" : blinkColour(colours, blinks);
@@ -98,8 +112,15 @@ export function createCaret(root: HTMLElement, frame: HTMLElement, colours: read
         element.classList.toggle("edged", !!ground && needsEdge(hexRgb(now), ground));
     };
 
-    /** Puts the caret where the cursor is now; true when it is shown. */
-    const move = (atOnce = false) => {
+    /** Where it was last put, to tell a short move from a long one. */
+    let last: { left: number; top: number; height: number } | undefined;
+    /**
+     * Puts the caret where the cursor is now. Typed text puts it there `atOnce`, in the same frame as the
+     * letter; a cursor moved by a key or a press slides it the short way, for 50 ms (quire.css), and a move
+     * to another line or a long way along one is at once too. `whole` brings it back blinked off without
+     * fading in. True when it is shown.
+     */
+    const move = (whole = false, atOnce = false) => {
         const box = document.activeElement === root || root.contains(document.activeElement) ? caretBox(root, frame) : null;
         const was = element.classList.contains("shown");
         element.classList.toggle("shown", !!box);
@@ -107,13 +128,13 @@ export function createCaret(root: HTMLElement, frame: HTMLElement, colours: read
         // as tall as the letters, not the whole line: a little is taken off the line's height, top and bottom alike
         const tall = box.height * TALL;
         const top = box.top + (box.height - tall) / 2;
-        // a long way (another line, a click elsewhere, or its first showing) is gone to at once; a letter's width is slid
-        const [x = 0, y = 0] = element.style.translate.split(" ").map(parseFloat);
-        const far = atOnce || !was || Math.abs(top - y) > 1 || Math.abs(box.left - x) > 40;
-        if (far) element.style.transition = "none";
+        const far = !last || Math.abs(last.top - top) > tall / 2 || Math.abs(last.left - box.left) > tall * 2;
+        last = { left: box.left, top, height: tall };
+        if (!was || atOnce || far) element.style.transition = "none";
+        else if (whole) element.style.transitionProperty = "translate, height";
         element.style.translate = `${box.left}px ${top}px`;
         element.style.height = `${tall}px`;
-        if (far) {
+        if (!was || whole || atOnce || far) {
             void element.offsetWidth;
             element.style.transition = "";
         }
@@ -125,7 +146,7 @@ export function createCaret(root: HTMLElement, frame: HTMLElement, colours: read
         // blinked off when a key is pressed, it is back at once and whole, not faded in
         const blinkedOff = element.classList.contains("off");
         element.classList.remove("off");
-        if (!move(blinkedOff || atOnce)) return;
+        if (!move(blinkedOff, atOnce)) return;
         colour();
         if (still()) return;
         // still for a moment, it starts to blink: off, then on in the next colour
@@ -145,10 +166,11 @@ export function createCaret(root: HTMLElement, frame: HTMLElement, colours: read
     // the cursor moving or text typed starts the blink over; the page moving under it only carries it along
     let fresh = false;
     const follow = () => {
+        // following, it is only carried along with what moves under it; it was put in place when the change came
         if (fresh) {
             fresh = false;
-            place(true);
-        } else move(true);
+            place();
+        } else move();
         if (performance.now() > until) {
             waiting = false;
             return;
@@ -162,10 +184,10 @@ export function createCaret(root: HTMLElement, frame: HTMLElement, colours: read
         waiting = true;
         requestAnimationFrame(follow);
     };
-    // The caret is put in its place in the same instant the text changes or the cursor moves, not a frame later:
-    // waiting for the next frame left it a letter behind the words while typing. Typed text takes it there at
-    // once; the cursor moved by a key or a press slides it the short way. Then it is followed for a moment, as
-    // what is above it settles.
+    // The caret is put in its place in the same instant the text changes or the cursor moves, not a frame
+    // later: waiting for the next frame left it a letter behind the words while typing. Typed text takes it
+    // there at once; the cursor moved by a key or a press slides it the short way. Then it is followed for a
+    // moment, as what is above it settles.
     let typedAt = -Infinity;
     const typed = () => {
         typedAt = performance.now();
@@ -180,9 +202,9 @@ export function createCaret(root: HTMLElement, frame: HTMLElement, colours: read
     const carried = () => soon(false);
     document.addEventListener("selectionchange", moved);
     root.addEventListener("input", typed);
-    // The editor writes the text itself, and the browser reports the cursor's move a frame or two later. A change
-    // to the text is heard here straight after it is made, before anything is drawn, so the caret is drawn with
-    // the letter and not after it.
+    // The editor writes the text itself, and the browser reports the cursor's move a frame or two later. A
+    // change to the text is heard here straight after it is made, before anything is drawn, so the caret is
+    // drawn with the letter and not after it.
     const written = new MutationObserver(typed);
     written.observe(root, { childList: true, subtree: true, characterData: true });
     root.addEventListener("focus", moved);
@@ -194,6 +216,15 @@ export function createCaret(root: HTMLElement, frame: HTMLElement, colours: read
     return {
         element,
         place,
+        /** Takes other colours, as the look changes; what it is drawn over is read again once the page has eased into its new ground. */
+        setColours(next) {
+            colours = next;
+            sheet = undefined;
+            setTimeout(() => {
+                sheet = undefined;
+                if (element.classList.contains("shown")) colour();
+            }, 500);
+        },
         destroy() {
             clearTimeout(rest);
             clearInterval(ticking);

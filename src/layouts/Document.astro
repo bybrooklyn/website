@@ -35,9 +35,11 @@ interface Props {
     /** When a post was published, and its tags. */
     published?: Date;
     tags?: string[];
+    /** The tab's mark, for the few pages that have one of their own (mdQuire's). */
+    icon?: string;
 }
 
-const { title, description = site.description, accent, type = "website", unlisted = false, bodyClass, image, imageAlt, facts = [], published, tags = [] } = Astro.props;
+const { title, description = site.description, accent, type = "website", unlisted = false, bodyClass, image, imageAlt, facts = [], published, tags = [], icon } = Astro.props;
 
 const pageTitle = title ? `${title} · ${site.name.toLowerCase()}` : site.name.toLowerCase();
 const canonical = new URL(Astro.url.pathname, Astro.site);
@@ -66,8 +68,8 @@ const opened = await openedPages();
         {/* Only the upright Torrens Serif is fetched ahead of time: every page starts with it. */}
         <Font cssVariable="--font-torrens" preload={[{ style: "normal" }]} />
         <Font cssVariable="--font-mono" />
-        {/* There is no icon; this stops browsers asking for one and logging a miss. */}
-        <link rel="icon" href="data:," />
+        {/* The site has no icon; the empty one stops browsers asking for one and logging a miss. */}
+        {icon ? <link rel="icon" type="image/svg+xml" href={icon} /> : <link rel="icon" href="data:," />}
         {/* A browser takes the first that fits, so its own bars stay the page's color. The last, plain one is for a link preview's stripe. */}
         <meta name="theme-color" media="(prefers-color-scheme: dark)" content={hex(theme.ground)} />
         <meta name="theme-color" media="(prefers-color-scheme: light)" content={hex(theme.ground)} />

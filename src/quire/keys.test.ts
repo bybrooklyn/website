@@ -343,3 +343,29 @@ test("the selected part of a document is copied as blocks, list items staying in
     expect(write(documentOf(blocks))).toBe("one\n\n- a\n- b\n\nLa\n");
     expect(write(documentOf(fragment(doc, { anchor: { path: [0], offset: 0 }, focus: { path: [0], offset: 4 } })))).toBe("Para\n");
 });
+
+test("Ctrl+Enter puts a page break at the cursor, splitting the line there, as one undo step", () => {
+    const typed = editor("One two.\n", [0], 3);
+    typed.key("Enter", { mod: true });
+    expect(typed.markdown).toBe('One\n\n<div style="break-after: page"></div>\n\ntwo.\n');
+    expect(typed.cursor).toEqual({ path: [2], offset: 0 });
+    typed.undo();
+    expect(typed.markdown).toBe("One two.\n");
+});
+
+test("a page break at the start of a line goes before it, and after a list it goes after the list with a line to write on", () => {
+    const start = editor("First.\n\nSecond.\n", [1], 0);
+    start.key("Enter", { mod: true });
+    expect(start.markdown).toBe('First.\n\n<div style="break-after: page"></div>\n\nSecond.\n');
+    expect(start.cursor).toEqual({ path: [2], offset: 0 });
+    const listed = editor("- one\n- two\n", [0, 1, 0], 3);
+    listed.key("Enter", { mod: true });
+    expect(listed.markdown.startsWith('- one\n- two\n\n<div style="break-after: page"></div>\n')).toBe(true);
+    expect(listed.cursor).toEqual({ path: [2], offset: 0 });
+});
+
+test("Backspace after a page break takes the break away, as it does a divider", () => {
+    const typed = editor('One\n\n<div style="break-after: page"></div>\n\nTwo\n', [2], 0);
+    typed.key("Backspace");
+    expect(typed.markdown).toBe("One\n\nTwo\n");
+});

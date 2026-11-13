@@ -244,7 +244,7 @@ const page = `<!doctype html>
 <link rel="stylesheet" href="/style.css">
 </head>
 <body class="quire-app edit-app">
-<header class="quire-top"><div class="quire-top-row"><div class="site-id"><p class="site-name">charlotte</p><span class="edit-where">editing on this computer</span></div><div class="quire-bar-home"></div></div></header>
+<header class="quire-top"><div class="quire-top-in"><div class="quire-top-line"><div class="quire-trail"><div class="site-id"><p class="site-name">charlotte</p><span class="edit-where">editing on this computer</span></div><span class="quire-stroke quire-name-stroke" aria-hidden="true">/</span><span class="quire-name-home"></span></div><div class="quire-menus-home"></div><div class="quire-status-home"></div></div><div class="quire-bar-home"></div></div></header>
 <main id="main">
     <div class="edit-panes">
         <div id="quire" class="quire-host"></div>

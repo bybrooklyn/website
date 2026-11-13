@@ -1,10 +1,10 @@
 // The pieces mdQuire's controls are made of: buttons with their icons, the keys that move along a
-// toolbar, where a floating thing goes so that it stays in the window, and the menu that flows out
-// of the control that was pressed, as the picture viewer's does (src/styles/viewer.css): from the
-// control's own size it grows to the menu's, a little past and back, each line arriving a moment
-// after the one above; closing, it draws back in plainly. Nothing here simply appears.
+// toolbar, where a floating thing goes so that it stays in the window, and the one kind of menu
+// every control opens, as the lab chose it (src/pages/mdquire-lab.astro): it drops below what was
+// pressed and covers nothing, growing out from under it on a slight spring, its lines arriving one
+// after another; closing, it draws back onto the control plainly. Nothing here simply appears.
 //
-// The functions that only count (moveIndex, placeNear) are pure and tested. Their styles are in
+// The functions that only count (moveIndex, placeNear, menuPlace, keySymbols) are pure and tested. Their styles are in
 // src/styles/quire.css.
 
 /** True when the visitor has asked for less motion. */
@@ -48,7 +48,15 @@ const PATHS: Record<string, string> = {
     spacing: '<path d="M11 6h9M11 12h9M11 18h9"/><path d="m4 8 2-3 2 3M4 16l2 3 2-3M6 5v14"/>',
     shelf: '<rect x="4" y="4" width="6.5" height="8" rx="1.2"/><rect x="13.5" y="4" width="6.5" height="8" rx="1.2"/><path d="M4 16h16M4 20h10"/>',
     search: '<circle cx="10.5" cy="10.5" r="5.5"/><path d="m15 15 4.5 4.5"/>',
+    pagebreak: '<path d="M6 3.5v5h12v-5M6 20.5v-5h12v5"/><path d="M3.5 12h3M10.5 12h3M17.5 12h3"/>',
     file: '<path d="M7 3.5h7l4 4V20a.5.5 0 0 1-.5.5h-10.5A.5.5 0 0 1 6.5 20V4a.5.5 0 0 1 .5-.5z"/><path d="M14 3.5V8h4"/>',
+    print: '<path d="M7 9V4h10v5"/><rect x="4" y="9" width="16" height="7" rx="1.5"/><path d="M7 14h10v6H7z"/>',
+    spelling: '<path d="M3.5 14 7 5l3.5 9M4.8 11h4.4"/><path d="m12.5 15 3 3 5.5-6.5"/>',
+    paint: '<rect x="5" y="3.5" width="12" height="5" rx="1.2"/><path d="M17 6h2v5h-7v3"/><rect x="10.5" y="14" width="3" height="6.5" rx="1"/>',
+    indent: '<path d="M5 5h14M11 10h8M11 14h8M5 19h14"/><path d="m5 9.5 3 2.5-3 2.5"/>',
+    outdent: '<path d="M5 5h14M11 10h8M11 14h8M5 19h14"/><path d="M8 9.5 5 12l3 2.5"/>',
+    clear: '<path d="M6 5h11M11.5 5 9 15"/><path d="m14 14 5 5M19 14l-5 5"/>',
+    find: '<circle cx="10" cy="10" r="5"/><path d="m14 14 5 5"/><path d="M8 10h4" opacity=".6"/>',
 };
 
 /** One of mdQuire's small line icons, drawn in the color of the text around it. */
@@ -164,6 +172,22 @@ export function linkForm(current: string | undefined, done: { set(href: string):
     return form;
 }
 
+/** "About mdQuire": what it is and who made it, in the project page's own words, with the way to her site and to the project, for a menu to hold. */
+export function aboutPanel(): HTMLElement {
+    const panel = make("div", "quire-about");
+    const name = make("p", "quire-about-name", "mdQuire");
+    const said = make("p", "quire-about-text", "A word processor for Markdown files, in the browser. Charlotte made it.");
+    const links = make("p", "quire-about-links");
+    const link = (href: string, words: string) => {
+        const anchor = make("a", "", words);
+        anchor.href = href;
+        return anchor;
+    };
+    links.append(link("/", "Her site"), link("/projects/mdquire/", "The project"));
+    panel.append(name, said, links);
+    return panel;
+}
+
 /** A line of a menu: what it says, an icon or a sample of what it makes, and what it does. */
 export interface MenuItem {
     label: string;
@@ -177,7 +201,74 @@ export interface MenuItem {
     run: () => void;
 }
 
-/** A menu that flows out of the control that opened it. */
+/** How a menu moves, the lab's starting values, which she kept: it opens in 200 ms on a slight spring and closes in 140 ms on the site's easing, its lines arriving 14 ms apart. */
+export const MOTION = { open: 200, close: 140, stagger: 14, bounce: 0.14 };
+
+/** The site's own easing, --ease in tokens.css. */
+export const EASE = "cubic-bezier(0.22, 1, 0.36, 1)";
+
+/** A spring that settles within its time, as a CSS linear() curve: no bounce at 0, a drop's bounce near 0.3. */
+export function springCurve(bounce: number, points = 48): string {
+    const damping = Math.max(0.25, 1 - bounce);
+    const values: string[] = [];
+    for (let step = 0; step <= points; step++) {
+        const t = step / points;
+        let x: number;
+        if (damping >= 0.999) {
+            const w = 9.23;
+            x = 1 - (1 + w * t) * Math.exp(-w * t);
+        } else {
+            const w = 6.9 / damping;
+            const wd = w * Math.sqrt(1 - damping * damping);
+            x = 1 - Math.exp(-damping * w * t) * (Math.cos(wd * t) + ((damping * w) / wd) * Math.sin(wd * t));
+        }
+        values.push((step === points ? 1 : x).toFixed(4));
+    }
+    return `linear(${values.join(", ")})`;
+}
+
+/** True on a Mac, where Ctrl in a shortcut is pressed as Command. */
+const mac = () => typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+
+/**
+ * A shortcut written as words ("Ctrl+Shift+Z") drawn as the keys' symbols ("⌃⇧Z", or "⌘⇧Z" on a
+ * Mac), with the same said in words for its tooltip. A hint that is not a shortcut (".md", "›") is
+ * given back as it is, with no words.
+ */
+export function keySymbols(hint: string, onMac = false): { shown: string; words: string } {
+    const parts = hint.split("+");
+    const named: Record<string, [string, string]> = {
+        Ctrl: onMac ? ["⌘", "Command"] : ["⌃", "Control"],
+        Cmd: ["⌘", "Command"],
+        Shift: ["⇧", "Shift"],
+        Alt: onMac ? ["⌥", "Option"] : ["⌥", "Alt"],
+        Enter: ["↵", "Enter"],
+    };
+    const isKey = (part: string, last: boolean) => (last ? part in named || /^[A-Z0-9=\-]$/i.test(part) : part in named);
+    if (parts.length < 2 && !(hint in named)) return { shown: hint, words: "" };
+    if (!parts.every((part, index) => isKey(part, index === parts.length - 1))) return { shown: hint, words: "" };
+    return { shown: parts.map((part) => named[part]?.[0] ?? part.toUpperCase()).join(""), words: parts.map((part) => named[part]?.[1] ?? part.toUpperCase()).join(" ") };
+}
+
+/**
+ * Where an open menu goes: just under its control, its left edge on the control's, or its right
+ * edge on the control's right when there is no room to the right; above the control when there is
+ * not room below and more above. It keeps `margin` from the window's edges, and when it is taller
+ * than its room it is cut to the room (and scrolls inside itself).
+ */
+export function menuPlace(control: Box, size: { width: number; height: number }, window: { width: number; height: number }, align: "left" | "right" = "left", margin = 8, gap = 4): Box & { up: boolean } {
+    const below = window.height - margin - (control.top + control.height + gap);
+    const above = control.top - gap - margin;
+    const up = size.height > below && above > below;
+    const height = Math.max(0, Math.min(size.height, up ? above : below));
+    const width = Math.min(size.width, window.width - margin * 2);
+    let left = align === "right" || control.left + width > window.width - margin ? control.left + control.width - width : control.left;
+    left = Math.min(Math.max(left, margin), window.width - margin - width);
+    const top = up ? control.top - gap - height : control.top + control.height + gap;
+    return { left: Math.round(left), top: Math.round(top), width: Math.round(width), height: Math.round(height), up };
+}
+
+/** A menu that grows out from under the control that opened it. */
 export interface Menu {
     box: HTMLElement;
     open(trigger: HTMLElement, items: MenuItem[] | HTMLElement, focusFirst?: boolean): void;
@@ -194,9 +285,24 @@ export function closeOthers(keep?: Menu) {
     for (const menu of openMenus) if (menu !== keep) menu.close(false);
 }
 
+/** Every motion of a menu stopped, keeping where it was drawn. */
+const halt = (animations: Animation[]) => {
+    for (const each of animations) each.cancel();
+    animations.length = 0;
+};
+
 /**
- * Makes a menu. It is one box, fixed to the window: it starts at the size of the control pressed,
- * just under it, and its width and height ease out to the size of what is in it.
+ * Makes a menu, the one kind every menu in mdQuire is, as the lab chose it: it drops below the
+ * control pressed and covers nothing, the control staying in its row, lit. One box, fixed to the
+ * window, grows out from under the control's bottom edge, as wide as the control at first, to the
+ * menu's size; what is inside is laid out at its final place and held still while the edges pass
+ * over it, so nothing slides or stretches. It opens in 200 ms on a slight spring, its lines arriving
+ * one after another, and closes back onto the control's edge in 140 ms on the site's easing. With
+ * no room below it grows upward from the control's top edge instead, and with no room to the right
+ * it keeps to the control's right edge. Opened from another control while open (the menu words, as
+ * the pointer moves along them), it slides across to its new place and becomes that one's menu.
+ * Under reduced motion it is simply open or shut. Its look is the lab's "raised": a slightly lighter
+ * surface with a soft shadow, no line and no glow (quire.css).
  */
 export function flowMenu(label: string, options: { align?: "left" | "right"; className?: string; onClose?: () => void; onSide?: (by: -1 | 1) => void } = {}): Menu {
     const box = make("div", `quire-menu ${options.className ?? ""}`.trim());
@@ -206,35 +312,36 @@ export function flowMenu(label: string, options: { align?: "left" | "right"; cla
     items.inert = true;
     let trigger: HTMLElement | undefined;
     let opened = false;
+    /** Where the box ends, and whether it grew upward. */
+    let final: (Box & { up: boolean }) | undefined;
+    const moving: Animation[] = [];
 
     const lines = () => [...items.querySelectorAll<HTMLElement>("button, input, a[href]")];
+    const boxOf = (element: Element): Box => {
+        const { left, top, width, height } = element.getBoundingClientRect();
+        return { left, top, width, height };
+    };
+    /** The control's edge the menu grows from and goes back to: a line as wide as the control, at its bottom (or its top, for a menu above it). */
+    const edgeOf = (control: Box, up: boolean): Box => ({ left: control.left, top: up ? control.top - 4 : control.top + control.height + 4, width: control.width, height: 0 });
+    const frame = (at: Box) => ({ left: `${at.left}px`, top: `${at.top}px`, width: `${at.width}px`, height: `${at.height}px` });
 
-    function place() {
-        if (!trigger) return;
-        const rect = trigger.getBoundingClientRect();
-        box.style.setProperty("--from-w", `${rect.width}px`);
-        box.style.setProperty("--from-h", `${rect.height}px`);
+    /** Works out where the menu goes and puts the box there, as it ends. */
+    function place(): Box & { up: boolean } {
+        const control = boxOf(trigger!);
+        // the inside keeps its own width (at least the control's), so that the box can follow it when it changes
         items.style.maxHeight = "";
-        const wide = items.offsetWidth;
-        const natural = items.offsetHeight;
-        // it grows from the control's left edge, or its right one when there is no room to the right;
-        // and when there is room on neither side it is slid along to stay inside the window
-        let right = options.align === "right" || rect.left + wide > window.innerWidth - 8;
-        if (right && rect.right - wide < 8) right = false;
-        box.style.left = right ? "" : `${Math.max(8, Math.min(rect.left, window.innerWidth - 8 - wide))}px`;
-        box.style.right = right ? `${Math.max(8, window.innerWidth - rect.right)}px` : "";
-        box.classList.toggle("from-right", right);
-        // under the control if it fits, over it if not, and on whichever side has more room if neither
-        const roomBelow = window.innerHeight - rect.bottom - 14;
-        const roomAbove = rect.top - 14;
-        const below = natural <= roomBelow || roomBelow >= Math.min(natural, 240) || roomBelow >= roomAbove;
+        items.style.width = "";
+        items.style.minWidth = "";
+        if (control.width > (parseFloat(getComputedStyle(items).minWidth) || 0)) items.style.minWidth = `${control.width}px`;
+        const size = { width: items.offsetWidth, height: items.offsetHeight };
+        const at = menuPlace(control, size, { width: innerWidth, height: innerHeight }, options.align);
+        if (at.width < size.width) items.style.width = `${at.width}px`;
         // a menu taller than its room scrolls inside itself
-        const high = Math.min(natural, below ? roomBelow : roomAbove);
-        if (high < natural) items.style.maxHeight = `${high}px`;
-        box.style.setProperty("--wide", `${wide}px`);
-        box.style.setProperty("--high", `${high}px`);
-        box.style.top = below ? `${rect.bottom + 6}px` : "";
-        box.style.bottom = below ? "" : `${window.innerHeight - rect.top + 6}px`;
+        if (at.height < size.height) items.style.maxHeight = `${at.height}px`;
+        Object.assign(box.style, frame(at));
+        box.classList.toggle("up", at.up);
+        final = at;
+        return at;
     }
 
     let typed = "";
@@ -278,8 +385,13 @@ export function flowMenu(label: string, options: { align?: "left" | "right"; cla
         }
     }
     box.addEventListener("keydown", onKey);
-    // what is in the menu may grow or shrink while it is open (a message under a form, say): the box follows
-    if (typeof ResizeObserver !== "undefined") new ResizeObserver(() => opened && place()).observe(items);
+    // what is in the menu may grow or shrink while it is open (a message under a form, say): the box follows, without moving
+    let building = false;
+    if (typeof ResizeObserver !== "undefined")
+        new ResizeObserver(() => {
+            if (!opened || building || moving.length) return;
+            place();
+        }).observe(items);
 
     // a menu opened with the mouse leaves focus in the text, and Escape there must still close it
     function escape(event: KeyboardEvent) {
@@ -293,50 +405,102 @@ export function flowMenu(label: string, options: { align?: "left" | "right"; cla
         menu.close(false);
     }
 
+    /** Fills the menu with its lines, or with an element of its own (a form, the about panel). */
+    function fill(content: MenuItem[] | HTMLElement) {
+        items.replaceChildren();
+        items.removeAttribute("role");
+        if (content instanceof HTMLElement) {
+            items.append(content);
+            return;
+        }
+        items.setAttribute("role", "menu");
+        const apple = mac();
+        content.forEach((item) => {
+            if (item.note) {
+                items.append(make("p", "quire-menu-note", item.label));
+                return;
+            }
+            const line = make("button", "quire-menu-line");
+            line.type = "button";
+            line.setAttribute("role", "menuitem");
+            if (item.pressed) line.classList.add("pressed");
+            if (item.group) line.dataset.group = item.group;
+            if (item.icon) line.append(typeof item.icon === "string" ? icon(item.icon) : item.icon);
+            line.append(make("span", "quire-menu-label", item.label));
+            if (item.hint) {
+                // a shortcut is drawn as its keys' symbols, and said in words when pointed at and to a screen reader
+                const { shown, words } = keySymbols(item.hint, apple);
+                const hint = make("span", "quire-menu-hint", shown);
+                if (words) {
+                    hint.title = words;
+                    hint.setAttribute("aria-label", words);
+                }
+                line.append(hint);
+            }
+            line.addEventListener("mousedown", (event) => event.preventDefault());
+            line.addEventListener("click", () => {
+                if (item.group) for (const other of items.querySelectorAll<HTMLElement>(`[data-group="${item.group}"]`)) other.classList.toggle("pressed", other === line);
+                else menu.close(false);
+                item.run();
+            });
+            items.append(line);
+        });
+    }
+
+    /** The box's edges move from `from` to where the menu ends, the inside held still at its end. */
+    function grow(from: Box, sliding: boolean) {
+        const at = final!;
+        const time = still() ? 0 : MOTION.open;
+        const curve = sliding ? EASE : springCurve(MOTION.bounce);
+        moving.push(
+            box.animate([frame(from), frame(at)], { duration: time, easing: curve, fill: "both" }),
+            items.animate([{ translate: `${at.left - from.left}px ${at.top - from.top}px` }, { translate: "0px 0px" }], { duration: time, easing: curve, fill: "both" }),
+        );
+        const shown = [...items.children] as HTMLElement[];
+        // sliding to a neighbour's menu, its lines come in together as the box moves across
+        if (sliding) moving.push(items.animate([{ opacity: 0 }, { opacity: 1 }], { duration: time * 0.75, easing: EASE, fill: "both" }));
+        // each line arrives a moment after the one before, from the control's side
+        else
+            shown.forEach((line, index) => {
+                const order = at.up ? shown.length - 1 - index : index;
+                moving.push(line.animate([{ opacity: 0, translate: `0 ${at.up ? 4 : -4}px` }, { opacity: 1, translate: "0 0" }], { duration: still() ? 0 : Math.max(time * 0.75, 90), delay: still() ? 0 : time * 0.2 + order * MOTION.stagger, easing: EASE, fill: "both" }));
+            });
+        // once it has all arrived the motions are let go, the box drawn by its own place and size
+        void Promise.all(moving.map((each) => each.finished)).then(
+            () => {
+                if (!opened) return;
+                halt(moving);
+                // what changed inside while it moved is caught up with
+                place();
+            },
+            () => {},
+        );
+    }
+
     const menu: Menu = {
         box,
         open(from, content, focusFirst = false) {
             if (!box.isConnected) document.body.append(box);
             closeOthers(menu);
-            // opened again from another control while open, the one it leaves is no longer shown as open
-            if (opened && trigger && trigger !== from) {
+            // opened from another control while open, it slides across from where it is drawn now
+            const sliding = opened && !!trigger && trigger !== from && !still();
+            // filled again from the same control while open (a switch turned, a line asking again), it stays where it is
+            const again = opened && trigger === from;
+            const was = boxOf(box);
+            halt(moving);
+            if (trigger && trigger !== from) {
                 trigger.setAttribute("aria-expanded", "false");
                 trigger.classList.remove("open");
             }
             trigger = from;
-            items.replaceChildren();
-            if (content instanceof HTMLElement) items.append(content);
-            else {
-                items.setAttribute("role", "menu");
-                content.forEach((item, index) => {
-                    if (item.note) {
-                        const note = make("p", "quire-menu-note", item.label);
-                        note.style.setProperty("--line-at", String(index));
-                        items.append(note);
-                        return;
-                    }
-                    const line = make("button", "quire-menu-line");
-                    line.type = "button";
-                    line.setAttribute("role", "menuitem");
-                    line.style.setProperty("--line-at", String(index));
-                    if (item.pressed) line.classList.add("pressed");
-                    if (item.group) line.dataset.group = item.group;
-                    if (item.icon) line.append(typeof item.icon === "string" ? icon(item.icon) : item.icon);
-                    line.append(make("span", "quire-menu-label", item.label));
-                    if (item.hint) line.append(make("span", "quire-menu-hint", item.hint));
-                    line.addEventListener("mousedown", (event) => event.preventDefault());
-                    line.addEventListener("click", () => {
-                        if (item.group) for (const other of items.querySelectorAll<HTMLElement>(`[data-group="${item.group}"]`)) other.classList.toggle("pressed", other === line);
-                        else menu.close(false);
-                        item.run();
-                    });
-                    items.append(line);
-                });
-            }
-            place();
-            // the box is drawn at its starting size first, so that it has somewhere to grow from
-            void box.offsetWidth;
+            building = true;
+            fill(content);
             box.classList.add("open");
+            box.classList.remove("closing");
+            box.classList.toggle("sliding", sliding);
+            const at = place();
+            building = false;
+            if (!again) grow(sliding ? was : edgeOf(boxOf(from), at.up), sliding);
             items.inert = false;
             opened = true;
             openMenus.add(menu);
@@ -350,6 +514,9 @@ export function flowMenu(label: string, options: { align?: "left" | "right"; cla
             if (!opened) return;
             opened = false;
             openMenus.delete(menu);
+            const was = boxOf(box);
+            const inside = getComputedStyle(items).translate;
+            halt(moving);
             box.classList.remove("open");
             items.inert = true;
             trigger?.setAttribute("aria-expanded", "false");
@@ -358,10 +525,30 @@ export function flowMenu(label: string, options: { align?: "left" | "right"; cla
             document.removeEventListener("keydown", escape, true);
             if (returnFocus) trigger?.focus({ preventScroll: true });
             options.onClose?.();
+            // it draws back onto the control's edge, the inside held where it was, the lines fading first
+            const at = final;
+            if (!trigger || !at || still()) return;
+            const back = edgeOf(boxOf(trigger), at.up);
+            const time = MOTION.close;
+            const start = inside === "none" ? [0, 0] : inside.split(" ").map((part) => parseFloat(part) || 0);
+            box.classList.add("closing");
+            const shrink = box.animate([frame(was), frame(back)], { duration: time, easing: EASE, fill: "both" });
+            moving.push(
+                shrink,
+                items.animate([{ translate: `${start[0] ?? 0}px ${start[1] ?? 0}px`, opacity: 1 }, { translate: `${at.left - back.left}px ${at.top - back.top}px`, opacity: 0 }], { duration: time, easing: EASE, fill: "both" }),
+            );
+            void shrink.finished.then(
+                () => {
+                    if (opened) return;
+                    box.classList.remove("closing");
+                    halt(moving);
+                },
+                () => {},
+            );
         },
         isOpen: () => opened,
         follow() {
-            if (opened) place();
+            if (opened && !moving.length) place();
         },
     };
     return menu;

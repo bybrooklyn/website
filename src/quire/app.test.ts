@@ -72,7 +72,7 @@ HTMLAnchorElement.prototype.click = function () {
 };
 
 window.q = { repo, calls, downloads, bytes, write, folderStore, oneFileStore, setStyle, packQuire, unpackQuire };
-startApp(document.querySelector("#host"), { database: ${JSON.stringify(database)}, fetcher, sample: "# A sample\\n" }).then((app) => {
+startApp(document.querySelector("#host"), { database: ${JSON.stringify(database)}, fetcher, sample: "# A sample\\n", top: document.querySelector(".quire-top") }).then((app) => {
     window.q.app = app;
     window.q.md = () => write(app.editor.surface.getDocument());
 });
@@ -90,7 +90,7 @@ beforeAll(async () => {
     if (!built.success) throw new Error(built.logs.join("\n"));
     const theme = ":root{--ground:oklch(0.16 0.035 300);--surface:oklch(0.21 0.045 300);--rule:oklch(0.32 0.055 300);--ink:oklch(0.93 0.02 300);--muted:oklch(0.73 0.045 300);--accent:oklch(0.77 0.16 300)}";
     const css = (await Promise.all(["tokens.css", "base.css", "prose.css", "quire.css"].map((name) => Bun.file(`${styles}/${name}`).text()))).join("\n");
-    await Bun.write(`${folder}/page.html`, `<!doctype html><meta charset="utf-8"><style>${css}${theme}</style><body class="quire-app"><header class="quire-top"><a class="site-name" href="/">site</a></header><main id="main"><div id="host"></div></main><script type="module">${await built.outputs[0]!.text()}</script></body>`);
+    await Bun.write(`${folder}/page.html`, `<!doctype html><meta charset="utf-8"><style>${css}${theme}</style><body class="quire-app"><header class="quire-top"><div class="quire-top-in"><div class="quire-top-line"><nav class="quire-trail"><div class="site-id"><a class="site-name" href="/">site</a></div><span class="quire-stroke">/</span><a class="quire-word" href="/mdquire/">mdQuire</a><span class="quire-stroke quire-name-stroke">/</span><span class="quire-name-home"></span></nav><div class="quire-menus-home"></div><div class="quire-status-home"></div></div><div class="quire-bar-home"></div></div></header><main id="main"><div id="host"></div></main><script type="module">${await built.outputs[0]!.text()}</script></body>`);
     await Bun.write(`${folder}/post.md`, "# A post\n\nFrom a file.\n");
     // a .quire file with a styled word, its style addressed as styling.ts says
     const style = { quire: 1, page: { size: "A5", orientation: "portrait", margins: 20 }, count: 2, blocks: [{ block: 0, hash: hash("A letter"), align: "center" }], runs: [{ block: 1, hash: hash("Dear Sam, hello."), from: 10, to: 15, quote: "hello", before: "Dear Sam, ", color: "#d52d00", font: "serif" }] };
@@ -143,7 +143,7 @@ async function press(selector: string, words = "") {
 
 /** Opens the documents list from the name in the bar, once it has grown far enough to be pressed. */
 async function documents() {
-    await press(".quire-bar .quire-name");
+    await press(".quire-name");
     await tab.wait(700);
 }
 
@@ -171,7 +171,7 @@ used("with nothing open the home screen shows ways to start; Blank grows into a 
     expect(await status()).toBe("Saved");
     // leaving: the page shrinks back onto its picture, which shows the words written
     const shrinking = paperWidths(600);
-    await press('.quire-bar button[aria-label="All documents"]');
+    await press(".quire-word");
     const shrunk = await shrinking;
     await tab.wait(300);
     expect(shrunk.some((width) => width < shrunk[0]! / 2)).toBe(true);
@@ -237,15 +237,9 @@ used("a file is opened from the computer, and downloaded again with its own name
 used("in a Markdown file the tools it cannot keep are not offered, and turning it into a .quire document makes a copy that has them", async () => {
     // post.md is open from the test before
     expect(await tab.run("document.querySelector('.quire-name-text').textContent")).toBe("post.md");
-    const looks = async () => {
-        await press('.quire-bar button[aria-label^="Text"]');
-        await tab.wait(600);
-        const seen = await tab.run<string[]>("[...document.querySelectorAll('.quire-menu.open .quire-menu-label')].map((line) => line.textContent)");
-        await tab.press("Escape");
-        await tab.wait(300);
-        return seen;
-    };
-    expect(await looks()).toEqual(["Text color", "Text size", "Align left", "Centre", "Align right"]);
+    // the tools a Markdown file cannot keep are away from the bar for one
+    const away = () => tab.run<string[]>("[...document.querySelectorAll('.quire-tool.away')].map((tool) => tool.firstElementChild.getAttribute('aria-label'))");
+    expect(await away()).toEqual(["Typeface", "Highlight", "Justify", "Line spacing"]);
     await press(".quire-dots");
     await tab.wait(700);
     const lines = await tab.run<string[]>("[...document.querySelectorAll('.quire-menu.open .quire-menu-line')].map((line) => line.textContent)");
@@ -255,12 +249,11 @@ used("in a Markdown file the tools it cannot keep are not offered, and turning i
     await tab.wait(900);
     expect(await tab.run("document.querySelector('.quire-name-text').textContent")).toBe("post.quire");
     expect(await md()).toBe("# A post\n\nFrom a file. Edited.\n");
-    expect(await looks()).toEqual(["Text color", "Text size", "Typeface", "Highlight", "Line spacing", "Align left", "Centre", "Align right", "Justify"]);
-    // a typeface chosen from the text button goes on the selection
+    await tab.wait(500);
+    expect(await away()).toEqual([]);
+    // a typeface chosen from its button goes on the selection
     await tab.run("q.app.editor.surface.setSelection({ anchor: { path: [1], offset: 0 }, focus: { path: [1], offset: 4 } })");
-    await press('.quire-bar button[aria-label^="Text"]');
-    await tab.wait(600);
-    await press(".quire-menu.open .quire-menu-line", "Typeface");
+    await press(".quire-font");
     await tab.wait(600);
     await press(".quire-menu.open .quire-menu-line", "System mono");
     await tab.wait(200);
@@ -396,8 +389,8 @@ used("the menu row: a menu flows from its word, slides to the next as the pointe
     await tab.wait(600);
     const format = await open();
     expect(format.word).toBe("Format");
-    expect(format.lines).toContain("BoldCtrl+B");
-    expect(format.lines).toContain("Heading 2Ctrl+Alt+2");
+    expect(format.lines).toContain("Bold⌃B");
+    expect(format.lines).toContain("Heading 2⌃⌥2");
     // the pointer moving onto Insert takes the open menu there, sliding
     await tab.run("document.querySelectorAll('.quire-row-word')[3].dispatchEvent(new PointerEvent('pointerenter'))");
     await tab.wait(500);
@@ -419,25 +412,21 @@ used("the menu row: a menu flows from its word, slides to the next as the pointe
     await tab.wait(400);
     expect((await open()).word).toBe("Edit");
     await tab.press("s");
-    expect(await tab.run("document.activeElement.textContent")).toBe("Select allCtrl+A");
+    expect(await tab.run("document.activeElement.textContent")).toBe("Select all⌃A");
     await tab.press("Enter");
     await tab.wait(200);
     expect(await tab.run("String(getSelection())")).toBe(await tab.run("document.querySelector('.quire').innerText.trim()"));
 });
 
-used("on a narrow window the menu row folds into the three dots, each word a line there that opens its menu", async () => {
+used("on a narrow window the menu words have a line of their own under the trail, and each opens its menu", async () => {
     await tab.resize(390, 800);
     try {
         await tab.wait(600);
-        expect(await tab.run("(() => { const row = document.querySelector('.quire-menu-row'); return [row.inert, getComputedStyle(row).opacity, Math.round(row.getBoundingClientRect().height)]; })()")).toEqual([true, "0", 0]);
-        await press(".quire-dots");
-        await tab.wait(700);
-        const lines = await tab.run<string[]>("[...document.querySelectorAll('.quire-menu.open .quire-menu-line')].map((line) => line.textContent)");
-        const words = ["File›", "Edit›", "View›", "Insert›", "Format›", "Tools›"];
-        expect(lines.filter((line) => words.includes(line))).toEqual(words);
-        await press(".quire-menu.open .quire-menu-line", "Format");
+        const row = await tab.run<{ words: number; under: boolean; inside: boolean }>("(() => { const row = document.querySelector('.quire-menu-row').getBoundingClientRect(); const trail = document.querySelector('.quire-trail').getBoundingClientRect(); return { words: [...document.querySelectorAll('.quire-row-word')].filter((word) => word.getBoundingClientRect().width > 0).length, under: row.top >= trail.bottom - 1, inside: row.left >= 0 && document.documentElement.scrollWidth <= innerWidth }; })()");
+        expect(row).toEqual({ words: 6, under: true, inside: true });
+        await press(".quire-row-word", "Format");
         await tab.wait(600);
-        expect(await tab.run("[...document.querySelectorAll('.quire-row-menu.open .quire-menu-line')].map((line) => line.textContent)[0]")).toBe("BoldCtrl+B");
+        expect(await tab.run("[...document.querySelectorAll('.quire-row-menu.open .quire-menu-line')].map((line) => line.textContent)[0]")).toBe("Bold⌃B");
         await tab.press("Escape");
     } finally {
         await tab.resize(1300, 900);
@@ -459,7 +448,7 @@ used("printed, the page is the document alone, dark on white, with none of the e
 });
 
 used("on the home screen each document's three dots rename it, duplicate it and delete it, asking once more; with less motion nothing travels", async () => {
-    await press('.quire-bar button[aria-label="All documents"]');
+    await press(".quire-word");
     await tab.wait(900);
     const names = () => tab.run<string[]>("[...document.querySelectorAll('.quire-shelf-recent .quire-card-name')].map((name) => name.textContent)");
     const first = (await names())[0]!;
@@ -501,7 +490,7 @@ used("on the home screen each document's three dots rename it, duplicate it and 
 });
 
 used("the Blog post on the home screen is made as plain Markdown, and a duplicated .quire document keeps its pictures", async () => {
-    await press('.quire-bar button[aria-label="All documents"]');
+    await press(".quire-word");
     await tab.wait(900);
     await press(".quire-shelf-start .quire-card:nth-child(2) .quire-card-open");
     await tab.wait(900);
@@ -512,7 +501,7 @@ used("the Blog post on the home screen is made as plain Markdown, and a duplicat
         await store.savePicture(made.id, new Blob(["png"]), "dot.png");
         return made.id;
     })()`);
-    await press('.quire-bar button[aria-label="All documents"]');
+    await press(".quire-word");
     await tab.wait(900);
     const index = await tab.run<number>("[...document.querySelectorAll('.quire-shelf-recent .quire-card-name')].findIndex((name) => name.textContent === 'With a picture')");
     await press(`.quire-shelf-recent .quire-card:nth-child(${index + 1}) .quire-dots`);
