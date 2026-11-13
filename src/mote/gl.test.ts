@@ -134,4 +134,43 @@ window.result = { one, after, shared, gone: live.buffers - empty, arrays: live.a
     expect(result.arrays).toBe(0);
 }, 30_000);
 
+test.skipIf(!chromium())("four hundred different words, each shown and taken away, are each drawn as themselves", async () => {
+    const result = await drawn<{ wrong: number[]; apart: number }>(`
+import { gl } from "${here}/gl.ts";
+/** A view that shows one word filling the picture, and what that picture is. */
+const viewer = (canvas) => {
+    const view = gl(canvas);
+    view.size(120, 120);
+    view.look([0, 0, 2], [0, 0, 0], 30);
+    const g = canvas.getContext("webgl2");
+    return (word) => {
+        const sign = view.sign(word, [1, 1, 1]);
+        view.draw();
+        const pixels = new Uint8Array(canvas.width * canvas.height * 4);
+        g.readPixels(0, 0, canvas.width, canvas.height, g.RGBA, g.UNSIGNED_BYTE, pixels);
+        view.remove(sign);
+        return pixels;
+    };
+};
+const fresh = () => {
+    const canvas = document.createElement("canvas");
+    canvas.style.cssText = "width:120px;height:120px";
+    document.body.append(canvas);
+    return canvas;
+};
+const unlike = (a, b) => { let sum = 0; for (let i = 0; i < a.length; i++) sum += Math.abs(a[i] - b[i]); return sum / a.length; };
+const long = viewer(fresh());
+const words = Array.from({ length: 400 }, (_, i) => String(i));
+const seen = words.map((word) => long(word));
+// a view that has written nothing else draws a few of them, late ones above all, to compare against
+const wrong = [];
+const once = viewer(fresh());
+for (const at of [0, 143, 144, 150, 250, 399]) if (unlike(seen[at], once(words[at])) > 0.5) wrong.push(at);
+window.result = { wrong, apart: unlike(seen[150], seen[151]) };
+`);
+    expect(result.wrong).toEqual([]);
+    // and the comparison can tell two words apart
+    expect(result.apart).toBeGreaterThan(2);
+}, 30_000);
+
 if (!chromium()) console.warn("gl.test.ts: no Chromium on this machine, so the drawing was not looked at.");

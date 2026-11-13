@@ -68,6 +68,8 @@ interface Shape {
     marksBuffer?: WebGLBuffer;
     count: number;
     markCount: number;
+    /** The cells of the sheet its words are written in. */
+    cells: number[];
     /** How many parts are drawn from it now. */
     users: number;
     /** Where it is kept, to be found again and to be forgotten when freed. */
@@ -320,7 +322,8 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
     g.bindFramebuffer(g.FRAMEBUFFER, null);
     let [smallWide, smallHigh] = [0, 0];
 
-    // what is written on faces: every different word once, side by side in one picture
+    // What is written on faces: every different word once, side by side in one picture. A cell no
+    // shape uses any more is written over by the next new word, the one longest unused first.
     const CELL = 128;
     const ACROSS = 12;
     const sheet = document.createElement("canvas");
@@ -328,6 +331,9 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
     sheet.height = CELL * ACROSS;
     const pen = sheet.getContext("2d")!;
     const written = new Map<string, number>();
+    /** Each cell's word, how many shapes use it, and when the last of them was freed. */
+    const cells = Array.from({ length: ACROSS * ACROSS }, () => ({ key: undefined as string | undefined, users: 0, freed: 0 }));
+    let clock = 0;
     const marks = g.createTexture();
     let stale = true;
 
@@ -356,13 +362,24 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
     };
 
     /** The cell of the sheet a word is written in, writing it there the first time. A word on a sign is fitted to the cell's width. */
-    const cell = (word: string, onSign: boolean): [u: number, v: number] => {
+    const cell = (word: string, onSign: boolean): [u: number, v: number, at: number] => {
         const key = onSign ? `sign ${word}` : word;
         let at = written.get(key);
         if (at === undefined) {
-            at = written.size;
+            // a cell never written in, or else the one whose word has gone unused longest
+            let free = -1;
+            for (let index = 0; index < cells.length; index++) {
+                const [one, best] = [cells[index]!, cells[free]];
+                if (one.users > 0) continue;
+                if (!best || (best.key !== undefined && (one.key === undefined || one.freed < best.freed))) free = index;
+            }
+            if (free < 0) console.error("Mote: more different words are shown at once than the sheet has room for, so one is shown in another's place.");
+            at = Math.max(0, free);
+            if (cells[at]!.key !== undefined) written.delete(cells[at]!.key!);
+            cells[at]!.key = key;
             written.set(key, at);
             const [x, y] = [(at % ACROSS) * CELL, Math.floor(at / ACROSS) * CELL];
+            pen.clearRect(x, y, CELL, CELL);
             // on a sign every word is the same height, so that a row of numbers reads as one line
             pen.font = `700 ${onSign ? 80 : word.length > 1 ? 74 : 88}px ${view.font}`;
             pen.textAlign = "center";
@@ -378,7 +395,8 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
             if (!onSign && (word === "6" || word === "9")) pen.fillRect(x + 40, y + 108, 48, 7);
             stale = true;
         }
-        return [(at % ACROSS) / ACROSS, Math.floor(at / ACROSS) / ACROSS];
+        cells[at]!.users++;
+        return [(at % ACROSS) / ACROSS, Math.floor(at / ACROSS) / ACROSS, at];
     };
     /** Every shape on the graphics card, by the mesh (or a sign's words) it was made from and then by the words on it. */
     const shapes = new Map<Mesh | string, Map<string, Shape>>();
@@ -388,13 +406,13 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
         if (shape.markCount) [shape.marksArray, shape.marksBuffer] = filled(shape.words, [3, 3, 2, 1]);
     };
     /** The shape for a mesh and the words on it, made only the first time. */
-    const shaped = (from: Mesh | string, key: string, make: () => [faces: number[], words: number[]]): Shape => {
+    const shaped = (from: Mesh | string, key: string, make: () => [faces: number[], words: number[], cells: number[]]): Shape => {
         let home = shapes.get(from);
         if (!home) shapes.set(from, (home = new Map()));
         let shape = home.get(key);
         if (!shape) {
-            const [faces, words] = make();
-            shape = { faces: new Float32Array(faces), words: new Float32Array(words), count: faces.length / 8, markCount: words.length / 9, users: 0, home, key };
+            const [faces, words, used] = make();
+            shape = { faces: new Float32Array(faces), words: new Float32Array(words), count: faces.length / 8, markCount: words.length / 9, cells: used, users: 0, home, key };
             upload(shape);
             home.set(key, shape);
         }
@@ -412,6 +430,7 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
                 if (shape.facesBuffer) g.deleteBuffer(shape.facesBuffer);
                 if (shape.marksArray) g.deleteVertexArray(shape.marksArray);
                 if (shape.marksBuffer) g.deleteBuffer(shape.marksBuffer);
+                for (const at of shape.cells) if (--cells[at]!.users === 0) cells[at]!.freed = ++clock;
                 home.delete(shape.key);
             }
             if (home.size === 0) shapes.delete(from);
@@ -431,9 +450,10 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
     };
 
     /** A mesh's faces as triangles, and the words on them, as the graphics card takes them. */
-    const geometry = (mesh: Mesh, look: Look): [faces: number[], words: number[]] => {
+    const geometry = (mesh: Mesh, look: Look): [faces: number[], words: number[], cells: number[]] => {
         const faces: number[] = [];
         const words: number[] = [];
+        const used: number[] = [];
         const flat = mesh.faces.map((face) => unit(cross(minus(mesh.points[face[1]!]!, mesh.points[face[0]!]!), minus(mesh.points[face[2]!]!, mesh.points[face[0]!]!))));
         // a smooth mesh is lit as if round: each corner faces the way the faces around it do, taken together
         const round = mesh.smooth ? mesh.points.map((_, point) => unit(mesh.faces.reduce<V3>((sum, face, number) => (face.includes(point) ? plus(sum, flat[number]!) : sum), [0, 0, 0]))) : undefined;
@@ -446,7 +466,8 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
             if (!asked) return;
             const { middle, room } = seat(mesh, number);
             for (const mark of typeof asked === "string" ? [{ word: asked, group: number } as Mark] : asked) {
-                const [u, v] = cell(mark.word, false);
+                const [u, v, at] = cell(mark.word, false);
+                used.push(at);
                 // upright toward a corner of the face (its first, unless one is named), and a hair above the face;
                 // one that sits toward a corner is smaller, and part of the way out to it
                 const toward = minus(corners[mark.corner ?? 0]!, middle);
@@ -460,8 +481,8 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
                 words.push(...corner(-1, -1), ...corner(1, -1), ...corner(1, 1), ...corner(-1, -1), ...corner(1, 1), ...corner(-1, 1));
             }
         });
-        return [faces, words];
-};
+        return [faces, words, used];
+    };
 
     const view: View = {
         font: "serif",
@@ -481,9 +502,9 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
         },
         sign(words, color) {
             const shape = shaped(`sign ${words}`, "", () => {
-                const [u, v] = cell(words, true);
+                const [u, v, at] = cell(words, true);
                 const corner = (x: number, y: number) => [x / 2, y / 2, 0, 0, 0, 1, u + ((x + 1) / 2) / ACROSS, v + ((1 - y) / 2) / ACROSS, 0];
-                return [[], [...corner(-1, -1), ...corner(1, -1), ...corner(1, 1), ...corner(-1, -1), ...corner(1, 1), ...corner(-1, 1)]];
+                return [[], [...corner(-1, -1), ...corner(1, -1), ...corner(1, 1), ...corner(-1, -1), ...corner(1, 1), ...corner(-1, 1)], [at]];
             });
             return made({ color, ink: color, over: true, shaded: false }, shape);
         },
