@@ -5,34 +5,72 @@ the project's file in [`docs/`](docs/README.md); what has been done is in [`CHAN
 
 ## Waiting on a decision
 
-- Generalist: keep or take out the small reward for one foot down, a rule about how to move ([generalist](docs/generalist.md#open)).
+### The site and what it publishes
+
+- Deploy: when. The live site is several days of work behind `main`, and none of the audit's fixes are live.
+- The about page, the resume and one post name where the owner studies, works and volunteers, which together narrow down a place. Keep, or cut the place names and rebuild so the resume's PDF changes too.
+- Git history is public and holds a personal email address in early commits and every photograph ever added, removed ones included. Clearing it means rewriting history again.
+- The drafts preview address is public unless Cloudflare Access is put in front of it.
+- The site says it does not track, while visitors' browsers ask GitHub for star counts. Reword, or fetch the counts at build time only.
+- The setup page lists a download stack that a reader may take as piracy.
+- The Terrustia recording shows a game server's port (the game's default).
+- The code and engines of draft minis ship in the live build though their pages are not listed.
+- Posts have no style for a `#` heading in the body, so the site draws it as large as the title. mdQuire now draws it smaller. Decide whether posts get the same rule.
+- Sentences in content that are no longer true: `dice.mdx` (typing a roll; there is no text box), `generalist.mdx` (learning by evolution, twice), `plinko.mdx` (what its settings change), `mote.mdx` (how many things the minis page has).
+- The share picture of the colophon post is out of date and is to be made again.
+- A guard on `bun run deploy` that refuses a branch other than `main` or uncommitted changes.
 - Page policy: whether the `blob:` allowance for pictures stays as it is ([mdQuire](docs/mdQuire.md#known-weak-spots)).
-- mdQuire: the wording of dictation's first-launch dialog, which has not been reviewed.
-- Generalist: the page text, which still says it learns by evolution, and its changed controls line, both to review.
-- Generalist: whether the page opens on practice (as now) or on evolution.
-- Deploy: when; the live site is several days of work behind `main`.
-- Git: delete twelve leftover local branches once nothing holds them: `comet`, `fold`, `generalist-gait`, `generalist-ppo3`, `mdquire-docs3`, `mdquire-feel`, `mdquire-lab`, `mdquire-leftovers`, `mdquire-look2`, `mdquire-markdown`, `parakeet`, and one unnamed agent branch.
-- Git: before deleting `generalist-gait`, tag commit `61c47e5`, which `walker/README.md` cites and which is on no other branch.
+- Looks that are a matter of taste, noted and not changed: terminals and the Playmatter clip play when scrolled to; on the photos page "another" falls just below the fold on a laptop; the mdQuire cover card is narrower than the others; on a phone the back-to-top button sits over text while reading; at 1920 wide the main pages leave the right half empty; on Comet the pull band runs off the left edge.
+
+### mdQuire
+
+- About thirty new sentences a writer can see were written during the audit (the "Not saved" dialog, errors from the stores, errors on opening a damaged file, one about spelling being unavailable) and the wording of dictation's first-launch dialog. All are to be read and approved or reworded.
+- Spelling: everything in [spelling](docs/spelling.md): American, British or both; on or off by default; a personal dictionary; names; a bigger word list.
+- A spoiler cannot be written inside a table cell, where pipes are cell edges. One that arrives there is written as its words. Confirm.
+- Backspace removes the last accent of a letter; Delete removes the whole letter. Confirm.
+- Whether the GitHub token moves from `localStorage` to `sessionStorage`.
+- Dictation: the model files are to be pinned to a revision and checked by digest; the hashes are to be read from Hugging Face and written into `models.ts`.
+
+### The minis and Mote
+
+- Generalist: keep or take out the small reward for one foot down, a rule about how to move ([generalist](docs/generalist.md#open)).
+- Generalist: the page text, and its changed controls line, to review; whether the page opens on practice (as now) or on evolution.
+- Generalist: the world's checker proves a path for a body that hops, and practice has no hop. Practised creatures bound and get past. Decide whether the checker should use what the body can do.
+- Generalist: the ramp of costs counts each worker's own steps, so with four workers it takes about four times as many steps in all.
+- Walker's engine: a body faster than about 16 m/s passes through a thin platform. Fixing it changes every result and every shared walker.
+- Mote: screens at 75 and 144 Hz cannot be stepped evenly unless the minis draw between physics steps.
+- Mote: a role and a label on the canvas, and a label on the sound switch, would change what a visitor sees.
+
+### Housekeeping
+
+- Git: delete the leftover local branches once nothing holds them (the fixers' `fix-*` branches and twelve older ones).
 
 ## Not yet verified
 
 - The resume's PDF, by eye.
-- Tone tags at phone width, by eye.
 - Dictation with a real voice, on phones, and in Safari.
-- mdQuire in Firefox and Safari.
+- mdQuire in Firefox and Safari; on a phone; with an input method on a real device; AltGr on Windows; with a screen reader.
 - Word files from mdQuire, opened in Word.
 - mdQuire's table of contents: its links against the site's real heading ids.
+- Frame rates on a real graphics card. Everything was measured with software drawing.
+- That the live site's headers match `public/_headers`.
 
 ## From the audit of 13 November
 
-- Filled in from `docs/AUDIT.md` once it is written.
+What was found and fixed is in [`docs/AUDIT.md`](docs/AUDIT.md). Still open from it, besides the decisions above:
+
+- mdQuire: editing a block rewrites the whole block, so untouched odd spellings in it (a doubled backslash, two spaces as a line break, `&amp;`) are normalised.
+- mdQuire: a line of 100,000 opening brackets takes the reader four seconds; deeply nested `<u>` is slower still.
+- mdQuire: the old `math` mark is still named in `docx.ts`, `export.ts`, `html.ts` and `surface.ts` and can go.
+- mdQuire: errors on the shelf are shown nowhere.
+- mdQuire: HEIC and AVIF pictures keep their metadata.
+- A browser test that throws before closing its browser leaves Chromium running.
+- Photo notes in the editing server have no check against two tabs.
 
 ## mdQuire
 
-- Merge the writer's pass (`mdquire-writer`): standard Markdown first, `__bold__`, tildes as strikethrough, `$` as a dollar, `||spoiler||`, `-# ` subtext, `>>> ` quotes, even spacing.
-- An emoji picker opened by a colon and letters, accepted only with Tab or Enter.
-- Google Docs' everyday keyboard shortcuts.
-- Better spelling, with a word list of its own.
+- Better spelling, with a word list of its own, once the questions in [spelling](docs/spelling.md) are settled.
+- What Google Docs has that mdQuire does not: the list to choose from is in [mdQuire against Docs](docs/mdQuire-against-docs.md).
 - Fluidity: typing, opening and closing, the bar; whether the caret glides.
 - Polish the top bar by using and testing it.
 - Decide when the page and its project page stop being hidden.
@@ -62,7 +100,6 @@ the project's file in [`docs/`](docs/README.md); what has been done is in [`CHAN
 
 ## Site
 
-- Shorten how long photographs are cached, so removed pictures stop lingering.
 - Spectrum: show the credit its license asks for somewhere a visitor sees it.
 - Three details on the resume.
 - Captions for photos.

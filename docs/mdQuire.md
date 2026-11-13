@@ -101,27 +101,26 @@ Word (a `.docx` written from scratch). PDF is the browser's print dialog with th
 **Standard Markdown's meaning always wins.** An extra is allowed only where Markdown gives no meaning. The
 decided cases:
 
-- `__text__` is bold, as Markdown has it. *In progress.*
+- `__text__` is bold, as Markdown has it.
 - `~text~` and `~~text~~` are both strikethrough, as GitHub reads them (on `main`, typed `~text~` makes
-  subscript). *In progress.*
-- `$` is a dollar sign; maths is a block only (on `main`, `$...$` in a line is read as maths). *In progress.*
-- `||spoiler||` makes a spoiler, kept as written. *In progress.*
-- `-# ` at the start of a line makes small, quiet subtext, kept as written. *In progress.*
-- `>>> ` quotes the line and everything after it. *In progress.*
+  subscript).
+- `$` is a dollar sign; maths is a block only (on `main`, `$...$` in a line is read as maths).
+- `||spoiler||` makes a spoiler, kept as written.
+- `-# ` at the start of a line makes small, quiet subtext, kept as written.
+- `>>> ` quotes the line and everything after it.
 - An emoji picker opened by a colon and letters, accepted only with Tab or Enter, so that ordinary typing
   with colons is never changed by surprise.
 
 **Spacing.** Even spacing between blocks in the manner of Google Docs, with sizes taken from the site's
 posts: one line between blocks, a little more above a heading that starts a section, the title at a post's
-title size. *In progress.*
+title size.
 
 **Shortcuts.** Google Docs' everyday keyboard shortcuts.
 
 **Spelling.** To be improved, with a word list of its own. How it works now, its numbers and the questions to settle are in `spelling.md`.
 
-The items marked in progress are on the branch `mdquire-writer`, a writer's pass not yet merged into
-`main`. It also makes lists look as Docs draws them and makes a list mark typed after a soft line break
-turn only that line into an item.
+All of the above is built and on `main`. Lists are drawn as Docs draws them, and a list mark typed after a
+soft line break turns only that line into an item.
 
 ## Open
 

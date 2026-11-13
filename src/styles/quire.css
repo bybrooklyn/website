@@ -469,6 +469,12 @@
     caret-color: transparent;
 }
 
+/* the document draws its own caret and hides the browser's; a field inside it (a card's value, a caption, a
+   code block's language) is the browser's to type in, and keeps its caret */
+.quire :is(input, textarea) {
+    caret-color: auto;
+}
+
 /* blocks out of sight are not laid out on every key, which keeps a long document quick to type in;
    each remembers its size once it has been seen, so the page does not jump */
 .quire > * {

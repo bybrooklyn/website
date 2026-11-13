@@ -8,6 +8,8 @@ open, how to run and test it, and its known weak spots.
 - [site.md](site.md): the site itself, its pages, the rules for what goes on them, caching and deploying.
 - [publishing.md](publishing.md): writing in the browser, drafts, held posts, photos and share pictures.
 - [mdQuire.md](mdQuire.md): the Markdown word processor at `/mdquire/`, also behind `bun run edit`.
+- [mdQuire-against-docs.md](mdQuire-against-docs.md): what Google Docs' menus have that mdQuire does not, each marked small, big or not fitting.
+- [AUDIT.md](AUDIT.md): the audit of 13 November 2026: what was read, found, fixed and left.
 - [spelling.md](spelling.md): mdQuire's spelling check as it is, measured, and the questions for its rebuild.
 - [imgQuire.md](imgQuire.md): an image editor to sit beside mdQuire; nothing built.
 - [cutout.md](cutout.md): a background remover, a page of its own and a tool of imgQuire; nothing built.
@@ -18,7 +20,6 @@ open, how to run and test it, and its known weak spots.
 - [comet.md](comet.md): Comet, an aim-and-fling gravity game, a draft.
 - [spectrum.md](spectrum.md): Spectrum, the sliders for gender and sexuality, rewritten for the site.
 - [tonetags.md](tonetags.md): the tone tags page.
-- `AUDIT.md`: an audit of the whole site, to be added.
 
 ## How the docs are kept
 
