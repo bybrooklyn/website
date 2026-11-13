@@ -154,15 +154,37 @@ test("Enter in a list makes a new item, and on an empty item leaves the list", (
     expect(e.cursor).toEqual({ path: [1], offset: 5 });
 });
 
-test("Enter in code is a newline, and on an empty last line leaves the code", () => {
+test("Enter in code is a newline, so a blank line can be typed, and only after two empty last lines does it leave the code", () => {
     const e = editor("```js\nlet a\n```\n", [0], 5);
     e.key("Enter");
     e.type("b");
     expect(e.markdown).toBe("```js\nlet a\nb\n```\n");
+    // a, Enter, b, Enter, Enter, c keeps the blank line between them
+    e.key("Enter");
+    e.key("Enter");
+    e.type("c");
+    expect(e.markdown).toBe("```js\nlet a\nb\n\nc\n```\n");
+    // two empty lines at the end, then Enter, leaves; the empty lines go
+    e.key("Enter");
     e.key("Enter");
     e.key("Enter");
     e.type("text");
-    expect(e.markdown).toBe("```js\nlet a\nb\n```\n\ntext\n");
+    expect(e.markdown).toBe("```js\nlet a\nb\n\nc\n```\n\ntext\n");
+});
+
+test("the down arrow on the last line of a code block at the document's end makes a line under it; elsewhere it is the browser's", () => {
+    const e = editor("```js\nlet a\nlet b\n```\n", [0], 3);
+    // on the first line it is the browser's own move
+    expect(e.key("ArrowDown")).toBeNull();
+    e.select({ anchor: { path: [0], offset: 8 }, focus: { path: [0], offset: 8 } });
+    e.key("ArrowDown");
+    expect(e.cursor).toEqual({ path: [1], offset: 0 });
+    e.type("after");
+    expect(e.markdown).toBe("```js\nlet a\nlet b\n```\n\nafter\n");
+    // with a line of text after the block, the browser moves there itself
+    expect(editor("```js\nlet a\n```\n\nNext\n", [0], 5).key("ArrowDown")).toBeNull();
+    // and in a paragraph it never does anything
+    expect(editor("Plain\n", [0], 2).key("ArrowDown")).toBeNull();
 });
 
 test("Enter at the end of a heading starts a paragraph, at its start puts a paragraph above", () => {

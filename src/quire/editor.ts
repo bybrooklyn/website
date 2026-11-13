@@ -33,6 +33,7 @@ import { createSaver, fileName, said, type Entry, type Opened, type Status, type
 import { altGraph, createSurface, type Surface } from "./surface";
 import { createTableTools } from "./tables";
 import { createPictureTools } from "./picture-tools";
+import { createBlockMenus } from "./block-menus";
 import { createCommentMargin, keptNotes, moveNotes } from "./comment-margin";
 import { addContents, dateText, findContents, specialGrid, typeIn, typeSpecial, updateContents } from "./inserts";
 import { colorHex, countRows, gatherPictures, heldElsewhere, markdownFor, pageHtml, plainText, readingStyles, type Picture } from "./export";
@@ -607,6 +608,8 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     const emojiList = createEmojiPicker(surface);
     const tableTools = createTableTools(surface, () => bar.element.getBoundingClientRect().bottom);
     const pictureTools = createPictureTools(surface, { keep: keepPicture, margin: host });
+    // a code block's language and a callout's kind, each a menu from its control in the text
+    const blockMenus = createBlockMenus(surface);
     // the writer's notes: marked in the text, in the right margin on a wide window and a list on a narrow one
     const notes = createCommentMargin(surface, { place: notesPlace });
     host.append(notes.element);
@@ -1131,6 +1134,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
             emojiList.close();
             tableTools.element.remove();
             pictureTools.destroy();
+            blockMenus.destroy();
             notes.destroy();
             for (const menu of [downloads, specials]) menu.box.remove();
             keeper.stop();

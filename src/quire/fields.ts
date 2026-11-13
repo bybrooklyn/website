@@ -9,16 +9,15 @@
 import { blockAt, blockPaths, type Document, type Position } from "./document";
 
 /** The kinds of field drawn inside a block of the text. */
-export type FieldKind = "summary" | "prop" | "code";
+export type FieldKind = "summary" | "prop";
 
 /**
- * Where the caret goes after Enter in a field drawn in the block at `path`: from a code block's
- * language, the start of its code; from a folding section's summary, the start of the first line in
- * the section, as Docs moves from a heading into its text; from a component's property, the start of
- * the first line after the component. With no line there, the nearest line before it.
+ * Where the caret goes after Enter in a field drawn in the block at `path`: from a folding section's
+ * summary, the start of the first line in the section, as Docs moves from a heading into its text;
+ * from a component's property, the start of the first line after the component. With no line there,
+ * the nearest line before it.
  */
 export function afterField(doc: Document, path: number[], kind: FieldKind): Position {
-    if (kind === "code" && blockAt(doc, path)?.kind === "code") return { path, offset: 0 };
     const paths = blockPaths(doc);
     const inside = (each: number[]) => each.length > path.length && path.every((step, k) => each[k] === step);
     const writable = (each: number[]) => {

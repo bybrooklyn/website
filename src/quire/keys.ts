@@ -604,9 +604,10 @@ function enter(state: State): Outcome {
         return done(next, caret(sameLeaf(doc, at.path, next), 0), "shortcut");
     }
     if (block.kind === "code") {
-        // Enter on an empty last line of code leaves the code block
-        if (at.offset === block.code.length && block.code.endsWith("\n")) {
-            let next = deleteText(doc, { start: { path: at.path, offset: at.offset - 1 }, end: at });
+        // Enter in code is a new line, so a blank line can be typed; at the end of code that already
+        // ends in two empty lines it leaves the block, the two empty lines taken away
+        if (at.offset === block.code.length && block.code.endsWith("\n\n")) {
+            let next = deleteText(doc, { start: { path: at.path, offset: at.offset - 2 }, end: at });
             next = insertBlock(next, at.path, paragraph());
             return done(next, caret(nextSibling(at.path), 0), "structure");
         }
@@ -643,6 +644,22 @@ function enter(state: State): Outcome {
     const grew = blockPaths(next).length > count;
     if (block.kind === "heading" && at.offset === 0 && runsLength(block.runs) > 0) next = changeKind(next, at.path, { kind: "paragraph" });
     return done(next, caret(sameLeaf(doc, at.path, next, grew ? 1 : 0), 0), "structure");
+}
+
+/**
+ * The down arrow on the last line of a code block with no line of text straight after it (the end
+ * of the document, or a table or picture next) makes a line there and goes to it, as Docs' code
+ * blocks are left. Anywhere else the arrow is the browser's.
+ */
+function downFromCode(state: State): Outcome {
+    const at = state.selection.focus;
+    if (!collapsed(state.selection)) return null;
+    const block = blockAt(state.doc, at.path);
+    if (block?.kind !== "code" || block.code.indexOf("\n", at.offset) !== -1) return null;
+    const after = nextSibling(at.path);
+    const next = blockAt(state.doc, after);
+    if (next && textual(next)) return null;
+    return done(insertBlock(state.doc, at.path, paragraph()), caret(after, 0), "structure");
 }
 
 function softBreak(state: State): Outcome {
@@ -748,6 +765,7 @@ export function handle(state: State, input: Input, options: TypingOptions = {}):
     if (key === "Delete") return forwardDelete(state, word || alt);
     if (key === "Enter") return shift ? softBreak(state) : enter(state);
     if (key === "Tab") return tab(state, shift);
+    if (key === "ArrowDown" && !shift && !alt) return downFromCode(state);
     return null;
 }
 

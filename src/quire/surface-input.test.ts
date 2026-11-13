@@ -126,7 +126,6 @@ const shown = (tab: Browser) => tab.run<string>("quire.shown()");
 describe("composition in a field inside the document stays in the field", () => {
     const fields: [string, string, string, string][] = [
         ["a card's property", "<Callout kind={1} title=\"Hi\" />\n\nText\n", "[data-prop=title]", "<Callout kind={1} title=\"Hi\" />\n\nText\n"],
-        ["a code block's language", "```js\nlet a;\n```\n\nText\n", "[data-lang]", "```js\nlet a;\n```\n\nText\n"],
         ["a folding section's summary", "<details>\n<summary>Fold</summary>\n\nInside\n\n</details>\n\nText\n", "[data-summary]", "<details>\n<summary>Fold</summary>\n\nInside\n\n</details>\n\nText\n"],
     ];
     for (const [what, markdown, selector, same] of fields) {
@@ -358,14 +357,14 @@ describe("every kind of input that changes text either changes the model or is c
     });
 
     inPage("copy, cut and a drop in a field inside the document are the field's own", async (tab) => {
-        await tab.run(`quire.reset("\`\`\`js\\nlet a;\\n\`\`\`\\n\\nText here\\n")`);
+        await tab.run(`quire.reset("<details>\\n<summary>Fold</summary>\\n\\nInside\\n\\n</details>\\n\\nText here\\n")`);
         await tab.run("quire.select([1], 0, 4)");
-        await tab.run(`(() => { const f = document.querySelector("[data-lang]"); f.focus(); f.select(); })()`);
+        await tab.run(`(() => { const f = document.querySelector("[data-summary]"); f.focus(); f.select(); })()`);
         const cut = await tab.run<boolean>(`(() => { const data = new DataTransfer(); const e = new ClipboardEvent("cut", { clipboardData: data, bubbles: true, cancelable: true }); document.activeElement.dispatchEvent(e); return e.defaultPrevented; })()`);
         expect(cut).toBe(false);
         const dropped = await tab.run<boolean>(`(() => { const data = new DataTransfer(); data.setData("text/plain", "dropped"); const e = new DragEvent("drop", { dataTransfer: data, bubbles: true, cancelable: true }); document.activeElement.dispatchEvent(e); return e.defaultPrevented; })()`);
         expect(dropped).toBe(false);
-        expect(await md(tab)).toBe("```js\nlet a;\n```\n\nText here\n");
+        expect(await md(tab)).toBe("<details>\n<summary>Fold</summary>\n\nInside\n\n</details>\n\nText here\n");
     });
 });
 

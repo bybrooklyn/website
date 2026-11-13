@@ -208,9 +208,6 @@ export const LANGUAGES: Language[] = [
     { name: "diff", label: "Diff", aliases: ["diff", "patch"], rules: diff },
 ];
 
-/** The names offered in a code block's language field: the languages highlighted, then maths and diagrams, which are drawn. */
-export const LANGUAGE_NAMES = [...LANGUAGES.map((language) => language.aliases[0]!), "math", "mermaid", "text"];
-
 /** The language a fence's info string names, by its first word; undefined for one not highlighted. */
 export function languageOf(info: string): Language | undefined {
     const name = info.trim().split(/[\s{]/)[0]!.toLowerCase();

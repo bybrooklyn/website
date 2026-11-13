@@ -34,7 +34,7 @@
 // `quire-task` on a task item and `quire-box` on its box (`data-checked`),
 // `quire-atom` on an inline HTML span or footnote reference.
 
-import { blockAt, blockPaths, changeKind, documentOf, image as imageBlock, isPageBreak, lengthOf, markdownOnly, paragraph, setBox, setRaw, toggleTask, type Block, type Code, type Document, type Leaf, type Mark, type Position, type Run, type Selection } from "./document";
+import { blockAt, blockPaths, documentOf, image as imageBlock, isPageBreak, lengthOf, markdownOnly, paragraph, setBox, setRaw, toggleTask, type Block, type Code, type Document, type Leaf, type Mark, type Position, type Run, type Selection } from "./document";
 import { createHistory, redo as redoStep, undo as undoStep, type ChangeKind, type State } from "./history";
 import { readHtml, writeHtml } from "./html";
 import { drawPicture } from "./picture-tools";
@@ -45,7 +45,8 @@ import { write } from "./write";
 import { fieldsOf, KNOWN, readTag, setProp, type Tag } from "./components";
 import { diagram } from "./diagram";
 import { emojiOf } from "./emoji";
-import { highlight, LANGUAGE_NAMES } from "./highlight";
+import { highlight } from "./highlight";
+import { calloutName, languageLabel } from "./block-menus";
 import { maths } from "./maths";
 import { namesIn } from "./check/names";
 import { bookmarkName } from "./bookmarks";
@@ -350,16 +351,16 @@ function drawCode(block: Code, inner: number[], how: Drawing): HTMLElement {
         fillText(holder, block.code);
         how.later(holder, block);
     } else fillTokens(holder, block.code, block.language);
+    // the language as a quiet button whose menu is block-menus.ts's
     const corner = aside("span", "quire-lang-corner");
-    const field = document.createElement("input");
-    field.className = "quire-lang";
-    field.value = block.language;
-    field.placeholder = "language";
-    field.spellcheck = false;
-    field.setAttribute("list", "quire-languages");
-    field.setAttribute("aria-label", "The code's language");
-    field.dataset.lang = inner.join(",");
-    corner.append(field);
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "quire-lang";
+    button.textContent = languageLabel(block.language);
+    button.setAttribute("aria-haspopup", "menu");
+    button.setAttribute("aria-label", `Code language: ${languageLabel(block.language)}`);
+    button.dataset.lang = inner.join(",");
+    corner.append(button);
     pre.append(corner, holder);
     return pre;
 }
@@ -379,9 +380,6 @@ function drawDrawn(block: Code, inner: number[], how: Drawing): HTMLElement {
     box.append(preview, drawCode(block, inner, how));
     return box;
 }
-
-/** The names a callout's kind steps through when its label is pressed. */
-const CALLOUTS = ["NOTE", "TIP", "IMPORTANT", "WARNING", "CAUTION"];
 
 /** A component's tag as a card: its name, what it is, and a field for each property. */
 function drawCard(tag: Tag, inner: number[]): HTMLElement {
@@ -501,7 +499,7 @@ function draw(block: Block, inner: number[], how: Drawing = plainDrawing): HTMLE
                 return element;
             }
             if (block.callout !== undefined) {
-                // a callout: its kind as a label that steps to the next kind when pressed, any title beside it
+                // a callout: its kind as a label whose menu of the five kinds is block-menus.ts's, any title beside it
                 const element = document.createElement("blockquote");
                 element.className = "quire-callout";
                 element.dataset.callout = block.callout.toLowerCase();
@@ -510,8 +508,10 @@ function draw(block: Block, inner: number[], how: Drawing = plainDrawing): HTMLE
                 kind.type = "button";
                 kind.className = "quire-callout-kind";
                 kind.dataset.calloutKind = inner.join(",");
-                kind.textContent = block.callout.charAt(0).toUpperCase() + block.callout.slice(1).toLowerCase();
-                kind.title = "Press for another kind of callout";
+                kind.textContent = calloutName(block.callout);
+                kind.title = "Change type";
+                kind.setAttribute("aria-haspopup", "menu");
+                kind.setAttribute("aria-label", `Callout type: ${calloutName(block.callout)}`);
                 head.append(kind);
                 if (block.title) {
                     const title = document.createElement("span");
@@ -696,14 +696,6 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
 
     // ---- drawing the document ----
 
-    // the languages a code block's field offers, once for the page
-    if (!document.getElementById("quire-languages")) {
-        const list = document.createElement("datalist");
-        list.id = "quire-languages";
-        for (const name of LANGUAGE_NAMES) list.append(new Option(name));
-        document.body.append(list);
-    }
-
     /** Whether typed arrows and signs become their characters, and `==` is shown joined: on unless the writer turned it off. */
     let symbols = true;
     const drawing = (): Drawing => ({ mdx: editor.state.doc.mdx, join: symbols, later });
@@ -737,6 +729,9 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
         if (holder) {
             const box = holder.closest<HTMLElement>(".quire-drawn");
             if (box) now.push(box);
+            // a code block with no language shows its quiet Plain text control while the caret is in it
+            const code = holder.closest<HTMLElement>("pre.quire-code");
+            if (code) now.push(code);
             for (const math of holder.querySelectorAll<HTMLElement>(".quire-math, .quire-spoiler")) {
                 const start = offsetIn(holder, math, 0);
                 if (focus.offset >= start && focus.offset <= start + units(math)) now.push(math);
@@ -1013,7 +1008,8 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
         const key = shortcutKey(event, mod);
         // Ctrl+Shift+V pastes, through the paste event, without formatting
         if (mod && event.shiftKey && key === "v") plainNext = true;
-        if (!mod && !["Enter", "Backspace", "Delete", "Tab"].includes(key)) return;
+        // the down arrow is looked at only to leave a code block at the document's end (keys.ts); elsewhere it stays the browser's
+        if (!mod && !["Enter", "Backspace", "Delete", "Tab", "ArrowDown"].includes(key)) return;
         if (MAC && event.ctrlKey && !mod) return;
         if (mod && key === "a" && !event.shiftKey && !event.altKey) {
             // Select All is the model's: the browser's own selects nothing at all when the document begins or ends with a block that cannot be written in
@@ -1319,17 +1315,9 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
         if (pressControl(target)) event.preventDefault();
     }
 
-    /** Presses a control drawn in the document, if the target is in one: a callout's label steps to the next kind, a folding section's button sets whether it starts open, a task's box is ticked. True if it was one. */
+    /** Presses a control drawn in the document, if the target is in one: a folding section's button sets whether it starts open, a task's box is ticked. True if it was one. A code block's language and a callout's kind open menus of their own (block-menus.ts). */
     function pressControl(target: HTMLElement): boolean {
-        const kind = target.closest?.("[data-callout-kind]") as HTMLElement | null;
-        if (kind && root.contains(kind)) {
-            const path = pathOf(kind, kind.dataset.calloutKind);
-            const block = blockAt(editor.state.doc, path);
-            if (block?.kind !== "quote" || block.callout === undefined) return true;
-            const next = CALLOUTS[(CALLOUTS.indexOf(block.callout.toUpperCase()) + 1) % CALLOUTS.length]!;
-            run((doc) => setBox(doc, path, { callout: next }));
-            return true;
-        }
+        if (target.closest?.("[data-callout-kind], [data-lang]")) return true;
         const fold = target.closest?.("[data-fold]") as HTMLElement | null;
         if (fold && root.contains(fold)) {
             const path = pathOf(fold, fold.dataset.fold);
@@ -1490,14 +1478,8 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
         commit(apply(editor, { state, kind }, Date.now()), { state, kind });
     }
 
-    /** A field inside the document was changed: a code block's language, a folding section's summary, or a component's property. Its block, and which kind of field it is, if it was one; a value the document already has changes nothing. */
+    /** A field inside the document was changed: a folding section's summary, or a component's property. Its block, and which kind of field it is, if it was one; a value the document already has changes nothing. */
     function keepField(field: HTMLInputElement): { path: number[]; kind: FieldKind } | undefined {
-        if (field.matches?.("[data-lang]")) {
-            const path = pathOf(field, field.dataset.lang);
-            const block = blockAt(editor.state.doc, path);
-            if (block?.kind === "code" && block.language !== field.value.trim()) run((doc) => changeKind(doc, path, { kind: "code", language: field.value.trim() }));
-            return { path, kind: "code" };
-        }
         if (field.matches?.("[data-summary]")) {
             const path = pathOf(field, field.dataset.summary);
             const block = blockAt(editor.state.doc, path);

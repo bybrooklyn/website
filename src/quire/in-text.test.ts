@@ -11,6 +11,9 @@ let page: EditorPage | undefined;
 
 beforeAll(async () => {
     page = await editorPage();
+    // the look of the Markdown kinds (code blocks, callouts, folding sections), which the shared page leaves out
+    const css = await Bun.file(`${import.meta.dir}/../styles/quire-markdown.css`).text();
+    await page?.tab.run(`(() => { const style = document.createElement("style"); style.textContent = ${JSON.stringify(css)}; document.head.append(style); })()`);
 }, 60_000);
 
 afterAll(async () => {
@@ -54,4 +57,94 @@ test("Enter in a component's property keeps it and puts the caret on the line af
     expect(await page!.md()).toBe('<Figure src="b.png" />\n\nAfter\n');
     expect(await keyboard()).toBe("writing");
     expect(await caret()).toEqual({ path: [1], offset: 0 });
+});
+
+test("a blank line can be typed in a code block, and two empty lines at its end then Enter leave it", async () => {
+    if (skip("a code block's blank lines")) return;
+    const { tab } = page!;
+    await page!.reset("```\nx\n```\n", [0], 1);
+    await tab.press("Backspace");
+    await tab.type("a");
+    await tab.press("Enter");
+    await tab.type("b");
+    await tab.press("Enter");
+    await tab.press("Enter");
+    await tab.type("c");
+    expect(await page!.md()).toBe("```\na\nb\n\nc\n```\n");
+    await tab.press("Enter");
+    await tab.press("Enter");
+    await tab.press("Enter");
+    await tab.type("after");
+    expect(await page!.md()).toBe("```\na\nb\n\nc\n```\n\nafter\n");
+});
+
+test("the down arrow on a code block's last line at the document's end goes to a new line under it", async () => {
+    if (skip("the down arrow out of a code block")) return;
+    const { tab } = page!;
+    await page!.reset("```\nlast\n```\n", [0], 2);
+    await tab.press("ArrowDown");
+    await tab.type("out");
+    expect(await page!.md()).toBe("```\nlast\n```\n\nout\n");
+});
+
+test("a code block's language is always shown once set, and is chosen from a menu that typing narrows; Escape leaves it as it was", async () => {
+    if (skip("a code block's language menu")) return;
+    const { tab } = page!;
+    await page!.reset("Before\n\n```ts\nlet a = 1\n```\n", [0], 3);
+    // shown with the caret elsewhere and nothing pointed at
+    expect(await tab.run("getComputedStyle(document.querySelector('.quire-lang-corner')).opacity")).toBe("1");
+    expect(await tab.run("document.querySelector('.quire-lang').textContent")).toBe("TypeScript");
+    await page!.press(".quire-lang");
+    await tab.wait(400);
+    expect(await keyboard()).toBe("input.quire-link-field quire-language-field");
+    expect(await tab.run("document.querySelector('.quire-language-list .pressed').textContent")).toBe("TypeScript");
+    await tab.type("py");
+    expect(await tab.run("[...document.querySelectorAll('.quire-language-list .quire-menu-label')].map((each) => each.textContent)")).toEqual(["Python"]);
+    await tab.press("Enter");
+    await tab.wait(300);
+    expect(await page!.md()).toBe("Before\n\n```py\nlet a = 1\n```\n");
+    // the caret went into the code
+    expect(await keyboard()).toBe("writing");
+    expect(await caret()).toEqual({ path: [1], offset: 0 });
+    await page!.press(".quire-lang");
+    await tab.wait(400);
+    await tab.press("Escape");
+    await tab.wait(300);
+    expect(await page!.md()).toBe("Before\n\n```py\nlet a = 1\n```\n");
+    expect(await keyboard()).toBe("writing");
+});
+
+test("a code block with no language says Plain text while the caret is in it, and hides it otherwise", async () => {
+    if (skip("a plain code block's control")) return;
+    const { tab } = page!;
+    await page!.reset("Before\n\n```\nplain\n```\n", [0], 0);
+    await tab.wait(250);
+    // (the pointer may still rest over the block from the test before, which shows it too, so the caret's mark is what is read)
+    expect(await tab.run("document.querySelector('pre.quire-code').classList.contains('quire-editing')")).toBe(false);
+    await tab.run("q.select([1], 2)");
+    await tab.wait(250);
+    expect(await tab.run("getComputedStyle(document.querySelector('.quire-lang-corner')).opacity")).toBe("1");
+    expect(await tab.run("document.querySelector('.quire-lang').textContent")).toBe("Plain text");
+});
+
+test("a callout's kind is chosen from a menu of the five, not stepped round by pressing it", async () => {
+    if (skip("a callout's kind menu")) return;
+    const { tab } = page!;
+    await page!.reset("> [!NOTE]\n> Mind this.\n", [0, 0], 2);
+    await page!.press(".quire-callout-kind");
+    await tab.wait(400);
+    expect(await tab.run("[...document.querySelectorAll('.quire-menu.open .quire-menu-label')].map((each) => each.textContent)")).toEqual(["Note", "Tip", "Important", "Warning", "Caution"]);
+    expect(await page!.md()).toBe("> [!NOTE]\n> Mind this.\n");
+    await page!.press(".quire-menu.open .quire-menu-line", "Warning");
+    await tab.wait(300);
+    expect(await page!.md()).toBe("> [!WARNING]\n> Mind this.\n");
+    expect(await keyboard()).toBe("writing");
+    expect(await caret()).toEqual({ path: [0, 0], offset: 2 });
+    // a click no pointer made, as a screen reader sends, opens the menu with its first line ready for the arrows
+    await tab.run("document.querySelector('[data-callout-kind]').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 0 }))");
+    await tab.wait(400);
+    expect(await tab.run("document.activeElement.textContent")).toBe("Note");
+    await tab.press("Escape");
+    await tab.wait(300);
+    expect(await page!.md()).toBe("> [!WARNING]\n> Mind this.\n");
 });

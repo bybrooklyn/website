@@ -54,7 +54,7 @@ test.skipIf(!chromium())(
                 import { read } from "${import.meta.dir}/read.ts";
                 const frame = document.querySelector("#frame");
                 const sheet = document.querySelector("#sheet");
-                const surface = createSurface(sheet, read("Text\\n\\n\u0060\u0060\u0060js\\nlet a;\\n\u0060\u0060\u0060\\n"));
+                const surface = createSurface(sheet, read("Text\\n\\n<details>\\n<summary>More</summary>\\n\\nInside\\n\\n</details>\\n"));
                 createCaret(sheet, frame);
                 surface.focus();`,
             );
@@ -66,7 +66,7 @@ test.skipIf(!chromium())(
             await tab.press("End");
             await tab.wait(100);
             expect(await shown()).toBe(true);
-            await tab.run("document.querySelector('[data-lang]').focus()");
+            await tab.run("document.querySelector('[data-summary]').focus()");
             await tab.type("x");
             await tab.wait(100);
             expect(await shown()).toBe(false);

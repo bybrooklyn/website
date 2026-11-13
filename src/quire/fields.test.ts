@@ -23,11 +23,6 @@ test("Enter in a component's property goes to the first line after the component
     expect(afterField(last, [1], "prop")).toEqual({ path: [0], offset: 0 });
 });
 
-test("Enter in a code block's language goes to the start of its code", () => {
-    const doc = read("Before\n\n```js\nlet a\n```\n");
-    expect(afterField(doc, [1], "code")).toEqual({ path: [1], offset: 0 });
-});
-
 test("a nested section's summary goes into its own first line, not the outer section's", () => {
     const doc = read("<details>\n<summary>Outer</summary>\n\nFirst.\n\n<details>\n<summary>Inner</summary>\n\nDeep.\n\n</details>\n\n</details>\n");
     expect(afterField(doc, [0, 1], "summary")).toEqual({ path: [0, 1, 0], offset: 0 });

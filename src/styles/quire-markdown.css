@@ -55,7 +55,7 @@
     color: color-mix(in oklch, var(--ink) 50%, oklch(0.72 0.17 15));
 }
 
-/* the language sits in the block's corner as a quiet field, the languages offered as it is typed in */
+/* the language sits in the block's corner as a quiet button, whose menu of languages is block-menus.ts's */
 .quire pre.quire-code[data-label]:not([data-label=""])::after {
     content: none;
 }
@@ -70,6 +70,7 @@
     color: var(--quire-faint);
     font-family: var(--font-mono), monospace;
     font-size: 0.75rem;
+    transition: opacity 0.2s var(--ease);
 }
 
 /* a block with a language names it at its top left, after a small sign for code, on a line of its own above the code */
@@ -86,7 +87,7 @@
     padding-top: 1.9rem;
 }
 
-/* a block with no language has no line for it: the field waits in the far corner and shows when the block is pointed at */
+/* a block with no language has no line for it: a quiet Plain text waits in the far corner, shown while the block is pointed at or the caret is in it */
 .quire pre.quire-code[data-label=""] .quire-lang-corner {
     right: 0.5rem;
     left: auto;
@@ -96,12 +97,14 @@
     content: none;
 }
 
-.quire pre.quire-code[data-label=""]:not(:hover, :focus-within) .quire-lang-corner {
+.quire pre.quire-code[data-label=""]:not(:hover, .quire-editing) .quire-lang-corner:not(:has(.open)) {
     opacity: 0;
 }
 
 .quire-lang {
-    width: 9em;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3em;
     padding: 0.1em 0.4em;
     margin-left: -0.4em;
     border: 0.0625rem solid transparent;
@@ -109,23 +112,41 @@
     background: transparent;
     color: inherit;
     font: inherit;
+    cursor: pointer;
     transition:
         border-color 0.2s var(--ease),
-        background 0.2s var(--ease);
+        color 0.2s var(--ease);
 }
 
-.quire pre.quire-code[data-label=""] .quire-lang {
-    text-align: right;
+/* a small arrow says the name opens a menu */
+.quire-lang::after {
+    content: "";
+    width: 0.7em;
+    height: 0.7em;
+    background: currentcolor;
+    mask: url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22black%22 stroke-width=%222.5%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22m6 9 6 6 6-6%22/%3E%3C/svg%3E') center / contain no-repeat;
 }
 
-.quire pre:hover .quire-lang,
-.quire-lang:focus {
+.quire-lang:hover,
+.quire-lang.open,
+.quire-lang:focus-visible {
     border-color: var(--rule);
+    color: var(--ink);
 }
 
-.quire-lang:focus {
-    background: var(--ground);
-    text-align: left;
+/* the menu of languages: a field to narrow them, and under it the languages, scrolling when they are many */
+.quire-language {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    min-width: 13rem;
+}
+
+.quire-language-list {
+    display: flex;
+    flex-direction: column;
+    max-height: min(18rem, 50vh);
+    overflow: auto;
 }
 
 /* ---- maths and diagrams ---- */
