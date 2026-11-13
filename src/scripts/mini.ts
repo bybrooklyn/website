@@ -5,7 +5,8 @@
 
 import { mote, type Mote, type Scene } from "../mote/stage";
 
-const minis = import.meta.glob<{ default: (m: Mote) => Scene; label?: string }>("../minis/*.ts");
+// The tests beside the minis are left out, or each would be built into the site as a file of its own.
+const minis = import.meta.glob<{ default: (m: Mote) => Scene; label?: string }>(["../minis/*.ts", "!../minis/*.test.ts"]);
 
 const near = new IntersectionObserver(
     (entries) => {
