@@ -171,6 +171,8 @@ const count = (set: string) => all.filter((photo) => photo.set === set).length;
             const pass = () => {
                 busy = false;
                 if (++missing <= 5) void show(draw(index));
+                // giving up: the figure comes back as it was, not left faded out
+                else delete figure.dataset.state;
             };
             if (image.src && !still.matches) {
                 figure.dataset.state = "leaving";
