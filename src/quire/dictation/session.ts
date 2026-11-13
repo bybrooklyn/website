@@ -260,13 +260,24 @@ export function startSession(options: SessionOptions): Session {
         const written = steps.some((step) => step.kind === "text" || step.kind === "line" || step.kind === "paragraph");
         if (written) last = { text: fixed, after: target.getDocument() };
         for (const command of commands) {
-            if (command === "undo") target.undo();
+            if (command === "undo") undoLast();
             else if (command === "delete") deleteLast();
             else if (command === "stop") void finish("command");
         }
     }
 
-    /** Takes back the last phrase dictated: by undo if nothing else has been done since, or by taking its text from before the cursor. */
+    /**
+     * "undo that" is heard from sound alone, which a video or another voice in the room can make, so
+     * it is bounded: it takes back only the last phrase this session wrote, and only while the
+     * document is still exactly as that phrase left it. Then the phrase is forgotten, so saying it
+     * again does nothing until another phrase is written. It never reaches the writer's own work.
+     */
+    function undoLast() {
+        if (last && target.getDocument() === last.after) target.undo();
+        last = undefined;
+    }
+
+    /** Takes back the last phrase dictated: by undo if nothing else has been done since, or by taking its text from before the cursor. Bounded as `undoLast` is: once, and only this session's last phrase. */
     function deleteLast() {
         if (!last) return;
         if (target.getDocument() === last.after) target.undo();
@@ -280,7 +291,8 @@ export function startSession(options: SessionOptions): Session {
                 // the text is taken out through the same step as writing, by an erase of nothing and a replacement
                 const state = write({ doc, selection: { anchor: { path: at.path, offset: at.offset }, focus: { path: at.path, offset: at.offset } } }, [{ kind: "text", text: "", erase: at.offset - cut }]);
                 return state.state;
-            }, "delete");
+                // a step of its own kind, so that it never joins a Backspace typed just before and one undo puts it back
+            }, "replace");
         }
         last = undefined;
     }

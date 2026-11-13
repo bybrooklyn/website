@@ -3,7 +3,7 @@
 // commands, a window cut at its quietest moment, and falling back to pause-only when too slow.
 
 import { describe, expect, test } from "bun:test";
-import { documentOf, paragraph, textAt, type Document, type Selection } from "../document";
+import { documentOf, insertText, paragraph, textAt, type Document, type Selection } from "../document";
 import type { ChangeKind, State } from "../history";
 import { caret } from "../keys";
 import { write as markdown } from "../write";
@@ -175,6 +175,40 @@ describe("spoken commands", () => {
         const { editor, session } = make();
         await drive(session, [...quiet(300), ...frames(2900, 0.2), ...quiet(1000), ...frames(1500, 0.4), ...quiet(1000)]);
         expect(editor.text()).toBe("");
+    });
+    /** An editor holding a line the writer typed herself, as its own undo step. */
+    function typed() {
+        const editor = target();
+        editor.run((doc) => ({ doc: insertText(doc, { path: [0], offset: 0 }, "Mine. "), selection: caret([0], 6) }), "type");
+        return editor;
+    }
+    function on(editor: Target) {
+        return startSession({ target: editor, recognizer: recognizer(), commands: () => true, custom: () => nothing() });
+    }
+    test("undo that, said before anything was dictated, leaves the writer's own work alone", async () => {
+        const editor = typed();
+        await drive(on(editor), [...quiet(300), ...frames(1500, 0.3), ...quiet(1000), ...frames(1500, 0.3), ...quiet(1000)]);
+        expect(editor.text()).toBe("Mine.");
+    });
+    test("undo that, said again and again, takes back only the one phrase dictated", async () => {
+        const editor = typed();
+        await drive(on(editor), [...quiet(300), ...frames(2900, 0.2), ...quiet(1000), ...frames(1500, 0.3), ...quiet(1000), ...frames(1500, 0.3), ...quiet(1000), ...frames(1500, 0.3), ...quiet(1000)]);
+        expect(editor.text()).toBe("Mine.");
+        editor.undo();
+        expect(editor.text()).toBe("");
+    });
+    test("undo that does nothing once the writer has changed the document since the phrase", async () => {
+        const editor = typed();
+        const session = on(editor);
+        await drive(session, [...quiet(300), ...frames(2900, 0.2), ...quiet(1000)]);
+        editor.run((doc, selection) => ({ doc: insertText(doc, selection.focus, " Also mine."), selection: caret([0], selection.focus.offset + 11) }), "type");
+        await drive(session, [...frames(1500, 0.3), ...quiet(1000)]);
+        expect(editor.text()).toBe("Mine. Hello there my dear friend. Also mine.");
+    });
+    test("delete that, said again and again, takes back only the one phrase dictated, as one undo step", async () => {
+        const editor = typed();
+        await drive(on(editor), [...quiet(300), ...frames(2900, 0.2), ...quiet(1000), ...frames(1500, 0.4), ...quiet(1000), ...frames(1500, 0.4), ...quiet(1000)]);
+        expect(editor.text()).toBe("Mine.");
     });
     test("with commands off every word is written", async () => {
         const { editor, session } = make({ commands: false });
