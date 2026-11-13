@@ -85,7 +85,9 @@ export default defineConfig({
         csp: {
             directives: [
                 "default-src 'self'",
-                // blob: is a picture mdQuire keeps in this browser or in a .quire zip, shown from the page's own memory
+                // blob: is a picture mdQuire keeps in this browser or in a .quire zip, shown from the page's own memory.
+                // The policy is the same on every page, so every page has it; a blob: address can only be made
+                // by the page's own script, so it lets nothing in from outside.
                 "img-src 'self' data: blob:",
                 "media-src 'self'",
                 "font-src 'self'",
@@ -95,7 +97,10 @@ export default defineConfig({
                 // ONNX Runtime's .wasm file and the workers are served from the site itself.
                 // blob: lets mdQuire read back such a picture, to put it inside a web page or Word file it is downloaded as
                 "connect-src 'self' blob: https://api.github.com https://huggingface.co https://*.hf.co",
-                "frame-src https:",
+                // The one thing the site frames: Playmatter's demo, from itch.io (PlayHere.astro). The game
+                // itself is a frame inside itch.io's page, which itch.io's own policy governs, not this one.
+                // A new embed from somewhere else needs its host added here, or it is blocked.
+                "frame-src https://itch.io",
                 "object-src 'none'",
                 "base-uri 'self'",
                 "form-action 'self'",
