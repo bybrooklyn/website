@@ -102,7 +102,7 @@ function refreshed(block: Block, context: Context): Block {
 function writeBlocks(all: Block[], context: Context, inside: boolean): string {
     // an empty paragraph (or one of spaces) has no Markdown form, so a fresh one is left out, and so is the empty line an
     // empty item, quote or footnote is read with, once something else stands beside it
-    const empty = (block: Block) => block.kind === "paragraph" && block.runs.every((run) => run.kind === "text" && run.text.trim() === "" && !run.marks.includes("code"));
+    const empty = (block: Block) => block.kind === "paragraph" && block.runs.every((run) => run.kind === "break" || (run.kind === "text" && run.text.trim() === "" && !run.marks.includes("code")));
     const blocks = all.filter((block) => !(empty(block) && (block.source === undefined || (block.source === "" && all.length > 1))));
     if (blocks.length && blocks.length < all.length && all[all.length - 1] !== blocks[blocks.length - 1]) blocks[blocks.length - 1] = { ...blocks[blocks.length - 1]!, gap: all[all.length - 1]!.gap };
     const texts: string[] = [];
