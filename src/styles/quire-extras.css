@@ -30,6 +30,29 @@
     touch-action: none;
 }
 
+/* a picture the text flows round floats at its side; the few blocks after it are laid out with it
+   (not skipped while out of sight, which would keep their lines from going round it) */
+.quire-image[data-wrap] {
+    float: left;
+    clear: both;
+    margin: 0.3rem 1.5rem 0.5rem 0;
+}
+
+.quire-image[data-wrap="right"] {
+    float: right;
+    margin: 0.3rem 0 0.5rem 1.5rem;
+}
+
+.quire-image[data-wrap] img {
+    width: 100%;
+}
+
+.quire > [data-wrap] + *,
+.quire > [data-wrap] + * + *,
+.quire > [data-wrap] + * + * + * {
+    content-visibility: visible;
+}
+
 /* the caption is shown when it has words, and grows in under a picked picture to be written */
 .quire-caption {
     display: block;

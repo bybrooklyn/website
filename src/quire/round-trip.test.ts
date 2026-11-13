@@ -116,7 +116,7 @@ export function seen(blocks: Block[]): string {
             case "table":
                 return `table ${JSON.stringify(block.align)} ${[block.header, ...block.rows].map((row) => row.map(seenRuns).join(" | ")).join(" / ")}`;
             case "image":
-                return block.align || block.width || block.caption ? `picture(${block.src} ${block.alt} ${block.align ?? ""} ${block.width ?? ""} ${block.caption ?? ""})` : `image(${block.src} ${block.alt} ${block.title ?? ""})`;
+                return block.align || block.width || block.caption || block.wrap ? `picture(${block.src} ${block.alt} ${block.align ?? ""} ${block.width ?? ""} ${block.caption ?? ""} ${block.wrap ? "wrap" : ""})` : `image(${block.src} ${block.alt} ${block.title ?? ""})`;
             case "divider":
                 return "divider";
             case "footnote":

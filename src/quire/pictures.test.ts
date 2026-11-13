@@ -61,6 +61,29 @@ test("only the exact forms are read as pictures: other HTML stays raw, as its te
 test("pictureHtml and readPicture agree on every field, the title included", () => {
     const block: Image = { kind: "image", src: "pictures/x y.png", alt: 'a "b"', title: "t", width: 75, caption: "c", gap: "" };
     expect(readPicture(pictureHtml(block))).toEqual({ ...block, gap: "" });
+    expect(readPicture(pictureHtml({ ...block, wrap: true, align: "right" }))).toEqual({ ...block, wrap: true, align: "right" });
+});
+
+test("text flowing round a picture is HTML's own align on the <img>, with no <div>, and reads back exactly; centring takes it away", () => {
+    const left = setImage(read(POST), [1], { wrap: true });
+    expect(write(left)).toBe('# A post\n\n<img src="pictures/cat.png" alt="A cat asleep" align="left" />\n\nThe end.\n');
+    expect(read(write(left)).blocks[1]).toMatchObject({ kind: "image", wrap: true });
+    expect((read(write(left)).blocks[1] as Image).align).toBeUndefined();
+    const right = setImage(setAlign(read(POST), [1], "right"), [1], { wrap: true, width: 40, caption: "Moss" });
+    const out = write(right);
+    expect(out).toContain('<figure><img src="pictures/cat.png" alt="A cat asleep" width="40%" align="right" /><figcaption>Moss</figcaption></figure>');
+    expect(out).not.toContain("<div");
+    expect(write(read(out))).toBe(out);
+    expect(read(out).blocks[1]).toMatchObject({ align: "right", wrap: true, width: 40 });
+    // a centred picture has no side for the text to flow round, so wrap moves it to the left
+    expect(setImage(setAlign(read(POST), [1], "center"), [1], { wrap: true }).blocks[1]).toMatchObject({ wrap: true });
+    expect((setImage(setAlign(read(POST), [1], "center"), [1], { wrap: true }).blocks[1] as Image).align).toBeUndefined();
+    expect((setAlign(left, [1], "center").blocks[1] as Image).wrap).toBeUndefined();
+    // taken off again, the picture is plain Markdown once more
+    expect(write(setImage(read(write(left)), [1], { wrap: false }))).toBe(POST);
+    // an <img> with HTML's align but no width is a picture too; other values stay raw
+    expect(readPicture('<img src="a.png" alt="b" align="right" />')).toMatchObject({ wrap: true, align: "right" });
+    expect(read('<img src="a.png" alt="b" align="middle" />\n').blocks[0]!.kind).toBe("raw");
 });
 
 test("a width being dragged is drawn to the whole, half and a third of the text when near them, and kept within a tenth and the whole", () => {
@@ -82,12 +105,12 @@ test("a picture moved to another place stands there, the other blocks written as
 });
 
 test("in a .quire document the Markdown stays plain and the width and caption go to style.json, and come back", () => {
-    const doc = setImage({ ...read(POST), quire: { page: { size: "A4", orientation: "portrait", margins: 25 }, notes: null } }, [1], { width: 50, caption: "Moss" });
+    const doc = setImage({ ...read(POST), quire: { page: { size: "A4", orientation: "portrait", margins: 25 }, notes: null } }, [1], { width: 50, caption: "Moss", wrap: true });
     const { markdown, style } = collect(doc);
     expect(markdown).toBe(POST);
-    expect(style.blocks).toEqual([{ block: 1, hash: expect.any(String), width: 50, caption: "Moss" }]);
+    expect(style.blocks).toEqual([{ block: 1, hash: expect.any(String), width: 50, caption: "Moss", wrap: true }]);
     const back = restore(read(markdown), readStyle(JSON.stringify(style)));
-    expect(back.blocks[1]).toMatchObject({ kind: "image", width: 50, caption: "Moss" });
+    expect(back.blocks[1]).toMatchObject({ kind: "image", width: 50, caption: "Moss", wrap: true });
     // restored, the picture is still as it was read, so it is written back byte for byte
     expect(write(back)).toBe(POST);
 });

@@ -45,6 +45,9 @@ test("the web page stands alone: the reading styles inside it, pictures inlined,
     expect(html).toContain('<a href="#hello-there">Back up</a>');
     expect(html).toContain('src="data:image/png;base64,iVBORw==" alt="A cat" style="width:50%"');
     expect(html).toContain("<figcaption>Moss</figcaption>");
+    // a picture with no alignment sits at the left; one the text flows round floats at its side
+    expect(html).toContain('<figure style="text-align:left"><div style="display:block;margin-inline:0 auto');
+    expect(pageHtml(setImage(doc, [2], { wrap: true }), { title: "t", pictures })).toContain('<figure style="float:left;margin:0.3em 1.5em 0.5em 0;width:50%"><img src="data:image/png;base64,iVBORw==" alt="A cat" style="width:100%">');
     // what an MDX file holds that is not plain HTML is shown as its text, never run
     expect(html).toContain("&lt;script&gt;");
     expect(html).not.toContain("<script>");

@@ -25,11 +25,14 @@ export function drawPicture(block: Image, inner: number[]): HTMLElement {
         figure.style.textAlign = block.align;
         figure.dataset.align = block.align;
     }
+    // a picture the text flows round floats at its side, its width the float's, and no wider than half the text when it has none
+    if (block.wrap) figure.dataset.wrap = block.align === "right" ? "right" : "left";
+    if (block.wrap && block.width === undefined) figure.style.maxWidth = "50%";
     const picture = make("img");
     picture.src = block.src;
     picture.alt = block.alt;
     picture.draggable = false;
-    if (block.width !== undefined) picture.style.width = `${block.width}%`;
+    if (block.width !== undefined) (block.wrap ? figure : picture).style.width = `${block.width}%`;
     const caption = make("input", "quire-caption");
     caption.value = block.caption ?? "";
     caption.placeholder = "Add a caption";
@@ -159,7 +162,10 @@ export function createPictureTools(surface: Surface) {
         const block = pictureOf(path)!;
         const start = event.clientX;
         const from = picture.getBoundingClientRect().width;
-        const room = figure.getBoundingClientRect().width || 1;
+        // the width is a share of the text's, which a floated picture's own box is not
+        const holder = getComputedStyle(figure.parentElement!);
+        const room = figure.parentElement!.clientWidth - parseFloat(holder.paddingLeft) - parseFloat(holder.paddingRight) || 1;
+        const sized = block.wrap ? figure : picture;
         // a centred picture grows on both sides at once, so a corner moves half as far as its width changes
         const both = block.align === "center" ? 2 : 1;
         const side = corner.endsWith("w") ? -1 : 1;
@@ -170,7 +176,8 @@ export function createPictureTools(surface: Surface) {
         const move = (moved: PointerEvent) => {
             const snapped = snapWidth(((from + side * (moved.clientX - start) * both) / room) * 100);
             width = snapped.width;
-            picture.style.width = `${width}%`;
+            sized.style.width = `${width}%`;
+            sized.style.maxWidth = "";
             label.textContent = snapped.snap ?? `${width}%`;
             label.classList.add("shown");
             label.classList.toggle("snapped", !!snapped.snap);

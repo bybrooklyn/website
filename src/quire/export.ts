@@ -221,6 +221,12 @@ function pageBody(doc: Document, address: (src: string) => string): string {
                     }
                     case "image": {
                         const width = block.width !== undefined && Number.isFinite(Number(block.width)) ? ` style="width:${Number(block.width)}%"` : "";
+                        // one the text flows round floats at its side, at its width, as the editor draws it
+                        if (block.wrap) {
+                            const float = block.align === "right" ? "right;margin:0.3em 0 0.5em 1.5em" : "left;margin:0.3em 1.5em 0.5em 0";
+                            const size = width ? `width:${Number(block.width)}%` : "max-width:50%";
+                            return `<figure style="float:${float};${size}">${picture(block.src, block.alt, ' style="width:100%"')}${block.caption ? `<figcaption>${escape(block.caption)}</figcaption>` : ""}</figure>`;
+                        }
                         // a picture with no alignment sits at the left, as the editor draws it
                         const side = block.align === "center" ? "margin-inline:auto" : block.align === "right" ? "margin-inline:auto 0" : "margin-inline:0 auto";
                         const align = block.align === "center" || block.align === "right" ? block.align : "left";

@@ -9,7 +9,9 @@
 //   <figure><img src="pictures/cat.png" alt="A cat asleep" width="50%" /><figcaption>Our cat</figcaption></figure>
 //
 // The width is a share of the text's width, so the picture keeps its place in the column on any
-// screen. Its alignment is the `<div align>` the writer puts round any block. The reader takes back
+// screen. Its alignment is the `<div align>` the writer puts round any block, and a picture the text
+// flows round has HTML's own `align="left"` or `align="right"` on its <img>, the float browsers and
+// GitHub draw from it, in place of the <div>. With no alignment it sits at the left. The reader takes back
 // only exactly these forms; any other HTML stays raw, as its text. In a `.quire` document the
 // Markdown stays plain and the width and caption go to style.json with the alignment (styling.ts).
 
@@ -249,18 +251,20 @@ function unescape(text: string): string {
     return text.replace(/&(amp|quot|lt|gt|#123|#125);/g, (_, name: string) => ({ amp: "&", quot: '"', lt: "<", gt: ">", "#123": "{", "#125": "}" })[name]!);
 }
 
-/** True for a picture that has no Markdown form: one with a width or a caption. */
-export const sized = (block: Image): boolean => block.width !== undefined || !!block.caption;
+/** True for a picture that has no Markdown form: one with a width, a caption or text flowing round it. */
+export const sized = (block: Image): boolean => block.width !== undefined || !!block.caption || !!block.wrap;
 
-/** A picture with a width or a caption, as the one line of HTML that keeps it. */
+/** A picture with a width, a caption or text flowing round it, as the one line of HTML that keeps it. */
 export function pictureHtml(block: Image): string {
     const title = block.title !== undefined ? ` title="${escape(block.title)}"` : "";
     const width = block.width !== undefined ? ` width="${block.width}%"` : "";
-    const picture = `<img src="${escape(block.src)}" alt="${escape(block.alt)}"${title}${width} />`;
+    // text flowing round a picture is HTML's own `align` on the <img>, which browsers and GitHub draw as a float
+    const wrap = block.wrap ? ` align="${block.align === "right" ? "right" : "left"}"` : "";
+    const picture = `<img src="${escape(block.src)}" alt="${escape(block.alt)}"${title}${width}${wrap} />`;
     return block.caption ? `<figure>${picture}<figcaption>${escape(block.caption)}</figcaption></figure>` : picture;
 }
 
-const PICTURE = /<img src="([^"]*)" alt="([^"]*)"(?: title="([^"]*)")?(?: width="(\d{1,3})%")? \/>/;
+const PICTURE = /<img src="([^"]*)" alt="([^"]*)"(?: title="([^"]*)")?(?: width="(\d{1,3})%")?(?: align="(left|right)")? \/>/;
 const ALONE = new RegExp(`^${PICTURE.source}$`);
 const FIGURE = new RegExp(`^<figure>${PICTURE.source}<figcaption>([^<]*)</figcaption></figure>$`);
 
@@ -269,8 +273,8 @@ export function readPicture(text: string): Image | undefined {
     const figure = FIGURE.exec(text);
     const alone = figure ? undefined : ALONE.exec(text);
     const found = figure ?? alone;
-    // a lone <img> with no width is ordinary HTML, left as it was written
-    if (!found || (alone && found[4] === undefined)) return undefined;
+    // a lone <img> with no width and no float is ordinary HTML, left as it was written
+    if (!found || (alone && found[4] === undefined && found[5] === undefined)) return undefined;
     const block: Image = { kind: "image", src: unescape(found[1]!), alt: unescape(found[2]!), gap: "" };
     if (found[3] !== undefined) block.title = unescape(found[3]);
     if (found[4] !== undefined) {
@@ -278,7 +282,9 @@ export function readPicture(text: string): Image | undefined {
         if (width < 1 || width > 100) return undefined;
         block.width = width;
     }
-    if (figure && figure[5]) block.caption = unescape(figure[5]);
+    if (found[5] !== undefined) block.wrap = true;
+    if (found[5] === "right") block.align = "right";
+    if (figure && figure[6]) block.caption = unescape(figure[6]);
     return block;
 }
 
