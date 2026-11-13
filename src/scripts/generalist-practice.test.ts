@@ -65,6 +65,26 @@ async function until(ready: () => boolean, ms: number): Promise<boolean> {
     return ready();
 }
 
+test("a kept learner of another size is refused before it is written, and practice starts afresh", async () => {
+    const reports: Report[] = [];
+    const leader = new Worker(HARNESS, { type: "module" });
+    leader.onmessage = (event: MessageEvent<Report>) => reports.push(event.data);
+    const beating = setInterval(() => leader.postMessage({ kind: "beat" } satisfies Order), 300);
+    try {
+        // running numbers of the right length for two legs (1 + 2 * 114 + 3), and a state far too long
+        const kept = { state: new Float32Array(20_000_000), running: new Float64Array(232), seconds: 100, steps: 1e6 };
+        leader.postMessage({ kind: "begin", setup: 1, legs: 2, seed: 3, difficulty: 0.2, amounts: [0.6, 0.4, 0.4, 0.4], workers: 1, index: 0, learnerSeed: 1, kept } satisfies Order);
+        expect(await until(() => reports.length >= 2, 20_000)).toBe(true);
+        const first = reports[0]!;
+        expect(first.kind).toBe("practised");
+        // what was kept is forgotten: it counts from nothing
+        if (first.kind === "practised") expect(first.steps).toBeLessThan(1e6);
+    } finally {
+        clearInterval(beating);
+        leader.terminate();
+    }
+}, 30_000);
+
 test("practice goes on, with its steps rising, after the world is changed twenty times while updates are in flight", async () => {
     const it = page();
     try {

@@ -99,10 +99,12 @@ function make(order: Extract<Order, { kind: "begin" }>): void {
     setup = order.setup;
 }
 
-/** Writes a kept learner into the engine's practice. */
+/** Writes a kept learner into the engine's practice. One of another length (kept by an older engine, or for another body) is refused before anything is written, so it never runs past its room. */
 function load(state: Float32Array, running: Float64Array): boolean {
     if (!engine) return false;
-    const [stateRoom, runningRoom] = [engine.state_room(0), engine.running_room()];
+    const stateRoom = engine.state_room(0);
+    if (engine.length() !== state.length) return false;
+    const runningRoom = engine.running_room();
     if (engine.length() !== running.length) return false;
     write(engine, stateRoom, state);
     write64(engine, runningRoom, running);
