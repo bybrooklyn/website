@@ -627,6 +627,14 @@
     font-style: normal;
 }
 
+/* in the emoji list a long name and its code end in an ellipsis inside the line, rather than running past the list's edge, cut */
+.quire-emoji-list :is(.quire-menu-label, .quire-menu-hint) {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 /* `==` and `===` drawn as one joined sign; the characters are the ones typed */
 .quire-join {
     letter-spacing: -0.16em;

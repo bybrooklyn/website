@@ -768,6 +768,15 @@ used("on a phone the find bar is wholly in the window, its edges clear of both s
     }
 });
 
+used("the emoji list's long names and codes end inside its lines, never running past its edge", async () => {
+    await reset("\n", [0], 0);
+    await tab.type(":smiling");
+    await tab.wait(600);
+    const past = await tab.run<string[]>(`(() => { const list = [...document.querySelectorAll('.quire-emoji-list')].find((each) => each.matches(':popover-open')); if (!list) return ['no list']; const edge = list.querySelector('.quire-menu-items').getBoundingClientRect().right; return [...list.querySelectorAll('.quire-menu-label, .quire-menu-hint')].filter((each) => each.getBoundingClientRect().right > edge + 0.5).map((each) => each.textContent); })()`);
+    expect(past).toEqual([]);
+    await tab.press("Escape");
+});
+
 used("the selection bar over the first line of the text never covers the document's title above it", async () => {
     await reset("A first line of words to select.\n", [0], 2, [0], 7);
     await tab.run(`(() => { const title = document.querySelector('.quire-title'); title.value = 'A title with tails, gjpqy'; title.dispatchEvent(new Event('input', { bubbles: true })); })()`);
