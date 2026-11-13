@@ -62,30 +62,64 @@
 
 .quire-lang-corner {
     position: absolute;
-    top: 0.3rem;
-    right: 0.5rem;
+    top: 0.35rem;
+    left: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.4em;
+    color: var(--quire-faint);
     font-family: var(--font-mono), monospace;
+    font-size: 0.75rem;
+}
+
+/* a block with a language names it at its top left, after a small sign for code, on a line of its own above the code */
+.quire-lang-corner::before {
+    content: "";
+    flex: none;
+    width: 1em;
+    height: 1em;
+    background: currentcolor;
+    mask: url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22black%22 stroke-width=%222.2%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M8 6l-6 6 6 6M16 6l6 6-6 6%22/%3E%3C/svg%3E') center / contain no-repeat;
+}
+
+.quire :not(.quire-drawn) > pre.quire-code:not([data-label=""]) {
+    padding-top: 1.9rem;
+}
+
+/* a block with no language has no line for it: the field waits in the far corner and shows when the block is pointed at */
+.quire pre.quire-code[data-label=""] .quire-lang-corner {
+    right: 0.5rem;
+    left: auto;
+}
+
+.quire pre.quire-code[data-label=""] .quire-lang-corner::before {
+    content: none;
+}
+
+.quire pre.quire-code[data-label=""]:not(:hover, :focus-within) .quire-lang-corner {
+    opacity: 0;
 }
 
 .quire-lang {
-    width: 7.5em;
+    width: 9em;
     padding: 0.1em 0.4em;
+    margin-left: -0.4em;
     border: 0.0625rem solid transparent;
     border-radius: 0.35rem;
     background: transparent;
-    color: var(--quire-faint);
+    color: inherit;
     font: inherit;
-    font-size: 0.75rem;
-    text-align: right;
     transition:
-        opacity 0.2s var(--ease),
         border-color 0.2s var(--ease),
         background 0.2s var(--ease);
 }
 
+.quire pre.quire-code[data-label=""] .quire-lang {
+    text-align: right;
+}
+
 .quire pre:hover .quire-lang,
 .quire-lang:focus {
-    opacity: 1;
     border-color: var(--rule);
 }
 
@@ -639,6 +673,40 @@
 .quire-join {
     letter-spacing: -0.16em;
     padding-right: 0.16em;
+}
+
+/* the arrows a typed -> <- => become: the site's typeface has none, and a fallback font's are thin and sit low, so they are drawn here at the weight of the words; the character is still there to select and copy */
+.quire-arrow {
+    position: relative;
+    display: inline-block;
+    width: 1em;
+    -webkit-text-fill-color: transparent;
+    white-space: nowrap;
+    overflow: hidden;
+    vertical-align: bottom;
+    --arrow: url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22black%22 stroke-width=%221.7%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M3 12h18M15 6l6 6-6 6%22/%3E%3C/svg%3E');
+    --arrow-bold: url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22black%22 stroke-width=%222.7%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M3 12h18M15 6l6 6-6 6%22/%3E%3C/svg%3E');
+}
+
+.quire-arrow[data-arrow="double"] {
+    --arrow: url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22black%22 stroke-width=%221.7%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M3 9h15M3 15h15M15 5l6 7-6 7%22/%3E%3C/svg%3E');
+    --arrow-bold: url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22black%22 stroke-width=%222.7%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M3 9h15M3 15h15M15 5l6 7-6 7%22/%3E%3C/svg%3E');
+}
+
+.quire-arrow::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: currentcolor;
+    mask: var(--arrow) center / 0.95em no-repeat;
+}
+
+.quire-arrow[data-arrow="left"]::after {
+    transform: scaleX(-1);
+}
+
+:is(h1, h2, h3, h4, h5, h6, strong, b) .quire-arrow::after {
+    mask-image: var(--arrow-bold);
 }
 
 /* ---- the site's components, as cards of fields ---- */

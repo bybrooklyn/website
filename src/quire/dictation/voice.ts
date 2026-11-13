@@ -30,7 +30,7 @@ export interface Heard {
 export interface VoiceOptions {
     /** A pause this long after speech settles the phrase said. */
     pause?: number;
-    /** Quiet this long after speech switches dictation off ("a couple of seconds"). */
+    /** Quiet this long after speech switches dictation off: fifteen seconds, time to think of the next sentence. */
     silence?: number;
     /** Nothing said at all for this long switches it off. */
     wait?: number;
@@ -58,7 +58,7 @@ const decibels = (frame: Float32Array): number => {
 
 /** Makes a detector. */
 export function createVoice(options: VoiceOptions = {}): Voice {
-    const { pause = 700, silence = 2500, wait = 8000, hangover = 300 } = options;
+    const { pause = 700, silence = 15000, wait = 15000, hangover = 300 } = options;
     let elapsed = 0;
     let lastSpeech = 0;
     let speaking = false;

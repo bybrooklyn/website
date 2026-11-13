@@ -1346,7 +1346,7 @@ used("on an empty line, of every kind, the caret stands where the first letter t
     }
 });
 
-used("the caret slides briefly when a key moves it along a line, is at once on another line, and with less motion never slides", async () => {
+used("the caret glides when a key moves it along a line or to another line, ends where the cursor is, and with less motion never glides", async () => {
     await pageView(false);
     await reset("A first line of words.\n\nA second.\n\nA third line, longer than the others are.\n", [0], 3);
     await tab.run("document.querySelector('.quire').focus()");
@@ -1363,9 +1363,11 @@ used("the caret slides briefly when a key moves it along a line, is at once on a
     expect((await after()).sliding).toBe(true);
     await tab.wait(200);
     await tab.run("q.select([2], 30)");
-    const jumped = await after();
-    expect(jumped).toEqual({ sliding: false, off: expect.any(Number) });
-    expect(jumped.off).toBeLessThanOrEqual(1);
+    expect((await after()).sliding).toBe(true);
+    await tab.wait(200);
+    const settled = await after();
+    expect(settled.sliding).toBe(false);
+    expect(settled.off).toBeLessThanOrEqual(1);
     await tab.media({ "prefers-reduced-motion": "reduce" });
     try {
         await tab.wait(200);

@@ -58,7 +58,7 @@ import {
 import { record, redo, seal, undo, type ChangeKind, type History, type State } from "./history";
 import { readTag } from "./components";
 import { inAddress, shortcodeAt } from "./emoji";
-import { SIGNS, symbolFor } from "./symbols";
+import { runBefore, symbolFor } from "./symbols";
 import { LINE_MARK, PAIRS } from "./vocabulary";
 
 /** A piece of input: text typed (or given by the keyboard of a phone), or a named key with its modifiers. `mod` is Ctrl, or Cmd on a Mac. */
@@ -207,12 +207,14 @@ function type(state: State, text: string, options: TypingOptions = {}): Outcome 
     const inText = textual(block) || !!tableOf(doc, at.path);
     const shortcut = textual(block) ? blockShortcut(after, text) ?? inlineShortcut(after, text) : inText ? inlineShortcut(after, text) : undefined;
     if (shortcut) return { state: shortcut, kind: "shortcut", literal: after };
+    const longer = inText ? longerRun(after, text, options) : undefined;
+    if (longer) return { state: longer, kind: "type", slash: false };
     const symbol = inText ? symbolShortcut(after, text, options) : undefined;
     if (symbol) return { state: symbol, kind: "symbol", literal: after };
     return { state: after, kind: "type", slash };
 }
 
-/** A typed pair of signs that becomes its character once the character after it shows it is complete (symbols.ts), or a known emoji shortcode once its closing colon is typed; never in code. */
+/** A typed pair of signs that becomes its character as its second sign is typed (symbols.ts), or a known emoji shortcode once its closing colon is typed; never in code. */
 function symbolShortcut(state: State, typed: string, options: TypingOptions): State | undefined {
     const { doc } = state;
     const at = state.selection.focus;
@@ -230,21 +232,32 @@ function symbolShortcut(state: State, typed: string, options: TypingOptions): St
         return { doc: next, selection: caret(at.path, start + 1) };
     }
     if (!options.symbols) return undefined;
-    // a pair of signs becomes its character only when what is typed after it cannot make it longer,
-    // and never in an address: a link's, inside an HTML tag, or a web address
-    if (SIGNS.includes(typed)) return undefined;
-    const pair = before.slice(0, -1);
-    const end = at.offset - 1;
-    const symbol = symbolFor(pair);
-    const lead = pair.slice(0, -2);
+    // a pair of signs becomes its character as its second sign is typed, and never in an address:
+    // a link's, inside an HTML tag, or a web address
+    const end = at.offset;
+    const symbol = symbolFor(before);
+    const lead = before.slice(0, -2);
     if (!symbol || quiet(end) || quiet(end - 1) || /<[A-Za-z/!?][^<>]*$/.test(lead) || /\]\([^()\s]*$/.test(lead) || (lead !== "" && inAddress(lead, lead.length - 1))) return undefined;
     const next = insertText(deleteText(doc, { start: { path: at.path, offset: end - 2 }, end: { path: at.path, offset: end } }), { path: at.path, offset: end - 2 }, symbol);
-    return { doc: next, selection: caret(at.path, at.offset - 1) };
+    return { doc: next, selection: caret(at.path, end - 1) };
+}
+
+/** A sign typed straight after a made character that makes a longer run with it (`!=` then `=`): the character is put back as its two signs, so `!==`, `<=>` and `->>` end as typed. */
+function longerRun(state: State, typed: string, options: TypingOptions): State | undefined {
+    const at = state.selection.focus;
+    const pair = options.symbols ? runBefore(textAt(state.doc, at.path).slice(0, at.offset)) : undefined;
+    if (!pair || typed.length !== 1 || marksNear(state.doc, { path: at.path, offset: at.offset - 1 }).some((mark) => mark === "code")) return undefined;
+    const start = at.offset - 2;
+    const next = insertText(deleteText(state.doc, { start: { path: at.path, offset: start }, end: { path: at.path, offset: start + 1 } }), { path: at.path, offset: start }, pair);
+    return { doc: next, selection: caret(at.path, at.offset + 1) };
 }
 
 const nextSibling = (path: number[]) => [...path.slice(0, -1), path[path.length - 1]! + 1];
 
-/** `# `, `- `, `1. `, `[ ] `, `> ` at the start of a paragraph, three backticks, or `---`. */
+/** A paragraph that is only three backticks and perhaps a language: what a space or Enter after it makes a code block of. */
+const FENCE = /^```([\w+#.-]*)$/;
+
+/** `# `, `- `, `1. `, `[ ] `, `> ` at the start of a paragraph, three backticks and a space, or `---`. */
 function blockShortcut(state: State, typed: string): State | undefined {
     const { doc } = state;
     const at = state.selection.focus;
@@ -303,8 +316,10 @@ function blockShortcut(state: State, typed: string): State | undefined {
             return land(start === 1 ? next : startAt(next, sameLeaf(doc, at.path, next), start));
         }
         if (before === "> " && !inQuote(doc, at.path)) return land(changeKind(strip(), at.path, { kind: "quote" }));
+        // three backticks, with a language after them or not, then a space: a code block in that language
+        const fence = FENCE.exec(before.slice(0, -1));
+        if (fence && before === text) return land(changeKind(strip(), at.path, { kind: "code", language: fence[1]! }));
     }
-    if (typed === "`" && text === "```") return land(changeKind(strip(), at.path, { kind: "code", language: "" }));
     // `$$` on an empty line starts a block of maths, and `<details>` a folding section
     if (typed === "$" && text === "$$") return land(changeKind(strip(), at.path, { kind: "code", language: "math", dollars: true }));
     if (typed === ">" && /^<details>$/i.test(text)) return land(makeBox(strip(), at.path, { details: { summary: "", open: false } }));
@@ -581,6 +596,13 @@ function enter(state: State): Outcome {
     }
     const block = blockAt(doc, at.path);
     if (!block) return null;
+    // Enter at the end of a line that is only three backticks and perhaps a language makes the code block
+    const fence = block.kind === "paragraph" && at.offset === runsLength(block.runs) ? FENCE.exec(runsText(block.runs)) : null;
+    if (fence) {
+        const emptied = deleteText(doc, { start: { path: at.path, offset: 0 }, end: at });
+        const next = changeKind(emptied, at.path, { kind: "code", language: fence[1]! });
+        return done(next, caret(sameLeaf(doc, at.path, next), 0), "structure");
+    }
     if (block.kind === "code") {
         // Enter on an empty last line of code leaves the code block
         if (at.offset === block.code.length && block.code.endsWith("\n")) {

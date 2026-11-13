@@ -157,9 +157,12 @@ const plainDrawing: Drawing = { mdx: false, join: true };
 
 // ---- drawing ----
 
-/** Text with each `==` and `===` drawn joined into one sign, as a display matter only: the characters are the ones typed. */
-function joined(text: string): Node {
-    const parts = text.split(/((?<!=)={2,3}(?!=))/);
+/** The arrows the site's typeface does not have, which the stylesheet draws itself so that they match the words beside them. */
+const ARROWS: Record<string, string> = { "→": "right", "←": "left", "⇒": "double" };
+
+/** Text with each `==` and `===` drawn joined into one sign and each arrow drawn by the stylesheet, as a display matter only: the characters are the ones typed. */
+function joined(text: string, equals = true): Node {
+    const parts = text.split(equals ? /((?<!=)={2,3}(?!=)|[→←⇒])/ : /([→←⇒])/);
     if (parts.length === 1) return document.createTextNode(text);
     const span = document.createElement("span");
     parts.forEach((part, index) => {
@@ -167,7 +170,8 @@ function joined(text: string): Node {
         if (index % 2 === 0) span.append(part);
         else {
             const sign = document.createElement("span");
-            sign.className = "quire-join";
+            sign.className = ARROWS[part] ? "quire-arrow" : "quire-join";
+            if (ARROWS[part]) sign.dataset.arrow = ARROWS[part];
             sign.textContent = part;
             span.append(sign);
         }
@@ -242,7 +246,7 @@ function drawLeaf(leaf: Leaf, how: Drawing = plainDrawing): Node {
         atom.textContent = leaf.kind === "footnote" ? `[${leaf.label}]` : leaf.html;
         return atom;
     }
-    let node: Node = leaf.marks.includes("math") ? drawMath(leaf.text) : how.join && !leaf.marks.includes("code") && leaf.text.includes("==") ? joined(leaf.text) : named(leaf.text);
+    let node: Node = leaf.marks.includes("math") ? drawMath(leaf.text) : !leaf.marks.includes("code") && (/[→←⇒]/.test(leaf.text) || (how.join && leaf.text.includes("=="))) ? joined(leaf.text, how.join) : named(leaf.text);
     for (const [mark, tag] of [...TAGS].reverse()) {
         if (!leaf.marks.includes(mark)) continue;
         const wrap = document.createElement(tag);

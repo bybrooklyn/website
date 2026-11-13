@@ -88,20 +88,20 @@ describe("a pause", () => {
 });
 
 describe("switching itself off", () => {
-    test("2.5 seconds of quiet after speech says silence, once", () => {
-        const { events, at } = run([...sound(300, 0.001, "hiss"), ...sound(1000, 0.2), ...sound(4000, 0.001, "hiss")]);
+    test("15 seconds of quiet after speech says silence, once", () => {
+        const { events, at } = run([...sound(300, 0.001, "hiss"), ...sound(1000, 0.2), ...sound(17000, 0.001, "hiss")]);
         expect(events).toEqual(["start", "pause", "silence"]);
         const quiet = at.get("silence")! - 1300;
-        expect(quiet).toBeGreaterThanOrEqual(2500);
-        expect(quiet).toBeLessThanOrEqual(2700);
+        expect(quiet).toBeGreaterThanOrEqual(15000);
+        expect(quiet).toBeLessThanOrEqual(15200);
     });
-    test("8 seconds with nothing said says nothing, once", () => {
-        const { events, at } = run(sound(12000, 0.001, "hiss"));
+    test("15 seconds with nothing said says nothing, once", () => {
+        const { events, at } = run(sound(19000, 0.001, "hiss"));
         expect(events).toEqual(["nothing"]);
-        expect(at.get("nothing")).toBeGreaterThanOrEqual(8000);
-        expect(at.get("nothing")).toBeLessThanOrEqual(8200);
+        expect(at.get("nothing")).toBeGreaterThanOrEqual(15000);
+        expect(at.get("nothing")).toBeLessThanOrEqual(15200);
     });
-    test("speech before 8 seconds means the long wait does not apply", () => {
+    test("speech before 15 seconds means the long wait does not apply", () => {
         const { events } = run([...sound(5000, 0.001, "hiss"), ...sound(1000, 0.2), ...sound(1500, 0.001, "hiss")]);
         expect(events).not.toContain("nothing");
         expect(events).not.toContain("silence");

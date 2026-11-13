@@ -66,7 +66,7 @@
     padding: 0 0.1rem;
 }
 
-/* the words that are not yet written: faint, and fading in and out */
+/* the words that are not yet written: set as the text they will join is (dictation.ts gives them its size and weight), only fainter, and fading in and out */
 .quire-ghost {
     position: fixed;
     z-index: 50;
@@ -74,8 +74,6 @@
     overflow: hidden;
     color: var(--muted);
     font-family: var(--font-text);
-    font-size: 1.05rem;
-    font-style: italic;
     pointer-events: none;
     opacity: 0;
     transition: opacity 0.25s var(--ease);

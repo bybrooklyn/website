@@ -136,13 +136,13 @@ describe("speaking", () => {
 describe("stopping", () => {
     test("by itself after quiet that follows speech, having written the phrase", async () => {
         const { editor, stops, session } = make();
-        await drive(session, [...quiet(300), ...frames(2900, 0.2), ...quiet(3500)]);
+        await drive(session, [...quiet(300), ...frames(2900, 0.2), ...quiet(16000)]);
         expect(stops).toEqual(["silence"]);
         expect(editor.text()).toBe("Hello there my dear friend.");
     });
     test("by itself when nothing is said for a long time", async () => {
         const { stops, session } = make();
-        await drive(session, quiet(9000));
+        await drive(session, quiet(16000));
         expect(stops).toEqual(["nothing"]);
     });
     test("when asked, settling the phrase still being said", async () => {
@@ -366,7 +366,7 @@ describe("the microphone", () => {
         const heard = held();
         const events: string[] = [];
         const session = startSession({ target: target(), recognizer: heard, commands: () => true, custom: () => nothing(), onRelease: () => events.push("release"), onStop: () => events.push("stop") });
-        await drive(session, [...quiet(300), ...frames(2900, 0.2), ...quiet(3500)]);
+        await drive(session, [...quiet(300), ...frames(2900, 0.2), ...quiet(16000)]);
         expect(events).toEqual(["release"]);
         heard.release();
         await new Promise((done) => setTimeout(done, 10));

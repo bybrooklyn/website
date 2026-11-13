@@ -45,6 +45,9 @@ export function contrast(a: [number, number, number], b: [number, number, number
 /** True when a colour needs an edge to be seen on the sheet: under 3 : 1, the least asked of a mark that is not text. */
 export const needsEdge = (colour: [number, number, number], sheet: [number, number, number]) => contrast(colour, sheet) < 3;
 
+/** How far, in pixels, the caret glides; a move longer than this is made at once. */
+const FAR = 700;
+
 /** Where a collapsed selection's caret is drawn, in the frame's coordinates, or null when it is not in `root`. */
 export function caretBox(root: HTMLElement, frame: HTMLElement): { left: number; top: number; height: number } | null {
     const selection = getSelection();
@@ -121,8 +124,8 @@ export function createCaret(root: HTMLElement, frame: HTMLElement, first: readon
     let last: { left: number; top: number; height: number } | undefined;
     /**
      * Puts the caret where the cursor is now. Typed text puts it there `atOnce`, in the same frame as the
-     * letter; a cursor moved by a key or a press slides it the short way, for 50 ms (quire.css), and a move
-     * to another line or a long way along one is at once too. `whole` brings it back blinked off without
+     * letter; a cursor moved by a key or a press glides it there, along a line or to another (quire.css), and a
+     * jump of most of a screen is at once too. `whole` brings it back blinked off without
      * fading in. True when it is shown.
      */
     const move = (whole = false, atOnce = false) => {
@@ -135,7 +138,8 @@ export function createCaret(root: HTMLElement, frame: HTMLElement, first: readon
         // as tall as the text, as the browser's own caret is
         const tall = box.height;
         const top = box.top + (box.height - tall) / 2;
-        const far = !last || Math.abs(last.top - top) > tall / 2 || Math.abs(last.left - box.left) > tall * 2;
+        // it glides to where a key or a press puts it, to another line too; only a jump of most of a screen is at once
+        const far = !last || Math.hypot(last.top - top, last.left - box.left) > FAR;
         last = { left: box.left, top, height: tall };
         if (!was || atOnce || far) element.style.transition = "none";
         else if (whole) element.style.transitionProperty = "translate, height";

@@ -413,11 +413,11 @@
     background: var(--caret);
     pointer-events: none;
     opacity: 0;
-    /* it fades as it blinks and slides the little way a key or a press moves it; caret.ts puts it in place at once while typing, and for a move to another line */
+    /* it fades as it blinks and glides to where a key or a press moves it, along a line or to another; caret.ts puts it in place at once while typing, and for a jump of most of a screen */
     transition:
         opacity 0.12s ease,
-        translate 0.05s ease-out,
-        height 0.05s ease-out;
+        translate 0.09s var(--ease),
+        height 0.09s var(--ease);
 }
 
 /* a flag color too faint on what it is drawn over is lightened toward the ink: one plain line, with nothing round it */

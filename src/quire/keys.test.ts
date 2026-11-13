@@ -280,7 +280,8 @@ test("each block shortcut turns into its block, and one undo gives back the char
         ["[ ] ", "task", "- [ ] task\n"],
         ["[x] ", "done", "- [x] done\n"],
         ["> ", "quote", "> quote\n"],
-        ["```", "code", "```\ncode\n```\n"],
+        ["``` ", "code", "```\ncode\n```\n"],
+        ["```rust ", "let a;", "```rust\nlet a;\n```\n"],
     ];
     for (const [typed, then, expected] of cases) {
         const e = editor("");
@@ -294,6 +295,24 @@ test("each block shortcut turns into its block, and one undo gives back the char
         expect(e.state.doc.blocks[0]!.kind).toBe("paragraph");
         expect(literal.trimEnd().replace(/\\/g, "")).toBe(typed.trimEnd());
     }
+});
+
+test("three backticks alone stay as typed until a space or Enter, and Enter makes the block in its language too", () => {
+    const waiting = editor("");
+    waiting.type("```js");
+    expect(waiting.state.doc.blocks[0]!.kind).toBe("paragraph");
+    waiting.key("Enter");
+    waiting.type("let a;");
+    expect(waiting.markdown).toBe("```js\nlet a;\n```\n");
+    const plain = editor("");
+    plain.type("```");
+    plain.key("Enter");
+    plain.type("x");
+    expect(plain.markdown).toBe("```\nx\n```\n");
+    // not when there are other words on the line
+    const words = editor("");
+    words.type("see ``` ");
+    expect(words.state.doc.blocks[0]!.kind).toBe("paragraph");
 });
 
 test("--- typed on its own line becomes a divider with a paragraph after it", () => {

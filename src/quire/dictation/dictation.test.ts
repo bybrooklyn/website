@@ -203,7 +203,7 @@ test.skipIf(!ready)(
             ["the tab hidden", "Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true }); document.dispatchEvent(new Event('visibilitychange'))"],
             ["the page being left", "dispatchEvent(new Event('pagehide'))"],
             ["the microphone's permission withdrawn", "window.dictationTest.takeAway()"],
-            ["quiet after speech", "window.dictationTest.quiet(3500)"],
+            ["quiet after speech", "window.dictationTest.quiet(16000)"],
             ["the spoken command", "window.dictationTest.quiet(1000).then(() => window.dictationTest.speak(1500, 0.5)).then(() => window.dictationTest.quiet(1000))"],
         ];
         for (const [what, how] of ways) {
@@ -271,23 +271,23 @@ test.skipIf(!ready)("after the download it listens, shows provisional words that
     expect(await markdown()).toBe("");
 });
 
-test.skipIf(!ready)("switches itself off after a couple of seconds of quiet once speech was heard, and writes what was said", async () => {
+test.skipIf(!ready)("switches itself off after fifteen seconds of quiet once speech was heard, and writes what was said", async () => {
     await fresh();
     await listening();
     await run("window.dictationTest.speak(3000, 0.2)");
-    await run("window.dictationTest.quiet(2000)");
+    await run("window.dictationTest.quiet(14000)");
     expect(await state()).toBe("listening");
-    await run("window.dictationTest.quiet(1200)");
+    await run("window.dictationTest.quiet(1500)");
     await until("window.dictation.state() === 'off'", "switched off");
     expect(await run("window.dictationTest.microphoneOpen()")).toBe(false);
     expect(await markdown()).toBe("Hello there my dear friend.");
-    expect(await run<string>("document.querySelector('.quire-sr').textContent")).toContain("quiet moment");
+    expect(await run<string>("document.querySelector('.quire-sr').textContent")).toContain("fifteen quiet seconds");
 });
 
 test.skipIf(!ready)("switches itself off when nothing is ever said", async () => {
     await fresh();
     await listening();
-    await run("window.dictationTest.quiet(7000)");
+    await run("window.dictationTest.quiet(14000)");
     expect(await state()).toBe("listening");
     await run("window.dictationTest.quiet(1500)");
     await until("window.dictation.state() === 'off'", "switched off");

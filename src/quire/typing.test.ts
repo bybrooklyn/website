@@ -55,14 +55,16 @@ test("each typed pair becomes its character, and what is saved is that character
     expect(e.cursor.offset).toBe("a → b ← c ⇒ d ≠ e ≤ f ≥ g".length);
 });
 
-test("a pair of signs becomes its character only once what is typed next shows it is complete, and never in an address", () => {
+test("a pair of signs becomes its character as its second sign is typed, a longer run ends as typed, and never in an address", () => {
     const cases: [string, string][] = [
         ["a -> b", "a → b"],
         ["a->b", "a→b"],
         ["1 <= 2.", "1 ≤ 2."],
         ["x != y", "x ≠ y"],
         ["a >= b", "a ≥ b"],
-        ["a ->", "a ->"],
+        ["a ->", "a →"],
+        ["x >= -1", "x ≥ -1"],
+        ["x>=-1", "x≥-1"],
         ["a !== b", "a !== b"],
         ["x <=> y", "x <=> y"],
         ["x <-> y", "x <-> y"],
@@ -83,13 +85,12 @@ test("a pair of signs becomes its character only once what is typed next shows i
 
 test("one Backspace straight after puts the two characters back, and so does one undo", () => {
     const e = editor("");
-    e.type("go -> ");
+    e.type("go ->");
     expect(e.markdown).toBe("go →\n");
     e.key("Backspace");
-    expect(text(e.doc)).toBe("go -> ");
-    expect(e.cursor.offset).toBe(6);
+    expect(text(e.doc)).toBe("go ->");
+    expect(e.cursor.offset).toBe(5);
     // a second Backspace deletes as usual
-    e.key("Backspace");
     e.key("Backspace");
     expect(e.markdown).toBe("go -\n");
     const f = editor("");
@@ -101,9 +102,9 @@ test("one Backspace straight after puts the two characters back, and so does one
     f.key("Backspace");
     expect(f.markdown).toBe("x ≠\n");
     const g = editor("");
-    g.type("a -> ");
+    g.type("a ->");
     g.undo();
-    expect(text(g.doc)).toBe("a -> ");
+    expect(text(g.doc)).toBe("a ->");
 });
 
 test("signs are left as typed in code blocks, code spans, maths, an open code span, and when the switch is off", () => {

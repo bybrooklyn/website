@@ -7,7 +7,7 @@
 //   dictation.items()                   // lines for the three-dot menu
 //   dictation.why                       // set, with the reason, when this browser cannot dictate
 //
-// The button is a switch: pressed, it listens, and it switches itself off after a couple of seconds
+// The button is a switch: pressed, it listens, and it switches itself off after fifteen seconds
 // of quiet. The first time, a dialog in the middle of the screen asks before downloading the speech
 // model: it says that no sound leaves the machine, and its "Choose" button becomes the three models
 // as cards, each with its size and who it suits, the one for this machine already picked; the
@@ -215,6 +215,12 @@ export function createDictation(surface: Surface, options: DictationOptions = {}
             ghost.style.width = `${column.width}px`;
             ghost.style.textIndent = `${Math.max(0, rect.left - column.left + (rect.left > column.left ? 6 : 0))}px`;
             ghost.style.lineHeight = `${Math.max(rect.height, 20)}px`;
+            // set as the text at the cursor is, so the words do not change size or slant when they are written
+            const around = range?.startContainer instanceof Element ? range.startContainer : range?.startContainer.parentElement;
+            const set = getComputedStyle(around && surface.element.contains(around) ? around : surface.element);
+            ghost.style.fontSize = set.fontSize;
+            ghost.style.fontWeight = set.fontWeight;
+            ghost.style.fontFamily = set.fontFamily;
         };
         const showWords = (text: string) => {
             speaking = text;
@@ -323,7 +329,7 @@ export function createDictation(surface: Surface, options: DictationOptions = {}
             session = undefined;
             button.style.setProperty("--level", "0");
             showWords("");
-            const why = reason === "silence" ? "Dictation switched itself off after a quiet moment." : reason === "nothing" ? "Dictation switched itself off because nothing was said." : reason === "command" || reason === "hidden" || reason === "lost" ? "Dictation stopped." : reason === "error" ? message || "Dictation stopped." : "";
+            const why = reason === "silence" ? "Dictation switched itself off after fifteen quiet seconds." : reason === "nothing" ? "Dictation switched itself off because nothing was said." : reason === "command" || reason === "hidden" || reason === "lost" ? "Dictation stopped." : reason === "error" ? message || "Dictation stopped." : "";
             if (why) say(why);
             else live.textContent = "Dictation is off";
             setState("off");

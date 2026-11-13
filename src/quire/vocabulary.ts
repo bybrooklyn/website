@@ -41,7 +41,7 @@ export const TYPING: Typed[] = [
     { typed: ">>> then a space", becomes: "Quote of everything after, to the end", saved: "> each line", origin: "extra", example: [">>> one\ntwo", "> one\n>\n> two\n"] },
     { typed: "-# then a space", becomes: "Subtext: small quiet text", saved: "-# text", origin: "extra", example: ["-# small print", "-# small print\n"] },
     { typed: "[!NOTE] then a space", becomes: "Callout (NOTE, TIP, IMPORTANT, WARNING, CAUTION)", saved: "> [!NOTE]", origin: "GitHub" },
-    { typed: "``` (three backticks)", becomes: "Code block", saved: "```", origin: "Markdown", example: ["```", "```\n```\n"] },
+    { typed: "``` then a space or Enter; ```rust for a language", becomes: "Code block", saved: "```", origin: "Markdown", example: ["``` ", "```\n```\n"] },
     { typed: "$$ on an empty line", becomes: "Block of maths", saved: "$$", origin: "extra" },
     { typed: "--- on an empty line", becomes: "Horizontal line", saved: "---", origin: "Markdown" },
     { typed: ": then a space, under a line", becomes: "Definition of the line above", saved: ": definition", origin: "extra" },
@@ -59,7 +59,7 @@ export const TYPING: Typed[] = [
     { typed: "^superscript^", becomes: "Superscript", saved: "<sup>superscript</sup>", origin: "extra", example: ["x ^2^", "x <sup>2</sup>\n"], pair: { mark: "sup", pattern: /(^|[^^[])\^([^^\s]+)\^$/, width: 1 } },
     { typed: ":smile: (a known name between colons)", becomes: "Emoji", saved: ":smile:", origin: "extra" },
     { typed: ": and two letters", becomes: "A list of emoji to choose from; Tab or Enter puts one in, anything else leaves the text as typed", saved: "the emoji's name between colons", origin: "extra" },
-    { typed: "-> <- => != <= >=, then any other character", becomes: "Arrows and signs (Tools, Typed signs)", saved: "the character", origin: "extra" },
+    { typed: "-> <- => != <= >=", becomes: "Arrows and signs (Tools, Typed signs)", saved: "the character", origin: "extra" },
 ];
 
 /** The inline pairs keys.ts completes, double signs before single ones. */
