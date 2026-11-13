@@ -124,7 +124,7 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
         if (!picked) return;
         const entry = await files.add(picked).catch(() => undefined);
         if (!entry) return;
-        await editor.open(files, entry);
+        if (!(await editor.open(files, entry))) return;
         await showEditor();
         editor.surface.focus();
     });
@@ -134,7 +134,7 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
         const [handle] = (await pickers.showOpenFilePicker?.({ types: [{ description: "Markdown and .quire documents", accept: { "text/markdown": [".md", ".mdx", ".markdown", ".txt"], "application/zip": [".quire"] } }] }).catch(() => [])) ?? [];
         if (!handle) return;
         const store = oneFileStore(handle);
-        await editor.open(store, { id: handle.name, name: handle.name });
+        if (!(await editor.open(store, { id: handle.name, name: handle.name }))) return;
         menu.close(false);
         await showEditor();
     };
@@ -287,7 +287,7 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
     /** Opens a document from its picture on the home screen. */
     async function enter(store: Store, entry: Entry, from: HTMLElement) {
         const picture = boxOf(from);
-        await editor.open(store, entry);
+        if (!(await editor.open(store, entry))) return;
         await showEditor(picture);
         editor.surface.focus();
     }
@@ -295,7 +295,7 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
     /** Makes something new from a way of starting, and opens it from its picture. */
     async function startFrom(template: Template, from: HTMLElement) {
         const picture = boxOf(from);
-        await editor.create(browser, template.name, template.text, template.quire ? emptyParts() : undefined);
+        if (!(await editor.create(browser, template.name, template.text, template.quire ? emptyParts() : undefined))) return;
         await showEditor(picture);
         // the last line a template starts with stands in for what is written there, and is selected, so that typing takes its place
         const paths = blockPaths(editor.surface.getDocument());
@@ -326,7 +326,8 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
         if (shelf.shown()) return;
         menu.close(false);
         const current = editor.current();
-        await editor.flush();
+        // words that could not be saved keep the writer in the document until she chooses
+        if (!(await editor.ready())) return;
         await shelf.refresh();
         scrollTo({ top: 0, behavior: "instant" });
         options.top?.classList.add("away");
@@ -339,7 +340,13 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
             picture.style.visibility = "";
         }
         host.classList.add("shelved");
-        await editor.leave();
+        if (!(await editor.leave())) {
+            // typed during the journey home and not saved: back to the document
+            host.classList.remove("shelved");
+            options.top?.classList.remove("away");
+            shelf.hide();
+            return;
+        }
         local()?.removeItem(PLACE_KEY);
         shelf.element.querySelector<HTMLElement>(".quire-card-open")?.focus({ preventScroll: true });
     }

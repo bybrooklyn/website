@@ -29,6 +29,7 @@ const editor = createEditor(host, read(""), { name: "Test", colors: [{ name: "Pi
 const surface = editor.surface;
 window.q = {
     editor,
+    storage,
     shortcuts,
     reset(markdown, mdx) { closeOthers(); surface.setDocument(read(markdown, { mdx })); surface.focus(); },
     select(anchor, from, focus = anchor, to = from) { surface.setSelection({ anchor: { path: anchor, offset: from }, focus: { path: focus, offset: to } }); },
@@ -742,6 +743,51 @@ used("a document changed elsewhere is not written over: the conflict is shown, a
     await tab.wait(300);
     expect(await tab.run(`q.kept(${JSON.stringify(id)})`)).toBe("Theirs and mine\n");
     expect(await tab.run("q.status()")).toBe("Saved");
+});
+
+used("words that could not be saved keep the writer in the document: she is told, and stays, tries again or leaves them knowingly", async () => {
+    await tab.run("q.useBrowser()");
+    const other = await tab.run<string>(`q.store.create("Other", "The other one\\n").then((made) => made.id)`);
+    const id = await tab.run<string>(`q.openIn("Kept", "Words\\n")`);
+    // saving fails from now on, as a full disk or a dropped network does
+    await tab.run(`(() => { window.realSave = q.store.save; q.store.save = async () => ({ ok: false, message: "the disk is full" }); })()`);
+    await tab.run("q.select([0], 5)");
+    await tab.type(" more");
+    await tab.wait(1400);
+    expect(await tab.run("q.status()")).toBe("Not saved: the disk is full");
+    const going = `(window.went = undefined, q.editor.open(q.store, { id: ${JSON.stringify(other)}, name: "Other" }).then((moved) => (window.went = moved)), true)`;
+    await tab.run(going);
+    await tab.wait(700);
+    expect(await tab.run<string>("document.querySelector('dialog.quire-dialog[open]')?.textContent ?? ''")).toContain("have not been saved: the disk is full");
+    // staying keeps the words and the document
+    await press("dialog.quire-dialog[open] button", "Stay");
+    await tab.wait(400);
+    expect(await tab.run("window.went")).toBe(false);
+    expect(await md()).toBe("Words more\n");
+    expect(await tab.run("q.editor.current().id")).toBe(id);
+    // trying again, once saving works, saves them and goes on
+    await tab.run(going);
+    await tab.wait(700);
+    await tab.run("q.store.save = window.realSave");
+    await press("dialog.quire-dialog[open] button", "Try again");
+    await tab.wait(600);
+    expect(await tab.run("window.went")).toBe(true);
+    expect(await tab.run(`q.kept(${JSON.stringify(id)})`)).toBe("Words more\n");
+    expect(await md()).toBe("The other one\n");
+    // leaving them knowingly: they are not saved, but they are in the version history
+    await tab.run(`q.store.save = async () => ({ ok: false, message: "the disk is full" })`);
+    await tab.run("q.select([0], 13)");
+    await tab.type(" changed");
+    await tab.wait(1400);
+    await tab.run("(window.went = undefined, q.editor.leave().then((left) => (window.went = left)), true)");
+    await tab.wait(700);
+    await press("dialog.quire-dialog[open] button", "Leave without saving");
+    await tab.wait(400);
+    expect(await tab.run("window.went")).toBe(true);
+    expect(await tab.run(`q.kept(${JSON.stringify(other)})`)).toBe("The other one\n");
+    const kept = await tab.run<string>(`q.storage.list("This browser:${other}").then((list) => q.storage.load(list[0].id))`);
+    expect(kept).toContain("The other one changed");
+    await tab.run("q.store.save = window.realSave");
 });
 
 /** Opens a 5,000-line document and types in its middle, in a look or in page view: it opens in under a second and each key is shown in under 16 ms. */

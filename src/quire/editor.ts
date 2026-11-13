@@ -4,7 +4,9 @@
 //
 //   const editor = createEditor(element, read(text), { name, store, id, mark, versions, colors });
 //   editor.surface              the editing surface (surface.ts)
-//   editor.open(store, entry)   leaves the document (saving what is waiting) and opens another
+//   editor.open(store, entry)   leaves the document (saving what is waiting) and opens another;
+//                               words that cannot be saved keep the writer there until she chooses
+//   editor.ready()              saves what is waiting, asking the writer if it cannot be: may it be left?
 //   editor.create(store, name)  makes a new document there and opens it
 //   editor.flush()              saves now what is waiting
 //   editor.getName(), editor.current(), editor.destroy()
@@ -25,7 +27,7 @@ import { read } from "./read";
 import { createSelectBar } from "./select-bar";
 import { boxOf, createSlash, definitionList, drawnBlock } from "./slash";
 import { createEmojiPicker } from "./emoji-picker";
-import { createSaver, fileName, said, type Entry, type Status, type Store } from "./store";
+import { createSaver, fileName, said, type Entry, type Opened, type Status, type Store } from "./store";
 import { createSurface, type Surface } from "./surface";
 import { createTableTools } from "./tables";
 import { createPictureTools } from "./picture-tools";
@@ -87,17 +89,20 @@ export interface Editor {
     commands: RowActions;
     getName(): string;
     current(): { store?: Store; id?: string; name: string };
-    open(store: Store, entry: Entry): Promise<void>;
+    /** Moves to another document; false when the writer chose to stay (the old one could not be saved) or it could not be opened. */
+    open(store: Store, entry: Entry): Promise<boolean>;
     /** Makes a new document there and opens it; given parts, it is made as a `.quire` document. */
-    create(store: Store, name: string, text?: string, quire?: Parts): Promise<void>;
+    create(store: Store, name: string, text?: string, quire?: Parts): Promise<boolean>;
+    /** Saves what is waiting; when it cannot be saved, asks the writer whether to try again, stay or leave it. True when the document may be left. */
+    ready(): Promise<boolean>;
     flush(): Promise<void>;
     status(): Status | undefined;
     /** The bar's name, from which the documents list grows. */
     nameElement(): HTMLElement;
     /** Renames the document where it lives. */
     rename(name: string): Promise<void>;
-    /** Saves what is waiting and lets the document go, so that nothing is open. */
-    leave(): Promise<void>;
+    /** Saves what is waiting and lets the document go, so that nothing is open; false when the writer stays. */
+    leave(): Promise<boolean>;
     /** The sheet, which grows out of a picture of it on the home screen and shrinks back. */
     paper: HTMLElement;
     /** Shows or hides the outline and the Markdown; `plain` shows the text alone, for a file that is not Markdown. */
@@ -810,7 +815,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
 
     // leaving the page with words not yet saved: they are saved if there is time, and the browser asks
     const leaving = (event: BeforeUnloadEvent) => {
-        if (!saver?.unsaved()) return;
+        if (saver?.unsaved() === undefined) return;
         void saver.flush();
         event.preventDefault();
     };
@@ -842,17 +847,75 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     async function create(next: Store, wanted: string, body = "", quire?: Parts) {
         const made = await next.create(wanted, body, quire);
         const entry = (await next.list().catch(() => [])).find((each) => each.id === made.id) ?? { id: made.id, name: wanted };
-        await open(next, entry);
+        return open(next, entry);
     }
 
-    /** Moves to a document: saves what is waiting in the old one, opens the new, and starts its saver and history. */
-    async function open(next: Store, entry: Entry) {
+    /** Asks the writer what to do with changes that could not be saved: try again, stay, or leave them. A copy can be downloaded meanwhile. */
+    const askUnsaved = (why: string) =>
+        new Promise<"retry" | "stay" | "discard">((answer) => {
+            let chosen: "retry" | "stay" | "discard" = "stay";
+            // the two other ways sit under the words, as the row at the bottom has room for two buttons
+            const ways = make("p");
+            const way = (label: string, press: () => void) => {
+                const button = make("button", "quire-dialog-dismiss", label);
+                button.type = "button";
+                button.addEventListener("click", press);
+                ways.append(button);
+            };
+            way("Download a copy", () => void (surface.getDocument().quire ? downloadQuire() : download()));
+            way("Leave without saving", () => ((chosen = "discard"), void dialog.close()));
+            const dialog = openDialog(bar.statusLine, {
+                title: "Not saved",
+                body: [make("p", "", `The latest changes to this document have not been saved: ${why}. They are still here.`), ways],
+                action: { label: "Try again", press: (_, open) => ((chosen = "retry"), void open.close()) },
+                dismiss: "Stay",
+                onClose: () => answer(chosen),
+            });
+        });
+
+    /** Saves what is waiting before the document is let go. When it cannot be saved the writer is told and chooses; true when the document may go. */
+    async function ready(): Promise<boolean> {
+        for (;;) {
+            const now = saver;
+            if (!now || !store?.can.save) return true;
+            await now.flush();
+            // what was typed while that save was on its way
+            if (now.status().state === "waiting") await now.flush();
+            if (now.unsaved() === undefined) return true;
+            // whatever is chosen, what was typed is kept in the version history
+            await keeper.now().catch(() => undefined);
+            const status = now.status();
+            const why = status.state === "failed" ? status.message : status.state === "changed" ? "it was changed somewhere else meanwhile" : "it is still waiting to be saved";
+            const choice = await askUnsaved(why);
+            if (choice === "stay") return false;
+            if (choice === "discard" && saver === now) {
+                now.stop();
+                stopListening?.();
+                stopListening = undefined;
+                saver = undefined;
+                return true;
+            }
+        }
+    }
+
+    /** Moves to a document: saves what is waiting in the old one, opens the new, and starts its saver and history. False when the writer stays where she is, or the new one could not be opened. */
+    async function open(next: Store, entry: Entry): Promise<boolean> {
         clearTimeout(typing);
-        await saver?.flush();
+        if (!(await ready())) return false;
+        let found: Opened;
+        try {
+            found = await next.open(entry.id);
+        } catch (error) {
+            // the document open stays open, still saving
+            bar.setStatus("Not opened", `${entry.name} was not opened: ${error instanceof Error ? error.message : String(error)}`, "warn");
+            return false;
+        }
+        // typed while the new one was being fetched
+        if (saver?.unsaved() !== undefined && !(await ready())) return false;
+        await keeper.now().catch(() => undefined);
         saver?.stop();
         stopListening?.();
         keeper.stop();
-        const found = await next.open(entry.id);
         store = next;
         id = entry.id;
         name = entry.name;
@@ -869,12 +932,14 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         void keeper.opened();
         showView(rememberedView(), false);
         options.onOpen?.(next, entry);
+        return true;
     }
 
-    /** Lets the document go: what is waiting is saved, and the editor holds an empty page kept nowhere. */
-    async function leave() {
+    /** Lets the document go: what is waiting is saved, and the editor holds an empty page kept nowhere. False when the writer stays. */
+    async function leave(): Promise<boolean> {
         clearTimeout(typing);
-        await saver?.flush();
+        if (!(await ready())) return false;
+        await keeper.now().catch(() => undefined);
         saver?.stop();
         stopListening?.();
         keeper.stop();
@@ -892,6 +957,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         showTitle();
         keeper = createKeeper(memoryStorage(), "", snapshot);
         bar.setStatus("", "Nothing is open");
+        return true;
     }
 
     return {
@@ -904,6 +970,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         current: () => ({ store, id, name }),
         open,
         create,
+        ready,
         flush: async () => {
             await saver?.flush();
         },
