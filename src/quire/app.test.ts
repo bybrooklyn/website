@@ -194,6 +194,10 @@ used("with nothing open the home screen shows ways to start; Blank grows into a 
     expect(await shelfShown()).toBe(true);
     expect(await tab.run("document.querySelector('.quire-shelf-recent .quire-card-name').textContent")).toBe("Untitled");
     expect(await tab.run("document.querySelector('.quire-shelf-recent .quire-mini').textContent")).toContain("First words.");
+    // the small page is set as the page is: its words at the left, in the page's own typeface, not the button's
+    expect(
+        await tab.run(`(() => { const words = getComputedStyle(document.querySelector('.quire-shelf-recent .quire-mini .prose p')); const page = getComputedStyle(document.querySelector('.quire-editor .prose.quire p') ?? document.body); return { align: words.textAlign, same: words.fontFamily === page.fontFamily }; })()`),
+    ).toEqual({ align: "start", same: true });
     // with nothing open a reload is the home screen again, and a document opened is what a reload comes back to
     await load();
     await tab.wait(300);

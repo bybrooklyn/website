@@ -2337,6 +2337,11 @@ body.quire-app,
     border: 0;
     border-radius: calc(var(--radius) * 0.8);
     background: none;
+    /* a button sets its own typeface, size and centring, which the small page inside took for its own:
+       its words were in the system's sans-serif and centred, and a checklist's box hung off its edge */
+    color: inherit;
+    font: inherit;
+    text-align: start;
     cursor: pointer;
 }
 
