@@ -4,7 +4,7 @@
 // underline `<u>`, and alignment a `<div align>` around the block, the forms the reader reads back.
 
 import { pictureHtml, sized } from "./pictures";
-import type { Align, Block, Document, Leaf, List, Run, TextRun } from "./document";
+import type { Align, Block, Document, Leaf, LinkRun, List, Run, TextRun } from "./document";
 import { emojiOf } from "./emoji";
 import { followed, standsApart } from "./read";
 
@@ -323,17 +323,33 @@ function writeRuns(runs: Run[], context: Context, cell: boolean): string {
         out += writeLeaves(leaves, context, cell);
         leaves = [];
     };
-    for (const run of runs) {
+    for (const [index, run] of runs.entries()) {
         if (run.kind !== "link") {
             leaves.push(run);
             continue;
         }
         flush();
         const label = writeLeaves(run.runs, context, cell);
-        out += run.ref !== undefined ? `[${label}][${said(run.ref, "a link's reference")}]` : `[${label}](${destination(said(run.href, "a link's address"))}${titleText(run.title)})`;
+        out += `[${label}]${linkTail(run, label, runs[index + 1])}`;
     }
     flush();
     return out;
+}
+
+/**
+ * What follows a link's words: its reference, or its address. A link written `[text][]` or `[text]`
+ * is found by its words, so it keeps that form only while its words are still the label it was read
+ * with; once they are changed it is written `[new words][label]`, which still names its definition.
+ * A shortcut followed by `(` or `[` would be read as another kind of link, so it takes the empty brackets.
+ */
+function linkTail(run: LinkRun, label: string, following: Run | undefined): string {
+    if (run.ref !== undefined && run.ref !== "") return `[${said(run.ref, "a link's reference")}]`;
+    if (run.ref === "" && run.label !== undefined) {
+        if (label !== run.label) return `[${run.label}]`;
+        const next = following?.kind === "text" ? following.text[0] : following?.kind === "link" ? "[" : undefined;
+        return run.shortcut && next !== "(" && next !== "[" ? "" : "[]";
+    }
+    return `(${destination(said(run.href, "a link's address"))}${titleText(run.title)})`;
 }
 
 function codeSpan(value: string): string {

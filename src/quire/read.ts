@@ -990,6 +990,8 @@ function inline(text: string, context: Context): Run[] {
                 if (reference) {
                     const run: Run = { kind: "link", href: reference.href, ref: reference.ref, runs: nested(label) };
                     if (reference.title !== undefined) run.title = reference.title;
+                    if (reference.ref === "") run.label = label;
+                    if (reference.shortcut) run.shortcut = true;
                     push(run);
                     index = reference.end;
                     continue;
@@ -1113,7 +1115,7 @@ function inline(text: string, context: Context): Run[] {
 }
 
 /** A reference link's target after the `]` at `close`: `[text][label]`, `[label][]` or `[label]`. */
-function referenceAt(text: string, close: number, context: Context, label?: string): { href: string; title?: string; ref: string; end: number } | undefined {
+function referenceAt(text: string, close: number, context: Context, label?: string): { href: string; title?: string; ref: string; shortcut?: boolean; end: number } | undefined {
     if (text[close + 1] === "[") {
         const end = text.indexOf("]", close + 2);
         if (end > 0) {
@@ -1127,7 +1129,7 @@ function referenceAt(text: string, close: number, context: Context, label?: stri
     const start = text.lastIndexOf("[", close);
     const name = label ?? text.slice(start + 1, close);
     const found = context.refs.get(normalLabel(name));
-    return found ? { ...found, ref: "", end: close + 1 } : undefined;
+    return found ? { ...found, ref: "", shortcut: true, end: close + 1 } : undefined;
 }
 
 function runsPlain(runs: Leaf[]): string {

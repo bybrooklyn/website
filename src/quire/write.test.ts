@@ -3,7 +3,7 @@
 // and centring included. Run with `bun test src/quire`.
 
 import { expect, test } from "bun:test";
-import { changeKind, code, divider, heading, image, list, paragraph, removeBlock, setAlign, setStyle, table, tidyRuns, toggleMark, type Block, type Document, type Paragraph, type Run } from "./document";
+import { changeKind, code, deleteText, divider, heading, image, insertText, list, paragraph, removeBlock, setAlign, setStyle, table, tidyRuns, toggleMark, type Block, type Document, type Paragraph, type Run } from "./document";
 import { read } from "./read";
 import { write } from "./write";
 
@@ -209,4 +209,21 @@ test("blocks brought together by an edit are kept apart as they read: two lists 
     expect(read(write(made1)).blocks[1]?.kind).toBe("list");
     // two blocks the file had together keep the single line ending between them
     for (const source of ["text\n- a\n", "# h\ntext\n", "<!-- c -->\ntext\n", "> q\n>\ntext\n", "- a\n  ```\n  x\n  ```\ntext\n", "| a |\n|---|\n# h\n"]) expect(write(read(source))).toBe(source);
+});
+
+test("a link found by its words keeps its form while they stay, and still names its definition once they change", () => {
+    const touched = (source: string, offset: number) => write(insertText(read(source), { path: [0], offset }, "z"));
+    expect(touched("see [ab]\n\n[ab]: http://x\n", 0)).toBe("zsee [ab]\n\n[ab]: http://x\n");
+    expect(touched("see [ab][]\n\n[ab]: http://x\n", 0)).toBe("zsee [ab][]\n\n[ab]: http://x\n");
+    expect(touched("see [ab]\n\n[ab]: http://x\n", 5)).toBe("see [azb][ab]\n\n[ab]: http://x\n");
+    expect(touched("see [ab][]\n\n[ab]: http://x\n", 5)).toBe("see [azb][ab]\n\n[ab]: http://x\n");
+    expect(touched("see [ab][r]\n\n[r]: http://x\n", 5)).toBe("see [azb][r]\n\n[r]: http://x\n");
+    for (const source of ["see [ab]\n\n[ab]: http://x\n", "see [ab][]\n\n[ab]: http://x\n"]) {
+        const back = read(touched(source, 5)).blocks[0];
+        expect(back?.kind === "paragraph" && back.runs.find((run) => run.kind === "link")).toMatchObject({ kind: "link", href: "http://x" });
+    }
+    // a shortcut followed by an opening bracket takes the empty brackets, or it would be another link
+    const doc = read("[ab] x\n\n[ab]: http://x\n");
+    const opened = deleteText(insertText(doc, { path: [0], offset: 2 }, "(y)"), { start: { path: [0], offset: 5 }, end: { path: [0], offset: 7 } });
+    expect(write(opened).split("\n")[0]).toBe("[ab][](y)");
 });

@@ -78,12 +78,18 @@ export interface EmojiRun {
 /** Anything that can sit inside a link. */
 export type Leaf = TextRun | ImageRun | BreakRun | FootnoteRun | HtmlRun | EmojiRun;
 
-/** A link around some runs. `ref` is set for a reference link, `[text][ref]`. */
+/**
+ * A link around some runs. `ref` is set for a reference link, `[text][ref]`; it is empty for one
+ * written `[text][]` or `[text]`, whose `label` is the text the file had in its brackets, which
+ * names its definition, and whose `shortcut` says it was written without the empty brackets.
+ */
 export interface LinkRun {
     kind: "link";
     href: string;
     title?: string;
     ref?: string;
+    label?: string;
+    shortcut?: boolean;
     runs: Leaf[];
 }
 
@@ -344,6 +350,8 @@ interface LinkInfo {
     href: string;
     title?: string;
     ref?: string;
+    label?: string;
+    shortcut?: boolean;
 }
 
 /** One leaf with the link around it: runs are edited in this flat form and grouped again after. */
@@ -367,10 +375,10 @@ export function runsText(runs: Run[]): string {
 }
 
 function pieces(runs: Run[]): Piece[] {
-    return runs.flatMap((run): Piece[] => (run.kind === "link" ? run.runs.map((leaf) => ({ leaf, link: { href: run.href, title: run.title, ref: run.ref } })) : [{ leaf: run }]));
+    return runs.flatMap((run): Piece[] => (run.kind === "link" ? run.runs.map((leaf) => ({ leaf, link: { href: run.href, title: run.title, ref: run.ref, label: run.label, shortcut: run.shortcut } })) : [{ leaf: run }]));
 }
 
-const sameLink = (a?: LinkInfo, b?: LinkInfo) => a === b || (!!a && !!b && a.href === b.href && a.title === b.title && a.ref === b.ref);
+const sameLink = (a?: LinkInfo, b?: LinkInfo) => a === b || (!!a && !!b && a.href === b.href && a.title === b.title && a.ref === b.ref && a.label === b.label && a.shortcut === b.shortcut);
 const sameMarks = (a: Mark[], b: Mark[]) => a.length === b.length && a.every((mark) => b.includes(mark));
 const sameNotes = (a?: string[], b?: string[]) => (a?.length ?? 0) === (b?.length ?? 0) && (!a || a.every((id) => b!.includes(id)));
 const sameFormat = (a: TextRun, b: TextRun) => sameMarks(a.marks, b.marks) && LOOKS.every((key) => a[key] === b[key]) && sameNotes(a.comments, b.comments);
@@ -399,6 +407,8 @@ function tidyLink(run: LinkRun): LinkRun {
     const out: LinkRun = { kind: "link", href: run.href, runs: run.runs };
     if (run.title !== undefined) out.title = run.title;
     if (run.ref !== undefined) out.ref = run.ref;
+    if (run.label !== undefined) out.label = run.label;
+    if (run.shortcut) out.shortcut = true;
     return out;
 }
 
