@@ -291,6 +291,37 @@ test("a table's strip and a picture's strip cover neither their table or picture
     await tab.press("Escape");
 });
 
+test("a picked picture: no caret blinks beside it, no empty slot in its strip, and wrapping a centred one is dimmed with the reason", async () => {
+    if (skip("a picked picture")) return;
+    const { tab } = page!;
+    const picture = await tab.run<string>("location.href.replace(/page\\.html$/, 'wide.svg')");
+    await page!.reset(`Before.\n\n<div align="center">\n\n![A picture](${picture})\n\n</div>\n\nAfter.\n`, [0], 2);
+    await tab.run("new Promise((done) => { const img = document.querySelector('.quire-image img'); img.complete ? done() : img.onload = done; })");
+    await tab.wait(300);
+    const caretShown = () => tab.run<string>("getComputedStyle(document.querySelector('.quire-caret')).opacity");
+    await page!.press(".quire-image img");
+    await tab.wait(400);
+    expect(await caretShown()).toBe("0");
+    // at its original size the button for it closes up to nothing
+    expect(await tab.run("document.querySelector('.quire-own-size').getBoundingClientRect().width")).toBe(0);
+    await tab.run("(() => { const box = document.querySelector('.quire-image img').getBoundingClientRect(); document.querySelector('.quire-image img').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: box.left + 30, clientY: box.top + 30 })); })()");
+    await tab.wait(400);
+    expect(await tab.run("[...document.querySelectorAll('.quire-picture-menu .quire-menu-line')].map((line) => [line.querySelector('.quire-menu-label').textContent, line.disabled, line.querySelector('.quire-menu-hint')?.textContent ?? ''])")).toEqual([
+        ["Picture options", false, ""],
+        ["Wrap text", true, "Left or right only"],
+        ["Replace", false, ""],
+        ["Remove", false, ""],
+    ]);
+    await page!.press(".quire-picture-menu .quire-menu-line", "Picture options");
+    await tab.wait(500);
+    expect(await tab.run("document.querySelector('.quire-picture-wrap').disabled")).toBe(true);
+    expect(await tab.run("document.querySelector('.quire-picture-note').classList.contains('shown')")).toBe(true);
+    await tab.press("Escape");
+    await tab.wait(300);
+    await tab.press("Escape");
+    await tab.wait(300);
+});
+
 test("a folding section just inserted takes the keyboard into its summary, whose empty word is quiet", async () => {
     if (skip("a new folding section's summary")) return;
     const { tab } = page!;

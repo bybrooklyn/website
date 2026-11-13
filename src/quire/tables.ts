@@ -166,7 +166,7 @@ export function createTableTools(surface: Surface, top: () => number = () => 0):
         menu.open(trigger, menuLines(), keyboard);
     }
     /** When the menu was last opened from the keyboard, whose own menu event may follow. */
-    let keyedAt = 0;
+    let keyedAt = -Infinity;
     /** A right-click in a table opens its menu at the pointer, the cursor first going to the cell pressed; Shift with it leaves the browser's own. */
     function onMenu(event: MouseEvent) {
         const cell = (event.target as HTMLElement).closest?.("td, th");

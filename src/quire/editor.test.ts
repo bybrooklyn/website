@@ -434,9 +434,9 @@ used("a picture shows with nothing under it, and its description is written in i
     const at = await tab.run<{ x: number; y: number }>("(() => { const b = document.querySelector('.quire-image img').getBoundingClientRect(); return { x: b.left + 8, y: b.top + 8 }; })()");
     await tab.run(`document.querySelector('.quire-image img').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2, clientX: ${at.x}, clientY: ${at.y} }))`);
     await tab.wait(400);
-    await press(".quire-picture-menu .quire-menu-line", "Description");
+    await press(".quire-picture-menu .quire-menu-line", "Picture options");
     await tab.wait(400);
-    await tab.run("document.querySelector('.quire-picture-panel input:focus').select()");
+    await tab.run("(() => { const field = document.querySelectorAll('.quire-picture-panel input')[1]; field.focus(); field.select(); })()");
     await tab.type("A tall tower");
     await tab.press("Enter");
     await tab.wait(50);

@@ -102,8 +102,8 @@ test("nothing stands under a picture; its menu opens at the pointer, its panel g
     const menu = await tab.run<{ x: number; y: number }>("q.box('.quire-picture-menu')");
     const img = await tab.run<{ x: number; y: number }>("q.box('.quire-image img')");
     expect(Math.abs(menu.x - (img.x + 30))).toBeLessThan(4);
-    expect(await tab.run("[...document.querySelectorAll('.quire-picture-menu .quire-menu-label')].map((each) => each.textContent)")).toEqual(["Caption", "Description", "Alignment", "Size", "Wrap text", "Replace", "Remove"]);
-    await page!.press(".quire-picture-menu .quire-menu-line", "Caption");
+    expect(await tab.run("[...document.querySelectorAll('.quire-picture-menu .quire-menu-label')].map((each) => each.textContent)")).toEqual(["Picture options", "Wrap text", "Replace", "Remove"]);
+    await page!.press(".quire-picture-menu .quire-menu-line", "Picture options");
     await tab.wait(30);
     // it is growing a moment after, and stands at the right of the window once settled
     expect(await tab.run<number>("document.querySelector('.quire-picture-skin').getAnimations().length")).toBe(1);
@@ -123,7 +123,7 @@ test("nothing stands under a picture; its menu opens at the pointer, its panel g
     expect(await tab.run("document.querySelector('.quire-picture-panel').classList.contains('open')")).toBe(false);
     // Escape closes the panel and gives the keyboard back to the picture
     await rightClick();
-    await page!.press(".quire-picture-menu .quire-menu-line", "Description");
+    await page!.press(".quire-picture-menu .quire-menu-line", "Picture options");
     await tab.wait(500);
     expect(await tab.run("document.activeElement.classList.contains('quire-picture-field')")).toBe(true);
     await tab.press("Escape");
@@ -144,7 +144,7 @@ test("wrap text from the menu floats the picture with the words beside it, as on
     expect(await page!.md()).toContain(`<img src="${picture}" alt="A wide picture" align="left" />`);
     expect(await tab.run("getComputedStyle(document.querySelector('.quire-image')).float")).toBe("left");
     await rightClick();
-    await page!.press(".quire-picture-menu .quire-menu-line", "Size");
+    await page!.press(".quire-picture-menu .quire-menu-line", "Picture options");
     await tab.wait(500);
     await page!.press(".quire-picture-panel button", "Half width");
     expect(await page!.md()).toContain(`<img src="${picture}" alt="A wide picture" width="50%" align="left" />`);

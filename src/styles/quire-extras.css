@@ -190,26 +190,24 @@
     transform-origin: right top;
 }
 
+/* back to the original size: an icon among icons, which closes up to nothing, leaving no slot, while the picture is at that size */
 .quire-own-size {
-    width: auto;
-    padding-inline: 0.5rem;
-    font-size: 0.8rem;
-    white-space: nowrap;
+    max-width: var(--press);
+    overflow: hidden;
     transition:
         opacity 0.2s ease,
         max-width 0.3s var(--ease),
+        min-width 0.3s var(--ease),
         padding 0.3s var(--ease);
-    max-width: 6rem;
-    overflow: hidden;
 }
 
 .quire-own-size.absent {
+    min-width: 0;
     max-width: 0;
     padding-inline: 0;
     opacity: 0;
     pointer-events: none;
 }
-
 /* ---- a picture's panel: quiet labelled lines at the right, as the document's facts there are
    (.quire-details), on a skin that grows out of the menu line pressed and goes back into the picture;
    on a phone it stands at the foot of the window ---- */
@@ -306,12 +304,30 @@
 }
 
 .quire-picture-wrap {
-    min-width: 3.2rem;
-    border: 0.0625rem solid var(--rule);
+    min-width: 1.9rem;
+    padding-inline: 0;
 }
 
 .quire-picture-wrap:disabled {
     opacity: 0.45;
+}
+
+/* why wrapping cannot be had for a centred picture: quiet words that open beside the switch, and close away */
+.quire-picture-note {
+    max-width: 0;
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 0.8rem;
+    white-space: nowrap;
+    opacity: 0;
+    transition:
+        max-width 0.3s var(--ease),
+        opacity 0.2s ease;
+}
+
+.quire-picture-note.shown {
+    max-width: 10rem;
+    opacity: 1;
 }
 
 .quire-picture-actions {
