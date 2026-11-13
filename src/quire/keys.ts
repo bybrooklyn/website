@@ -56,8 +56,8 @@ import {
 } from "./document";
 import { record, redo, seal, undo, type ChangeKind, type History, type State } from "./history";
 import { readTag } from "./components";
-import { emojiOf, shortcodeAt } from "./emoji";
-import { symbolFor } from "./symbols";
+import { inAddress, shortcodeAt } from "./emoji";
+import { SIGNS, symbolFor } from "./symbols";
 import { LINE_MARK, PAIRS } from "./vocabulary";
 
 /** A piece of input: text typed (or given by the keyboard of a phone), or a named key with its modifiers. `mod` is Ctrl, or Cmd on a Mac. */
@@ -191,7 +191,7 @@ function type(state: State, text: string, options: TypingOptions = {}): Outcome 
     return { state: after, kind: "type", slash };
 }
 
-/** A typed pair that becomes its character (symbols.ts), or a known emoji shortcode once its closing colon is typed; never in code or maths. */
+/** A typed pair of signs that becomes its character once the character after it shows it is complete (symbols.ts), or a known emoji shortcode once its closing colon is typed; never in code. */
 function symbolShortcut(state: State, typed: string, options: TypingOptions): State | undefined {
     const { doc } = state;
     const at = state.selection.focus;
@@ -200,7 +200,7 @@ function symbolShortcut(state: State, typed: string, options: TypingOptions): St
     if (typed.length !== 1) return undefined;
     if (typed === ":") {
         const code = /:([a-z0-9_+-]+):$/.exec(before);
-        if (!code || !emojiOf(code[1]!) || /[￼\n]/.test(code[0])) return undefined;
+        if (!code || /[￼\n]/.test(code[0])) return undefined;
         const start = at.offset - code[0].length;
         // only a shortcode standing as a word of its own, not in a word or a web address (emoji.ts)
         if (shortcodeAt(textAt(doc, at.path), start) !== code[1]) return undefined;
@@ -209,9 +209,15 @@ function symbolShortcut(state: State, typed: string, options: TypingOptions): St
         return { doc: next, selection: caret(at.path, start + 1) };
     }
     if (!options.symbols) return undefined;
-    const symbol = symbolFor(before);
-    if (!symbol || quiet(at.offset) || quiet(at.offset - 1)) return undefined;
-    const next = insertText(deleteText(doc, { start: { path: at.path, offset: at.offset - 2 }, end: at }), { path: at.path, offset: at.offset - 2 }, symbol);
+    // a pair of signs becomes its character only when what is typed after it cannot make it longer,
+    // and never in an address: a link's, inside an HTML tag, or a web address
+    if (SIGNS.includes(typed)) return undefined;
+    const pair = before.slice(0, -1);
+    const end = at.offset - 1;
+    const symbol = symbolFor(pair);
+    const lead = pair.slice(0, -2);
+    if (!symbol || quiet(end) || quiet(end - 1) || /<[A-Za-z/!?][^<>]*$/.test(lead) || /\]\([^()\s]*$/.test(lead) || (lead !== "" && inAddress(lead, lead.length - 1))) return undefined;
+    const next = insertText(deleteText(doc, { start: { path: at.path, offset: end - 2 }, end: { path: at.path, offset: end } }), { path: at.path, offset: end - 2 }, symbol);
     return { doc: next, selection: caret(at.path, at.offset - 1) };
 }
 
