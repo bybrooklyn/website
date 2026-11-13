@@ -212,13 +212,21 @@ export function createSaver(
         /** After a refusal: keep mine writes it over theirs; take theirs gives their text to show, mine having been kept by the caller. */
         async choose(choice: "mine" | "theirs"): Promise<Opened | undefined> {
             if (status.state !== "changed") return undefined;
-            const theirs = status.theirs ?? (await store.open(id).catch(() => undefined));
+            const refused = status.theirs;
             if (choice === "mine") {
+                const theirs = refused ?? (await store.open(id).catch(() => undefined));
                 running = running.then(() => save(theirs?.mark));
                 await running;
                 return undefined;
             }
-            if (theirs) mark = theirs.mark;
+            // their version is read afresh where it can be, so that a store keeping pictures beside it takes theirs too
+            const theirs = (await store.open(id).catch(() => undefined)) ?? refused;
+            if (!theirs) {
+                // nothing to put in its place: what was typed stays, waiting, and the writer is told
+                set({ state: "failed", message: "their version could not be read, so yours is kept here and is still to be saved" });
+                return undefined;
+            }
+            mark = theirs.mark;
             pending = undefined;
             set({ state: "saved" });
             return theirs;
