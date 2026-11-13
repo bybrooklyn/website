@@ -41,10 +41,15 @@ export function sounds(m: Mote): Sounds {
         on = !on;
         m.keep("sound", on);
         say();
-        if (on) ready()?.resume();
+        ready();
     };
 
-    /** The browser's sound, made the first time it is needed. A browser only allows it after a press, which the button is. */
+    /**
+     * The browser's sound, made the first time it is needed, and nothing at all while the sound is off.
+     * A browser holds it back until the visitor has pressed something: made before that (sound left on
+     * from a last visit, and a roll opened from a link), or made by a press that Safari does not count,
+     * it waits, and is started here, or at the next press anywhere on the page.
+     */
     const ready = (): AudioContext | undefined => {
         if (!on || typeof AudioContext === "undefined") return undefined;
         if (!out) {
@@ -54,8 +59,10 @@ export function sounds(m: Mote): Sounds {
             const samples = hiss.getChannelData(0);
             for (let i = 0; i < samples.length; i++) samples[i] = Math.random() * 2 - 1;
         }
+        if (out.state === "suspended") void out.resume().catch(() => {});
         return out.state === "running" ? out : undefined;
     };
+    for (const name of ["pointerup", "keydown", "touchend"]) document.addEventListener(name, () => void (out?.state === "suspended" && ready()), { capture: true, passive: true });
     /** A volume that starts at `loud` and dies away over `seconds`. */
     const fading = (audio: AudioContext, loud: number, seconds: number): GainNode => {
         const volume = audio.createGain();
