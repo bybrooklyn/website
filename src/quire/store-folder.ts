@@ -18,7 +18,7 @@ export interface FileHandle {
     kind: "file";
     name: string;
     getFile(): Promise<{ text(): Promise<string>; lastModified: number; size: number; type?: string } & Blob>;
-    createWritable(): Promise<{ write(data: string | Blob): Promise<void>; close(): Promise<void> }>;
+    createWritable(): Promise<{ write(data: string | Blob): Promise<void>; close(): Promise<void>; abort?(): Promise<void> }>;
     requestPermission?(options: { mode: "readwrite" }): Promise<string>;
 }
 
@@ -59,8 +59,15 @@ async function fileData(id: string, text: string, quire: Parts | undefined, shel
 
 async function write(handle: FileHandle, data: string | Blob) {
     if (handle.requestPermission && (await handle.requestPermission({ mode: "readwrite" })) !== "granted") throw new StoreError("permission to write the file was not given");
+    // the browser writes into a copy beside the file and puts it in the file's place only on close, so the file
+    // is never left half written; a write that fails is abandoned, which lets the copy go and keeps the file as it was
     const writable = await handle.createWritable();
-    await writable.write(data);
+    try {
+        await writable.write(data);
+    } catch (error) {
+        await writable.abort?.().catch(() => undefined);
+        throw error;
+    }
     await writable.close();
 }
 

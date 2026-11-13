@@ -148,3 +148,39 @@ test("the folder store says whether an address in a document leads to a file or 
     expect(await store.exists!("posts/one.md", "../../out.md")).toBeUndefined();
     expect(await store.exists!("posts/one.md", "https://example.com/")).toBeUndefined();
 });
+
+test("a write that fails half way is abandoned: the file keeps what it had, and the save says it failed", async () => {
+    let content = "kept words";
+    let abandoned = false;
+    const handle: FileHandle = {
+        kind: "file",
+        name: "note.md",
+        async getFile() {
+            return new File([content], "note.md", { lastModified: 5 });
+        },
+        async createWritable() {
+            let copy = "";
+            return {
+                async write(data: string | Blob) {
+                    copy = typeof data === "string" ? data.slice(0, 3) : "";
+                    throw new Error("the disk is full");
+                },
+                async close() {
+                    content = copy;
+                },
+                async abort() {
+                    abandoned = true;
+                },
+            };
+        },
+    };
+    const store = oneFileStore(handle);
+    const opened = await store.open("note.md");
+    const saver = createSaver(store, "note.md", opened.mark, { wait: (run) => (run(), () => {}) });
+    saver.changed("new words");
+    await saver.settled();
+    expect(saver.status()).toEqual({ state: "failed", message: "the disk is full" });
+    expect(abandoned).toBe(true);
+    expect(content).toBe("kept words");
+    expect(saver.unsaved()).toBe("new words");
+});
