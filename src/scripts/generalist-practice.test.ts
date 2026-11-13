@@ -102,6 +102,26 @@ test("a trap in the engine is told to the page, and that setup is not tried agai
     }
 }, 30_000);
 
+test("when the helpers change, the leader takes its new share of the creatures, keeping what it learned", async () => {
+    const it = page();
+    try {
+        it.staff(3);
+        await it.change(0, false);
+        expect(await until(() => it.practised().length >= 2, 20_000)).toBe(true);
+        // four workers of 8 creatures, then the leader alone, as a change of effort to gentle does
+        it.staff(0);
+        const before = it.practised().length;
+        expect(await until(() => it.practised().length >= before + 4, 20_000)).toBe(true);
+        const [a, b, c] = it.practised().slice(-3).map((report) => report.steps);
+        // 32 creatures, 64 decisions of 4 steps: 8,192 steps an update, a few less when runs end mid-decision
+        expect(b! - a!).toBeGreaterThan(6000);
+        expect(c! - b!).toBeGreaterThan(6000);
+        expect(it.practised().at(-1)!.updates).toBeGreaterThan(before);
+    } finally {
+        it.close();
+    }
+}, 60_000);
+
 test("practice goes on, with its steps rising, after the world is changed twenty times while updates are in flight", async () => {
     const it = page();
     try {

@@ -67,6 +67,8 @@ const loading = fetch(engineAddress())
     .catch((error: unknown) => tell({ kind: "failed", why: String(error) }));
 
 let setup = -1;
+/** What the page last said to begin, so the leader can take a new share of the creatures when its helpers change. */
+let begun: Extract<Order, { kind: "begin" }> | undefined;
 let paused = false;
 let gentle = false;
 let heard = 0;
@@ -99,6 +101,7 @@ function make(order: Extract<Order, { kind: "begin" }>): void {
     // each worker draws its own actions and has worlds of its own; the leader's weights are sent to all
     engine.practice_create(share, (order.learnerSeed + order.index) >>> 0, (order.learnerSeed * 64 + order.index) >>> 0);
     setup = order.setup;
+    begun = order;
 }
 
 /** Writes a kept learner into the engine's practice. One of another length (kept by an older engine, or for another body) is refused before anything is written, so it never runs past its room. */
@@ -266,6 +269,13 @@ onmessage = async (event: MessageEvent<Order>) => {
         crew += 1;
         gentle = order.gentle;
         helpers = order.ports.map((port) => ({ port }));
+        // a leader already practising takes its share for the new number of workers, keeping what it has learned,
+        // so effort changes how fast it learns and not what (the page gives the new helpers their shares)
+        if (engine && begun && !lead && begun.workers !== helpers.length + 1) {
+            const [state, running] = [list(engine, engine.practice_state()), list64(engine, engine.practice_running())];
+            make({ ...begun, workers: helpers.length + 1, kept: undefined });
+            load(state, running);
+        }
         // an answer to a request given up (by time, or by a change of setup) is let go
         for (const helper of helpers) helper.port.onmessage = (message: MessageEvent<Answer>) => {
             if (helper.waiting?.asked === message.data.asked) helper.waiting.answered(message.data);
