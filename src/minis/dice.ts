@@ -6,7 +6,7 @@
 // here it is drawn, by Mote's own 3D drawing (gl.ts), with the dice to pick
 // from and a history under it. A roll can be sent as a link: ?roll=2d6+3.
 
-import { fortune, tally, type Luck } from "./luck";
+import { fortune, keptLuck, tally, type Luck } from "./luck";
 import { gl, seat, type Color, type Mark, type Part } from "../mote/gl";
 import { apply, block, cross, mix3, mixTurn, nearness, normals, paint, plus, scaled, spun, turned, upright, type Mesh, type Turn, type V3 } from "../mote/solids";
 import { sounds } from "../mote/sound";
@@ -14,7 +14,7 @@ import { turn } from "../mote/space";
 import { el, gently, toward, type Mote, type Scene } from "../mote/stage";
 import { copyText } from "../scripts/copy";
 import { still } from "../scripts/opening";
-import { MOST, lineUp, numbers, read, row, tidy, total, type Roll } from "./rolls";
+import { MOST, keptHistory, lineUp, numbers, read, row, tidy, total, type Roll } from "./rolls";
 import { SHAPES, TOWER, slabs, throwDice, trayFor, type Sides, type Slab, type Throw, type Tray } from "./tower";
 
 export const label = "A dice tower. Dice dropped in at the top tumble down its ramps into a tray.";
@@ -186,9 +186,10 @@ export default function dice(m: Mote): Scene {
     fit();
 
     // ---- what is kept between visits: the last rolls ----
-    let history = m.recall<{ what: string; said: string; total: number }[]>("dice", []);
+    // read back only as sane entries: a damaged store would otherwise stop the whole mini starting
+    let history = keptHistory(m.recall<unknown>("dice", []));
     /** Every number each kind of die has shown here, kept between visits: what "luck" is worked out from. */
-    let luck = m.recall<Luck>("dice-luck", {});
+    let luck: Luck = keptLuck(m.recall<unknown>("dice-luck", {}));
     /** The roll last sent down the tower, as it is written: what a link to it carries. */
     let last = "";
 

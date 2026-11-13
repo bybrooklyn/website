@@ -1,6 +1,7 @@
 // What a typed roll means: "2d6+3", "4d6 drop lowest", "d20 adv", "d100".
 // Reading it and adding it up are kept apart from throwing the dice, so both can be tested.
 
+import { list, record, text } from "./checked";
 import { SIDES, type Sides } from "./tower";
 
 /** The most dice the tower takes at once. */
@@ -74,6 +75,23 @@ export function read(text: string): Roll | string {
     if (dice.length === 0) return "There are no dice in that.";
     if (dice.length > MOST) return `At most ${MOST} dice at once.`;
     return { groups, plus, dice };
+}
+
+/** A roll as the history keeps it: as it was written, what each die showed, and the total. */
+export interface Rolled {
+    what: string;
+    said: string;
+    total: number;
+}
+
+/** The rolls kept from an earlier visit, read back as at most thirty sane entries; any that is not one is left out. */
+export function keptHistory(value: unknown): Rolled[] {
+    return list(value, 30, (item) => {
+        const entry = record(item);
+        const [what, said] = [text(entry?.what, LONGEST, ""), text(entry?.said, LONGEST * 8, "")];
+        const sum = entry?.total;
+        return what && said && typeof sum === "number" && Number.isFinite(sum) ? { what, said, total: sum } : undefined;
+    });
 }
 
 /** Adds a roll up from what the dice showed, in the order of `roll.dice`. */

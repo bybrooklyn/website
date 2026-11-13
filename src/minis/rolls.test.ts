@@ -1,6 +1,6 @@
 // What reading a typed roll, adding it up and lining its numbers up are held to. Run with `bun run test`.
 import { expect, test } from "bun:test";
-import { lineUp, numbers, read, row, tidy, total, type Roll } from "./rolls";
+import { keptHistory, lineUp, numbers, read, row, tidy, total, type Roll } from "./rolls";
 
 const ok = (text: string) => read(text) as Roll;
 
@@ -92,6 +92,15 @@ test("a roll from a link is kept as its tidy text, and one too long to be a roll
     expect((long as string).length).toBeLessThan(100);
     expect(typeof read(Array.from({ length: 60 }, () => "1d6").join(" + "))).toBe("object");
     expect(ok(Array.from({ length: 30 }, () => "2d6 kh1").join(" + ")).dice.length).toBe(60);
+});
+
+test("rolls kept from an earlier visit are read back as a short list of sane entries, and the rest are left out", () => {
+    const good = { what: "2d6 + 3", said: "2d6 [4, 5] + 3", total: 12 };
+    expect(keptHistory([good, good])).toEqual([good, good]);
+    expect(keptHistory([good, { what: 3, said: "x", total: 1 }, { what: "d6", said: "d6 [2]", total: "2" }, null, "x", { ...good, total: Number.NaN }])).toEqual([good]);
+    expect(keptHistory(Array.from({ length: 100 }, () => good)).length).toBe(30);
+    expect(keptHistory([{ ...good, what: "d6".repeat(1000) }])).toEqual([]);
+    for (const value of [null, undefined, 3, "x", {}, { 0: good }]) expect(keptHistory(value)).toEqual([]);
 });
 
 test("keeping or dropping the highest or the lowest, for any number below, equal to or above the dice rolled, never turns into its opposite", () => {
