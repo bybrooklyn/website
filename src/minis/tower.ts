@@ -120,6 +120,8 @@ export const TUNE = { rub: 0.4, bounce: 0.5, spin: 30, damp: 0.03, floor: 2, apa
 
 /** How long after one die the next is let into the tower, in seconds. A stream goes down the ramps where a stack would wedge. */
 const BETWEEN = 0.11;
+/** How long past its turn a die waits for the top of the tower to be clear before it is let in anyway, in seconds. */
+const STUCK = 3;
 
 /** Lets these dice into the top of the tower one after another, each turned and spun its own way. `random` gives numbers from 0 to 1. */
 export function throwDice(kinds: Sides[], random: () => number = Math.random): Throw {
@@ -158,9 +160,11 @@ export function throwDice(kinds: Sides[], random: () => number = Math.random): T
         tray,
         slabs: still,
         step(dt) {
-            // the next die goes in once its turn has come and the one before has fallen clear of where it starts
+            // the next die goes in once its turn has come and the one before has fallen clear of where it starts;
+            // or, if one has stayed there, after a long wait all the same, so that the roll can still end
             const [next, start] = [dice[gone], starts[gone]];
-            if (next && start && waited >= gone * BETWEEN && dice.every((die) => die.waiting || Math.hypot(die.body.p[0] - start[0], die.body.p[1] - start[1], die.body.p[2] - start[2]) > 1.5)) {
+            const clear = () => dice.every((die) => die.waiting || Math.hypot(die.body.p[0] - start![0], die.body.p[1] - start![1], die.body.p[2] - start![2]) > 1.5);
+            if (next && start && waited >= gone * BETWEEN && (waited >= gone * BETWEEN + STUCK || clear())) {
                 next.waiting = false;
                 next.body.p = start;
                 space.wake(next.body);

@@ -68,3 +68,20 @@ for (const sides of SIDES) {
         expect(Math.min(...counts)).toBeGreaterThan(0);
     }, 180_000);
 }
+
+test("a die that stays near the top of the tower does not keep the rest of the roll out for ever", () => {
+    const thrown = throwDice([6, 6, 6], seeded(5));
+    let pinned = false;
+    for (let step = 0; step < 120 * 40 && !thrown.done(); step++) {
+        thrown.step(1 / 120);
+        // the first die, once in, is held fast just under where every later die is let in
+        const [first] = thrown.dice;
+        if (!pinned && first && !first.waiting) {
+            first.body.p = [-2.4, TOWER.top + 0.6, 0];
+            thrown.space.hold(first.body);
+            pinned = true;
+        }
+    }
+    expect(thrown.dice.every((die) => !die.waiting)).toBe(true);
+    expect(thrown.done()).toBe(true);
+});
