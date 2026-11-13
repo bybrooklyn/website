@@ -30,11 +30,8 @@ const next = projects[at + 1];
 const placed = tags.map((tag, place) => ({ tag, place }));
 /** The few seen every day, for the strip at the top. */
 const everyday = placed.filter((each) => each.tag.common);
-/** Every tag by its first spelling, gathered under its first letter, for the columns. */
-const letters = Map.groupBy(
-    placed.toSorted((a, b) => a.tag.forms[0]!.localeCompare(b.tag.forms[0]!)),
-    (each) => each.tag.forms[0]![0]!.toUpperCase(),
-);
+/** Every tag by its first spelling, for the columns. */
+const all = placed.toSorted((a, b) => a.tag.forms[0]!.localeCompare(b.tag.forms[0]!));
 ---
 
 <Opened title={name} description={summary} image={sharePicture("project-tone-tags")} facts={projectShare(project)} back={{ href: "/projects/", label: "projects" }}>
@@ -71,30 +68,20 @@ const letters = Map.groupBy(
                 </div>
             </section>
 
-            {/* all of them, A to Z, down three columns, a letter at the head of each run */}
-            <div class="tonetags-letters">
-                {[...letters].map(([letter, rows]) => (
-                    <section class="tonetags-letter fold open">
-                        <div>
-                            <h2 aria-hidden="true">{letter}</h2>
-                            <ul>
-                                {rows.map(({ tag, place }) => (
-                                    <li class="fold open" data-tag={place}>
-                                        <div class="tonetag">
-                                            <span class="tonetag-forms">
-                                                {tag.forms.map((form) => (
-                                                    <code>/{form}</code>
-                                                ))}
-                                            </span>
-                                            <span class="tonetag-means">{tag.means}</span>
-                                        </div>
-                                    </li>
-                                ))}
-                            </ul>
+            {/* all of them, A to Z, down three columns: a tag, its meaning, and any other way it is written */}
+            <ul class="tonetags-all">
+                {all.map(({ tag, place }) => (
+                    <li class="fold open" data-tag={place}>
+                        <div class="tonetag">
+                            <code>/{tag.forms[0]}</code>
+                            <span>
+                                {tag.means}
+                                {tag.forms.length > 1 && <span class="tonetag-also"> also {tag.forms.slice(1).map((form) => `/${form}`).join(", ")}</span>}
+                            </span>
                         </div>
-                    </section>
+                    </li>
                 ))}
-            </div>
+            </ul>
         </div>
 
         <PrevNext

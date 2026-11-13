@@ -1,4 +1,4 @@
-/* The tone tags page (src/pages/tonetags.astro): what they are, a box to search in, a strip of the everyday ones, and all of them A to Z in columns. */
+/* The tone tags page (src/pages/tonetags.astro): what they are, a box to search in, a strip of the everyday ones, and all of them A to Z in tight columns. */
 
 .tonetags {
     --grow: 0.28s;
@@ -69,44 +69,36 @@
 }
 
 /* All of them, A to Z, down three columns on a wide window, two on a middling one, one on a phone. */
-.tonetags-letters {
+.tonetags-all {
     column-count: 3;
     column-gap: 3rem;
 }
 
 @media (max-width: 62rem) {
-    .tonetags-letters {
+    .tonetags-all {
         column-count: 2;
     }
 }
 
 @media (max-width: 34rem) {
-    .tonetags-letters {
+    .tonetags-all {
         column-count: 1;
     }
 }
 
-/* A letter stands at the head of its run, large and quiet, and is not left alone at the foot of a column. */
-.tonetags-letter h2 {
-    margin: 0.9rem 0 0.15rem;
-    font-size: 1.5rem;
-    line-height: 1.2;
-    color: color-mix(in oklch, var(--muted) 75%, transparent);
-    break-after: avoid;
-}
-
-/* One tag: the ways it is written, then what it means close beside them, and never split between columns. */
+/* One tag: how it is written, then what it means right beside it, and never split between columns. */
 .tonetag {
     display: grid;
-    grid-template-columns: 6rem 1fr;
+    grid-template-columns: 3.6rem 1fr;
     align-items: baseline;
-    gap: 0 0.75rem;
-    padding: 0.12rem 0;
+    gap: 0 0.5rem;
+    padding: 0.08rem 0;
     break-inside: avoid;
 }
 
-.tonetag-forms {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0 0.5rem;
+/* another way the same tag is written, said quietly after its meaning */
+.tonetag-also {
+    color: var(--muted);
+    font-size: 0.85em;
+    white-space: nowrap;
 }
