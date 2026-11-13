@@ -71,9 +71,13 @@ fn nearest(x: f64) -> i64 {
 
 /// The sine and cosine of an angle together. The angle is brought within a quarter turn of zero and
 /// two short polynomials do the rest; they are the ones the C library musl uses, good to the last bit
-/// of an f32.
+/// of an f32. An angle that is not a finite number has no sine or cosine: both are NaN, as the
+/// standard library gives.
 #[allow(clippy::excessive_precision)]
 pub fn sin_cos(angle: f32) -> (f32, f32) {
+    if !angle.is_finite() {
+        return (f32::NAN, f32::NAN);
+    }
     let x = angle as f64;
     let quarter = nearest(x * (2.0 / core::f64::consts::PI));
     let r = x - quarter as f64 * core::f64::consts::FRAC_PI_2;
@@ -208,6 +212,10 @@ fn exp64(x: f64) -> f64 {
 pub fn ln(x: f32) -> f32 {
     if x <= 0.0 {
         return f32::NEG_INFINITY;
+    }
+    // the power of two of infinity or NaN would be read as an ordinary one, about 2^1024
+    if x.is_nan() || x == f32::INFINITY {
+        return x;
     }
     let x = x as f64;
     let bits = x.to_bits();
@@ -480,6 +488,17 @@ mod tests {
         }
         assert!((atan2(1.0, -1.0) - 3.0 * PI / 4.0).abs() < 1e-6);
         assert!((atan2(-1.0, -1.0) + 3.0 * PI / 4.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn what_is_not_a_finite_number_has_no_sine_and_its_logarithm_is_itself() {
+        for angle in [f32::INFINITY, f32::NEG_INFINITY, f32::NAN] {
+            let (s, c) = sin_cos(angle);
+            assert!(s.is_nan() && c.is_nan(), "sin_cos({angle}) = ({s}, {c})");
+        }
+        assert_eq!(ln(f32::INFINITY), f32::INFINITY);
+        assert!(ln(f32::NAN).is_nan());
+        assert_eq!(ln(f32::MAX), f32::MAX.ln());
     }
 
     /// Runs a check over every f32 bit pattern from `low` to `high`, on every core, and returns the
