@@ -211,6 +211,10 @@
         animation: none;
     }
 
+    .terminal-bar button {
+        transition: background-color 0.15s ease;
+    }
+
     .terminal-bar .terminal-again {
         scale: 1;
         transition: opacity 0.15s ease, visibility 0s 0.15s;

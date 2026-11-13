@@ -445,8 +445,15 @@
 
     .dice-count,
     .plinko-word,
-    .mini-preview {
+    .mini-preview,
+    .mini-stage canvas {
         transition: none;
+    }
+
+    .mote-panel button {
+        transition:
+            color 0.15s ease,
+            text-decoration-color 0.15s ease;
     }
 
     .mini-list a:hover .mini-preview,

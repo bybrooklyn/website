@@ -148,7 +148,9 @@ body.opened:has(.strip:hover, .strip:focus-visible) .opened-panel {
         transition: none;
     }
 
-    body.opened:has(.strip:hover, .strip:focus-visible) .opened-panel {
+    body.opened:has(.strip:hover, .strip:focus-visible) .opened-panel,
+    .strip:hover .strip-button,
+    .strip:focus-visible .strip-button {
         translate: none;
     }
 }

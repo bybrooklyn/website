@@ -415,6 +415,13 @@
     transform: translate(-50%, 0);
 }
 
+/* without motion the name fades in where it stands, and does not rise into place */
+@media (prefers-reduced-motion: reduce) {
+    .prose .ref a[data-source]::after {
+        transition: opacity 0.15s ease;
+    }
+}
+
 @media print {
     .prose .ref {
         display: none;
