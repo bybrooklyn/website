@@ -733,6 +733,23 @@ used("Ctrl+K opens a link field that can be seen at every width, from the three 
     }
 });
 
+used("on a phone with the tools scrolled along, Alt+/ opens the search of the menus where it can be seen", async () => {
+    try {
+        await tab.resize(390, 844);
+        await reset("Words\n", [0], 0);
+        await tab.wait(300);
+        await tab.run("(() => { const strip = document.querySelector('.quire-bar-strip'); strip.scrollLeft = strip.scrollWidth; })()");
+        await tab.wait(300);
+        await tab.press("/", { alt: true });
+        await tab.wait(500);
+        const hit = await tab.run<boolean>(`(() => { const menu = [...document.querySelectorAll('.quire-menu')].find((each) => each.matches(':popover-open')); if (!menu) return false; const box = menu.getBoundingClientRect(); return menu.contains(document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2)); })()`);
+        expect(hit).toBe(true);
+        await tab.press("Escape");
+    } finally {
+        await tab.resize(1300, 900);
+    }
+});
+
 used("the selection bar over the first line of the text never covers the document's title above it", async () => {
     await reset("A first line of words to select.\n", [0], 2, [0], 7);
     await tab.run(`(() => { const title = document.querySelector('.quire-title'); title.value = 'A title with tails, gjpqy'; title.dispatchEvent(new Event('input', { bubbles: true })); })()`);
