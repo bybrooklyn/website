@@ -48,6 +48,7 @@ import { pictureType, withoutMetadata } from "./pictures";
 import { crc32 } from "./zip";
 import { PAGE } from "./styling";
 import { createCaret, FLAG, FLAG_ON_PAPER } from "./caret";
+import { createLiveCount } from "./live-count";
 import { createDetails, keptLine, lengthLine, sizeLine } from "./details";
 import { createFind } from "./find";
 import { mountChecking } from "./check/mount";
@@ -565,6 +566,16 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     // the document's file, length and where it is kept, in the right margin of the look with no page
     const details = createDetails();
     host.append(details.element);
+    // the word count while typing, at the window's lower left, as View shows or hides it
+    const counter = createLiveCount(() => {
+        const doc = surface.getDocument();
+        const selection = surface.getSelection();
+        return { whole: plainText(doc), part: collapsed(selection) ? undefined : plainText(documentOf(fragment(doc, selection))), pages: pages.paged() ? pages.now() : undefined };
+    });
+    host.append(counter.element);
+    host.classList.toggle("counting", counter.shown());
+    surface.on("change", () => counter.update());
+    surface.on("select", () => counter.update());
     // the outline and the details stand in the margins beside the sheet; when the sheet, zoomed or on a small
     // window, leaves them too little room to be read whole, they fade away rather than be cut or run under it
     const roomBeside = () => {
@@ -757,6 +768,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
                 contents: doing(addContents),
                 updateContents: () => (surface.run((doc) => updateContents(doc)), surface.focus()),
                 fullScreen: () => fullScreen(!full),
+                liveCount: () => (counter.show(!counter.shown()), host.classList.toggle("counting", counter.shown())),
                 makeCopy: () => void makeCopy(),
                 rename: renameHere,
                 fileDetails: () => showFacts(row.words[0]!),
@@ -801,7 +813,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     };
     const row = createMenuRow(() =>
         headings(
-            { rich: !!surface.getDocument().quire, contents: !!findContents(surface.getDocument()), paged: pages.paged(), look, outline: outlineView.isOpen(), markdown: host.classList.contains("markdown"), words: countWords(surface.getDocument()), full, align: aligned(surface.getDocument(), surface.getSelection().focus.path), symbols: surface.symbols() },
+            { rich: !!surface.getDocument().quire, contents: !!findContents(surface.getDocument()), paged: pages.paged(), look, outline: outlineView.isOpen(), markdown: host.classList.contains("markdown"), words: countWords(surface.getDocument()), full, counting: counter.shown(), align: aligned(surface.getDocument(), surface.getSelection().focus.path), symbols: surface.symbols() },
             actions,
         ),
     );
@@ -1212,6 +1224,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
             removeEventListener("pointermove", fullPointer);
             caret.destroy();
             details.destroy();
+            counter.destroy();
             widening?.removeEventListener("change", outlineAsKept);
             checking.destroy();
             pages.destroy();

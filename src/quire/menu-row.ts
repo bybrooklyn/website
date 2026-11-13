@@ -38,6 +38,8 @@ export interface RowState {
     contents?: boolean;
     /** True in full screen, with the top folded away. */
     full?: boolean;
+    /** True while the word count is kept at the window's lower left as the writer types. */
+    counting?: boolean;
 }
 
 /** What each command does, given by the editor. A command not given is left out. */
@@ -56,7 +58,7 @@ export type Command =
     | "superscript" | "subscript" | "marked" | "typedSigns"
     | "downloadAs" | "notes" | "nextNote" | "previousNote" | "comment" | "date" | "symbols" | "contents" | "updateContents"
     | "makeCopy" | "rename" | "fileDetails" | "cut" | "copy" | "paste" | "delete"
-    | "fullScreen";
+    | "fullScreen" | "liveCount";
 
 /** The menus of the row, for a document as it stands. A line's shortcut, if it has one, comes from the table in shortcuts.ts. */
 export function headings(state: RowState, act: RowActions): Heading[] {
@@ -111,6 +113,7 @@ export function headings(state: RowState, act: RowActions): Heading[] {
                 ...line("lookPaper", "Light paper", { pressed: state.look === "paper", group: "look" }),
                 ...line("pageView", "Page view", { pressed: !!state.paged }),
                 ...line("fullScreen", "Full screen", { pressed: !!state.full }),
+                ...line("liveCount", "Word count while typing", { pressed: !!state.counting }),
                 ...line("zoom", "Zoom", { hint: "›" }),
                 ...line("zoomIn", "Zoom in"),
                 ...line("zoomOut", "Zoom out"),

@@ -790,3 +790,110 @@
         opacity 0.25s ease,
         visibility 0s 0.25s;
 }
+
+/* ---- the word count while typing (live-count.ts): a small quiet counter at the lower left, lined up
+   with the outline, that grows in from its corner; a press grows it open upward to the characters and
+   pages. The writing keeps room under its last line for it, and the cursor is kept clear of it. ---- */
+
+.quire-live-count {
+    position: fixed;
+    left: var(--from, 1rem);
+    bottom: 1rem;
+    z-index: 30;
+    display: grid;
+    grid-template-rows: auto minmax(0, 0fr);
+    justify-items: start;
+    padding: 0.3rem 0.75rem;
+    border: 0.0625rem solid var(--rule);
+    border-radius: 0.9rem;
+    background: var(--surface);
+    color: var(--ink);
+    font: inherit;
+    font-size: 0.8rem;
+    line-height: 1.5;
+    font-variant-numeric: tabular-nums;
+    text-align: left;
+    cursor: pointer;
+    box-shadow: 0 0.5rem 1.25rem -0.75rem oklch(0.05 0.02 300 / 0.7);
+    transform-origin: left bottom;
+    opacity: 0;
+    scale: 0.6;
+    visibility: hidden;
+    transition:
+        opacity 0.15s ease,
+        scale 0.2s var(--ease),
+        grid-template-rows 0.3s var(--ease),
+        visibility 0s 0.2s;
+}
+
+.quire-live-count.shown {
+    opacity: 1;
+    scale: 1;
+    visibility: visible;
+    transition:
+        opacity 0.2s ease,
+        scale 0.35s var(--quire-spring),
+        grid-template-rows 0.3s var(--ease),
+        visibility 0s;
+}
+
+.quire-live-count.open {
+    grid-template-rows: auto minmax(0, 1fr);
+}
+
+.quire-live-count:hover {
+    border-color: color-mix(in oklch, var(--rule) 50%, var(--accent));
+}
+
+.quire-live-count:focus-visible {
+    outline: 0.125rem solid var(--accent);
+    outline-offset: 0.15rem;
+}
+
+.quire-live-more {
+    /* closed, the lines under the words give the counter none of their width; open, it widens to them as it grows */
+    interpolate-size: allow-keywords;
+    width: 0;
+    overflow: clip;
+    white-space: nowrap;
+    transition: width 0.3s var(--ease);
+}
+
+.quire-live-count.open .quire-live-more {
+    width: max-content;
+}
+
+.quire-live-more-in {
+    display: grid;
+    color: var(--muted);
+}
+
+/* the last line of the writing can always be brought up above the counter, and the cursor is kept clear of it */
+.quire-editor.counting .quire-column {
+    padding-bottom: calc(var(--line) * 4 + 2.5rem);
+}
+
+html:has(.quire-editor.counting) {
+    scroll-padding-bottom: 3.5rem;
+}
+
+/* behind the home screen there is nothing to count */
+.quire-editor.shelved > .quire-live-count {
+    opacity: 0;
+    visibility: hidden;
+}
+
+/* on a phone it opens sideways, along its one line, so that it never rises over the line being written */
+@media (max-width: 40rem) {
+    .quire-live-count,
+    .quire-live-count.open {
+        grid-template-rows: auto;
+        grid-auto-flow: column;
+    }
+
+    .quire-live-more-in {
+        display: flex;
+        gap: 0.75rem;
+        padding-left: 0.75rem;
+    }
+}
