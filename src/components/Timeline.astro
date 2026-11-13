@@ -258,6 +258,8 @@ import "../styles/timeline.css";
             inputAt = performance.now();
             if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
             if (event.target instanceof HTMLElement && event.target.closest("input, textarea, select, [contenteditable]")) return;
+            // Space presses a focused button; it is not the timeline's to take
+            if (event.key === " " && event.target instanceof HTMLElement && event.target.closest("button, summary, [role=button]")) return;
             const forward = ["ArrowDown", "PageDown"].includes(event.key) || (event.key === " " && !event.shiftKey);
             const back = ["ArrowUp", "PageUp"].includes(event.key) || (event.key === " " && event.shiftKey);
             if (!forward && !back) return;

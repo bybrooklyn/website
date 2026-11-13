@@ -6,6 +6,7 @@ import { satteri } from "@astrojs/markdown-satteri";
 import mdx from "@astrojs/mdx";
 import sitemap from "@astrojs/sitemap";
 import cspCheck from "./integrations/csp-check";
+import { engineVersions } from "./integrations/engine-versions";
 import privateLinks from "./integrations/private-links";
 import pruneAssets from "./integrations/prune-assets";
 import resumePdf from "./integrations/resume-pdf";
@@ -19,6 +20,7 @@ const transition = createHash("sha256").update(readFileSync(new URL("./src/scrip
 // .wasm file and glue it loads, so a browser downloads only the pair it can use. To ship a smaller
 // build made by hand, replace the files in this list (src/quire/dictation/parakeet/RUNTIME.md).
 const ORT = ["ort.wasm.min.mjs", "ort-wasm-simd-threaded.mjs", "ort-wasm-simd-threaded.wasm", "ort.min.mjs", "ort-wasm-simd-threaded.jsep.mjs", "ort-wasm-simd-threaded.jsep.wasm"];
+const wasmFolder = fileURLToPath(new URL("./public/wasm/", import.meta.url));
 const ortFolder = fileURLToPath(new URL("./node_modules/onnxruntime-web/dist/", import.meta.url));
 type Answer = { setHeader(name: string, value: string): void; end(body: Buffer): void };
 const ortFiles = {
@@ -83,7 +85,9 @@ export default defineConfig({
         csp: {
             directives: [
                 "default-src 'self'",
-                // blob: is a picture mdQuire keeps in this browser or in a .quire zip, shown from the page's own memory
+                // blob: is a picture mdQuire keeps in this browser or in a .quire zip, shown from the page's own memory.
+                // The policy is the same on every page, so every page has it; a blob: address can only be made
+                // by the page's own script, so it lets nothing in from outside.
                 "img-src 'self' data: blob:",
                 "media-src 'self'",
                 "font-src 'self'",
@@ -93,7 +97,10 @@ export default defineConfig({
                 // ONNX Runtime's .wasm file and the workers are served from the site itself.
                 // blob: lets mdQuire read back such a picture, to put it inside a web page or Word file it is downloaded as
                 "connect-src 'self' blob: https://api.github.com https://huggingface.co https://*.hf.co",
-                "frame-src https:",
+                // The one thing the site frames: Playmatter's demo, from itch.io (PlayHere.astro). The game
+                // itself is a frame inside itch.io's page, which itch.io's own policy governs, not this one.
+                // A new embed from somewhere else needs its host added here, or it is blocked.
+                "frame-src https://itch.io",
                 "object-src 'none'",
                 "base-uri 'self'",
                 "form-action 'self'",
@@ -130,8 +137,13 @@ export default defineConfig({
         ortFiles,
     ],
     // Workers are built as modules, because the dictation worker loads ONNX Runtime
-    // with import(), which a single-file worker cannot do.
-    vite: { worker: { format: "es" } },
+    // with import(), which a single-file worker cannot do. The minis' engines are fetched at an
+    // address carrying a hash of the file (integrations/engine-versions.ts); workers are built
+    // apart from pages, so they are given the same plugin.
+    vite: {
+        plugins: [engineVersions(wasmFolder)],
+        worker: { format: "es", plugins: () => [engineVersions(wasmFolder)] },
+    },
     markdown: {
         processor: satteri({
             features: { smartPunctuation: true },

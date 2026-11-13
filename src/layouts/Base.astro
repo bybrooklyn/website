@@ -9,7 +9,7 @@ type Props = Omit<ComponentProps<typeof Document>, "bodyClass">;
 
 <Document {...Astro.props}>
     <Header />
-    <main id="main">
+    <main id="main" tabindex="-1">
         <slot />
     </main>
     <Footer />
