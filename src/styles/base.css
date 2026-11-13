@@ -914,7 +914,7 @@ h1 + .about {
         overflow: visible;
         white-space: normal;
         color: var(--muted);
-        font-size: var(--small, 0.85em);
+        font-size: 0.85em;
     }
 
     .reveal.rights .reveal-short {
