@@ -154,6 +154,8 @@
     --ink: oklch(0.24 0.04 300);
     --muted: oklch(0.47 0.045 300);
     --quire-faint: oklch(from var(--muted) 0.51 c h);
+    /* the browser's own parts on the light sheet (scrollbars of code, checkboxes, fields) are drawn light too */
+    color-scheme: light;
     --accent: oklch(0.52 0.19 300);
     --rule: oklch(0.82 0.025 300);
     --surface: oklch(0.925 0.014 300);
