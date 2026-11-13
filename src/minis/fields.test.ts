@@ -4,7 +4,7 @@
 
 import { expect, test } from "bun:test";
 import { HIGH, WIDE, fly, nearest, velocity } from "./flight";
-import { NARROWEST, begin, bestFor, hash, make, making, numbers, passes, plan, shoot, win, type Made } from "./fields";
+import { NARROWEST, begin, bestFor, hash, layout, make, making, numbers, passes, plan, shoot, win, type Made } from "./fields";
 
 const median = (values: number[]) => [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)]!;
 
@@ -31,6 +31,11 @@ test("the numbers a field is made from are the same on every machine", () => {
     expect([made.field.start.x, made.solution.aim, made.solution.notches, made.field.stars.length]).toEqual(GOLDEN);
 });
 const GOLDEN = [900.6624900922179, 437, 8, 4];
+
+test("a field is laid out with adding, multiplying, dividing and square roots only, never a power, which a browser may round its own way", () => {
+    expect(layout.toString()).not.toContain("**");
+    expect(layout.toString()).not.toContain("Math.pow");
+});
 
 /** Every level from 1 to 12, for this many seeds each. */
 const SEEDS = 200;

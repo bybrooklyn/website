@@ -81,6 +81,8 @@ export function numbers(seed: number): () => number {
 /** How strongly a star of a given size pulls (or a pusher pushes): its mass for each cubed unit of radius. */
 const DENSE = 380;
 const HOLE_MASS = 2.4e7;
+/** A number times itself: multiplied, not raised to a power, which a browser may round in its own way (see flight.ts). */
+const square = (n: number) => n * n;
 
 /** Lays out a field to a plan. Nothing in it is checked yet. */
 export function layout(seed: string, level: number, wanted: Plan, attempt = 0): Field {
@@ -89,16 +91,16 @@ export function layout(seed: string, level: number, wanted: Plan, attempt = 0): 
     // the start near one side and the hole well across from it; which side is chosen too
     let start = { x: between(70, 150), y: between(90, HIGH - 90) };
     let hole = { x: between(720, 920), y: between(90, HIGH - 90) };
-    while ((hole.x - start.x) ** 2 + (hole.y - start.y) ** 2 < 600 * 600) hole = { x: between(720, 920), y: between(90, HIGH - 90) };
+    while (square(hole.x - start.x) + square(hole.y - start.y) < 600 * 600) hole = { x: between(720, 920), y: between(90, HIGH - 90) };
     if (random() < 0.5) [start, hole] = [{ x: WIDE - start.x, y: start.y }, { x: WIDE - hole.x, y: hole.y }];
     const stars: Star[] = [];
     const gates: Gate[] = [];
     /** Whether a round thing of radius r at (x, y) leaves room around the start, the hole, the edges and what is already placed. */
     const free = (x: number, y: number, r: number) =>
         x > r + 30 && x < WIDE - r - 30 && y > r + 30 && y < HIGH - r - 30 &&
-        (x - start.x) ** 2 + (y - start.y) ** 2 > (r + 75) ** 2 &&
-        (x - hole.x) ** 2 + (y - hole.y) ** 2 > (r + wanted.reach + 70) ** 2 &&
-        [...stars, ...gates].every((other) => (x - other.x) ** 2 + (y - other.y) ** 2 > (r + other.radius + 45) ** 2);
+        square(x - start.x) + square(y - start.y) > square(r + 75) &&
+        square(x - hole.x) + square(y - hole.y) > square(r + wanted.reach + 70) &&
+        [...stars, ...gates].every((other) => square(x - other.x) + square(y - other.y) > square(r + other.radius + 45));
     const place = (r: number, near?: () => [number, number]): [number, number] | undefined => {
         for (let tries = 0; tries < 60; tries++) {
             const [x, y] = near ? near() : [between(r + 30, WIDE - r - 30), between(r + 30, HIGH - r - 30)];
@@ -106,7 +108,7 @@ export function layout(seed: string, level: number, wanted: Plan, attempt = 0): 
         }
         return undefined;
     };
-    const [sx, sy, long] = [hole.x - start.x, hole.y - start.y, Math.sqrt((hole.x - start.x) ** 2 + (hole.y - start.y) ** 2)];
+    const [sx, sy, long] = [hole.x - start.x, hole.y - start.y, Math.sqrt(square(hole.x - start.x) + square(hole.y - start.y))];
     for (let i = 0; i < wanted.pullers + wanted.pushers; i++) {
         const pushes = i >= wanted.pullers;
         const r = pushes ? between(15, 22) : between(17, 30);
@@ -125,7 +127,7 @@ export function layout(seed: string, level: number, wanted: Plan, attempt = 0): 
         gates.push({ x: a[0], y: a[1], radius: 19, to: gates.length + 1, pair });
         const b = place(19, () => {
             const [x, y] = [between(50, WIDE - 50), between(50, HIGH - 50)];
-            return (x - a[0]) ** 2 + (y - a[1]) ** 2 > 320 * 320 ? [x, y] : [-1000, -1000];
+            return square(x - a[0]) + square(y - a[1]) > 320 * 320 ? [x, y] : [-1000, -1000];
         });
         if (!b) {
             gates.pop();
