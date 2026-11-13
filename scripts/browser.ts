@@ -2,11 +2,11 @@
 // script in it, click, photograph. `bun run pictures` and the drawing test use it. No dependency.
 
 import { spawn } from "node:child_process";
-import { rmSync } from "node:fs";
+import { existsSync, rmSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 
 export interface Browser {
     /** Goes to an address and waits for the page to load, then `settle` milliseconds more. */
@@ -36,8 +36,15 @@ export interface Browser {
     close(): Promise<void>;
 }
 
-/** Where Chromium is, or undefined if this machine has none. */
-export const chromium = (): string | undefined => ["chromium", "chromium-browser", "google-chrome-stable", "google-chrome"].map((name) => Bun.which(name)).find(Boolean) ?? undefined;
+/** Where Chromium is, or undefined if this machine has none. Written without Bun's own calls, since the resume's PDF is printed from inside Astro, which runs on Node. */
+export function chromium(): string | undefined {
+    for (const name of ["chromium", "chromium-browser", "google-chrome-stable", "google-chrome"]) {
+        for (const folder of (process.env.PATH ?? "").split(delimiter)) {
+            if (folder && existsSync(join(folder, name))) return join(folder, name);
+        }
+    }
+    return undefined;
+}
 
 /** How long one call to the browser may take before it is given up as hung. */
 const PATIENCE = 30_000;

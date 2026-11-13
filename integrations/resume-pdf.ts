@@ -9,8 +9,9 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from "node:fs
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
-import { delimiter, extname, join, normalize } from "node:path";
+import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
+import { chromium } from "../scripts/browser";
 
 /** Where the PDF is served. src/lib/resume.ts links to the same address. */
 const ADDRESS = "/resume/charlotte-resume.pdf";
@@ -26,15 +27,6 @@ const TYPES: Record<string, string> = {
     ".webp": "image/webp",
     ".png": "image/png",
 };
-
-function chromium(): string | undefined {
-    for (const name of ["chromium", "chromium-browser", "google-chrome-stable", "google-chrome"]) {
-        for (const folder of (process.env.PATH ?? "").split(delimiter)) {
-            if (folder && existsSync(join(folder, name))) return join(folder, name);
-        }
-    }
-    return undefined;
-}
 
 /**
  * Print a page to a PDF file. Returns how many pages it came to. Chromium is given a profile folder
