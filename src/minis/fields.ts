@@ -149,13 +149,6 @@ const STRENGTHS = [8, 12, 16, 20, 24, 28, 32, 36, 40];
 /** How far the span around a win is followed each way, in half degrees: past this a way in counts as wide enough anyway. */
 const FOLLOW = 70;
 
-/**
- * Searches a field for launches that win. Gives the one with the widest span of winning directions
- * around it (the middle of that span), or undefined if none was found; and how many of the launches
- * tried won.
- */
-export const solve = (field: Field): Searched => finish(solving(field));
-
 /** What a search of a field found. */
 export interface Searched {
     solution?: Solution;
@@ -165,7 +158,7 @@ export interface Searched {
     tried: number;
 }
 
-/** Runs a search, or the making of a field, to its end at once. */
+/** Runs the making of a field to its end at once. */
 function finish<T>(work: Generator<undefined, T>): T {
     for (;;) {
         const next = work.next();
@@ -173,7 +166,12 @@ function finish<T>(work: Generator<undefined, T>): T {
     }
 }
 
-/** `solve`, a row of strength at a time: it pauses after each, so that a page can spread the work over frames. */
+/**
+ * Searches a field for launches that win, a row of strength at a time, pausing after each so that a
+ * page can spread the work over frames. Gives the one with the widest span of winning directions
+ * around it (the middle of that span), or undefined if none was found; and how many of the launches
+ * tried won.
+ */
 export function* solving(field: Field): Generator<undefined, Searched> {
     const toward = nearest(field.hole.x - field.start.x, field.hole.y - field.start.y);
     const wins = (aim: number, notches: number) => {
