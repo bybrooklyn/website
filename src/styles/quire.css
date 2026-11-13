@@ -1111,7 +1111,6 @@
 }
 
 .quire-link-field:focus {
-    outline: none;
     border-color: var(--accent);
 }
 
@@ -1189,7 +1188,9 @@
     gap: 0.15rem;
 }
 
+/* the find bar clips what leaves it as it grows, so its fields' rings are drawn just inside */
 .quire-find-field {
+    --ring-offset: -0.125rem;
     flex: 1 1 13rem;
     width: 13rem;
     min-width: 3rem;
@@ -1359,7 +1360,6 @@
 }
 
 .quire-alt:focus {
-    outline: none;
     border-color: var(--accent);
     background: var(--ground);
     color: var(--ink);
@@ -1429,7 +1429,9 @@
     padding-left: 1.5rem;
 }
 
+/* the panel has no room round its links on a wide window and clips what leaves it: the ring is drawn just inside */
 .quire-outline-link {
+    --ring-offset: -0.125rem;
     display: block;
     width: 100%;
     padding: 0.3rem 0 0.3rem 0.75rem;
@@ -1682,7 +1684,11 @@
 .quire-history-item:hover,
 .quire-history-item:focus-visible {
     background: color-mix(in oklch, var(--ink) 8%, transparent);
-    outline: none;
+}
+
+/* the ring is drawn just inside a row, which fills the panel's width */
+.quire-history-item {
+    --ring-offset: -0.125rem;
 }
 
 .quire-history-summary {
@@ -2370,10 +2376,6 @@ body.quire-app,
 .quire-card-open:focus-visible .quire-mini {
     translate: 0 -0.2rem;
     border-color: var(--accent);
-}
-
-.quire-card-open:focus-visible {
-    outline: none;
 }
 
 .quire-mini .quire-mini-page {

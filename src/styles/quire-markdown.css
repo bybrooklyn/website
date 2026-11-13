@@ -90,7 +90,6 @@
 }
 
 .quire-lang:focus {
-    outline: none;
     background: var(--ground);
     text-align: left;
 }
@@ -589,10 +588,6 @@
     font-weight: 650;
 }
 
-.quire-summary:focus {
-    outline: 0.0625rem solid var(--rule);
-}
-
 .quire-fold-body {
     padding: calc(var(--line) * 0.5) 1rem;
 }
@@ -710,7 +705,6 @@
 }
 
 .quire-comp-field input:focus {
-    outline: none;
     border-color: var(--accent);
 }
 

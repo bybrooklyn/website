@@ -74,7 +74,6 @@
 }
 
 .quire-caption:focus {
-    outline: none;
     border-color: var(--accent);
     background: var(--ground);
 }
@@ -431,8 +430,13 @@
 }
 
 .quire-note-field:focus {
-    outline: none;
     border-color: var(--accent);
+}
+
+/* a note is written in a textarea, which the site's ring (base.css) does not name: it is given the same ring */
+.quire-note-field:focus-visible {
+    outline: 0.125rem solid var(--accent);
+    outline-offset: var(--ring-offset, 0.15rem);
 }
 
 .quire-notes-resolved {
@@ -504,7 +508,6 @@
 }
 
 .quire-specials-search:focus {
-    outline: none;
     border-color: var(--accent);
 }
 
@@ -542,7 +545,6 @@
 
 .quire-special:hover,
 .quire-special:focus-visible {
-    outline: none;
     background: color-mix(in oklch, var(--accent) 22%, transparent);
     scale: 1.12;
 }
