@@ -26,6 +26,8 @@ body {
     margin: 0 auto;
     padding: calc(var(--line) * 1.25) var(--gutter) calc(var(--line) * 1.5);
     display: grid;
+    /* never wider than the window, however long a word in a table */
+    grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto 1fr auto;
     row-gap: calc(var(--line) * 2.5);
     font-size: var(--text);
