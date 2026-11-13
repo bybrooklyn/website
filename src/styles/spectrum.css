@@ -280,13 +280,6 @@
         translate 0.5s var(--ease);
 }
 
-/* The words about it, under the thing itself, set apart from it by a rule. */
-.spectrum-about {
-    margin-top: calc(var(--line) * 2.5);
-    padding-top: calc(var(--line) * 0.5);
-    border-top: 0.0625rem solid var(--rule);
-}
-
 @media (prefers-reduced-motion: reduce) {
     .spectrum-translator.open,
     .spectrum-unset,

@@ -15,22 +15,3 @@ export function copyText(button: HTMLButtonElement, text: string, words: { rest:
     );
     setTimeout(() => (button.textContent = words.rest), 2500);
 }
-
-/**
- * Copies `text` and marks the button as having copied (`data-copied`) for two and a half seconds,
- * for a button whose words are more than plain text and are swapped by its stylesheet. The button
- * keeps its width while it is marked.
- */
-export function copyMarked(button: HTMLButtonElement, text: string): void {
-    navigator.clipboard?.writeText(text).then(
-        () => {
-            button.style.minWidth = `${button.offsetWidth}px`;
-            button.dataset.copied = "";
-            setTimeout(() => {
-                delete button.dataset.copied;
-                button.style.minWidth = "";
-            }, 2500);
-        },
-        () => {},
-    );
-}

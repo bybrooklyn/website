@@ -5,7 +5,7 @@
 // after # in the address is lit. The matching itself is in src/tonetags/tags.ts.
 
 import { find, tags } from "../tonetags/tags";
-import { copyMarked, copyText } from "./copy";
+import { copyText } from "./copy";
 
 const root = document.querySelector<HTMLElement>("[data-tonetags]");
 if (root) {
@@ -37,14 +37,6 @@ if (root) {
     };
 
     box.addEventListener("input", show);
-    // the link carries what is being searched for, so that whoever opens it sees the same tags
-    // (the page has no such button at present; this is kept for when one is wanted again, with its styles in tonetags.css)
-    const copy = root.querySelector<HTMLButtonElement>(".tonetags-copy");
-    copy?.addEventListener("click", () => {
-        const here = new URL(location.pathname, location.origin);
-        if (box.value.trim()) here.searchParams.set("q", box.value.trim());
-        copyMarked(copy, here.href);
-    });
     // a tag pressed is copied, slash and all, ready to put after a message
     root.addEventListener("click", (event) => {
         const tag = (event.target as Element).closest<HTMLButtonElement>(".tonetag-tag");
