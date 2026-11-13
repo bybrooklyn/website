@@ -120,7 +120,7 @@ export function createCommentMargin(surface: Surface, options: { place: () => st
                     redraw();
                 }, "quire-button quire-note-button"),
             );
-        actions.append(control("Delete the comment", icon("trash"), () => keep((now) => deleteComment(now, comment.id))));
+        actions.append(control("Remove the comment", icon("trash"), () => keep((now) => deleteComment(now, comment.id))));
         element.append(actions);
         element.addEventListener("click", (event) => {
             if ((event.target as HTMLElement).closest("button, textarea")) return;
@@ -129,7 +129,7 @@ export function createCommentMargin(surface: Surface, options: { place: () => st
         return element;
     }
 
-    /** A field to write a comment in: Ctrl+Enter or Comment keeps it, Escape or Cancel lets it go. */
+    /** A field to write a comment in: Ctrl+Enter or Comment keeps it, Escape or Cancel lets it go, as in Docs. */
     function field(value: string, done: (text: string) => void, cancel: () => void): HTMLElement {
         const form = make("div", "quire-note-form");
         const area = make("textarea", "quire-note-field");

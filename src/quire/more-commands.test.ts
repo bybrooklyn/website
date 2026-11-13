@@ -120,9 +120,9 @@ used("Format, Title goes to the title line; Subtitle is offered for a .quire doc
     expect(await tab.run<string>("document.querySelector('.quire-style-label').textContent")).toBe("Subtitle");
 });
 
-used("Edit, Select all matching text selects every place the words appear: typing and a Format key change them all, Escape leaves, one undo takes the typing back", async () => {
+used("Edit, Select all occurrences selects every place the words appear: typing and a Format key change them all, Escape leaves, one undo takes the typing back", async () => {
     await reset("The cat sat. A cat ran.\n\nOne cat.\n", [0], 4, [0], 7);
-    await menu("Edit", "Select all matching text");
+    await menu("Edit", "Select all occurrences");
     await tab.wait(300);
     await tab.type("dog");
     expect(await md()).toBe("The dog sat. A dog ran.\n\nOne dog.\n");

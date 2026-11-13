@@ -443,6 +443,11 @@
     opacity: 0;
 }
 
+/* while a picture is picked, what the keys act on is the picture, and no caret blinks beside it */
+.quire.quire-picking ~ .quire-caret.shown {
+    opacity: 0;
+}
+
 .quire-paper ::selection {
     background: color-mix(in oklch, var(--accent), transparent 72%);
     color: var(--ink);
@@ -3885,6 +3890,7 @@ body.quire-app,
 /* A button or field that cannot be used now looks it: faded, and not lit by the pointer. Without this the
    editor's own colour for buttons hid the browser's grey, and a disabled button looked pressable. */
 .quire-button:disabled,
+.quire-menu-line:disabled,
 .quire-link-field:disabled {
     opacity: 0.5;
     pointer-events: none;

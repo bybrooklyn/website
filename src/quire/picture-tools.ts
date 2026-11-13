@@ -18,7 +18,9 @@
 
 import { insetOf, DIALOG, switchButton } from "./dialog";
 import { blockAt, removeBlock, setAlign, setImage, type Align, type Image } from "./document";
+import { enterGivesBack } from "./fields";
 import { landedAt, landings, moveBlockTo, snapWidth, staysPut } from "./pictures";
+import { linesAround, placeClear } from "./strips";
 import type { Operation, Surface } from "./surface";
 import { control, dots, EASE, flowMenu, icon, make, MOTION, springCurve, still, type Box, type MenuItem } from "./ui";
 
@@ -55,9 +57,16 @@ const SIDES: [Align, string][] = [
     ["right", "Picture to the right"],
 ];
 
+/** A "1:1" drawn as mdQuire's line icons are (ui.ts), for putting a picture back to its original size among the strip's icons. */
+function originalIcon(): SVGSVGElement {
+    const svg = icon("");
+    svg.innerHTML = '<path d="M6.5 8.5 8 7.5v9M16 8.5l1.5-1v9"/><circle cx="12" cy="10" r=".9" fill="currentColor"/><circle cx="12" cy="14.5" r=".9" fill="currentColor"/>';
+    return svg;
+}
+
 /** The sizes the panel offers, by name; undefined is the picture's own. */
 const SIZES: [string, number | undefined][] = [
-    ["Own size", undefined],
+    ["Original", undefined],
     ["Full", 100],
     ["Half", 50],
     ["A third", 33],
@@ -72,6 +81,8 @@ const boxOf = (element: Element): Box => {
 export interface PictureOptions {
     keep?: (file: File) => Promise<string>;
     margin?: HTMLElement;
+    /** How far down the window the editor's own top reaches, which the picture's strip keeps under. */
+    top?: () => number;
 }
 
 /** Builds the picture tools for a surface. */
@@ -102,7 +113,7 @@ export function createPictureTools(surface: Surface, options: PictureOptions = {
         aligns.set(align, button);
         strip.append(button);
     }
-    const own = control("Its own size", "Own size", () => change((path) => (doc) => setImage(doc, path, { width: undefined })), "quire-button quire-own-size");
+    const own = control("Original size", originalIcon(), () => change((path) => (doc) => setImage(doc, path, { width: undefined })), "quire-button quire-own-size");
     const more = dots("More for this picture");
     more.addEventListener("click", () => (menu.isOpen() ? menu.close(true) : openMenu(more)));
     strip.append(make("span", "quire-select-rule"), own, more);
@@ -144,15 +155,20 @@ export function createPictureTools(surface: Surface, options: PictureOptions = {
         for (const [width, button] of sizes) pressed(button, block.width === width);
         wrap.set(!!block.wrap);
         wrap.disabled = block.align === "center";
+        wrapNote.classList.toggle("shown", wrap.disabled);
         // a field being written in is left as it is
         if (document.activeElement !== caption) caption.value = block.caption ?? "";
         if (document.activeElement !== described) described.value = block.alt;
         own.classList.toggle("absent", block.width === undefined);
         own.tabIndex = block.width === undefined ? -1 : 0;
-        // the strip goes under the picture when there is no room above it in the window, and starts at its left edge when a narrow picture would push it out of the window
-        frame.classList.toggle("low", picture.getBoundingClientRect().top < 120);
-        frame.classList.remove("start");
-        frame.classList.toggle("start", strip.getBoundingClientRect().left < 8);
+        // one rule for every strip over the writing (strips.ts): at the picture's top right corner, never on the picture nor
+        // the line before or after it while there is room, under it when there is none above, and inside the window
+        const shown = picture.getBoundingClientRect();
+        const limit = options.top?.() ?? 0;
+        const at = placeClear(shown, { width: strip.offsetWidth, height: strip.offsetHeight }, { left: 0, top: limit, width: innerWidth, height: innerHeight - limit }, linesAround(root, shown, figure), "above", "end");
+        // held by its right edge, so that the original size's button closing up draws it in from the left
+        Object.assign(strip.style, { right: `${shown.left + shown.width - (at.left + strip.offsetWidth)}px`, top: `${at.top - shown.top}px`, left: "auto", bottom: "auto" });
+        frame.classList.toggle("low", at.side === "below");
     }
 
     /** Picks a picture: the frame grows round it. */
@@ -162,6 +178,8 @@ export function createPictureTools(surface: Surface, options: PictureOptions = {
         if (picked && (picked.length !== path.length || picked.some((step, k) => step !== path[k]))) figureAt(picked)?.classList.remove("quire-picked");
         picked = path;
         figure.classList.add("quire-picked");
+        // the text says a picture is picked, for no caret to blink beside it (quire.css)
+        root.classList.add("quire-picking");
         const fresh = !frame.classList.contains("shown");
         place();
         if (fresh) requestAnimationFrame(() => picked && frame.classList.add("shown"));
@@ -174,6 +192,7 @@ export function createPictureTools(surface: Surface, options: PictureOptions = {
         closePanel(false);
         figureAt(picked)?.classList.remove("quire-picked");
         picked = undefined;
+        root.classList.remove("quire-picking");
         frame.classList.remove("shown");
         label.classList.remove("shown");
         setTimeout(() => !picked && frame.remove(), still() ? 0 : 220);
@@ -213,12 +232,11 @@ export function createPictureTools(surface: Surface, options: PictureOptions = {
     menu.box.addEventListener("click", (event) => (from = (event.target as Element).closest(".quire-menu-line")?.getBoundingClientRect()), true);
     const lines = (): MenuItem[] => {
         const block = picked && pictureOf(picked);
+        // one line opens the panel, as Docs' Image options does; wrapping is the same switch here as there, and can only be had at the left or right
+        const centred = block?.align === "center";
         return [
-            { label: "Caption", icon: "footnote", run: () => openPanel(caption) },
-            { label: "Description", icon: "quote", run: () => openPanel(described) },
-            { label: "Alignment", icon: "left", run: () => openPanel(sides.get(block?.align ?? "left")) },
-            { label: "Size", icon: "image", run: () => openPanel([...sizes.values()][0]) },
-            { label: "Wrap text", icon: "wrap", pressed: !!block?.wrap, run: () => change((path) => (doc) => setImage(doc, path, { wrap: !block?.wrap })) },
+            { label: "Picture options", icon: "image", run: () => openPanel(caption) },
+            { label: "Wrap text", icon: "wrap", pressed: !!block?.wrap, disabled: centred, hint: centred ? "Left or right only" : undefined, run: toggleWrap },
             { label: "Replace", icon: "redo", run: () => chooser.click() },
             { label: "Remove", icon: "trash", run: removePicked },
         ];
@@ -258,26 +276,31 @@ export function createPictureTools(surface: Surface, options: PictureOptions = {
         value.setAttribute("aria-labelledby", name.id);
         facts.append(name, value);
     };
-    /** A field that keeps what was written when it is left, or Enter is pressed, as one undo step. */
+    /** A field that keeps what was written when it is left, or Enter is pressed, as one undo step; Enter also closes the panel and gives the keyboard back to the picture (fields.ts). */
     const field = (placeholder: string, keep: (value: string) => void) => {
         const input = make("input", "quire-picture-field");
         input.placeholder = placeholder;
-        input.addEventListener("change", () => keep(input.value.trim()));
-        input.addEventListener("keydown", (event) => event.key === "Enter" && input.blur());
+        enterGivesBack(input, keep, () => closePanel(true));
         return input;
     };
     const caption = field("Words under the picture", (value) => change((path) => (doc) => setImage(doc, path, { caption: value || undefined })));
     const described = field("What the picture shows", (value) => change((path) => (doc) => setImage(doc, path, { alt: value })));
     const sides = new Map(SIDES.map(([align, words]) => [align, control(words, icon(align), () => sitAt(align))] as const));
-    const sizes = new Map(SIZES.map(([name, width]) => [width, control(name === "Own size" ? "Its own size" : `${name} width`, name, () => change((path) => (doc) => setImage(doc, path, { width })), "quire-button quire-picture-size")] as const));
-    // a switch, drawn as every switch is: pressed with a tick when on, its line's name its only words
-    const wrap = switchButton("Wrap text", false, () => change((path) => (doc) => setImage(doc, path, { wrap: !pictureOf(path)?.wrap })));
+    const sizes = new Map(SIZES.map(([name, width]) => [width, control(name === "Original" ? "Original size" : `${name} width`, name, () => change((path) => (doc) => setImage(doc, path, { width })), "quire-button quire-picture-size")] as const));
+    /** Text flows round the picture, or stops; never for a centred picture, which has no side for the text to be on. */
+    function toggleWrap() {
+        change((path) => (doc) => (pictureOf(path)?.align === "center" ? doc : setImage(doc, path, { wrap: !pictureOf(path)?.wrap })));
+    }
+    // a switch, drawn as every switch is: pressed with a tick when on, named the same as the menu's line
+    const wrap = switchButton("Wrap text", false, toggleWrap);
     wrap.classList.add("quire-picture-wrap");
     line("Caption", caption);
     line("Description", described);
     line("Alignment", ...sides.values());
     line("Size", ...sizes.values());
-    line("Wrap text", wrap);
+    // why it cannot be pressed for a centred picture, said beside it
+    const wrapNote = make("span", "quire-picture-note", "Left or right only");
+    line("Wrap text", wrap, wrapNote);
     const actions = make("div", "quire-picture-actions");
     actions.append(control("Replace the picture", "Replace", () => chooser.click(), "quire-button quire-picture-action"), control("Take the picture away", "Remove", removePicked, "quire-button quire-picture-action"));
     inside.append(head, facts, actions, chooser);
@@ -501,7 +524,7 @@ export function createPictureTools(surface: Surface, options: PictureOptions = {
         unpick();
     }
     /** When the menu was last opened from the keyboard, whose own menu event may follow. */
-    let keyedAt = 0;
+    let keyedAt = -Infinity;
     function onMenu(event: MouseEvent) {
         const figure = (event.target as HTMLElement).closest<HTMLElement>("figure.quire-image");
         if (!figure || !root.contains(figure)) return;
@@ -546,6 +569,7 @@ export function createPictureTools(surface: Surface, options: PictureOptions = {
         place();
     });
     addEventListener("resize", place);
+    addEventListener("scroll", place, { passive: true });
 
     return {
         /** The path of the picked picture, if one is. */
@@ -563,6 +587,7 @@ export function createPictureTools(surface: Surface, options: PictureOptions = {
             document.removeEventListener("pointerdown", onOutside, true);
             document.removeEventListener("keydown", onEscape, true);
             removeEventListener("resize", place);
+            removeEventListener("scroll", place);
             for (const each of [frame, dropLine, anchor, panel, menu.box]) each.remove();
         },
     };

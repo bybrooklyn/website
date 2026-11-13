@@ -42,9 +42,22 @@ test("a command the editor does not give is left out, and the page's own lines l
 test("Insert has a page break with its shortcut, and for a .quire document the header, footer and page numbers", () => {
     const act: RowActions = { ...every, pageBreak: () => {}, headerFooter: () => {} };
     expect(lines(true, act).Insert).toContain("Page break Ctrl+Enter");
-    expect(lines(true, act).Insert).toContain("Header, footer and page numbers ›");
+    // outside page view, where a header shows nowhere, it is offered dimmed with the reason, as Docs dims it in pageless
+    expect(lines(true, act).Insert).toContain("Header, footer and page numbers Page view only");
+    const outside = headings({ rich: true, outline: true, markdown: false, words: 0 }, act)[3]!.items().find((item) => item.key === "headerFooter");
+    expect(outside?.disabled).toBe(true);
+    const paged = headings({ rich: true, paged: true, outline: true, markdown: false, words: 0 }, act)[3]!.items().find((item) => item.key === "headerFooter");
+    expect(paged).toMatchObject({ hint: "›" });
+    expect(paged?.disabled).toBeUndefined();
     expect(lines(false, act).Insert).toContain("Page break Ctrl+Enter");
-    expect(lines(false, act).Insert).not.toContain("Header, footer and page numbers ›");
+    expect(lines(false, act).Insert.some((line) => line.startsWith("Header, footer"))).toBe(false);
+});
+
+test("Select all occurrences is dimmed while the words appear in fewer than two places", () => {
+    const act: RowActions = { ...every, selectMatching: () => {} };
+    const line = (matches: number) => headings({ rich: true, matches: () => matches, outline: true, markdown: false, words: 0 }, act)[1]!.items().find((item) => item.key === "selectMatching");
+    expect(line(1)?.disabled).toBe(true);
+    expect(line(3)?.disabled).toBeUndefined();
 });
 
 test("View has page view, pressed while it is on", () => {

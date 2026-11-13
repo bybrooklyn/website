@@ -316,6 +316,8 @@ export interface MenuItem {
     stays?: boolean;
     /** Drawn quieter than the lines around it. */
     quiet?: boolean;
+    /** Can do nothing where the cursor is now: shown dimmed, passed over by the arrow keys, and not pressed. */
+    disabled?: boolean;
     /** The command the line runs, by its name in the menus' table (menu-row.ts), for the command palette to count and to rank by where the cursor is. */
     key?: string;
     run: () => void;
@@ -383,6 +385,7 @@ export function menuLine(item: MenuItem, apple = mac()): HTMLButtonElement {
     if (item.pressed !== undefined) line.setAttribute("aria-checked", String(item.pressed));
     if (item.pressed) line.classList.add("pressed");
     if (item.quiet) line.classList.add("quiet");
+    if (item.disabled) line.disabled = true;
     if (item.group) line.dataset.group = item.group;
     if (item.icon) line.append(typeof item.icon === "string" ? icon(item.icon) : item.icon);
     line.append(make("span", "quire-menu-label", item.label));
@@ -504,7 +507,7 @@ export function flowMenu(label: string, options: { align?: "left" | "right"; cla
     let leaving: HTMLElement | undefined;
     const moving: Animation[] = [];
 
-    const lines = () => [...items.querySelectorAll<HTMLElement>("button, input, a[href]")];
+    const lines = () => [...items.querySelectorAll<HTMLElement>("button:not(:disabled), input, a[href]")];
     const boxOf = (element: Element): Box => {
         const { left, top, width, height } = element.getBoundingClientRect();
         return { left, top, width, height };

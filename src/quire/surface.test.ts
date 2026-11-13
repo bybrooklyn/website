@@ -8,6 +8,13 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { browser, chromium, type Browser } from "../../scripts/browser";
+import { drawnNote } from "./surface";
+
+test("an empty block of maths asks for a formula in plain words, and a flowchart with a slip in it is told it could not be drawn, not that only flowcharts are", () => {
+    expect(drawnNote("math", "")).toBe("Type a formula below");
+    expect(drawnNote("mermaid", "flowchart LR\n  A -->")).toBe("Could not draw this flowchart");
+    expect(drawnNote("mermaid", "sequenceDiagram\n  A->>B: hi")).toBe("Shown as code: mdQuire draws flowcharts only");
+});
 
 const here = import.meta.dir;
 
@@ -290,7 +297,7 @@ test.skipIf(!chromium())(
 );
 
 test.skipIf(!chromium())(
-    "a task's box, a callout's kind and a folding section's button work from a screen reader's click as from the mouse, once each",
+    "a task's box and a folding section's choice for readers work from a screen reader's click as from the mouse, once each",
     async () => {
         const { tab, folder } = await open();
         try {
@@ -298,11 +305,9 @@ test.skipIf(!chromium())(
             // a click no pointer made, as a screen reader's activation sends
             const press = (selector: string) => tab.run(`document.querySelector(${JSON.stringify(selector)}).dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, detail: 0 }))`);
             await press("[data-box]");
-            await press("[data-callout-kind]");
-            await press("[data-fold]");
+            await press("[data-readers]");
             const md = await tab.run<string>("quire.markdown()");
             expect(md).toContain("- [x] task");
-            expect(md).toContain("[!TIP]");
             expect(md).toContain("<details open>");
             // the mouse: pressed and let go on the box, it is ticked once, not twice (the box given a size, which the site's styles give it)
             await tab.run(`(() => { const style = document.createElement("style"); style.textContent = ".quire-box { display: inline-block; width: 1em; height: 1em; background: #888 }"; document.head.append(style); })()`);

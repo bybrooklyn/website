@@ -1,4 +1,4 @@
-// Select all matching text, from Edit: every place the selected words appear (the cursor's word
+// Select all occurrences, from Edit: every place the selected words appear (the cursor's word
 // when nothing is selected) is selected at once, each drawn as a selection through the browser's
 // highlights, as find draws its matches (find.ts finds them). While they are, typing writes in every
 // one, Backspace and Delete take from every one, and a Format command (from its menu or its keys)
@@ -75,13 +75,13 @@ export function eachSpot(doc: Document, spots: Match[], action: Action): Documen
     return doc;
 }
 
-/** Where every place the words of a selection on one line appear is, exactly as written; the cursor's word when nothing is selected. */
+/** Where every place the words of a selection on one line appear is, in capitals or not, as Docs finds words; the cursor's word when nothing is selected. */
 export function matchingSpots(state: State): Match[] {
     const { anchor, focus } = state.selection;
     if (anchor.path.join() !== focus.path.join()) return [];
     const word = anchor.offset === focus.offset ? wordAt(state.doc, focus) : { start: anchor, end: focus };
     const [from, to] = [word.start.offset, word.end.offset].sort((a, b) => a - b);
-    return findMatches(state.doc, textAt(state.doc, focus.path).slice(from, to), { matchCase: true });
+    return findMatches(state.doc, textAt(state.doc, focus.path).slice(from, to));
 }
 
 /** Builds select all matching for a surface. `command` runs a Format command for a key press and says whether it did. */

@@ -34,6 +34,8 @@ import { createSaver, fileName, said, type Entry, type Opened, type Status, type
 import { altGraph, createSurface, type Surface } from "./surface";
 import { createTableTools } from "./tables";
 import { createPictureTools } from "./picture-tools";
+import { createBlockMenus } from "./block-menus";
+import { createTextMenu } from "./text-menu";
 import { createCommentMargin, keptNotes, moveNotes } from "./comment-margin";
 import { addContents, dateText, findContents, specialGrid, typeIn, typeSpecial, updateContents } from "./inserts";
 import { colorHex, countRows, gatherPictures, heldElsewhere, markdownFor, pageHtml, plainText, readingStyles, type Picture } from "./export";
@@ -56,7 +58,7 @@ import { createTitle, nameFor, shownName, type OwnTitle } from "./title";
 import { createZoom, pageRule, percent, setPage, setupForm } from "./paper";
 import type { Page } from "./document";
 import { moreCommands } from "./more-commands";
-import { createMatching } from "./matching";
+import { createMatching, matchingSpots } from "./matching";
 import { places } from "./bookmarks";
 
 /** What the editor is given by the page. */
@@ -570,7 +572,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     };
     host.addEventListener("keydown", zoomKey);
     surface.on("link", () => openLink(bar.seen("Link")));
-    const selectBar = createSelectBar(surface, () => bar.element.getBoundingClientRect().bottom);
+    const selectBar = createSelectBar(surface, () => bar.element.getBoundingClientRect().bottom, (from) => notes.add(from));
     const linkCard = createLinkCard(surface, openLink, () => bar.element.getBoundingClientRect().bottom);
     const outlineView = createOutline(surface, () => bar.element.getBoundingClientRect().bottom, (open) => {
         host.classList.toggle("outlined", open);
@@ -627,15 +629,17 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     widening?.addEventListener("change", outlineAsKept);
     const emojiList = createEmojiPicker(surface);
     const tableTools = createTableTools(surface, () => bar.element.getBoundingClientRect().bottom);
-    const pictureTools = createPictureTools(surface, { keep: keepPicture, margin: host });
+    const pictureTools = createPictureTools(surface, { keep: keepPicture, margin: host, top: () => bar.element.getBoundingClientRect().bottom });
+    // a code block's language and a callout's kind, each a menu from its control in the text
+    const blockMenus = createBlockMenus(surface);
     // the writer's notes: marked in the text, in the right margin on a wide window and a list on a narrow one
     const notes = createCommentMargin(surface, { place: notesPlace });
     host.append(notes.element);
     notes.opened();
 
     // ---- the menu row: every command by name, above the bar ----
-    // with every match selected (Edit, Select all matching text) a command goes on each; a Format key does too
-    const matching = createMatching(surface, { command: (event) => !!formatKey(event), told: (count) => bar.setStatus(`${count} selected`, `${count} places are selected: typing or a Format command changes every one, and Escape leaves them`, "quiet") });
+    // with every match selected (Edit, Select all occurrences) a command goes on each; a Format key does too
+    const matching = createMatching(surface, { command: (event) => !!formatKey(event), told: (count) => bar.setStatus(`${count} selected`, `${count} ${count === 1 ? "place is" : "places are"} selected: typing or a Format command changes every one, and Escape leaves them`, "quiet") });
     const formatKey = (event: KeyboardEvent) => {
         const found = shortcutFor(chordFrom(event, MAC));
         const run = found?.menu === "Format" && found.command ? actions[found.command] : undefined;
@@ -760,9 +764,11 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     };
     // the command palette: the menus' lines and what fits where the cursor is, from the bottom left corner or a slash on an empty line (palette.ts)
     const palette = createPalette(surface, { menus: () => row.headings(), table: tableTools.lines, picture: pictureTools.lines, pickImage: bar.pickImage, corner: host });
+    // a right-click in the text, or the menu key, opens the menus' own lines for it there
+    const textMenu = createTextMenu(surface, () => row.headings());
     const row = createMenuRow(() =>
         headings(
-            { rich: !!surface.getDocument().quire, contents: !!findContents(surface.getDocument()), paged: pages.paged(), look, outline: outlineView.isOpen(), markdown: host.classList.contains("markdown"), words: countWords(surface.getDocument()), align: aligned(surface.getDocument(), surface.getSelection().focus.path), symbols: surface.symbols() },
+            { rich: !!surface.getDocument().quire, contents: !!findContents(surface.getDocument()), matches: () => matchingSpots({ doc: surface.getDocument(), selection: surface.getSelection() }).length, paged: pages.paged(), look, outline: outlineView.isOpen(), markdown: host.classList.contains("markdown"), words: countWords(surface.getDocument()), align: aligned(surface.getDocument(), surface.getSelection().focus.path), symbols: surface.symbols() },
             actions,
         ),
     );
@@ -1147,9 +1153,11 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
             selectBar.element.remove();
             linkCard.element.remove();
             palette.destroy();
+            textMenu.destroy();
             emojiList.close();
-            tableTools.element.remove();
+            tableTools.destroy();
             pictureTools.destroy();
+            blockMenus.destroy();
             notes.destroy();
             for (const menu of [downloads, specials]) menu.box.remove();
             keeper.stop();

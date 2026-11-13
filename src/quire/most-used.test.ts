@@ -42,7 +42,8 @@ test("typing after the slash puts the most made first among those that match as 
     expect(keys(filterSlash("head", false, { heading3: 4 }))).toEqual(["heading3", "heading1", "heading2"]);
     // a match by name still comes before a match by another word, however often the other is made
     expect(keys(filterSlash("list", false, { definitions: 9 }))).toEqual(["definitions", "bullet", "number"]);
-    expect(keys(filterSlash("li", false, { divider: 9 }))).toEqual(["bullet", "number", "definitions", "divider"]);
+    // Horizontal line has "li" in its name, so it is a match by name, and the most made of those comes first
+    expect(keys(filterSlash("li", false, { divider: 9 }))).toEqual(["divider", "bullet", "number", "definitions"]);
 });
 
 test("the site's components stay in MDX files alone, however often they were made", () => {

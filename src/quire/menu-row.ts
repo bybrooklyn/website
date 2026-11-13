@@ -25,6 +25,8 @@ export interface RowState {
     rich: boolean;
     /** True in page view: the paper set up, as real pages. */
     paged?: boolean;
+    /** How many places the selected words (or the cursor's word) appear in, counted only when the Edit menu is drawn, since in a long document it takes a while; Select all occurrences is dimmed for fewer than two. */
+    matches?: () => number;
     /** The look of the writing: no page, or light paper. */
     look?: "none" | "paper";
     outline: boolean;
@@ -82,7 +84,7 @@ export function headings(state: RowState, act: RowActions): Heading[] {
                 ...line("undo", "Undo", { icon: "undo" }),
                 ...line("redo", "Redo", { icon: "redo" }),
                 ...line("selectAll", "Select all"),
-                ...line("selectMatching", "Select all matching text"),
+                ...line("selectMatching", "Select all occurrences", (state.matches?.() ?? 2) < 2 ? { disabled: true } : {}),
                 ...line("pastePlain", "Paste without formatting"),
                 ...line("find", "Find", { icon: "search" }),
                 ...line("replace", "Find and replace"),
@@ -125,7 +127,7 @@ export function headings(state: RowState, act: RowActions): Heading[] {
                 ...line("symbols", "Special characters", { hint: "›" }),
                 ...(state.contents ? line("updateContents", "Update the table of contents") : line("contents", "Table of contents")),
                 ...line("comment", "Comment"),
-                ...(state.rich ? line("headerFooter", "Header, footer and page numbers", { hint: "›" }) : []),
+                ...(state.rich ? line("headerFooter", "Header, footer and page numbers", state.paged ? { hint: "›" } : { hint: "Page view only", disabled: true }) : []),
                 ...line("bullet", "Bulleted list", { icon: "bullet" }),
                 ...line("number", "Numbered list", { icon: "number" }),
                 ...line("task", "Checklist", { icon: "task" }),

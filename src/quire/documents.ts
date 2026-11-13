@@ -5,6 +5,7 @@
 // What is shown is built here; app.ts says what each choice does. Filtering a long list is pure and
 // tested.
 
+import { enterGivesBack } from "./fields";
 import type { Entry } from "./store";
 import { composing, control, icon, make } from "./ui";
 
