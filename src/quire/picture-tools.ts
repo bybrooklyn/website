@@ -74,7 +74,7 @@ export function createPictureTools(surface: Surface) {
         ["center", "Picture in the centre"],
         ["right", "Picture to the right"],
     ] as [Align, string][]) {
-        const button = control(words, icon(align), doing((path) => surface.run((doc) => setAlign(doc, path, align === "center" ? null : align))));
+        const button = control(words, icon(align), doing((path) => surface.run((doc) => setAlign(doc, path, align === "left" ? null : align))));
         aligns.set(align, button);
         strip.append(button);
     }
@@ -119,7 +119,7 @@ export function createPictureTools(surface: Surface) {
         if (frame.parentElement !== figure) figure.append(frame);
         Object.assign(frame.style, { left: `${picture.offsetLeft}px`, top: `${picture.offsetTop}px`, width: `${picture.offsetWidth}px`, height: `${picture.offsetHeight}px` });
         for (const [align, button] of aligns) {
-            const on = (block.align ?? "center") === align;
+            const on = (block.align ?? "left") === align;
             button.classList.toggle("pressed", on);
             button.setAttribute("aria-pressed", String(on));
         }
@@ -161,7 +161,7 @@ export function createPictureTools(surface: Surface) {
         const from = picture.getBoundingClientRect().width;
         const room = figure.getBoundingClientRect().width || 1;
         // a centred picture grows on both sides at once, so a corner moves half as far as its width changes
-        const both = (block.align ?? "center") === "center" ? 2 : 1;
+        const both = block.align === "center" ? 2 : 1;
         const side = corner.endsWith("w") ? -1 : 1;
         let width = block.width;
         const handle = event.target as HTMLElement;

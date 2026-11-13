@@ -517,10 +517,11 @@
     margin: var(--line) 0;
 }
 
+/* a picture sits at the left unless it is set in the centre or at the right (quire-extras.css) */
 .quire-image img {
     display: block;
     max-width: 100%;
-    margin-inline: auto;
+    margin-inline: 0 auto;
 }
 
 .quire-divider hr {

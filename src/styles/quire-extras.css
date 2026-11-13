@@ -17,8 +17,8 @@
     content-visibility: visible;
 }
 
-.quire-image[data-align="left"] img {
-    margin-inline: 0 auto;
+.quire-image[data-align="center"] img {
+    margin-inline: auto;
 }
 
 .quire-image[data-align="right"] img {

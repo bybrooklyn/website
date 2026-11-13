@@ -59,9 +59,10 @@ test("a corner dragged with the mouse resizes the picture keeping its shape, dra
     const before = await tab.run<{ x: number; y: number; width: number; height: number }>("q.box('.quire-image img')");
     const corner = await tab.run<{ x: number; y: number; width: number }>("q.box('.quire-handle[data-corner=\"se\"]')");
     const from = { x: corner.x + corner.width / 2, y: corner.y + corner.width / 2 };
-    // a centred picture grows on both sides, so the corner moves half as far as the width changes
+    // a picture at the left grows to the right alone, so the corner moves as far as the width changes
     const wanted = room * 0.51;
-    await tab.drag(from, { x: from.x + (wanted - before.width) / 2, y: from.y }, 12);
+    expect(Math.abs(before.x - (await tab.run<{ x: number }>("q.box('.quire-image')")).x)).toBeLessThan(2);
+    await tab.drag(from, { x: from.x + (wanted - before.width), y: from.y }, 12);
     await tab.wait(100);
     expect(await page!.md()).toContain(`<img src="${picture}" alt="A wide picture" width="50%" />`);
     const after = await tab.run<{ width: number; height: number }>("q.box('.quire-image img')");
@@ -71,15 +72,16 @@ test("a corner dragged with the mouse resizes the picture keeping its shape, dra
     expect(await page!.md()).toContain(`![A wide picture](${picture})`);
 });
 
-test("the strip puts the picture to the right, and back in the centre", async () => {
+test("a picture sits at the left until moved; the strip puts it in the centre and back to the left, which is written as nothing", async () => {
     if (skip()) return;
     const { tab } = page!;
     await start();
     await page!.press(".quire-image img");
     await tab.wait(400);
-    await page!.press(".quire-picture-strip button", "Picture to the right");
-    expect(await page!.md()).toContain(`<div align="right">\n\n![A wide picture](${picture})\n\n</div>`);
+    expect(await tab.run("document.querySelector('.quire-picture-strip [aria-label=\"Picture to the left\"]').getAttribute('aria-pressed')")).toBe("true");
     await page!.press(".quire-picture-strip button", "Picture in the centre");
+    expect(await page!.md()).toContain(`<div align="center">\n\n![A wide picture](${picture})\n\n</div>`);
+    await page!.press(".quire-picture-strip button", "Picture to the left");
     expect(await page!.md()).toBe(`One line.\n\n![A wide picture](${picture})\n\nAnother line.\n`);
 });
 

@@ -221,8 +221,9 @@ function pageBody(doc: Document, address: (src: string) => string): string {
                     }
                     case "image": {
                         const width = block.width !== undefined && Number.isFinite(Number(block.width)) ? ` style="width:${Number(block.width)}%"` : "";
-                        const side = block.align === "left" ? "margin-inline:0 auto" : block.align === "right" ? "margin-inline:auto 0" : "margin-inline:auto";
-                        const align = block.align === "left" || block.align === "right" ? block.align : "center";
+                        // a picture with no alignment sits at the left, as the editor draws it
+                        const side = block.align === "center" ? "margin-inline:auto" : block.align === "right" ? "margin-inline:auto 0" : "margin-inline:0 auto";
+                        const align = block.align === "center" || block.align === "right" ? block.align : "left";
                         return `<figure style="text-align:${align}"><div style="display:block;${side};width:fit-content;max-width:100%">${picture(block.src, block.alt, width)}</div>${block.caption ? `<figcaption>${escape(block.caption)}</figcaption>` : ""}</figure>`;
                     }
                     case "divider":
