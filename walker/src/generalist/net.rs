@@ -263,7 +263,7 @@ fn dot(a: &[f32], b: &[f32]) -> f32 {
     let mut sums = [0.0f32; 8];
     let (whole_a, rest_a) = a.split_at(a.len() / 8 * 8);
     let (whole_b, rest_b) = b.split_at(whole_a.len());
-    for (ca, cb) in whole_a.chunks_exact(8).zip(whole_b.chunks_exact(8)) {
+    for (ca, cb) in whole_a.as_chunks::<8>().0.iter().zip(whole_b.as_chunks::<8>().0) {
         for j in 0..8 {
             sums[j] += ca[j] * cb[j];
         }

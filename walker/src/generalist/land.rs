@@ -263,7 +263,7 @@ impl Land {
         while self.reached.x < until {
             let wanted = match (&mut self.plan, self.given.pop()) {
                 (_, Some(piece)) => piece,
-                (Some(plan), None) => plan.next(),
+                (Some(plan), None) => plan.piece(),
                 (None, None) => Piece::new(Kind::Flat, 10.0, 0.0, 0.5),
             };
             let piece = self.crossable(wanted);

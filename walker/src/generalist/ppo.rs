@@ -402,10 +402,10 @@ impl Learner {
             self.head.forward(&self.weights[self.at[1]..self.at[2]], from.output(), n, to);
             for i in 0..n {
                 let mut chance = 0.0;
-                for k in 0..a {
+                for (k, &spread) in spreads.iter().enumerate().take(a) {
                     let noise = self.bell();
                     let middle = works[1].output()[i * a + k];
-                    self.actions_now[i * a + k] = middle + spreads[k] * noise;
+                    self.actions_now[i * a + k] = middle + spread * noise;
                     chance += -0.5 * noise * noise - self.weights[self.at[4] + k] - HALF_LOG_TAU;
                 }
                 self.chances[t * n + i] = chance;

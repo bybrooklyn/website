@@ -54,7 +54,7 @@ fn a_held_creature_goes_where_the_hand_goes_and_falls_when_dropped() {
 fn the_worlds_lists_come_out_as_it_is_made() {
     let mut page = page(4);
     let first = page.ground(100.0, 0).len();
-    assert!(first % 4 == 0 && first > 0);
+    assert!(first.is_multiple_of(4) && first > 0);
     let more = page.ground(300.0, first / 4).len();
     assert!(more > 0 && page.show.stage.land.reached.x >= 300.0);
     assert_eq!(page.blocks(0).len() % 4, 0);

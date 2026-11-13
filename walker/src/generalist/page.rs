@@ -109,7 +109,7 @@ impl Page {
                     // a policy decides every few steps, as it practised, and its actions are held between
                     // by practice's own rule (no hop)
                     let way = Way::of(self.legs);
-                    if self.show.judge.steps % way.skip == 0 {
+                    if self.show.judge.steps.is_multiple_of(way.skip) {
                         let mut asked = core::mem::take(&mut self.asked);
                         policy.act(&self.senses, &mut asked);
                         way.hold(&asked, &mut self.held_actions);

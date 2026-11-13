@@ -238,7 +238,7 @@ fn gradient_against_nudging(settings: Settings, moved: f32, h: f32) -> f32 {
     learner.gradient(1);
     let clipped = learner.report.clipped;
     let grads = learner.grads.clone();
-    for k in 0..learner.weights.len() {
+    for (k, &grad) in grads.iter().enumerate() {
         let kept = learner.weights[k];
         learner.weights[k] = kept + h;
         learner.gradient(1);
@@ -248,8 +248,8 @@ fn gradient_against_nudging(settings: Settings, moved: f32, h: f32) -> f32 {
         let down = whole_loss(&learner);
         learner.weights[k] = kept;
         let wanted = (up - down) / (2.0 * h as f64);
-        let error = (grads[k] as f64 - wanted).abs();
-        assert!(error < 2e-3 + 2e-2 * wanted.abs(), "weight {k}: gradient {}, nudging {wanted}", grads[k]);
+        let error = (grad as f64 - wanted).abs();
+        assert!(error < 2e-3 + 2e-2 * wanted.abs(), "weight {k}: gradient {grad}, nudging {wanted}");
     }
     clipped
 }

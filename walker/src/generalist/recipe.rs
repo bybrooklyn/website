@@ -259,7 +259,7 @@ impl Plan {
     }
 
     /// The next piece.
-    pub fn next(&mut self) -> Piece {
+    pub fn piece(&mut self) -> Piece {
         let Recipe { difficulty: d, amounts, .. } = self.recipe;
         // pick a kind of thing by the amounts, against a fixed weight of level ground, then a piece
         // of that kind evenly
