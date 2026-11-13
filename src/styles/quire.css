@@ -3474,3 +3474,26 @@ body.quire-app,
 .prose.quire ul:has(> .quire-task) > li:not(.quire-task) > p:first-of-type {
     display: block;
 }
+
+/* A list's marks hang to the left of its items, in its own padding. A block that may be skipped while out
+   of sight is painted only inside its box (content-visibility above), and a number of two digits or more
+   ("10.", "100.", "1000.") is wider than that padding, so the front of it was cut off. A list at the top
+   level has its box reach further left, with its margin less by as much, so that its marks are wholly
+   inside it and nothing moves. (Lists inside a list, a quote or a callout have their marks inside the
+   box of the block they are in.) */
+.prose.quire > :is(ul, ol) {
+    --mark-room: 2.5em;
+    margin-left: calc(var(--mark-room) * -1);
+}
+
+.prose.quire > ul {
+    padding-left: calc(1em + var(--mark-room));
+}
+
+.prose.quire > ol {
+    padding-left: calc(1.45em + var(--mark-room));
+}
+
+.prose.quire > ul:has(> .quire-task) {
+    padding-left: calc(1.2em + var(--mark-room));
+}

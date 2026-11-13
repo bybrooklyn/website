@@ -1500,6 +1500,53 @@ used("no letter of any block is cut by its box: tails, accents and a leaning f s
     await tab.run(`document.querySelector(".quire-editor").classList.remove("look-paper")`);
 });
 
+used("no list mark, checkbox or focus ring is cut by its block's box: numbers of every width, nested marks, and the rings of the fields inside blocks, in both looks", async () => {
+    const numbers = Array.from({ length: 1002 }, (_, index) => `${index + 1}. item`).join("\n");
+    const markdown = [numbers, "1. top\n   1. letter\n      1. roman\n      2. roman\n      3. roman\n      4. roman\n      5. roman\n      6. roman\n      7. roman\n      8. roman", "- dot\n  - ring\n    - square", "- [ ] box\n- [x] done", "> 1. quoted\n> 2. list", "```js\nlet x = 1;\n```"].join("\n\n");
+    for (const paper of [false, true]) {
+        await tab.run(`(() => { document.querySelector(".quire-editor").classList.toggle("look-paper", ${paper}); q.reset(${JSON.stringify(markdown)}); })()`);
+        await tab.wait(400);
+        const cut = await tab.run<string[]>(`(() => {
+            const out = [];
+            const root = document.querySelector(".quire[contenteditable]");
+            const pen = document.createElement("canvas").getContext("2d");
+            for (const top of root.children) {
+                const box = top.getBoundingClientRect();
+                // a list's marks: the widest number, drawn right-aligned a little before its item, or a dot or box
+                for (const li of top.querySelectorAll("li")) {
+                    const mark = getComputedStyle(li, "::before");
+                    const item = li.getBoundingClientRect();
+                    const size = parseFloat(mark.fontSize);
+                    let left;
+                    if (mark.content.startsWith("counter")) {
+                        const shown = li.parentElement.children.length + ".";
+                        pen.font = mark.fontWeight + " " + mark.fontSize + " " + mark.fontFamily;
+                        left = item.left - 0.3 * size - pen.measureText(shown).width;
+                        if (li.parentElement.closest("li")) continue;
+                    } else if (li.querySelector(":scope > .quire-box")) left = li.querySelector(":scope > .quire-box").getBoundingClientRect().left;
+                    else left = item.left - 0.72 * size;
+                    // one mark said is enough for a block
+                    if (left < box.left - 0.5) {
+                        out.push(top.tagName + " mark of " + JSON.stringify(li.textContent.slice(0, 12)) + " starts at " + Math.round(left) + ", the box at " + Math.round(box.left));
+                        break;
+                    }
+                }
+                // the ring of anything that can be focused inside the block
+                for (const field of top.querySelectorAll("input, button, summary, textarea, select")) {
+                    const ring = field.getBoundingClientRect();
+                    const out2 = 0.15 * parseFloat(getComputedStyle(document.documentElement).fontSize) + 2;
+                    const offset = parseFloat(getComputedStyle(field).getPropertyValue("--ring-offset")) || 0;
+                    const reach = offset < 0 ? 0 : out2;
+                    if (ring.left - reach < box.left - 0.5 || ring.right + reach > box.right + 0.5 || ring.top - reach < box.top - 0.5 || ring.bottom + reach > box.bottom + 0.5) out.push(top.tagName + " ring of " + field.className + " leaves its box");
+                }
+            }
+            return out;
+        })()`);
+        expect({ paper, cut }).toEqual({ paper, cut: [] });
+    }
+    await tab.run(`document.querySelector(".quire-editor").classList.remove("look-paper")`);
+});
+
 used("Ctrl+/ opens every shortcut and every piece of typing in a dialog, with a search that narrows it", async () => {
     await tab.run(`q.reset("Words.\\n")`);
     await tab.run(`document.querySelector(".quire[contenteditable]").dispatchEvent(new KeyboardEvent("keydown", { code: "Slash", key: "/", ctrlKey: true, bubbles: true, cancelable: true }))`);
