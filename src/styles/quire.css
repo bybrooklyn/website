@@ -2701,6 +2701,19 @@ body.quire-app,
     width: 100%;
 }
 
+/* the same rows in a menu (the site's editor asks a new post's title so) */
+.quire-menu .quire-repository {
+    width: min(26rem, 100vw - 2.5rem);
+    padding: 0.5rem 0.55rem 0.6rem;
+}
+
+.quire-repository-title {
+    margin: 0 0 0.2rem;
+    font-family: var(--font-head);
+    font-size: 1.15rem;
+    font-weight: var(--head-weight);
+}
+
 .quire-repository-about {
     margin: 0.2rem 0 0;
     color: var(--muted);
