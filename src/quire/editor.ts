@@ -1002,6 +1002,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
             // every way out is in the one row: leaving without saving, which loses the words, stands apart at the far left
             openDialog(bar.statusLine, {
                 title: "Not saved",
+                className: "quire-unsaved-dialog",
                 body: [make("p", "", `The latest changes to this document have not been saved: ${why}. They are still here.`)],
                 others: [
                     { label: "Leave without saving", far: true, press: (dialog) => ((chosen = "discard"), void dialog.close()) },

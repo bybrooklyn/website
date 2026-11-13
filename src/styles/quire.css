@@ -1968,7 +1968,7 @@
     z-index: 67;
     display: flex;
     flex-direction: column;
-    width: min(26rem, 100vw - 2rem);
+    width: min(29rem, 100vw - 2rem);
     max-height: calc(100vh - var(--quire-below-bar) - 1rem);
     box-sizing: border-box;
     padding: 0.8rem 1rem 1rem;
@@ -2969,10 +2969,12 @@ body.quire-app,
 .quire-dialog-in {
     position: relative;
     display: grid;
+    /* the title and the buttons stay put; what is between them scrolls when there is more than the window holds */
+    grid-template-rows: auto minmax(0, 1fr) auto;
     gap: 0.9rem;
     max-height: calc(100dvh - 2rem);
     padding: 1.4rem 1.5rem 1.25rem;
-    overflow: auto;
+    overflow: hidden;
     box-sizing: border-box;
 }
 
@@ -2985,7 +2987,18 @@ body.quire-app,
 
 .quire-dialog-body {
     display: grid;
+    align-content: start;
     gap: 0.75rem;
+    min-height: 0;
+    /* room round the edge for a field's focus ring, which the scrolling would otherwise cut */
+    margin: -0.25rem;
+    padding: 0.25rem;
+    overflow: auto;
+}
+
+/* Not saved has four ways out, which want the room to stand in one row */
+.quire-dialog.quire-unsaved-dialog {
+    width: min(40rem, 100vw - 2rem);
 }
 
 .quire-dialog-body > p {
