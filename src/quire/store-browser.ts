@@ -112,7 +112,8 @@ export async function indexedTables(name = "quire", factory: IDBFactory = global
             let value: T;
             let thrown: unknown;
             transaction.oncomplete = () => done(value);
-            transaction.onabort = () => failed(thrown ?? refusal(transaction.error));
+            // a store's own reason is said as it is; the browser's (a request refused at once, or the transaction at its end) in plain words
+            transaction.onabort = () => failed(thrown instanceof StoreError ? thrown : refusal(thrown ?? transaction.error));
             const fail = (error: unknown) => {
                 thrown = error;
                 try {

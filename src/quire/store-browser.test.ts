@@ -214,3 +214,30 @@ test("a rename made while a save is on its way keeps the saved text", async () =
     expect(await store.open(made.id)).toMatchObject({ text: "after", mark: "2" });
     expect((await store.list())[0]!.name).toBe("Renamed");
 });
+
+test("a request the browser refuses at once is said in plain words too, and a store's own reason as it is", async () => {
+    const stand = standInIndexedDB();
+    const store = browserStore(await indexedTables("quire", stand.factory));
+    const made = await store.create("Draft", "first");
+    const real = stand.factory.open;
+    // the database's put refuses at once, as Chrome does when there is no room
+    const tables = await indexedTables("quire", {
+        open() {
+            const opening = real.call(stand.factory, "quire") as { onsuccess?: () => void; result?: { transaction: (name: string, mode: string) => { objectStore: () => Record<string, unknown> } } };
+            const done = () => {
+                const database = opening.result!;
+                const transaction = database.transaction.bind(database);
+                database.transaction = (name: string, mode: string) => {
+                    const made = transaction(name, mode);
+                    const store = made.objectStore();
+                    made.objectStore = () => ({ ...store, put: () => { throw Object.assign(new Error("full"), { name: "QuotaExceededError" }); } });
+                    return made;
+                };
+            };
+            const wrapped = { set onsuccess(run: () => void) { opening.onsuccess = () => (done(), run()); }, get result() { return opening.result; }, set onupgradeneeded(run: () => void) { (opening as { onupgradeneeded?: () => void }).onupgradeneeded = run; }, set onerror(_run: () => void) {} };
+            return wrapped;
+        },
+    } as unknown as IDBFactory);
+    await expect(browserStore(tables).save(made.id, "second", made.mark)).rejects.toThrow("this browser has no more room");
+    await expect(browserStore(tables).save("nothing", "x", "1")).rejects.toThrow("this document is no longer kept here");
+});
