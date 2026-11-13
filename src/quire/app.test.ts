@@ -72,6 +72,8 @@ HTMLAnchorElement.prototype.click = function () {
 };
 
 window.q = { repo, calls, downloads, bytes, write, folderStore, oneFileStore, setStyle, packQuire, unpackQuire };
+// a browser that keeps nothing, as some private windows are
+if (location.search.includes("no-storage")) indexedDB.open = () => { throw new DOMException("The user denied permission to access the database.", "SecurityError"); };
 startApp(document.querySelector("#host"), { database: ${JSON.stringify(database)}, fetcher, sample: "# A sample\\n", top: document.querySelector(".quire-top") }).then((app) => {
     window.q.app = app;
     window.q.md = () => write(app.editor.surface.getDocument());
@@ -127,6 +129,20 @@ async function load() {
     for (let tries = 0; tries < 100 && !(await tab.run("!!window.q?.md")); tries++) await tab.wait(50);
 }
 const md = () => tab.run<string>("q.md()");
+
+used("a browser that keeps nothing still opens mdQuire, and says a document is kept in this tab only", async () => {
+    await tab.open(`http://localhost:${server().port}/page.html?no-storage`, 100);
+    for (let tries = 0; tries < 100 && !(await tab.run("!!window.q?.md")); tries++) await tab.wait(50);
+    expect(await tab.run("!!window.q.app")).toBe(true);
+    await tab.run(`q.app.editor.create(q.app.browser, "Kept here", "Words.\\n").then(() => q.app.editor.surface.focus())`);
+    await tab.run(`q.app.editor.surface.pasteText("More words")`);
+    await tab.wait(1400);
+    expect(await tab.run<string>("document.querySelector('.quire-status').getAttribute('aria-label')")).toContain("kept in this tab only");
+    expect(await tab.run(`(() => { const event = new Event("beforeunload", { cancelable: true }); dispatchEvent(event); return event.defaultPrevented; })()`)).toBe(true);
+    // back to the page as the other tests have it, with nothing waiting to be downloaded
+    await tab.run("q.app.editor.commands.download()");
+    await load();
+});
 const status = () => tab.run<string>("document.querySelector('.quire-status').getAttribute('aria-label')");
 
 async function press(selector: string, words = "") {

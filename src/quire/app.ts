@@ -13,7 +13,7 @@ import { blockPaths, lengthOf } from "./document";
 import { read } from "./read";
 import { emptyParts, opened, type Parts } from "./quire-file";
 import { copyDocument, fileName, type Entry, type Store } from "./store";
-import { browserStore, indexedTables } from "./store-browser";
+import { browserStore, indexedTables, memoryTables } from "./store-browser";
 import { filesStore, OPENABLE } from "./store-files";
 import { canOpen, folderStore, oneFileStore, type FileHandle, type FolderHandle } from "./store-folder";
 import { folderPath, forgetSettings, githubStore, keepSettings, readSettings, repository, type Fetcher } from "./store-github";
@@ -47,7 +47,10 @@ function local(): Storage | undefined {
 
 /** Starts mdQuire on an element. */
 export async function startApp(host: HTMLElement, options: AppOptions = {}) {
-    const browser = browserStore(await indexedTables(options.database));
+    // a browser that keeps nothing (some private windows, site data blocked) still opens mdQuire: documents
+    // are then kept in this tab only, and the status says so, as it does for a file opened from the computer
+    const tables = await indexedTables(options.database).catch(() => undefined);
+    const browser = tables ? browserStore(tables) : { ...browserStore(memoryTables()), note: "This browser is not keeping documents, so this one is kept in this tab only: download it to keep it." };
     const files = filesStore();
     let folder: Store | undefined;
     let settings = readSettings(local());
