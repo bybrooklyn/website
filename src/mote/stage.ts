@@ -282,6 +282,8 @@ export function mote(host: HTMLElement, make: (m: Mote) => Scene, { label = "An 
         [m.pointer.x, m.pointer.y] = [event.offsetX, event.offsetY];
     };
     canvas.addEventListener("pointerdown", (event) => {
+        // Only the main button presses: a right click, or a click with ctrl on a Mac, opens a menu and may never be let go.
+        if (event.pointerType === "mouse" && event.button !== 0) return;
         // a drag that starts on the canvas is the mini's, and must not begin selecting the page's text
         event.preventDefault();
         place(event);
@@ -308,6 +310,7 @@ export function mote(host: HTMLElement, make: (m: Mote) => Scene, { label = "An 
     };
     canvas.addEventListener("pointerup", up);
     canvas.addEventListener("pointercancel", up);
+    canvas.addEventListener("lostpointercapture", up);
     canvas.addEventListener("pointerenter", () => {
         m.pointer.inside = true;
         if (allowed) start();
