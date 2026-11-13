@@ -268,6 +268,10 @@ export default function plinko(m: Mote): Scene {
         press() {
             if (!dropping && !m.preview) start();
         },
+        // Space or Enter on the board does what a click does, for a visitor on the keyboard.
+        keydown(name) {
+            if (name === "action" && !dropping && !m.preview) start();
+        },
         resting: () => !m.preview && !dropping && flare === 0 && (view?.shade ?? 0) === (letters.length > 0 ? 0.35 : 0) && pegs.every((peg) => peg.struck === 0) && bins.every((each) => each.caught === 0),
         debug: () => [`${board.balls.size} balls on the board, ${board.landings.length} landed, ${board.late} out of time`],
         draw() {

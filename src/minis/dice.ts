@@ -408,6 +408,10 @@ export default function dice(m: Mote): Scene {
         press() {
             if (!thrown) send("d20");
         },
+        // Space or Enter on the tower does what a click does, for a visitor on the keyboard.
+        keydown(name) {
+            if (name === "action" && !thrown) send("d20");
+        },
         // (with no numbers lifted, as without WebGL, there is no row to wait for)
         resting: () => !m.preview && (!thrown || (landed() && over === 1 && shine === 1 && (lifted.length === 0 || lined >= lastIn()))) && (view?.shade ?? 0) === (lifted.length > 0 && thrown ? 0.72 : 0),
         debug: () => (thrown ? [`${thrown.space.solids.filter((solid) => solid.im && solid.quiet < 0.4).length} of ${thrown.dice.length} dice moving`] : []),
