@@ -689,16 +689,52 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
         lit = now;
     }
 
+    /** The block each drawn top-level element stands for, so that an element taken over by another block is no longer found for the old one. */
+    let owners = new WeakMap<HTMLElement, Block>();
+
+    /**
+     * Makes `into`, an element already in the page, look as `from`: its attributes and its children.
+     * A changed block is drawn this way into the element it had, when the two are the same kind of
+     * element: an element put in or taken out among the document's thousands of blocks makes the
+     * browser work out the style of its neighbours again (the stylesheet has rules that look at a
+     * block's neighbours), which cost about 8 ms a key in a 5,000-line document; a changed element
+     * costs only itself.
+     */
+    function takeOver(into: HTMLElement, from: HTMLElement) {
+        for (const name of into.getAttributeNames()) if (!from.hasAttribute(name)) into.removeAttribute(name);
+        for (const name of from.getAttributeNames()) if (into.getAttribute(name) !== from.getAttribute(name)) into.setAttribute(name, from.getAttribute(name)!);
+        into.replaceChildren(...from.childNodes);
+    }
+
     function render() {
         const fresh: HTMLElement[] = [];
-        const wanted = editor.state.doc.blocks.map((block) => {
+        const blocks = editor.state.doc.blocks;
+        const kept = new Set<Node>();
+        for (const block of blocks) {
+            const element = drawn.get(block);
+            if (element) kept.add(element);
+        }
+        let previous: HTMLElement | undefined;
+        const wanted = blocks.map((block) => {
             let element = drawn.get(block);
             if (!element) {
                 element = draw(block, [], drawing());
                 showPictures(element);
+                // the element that stood here before, if no block keeps it, is reused (pages.ts keeps a
+                // pushed element's measure by the element, so a pushed one is left alone)
+                const there = previous ? previous.nextSibling : root.firstChild;
+                if (there && isElement(there) && !kept.has(there) && there.tagName === element.tagName && !("push" in there.dataset)) {
+                    takeOver(there, element);
+                    const was = owners.get(there);
+                    if (was && drawn.get(was) === there) drawn.delete(was);
+                    element = there;
+                }
+                kept.add(element);
                 drawn.set(block, element);
+                owners.set(element, block);
                 fresh.push(element);
             }
+            previous = element;
             return element;
         });
         // a block drawn by an edit is laid out at once, so that what is measured next (the cursor's

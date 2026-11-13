@@ -213,4 +213,32 @@ test.skipIf(!chromium())(
     60_000,
 );
 
+test.skipIf(!chromium())(
+    "a key typed in a block draws it again in the element it had, so its neighbours are not restyled, and undo and redo still show the right text",
+    async () => {
+        const { tab, folder } = await open();
+        try {
+            await tab.run(`quire.reset("One\\n\\nTwo\\n\\nThree\\n")`);
+            await tab.run(`quire.surface.setSelection({ anchor: { path: [1], offset: 3 }, focus: { path: [1], offset: 3 } })`);
+            await tab.run(`window.before = [...document.querySelector("#editor").children]`);
+            await tab.type("s");
+            expect(await tab.run<boolean[]>(`[...document.querySelector("#editor").children].map((each, index) => each === window.before[index])`)).toEqual([true, true, true]);
+            expect(await tab.run<string>(`document.querySelector("#editor").textContent`)).toBe("OneTwosThree");
+            await tab.press("Enter");
+            await tab.type("# Big");
+            expect(await tab.run<string>("quire.markdown()")).toBe("One\n\nTwos\n\n# Big\n\nThree\n");
+            for (let index = 0; index < 10; index++) await tab.press("z", { ctrl: true });
+            expect(await tab.run<string>("quire.markdown()")).toBe("One\n\nTwo\n\nThree\n");
+            expect(await tab.run<string>(`document.querySelector("#editor").textContent`)).toBe("OneTwoThree");
+            for (let index = 0; index < 10; index++) await tab.press("z", { ctrl: true, shift: true });
+            expect(await tab.run<string>(`[...document.querySelector("#editor").children].map((each) => each.tagName + ":" + each.textContent).join(" ")`)).toBe("P:One P:Twos H1:Big P:Three");
+            expect(tab.errors).toEqual([]);
+        } finally {
+            await tab.close();
+            await rm(folder, { recursive: true, force: true });
+        }
+    },
+    60_000,
+);
+
 if (!chromium()) console.warn("surface.test.ts: no Chromium on this machine, so the surface was not typed in.");
