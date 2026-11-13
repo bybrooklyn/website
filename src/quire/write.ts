@@ -6,11 +6,13 @@
 import { pictureHtml, sized } from "./pictures";
 import type { Align, Block, Document, Leaf, LinkRun, List, Run, TextRun } from "./document";
 import { emojiOf } from "./emoji";
-import { followed, standsApart } from "./read";
+import { definedLabels, followed, normalLabel, standsApart } from "./read";
 
 interface Context {
     eol: string;
     mdx: boolean;
+    /** The labels the document's definitions name, found when a reference link is first written. */
+    defined?: () => Set<string>;
     /** Set while the runs being written hold dollar signs that could pair as maths, so that each is escaped. */
     dollars?: boolean;
 }
@@ -35,7 +37,8 @@ function said(value: unknown, what: string): string {
 
 /** Writes a whole document. */
 export function write(doc: Document): string {
-    const context: Context = { eol: doc.eol, mdx: doc.mdx };
+    let defined: Set<string> | undefined;
+    const context: Context = { eol: doc.eol, mdx: doc.mdx, defined: () => (defined ??= definedLabels(doc.blocks)) };
     let body = writeBlocks(doc.blocks, context, false);
     // a `---` on the first line opens frontmatter when another such line comes later, so a line across
     // the page that has come to the top is written `***` when it would be read so
@@ -477,7 +480,7 @@ function writeRuns(runs: Run[], context: Context, cell: boolean): string {
         }
         flush("[");
         const label = writeLeaves(run.runs, context, cell, "[", "]", true);
-        out += `[${label}]${linkTail(run, label, runs[index + 1])}`;
+        out += `[${label}]${linkTail(run, label, runs[index + 1], context)}`;
     }
     flush(" ");
     return out;
@@ -488,10 +491,14 @@ function writeRuns(runs: Run[], context: Context, cell: boolean): string {
  * is found by its words, so it keeps that form only while its words are still the label it was read
  * with; once they are changed it is written `[new words][label]`, which still names its definition.
  * A shortcut followed by `(` or `[` would be read as another kind of link, so it takes the empty brackets.
+ * A reference whose definition has gone from the document is written with its address.
  */
-function linkTail(run: LinkRun, label: string, following: Run | undefined): string {
-    if (run.ref !== undefined && run.ref !== "") return `[${said(run.ref, "a link's reference")}]`;
-    if (run.ref === "" && run.label !== undefined) {
+function linkTail(run: LinkRun, label: string, following: Run | undefined, context: Context): string {
+    // a reference whose definition is no longer in the document would leave plain text behind: it is written with its address
+    const name = run.ref || run.label;
+    const kept = name !== undefined && context.defined?.().has(normalLabel(name));
+    if (kept && run.ref) return `[${said(run.ref, "a link's reference")}]`;
+    if (kept && run.ref === "" && run.label !== undefined) {
         if (label !== run.label) return `[${run.label}]`;
         const next = following?.kind === "text" ? following.text[0] : following?.kind === "link" ? "[" : undefined;
         return run.shortcut && next !== "(" && next !== "[" ? "" : "[]";

@@ -254,3 +254,10 @@ test("two pieces of code side by side are written as one code span, never as two
     const doc = setStyle(read("`abc`\n"), { start: { path: [0], offset: 0 }, end: { path: [0], offset: 2 } }, { color: "red" });
     expect(readsBack(doc)).toBe('<span style="color:red">`ab`</span>`c`\n');
 });
+
+test("a reference link whose definition has been taken out of the document is written with its address, so it stays a link", () => {
+    const doc = removeBlock(insertText(read("see [a][r] and [b]\n\n[r]: http://r\n[b]: /b 'B'\n"), { path: [0], offset: 0 }, "z"), [1]);
+    expect(write(doc)).toBe("zsee [a](http://r) and [b](/b \"B\")\n");
+    const kept = insertText(read("see [a][r]\n\n> [r]: http://r\n"), { path: [0], offset: 0 }, "z");
+    expect(write(kept)).toBe("zsee [a][r]\n\n> [r]: http://r\n");
+});

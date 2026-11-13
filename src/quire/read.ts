@@ -712,7 +712,25 @@ function sameDefinitions(a: Map<string, { href: string; title?: string }>, b: Ma
     return true;
 }
 
-const normalLabel = (label: string) => label.trim().replace(/\s+/g, " ").toLowerCase();
+/** The labels named by the definitions among these blocks, at any depth, in lower case. */
+export function definedLabels(blocks: Block[]): Set<string> {
+    const out = new Set<string>();
+    const visit = (list: Block[]) => {
+        for (const block of list) {
+            if (block.kind === "raw") for (const line of block.text.split("\n")) {
+                const match = DEFINITION.exec(line);
+                if (match && !match[1]!.startsWith("^")) out.add(normalLabel(match[1]!));
+            }
+            else if (block.kind === "list") for (const item of block.items) visit(item.blocks);
+            else if (block.kind === "quote" || block.kind === "footnote") visit(block.blocks);
+        }
+    };
+    visit(blocks);
+    return out;
+}
+
+/** A link label as definitions are matched: spacing made one space, in lower case. */
+export const normalLabel = (label: string) => label.trim().replace(/\s+/g, " ").toLowerCase();
 
 // ---- inline ----
 
