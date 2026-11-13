@@ -231,12 +231,16 @@ export function createFind(surface: Surface, sheet: HTMLElement, top: () => numb
     function place() {
         const box = sheet.getBoundingClientRect();
         bar.style.top = `${Math.max(top(), box.top) + 10}px`;
-        // on a narrow window it slides left as far as it must to stay whole
-        bar.style.right = `${Math.max(8, Math.min(innerWidth - box.right + 10, innerWidth - bar.offsetWidth - 8))}px`;
+        // on a narrow window it slides left as far as it must to stay whole; measured on the page's own width, not
+        // the window's, which counts the room kept for a scrollbar that a fixed box's right edge does not
+        const wide = document.documentElement.getBoundingClientRect().right;
+        bar.style.right = `${Math.max(8, Math.min(wide - box.right + 10, wide - bar.offsetWidth - 8))}px`;
     }
     const follow = () => bar.classList.contains("shown") && place();
     addEventListener("scroll", follow, { passive: true });
     addEventListener("resize", follow);
+    // it grows wider once it counts the matches, which on a narrow window took its left edge out of it
+    new ResizeObserver(follow).observe(bar);
     // the text changing elsewhere (typing, undo) moves the matches with it
     let waiting: ReturnType<typeof setTimeout> | undefined;
     const stop = surface.on("change", () => {

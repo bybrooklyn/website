@@ -750,6 +750,24 @@ used("on a phone with the tools scrolled along, Alt+/ opens the search of the me
     }
 });
 
+used("on a phone the find bar is wholly in the window, its edges clear of both sides", async () => {
+    try {
+        for (const width of [390, 360]) {
+            await tab.resize(width, 844);
+            await reset("Some words to find\n", [0], 0);
+            await tab.wait(200);
+            await tab.press("f", { ctrl: true });
+            await tab.wait(600);
+            const seen = await tab.run<{ left: number; right: number; wide: number }>(`(() => { const box = document.querySelector('.quire-find').getBoundingClientRect(); return { left: box.left, right: box.right, wide: document.documentElement.getBoundingClientRect().right }; })()`);
+            expect({ width, inside: seen.left >= 0 && seen.right <= seen.wide }).toEqual({ width, inside: true });
+            await tab.press("Escape");
+            await tab.wait(300);
+        }
+    } finally {
+        await tab.resize(1300, 900);
+    }
+});
+
 used("the selection bar over the first line of the text never covers the document's title above it", async () => {
     await reset("A first line of words to select.\n", [0], 2, [0], 7);
     await tab.run(`(() => { const title = document.querySelector('.quire-title'); title.value = 'A title with tails, gjpqy'; title.dispatchEvent(new Event('input', { bubbles: true })); })()`);
