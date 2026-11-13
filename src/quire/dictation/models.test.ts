@@ -39,6 +39,12 @@ test("addressOf is the repository's resolve address for the file", () => {
     expect(addressOf(tiny, tiny.files[0]!)).toBe("https://huggingface.co/onnx-community/moonshine-tiny-ONNX/resolve/main/onnx/encoder_model.onnx");
 });
 
+test("addressOf fetches at the tier's revision, which every tier names", () => {
+    for (const tier of TIERS) expect(tier.revision.length).toBeGreaterThan(0);
+    const tiny = { ...tierOf("tiny"), revision: "0123abcd" };
+    expect(addressOf(tiny, tiny.files[0]!)).toBe("https://huggingface.co/onnx-community/moonshine-tiny-ONNX/resolve/0123abcd/onnx/encoder_model.onnx");
+});
+
 test("megabytes says a size the way the panel does", () => {
     expect(megabytes(54833597)).toBe("55 MB");
     expect(megabytes(667728000)).toBe("668 MB");

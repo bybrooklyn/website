@@ -17,11 +17,12 @@ export type Engine = "parakeet" | "moonshine";
 /** What a file is for. */
 export type Role = "encoder" | "decoder" | "vocab" | "tokenizer";
 
-/** One file of a model: its place in the repository and its size in bytes. */
+/** One file of a model: its place in the repository, its size in bytes, and the SHA-256 of its bytes in hex when it is known, which the download then checks. */
 export interface ModelFile {
     role: Role;
     path: string;
     bytes: number;
+    sha256?: string;
 }
 
 /** A tier of the model list. */
@@ -35,6 +36,13 @@ export interface Tier {
     engine: Engine;
     /** The Hugging Face repository the files come from. */
     repo: string;
+    /**
+     * The revision of the repository the files are fetched at. A commit hash pins them, so that what
+     * is downloaded is what the sizes and digests here describe; a branch name ("main") follows
+     * whatever the repository's owner puts there next. Changing it makes every browser fetch the
+     * files again, since a file kept from another revision is not trusted.
+     */
+    revision: string;
     files: ModelFile[];
     license: string;
     /** Who made it, as the panel and the license page say it. */
@@ -48,7 +56,12 @@ export interface Tier {
 /** Where the files are fetched from. */
 export const HOST = "https://huggingface.co";
 
-/** The tiers, the most accurate first. */
+/**
+ * The tiers, the most accurate first. Their revisions are still the branch "main" and their files
+ * carry no digest yet: pinning each to the commit its sizes were read from, and writing in the
+ * SHA-256 of each file, needs those to be read from Hugging Face. The download and the check of
+ * kept files use both as soon as they are filled in.
+ */
 export const TIERS: Tier[] = [
     {
         id: "main",
@@ -59,6 +72,7 @@ export const TIERS: Tier[] = [
         mels: 128,
         card: true,
         repo: "Olicorne/parakeet-tdt-0.6b-v3-ultra-onnx",
+        revision: "main",
         files: [
             { role: "encoder", path: "w4a8/encoder-model.w4a8.onnx", bytes: 383355483 },
             { role: "decoder", path: "int8/decoder_joint-model.int8.onnx", bytes: 18203490 },
@@ -75,6 +89,7 @@ export const TIERS: Tier[] = [
         engine: "parakeet",
         mels: 128,
         repo: "Olicorne/parakeet-tdt-0.6b-v3-redux-onnx",
+        revision: "main",
         files: [
             { role: "encoder", path: "w2a8/encoder-model.w2a8.onnx", bytes: 189893007 },
             { role: "decoder", path: "int8/decoder_joint-model.int8.onnx", bytes: 18203490 },
@@ -90,6 +105,7 @@ export const TIERS: Tier[] = [
         who: "For phones, tablets and slow connections",
         engine: "moonshine",
         repo: "onnx-community/moonshine-tiny-ONNX",
+        revision: "main",
         files: [
             { role: "encoder", path: "onnx/encoder_model.onnx", bytes: 30882331 },
             { role: "decoder", path: "onnx/decoder_model_merged_int8.onnx", bytes: 20189512 },
@@ -104,7 +120,7 @@ export const TIERS: Tier[] = [
 export const tierOf = (id: string): Tier => TIERS.find((tier) => tier.id === id) ?? TIERS.find((tier) => tier.id === "light")!;
 
 /** Where one file is fetched from. */
-export const addressOf = (tier: Tier, file: ModelFile): string => `${HOST}/${tier.repo}/resolve/main/${file.path.split("/").map(encodeURIComponent).join("/")}`;
+export const addressOf = (tier: Tier, file: ModelFile): string => `${HOST}/${tier.repo}/resolve/${encodeURIComponent(tier.revision)}/${file.path.split("/").map(encodeURIComponent).join("/")}`;
 
 /** The whole download of a tier, in bytes. */
 export const sizeOf = (tier: Tier): number => tier.files.reduce((sum, file) => sum + file.bytes, 0);

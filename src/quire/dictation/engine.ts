@@ -5,7 +5,7 @@
 // The whole of what the panel and the session need of an engine is `Provider`. The browser tests
 // give the page a made-up one with the same shape, so no model is ever downloaded in a test.
 
-import { nameOf } from "./download";
+import { nameOf, whole } from "./download";
 import type { Tier } from "./models";
 import type { Live, LiveUpdate, Recognizer } from "./session";
 
@@ -84,7 +84,14 @@ export function createProvider(): Provider {
             const top = await directory(false);
             const dir = await top?.getDirectoryHandle(tier.id).catch(() => undefined);
             if (!dir) return false;
-            for (const file of tier.files) if (!(await dir.getFileHandle(`${nameOf(file.path)}.whole`).then(() => true, () => false))) return false;
+            // a file is ready only if its mark is for the table as it is now and its size is right (download.ts)
+            const fileOf = (name: string) => dir.getFileHandle(name).then((handle) => handle.getFile());
+            for (const file of tier.files) {
+                const name = nameOf(file.path);
+                const mark = await fileOf(`${name}.whole`).then((each) => each.text(), () => undefined);
+                const size = await fileOf(name).then((each) => each.size, () => -1);
+                if (!whole(tier, file, mark, size)) return false;
+            }
             return true;
         },
         async used() {

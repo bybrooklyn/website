@@ -33,22 +33,36 @@ async function folder(tier: Tier): Promise<FileSystemDirectoryHandle> {
 
 /** The tier's folder as download.ts wants it, on the private file storage. */
 function storage(dir: FileSystemDirectoryHandle): Folder {
-    const has = (name: string) => dir.getFileHandle(name).then(() => true, () => false);
+    const fileOf = (name: string) => dir.getFileHandle(name).then((handle) => handle.getFile());
+    const open = async (name: string) => {
+        // createSyncAccessHandle is in every browser's worker but not yet in TypeScript's types
+        const handle = (await dir.getFileHandle(name, { create: true })) as FileSystemFileHandle & { createSyncAccessHandle(): Promise<{ getSize(): number; write(data: Uint8Array, options: { at: number }): number; truncate(size: number): void; flush(): void; close(): void }> };
+        return handle.createSyncAccessHandle();
+    };
     return {
         async open(name) {
-            // createSyncAccessHandle is in every browser's worker but not yet in TypeScript's types
-            const handle = (await dir.getFileHandle(name, { create: true })) as FileSystemFileHandle & { createSyncAccessHandle(): Promise<{ getSize(): number; write(data: Uint8Array, options: { at: number }): number; truncate(size: number): void; flush(): void; close(): void }> };
-            const access = await handle.createSyncAccessHandle();
+            const access = await open(name);
             return {
                 size: () => access.getSize(),
-                write: (data, at) => void access.write(data, { at }),
+                write: (data, at) => access.write(data, { at }),
                 truncate: (size) => access.truncate(size),
                 flush: () => access.flush(),
                 close: () => access.close(),
             };
         },
-        whole: (name) => has(`${name}.whole`),
-        mark: async (name) => void (await dir.getFileHandle(`${name}.whole`, { create: true })),
+        marked: (name) => fileOf(`${name}.whole`).then((file) => file.text(), () => undefined),
+        async mark(name, signature) {
+            const access = await open(`${name}.whole`);
+            try {
+                access.truncate(0);
+                access.write(new TextEncoder().encode(signature), { at: 0 });
+                access.flush();
+            } finally {
+                access.close();
+            }
+        },
+        size: (name) => fileOf(name).then((file) => file.size, () => -1),
+        read: async (name) => new Uint8Array(await (await fileOf(name)).arrayBuffer()),
     };
 }
 
