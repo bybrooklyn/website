@@ -349,7 +349,7 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
     const pen = sheet.getContext("2d")!;
     const written = new Map<string, number>();
     /** Each cell's word, how many shapes use it, and when the last of them was freed. */
-    const cells = Array.from({ length: ACROSS * ACROSS }, () => ({ key: undefined as string | undefined, users: 0, freed: 0 }));
+    const cells = Array.from({ length: ACROSS * ACROSS }, () => ({ key: undefined as string | undefined, word: "", onSign: false, users: 0, freed: 0 }));
     let clock = 0;
 
     const parts: Drawn[] = [];
@@ -377,7 +377,27 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
         return [array, buffer];
     };
 
-    /** The cell of the sheet a word is written in, writing it there the first time. A word on a sign is fitted to the cell's width. */
+    /** Writes a word in a cell of the sheet. A word on a sign is fitted to the cell's width. */
+    const write = (at: number) => {
+        const { word, onSign } = cells[at]!;
+        const [x, y] = [(at % ACROSS) * CELL, Math.floor(at / ACROSS) * CELL];
+        pen.clearRect(x, y, CELL, CELL);
+        // on a sign every word is the same height, so that a row of numbers reads as one line
+        pen.font = `700 ${onSign ? 80 : word.length > 1 ? 74 : 88}px ${view.font}`;
+        pen.textAlign = "center";
+        pen.textBaseline = "middle";
+        pen.fillStyle = "#fff";
+        const wide = pen.measureText(word).width;
+        pen.save();
+        pen.translate(x + CELL / 2, y + CELL / 2 + 6);
+        if (onSign && wide > CELL - 12) pen.scale((CELL - 12) / wide, (CELL - 12) / wide);
+        pen.fillText(word, 0, 0);
+        pen.restore();
+        // a line under 6 and 9 on a face, so that they can be told apart whichever way up
+        if (!onSign && (word === "6" || word === "9")) pen.fillRect(x + 40, y + 108, 48, 7);
+        stale = true;
+    };
+    /** The cell of the sheet a word is written in, writing it there the first time. */
     const cell = (word: string, onSign: boolean): [u: number, v: number, at: number] => {
         const key = onSign ? `sign ${word}` : word;
         let at = written.get(key);
@@ -392,24 +412,9 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
             if (free < 0) console.error("Mote: more different words are shown at once than the sheet has room for, so one is shown in another's place.");
             at = Math.max(0, free);
             if (cells[at]!.key !== undefined) written.delete(cells[at]!.key!);
-            cells[at]!.key = key;
+            Object.assign(cells[at]!, { key, word, onSign });
             written.set(key, at);
-            const [x, y] = [(at % ACROSS) * CELL, Math.floor(at / ACROSS) * CELL];
-            pen.clearRect(x, y, CELL, CELL);
-            // on a sign every word is the same height, so that a row of numbers reads as one line
-            pen.font = `700 ${onSign ? 80 : word.length > 1 ? 74 : 88}px ${view.font}`;
-            pen.textAlign = "center";
-            pen.textBaseline = "middle";
-            pen.fillStyle = "#fff";
-            const wide = pen.measureText(word).width;
-            pen.save();
-            pen.translate(x + CELL / 2, y + CELL / 2 + 6);
-            if (onSign && wide > CELL - 12) pen.scale((CELL - 12) / wide, (CELL - 12) / wide);
-            pen.fillText(word, 0, 0);
-            pen.restore();
-            // a line under 6 and 9 on a face, so that they can be told apart whichever way up
-            if (!onSign && (word === "6" || word === "9")) pen.fillRect(x + 40, y + 108, 48, 7);
-            stale = true;
+            write(at);
         }
         cells[at]!.users++;
         return [(at % ACROSS) / ACROSS, Math.floor(at / ACROSS) / ACROSS, at];
@@ -713,6 +718,7 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
         dispose() {
             canvas.removeEventListener("webglcontextlost", lose);
             canvas.removeEventListener("webglcontextrestored", restore);
+            document.fonts?.removeEventListener("loadingdone", fonts);
             for (const part of parts) part.shape.users--;
             parts.length = 0;
             sweep();
@@ -738,7 +744,13 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
         lost = false;
         view.draw();
     }
+    // A word written before its font had come was written in another; when a font comes, every word is written again.
+    function fonts(): void {
+        cells.forEach((one, at) => one.key !== undefined && write(at));
+        if (!lost && parts.length) view.draw();
+    }
     canvas.addEventListener("webglcontextlost", lose);
     canvas.addEventListener("webglcontextrestored", restore);
+    document.fonts?.addEventListener("loadingdone", fonts);
     return view;
 }
