@@ -81,7 +81,7 @@ body.lab {
     white-space: nowrap;
 }
 
-/* "by" is a word of the name like the others: the same size, only quieter */
+/* the stroke between the editor's name and hers, as in the trail on the site's pages ("blog / a post"): the same size, only quieter */
 .lab-by-word {
     color: var(--muted);
 }
