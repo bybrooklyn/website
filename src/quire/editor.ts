@@ -54,6 +54,9 @@ import { mountChecking } from "./check/mount";
 import { createTitle, nameFor, shownName, type OwnTitle } from "./title";
 import { createZoom, pageRule, percent, setPage, setupItems } from "./paper";
 import type { Page } from "./document";
+import { moreCommands } from "./more-commands";
+import { createMatching } from "./matching";
+import { places } from "./bookmarks";
 
 /** What the editor is given by the page. */
 export interface EditorOptions {
@@ -286,7 +289,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
                 finish();
             },
             cancel: finish,
-        });
+        }, places(surface.getDocument()));
         links.open(from, form);
         form.querySelector("input")?.focus({ preventScroll: true });
     };
@@ -402,6 +405,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         onZoom: (from) => (zooms.isOpen() ? zooms.close(true) : zooms.open(from, zoomLines(() => from), document.activeElement === from)),
         // every command of the menus, by name, for the search of them
         commands: () => row.headings().flatMap((heading) => heading.items()),
+        onTitle: () => title.focus(),
         more,
     });
     // checking (src/quire/check/): underlines, a count at the bar's end, and its settings from Tools
@@ -609,8 +613,16 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     notes.opened();
 
     // ---- the menu row: every command by name, above the bar ----
+    // with every match selected (Edit, Select all matching text) a command goes on each; a Format key does too
+    const matching = createMatching(surface, { command: (event) => !!formatKey(event), told: (count) => bar.setStatus(`${count} selected`, `${count} places are selected: typing or a Format command changes every one, and Escape leaves them`, "quiet") });
+    const formatKey = (event: KeyboardEvent) => {
+        const found = shortcutFor(chordFrom(event, MAC));
+        const run = found?.menu === "Format" && found.command ? actions[found.command] : undefined;
+        run?.();
+        return run;
+    };
     const doing = (action: Action) => () => {
-        surface.run((doc, selection) => action({ doc, selection }));
+        surface.run((doc, selection) => matching.apply(action, { doc, selection }));
         surface.focus();
     };
     const format = () => row.words[4]!;
@@ -722,6 +734,8 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
                 // the slash menu opens on the first five again
                 forgetUsed: () => (remember(), bar.setStatus("Forgotten", "What you use most is forgotten: the slash menu opens on its first five again")),
                 tools: () => dictation.items(row.words[5]!),
+                ...moreCommands(surface, { doing, word: (index) => row.words[index]!, title: () => title.focus() }),
+                selectMatching: () => matching.start(),
     };
     // the command palette: the menus' lines and what fits where the cursor is, from the bottom left corner or a slash on an empty line (palette.ts)
     const palette = createPalette(surface, { menus: () => row.headings(), table: tableTools.lines, picture: pictureTools.lines, pickImage: bar.pickImage, corner: host });

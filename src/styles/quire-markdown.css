@@ -181,6 +181,15 @@
     line-height: calc(var(--line) * 0.8);
 }
 
+/* a subtitle (a .quire document's alone): larger than the text and quieter, as Docs draws one under its
+   title, and so as the first paragraph too, which is otherwise the size of the rest */
+.prose .quire-subtitle,
+.prose.quire > p.quire-subtitle:first-child {
+    color: var(--muted);
+    font-size: 1.35em;
+    line-height: 1.3;
+}
+
 /* a spoiler (`||hidden||`): on the site it is covered until pressed; here it is a dim band with a
    dotted edge whose words show faintly, so it can be written in, and plainly while the cursor is in it */
 .quire-spoiler {

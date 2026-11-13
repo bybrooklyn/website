@@ -121,6 +121,8 @@ export interface Paragraph extends Kept {
     spacing?: number;
     /** Small, quiet text, written `-# text` as Discord has it. */
     subtext?: boolean;
+    /** A subtitle, larger than the text and quieter. Markdown has none, so only a `.quire` document keeps it, in its style.json. */
+    subtitle?: boolean;
 }
 
 /** A heading, `#` to `######`. */
@@ -488,6 +490,7 @@ export function markdownOnly(blocks: Block[]): Block[] {
             case "heading": {
                 const { spacing: _spacing, ...rest } = block;
                 const next = { ...rest, runs: plain(block.runs) };
+                if (next.kind === "paragraph") delete next.subtitle;
                 if (next.align === "justify") delete next.align;
                 return next;
             }
@@ -905,6 +908,22 @@ export function toggleMark(doc: Document, range: Range, mark: Mark, force?: bool
     return doc;
 }
 
+/** Changes the characters of the text in a range, piece by piece, keeping every mark, link, look and note on them. `change` is given each piece's text, where it starts in its block's text, and the part of that block the range covers. */
+export function changeText(doc: Document, range: Range, change: (text: string, at: number, part: { path: number[]; from: number; to: number }) => string): Document {
+    for (const part of covered(doc, range)) {
+        if (!runsAt(doc, part.path) || part.to <= part.from) continue;
+        let at = part.from;
+        doc = editRuns(doc, part.path, (runs) =>
+            mapRuns(runs, part.from, part.to, (piece) => {
+                const from = at;
+                at += leafLength(piece.leaf);
+                return piece.leaf.kind === "text" ? { ...piece, leaf: { ...piece.leaf, text: change(piece.leaf.text, from, part) } } : piece;
+            }),
+        );
+    }
+    return doc;
+}
+
 /** Sets or clears (with null) the color, size, font or highlight of the text in a range. Values cannot hold quotes or semicolons. */
 export function setStyle(doc: Document, range: Range, style: { [key in keyof Look]?: string | null }): Document {
     for (const part of covered(doc, range)) {
@@ -1210,6 +1229,15 @@ export function setSubtext(doc: Document, path: number[], on: boolean): Document
     });
 }
 
+/** Makes the paragraph at a path a subtitle (no longer subtext), or ordinary text again. Only a `.quire` document keeps it. */
+export function setSubtitle(doc: Document, path: number[], on: boolean): Document {
+    return replace(doc, path, (block) => {
+        if (block.kind !== "paragraph" || !!block.subtitle === on) return null;
+        const { subtitle: _subtitle, subtext: _subtext, ...rest } = block;
+        return [on ? { ...rest, subtitle: true, source: undefined } : { ...rest, source: undefined }];
+    });
+}
+
 /** Puts the block at a path and every block after it among its neighbours into one quote, as Discord's `>>> ` does. */
 export function quoteRest(doc: Document, path: number[]): Document {
     return edit(doc, path, (blocks, index, sep) => {
@@ -1224,6 +1252,41 @@ export function quoteRest(doc: Document, path: number[]): Document {
 /** Sets the number a numbered list at a path starts from. */
 export function setListStart(doc: Document, path: number[], start: number): Document {
     return replace(doc, path, (block) => (block.kind === "list" ? [{ ...block, start, source: undefined }] : null));
+}
+
+/** The list a path is in, and which of its items: the deepest list on the path. */
+export function listAt(doc: Document, path: number[]): { list: number[]; item: number } | undefined {
+    return itemOf(doc, path);
+}
+
+/** Sets the sign a bulleted list is written with. All three read as the same bullet. */
+export function setListMarker(doc: Document, path: number[], marker: List["marker"]): Document {
+    return replace(doc, path, (block) => (block.kind === "list" && block.marker !== marker ? [{ ...block, marker, source: undefined }] : null));
+}
+
+/** Numbers the list at a path afresh from item `item`, starting at `start`, each of those items written with its new number: at its first item the list's own start changes; further down, the list is cut in two there. */
+export function restartList(doc: Document, path: number[], item: number, start: number): Document {
+    return replace(doc, path, (block, sep) => {
+        if (block.kind !== "list" || item >= block.items.length) return null;
+        const after: List = { ...block, items: block.items.slice(Math.max(0, item)).map((each) => ({ ...each, source: undefined })), start, source: undefined, gap: block.gap };
+        if (item <= 0) return [after];
+        const before = block.items.slice(0, item);
+        return [{ ...block, items: [...before.slice(0, -1), { ...before[before.length - 1]!, gap: "" }], source: undefined, gap: sep }, after];
+    });
+}
+
+/** Joins the list at a path onto the list just before it, when both are numbered or both are not, so that the two are one list of the first one's kind. */
+export function joinLists(doc: Document, path: number[]): Document {
+    return edit(doc, path, (blocks, index) => {
+        const before = blocks[index - 1];
+        const block = blocks[index];
+        if (before?.kind !== "list" || block?.kind !== "list" || before.style === "definition" || block.style === "definition" || (before.style === "number") !== (block.style === "number")) return blocks;
+        const last = { ...before.items[before.items.length - 1]!, gap: before.loose ? doc.eol + doc.eol : doc.eol };
+        // the items joined are written with their new numbers, and take the boxes of the list they join or lose theirs
+        const boxed = (each: ListItem): ListItem => (before.style === "task" ? { ...each, checked: each.checked ?? false } : before.style === block.style ? each : (({ checked: _checked, ...rest }) => rest)(each));
+        const items = [...before.items.slice(0, -1), last, ...block.items.map((each) => ({ ...boxed(each), source: undefined }))];
+        return spliceBlocks(blocks, index - 1, 2, [{ ...before, items, source: undefined, gap: block.gap }]);
+    });
 }
 
 /** Ticks or unticks a task item. An item with no box gains an empty one. */
@@ -1291,6 +1354,27 @@ export function addColumn(doc: Document, path: number[], at: number): Document {
 export function removeColumn(doc: Document, path: number[], column: number): Document {
     const drop = <T>(list: T[]) => list.filter((_, k) => k !== column);
     return editTable(doc, path, (found) => (found.header.length <= 1 || column >= found.header.length ? null : { ...found, header: drop(found.header), align: drop(found.align), rows: found.rows.map(drop) }));
+}
+
+/** The order of a table's body rows sorted by a column, as their old numbers: by value when every cell in it with words is a number, as words otherwise, empty cells last. The heading row is not a body row. */
+export function sortedRows(table: Table, column: number, descending = false): number[] {
+    const words = table.rows.map((row) => runsText(row[column] ?? []).trim());
+    const number = (text: string) => (/^[-+]?(\d{1,3}(,\d{3})+|\d*)(\.\d+)?%?$/.test(text) && /\d/.test(text) ? parseFloat(text.replace(/[,%]/g, "")) : NaN);
+    const numeric = words.some((text) => text !== "") && words.every((text) => text === "" || !Number.isNaN(number(text)));
+    const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+    return words
+        .map((_, index) => index)
+        .sort((a, b) => {
+            const [x, y] = [words[a]!, words[b]!];
+            if (x === "" || y === "") return Number(x === "") - Number(y === "");
+            const by = numeric ? number(x) - number(y) : collator.compare(x, y);
+            return descending ? -by : by;
+        });
+}
+
+/** Puts a table's body rows in the order given, as their old numbers. */
+export function orderRows(doc: Document, path: number[], order: number[]): Document {
+    return editTable(doc, path, (found) => (order.length !== found.rows.length || order.every((each, index) => each === index) ? null : { ...found, rows: order.map((index) => found.rows[index]!) }));
 }
 
 /** Sets a column's alignment; null is no alignment. */

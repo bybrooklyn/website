@@ -52,7 +52,8 @@ export type Command =
     | "color" | "size" | "font" | "highlight" | "spacing" | "left" | "center" | "right" | "justify" | "indent" | "outdent" | "bigger" | "smaller" | "clear"
     | "check" | "about" | "wordCount" | "shortcuts" | "searchMenus" | "forgetUsed"
     | "superscript" | "subscript" | "marked" | "typedSigns"
-    | "downloadAs" | "notes" | "nextNote" | "previousNote" | "comment" | "date" | "symbols" | "contents" | "updateContents";
+    | "downloadAs" | "notes" | "nextNote" | "previousNote" | "comment" | "date" | "symbols" | "contents" | "updateContents"
+    | "capitals" | "lists" | "title" | "subtitle" | "selectMatching" | "bookmark";
 
 /** The menus of the row, for a document as it stands. A line's shortcut, if it has one, comes from the table in shortcuts.ts. */
 export function headings(state: RowState, act: RowActions): Heading[] {
@@ -81,6 +82,7 @@ export function headings(state: RowState, act: RowActions): Heading[] {
                 ...line("undo", "Undo", { icon: "undo" }),
                 ...line("redo", "Redo", { icon: "redo" }),
                 ...line("selectAll", "Select all"),
+                ...line("selectMatching", "Select all matching text"),
                 ...line("pastePlain", "Paste without formatting"),
                 ...line("find", "Find", { icon: "search" }),
                 ...line("replace", "Find and replace"),
@@ -128,6 +130,7 @@ export function headings(state: RowState, act: RowActions): Heading[] {
                 ...line("number", "Numbered list", { icon: "number" }),
                 ...line("task", "Checklist", { icon: "task" }),
                 ...line("link", "Link", { icon: "link" }),
+                ...line("bookmark", "Bookmark"),
             ],
         },
         {
@@ -142,7 +145,10 @@ export function headings(state: RowState, act: RowActions): Heading[] {
                 ...line("spoiler", "Spoiler"),
                 ...line("superscript", "Superscript"),
                 ...line("subscript", "Subscript"),
+                ...line("capitals", "Capitalisation", { hint: "›" }),
                 ...line("paragraph", "Normal text"),
+                ...line("title", "Title"),
+                ...(state.rich ? line("subtitle", "Subtitle") : []),
                 ...line("heading1", "Heading 1"),
                 ...line("heading2", "Heading 2"),
                 ...line("heading3", "Heading 3"),
@@ -163,6 +169,7 @@ export function headings(state: RowState, act: RowActions): Heading[] {
                 ...(state.rich ? line("justify", "Justify", { icon: "justify", pressed: state.align === "justify" }) : []),
                 ...line("indent", "Indent more", { icon: "indent" }),
                 ...line("outdent", "Indent less", { icon: "outdent" }),
+                ...line("lists", "Bullets and numbering", { icon: "bullet", hint: "›" }),
                 ...line("clear", "Clear formatting", { icon: "clear" }),
             ],
         },

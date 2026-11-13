@@ -5,6 +5,7 @@
 // edit; what is not understood becomes a raw block, kept as its text.
 
 import { asPicture } from "./pictures";
+import { BOOKMARK } from "./bookmarks";
 import { tidyRuns, type Align, type Block, type Document, type Leaf, type Level, type ListItem, type ListStyle, type Mark, type Paragraph, type Run, type TextRun } from "./document";
 import { addresses, shortcodeAt } from "./emoji";
 
@@ -1096,6 +1097,13 @@ function inline(text: string, context: Context): Run[] {
                 const href = auto[1]!.includes(":") ? auto[1]! : `mailto:${auto[1]}`;
                 push({ kind: "link", href, runs: [textRun(auto[1]!)] });
                 index += auto[0].length;
+                continue;
+            }
+            // an empty anchor is a bookmark (bookmarks.ts), one thing in the text rather than two tags
+            const anchor = BOOKMARK.exec(rest);
+            if (anchor) {
+                push({ kind: "html", html: anchor[0] });
+                index += anchor[0].length;
                 continue;
             }
             const style = STYLE.exec(rest);

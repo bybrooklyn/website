@@ -1,7 +1,7 @@
 # What Google Docs' menus have that mdQuire does not (13 Nov 2026)
 
 Marks: **S** makes sense for a Markdown editor and is small; **B** makes sense and is big; **X** does not fit.
-Nothing here is built. Things mdQuire already has are left out.
+Things mdQuire already had are left out; lines marked done were built after this list was made.
 
 ## File
 - New document, Open (as menu lines; the shelf does it now) : S
@@ -16,7 +16,7 @@ Nothing here is built. Things mdQuire already has are left out.
 ## Edit
 - Cut, Copy, Paste as menu lines (keys work) : S
 - Delete : S
-- Select all matching text : S
+- Select all matching text : done
 - Paste from the clipboard history, Web clipboard : X
 
 ## View
@@ -36,17 +36,17 @@ Nothing here is built. Things mdQuire already has are left out.
 - Equation (an inline equation; inline maths was taken out for `$`) : S as a menu line that inserts a maths block, done; inline maths : B and collides with `$`
 - Watermark : X
 - Headers and footers, page numbers for Markdown files : X (a .quire document has them)
-- Bookmark (a link to a place in the document) : S
+- Bookmark (a link to a place in the document) : done
 - Break: section break, column break : X (Markdown has no sections or columns)
 
 ## Format
-- Text: superscript, subscript, size, capitalisation (lower, UPPER, Title Case) : capitalisation S
-- Paragraph styles: Title, Subtitle as styles; "Update Normal text to match"; save as default styles : S for Title/Subtitle, B for named styles
+- Text: superscript, subscript, size, capitalisation (lower, UPPER, Title Case) : capitalisation done
+- Paragraph styles: Title, Subtitle as styles; "Update Normal text to match"; save as default styles : Title and Subtitle done; B for named styles
 - Align and indent: indentation options (first line, hanging) : X in Markdown, S for .quire
 - Line and paragraph spacing: space before and after : S for .quire
 - Columns : X
-- Bullets and numbering: choose the marks (arrows, dashes, letters), restart numbering, continue previous list : S (restart and continue map to Markdown's start numbers)
-- Table: table properties (borders, cell colour), merge cells, sort : sort S; merge and colours X in Markdown
+- Bullets and numbering: choose the marks (arrows, dashes, letters), restart numbering, continue previous list : done (the three bullet signs; restart and continue map to start numbers)
+- Table: table properties (borders, cell colour), merge cells, sort : sort done; merge and colours X in Markdown
 - Image: crop, alt text (we have alt), image options, replace image : crop S for .quire, replace S
 - Borders and lines, shading : X
 - Clear formatting : done

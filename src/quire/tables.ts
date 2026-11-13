@@ -1,8 +1,9 @@
 // A table's own controls: while the cursor is in a table, a small strip grows at the table's top
-// edge to add and remove a row or a column and to set the column's alignment. Tab moves between
+// edge to add and remove a row or a column, to set the column's alignment and to sort the rows by
+// the column (numbers by value when the column holds only numbers). Tab moves between
 // cells (keys.ts). What each control does, cursor and all, is pure and tested; the strip is DOM.
 
-import { addColumn, addRow, blockAt, removeColumn, removeRow, setColumnAlign, type Align, type Document, type Table } from "./document";
+import { addColumn, addRow, blockAt, orderRows, removeColumn, removeRow, setColumnAlign, sortedRows, type Align, type Document, type Table } from "./document";
 import type { State } from "./history";
 import { caret, tableOf } from "./keys";
 import type { Surface } from "./surface";
@@ -56,6 +57,16 @@ export function alignHere(align: Align): (state: State) => State {
     return (state) => within(state, ({ path, table, column }) => ({ ...state, doc: setColumnAlign(state.doc, path, column, table.align[column] === align ? null : align) }));
 }
 
+/** Sorts the table's body rows by the cursor's column, A to Z or (descending) Z to A, the cursor going with its row. */
+export function sortHere(descending: boolean): (state: State) => State {
+    return (state) =>
+        within(state, ({ path, table, row, column }) => {
+            const order = sortedRows(table, column, descending);
+            const doc = orderRows(state.doc, path, order);
+            return { doc, selection: row === 0 ? state.selection : caret([...path, order.indexOf(row - 1) + 1, column], state.selection.focus.offset) };
+        });
+}
+
 /**
  * Builds the table controls for a surface. `top` is how far down the window the editor's own top
  * reaches: the controls stay under it, never drawn over the tools there.
@@ -88,6 +99,10 @@ export function createTableTools(surface: Surface, top: () => number = () => 0):
         aligns.set(align, button);
         tools.append(button);
     }
+    // the two sorts go together, onto a line of their own where the window is too narrow for the strip
+    const sorts = make("span", "quire-table-sorts");
+    sorts.append(make("span", "quire-select-rule"), control("Sort the rows by this column, A to Z", "A→Z", doing(sortHere(false)), "quire-button quire-sort"), control("Sort the rows by this column, Z to A", "Z→A", doing(sortHere(true)), "quire-button quire-sort"));
+    tools.append(sorts);
 
     let shownFor: HTMLElement | undefined;
     const place = () => {

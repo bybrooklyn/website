@@ -552,6 +552,19 @@
     font-size: 0.85em;
 }
 
+/* a bookmark, `<a id>`: a small flag in the text, never printed */
+.quire-bookmark {
+    margin-inline: 0.1em;
+    font-size: 0.75em;
+    vertical-align: 0.3em;
+}
+
+@media print {
+    .quire-bookmark {
+        display: none;
+    }
+}
+
 .quire-footnote {
     display: flex;
     gap: 0.5rem;
@@ -1110,6 +1123,19 @@
     color: var(--accent);
 }
 
+/* the document's headings and bookmarks under the link field, to link to by name */
+.quire-link-places {
+    max-height: 14rem;
+    margin-top: 0.35rem;
+    overflow-y: auto;
+}
+
+.quire-link-places-head {
+    margin: 0.2rem 0.45rem;
+    color: var(--muted);
+    font-size: 0.8rem;
+}
+
 /* ---- the selection bar ----
    It grows out of the top edge of the selected text (or the bottom edge when it sits below),
    a little past its size and back, and shrinks away plainly when the selection goes. */
@@ -1237,6 +1263,11 @@
     background-color: color-mix(in oklch, var(--accent) 28%, transparent);
 }
 
+/* every place selected by Select all matching text, drawn as the selection is */
+::highlight(quire-matching) {
+    background-color: color-mix(in oklch, var(--accent), transparent 72%);
+}
+
 ::highlight(quire-found-now) {
     background-color: var(--accent);
     color: var(--ground);
@@ -1272,6 +1303,12 @@
     /* under the editor's top (40), so that scrolled up with the table it goes beneath the tools there, never over them */
     z-index: 39;
     display: flex;
+    /* on a phone the strip is wider than the window, and its sorting goes onto a second line */
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    box-sizing: border-box;
+    width: max-content;
+    max-width: calc(100vw - 1rem);
     align-items: center;
     padding: 0.15rem;
     border: 0.0625rem solid var(--rule);
@@ -1321,6 +1358,16 @@
     margin-left: -0.1rem;
     font-size: 0.8rem;
     font-weight: 700;
+}
+
+/* sorting is said in letters, A→Z, a little smaller than the text */
+.quire-table-sorts {
+    display: flex;
+    align-items: center;
+}
+
+.quire-table-tools .quire-sort {
+    font-size: 0.8rem;
 }
 
 /* the cell the cursor is in, so that the controls' row and column are plain */
