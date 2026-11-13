@@ -35,7 +35,7 @@ test("scripts, styles, handlers, unsafe addresses and embedded pictures are drop
 
 test("a copy from a word processor, wrapped in a bold that is not bold, keeps only the real marks", () => {
     const html = '<meta charset="utf-8"><b style="font-weight:normal;" id="docs-internal-guid-1"><p dir="ltr"><span style="font-weight:700;">Bold</span><span style="font-weight:400;"> and </span><span style="font-style:italic;">italic</span><span>&nbsp;&amp; more</span></p></b>';
-    expect(markdown(readHtml(html))).toBe("**Bold** and *italic*\u00a0& more\n");
+    expect(markdown(readHtml(html))).toBe("**Bold** and *italic*&nbsp;& more\n");
 });
 
 test("only the fragment between the clipboard's markers is read, and loose text becomes a paragraph", () => {
