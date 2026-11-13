@@ -75,7 +75,17 @@ test("a new file outside src/ and public/ stops publishing before anything is co
     await rm(join(copy, "password.txt"));
 });
 
-test("only src/ and public/ are committed, then the site is deployed", async () => {
+test("publishing is refused on any branch but main", async () => {
+    await git("switch", "-q", "-c", "elsewhere");
+    const result = await publish();
+    expect(result.ok).toBe(false);
+    expect(result.log).toContain("main");
+    expect(result.log).toContain("elsewhere");
+    expect(await called()).toBe("");
+    await git("switch", "-q", "main");
+});
+
+test("only src/ and public/ are committed; the site is built again after the commit, then deployed to main", async () => {
     await Bun.write(join(copy, "src/content/blog/kitchen-sink.mdx"), `${await Bun.file(join(copy, "src/content/blog/kitchen-sink.mdx")).text()}\nA new line.\n`);
     await Bun.write(join(copy, "src/assets/posts/new-picture.png"), "png");
     await Bun.write(join(copy, "package.json"), `${await Bun.file(join(copy, "package.json")).text()}\n`);
@@ -87,5 +97,14 @@ test("only src/ and public/ are committed, then the site is deployed", async () 
     // what is not the editor's is left as it was, not committed
     expect(await git("status", "--porcelain")).toBe("M package.json");
     expect(await git("rev-parse", "origin/main")).toBe(await git("rev-parse", "HEAD"));
-    expect((await called()).trim().split("\n")).toEqual(["bunx wrangler pages deploy --branch main"]);
+    expect((await called()).trim().split("\n")).toEqual(["bun run build", "bunx wrangler pages deploy --branch main"]);
+});
+
+test("a file that changes while the site is built stops the deploy", async () => {
+    await Bun.write(calls, "");
+    await Bun.write(join(scratch, "save-during-build"), "");
+    const result = await publish();
+    expect(result.ok).toBe(false);
+    expect(result.log).toContain("src/content/blog/kitchen-sink.mdx");
+    expect((await called()).trim().split("\n")).toEqual(["bun run build"]);
 });

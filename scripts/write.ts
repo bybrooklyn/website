@@ -184,6 +184,9 @@ async function plan(path: string) {
 
 /** Why publishing must not go ahead from here, or undefined if it may. */
 async function refusal(): Promise<string | undefined> {
+    const branch = (await $`git branch --show-current`.cwd(root).nothrow().quiet()).text().trim();
+    // Publishing deploys to production, which is main; from any other branch the live site would show what main does not have.
+    if (branch !== "main") return `Publishing goes from main only, and this checkout is on ${branch ? `the branch ${branch}` : "no branch"}. Switch to main first.`;
     // Only what is in src/ and public/ is committed, so a file anywhere else would be built without being kept.
     const strays = (await $`git status --porcelain --untracked-files=all`.cwd(root).text())
         .split("\n")
@@ -212,6 +215,10 @@ async function publish(message: string): Promise<{ ok: boolean; log: string }> {
             await run("git commit", $`git commit -m ${text}`);
             await run("git push", $`git push`);
         }
+        // Built again now, from what was just committed: the build from the plan may be older than the last save.
+        await run("bun run build", $`bun run build`);
+        const after = (await $`git status --porcelain -- src public`.cwd(root).text()).trim();
+        if (after) throw new Error(`${log.join("\n")}\n\nThese files changed while publishing, so the build is not what was committed:\n${after}\nOpen Publish again.`);
         // Named, so that it goes to production whatever git says the branch is.
         await run("wrangler pages deploy", $`bunx wrangler pages deploy --branch main`);
         return { ok: true, log: `${log.join("\n")}\n\nDeployed.` };
