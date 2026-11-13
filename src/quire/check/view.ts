@@ -13,15 +13,10 @@ import { control, flowMenu, make } from "../ui";
 import { createChecker, KINDS, ruleOn, type Context, type Finding, type Fix, type Job, type Rule, type Unit } from "./engine";
 import { loadDictionary, type Dictionary } from "./dictionary";
 import { byKind, findingAt, findingKey, KIND_NAMES, loadIgnored, loadOwn, loadPrefs, nextFinding, saveIgnored, saveOwn, savePrefs, shownFindings, type Ignored } from "./findings";
-import { LINKS } from "./links";
-import { MARKDOWN } from "./markdown";
 import type { CheckingHost } from "./mount";
-import { PROSE, readability } from "./prose";
-import { createSpeller, SPELLING } from "./spelling";
-import { WRITING } from "./writing";
-
-/** Every rule, in the order the settings list them. */
-export const RULES: Rule[] = [...SPELLING, ...MARKDOWN, ...LINKS, ...WRITING, ...PROSE];
+import { readability } from "./prose";
+import { RULES } from "./rules";
+import { createSpeller } from "./spelling";
 
 /** Most findings of one kind the list draws; the rest are counted. */
 const LISTED = 150;
@@ -49,6 +44,8 @@ export function createChecking(host: CheckingHost & { keep: CheckingHost["keep"]
     let units: Unit[] = [];
     let checked: unknown;
     const spellcheckWas = surface.element.spellcheck;
+    // under ?debug a rule that throws says so in the console; otherwise it is quietly left out
+    const debug = typeof location !== "undefined" && new URLSearchParams(location.search).has("debug");
 
     // ---- where links lead: asked of the store in the background, and remembered ----
     const answers = new Map<string, boolean | undefined>();
@@ -72,6 +69,7 @@ export function createChecking(host: CheckingHost & { keep: CheckingHost["keep"]
         settings: prefs.settings,
         speller: dictionary && prefs.settings.kinds.spelling ? createSpeller(dictionary, prefs.settings.dialect, own, new Set(ignored.words)) : undefined,
         exists: host.where().store?.exists ? exists : undefined,
+        failed: debug ? (id, error) => console.warn(`Checking: the rule ${id} failed and reported nothing.`, error) : undefined,
     });
 
     // ---- the count, at the end of the bar ----

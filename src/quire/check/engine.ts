@@ -102,6 +102,8 @@ export interface Context {
     speller?: Speller;
     /** Whether an address in a link or picture leads somewhere: true, false, or undefined when it is not known (yet). */
     exists?: (address: string) => boolean | undefined;
+    /** Told when a rule throws: that rule reports nothing for the unit or document, and the others still run. */
+    failed?: (rule: string, error: unknown) => void;
 }
 
 /** A rule. It has a `unit` part, a `document` part, or both. */
@@ -176,10 +178,20 @@ interface Kept {
     hits: { rule: Rule; hit: Hit }[];
 }
 
+/** What a rule gives back, or nothing if it throws: one rule that breaks never stops the others. */
+function guarded<T>(rule: Rule, context: Context, run: () => T[]): T[] {
+    try {
+        return run();
+    } catch (error) {
+        context.failed?.(rule.id, error);
+        return [];
+    }
+}
+
 function checkUnit(place: Place, rules: Rule[], context: Context, hash: string): Kept {
     const unit = makeUnit(place);
     const hits: Kept["hits"] = [];
-    for (const rule of rules) if (rule.unit) for (const hit of rule.unit(unit, context)) hits.push({ rule, hit });
+    for (const rule of rules) if (rule.unit) for (const hit of guarded(rule, context, () => rule.unit!(unit, context))) hits.push({ rule, hit });
     return { unit, hash, hits };
 }
 
@@ -250,7 +262,7 @@ export function createChecker(rules: Rule[]) {
                     units = kept.map((entry) => entry.unit);
                     const findings: Finding[] = [];
                     for (const entry of kept) for (const { rule, hit } of entry.hits) findings.push(found(rule, entry.unit.path, hit));
-                    for (const rule of live) if (rule.document) findings.push(...rule.document(doc, units, context));
+                    for (const rule of live) if (rule.document) findings.push(...guarded(rule, context, () => rule.document!(doc, units, context)));
                     return inOrder(findings);
                 },
             };
