@@ -177,7 +177,8 @@ function report(speed: number): void {
         practised.shown = practised.seconds;
         const state = list(engine, engine.practice_state());
         const running = list64(engine, engine.practice_running());
-        progress.policy = { weights: state.slice(0, (state.length - 2) / 3), running };
+        // the weights come first, then Adam's two lists as long, then four numbers (walker/src/generalist/ppo.rs, `KEPT_AFTER`)
+        progress.policy = { weights: state.slice(0, (state.length - 4) / 3), running };
         moved.push(progress.policy.weights.buffer);
         if (practised.seconds - practised.kept >= KEEP_EVERY) {
             practised.kept = practised.seconds;

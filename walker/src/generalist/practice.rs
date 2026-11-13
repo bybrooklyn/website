@@ -464,6 +464,7 @@ impl Practice {
     pub fn update(&mut self) {
         self.ramp();
         self.learner.update(&mut self.worlds);
+        self.learner.practised = self.worlds.steps;
         let Some(curriculum) = self.curriculum else { return };
         let (ended, reached) = self.worlds.tally;
         if ended >= curriculum.runs {
@@ -472,6 +473,17 @@ impl Practice {
             }
             self.worlds.tally = (0, 0);
         }
+    }
+
+    /// Takes back a learner kept with `Learner::state` and `running`, and the steps it had practised,
+    /// so its costs go on from where they were rather than coming in again from nothing. False, and
+    /// nothing changed, if it does not fit.
+    pub fn load(&mut self, state: &[f32], running: &[f64]) -> bool {
+        if !self.learner.load(state, running) {
+            return false;
+        }
+        self.worlds.steps = self.learner.practised;
+        true
     }
 
     /// How far the policy gets through each of these worlds, acting without drawing.

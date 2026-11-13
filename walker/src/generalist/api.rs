@@ -311,6 +311,7 @@ pub extern "C" fn practice_local() -> *const f64 {
     practice.learner.collect(&mut practice.worlds);
     practice.learner.epochs();
     practice.learner.updated();
+    practice.learner.practised = practice.worlds.steps;
     page.running_out = practice.learner.rollout_sensed.numbers();
     page.running_out.extend(practice.learner.rollout_returned.numbers());
     give64(&page.running_out)
@@ -421,7 +422,7 @@ pub extern "C" fn practice_running() -> *const f64 {
 pub extern "C" fn state_room(weights: u32) -> *mut f32 {
     let Some(page) = page() else { return core::ptr::null_mut() };
     let (state, _) = page.rooms();
-    let length = if weights != 0 { (state - 2) / 3 } else { state };
+    let length = if weights != 0 { (state - super::ppo::KEPT_AFTER) / 3 } else { state };
     page.state_room.clear();
     page.state_room.resize(length, 0.0);
     *LENGTH.get() = length;
@@ -445,7 +446,7 @@ pub extern "C" fn running_room() -> *mut f64 {
 pub extern "C" fn practice_load() -> u32 {
     let Some(page) = page() else { return 0 };
     let (state, running) = (core::mem::take(&mut page.state_room), core::mem::take(&mut page.running_room));
-    let taken = page.practice.as_mut().is_some_and(|practice| practice.learner.load(&state, &running));
+    let taken = page.practice.as_mut().is_some_and(|practice| practice.load(&state, &running));
     (page.state_room, page.running_room) = (state, running);
     u32::from(taken)
 }
