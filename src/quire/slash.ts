@@ -5,7 +5,7 @@
 //
 // The items, how typing narrows them and what choosing does are pure and tested; the rest is DOM.
 
-import { addDivider, addTable, setStyleOf, toggleList, type Action } from "./bar";
+import { addDivider, addTable, setStyleOf, toggleList, toggleSubtext, type Action } from "./bar";
 import { importFor, TEMPLATES } from "./components";
 import { blockAt, changeKind, deleteText, insertBlock, insertText, makeBox, moveBlock, paragraph, removeBlock, runsText, setRaw, textAt, type Details, type Document } from "./document";
 import type { State } from "./history";
@@ -24,7 +24,7 @@ export interface SlashItem {
 }
 
 /** Makes the cursor's block a box: a callout or a folding section, the cursor staying in it. */
-const boxOf =
+export const boxOf =
     (box: { callout: string } | { details: Details }): Action =>
     (state) => {
         const path = state.selection.focus.path;
@@ -33,7 +33,7 @@ const boxOf =
     };
 
 /** Makes the cursor's empty line the term of a new definition list, with a definition under it to write. */
-const definitionList: Action = (state) => {
+export const definitionList: Action = (state) => {
     const path = state.selection.focus.path;
     let doc = changeKind(state.doc, path, { kind: "list", style: "definition" });
     const term = sameLeaf(state.doc, path, doc);
@@ -42,7 +42,7 @@ const definitionList: Action = (state) => {
 };
 
 /** Makes the cursor's line a block of maths or a diagram, a diagram with a small flowchart to start from. */
-const drawnBlock =
+export const drawnBlock =
     (language: "math" | "mermaid"): Action =>
     (state) => {
         const path = state.selection.focus.path;
@@ -103,6 +103,7 @@ export const SLASH_ITEMS: SlashItem[] = [
     { key: "callout", label: "Callout", icon: "quote", words: ["note", "tip", "warning", "important", "caution", "admonition", "alert"], action: boxOf({ callout: "NOTE" }) },
     { key: "details", label: "Folding section", icon: "chevron", words: ["details", "collapse", "collapsible", "toggle", "summary", "hide"], action: boxOf({ details: { summary: "", open: false } }) },
     { key: "definitions", label: "Definition list", icon: "indent", words: ["terms", "glossary", "dl"], action: definitionList },
+    { key: "subtext", label: "Subtext", icon: "heading", words: ["small", "quiet", "caption", "-#", "fine print"], action: toggleSubtext },
     { key: "maths", label: "Maths", icon: "plus", words: ["math", "equation", "formula", "latex", "tex"], action: drawnBlock("math") },
     { key: "diagram", label: "Diagram", icon: "row", words: ["mermaid", "flowchart", "chart", "graph"], action: drawnBlock("mermaid") },
     { key: "figure", label: "Figure", icon: "image", words: ["component", "caption", "video"], action: component("Figure"), mdx: true },

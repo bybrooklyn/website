@@ -71,9 +71,13 @@ fn nearest(x: f64) -> i64 {
 
 /// The sine and cosine of an angle together. The angle is brought within a quarter turn of zero and
 /// two short polynomials do the rest; they are the ones the C library musl uses, good to the last bit
-/// of an f32.
+/// of an f32. An angle that is not a finite number has no sine or cosine: both are NaN, as the
+/// standard library gives.
 #[allow(clippy::excessive_precision)]
 pub fn sin_cos(angle: f32) -> (f32, f32) {
+    if !angle.is_finite() {
+        return (f32::NAN, f32::NAN);
+    }
     let x = angle as f64;
     let quarter = nearest(x * (2.0 / core::f64::consts::PI));
     let r = x - quarter as f64 * core::f64::consts::FRAC_PI_2;
@@ -208,6 +212,10 @@ fn exp64(x: f64) -> f64 {
 pub fn ln(x: f32) -> f32 {
     if x <= 0.0 {
         return f32::NEG_INFINITY;
+    }
+    // the power of two of infinity or NaN would be read as an ordinary one, about 2^1024
+    if x.is_nan() || x == f32::INFINITY {
+        return x;
     }
     let x = x as f64;
     let bits = x.to_bits();
@@ -482,6 +490,17 @@ mod tests {
         assert!((atan2(-1.0, -1.0) + 3.0 * PI / 4.0).abs() < 1e-6);
     }
 
+    #[test]
+    fn what_is_not_a_finite_number_has_no_sine_and_its_logarithm_is_itself() {
+        for angle in [f32::INFINITY, f32::NEG_INFINITY, f32::NAN] {
+            let (s, c) = sin_cos(angle);
+            assert!(s.is_nan() && c.is_nan(), "sin_cos({angle}) = ({s}, {c})");
+        }
+        assert_eq!(ln(f32::INFINITY), f32::INFINITY);
+        assert!(ln(f32::NAN).is_nan());
+        assert_eq!(ln(f32::MAX), f32::MAX.ln());
+    }
+
     /// Runs a check over every f32 bit pattern from `low` to `high`, on every core, and returns the
     /// ones it failed for (at most a few).
     fn every_f32(low: u32, high: u32, same: impl Fn(f32) -> bool + Sync) -> Vec<u32> {
@@ -502,17 +521,20 @@ mod tests {
         })
     }
 
-    // These take a minute or so each, on every core: `cargo test --release -- --ignored every`.
+    // These take half a minute or so each, on every core: `cargo test -- --ignored every`. They are
+    // what holds the two builds to the same numbers (the square root by Newton's way, which the build
+    // without SIMD uses, equals the processor's for every f32) and the quick tanh, angle and wrap to
+    // the exact ones, so run them whenever this file changes.
 
     #[test]
-    #[ignore]
+    #[ignore = "slow: tries every f32 (cargo test -- --ignored every)"]
     fn every_positive_f32_has_the_same_square_root_from_newton_and_from_the_processor() {
         let wrong = every_f32(1, 0x7f80_0000, |x| (sqrt64(x as f64) as f32).to_bits() == ((x as f64).sqrt() as f32).to_bits());
         assert!(wrong.is_empty(), "differs for {wrong:x?}");
     }
 
     #[test]
-    #[ignore]
+    #[ignore = "slow: tries every f32 (cargo test -- --ignored every)"]
     fn every_f32_has_the_same_tanh_the_quick_way_as_the_exact_way() {
         let wrong = every_f32(0, u32::MAX, |x| x.is_nan() || tanh(x).to_bits() == tanh_exact(x).to_bits());
         assert!(wrong.is_empty(), "differs for {wrong:x?}");
@@ -521,7 +543,7 @@ mod tests {
     /// The square root is the only part of the quick angle that differs from the exact one, and it
     /// differs only for a double, which cannot all be tried, so this tries many angles of each size.
     #[test]
-    #[ignore]
+    #[ignore = "slow: tries every f32 (cargo test -- --ignored every)"]
     fn every_size_of_angle_comes_out_the_same_the_quick_way_as_the_exact_way() {
         let wrong = every_f32(0, 0x7f80_0000, |y| {
             [1.0f32, -1.0, 0.37, -2.9, 1e-3, 7e5].iter().all(|&x| atan2(y, x).to_bits() == atan2_exact(y, x).to_bits() && atan2(-y, x).to_bits() == atan2_exact(-y, x).to_bits())
@@ -530,7 +552,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
+    #[ignore = "slow: tries every f32 (cargo test -- --ignored every)"]
     fn every_f32_is_wrapped_the_same_with_the_short_cut_as_the_long_way() {
         let long = |angle: f32| {
             let turns = nearest(angle as f64 / (2.0 * core::f64::consts::PI));

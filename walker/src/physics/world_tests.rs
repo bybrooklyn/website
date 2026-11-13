@@ -1,7 +1,8 @@
 //! What the physics added for the generalist's world is held to: static blocks are solid on every
 //! side, boxes stacked on them stand still, a body that moves by itself carries what rests on it
 //! without sliding, bodies can be taken out without disturbing the rest, and blocks left behind can
-//! be dropped without changing anything still going on. Run with `cargo test` in `walker/`.
+//! be dropped without changing anything still going on; and where a fast body can pass through a
+//! block, a known limit kept as it is. Run with `cargo test` in `walker/`.
 
 use super::shape::Shape;
 use super::*;
@@ -160,4 +161,57 @@ fn blocks_left_behind_are_dropped_without_changing_what_rests_on_the_others() {
     run(&mut with, 2.0);
     assert!((with.bodies[0].position.y - 0.85).abs() < 0.01 && with.bodies[0].velocity.length() < 0.01);
     assert_eq!(with.blocks().next().unwrap().0.x, 512.0);
+}
+
+/// Of 32 drops of a body at `speed` onto a block `thick` thick with its top at y = 1, or onto the
+/// ground at y = 0 if `thick` is 0, each starting a little higher, so that between them they cover
+/// every place the body can be at the start of a step: how many end below it.
+fn drops_through(shape: Shape, angle: f32, thick: f32, speed: f32) -> usize {
+    (0..32)
+        .filter(|k| {
+            let mut world = World::new();
+            let top = if thick > 0.0 { 1.0 } else { 0.0 };
+            if thick > 0.0 {
+                world.set_ground(&[Segment { a: Vec2::new(-50.0, -20.0), b: Vec2::new(50.0, -20.0) }]);
+                world.add_blocks(&[(Vec2::new(-1.0, 1.0 - thick), Vec2::new(1.0, 1.0))]);
+            } else {
+                world.set_ground(&[Segment { a: Vec2::new(-50.0, 0.0), b: Vec2::new(50.0, 0.0) }]);
+            }
+            let mut body = Body::new(shape, Vec2::new(0.0, top + 0.8 + *k as f32 / 32.0 * speed * STEP), angle, 1.0);
+            body.velocity = Vec2::new(0.0, -speed);
+            world.add_body(body);
+            run(&mut world, 1.5);
+            world.bodies[0].position.y < top - thick.max(DEPTH * 0.5)
+        })
+        .count()
+}
+
+/// A known limit, kept as it is: contacts are found only between surfaces within `AHEAD` of each
+/// other at the start of a step, with no sweep, so a body that moves far enough in one step can pass
+/// through a block, or even the ground. Changing that would change every result the engine gives, so
+/// this test holds the present behaviour, to show where the limit is.
+///
+/// The generalist's floating platforms, the only blocks either mini makes, are 0.25 m thick. Of the
+/// creatures' own parts, at the angles they stand at, the first to go through one does so falling
+/// at 16.25 m/s (a two-legged creature's thigh, at the worst place to start a step); through the
+/// ground, a metre deep, small parts go from about 40 m/s. The fastest any body of the Walker or the
+/// generalist was measured going in real runs was 8.6 m/s, and a creature in those worlds cannot fall
+/// far enough to reach 16 m/s (it would take a fall of over 13 m).
+#[test]
+fn known_limit_a_body_fast_enough_can_pass_through_a_static_block() {
+    let little_box = Shape::Box { half_width: 0.1, half_height: 0.1 };
+    let thigh = Shape::Capsule { half: 0.21, radius: 0.06 };
+    let upright = -core::f32::consts::FRAC_PI_2;
+    // a little box onto a block 5 cm thick: held at 5 m/s, through at 10 m/s from some starts
+    assert_eq!(drops_through(little_box, 0.0, 0.05, 5.0), 0);
+    assert!(drops_through(little_box, 0.0, 0.05, 10.0) > 0);
+    // an upright thigh onto a platform as thick as the generalist's: held at the fastest speed seen
+    // in real runs and at twice it, through at 30 m/s from some starts
+    assert_eq!(drops_through(thigh, upright, 0.25, 8.6), 0);
+    assert_eq!(drops_through(thigh, upright, 0.25, 17.2), 0);
+    assert!(drops_through(thigh, upright, 0.25, 30.0) > 0);
+    // a small ball onto the ground: held at 30 m/s, through at the speed limit from some starts
+    let ball = Shape::Circle { radius: 0.05 };
+    assert_eq!(drops_through(ball, 0.0, 0.0, 30.0), 0);
+    assert!(drops_through(ball, 0.0, 0.0, FASTEST) > 0);
 }

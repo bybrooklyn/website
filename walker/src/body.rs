@@ -51,7 +51,7 @@ impl Description {
 
     /// A stride to start from: steady values for the brain's outputs that make the legs walk with no
     /// feedback at all, measured once and written here. For four legs they are the average outputs of
-    /// the best walker of a long training run, and walk 8.5 m in ten seconds; for two legs, whose
+    /// the best walker of a long training run, and walk 7.3 m in ten seconds; for two legs, whose
     /// average falls over, the best of four thousand strides tried at random, which walks 8.4 m. A
     /// brain that learns live starts here, so its first attempt already steps.
     pub fn stride(&self) -> &'static [f32] {
@@ -420,7 +420,7 @@ impl Creature {
         joint.speed = clamp(GAIN * (target - angle), -top, top);
         // a single leg has to throw the whole body up, so its knee is stronger
         let knee = if self.legs.len() == 1 { 1.8 * KNEE_TORQUE } else { KNEE_TORQUE };
-        joint.torque = if i % 2 == 0 { HIP_TORQUE } else { knee };
+        joint.torque = if i.is_multiple_of(2) { HIP_TORQUE } else { knee };
     }
 
     /// The work the motors did in the last step, in joules, counting work done braking as well.

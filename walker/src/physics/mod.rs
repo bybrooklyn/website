@@ -123,18 +123,17 @@ impl Body {
         self.inverse_mass > 0.0
     }
 
-    /// The velocity of a point fixed to the body.
-    pub fn velocity_at(&self, point: Vec2) -> Vec2 {
-        self.velocity + (point - self.position).spun(self.spin)
-    }
-
     /// The body's outline where it is now.
     pub fn placed(&self) -> Outline {
         self.outline.placed(self.position, self.rotation)
     }
 
-    /// A sudden push at a point, in newton seconds, as from a hand or a hit.
+    /// A sudden push at a point, in newton seconds, as from a hand or a hit. A push or a point that is
+    /// not finite is ignored: its NaN would stay in the body's speed for good.
     pub fn push(&mut self, at: Vec2, impulse: Vec2) {
+        if !(impulse.x.is_finite() && impulse.y.is_finite() && at.x.is_finite() && at.y.is_finite()) {
+            return;
+        }
         self.velocity += impulse * self.inverse_mass;
         self.spin += self.inverse_inertia * (at - self.position).cross(impulse);
     }
@@ -426,8 +425,12 @@ impl World {
     }
 
     /// Moves the world on by `seconds` of time, in whole steps, keeping what is left over for next
-    /// time. Returns the number of steps taken.
+    /// time. Returns the number of steps taken. Time that is not a number, or less than none, is
+    /// refused: kept, it would leave the remainder never again a whole step and the world stopped.
     pub fn advance(&mut self, seconds: f32) -> u32 {
+        if seconds.is_nan() || seconds < 0.0 {
+            return 0;
+        }
         self.leftover += seconds;
         let mut taken = 0;
         while self.leftover >= STEP && taken < MOST_STEPS {

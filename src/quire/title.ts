@@ -6,6 +6,7 @@
 // frontmatter's title, given through `own`.
 
 import type { Document } from "./document";
+import { namesIn } from "./check/names";
 
 const extension = /\.(md|mdx|markdown|txt|quire)$/i;
 
@@ -42,8 +43,13 @@ export function createTitle(options: TitleOptions): { element: HTMLTextAreaEleme
     field.className = "quire-title";
     field.rows = 1;
     field.placeholder = "Untitled";
-    field.spellcheck = true;
     field.setAttribute("aria-label", "Title");
+    // the browser's spelling cannot be taught a word: a title with one of the site's names in it (check/names.ts) is not checked by it
+    const checkSpelling = () => {
+        const wanted = namesIn(field.value).length === 0;
+        if (field.spellcheck !== wanted) field.spellcheck = wanted;
+    };
+    checkSpelling();
     let settledAt = "";
     // as tall as its lines, where the browser does not size a field to its content itself
     const fit = () => {
@@ -65,6 +71,7 @@ export function createTitle(options: TitleOptions): { element: HTMLTextAreaEleme
             field.setSelectionRange(at, at);
         }
         fit();
+        checkSpelling();
         options.typed(field.value);
     });
     field.addEventListener("keydown", (event) => {
@@ -83,6 +90,7 @@ export function createTitle(options: TitleOptions): { element: HTMLTextAreaEleme
             field.readOnly = !editable;
             if (document.activeElement !== field) field.value = value;
             fit();
+            checkSpelling();
         },
         focus() {
             field.focus();

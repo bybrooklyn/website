@@ -4,25 +4,6 @@
    can change without the other. Colors are the site's tokens; on light paper quire.css gives the
    same tokens their paper values, so nothing here needs a second set. */
 
-/* A plain bullet in a list that also has checklist items keeps its bullet, drawn where a box would be. */
-.quire ul:has(> .quire-task) > li:not(.quire-task) {
-    list-style: none;
-}
-
-.quire ul:has(> .quire-task) > li:not(.quire-task)::before {
-    content: "";
-    display: inline-block;
-    width: 0.9em;
-    height: 0.9em;
-    margin-right: 0.5em;
-    vertical-align: -0.1em;
-    background: radial-gradient(circle, var(--muted) 0 0.16em, transparent 0.17em) center / 0.9em 0.9em no-repeat;
-}
-
-.quire ul:has(> .quire-task) > li:not(.quire-task) > p:first-of-type {
-    display: inline;
-}
-
 /* ---- code: the colors the site's own code blocks use (tokens.css), and a little more ---- */
 
 .quire-t-keyword,
@@ -155,6 +136,33 @@
     color: var(--muted);
     font-size: 0.85rem;
     font-style: italic;
+}
+
+/* subtext (`-# text`): small and quiet, as Discord draws it and as the site's posts do (prose.css) */
+.prose .quire-subtext {
+    color: var(--muted);
+    font-size: 0.8em;
+    line-height: calc(var(--line) * 0.8);
+}
+
+/* a spoiler (`||hidden||`): on the site it is covered until pressed; here it is a dim band with a
+   dotted edge whose words show faintly, so it can be written in, and plainly while the cursor is in it */
+.quire-spoiler {
+    padding-inline: 0.1em;
+    border-radius: 0.2em;
+    background: color-mix(in oklch, var(--ink) 16%, transparent);
+    box-shadow: inset 0 -0.08em 0 color-mix(in oklch, var(--ink) 35%, transparent);
+    color: color-mix(in oklch, var(--ink) 45%, transparent);
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
+    transition:
+        color 0.2s var(--ease),
+        background-color 0.2s var(--ease);
+}
+
+.quire-spoiler.quire-editing {
+    background: color-mix(in oklch, var(--ink) 9%, transparent);
+    color: inherit;
 }
 
 /* inline maths: the maths laid out, and in its place its source between dollars while the cursor is in it */

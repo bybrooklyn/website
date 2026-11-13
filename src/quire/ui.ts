@@ -325,11 +325,15 @@ export function keySymbols(hint: string, onMac = false): { shown: string; words:
         Shift: ["⇧", "Shift"],
         Alt: onMac ? ["⌥", "Option"] : ["⌥", "Alt"],
         Enter: ["↵", "Enter"],
+        Tab: ["⇥", "Tab"],
+        Backspace: ["⌫", "Backspace"],
     };
-    const isKey = (part: string, last: boolean) => (last ? part in named || /^[A-Z0-9=\-]$/i.test(part) : part in named);
+    // signs are drawn as themselves and said by name
+    const signs: Record<string, string> = { ".": "Full stop", ",": "Comma", "/": "Slash", "\\": "Backslash", "[": "Left bracket", "]": "Right bracket", "=": "Equals", "-": "Minus" };
+    const isKey = (part: string, last: boolean) => (last ? part in named || part in signs || /^[A-Z0-9]$/i.test(part) : part in named);
     if (parts.length < 2 && !(hint in named)) return { shown: hint, words: "" };
     if (!parts.every((part, index) => isKey(part, index === parts.length - 1))) return { shown: hint, words: "" };
-    return { shown: parts.map((part) => named[part]?.[0] ?? part.toUpperCase()).join(""), words: parts.map((part) => named[part]?.[1] ?? part.toUpperCase()).join(" ") };
+    return { shown: parts.map((part) => named[part]?.[0] ?? part.toUpperCase()).join(""), words: parts.map((part) => named[part]?.[1] ?? signs[part] ?? part.toUpperCase()).join(" ") };
 }
 
 /** A menu that grows out from under the control that opened it. */

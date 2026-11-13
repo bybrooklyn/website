@@ -133,34 +133,19 @@ test("a folding section's summary and opening are changed by themselves, and it 
 
 // ---- maths ----
 
-test("maths in a line and as a block come back exactly; a lone dollar or money is only text", () => {
+test("maths as a block comes back exactly; dollars in a line are only dollar signs, as standard Markdown has them", () => {
     for (const source of ["The area is $\\pi r^2$ here.\n", "$$\n\\sum_{i=1}^n i = \\frac{n(n+1)}{2}\n$$\n", "$$ E = mc^2 $$\n", "```math\nx^2\n```\n", "It costs $5 and $10.\n", "Over $3,000 raised.\n"]) everywhere(source);
-    const runs = (read("A $x^2$ b\n").blocks[0] as Extract<Block, { kind: "paragraph" }>).runs;
-    expect(runs).toEqual([
-        { kind: "text", text: "A ", marks: [] },
-        { kind: "text", text: "x^2", marks: ["math"] },
-        { kind: "text", text: " b", marks: [] },
-    ]);
+    expect((read("A $x^2$ b\n").blocks[0] as Extract<Block, { kind: "paragraph" }>).runs).toEqual([{ kind: "text", text: "A $x^2$ b", marks: [] }]);
     expect(read("$$\nx\n$$\n").blocks[0]).toMatchObject({ kind: "code", language: "math", code: "x", dollars: true });
     expect((read("It costs $5 and $10.\n").blocks[0] as Extract<Block, { kind: "paragraph" }>).runs).toEqual([{ kind: "text", text: "It costs $5 and $10.", marks: [] }]);
     // an unclosed $$ is not a block
     expect(read("$$\nnever closed\n").blocks[0]!.kind).toBe("paragraph");
 });
 
-test("dollars that could pair as maths are escaped when text is written fresh, and a lone one is left alone", () => {
-    expect(meansTheSame("Prices: \\$5 and \\$10$ here.\n")).toContain("\\$");
+test("dollars written fresh are left as they are, and an escaped one still means a dollar", () => {
+    expect(meansTheSame("Prices: $5 and $10$ here.\n")).toBe("Prices: $5 and $10$ here.\n");
     expect(meansTheSame("Over $3,000 raised.\n")).toBe("Over $3,000 raised.\n");
     meansTheSame("Both $a$ and \\$b.\n");
-});
-
-test("text typed at the edge of maths stays outside it, and inside it is maths", () => {
-    const doc = read("A $x$ b\n");
-    const after = insertText(doc, { path: [0], offset: 3 }, "y");
-    expect(write(after)).toBe("A $x$y b\n");
-    const before = insertText(doc, { path: [0], offset: 2 }, "y");
-    expect(write(before)).toBe("A y$x$ b\n");
-    const inside = insertText(read("A $xz$ b\n"), { path: [0], offset: 3 }, "y");
-    expect(write(inside)).toBe("A $xyz$ b\n");
 });
 
 // ---- superscript, subscript, marked text, emoji ----

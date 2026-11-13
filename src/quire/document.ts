@@ -11,10 +11,11 @@
 
 /**
  * A way text can be marked. Underline is not Markdown and is written as `<u>`; superscript and
- * subscript as `<sup>` and `<sub>`. "mark" is `==highlighted==` text, and "math" is inline maths,
- * `$...$`, whose text is the TeX source.
+ * subscript as `<sup>` and `<sub>`. "mark" is `==highlighted==` text, and "spoiler" is `||hidden||`
+ * text, as Discord has it. "math" is inline maths whose text is TeX; it is no longer read from `$...$`
+ * (a `$` is a dollar sign, as standard Markdown has it) and is kept for documents that still hold it.
  */
-export type Mark = "bold" | "italic" | "strike" | "code" | "underline" | "mark" | "sup" | "sub" | "math";
+export type Mark = "bold" | "italic" | "strike" | "code" | "underline" | "mark" | "sup" | "sub" | "math" | "spoiler";
 
 /** How a paragraph, heading or picture sits across the page. Written as `<div align="...">`; justified is for `.quire` documents alone. */
 export type Align = "left" | "center" | "right" | "justify";
@@ -109,6 +110,8 @@ export interface Paragraph extends Kept {
     align?: Align;
     /** Line spacing, as a multiple of the usual; kept only by a `.quire` document. */
     spacing?: number;
+    /** Small, quiet text, written `-# text` as Discord has it. */
+    subtext?: boolean;
 }
 
 /** A heading, `#` to `######`. */
@@ -349,7 +352,7 @@ interface Piece {
     link?: LinkInfo;
 }
 
-const ORDER: Mark[] = ["code", "math", "bold", "italic", "strike", "underline", "mark", "sup", "sub"];
+const ORDER: Mark[] = ["code", "math", "spoiler", "bold", "italic", "strike", "underline", "mark", "sup", "sub"];
 
 const leafLength = (leaf: Leaf) => (leaf.kind === "text" ? leaf.text.length : 1);
 
@@ -1160,6 +1163,33 @@ export function outdent(doc: Document, path: number[]): Document {
         const parentNext: ListItem = { ...parentItem, blocks: parentBlocks, source: undefined, gap: sep };
         return spliceBlocks(items, outer.item, 1, [parentNext, lifted]);
     });
+}
+
+/** Makes the paragraph at a path small quiet text (`-# `), or ordinary text again. */
+export function setSubtext(doc: Document, path: number[], on: boolean): Document {
+    return replace(doc, path, (block) => {
+        if (block.kind !== "paragraph" || !!block.subtext === on) return null;
+        const next: Paragraph = { ...block, source: undefined };
+        if (on) next.subtext = true;
+        else delete next.subtext;
+        return [next];
+    });
+}
+
+/** Puts the block at a path and every block after it among its neighbours into one quote, as Discord's `>>> ` does. */
+export function quoteRest(doc: Document, path: number[]): Document {
+    return edit(doc, path, (blocks, index, sep) => {
+        const taken = blocks.slice(index);
+        if (taken.length === 0) return blocks;
+        const tail = taken[taken.length - 1]!.gap;
+        const quote: Quote = { kind: "quote", blocks: chain(taken, sep, ""), gap: tail };
+        return [...blocks.slice(0, index), quote];
+    });
+}
+
+/** Sets the number a numbered list at a path starts from. */
+export function setListStart(doc: Document, path: number[], start: number): Document {
+    return replace(doc, path, (block) => (block.kind === "list" ? [{ ...block, start, source: undefined }] : null));
 }
 
 /** Ticks or unticks a task item. An item with no box gains an empty one. */

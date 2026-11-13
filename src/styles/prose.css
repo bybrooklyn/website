@@ -161,3 +161,50 @@
 .prose h3 + table {
     margin-top: calc(var(--line) * 0.5);
 }
+
+/* `-# small text`, as Discord has it and mdQuire writes it (integrations/discord-markdown.ts). */
+.prose .subtext {
+    color: var(--muted);
+    font-size: 0.8em;
+    line-height: calc(var(--line) * 0.8);
+}
+
+/* `||a spoiler||`: covered until pressed, and covered again when something else is. It can be reached
+   with the keyboard, and the words are there for a screen reader as they are. */
+.prose .spoiler {
+    padding-inline: 0.1em;
+    border-radius: 0.2em;
+    background: color-mix(in oklch, var(--ink) 80%, var(--ground));
+    color: transparent;
+    cursor: pointer;
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
+    transition:
+        color 0.2s var(--ease),
+        background-color 0.2s var(--ease);
+}
+
+.prose .spoiler :is(a, code) {
+    visibility: hidden;
+}
+
+.prose .spoiler:is(:focus, :focus-within, :active) {
+    background: color-mix(in oklch, var(--ink) 10%, transparent);
+    color: inherit;
+    outline: none;
+    cursor: text;
+}
+
+.prose .spoiler:is(:focus, :focus-within, :active) :is(a, code) {
+    visibility: visible;
+}
+
+.prose .spoiler:focus-visible {
+    box-shadow: 0 0 0 0.125rem var(--accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .prose .spoiler {
+        transition: none;
+    }
+}

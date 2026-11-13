@@ -4,15 +4,16 @@
 // with a capital inside (TypeScript, iPhone), which are names a dictionary does not hold.
 //
 // The speller the rule asks is made by createSpeller from the dictionary, the country's spelling,
-// and two lists: the words she has added to her own dictionary (kept in the browser) and the words
+// the site's own names (names.ts), and two lists: the words she has added to her own dictionary (kept in the browser) and the words
 // she has said to ignore in this document.
 
 import { replaceWith, type Rule, type Speller } from "./engine";
 import type { Dialect, Dictionary } from "./dictionary";
+import { isName } from "./names";
 
 /** Makes the speller the rules ask, from a dictionary and the words she has let through. */
 export function createSpeller(dictionary: Dictionary, dialect: Dialect, own: ReadonlySet<string> = new Set(), ignored: ReadonlySet<string> = new Set()): Speller {
-    const allowed = (word: string) => own.has(word) || own.has(word.toLowerCase()) || ignored.has(word) || ignored.has(word.toLowerCase());
+    const allowed = (word: string) => isName(word) || own.has(word) || own.has(word.toLowerCase()) || ignored.has(word) || ignored.has(word.toLowerCase());
     return {
         known: (word) => allowed(word) || dictionary.known(word, dialect),
         suggest: (word) => dictionary.suggest(word, dialect),

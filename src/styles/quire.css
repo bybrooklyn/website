@@ -324,20 +324,31 @@
     }
 }
 
-/* the title, the first line on the page: set as a published post's title, and faint "Untitled" when empty */
+/* the post title's size, worked out where the window's width is the editor's (outside the sheet, which
+   a zoom scales) and handed down as a length, so that the zoomed title grows exactly as the rest does */
+@property --title-size { syntax: "<length>"; inherits: true; initial-value: 4rem; }
+
+.quire-editor {
+    --title-size: clamp(2.5rem, 1.5rem + 4vw, 4.25rem);
+}
+
+/* the title, the first line on the page: the size a published post's title has (base.css's h1, which
+   Post.astro gives the title), so that no heading is ever bigger than it; faint "Untitled" when empty.
+   A field cuts what hangs outside it, so its line is a little taller than the post's, the tails of
+   g and y below and accents above kept inside, and its margin less by as much. */
 .quire-title {
     display: block;
     box-sizing: border-box;
     width: 100%;
-    margin: 0 0 calc(var(--line) * 1.25);
-    padding: 0;
+    margin: 0 0 calc(var(--line) * 1.25 - 0.08em);
+    padding: 0.04em 0;
     border: 0;
     background: transparent;
     color: var(--ink);
     font-family: var(--font-head);
     font-weight: var(--head-weight);
-    font-size: clamp(2.25rem, 1.5rem + 2vw, 3.4rem);
-    line-height: 1.05;
+    font-size: var(--title-size);
+    line-height: 1.12;
     letter-spacing: -0.02em;
     text-wrap: balance;
     field-sizing: content;
@@ -378,12 +389,13 @@
     transition: opacity 0.4s ease 0.1s;
 }
 
-/* the caret, drawn (caret.ts): a thin square-ended line about as tall as the letters, in the flag's colors */
+/* the caret, drawn (caret.ts): a thin square-ended line as tall as the browser's own and where it is, in
+   the flag's colors. It starts where the browser's starts, after the letter before, so it never lies on it */
 .quire-caret {
     --caret: var(--accent);
     position: absolute;
     top: 0;
-    left: -0.045rem;
+    left: 0;
     z-index: 2;
     width: max(0.09rem, 1.5px);
     background: var(--caret);
@@ -1508,6 +1520,18 @@
     }
 }
 
+/* with too little room beside the sheet to be read whole (it is zoomed, or the window is small), the outline and the details fade away rather than be cut (editor.ts says when) */
+@media (min-width: 64rem) {
+    .quire-editor.cramped .quire-outline.open,
+    .quire-editor.cramped .quire-details {
+        opacity: 0;
+        visibility: hidden;
+        transition:
+            opacity 0.2s ease,
+            visibility 0s linear 0.2s;
+    }
+}
+
 @media (min-width: 64rem) and (max-width: 80rem) {
     .look-paper .quire-outline.open {
         opacity: 0;
@@ -1762,6 +1786,13 @@
         opacity 0.2s ease,
         translate 0.35s var(--ease),
         visibility 0s linear 0.35s;
+}
+
+/* put away, it takes no width at all: its padding and edge would otherwise reach past the window beside a zoomed sheet */
+.quire-editor:not(.markdown) .quire-source {
+    padding-inline: 0;
+    border-inline-width: 0;
+    translate: 0 0;
 }
 
 .quire-source:focus {
@@ -2129,6 +2160,21 @@ body.quire-app,
 .quire-name-text {
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+/* the name is quiet: the size and face of the menu words beside it (File, Edit), muted until pointed
+   at or focused, as the owner chose; the strokes and "mdQuire" keep the trail's own size */
+.quire-trail .quire-name,
+.quire-name-home .quire-name {
+    font-family: var(--font-text);
+    font-weight: var(--text-weight, 400);
+    font-size: 0.95rem;
+    color: var(--muted);
+    transition: color 0.15s ease;
+}
+
+.quire-name:is(:hover, :focus-visible, .open) {
+    color: var(--ink);
 }
 
 .quire-menus-home {
@@ -2838,6 +2884,89 @@ body.quire-app,
     line-height: 1.5;
 }
 
+/* the keyboard shortcuts (Ctrl+/): a search over two quiet columns, the keys in the menus' own symbols; the list scrolls, the search stays */
+.quire-dialog.quire-keys-dialog {
+    width: min(38rem, 100vw - 2rem);
+}
+
+.quire-keys-dialog .quire-dialog-in {
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    height: min(40rem, 100dvh - 2rem);
+    overflow: hidden;
+}
+
+.quire-keys-dialog .quire-dialog-body {
+    grid-template-rows: auto minmax(0, 1fr);
+    min-height: 0;
+}
+
+.quire-keys-search {
+    box-sizing: border-box;
+    width: 100%;
+}
+
+.quire-keys {
+    min-height: 0;
+    overflow: auto;
+    padding-right: 0.25rem;
+}
+
+.quire-keys-head {
+    margin: 0.9rem 0 0.3rem;
+    color: var(--muted);
+    font-family: var(--font-text);
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.quire-keys-head:first-child {
+    margin-top: 0;
+}
+
+.quire-keys-table,
+.quire-count {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.92rem;
+    line-height: 1.35;
+}
+
+.quire-keys-table td {
+    padding: 0.28rem 0;
+    border-bottom: 0.0625rem solid color-mix(in oklch, var(--rule) 55%, transparent);
+    vertical-align: top;
+}
+
+.quire-keys-keys {
+    width: 7.5rem;
+    padding-right: 1rem !important;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.quire-keys-none {
+    color: var(--muted);
+}
+
+.quire-count th,
+.quire-count td {
+    padding: 0.3rem 0;
+    text-align: left;
+    font-weight: 400;
+}
+
+.quire-count td,
+.quire-count-head th:not(:first-child) {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.quire-count-head th {
+    color: var(--muted);
+    font-size: 0.8rem;
+}
+
 .quire-dialog-actions {
     display: flex;
     justify-content: flex-end;
@@ -3183,3 +3312,165 @@ body.quire-app,
 }
 
 /* ---- end of checking ---- */
+
+/* ---- the rhythm of the writing ----
+   Sizes are a published post's (prose.css and base.css). The space between blocks is not: as the
+   owner chose ("Even, like Docs"), one line lies between any two blocks, a heading that starts a new
+   section after other writing has a little more above it (1.4 lines), a heading straight after a
+   heading has no more than a line, and under a heading is one line. Margins collapse, so each block
+   says only the least it wants above and below and the larger of two neighbours' wins. A heading's
+   last line has its tails kept inside its box by padding (a block out of sight is painted only inside
+   its box, see content-visibility above), and its margin is less by as much. */
+.prose.quire > *,
+.prose.quire :where(blockquote, :not(.quire-tight) > li, .quire-fold-body) > :where(p, ul, ol, pre, table, blockquote, .quire-drawn, .quire-terms, .quire-comp, .quire-image, .quire-divider) {
+    margin-block: 0 var(--line);
+}
+
+.prose.quire :is(h1, h2, h3, h4, h5, h6) {
+    /* room inside the box for the tails below and the accents above (a top heading is set solid, its line its size) */
+    --tail: 0.22em;
+    --crown: 0.08em;
+    margin-block: calc(var(--line) - var(--crown)) calc(var(--line) - var(--tail));
+    padding-block: var(--crown) var(--tail);
+}
+
+/* A `#` heading in a post's body has no style of its own on the site (a post's only h1 is its title,
+   Post.astro), so it would be drawn as large as the title, and the page would have no top to it. Here
+   it is one clear step under the title and over a Heading 2 (2rem in prose.css). The same rule in
+   prose.css would make posts agree; it is not there, as posts are the owner's to change. */
+.prose.quire h1 {
+    font-size: 2.6rem;
+    line-height: 1.15;
+    letter-spacing: -0.015em;
+}
+
+.prose.quire > :not(h1, h2, h3, h4, h5, h6) + :is(h1, h2, h3, h4, h5, h6) {
+    margin-top: calc(var(--line) * 1.4 - var(--crown));
+}
+
+.prose.quire > :first-child {
+    margin-top: 0;
+}
+
+/* the last block of a quote, callout, folding section or item has no space under it of its own */
+.prose.quire :is(blockquote, .quire-fold-body, li, dd) > :last-child {
+    margin-bottom: 0;
+}
+
+/* a divider is its line and the one line either side, as every other block */
+.prose.quire .quire-divider hr {
+    margin: 0;
+}
+
+/* a heading straight after a heading: the one line is the first's margin and the room under its tails */
+.prose.quire :is(h1, h2, h3, h4, h5, h6) + :is(h1, h2, h3, h4, h5, h6) {
+    margin-top: calc(var(--crown) * -1);
+}
+
+/* ---- lists, as Docs draws them ----
+   The dot sits near the column's edge and the text a little in from it (one em, where the site's posts
+   have 1.25em); each nested level steps in by the same em, its dot under the text of the item above.
+   The marks are drawn here rather than by the browser, so that their size and height on the line are
+   the same in every list: a filled dot, then a ring, then a square, as Docs nests them; numbers sit
+   right-aligned on their full stops, nested numbers as letters, then roman numerals. A checklist's
+   boxes stand where the dots stand. Items are spaced as a little more than a paragraph's own lines. */
+.prose.quire :is(ul, ol) {
+    padding-left: 1em;
+    list-style: none;
+}
+
+.prose.quire ol {
+    padding-left: 1.45em;
+}
+
+.prose.quire ul:has(> .quire-task) {
+    padding-left: 1.2em;
+}
+
+.prose.quire :is(ul, ol) > li {
+    position: relative;
+}
+
+.prose.quire li + li {
+    margin-top: calc(var(--line) * 0.2);
+}
+
+.prose.quire li > :is(ul, ol) {
+    margin-block: calc(var(--line) * 0.2) 0;
+}
+
+/* the dot: a circle a third of an em across, its middle on the middle of the first line's small letters */
+.prose.quire ul > li:not(.quire-task)::before {
+    content: "";
+    position: absolute;
+    top: calc(var(--line) / 2 - 0.12em);
+    right: calc(100% + 0.42em);
+    box-sizing: border-box;
+    width: 0.3em;
+    height: 0.3em;
+    border-radius: 50%;
+    background: var(--accent);
+}
+
+.prose.quire ul ul > li:not(.quire-task)::before {
+    border: 0.07em solid var(--accent);
+    background: transparent;
+}
+
+.prose.quire ul ul ul > li:not(.quire-task)::before {
+    border: 0;
+    border-radius: 0.04em;
+    background: var(--accent);
+    width: 0.27em;
+    height: 0.27em;
+}
+
+.prose.quire ol > li::before {
+    content: counter(list-item) ".";
+    position: absolute;
+    top: 0;
+    right: calc(100% + 0.3em);
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+}
+
+.prose.quire ol ol > li::before {
+    content: counter(list-item, lower-alpha) ".";
+}
+
+.prose.quire ol ol ol > li::before {
+    content: counter(list-item, lower-roman) ".";
+}
+
+.prose.quire li::marker {
+    content: none;
+}
+
+/* a checklist's box stands where a dot does, as tall as the small letters and a little more */
+.prose.quire .quire-task > .quire-box {
+    position: absolute;
+    top: calc(var(--line) / 2 - 0.36em);
+    right: calc(100% + 0.32em);
+    box-sizing: border-box;
+    width: 0.72em;
+    height: 0.72em;
+    margin: 0;
+    vertical-align: 0;
+}
+
+.prose.quire .quire-task > p {
+    display: block;
+}
+
+/* a plain bullet among checklist items keeps the dot, drawn where the boxes are */
+.prose.quire ul:has(> .quire-task) > li:not(.quire-task)::before {
+    right: calc(100% + 0.53em);
+    width: 0.3em;
+    height: 0.3em;
+    margin: 0;
+    background: var(--accent);
+}
+
+.prose.quire ul:has(> .quire-task) > li:not(.quire-task) > p:first-of-type {
+    display: block;
+}
