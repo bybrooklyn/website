@@ -739,7 +739,7 @@ export function handle(state: State, input: Input, options: TypingOptions = {}):
         if (shift && lower === "x") return mark(state, "strike");
         if (shift && lower === "h") return mark(state, "mark");
         if (!shift && !alt && MARK_KEYS[lower]) return mark(state, MARK_KEYS[lower]!);
-        if (key === "Enter" && !shift && !alt) return { state: pageBreakAt(state), kind: "structure" };
+        if (key === "Enter" && !shift && !alt) return { state: pageBreakAt(state), kind: "format" };
         if (key === "Backspace") return backspace(state, true);
         if (key === "Delete") return forwardDelete(state, true);
         return null;

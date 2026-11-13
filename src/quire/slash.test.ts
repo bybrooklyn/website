@@ -16,7 +16,7 @@ import { write } from "./write";
 const keys = (query: string) => filterSlash(query).map((item) => item.key);
 
 test("with nothing typed after the slash every item is offered", () => {
-    expect(keys("")).toEqual(SLASH_ITEMS.map((item) => item.key));
+    expect([...keys("")].sort()).toEqual(SLASH_ITEMS.map((item) => item.key).sort());
     expect(keys("   ")).toHaveLength(SLASH_ITEMS.length);
 });
 

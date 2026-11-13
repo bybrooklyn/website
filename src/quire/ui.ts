@@ -293,6 +293,10 @@ export interface MenuItem {
     note?: boolean;
     /** A choice among the lines of the same group: pressing it leaves the menu open, pressed in place of the one that was. */
     group?: string;
+    /** Pressing it leaves the menu open, as More in the slash menu does. */
+    stays?: boolean;
+    /** Drawn quieter than the lines around it. */
+    quiet?: boolean;
     run: () => void;
 }
 
@@ -353,6 +357,8 @@ export function keySymbols(hint: string, onMac = false): { shown: string; words:
 export interface Menu {
     box: HTMLElement;
     open(trigger: HTMLElement, items: MenuItem[] | HTMLElement, focusFirst?: boolean): void;
+    /** Fills the open menu with more lines than it had, the last line it had (the one that asked for more) giving way: the box grows to hold them, the lines before staying still and the new ones arriving one after another. */
+    more(items: MenuItem[]): void;
     close(returnFocus?: boolean): void;
     isOpen(): boolean;
 }
@@ -568,6 +574,7 @@ export function flowMenu(label: string, options: { align?: "left" | "right"; cla
             line.setAttribute("role", item.pressed === undefined ? "menuitem" : item.group ? "menuitemradio" : "menuitemcheckbox");
             if (item.pressed !== undefined) line.setAttribute("aria-checked", String(item.pressed));
             if (item.pressed) line.classList.add("pressed");
+            if (item.quiet) line.classList.add("quiet");
             if (item.group) line.dataset.group = item.group;
             if (item.icon) line.append(typeof item.icon === "string" ? icon(item.icon) : item.icon);
             line.append(make("span", "quire-menu-label", item.label));
@@ -588,7 +595,7 @@ export function flowMenu(label: string, options: { align?: "left" | "right"; cla
                         other.classList.toggle("pressed", other === line);
                         if (other.hasAttribute("aria-checked")) other.setAttribute("aria-checked", String(other === line));
                     }
-                else menu.close(false);
+                else if (!item.stays) menu.close(false);
                 item.run();
             });
             items.append(line);
@@ -713,6 +720,30 @@ export function flowMenu(label: string, options: { align?: "left" | "right"; cla
             from.setAttribute("aria-expanded", "true");
             from.classList.add("open");
             if (focusFirst) lines()[0]?.focus({ preventScroll: true });
+        },
+        more(content) {
+            if (!opened || !final) return;
+            const was = boxOf(box);
+            const kept = items.children.length - 1;
+            halt(moving);
+            items.style.height = items.style.flexShrink = "";
+            fill(content);
+            // it grows on the side it opened on, from the size it was
+            const at = boxOf(box);
+            final = { ...at, up: final.up };
+            if (still()) return;
+            items.style.height = `${items.offsetHeight}px`;
+            items.style.flexShrink = "0";
+            moving.push(box.animate([{ width: `${was.width}px`, height: `${was.height}px` }, { width: `${at.width}px`, height: `${at.height}px` }], { duration: MOTION.open, easing: springCurve(MOTION.bounce), fill: "both" }));
+            [...items.children].slice(kept).forEach((line, index) => moving.push(line.animate([{ opacity: 0, translate: `0 ${final!.up ? 4 : -4}px` }, { opacity: 1, translate: "0 0" }], { duration: Math.max(MOTION.open * 0.75, 90), delay: MOTION.open * 0.2 + index * MOTION.stagger, easing: EASE, fill: "both" })));
+            void Promise.all(moving.map((each) => each.finished)).then(
+                () => {
+                    if (!opened) return;
+                    halt(moving);
+                    items.style.height = items.style.flexShrink = "";
+                },
+                () => {},
+            );
         },
         close(returnFocus = false) {
             if (!opened) return;

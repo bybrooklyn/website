@@ -50,7 +50,7 @@ export type Command =
     | "callout" | "details" | "definitions" | "maths" | "diagram"
     | "bold" | "italic" | "underline" | "strike" | "inline" | "paragraph" | "heading1" | "heading2" | "heading3" | "heading4" | "heading5" | "heading6" | "quote" | "subtext" | "spoiler"
     | "color" | "size" | "font" | "highlight" | "spacing" | "left" | "center" | "right" | "justify" | "indent" | "outdent" | "bigger" | "smaller" | "clear"
-    | "check" | "about" | "wordCount" | "shortcuts" | "searchMenus"
+    | "check" | "about" | "wordCount" | "shortcuts" | "searchMenus" | "forgetUsed"
     | "superscript" | "subscript" | "marked" | "typedSigns"
     | "downloadAs" | "notes" | "nextNote" | "previousNote" | "comment" | "date" | "symbols" | "contents" | "updateContents";
 
@@ -176,6 +176,7 @@ export function headings(state: RowState, act: RowActions): Heading[] {
                 ...line("typedSigns", "Typed signs, -> to →", { pressed: state.symbols !== false }),
                 ...line("searchMenus", "Search the menus", { icon: "search" }),
                 ...line("shortcuts", "Keyboard shortcuts"),
+                ...line("forgetUsed", "Forget what I use most"),
                 ...(act.tools?.() ?? []),
                 ...line("about", "About mdQuire"),
             ],
