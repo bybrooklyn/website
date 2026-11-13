@@ -388,3 +388,15 @@ test("what rested on something fixed falls when that is taken away", () => {
     expect(lower.y).toBeGreaterThan(300);
     expect(upper.y).toBeGreaterThan(260);
 });
+
+test("a step of no number or of minus a second is ignored, one of forever is kept to a second, and the steps after work", () => {
+    for (const bad of [Number.NaN, -1, Infinity, 1e12]) {
+        const flat = new Flat(1800);
+        const ball = flat.ball(0, 0, 10);
+        flat.step(bad);
+        const after = ball.y;
+        flat.step(TICK);
+        expect(Number.isFinite(after)).toBe(true);
+        expect(ball.y).toBeGreaterThan(after);
+    }
+});

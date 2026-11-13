@@ -492,9 +492,10 @@ export class Space {
         return made;
     }
 
-    /** Moves everything on by `dt` seconds, in steps of 1 / `rate`. */
+    /** Moves everything on by `dt` seconds, in steps of 1 / `rate`. A time that is not ahead is ignored, and more than a second is taken as a second. */
     step(dt: number): void {
-        this.#owed += dt;
+        if (!(dt > 0)) return;
+        this.#owed += Math.min(dt, 1);
         const each = 1 / this.rate;
         while (this.#owed >= each - 1e-9) {
             this.#advance(each);

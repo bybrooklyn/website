@@ -190,3 +190,15 @@ test("two balls that meet head on part again, and neither is left inside the oth
     expect(a.v[0]).toBeLessThan(-3);
     expect(b.v[0]).toBeGreaterThan(3);
 });
+
+test("a step of no number or of minus a second is ignored, one of forever is kept to a second, and the steps after work", () => {
+    for (const bad of [Number.NaN, -1, Infinity, 1e12]) {
+        const space = new Space();
+        const die = space.solid(cube(), [0, 4, 0]);
+        space.step(bad);
+        const after = die.p[1];
+        space.step(TICK);
+        expect(Number.isFinite(after)).toBe(true);
+        expect(die.p[1]).toBeLessThan(after);
+    }
+});

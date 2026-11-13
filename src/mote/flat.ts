@@ -562,9 +562,10 @@ export class Flat {
         return undefined;
     }
 
-    /** Moves everything on by `dt` seconds, in steps of 1/120. */
+    /** Moves everything on by `dt` seconds, in steps of 1/120. A time that is not ahead is ignored, and more than a second is taken as a second. */
     step(dt: number): void {
-        this.#owed += dt;
+        if (!(dt > 0)) return;
+        this.#owed += Math.min(dt, 1);
         while (this.#owed >= 1 / 120 - 1e-9) {
             this.#advance(1 / 120);
             this.#owed -= 1 / 120;
