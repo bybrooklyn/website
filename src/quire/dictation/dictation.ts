@@ -502,9 +502,12 @@ export function createDictation(surface: Surface, options: DictationOptions = {}
                     action(`Remove the model (${megabytes(sizeOf(wanted))})`, async () => {
                         recognizer?.dispose();
                         recognizer = undefined;
-                        await provider.remove(wanted);
+                        const failed = await provider.remove(wanted).then(
+                            () => undefined,
+                            (error: Error) => error,
+                        );
                         await refresh();
-                        say(`The ${wanted.name.toLowerCase()} model was removed from this browser.`);
+                        say(failed ? `The model could not be removed: ${failed.message}` : `The ${wanted.name.toLowerCase()} model was removed from this browser.`);
                     }),
                 );
             }

@@ -114,6 +114,22 @@ describe("the engine", () => {
         worker.answer({ type: "failed", id: worker.last("download"), message: "cancelled", cancelled: true });
         await expect(stopped).rejects.toMatchObject({ cancelled: true });
     });
+    test("removing a model tries again while the ended worker still holds its files, and a removal that keeps failing is said", async () => {
+        const saved = globalThis.navigator;
+        const storage = (failures: number) => {
+            let left = failures;
+            const top = { removeEntry: async () => (left-- > 0 ? Promise.reject(new DOMException("held", "NoModificationAllowedError")) : undefined) };
+            Object.defineProperty(globalThis, "navigator", { value: { storage: { getDirectory: async () => ({ getDirectoryHandle: async () => top }) } }, configurable: true });
+        };
+        try {
+            storage(2);
+            await createProvider().remove(tier);
+            storage(100);
+            await expect(createProvider().remove(tier)).rejects.toThrow("held");
+        } finally {
+            Object.defineProperty(globalThis, "navigator", { value: saved, configurable: true });
+        }
+    }, 5000);
     test("letting the recognizer go ends the worker and fails what was waiting", async () => {
         const { worker, recognizer } = await loaded();
         const heard = recognizer.transcribe(new Float32Array(10)).then(() => "answered", (error: Error) => error.message);

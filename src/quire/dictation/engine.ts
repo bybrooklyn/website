@@ -221,7 +221,19 @@ export function createProvider(): Provider {
         async remove(tier) {
             if (worker) lose(worker, "The model was removed");
             const top = await directory(false);
-            await top?.removeEntry(tier.id, { recursive: true }).catch(() => {});
+            if (!top) return;
+            // The ended worker may hold its files for a moment yet, which makes the removal fail: it is tried
+            // again a few times, and a removal that still fails is said, not passed over as done.
+            for (let tries = 0; ; tries++) {
+                try {
+                    await top.removeEntry(tier.id, { recursive: true });
+                    return;
+                } catch (error) {
+                    if (error instanceof DOMException && error.name === "NotFoundError") return;
+                    if (tries >= 4) throw error;
+                    await new Promise((done) => setTimeout(done, 100 * (tries + 1)));
+                }
+            }
         },
     };
 }
