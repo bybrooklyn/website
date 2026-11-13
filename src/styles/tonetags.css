@@ -1,15 +1,20 @@
-/* The tone tags page (src/pages/tonetags.astro): a box to search in, and the tags in two parts. */
+/* The tone tags page (src/pages/tonetags.astro): what they are, a box to search in, a strip of the everyday ones, and all of them A to Z in columns. */
 
 .tonetags {
     --grow: 0.28s;
     --fade: 0.18s;
-    max-width: var(--measure);
-    margin-bottom: calc(var(--line) * 2);
+    margin-block: calc(var(--line) * 1.5) calc(var(--line) * 2);
+}
+
+/* The columns take the page's whole width, the room a post keeps for its contents list included, so that meanings sit on one line. */
+.post > .tonetags {
+    grid-column: 1 / -1;
 }
 
 /* The box is a line to type on, as the minis' are: a rule under the words, the accent when it is being typed on. */
 .tonetags-find input {
     width: 100%;
+    max-width: var(--measure);
     padding: 0.4rem 0;
     border: 0;
     border-bottom: 0.0625rem solid var(--rule);
@@ -36,45 +41,72 @@
     margin: 0.4rem 0 0;
 }
 
-.tonetags-part h2 {
-    margin: var(--line) 0 0.3rem;
-    font-size: 1rem;
-    color: var(--muted);
-}
-
-.tonetags-part ul {
-    display: flex;
-    flex-direction: column;
+.tonetags :is(ul, ol) {
     margin: 0;
     padding: 0;
     list-style: none;
 }
 
-/* One tag: the ways it is written at the left, each on the code face, and what it means beside them. */
-.tonetag {
-    display: grid;
-    grid-template-columns: 9rem 1fr;
-    align-items: baseline;
-    gap: 0 1rem;
-    padding: 0.35rem 0;
-    border-top: 0.0625rem solid var(--rule);
-}
-
-.tonetag-forms {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0 0.6rem;
-}
-
-.tonetag-forms code {
+.tonetags code {
     padding: 0;
     background: none;
     color: var(--accent);
     font-size: 0.95em;
 }
 
-@media (max-width: 28rem) {
-    .tonetag {
-        grid-template-columns: 6.5rem 1fr;
+/* The everyday ones: a tag and its meaning together, one after another, wrapping as words do. */
+.tonetags-everyday h2 {
+    margin: 0 0 0.5rem;
+    font-size: 1rem;
+    color: var(--muted);
+}
+
+.tonetags-everyday ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem 1.75rem;
+    padding-bottom: var(--line);
+}
+
+/* All of them, A to Z, down three columns on a wide window, two on a middling one, one on a phone. */
+.tonetags-letters {
+    column-count: 3;
+    column-gap: 3rem;
+}
+
+@media (max-width: 62rem) {
+    .tonetags-letters {
+        column-count: 2;
     }
+}
+
+@media (max-width: 34rem) {
+    .tonetags-letters {
+        column-count: 1;
+    }
+}
+
+/* A letter stands at the head of its run, large and quiet, and is not left alone at the foot of a column. */
+.tonetags-letter h2 {
+    margin: 0.9rem 0 0.15rem;
+    font-size: 1.5rem;
+    line-height: 1.2;
+    color: color-mix(in oklch, var(--muted) 75%, transparent);
+    break-after: avoid;
+}
+
+/* One tag: the ways it is written, then what it means close beside them, and never split between columns. */
+.tonetag {
+    display: grid;
+    grid-template-columns: 6rem 1fr;
+    align-items: baseline;
+    gap: 0 0.75rem;
+    padding: 0.12rem 0;
+    break-inside: avoid;
+}
+
+.tonetag-forms {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 0.5rem;
 }

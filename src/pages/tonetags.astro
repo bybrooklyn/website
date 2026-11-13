@@ -4,7 +4,8 @@
 // src/content/projects/tone-tags.mdx, which says `opens: /tonetags/`): the thing at the top, then
 // what it is.
 //
-// The whole list is written here, the most used first, so the page reads without scripts.
+// The whole list is written here, A to Z in columns under a strip of the most used, so the page
+// reads without scripts.
 // src/scripts/tonetags.ts then narrows it as the box is typed in. The list and how it is searched
 // are in src/tonetags/.
 import "../styles/content";
@@ -26,10 +27,14 @@ const at = projects.findIndex((each) => each.id === project.id);
 const previous = projects[at - 1];
 const next = projects[at + 1];
 
-const parts = [
-    { head: "the ones you will see most", rows: tags.map((tag, place) => ({ tag, place })).filter((each) => each.tag.common) },
-    { head: "the rest, by letter", rows: tags.map((tag, place) => ({ tag, place })).filter((each) => !each.tag.common) },
-];
+const placed = tags.map((tag, place) => ({ tag, place }));
+/** The few seen every day, for the strip at the top. */
+const everyday = placed.filter((each) => each.tag.common);
+/** Every tag by its first spelling, gathered under its first letter, for the columns. */
+const letters = Map.groupBy(
+    placed.toSorted((a, b) => a.tag.forms[0]!.localeCompare(b.tag.forms[0]!)),
+    (each) => each.tag.forms[0]![0]!.toUpperCase(),
+);
 ---
 
 <Opened title={name} description={summary} image={sharePicture("project-tone-tags")} facts={projectShare(project)} back={{ href: "/projects/", label: "projects" }}>
@@ -40,19 +45,40 @@ const parts = [
             <p class="lede">{summary}</p>
         </header>
 
+        {/* What a tone tag is, who it helps, and that nobody has to learn them: the project's own words, first, for whoever has never seen one. */}
+        <div class="prose tonetags-about">
+            <Content />
+        </div>
+
         <div class="tonetags" data-tonetags>
             <label class="tonetags-find">
                 <span class="unseen">Search the tags</span>
                 <input type="search" placeholder="/j, or a word such as joking" autocomplete="off" autocapitalize="off" spellcheck="false" />
             </label>
             <p class="tonetags-count note" aria-live="polite"></p>
-            {
-                parts.map((part) => (
-                    <section class="tonetags-part fold open">
+
+            {/* the ones seen every day, in a strip; it folds away while something is being looked for */}
+            <section class="tonetags-everyday fold open">
+                <div>
+                    <h2>the ones you will see most</h2>
+                    <ul>
+                        {everyday.map(({ tag }) => (
+                            <li>
+                                <code>/{tag.forms[0]}</code> {tag.means}
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            </section>
+
+            {/* all of them, A to Z, down three columns, a letter at the head of each run */}
+            <div class="tonetags-letters">
+                {[...letters].map(([letter, rows]) => (
+                    <section class="tonetags-letter fold open">
                         <div>
-                            <h2>{part.head}</h2>
+                            <h2 aria-hidden="true">{letter}</h2>
                             <ul>
-                                {part.rows.map(({ tag, place }) => (
+                                {rows.map(({ tag, place }) => (
                                     <li class="fold open" data-tag={place}>
                                         <div class="tonetag">
                                             <span class="tonetag-forms">
@@ -67,13 +93,8 @@ const parts = [
                             </ul>
                         </div>
                     </section>
-                ))
-            }
-        </div>
-
-        {/* What a tone tag is, who it helps, and that nobody has to learn them: the project's own words. */}
-        <div class="prose tonetags-about">
-            <Content />
+                ))}
+            </div>
         </div>
 
         <PrevNext
