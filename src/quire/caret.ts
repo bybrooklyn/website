@@ -123,7 +123,9 @@ export function createCaret(root: HTMLElement, frame: HTMLElement, first: readon
      * fading in. True when it is shown.
      */
     const move = (whole = false, atOnce = false) => {
-        const box = document.activeElement === root || root.contains(document.activeElement) ? caretBox(root, frame) : null;
+        // a field inside the document (a code block's language, a picture's alt text) has its own caret; the text's is not drawn beside it
+        const field = document.activeElement instanceof HTMLInputElement || document.activeElement instanceof HTMLTextAreaElement;
+        const box = !field && (document.activeElement === root || root.contains(document.activeElement)) ? caretBox(root, frame) : null;
         const was = element.classList.contains("shown");
         element.classList.toggle("shown", !!box);
         if (!box) return false;
