@@ -1280,30 +1280,41 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
             if (at) commit(apply(editor, { state: { doc: editor.state.doc, selection: { anchor: at, focus: at } }, kind: "move" }, Date.now()));
             return;
         }
-        // a callout's label steps to the next kind; a folding section's button sets whether it starts open
+        if (pressControl(target)) event.preventDefault();
+    }
+
+    /** Presses a control drawn in the document, if the target is in one: a callout's label steps to the next kind, a folding section's button sets whether it starts open, a task's box is ticked. True if it was one. */
+    function pressControl(target: HTMLElement): boolean {
         const kind = target.closest?.("[data-callout-kind]") as HTMLElement | null;
         if (kind && root.contains(kind)) {
-            event.preventDefault();
             const path = pathOf(kind, kind.dataset.calloutKind);
             const block = blockAt(editor.state.doc, path);
-            if (block?.kind !== "quote" || block.callout === undefined) return;
+            if (block?.kind !== "quote" || block.callout === undefined) return true;
             const next = CALLOUTS[(CALLOUTS.indexOf(block.callout.toUpperCase()) + 1) % CALLOUTS.length]!;
             run((doc) => setBox(doc, path, { callout: next }));
-            return;
+            return true;
         }
         const fold = target.closest?.("[data-fold]") as HTMLElement | null;
         if (fold && root.contains(fold)) {
-            event.preventDefault();
             const path = pathOf(fold, fold.dataset.fold);
             const block = blockAt(editor.state.doc, path);
             if (block?.kind === "quote" && block.details) run((doc) => setBox(doc, path, { details: { ...block.details!, open: !block.details!.open } }));
-            return;
+            return true;
         }
         const box = target.closest?.("[data-box]") as HTMLElement | null;
-        if (!box || !root.contains(box)) return;
-        event.preventDefault();
+        if (!box || !root.contains(box)) return false;
         const path = pathOf(box, box.dataset.box);
         run((doc) => toggleTask(doc, path));
+        return true;
+    }
+
+    /**
+     * A click that no pointer made (a screen reader's activation, or Enter or Space on a focused
+     * control) presses the control it is on; a pointer's click was already taken at its press.
+     */
+    function onClick(event: MouseEvent) {
+        if (event.detail !== 0 || !(event.target instanceof HTMLElement)) return;
+        if (pressControl(event.target)) event.preventDefault();
     }
 
     function looksLikeMarkdown(text: string): boolean {
@@ -1419,6 +1430,7 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
         [root, "compositionend", onCompositionEnd as EventListener],
         [root, "mousedown", onMouseDown as EventListener],
         [root, "pointerdown", onPress],
+        [root, "click", onClick as EventListener],
         [root, "focus", onFocus],
         [root, "paste", onPaste as EventListener],
         [root, "copy", onCopy as EventListener],
