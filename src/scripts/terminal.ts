@@ -370,6 +370,20 @@ if (typeof document !== "undefined") {
         let cover: ReturnType<typeof shade> | undefined;
         /** Keeps the terminal's room in the page while it is out of it, so the page under it does not move. */
         let room: HTMLElement | undefined;
+        /** Open, the page under it is out of reach of a screen reader as well as of Tab: what is set inert, to be given back. */
+        let stilled: HTMLElement[] = [];
+        const reach = (to: boolean) => {
+            for (const other of stilled) other.inert = false;
+            stilled = [];
+            if (!to) return;
+            for (let at: HTMLElement = host; at.parentElement && at !== document.body; at = at.parentElement) {
+                for (const other of at.parentElement.children) {
+                    if (other === at || !(other instanceof HTMLElement) || other.inert || other.classList.contains("terminal-shade")) continue;
+                    other.inert = true;
+                    stilled.push(other);
+                }
+            }
+        };
         const open = (to: boolean, moving = true) => {
             if (to === host.classList.contains("open")) return;
             const from = boxOf(frame);
@@ -383,6 +397,7 @@ if (typeof document !== "undefined") {
                 room?.remove();
                 cover?.lift();
             }
+            reach(to);
             host.classList.toggle("open", to);
             document.documentElement.classList.toggle("terminal-open", to);
             if (grow) [grow.dataset.shows, grow.ariaLabel, grow.title, grow.ariaExpanded] = [to ? "close" : "grow", to ? "Close" : "Full size", to ? "Close" : "Full size", String(to)];
