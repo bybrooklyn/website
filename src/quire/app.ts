@@ -77,7 +77,11 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
     const remember = (store: Store, entry: Entry) => {
         const place = keyOf(store);
         // a file or folder opened from the computer cannot be opened again without being chosen again
-        if (place === "browser" || place === "github") local()?.setItem(PLACE_KEY, JSON.stringify({ place, id: entry.id, name: entry.name }));
+        try {
+            if (place === "browser" || place === "github") local()?.setItem(PLACE_KEY, JSON.stringify({ place, id: entry.id, name: entry.name }));
+        } catch {
+            // a browser with no room keeps working; the document is only not opened again next time
+        }
     };
 
     // the documents list is shown for a place, which is the current document's until another is chosen
