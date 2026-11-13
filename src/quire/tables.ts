@@ -6,7 +6,7 @@ import { addColumn, addRow, blockAt, removeColumn, removeRow, setColumnAlign, ty
 import type { State } from "./history";
 import { caret, tableOf } from "./keys";
 import type { Surface } from "./surface";
-import { control, icon, make } from "./ui";
+import { control, icon, make, type MenuItem } from "./ui";
 
 /** The table the cursor is in, and which row (0 is the heading row) and column. */
 export function tableAt(doc: Document, path: number[]): { path: number[]; table: Table; row: number; column: number } | undefined {
@@ -60,7 +60,7 @@ export function alignHere(align: Align): (state: State) => State {
  * Builds the table controls for a surface. `top` is how far down the window the editor's own top
  * reaches: the controls stay under it, never drawn over the tools there.
  */
-export function createTableTools(surface: Surface, top: () => number = () => 0): { element: HTMLElement } {
+export function createTableTools(surface: Surface, top: () => number = () => 0): { element: HTMLElement; lines(): MenuItem[] } {
     const tools = make("div", "quire-table-tools");
     tools.setAttribute("role", "toolbar");
     tools.setAttribute("aria-label", "Table");
@@ -132,7 +132,11 @@ export function createTableTools(surface: Surface, top: () => number = () => 0):
     surface.on("change", () => requestAnimationFrame(update));
     addEventListener("scroll", place, { passive: true });
     addEventListener("resize", place);
-    return { element: tools };
+    return {
+        element: tools,
+        /** The strip's controls as lines, while the cursor is in a table, for the command palette. */
+        lines: () => (shownFor ? [...tools.querySelectorAll<HTMLButtonElement>("button")].map((button) => ({ label: button.getAttribute("aria-label") ?? "", run: () => button.click() })) : []),
+    };
 }
 
 /** An icon with a small + or minus beside it. */

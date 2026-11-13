@@ -1,7 +1,7 @@
 /* mdQuire's pictures, notes and inserts: the frame round a picked picture with its handles and
    strip (src/quire/picture-tools.ts), the writer's notes marked on her text and set in the margin
    beside it (comments.ts), the grid of special characters (inserts.ts), and the setup of the page
-   for print as PDF (export.ts). Loaded after quire.css, whose tokens it uses. Everything here that
+   for print as PDF (export.ts), and the command palette (palette.ts). Loaded after quire.css, whose tokens it uses. Everything here that
    is not always there grows in from where it was asked for and goes back there, and holds still
    under prefers-reduced-motion. */
 
@@ -720,5 +720,89 @@
     .quire-note-actions,
     .quire-special {
         transition: none;
+    }
+}
+
+/* ---- the command palette (palette.ts): a quiet button resting in the window's bottom left corner,
+   and the list that grows up out of it, or out of the cursor for a slash on an empty line ---- */
+
+/* the button keeps the corner; a word counter beside it starts 3.5rem in from the left */
+.quire-button.quire-palette-button {
+    position: fixed;
+    bottom: 0.75rem;
+    left: 0.75rem;
+    z-index: 40;
+    width: 2.25rem;
+    min-width: 0;
+    height: 2.25rem;
+    padding: 0;
+    border-radius: 50%;
+    background: var(--panel-raised);
+    box-shadow: 0 0.15rem 0.5rem oklch(0.05 0.02 300 / 0.35);
+    color: var(--muted);
+}
+
+.quire-button.quire-palette-button:is(:hover, .open) {
+    background: color-mix(in oklch, var(--ink) 10%, var(--panel-raised));
+    color: var(--ink);
+}
+
+.quire-menu-items:has(> .quire-palette-form) {
+    max-width: none;
+    padding: 0;
+}
+
+/* the field over the list, with room round it for its focus ring */
+.quire-palette-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    box-sizing: border-box;
+    width: min(26rem, 100vw - 1.5rem);
+    padding: 0.5rem 0.35rem 0.35rem;
+}
+
+.quire-link-field.quire-palette-field {
+    box-sizing: border-box;
+    width: calc(100% - 0.4rem);
+    margin: 0.15rem 0.2rem 0;
+}
+
+.quire-palette-field::placeholder {
+    color: var(--muted);
+    opacity: 1;
+}
+
+/* as tall as the seven it opens on, so that typing does not move the field */
+.quire-palette-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.05rem;
+    min-height: calc(7 * 2.15rem);
+}
+
+/* a line with no icon starts its words where the others do */
+.quire-palette-list > .quire-menu-line > .quire-menu-label:first-child {
+    margin-left: 2rem;
+}
+
+.quire-palette-list > .quire-menu-note {
+    padding: 0.4rem 0.8rem;
+    color: var(--muted);
+}
+
+/* on a phone it spans the window's foot */
+@media (max-width: 30rem) {
+    .quire-menu.quire-palette:has(.quire-palette-form) {
+        inset: auto 0 0 !important;
+        width: 100%;
+        margin: 0;
+        border-radius: 12px 12px 0 0;
+        position-area: none !important;
+    }
+
+    .quire-menu-items:has(> .quire-palette-form),
+    .quire-palette-form {
+        width: 100%;
     }
 }

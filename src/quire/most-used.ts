@@ -1,7 +1,8 @@
 // What the writer makes most, so that the slash menu can open on her own five. A thing is counted
 // however it was made (the slash menu, the bar, a menu, its shortcut, or a Markdown mark typed such
-// as `* `): the slash menu compares the document before and after each change that makes things
-// and counts what there is more of. The counts are kept in this browser alone and never sent anywhere.
+// as `* `): the command palette (palette.ts) compares the document before and after each change
+// that makes things and counts what there is more of, and counts apart what is picked from it. The
+// counts are kept in this browser alone and never sent anywhere.
 
 import { isPageBreak, type Block, type Document, type Run } from "./document";
 
@@ -11,8 +12,11 @@ export type Counts = Record<string, number>;
 /** The five the slash menu opens on before anything has been counted, in this order. */
 export const FIRST_FIVE = ["heading2", "bullet", "task", "image", "code"];
 
-/** Where this browser keeps the counts. */
+/** Where this browser keeps the counts of what was made. */
 const KEPT = "quire-most-used";
+
+/** Where it keeps the counts of what was picked from the command palette (palette.ts). */
+export const PICKED = "quire-most-picked";
 
 const LISTS: Record<string, string> = { bullet: "bullet", number: "number", task: "task", definition: "definitions" };
 
@@ -51,8 +55,8 @@ export function counted(counts: Counts, keys: string[]): Counts {
     return next;
 }
 
-/** Counts read from what was kept, anything that is not a whole count of a known thing left out; rubbish reads as nothing counted. */
-export function readCounts(kept: string | null, known: string[]): Counts {
+/** Counts read from what was kept, anything that is not a whole count of a known thing (of anything, with nothing known given) left out; rubbish reads as nothing counted. */
+export function readCounts(kept: string | null, known?: string[]): Counts {
     let value: unknown;
     try {
         value = JSON.parse(kept ?? "{}");
@@ -60,7 +64,7 @@ export function readCounts(kept: string | null, known: string[]): Counts {
         return {};
     }
     if (!value || typeof value !== "object" || Array.isArray(value)) return {};
-    return Object.fromEntries(Object.entries(value).filter(([key, count]) => known.includes(key) && Number.isSafeInteger(count) && count > 0));
+    return Object.fromEntries(Object.entries(value).filter(([key, count]) => (!known || known.includes(key)) && Number.isSafeInteger(count) && count > 0));
 }
 
 /** The items, the most made first; those made as often keep the order they came in. */
@@ -74,20 +78,20 @@ export function opening<T extends { key: string }>(items: T[], counts: Counts): 
     return ranked([...first, ...items.filter((item) => !first.includes(item))], counts);
 }
 
-/** The counts this browser keeps; nothing, where it keeps nothing or cannot be read. */
-export function remembered(known: string[]): Counts {
+/** The counts this browser keeps in a place; nothing, where it keeps nothing or cannot be read. */
+export function remembered(known?: string[], where = KEPT): Counts {
     try {
-        return readCounts(localStorage.getItem(KEPT), known);
+        return readCounts(localStorage.getItem(where), known);
     } catch {
         return {};
     }
 }
 
-/** Keeps the counts in this browser, or forgets them all when given none. Where the browser will not keep them, they are not kept. */
-export function remember(counts?: Counts) {
+/** Keeps the counts in this browser, or forgets them all, made and picked, when given none. Where the browser will not keep them, they are not kept. */
+export function remember(counts?: Counts, where = KEPT) {
     try {
-        if (counts) localStorage.setItem(KEPT, JSON.stringify(counts));
-        else localStorage.removeItem(KEPT);
+        if (counts) localStorage.setItem(where, JSON.stringify(counts));
+        else for (const place of [KEPT, PICKED]) localStorage.removeItem(place);
     } catch {
         // then nothing is learned, and the menu opens on the first five
     }

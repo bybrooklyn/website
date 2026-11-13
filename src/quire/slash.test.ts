@@ -1,4 +1,4 @@
-// What the slash menu is held to: typing after the slash narrows it to the right things, it knows
+// What the slash way into the palette is held to: typing after the slash narrows it to the right things, it knows
 // when the slash is gone, and choosing takes the slash away and makes the block. Run with
 // `bun test src/quire`.
 
@@ -96,12 +96,12 @@ test.skipIf(!chromium())(
             await Bun.write(
                 `${folder}/page.ts`,
                 `import { createSurface } from "${import.meta.dir}/surface.ts";
-                import { createSlash } from "${import.meta.dir}/slash.ts";
+                import { createPalette } from "${import.meta.dir}/palette.ts";
                 import { createEmojiPicker } from "${import.meta.dir}/emoji-picker.ts";
                 import { read } from "${import.meta.dir}/read.ts";
                 const sheet = document.querySelector("#sheet");
                 const surface = createSurface(sheet, read(""));
-                createSlash(surface, () => {});
+                createPalette(surface);
                 createEmojiPicker(surface);
                 surface.focus();
                 window.surface = surface;`,

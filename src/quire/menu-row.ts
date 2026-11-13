@@ -59,7 +59,7 @@ export function headings(state: RowState, act: RowActions): Heading[] {
     const line = (command: Command, label: string, extra: Partial<MenuItem> = {}): MenuItem[] => {
         if (!act[command]) return [];
         const keys = keysFor(command);
-        return [{ label, run: act[command]!, ...(keys && !extra.hint ? { hint: keys } : {}), ...extra }];
+        return [{ label, key: command, run: act[command]!, ...(keys && !extra.hint ? { hint: keys } : {}), ...extra }];
     };
     return [
         {
