@@ -89,8 +89,9 @@ test("a word is looked up in microseconds and suggestions come in milliseconds",
     const sample = ["house", "Colour", "running", "dog's", "NASA", "well-known", "recieve"];
     let start = performance.now();
     for (let index = 0; index < 70_000; index++) words.known(sample[index % sample.length]!, "us");
-    expect(((performance.now() - start) * 1000) / 70_000).toBeLessThan(5);
+    // measured near 0.13 microseconds a word and 6 milliseconds a suggestion: these allow for a busy machine, not for a slower speller
+    expect(((performance.now() - start) * 1000) / 70_000).toBeLessThan(1);
     start = performance.now();
     for (const word of ["definately", "seperate", "accomodate", "goverment", "tommorow"]) words.suggest(word, "us");
-    expect((performance.now() - start) / 5).toBeLessThan(60);
+    expect((performance.now() - start) / 5).toBeLessThan(25);
 });
