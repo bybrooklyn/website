@@ -41,7 +41,6 @@ export interface Engine {
     show_score(): number;
     show_seconds(): number;
     legs_length(): number;
-    show_hop(): number;
     show_bodies(): number;
     show_things(): number;
     show_rays(): number;
@@ -116,9 +115,6 @@ export async function start(bytes: ArrayBuffer): Promise<Engine> {
 
 /** A copy of the list a call just gave, out of the engine's memory. Taken fresh each time, since memory can grow. */
 export const list = (engine: Engine, pointer: number): Float32Array => new Float32Array(engine.memory.buffer, pointer, engine.length()).slice();
-
-/** A copy of `length` f32 out of the engine's memory. */
-export const read = (engine: Engine, pointer: number, length: number): Float32Array => new Float32Array(engine.memory.buffer, pointer, length).slice();
 
 /** A copy of the list of f64 a call just gave (the running numbers kept with what practice learned). */
 export const list64 = (engine: Engine, pointer: number): Float64Array => new Float64Array(engine.memory.buffer, pointer, engine.length()).slice();

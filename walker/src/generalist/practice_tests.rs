@@ -25,7 +25,7 @@ fn mix(hash: &mut u64, values: &[f32]) {
 }
 
 /// The fingerprint of a small learner's state after two updates, which the page's engine must give.
-pub const FINGERPRINT: u64 = 0xe3a5_9b12_d99e_1fc0;
+pub const FINGERPRINT: u64 = 0x25ce_c97f_9917_3d31;
 
 fn fingerprint() -> u64 {
     let mut practice = Practice::new(recipe(0.5), Way::of(2), Settings::default(), 2, 7, 3).unwrap();
@@ -65,18 +65,37 @@ fn the_same_seed_practises_the_same_way_to_the_bit() {
 
 #[test]
 fn a_learner_kept_and_taken_back_goes_on_as_if_never_stopped() {
+    // a short ramp, so the costs are still coming in when the learner is kept
     let settings = Settings { steps: 16, ..Settings::default() };
-    let mut whole = Practice::new(recipe(0.3), Way::of(4), settings, 4, 2, 2).unwrap();
-    let mut halves = Practice::new(recipe(0.3), Way::of(4), settings, 4, 2, 2).unwrap();
+    let way = Way { ramp: 2_000, ..Way::of(2) };
+    let mut whole = Practice::new(recipe(0.3), way, settings, 4, 2, 2).unwrap();
+    let mut broken = Practice::new(recipe(0.3), way, settings, 4, 2, 2).unwrap();
     whole.update();
-    halves.update();
-    let (state, running) = (halves.learner.state(), halves.learner.running());
-    let mut taken = Learner::new(settings, halves.learner.senses, halves.learner.actions, 4, 2);
-    assert!(taken.load(&state, &running));
-    assert_eq!(taken.state(), state);
-    assert_eq!(taken.running(), running);
-    // and a list that does not fit is turned away
+    broken.update();
+    let (state, running) = (broken.learner.state(), broken.learner.running());
+    assert!(broken.worlds.steps > 0 && broken.worlds.steps < way.ramp, "kept partway up the ramp");
+    // everything kept is forgotten, as a new page's learner has it: fresh weights and running numbers,
+    // no updates and no steps practised (its worlds and its draws go on, being no part of what is kept)
+    let fresh = Learner::new(settings, broken.learner.senses, broken.learner.actions, 4, 9);
+    assert!(broken.load(&fresh.state(), &fresh.running()));
+    assert_eq!(broken.worlds.steps, 0);
+    // then taken back
+    assert!(broken.load(&state, &running));
+    assert_eq!(broken.learner.state(), state);
+    assert_eq!(broken.learner.running(), running);
+    whole.update();
+    broken.update();
+    assert_eq!(broken.worlds.steps, whole.worlds.steps);
+    assert_eq!(broken.worlds.way, whole.worlds.way, "the costs go on from where they were");
+    let bits = |practice: &Practice| practice.learner.state().iter().map(|x| x.to_bits()).collect::<Vec<u32>>();
+    assert_eq!(bits(&broken), bits(&whole), "the next update is the unbroken run's, to the bit");
+    // a list that does not fit is turned away, and so is a state kept before the steps were kept with it
+    let mut taken = Learner::new(settings, broken.learner.senses, broken.learner.actions, 4, 2);
     assert!(!taken.load(&state[1..], &running));
+    assert!(!taken.load(&state[..state.len() - 2], &running));
+    let mut halfway = state.clone();
+    *halfway.last_mut().unwrap() = 0.5;
+    assert!(!taken.load(&halfway, &running), "a step count that is not a whole number");
 }
 
 #[test]

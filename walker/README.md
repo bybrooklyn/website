@@ -401,7 +401,8 @@ are 1 m wide and come in twos. A moving platform is 1.2 m wide, starts at the le
 eases across and back. A see-saw's left end starts on the ground.
 
 Planning picks each piece's kind by the amounts, weighed against a fixed 0.3 for a stretch of level
-ground, so with everything at 1 about three pieces in four are something; then a piece of that kind
+ground, so with everything at 1 a piece is level ground 0.3 times in 4.3 and about 93 in 100 are
+something; then a piece of that kind
 evenly, at 60 to 100 percent of the hardest the table allows. Ups and downs lean back toward the
 start's height. Only plus, times and a seeded random generator are used, so the same recipe makes
 the same world to the bit, natively and in every browser, however far at a time it is made.
@@ -446,6 +447,14 @@ given up for level ground if it never can be. The tests lay 4,400 worlds of 150 
 difficulty and check each whole: every one can be crossed. The table keeps within the reach, so no
 planned piece has needed making easier; the checker is there for pieces given whole, by a link or a
 teacher.
+
+That reach is a hopping body's, which evolution's is; practice's body has no hop. Walking to the
+Walker's stride with no hop, two legs get up and over nothing and four legs walk up 0.12 m and over
+0.59 m, and with everything switched on 493 of 500 worlds, at every difficulty, hold a piece beyond
+that (`cargo test --release no_hop -- --ignored --nocapture`). Practised policies bound rather than
+walk to a stride, and get past such pieces (four legs average 44 m through held-out worlds at
+difficulty 0.1), so these pieces are in doubt for practice rather than impossible; how far a body
+with no hop can really get is not measured, and the checker still counts on a hop.
 
 ### The body
 
@@ -572,7 +581,10 @@ network whose backward pass is written by hand. Three files:
   its weight for every output, so one input times its row adds into sixteen outputs side by side
   (SIMD), and four rows of a batch share a row of weights while it is in registers. Every sum is in
   one fixed order, so the same weights and inputs give the same answer to the bit natively and in
-  every browser. Tests hold the gradient to finite differences, for every kind of squash.
+  every browser. Tests hold the gradient to finite differences, for every kind of squash. Adam's
+  small number is 1e-5, added outside the square root (the usual is 1e-8): with gradients shortened
+  to a length of 0.5 over about 23,000 weights, it damps a weight whose gradient stays under about
+  1e-4.
 - `src/generalist/ppo.rs`: the learner. A policy gives the middle of a bell curve for each action,
   with one learned spread per action whatever is sensed; a value network guesses the reward to
   come. Generalised advantage estimation; the clipped objective, the value's error and an entropy
@@ -580,7 +592,9 @@ network whose backward pass is written by hand. Three files:
   running spread of their discounted sums, both kept with the weights; gradients shortened past a
   length; a rate that falls. A run cut short by its time is valued where it was cut, not as if it
   had ended. Every number is in `Settings`. Tested on a point that must reach a mark (it learns to),
-  on advantages worked out by hand, and on the same seed learning to the bit.
+  on advantages worked out by hand, and on the same seed learning to the bit. A sense, a running
+  number or a gradient that is not finite (a blow-up in the physics) is let go rather than learned
+  from.
 - `src/generalist/practice.rs`: the worlds it practises in. Every run is in a fresh world of the
   recipe's kind (its seed has the top bit set), so what is learned must hold in any world of that
   kind; it is measured on held-out worlds, seeds 2 to 17, never practised in. World 1 is the one the
@@ -596,8 +610,8 @@ on 470,000 (`src/minis/generalist.test.ts` prints it).
 
 ### How it moves
 
-After watching evolution's creature the owner said it "just hops to move", and chose: "Let it find its
-own way, but not this". So there is no rule for how to move, and there are costs instead. What was
+Evolution's creature gets about only by hopping. The aim for practice is a creature that finds its own
+way of moving, and not that one. So there is no rule for how to move, and there are costs instead. What was
 measured, on flat ground and in worlds at difficulty 0.1, two legs unless said (`examples/practice.rs`
 prints, beside the learning curve, the share of time spent in the air with nothing ahead to clear and
 the motors' work for each metre, while practising and for the policy on show; `trace=1` prints how
@@ -763,12 +777,18 @@ sends the average and every worker's running numbers back, so all go on from the
 plain messages pass, no shared memory. Practice stops when the page is hidden or scrolled away (the
 page's drawing sends a beat each second, as for evolution). Every three seconds the page is sent the
 policy, and the creature on show is the newest policy acting without drawing, from the start of the
-visitor's world, each time its run ends. Above it, twice a second, small words say what it was just
+visitor's world, each time its run ends, its actions held between decisions by practice's own rule
+(`Way::hold`: each within -1 to 1, and no hop), so what is shown is what was practised; a test holds
+the show and practice to the same trajectory, to the bit. Above it, twice a second, small words say what it was just
 rewarded and charged for: forward, up, effort, in the air for nothing, fell. The status line says how
 long it has practised, how many steps, how far it gets in this world now and on average in practice.
 Everything learned is kept in the browser (IndexedDB) every half minute, for that body and that kind
-of world, and taken up again on the next visit; "start over" forgets it. A learner is about 24,000
-numbers, which does not fit in a link, so a link carries the world and not the brain.
+of world, and taken up again on the next visit; "start over" forgets it. What is kept holds the steps
+practised, so the costs brought in over the first 4 million steps go on from where they were; a
+learner kept before that was added, or of another size, is refused and practice starts afresh. A two-legged learner's
+weights are 23,435 numbers, and all that is kept of it 70,309 (the weights, Adam's two running
+averages as long, its updates, Adam's steps and the steps practised), which does not fit in a link, so
+a link carries the world and not the brain.
 
 Measured in headless Chromium on this machine (Ryzen 7 9700X, 16 threads, four of them busy with
 other work), two legs, the page at 60 frames a second at every effort:
@@ -800,8 +820,8 @@ How it moves, plainly. Two legs: after two minutes it runs a few steps crouched,
 headlong over the first gap and lands on its belly on the moving platform; at 50 of 100 it leaps onto
 the platform and rides it, sitting. After ten minutes it goes on its belly and knees, its legs pushing
 it along in lunges that leave the ground (the words over it say "in the air for nothing" often), and
-in meadow it falls into the first gap, though in practice worlds it averages 27 m. It does not look
-alive in the way she asked. Four legs: from the first minute a quick scurrying run with its feet
+in meadow it falls into the first gap, though in practice worlds it averages 27 m. It does not yet look
+alive, which is the aim. Four legs: from the first minute a quick scurrying run with its feet
 mostly down and short bounds between, 44 m through meadow; after ten minutes a bounding gallop, the
 hind legs pushing together, which takes it up small ledges. At 50 of 100 it stalls at a box and rears
 up on its hind legs at two minutes, and at ten leaps for the moving platform and tips off it. How far
@@ -822,6 +842,16 @@ the share of its time off the ground with nothing ahead to clear, and J/m the mo
 metre, both in the held-out worlds at 20 million steps. Made with `sh examples/compare.sh`
 (`examples/compare.rs`), four runs at a time on a Ryzen 7 9700X with other work going on: 90 runs,
 93 minutes. The same seed learns the same way to the bit, so every number here comes out again.
+
+Each method is measured under the rules it learned under: evolution's runs end as the run's own rule
+has it (after a second with the body down), and practice's as its way has it (for two legs, at the
+first touch of the body once its costs are all in). Measuring evolution by practice's rule would mark
+it down for something it was never bred to avoid. Until 13 November 2026 `compare.rs` measured
+evolution through practice's way, so for two legs by practice's stricter rule; the two-legged
+evolution rows, run again under evolution's own rule (16 held-out worlds, seeds 1 to 5, 20 million
+steps), came out as below to the bit, in distance, air and J/m, since the table was made before two
+legs had that rule. By the stricter rule they would have been 0.2 to 0.4 m less (at 20 million steps
+4.4, 4.0, 2.2 and 2.0 m, in the air 0.30 to 0.51 of the time).
 
 | legs | difficulty | evolution, 5 M | evolution, 20 M | practice, 5 M | practice, 20 M | 20 M took, evolution / practice | air, evolution / practice | J/m, evolution / practice |
 |---|---|---|---|---|---|---|---|---|
@@ -883,7 +913,7 @@ creature and its learning per module instance. A function that gives a list give
 - The show, the best brain so far walking the world from the start, playing the very run it was
   scored on unless it is touched: `show_reset()`, `show_step(seconds) -> steps`, `show_over()`,
   `show_end()` (how it ended: 0 going, 1 time, 2 down, 3 stalled, 4 hazard, 5 fell),
-  `show_distance()`, `show_furthest()`, `show_score()`, `show_seconds()`, `show_hop()` (1 mid-hop),
+  `show_distance()`, `show_furthest()`, `show_score()`, `show_seconds()`,
   `legs_length()`, `show_bodies()` (six f32 a body as the Walker's: the torso, then each leg's upper
   and lower part), `show_things()` (six f32 for each box, moving platform and see-saw plank made: 0, 1
   or 2 for which, x, y, angle, half width, half height), `show_rays()` (the eye's x and y, then for

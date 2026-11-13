@@ -1,7 +1,7 @@
 # The generalist: what already exists
 
-A literature search, 12 Nov 2026, before anything is built or called new. Her choice: "Safe base, one
-risky bet", and "A proper literature search first". The decisions are in `docs/generalist.md`.
+A literature search, 12 Nov 2026, before anything is built or called new. The plan is a safe base
+with one risky bet, and a proper literature search first. The decisions are in `docs/generalist.md`.
 
 ## How to read this
 
@@ -21,14 +21,14 @@ literature uses a GPU or a cluster.
 
 ## 1. Neurons that are evolved programs
 
-Her words: each neuron's rule is found, not designed; "allow new neuron types to be built by the model
-itself".
+The aim: each neuron's rule is found, not designed, and new kinds of neuron can be built by the model
+itself.
 
 ### What has been done
 
 1. **"Structurally Flexible Neural Networks: Evolving the Building Blocks for General Agents"**,
    Pedersen, Plantec, Nisioti, Montero, Risi. GECCO 2024. https://arxiv.org/abs/2404.15193 **[opened]**
-   The closest work to her wish. Three neuron types (small linear layers with tanh, parameters shared
+   The closest work to this aim. Three neuron types (small linear layers with tanh, parameters shared
    within a type) and three synapse types (GRUs acting as plasticity rules, gates shared within a type,
    each synapse with its own state). Only the building blocks are optimised, by CMA-ES (population 128),
    never by gradients. 32 neurons, 565 evolved parameters, random sparse wiring each lifetime. One agent
@@ -75,7 +75,7 @@ itself".
    **[search]**: rules as Volterra expansions, fitted by CMA-ES; recovers Oja's rule; a reviewer said it
    stays "at the level of just a few neurons".
 9. **"Discovering Parametric Activation Functions"** (PANGAEA), Bingham and Miikkulainen. Neural
-   Networks 2022. https://arxiv.org/abs/2006.03179 **[search]** Exactly the split she asked for, but
+   Networks 2022. https://arxiv.org/abs/2006.03179 **[search]** Exactly the split wanted here, but
    for activation functions only: evolution finds the shape of the function as a small graph, gradient
    descent tunes the numbers inside. Claims this beats gradient-only learnable activations. Image
    classification, not RL. For RL there is **"Evolving RL: Discovering New Activation Functions using
@@ -146,14 +146,14 @@ rule that adapts to a broken leg". A reviewer would also ask why not simply use 
 
 ## 2. Learning passed down like culture
 
-Her idea: creatures do not inherit brains; a newborn watches the previous one's best runs, then
+The idea: creatures do not inherit brains; a newborn watches the previous one's best runs, then
 practises; skills accumulate without copying weights.
 
 ### What has been done
 
 1. **"Artificial Generational Intelligence: Cultural Accumulation in Reinforcement Learning"**, Cook,
    Lu, Hughes, Leibo, Foerster. NeurIPS 2024. https://arxiv.org/abs/2406.00392 **[opened, full text]**
-   This is her idea, already done. Its "in-weights accumulation" (Algorithm 3) starts each generation
+   This is the idea, already done. Its "in-weights accumulation" (Algorithm 3) starts each generation
    from fresh random parameters, puts the previous generation's best agent into the same environment,
    lets the newborn see it with a probability that falls linearly to zero over training, and trains with
    ordinary PPO and no imitation loss. "We do not assume that the new learner has access to the policies
@@ -229,8 +229,8 @@ Cook et al. 2024. Any article claim here must cite it and say what differs.
 
 ## 3. A brain that rewires, with a budget
 
-Her words: "maybe give it a max neurons number and have it change the synapses and connections and
-thoughts more". Connections are added, cut and moved while it lives, each costing energy from the food
+The aim: a brain with a most number of neurons, which changes its synapses and connections as it
+lives. Connections are added, cut and moved while it lives, each costing energy from the food
 it finds.
 
 ### What has been done
@@ -322,9 +322,9 @@ would ask: is the energy economy doing anything a plain L1 penalty or a fixed ca
 
 ---
 
-## 4. "Not just linear": small non-feedforward controllers
+## 4. More than linear: small non-feedforward controllers
 
-Her remark: "lets not have the brain just be linear yknow. its called the generalist for a reason".
+The aim: a brain that is more than a plain stack of layers, as a generalist should have.
 Everything here is well established; it belongs in the safe base, not in a novelty claim.
 
 - **Continuous-time recurrent networks.** Beer and Gallagher, "Evolving dynamical neural networks for
@@ -342,7 +342,7 @@ Everything here is well established; it belongs in the safe base, not in a novel
 - **Rhythm generators under a learned conductor.** "CPG-RL: Learning Central Pattern Generators for
   Quadruped Locomotion", Bellegarda and Ijspeert, RA-L 2022, https://arxiv.org/abs/2211.00458
   **[search]**: the policy sets oscillator amplitude and frequency; transfers to a real robot carrying
-  115% of its mass. This is exactly her "rhythm neurons the brain conducts".
+  115% of its mass. This is exactly the idea of rhythm neurons the brain conducts.
 - **Modular and graph policies.** "One Policy to Control Them All", Huang, Mordatch, Pathak, ICML 2020,
   https://arxiv.org/abs/2007.04976 **[search]**: one small shared network per actuator, messages
   between them; 20+ planar bodies. "My Body is a Cage", Kurin et al., ICLR 2021,
@@ -368,7 +368,7 @@ pass must support; CPGs help gait but can fight a reward that wants hops removed
 
 First experiment (safe base, low risk, no newness): on the same worlds and budget, compare MLP, GRU
 memory, CTRNN-style leaky neurons, and MLP plus four oscillators the policy conducts. Measure score on
-held-out worlds, effort per metre, and time airborne with nothing to clear (her "just hops" complaint).
+held-out worlds, effort per metre, and time airborne with nothing to clear (evolution's creature moves only by hopping, which this is meant to avoid).
 
 ---
 
@@ -423,9 +423,9 @@ Why this one:
   produces something worth seeing, and either answer is reportable.
 - **On the page.** It shows better than anything else: the brain's picture with wires appearing and
   dying, an energy bar split between muscles and mind, a visitor breaking a leg and watching wires
-  re-route. It fits her builder (she sets the neuron cap and the price of a synapse).
-- **Fit.** It is her own limit ("a max neurons number ... change the synapses and connections and
-  thoughts more"), it uses the needs and food already planned, and a generalist that budgets its own
+  re-route. It fits a builder in which the neuron cap and the price of a synapse are set by hand.
+- **Fit.** It is the limit wanted (a most number of neurons, with the synapses and connections
+  changing), it uses the needs and food already planned, and a generalist that budgets its own
   mind is a story an article can tell.
 - **How it takes in idea 1, cheaply.** Make the grow and cut rule a tiny formula with three or four
   evolved coefficients (how much to weigh weight size, recent use, co-activity and gradient), evolved

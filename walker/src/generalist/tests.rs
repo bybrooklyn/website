@@ -148,7 +148,7 @@ fn sizes(difficulty: f32, kind: Kind, size: fn(&Piece) -> f32) -> (f32, f32) {
     for seed in 0..300 {
         let mut plan = Plan::new(recipe(seed, difficulty));
         for _ in 0..40 {
-            let piece = plan.next();
+            let piece = plan.piece();
             if piece.kind == kind {
                 most = most.max(size(&piece));
                 sum += size(&piece);
@@ -159,9 +159,12 @@ fn sizes(difficulty: f32, kind: Kind, size: fn(&Piece) -> f32) -> (f32, f32) {
     (most, sum / count.max(1) as f32)
 }
 
+/// A kind of piece, the size of one that the table limits, and the table's limit at a difficulty.
+type Check = (Kind, fn(&Piece) -> f32, fn(f32) -> f32);
+
 #[test]
 fn difficulty_means_the_sizes_in_the_table() {
-    let checks: [(Kind, fn(&Piece) -> f32, fn(f32) -> f32); 8] = [
+    let checks: [Check; 8] = [
         (Kind::Gap, |p| p.a, Table::gap),
         (Kind::Stairs, |p| p.b.abs(), Table::stair),
         (Kind::Ledge, |p| p.a, Table::ledge),

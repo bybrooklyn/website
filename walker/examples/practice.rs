@@ -187,7 +187,7 @@ fn main() {
             practice.learner.updated();
             collect_time += collected;
             train_time += began.elapsed().as_secs_f64() - collected;
-            if practice.learner.updates % 50 == 0 {
+            if practice.learner.updates.is_multiple_of(50) {
                 println!("# collecting {:.0}% of the time, the epochs {:.0}%", 100.0 * collect_time / (collect_time + train_time), 100.0 * train_time / (collect_time + train_time));
             }
         } else {

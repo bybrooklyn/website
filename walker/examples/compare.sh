@@ -7,7 +7,8 @@
 #
 #     sh examples/compare.sh > compare.txt
 
-cargo build --release --example compare 2>/dev/null
+# a failed build stops here, rather than running a binary left from before
+cargo build --release --example compare || exit 1
 {
     for method in practice evolution; do
         for legs in 2 4; do

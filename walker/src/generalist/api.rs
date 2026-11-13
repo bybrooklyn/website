@@ -166,7 +166,6 @@ number!(show_furthest, f32, 0.0, |page| page.show.judge.furthest);
 number!(show_score, f32, 0.0, |page| page.show.judge.score);
 number!(show_seconds, f32, 0.0, |page| page.show.judge.steps as f32 * crate::physics::STEP);
 number!(legs_length, u32, 0, |page| page.legs);
-number!(show_hop, u32, 0, |page| u32::from(matches!(page.show.body.hop, super::body::Hop::Crouch(_) | super::body::Hop::Spring(_))));
 list!(show_bodies, |page| page.bodies());
 list!(show_things, |page| page.things());
 list!(show_rays, |page| page.rays());
@@ -199,7 +198,8 @@ pub extern "C" fn show_drop() {
 #[unsafe(no_mangle)]
 pub extern "C" fn land_ground(until: f32, from: u32) -> *const f32 {
     match page() {
-        Some(page) => give(page.ground(until.min(1.0e6), from as usize)),
+        // a NaN would otherwise pass min() as 1e6 metres of world to make
+        Some(page) => give(page.ground(if until.is_finite() { until.min(1.0e6) } else { 0.0 }, from as usize)),
         None => give(&[]),
     }
 }
@@ -311,6 +311,7 @@ pub extern "C" fn practice_local() -> *const f64 {
     practice.learner.collect(&mut practice.worlds);
     practice.learner.epochs();
     practice.learner.updated();
+    practice.learner.practised = practice.worlds.steps;
     page.running_out = practice.learner.rollout_sensed.numbers();
     page.running_out.extend(practice.learner.rollout_returned.numbers());
     give64(&page.running_out)
@@ -421,7 +422,7 @@ pub extern "C" fn practice_running() -> *const f64 {
 pub extern "C" fn state_room(weights: u32) -> *mut f32 {
     let Some(page) = page() else { return core::ptr::null_mut() };
     let (state, _) = page.rooms();
-    let length = if weights != 0 { (state - 2) / 3 } else { state };
+    let length = if weights != 0 { (state - super::ppo::KEPT_AFTER) / 3 } else { state };
     page.state_room.clear();
     page.state_room.resize(length, 0.0);
     *LENGTH.get() = length;
@@ -445,7 +446,7 @@ pub extern "C" fn running_room() -> *mut f64 {
 pub extern "C" fn practice_load() -> u32 {
     let Some(page) = page() else { return 0 };
     let (state, running) = (core::mem::take(&mut page.state_room), core::mem::take(&mut page.running_room));
-    let taken = page.practice.as_mut().is_some_and(|practice| practice.learner.load(&state, &running));
+    let taken = page.practice.as_mut().is_some_and(|practice| practice.load(&state, &running));
     (page.state_room, page.running_room) = (state, running);
     u32::from(taken)
 }
@@ -484,7 +485,7 @@ pub extern "C" fn net_work(rounds: u32, backward: u32) -> u32 {
             net.backward(&weights, &input, rows, &mut work, &mut grads, None);
         }
     }
-    rounds * rows as u32
+    rounds.saturating_mul(rows as u32)
 }
 
 /// What the show's creature was rewarded and charged for since the last call, five f32: its run's own

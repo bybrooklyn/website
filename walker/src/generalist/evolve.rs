@@ -99,22 +99,22 @@ impl Evolution {
         let mut next = 0;
         loop {
             // every free lane takes the next brain, from the start
-            for lane in 0..LANES {
-                if which[lane].is_none() && next < count {
+            for (lane, slot) in which.iter_mut().enumerate() {
+                if slot.is_none() && next < count {
                     let brain = weights(self, next);
                     self.lanes.restart(lane);
                     self.brains[lane].load(&brain);
                     self.lanes.runs[lane].sense(&mut self.observations[lane * senses..(lane + 1) * senses]);
-                    which[lane] = Some(next);
+                    *slot = Some(next);
                     next += 1;
                 }
             }
             if which.iter().all(Option::is_none) {
                 break;
             }
-            for lane in 0..LANES {
+            for (lane, slot) in which.iter().enumerate() {
                 let actions = &mut self.actions[lane * wide..(lane + 1) * wide];
-                if which[lane].is_some() {
+                if slot.is_some() {
                     self.brains[lane].think(&self.observations[lane * senses..(lane + 1) * senses]);
                     actions.copy_from_slice(&self.brains[lane].outputs);
                 } else {
@@ -125,10 +125,10 @@ impl Evolution {
             self.lanes.step(&self.actions, &mut self.observations, &mut self.rewards, &mut self.done);
             let running = which.iter().filter(|w| w.is_some()).count() as u64;
             self.steps += (self.lanes.steps - before) / LANES as u64 * running;
-            for lane in 0..LANES {
-                if let Some(k) = which[lane].filter(|_| self.done[lane] == 1.0) {
+            for (lane, slot) in which.iter_mut().enumerate() {
+                if let Some(k) = slot.filter(|_| self.done[lane] == 1.0) {
                     done(k, self.lanes.finished[lane], self.lanes.distances[lane]);
-                    which[lane] = None;
+                    *slot = None;
                 }
             }
         }
@@ -168,7 +168,8 @@ impl Evolution {
 
     /// Takes in how a member of this generation did; once all have, the next generation is bred.
     pub fn record(&mut self, index: usize, score: f32, distance: f32) {
-        if index >= self.size || self.scored[index] {
+        // a score that is not a number would win or lose every comparison in breeding
+        if index >= self.size || self.scored[index] || !score.is_finite() || !distance.is_finite() {
             return;
         }
         self.scores[index] = score;

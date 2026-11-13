@@ -131,9 +131,9 @@ impl Body {
             if self.aims.len() != walking {
                 self.aims = self.creature.joints.iter().map(|&joint| world.joints[joint as usize].angle(&world.bodies)).collect();
             }
-            for i in 0..walking {
+            for (i, &action) in actions.iter().enumerate().take(walking) {
                 let joint = &world.joints[self.creature.joints[i] as usize];
-                let wanted = joint.lower + 0.5 * (clamp(actions[i], -1.0, 1.0) + 1.0) * (joint.upper - joint.lower);
+                let wanted = joint.lower + 0.5 * (clamp(action, -1.0, 1.0) + 1.0) * (joint.upper - joint.lower);
                 self.aims[i] += self.ease * (wanted - self.aims[i]);
                 self.creature.aim(world, i, self.aims[i]);
                 let joint = &mut world.joints[self.creature.joints[i] as usize];

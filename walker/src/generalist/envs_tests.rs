@@ -156,6 +156,19 @@ fn evolution_learns_the_same_way_however_its_runs_are_shared_out_and_gets_furthe
     assert!(last > first && alone.best_distance > 1.5, "furthest {first} at first, {last} after 25 generations");
 }
 
+#[test]
+fn a_score_handed_back_that_is_not_a_number_is_refused() {
+    let mut evolution = Evolution::new(recipe(5, 0.1), 2, 6, 8, 1, 0, 8.0, 3).unwrap();
+    evolution.record(0, f32::NAN, 1.0);
+    evolution.record(1, 2.0, f32::INFINITY);
+    assert!(!evolution.scored[0] && !evolution.scored[1], "left to be scored again");
+    for i in 0..6 {
+        evolution.record(i, i as f32, 1.0);
+    }
+    assert_eq!(evolution.generation, 1);
+    assert!(evolution.history_mean.iter().chain(&evolution.history_best).all(|x| x.is_finite()));
+}
+
 // Natively, on the machine this was written on (a Ryzen 7 9700X, busy with other work), 64 two-legged
 // creatures, seeing with sixteen rays each, stepped about 340,000 times a second on one core.
 const FLOOR: f64 = 30_000.0;

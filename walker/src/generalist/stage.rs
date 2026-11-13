@@ -188,10 +188,10 @@ impl Stage {
                 k += 1;
                 continue;
             }
-            // a see-saw's pivot first, as it comes after its plank
+            // a see-saw's plank, then its pivot, which has slid into the plank's place
             let count = if made.thing == Thing::Seesaw { 2 } else { 1 };
             for _ in 0..count {
-                self.world.remove_body(made.body + count - 1);
+                self.world.remove_body(made.body);
             }
             self.made.remove(k);
             for later in &mut self.made {

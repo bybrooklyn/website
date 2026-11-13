@@ -171,6 +171,42 @@ fn learner_advantages(learner: &Learner) -> Vec<f32> {
 }
 
 #[test]
+fn more_minibatches_asked_than_there_are_samples_is_a_minibatch_of_one_each() {
+    let settings = Settings { steps: 2, minibatches: 64, ..toy() };
+    let mut task = Reach::new(4, 1);
+    let mut learner = Learner::new(settings, 2, 1, 4, 3);
+    learner.begin(&mut task);
+    learner.update(&mut task);
+    assert!(learner.weights.iter().all(|w| w.is_finite()));
+}
+
+#[test]
+fn a_number_that_is_not_finite_never_gets_into_what_is_learned() {
+    // a running mean is not spoiled by one row with a NaN or an infinity in it
+    let mut running = Running::new(2);
+    running.add(&[1.0, 2.0]);
+    running.add(&[f32::NAN, 5.0]);
+    running.add(&[3.0, f32::INFINITY]);
+    running.add(&[3.0, 4.0]);
+    assert_eq!((running.count, running.mean[0], running.mean[1]), (2.0, 2.0, 3.0));
+    // a sense that is not finite is taken as nothing out of the ordinary, and acting goes on
+    let mut learner = Learner::new(toy(), 2, 1, 4, 3);
+    let mut action = [0.0f32];
+    learner.act(&[f32::NAN, f32::INFINITY], &mut action);
+    assert!(action[0].is_finite());
+    // a gradient that is not finite moves no weight
+    let before = learner.weights.clone();
+    let mut grads = vec![0.01f32; before.len()];
+    grads[3] = f32::NAN;
+    learner.apply(Some(&grads));
+    assert_eq!(learner.weights, before);
+    grads[3] = f32::INFINITY;
+    learner.apply(Some(&grads));
+    assert_eq!(learner.weights, before);
+    assert!(learner.adam.mean.iter().chain(&learner.adam.square).all(|x| x.is_finite()));
+}
+
+#[test]
 fn merged_running_numbers_are_the_numbers_of_all_of_it() {
     let values: Vec<[f32; 2]> = (0..50).map(|i| [(i as f32 * 0.37).sin() * 3.0, i as f32]).collect();
     let mut whole = Running::new(2);
@@ -202,6 +238,26 @@ fn whole_loss(learner: &Learner) -> f64 {
 #[test]
 fn the_gradient_of_the_whole_loss_is_what_nudging_shows() {
     let settings = Settings { hidden: 8, steps: 8, minibatches: 2, entropy_weight: 0.01, ..toy() };
+    let clipped = gradient_against_nudging(settings, 0.0, 1e-2);
+    // every ratio starts at 1, so here the clipped branch is never the one taken
+    assert_eq!(clipped, 0.0);
+}
+
+#[test]
+fn the_gradient_is_what_nudging_shows_where_ratios_are_clipped_too() {
+    // the weights moved after the rollout, as epochs move them, so some ratios are past 1 +- clip
+    // and the loss there is flat; with the trunk shared between the policy and the value as well
+    for shared in [false, true] {
+        let settings = Settings { hidden: 8, steps: 16, minibatches: 2, entropy_weight: 0.01, shared, ..toy() };
+        let clipped = gradient_against_nudging(settings, 0.6, 1e-3);
+        assert!(clipped > 0.2 && clipped < 0.9, "shared {shared}: {clipped} of the samples clipped");
+    }
+}
+
+/// Holds the gradient of the whole loss over a minibatch to finite differences of step `h`, the
+/// weights moved by up to `moved` after the rollout was collected. Gives the share of the samples
+/// whose ratio was clipped.
+fn gradient_against_nudging(settings: Settings, moved: f32, h: f32) -> f32 {
     let mut task = Reach::new(4, 11);
     let mut learner = Learner::new(settings, 2, 1, 4, 3);
     // weights away from where they start, so the policy's means and spreads are not all alike
@@ -211,11 +267,14 @@ fn the_gradient_of_the_whole_loss_is_what_nudging_shows() {
     }
     learner.begin(&mut task);
     learner.collect(&mut task);
+    for w in learner.weights.iter_mut() {
+        *w += moved * (2.0 * random.unit() - 1.0);
+    }
     learner.shuffle();
     learner.gradient(1);
+    let clipped = learner.report.clipped;
     let grads = learner.grads.clone();
-    let h = 1e-2f32;
-    for k in 0..learner.weights.len() {
+    for (k, &grad) in grads.iter().enumerate() {
         let kept = learner.weights[k];
         learner.weights[k] = kept + h;
         learner.gradient(1);
@@ -225,7 +284,8 @@ fn the_gradient_of_the_whole_loss_is_what_nudging_shows() {
         let down = whole_loss(&learner);
         learner.weights[k] = kept;
         let wanted = (up - down) / (2.0 * h as f64);
-        let error = (grads[k] as f64 - wanted).abs();
-        assert!(error < 2e-3 + 2e-2 * wanted.abs(), "weight {k}: gradient {}, nudging {wanted}", grads[k]);
+        let error = (grad as f64 - wanted).abs();
+        assert!(error < 2e-3 + 2e-2 * wanted.abs(), "weight {k}: gradient {grad}, nudging {wanted}");
     }
+    clipped
 }

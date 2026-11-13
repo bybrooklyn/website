@@ -54,7 +54,7 @@ fn a_held_creature_goes_where_the_hand_goes_and_falls_when_dropped() {
 fn the_worlds_lists_come_out_as_it_is_made() {
     let mut page = page(4);
     let first = page.ground(100.0, 0).len();
-    assert!(first % 4 == 0 && first > 0);
+    assert!(first.is_multiple_of(4) && first > 0);
     let more = page.ground(300.0, first / 4).len();
     assert!(more > 0 && page.show.stage.land.reached.x >= 300.0);
     assert_eq!(page.blocks(0).len() % 4, 0);
@@ -126,4 +126,52 @@ fn creatures_stepped_for_a_learner_step() {
     let stepped = page.envs.as_ref().unwrap();
     assert_eq!(stepped.observations.len(), 5 * page.senses());
     assert!(stepped.observations.iter().all(|x| x.is_finite()));
+}
+
+#[test]
+fn a_policy_on_show_moves_exactly_as_it_would_in_practice() {
+    use super::ppo::{GOING, Learner, Settings, Task};
+    use super::practice::{Way, Worlds};
+    use alloc::vec;
+    for legs in [2, 4] {
+        let recipe = Recipe { seed: 8, difficulty: 0.2, amounts: [1.0; 4] };
+        let mut page = Page::new(recipe, legs, 8, 8, 1, 0, 30.0, 2).unwrap();
+        page.practice_create(4, 5, 3);
+        let learner = &page.practice.as_ref().unwrap().learner;
+        let (mut state, running) = (learner.state(), learner.running());
+        // the hop's middle pushed to its top, as noise in learning could drift it: practice has no hop,
+        // so what is shown must not hop either
+        let (hidden, senses, actions) = (learner.settings.hidden, learner.senses, learner.actions);
+        state[learner.at[1] + hidden * actions + actions - 1] = 5.0;
+        let mut policy = Learner::new(Settings::default(), senses, actions, 1, 0);
+        assert!(policy.load(&state, &running));
+        (page.state_room, page.running_room) = (state, running);
+        assert!(page.policy_load());
+
+        // the same policy in the same world, as practice and its measuring step it
+        let way = Way::of(legs);
+        let mut worlds = Worlds::alone(recipe, way, &[recipe.seed]).unwrap();
+        let wide = worlds.actions();
+        let (mut sensed, mut asked, mut rewards, mut ends, mut last) = (vec![0.0; senses], vec![0.0; wide], vec![0.0; 1], vec![GOING; 1], vec![0.0; senses]);
+        worlds.observe(&mut sensed);
+        let torso = page.show.body.creature.torso as usize;
+        let at = |run: &super::envs::Run| {
+            let body = &run.stage.world.bodies[torso];
+            ((body.position.x + run.stage.origin).to_bits(), body.position.y.to_bits(), body.angle().to_bits())
+        };
+        let mut decisions = 0;
+        while worlds.going(0) {
+            policy.act(&sensed, &mut asked);
+            worlds.step(&asked, &mut sensed, &mut rewards, &mut ends, &mut last);
+            let mut taken = 0;
+            while taken < way.skip && !page.show.judge.over() {
+                taken += page.show_step(crate::physics::STEP);
+            }
+            assert_eq!(at(&page.show), at(&worlds.runs[0]), "{legs} legs: apart after {decisions} decisions");
+            decisions += 1;
+        }
+        assert!(page.show.judge.over(), "{legs} legs: the show ends when practice's run does");
+        assert_eq!(page.show.judge.end, worlds.runs[0].judge.end);
+        assert!(decisions > 10, "{legs} legs: {decisions} decisions");
+    }
 }
