@@ -396,9 +396,9 @@
         height 0.05s ease-out;
 }
 
-/* a flag color too faint on what it is drawn over has a hairline of the ink round it */
+/* a flag color too faint on what it is drawn over is lightened toward the ink: one plain line, with nothing round it */
 .quire-caret.edged {
-    box-shadow: 0 0 0 0.0625rem color-mix(in oklch, var(--ink) 75%, transparent);
+    background: color-mix(in oklch, var(--caret) 55%, var(--ink));
 }
 
 .quire-caret.shown {
