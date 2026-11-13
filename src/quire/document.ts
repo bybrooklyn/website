@@ -1344,6 +1344,27 @@ export function removeColumn(doc: Document, path: number[], column: number): Doc
     return editTable(doc, path, (found) => (found.header.length <= 1 || column >= found.header.length ? null : { ...found, header: drop(found.header), align: drop(found.align), rows: found.rows.map(drop) }));
 }
 
+/** The order of a table's body rows sorted by a column, as their old numbers: by value when every cell in it with words is a number, as words otherwise, empty cells last. The heading row is not a body row. */
+export function sortedRows(table: Table, column: number, descending = false): number[] {
+    const words = table.rows.map((row) => runsText(row[column] ?? []).trim());
+    const number = (text: string) => (/^[-+]?(\d{1,3}(,\d{3})+|\d*)(\.\d+)?%?$/.test(text) && /\d/.test(text) ? parseFloat(text.replace(/[,%]/g, "")) : NaN);
+    const numeric = words.some((text) => text !== "") && words.every((text) => text === "" || !Number.isNaN(number(text)));
+    const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+    return words
+        .map((_, index) => index)
+        .sort((a, b) => {
+            const [x, y] = [words[a]!, words[b]!];
+            if (x === "" || y === "") return Number(x === "") - Number(y === "");
+            const by = numeric ? number(x) - number(y) : collator.compare(x, y);
+            return descending ? -by : by;
+        });
+}
+
+/** Puts a table's body rows in the order given, as their old numbers. */
+export function orderRows(doc: Document, path: number[], order: number[]): Document {
+    return editTable(doc, path, (found) => (order.length !== found.rows.length || order.every((each, index) => each === index) ? null : { ...found, rows: order.map((index) => found.rows[index]!) }));
+}
+
 /** Sets a column's alignment; null is no alignment. */
 export function setColumnAlign(doc: Document, path: number[], column: number, align: Align | null): Document {
     return editTable(doc, path, (found) => (column >= found.header.length ? null : { ...found, align: found.align.map((each, k) => (k === column ? align : each)) }));

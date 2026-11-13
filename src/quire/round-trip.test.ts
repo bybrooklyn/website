@@ -13,6 +13,7 @@ import { blockAt, blockPaths, changeKind, insertBlock, lengthOf, list, removeBlo
 import type { Action } from "./bar";
 import { recase } from "./capitals";
 import { continuePrevious, markWith, restartAt } from "./numbering";
+import { sortHere } from "./tables";
 import { emojiOf } from "./emoji";
 import { createHistory, record } from "./history";
 import { caret, fragment, paste, step, tableOf, type Editor, type Input } from "./keys";
@@ -330,6 +331,8 @@ function change(editor: Editor, random: ReturnType<typeof generator>, time: numb
             ["restart at 1", restartAt(1)],
             ["restart at 7", restartAt(7)],
             ["continue the list before", continuePrevious],
+            ["sort A to Z", sortHere(false)],
+            ["sort Z to A", sortHere(true)],
         ];
         const [what, command] = random.pick(commands);
         const state = command({ doc, selection: { anchor, focus } });

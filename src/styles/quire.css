@@ -1323,6 +1323,11 @@
     font-weight: 700;
 }
 
+/* sorting is said in letters, A→Z, a little smaller than the text */
+.quire-table-tools .quire-sort {
+    font-size: 0.8rem;
+}
+
 /* the cell the cursor is in, so that the controls' row and column are plain */
 .quire td.quire-here,
 .quire th.quire-here {

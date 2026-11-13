@@ -6,7 +6,7 @@ import { expect, test } from "bun:test";
 import type { State } from "./history";
 import { caret } from "./keys";
 import { read } from "./read";
-import { alignHere, columnRight, removeColumnHere, removeRowHere, rowBelow, tableAt } from "./tables";
+import { alignHere, columnRight, removeColumnHere, removeRowHere, rowBelow, sortHere, tableAt } from "./tables";
 import { write } from "./write";
 
 const TABLE = "| a | b |\n| --- | --- |\n| 1 | 2 |\n";
@@ -41,4 +41,14 @@ test("a column's alignment is set, and set again goes back to none", () => {
     const centred = alignHere("center")(at(1, 1));
     expect(write(centred.doc)).toBe("| a   | b   |\n| --- | :-: |\n| 1   | 2   |\n");
     expect(write(alignHere("center")(centred).doc)).toBe("| a   | b   |\n| --- | --- |\n| 1   | 2   |\n");
+});
+
+test("rows sort by the cursor's column, words A to Z or Z to A and numbers by value, the heading row staying first and the cursor going with its row", () => {
+    const words = "| name | n |\n| --- | --- |\n| pear | 10 |\n| Apple | 9 |\n| éclair | 1,000 |\n|  | 2 |\n";
+    const sorted = sortHere(false)({ doc: read(words), selection: caret([0, 1, 0], 2) });
+    expect(write(sorted.doc).split("\n").slice(2, 6).map((line) => line.split("|")[1]!.trim())).toEqual(["Apple", "éclair", "pear", ""]);
+    expect(sorted.selection).toEqual(caret([0, 3, 0], 2));
+    const numbers = sortHere(true)({ doc: read(words), selection: caret([0, 0, 1], 0) });
+    expect(write(numbers.doc).split("\n").slice(2, 6).map((line) => line.split("|")[2]!.trim())).toEqual(["1,000", "10", "9", "2"]);
+    expect(write(sortHere(false)({ doc: read(TABLE), selection: caret([0, 1, 0], 0) }).doc)).toBe(write(read(TABLE)));
 });
