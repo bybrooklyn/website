@@ -116,7 +116,9 @@ export function createZoom(paper: HTMLElement, room: HTMLElement, space: () => n
         scope().style.setProperty("--margin-mm", String(page().margins));
         const next = wanted();
         // only a sheet wider than its room scrolls; otherwise the Markdown sliding in from the side could be scrolled to
-        room.classList.toggle("wide", !narrow() && (paged() ? next * width * MM > space() + 1 : next > 1.25));
+        // (in a look the sheet's own width is read: zoomed past the window's room on a small window, it scrolls rather than the page)
+        const own = paper.getBoundingClientRect().width / (shown || 1);
+        room.classList.toggle("wide", !narrow() && (paged() ? next * width * MM > space() + 1 : next > 1.25 || next * own > space() + 1));
         if (next === shown) return onChange?.(next);
         // the whole page grows, the caret on it too
         const targets = [paper];

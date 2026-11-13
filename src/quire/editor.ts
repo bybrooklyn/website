@@ -393,7 +393,10 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     const setups = flowMenu("Page setup", { align: "right" });
     // the page as pages of that paper in page view, with the header, footer and numbers of a .quire document
     const pages = createPages(paper, surface, { page: pageNow, rich: () => !!surface.getDocument().quire });
-    const zoom = createZoom(paper, column, space, pageNow, pages.paged, (now) => bar.setZoom(percent(now)));
+    const zoom = createZoom(paper, column, space, pageNow, pages.paged, (now) => {
+        bar.setZoom(percent(now));
+        requestAnimationFrame(() => roomBeside());
+    });
     // ---- the two looks, A (no page) and C (light paper), kept for every document; and page view, kept for each ----
     const looked = (): Look => {
         try {
@@ -450,8 +453,17 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     const openSetup = (from: HTMLElement) => setups.open(from, setupItems(pageNow(), (change) => surface.run((doc) => setPage(doc, { ...pageNow(), ...change }))), true);
     /** The zoom's lines, and for a `.quire` document the page setup, which opens in its place. */
     const zoomLines = (from: () => HTMLElement): MenuItem[] => [{ label: "Page view", pressed: pages.paged(), run: () => showView(!pages.paged()) }, ...zoom.items(), ...(surface.getDocument().quire ? [{ label: "Page setup", hint: "›", run: () => openSetup(from()) }] : [])];
-    // as the Markdown opens beside the sheet, the sheet's column narrows and the sheet follows it
-    if (typeof ResizeObserver !== "undefined") new ResizeObserver(() => zoom.refresh(false)).observe(markdown.element);
+    // as the Markdown opens beside the sheet, or the window (or the browser's own zoom) changes, the sheet's column narrows and the sheet follows it
+    if (typeof ResizeObserver !== "undefined") {
+        // only a change of width matters: the editor grows taller with every line typed
+        let wide = 0;
+        new ResizeObserver(() => zoom.refresh(false)).observe(markdown.element);
+        new ResizeObserver(() => {
+            if (host.clientWidth === wide) return;
+            wide = host.clientWidth;
+            zoom.refresh(false);
+        }).observe(host);
+    }
     // print is given the paper and margins of the page set up
     const printing = make("style");
     document.head.append(printing);
@@ -490,6 +502,20 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     // the document's file, length and where it is kept, in the right margin of the look with no page
     const details = createDetails();
     host.append(details.element);
+    // the outline and the details stand in the margins beside the sheet; when the sheet, zoomed or on a small
+    // window, leaves them too little room to be read whole, they fade away rather than be cut or run under it
+    const roomBeside = () => {
+        const room = parseFloat(getComputedStyle(details.element).width);
+        const least = 8.5 * parseFloat(getComputedStyle(document.documentElement).fontSize);
+        host.classList.toggle("cramped", Number.isFinite(room) && room < least);
+    };
+    let besideAt = 0;
+    if (typeof ResizeObserver !== "undefined")
+        new ResizeObserver(() => {
+            if (host.clientWidth === besideAt) return;
+            besideAt = host.clientWidth;
+            roomBeside();
+        }).observe(host);
     let savedAt: number | undefined;
     const showDetails = () => details.show({ file: fileName(name, surface.getDocument().quire ? ".quire" : surface.getDocument().mdx ? ".mdx" : ".md"), words: countWords(surface.getDocument()), place: store?.label, saved: savedAt });
     let detailing: ReturnType<typeof setTimeout> | undefined;

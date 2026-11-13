@@ -100,8 +100,11 @@ export function chordOf(keys: string): Chord {
 }
 
 /** The chord a key press makes; Ctrl is Cmd on a Mac. */
-export function chordFrom(event: { code: string; ctrlKey: boolean; metaKey: boolean; shiftKey: boolean; altKey: boolean }, mac = false): Chord {
-    return { mod: mac ? event.metaKey : event.ctrlKey, shift: event.shiftKey, alt: event.altKey, code: event.code };
+export function chordFrom(event: { code: string; key?: string; ctrlKey: boolean; metaKey: boolean; shiftKey: boolean; altKey: boolean }, mac = false): Chord {
+    // a key with no place given (some on-screen keyboards, a key sent by a script) is known by its character
+    const key = event.key ?? "";
+    const code = event.code || CODES[key] || (/^[a-z]$/i.test(key) ? `Key${key.toUpperCase()}` : /^\d$/.test(key) ? `Digit${key}` : key);
+    return { mod: mac ? event.metaKey : event.ctrlKey, shift: event.shiftKey, alt: event.altKey, code };
 }
 
 const same = (a: Chord, b: Chord) => a.mod === b.mod && a.shift === b.shift && a.alt === b.alt && a.code === b.code;

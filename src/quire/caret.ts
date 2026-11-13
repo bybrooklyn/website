@@ -60,7 +60,9 @@ export function caretBox(root: HTMLElement, frame: HTMLElement): { left: number;
         const box = (child instanceof Element ? child : element).getBoundingClientRect();
         const style = getComputedStyle(child instanceof Element ? child : element);
         const line = parseFloat(style.lineHeight) || box.height;
-        rect = new DOMRect(box.left + (parseFloat(style.paddingLeft) || 0), box.top + (parseFloat(style.paddingTop) || 0), 0, Math.min(line, box.height || line));
+        // as tall as the text would be there, as the browser's caret is, in the middle of the line
+        const text = Math.min(line, box.height || line, (parseFloat(style.fontSize) || line) * 1.25);
+        rect = new DOMRect(box.left + (parseFloat(style.paddingLeft) || 0), box.top + (parseFloat(style.paddingTop) || 0) + (line - text) / 2, 0, text);
     }
     const origin = frame.getBoundingClientRect();
     // a sheet shown nearer or further (paper.ts) is measured on screen at its zoom, and placed inside at its own size
@@ -68,8 +70,8 @@ export function caretBox(root: HTMLElement, frame: HTMLElement): { left: number;
     return { left: (rect.left - origin.left) / zoom - frame.clientLeft, top: (rect.top - origin.top) / zoom - frame.clientTop, height: rect.height / zoom };
 }
 
-/** How much of the line's height the caret stands: about the height of the letters with their tails. */
-const TALL = 0.9;
+/** How much of the text's height the caret stands: all of it, as the browser's own caret does. */
+const TALL = 1;
 
 /** The colour shown after `index` blinks, going round the list. */
 export function blinkColour(colours: readonly string[], index: number): string {
@@ -125,14 +127,15 @@ export function createCaret(root: HTMLElement, frame: HTMLElement, first: readon
         const was = element.classList.contains("shown");
         element.classList.toggle("shown", !!box);
         if (!box) return false;
-        // as tall as the letters, not the whole line: a little is taken off the line's height, top and bottom alike
+        // as tall as the text, as the browser's own caret is (TALL)
         const tall = box.height * TALL;
         const top = box.top + (box.height - tall) / 2;
         const far = !last || Math.abs(last.top - top) > tall / 2 || Math.abs(last.left - box.left) > tall * 2;
         last = { left: box.left, top, height: tall };
         if (!was || atOnce || far) element.style.transition = "none";
         else if (whole) element.style.transitionProperty = "translate, height";
-        element.style.translate = `${box.left}px ${top}px`;
+        // a hair after the letter before, in proportion to the text, so that it never lies on a letter that reaches its edge (a heading's w)
+        element.style.translate = `${box.left + tall * 0.05}px ${top}px`;
         element.style.height = `${tall}px`;
         if (!was || whole || atOnce || far) {
             void element.offsetWidth;

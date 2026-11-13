@@ -381,12 +381,13 @@
     transition: opacity 0.4s ease 0.1s;
 }
 
-/* the caret, drawn (caret.ts): a thin square-ended line about as tall as the letters, in the flag's colors */
+/* the caret, drawn (caret.ts): a thin square-ended line as tall as the browser's own and where it is, in
+   the flag's colors. It starts where the browser's starts, after the letter before, so it never lies on it */
 .quire-caret {
     --caret: var(--accent);
     position: absolute;
     top: 0;
-    left: -0.045rem;
+    left: 0;
     z-index: 2;
     width: max(0.09rem, 1.5px);
     background: var(--caret);
@@ -1508,6 +1509,18 @@
     /* the outline's own heading is a quiet label, and the panel's close button is not needed beside the page */
     .quire-outline-close {
         display: none;
+    }
+}
+
+/* with too little room beside the sheet to be read whole (it is zoomed, or the window is small), the outline and the details fade away rather than be cut (editor.ts says when) */
+@media (min-width: 64rem) {
+    .quire-editor.cramped .quire-outline.open,
+    .quire-editor.cramped .quire-details {
+        opacity: 0;
+        visibility: hidden;
+        transition:
+            opacity 0.2s ease,
+            visibility 0s linear 0.2s;
     }
 }
 
@@ -3299,13 +3312,15 @@ body.quire-app,
 }
 
 .prose.quire :is(h1, h2, h3, h4, h5, h6) {
+    /* room inside the box for the tails below and the accents above (a top heading is set solid, its line its size) */
     --tail: 0.22em;
-    margin-block: var(--line) calc(var(--line) - var(--tail));
-    padding-block: 0 var(--tail);
+    --crown: 0.08em;
+    margin-block: calc(var(--line) - var(--crown)) calc(var(--line) - var(--tail));
+    padding-block: var(--crown) var(--tail);
 }
 
 .prose.quire > :not(h1, h2, h3, h4, h5, h6) + :is(h1, h2, h3, h4, h5, h6) {
-    margin-top: calc(var(--line) * 1.4);
+    margin-top: calc(var(--line) * 1.4 - var(--crown));
 }
 
 .prose.quire > :first-child {
@@ -3324,7 +3339,7 @@ body.quire-app,
 
 /* a heading straight after a heading: the one line is the first's margin and the room under its tails */
 .prose.quire :is(h1, h2, h3, h4, h5, h6) + :is(h1, h2, h3, h4, h5, h6) {
-    margin-top: 0;
+    margin-top: calc(var(--crown) * -1);
 }
 
 /* ---- lists, as Docs draws them ----

@@ -1084,17 +1084,18 @@ used("the caret is drawn where the cursor is, a line tall, blinking once still i
         const caret = document.querySelector('.quire-caret').getBoundingClientRect();
         const cursor = getSelection().getRangeAt(0).getClientRects()[0];
         const probe = document.createElement('i'); probe.style.color = 'var(--accent)'; document.body.append(probe); const accent = getComputedStyle(probe).color; probe.remove();
-        return { dx: Math.abs(caret.left + caret.width / 2 - cursor.left), dy: Math.abs(caret.top - cursor.top), width: caret.width, height: caret.height, colour: getComputedStyle(document.querySelector('.quire-caret')).backgroundColor, accent };
+        return { dx: Math.abs(caret.left - (cursor.left + cursor.height * 0.05)), dy: Math.abs(caret.top - cursor.top), width: caret.width, height: caret.height, colour: getComputedStyle(document.querySelector('.quire-caret')).backgroundColor, accent };
     })()`);
     expect(seen.dx).toBeLessThan(1.5);
     expect(seen.dy).toBeLessThan(1.5);
     expect(seen.width).toBeGreaterThanOrEqual(1.4);
     expect(seen.width).toBeLessThanOrEqual(2.2);
     expect(seen.height).toBeGreaterThan(18);
-    const flag = ["rgb(213, 45, 0)", "rgb(255, 154, 86)", "rgb(255, 255, 255)", "rgb(211, 98, 164)", "rgb(163, 2, 98) edged"];
+    const flag = ["rgb(213, 45, 0)", "rgb(255, 154, 86)", "rgb(255, 255, 255)", "rgb(211, 98, 164)", "#A30262 edged"];
     expect(flag.map((each) => each.replace(" edged", ""))).toContain(seen.colour);
+    // (an edged colour is drawn lightened toward the ink, one plain line, so it is told by the colour asked for)
     // still, it blinks, and each time it comes back on it is the next colour of the flag
-    const colours = tab.run<string[]>(`new Promise((done) => { const seen = []; const caret = document.querySelector('.quire-caret'); const start = performance.now(); const step = () => { const style = getComputedStyle(caret); if (style.opacity === '1') { const now = style.backgroundColor + (caret.classList.contains('edged') ? ' edged' : ''); if (seen[seen.length - 1] !== now) seen.push(now); } if (performance.now() - start < 6800) requestAnimationFrame(step); else done(seen); }; requestAnimationFrame(step); })`);
+    const colours = tab.run<string[]>(`new Promise((done) => { const seen = []; const caret = document.querySelector('.quire-caret'); const start = performance.now(); const step = () => { const style = getComputedStyle(caret); if (style.opacity === '1') { const now = (caret.classList.contains('edged') ? caret.style.getPropertyValue('--caret').trim() : style.backgroundColor) + (caret.classList.contains('edged') ? ' edged' : ''); if (seen[seen.length - 1] !== now) seen.push(now); } if (performance.now() - start < 6800) requestAnimationFrame(step); else done(seen); }; requestAnimationFrame(step); })`);
     const blinking = await tab.run<number[]>("q.watch('.quire-caret', 'opacity', 2800)");
     expect(blinking).toContain(0);
     expect(blinking[0]).toBe(1);
@@ -1134,7 +1135,7 @@ used("the caret slides briefly when a key moves it along a line, is at once on a
             const caret = document.querySelector(".quire-caret");
             const rect = [...getSelection().getRangeAt(0).getClientRects()].find((box) => box.height > 0);
             const drawn = caret.getBoundingClientRect();
-            done({ sliding: caret.getAnimations().some((each) => each.transitionProperty === "translate"), off: Math.abs(drawn.left + drawn.width / 2 - rect.left) });
+            done({ sliding: caret.getAnimations().some((each) => each.transitionProperty === "translate"), off: Math.abs(drawn.left - (rect.left + rect.height * 0.05)) });
         }, 15))`);
     await tab.press("ArrowRight");
     expect((await after()).sliding).toBe(true);
@@ -1421,7 +1422,8 @@ used("typing, the caret is never a frame behind: on every frame it is within a p
             if (selection.rangeCount && selection.isCollapsed) {
                 const rect = [...selection.getRangeAt(0).getClientRects()].find((box) => box.height > 0);
                 const drawn = caret.getBoundingClientRect();
-                if (rect && caret.classList.contains("shown")) window.behind.push(Math.abs(drawn.left + drawn.width / 2 - rect.left));
+                // the caret starts a hair after the browser's place (a twentieth of the text's height), so it never lies on the letter before
+                if (rect && caret.classList.contains("shown")) window.behind.push(Math.abs(drawn.left - (rect.left + rect.height * 0.05)));
             }
             if (!window.stopLooking) requestAnimationFrame(look);
         };
@@ -1457,6 +1459,39 @@ used("every shortcut in the table that the surface does not keep runs its own co
         return missed;
     })()`);
     expect(missed).toEqual([]);
+});
+
+used("no letter of any block is cut by its box: tails, accents and a leaning f stay inside, in both looks, and the title holds its lines", async () => {
+    const line = "gjpqy ÅÉÑ fj";
+    const markdown = [`${line} first, a paragraph`, ...[1, 2, 3, 4, 5, 6].map((level) => `${"#".repeat(level)} ${line} heading ${level}`), `# ${line} a heading long enough to wrap onto a second line at the width of the column here`, `- ${line} item\n  - ${line} nested`, `1. ${line} number`, `- [ ] ${line} box`, `> ${line} quote`, `> [!NOTE]\n> ${line} callout`, `| ${line} | b |\n| - | - |\n| ${line} | c |`, `Term ${line}\n: ${line} definition`, `-# ${line} subtext`, `*${line} italic f*`, `${line} last`].join("\n\n");
+    for (const paper of [false, true]) {
+        await tab.run(`(() => { document.querySelector(".quire-editor").classList.toggle("look-paper", ${paper}); q.reset(${JSON.stringify(markdown)}); const t = document.querySelector(".quire-title"); t.value = "gjpqy ÅÉÑ fj Welcome to mdQuire, a title long enough to wrap"; t.dispatchEvent(new Event("input", { bubbles: true })); })()`);
+        await tab.wait(400);
+        const cut = await tab.run<string[]>(`(() => {
+            const out = [];
+            const root = document.querySelector(".quire[contenteditable]");
+            for (const top of root.children) {
+                const box = top.getBoundingClientRect();
+                const walker = document.createTreeWalker(top, NodeFilter.SHOW_TEXT);
+                for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+                    if (!node.textContent.trim() || node.parentElement.closest("[contenteditable=false], input, .quire-caret")) continue;
+                    const size = parseFloat(getComputedStyle(node.parentElement).fontSize);
+                    const range = document.createRange();
+                    range.selectNodeContents(node);
+                    for (const rect of range.getClientRects()) {
+                        // the ink of a line is inside its text's box; an italic letter may lean a tenth of an em past it
+                        const lean = getComputedStyle(node.parentElement).fontStyle === "italic" ? size * 0.12 : 0;
+                        if (rect.top < box.top - 0.5 || rect.bottom > box.bottom + 0.5 || rect.left < box.left - 0.5 || rect.right + lean > box.right + 0.5) out.push(top.tagName + " " + JSON.stringify(node.textContent.slice(0, 24)) + " text " + [rect.top, rect.bottom, rect.left, rect.right].map(Math.round) + " box " + [box.top, box.bottom, box.left, box.right].map(Math.round));
+                    }
+                }
+            }
+            const title = document.querySelector(".quire-title");
+            if (title.scrollHeight > title.clientHeight + 1) out.push("the title is cut: " + title.scrollHeight + " in " + title.clientHeight);
+            return out;
+        })()`);
+        expect({ paper, cut }).toEqual({ paper, cut: [] });
+    }
+    await tab.run(`document.querySelector(".quire-editor").classList.remove("look-paper")`);
 });
 
 used("Ctrl+/ opens every shortcut and every piece of typing in a dialog, with a search that narrows it", async () => {
