@@ -1,6 +1,14 @@
 // The tone tags: the list holds together, and the search finds what a person would type.
 import { expect, test } from "bun:test";
-import { find, stem, tags, tidy, words } from "./tags";
+import { find, named, stem, tags, tidy, words } from "./tags";
+
+test("a tag named in the address is read without its slash, and a broken hash does not throw", () => {
+    expect(named("#srs")).toBe("srs");
+    expect(named("#%2FSRS")).toBe("srs");
+    expect(named("")).toBe("");
+    expect(() => named("#%")).not.toThrow();
+    expect(named("#%")).toBe("%");
+});
 
 const first = (typed: string) => find(typed)[0]?.forms[0];
 
