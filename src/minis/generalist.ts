@@ -9,7 +9,8 @@
 // start, with its brain drawn beside it as it thinks. Its rays can be drawn, faint, so a visitor sees
 // what it sees. It can be picked up and dropped, or pushed.
 //
-// The controls are in a column at the side, in the panel style the minis use. What this and the
+// The world's and the body's controls are in a strip under the world, and the brain, a chart of how far
+// it gets and the learning in a column beside it, in the panel style the minis use. What this and the
 // worker share is in roaming.ts.
 
 import { el, type Mote, type Scene } from "../mote/stage";
@@ -75,6 +76,8 @@ export default function generalist(m: Mote): Scene {
     /** How practice goes: how long and how many steps, how far its practice runs get, how far the shown creature got in its last run here, and the next policy to show. */
     let practice = { seconds: 0, steps: 0, reached: 0, here: -1, speed: 0, waited: [0, 0], hard: 0 };
     let policy: { weights: Float32Array; running: Float64Array } | undefined;
+    /** How far it got as it learned, for the chart: steps practised (or generations) against metres. */
+    let learned: { x: number; y: number }[] = [];
     /** What the creature on show was just rewarded and charged for, said beside it, and when it was last read. */
     let lately: { words: string; good: boolean }[] = [];
     let heardRewards = 0;
@@ -112,6 +115,14 @@ export default function generalist(m: Mote): Scene {
 
     const tell = (order: Order | PracticeOrder) => worker?.postMessage(order);
 
+    /** A point for the chart, when there is more learned to show; when there are many, every other one is let go. */
+    const note = (x: number, y: number) => {
+        // nothing until a run has been finished, so the line does not start with a fall to nothing
+        if (x <= (learned.at(-1)?.x ?? -1) || (learned.length === 0 && y <= 0)) return;
+        learned.push({ x, y });
+        if (learned.length > 400) learned = learned.filter((_, k) => k % 2 === 0 || k === learned.length - 1);
+    };
+
     /** The world's lists as far as `until`, read again from where they were left. */
     const extend = (until: number) => {
         if (!engine || until <= reached) return;
@@ -124,7 +135,7 @@ export default function generalist(m: Mote): Scene {
 
     const begin = () => {
         id += 1;
-        [generation, runs, waiting, shown, furthest, ended] = [0, 0, undefined, false, 0, 0];
+        [generation, runs, waiting, shown, furthest, ended, learned] = [0, 0, undefined, false, 0, 0, []];
         const { seed, difficulty, amounts } = engineRecipe(recipe);
         const brainSeed = (Math.random() * 2 ** 32) >>> 0;
         if (engine) {
@@ -183,6 +194,7 @@ export default function generalist(m: Mote): Scene {
         if (m.debug) Object.assign(globalThis, { generalistPractice: practice });
         if (policy && !shown) takePolicy();
         if (report.kept) void keeping((kept) => kept.put(report.kept, keptKey(recipe)));
+        note(practice.steps, practice.reached);
         changed();
     };
 
@@ -205,6 +217,7 @@ export default function generalist(m: Mote): Scene {
             take(waiting);
             waiting = undefined;
         }
+        if (shown) note(generation, furthest);
         changed();
     };
 
@@ -277,20 +290,24 @@ export default function generalist(m: Mote): Scene {
             begin();
         });
 
-    // ---- the controls, in a column at the side ----
+    // ---- the controls: a strip under the world, and a column beside it ----
     let changed = () => {};
     let drawBrain = () => {};
+    let drawChart = () => {};
     /** The tick the brain was last drawn at; none yet. */
     let brainAt = -1;
     if (!m.preview) {
         const host = m.canvas.parentElement!;
         const side = m.panel();
         side.classList.add("walker-side");
+        // the world's own controls, and the body's, in a strip under the picture, as the Walker's ground has
+        const strip = el("div", { class: "mote-panel walker-ground generalist-world" });
+        host.insertBefore(strip, side);
         const status = el("p", { class: "walker-status" });
         status.setAttribute("aria-hidden", "true");
         const said = el("p", { class: "walker-said unseen" });
         said.setAttribute("aria-live", "polite");
-        host.insertBefore(status, side);
+        host.insertBefore(status, strip);
         side.append(said);
 
         const row = (words: string, ...controls: (Node | string)[]) => [el("span", { class: "walker-label", textContent: words }), el("div", { class: "walker-controls" }, ...controls)];
@@ -476,16 +493,68 @@ export default function generalist(m: Mote): Scene {
             ctx.fillText("moves", wide - 2, high - 3);
         };
 
+        // how far it gets, against how long it has practised (or, by evolution, the generations), drawn as it learns
+        const chart = el("canvas", { class: "walker-brain-picture generalist-chart" });
+        chart.setAttribute("role", "img");
+        chart.setAttribute("aria-label", "A line of how far the creature gets, rising as it learns.");
+        drawChart = () => {
+            const ctx = chart.getContext("2d");
+            const [wide, high] = [chart.clientWidth, chart.clientHeight];
+            if (!ctx || wide === 0) return;
+            const ratio = window.devicePixelRatio || 1;
+            if (chart.width !== Math.round(wide * ratio) || chart.height !== Math.round(high * ratio)) [chart.width, chart.height] = [Math.round(wide * ratio), Math.round(high * ratio)];
+            ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+            ctx.clearRect(0, 0, wide, high);
+            const [accent, muted] = [m.color("--accent"), m.color("--muted")];
+            const evolving = how === "evolution";
+            // from where this visit's learning began, which for a learner kept from before is not the start
+            const [firstX, lastX] = [learned[0]?.x ?? 0, learned.at(-1)?.x ?? 0];
+            const most = Math.max(5, Math.ceil(Math.max(...learned.map((point) => point.y), 0) / 5) * 5);
+            const [left, right, top, bottom] = [8, wide - 8, 22, high - 20];
+            const at = (x: number, y: number): [number, number] => [left + ((right - left) * (x - firstX)) / Math.max(lastX - firstX, 1), bottom - ((bottom - top) * Math.max(0, y)) / most];
+            // the two axes, faint
+            ctx.strokeStyle = muted;
+            ctx.globalAlpha = 0.35;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(left, top);
+            ctx.lineTo(left, bottom);
+            ctx.lineTo(right, bottom);
+            ctx.stroke();
+            ctx.globalAlpha = 1;
+            // how far it gets, as one line, and a dot at where it is now
+            if (learned.length > 0) {
+                ctx.strokeStyle = accent;
+                ctx.lineWidth = 1.5;
+                ctx.lineJoin = "round";
+                ctx.beginPath();
+                learned.forEach((point, k) => (k === 0 ? ctx.moveTo(...at(point.x, point.y)) : ctx.lineTo(...at(point.x, point.y))));
+                ctx.stroke();
+                const [nx, ny] = at(lastX, learned.at(-1)!.y);
+                ctx.fillStyle = accent;
+                ctx.beginPath();
+                ctx.arc(nx, ny, 2.5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.fillStyle = muted;
+            ctx.font = `11px ${code}`;
+            ctx.textBaseline = "top";
+            ctx.textAlign = "left";
+            ctx.fillText(evolving ? "furthest, by generation" : "how far it gets, on average", left, 3);
+            ctx.textAlign = "right";
+            ctx.fillText(`${most} m`, right, 3);
+            ctx.textBaseline = "bottom";
+            ctx.textAlign = "left";
+            ctx.fillText(firstX === 0 ? "0" : evolving ? `generation ${firstX}` : `${counted(firstX)} steps`, left, high - 3);
+            ctx.textAlign = "right";
+            ctx.fillText(learned.length === 0 ? (evolving ? "generations" : "steps practised") : evolving ? `generation ${lastX}` : `${counted(lastX)} steps`, right, high - 3);
+        };
+
+        strip.append(...row("seed", seed, another), ...row("how hard", hard.holder), ...kinds.flat(), ...row("legs", legs), ...row("eyes", el("label", {}, rays, "show what it sees")));
         side.append(
             group("brain"),
             brainPicture,
-            group("world"),
-            ...row("seed", seed, another),
-            ...row("how hard", hard.holder),
-            ...kinds.flat(),
-            group("body"),
-            ...row("legs", legs),
-            ...row("eyes", el("label", {}, rays, "show what it sees")),
+            chart,
             group("learning"),
             ...row("how it learns", hows),
             explain,
@@ -502,15 +571,18 @@ export default function generalist(m: Mote): Scene {
             const now = !engine ? "Loading." : how === "practice" ? `${practised}${gets}` : !shown ? `Generation 0, ${runs} of ${POPULATION} tried` : `Generation ${generation}, furthest ${furthest.toFixed(1)} m`;
             const text = m.time < notice.until && notice.text ? notice.text : `${now}${paused ? ", paused" : ""}`;
             if (status.textContent !== text) status.textContent = text;
+            drawChart();
         };
     }
 
     // ---- drawing ----
     const code = getComputedStyle(m.canvas).getPropertyValue("--font-code").trim() || "monospace";
     let scale = 100;
-    const horizon = () => m.height * 0.7;
-    const toScreen = (x: number, y: number): [number, number] => [(x - camera.x) * scale + m.width * 0.38, horizon() - (y - camera.y) * scale];
-    const toWorld = (sx: number, sy: number): [number, number] => [(sx - m.width * 0.38) / scale + camera.x, (horizon() - sy) / scale + camera.y];
+    const horizon = () => m.height * 0.68;
+    /** The creature is kept this far across the picture, so most of it is what is coming. */
+    const KEPT_AT = 0.28;
+    const toScreen = (x: number, y: number): [number, number] => [(x - camera.x) * scale + m.width * KEPT_AT, horizon() - (y - camera.y) * scale];
+    const toWorld = (sx: number, sy: number): [number, number] => [(sx - m.width * KEPT_AT) / scale + camera.x, (horizon() - sy) / scale + camera.y];
     const seen = (left: number, right: number, a: number, b: number) => Math.max(a, b) >= left - 1 && Math.min(a, b) <= right + 1;
 
     /** The height of the ground's surface at x, the highest piece over it, or none over a gap. */
@@ -780,8 +852,10 @@ export default function generalist(m: Mote): Scene {
         ctx.textAlign = "center";
         ctx.textBaseline = "bottom";
         lately.forEach((each, k) => {
+            // kept inside the picture, where the creature is near its edge on a narrow screen
+            const half = ctx.measureText(each.words).width / 2 + 4;
             ctx.fillStyle = m.color(each.good ? "--accent" : "--muted");
-            ctx.fillText(each.words, sx, sy - 0.55 * scale - k * 14);
+            ctx.fillText(each.words, Math.min(m.width - half, Math.max(half, sx)), sy - 0.55 * scale - k * 14);
         });
     };
 
@@ -901,8 +975,9 @@ export default function generalist(m: Mote): Scene {
         resting: () => !m.preview && paused && !!engine && engine.show_over() === 1,
         debug: () => [`${here ? "learning on the page" : `learning ${how === "practice" ? "by practice" : "by evolution"} in ${helpers.length + 1} workers, ${effort}`}, ${how === "practice" ? `${Math.round(practice.speed)} steps a second, an update ${practice.waited.map((ms) => ms.toFixed(0)).join(" ms working and ")} ms waiting` : `generation ${generation}`}, ${ground.length / 4} pieces of ground made to ${reached.toFixed(0)} m`],
         draw() {
-            // about eight metres across, so what is coming can be seen as well as the creature
-            scale = Math.max(34, Math.min(m.height / 4.2, m.width / 8));
+            // eighteen metres across a wide picture, thirteen of them ahead of the creature, so what is
+            // coming can be seen well before it gets there; never so small that the creature is lost
+            scale = Math.max(38, Math.min(m.height / 4.5, m.width / 18));
             drawWorld();
             if (!engine) return;
             drawFlag();

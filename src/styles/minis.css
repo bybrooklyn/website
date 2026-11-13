@@ -781,41 +781,84 @@
     }
 }
 
-/* ---- the generalist: the scene, and its controls in a column beside it, in the Walker's style ---- */
+/* ---- the generalist: a wide picture of the world, the world's controls in a strip under it, and
+   the brain, the body and the learning in a column beside it, in the Walker's style ---- */
 
+/* It is wider than the text: as wide as the page less its margins, up to 75rem, and centred on the
+   text, so the world can be a wide picture that shows what is coming. A post's grid keeps a column
+   for its contents, which a mini's page leaves empty; the mini takes that room too, as the tone
+   tags' list does. The 1rem is room for the panel's scrollbar, so the page never scrolls sideways. */
 .mini-stage[data-mini="generalist"] {
-    --panel-room: 16rem;
-    max-width: 64rem;
+    --wide: max(100%, min(75rem, 100vw - var(--strip) - 2 * var(--panel-gutter, 1.25rem) - 1rem));
+    --side: 21rem;
+    width: var(--wide);
+    max-width: none;
+    margin-inline: calc((100% - var(--wide)) / 2);
+    /* room kept while it loads: the world, the strip under it, and a little more */
+    min-height: calc((var(--wide) - var(--side)) * 10 / 16 + 12rem);
 }
 
-.mini-stage.with-panel[data-mini="generalist"] {
-    min-height: calc(clamp(16rem, 52svh, 28rem) + var(--panel-room));
+.post > .mini-stage[data-mini="generalist"] {
+    grid-column: 1 / -1;
 }
 
 .mini-stage[data-mini="generalist"]:has(.walker-side) {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 19rem;
-    grid-template-rows: minmax(clamp(16rem, 52svh, 28rem), 1fr);
-    grid-template-areas: "scene side";
+    grid-template-columns: minmax(0, 1fr) var(--side);
+    grid-template-rows: auto auto;
+    grid-template-areas:
+        "scene side"
+        "ground side";
     min-height: 0;
 }
 
+/* The world's height comes from its own shape, never from the column beside it. */
 .mini-stage[data-mini="generalist"] > canvas {
     grid-area: scene;
-    height: clamp(16rem, 52svh, 28rem);
+    width: 100%;
+    height: auto;
+    aspect-ratio: 16 / 10;
 }
 
-/* Placed absolutely in its grid area, as the Walker's scene is, so its own size never feeds back. */
-.mini-stage[data-mini="generalist"]:has(.walker-side) > canvas {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
+.mini-stage[data-mini="generalist"] .walker-status {
+    grid-area: scene;
+    max-width: 52rem;
+}
+
+/* The world's controls and the body's, two to a line. */
+.mote-panel.generalist-world {
+    grid-template-columns: repeat(2, 4.6rem minmax(0, 1fr));
+    gap: 0.6rem 0.8rem;
+    padding: 0.8rem 1rem 0.9rem;
+}
+
+/* The column is as tall as the world and its strip, and no taller: it adds nothing to the height of
+   the rows it is in, then stretches to them. At 75rem all of it fits; in a window a little narrower,
+   what does not fit scrolls inside the column, which is never folded. */
+.mini-stage[data-mini="generalist"] .mote-panel.walker-side {
+    height: 0;
+    min-height: 100%;
+    box-sizing: border-box;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--rule) transparent;
+}
+
+.mote .mote-panel canvas.walker-brain-picture.generalist-brain {
+    grid-column: 1 / -1;
+    height: 12rem;
+}
+
+.mote .mote-panel canvas.walker-brain-picture.generalist-chart {
+    grid-column: 1 / -1;
+    height: 6.5rem;
+    margin-top: -0.25rem;
 }
 
 /* The seed is a line to type on, as wide as the column lets it be. */
 .mini-stage[data-mini="generalist"] .walker-controls input[type="text"] {
     flex: 1 1 6rem;
+    min-width: 0;
     font-family: var(--font-code);
     font-size: 0.9rem;
 }
@@ -831,6 +874,10 @@
     min-width: 0;
 }
 
+.mini-stage[data-mini="generalist"] .walker-range input[type="range"] {
+    width: auto;
+}
+
 .mini-stage[data-mini="generalist"] .walker-range input[type="range"]:disabled {
     opacity: 0.4;
 }
@@ -840,16 +887,57 @@
     text-align: right;
 }
 
-@media (max-width: 46rem) {
+/* Narrower: the world across the top, the strip under it, then the column, all of it in view. */
+@media (max-width: 74rem) {
     .mini-stage[data-mini="generalist"] {
-        --panel-room: 30rem;
+        min-height: calc(var(--wide) * 10 / 16 + 40rem);
     }
 
     .mini-stage[data-mini="generalist"]:has(.walker-side) {
         grid-template-columns: minmax(0, 1fr);
-        grid-template-rows: clamp(16rem, 52svh, 28rem) auto;
+        grid-template-rows: auto;
         grid-template-areas:
             "scene"
+            "ground"
             "side";
+    }
+
+    .mini-stage[data-mini="generalist"] .mote-panel.walker-side {
+        height: auto;
+        min-height: 0;
+        overflow: visible;
+        border-left: 0;
+        border-top: 0.0625rem solid var(--rule);
+    }
+}
+
+/* A phone: a squarer world, so it is a picture and not a strip, with the status line under it
+   rather than over it, and the world's controls one to a line. */
+@media (max-width: 40rem) {
+    .mini-stage[data-mini="generalist"] {
+        min-height: calc(var(--wide) * 3 / 4 + 50rem);
+    }
+
+    .mini-stage[data-mini="generalist"]:has(.walker-side) {
+        grid-template-areas:
+            "scene"
+            "status"
+            "ground"
+            "side";
+    }
+
+    .mini-stage[data-mini="generalist"] > canvas {
+        aspect-ratio: 4 / 3;
+    }
+
+    .mini-stage[data-mini="generalist"] .walker-status {
+        grid-area: status;
+        padding-block: 0.6rem 0.2rem;
+        border-top: 0.0625rem solid var(--rule);
+    }
+
+    .mote-panel.generalist-world {
+        grid-template-columns: 4.6rem minmax(0, 1fr);
+        border-top: 0;
     }
 }
