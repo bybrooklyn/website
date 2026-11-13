@@ -122,6 +122,8 @@ pre {
     background: var(--ink);
     color: var(--ground);
     translate: 0 -120%;
+    /* it comes down from the top of the window when reached, and goes back up */
+    transition: translate 0.2s var(--ease);
 }
 
 /* down from the window's edge by a little more than its focus ring, which is then seen whole */
@@ -270,7 +272,8 @@ h1 + .lede,
 
 @media (prefers-reduced-motion: reduce) {
     .reveal.ready,
-    .reveal.ready > span {
+    .reveal.ready > span,
+    .skip {
         transition: none;
     }
 }
