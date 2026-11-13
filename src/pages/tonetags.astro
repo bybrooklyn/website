@@ -6,7 +6,8 @@
 //
 // The whole list is written here, A to Z in columns under a strip of the most used, so the page
 // reads without scripts.
-// src/scripts/tonetags.ts then narrows it as the box is typed in. The list and how it is searched
+// src/scripts/tonetags.ts then narrows it as the box is typed in, copies a tag when it is pressed,
+// and lights the tag named in the address (/tonetags/#srs). The list and how it is searched
 // are in src/tonetags/.
 import "../styles/content";
 import "../styles/blog.css";
@@ -66,7 +67,10 @@ const all = placed.toSorted((a, b) => a.tag.forms[0]!.localeCompare(b.tag.forms[
                     <ul>
                         {everyday.map(({ tag }) => (
                             <li>
-                                <code>/{tag.forms[0]}</code> {tag.means}
+                                <button type="button" class="tonetag-tag" data-copy={`/${tag.forms[0]}`}>
+                                    /{tag.forms[0]}
+                                </button>{" "}
+                                {tag.means}
                             </li>
                         ))}
                     </ul>
@@ -76,9 +80,11 @@ const all = placed.toSorted((a, b) => a.tag.forms[0]!.localeCompare(b.tag.forms[
             {/* all of them, A to Z, down three columns: a tag, its meaning, and any other way it is written */}
             <ul class="tonetags-all">
                 {all.map(({ tag, place }) => (
-                    <li class="fold open" data-tag={place}>
+                    <li class="fold open" data-tag={place} data-forms={tag.forms.join(" ")}>
                         <div class="tonetag">
-                            <code>/{tag.forms[0]}</code>
+                            <button type="button" class="tonetag-tag" data-copy={`/${tag.forms[0]}`}>
+                                /{tag.forms[0]}
+                            </button>
                             <span>
                                 {tag.means}
                                 {tag.forms.length > 1 && <span class="tonetag-also"> also {tag.forms.slice(1).map((form) => `/${form}`).join(", ")}</span>}

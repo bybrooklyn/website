@@ -153,11 +153,44 @@
     list-style: none;
 }
 
-.tonetags code {
+/* A tag is a thing to press: it copies itself. It is set on the code face in the accent, with no box round it. */
+.tonetag-tag {
     padding: 0;
+    border: 0;
     background: none;
     color: var(--accent);
+    font-family: var(--font-code);
     font-size: 0.95em;
+    text-align: start;
+    white-space: nowrap;
+    cursor: copy;
+    transition: color 0.15s ease;
+}
+
+.tonetag-tag:hover {
+    color: var(--ink);
+}
+
+/* The tag named in the address: a wash of the accent behind its row that fades away. */
+.tonetags-all li.lit .tonetag {
+    animation: tonetag-lit 2.4s ease-out;
+}
+
+@keyframes tonetag-lit {
+    from {
+        background: color-mix(in oklch, var(--accent) 30%, transparent);
+    }
+
+    to {
+        background: transparent;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .tonetags-all li.lit .tonetag {
+        animation: none;
+        outline: 0.0625rem solid var(--accent);
+    }
 }
 
 /* The everyday ones: a tag and its meaning together, one after another, wrapping as words do. */

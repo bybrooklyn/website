@@ -1,10 +1,11 @@
 // The tone tags page (src/pages/tonetags.astro) made searchable: as the box is typed in, the tags
 // that do not answer fold away and those that do come to the top, the closest first. It can be
 // searched by a tag's letters or by what is meant ("not angry at you"). The strip of everyday tags
-// folds away while a search is on. The matching itself is in src/tonetags/tags.ts.
+// folds away while a search is on. A tag pressed is copied; "/" goes to the search; and a tag named
+// after # in the address is lit. The matching itself is in src/tonetags/tags.ts.
 
 import { find, tags } from "../tonetags/tags";
-import { copyMarked } from "./copy";
+import { copyMarked, copyText } from "./copy";
 
 const root = document.querySelector<HTMLElement>("[data-tonetags]");
 if (root) {
@@ -43,8 +44,41 @@ if (root) {
         if (box.value.trim()) here.searchParams.set("q", box.value.trim());
         copyMarked(copy, here.href);
     });
+    // a tag pressed is copied, slash and all, ready to put after a message
+    root.addEventListener("click", (event) => {
+        const tag = (event.target as Element).closest<HTMLButtonElement>(".tonetag-tag");
+        if (tag?.dataset.copy) copyText(tag, tag.dataset.copy, { rest: tag.dataset.copy, done: "copied" });
+    });
+
+    // "/" from anywhere on the page goes to the search, where it is the first thing typed; Escape there empties it
+    document.addEventListener("keydown", (event) => {
+        const typing = (event.target as Element).closest("input, textarea, [contenteditable]");
+        if (event.key === "/" && !typing && !event.ctrlKey && !event.metaKey && !event.altKey) box.focus();
+        if (event.key === "Escape" && event.target === box && box.value) {
+            box.value = "";
+            show();
+        }
+    });
+
+    // a tag named in the address is brought into view and lit for a moment: /tonetags/#srs
+    const light = () => {
+        const named = decodeURIComponent(location.hash.slice(1)).toLowerCase().replace(/^\//, "");
+        const row = named && rows.find((each) => each.dataset.forms!.split(" ").includes(named));
+        if (!row) return;
+        if (box.value) {
+            box.value = "";
+            show();
+        }
+        row.scrollIntoView({ block: "center", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+        row.classList.remove("lit");
+        void row.offsetWidth;
+        row.classList.add("lit");
+    };
+    addEventListener("hashchange", light);
+
     // a tag in the address is looked up at once: /tonetags/?q=srs
     const asked = new URLSearchParams(location.search).get("q");
     if (asked) box.value = asked;
     show();
+    light();
 }
