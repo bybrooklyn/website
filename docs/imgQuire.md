@@ -87,13 +87,14 @@ All of it is to be simple and easy first, with the depth underneath.
   browser only and never in the repository; albums browsed, searched and pulled in. Any folder on the
   machine as a library: a grid, dates, search by name and by the text found in the pictures (a folder
   that Syncthing keeps is one of these). Ideas are to be taken from Immich's own interface.
-- **Writing and reading formats.** Browsers write only PNG, JPEG and WebP, so encoders are built from
-  Rust to WebAssembly and each is loaded only when its format is picked; the measurements are in
-  [imgQuire-codecs](imgQuire-codecs.md). Only crates under permissive licences are used, never AGPL: so
-  JPEG XL is written lossless (`zune-jpegxl`), JPEG by `jpeg-encoder`, PNG by `oxipng`, and lossy WebP is
-  left to the browser. AVIF is written by `ravif`, on one thread, with a bar that shows its progress and a
-  word that it is slow and suits photographs, not screenshots. HEIC photographs from a phone are read
-  (`heic-rs`). Metadata is written by `little_exif` and colour profiles handled by `moxcms`.
+- **Writing and reading formats.** Browsers write only PNG, JPEG and WebP, so encoders are built to
+  WebAssembly and each is loaded only when its format is picked; the measurements are in
+  [imgQuire-codecs](imgQuire-codecs.md). Only permissive licences are used, never AGPL. The four writers
+  are the reference C encoders built with Emscripten, each kept as one whole file: `libjxl` for JPEG XL
+  (lossy and lossless), `libaom` for AVIF, `jpegli` for JPEG and `libwebp` for WebP, with threads for the
+  two large ones. Rust crates do the rest: `oxipng` for PNG, `heic-rs` to read HEIC photographs from a
+  phone, `little_exif` for metadata and `moxcms` for colour profiles. Before `libjxl` is relied on, a
+  release of it is to be built and its lossy quality compared with the native encoder's.
 - **Working it.** The steps are hidden until wanted: a "steps" button grows the list open at the side.
   Single keys pick a tool (C crop, R redact, A arrow, T text, B box, G grade, E export), Enter applies,
   Escape leaves, and the palette is mdQuire's. The first Ctrl+C asks whether to copy the picture as it
