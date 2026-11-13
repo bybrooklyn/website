@@ -144,9 +144,29 @@ export function activeBlock(doc: Document, path: number[]): { kind: Block["kind"
 // ---- small steps ----
 
 /** Deletes what is selected, giving the document and the position the cursor goes to. */
+/** True if a range runs from the very start of a document to its very end, as Select All makes it. */
+function wholeDocument(doc: Document, start: Position, end: Position): boolean {
+    const paths = blockPaths(doc);
+    if (paths.length === 0 || start.offset !== 0 || indexOf(doc, start.path) !== 0 || indexOf(doc, end.path) !== paths.length - 1) return false;
+    const first = tableOf(doc, start.path);
+    if (first && start.path.slice(-2).some((step) => step !== 0)) return false;
+    const table = tableOf(doc, end.path);
+    if (table) {
+        const found = blockAt(doc, table);
+        if (found?.kind !== "table" || end.path[end.path.length - 2] !== found.rows.length || end.path[end.path.length - 1] !== found.header.length - 1) return false;
+    }
+    return end.offset >= lengthOf(doc, end.path);
+}
+
 function clear(state: State): { doc: Document; at: Position } {
     if (collapsed(state.selection)) return { doc: state.doc, at: state.selection.focus };
     const { start, end } = rangeOf(state.selection);
+    // everything selected (Select All): all of it goes, a divider, picture or table at either end too,
+    // and what is typed is the one paragraph left
+    if (wholeDocument(state.doc, start, end)) {
+        const last = state.doc.blocks[state.doc.blocks.length - 1];
+        return { doc: { ...state.doc, blocks: [{ ...paragraph(), gap: last?.gap ?? "" }] }, at: { path: [0], offset: 0 } };
+    }
     // a selection that ends inside a table cell only clears the text, the table stays
     if (!samePath(start.path, end.path) && (tableOf(state.doc, start.path) || tableOf(state.doc, end.path))) return { doc: state.doc, at: start };
     return { doc: deleteText(state.doc, { start, end }), at: start };

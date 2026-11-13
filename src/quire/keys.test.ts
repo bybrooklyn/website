@@ -622,3 +622,19 @@ test("a typed shortcode becomes an emoji only as a word of its own, not inside a
     e.type("a :cat:");
     expect(e.state.doc.blocks[0]).toMatchObject({ runs: [{ kind: "text", text: "a " }, { kind: "emoji", name: "cat" }] });
 });
+
+test("typing over Select All replaces everything, a divider, picture or table at either end too, and one undo brings it all back", () => {
+    for (const source of ["---\n\ntext\n\n![a](b.png)\n", "![a](b.png)\n\n- one\n- two\n\n---\n", "| a |\n|---|\n| 1 |\n\nmiddle\n\n| b |\n|---|\n| 2 |\n"]) {
+        const e = editor(source);
+        const paths = blockPaths(e.state.doc);
+        const last = paths[paths.length - 1]!;
+        const lastBlock = blockAt(e.state.doc, last);
+        const end = lastBlock?.kind === "table" ? { path: [...last, lastBlock.rows.length, lastBlock.header.length - 1], offset: 1 } : { path: last, offset: 0 };
+        const start = blockAt(e.state.doc, paths[0]!)?.kind === "table" ? { path: [...paths[0]!, 0, 0], offset: 0 } : { path: paths[0]!, offset: 0 };
+        e.select({ anchor: start, focus: end });
+        e.type("x");
+        expect({ source, written: e.markdown }).toEqual({ source, written: "x\n" });
+        e.undo();
+        expect({ source, written: e.markdown }).toEqual({ source, written: source });
+    }
+});
