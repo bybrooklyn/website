@@ -203,3 +203,12 @@ test("too many requests is said as such, not as a token that may not do this; a 
     const stale = await githubStore(SETTINGS, answer(422, {}, { message: "sha wasn't supplied" })).save("a.md", "x", "sha1");
     expect(stale).toMatchObject({ ok: false, changed: true });
 });
+
+test("a title with a slash, spaces or dots is made a plain file name in the folder, not a folder of its own", async () => {
+    const github = mockGithub(POSTS);
+    const store = githubStore(SETTINGS, github.fetcher);
+    const made = await store.create("Why A/B tests", "words");
+    expect(made.id).toBe("src/content/blog/why-a-b-tests.md");
+    expect(await store.rename(made.id, "../../Up and out")).toBe("src/content/blog/up-and-out.md");
+    expect(await store.rename("src/content/blog/first.mdx", "First again")).toBe("src/content/blog/first-again.mdx");
+});

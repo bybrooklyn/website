@@ -10,7 +10,7 @@
 // into their folder, and written in the document by a path relative to it. Nothing else is asked
 // of the network. Tested against a mock of the API.
 
-import { besideDocument, freeName, relative, type Saved, type Store, StoreError } from "./store";
+import { besideDocument, fileName, freeName, relative, type Saved, type Store, StoreError } from "./store";
 import { markdownFile } from "./store-files";
 
 /** What the repository store is told once, and keeps in this browser. */
@@ -162,7 +162,8 @@ export function githubStore(settings: GithubSettings, fetcher: Fetcher = (url, i
             return { ok: false, message: done.status === 404 ? `${id} or its branch is not there` : done.status === 422 ? "GitHub would not take this file (it may be too large)" : `GitHub answered ${done.status}` };
         },
         async create(name, text) {
-            const path = inFolder(freeName(name, await names(folder)));
+            // a plain file name, as the folder store makes: a title with a slash in it must not become a folder
+            const path = inFolder(freeName(fileName(name), await names(folder)));
             const done = await put(path, new TextEncoder().encode(text), `Add ${nameOf(path)}`);
             if (!done.sha) throw new StoreError(`GitHub answered ${done.status}`);
             return { id: path, mark: done.sha };
@@ -174,7 +175,7 @@ export function githubStore(settings: GithubSettings, fetcher: Fetcher = (url, i
         },
         async rename(id, name) {
             const file = await read(id);
-            const path = inFolder(freeName(name, (await names(folder)).filter((each) => each !== nameOf(id))));
+            const path = inFolder(freeName(fileName(name, /\.mdx$/i.test(id) ? ".mdx" : ".md"), (await names(folder)).filter((each) => each !== nameOf(id))));
             if (path === id) return id;
             const made = await put(path, new TextEncoder().encode(file.text), `Rename ${nameOf(id)} to ${nameOf(path)}`);
             if (!made.sha) throw new StoreError(`GitHub answered ${made.status}`);
