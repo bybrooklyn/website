@@ -76,6 +76,18 @@ afterEach(() => {
 
 const sound = (seconds: number) => new Float32Array(Math.round(16000 * seconds)).map((_, at) => Math.sin(at * 0.07) * 0.3);
 
+describe("opening", () => {
+    test("a vocabulary that will not do lets go of the sessions already made", async () => {
+        const { ort } = fakeOrt();
+        let released = 0;
+        const create = ort.InferenceSession.create.bind(ort.InferenceSession);
+        (ort.InferenceSession as { create: unknown }).create = async (...args: Parameters<typeof create>) => ({ ...(await create(...args)), release: async () => void released++ });
+        provide("wasm", ort);
+        await expect(open({ encoder: new ArrayBuffer(1), decoder: new ArrayBuffer(1), vocab: "x 30000000" })).rejects.toThrow();
+        expect(released).toBe(2);
+    });
+});
+
 describe("a recognizer", () => {
     test("turns sound into the words the decoder wrote, with times in seconds", async () => {
         const { ort } = fakeOrt();

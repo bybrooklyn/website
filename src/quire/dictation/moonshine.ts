@@ -81,7 +81,14 @@ export interface Moonshine {
 /** Loads the encoder and decoder as ONNX Runtime sessions and gives back the recognizer. */
 export async function createMoonshine(ort: Ort, files: { encoder: ArrayBuffer | Uint8Array | string; decoder: ArrayBuffer | Uint8Array | string; tokenizer: string }, options: object = {}): Promise<Moonshine> {
     const pieces = piecesOf(files.tokenizer);
-    const [encoder, decoder] = await Promise.all([ort.InferenceSession.create(files.encoder, options), ort.InferenceSession.create(files.decoder, options)]);
+    const made = await Promise.allSettled([ort.InferenceSession.create(files.encoder, options), ort.InferenceSession.create(files.decoder, options)]);
+    const failed = made.find((each) => each.status === "rejected");
+    if (failed) {
+        // the one that was made is let go, or its memory would stay with the worker
+        for (const each of made) if (each.status === "fulfilled") await each.value.release?.();
+        throw failed.reason;
+    }
+    const [encoder, decoder] = made.map((each) => (each as PromiseFulfilledResult<Session>).value) as [Session, Session];
     const empty = () => new ort.Tensor("float32", new Float32Array(0), [1, HEADS, 0, HEAD]);
 
     return {

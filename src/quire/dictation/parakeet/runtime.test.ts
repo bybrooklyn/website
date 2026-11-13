@@ -11,7 +11,8 @@ interface Made {
     fed: Record<string, { dims: number[]; data: unknown }>[];
 }
 
-function fakeOrt(opts: { width?: number; steps?: number; failOn?: string } = {}) {
+function fakeOrt(opts: { width?: number; steps?: number; failOn?: string; failDecoder?: boolean; unreadable?: boolean } = {}) {
+    const disposed: unknown[] = [];
     const width = opts.width ?? 3;
     const steps = opts.steps ?? 2;
     const made: Made[] = [];
@@ -21,15 +22,18 @@ function fakeOrt(opts: { width?: number; steps?: number; failOn?: string } = {})
             disposed = false;
             constructor(public type: string, public data: unknown, public dims: number[]) {}
             async getData() {
+                if (opts.unreadable) throw new Error("the card lost it");
                 return this.data as Float32Array;
             }
             dispose() {
                 this.disposed = true;
+                disposed.push(this);
             }
         },
         InferenceSession: {
             async create(_model: unknown, options: Record<string, unknown> = {}) {
                 if (opts.failOn && (options.executionProviders as unknown[]).includes(opts.failOn)) throw new Error("Only 4b quantization is supported");
+                if (opts.failDecoder && made.length === 1) throw new Error("the decoder file is broken");
                 const record: Made = { options, released: false, fed: [] };
                 made.push(record);
                 const encoder = made.length === 1 || (options.executionProviders as unknown[]).length === 2;
@@ -51,7 +55,7 @@ function fakeOrt(opts: { width?: number; steps?: number; failOn?: string } = {})
             },
         },
     };
-    return { ort: ort as unknown as Ort, made, raw: ort };
+    return { ort: ort as unknown as Ort, made, raw: ort, disposed };
 }
 
 const files = { encoder: new ArrayBuffer(8), decoder: new ArrayBuffer(8) };
@@ -73,9 +77,11 @@ describe("detect", () => {
         browser({});
         expect((await detect()).kind).toBe("wasm");
     });
-    test("a real adapter that gives a device gets WebGPU", async () => {
-        browser({ gpu: card() });
+    test("a real adapter that gives a device gets WebGPU, and the device asked for to know it is let go", async () => {
+        let destroyed = 0;
+        browser({ gpu: { requestAdapter: async () => ({ info: {}, requestDevice: async () => ({ destroy: () => void destroyed++ }) }) } });
         expect((await detect()).kind).toBe("webgpu");
+        expect(destroyed).toBe(1);
     });
     test("a software adapter is turned down, because it is slower than WebAssembly", async () => {
         browser({ gpu: card({ isFallbackAdapter: true }) });
@@ -181,6 +187,22 @@ describe("load", () => {
         expect(raw.env.wasm.simd).toBe(true);
         expect(raw.env.wasm.proxy).toBe(false);
         expect(loaded.backend.threads).toBe(3);
+    });
+    test("a decoder that will not load lets go of the encoder made before it", async () => {
+        browser({});
+        const { ort, made } = fakeOrt({ failDecoder: true });
+        provide("wasm", ort);
+        await expect(load({ files })).rejects.toThrow("broken");
+        expect(made.map((each) => each.released)).toEqual([true]);
+    });
+    test("an encoder output that cannot be read is let go all the same", async () => {
+        browser({});
+        const { ort, disposed } = fakeOrt({ unreadable: true });
+        provide("wasm", ort);
+        const loaded = await load({ files });
+        await expect(loaded.encode(new Float32Array(128 * 5), 128, 5)).rejects.toThrow("lost");
+        // the two inputs and the two outputs
+        expect(disposed.length).toBe(4);
     });
     test("release lets go of both sessions", async () => {
         browser({});

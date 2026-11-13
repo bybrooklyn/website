@@ -11,8 +11,8 @@ import type { Answer, Ask } from "./engine";
 import { createMoonshine, type Moonshine, type Ort } from "./moonshine";
 import { download, nameOf, type Folder } from "./download";
 import { tierOf, type Tier } from "./models";
-import { detect, open, type Recognizer, type Stream } from "./parakeet";
-import { ortFor } from "./parakeet/runtime";
+import { open, type Recognizer, type Stream } from "./parakeet";
+import { ortFor, threadsHere } from "./parakeet/runtime";
 
 const say = (answer: Answer, transfer: Transferable[] = []) => (self as unknown as Worker).postMessage(answer, transfer);
 
@@ -82,7 +82,8 @@ async function load(tier: Tier, words: string[], id: number) {
 
     if (tier.engine === "moonshine") {
         const ort = await ortFor("wasm");
-        const here = await detect();
+        // only the threads are wanted here, so no graphics card is asked for
+        const here = { threads: threadsHere() };
         ort.env.wasm.numThreads = here.threads;
         ort.env.wasm.simd = true;
         ort.env.wasm.proxy = false;

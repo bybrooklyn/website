@@ -3,7 +3,7 @@
 // hand (MODELS.md), not here.
 
 import { describe, expect, test } from "bun:test";
-import { best, decodeTokens, piecesOf } from "./moonshine";
+import { best, createMoonshine, decodeTokens, piecesOf, type Ort } from "./moonshine";
 
 const tokenizer = JSON.stringify({ model: { vocab: { "<unk>": 0, "<s>": 1, "</s>": 2, "<0xC3>": 3, "<0xA9>": 4, "▁the": 5, "▁cafe": 6, "ing": 7 } } });
 
@@ -17,6 +17,23 @@ describe("piecesOf", () => {
         expect(() => piecesOf(JSON.stringify({ model: { vocab: { a: 0, b: 4294967294 } } }))).toThrow();
         expect(() => piecesOf(JSON.stringify({ model: { vocab: { a: 0, b: -1 } } }))).toThrow();
         expect(piecesOf(JSON.stringify({ model: { vocab: { a: 0, b: 3 } } }))[3]).toBe("b");
+    });
+});
+
+describe("createMoonshine", () => {
+    test("when one of the two sessions will not load, the other is let go", async () => {
+        const released: string[] = [];
+        const ort = {
+            Tensor: class {},
+            InferenceSession: {
+                async create(model: string) {
+                    if (model === "decoder") throw new Error("the decoder file is broken");
+                    return { run: async () => ({}), release: async () => void released.push(model) };
+                },
+            },
+        } as unknown as Ort;
+        await expect(createMoonshine(ort, { encoder: "encoder", decoder: "decoder", tokenizer })).rejects.toThrow("broken");
+        expect(released).toEqual(["encoder"]);
     });
 });
 

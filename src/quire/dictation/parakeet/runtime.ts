@@ -105,20 +105,21 @@ export function provide(flavor: Flavor, ort: Ort): void {
 }
 
 /** Threads WebAssembly can use here: more than one only when the page is cross-origin isolated, which lets it share memory. Half the processor's threads, between 1 and 8: measured, more than that buys little (RUNTIME.md). */
-function threadsHere(): number {
+export function threadsHere(): number {
     if (!self.crossOriginIsolated || typeof SharedArrayBuffer === "undefined") return 1;
     return Math.max(1, Math.min(8, Math.floor((navigator.hardwareConcurrency || 2) / 2)));
 }
 
 /** Whether the browser gives a graphics adapter and a device from it, which is the only way to know WebGPU will work. */
 async function graphicsCard(): Promise<boolean> {
-    const gpu = (navigator as unknown as { gpu?: { requestAdapter(): Promise<{ info?: { isFallbackAdapter?: boolean }; requestDevice(): Promise<unknown> } | null> } }).gpu;
+    const gpu = (navigator as unknown as { gpu?: { requestAdapter(): Promise<{ info?: { isFallbackAdapter?: boolean }; requestDevice(): Promise<{ destroy?(): void }> } | null> } }).gpu;
     if (!gpu) return false;
     try {
         const adapter = await gpu.requestAdapter();
         // a software stand-in for a card (SwiftShader) runs the encoder ten times slower than WebAssembly does
         if (!adapter || adapter.info?.isFallbackAdapter) return false;
-        await adapter.requestDevice();
+        // the device was asked for only to know that one is given; it is let go at once rather than left to be collected
+        (await adapter.requestDevice()).destroy?.();
         return true;
     } catch {
         return false;
@@ -162,7 +163,14 @@ export async function load(options: LoadOptions): Promise<Loaded> {
         encoder = await ort.InferenceSession.create(bytes(options.files.encoder), { ...ENCODER, executionProviders: ["wasm"] });
     }
     // the decoder follows the encoder into the same module, so that only one WebAssembly module is made
-    const decoder = await ort.InferenceSession.create(bytes(options.files.decoder), { ...DECODER, ...options.tune?.decoder });
+    let decoder: Session;
+    try {
+        decoder = await ort.InferenceSession.create(bytes(options.files.decoder), { ...DECODER, ...options.tune?.decoder });
+    } catch (error) {
+        // the encoder made already is let go, or its memory would stay with the worker
+        await encoder.release().catch(() => undefined);
+        throw error;
+    }
 
     // names and kinds are read from the files, so that a model exported with other names still runs
     const [signal, length] = encoder.inputNames.length > 1 ? [encoder.inputNames[0]!, encoder.inputNames[1]!] : [encoder.inputNames[0]!, undefined];
@@ -184,14 +192,18 @@ export async function load(options: LoadOptions): Promise<Loaded> {
                 input.dispose();
                 lengths?.dispose();
             }
-            const tensor = results[out]!;
-            // the output is [1, width, frames]; the decoder wants one row of `width` numbers per frame
-            const [, width, steps] = tensor.dims as [number, number, number];
-            const source = (await tensor.getData()) as Float32Array;
-            const data = new Float32Array(steps * width);
-            for (let step = 0; step < steps; step++) for (let at = 0; at < width; at++) data[step * width + at] = source[at * steps + step]!;
-            for (const each of Object.values(results)) each.dispose();
-            return { data, frames: steps, width };
+            try {
+                const tensor = results[out]!;
+                // the output is [1, width, frames]; the decoder wants one row of `width` numbers per frame
+                const [, width, steps] = tensor.dims as [number, number, number];
+                const source = (await tensor.getData()) as Float32Array;
+                const data = new Float32Array(steps * width);
+                for (let step = 0; step < steps; step++) for (let at = 0; at < width; at++) data[step * width + at] = source[at * steps + step]!;
+                return { data, frames: steps, width };
+            } finally {
+                // on the card the outputs are its memory, let go whether or not they could be read
+                for (const each of Object.values(results)) each.dispose();
+            }
         },
         async release() {
             await encoder.release();
