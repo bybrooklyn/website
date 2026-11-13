@@ -38,6 +38,13 @@ test("a copy from a word processor, wrapped in a bold that is not bold, keeps on
     expect(markdown(readHtml(html))).toBe("**Bold** and *italic*&nbsp;& more\n");
 });
 
+test("several paragraphs and a heading copied from a word processor inside its wrapping bold stay apart, each its own block", () => {
+    const html = '<meta charset="utf-8"><b style="font-weight:normal;" id="docs-internal-guid-1"><p dir="ltr"><span style="font-weight:700;">Bold</span><span style="font-weight:400;"> then plain</span></p><h2 dir="ltr"><span>A heading</span></h2><p dir="ltr"><span>Last.</span></p></b>';
+    expect(markdown(readHtml(html))).toBe("**Bold** then plain\n\n## A heading\n\nLast.\n");
+    // a real bold round whole paragraphs still makes them bold
+    expect(markdown(readHtml("<strong><p>One</p><p>Two</p></strong>"))).toBe("**One**\n\n**Two**\n");
+});
+
 test("only the fragment between the clipboard's markers is read, and loose text becomes a paragraph", () => {
     expect(markdown(readHtml("<html><body>before<!--StartFragment-->Just <b>text</b><!--EndFragment-->after</body></html>"))).toBe("Just **text**\n");
     expect(markdown(readHtml("plain &lt;words&gt;"))).toBe("plain \\<words>\n");

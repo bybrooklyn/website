@@ -288,6 +288,9 @@ function alignOf(element: Element): Align | null {
     return value === "center" || value === "right" || value === "left" ? value : null;
 }
 
+/** Whether an element has a block anywhere inside it. */
+const holdsBlocks = (element: Element): boolean => element.children.some((child) => typeof child !== "string" && (BLOCKS.has(child.name) || holdsBlocks(child)));
+
 function blocks(nodes: Node[], look: Look): Block[] {
     const out: Block[] = [];
     let pending: Node[] = [];
@@ -300,6 +303,13 @@ function blocks(nodes: Node[], look: Look): Block[] {
         else if (runs.some((run) => run.kind !== "text" || run.text.trim() !== "")) out.push({ kind: "paragraph", runs, gap: "" });
     };
     for (const node of nodes) {
+        // an inline element round whole blocks (Google Docs wraps a copy in a <b>) is read as the blocks it
+        // holds, with its marks: read as one line, a paragraph and the heading after it ran together
+        if (typeof node !== "string" && !BLOCKS.has(node.name) && node.name !== "a" && holdsBlocks(node)) {
+            flush();
+            out.push(...blocks(node.children, { ...look, marks: marksFor(node, look.marks) }));
+            continue;
+        }
         if (typeof node === "string" || !BLOCKS.has(node.name)) {
             pending.push(node);
             continue;
