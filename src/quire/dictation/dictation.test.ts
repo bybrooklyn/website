@@ -320,7 +320,6 @@ test.skipIf(!ready)("custom words and shortcuts correct what is written, and are
 
 test.skipIf(!ready)("Ctrl+D switches it on and off from the editor, and the browser's own use of the key is prevented", async () => {
     await fresh();
-    await run("window.dictationTest.downloaded"); // the made-up engine starts empty
     // keep the model so that the shortcut goes straight to listening
     await listening();
     await run("window.dictationTest.quiet(100)");
@@ -355,11 +354,11 @@ test.skipIf(!ready)("nothing appears without a transition, and under reduced mot
 });
 
 test.skipIf(!ready)("the control is absent, with a line saying why, where nothing can run it", async () => {
-    await tab.open(PAGE, 400);
-    await run("window.dictation.destroy()");
-    // the page with no microphone API at all
-    await tab.open(`http://localhost:${PORT}/mdquire-dictation/`, 400);
-    const none = await run<boolean>("!window.dictation?.why || !!document.querySelector('.quire-dictate')");
-    // headless Chromium has a microphone API, so either the control is there or the reason is
-    expect(none).toBe(true);
+    // the test page told that this browser cannot dictate, as one without a microphone or WebAssembly is
+    await tab.open(`${PAGE}&none`, 400);
+    await until("window.dictation", "the page is ready");
+    expect(await run<string>("window.dictation.why")).toBe("Dictation cannot run in this test.");
+    expect(await run<number>("document.querySelectorAll('.quire-dictate, .quire-dictate-more').length")).toBe(0);
+    expect(await text(".dictation-why")).toBe("Dictation cannot run in this test.");
+    expect(await run<string>("window.dictation.state()")).toBe("off");
 });
