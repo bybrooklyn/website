@@ -1770,20 +1770,31 @@ used("page setup, from the zoom control, gives a .quire document's sheet its pap
     await tab.wait(650);
     await press(".quire-menu.open .quire-menu-line", "Page setup");
     await tab.wait(650);
-    await press(".quire-menu.open .quire-menu-line", "A5");
-    await tab.wait(100);
-    // the menu stays open for the next choice, pressed where it now is
-    await press(".quire-menu.open .quire-menu-line", "Landscape");
-    await tab.wait(700);
-    expect(await tab.run("[...document.querySelectorAll('.quire-menu.open .quire-menu-line.pressed')].map((line) => line.textContent)")).toEqual(["A5", "Landscape", "Normal"]);
+    // a dialog: the choices are rows of buttons, and nothing changes until OK
+    expect(await tab.run("document.querySelector('dialog.quire-dialog[open] .quire-dialog-title')?.textContent")).toBe("Page setup");
+    await press("dialog.quire-dialog[open] .quire-setup-choice", "A5");
+    await press("dialog.quire-dialog[open] .quire-setup-choice", "Landscape");
+    expect(await tab.run("[...document.querySelectorAll('dialog.quire-dialog[open] .quire-setup-choice[aria-checked=true]')].map((each) => each.firstChild.textContent)")).toEqual(["A5", "Landscape", "Normal"]);
+    expect(await tab.run("q.editor.surface.getDocument().quire.page.size")).toBe("A4");
+    await press("dialog.quire-dialog[open] button", "OK");
+    await tab.wait(400);
+    expect(await tab.run("!!document.querySelector('dialog.quire-dialog')")).toBe(false);
     expect(await tab.run("q.editor.surface.getDocument().quire.page")).toEqual({ size: "A5", orientation: "landscape", margins: 25 });
     expect(await shape()).toBeCloseTo(210 / 148, 1);
     // print is given the page as a stylesheet adopted through the CSSOM, which the page's policy allows, not a <style> added at run time, which it refuses
     expect(await tab.run("document.adoptedStyleSheets.some((sheet) => [...sheet.cssRules].some((rule) => rule.cssText.includes('@media print') && rule.cssText.toLowerCase().includes('size: a5 landscape; margin: 25mm')))")).toBe(true);
     expect(await tab.run("[...document.querySelectorAll('head style')].some((style) => style.textContent.includes('size: A5'))")).toBe(false);
+    // the whole setup is one step back
+    await tab.run("q.editor.surface.undo()");
+    expect(await tab.run("q.editor.surface.getDocument().quire.page.size")).toBe("A4");
+    // Cancel, or Escape, leaves the page as it was
+    await zoomMenu();
+    await tab.wait(650);
+    await press(".quire-menu.open .quire-menu-line", "Page setup");
+    await tab.wait(650);
+    await press("dialog.quire-dialog[open] .quire-setup-choice", "Letter");
     await tab.press("Escape");
-    // each choice is one step back
-    await tab.run("q.editor.surface.undo(); q.editor.surface.undo()");
+    await tab.wait(400);
     expect(await tab.run("q.editor.surface.getDocument().quire.page.size")).toBe("A4");
     expect(tab.errors).toEqual([]);
 });

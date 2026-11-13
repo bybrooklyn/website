@@ -3,7 +3,7 @@
 // twice; and fitting a sheet to the room it has. The sheet itself is used in editor.test.ts.
 
 import { expect, test } from "bun:test";
-import { fitZoom, pageRule, wantedZoom, paperSize, percent, setPage, setupItems, stepZoom, ZOOMS } from "./paper";
+import { fitZoom, pageRule, wantedZoom, paperSize, percent, setPage, setupChoices, stepZoom, ZOOMS } from "./paper";
 import { read } from "./read";
 import { PAGE } from "./styling";
 
@@ -44,14 +44,13 @@ test("fitting the width fills the room, never past twice or below a quarter, and
     expect(fitZoom(0, 794)).toBe(1);
 });
 
-test("page setup offers the three papers, both ways up and three margins, pressing what the page has, and says only what changes", () => {
-    const changes: object[] = [];
-    const items = setupItems({ size: "Letter", orientation: "landscape", margins: 25 }, (change) => changes.push(change));
-    expect(items.filter((item) => item.pressed).map((item) => item.label)).toEqual(["Letter", "Landscape", "Normal"]);
-    expect(items.filter((item) => item.note).map((item) => item.label)).toEqual(["Paper", "Which way up", "Margins"]);
-    items.find((item) => item.label === "A5")!.run();
-    items.find((item) => item.label === "Narrow")!.run();
-    expect(changes).toEqual([{ size: "A5" }, { margins: 12.7 }]);
+test("page setup offers the three papers, both orientations and three margins with their sizes, each on when it is what the page has, and says only what changes", () => {
+    const groups = setupChoices({ size: "Letter", orientation: "landscape", margins: 25 });
+    expect(groups.map((group) => group.label)).toEqual(["Paper", "Orientation", "Margins"]);
+    expect(groups.flatMap((group) => group.choices.filter((choice) => choice.on).map((choice) => choice.label))).toEqual(["Letter", "Landscape", "Normal"]);
+    expect(groups[2]!.choices.map((choice) => `${choice.label} ${choice.note}`)).toEqual(["Narrow 12.7 mm", "Normal 25 mm", "Wide 38 mm"]);
+    expect(groups[0]!.choices.find((choice) => choice.label === "A5")!.change).toEqual({ size: "A5" });
+    expect(groups[2]!.choices.find((choice) => choice.label === "Narrow")!.change).toEqual({ margins: 12.7 });
 });
 
 test("print is given the header, footer and page number in the page's margin boxes, quoted safely", () => {

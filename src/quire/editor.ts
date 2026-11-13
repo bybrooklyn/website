@@ -52,7 +52,7 @@ import { createDetails } from "./details";
 import { createFind } from "./find";
 import { mountChecking } from "./check/mount";
 import { createTitle, nameFor, shownName, type OwnTitle } from "./title";
-import { createZoom, pageRule, percent, setPage, setupItems } from "./paper";
+import { createZoom, pageRule, percent, setPage, setupForm } from "./paper";
 import type { Page } from "./document";
 import { moreCommands } from "./more-commands";
 import { createMatching } from "./matching";
@@ -446,7 +446,6 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         return (host.clientWidth - gutter * 2) / (host.classList.contains("markdown") ? 2 : 1);
     };
     const zooms = flowMenu("Zoom", { align: "right" });
-    const setups = flowMenu("Page setup", { align: "right" });
     // the page as pages of that paper in page view, with the header, footer and numbers of a .quire document
     const pages = createPages(paper, surface, { page: pageNow, rich: () => !!surface.getDocument().quire });
     const zoom = createZoom(paper, column, space, pageNow, pages.paged, (now) => {
@@ -506,7 +505,24 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         zoom.refresh();
     };
     showView(rememberedView(), false);
-    const openSetup = (from: HTMLElement) => setups.open(from, setupItems(pageNow(), (change) => surface.run((doc) => setPage(doc, { ...pageNow(), ...change }))), true);
+    // page setup is a form of three choices, so a dialog, as Docs has it: nothing changes until OK, and Cancel leaves the page as it was
+    const openSetup = (from: HTMLElement) => {
+        const form = setupForm(pageNow());
+        openDialog(from, {
+            title: "Page setup",
+            body: [form.element],
+            className: "quire-setup-dialog",
+            dismiss: "Cancel",
+            action: {
+                label: "OK",
+                press: (_, dialog) => {
+                    surface.run((doc) => setPage(doc, form.page()));
+                    void dialog.close();
+                },
+            },
+            onClose: () => surface.focus(),
+        });
+    };
     /** The zoom's lines, and for a `.quire` document the page setup, which opens in its place. */
     const zoomLines = (from: () => HTMLElement): MenuItem[] => [{ label: "Page view", pressed: pages.paged(), run: () => showView(!pages.paged()) }, ...zoom.items(), ...(surface.getDocument().quire ? [{ label: "Page setup", hint: "›", run: () => openSetup(from()) }] : [])];
     // as the Markdown opens beside the sheet, or the window (or the browser's own zoom) changes, the sheet's column narrows and the sheet follows it
@@ -1124,7 +1140,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
             if (!options.top) top.remove();
             dictation.destroy();
             surface.destroy();
-            for (const menu of [...bar.menus, links, row.menu, zooms, setups]) menu.box.remove();
+            for (const menu of [...bar.menus, links, row.menu, zooms]) menu.box.remove();
             selectBar.element.remove();
             palette.destroy();
             emojiList.close();
