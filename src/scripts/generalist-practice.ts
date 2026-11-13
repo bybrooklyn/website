@@ -52,7 +52,7 @@ type Work =
 type Answer = { kind: "local"; setup: number; asked: number; share: Float64Array; weights: Float32Array; steps: number } | { kind: "gone"; setup: number; asked: number };
 
 /** Creatures practising together in all the workers; each has its share. */
-export const CREATURES = 32;
+const CREATURES = 32;
 /** How often the page is sent the policy to show, and everything to keep, in seconds. */
 const SHOW_EVERY = 3;
 const KEEP_EVERY = 30;
