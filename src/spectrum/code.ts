@@ -12,9 +12,9 @@ import { axes, HIGHEST, UNSET, widened, type Values } from "./axes";
 
 export const LENGTH = 8;
 /** Nine sliders of nine positions. */
-export const NINE_LENGTH = 6;
+const NINE_LENGTH = 6;
 /** The old app's eleven sliders of nine positions. */
-export const OLD_LENGTH = 7;
+const OLD_LENGTH = 7;
 const BASE = HIGHEST + 1;
 const DIGITS = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
