@@ -215,4 +215,19 @@ used("the key is taken out of the address once the page has it, and every answer
     }
 });
 
+used("two saves of one file at once cannot both pass the check: one is written whole, the other refused", async () => {
+    const base = address.replace(/\/\?k=.*$/, "");
+    const headers = { "x-edit-key": key, "content-type": "application/json" };
+    const path = "src/content/blog/blocks.mdx";
+    for (let round = 0; round < 5; round++) {
+        const { hash } = (await (await fetch(`${base}/api/file?path=${path}`, { headers })).json()) as { hash: string };
+        const contents = [`${POST}first ${round}\n`, `${POST}second ${round}\n`];
+        const answers = await Promise.all(contents.map((content) => fetch(`${base}/api/save`, { method: "POST", headers, body: JSON.stringify({ path, content, hash }) })));
+        expect(answers.map((answer) => answer.status).sort()).toEqual([200, 409]);
+        expect(await onDisk(path)).toBe(contents[answers.findIndex((answer) => answer.status === 200)]!);
+    }
+    // nothing is left beside the file from writing it
+    expect((await Array.fromAsync(new Bun.Glob("src/content/blog/blocks.mdx*").scan({ cwd: copy })))).toEqual(["src/content/blog/blocks.mdx"]);
+});
+
 if (!live) console.warn("edit.test.ts: no Chromium on this machine, so the editor was not used.");

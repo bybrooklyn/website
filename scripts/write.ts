@@ -17,7 +17,7 @@
 // The page itself is scripts/editor/main.ts, its styles scripts/editor/editor.css.
 
 import { $ } from "bun";
-import { mkdir, stat } from "node:fs/promises";
+import { mkdir, rename, stat } from "node:fs/promises";
 import { dirname, extname, relative, resolve } from "node:path";
 import { themeStyle } from "../src/lib/color";
 import { forEditor } from "./dictation-stubs";
@@ -31,6 +31,24 @@ const key = crypto.randomUUID().replace(/-/g, "");
 const DEV = "http://localhost:4321";
 
 const exists = (path: string) => Bun.file(at(path)).exists();
+
+/**
+ * Work on one file waits for the work on it before to end: two saves from two tabs could otherwise
+ * both pass the check that the file is as they last read it, and the second overwrite the first.
+ */
+const turns = new Map<string, Promise<unknown>>();
+function inTurn<T>(path: string, work: () => Promise<T>): Promise<T> {
+    const turn = (turns.get(path) ?? Promise.resolve()).then(work, work);
+    turns.set(path, turn.catch(() => {}));
+    return turn;
+}
+
+/** Writes a file whole or not at all: to a file beside it, then moved into its place, so that a crash or the dev server never sees half of it. */
+async function replace(file: string, content: string): Promise<void> {
+    const beside = `${file}.${process.pid}.saving`;
+    await Bun.write(beside, content);
+    await rename(beside, file);
+}
 const hash = (content: string) => Bun.hash(content).toString(36);
 
 /** The only files the editor may read or write. */
@@ -91,7 +109,10 @@ async function notePhoto(file: string, title: string, note: string): Promise<voi
     if (!photo) throw new Error("That picture is not on the site.");
     photo.title = title.trim() || undefined;
     photo.note = note.trim() || undefined;
-    await writeJson(at(PHOTOS), { photos });
+    // whole or not at all, as a saved file is
+    const beside = `${at(PHOTOS)}.${process.pid}.saving`;
+    await writeJson(beside, { photos });
+    await rename(beside, at(PHOTOS));
 }
 
 async function newPost(title: string): Promise<string> {
@@ -350,15 +371,17 @@ async function handle(request: Request): Promise<Response> {
     if (url.pathname === "/api/save") {
         const { path = "", content = "" } = body;
         if (!editable(path) || !(await exists(path))) return json({ error: "That file is not one the editor opens." }, 404);
-        if (hash(await Bun.file(at(path)).text()) !== body.hash) {
-            return json({ error: "This file changed on disk since it was opened. Open it again from the list to carry on (your last change was not saved)." }, 409);
-        }
-        await Bun.write(at(path), content);
-        return json({ hash: hash(content) });
+        return inTurn(path, async () => {
+            if (hash(await Bun.file(at(path)).text()) !== body.hash) {
+                return json({ error: "This file changed on disk since it was opened. Open it again from the list to carry on (your last change was not saved)." }, 409);
+            }
+            await replace(at(path), content);
+            return json({ hash: hash(content) });
+        });
     }
     if (url.pathname === "/api/new") return json({ path: await newPost(body.title ?? "") });
     if (url.pathname === "/api/photos/note") {
-        await notePhoto(body.file ?? "", body.title ?? "", body.note ?? "");
+        await inTurn(PHOTOS, () => notePhoto(body.file ?? "", body.title ?? "", body.note ?? ""));
         return json({ ok: true });
     }
     if (url.pathname === "/api/plan") return json(await plan(body.path ?? ""));
