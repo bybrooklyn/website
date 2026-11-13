@@ -4,7 +4,7 @@
 
 import { expect, test } from "bun:test";
 import { Glob } from "bun";
-import { blockAt, blockPaths, fields, type Block, type Document, type List, type Paragraph, type Run } from "./document";
+import { blockAt, blockPaths, fields, insertText, type Block, type Document, type List, type Paragraph, type Run } from "./document";
 import { parseInline, read } from "./read";
 import { write } from "./write";
 
@@ -342,4 +342,12 @@ test("only a definition block defines a link: a line that looks like one in code
     expect(linkIn("see [a]\n\n[a]: http://good\n")).toBe(true);
     expect(linkIn("see [a]\n\n> [a]: http://good\n")).toBe(true);
     same("```\n[a]: http://evil\n```\n\nsee [a]\n");
+});
+
+test("a raw block in a CRLF file holds plain newlines, and an edit to it is written with the file's CRLF", () => {
+    const doc = read("<div>\r\nx\r\n</div>\r\n\r\ntext\r\n");
+    expect(doc.blocks[0]?.kind === "raw" && doc.blocks[0].text).toBe("<div>\nx\n</div>");
+    same("<div>\r\nx\r\n</div>\r\n\r\ntext\r\n");
+    const typed = insertText(doc, { path: [0], offset: 6 }, "y\nz");
+    expect(write(typed)).toBe("<div>\r\ny\r\nzx\r\n</div>\r\n\r\ntext\r\n");
 });

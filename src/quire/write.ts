@@ -145,7 +145,7 @@ function writeBlock(block: Block, context: Context): string {
         case "footnote":
             return prefixLines(writeBlocks(block.blocks, context, true), `[^${said(block.label, "a footnote's label")}]: `, "    ", "");
         case "raw":
-            return said(block.text, "a raw block's text");
+            return said(block.text, "a raw block's text").replace(/\r?\n/g, eol);
     }
 }
 

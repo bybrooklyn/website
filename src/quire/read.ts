@@ -271,7 +271,9 @@ function untilBlank(lines: Line[], from: number): number {
 function readBlock(lines: Line[], at: number, context: Context): [Block, number] {
     const line = lines[at]!.text;
     const indent = indentOf(line);
-    const raw = (end: number): [Block, number] => [{ kind: "raw", text: joinSource(lines.slice(at, end)), gap: "" }, end];
+    // a raw block's text has plain newlines, as code has, so that a line typed into it is the same
+    // as the others; the block's source keeps the file's own line endings
+    const raw = (end: number): [Block, number] => [{ kind: "raw", text: lines.slice(at, end).map((each) => each.text).join("\n"), gap: "" }, end];
 
     if (indent >= 4 && !context.mdx) return readIndentedCode(lines, at);
     const text = indent >= 4 ? line.trimStart() : stripIndent(line, indent);
