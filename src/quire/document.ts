@@ -1162,6 +1162,11 @@ export function outdent(doc: Document, path: number[]): Document {
     });
 }
 
+/** Sets the number a numbered list at a path starts from. */
+export function setListStart(doc: Document, path: number[], start: number): Document {
+    return replace(doc, path, (block) => (block.kind === "list" ? [{ ...block, start, source: undefined }] : null));
+}
+
 /** Ticks or unticks a task item. An item with no box gains an empty one. */
 export function toggleTask(doc: Document, path: number[]): Document {
     const found = itemOf(doc, path);

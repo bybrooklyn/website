@@ -35,6 +35,7 @@ import {
     removeBlock,
     runsLength,
     runsText,
+    setListStart,
     sliceRuns,
     splitBlock,
     textAt,
@@ -216,6 +217,14 @@ function blockShortcut(state: State, typed: string): State | undefined {
     const strip = () => deleteText(doc, { start: { path: at.path, offset: 0 }, end: at });
     const land = (next: Document, offset = 0): State => ({ doc: next, selection: caret(sameLeaf(doc, at.path, next), offset) });
 
+    // a marker typed after a soft line break (Shift+Enter) is for that line alone: the paragraph is
+    // split at the break and only the new line becomes the list item, heading or quote
+    const lineStart = before.lastIndexOf("\n") + 1;
+    if (lineStart > 0 && typed === " " && !inItem(doc, at.path) && LINE_MARKER.test(before.slice(lineStart))) {
+        const cut = deleteText(doc, { start: { path: at.path, offset: lineStart - 1 }, end: { path: at.path, offset: lineStart } });
+        const split = splitBlock(cut, { path: at.path, offset: lineStart - 1 });
+        return blockShortcut({ doc: split, selection: caret(nextSibling(at.path), at.offset - lineStart) }, typed);
+    }
     if (typed === " ") {
         const hashes = /^(#{1,6}) $/.exec(before);
         if (hashes) return land(changeKind(strip(), at.path, { kind: "heading", level: hashes[1]!.length as Level }));
@@ -245,7 +254,13 @@ function blockShortcut(state: State, typed: string): State | undefined {
         }
         if (inItem(doc, at.path)) return undefined;
         if (/^[-*+] $/.test(before)) return land(changeKind(strip(), at.path, { kind: "list", style: "bullet" }));
-        if (/^\d{1,9}[.)] $/.test(before)) return land(changeKind(strip(), at.path, { kind: "list", style: "number" }));
+        const number = /^(\d{1,9}|[aAiI])[.)] $/.exec(before);
+        if (number) {
+            // `3. ` starts the list at 3; a lettered or roman `a. ` or `i. ` makes a numbered list, which is what a Markdown file can keep
+            const next = changeKind(strip(), at.path, { kind: "list", style: "number" });
+            const start = /^\d/.test(number[1]!) ? Number(number[1]) : 1;
+            return land(start === 1 ? next : startAt(next, sameLeaf(doc, at.path, next), start));
+        }
         if (before === "> " && !inQuote(doc, at.path)) return land(changeKind(strip(), at.path, { kind: "quote" }));
     }
     if (typed === "`" && text === "```") return land(changeKind(strip(), at.path, { kind: "code", language: "" }));
@@ -259,6 +274,16 @@ function blockShortcut(state: State, typed: string): State | undefined {
         return { doc: next, selection: caret(sameLeaf(doc, at.path, next, 1), 0) };
     }
     return undefined;
+}
+
+/** What, typed at the start of a line, turns that line into a block: a heading's hashes, a list's mark, a box, a quote. */
+const LINE_MARKER = /^(#{1,6}|[-*+]|\d{1,9}[.)]|[aAiI][.)]|\[[ xX]?\]|>) $/;
+
+/** Sets where the numbered list holding a path starts, when the path's item is its only one (a list just made). */
+function startAt(doc: Document, path: number[], start: number): Document {
+    const owner = blockAt(doc, path.slice(0, -2));
+    if (owner?.kind !== "list" || owner.style !== "number" || owner.items.length !== 1) return doc;
+    return setListStart(doc, path.slice(0, -2), start);
 }
 
 const INLINE: [RegExp, Mark, number][] = [
@@ -330,6 +355,23 @@ function backspace(state: State, word: boolean): Outcome {
     if (tableOf(doc, at.path) || !block) return done(doc, state.selection, "move");
     // at the start of a block: a heading, list item or quote first becomes a plain paragraph
     if (block.kind === "heading") return done(changeKind(doc, at.path, { kind: "paragraph" }), state.selection, "structure");
+    // at the start of a later item, as in Docs, the bullet goes and the text stays where it was, as a
+    // line of the item above (a hard break in it); Backspace again joins the two lines
+    const owner = inItem(doc, at.path) ? blockAt(doc, at.path.slice(0, -2)) : undefined;
+    const itemIndex = at.path[at.path.length - 2]!;
+    if (block.kind === "paragraph" && owner?.kind === "list" && owner.style !== "definition" && at.path[at.path.length - 1] === 0 && itemIndex > 0) {
+        const item = owner.items[itemIndex]!;
+        const previous = owner.items[itemIndex - 1]!;
+        const tail = previous.blocks[previous.blocks.length - 1];
+        // an empty item has no line to keep (a break at a paragraph's end is not kept by Markdown): it leaves the list below
+        if (item.blocks.length === 1 && tail?.kind === "paragraph" && runsLength(block.runs) > 0) {
+            const tailPath = [...at.path.slice(0, -2), itemIndex - 1, previous.blocks.length - 1];
+            const length = runsLength(tail.runs);
+            let next = insertAtom(doc, { path: tailPath, offset: length }, { kind: "break" });
+            next = joinBlock(next, at.path);
+            if (next !== doc) return done(next, caret(tailPath, length + 1), "structure");
+        }
+    }
     if (block.kind === "paragraph" && (inItem(doc, at.path) || inQuote(doc, at.path)) && at.path[at.path.length - 1] === 0) {
         const next = changeKind(doc, at.path, { kind: "paragraph" });
         return done(next, caret(sameLeaf(doc, at.path, next), 0), "structure");
