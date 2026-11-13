@@ -1162,7 +1162,7 @@ used("the caret is drawn where the cursor is, a line tall, blinking once still i
         const caret = document.querySelector('.quire-caret').getBoundingClientRect();
         const cursor = getSelection().getRangeAt(0).getClientRects()[0];
         const probe = document.createElement('i'); probe.style.color = 'var(--accent)'; document.body.append(probe); const accent = getComputedStyle(probe).color; probe.remove();
-        return { dx: Math.abs(caret.left - (cursor.left + cursor.height * 0.05)), dy: Math.abs(caret.top - cursor.top), width: caret.width, height: caret.height, colour: getComputedStyle(document.querySelector('.quire-caret')).backgroundColor, accent };
+        return { dx: Math.abs(caret.left - cursor.left), dy: Math.abs(caret.top - cursor.top), width: caret.width, height: caret.height, colour: getComputedStyle(document.querySelector('.quire-caret')).backgroundColor, accent };
     })()`);
     expect(seen.dx).toBeLessThan(1.5);
     expect(seen.dy).toBeLessThan(1.5);
@@ -1203,6 +1203,16 @@ used("the caret is drawn where the cursor is, a line tall, blinking once still i
     expect(await tab.run("getComputedStyle(document.querySelector('.quire-caret')).opacity")).toBe("0");
 });
 
+used("in a heading as in the text, the caret starts within a pixel of where the browser's own would", async () => {
+    await pageView(false);
+    for (const markdown of ["# Heading\n", "## Heading\n", "Some words.\n"]) {
+        await reset(markdown, [0], 7);
+        await tab.wait(120);
+        const off = await tab.run<number>(`(() => { const rect = [...getSelection().getRangeAt(0).getClientRects()].find((box) => box.height > 0); return Math.abs(document.querySelector('.quire-caret').getBoundingClientRect().left - rect.left); })()`);
+        expect({ markdown, off: off <= 1 }).toEqual({ markdown, off: true });
+    }
+});
+
 used("on an empty line, of every kind, the caret stands where the first letter typed will be: it does not move up or down when the letter comes", async () => {
     await pageView(false);
     const drawn = () => tab.run<{ top: number; height: number }>(`(() => { const box = document.querySelector('.quire-caret').getBoundingClientRect(); return { top: box.top, height: box.height }; })()`);
@@ -1237,7 +1247,7 @@ used("the caret slides briefly when a key moves it along a line, is at once on a
             const caret = document.querySelector(".quire-caret");
             const rect = [...getSelection().getRangeAt(0).getClientRects()].find((box) => box.height > 0);
             const drawn = caret.getBoundingClientRect();
-            done({ sliding: caret.getAnimations().some((each) => each.transitionProperty === "translate"), off: Math.abs(drawn.left - (rect.left + rect.height * 0.05)) });
+            done({ sliding: caret.getAnimations().some((each) => each.transitionProperty === "translate"), off: Math.abs(drawn.left - rect.left) });
         }, 15))`);
     await tab.press("ArrowRight");
     expect((await after()).sliding).toBe(true);
@@ -1577,8 +1587,8 @@ used("typing, the caret is never a frame behind: on every frame it is within a p
             if (selection.rangeCount && selection.isCollapsed) {
                 const rect = [...selection.getRangeAt(0).getClientRects()].find((box) => box.height > 0);
                 const drawn = caret.getBoundingClientRect();
-                // the caret starts a hair after the browser's place (a twentieth of the text's height), so it never lies on the letter before
-                if (rect && caret.classList.contains("shown")) window.behind.push(Math.abs(drawn.left - (rect.left + rect.height * 0.05)));
+                // the caret starts where the browser's own would
+                if (rect && caret.classList.contains("shown")) window.behind.push(Math.abs(drawn.left - rect.left));
             }
             if (!window.stopLooking) requestAnimationFrame(look);
         };

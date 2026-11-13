@@ -139,8 +139,9 @@ export function createCaret(root: HTMLElement, frame: HTMLElement, first: readon
         last = { left: box.left, top, height: tall };
         if (!was || atOnce || far) element.style.transition = "none";
         else if (whole) element.style.transitionProperty = "translate, height";
-        // a hair after the letter before, in proportion to the text, so that it never lies on a letter that reaches its edge (a heading's w)
-        element.style.translate = `${box.left + tall * 0.05}px ${top}px`;
+        // where the browser's own starts, just after the letter before: a gap in proportion to the text left
+        // it two or three pixels off in a heading, standing apart from the word as no caret does
+        element.style.translate = `${box.left}px ${top}px`;
         element.style.height = `${tall}px`;
         if (!was || whole || atOnce || far) {
             void element.offsetWidth;
