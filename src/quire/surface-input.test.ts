@@ -277,6 +277,20 @@ describe("composition in the text keeps the model and the page in step", () => {
 });
 
 describe("every kind of input that changes text either changes the model or is cancelled", () => {
+    inPage("a spelling fix replaces its range, or with no range the word at the cursor; yank types its text", async (tab) => {
+        await tab.run(`quire.reset("I saw teh cat\\n")`);
+        await tab.run("quire.select([0], 9)");
+        expect(await tab.run<boolean>(`quire.input("insertReplacementText", "the", [{ path: [0], offset: 6 }, { path: [0], offset: 9 }])`)).toBe(true);
+        expect(await md(tab)).toBe("I saw the cat\n");
+        await tab.run("quire.select([0], 12)");
+        await tab.run(`quire.input("insertReplacementText", "dog")`);
+        expect(await md(tab)).toBe("I saw the dog\n");
+        await tab.run("quire.select([0], 13)");
+        await tab.run(`quire.input("insertFromYank", "!")`);
+        expect(await md(tab)).toBe("I saw the dog!\n");
+        expect(await shown(tab)).toBe("I saw the dog!");
+    });
+
     inPage("the browser's Edit menu undoes and redoes through the editor's own history, and its Bold makes bold", async (tab) => {
         await tab.run(`quire.reset("")`);
         await tab.type("word");

@@ -930,12 +930,28 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
         if (send({ type: "key", key, shift: event.shiftKey, mod: mod && !word, alt: event.altKey && !word, word })) event.preventDefault();
     }
 
-    function selectTargetRange(event: InputEvent) {
+    function selectTargetRange(event: InputEvent): boolean {
         const range = event.getTargetRanges?.()[0];
-        if (!range) return;
+        if (!range) return false;
         const anchor = toPosition(range.startContainer, range.startOffset);
         const focus = toPosition(range.endContainer, range.endOffset);
-        if (anchor && focus) editor = { ...editor, state: { doc: editor.state.doc, selection: { anchor, focus } } };
+        if (!anchor || !focus) return false;
+        editor = { ...editor, state: { doc: editor.state.doc, selection: { anchor, focus } } };
+        return true;
+    }
+
+    /** The word the cursor is in or just after, selected: what a spelling fix replaces when the browser does not say which range it means. */
+    function selectWord() {
+        const { focus } = editor.state.selection;
+        const holder = holderAt(focus.path);
+        if (!collapsed(editor.state.selection) || !holder) return;
+        const text = textOf(holder);
+        const letter = /[\p{L}\p{M}\p{N}'’]/u;
+        let start = focus.offset;
+        let end = focus.offset;
+        while (start > 0 && letter.test(text[start - 1]!)) start--;
+        while (end < text.length && letter.test(text[end]!)) end++;
+        if (start < end) editor = { ...editor, state: { doc: editor.state.doc, selection: { anchor: { path: focus.path, offset: start }, focus: { path: focus.path, offset: end } } } };
     }
 
     // ---- what the browser changes itself ----
@@ -1044,9 +1060,13 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
         const text = event.data ?? event.dataTransfer?.getData("text/plain") ?? "";
         switch (type) {
             case "insertText":
+            case "insertFromYank":
             case "insertReplacementText": {
                 const range = event.getTargetRanges?.()[0];
-                if (type === "insertReplacementText" || (range && !range.collapsed)) selectTargetRange(event);
+                if (type === "insertReplacementText") {
+                    // a spelling fix: the range it replaces, or when none is given the word at the cursor
+                    if (!selectTargetRange(event)) selectWord();
+                } else if (range && !range.collapsed) selectTargetRange(event);
                 send({ type: "text", text });
                 return;
             }
