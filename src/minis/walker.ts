@@ -495,16 +495,22 @@ export default function walker(m: Mote): Scene {
             return { ctx, wide, high };
         };
 
+        /** The course never changes, so its first two laps are laid out once, the first time they are drawn. */
+        const span = 240;
+        let laid: { profile: number[]; low: number; top: number } | undefined;
         drawCourse = () => {
             if (!course.open()) return;
             const drawn = ready(map);
             if (!drawn) return;
             const { ctx, wide, high } = drawn;
             // the first two laps, squeezed into the picture, each stretch in its own tone
-            const span = 240;
-            const profile = new Terrain({ kind: "course", rough: 0 }).next(span);
-            let [low, top] = [0, 0];
-            for (let i = 1; i < profile.length; i += 2) [low, top] = [Math.min(low, profile[i]!), Math.max(top, profile[i]!)];
+            if (!laid) {
+                const profile = new Terrain({ kind: "course", rough: 0 }).next(span);
+                let [low, top] = [0, 0];
+                for (let i = 1; i < profile.length; i += 2) [low, top] = [Math.min(low, profile[i]!), Math.max(top, profile[i]!)];
+                laid = { profile, low, top };
+            }
+            const { profile, low, top } = laid;
             const x = (along: number) => 4 + ((wide - 8) * along) / span;
             const y = (height: number) => high - 6 - ((high - 14) * (height - low)) / Math.max(1, top - low);
             ctx.lineWidth = 2;
