@@ -110,7 +110,8 @@
 }
 
 .quire-drawn:not(.quire-editing, .quire-drawn-plain) > pre {
-    max-height: 2.9em;
+    /* its first line with the box's room above and below it (prose.css), so the line is not drawn on the box's foot */
+    max-height: calc(1lh + var(--line) * 1.5 + 0.125rem);
     overflow: hidden;
     opacity: 0.55;
 }

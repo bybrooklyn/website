@@ -1446,6 +1446,23 @@ used("a line of space lies between a paragraph and a drawing of maths or a flowc
     expect(gaps.map(({ name, gap }) => ({ name, near: gap >= 0.95 && gap <= (name.includes("quire-drawn") ? 1.3 : 1.05) }))).toEqual(gaps.map(({ name }) => ({ name, near: true })));
 });
 
+used("the source of maths or a flowchart folded to its first line has as much room under that line as over it", async () => {
+    await reset("Words.\n\n```mermaid\nflowchart LR\n  A --> B\n```\n\n$$\nx + y\n$$\n", [0], 0);
+    await tab.run("document.activeElement.blur()");
+    await tab.wait(600);
+    const seen = await tab.run<{ above: number; below: number }[]>(`[...document.querySelectorAll('.quire-drawn > pre')].map((pre) => {
+        const box = pre.getBoundingClientRect();
+        const range = document.createRange();
+        range.selectNodeContents(pre.querySelector('code'));
+        const first = [...range.getClientRects()].find((each) => each.height > 0);
+        const line = parseFloat(getComputedStyle(pre).lineHeight);
+        const middle = first.top + first.height / 2;
+        return { above: Math.round(middle - line / 2 - box.top), below: Math.round(box.bottom - (middle + line / 2)) };
+    })`);
+    expect(seen.length).toBe(2);
+    for (const { above, below } of seen) expect(Math.abs(above - below)).toBeLessThanOrEqual(2);
+});
+
 used("a line of space lies above a table's first words and below its last rule, after a paragraph, a heading or code", async () => {
     await reset("Words.\n\n| a | b |\n| --- | --- |\n| 1 | 2 |\n\n## A heading\n\n| a | b |\n| --- | --- |\n| 1 | 2 |\n\n```\ncode\n```\n\n| a | b |\n| --- | --- |\n| 1 | 2 |\n\nWords.\n", [0], 0);
     await tab.run("document.activeElement.blur()");
