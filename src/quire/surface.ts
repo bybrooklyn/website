@@ -988,7 +988,8 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
         // paste, drop and cut come through their own events; anything else is not let through
     }
 
-    function onCompositionStart() {
+    function onCompositionStart(event: CompositionEvent) {
+        if (fromField(event)) return;
         syncSelection();
         // what is selected goes first, so the composed text replaces it
         if (!collapsed(editor.state.selection)) send({ type: "key", key: "Backspace" });
@@ -997,6 +998,7 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
     }
 
     function onCompositionEnd(event: CompositionEvent) {
+        if (fromField(event)) return;
         composing = false;
         const at = composedAt ?? editor.state.selection;
         composedAt = undefined;
@@ -1139,18 +1141,22 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
     }
 
     function onCopy(event: ClipboardEvent) {
+        if (fromField(event)) return;
         copyTo(event);
     }
 
     function onCut(event: ClipboardEvent) {
+        if (fromField(event)) return;
         if (copyTo(event)) send({ type: "key", key: "Backspace" });
     }
 
     function onDragOver(event: DragEvent) {
+        if (fromField(event)) return;
         event.preventDefault();
     }
 
     function onDrop(event: DragEvent) {
+        if (fromField(event)) return;
         event.preventDefault();
         const place = (document as unknown as { caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null }).caretPositionFromPoint?.(event.clientX, event.clientY);
         // older Safari has only the older name
@@ -1170,7 +1176,7 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
         [root, "keydown", onKeyDown as EventListener],
         [root, "beforeinput", onBeforeInput as EventListener],
         [root, "input", onInput],
-        [root, "compositionstart", onCompositionStart],
+        [root, "compositionstart", onCompositionStart as EventListener],
         [root, "compositionend", onCompositionEnd as EventListener],
         [root, "mousedown", onMouseDown as EventListener],
         [root, "paste", onPaste as EventListener],
