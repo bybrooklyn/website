@@ -82,6 +82,8 @@ export interface EditorOptions {
 /** The editor, as the page sees it. */
 export interface Editor {
     surface: Surface;
+    /** Every command by name, as the menus, the shortcuts and the Ctrl+/ panel run them. */
+    commands: RowActions;
     getName(): string;
     current(): { store?: Store; id?: string; name: string };
     open(store: Store, entry: Entry): Promise<void>;
