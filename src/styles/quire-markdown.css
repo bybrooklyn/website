@@ -4,25 +4,6 @@
    can change without the other. Colors are the site's tokens; on light paper quire.css gives the
    same tokens their paper values, so nothing here needs a second set. */
 
-/* A plain bullet in a list that also has checklist items keeps its bullet, drawn where a box would be. */
-.quire ul:has(> .quire-task) > li:not(.quire-task) {
-    list-style: none;
-}
-
-.quire ul:has(> .quire-task) > li:not(.quire-task)::before {
-    content: "";
-    display: inline-block;
-    width: 0.9em;
-    height: 0.9em;
-    margin-right: 0.5em;
-    vertical-align: -0.1em;
-    background: radial-gradient(circle, var(--muted) 0 0.16em, transparent 0.17em) center / 0.9em 0.9em no-repeat;
-}
-
-.quire ul:has(> .quire-task) > li:not(.quire-task) > p:first-of-type {
-    display: inline;
-}
-
 /* ---- code: the colors the site's own code blocks use (tokens.css), and a little more ---- */
 
 .quire-t-keyword,
