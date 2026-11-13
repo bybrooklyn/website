@@ -357,7 +357,13 @@ const server = Bun.serve({
     hostname: "127.0.0.1",
     port,
     idleTimeout: 255,
-    fetch: (request) => handle(request).catch((error: unknown) => json({ error: error instanceof Error ? error.message : String(error) }, 500)),
+    fetch: async (request) => {
+        const answer = await handle(request).catch((error: unknown) => json({ error: error instanceof Error ? error.message : String(error) }, 500));
+        // No address with the key in it is passed on to another site, and no other page may frame the editor.
+        answer.headers.set("referrer-policy", "no-referrer");
+        answer.headers.set("x-frame-options", "DENY");
+        return answer;
+    },
 });
 
 // The preview beside the text is the site's own dev server.

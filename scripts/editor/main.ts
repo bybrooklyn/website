@@ -16,6 +16,11 @@ import { editStore, PHOTOS, server, type Offered } from "./store";
 
 const meta = (name: string) => document.querySelector<HTMLMetaElement>(`meta[name="${name}"]`)?.content ?? "";
 const key = meta("edit-key");
+// The key came in the address; the page has it from its meta tag now, so it is taken out of the
+// address bar and the history, where anyone looking over a shoulder or at the history could read it.
+const bare = new URL(location.href);
+bare.searchParams.delete("k");
+history.replaceState(history.state, "", bare);
 const site = meta("edit-site");
 const ask = server(key);
 const remembered = (() => {

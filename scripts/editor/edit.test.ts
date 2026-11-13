@@ -199,4 +199,14 @@ used("a picture is served sandboxed, so a script inside an SVG cannot run with t
     expect(answer.headers.get("x-content-type-options")).toBe("nosniff");
 });
 
+used("the key is taken out of the address once the page has it, and every answer keeps its address to itself and refuses to be framed", async () => {
+    expect(await tab.run("location.search")).toBe("");
+    expect(await tab.run("document.querySelector('meta[name=edit-key]').content")).toBe(key);
+    for (const path of ["/", "/api/files", "/style.css", "/nothing"]) {
+        const answer = await fetch(`${address.replace(/\/\?k=.*$/, "")}${path}`, { headers: { "x-edit-key": key } });
+        expect(answer.headers.get("referrer-policy")).toBe("no-referrer");
+        expect(answer.headers.get("x-frame-options")).toBe("DENY");
+    }
+});
+
 if (!live) console.warn("edit.test.ts: no Chromium on this machine, so the editor was not used.");
