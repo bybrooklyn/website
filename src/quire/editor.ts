@@ -543,7 +543,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         zoom.step(1);
     };
     host.addEventListener("keydown", zoomKey);
-    surface.on("link", () => openLink(bar.element.querySelector<HTMLElement>('[aria-label^="Link"]')!));
+    surface.on("link", () => openLink(bar.seen("Link")));
     const selectBar = createSelectBar(surface, () => bar.element.getBoundingClientRect().bottom);
     const outlineView = createOutline(surface, () => bar.element.getBoundingClientRect().bottom, (open) => {
         host.classList.toggle("outlined", open);
@@ -633,7 +633,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
                     surface.setSelection({ anchor: { path: paths[0] ?? [0], offset: 0 }, focus: { path: last, offset: lengthOf(surface.getDocument(), last) } });
                     surface.focus();
                 },
-                link: () => openLink(bar.element.querySelector<HTMLElement>('[aria-label^="Link"]') ?? format()),
+                link: () => openLink(bar.seen("Link")),
                 outline: () => (toggleOutline()),
                 markdown: () => showMarkdown(!host.classList.contains("markdown")),
                 pageView: () => showView(!pages.paged()),

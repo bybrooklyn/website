@@ -710,6 +710,29 @@ used("the selection bar never covers a heading over the selection, nor the line 
     expect(overlaps(seen.bar, seen.selection)).toBe(false);
 });
 
+used("Ctrl+K opens a link field that can be seen at every width, from the three dots when the bar's Link button is folded away", async () => {
+    try {
+        for (const width of [1300, 900, 600, 390]) {
+            await tab.resize(width, 900);
+            await reset("Some words to link\n", [0], 5, [0], 10);
+            await tab.wait(300);
+            await tab.press("k", { ctrl: true });
+            await tab.wait(500);
+            const seen = await tab.run<{ open: boolean; hit: boolean; focused: boolean }>(`(() => {
+                const menu = [...document.querySelectorAll('.quire-menu')].find((each) => each.matches(':popover-open') && each.querySelector('.quire-link-field'));
+                if (!menu) return { open: false, hit: false, focused: false };
+                const box = menu.getBoundingClientRect();
+                return { open: true, hit: menu.contains(document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2)), focused: document.activeElement?.classList.contains('quire-link-field') };
+            })()`);
+            expect({ width, ...seen }).toEqual({ width, open: true, hit: true, focused: true });
+            await tab.press("Escape");
+            await tab.wait(300);
+        }
+    } finally {
+        await tab.resize(1300, 900);
+    }
+});
+
 used("the selection bar over the first line of the text never covers the document's title above it", async () => {
     await reset("A first line of words to select.\n", [0], 2, [0], 7);
     await tab.run(`(() => { const title = document.querySelector('.quire-title'); title.value = 'A title with tails, gjpqy'; title.dispatchEvent(new Event('input', { bubbles: true })); })()`);

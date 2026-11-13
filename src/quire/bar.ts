@@ -1072,6 +1072,18 @@ export function createBar(surface: Surface, options: BarOptions) {
             showSize();
         },
         rich: () => richOn,
+        /**
+         * The bar's button for a tool if it can be seen, or else the three dots it is folded into: a menu is tied to
+         * the control it opens from, and the browser does not draw a menu tied to a control out of sight (folded
+         * away, or scrolled out of the strip on a phone), so the menu was open, and its field focused, unseen.
+         */
+        seen(label: string): HTMLElement {
+            const button = bar.querySelector<HTMLElement>(`[aria-label^="${label}"]`);
+            const box = button?.getBoundingClientRect();
+            if (!button || !box || box.width === 0 || button.closest(".folded, .away")) return moreButton;
+            const room = strip.contains(button) ? strip.getBoundingClientRect() : undefined;
+            return !room || (box.left >= room.left - 1 && box.right <= room.right + 1) ? button : moreButton;
+        },
         /** Opens the search of the menus, from its button or, folded away, from the three dots, its field focused (Alt+/). */
         search() {
             if (searching.isOpen()) return searching.box.querySelector("input")?.focus({ preventScroll: true });
