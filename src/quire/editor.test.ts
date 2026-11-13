@@ -871,6 +871,10 @@ used("a document changed elsewhere is not written over: the conflict is shown, a
     expect(await tab.run(`q.kept(${JSON.stringify(id)})`)).toBe("Theirs\n");
     await tab.wait(400);
     expect(await tab.run("getComputedStyle(document.querySelector('.quire-conflict')).visibility")).toBe("visible");
+    // it comes below the bar and leaves the keyboard in the text, so that a key typed as it comes chooses nothing
+    expect(await tab.run("document.querySelector('.quire-conflict').getBoundingClientRect().top >= document.querySelector('.quire-bar').getBoundingClientRect().bottom")).toBe(true);
+    expect(await tab.run("document.activeElement === q.editor.surface.element")).toBe(true);
+    expect(await tab.run<string[]>("[...document.querySelectorAll('.quire-conflict-choices button')].map((b) => b.textContent)")).toEqual(["See both", "Take theirs", "Keep mine"]);
     // see both, side by side
     await press(".quire-conflict button", "See both");
     await tab.wait(400);

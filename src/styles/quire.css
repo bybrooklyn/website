@@ -1961,16 +1961,17 @@
 
 .quire-conflict {
     position: fixed;
-    top: 1rem;
+    top: var(--quire-below-bar);
     right: 1rem;
     z-index: 67;
     display: flex;
     flex-direction: column;
     width: min(26rem, 100vw - 2rem);
-    max-height: calc(100vh - 2rem);
+    max-height: calc(100vh - var(--quire-below-bar) - 1rem);
+    box-sizing: border-box;
     padding: 0.8rem 1rem 1rem;
     border: 0.0625rem solid color-mix(in oklch, var(--accent) 55%, var(--rule));
-    border-radius: calc(var(--radius) * 2);
+    border-radius: var(--quire-round-large);
     background: var(--surface);
     overflow: hidden;
     font-family: var(--font-text);
@@ -2026,20 +2027,23 @@
     font-size: 0.82rem;
 }
 
+/* the choices in a dialog's order: seeing both, a switch, alone at the left, then taking theirs, and keeping mine filled at the right */
 .quire-conflict-choices {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.4rem;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.4rem 0.6rem;
 }
 
+.quire-conflict-choices .far {
+    margin-right: auto;
+}
+
+/* a quiet choice with an outline, as find's Replace and All are */
 .quire-choice {
     padding-inline: 0.9rem;
     border: 0.0625rem solid var(--rule);
-}
-
-.quire-choice:first-child {
-    border-color: var(--accent);
-    color: var(--accent);
 }
 
 /* both texts side by side, grown open under the choices */
@@ -2071,7 +2075,7 @@
     margin: 0.3rem 0 0;
     padding: 0.7rem 0.8rem;
     border: 0.0625rem solid var(--panel-rule);
-    border-radius: var(--radius);
+    border-radius: var(--quire-round);
     background: var(--panel);
     font-family: var(--font-code);
     font-size: 0.78rem;
