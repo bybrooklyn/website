@@ -5,7 +5,7 @@
 
 import type { AstroIntegration } from "astro";
 import { spawn } from "node:child_process";
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
@@ -36,13 +36,40 @@ function chromium(): string | undefined {
     return undefined;
 }
 
-/** Print a page to a PDF file. Returns how many pages it came to. */
-async function print(browser: string, url: string, output: string): Promise<number> {
-    await new Promise<void>((resolve, reject) => {
-        const run = spawn(browser, ["--headless", "--disable-gpu", "--no-pdf-header-footer", `--print-to-pdf=${output}`, url], { stdio: "ignore" });
-        run.on("error", reject);
-        run.on("exit", (code) => (code === 0 ? resolve() : reject(new Error(`Chromium exited with ${code} while printing the resume.`))));
-    });
+/**
+ * Print a page to a PDF file. Returns how many pages it came to. Chromium is given a profile folder
+ * of its own, so that it never hands the job to a Chromium already open (which can end without
+ * writing anything), and is stopped if it takes longer than `limit` milliseconds.
+ */
+export async function print(browser: string, url: string, output: string, limit = 60_000): Promise<number> {
+    // an old file left where the new one goes must not be taken for it
+    rmSync(output, { force: true });
+    const profile = mkdtempSync(join(tmpdir(), "resume-print-"));
+    try {
+        await new Promise<void>((resolve, reject) => {
+            const run = spawn(browser, ["--headless", "--disable-gpu", "--no-pdf-header-footer", `--user-data-dir=${profile}`, `--print-to-pdf=${output}`, url], { stdio: "ignore", detached: true });
+            const timer = setTimeout(() => {
+                try {
+                    process.kill(-run.pid!, "SIGKILL");
+                } catch {
+                    run.kill("SIGKILL");
+                }
+                reject(new Error(`Chromium took more than ${limit / 1000} s to print the resume, and was stopped.`));
+            }, limit);
+            run.on("error", (error) => {
+                clearTimeout(timer);
+                reject(error);
+            });
+            run.on("exit", (code) => {
+                clearTimeout(timer);
+                if (code === 0) resolve();
+                else reject(new Error(`Chromium exited with ${code} while printing the resume.`));
+            });
+        });
+    } finally {
+        rmSync(profile, { recursive: true, force: true, maxRetries: 3 });
+    }
+    if (!existsSync(output)) throw new Error("Chromium finished without writing the resume's PDF.");
     return (readFileSync(output, "latin1").match(/\/Type\s*\/Page\b(?!s)/g) ?? []).length;
 }
 
@@ -60,19 +87,23 @@ export default function resumePdf(): AstroIntegration {
                         response.end("The PDF needs Chromium or Chrome on this machine.");
                         return;
                     }
-                    const output = join(tmpdir(), `resume-${process.pid}.pdf`);
-                    print(browser, `http://localhost:${port}${PAGE}`, output).then(
-                        () => {
-                            response.setHeader("Content-Type", "application/pdf");
-                            response.setHeader("Cache-Control", "no-store");
-                            response.end(readFileSync(output));
-                        },
-                        (error: unknown) => {
-                            logger.error(String(error));
-                            response.statusCode = 500;
-                            response.end("The resume could not be printed.");
-                        },
-                    );
+                    // a folder of its own for each request, so that two at once do not share a file
+                    const folder = mkdtempSync(join(tmpdir(), "resume-"));
+                    const output = join(folder, "resume.pdf");
+                    print(browser, `http://localhost:${port}${PAGE}`, output)
+                        .then(
+                            () => {
+                                response.setHeader("Content-Type", "application/pdf");
+                                response.setHeader("Cache-Control", "no-store");
+                                response.end(readFileSync(output));
+                            },
+                            (error: unknown) => {
+                                logger.error(String(error));
+                                response.statusCode = 500;
+                                response.end("The resume could not be printed.");
+                            },
+                        )
+                        .finally(() => rmSync(folder, { recursive: true, force: true }));
                 });
             },
 
