@@ -66,6 +66,7 @@ if (root) {
         const tag = named(location.hash);
         const row = tag && rows.find((each) => each.dataset.forms!.split(" ").includes(tag));
         if (!row) return;
+        // the named tag wins over a search, ?q= in the same address included, which could fold it away
         if (box.value) {
             box.value = "";
             show();
