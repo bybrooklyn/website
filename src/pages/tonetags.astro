@@ -1,0 +1,89 @@
+---
+// /tonetags/: what tone tags mean, with a search. A tone tag is a short mark after a message,
+// behind a slash, that says how the message is meant. It opens like a project (its words are
+// src/content/projects/tone-tags.mdx, which says `opens: /tonetags/`): the thing at the top, then
+// what it is.
+//
+// The whole list is written here, the most used first, so the page reads without scripts.
+// src/scripts/tonetags.ts then narrows it as the box is typed in. The list and how it is searched
+// are in src/tonetags/.
+import "../styles/content";
+import "../styles/blog.css";
+import "../styles/projects.css";
+import "../styles/tonetags.css";
+import { getEntry, render } from "astro:content";
+import PrevNext from "../components/PrevNext.astro";
+import Opened from "../layouts/Opened.astro";
+import { getProjects, projectPage } from "../lib/projects";
+import { projectShare, sharePicture } from "../lib/share";
+import { tags } from "../tonetags/tags";
+
+const project = (await getEntry("projects", "tone-tags"))!;
+const { name, summary, language } = project.data;
+const { Content } = await render(project);
+const projects = await getProjects();
+const at = projects.findIndex((each) => each.id === project.id);
+const previous = projects[at - 1];
+const next = projects[at + 1];
+
+const parts = [
+    { head: "the ones you will see most", rows: tags.map((tag, place) => ({ tag, place })).filter((each) => each.tag.common) },
+    { head: "the rest, by letter", rows: tags.map((tag, place) => ({ tag, place })).filter((each) => !each.tag.common) },
+];
+---
+
+<Opened title={name} description={summary} image={sharePicture("project-tone-tags")} facts={projectShare(project)} back={{ href: "/projects/", label: "projects" }}>
+    <article class="post tonetags-page">
+        <header class="post-header">
+            <p class="post-meta"><span>{language}</span></p>
+            <h1>{name.toLowerCase()}</h1>
+            <p class="lede">{summary}</p>
+        </header>
+
+        <div class="tonetags" data-tonetags>
+            <label class="tonetags-find">
+                <span class="unseen">Search the tags</span>
+                <input type="search" placeholder="/j, or a word such as joking" autocomplete="off" autocapitalize="off" spellcheck="false" />
+            </label>
+            <p class="tonetags-count note" aria-live="polite"></p>
+            {
+                parts.map((part) => (
+                    <section class="tonetags-part fold open">
+                        <div>
+                            <h2>{part.head}</h2>
+                            <ul>
+                                {part.rows.map(({ tag, place }) => (
+                                    <li class="fold open" data-tag={place}>
+                                        <div class="tonetag">
+                                            <span class="tonetag-forms">
+                                                {tag.forms.map((form) => (
+                                                    <code>/{form}</code>
+                                                ))}
+                                            </span>
+                                            <span class="tonetag-means">{tag.means}</span>
+                                        </div>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    </section>
+                ))
+            }
+        </div>
+
+        {/* What a tone tag is, who it helps, and that nobody has to learn them: the project's own words. */}
+        <div class="prose tonetags-about">
+            <Content />
+        </div>
+
+        <PrevNext
+            label="More projects"
+            previous={previous && { href: projectPage(previous), note: "previous", title: previous.data.name }}
+            next={next ? { href: projectPage(next), note: "next", title: next.data.name } : { href: "/projects/", note: "back to the list", title: "all projects" }}
+        />
+    </article>
+</Opened>
+
+<script>
+    import "../scripts/tonetags";
+</script>

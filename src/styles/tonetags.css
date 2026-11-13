@@ -1,0 +1,80 @@
+/* The tone tags page (src/pages/tonetags.astro): a box to search in, and the tags in two parts. */
+
+.tonetags {
+    --grow: 0.28s;
+    --fade: 0.18s;
+    max-width: var(--measure);
+    margin-bottom: calc(var(--line) * 2);
+}
+
+/* The box is a line to type on, as the minis' are: a rule under the words, the accent when it is being typed on. */
+.tonetags-find input {
+    width: 100%;
+    padding: 0.4rem 0;
+    border: 0;
+    border-bottom: 0.0625rem solid var(--rule);
+    border-radius: 0;
+    background: none;
+    color: var(--ink);
+    font: inherit;
+    font-size: 1.15rem;
+    transition: border-color 0.15s ease;
+}
+
+.tonetags-find input:focus {
+    outline: none;
+    border-bottom-color: var(--accent);
+}
+
+.tonetags-find input::placeholder {
+    color: color-mix(in oklch, var(--muted) 70%, transparent);
+}
+
+/* How many were found: room is kept for the line, so the list under it does not jump when it speaks. */
+.tonetags-count {
+    min-height: var(--line);
+    margin: 0.4rem 0 0;
+}
+
+.tonetags-part h2 {
+    margin: var(--line) 0 0.3rem;
+    font-size: 1rem;
+    color: var(--muted);
+}
+
+.tonetags-part ul {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+/* One tag: the ways it is written at the left, each on the code face, and what it means beside them. */
+.tonetag {
+    display: grid;
+    grid-template-columns: 9rem 1fr;
+    align-items: baseline;
+    gap: 0 1rem;
+    padding: 0.35rem 0;
+    border-top: 0.0625rem solid var(--rule);
+}
+
+.tonetag-forms {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 0.6rem;
+}
+
+.tonetag-forms code {
+    padding: 0;
+    background: none;
+    color: var(--accent);
+    font-size: 0.95em;
+}
+
+@media (max-width: 28rem) {
+    .tonetag {
+        grid-template-columns: 6.5rem 1fr;
+    }
+}
