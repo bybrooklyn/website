@@ -1,6 +1,7 @@
 // Clicking a picture anywhere on the site lifts it out of the page, moves it
 // to the middle of the window at full size, and puts it back where it was
-// when it is clicked again, Escape is pressed or the page is scrolled. Three
+// when it is clicked again, Escape is pressed, the window is resized, or a wheel or a finger
+// tries to scroll the page (keys do not reach the page while it is open). Three
 // dots in the picture's corner flow out into a small menu, and become a cross
 // that closes it: what the picture is, opening
 // it in a new tab, downloading it, and what may be done with it.
@@ -46,8 +47,6 @@ function centered(shape: number, limit: number): Box {
     const height = width / shape;
     return { left: (innerWidth - width) / 2, top: (innerHeight - height) / 2, width, height };
 }
-
-/** The transform that makes something at `to` appear to be at `from`. */
 
 /** What is known about a picture from the page around it: what it is called, and who made it or when. */
 function about(picture: HTMLImageElement): { title: string; more: string } {
