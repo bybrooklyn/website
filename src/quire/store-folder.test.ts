@@ -6,6 +6,7 @@
 import { expect, test } from "bun:test";
 import { packQuire, unpackQuire } from "./quire-file";
 import { canOpen, folderStore, memoryFolder, oneFileStore, type FileHandle } from "./store-folder";
+import { createSaver } from "./store";
 
 /** A clock that moves on a millisecond each time it is read, as a disk's would between writes. */
 const ticking = () => {
@@ -50,6 +51,18 @@ test("new files get plain free names, renaming moves the file, and pictures go b
     expect(await store.savePicture(moved, new Blob(["png"]), "my cat.png")).toBe("./my-cat.png");
     expect(await store.savePicture(moved, new Blob(["png"]), "my cat.png")).toBe("./my-cat-2.png");
     expect((await (await (await root.getDirectoryHandle("posts")).getFileHandle("my-cat.png")).getFile()).size).toBe(3);
+});
+
+test("after a rename the file's mark is given at its new place, and saving goes on there with no conflict", async () => {
+    const store = folderStore(memoryFolder("site", { "posts/old.md": "words" }, ticking()));
+    await store.open("posts/old.md");
+    const moved = await store.rename("posts/old.md", "Better Name");
+    const mark = await store.markOf!(moved);
+    const saver = createSaver(store, moved, mark, { wait: (run) => (run(), () => {}) });
+    saver.changed("words, and more");
+    await saver.settled();
+    expect(saver.status().state).toBe("saved");
+    expect((await store.open(moved)).text).toBe("words, and more");
 });
 
 test("a file taken away is moved into the trash folder beside it, not lost", async () => {

@@ -47,7 +47,10 @@ export interface Store {
     save(id: string, text: string, mark: string, quire?: Parts): Promise<Saved>;
     /** Makes a document; given parts, it is made as a `.quire` document. */
     create(name: string, text: string, quire?: Parts): Promise<{ id: string; mark: string }>;
+    /** Renames a document and gives its id afterwards, which is a new one where the id is a path. */
     rename(id: string, name: string): Promise<string>;
+    /** The mark of the version kept now, where a rename changes the id and so the saver needs it afresh. */
+    markOf?(id: string): Promise<string>;
     /** Takes a document away; where the store can, to somewhere it can be brought back from. */
     remove(id: string): Promise<void>;
     /** Keeps a picture beside a document and gives the address to write in it, relative to the document. */

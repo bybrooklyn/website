@@ -23,6 +23,7 @@ import { closeOthers } from "${here}/ui.ts";
 import * as shortcuts from "${here}/shortcuts.ts";
 import { memoryStorage } from "${here}/versions.ts";
 import { browserStore, indexedTables } from "${here}/store-browser.ts";
+import { folderStore, memoryFolder } from "${here}/store-folder.ts";
 const host = document.querySelector("#host");
 const storage = memoryStorage();
 const editor = createEditor(host, read(""), { name: "Test", colors: [{ name: "Pink", value: "salmon" }], onImage: async () => "/picture.png", versions: storage });
@@ -36,6 +37,8 @@ window.q = {
     md: () => write(surface.getDocument()),
     /** The browser store, over a database of the test's own. */
     async useBrowser() { window.q.store = browserStore(await indexedTables("quire-test")); return true; },
+    /** A folder on a disk kept in memory, with these files in it. */
+    useFolder(files) { window.q.store = folderStore(memoryFolder("notes", files)); return true; },
     async openIn(name, text) { const made = await window.q.store.create(name, text); await editor.open(window.q.store, { id: made.id, name }); surface.focus(); return made.id; },
     async kept(id) { return (await window.q.store.open(id)).text; },
     async saveElsewhere(id, text) { const opened = await window.q.store.open(id); return window.q.store.save(id, text, opened.mark); },
@@ -743,6 +746,26 @@ used("a document changed elsewhere is not written over: the conflict is shown, a
     await tab.wait(300);
     expect(await tab.run(`q.kept(${JSON.stringify(id)})`)).toBe("Theirs and mine\n");
     expect(await tab.run("q.status()")).toBe("Saved");
+});
+
+used("after a rename in a folder every later save goes to the new file, with no conflict, and the history follows", async () => {
+    await tab.run(`q.useFolder({ "plans.md": "Plans\\n" })`);
+    await tab.run(`q.editor.open(q.store, { id: "plans.md", name: "plans.md" }).then(() => q.editor.surface.focus())`);
+    await tab.run("q.select([0], 5)");
+    await tab.type(" one");
+    await tab.wait(1400);
+    expect(await tab.run("q.status()")).toBe("Saved");
+    await tab.run(`q.editor.rename("Better Plans")`);
+    expect(await tab.run("q.editor.current().id")).toBe("better-plans.md");
+    await tab.run("q.editor.surface.focus()");
+    await tab.run("q.select([0], 9)");
+    await tab.type(" two");
+    await tab.wait(1400);
+    expect(await tab.run("q.status()")).toBe("Saved");
+    expect(await tab.run(`q.kept("better-plans.md")`)).toBe("Plans one two\n");
+    expect(await tab.run("q.store.list().then((list) => list.map((entry) => entry.id))")).toEqual(["better-plans.md"]);
+    expect(await tab.run(`q.storage.list("notes:better-plans.md").then((list) => list.length > 0)`)).toBe(true);
+    expect(await tab.run(`q.storage.list("notes:plans.md").then((list) => list.length)`)).toBe(0);
 });
 
 used("words that could not be saved keep the writer in the document: she is told, and stays, tries again or leaves them knowingly", async () => {

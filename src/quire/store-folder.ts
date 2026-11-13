@@ -125,6 +125,9 @@ export function folderStore(root: FolderHandle): Store {
             await write(handle, await fileData(path, text, quire, shelf));
             return { id: path, mark: markOf(await handle.getFile()) };
         },
+        async markOf(id) {
+            return markOf(await (await fileAt(id)).getFile());
+        },
         async rename(id, name) {
             const old = await fileAt(id);
             const body = await old.getFile();

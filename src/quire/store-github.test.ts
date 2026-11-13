@@ -108,6 +108,16 @@ test("documents are made with free names, renamed and removed, each a commit say
     expect(github.calls.filter((call) => call.method !== "GET").map((call) => call.body?.message)).toEqual(["Add first-2.mdx", "Rename first-2.mdx to better.mdx", "Rename first-2.mdx to better.mdx", "Remove better.mdx"]);
 });
 
+test("after a rename the new file's SHA is the mark, so the next save goes to the new path with no conflict", async () => {
+    const github = mockGithub(POSTS);
+    const store = githubStore(SETTINGS, github.fetcher);
+    const moved = await store.rename("src/content/blog/first.mdx", "renamed.mdx");
+    const saved = await store.save(moved, "# First, renamed\n", await store.markOf!(moved));
+    expect(saved.ok).toBe(true);
+    expect(github.text(moved)).toBe("# First, renamed\n");
+    expect(github.files.has("src/content/blog/first.mdx")).toBe(false);
+});
+
 test("a picture is uploaded into its folder and written by a path relative to the document", async () => {
     const github = mockGithub(POSTS);
     const store = githubStore(SETTINGS, github.fetcher);

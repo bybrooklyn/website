@@ -140,6 +140,16 @@ export function memoryStorage(): VersionStorage {
     };
 }
 
+/** Moves a document's snapshots to the name it has after a rename, so that its history follows it. */
+export async function moveVersions(storage: VersionStorage, from: string, to: string) {
+    if (from === to) return;
+    for (const version of await storage.list(from)) {
+        const { id, ...info } = version;
+        await storage.save(to, await storage.load(id), info);
+        await storage.remove(id);
+    }
+}
+
 // ---- taking snapshots ----
 
 /** Takes the snapshots for one document: when it is opened, and after each pause in editing. Time and waiting are passed in, so it can be tested. */

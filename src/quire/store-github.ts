@@ -163,6 +163,11 @@ export function githubStore(settings: GithubSettings, fetcher: Fetcher = (url, i
             if (!done.sha) throw new StoreError(`GitHub answered ${done.status}`);
             return { id: path, mark: done.sha };
         },
+        async markOf(id) {
+            const answer = await ask("GET", `${contents(id)}?ref=${encodeURIComponent(branch)}`);
+            if (!answer.ok) throw new StoreError(answer.status === 404 ? `${id} is not in ${settings.owner}/${settings.repo} on ${branch}` : `GitHub answered ${answer.status}`);
+            return ((await answer.json()) as { sha: string }).sha;
+        },
         async rename(id, name) {
             const file = await read(id);
             const path = inFolder(freeName(name, (await names(folder)).filter((each) => each !== nameOf(id))));

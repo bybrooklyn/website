@@ -44,6 +44,19 @@ export function writtenWhen(created: number, now = Date.now()): string {
 /** The marks of the notes in the text: every open note's words, and the one being looked at. */
 const MARKS = { all: "quire-note", now: "quire-note-now" };
 
+/** Moves a Markdown file's notes kept in this browser to the place it has after a rename. */
+export function moveNotes(from: string, to: string) {
+    if (from === to) return;
+    try {
+        const kept = localStorage.getItem(KEY + from);
+        if (kept === null) return;
+        localStorage.setItem(KEY + to, kept);
+        localStorage.removeItem(KEY + from);
+    } catch {
+        // a browser that keeps nothing had nothing to move
+    }
+}
+
 /** Builds the notes' margin and list for a surface. */
 export function createCommentMargin(surface: Surface, options: { place: () => string | undefined }) {
     const margin = make("aside", "quire-notes");

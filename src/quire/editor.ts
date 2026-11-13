@@ -31,7 +31,7 @@ import { createSaver, fileName, said, type Entry, type Opened, type Status, type
 import { createSurface, type Surface } from "./surface";
 import { createTableTools } from "./tables";
 import { createPictureTools } from "./picture-tools";
-import { createCommentMargin, keptNotes } from "./comment-margin";
+import { createCommentMargin, keptNotes, moveNotes } from "./comment-margin";
 import { addContents, dateText, findContents, specialGrid, typeIn, typeSpecial, updateContents } from "./inserts";
 import { colorHex, countRows, gatherPictures, markdownFor, pageHtml, plainText, readingStyles } from "./export";
 import { docx } from "./docx";
@@ -39,7 +39,7 @@ import { aboutPanel, control, flowMenu, keySymbols, linkForm, make, type MenuIte
 import { openDialog } from "./dialog";
 import { chordFrom, findShortcuts, shortcutFor } from "./shortcuts";
 import { findTyping } from "./vocabulary";
-import { changes, createHistoryPanel, createKeeper, memoryStorage, snapshotParts, snapshotText, type VersionStorage } from "./versions";
+import { changes, createHistoryPanel, createKeeper, memoryStorage, moveVersions, snapshotParts, snapshotText, type VersionStorage } from "./versions";
 import { write } from "./write";
 import { emptyParts, opened, packQuire, written, type Parts } from "./quire-file";
 import { PAGE } from "./styling";
@@ -180,7 +180,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         if (next === name) return;
         // the name typed belongs to the document it was typed in, not to one opened before the rename comes round
         const meant = { store, id };
-        renaming = renaming.then(() => (store === meant.store && id === meant.id ? rename(next) : undefined));
+        renaming = renaming.then(() => (store === meant.store && id === meant.id ? renameNow(next) : undefined)).catch(() => undefined);
     };
     const title = createTitle({
         goOn: () => {
@@ -766,6 +766,9 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     // ---- saving as you type, and what to do when the document changed elsewhere ----
     let saver = store && id ? createSaver(store, id, options.mark ?? "") : undefined;
     let quiet = false;
+    // true while a rename moves the document, and whether anything was typed meanwhile
+    let moving = false;
+    let typedWhileMoving = false;
     const conflict = createConflict(async (choice) => {
         const asked = saver;
         if (!asked) return;
@@ -810,7 +813,8 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         // a document being put in place of another is not an edit of the one leaving
         if (quiet) return;
         keeper.edited();
-        saver?.changed(() => written(now, write));
+        if (moving) typedWhileMoving = true;
+        else saver?.changed(() => written(now, write));
     });
 
     // leaving the page with words not yet saved: they are saved if there is time, and the browser asks
@@ -821,7 +825,14 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     };
     addEventListener("beforeunload", leaving);
 
-    async function rename(value: string) {
+    /** Renames the document, one rename at a time. */
+    function rename(value: string) {
+        const run = renaming.then(() => renameNow(value));
+        renaming = run.catch(() => undefined);
+        return run;
+    }
+
+    async function renameNow(value: string) {
         if (!store || !id || !store.can.rename) {
             name = value;
             bar.setName(value);
@@ -829,19 +840,54 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
             options.onRename?.(value);
             return;
         }
+        if (saver?.status().state === "changed") {
+            bar.setName(name);
+            showTitle();
+            bar.setStatus("Not renamed", "Not renamed: it was changed somewhere else; choose which version to keep first", "warn");
+            return;
+        }
         await saver?.flush();
+        const was = { store, id };
+        // what is typed while the file moves is saved once it is in its new place, not into the old one
+        moving = true;
         try {
-            id = await store.rename(id, value);
-            name = (await store.list().catch(() => [])).find((entry) => entry.id === id)?.name ?? value;
+            const moved = await was.store.rename(was.id, value);
+            if (store !== was.store || id !== was.id) return;
+            if (moved !== was.id) await follow(was.store, was.id, moved);
+            name = (await was.store.list().catch(() => [])).find((entry) => entry.id === moved)?.name ?? value;
             bar.setName(name);
             showTitle();
             options.onRename?.(value);
-            options.onOpen?.(store, { id, name });
+            options.onOpen?.(was.store, { id: moved, name });
         } catch (error) {
             bar.setName(name);
             showTitle();
             bar.setStatus("Not renamed", `Not renamed: ${error instanceof Error ? error.message : String(error)}`, "warn");
+        } finally {
+            moving = false;
+            if (typedWhileMoving) {
+                typedWhileMoving = false;
+                saver?.changed(() => written(surface.getDocument(), write));
+            }
         }
+    }
+
+    /** After a rename that gave the document a new id (a path in a folder or a repository): saving, its history and its notes go on from there. */
+    async function follow(where: Store, from: string, to: string) {
+        const before = `${where.label}:${from}`;
+        const mark = await (where.markOf ? where.markOf(to) : where.open(to).then((found) => found.mark)).catch(() => "");
+        if (saver?.unsaved() !== undefined) typedWhileMoving = true;
+        saver?.stop();
+        stopListening?.();
+        await keeper.now().catch(() => undefined);
+        keeper.stop();
+        id = to;
+        saver = createSaver(where, to, mark);
+        stopListening = saver.on(showStatus);
+        showStatus(saver.status());
+        await moveVersions(versions, before, historyKey()).catch(() => undefined);
+        keeper = createKeeper(versions, historyKey(), snapshot);
+        moveNotes(before, notesPlace() ?? before);
     }
 
     async function create(next: Store, wanted: string, body = "", quire?: Parts) {
@@ -875,6 +921,8 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
 
     /** Saves what is waiting before the document is let go. When it cannot be saved the writer is told and chooses; true when the document may go. */
     async function ready(): Promise<boolean> {
+        // a rename on its way finishes first, so that what is saved goes to the document's new place
+        await renaming;
         for (;;) {
             const now = saver;
             if (!now || !store?.can.save) return true;
