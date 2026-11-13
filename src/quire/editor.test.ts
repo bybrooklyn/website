@@ -323,14 +323,23 @@ used("the selection bar grows out of a selection over time, marks it, and its li
 });
 
 used("the slash menu grows at the cursor, narrows as you type, and makes a heading and a table", async () => {
+    // what earlier tests made is forgotten, so the menu opens on its first five
+    await tab.run("localStorage.removeItem('quire-most-used')");
     await reset("Above\n", [0], 5);
     await tab.press("Enter");
     const watching = tab.run<number[]>("q.watch('.quire-slash.open', 'height', 600)");
     await tab.type("/");
     const heights = (await watching).filter((value) => value !== null && !Number.isNaN(value));
     expect(new Set(heights.map(Math.round)).size).toBeGreaterThan(4);
-    // the twelve blocks, then callouts, folding sections, definition lists, maths, diagrams and subtext; the site's components are offered in MDX files alone
-    expect(await tab.run("document.querySelectorAll('.quire-slash.open .quire-menu-line').length")).toBe(18);
+    const lines = () => tab.run<string[]>("[...document.querySelectorAll('.quire-slash.open .quire-menu-label')].map((label) => label.textContent)");
+    expect(await lines()).toEqual(["Heading 2", "Bulleted list", "Checklist", "Picture", "Code block", "More"]);
+    // More grows it open to everything: the twelve blocks, then callouts, folding sections, definition lists, maths, diagrams and subtext; the site's components are offered in MDX files alone
+    const growing = tab.run<number[]>("q.watch('.quire-slash.open', 'height', 400)");
+    await press(".quire-slash.open .quire-menu-line", "More");
+    const grown = (await growing).filter((value) => value !== null && !Number.isNaN(value));
+    expect(new Set(grown.map(Math.round)).size).toBeGreaterThan(4);
+    expect(await lines()).toHaveLength(18);
+    expect((await lines()).slice(0, 5)).toEqual(["Heading 2", "Bulleted list", "Checklist", "Picture", "Code block"]);
     // it opens at the cursor
     const near = await tab.run<{ menu: number; caret: number }>("(() => ({ menu: document.querySelector('.quire-slash').getBoundingClientRect().top, caret: getSelection().getRangeAt(0).getBoundingClientRect().bottom }))()");
     expect(Math.abs(near.menu - near.caret)).toBeLessThan(30);
