@@ -3497,3 +3497,29 @@ body.quire-app,
 .prose.quire > ul:has(> .quire-task) {
     padding-left: calc(1.2em + var(--mark-room));
 }
+
+/* A block that may be skipped while out of sight is painted only inside its box, so what is wider than
+   the column was cut off rather than shown: a long web address or word, and on a phone a table of
+   several columns. Words that do not fit break where they must (in a cell too, so a table of a few
+   columns still fits and fills the width), and on a narrow window a table of four columns or more
+   scrolls sideways inside its own block, with a shadow at the edge where more of it is, so the page
+   itself never scrolls sideways. */
+.prose.quire :is(p, li, h1, h2, h3, h4, h5, h6, dt, dd, blockquote) {
+    overflow-wrap: break-word;
+}
+
+.prose.quire > table:not(:has(tr > :nth-child(4))) :is(td, th) {
+    overflow-wrap: anywhere;
+}
+
+@media (max-width: 48rem) {
+    .prose.quire > table:has(tr > :nth-child(4)) {
+        display: block;
+        overflow-x: auto;
+        background:
+            linear-gradient(to right, var(--ground) 40%, transparent) left / 1.5rem 100% no-repeat local,
+            linear-gradient(to left, var(--ground) 40%, transparent) right / 1.5rem 100% no-repeat local,
+            radial-gradient(farthest-side at 0 50%, color-mix(in oklch, var(--ink) 30%, transparent), transparent) left / 0.6rem 100% no-repeat scroll,
+            radial-gradient(farthest-side at 100% 50%, color-mix(in oklch, var(--ink) 30%, transparent), transparent) right / 0.6rem 100% no-repeat scroll;
+    }
+}
