@@ -87,9 +87,13 @@ All of it is to be simple and easy first, with the depth underneath.
   browser only and never in the repository; albums browsed, searched and pulled in. Any folder on the
   machine as a library: a grid, dates, search by name and by the text found in the pictures (a folder
   that Syncthing keeps is one of these). Ideas are to be taken from Immich's own interface.
-- **Writing AVIF and JPEG XL.** Browsers write only PNG, JPEG and WebP, so the standard open encoders are
-  built to WebAssembly and each is loaded only when its format is picked. This is the one exception to
-  writing everything by hand, and they are to be made as fast and small as they can be.
+- **Writing and reading formats.** Browsers write only PNG, JPEG and WebP, so encoders are built from
+  Rust to WebAssembly and each is loaded only when its format is picked; the measurements are in
+  [imgQuire-codecs](imgQuire-codecs.md). Only crates under permissive licences are used, never AGPL: so
+  JPEG XL is written lossless (`zune-jpegxl`), JPEG by `jpeg-encoder`, PNG by `oxipng`, and lossy WebP is
+  left to the browser. AVIF is written by `ravif`, on one thread, with a bar that shows its progress and a
+  word that it is slow and suits photographs, not screenshots. HEIC photographs from a phone are read
+  (`heic-rs`). Metadata is written by `little_exif` and colour profiles handled by `moxcms`.
 - **Working it.** The steps are hidden until wanted: a "steps" button grows the list open at the side.
   Single keys pick a tool (C crop, R redact, A arrow, T text, B box, G grade, E export), Enter applies,
   Escape leaves, and the palette is mdQuire's. The first Ctrl+C asks whether to copy the picture as it
