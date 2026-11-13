@@ -4,7 +4,7 @@
 
 import { expect, test } from "bun:test";
 import { Glob } from "bun";
-import { fields, type Block, type Document, type List, type Paragraph, type Run } from "./document";
+import { blockAt, blockPaths, fields, type Block, type Document, type List, type Paragraph, type Run } from "./document";
 import { parseInline, read } from "./read";
 import { write } from "./write";
 
@@ -319,3 +319,14 @@ function runText(block: Block): string {
     const runs: Run[] = block.kind === "paragraph" || block.kind === "heading" ? block.runs : [];
     return runs.map((run) => (run.kind === "text" ? run.text : "")).join("");
 }
+
+test("an empty list item, quote or footnote holds one empty line the cursor can go into, and is written back exactly as it was", () => {
+    for (const source of ["- a\n-\n- b\n", "> \n", ">\n", "[^1]: \n", "- [ ]\n", "1.\n", "- a\n  - b\n  -\n"]) {
+        const doc = read(source);
+        same(source);
+        const leaves = blockPaths(doc).filter((path) => blockAt(doc, path)?.kind === "paragraph");
+        expect({ source, places: leaves.length > 0 }).toEqual({ source, places: true });
+    }
+    const items = (read("- a\n-\n- b\n").blocks[0] as List).items;
+    expect(items.map((item) => item.blocks.length)).toEqual([1, 1, 1]);
+});

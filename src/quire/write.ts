@@ -17,6 +17,21 @@ interface Context {
 /** Text marked as maths or code is written as it is, inside its own delimiters, and never escaped. */
 const literal = (leaf: TextRun) => leaf.marks.includes("code") || leaf.marks.includes("math");
 
+/** True while the tests run, where a value missing from the model must be seen as the failure it is. */
+const strict = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env?.NODE_ENV === "test";
+
+/**
+ * A value from the model as text. A value that is not text, from a block or run built wrongly, would
+ * otherwise be written into the file as the word "undefined", "null", "NaN" or "[object Object]": in
+ * the tests that throws, and in use nothing is written for it.
+ */
+function said(value: unknown, what: string): string {
+    if (typeof value === "string") return value;
+    if (typeof value === "number" && Number.isFinite(value)) return String(value);
+    if (strict) throw new Error(`write: ${what} is ${String(value)}, where text belongs`);
+    return "";
+}
+
 /** Writes a whole document. */
 export function write(doc: Document): string {
     const context: Context = { eol: doc.eol, mdx: doc.mdx };
@@ -39,7 +54,7 @@ function writeBlocks(all: Block[], context: Context, tight: boolean, inside: boo
     if (blocks.length && blocks.length < all.length && all[all.length - 1] !== blocks[blocks.length - 1]) blocks[blocks.length - 1] = { ...blocks[blocks.length - 1]!, gap: all[all.length - 1]!.gap };
     let out = "";
     blocks.forEach((block, index) => {
-        out += block.source ?? writeBlock(block, context);
+        out += block.source ?? said(writeBlock(block, context), `a block of kind ${String(block?.kind)}`);
         const next = blocks[index + 1];
         let gap = block.gap;
         if (!next) gap = inside ? "" : gap;
@@ -75,7 +90,7 @@ function writeBlock(block: Block, context: Context): string {
             let content = writeRuns(block.runs, context, false).replace(/[ \t]*\n[ \t]*/g, " ").trim();
             // a heading that ends in #s would lose them as a closing sequence
             if (/(^|[ \t])#+$/.test(content)) content = content.replace(/#(#*)$/, "\\#$1");
-            return aligned("#".repeat(block.level) + (content ? ` ${content}` : ""), block.align);
+            return aligned("#".repeat(Math.min(6, Math.max(1, Number(block.level) || 1))) + (content ? ` ${content}` : ""), block.align);
         }
         case "image":
             return aligned(sized(block) ? pictureHtml(block) : imageText(block.src, block.alt, block.title), block.align);
@@ -83,10 +98,12 @@ function writeBlock(block: Block, context: Context): string {
             return "---";
         case "code": {
             if (block.dollars && block.language === "math" && !/^[ \t]*\$\$[ \t]*$/m.test(block.code)) return `$$${eol}${block.code.split("\n").join(eol)}${eol}$$`;
-            const longest = Math.max(0, ...(block.code.match(/`+/g) ?? []).map((run) => run.length));
-            const fence = block.language.includes("`") ? "~~~" : "`".repeat(Math.max(3, longest + 1));
-            const body = block.code === "" ? "" : block.code.split("\n").join(eol) + eol;
-            return `${fence}${block.language}${eol}${body}${fence}`;
+            const code = said(block.code, "a code block's text");
+            const language = said(block.language, "a code block's language");
+            const longest = Math.max(0, ...(code.match(/`+/g) ?? []).map((run) => run.length));
+            const fence = language.includes("`") ? "~~~" : "`".repeat(Math.max(3, longest + 1));
+            const body = code === "" ? "" : code.split("\n").join(eol) + eol;
+            return `${fence}${language}${eol}${body}${fence}`;
         }
         case "table":
             return tableText(block.header, block.align, block.rows, context);
@@ -105,9 +122,9 @@ function writeBlock(block: Block, context: Context): string {
             return prefixLines(inner, "> ", "> ", ">");
         }
         case "footnote":
-            return prefixLines(writeBlocks(block.blocks, context, false, true), `[^${block.label}]: `, "    ", "");
+            return prefixLines(writeBlocks(block.blocks, context, false, true), `[^${said(block.label, "a footnote's label")}]: `, "    ", "");
         case "raw":
-            return block.text;
+            return said(block.text, "a raw block's text");
     }
 }
 
@@ -116,7 +133,7 @@ function listText(list: List, context: Context): string {
     const sep = list.loose ? eol + eol : eol;
     let out = "";
     list.items.forEach((item, index) => {
-        const marker = list.style === "number" ? `${list.start + index}${list.delimiter}` : list.marker;
+        const marker = list.style === "number" ? `${said(list.start + index, "a list's number")}${said(list.delimiter, "a list's delimiter")}` : said(list.marker, "a list's bullet");
         let text: string;
         if (list.style === "definition") text = item.source ?? definitionText(item.blocks, context);
         else if (item.source !== undefined) {
@@ -256,12 +273,14 @@ function writeLeaves(all: Leaf[], context: Context, cell: boolean): string {
                 stack.push(key);
             }
         }
-        if (leaf.kind === "text") out += leaf.marks.includes("code") ? codeSpan(leaf.text, cell) : leaf.marks.includes("math") ? `$${cell ? leaf.text.replace(/\|/g, "\\|") : leaf.text}$` : escapeText(leaf.text, context, cell, leaves[index - 1], leaves[index + 1]);
+        if (leaf.kind === "text" && typeof leaf.text !== "string") said(leaf.text, "a run's text");
+        else if (leaf.kind === "text") out += leaf.marks.includes("code") ? codeSpan(leaf.text, cell) : leaf.marks.includes("math") ? `$${cell ? leaf.text.replace(/\|/g, "\\|") : leaf.text}$` : escapeText(leaf.text, context, cell, leaves[index - 1], leaves[index + 1]);
         else if (leaf.kind === "image") out += imageText(leaf.src, leaf.alt, leaf.title);
         else if (leaf.kind === "break") out += cell ? "<br>" : "\\\n";
-        else if (leaf.kind === "footnote") out += `[^${leaf.label}]`;
-        else if (leaf.kind === "emoji") out += `:${leaf.name}:`;
-        else out += leaf.html;
+        else if (leaf.kind === "footnote") out += `[^${said(leaf.label, "a footnote's label")}]`;
+        else if (leaf.kind === "emoji") out += `:${said(leaf.name, "an emoji's name")}:`;
+        else if (leaf.kind === "html") out += said(leaf.html, "inline HTML");
+        else said(undefined, `a run of kind ${String((leaf as { kind?: unknown } | undefined)?.kind)}`);
     });
     while (stack.length) out += closeKey(stack.pop()!);
     return out;
@@ -284,7 +303,7 @@ function writeRuns(runs: Run[], context: Context, cell: boolean): string {
         }
         flush();
         const label = writeLeaves(run.runs, context, cell);
-        out += run.ref !== undefined ? `[${label}][${run.ref}]` : `[${label}](${destination(run.href)}${titleText(run.title)})`;
+        out += run.ref !== undefined ? `[${label}][${said(run.ref, "a link's reference")}]` : `[${label}](${destination(said(run.href, "a link's address"))}${titleText(run.title)})`;
     }
     flush();
     return out;

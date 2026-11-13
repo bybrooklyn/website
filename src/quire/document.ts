@@ -835,7 +835,8 @@ export function joinBlock(doc: Document, path: number[]): Document {
             if (textual(tail) && textual(head)) {
                 const joined = { ...(tail as Paragraph), runs: fromPieces([...pieces((tail as Paragraph).runs), ...pieces((head as Paragraph).runs)]), source: undefined, gap: item.blocks.length > 1 ? head.gap : "" };
                 blocks = [...previous.blocks.slice(0, -1), joined, ...item.blocks.slice(1)];
-            } else blocks = [...previous.blocks.slice(0, -1), { ...tail!, gap: container.loose ? doc.eol + doc.eol : sep }, ...item.blocks];
+            } else if (!tail) blocks = item.blocks;
+            else blocks = [...previous.blocks.slice(0, -1), { ...tail, gap: container.loose ? doc.eol + doc.eol : sep }, ...item.blocks];
             return spliceBlocks(items, parent.item - 1, 2, [{ ...previous, blocks, source: undefined, gap: item.gap }]);
         });
     }

@@ -158,3 +158,12 @@ test("a list mixing bullets and checklist items keeps each bullet a bullet when 
         expect(write({ ...doc, blocks: [{ ...list, source: undefined, items: list.items.map((each) => ({ ...each, source: undefined })) }] })).toBe(source);
     }
 });
+
+test("a block or run built wrongly is never written as the word undefined, null, NaN or [object Object]: in the tests the writer throws", () => {
+    const broken = (block: unknown) => () => write(made([block as Block]));
+    expect(broken({ kind: "nothing", gap: "" })).toThrow();
+    expect(broken({ kind: "paragraph", runs: [{ kind: "footnote" }], gap: "" })).toThrow();
+    expect(broken({ kind: "paragraph", runs: [{ kind: "text", text: undefined, marks: [] }], gap: "" })).toThrow();
+    expect(broken({ ...list("number", ["a"]), start: undefined })).toThrow();
+    expect(broken({ kind: "code", code: null, language: "", gap: "" })).toThrow();
+});

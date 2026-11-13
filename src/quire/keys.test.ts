@@ -453,3 +453,15 @@ test("Tab nests an item with its own children, and Shift+Tab brings it back with
     e.key("Tab", { shift: true });
     expect(e.markdown).toBe("- one\n- two\n  - child\n");
 });
+
+test("Delete at the end of an item before an empty one joins them and never writes a missing value into the file", () => {
+    const e = editor("- a\n-\n- b\n", [0, 0, 0], 1);
+    e.key("Delete");
+    expect(e.markdown).toBe("- a\n- b\n");
+    for (const source of ["- a\n-\n- b\n", "> a\n>\n", "- a\n- [ ]\n- b\n"]) {
+        const each = editor(source, [0, 0, 0], 1);
+        each.key("Delete");
+        each.key("Delete");
+        expect(each.markdown).not.toMatch(/undefined|NaN|null|\[object Object\]/);
+    }
+});

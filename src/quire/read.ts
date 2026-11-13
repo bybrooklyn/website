@@ -305,11 +305,14 @@ function readDetails(lines: Line[], at: number, context: Context): [Block, numbe
     let last = close - 1;
     while (last >= start && blank(lines[last]!.text)) last--;
     const blocks = last >= start ? parseInside(lines.slice(start, last + 1), context) : [];
-    return [{ kind: "quote", blocks: blocks.length ? blocks : [emptyKept()], details: { summary, open: !!open[1] }, gap: "" }, close + 1];
+    return [{ kind: "quote", blocks: orEmpty(blocks), details: { summary, open: !!open[1] }, gap: "" }, close + 1];
 }
 
 /** An empty paragraph that stands for nothing in the file, so that an empty box has a line to write on. */
 const emptyKept = (): Paragraph => ({ kind: "paragraph", runs: [], source: "", gap: "" });
+
+/** The blocks of a list item, quote or footnote, or one empty line to write on if it has none, so that the cursor can go into it. */
+const orEmpty = (blocks: Block[]): Block[] => (blocks.length ? blocks : [emptyKept()]);
 
 /** A definition's line: a colon at the start, then the definition. */
 const DETAIL = /^ {0,3}:[ \t]+(.*)$/;
@@ -467,7 +470,8 @@ function readList(lines: Line[], at: number, context: Context): [Block, number] 
         const { inner, end: itemEnd } = gather(lines, index, start.first, start.content);
         const box = /^\[([ xX])\](?=[ \t]|$)[ \t]?/.exec(inner[0]!.text);
         if (box) inner[0] = { ...inner[0]!, text: inner[0]!.text.slice(box[0].length) };
-        const blocks = parseInside(inner, context);
+        // an empty item still has a line to write on, which stands for nothing in the file
+        const blocks = orEmpty(parseInside(inner, context));
         if (blocks.slice(0, -1).some((block) => hasBlank(block.gap))) loose = true;
         const item: ListItem = { blocks, source: joinSource(lines.slice(index, itemEnd)), gap: "" };
         if (box) {
@@ -522,18 +526,17 @@ function readQuote(lines: Line[], at: number, context: Context): [Block, number]
     // a callout, `> [!NOTE]`, with any words after the marker as its title
     const callout = /^\[!([A-Za-z]+)\][ \t]*(.*)$/.exec(inner[0]?.text ?? "");
     if (callout) {
-        const blocks = parseInside(inner.slice(1), context);
-        const block: Block = { kind: "quote", blocks: blocks.length ? blocks : [emptyKept()], callout: callout[1]!, gap: "" };
+        const block: Block = { kind: "quote", blocks: orEmpty(parseInside(inner.slice(1), context)), callout: callout[1]!, gap: "" };
         if (callout[2]) block.title = callout[2];
         return [block, index];
     }
-    return [{ kind: "quote", blocks: parseInside(inner, context), gap: "" }, index];
+    return [{ kind: "quote", blocks: orEmpty(parseInside(inner, context)), gap: "" }, index];
 }
 
 function readFootnote(lines: Line[], at: number, match: RegExpExecArray, context: Context): [Block, number] {
     const text = stripIndent(lines[at]!.text, indentOf(lines[at]!.text));
     const { inner, end } = gather(lines, at, text.slice(match[0].length), 4);
-    return [{ kind: "footnote", label: match[1]!, blocks: parseInside(inner, context), gap: "" }, end];
+    return [{ kind: "footnote", label: match[1]!, blocks: orEmpty(parseInside(inner, context)), gap: "" }, end];
 }
 
 /** Splits a table row into cells on the pipes that are not escaped. */
