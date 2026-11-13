@@ -127,8 +127,13 @@ export function relative(from: string, to: string): string {
 export async function copyDocument(store: Store, id: string, name: string): Promise<{ id: string; mark: string }> {
     const found = await store.open(id);
     const made = await store.create(name, found.text, found.quire);
-    if (found.quire && store.pictures) for (const [each, picture] of await store.pictures(id)) await store.savePicture(made.id, picture, each);
-    return made;
+    const pictures = found.quire && store.pictures ? await store.pictures(id) : new Map<string, Blob>();
+    if (pictures.size === 0) return made;
+    for (const [each, picture] of pictures) await store.savePicture(made.id, picture, each);
+    // a store that writes a `.quire` file whole (a folder) holds the pictures only until the next save, so the copy is saved once more with them
+    const saved = await store.save(made.id, found.text, made.mark, found.quire);
+    if (!saved.ok) throw new StoreError(saved.changed ? "the copy changed while it was being made" : saved.message);
+    return { id: made.id, mark: saved.mark };
 }
 
 /** What is waiting to be saved: the text or the writing, or a way to make it once it is needed. */

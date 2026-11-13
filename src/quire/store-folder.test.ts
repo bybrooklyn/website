@@ -6,7 +6,7 @@
 import { expect, test } from "bun:test";
 import { packQuire, unpackQuire } from "./quire-file";
 import { canOpen, folderStore, memoryFolder, oneFileStore, type FileHandle } from "./store-folder";
-import { createSaver } from "./store";
+import { copyDocument, createSaver } from "./store";
 
 /** A clock that moves on a millisecond each time it is read, as a disk's would between writes. */
 const ticking = () => {
@@ -103,6 +103,23 @@ test("a .quire file in a folder is listed, opened, and written back in place as 
     expect((await store.list()).length).toBe(1);
     expect(await store.rename("letters/to-sam.quire", "To Alex.md")).toBe("letters/to-alex.quire");
     expect(await store.create("Fresh", "x", { style: "", notes: "" }).then((made) => made.id)).toBe("fresh.quire");
+});
+
+test("a .quire file duplicated in a folder keeps its pictures on disk, and after it is opened again", async () => {
+    const bytes = await packQuire({ markdown: "![A cat](pictures/cat.png)\n", parts: { style: '{"quire":1}', notes: "{}" }, pictures: new Map([["cat.png", new Blob(["meow"])]]) });
+    const root = memoryFolder("site", { "letter.quire": new Blob([bytes as BlobPart]) }, ticking());
+    const store = folderStore(root);
+    const copy = await copyDocument(store, "letter.quire", "Letter copy");
+    const file = await (await root.getFileHandle(copy.id)).getFile();
+    const onDisk = await unpackQuire(new Uint8Array(await file.arrayBuffer()));
+    expect([...onDisk.pictures.keys()]).toEqual(["cat.png"]);
+    expect(await onDisk.pictures.get("cat.png")!.text()).toBe("meow");
+    // a fresh store, as after a reload, finds them too
+    const again = folderStore(root);
+    await again.open(copy.id);
+    expect([...(await again.pictures!(copy.id)).keys()]).toEqual(["cat.png"]);
+    // and the copy's mark is the one now on disk, so it can be saved
+    expect((await again.save(copy.id, "More.\n", copy.mark)).ok).toBe(true);
 });
 
 test("one .quire file on its own keeps its pictures inside it", async () => {
