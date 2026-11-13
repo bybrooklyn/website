@@ -17,8 +17,9 @@ export function sideBySide(mine: string, theirs: string): Row[] {
     const a = mine.replace(/\r?\n$/, "").split(/\r?\n/);
     const b = theirs.replace(/\r?\n$/, "").split(/\r?\n/);
     // the longest run of lines both share, found from the end so the rows can be read off from the start
-    const shared: number[][] = Array.from({ length: a.length + 1 }, () => new Array<number>(b.length + 1).fill(0));
+    // too long to compare line against line: the table would not fit, so it is not made
     if (a.length * b.length > 4_000_000) return [...a.map((line) => ({ mine: line, same: false })), ...b.map((line) => ({ theirs: line, same: false }))];
+    const shared: number[][] = Array.from({ length: a.length + 1 }, () => new Array<number>(b.length + 1).fill(0));
     for (let i = a.length - 1; i >= 0; i--) for (let j = b.length - 1; j >= 0; j--) shared[i]![j] = a[i] === b[j] ? shared[i + 1]![j + 1]! + 1 : Math.max(shared[i + 1]![j]!, shared[i]![j + 1]!);
     const rows: Row[] = [];
     let i = 0;
