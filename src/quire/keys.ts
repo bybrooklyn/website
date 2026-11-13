@@ -601,7 +601,7 @@ function enter(state: State): Outcome {
     if (fence) {
         const emptied = deleteText(doc, { start: { path: at.path, offset: 0 }, end: at });
         const next = changeKind(emptied, at.path, { kind: "code", language: fence[1]! });
-        return done(next, caret(sameLeaf(doc, at.path, next), 0), "structure");
+        return done(next, caret(sameLeaf(doc, at.path, next), 0), "shortcut");
     }
     if (block.kind === "code") {
         // Enter on an empty last line of code leaves the code block

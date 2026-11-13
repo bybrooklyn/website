@@ -62,7 +62,8 @@ test("one more is counted for each thing made", () => {
 test("a typed Markdown mark counts what it made", () => {
     expect(typed("* ")).toEqual(["bullet"]);
     expect(typed("## ")).toEqual(["heading2"]);
-    expect(typed("```")).toEqual(["code"]);
+    expect(typed("``` ")).toEqual(["code"]);
+    expect(typed("```rust ")).toEqual(["code"]);
     expect(typed("> ")).toEqual(["quote"]);
     expect(typed("[ ] ")).toEqual(["task"]);
     expect(typed("1. ")).toEqual(["number"]);
