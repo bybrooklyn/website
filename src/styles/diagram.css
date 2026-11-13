@@ -2,6 +2,7 @@
 
 .diagram {
     margin: var(--line) 0 calc(var(--line) * 1.25);
+    container: diagram / inline-size;
 }
 
 .diagram figcaption {
@@ -107,7 +108,12 @@
     grid-row: 1 / span 2;
 }
 
-@media (max-width: 36rem) {
+/*
+ * Down a column once the row has no room for its steps: four steps of 8rem and their three 2rem gaps
+ * need 38rem. In a narrower row the last step wrapped to a line of its own, and its arrow pointed
+ * from the margin at nothing.
+ */
+@container diagram (max-width: 38rem) {
     .prose .flow {
         flex-direction: column;
         gap: 1.6rem;
