@@ -66,6 +66,12 @@
     border-color: var(--accent);
 }
 
+/* The dots fill the circle, and the circle clips, so a ring round the button itself could not be
+   seen: the site's ring (base.css) goes round the circle instead, and round the menu while it is open. */
+.viewer-dots:focus-visible {
+    outline: none;
+}
+
 .viewer-menu.open {
     width: var(--wide);
     height: var(--high);

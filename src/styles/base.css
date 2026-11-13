@@ -345,6 +345,7 @@ a:focus-visible,
 [data-zoom]:focus-visible,
 .flag:focus-visible,
 .strip:focus-visible .strip-button,
+.viewer-menu:has(.viewer-dots:focus-visible),
 .spectrum-track:has(input:focus-visible) .spectrum-thumb {
     outline: 0.125rem solid var(--accent);
     outline-offset: var(--ring-offset, 0.15rem);
