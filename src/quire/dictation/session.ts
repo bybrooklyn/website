@@ -136,6 +136,9 @@ export function startSession(options: SessionOptions): Session {
     let mode: "live" | "pause" = "live";
     let stopping = false;
     let finished = false;
+    /** The session's end, once it has begun, and whether something went wrong on the way. */
+    let ending: Promise<void> | undefined;
+    let failed = false;
     let pending: Pending = {};
     let last: { text: string; after: Document } | undefined;
     let shown = "";
@@ -203,8 +206,7 @@ export function startSession(options: SessionOptions): Session {
             const words = (heard.words && heard.words.length > 0 ? heard.words : spread(heard.text, 0, seconds)).map((word) => ({ ...word, start: word.start + from, end: word.end + from }));
             return { text: heard.text, words };
         } catch (error) {
-            note(`Dictation stopped: ${error instanceof Error ? error.message : String(error)}`);
-            void finish("error");
+            fail(error);
             return undefined;
         }
     }
@@ -289,23 +291,29 @@ export function startSession(options: SessionOptions): Session {
         live = undefined;
         const job = queue.then(async () => {
             busy = true;
-            // a live phrase already holds everything said, so it is only asked to finish
-            let said: string | undefined;
-            if (stream) {
-                said = await stream.finish().then((words) => words.map((word) => word.text).join(" "), () => undefined);
+            try {
+                // a live phrase already holds everything said, so it is only asked to finish
+                let said: string | undefined;
+                if (stream) {
+                    said = await stream.finish().then((words) => words.map((word) => word.text).join(" "), () => undefined);
+                }
+                const heard = said === undefined && count >= 1600 ? await recognize(count) : undefined;
+                if (said?.trim()) settle(said);
+                if (heard) {
+                    const merged = merger.update(heard.words, { final: true });
+                    if (merged.settled.length > 0) settle(merged.settled.map((word) => word.text).join(" "));
+                }
+                drop(Math.min(count, length));
+                lastRun = 0;
+                if (count >= length) show("");
+            } catch (error) {
+                // the phrase could not be written: the session ends here, as it does when recognizing fails
+                fail(error);
+            } finally {
+                busy = false;
             }
-            const heard = said === undefined && count >= 1600 ? await recognize(count) : undefined;
-            if (said?.trim()) settle(said);
-            if (heard) {
-                const merged = merger.update(heard.words, { final: true });
-                if (merged.settled.length > 0) settle(merged.settled.map((word) => word.text).join(" "));
-            }
-            drop(Math.min(count, length));
-            lastRun = 0;
-            if (count >= length) show("");
-            busy = false;
         });
-        queue = job.catch(() => {});
+        queue = job;
         return job;
     }
 
@@ -319,24 +327,52 @@ export function startSession(options: SessionOptions): Session {
             waiting = false;
             if (mine !== generation || finished) return;
             busy = true;
-            const heard = await recognize(count);
-            busy = false;
-            if (!heard || mine !== generation || finished) return;
-            lastRun = count;
-            const merged = merger.update(heard.words, {});
-            show(correct(merged.provisional.map((word) => word.text).join(" "), options.custom()));
+            try {
+                const heard = await recognize(count);
+                if (!heard || mine !== generation || finished) return;
+                lastRun = count;
+                const merged = merger.update(heard.words, {});
+                show(correct(merged.provisional.map((word) => word.text).join(" "), options.custom()));
+            } catch (error) {
+                fail(error);
+            } finally {
+                busy = false;
+            }
         });
     }
 
-    async function finish(reason: Reason) {
-        if (finished || stopping) return;
+    /** Something went wrong in recognizing or writing: it is said, and the session ends. */
+    function fail(error: unknown) {
+        failed = true;
+        note(`Dictation stopped: ${error instanceof Error ? error.message : String(error)}`);
+        void finish("error");
+    }
+
+    /**
+     * Ends the session, once: whatever asks again is given the same promise. Every way out comes
+     * here, and whatever happens while the last phrase is settled, the promise resolves and
+     * `onStop` is called exactly once.
+     */
+    function finish(reason: Reason): Promise<void> {
+        if (ending) return ending;
         stopping = true;
-        if (active && length >= 3200) await settleFirst(length);
-        else await queue;
-        finished = true;
-        show("");
-        options.onLevel?.(0, false);
-        options.onStop?.(reason);
+        ending = (async () => {
+            try {
+                if (active && length >= 3200) await settleFirst(length);
+                else await queue;
+            } catch (error) {
+                failed = true;
+                note(`Dictation stopped: ${error instanceof Error ? error.message : String(error)}`);
+            } finally {
+                finished = true;
+                live?.cancel();
+                live = undefined;
+                show("");
+                options.onLevel?.(0, false);
+                options.onStop?.(failed ? "error" : reason);
+            }
+        })();
+        return ending;
     }
 
     return {

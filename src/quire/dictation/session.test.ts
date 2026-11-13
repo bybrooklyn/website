@@ -286,3 +286,31 @@ describe("a recognizer with a live stream", () => {
         expect(editor.text().length).toBeGreaterThan(0);
     });
 });
+
+describe("a throw while a phrase is settled", () => {
+    test("in the editor's writing ends the session: stop resolves and onStop is called once", async () => {
+        const editor = target();
+        editor.run = () => {
+            throw new Error("boom");
+        };
+        const stops: Reason[] = [];
+        const notes: string[] = [];
+        const session = startSession({ target: editor, recognizer: recognizer(), commands: () => true, custom: () => nothing(), onStop: (reason) => stops.push(reason), onNote: (note) => notes.push(note) });
+        await drive(session, [...quiet(300), ...frames(2900, 0.2)]);
+        await session.stop("button");
+        expect(stops).toEqual(["error"]);
+        expect(notes.join(" ")).toContain("boom");
+        await session.stop("button");
+        expect(stops.length).toBe(1);
+    });
+    test("at a pause ends the session at once, without waiting for the button", async () => {
+        const editor = target();
+        editor.run = () => {
+            throw new Error("boom");
+        };
+        const stops: Reason[] = [];
+        const session = startSession({ target: editor, recognizer: recognizer(), commands: () => true, custom: () => nothing(), onStop: (reason) => stops.push(reason) });
+        await drive(session, [...quiet(300), ...frames(2900, 0.2), ...quiet(1000)]);
+        expect(stops).toEqual(["error"]);
+    });
+});
