@@ -114,38 +114,36 @@ function atoms(phrase: string, commands: boolean): Atom[] {
     const word = (token: Token): Atom => ({ kind: "word", text: token.lead + token.core + token.trail });
     if (!commands) return all.map(word);
     const whole = plain(phrase);
+    // A command is a phrase by itself. "stop dictation" at the end of a longer phrase is not one: "I told them
+    // to stop listening" is a sentence, and its last two words were once dropped and dictation switched off.
     if (ALONE[whole]) return [{ kind: "command", command: ALONE[whole]! }];
-    // "stop dictation" may close a phrase: the rest is written, then it stops
-    const closing = / stop (dictation|listening)$/.test(` ${whole}`) && all.length >= 3;
-    const body = closing ? all.slice(0, -2) : all;
     const out: Atom[] = [];
-    for (let at = 0; at < body.length; at++) {
+    for (let at = 0; at < all.length; at++) {
         let size = 0;
         for (const tried of [3, 2, 1]) {
-            if (at + tried > body.length) continue;
-            const run = body.slice(at, at + tried);
+            if (at + tried > all.length) continue;
+            const run = all.slice(at, at + tried);
             // the words of a spoken phrase run together: only the last may carry punctuation
             if (run.slice(0, -1).some((token) => token.trail) || run.slice(1).some((token) => token.lead)) continue;
             const said = run.map((token) => token.core.toLowerCase()).join(" ");
             const last = run[run.length - 1]!;
             const mark = MARKS[said];
-            const before = body[at - 1];
+            const before = all[at - 1];
             if (mark && !(before && ARTICLES.has(before.core.toLowerCase()) && !before.trail)) {
                 out.push({ kind: "mark", ...mark });
                 size = tried;
                 break;
             }
             const kind = BREAKS[said];
-            if (kind && (!GUARDED.has(said) || at + tried === body.length || /[.!?]/.test(last.trail))) {
+            if (kind && (!GUARDED.has(said) || at + tried === all.length || /[.!?]/.test(last.trail))) {
                 out.push({ kind });
                 size = tried;
                 break;
             }
         }
         if (size) at += size - 1;
-        else out.push(word(body[at]!));
+        else out.push(word(all[at]!));
     }
-    if (closing) out.push({ kind: "command", command: "stop" });
     return out;
 }
 

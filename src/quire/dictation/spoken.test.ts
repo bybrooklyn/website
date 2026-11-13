@@ -134,8 +134,9 @@ describe("commands", () => {
         expect(written("a bullet hit the wall")).toBe("A bullet hit the wall");
         expect(written("we should undo that change")).toBe("We should undo that change");
     });
-    test("stop dictation may close a phrase", () => {
-        expect(written("that is everything stop dictation")).toBe("That is everything[stop]");
+    test("stop dictation is a command only as a phrase by itself, so a sentence that ends with the words keeps them", () => {
+        expect(written("I told them to stop listening")).toBe("I told them to stop listening");
+        expect(written("that is everything stop dictation")).toBe("That is everything stop dictation");
         expect(steps("stop dictation", "text")).toEqual([{ kind: "command", command: "stop" }]);
     });
 });
