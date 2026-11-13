@@ -497,13 +497,17 @@
         display: contents;
     }
 
+    /* It scrolls, so it clips: room round the inside, given back outside, lets the focus ring of a
+       link as wide as the column be seen whole, while the words stay where they were. */
     .post-side {
         grid-column: 2;
         grid-row: 1 / span 12;
         position: sticky;
-        top: calc(var(--line) * 1.5);
-        max-height: calc(100vh - var(--line) * 3);
+        top: calc(var(--line) * 1.5 - 0.4rem);
+        max-height: calc(100vh - var(--line) * 3 + 0.8rem);
         overflow-y: auto;
+        margin: -0.4rem;
+        padding: 0.4rem;
     }
 
     .contents {
