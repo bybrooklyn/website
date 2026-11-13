@@ -12,15 +12,13 @@
 }
 
 /* The search: a soft rounded field the width of the list, a magnifier at its start. Its edge takes the accent while it is typed in. */
-/* The search, and beside it at the right the button that copies a link to the page. */
+/* The button that copies a link to the page, and beside it at the right the search. */
 .tonetags-top {
     /* how tall the field and the button are; the button at rest is as wide as this too, so that it is a circle */
     --tall: 3rem;
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    /* no wider than a line of reading: stretched to the columns' full width it ran out past where what is under it ends */
-    max-width: var(--measure);
 }
 
 /* A round button the height of the field beside it, with the field's own quiet edge and ground. At rest it is a circle round
