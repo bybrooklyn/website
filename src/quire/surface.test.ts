@@ -263,4 +263,30 @@ test.skipIf(!chromium())(
     60_000,
 );
 
+test.skipIf(!chromium())(
+    "focus given back to the text by a menu or a dialog puts back the selection it had, where the browser would put the cursor at the start",
+    async () => {
+        const { tab, folder } = await open();
+        try {
+            await tab.run(`quire.reset("Hello world here\\n")`);
+            // a key pressed first, so that the page has the focus a person's window would have
+            await tab.press("End");
+            await tab.run(`quire.surface.setSelection({ anchor: { path: [0], offset: 6 }, focus: { path: [0], offset: 11 } })`);
+            await tab.run(`(() => { const field = document.createElement("input"); document.body.append(field); field.focus(); })()`);
+            await tab.wait(50);
+            await tab.run("document.querySelector('#editor').focus()");
+            await tab.wait(50);
+            expect(await tab.run("quire.surface.getSelection()")).toEqual({ anchor: { path: [0], offset: 6 }, focus: { path: [0], offset: 11 } });
+            expect(await tab.run<string>("document.getSelection().toString()")).toBe("world");
+            await tab.type("X");
+            expect(await tab.run<string>("quire.markdown()")).toBe("Hello X here\n");
+            expect(tab.errors).toEqual([]);
+        } finally {
+            await tab.close();
+            await rm(folder, { recursive: true, force: true });
+        }
+    },
+    60_000,
+);
+
 if (!chromium()) console.warn("surface.test.ts: no Chromium on this machine, so the surface was not typed in.");

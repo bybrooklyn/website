@@ -1239,8 +1239,27 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
         repair(event);
     }
 
+    /** When the text was last pressed, so that the focus a press brings is told from focus given back by a menu or a dialog. */
+    let pressedAt = -Infinity;
+    const onPress = () => (pressedAt = performance.now());
+
+    /** Until when the cursor the browser puts in on focus is not the writer's own move. */
+    let restoring = 0;
+
+    /** Focus given back to the text (a menu or dialog closing) puts back the model's selection, where the browser would put the cursor at the start. */
+    function onFocus() {
+        if (performance.now() - pressedAt < 500) return;
+        placeSelection();
+        // the browser puts its own cursor in a moment after the focus event, and that is put back too
+        restoring = performance.now() + 100;
+    }
+
     function onSelectionChange() {
         if (composing || document.activeElement instanceof HTMLInputElement || document.activeElement instanceof HTMLTextAreaElement) return;
+        if (performance.now() < restoring) {
+            restoring = 0;
+            return placeSelection();
+        }
         syncSelection();
     }
 
@@ -1399,6 +1418,8 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
         [root, "compositionstart", onCompositionStart as EventListener],
         [root, "compositionend", onCompositionEnd as EventListener],
         [root, "mousedown", onMouseDown as EventListener],
+        [root, "pointerdown", onPress],
+        [root, "focus", onFocus],
         [root, "paste", onPaste as EventListener],
         [root, "copy", onCopy as EventListener],
         [root, "cut", onCut as EventListener],
