@@ -505,16 +505,22 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     /** The zoom's lines, and for a `.quire` document the page setup, which opens in its place. */
     const zoomLines = (from: () => HTMLElement): MenuItem[] => [{ label: "Page view", pressed: pages.paged(), run: () => showView(!pages.paged()) }, ...zoom.items(), ...(surface.getDocument().quire ? [{ label: "Page setup", hint: "›", run: () => openSetup(from()) }] : [])];
     // as the Markdown opens beside the sheet, or the window (or the browser's own zoom) changes, the sheet's column narrows and the sheet follows it
-    if (typeof ResizeObserver !== "undefined") {
-        // only a change of width matters: the editor grows taller with every line typed
-        let wide = 0;
-        new ResizeObserver(() => zoom.refresh(false)).observe(markdown.element);
-        new ResizeObserver(() => {
-            if (host.clientWidth === wide) return;
-            wide = host.clientWidth;
-            zoom.refresh(false);
-        }).observe(host);
-    }
+    // what the editor listens to on the page and the host, let go when it is destroyed
+    const watchers: ResizeObserver[] = [];
+    const watch = (element: Element, run: () => void) => {
+        if (typeof ResizeObserver === "undefined") return;
+        const watcher = new ResizeObserver(run);
+        watcher.observe(element);
+        watchers.push(watcher);
+    };
+    // only a change of width matters: the editor grows taller with every line typed
+    let wideAt = 0;
+    watch(markdown.element, () => zoom.refresh(false));
+    watch(host, () => {
+        if (host.clientWidth === wideAt) return;
+        wideAt = host.clientWidth;
+        zoom.refresh(false);
+    });
     // print is given the paper and margins of the page set up, in a stylesheet made in script: the page's
     // policy refuses a <style> element added at run time, but not a sheet built through the CSSOM and adopted
     const printing = typeof CSSStyleSheet === "function" && "adoptedStyleSheets" in document ? new CSSStyleSheet() : undefined;
@@ -531,11 +537,12 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     surface.on("change", showPage);
     showPage();
     // Ctrl with + (as well as =) zooms in too, as a browser does
-    host.addEventListener("keydown", (event) => {
+    const zoomKey = (event: KeyboardEvent) => {
         if (!(event.ctrlKey || event.metaKey) || event.altKey || event.key !== "+" || event.code === "Equal") return;
         event.preventDefault();
         zoom.step(1);
-    });
+    };
+    host.addEventListener("keydown", zoomKey);
     surface.on("link", () => openLink(bar.element.querySelector<HTMLElement>('[aria-label^="Link"]')!));
     const selectBar = createSelectBar(surface, () => bar.element.getBoundingClientRect().bottom);
     const outlineView = createOutline(surface, () => bar.element.getBoundingClientRect().bottom, (open) => {
@@ -564,12 +571,11 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         host.classList.toggle("cramped", Number.isFinite(room) && room < least);
     };
     let besideAt = 0;
-    if (typeof ResizeObserver !== "undefined")
-        new ResizeObserver(() => {
-            if (host.clientWidth === besideAt) return;
-            besideAt = host.clientWidth;
-            roomBeside();
-        }).observe(host);
+    watch(host, () => {
+        if (host.clientWidth === besideAt) return;
+        besideAt = host.clientWidth;
+        roomBeside();
+    });
     let savedAt: number | undefined;
     const showDetails = () => details.show({ file: fileName(name, surface.getDocument().quire ? ".quire" : surface.getDocument().mdx ? ".mdx" : ".md"), words: countWords(surface.getDocument()), place: store?.label, saved: savedAt });
     let detailing: ReturnType<typeof setTimeout> | undefined;
@@ -721,7 +727,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         ),
     );
     // ---- the keyboard's shortcuts: each runs its command from the one table (shortcuts.ts); the surface's own it has already taken ----
-    host.addEventListener("keydown", (event) => {
+    const shortcutKey = (event: KeyboardEvent) => {
         if (event.defaultPrevented || event.isComposing) return;
         const found = shortcutFor(chordFrom(event, MAC));
         if (!found?.command || found.surface) return;
@@ -734,7 +740,8 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         if (found.command === "pastePlain") return;
         event.preventDefault();
         run();
-    });
+    };
+    host.addEventListener("keydown", shortcutKey);
     // ---- the word count, Ctrl+Shift+C: a small dialog, as Docs has ----
     const showCount = (from: HTMLElement) => {
         const doc = surface.getDocument();
@@ -1111,6 +1118,10 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
             history.element.remove();
             conflict.element.remove();
             removeEventListener("beforeunload", leaving);
+            host.removeEventListener("keydown", zoomKey);
+            host.removeEventListener("keydown", shortcutKey);
+            for (const watcher of watchers) watcher.disconnect();
+            for (const timer of [typing, easing, detailing]) clearTimeout(timer);
             host.replaceChildren();
         },
     };
