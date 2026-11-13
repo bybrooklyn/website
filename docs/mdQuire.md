@@ -104,6 +104,18 @@ kept in the browser with it.
 **Notes** (`comments.ts`, `comment-margin.ts`). Notes on selected words, kept beside the text and never
 written into the Markdown. There are no accounts; a note is the writer's own.
 
+**From Docs' menus** (`more-commands.ts` puts them in the row). Format, Capitalisation changes the
+letters of the selected words (`capitals.ts`). Format, Bullets and numbering chooses the sign a bulleted
+list is written with (`-`, `*` or `+`, all drawn alike, since Markdown reads them alike), restarts a
+numbered list at a number (part way down, the list is cut in two and the second written with the other
+delimiter, `1)`) and carries on the list before (`numbering.ts`). A table's strip sorts its rows by the
+cursor's column (`tables.ts`). The style list has Title, which goes to the title line, since that line
+is the document's name and Markdown has no title, and Subtitle, kept in a `.quire` document's style.json
+and not offered for Markdown. Edit, Select all matching text selects every place the words appear;
+typing, Backspace and Format commands change all of them (`matching.ts`). Insert, Bookmark writes an
+empty anchor, `<a id="name"></a>`, drawn as a small flag, and the link field offers the headings (by the
+ids the site gives them) and the bookmarks (`bookmarks.ts`).
+
 **Inserts and downloads** (`inserts.ts`, `export.ts`, `docx.ts`). Insert adds today's date, special
 characters and a table of contents. File, Download as gives Markdown, `.quire`, a web page, plain text and
 Word (a `.docx` written from scratch). PDF is the browser's print dialog with the page already set up.
