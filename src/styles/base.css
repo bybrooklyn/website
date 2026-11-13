@@ -109,8 +109,11 @@ pre {
     font-weight: 400;
 }
 
+/* Above everything fixed on the page (the opened panel and its strip, the viewer at 60), which would
+   otherwise be painted over it. */
 .skip {
     position: absolute;
+    z-index: 70;
     left: var(--gutter);
     top: 0;
     padding: 0.25em 0.75em;
@@ -119,8 +122,9 @@ pre {
     translate: 0 -120%;
 }
 
+/* down from the window's edge by a little more than its focus ring, which is then seen whole */
 .skip:focus {
-    translate: 0 0;
+    translate: 0 0.4rem;
 }
 
 /* Small supporting text: dates, captions, counts. */
