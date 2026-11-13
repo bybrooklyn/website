@@ -3319,6 +3319,16 @@ body.quire-app,
     padding-block: var(--crown) var(--tail);
 }
 
+/* A `#` heading in a post's body has no style of its own on the site (a post's only h1 is its title,
+   Post.astro), so it would be drawn as large as the title, and the page would have no top to it. Here
+   it is one clear step under the title and over a Heading 2 (2rem in prose.css). The same rule in
+   prose.css would make posts agree; it is not there, as posts are the owner's to change. */
+.prose.quire h1 {
+    font-size: 2.6rem;
+    line-height: 1.15;
+    letter-spacing: -0.015em;
+}
+
 .prose.quire > :not(h1, h2, h3, h4, h5, h6) + :is(h1, h2, h3, h4, h5, h6) {
     margin-top: calc(var(--line) * 1.4 - var(--crown));
 }
