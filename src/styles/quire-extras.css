@@ -877,3 +877,285 @@
     color: var(--accent);
     font-size: 0.9rem;
 }
+
+/* ---- File, Details: the facts of the document in a small dialog, a quiet word before each ---- */
+
+.quire-facts {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 0.45rem 1.25rem;
+    margin: 0;
+    font-size: 0.92rem;
+    line-height: 1.4;
+}
+
+.quire-facts dt {
+    color: var(--muted);
+}
+
+.quire-facts dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+/* ---- full screen (View, Ctrl+Shift+F): the top folds up out of the way and leaves the page alone. Its
+   row closes to nothing as what is in it slides up and fades; the pointer at the window's top edge
+   opens it again for as long as it is there, and Escape ends it. ---- */
+
+.quire-top {
+    display: grid;
+    grid-template-rows: minmax(0, 1fr);
+    transition:
+        grid-template-rows 0.4s var(--ease),
+        border-color 0.3s ease;
+}
+
+.quire-top > .quire-top-in {
+    min-height: 0;
+    transition:
+        translate 0.4s var(--ease),
+        opacity 0.25s ease;
+}
+
+/* while folded, and while it opens again, what is in it is cut at its edge rather than spill over the page */
+.quire-top:is(.folded, .unfolding) {
+    overflow: clip;
+}
+
+.quire-top.folded:not(.peek) {
+    grid-template-rows: minmax(0, 0fr);
+    border-bottom-color: transparent;
+}
+
+.quire-top.folded:not(.peek) > .quire-top-in {
+    translate: 0 -1.5rem;
+    opacity: 0;
+}
+
+.quire-app .quire-editor.full,
+.quire-editor.full {
+    --stuck: 0px;
+}
+
+/* the outline and the facts in the margins fade with it, so that the page is all there is */
+.quire-editor.full > :is(.quire-outline, .quire-details) {
+    opacity: 0;
+    visibility: hidden;
+    transition:
+        opacity 0.25s ease,
+        visibility 0s 0.25s;
+}
+
+/* ---- the word count while typing (live-count.ts): a small quiet counter at the lower left, lined up
+   with the outline, that grows in from its corner; a press grows it open upward to the characters and
+   pages. The writing keeps room under its last line for it, and the cursor is kept clear of it. ---- */
+
+.quire-live-count {
+    position: fixed;
+    left: var(--from, 1rem);
+    bottom: 1rem;
+    z-index: 30;
+    display: grid;
+    grid-template-rows: auto minmax(0, 0fr);
+    justify-items: start;
+    padding: 0.3rem 0.75rem;
+    border: 0.0625rem solid var(--rule);
+    border-radius: 0.9rem;
+    background: var(--surface);
+    color: var(--ink);
+    font: inherit;
+    font-size: 0.8rem;
+    line-height: 1.5;
+    font-variant-numeric: tabular-nums;
+    text-align: left;
+    cursor: pointer;
+    box-shadow: 0 0.5rem 1.25rem -0.75rem oklch(0.05 0.02 300 / 0.7);
+    transform-origin: left bottom;
+    opacity: 0;
+    scale: 0.6;
+    visibility: hidden;
+    transition:
+        opacity 0.15s ease,
+        scale 0.2s var(--ease),
+        grid-template-rows 0.3s var(--ease),
+        visibility 0s 0.2s;
+}
+
+.quire-live-count.shown {
+    opacity: 1;
+    scale: 1;
+    visibility: visible;
+    transition:
+        opacity 0.2s ease,
+        scale 0.35s var(--quire-spring),
+        grid-template-rows 0.3s var(--ease),
+        visibility 0s;
+}
+
+.quire-live-count.open {
+    grid-template-rows: auto minmax(0, 1fr);
+}
+
+.quire-live-count:hover {
+    border-color: color-mix(in oklch, var(--rule) 50%, var(--accent));
+}
+
+.quire-live-count:focus-visible {
+    outline: 0.125rem solid var(--accent);
+    outline-offset: 0.15rem;
+}
+
+.quire-live-more {
+    /* closed, the lines under the words give the counter none of their width; open, it widens to them as it grows */
+    interpolate-size: allow-keywords;
+    width: 0;
+    overflow: clip;
+    white-space: nowrap;
+    transition: width 0.3s var(--ease);
+}
+
+.quire-live-count.open .quire-live-more {
+    width: max-content;
+}
+
+.quire-live-more-in {
+    display: grid;
+    color: var(--muted);
+}
+
+/* the last line of the writing can always be brought up above the counter, and the cursor is kept clear of it */
+.quire-editor.counting .quire-column {
+    padding-bottom: calc(var(--line) * 4 + 2.5rem);
+}
+
+html:has(.quire-editor.counting) {
+    scroll-padding-bottom: 3.5rem;
+}
+
+/* behind the home screen there is nothing to count */
+.quire-editor.shelved > .quire-live-count {
+    opacity: 0;
+    visibility: hidden;
+}
+
+/* on a phone it opens sideways, along its one line, so that it never rises over the line being written */
+@media (max-width: 40rem) {
+    .quire-live-count,
+    .quire-live-count.open {
+        grid-template-rows: auto;
+        grid-auto-flow: column;
+    }
+
+    .quire-live-more-in {
+        display: flex;
+        gap: 0.75rem;
+        padding-left: 0.75rem;
+    }
+}
+
+/* ---- Tools, Typing preferences (typing-panel.ts): what typing turns into, a switch on each line, the
+   whole line pressable; a group's own switch first under its heading ---- */
+
+.quire-typing-intro {
+    color: var(--muted);
+}
+
+.quire-switch {
+    display: flex;
+    align-items: center;
+    gap: 0.9rem;
+    width: 100%;
+    padding: 0.4rem 0.4rem 0.4rem 0;
+    border-bottom: 0.0625rem solid color-mix(in oklch, var(--rule) 55%, transparent) !important;
+    color: var(--ink);
+    font-size: 0.92rem;
+    line-height: 1.35;
+    text-align: left;
+    white-space: normal !important;
+}
+
+.quire-switch:focus-visible {
+    outline: 0.125rem solid var(--accent);
+    outline-offset: -0.0625rem;
+    border-radius: 0.3rem;
+}
+
+.quire-switch-group {
+    font-weight: 600;
+}
+
+.quire-switch-label {
+    display: flex;
+    flex: 1 1 auto;
+    flex-wrap: wrap;
+    gap: 0.15rem 0.75rem;
+    min-width: 0;
+}
+
+.quire-typing-typed {
+    flex: 0 0 13rem;
+    color: var(--ink);
+    font-family: var(--font-code);
+    font-size: 0.85em;
+    overflow-wrap: anywhere;
+}
+
+.quire-typing-becomes {
+    flex: 1 1 10rem;
+    color: var(--muted);
+}
+
+.quire-switch-track {
+    position: relative;
+    flex: none;
+    width: 2.1rem;
+    height: 1.2rem;
+    border-radius: 0.6rem;
+    background: color-mix(in oklch, var(--ink) 22%, transparent);
+    transition: background 0.25s var(--ease);
+}
+
+.quire-switch-track::after {
+    content: "";
+    position: absolute;
+    top: 0.15rem;
+    left: 0.15rem;
+    width: 0.9rem;
+    height: 0.9rem;
+    border-radius: 50%;
+    background: var(--ink);
+    transition:
+        translate 0.3s var(--quire-spring),
+        background 0.25s var(--ease);
+}
+
+.quire-switch[aria-checked="true"] .quire-switch-track {
+    background: var(--accent);
+}
+
+.quire-switch[aria-checked="true"] .quire-switch-track::after {
+    translate: 0.9rem 0;
+    background: var(--ground);
+}
+
+@media (max-width: 40rem) {
+    .quire-typing-typed {
+        flex-basis: 100%;
+    }
+}
+
+/* ---- Help, mdQuire help: a few paragraphs, the keyboard shortcuts a link among them ---- */
+
+.quire-dialog .quire-help-link {
+    padding: 0;
+    color: var(--accent);
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+    white-space: normal;
+}
+
+.quire-help-link:focus-visible {
+    outline: 0.125rem solid var(--accent);
+    outline-offset: 0.15rem;
+    border-radius: 0.2rem;
+}

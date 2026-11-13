@@ -19,7 +19,7 @@ import { blockPaths, countWords, documentOf, lengthOf } from "./document";
 import { createConflict } from "./conflict";
 import { createDictation } from "./dictation/dictation";
 import { type Document } from "./document";
-import { collapsed, fragment, pageBreakAt } from "./keys";
+import { collapsed, fragment, handle, pageBreakAt } from "./keys";
 import { createPages } from "./pages";
 import { createMarkdownView } from "./markdown-view";
 import { remember } from "./most-used";
@@ -30,7 +30,8 @@ import { createLinkCard } from "./link-card";
 import { boxOf, definitionList, drawnBlock } from "./slash";
 import { createPalette } from "./palette";
 import { createEmojiPicker } from "./emoji-picker";
-import { createSaver, fileName, said, type Entry, type Opened, type Status, type Store } from "./store";
+import { copyDocument, createSaver, fileName, said, type Entry, type Opened, type Status, type Store } from "./store";
+import { copyName } from "./shelf";
 import { altGraph, createSurface, type Surface } from "./surface";
 import { createTableTools } from "./tables";
 import { createPictureTools } from "./picture-tools";
@@ -38,12 +39,14 @@ import { createBlockMenus } from "./block-menus";
 import { createTextMenu } from "./text-menu";
 import { createCommentMargin, keptNotes, moveNotes } from "./comment-margin";
 import { addContents, dateText, findContents, specialGrid, typeIn, typeSpecial, updateContents } from "./inserts";
-import { colorHex, countRows, gatherPictures, heldElsewhere, markdownFor, pageHtml, plainText, readingStyles, type Picture } from "./export";
+import { colorHex, countRows, gatherPictures, heldElsewhere, markdownFor, pageHtml, pictureAddresses, plainText, readingStyles, type Picture } from "./export";
 import { docx } from "./docx";
 import { aboutPanel, control, flowMenu, keySymbols, linkForm, make, type MenuItem } from "./ui";
 import { openDialog } from "./dialog";
 import { chordFrom, findShortcuts, shortcutFor } from "./shortcuts";
-import { findTyping } from "./vocabulary";
+import { findTyping, readOff } from "./vocabulary";
+import { openTyping } from "./typing-panel";
+import { helpBody } from "./help";
 import { changes, createHistoryPanel, createKeeper, memoryStorage, moveVersions, snapshotParts, snapshotText, type VersionStorage } from "./versions";
 import { write } from "./write";
 import { emptyParts, opened, packQuire, written, type Parts } from "./quire-file";
@@ -51,7 +54,8 @@ import { pictureType, withoutMetadata } from "./pictures";
 import { crc32 } from "./zip";
 import { PAGE } from "./styling";
 import { createCaret, FLAG, FLAG_ON_PAPER } from "./caret";
-import { createDetails } from "./details";
+import { createLiveCount } from "./live-count";
+import { createDetails, keptLine, lengthLine, sizeLine } from "./details";
 import { createFind } from "./find";
 import { mountChecking } from "./check/mount";
 import { createTitle, nameFor, shownName, type OwnTitle } from "./title";
@@ -132,6 +136,8 @@ const MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator
 
 /** Where typed signs being turned off is kept. */
 const SYMBOLS_KEY = "quire-symbols";
+/** Where the rest of what typing turns into, switched off in Typing preferences, is kept: a list of the typing table's ids. */
+const TYPING_KEY = "quire-typing-off";
 
 /** Where the outline being open or shut on a wide window is kept. */
 const OUTLINE_KEY = "quire-outline";
@@ -195,6 +201,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     // typed signs are on unless the writer turned them off, for every document
     try {
         if (localStorage.getItem(SYMBOLS_KEY) === "off") surface.setSymbols(false);
+        surface.setTyping(readOff(localStorage.getItem(TYPING_KEY)));
     } catch {
         // a browser keeping nothing has them on
     }
@@ -592,6 +599,16 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     // the document's file, length and where it is kept, in the right margin of the look with no page
     const details = createDetails();
     host.append(details.element);
+    // the word count while typing, at the window's lower left, as View shows or hides it
+    const counter = createLiveCount(() => {
+        const doc = surface.getDocument();
+        const selection = surface.getSelection();
+        return { whole: plainText(doc), part: collapsed(selection) ? undefined : plainText(documentOf(fragment(doc, selection))), pages: pages.paged() ? pages.now() : undefined };
+    });
+    host.append(counter.element);
+    host.classList.toggle("counting", counter.shown());
+    surface.on("change", () => counter.update());
+    surface.on("select", () => counter.update());
     // the outline and the details stand in the margins beside the sheet; when the sheet, zoomed or on a small
     // window, leaves them too little room to be read whole, they fade away rather than be cut or run under it
     const roomBeside = () => {
@@ -651,6 +668,70 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         surface.focus();
     };
     const format = () => row.words[4]!;
+    // ---- File's Make a copy, Rename and Details, and Edit's Cut, Copy and Paste, which the keys already do ----
+    /** Makes a copy of the document beside it, its pictures with it, and opens the copy; where copies cannot be made, in this browser. */
+    const makeCopy = async () => {
+        if (!(await ready())) return;
+        const wanted = copyName(name);
+        try {
+            if (store?.can.create && id) {
+                const made = await copyDocument(store, id, wanted);
+                const entry = (await store.list().catch(() => [])).find((each) => each.id === made.id) ?? { id: made.id, name: wanted };
+                await open(store, entry);
+            } else if (options.richHome) {
+                const { text: markdown, quire } = written(surface.getDocument(), write);
+                await create(options.richHome, wanted, markdown, quire);
+            }
+            surface.focus();
+        } catch (error) {
+            bar.setStatus("No copy", `The copy was not made: ${error instanceof Error ? error.message : String(error)}`, "warn");
+        }
+    };
+    /** Rename goes to the title, its words selected, since typing there renames the document. */
+    const renameHere = () => {
+        if (title.element.readOnly) return bar.setStatus("Not renamed", "A document kept here cannot be renamed", "quiet");
+        title.focus();
+        title.element.select();
+    };
+    /** What is known about the document, in a small dialog: the margin's facts, with its size. */
+    const showFacts = (from: HTMLElement) => {
+        const doc = surface.getDocument();
+        const { text: markdown, quire } = written(doc, write);
+        const bytes = new Blob([markdown, quire?.style ?? "", quire?.notes ?? ""]).size;
+        const list = make("dl", "quire-facts");
+        const facts: [string, string][] = [
+            ["File", fileName(name, doc.quire ? ".quire" : doc.mdx ? ".mdx" : ".md")],
+            ["Kept", keptLine(store?.label, savedAt, Date.now())],
+            ["Size", sizeLine(bytes, doc.quire ? new Set(pictureAddresses(doc)).size : 0)],
+            ["Length", lengthLine(countWords(doc))],
+        ];
+        for (const [term, value] of facts) list.append(make("dt", "", term), make("dd", "", value));
+        openDialog(from, { title: "Details", body: [list], action: { label: "Done", press: (_, dialog) => void dialog.close() }, onClose: () => surface.focus() });
+    };
+    /** The keys' own cut and copy, asked for from a menu: the surface takes them as it takes the keys. */
+    const clip = (how: "cut" | "copy") => {
+        surface.focus();
+        const keys = `${MAC ? "Cmd" : "Ctrl"}+${how === "cut" ? "X" : "C"}`;
+        if (!document.execCommand(how)) bar.setStatus(`Press ${keys}`, `This browser did not let the menu ${how}: press ${keys}`, "quiet");
+    };
+    /** Paste from a menu asks the clipboard for what it holds; a browser that will not give it says so in the status, and the keys still paste. */
+    const pasteHere = async () => {
+        try {
+            const data = new DataTransfer();
+            for (const item of await navigator.clipboard.read()) {
+                for (const type of item.types) {
+                    const blob = await item.getType(type);
+                    if (type === "text/html" || type === "text/plain") data.setData(type, await blob.text());
+                    else if (type.startsWith("image/")) data.items.add(new File([blob], `picture.${type.slice(6)}`, { type }));
+                }
+            }
+            surface.focus();
+            surface.pasteData(data);
+        } catch {
+            const keys = MAC ? "Cmd+V" : "Ctrl+V";
+            bar.setStatus(`Press ${keys}`, `This browser did not let mdQuire read the clipboard: press ${keys} to paste`, "quiet");
+        }
+    };
     /** Every command, by name: the menus, their search, the keyboard's shortcuts (shortcuts.ts) and the Ctrl+/ panel all run these. */
     const actions: RowActions = {
                 file: options.fileItems,
@@ -711,14 +792,24 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
                 marked: doing(toggle("mark")),
                 superscript: doing(toggle("sup")),
                 subscript: doing(toggle("sub")),
-                typedSigns: () => {
-                    surface.setSymbols(!surface.symbols());
-                    try {
-                        localStorage.setItem(SYMBOLS_KEY, surface.symbols() ? "on" : "off");
-                    } catch {
-                        // kept for this visit only
-                    }
-                },
+                help: () => openDialog(row.words[6]!, { title: "mdQuire help", body: helpBody(showShortcuts), className: "quire-help", action: { label: "Done", press: (_, dialog) => void dialog.close() }, onClose: () => surface.focus() }),
+                typing: () =>
+                    openTyping(row.words[5]!, {
+                        // the arrows and signs are the switch that was there first, kept where it always was
+                        off: () => new Set([...surface.typingOff(), ...(surface.symbols() ? [] : ["signs"])]),
+                        set: (off) => {
+                            surface.setSymbols(!off.has("signs"));
+                            off.delete("signs");
+                            surface.setTyping(off);
+                            try {
+                                localStorage.setItem(SYMBOLS_KEY, surface.symbols() ? "on" : "off");
+                                localStorage.setItem(TYPING_KEY, JSON.stringify([...off]));
+                            } catch {
+                                // kept for this visit only
+                            }
+                        },
+                        onClose: () => surface.focus(),
+                    }),
                 downloadAs: () => downloads.open(row.words[0]!, downloadLines(), true),
                 notes: () => notes.list(row.words[2]!),
                 nextNote: () => notes.next(1),
@@ -728,6 +819,18 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
                 symbols: () => openSpecials(row.words[3]!),
                 contents: doing(addContents),
                 updateContents: () => (surface.run((doc) => updateContents(doc)), surface.focus()),
+                fullScreen: () => fullScreen(!full),
+                liveCount: () => (counter.show(!counter.shown()), host.classList.toggle("counting", counter.shown())),
+                makeCopy: () => void makeCopy(),
+                rename: renameHere,
+                fileDetails: () => showFacts(row.words[0]!),
+                cut: () => clip("cut"),
+                copy: () => clip("copy"),
+                paste: () => void pasteHere(),
+                delete: doing((state) => {
+                    const outcome = handle(state, { type: "key", key: "Delete" });
+                    return outcome && "state" in outcome ? outcome.state : state;
+                }),
                 pastePlain: () => {
                     // the menu line asks the clipboard for its text; a browser that will not give it says so, and Ctrl+Shift+V still does it
                     void navigator.clipboard?.readText().then(
@@ -768,7 +871,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     const textMenu = createTextMenu(surface, () => row.headings());
     const row = createMenuRow(() =>
         headings(
-            { rich: !!surface.getDocument().quire, contents: !!findContents(surface.getDocument()), matches: () => matchingSpots({ doc: surface.getDocument(), selection: surface.getSelection() }).length, paged: pages.paged(), look, outline: outlineView.isOpen(), markdown: host.classList.contains("markdown"), words: countWords(surface.getDocument()), align: aligned(surface.getDocument(), surface.getSelection().focus.path), symbols: surface.symbols() },
+            { rich: !!surface.getDocument().quire, contents: !!findContents(surface.getDocument()), matches: () => matchingSpots({ doc: surface.getDocument(), selection: surface.getSelection() }).length, paged: pages.paged(), look, outline: outlineView.isOpen(), markdown: host.classList.contains("markdown"), words: countWords(surface.getDocument()), full, counting: counter.shown(), align: aligned(surface.getDocument(), surface.getSelection().focus.path) },
             actions,
         ),
     );
@@ -777,7 +880,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         // AltGr types a character (@ # { [ | on many layouts): it is never a shortcut
         if (event.defaultPrevented || event.isComposing || altGraph(event)) return;
         const found = shortcutFor(chordFrom(event, MAC));
-        if (!found?.command || found.surface) return;
+        if (!found?.command || found.surface || found.browser) return;
         // a field of the editor's own (the find bar, a menu's search) keeps the keys that edit text in it
         const field = event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement;
         if (field && ["selectAll", "pastePlain"].includes(found.command)) return;
@@ -847,6 +950,39 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     };
     // the menu words, on the top's first line after the trail
     place("menus").append(row.element);
+
+    // ---- full screen, from View or Ctrl+Shift+F: the top folds away and leaves the page; Escape ends it,
+    // and the pointer at the window's top edge opens the top again for as long as it stays up there ----
+    let full = false;
+    let unfolding: ReturnType<typeof setTimeout> | undefined;
+    const peek = (on: boolean) => {
+        top.classList.toggle("peek", on);
+        top.inert = full && !on;
+    };
+    const fullScreen = (on: boolean) => {
+        if (on === full) return;
+        full = on;
+        clearTimeout(unfolding);
+        top.classList.toggle("folded", on);
+        host.classList.toggle("full", on);
+        peek(false);
+        // opening again, what is in the top stays cut at its edge until the row has its height
+        top.classList.toggle("unfolding", !on);
+        if (!on) unfolding = setTimeout(() => top.classList.remove("unfolding"), 450);
+        surface.focus();
+    };
+    const fullKeys = (event: KeyboardEvent) => {
+        // an Escape meant for a dialog or a menu is theirs
+        if (!full || event.key !== "Escape" || event.defaultPrevented || (event.target instanceof Element && event.target.closest("dialog, [popover]"))) return;
+        fullScreen(false);
+    };
+    const fullPointer = (event: PointerEvent) => {
+        if (!full) return;
+        if (event.clientY <= 4) peek(true);
+        else if (top.classList.contains("peek") && event.clientY > top.getBoundingClientRect().bottom + 24 && !row.menu.isOpen() && !top.contains(document.activeElement)) peek(false);
+    };
+    addEventListener("keydown", fullKeys);
+    addEventListener("pointermove", fullPointer);
 
     // ---- version history: a snapshot on opening and after each pause in editing, kept by store and document ----
     const historyKey = () => (store && id ? `${store.label}:${id}` : name);
@@ -1103,6 +1239,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         id = undefined;
         name = "Untitled";
         bar.setName(name);
+        fullScreen(false);
         if (!wide()) outlineView.close();
         quiet = true;
         surface.setDocument(read(""));
@@ -1138,8 +1275,11 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
             if (shown !== undefined || plain) showMarkdown(plain || !!shown);
         },
         destroy() {
+            removeEventListener("keydown", fullKeys);
+            removeEventListener("pointermove", fullPointer);
             caret.destroy();
             details.destroy();
+            counter.destroy();
             widening?.removeEventListener("change", outlineAsKept);
             checking.destroy();
             pages.destroy();

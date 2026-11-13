@@ -1899,7 +1899,7 @@ used("every shortcut in the table that the surface does not keep runs its own co
         for (const name of Object.keys(commands)) { kept[name] = commands[name]; commands[name] = () => ran.push(name); }
         const missed = [];
         // Ctrl+Shift+V is the browser's own paste, which the surface takes as plain text
-        for (const each of SHORTCUTS.filter((shortcut) => shortcut.command && !shortcut.surface && shortcut.command !== "pastePlain")) {
+        for (const each of SHORTCUTS.filter((shortcut) => shortcut.command && !shortcut.surface && !shortcut.browser && shortcut.command !== "pastePlain")) {
             ran.length = 0;
             const chord = chordOf(each.keys);
             const target = document.querySelector(".quire[contenteditable]");

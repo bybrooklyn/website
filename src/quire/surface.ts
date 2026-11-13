@@ -107,8 +107,14 @@ export interface Surface {
     setSymbols(on: boolean): void;
     /** Whether typed arrows and signs become their characters. */
     symbols(): boolean;
+    /** Switches off rows of the typing table (vocabulary.ts, by id), which then stay as typed; nothing is off to begin with. */
+    setTyping(off: ReadonlySet<string>): void;
+    /** The rows of the typing table switched off. */
+    typingOff(): ReadonlySet<string>;
     /** Puts text in at the cursor as it is, each line a paragraph, with no formatting and no Markdown read from it. */
     pasteText(text: string): void;
+    /** Pastes what the clipboard held, as a paste with the keys would: pictures, a web page's formatting or Markdown read from the text. */
+    pasteData(data: DataTransfer): void;
 }
 
 const MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
@@ -736,6 +742,7 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
 
     /** Whether typed arrows and signs become their characters, and `==` is shown joined: on unless the writer turned it off. */
     let symbols = true;
+    let off: ReadonlySet<string> = new Set();
     const drawing = (): Drawing => ({ mdx: editor.state.doc.mdx, join: symbols, later, folded: (block) => folds.has(block) });
 
     /** The folding sections the writer has folded away in the editor, by their block; a section changed is drawn open again, so nothing is ever hidden by surprise. */
@@ -991,7 +998,7 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
     }
 
     function send(input: Input): boolean {
-        const { editor: next, outcome } = step(editor, input, Date.now(), { symbols });
+        const { editor: next, outcome } = step(editor, input, Date.now(), { symbols, off });
         if (!outcome) return false;
         if ("action" in outcome && outcome.action === "link") {
             emit("link", { selection: editor.state.selection, rect: rect() });
@@ -1695,9 +1702,17 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
         },
         symbols: () => symbols,
         positionAt: (node, offset) => toPosition(node, offset),
+        setTyping(next) {
+            off = next;
+        },
+        typingOff: () => off,
         pasteText(text) {
             syncSelection();
             insertPlain(text);
+        },
+        pasteData(data) {
+            syncSelection();
+            void takeData(data);
         },
         destroy() {
             for (const [target, name, handler] of handlers) target.removeEventListener(name, handler);

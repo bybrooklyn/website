@@ -185,6 +185,18 @@ anchored to its word: the word stays in the row, lit, and the menu grows from un
 above, with the raised look and shortcuts shown as symbols. Tooltips and the find bar grow from where they
 were asked for.
 
+**Lines taken from Google Docs** (chosen from `mdQuire-against-docs.md`). File has Make a copy (beside the
+original, its pictures with it), Rename (to the title, selected) and Details (file, where it is kept and when
+last saved, size, length). Edit has Cut, Copy, Paste and Delete with their keys; a menu paste the browser
+refuses says in the status to press Ctrl+V. View has Full screen (Ctrl+Shift+F, the keys of Docs' compact
+mode): the top folds away, the pointer at the window's top edge opens it while it stays there, Escape ends
+it. View, Word count while typing keeps a counter at the lower left (`live-count.ts`), the selection's count
+when there is one, opening to characters and pages on a press; on a phone it opens sideways. Tools, Typing
+preferences (`typing-panel.ts`) has a switch for each row of `vocabulary.ts`, and one for each of
+Markdown's, GitHub's and mdQuire's own marks; what is off stays as typed. The arrows' switch is the old
+Typed signs, still kept under its own key. Help, mdQuire help (`help.ts`) is a short page whose words have
+not yet been reviewed. Choices kept per browser: `quire-live-count`, `quire-typing-off`, `quire-symbols`.
+
 **Markdown kinds** (`more-markdown.test.ts` covers them). Highlighted code blocks (`highlight.ts`),
 callouts, definition lists, superscript and subscript, marked text, emoji shortcodes (`emoji.ts`, a short
 table written by hand), folding sections (`details.ts`), maths laid out by its own code (`maths.ts`),
@@ -291,7 +303,7 @@ soft line break turns only that line into an item.
 
 ## Open
 
-- The wording of dictation's first-launch dialog has not been reviewed.
+- The wording of dictation's first-launch dialog has not been reviewed, nor that of the help page.
 - Fluidity: typing and the text, opening and closing, the bar; whether the caret should glide to a new
   place in place of jumping there.
 - The top bar is close and needs further polish, found by using and testing it.

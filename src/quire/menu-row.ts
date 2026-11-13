@@ -1,4 +1,4 @@
-// The menu row: File, Edit, View, Insert, Format and Tools, above the bar in the site's top row.
+// The menu row: File, Edit, View, Insert, Format, Tools and Help, above the bar in the site's top row.
 // Every command mdQuire has is in it by name, with its shortcut beside it, so nothing has to be
 // known by its keys or its Markdown to be found. Its menus are the editor's own (flowMenu in
 // ui.ts): one box that flows open from the word pressed and, while open, slides along to the next
@@ -34,10 +34,12 @@ export interface RowState {
     words: number;
     /** How the cursor's block sits across the page, shown as pressed in Format. */
     align?: Align;
-    /** Whether typed arrows and signs become their characters, shown as pressed in Tools. */
-    symbols?: boolean;
     /** True when the document has a table of contents, which Insert then offers to make again. */
     contents?: boolean;
+    /** True in full screen, with the top folded away. */
+    full?: boolean;
+    /** True while the word count is kept at the window's lower left as the writer types. */
+    counting?: boolean;
 }
 
 /** What each command does, given by the editor. A command not given is left out. */
@@ -53,8 +55,10 @@ export type Command =
     | "bold" | "italic" | "underline" | "strike" | "inline" | "paragraph" | "heading1" | "heading2" | "heading3" | "heading4" | "heading5" | "heading6" | "quote" | "subtext" | "spoiler"
     | "color" | "size" | "font" | "highlight" | "spacing" | "left" | "center" | "right" | "justify" | "indent" | "outdent" | "bigger" | "smaller" | "clear"
     | "check" | "about" | "wordCount" | "shortcuts" | "searchMenus" | "forgetUsed"
-    | "superscript" | "subscript" | "marked" | "typedSigns"
+    | "superscript" | "subscript" | "marked"
     | "downloadAs" | "notes" | "nextNote" | "previousNote" | "comment" | "date" | "symbols" | "contents" | "updateContents"
+    | "makeCopy" | "rename" | "fileDetails" | "cut" | "copy" | "paste" | "delete"
+    | "fullScreen" | "liveCount" | "typing" | "help"
     | "capitals" | "lists" | "title" | "subtitle" | "selectMatching" | "bookmark";
 
 /** The menus of the row, for a document as it stands. A line's shortcut, if it has one, comes from the table in shortcuts.ts. */
@@ -69,6 +73,9 @@ export function headings(state: RowState, act: RowActions): Heading[] {
             label: "File",
             items: () => [
                 ...(act.file?.() ?? []),
+                ...line("makeCopy", "Make a copy"),
+                ...line("rename", "Rename"),
+                ...line("fileDetails", "Details"),
                 ...(state.rich ? [] : line("turnRich", "Turn into a .quire document", { icon: "file" })),
                 ...(state.rich ? line("downloadQuire", "Download", { hint: ".quire" }) : []),
                 ...line("download", state.rich ? "Download as Markdown" : "Download", { hint: ".md" }),
@@ -83,9 +90,13 @@ export function headings(state: RowState, act: RowActions): Heading[] {
             items: () => [
                 ...line("undo", "Undo", { icon: "undo" }),
                 ...line("redo", "Redo", { icon: "redo" }),
+                ...line("cut", "Cut"),
+                ...line("copy", "Copy"),
+                ...line("paste", "Paste"),
+                ...line("pastePlain", "Paste without formatting"),
                 ...line("selectAll", "Select all"),
                 ...line("selectMatching", "Select all occurrences", (state.matches?.() ?? 2) < 2 ? { disabled: true } : {}),
-                ...line("pastePlain", "Paste without formatting"),
+                ...line("delete", "Delete"),
                 ...line("find", "Find", { icon: "search" }),
                 ...line("replace", "Find and replace"),
                 ...line("link", "Link", { icon: "link" }),
@@ -103,6 +114,8 @@ export function headings(state: RowState, act: RowActions): Heading[] {
                 ...line("lookNone", "No page", { pressed: (state.look ?? "none") === "none", group: "look" }),
                 ...line("lookPaper", "Light paper", { pressed: state.look === "paper", group: "look" }),
                 ...line("pageView", "Page view", { pressed: !!state.paged }),
+                ...line("fullScreen", "Full screen", { pressed: !!state.full }),
+                ...line("liveCount", "Word count while typing", { pressed: !!state.counting }),
                 ...line("zoom", "Zoom", { hint: "›" }),
                 ...line("zoomIn", "Zoom in"),
                 ...line("zoomOut", "Zoom out"),
@@ -182,13 +195,17 @@ export function headings(state: RowState, act: RowActions): Heading[] {
                 ...line("wordCount", "Word count"),
                 ...line("history", "Version history"),
                 ...line("check", "Checking", { hint: "›" }),
-                ...line("typedSigns", "Typed signs, -> to →", { pressed: state.symbols !== false }),
+                ...line("typing", "Typing preferences"),
                 ...line("searchMenus", "Search the menus", { icon: "search" }),
                 ...line("shortcuts", "Keyboard shortcuts"),
                 ...line("forgetUsed", "Forget what I use most"),
                 ...(act.tools?.() ?? []),
                 ...line("about", "About mdQuire"),
             ],
+        },
+        {
+            label: "Help",
+            items: () => [...line("help", "mdQuire help"), ...line("shortcuts", "Keyboard shortcuts"), ...line("about", "About mdQuire")],
         },
     ];
 }
@@ -207,7 +224,7 @@ export function createMenuRow(menus: () => Heading[]) {
             menu.box.classList.remove("sliding");
         },
     });
-    const words = ["File", "Edit", "View", "Insert", "Format", "Tools"].map((label, index) => {
+    const words = ["File", "Edit", "View", "Insert", "Format", "Tools", "Help"].map((label, index) => {
         const word = make("button", "quire-row-word", label);
         word.type = "button";
         word.setAttribute("role", "menuitem");

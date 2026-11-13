@@ -36,6 +36,12 @@ export function keptLine(place: string | undefined, saved: number | undefined, n
     return saved === undefined ? where : `${where}, ${ago(saved, now)}`;
 }
 
+/** How large a document's file is, in the units a file manager uses, and how many pictures are kept beside it. */
+export function sizeLine(bytes: number, pictures = 0): string {
+    const size = bytes < 1000 ? `${bytes.toLocaleString("en")} ${bytes === 1 ? "byte" : "bytes"}` : bytes < 1_000_000 ? `${(bytes / 1000).toFixed(1)} KB` : `${(bytes / 1_000_000).toFixed(1)} MB`;
+    return pictures === 0 ? size : `${size}, and ${pictures} ${pictures === 1 ? "picture" : "pictures"} kept beside it`;
+}
+
 /** What the margin shows. */
 export interface Shown {
     file: string;

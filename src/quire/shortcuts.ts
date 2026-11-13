@@ -18,6 +18,8 @@ export interface Shortcut {
     command?: Command;
     /** Handled by the editing surface (keys.ts), which sees it first. */
     surface?: boolean;
+    /** The browser's own key (cut, copy, paste), which the surface takes as the browser sends it: listed and shown, never run by the editor. */
+    browser?: boolean;
 }
 
 /** Every shortcut, in the order the panel shows them. The first for a command is the one its menu line shows. */
@@ -26,11 +28,16 @@ export const SHORTCUTS: Shortcut[] = [
     { keys: "Ctrl+Z", label: "Undo", menu: "Edit", command: "undo", surface: true },
     { keys: "Ctrl+Shift+Z", label: "Redo", menu: "Edit", command: "redo", surface: true },
     { keys: "Ctrl+Y", label: "Redo", menu: "Edit", command: "redo", surface: true },
+    { keys: "Ctrl+X", label: "Cut", menu: "Edit", command: "cut", browser: true },
+    { keys: "Ctrl+C", label: "Copy", menu: "Edit", command: "copy", browser: true },
+    { keys: "Ctrl+V", label: "Paste", menu: "Edit", command: "paste", browser: true },
+    { keys: "Delete", label: "Delete", menu: "Edit", command: "delete", surface: true },
     { keys: "Ctrl+A", label: "Select all", menu: "Edit", command: "selectAll" },
     { keys: "Ctrl+Shift+V", label: "Paste without formatting", menu: "Edit", command: "pastePlain" },
     { keys: "Ctrl+F", label: "Find", menu: "Edit", command: "find" },
     { keys: "Ctrl+H", label: "Find and replace", menu: "Edit", command: "replace" },
     { keys: "Ctrl+K", label: "Link", menu: "Edit", command: "link", surface: true },
+    { keys: "Ctrl+Shift+F", label: "Full screen", menu: "View", command: "fullScreen" },
     { keys: "Ctrl+=", label: "Zoom in", menu: "View", command: "zoomIn" },
     { keys: "Ctrl+-", label: "Zoom out", menu: "View", command: "zoomOut" },
     { keys: "Ctrl+0", label: "Zoom back to the usual", menu: "View", command: "zoomReset" },
