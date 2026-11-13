@@ -129,7 +129,7 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
         const picked = chooser.files?.[0];
         chooser.value = "";
         if (!picked) return;
-        const entry = await files.add(picked).catch(() => undefined);
+        const entry = await files.add(picked).catch((error) => void editor.say("Not opened", `${picked.name} was not opened: ${error instanceof Error ? error.message : String(error)}`));
         if (!entry) return;
         if (!(await editor.open(files, entry))) return;
         await showEditor();
@@ -198,8 +198,8 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
                 await showDocuments();
             },
             remove: async (entry) => {
-                await shown.remove(entry.id).catch(() => undefined);
-                await showDocuments();
+                const problem = await shown.remove(entry.id).then(() => undefined, (error) => `${entry.name} was not taken away: ${error instanceof Error ? error.message : String(error)}`);
+                await showDocuments(problem);
             },
             restore: async (entry) => {
                 await browser.restore(entry.id);

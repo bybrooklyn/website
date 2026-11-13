@@ -232,6 +232,15 @@ used("the documents list flows out of the name: a new document, a rename, one ta
     await tab.press("Escape");
 });
 
+used("a damaged .quire chosen from the computer is not opened, and the status says why", async () => {
+    const before = await md();
+    // the file chooser gives a file that is not a zip, though it is named as a .quire
+    await tab.run(`(() => { const chooser = [...document.querySelectorAll("input.quire-file")].find((input) => input.accept.includes(".quire")); const files = new DataTransfer(); files.items.add(new File(["this is not a zip at all"], "damaged.quire")); chooser.files = files.files; chooser.dispatchEvent(new Event("change")); })()`);
+    await tab.wait(300);
+    expect(await status()).toContain("damaged.quire was not opened: this is not a zip file");
+    expect(await md()).toBe(before);
+});
+
 used("a file is opened from the computer, and downloaded again with its own name and what was written", async () => {
     await tab.files([`${folder}/post.md`]);
     await documents();

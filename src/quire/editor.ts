@@ -95,6 +95,8 @@ export interface Editor {
     open(store: Store, entry: Entry): Promise<boolean>;
     /** Makes a new document there and opens it; given parts, it is made as a `.quire` document. */
     create(store: Store, name: string, text?: string, quire?: Parts): Promise<boolean>;
+    /** Says something went wrong, in the status: a few words, and the whole of it. */
+    say(short: string, full: string): void;
     /** Saves what is waiting; when it cannot be saved, asks the writer whether to try again, stay or leave it. True when the document may be left. */
     ready(): Promise<boolean>;
     flush(): Promise<void>;
@@ -1072,6 +1074,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         open,
         create,
         ready,
+        say: (short, full) => bar.setStatus(short, full, "warn"),
         flush: async () => {
             await saver?.flush();
         },
