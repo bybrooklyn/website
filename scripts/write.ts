@@ -17,10 +17,11 @@
 // The page itself is scripts/editor/main.ts, its styles scripts/editor/editor.css.
 
 import { $ } from "bun";
-import { mkdir, stat } from "node:fs/promises";
+import { mkdir, rename, stat } from "node:fs/promises";
 import { dirname, extname, relative, resolve } from "node:path";
 import { themeStyle } from "../src/lib/color";
 import { forEditor } from "./dictation-stubs";
+import { preview } from "./editor/preview";
 import { at, frontmatter, isDraft, listMdx, root, slug, stem, writeJson } from "./lib";
 
 const args = process.argv.slice(2);
@@ -30,6 +31,24 @@ const key = crypto.randomUUID().replace(/-/g, "");
 const DEV = "http://localhost:4321";
 
 const exists = (path: string) => Bun.file(at(path)).exists();
+
+/**
+ * Work on one file waits for the work on it before to end: two saves from two tabs could otherwise
+ * both pass the check that the file is as they last read it, and the second overwrite the first.
+ */
+const turns = new Map<string, Promise<unknown>>();
+function inTurn<T>(path: string, work: () => Promise<T>): Promise<T> {
+    const turn = (turns.get(path) ?? Promise.resolve()).then(work, work);
+    turns.set(path, turn.catch(() => {}));
+    return turn;
+}
+
+/** Writes a file whole or not at all: to a file beside it, then moved into its place, so that a crash or the dev server never sees half of it. */
+async function replace(file: string, content: string): Promise<void> {
+    const beside = `${file}.${process.pid}.saving`;
+    await Bun.write(beside, content);
+    await rename(beside, file);
+}
 const hash = (content: string) => Bun.hash(content).toString(36);
 
 /** The only files the editor may read or write. */
@@ -90,12 +109,16 @@ async function notePhoto(file: string, title: string, note: string): Promise<voi
     if (!photo) throw new Error("That picture is not on the site.");
     photo.title = title.trim() || undefined;
     photo.note = note.trim() || undefined;
-    await writeJson(at(PHOTOS), { photos });
+    // whole or not at all, as a saved file is
+    const beside = `${at(PHOTOS)}.${process.pid}.saving`;
+    await writeJson(beside, { photos });
+    await rename(beside, at(PHOTOS));
 }
 
 async function newPost(title: string): Promise<string> {
     const path = `src/content/blog/${slug(title)}.mdx`;
-    if (!slug(title)) throw new Error("That title has no letters or numbers in it.");
+    // The file name is made from the Latin letters and numbers in the title; a title in another script has none.
+    if (!slug(title)) throw new Error("The post's file name is made from the title's letters a to z and numbers, and this title has none. Give it a title with some, and change it afterwards if you like.");
     if (await exists(path)) return path;
     await Bun.write(
         at(path),
@@ -140,17 +163,6 @@ async function routes(): Promise<Set<string>> {
     return made;
 }
 
-let startedDev = false;
-
-async function devServer(): Promise<void> {
-    const up = () => fetch(DEV).then(() => true, () => false);
-    if (await up()) return;
-    // --background returns once the server is up; without it this would never come back.
-    await $`bunx astro dev --background`.cwd(root).nothrow().quiet();
-    startedDev = true;
-    for (let tries = 0; tries < 40 && !(await up()); tries++) await Bun.sleep(250);
-}
-
 // ---- publishing ----
 
 async function drafts(): Promise<string[]> {
@@ -182,7 +194,24 @@ async function plan(path: string) {
     };
 }
 
+/** Why publishing must not go ahead from here, or undefined if it may. */
+async function refusal(): Promise<string | undefined> {
+    const branch = (await $`git branch --show-current`.cwd(root).nothrow().quiet()).text().trim();
+    // Publishing deploys to production, which is main; from any other branch the live site would show what main does not have.
+    if (branch !== "main") return `Publishing goes from main only, and this checkout is on ${branch ? `the branch ${branch}` : "no branch"}. Switch to main first.`;
+    // Only what is in src/ and public/ is committed, so a file anywhere else would be built without being kept.
+    const strays = (await $`git status --porcelain --untracked-files=all`.cwd(root).text())
+        .split("\n")
+        .filter((line) => line.startsWith("?? "))
+        .map((line) => line.slice(3).replace(/^"|"$/g, ""))
+        .filter((path) => !path.startsWith("src/") && !path.startsWith("public/"));
+    if (strays.length > 0) return `Not publishing: there are new files outside src/ and public/, which the editor does not commit:\n${strays.map((path) => `  ${path}`).join("\n")}\nCommit them, delete them or add them to .gitignore first.`;
+    return undefined;
+}
+
 async function publish(message: string): Promise<{ ok: boolean; log: string }> {
+    const refused = await refusal();
+    if (refused) return { ok: false, log: refused };
     if (dryRun) return { ok: true, log: "Dry run: stopped here, before the commit and the deploy." };
     const log: string[] = [];
     const run = async (label: string, command: ReturnType<typeof $>) => {
@@ -191,12 +220,17 @@ async function publish(message: string): Promise<{ ok: boolean; log: string }> {
         if (result.exitCode !== 0) throw new Error(log.join("\n"));
     };
     try {
-        if ((await $`git status --short`.cwd(root).text()).trim()) {
+        // Only the folders the editor writes to are staged, never everything in the checkout.
+        await run("git add src public", $`git add -A -- src public`);
+        if ((await $`git diff --cached --quiet`.cwd(root).nothrow().quiet()).exitCode !== 0) {
             const text = message.trim() || "Edit the site";
-            await run("git add", $`git add -A`);
             await run("git commit", $`git commit -m ${text}`);
             await run("git push", $`git push`);
         }
+        // Built again now, from what was just committed: the build from the plan may be older than the last save.
+        await run("bun run build", $`bun run build`);
+        const after = (await $`git status --porcelain -- src public`.cwd(root).text()).trim();
+        if (after) throw new Error(`${log.join("\n")}\n\nThese files changed while publishing, so the build is not what was committed:\n${after}\nOpen Publish again.`);
         // Named, so that it goes to production whatever git says the branch is.
         await run("wrangler pages deploy", $`bunx wrangler pages deploy --branch main`);
         return { ok: true, log: `${log.join("\n")}\n\nDeployed.` };
@@ -257,6 +291,8 @@ const page = `<!doctype html>
 
 // ---- the server ----
 
+/** Whether a path on the disk is within one of the repo's folders named, and not reached out of one by `..`. */
+const inside = (file: string, ...folders: string[]) => folders.some((folder) => !relative(at(folder), file).startsWith(".."));
 const json = (data: unknown, status = 200) => Response.json(data, { status });
 const TYPES: Record<string, string> = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp", ".avif": "image/avif", ".gif": "image/gif", ".svg": "image/svg+xml", ".woff2": "font/woff2" };
 
@@ -293,18 +329,22 @@ async function handle(request: Request): Promise<Response> {
         // A picture named in a file: from public/ if it starts with a slash, else beside the file.
         const src = query("src");
         const file = src.startsWith("/") ? resolve(at("public"), `.${src}`) : resolve(dirname(at(query("file"))), src);
-        const inside = [at("src"), at("public")].some((folder) => !relative(folder, file).startsWith(".."));
         const type = TYPES[extname(file).toLowerCase()];
-        return inside && type && (await Bun.file(file).exists()) ? new Response(Bun.file(file), { headers: { "content-type": type } }) : json({ error: "No such picture." }, 404);
+        // An SVG can hold a script. Opened in a tab of its own it would run on this origin and could
+        // ask the server for anything, so it is served sandboxed, with no script and nothing fetched.
+        const guarded = { "content-type": type ?? "", "content-security-policy": "sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src data:", "x-content-type-options": "nosniff" };
+        return inside(file, "src", "public") && type && (await Bun.file(file).exists()) ? new Response(Bun.file(file), { headers: guarded }) : json({ error: "No such picture." }, 404);
     }
     if (url.pathname === "/api/files") return json(await files());
     if (url.pathname === "/api/exists") {
         // For checking in the editor: a page of the site if the address starts with a slash, else a file beside the document.
         const src = decodeURI(query("src").replace(/[?#].*$/, ""));
-        if (src.startsWith("/")) return json({ there: (await routes()).has(src.replace(/\/?$/, "/")) || (await Bun.file(resolve(at("public"), `.${src}`)).exists()) });
+        if (src.startsWith("/")) {
+            const file = resolve(at("public"), `.${src}`);
+            return json({ there: (await routes()).has(src.replace(/\/?$/, "/")) || (inside(file, "public") && (await Bun.file(file).exists())) });
+        }
         const file = resolve(dirname(at(query("file"))), src);
-        const inside = [at("src"), at("public")].some((folder) => !relative(folder, file).startsWith(".."));
-        return json({ there: inside && ((await Bun.file(file).exists()) || (await stat(file).then((found) => found.isDirectory(), () => false))) });
+        return json({ there: inside(file, "src", "public") && ((await Bun.file(file).exists()) || (await stat(file).then((found) => found.isDirectory(), () => false))) });
     }
     if (url.pathname === "/api/photos" && request.method === "GET") return json({ photos: await readPhotos() });
     if (url.pathname === "/api/file") {
@@ -331,15 +371,17 @@ async function handle(request: Request): Promise<Response> {
     if (url.pathname === "/api/save") {
         const { path = "", content = "" } = body;
         if (!editable(path) || !(await exists(path))) return json({ error: "That file is not one the editor opens." }, 404);
-        if (hash(await Bun.file(at(path)).text()) !== body.hash) {
-            return json({ error: "This file changed on disk since it was opened. Open it again from the list to carry on (your last change was not saved)." }, 409);
-        }
-        await Bun.write(at(path), content);
-        return json({ hash: hash(content) });
+        return inTurn(path, async () => {
+            if (hash(await Bun.file(at(path)).text()) !== body.hash) {
+                return json({ error: "This file changed on disk since it was opened. Open it again from the list to carry on (your last change was not saved)." }, 409);
+            }
+            await replace(at(path), content);
+            return json({ hash: hash(content) });
+        });
     }
     if (url.pathname === "/api/new") return json({ path: await newPost(body.title ?? "") });
     if (url.pathname === "/api/photos/note") {
-        await notePhoto(body.file ?? "", body.title ?? "", body.note ?? "");
+        await inTurn(PHOTOS, () => notePhoto(body.file ?? "", body.title ?? "", body.note ?? ""));
         return json({ ok: true });
     }
     if (url.pathname === "/api/plan") return json(await plan(body.path ?? ""));
@@ -351,19 +393,28 @@ const server = Bun.serve({
     hostname: "127.0.0.1",
     port,
     idleTimeout: 255,
-    fetch: (request) => handle(request).catch((error: unknown) => json({ error: error instanceof Error ? error.message : String(error) }, 500)),
+    fetch: async (request) => {
+        const answer = await handle(request).catch((error: unknown) => json({ error: error instanceof Error ? error.message : String(error) }, 500));
+        // No address with the key in it is passed on to another site, and no other page may frame the editor.
+        answer.headers.set("referrer-policy", "no-referrer");
+        answer.headers.set("x-frame-options", "DENY");
+        return answer;
+    },
 });
 
-// The preview beside the text is the site's own dev server.
-if (!args.includes("--no-preview")) await devServer();
+// The preview beside the text is the site's own dev server. However the editor ends (Ctrl+C, the
+// terminal closed, killed), the server is stopped if this is what started it, and never otherwise.
+const stopPreview = args.includes("--no-preview") ? () => {} : await preview(root, DEV);
+process.on("exit", stopPreview);
+for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"] as const) {
+    process.on(signal, () => {
+        stopPreview();
+        process.exit(0);
+    });
+}
 
 const address = `http://127.0.0.1:${server.port}/?k=${key}`;
 console.log(`\nThe editor is at:\n\n  ${address}\n\n${dryRun ? "Dry run: publishing will stop before the commit and the deploy.\n" : ""}Press Ctrl+C to stop.`);
-// Stopping the editor also stops the preview server, if this is what started it.
-process.on("SIGINT", async () => {
-    if (startedDev) await $`bunx astro dev stop`.cwd(root).nothrow().quiet();
-    process.exit(0);
-});
 
 if (!args.includes("--no-open")) {
     const opener = process.platform === "darwin" ? "open" : "xdg-open";

@@ -9,9 +9,16 @@ export const root = resolve(new URL("..", import.meta.url).pathname);
 /** A path inside the repo. */
 export const at = (...parts: string[]) => join(root, ...parts);
 
-/** One `key: value` line from a file's frontmatter, without quotes. */
+/**
+ * One `key: value` line from a file's frontmatter (the lines between the first two `---`), without
+ * its quotes or a `# comment` after it. A line of the same shape in the text below is not read.
+ */
 export function frontmatter(source: string, key: string): string | undefined {
-    return new RegExp(`^${key}:\\s*(.*)$`, "m").exec(source)?.[1]?.trim().replace(/^"|"$/g, "");
+    const block = /^---\r?\n([\s\S]*?)\r?\n---[ \t]*(\r?\n|$)/.exec(source)?.[1];
+    const value = block === undefined ? undefined : new RegExp(`^${key}:[ \\t]*(.*)$`, "m").exec(block)?.[1]?.trim();
+    if (!value) return undefined;
+    const quoted = /^(["'])(.*)\1(\s+#.*)?$/.exec(value);
+    return quoted ? quoted[2] : value.replace(/\s+#.*$/, "");
 }
 
 export async function isDraft(path: string): Promise<boolean> {

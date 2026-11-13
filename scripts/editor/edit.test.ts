@@ -141,6 +141,12 @@ used("a new post is made by the server's own endpoint, its frontmatter edited as
     expect(expected.split("\n").filter((line) => line.startsWith("date:") || line.startsWith("#"))).toEqual(before.split("\n").filter((line) => line.startsWith("date:") || line.startsWith("#")));
 });
 
+used("a title with no letters a to z or numbers is refused with that reason, not as a title with no letters", async () => {
+    const made = await fetch(new URL("/api/new", address), { method: "POST", headers: { "x-edit-key": key, "content-type": "application/json" }, body: JSON.stringify({ title: "日本語" }) });
+    expect(made.status).toBe(500);
+    expect(((await made.json()) as { error: string }).error).toContain("a to z");
+});
+
 used("the raw frontmatter is behind a switch, and the real page beside the text can be hidden and shown", async () => {
     await press(".edit-front-swap");
     await tab.wait(400);
@@ -178,6 +184,8 @@ used("the server answers whether a link in a post leads to a file beside it or a
     expect(await ask("../../content.config.ts")).toBe(true);
     expect(await ask("./nothing.png")).toBe(false);
     expect(await ask("../../../../etc/passwd")).toBe(false);
+    // an address from the top of the site is held inside public/ too, however many steps up it takes
+    expect(await ask("/../../../../../etc/passwd")).toBe(false);
     expect(await ask("/blog/blocks/")).toBe(true);
     expect(await ask("/blog/blocks")).toBe(true);
     expect(await ask("/mdquire/")).toBe(true);
@@ -187,6 +195,39 @@ used("the server answers whether a link in a post leads to a file beside it or a
     const dictionary = await fetch(`${address.replace(/\/\?k=.*$/, "")}/quire/words-en.dat`);
     expect(dictionary.ok).toBe(true);
     expect((await dictionary.arrayBuffer()).byteLength).toBeGreaterThan(100_000);
+});
+
+used("a picture is served sandboxed, so a script inside an SVG cannot run with the editor's key", async () => {
+    const answer = await fetch(`${address.replace(/\/\?k=.*$/, "")}/api/asset?file=src/content/blog/blocks.mdx&src=/mdquire/icon.svg`, { headers: { "x-edit-key": key } });
+    expect(answer.headers.get("content-type")).toBe("image/svg+xml");
+    expect(answer.headers.get("content-security-policy")).toStartWith("sandbox;");
+    expect(answer.headers.get("content-security-policy")).toContain("default-src 'none'");
+    expect(answer.headers.get("x-content-type-options")).toBe("nosniff");
+});
+
+used("the key is taken out of the address once the page has it, and every answer keeps its address to itself and refuses to be framed", async () => {
+    expect(await tab.run("location.search")).toBe("");
+    expect(await tab.run("document.querySelector('meta[name=edit-key]').content")).toBe(key);
+    for (const path of ["/", "/api/files", "/style.css", "/nothing"]) {
+        const answer = await fetch(`${address.replace(/\/\?k=.*$/, "")}${path}`, { headers: { "x-edit-key": key } });
+        expect(answer.headers.get("referrer-policy")).toBe("no-referrer");
+        expect(answer.headers.get("x-frame-options")).toBe("DENY");
+    }
+});
+
+used("two saves of one file at once cannot both pass the check: one is written whole, the other refused", async () => {
+    const base = address.replace(/\/\?k=.*$/, "");
+    const headers = { "x-edit-key": key, "content-type": "application/json" };
+    const path = "src/content/blog/blocks.mdx";
+    for (let round = 0; round < 5; round++) {
+        const { hash } = (await (await fetch(`${base}/api/file?path=${path}`, { headers })).json()) as { hash: string };
+        const contents = [`${POST}first ${round}\n`, `${POST}second ${round}\n`];
+        const answers = await Promise.all(contents.map((content) => fetch(`${base}/api/save`, { method: "POST", headers, body: JSON.stringify({ path, content, hash }) })));
+        expect(answers.map((answer) => answer.status).sort()).toEqual([200, 409]);
+        expect(await onDisk(path)).toBe(contents[answers.findIndex((answer) => answer.status === 200)]!);
+    }
+    // nothing is left beside the file from writing it
+    expect((await Array.fromAsync(new Bun.Glob("src/content/blog/blocks.mdx*").scan({ cwd: copy })))).toEqual(["src/content/blog/blocks.mdx"]);
 });
 
 if (!live) console.warn("edit.test.ts: no Chromium on this machine, so the editor was not used.");

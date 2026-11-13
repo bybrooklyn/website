@@ -6,8 +6,12 @@
 //   mini-<id>.png      a mini, photographed while it runs
 //
 // `bun run pictures` makes them all with the system's Chromium; give names to make only those
-// (`bun run pictures mini-dice`). `bun run pictures --check` only says which are missing, and
-// `bun run check` runs that, so a new post, project or mini cannot go out with no picture.
+// (`bun run pictures mini-dice`). `bun run pictures --check` only says which are missing or out of
+// date, and `bun run check` runs that, so a new post, project or mini cannot go out with no picture,
+// nor a renamed one with its old title. What each picture was made from (a post's title, date and
+// accent; a project's name and language; how a mini is photographed) is kept as a hash in
+// src/assets/share/made-from.json when the picture is made. A picture made before that file
+// existed has no record, and is passed with a note until it is made again.
 
 import { existsSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
@@ -19,7 +23,7 @@ import { cells, nameSize } from "../src/lib/drawn";
 import { make } from "../src/minis/fields";
 import { nearest } from "../src/minis/flight";
 import { browser, type Browser } from "./browser";
-import { at, frontmatter, listMdx, stem } from "./lib";
+import { at, frontmatter, listMdx, stem, writeJson } from "./lib";
 
 const WIDTH = 1200;
 const HEIGHT = 630;
@@ -27,6 +31,8 @@ const folder = at("src/assets/share");
 
 interface Wanted {
     name: string;
+    /** What the picture is made from, as text: when this changes, the picture is out of date. */
+    from: string;
     make(tab: Browser): Promise<Buffer>;
 }
 
@@ -112,34 +118,40 @@ async function served(): Promise<string> {
 
 async function wanted(): Promise<Wanted[]> {
     const read = (path: string) => Bun.file(at(path)).text();
-    const list: Wanted[] = [{ name: "site", make: card(`${site.name.toLowerCase()}.`, accents.violet) }];
+    const list: Wanted[] = [{ name: "site", from: site.name, make: card(`${site.name.toLowerCase()}.`, accents.violet) }];
     for (const file of await listMdx("src/content/projects")) {
         const source = await read(`src/content/projects/${file}`);
         if (frontmatter(source, "cover")) continue;
-        list.push({ name: `project-${stem(file)}`, make: card(frontmatter(source, "name")!, languageColors[frontmatter(source, "language")!] ?? otherLanguageColor) });
+        const [name, language] = [frontmatter(source, "name")!, frontmatter(source, "language")!];
+        list.push({ name: `project-${stem(file)}`, from: JSON.stringify([name, language]), make: card(name, languageColors[language] ?? otherLanguageColor) });
     }
     for (const file of await listMdx("src/content/blog")) {
         const source = await read(`src/content/blog/${file}`);
         // A post being held back has `.hold` in its name and is not part of the site.
         if (file.includes(".hold.") || frontmatter(source, "cover")) continue;
         const date = new Intl.DateTimeFormat("en-US", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(frontmatter(source, "date")!));
-        list.push({ name: `post-${stem(file)}`, make: card(frontmatter(source, "title")!, accents[(frontmatter(source, "accent") as keyof typeof accents) ?? "violet"] ?? accents.violet, date) });
+        const [title, accent] = [frontmatter(source, "title")!, frontmatter(source, "accent") ?? "violet"];
+        list.push({ name: `post-${stem(file)}`, from: JSON.stringify([title, date, accent]), make: card(title, accents[accent as keyof typeof accents] ?? accents.violet, date) });
     }
-    for (const file of await listMdx("src/content/minis")) list.push({ name: `mini-${stem(file)}`, make: mini(stem(file)) });
+    for (const file of await listMdx("src/content/minis")) list.push({ name: `mini-${stem(file)}`, from: JSON.stringify(shots[stem(file)] ?? {}), make: mini(stem(file)) });
     return list;
 }
 
 const asked = process.argv.slice(2);
 const all = await wanted();
 const path = (name: string) => `${folder}/${name}.png`;
+const RECORD = `${folder}/made-from.json`;
+const record: Record<string, string> = existsSync(RECORD) ? await Bun.file(RECORD).json() : {};
+const digest = (one: Wanted) => Bun.hash(one.from).toString(36);
 
 if (asked.includes("--check")) {
     const missing = all.filter((one) => !existsSync(path(one.name))).map((one) => one.name);
-    if (missing.length > 0) {
-        console.error(`No picture for sharing: ${missing.join(", ")}. Make them with: bun run pictures ${missing.join(" ")}`);
-        process.exit(1);
-    }
-    process.exit(0);
+    const stale = all.filter((one) => existsSync(path(one.name)) && record[one.name] !== undefined && record[one.name] !== digest(one)).map((one) => one.name);
+    const unrecorded = all.filter((one) => existsSync(path(one.name)) && record[one.name] === undefined).map((one) => one.name);
+    if (unrecorded.length > 0) console.log(`Pictures for sharing with no record of what they were made from, so not checked: ${unrecorded.join(", ")}. Making them again records it.`);
+    if (missing.length > 0) console.error(`No picture for sharing: ${missing.join(", ")}. Make them with: bun run pictures ${missing.join(" ")}`);
+    if (stale.length > 0) console.error(`Pictures for sharing made from an older title, date, accent or name: ${stale.join(", ")}. Make them again with: bun run pictures ${stale.join(" ")}`);
+    process.exit(missing.length + stale.length > 0 ? 1 : 0);
 }
 
 await mkdir(folder, { recursive: true });
@@ -147,6 +159,8 @@ const tab = await browser({ width: 1280, height: 900, scale: 2 });
 try {
     for (const one of all.filter((one) => asked.length === 0 || asked.includes(one.name))) {
         await Bun.write(path(one.name), await sharp(await one.make(tab)).resize(WIDTH, HEIGHT).png({ compressionLevel: 9 }).toBuffer());
+        record[one.name] = digest(one);
+        await writeJson(RECORD, Object.fromEntries(Object.entries(record).sort()));
         console.log(`made ${one.name}.png`);
     }
 } finally {

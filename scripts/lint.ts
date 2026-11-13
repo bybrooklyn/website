@@ -9,6 +9,8 @@
 //   words          comments and page text in plain words: no dash as punctuation, no emoji, none of the tells
 //   tests          a file of engine or logic code has a test beside it
 //   tokens         stylesheets take colors from the site's tokens, not hex values
+//   private        no IP address, Tailscale host name or port (written as host:NNNN) in any file git tracks,
+//                  but for the few kinds in SAFE below
 
 import { Glob } from "bun";
 import { at } from "./lib";
@@ -44,6 +46,22 @@ const TELLS: [RegExp, string][] = [
 /** A framing that reads as a model's in prose, though it is ordinary in a comment. */
 const FRAMING: [RegExp, string] = [/\b(not just|not only|isn't just|more than just)\b/i, "a 'not just X' framing"];
 
+/** What looks like an address of her machines in a tracked file: an IPv4 address, a Tailscale name, a port after a host. */
+const PRIVATE: [RegExp, string][] = [
+    [/\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)\b/g, "an IP address"],
+    [/\bts\.net\b/gi, "a Tailscale host name"],
+    [/(?:localhost|(?:\d{1,3}\.){3}\d{1,3}|[a-z][a-z0-9-]*(?:\.[a-z0-9-]+)*):\d{4,5}\b/gi, "a port"],
+];
+/** What looks like one of those and is not: the files it may be in, what it is, and why it is allowed. */
+const SAFE: { files: RegExp; what: RegExp; why: string }[] = [
+    { files: /./, what: /^(127\.0\.0\.1|0\.0\.0\.0)$/, why: "this computer's own address and the any-address, which name no machine" },
+    { files: /^(scripts|integrations)\/|\.test\.ts$|^(README|STYLE)\.md$/, what: /^(localhost|127\.0\.0\.1):\d+$/, why: "a port on this computer, for the dev server, the editor and the tests" },
+    { files: /^(src\/content\/projects\/terrustia\.mdx|public\/casts\/terrustia\.cast)$/, what: /^1\.4\.\d+\.\d+$/, why: "Terraria's version number, which has the shape of an address" },
+    { files: /^public\/casts\/terrustia\.cast$/, what: /^0\.0\.0\.0:7777$/, why: "the Terraria server's standard port, in the recorded demo of the project" },
+];
+/** Files that are not text, which the search for addresses does not read. */
+const BINARY = /\.(png|jpe?g|avif|webp|gif|ico|woff2?|ttf|otf|wasm|mp4|webm|dat|pdf|onnx|bin|zip|gz)$/i;
+
 const found: string[] = [];
 const say = (file: string, line: number, what: string) => found.push(`${file}:${line}  ${what}`);
 const files = async (pattern: string) => (await Array.fromAsync(new Glob(pattern).scan({ cwd: at() }))).filter((file) => !file.includes("node_modules/")).sort();
@@ -66,8 +84,8 @@ for (const file of sources) {
     lines.forEach((line, index) => {
         const number = index + 1;
         // ---- dependencies: code that stands alone ----
-        const from = /\bfrom\s+"([^"]+)"|import\("([^"]+)"\)/.exec(line);
-        const path = from?.[1] ?? from?.[2];
+        // `from "x"`, `import "x"` (for its effect alone), `import("x")` and `require("x")`, in either kind of quotes
+        const path = /\b(?:from|import|require)(?:\s+|\s*\(\s*)["']([^"']+)["']/.exec(line)?.[1];
         const speech = path !== undefined && SPEECH.some((name) => path === name || path.startsWith(`${name}/`)) && file.startsWith(SPEECH_HOME);
         if (alone && path && !test && !speech) {
             const depth = file.slice(alone.length).split("/").length - 1;
@@ -75,11 +93,12 @@ for (const file of sources) {
             if (!path.startsWith(".") || leaves) say(file, number, `imports ${path}, from outside ${alone}`);
         }
         // ---- comments: every exported thing in such a folder has a sentence above it ----
-        if (SPOKEN.some((folder) => file.startsWith(folder)) && !test && /^export (async )?(function|const|class|interface|type) /.test(line) && !/^\s*(\*\/|\/\/|\*)/.test(lines[index - 1] ?? "") && !/\*\/\s*$/.test(lines[index - 1] ?? "")) say(file, number, "exported with no sentence above it");
+        if (SPOKEN.some((folder) => file.startsWith(folder)) && !test && /^export (default\b|(async |declare |abstract )*(function|const|let|var|class|interface|type|enum) )/.test(line) && !/^\s*(\*\/|\/\/|\*)/.test(lines[index - 1] ?? "") && !/\*\/\s*$/.test(lines[index - 1] ?? "")) say(file, number, "exported with no sentence above it");
         // ---- leftovers ----
         if (file.startsWith("src/") && !test && /\bconsole\.log\(/.test(line)) say(file, number, "console.log left in");
         // ---- words, in comments ----
-        const comment = /(^|\s)(\/\/|\*)\s(.*)$/.exec(line)?.[3];
+        // a line comment, a comment of one line between /* or /** and */ (or the first line of a longer one), or a line inside one
+        const comment = /(^|\s)\/\/\s(.*)$/.exec(line)?.[2] ?? /(^|\s)\/\*\*?\s(.*?)\s*(\*\/|$)/.exec(line)?.[2] ?? /^\s*\*\s(.*)$/.exec(line)?.[1];
         if (comment) for (const [tell, what] of TELLS) if (tell.test(comment)) say(file, number, `${what} in a comment`);
     });
 
@@ -96,6 +115,21 @@ for (const file of await files("src/content/**/*.mdx")) {
         if (/^(```|~~~)/.test(line)) fenced = !fenced;
         if (fenced || /^\s*(import |<|\|?\s*-{3})/.test(line)) return;
         for (const [tell, what] of [...TELLS, FRAMING]) if (tell.test(line.replace(/`[^`]*`/g, "").replace(/\]\([^)]*\)/g, "]"))) say(file, index + 1, what);
+    });
+}
+
+// ---- private: what never goes on the site, in every file git tracks ----
+const tracked = Bun.spawnSync(["git", "ls-files", "-z"], { cwd: at() });
+for (const file of tracked.success ? tracked.stdout.toString().split("\0").filter((name) => name && !BINARY.test(name)) : []) {
+    const bytes = new Uint8Array(await Bun.file(at(file)).arrayBuffer().catch(() => new ArrayBuffer(0)));
+    if (bytes.subarray(0, 8000).includes(0)) continue;
+    // color codes in a terminal recording are taken out first, so that they do not run into what follows them
+    new TextDecoder().decode(bytes).split("\n").map((line) => line.replace(/\\u001b\[[\d;]*[a-z]/gi, " ")).forEach((line, index) => {
+        for (const [pattern, what] of PRIVATE) {
+            for (const [seen] of line.matchAll(pattern)) {
+                if (!SAFE.some((safe) => safe.files.test(file) && safe.what.test(seen))) say(file, index + 1, `${what}, which is never written down in the repository (shown here with its digits hidden: ${seen.replace(/\d/g, "N")})`);
+            }
+        }
     });
 }
 

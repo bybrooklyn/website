@@ -44,7 +44,9 @@ const DATA = join(root, "src/data/photos.json");
 const PICTURE = /\.(jpe?g|png|webp|avif|gif|tiff?|heic|heif|dng)$/i;
 
 const slug = (name: string) => words(stem(name)) || "photo";
-const names = async (folder: string) => (await readdir(folder, { withFileTypes: true }).catch(() => [])).filter((entry) => entry.isFile()).map((entry) => entry.name);
+/** What is in a folder; a folder that is not there has nothing in it, and any other failure to read one stops the run. */
+const entries = (folder: string) => readdir(folder, { withFileTypes: true }).catch((error: NodeJS.ErrnoException) => (error.code === "ENOENT" ? [] : Promise.reject(error)));
+const names = async (folder: string) => (await entries(folder)).filter((entry) => entry.isFile()).map((entry) => entry.name);
 
 /**
  * Open a picture. What sharp cannot read itself (iPhone HEIC, camera DNG) is
@@ -66,8 +68,9 @@ async function open(source: string): Promise<{ picture: Sharp; exif?: Buffer; cl
 let photos = ((await Bun.file(DATA).json()) as { photos: Photo[] }).photos;
 const before = JSON.stringify(photos);
 
-// A photo whose picture has been deleted is off the site.
-const present = new Set(await names(OUT));
+// A photo whose picture has been deleted is off the site. If the folder cannot be read at all (or
+// is not there while photos are listed), the run stops here rather than take every photo off.
+const present = new Set(photos.length > 0 ? (await readdir(OUT, { withFileTypes: true })).filter((entry) => entry.isFile()).map((entry) => entry.name) : await names(OUT));
 for (const photo of photos.filter((candidate) => !present.has(candidate.file))) {
     await rm(join(SMALL, photo.file), { force: true });
     console.log(`removed  ${photo.file}`);
@@ -116,7 +119,7 @@ async function add(name: string, sub: string): Promise<void> {
 
 // Several at a time: encoding is the slow part and each one mostly uses a single core.
 const queue: [string, string][] = pictures.map((name): [string, string] => [name, ""]);
-const friends = (await readdir(INBOX, { withFileTypes: true }).catch(() => [])).filter((entry) => entry.isDirectory() && entry.name.startsWith("by-")).map((entry) => entry.name);
+const friends = (await entries(INBOX)).filter((entry) => entry.isDirectory() && entry.name.startsWith("by-")).map((entry) => entry.name);
 for (const sub of ["shitposts", ...friends]) {
     for (const name of await names(join(INBOX, sub))) if (PICTURE.test(name)) queue.push([name, sub]);
 }

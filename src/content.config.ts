@@ -4,8 +4,14 @@ import { glob } from "astro/loaders";
 import { z } from "astro/zod";
 import { accentNames } from "./data/theme";
 
+/**
+ * A post being held back has `.hold` in its file name. It is never committed and is shown on the
+ * dev server only: every build leaves it out, the drafts build too, whether it is a draft or not.
+ */
+const HELD = "!**/*.hold.{md,mdx}";
+
 const blog = defineCollection({
-    loader: glob({ base: "./src/content/blog", pattern: "**/*.{md,mdx}" }),
+    loader: glob({ base: "./src/content/blog", pattern: import.meta.env.DEV ? "**/*.{md,mdx}" : ["**/*.{md,mdx}", HELD] }),
     schema: ({ image }) =>
         z
             .object({
