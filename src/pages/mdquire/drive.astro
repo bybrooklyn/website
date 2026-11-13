@@ -1,0 +1,28 @@
+---
+// The page Google sends the sign-in window back to, when mdQuire signs in to Google Drive
+// (src/quire/google-sign-in.ts). It hands the token in the address's fragment to the mdQuire tab
+// that asked, takes it out of the address, and closes. Its address must be listed exactly among the
+// OAuth client's redirect URIs (docs/mdQuire.md, "Setting up Google Drive"). Unlisted.
+import Document from "../../layouts/Document.astro";
+import "../../styles/quire.css";
+---
+
+<Document title="Signing in" description="Signing in to Google Drive for mdQuire." unlisted bodyClass="quire-app" icon="/mdquire/icon.svg">
+    <main id="main" tabindex="-1" class="quire-signed-in">
+        <p id="said">Signing in</p>
+    </main>
+</Document>
+
+<style>
+    .quire-signed-in {
+        display: grid;
+        place-items: center;
+        min-height: 80vh;
+        padding: 1rem;
+        font-family: var(--font-text);
+    }
+</style>
+
+<script>
+    import "../../scripts/mdquire-drive";
+</script>

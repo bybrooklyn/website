@@ -96,8 +96,11 @@ export default defineConfig({
                 // Dictation fetches its speech model from Hugging Face, which sends the large files on
                 // from its own content network (the .hf.co hosts). Nothing else is added for it:
                 // ONNX Runtime's .wasm file and the workers are served from the site itself.
-                // blob: lets mdQuire read back such a picture, to put it inside a web page or Word file it is downloaded as
-                "connect-src 'self' blob: https://api.github.com https://huggingface.co https://*.hf.co",
+                // blob: lets mdQuire read back such a picture, to put it inside a web page or Word file it is downloaded as.
+                // mdQuire's Google Drive store sends its locked files to Drive's API at www.googleapis.com, and nowhere
+                // else at Google. Signing in needs nothing here: it is a window of its own at accounts.google.com, which
+                // sends the window back to /mdquire/drive/, a page of the site (src/quire/google-sign-in.ts).
+                "connect-src 'self' blob: https://api.github.com https://huggingface.co https://*.hf.co https://www.googleapis.com",
                 // The one thing the site frames: Playmatter's demo, from itch.io (PlayHere.astro). The game
                 // itself is a frame inside itch.io's page, which itch.io's own policy governs, not this one.
                 // A new embed from somewhere else needs its host added here, or it is blocked.
