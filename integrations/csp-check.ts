@@ -18,6 +18,25 @@ function pages(folder: string): string[] {
 
 const unescape = (text: string) => text.replace(/&#39;|&#x27;/g, "'").replace(/&quot;/g, '"').replace(/&amp;/g, "&");
 
+/**
+ * What in one built page its policy would block. A page with no policy at all is let through only if
+ * it runs no script (the mdQuire lab's mock-ups are plain pages of markup and style); one that runs
+ * script without a policy has lost it somewhere, and that is a problem too.
+ */
+export function problemsIn(html: string): string[] {
+    const problems: string[] = [];
+    const policy = /http-equiv="content-security-policy" content="([^"]*)"/.exec(html)?.[1];
+    if (!policy) return /<script(?![^>]*application\/(ld\+)?json)[^>]*>/.test(html) ? ["a page with script and no content security policy"] : [];
+    const allowed = new Set([...unescape(policy).matchAll(/'sha256-([^']+)'/g)].map((match) => match[1]));
+    for (const [, tag, attributes = "", body = ""] of html.matchAll(/<(style|script)([^>]*)>([\s\S]*?)<\/\1>/g)) {
+        if (tag === "script" && /\ssrc=|application\/(ld\+)?json/.test(attributes)) continue;
+        if (!body.trim()) continue;
+        const hash = createHash("sha256").update(body).digest("base64");
+        if (!allowed.has(hash)) problems.push(`a <${tag}> starting "${body.trim().slice(0, 60)}"`);
+    }
+    return problems;
+}
+
 export default function cspCheck(): AstroIntegration {
     return {
         name: "csp-check",
@@ -26,16 +45,7 @@ export default function cspCheck(): AstroIntegration {
                 const built = fileURLToPath(dir);
                 const problems: string[] = [];
                 for (const page of pages(built)) {
-                    const html = readFileSync(page, "utf8");
-                    const policy = /http-equiv="content-security-policy" content="([^"]*)"/.exec(html)?.[1];
-                    if (!policy) continue;
-                    const allowed = new Set([...unescape(policy).matchAll(/'sha256-([^']+)'/g)].map((match) => match[1]));
-                    for (const [, tag, attributes = "", body = ""] of html.matchAll(/<(style|script)([^>]*)>([\s\S]*?)<\/\1>/g)) {
-                        if (tag === "script" && /\ssrc=|application\/(ld\+)?json/.test(attributes)) continue;
-                        if (!body.trim()) continue;
-                        const hash = createHash("sha256").update(body).digest("base64");
-                        if (!allowed.has(hash)) problems.push(`${relative(built, page)}: a <${tag}> starting "${body.trim().slice(0, 60)}"`);
-                    }
+                    for (const problem of problemsIn(readFileSync(page, "utf8"))) problems.push(`${relative(built, page)}: ${problem}`);
                 }
                 if (problems.length > 0) {
                     throw new Error(
