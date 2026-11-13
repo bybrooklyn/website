@@ -168,7 +168,8 @@ impl Evolution {
 
     /// Takes in how a member of this generation did; once all have, the next generation is bred.
     pub fn record(&mut self, index: usize, score: f32, distance: f32) {
-        if index >= self.size || self.scored[index] {
+        // a score that is not a number would win or lose every comparison in breeding
+        if index >= self.size || self.scored[index] || !score.is_finite() || !distance.is_finite() {
             return;
         }
         self.scores[index] = score;
