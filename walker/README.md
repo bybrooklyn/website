@@ -609,7 +609,8 @@ the policy moves through a held-out world, a line every tenth of a second):
   a hazard or a moving thing where its five nearest rays down land, or a wall within a metre); both
   brought in over its first 4 million steps, so it can find how to move before it is charged for how;
   and 3 for a fall that leaves it down, as a fall into a gap or a hazard costs, since without it the
-  cheapest thing under the costs was to lunge forward and fall. The first spread of its actions is
+  cheapest thing under the costs was to lunge forward and fall. Two legs have posture terms besides ("How it walks,
+  measured", below). The first spread of its actions is
   smaller (0.37 rather than 0.61), which learned further under every cost tried.
 - **What did not help:** joints that ease toward the angle asked rather than going at once (`ease`),
   weaker everyday muscles (`strength`: with half strength it stopped leaving the ground but crawled on
@@ -628,6 +629,107 @@ energy for each metre it did with no costs while getting as far, but neither bod
 with a foot always down. Both still bound, leaving the ground about a fifth of the time on plain
 ground; the costs make that dearer without making it rare, and costs strong enough to forbid it leave
 a learner that gives up before it finds anything cheaper.
+
+### How it walks, measured
+
+"Looks alive" is counted, not guessed from a filmstrip. `generalist::gait` watches every step of
+every held-out run and sums them up (`examples/compare.rs` prints them after the distance):
+
+- **low**: the share of the time with the body or a knee touching anything, and **belly**, the body
+  alone;
+- **air**: the share in the air with nothing ahead to clear, as before;
+- **height**: the body's height over the ground under it, as a share of the height it stood at, and
+  **pitch**, its angle (0 upright), each a mean and a spread;
+- **together**: how the two first feet's being down goes together, from -1 (always one down while
+  the other is up: taking turns) to 1 (always together: hopping on both);
+- **cadence**, landings of each foot a second; **balance**, the fewest landings of any foot over the
+  most; **variation**, the spread of the time between one foot's landings over its mean (0 is a
+  metronome). A landing counts after the foot has been up three steps.
+
+It counts as walking (`Gait::walks`) when low is under 0.05, air under 0.10, height at least 0.75,
+the lean under 0.35 radians on average and rocking by less than that, every foot stepping (balance at
+least 0.7) at strides varying by less than 0.35, and, for two legs, together under -0.2. A test holds
+the measures to telling the hand-written stepping controller (low 0, together below -0.2) from hopping.
+
+What was tried, each against the settled way, two legs, difficulty 0.1, 10 million steps, seeds 1
+to 3 (distance in the held-out worlds, then its spread over the seeds):
+
+| | distance | air | low | belly | height | pitch spread | together | balance | variation |
+|---|---|---|---|---|---|---|---|---|---|
+| the settled way (before) | 25.5 ± 3.8 m | 0.21 | 0.07 | 0.03 | 0.79 | 0.61 | -0.14 | 0.71 | 0.53 |
+| rhythm neurons: each leg's own phase at a pace it sets, the actions its hip's centre and swing and its knee's centre and lift | 13.3 ± 1.4 m | 0.25 | 0.14 | 0.11 | 0.76 | 1.03 | -0.02 | 0.77 | 0.50 |
+| the evolution brain's actions, shaping each joint's swing to the shared rhythm | 12.8 ± 5.6 m | 0.16 | 0.13 | 0.12 | 0.79 | 0.76 | -0.10 | 0.89 | 0.42 |
+| actions centred on the standing pose, not the middle of each joint's range | 23.7 ± 2.0 m | 0.16 | 0.06 | 0.02 | 0.81 | 0.62 | -0.17 | 0.79 | 0.46 |
+| posture: a run ends at the first touch of its body, 1 for each second of a knee down, 0.5 for each second carried tall | 24.4 ± 7.5 m | 0.21 | 0.01 | 0.00 | 0.86 | 0.28 | -0.16 | 0.69 | 0.60 |
+| posture and centred actions | 12.2 ± 6.4 m | 0.08 | 0.00 | 0.00 | 0.90 | 0.34 | -0.18 | 0.79 | 0.68 |
+| posture and a mirror loss (Yu, Turk and Liu 2018: a quarter of each minibatch run with the legs swapped, the difference squared) | 15.1 ± 5.2 m | 0.27 | 0.01 | 0.00 | 0.85 | 0.22 | 0.16 | 0.95 | 0.46 |
+| posture and 8 memory neurons, each written by an action of its own | 23.2 ± 2.6 m | 0.19 | 0.01 | 0.00 | 0.86 | 0.26 | -0.18 | 0.75 | 0.56 |
+| **posture and 0.5 for each second with one foot down going forward** | **22.6 ± 3.7 m** | **0.16** | **0.01** | **0.00** | **0.83** | **0.31** | **-0.26** | **0.86** | **0.53** |
+| posture and 1 for each second with one foot down | 20.7 ± 2.8 m | 0.15 | 0.02 | 0.00 | 0.82 | 0.32 | -0.27 | 0.77 | 0.53 |
+
+So two legs now practise with the posture terms and the bonus for one foot down (`Way::of(2)`): the
+first touch of its body ends a run once the costs are all in (until then the second it may be down
+shrinks to nothing over the first 4 million steps), so belly and knees came off the ground (low 0.07 to
+0.01) and the body stopped rocking (its angle's spread 0.61 to 0.31 radians); the bonus, which is the
+Walker's own count of feet taking turns, made the feet take turns (together -0.14 to -0.26) and cut the
+time in the air for nothing by a quarter. Four legs practise as before: the posture terms took them
+from 44.4 ± 3.1 m to 39.8 ± 1.7 m at 10 million steps, and they were not low to begin with (0.08).
+
+Tried and not kept, and taken out of the engine again (they are in the history, commit 61c47e5):
+
+- **Rhythm neurons**, as CPG-RL has them (Bellegarda and Ijspeert 2022), in joint space: each leg
+  keeps a phase that goes round at a pace its first action sets (a quarter to one and three quarters
+  of the legs' own), the legs starting half a stride apart, each leg's sine and cosine sensed; the
+  other four actions set the hip's centre and swing and the knee's centre and how far it lifts as the
+  leg swings forward. It went half as far and tumbled (the body's angle spread over a radian): with
+  the swing open loop, the policy has no quick way to catch a lean. The evolution brain's rhythm-shaped
+  actions did the same.
+- **Mirroring**, the cheap help for two legs. First as data: every sample also taken with the legs
+  swapped and its old chance worked out from the mirror image. The mirrored samples are far from what
+  the policy would have done, their ratios large, and it fell from the start (0.8 m at 5 million
+  steps). Then as a loss on how unlike the policy is both ways round: it does what it is told, every
+  foot steps as often (balance 0.95), but the cheapest gait the same both ways round was both legs
+  together (together 0.16), a hop, and it went less far. The test of it (a policy taught only one way
+  round acts right the other way) passed: 0.98 of the time against 0.5 without.
+- **Memory neurons**, as external memory written by actions of their own (Peshkin, Meuleau and
+  Kaelbling 1999), so PPO trains them with no gradient through time; each memory moved `1 / (2 + 2k)`
+  of the way to what was written each decision. A test of a sign shown once and asked for four
+  decisions later went from 0 to 1 with them; on the walk they changed nothing.
+- **Centred actions** learned faster early (22.6 m against 13.5 m at 5 million steps) and ended level;
+  with the posture terms they left the ground less (0.08 of the time) but went half as far.
+
+Each of these had a test of its gradient against finite differences while it was in; the whole loss
+of PPO is still held to that (`ppo_tests`).
+
+What was kept, against the way before, as the comparison below measures it: 20 million steps, five
+seeds, sixteen held-out worlds (`examples/compare.rs`; `knee=0 upright=0 turns=0 down=1` gives the
+way before, whose distances come out to the bit as in the table below). Four legs practise as they
+did, so theirs are the same runs both ways.
+
+| legs | difficulty | | distance | air | low | belly | height | pitch | together | balance | variation |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 2 | 0.1 | before | 26.1 ± 4.5 m | 0.21 | 0.09 | 0.02 | 0.76 | 0.40 ± 0.52 | -0.11 | 0.73 | 0.60 |
+| 2 | 0.1 | now | 25.6 ± 3.9 m | 0.14 | 0.01 | 0.00 | 0.85 | 0.02 ± 0.34 | -0.29 | 0.78 | 0.52 |
+| 2 | 0.8 | before | 10.6 ± 2.2 m | 0.14 | 0.32 | 0.03 | 0.68 | 0.41 ± 0.54 | 0.08 | 0.63 | 0.71 |
+| 2 | 0.8 | now | 9.2 ± 2.8 m | 0.08 | 0.03 | 0.00 | 0.79 | 0.01 ± 0.33 | -0.18 | 0.76 | 0.71 |
+| 4 | 0.1 | | 44.0 ± 4.7 m | 0.15 | 0.19 | 0.01 | 0.80 | 0.17 ± 0.24 | 0.07 | 0.73 | 0.61 |
+| 4 | 0.8 | | 16.4 ± 4.3 m | 0.10 | 0.27 | 0.02 | 0.76 | 0.13 ± 0.30 | 0.17 | 0.32 | 0.81 |
+
+Two legs now carry the body upright (it leaned back 0.4 radians on average before, now not at all)
+and higher, belly and knees off the ground, their feet taking turns, in the air for nothing a third
+less, as far on easy worlds and a little less far on hard ones. By the thresholds above it does not
+yet walk: its strides are irregular (a spread of half their length), it rocks by a third of a radian,
+and it is still in the air for nothing a seventh of the time. Four legs, whose knees are often down
+(low 0.19), do not walk by them either; they trot and bound. Practice is no slower for it: 118,000 to
+124,000 steps a second against 113,000 to 114,000 before (`examples/practice.rs`, two legs, 3 million
+steps, one core).
+
+On the page, in headless Chromium at normal effort in "meadow", 10 of 100 hard, everything on, after
+two minutes of practice (49 million steps, 17.6 m on average in practice runs): two legs run on their
+feet, the body off the ground and upright, one leg then the other, but each stride is a high kick of
+the leg in front, held out nearly level, then a wide split; it looks like a goose step, not yet a
+walk. Four legs, the same as before, crouch at the start and leap for the first gap, landing on their
+nose before getting their feet under them again.
 
 ### Practice in the browser
 
@@ -782,7 +884,8 @@ creature and its learning per module instance. A function that gives a list give
   `envs_observations()`, `envs_rewards()`, `envs_done()`, `senses_length()`, `actions_length()`,
   `rays_length()`.
 
-The module is 295 KiB with SIMD, 287 KiB without (the Walker's is 127 KiB, the physics alone
+The module is 299 KiB with SIMD, 291 KiB without (295 and 287 before the posture terms for two legs,
+which cost 2.8 KiB, and the bonus for taking turns, 1.2 KiB; the gait measures are left out of it; the Walker's is 127 KiB, the physics alone
 37 KiB; what the generalist added to the Walker's own module is 1.3 KiB of physics it does not use,
 which the compiler mostly leaves out). Learning by practice costs 94 KiB of that: before it the module
 was 190 KiB; the brain's picture costs 11 KiB more. The functions for practice (`practice_create`,

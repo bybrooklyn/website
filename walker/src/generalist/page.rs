@@ -135,7 +135,7 @@ impl Page {
                 if self.policy.is_some() {
                     let parts = super::practice::shaped(&mut self.show, Way::of(self.legs).shaping, &actions);
                     self.parts.run += parts.run;
-                    self.parts.up += parts.up;
+                    self.parts.up += parts.up + parts.posture;
                     self.parts.effort += parts.effort;
                     self.parts.air += parts.air;
                     self.parts.fall += parts.fall;

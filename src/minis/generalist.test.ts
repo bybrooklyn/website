@@ -129,7 +129,7 @@ test("many creatures step together, as fast as this runtime goes", async () => {
 });
 
 /** The native engine's fingerprint of a small learner's state over two updates of practice (walker/src/generalist/practice_tests.rs). */
-const PRACTICE_FINGERPRINT = 0xb4ea800f279a20e8n;
+const PRACTICE_FINGERPRINT = 0xe3a59b12d99e1fc0n;
 
 test("practice in the page's engine learns to the bit as natively, with SIMD and without", async () => {
     for (const each of [path, scalarPath]) {

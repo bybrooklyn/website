@@ -190,3 +190,42 @@ fn merged_running_numbers_are_the_numbers_of_all_of_it() {
     }
     assert_eq!(Running::from_numbers(&whole.numbers(), 2), Some(whole));
 }
+
+/// The whole loss an update goes down, as `gradient` reports it: the policy's, the value's weighed,
+/// less the entropy bonus.
+fn whole_loss(learner: &Learner) -> f64 {
+    let set = learner.settings;
+    let entropy: f32 = learner.weights[learner.at[4]..].iter().sum();
+    learner.report.policy_loss as f64 + set.value_weight as f64 * learner.report.value_loss as f64 - set.entropy_weight as f64 * entropy as f64
+}
+
+#[test]
+fn the_gradient_of_the_whole_loss_is_what_nudging_shows() {
+    let settings = Settings { hidden: 8, steps: 8, minibatches: 2, entropy_weight: 0.01, ..toy() };
+    let mut task = Reach::new(4, 11);
+    let mut learner = Learner::new(settings, 2, 1, 4, 3);
+    // weights away from where they start, so the policy's means and spreads are not all alike
+    let mut random = Random::new(5);
+    for w in learner.weights.iter_mut() {
+        *w += 0.1 * (2.0 * random.unit() - 1.0);
+    }
+    learner.begin(&mut task);
+    learner.collect(&mut task);
+    learner.shuffle();
+    learner.gradient(1);
+    let grads = learner.grads.clone();
+    let h = 1e-2f32;
+    for k in 0..learner.weights.len() {
+        let kept = learner.weights[k];
+        learner.weights[k] = kept + h;
+        learner.gradient(1);
+        let up = whole_loss(&learner);
+        learner.weights[k] = kept - h;
+        learner.gradient(1);
+        let down = whole_loss(&learner);
+        learner.weights[k] = kept;
+        let wanted = (up - down) / (2.0 * h as f64);
+        let error = (grads[k] as f64 - wanted).abs();
+        assert!(error < 2e-3 + 2e-2 * wanted.abs(), "weight {k}: gradient {}, nudging {wanted}", grads[k]);
+    }
+}

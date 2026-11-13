@@ -25,7 +25,7 @@ fn mix(hash: &mut u64, values: &[f32]) {
 }
 
 /// The fingerprint of a small learner's state after two updates, which the page's engine must give.
-pub const FINGERPRINT: u64 = 0xb4ea_800f_279a_20e8;
+pub const FINGERPRINT: u64 = 0xe3a5_9b12_d99e_1fc0;
 
 fn fingerprint() -> u64 {
     let mut practice = Practice::new(recipe(0.5), Way::of(2), Settings::default(), 2, 7, 3).unwrap();
@@ -223,4 +223,48 @@ fn stepping_and_hopping_compared() {
             std::println!("  hopping {pose:?}: {:.1} m, up {}, {:.0}% in the air, {:.0} J a metre", cost.distance, cost.up, 100.0 * cost.air, cost.joules_per_metre);
         }
     }
+}
+
+/// How a controller written by hand moves on flat ground, deciding every step, as `gait` measures it.
+fn gait_of(way: Way, seconds: f32, mut act: impl FnMut(f32, &mut [f32])) -> super::gait::Gait {
+    use super::ppo::Task;
+    let flat = Recipe { seed: 1, difficulty: 0.0, amounts: [0.0; 4] };
+    let way = Way { skip: 1, seconds, ..way };
+    let mut worlds = super::practice::Worlds::alone(flat, way, &[1]).unwrap();
+    worlds.watches = Some(vec![Default::default()]);
+    let (senses, wide) = (worlds.senses(), worlds.actions());
+    let (mut sensed, mut actions, mut rewards, mut ends, mut last) = (vec![0.0; senses], vec![0.0; wide], vec![0.0; 1], vec![0u8; 1], vec![0.0; senses]);
+    let mut steps = 0;
+    while worlds.going(0) {
+        act(steps as f32 * crate::physics::STEP, &mut actions);
+        worlds.step(&actions, &mut sensed, &mut rewards, &mut ends, &mut last);
+        steps += 1;
+    }
+    super::gait::Gait::of(worlds.watches.as_deref().unwrap())
+}
+
+#[test]
+fn the_gait_measures_tell_a_step_from_a_hop() {
+    let way = Way { hop: true, ..Way::of(2) };
+    let stepped = gait_of(way, 10.0, stepping(2, [0.8, 0.4, 0.3, 0.3, 0.0]));
+    assert!(stepped.low == 0.0 && stepped.idle_air < 0.02 && stepped.together < -0.2 && stepped.balance > 0.7 && stepped.height > 0.75, "{stepped:?}");
+    assert!(stepped.cadence > 0.5 && stepped.variation < 0.35, "{stepped:?}");
+    let hopped = gait_of(way, 10.0, hopping(0.3, 0.5));
+    assert!(hopped.idle_air > 0.1 && hopped.together > stepped.together + 0.3, "stepping {stepped:?}, hopping {hopped:?}");
+}
+
+#[test]
+fn a_run_ends_at_the_first_touch_of_its_body_when_asked() {
+    // every joint aimed as low as it goes: it sits down
+    let slump = |_: f32, actions: &mut [f32]| actions.fill(-1.0);
+    let down_for = |down: f32| {
+        let mut way = Way::of(2);
+        way.shaping.down = down;
+        let gait = gait_of(way, 10.0, slump);
+        gait.belly
+    };
+    // the share of the run with its body down: with a second's grace it lies there a while, with none
+    // its run is over at the first touch
+    let (graced, ended) = (down_for(1.0), down_for(0.0));
+    assert!(graced > 0.0 && ended < graced, "down a share {graced} with a second's grace, {ended} with none");
 }

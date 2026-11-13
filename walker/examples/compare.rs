@@ -16,6 +16,17 @@
 //! Practice's costs can be changed for a trial: `energy=` (each joule), `air=` (each second in the
 //! air with nothing to clear), `fall=`, and `ramp=` (the steps over which effort and air come in).
 //!
+//! Each line ends with how it moved in the held-out worlds (`generalist::gait`): the share of the time
+//! with its body or a knee on the ground (`low`) and its body alone (`belly`), the body's height as a
+//! share of its standing height and its angle (each mean/spread), how its first two feet's being down
+//! goes together (`together`, -1 taking turns), landings of each foot a second, the fewest landings of
+//! a foot over the most, how much its strides vary, and whether all that counts as walking.
+//!
+//! The posture terms can be changed too: `knee=` (each second of a knee down), `upright=` (each second
+//! carried tall), `turns=` (each second with one foot down going forward), `down=` (seconds the body may
+//! be down before a run ends), `alive=`, `tall=1`; and `name=` labels the lines. `knee=0 upright=0
+//! turns=0 down=1` is how two legs practised before.
+//!
 //! For the transfer measurement, `easy=0.1 switch=10000000` has practice spend its first ten million
 //! steps in worlds of difficulty 0.1 and the rest in worlds of the difficulty asked, while it is
 //! measured all along in held-out worlds of the difficulty asked:
@@ -38,6 +49,7 @@ fn main() {
     let (mut energy, mut air, mut fall): (Option<f32>, Option<f32>, Option<f32>) = (None, None, None);
     let mut ramp: Option<u64> = None;
     let (mut easy, mut switch): (Option<f32>, u64) = (None, 0);
+    let mut trials: Vec<(String, f32)> = Vec::new();
     for arg in std::env::args().skip(1) {
         let Some((name, value)) = arg.split_once('=') else { continue };
         match name {
@@ -52,7 +64,8 @@ fn main() {
             "fall" => fall = Some(value.parse().unwrap()),
             "easy" => easy = Some(value.parse().unwrap()),
             "switch" => switch = value.parse().unwrap(),
-            _ => panic!("no setting called {name}"),
+            "name" => method = value.to_string(),
+            _ => trials.push((name.to_string(), value.parse().unwrap_or_else(|_| panic!("{arg}")))),
         }
     }
     let recipe = Recipe { seed: 1, difficulty, amounts: [1.0; 4] };
@@ -64,7 +77,25 @@ fn main() {
     let started = Instant::now();
     let say = |steps: u64, measured: Measured, own: f32| {
         let furthest = measured.distances.iter().fold(0.0f32, |a, &b| a.max(b));
-        println!("{method} {legs} {difficulty} {seed} {steps} {:.1} {:.2} {furthest:.2} {own:.2} {:.3} {:.0}", started.elapsed().as_secs_f32(), measured.mean(), measured.idle_air, measured.joules_per_metre);
+        let g = measured.gait;
+        println!(
+            "{method} {legs} {difficulty} {seed} {steps} {:.1} {:.2} {furthest:.2} {own:.2} {:.3} {:.0} low={:.3} belly={:.3} height={:.2}/{:.2} pitch={:.2}/{:.2} together={:.2} cadence={:.2} balance={:.2} variation={:.2} walks={}",
+            started.elapsed().as_secs_f32(),
+            measured.mean(),
+            measured.idle_air,
+            measured.joules_per_metre,
+            g.low,
+            g.belly,
+            g.height,
+            g.height_spread,
+            g.pitch,
+            g.pitch_spread,
+            g.together,
+            g.cadence,
+            g.balance,
+            g.variation,
+            u8::from(g.walks(legs as usize))
+        );
     };
     if method == "evolution" {
         let mut evolution = Evolution::new(recipe, legs, 32, 16, 2, 4, 30.0, seed).unwrap();
@@ -93,9 +124,23 @@ fn main() {
         way.shaping.air = air.unwrap_or(way.shaping.air);
         way.shaping.fall = fall.unwrap_or(way.shaping.fall);
         way.ramp = ramp.unwrap_or(way.ramp);
+        let settings = Settings::default();
+        for (name, value) in &trials {
+            let (value, on) = (*value, *value != 0.0);
+            match name.as_str() {
+                "direct" => way.direct = on,
+                "knee" => way.shaping.knee = value,
+                "upright" => way.shaping.upright = value,
+                "down" => way.shaping.down = value,
+                "turns" => way.shaping.turns = value,
+                "alive" => way.shaping.alive = value,
+                "tall" => way.shaping.tall = on,
+                _ => panic!("no setting called {name}"),
+            }
+        }
         // practising first in easier worlds, if asked, while measured in worlds of the difficulty asked
         let first = Recipe { difficulty: easy.unwrap_or(difficulty), ..recipe };
-        let mut practice = Practice::new(first, way, Settings::default(), 32, seed, seed as u32).unwrap();
+        let mut practice = Practice::new(first, way, settings, 32, seed, seed as u32).unwrap();
         practice.recipe = recipe;
         for &mark in &marks {
             while practice.worlds.steps < mark {

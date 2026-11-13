@@ -13,6 +13,7 @@
 //! - `evolve`: learning by evolution, as the Walker learns, its runs going through `envs`.
 //! - `ppo`: learning by practice, proximal policy optimisation over `net`.
 //! - `practice`: the worlds it practises in, fresh for every run, and measuring on held-out worlds.
+//! - `gait`: how a creature moves, in numbers: on its feet or its belly, upright, taking turns.
 //! - `mind`: a brain drawn as it thinks, whichever way it learns.
 //! - `net`: a small network with its backward pass written by hand, and Adam, for gradient learning.
 //! - `page` and `api`: what the page reaches, and the plain functions it calls in `generalist.wasm`.
@@ -28,6 +29,7 @@ pub mod check;
 pub mod envs;
 pub mod evolve;
 pub mod eyes;
+pub mod gait;
 pub mod land;
 pub mod mind;
 pub mod net;

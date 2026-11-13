@@ -87,6 +87,9 @@ fn main() {
             "tall" => way.shaping.tall = number != 0.0,
             "smooth" => way.shaping.smooth = number as f32,
             "fall" => way.shaping.fall = number as f32,
+            "knee" => way.shaping.knee = number as f32,
+            "upright" => way.shaping.upright = number as f32,
+            "down" => way.shaping.down = number as f32,
             _ => panic!("no setting called {name}"),
         }
     }
