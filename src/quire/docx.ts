@@ -21,9 +21,17 @@ import { isContentsMark, slug } from "./inserts";
 import { isPageBreak } from "./document";
 import { emojiOf } from "./emoji";
 import { writeZip } from "./zip";
+import { safeAddress } from "./html";
 
-/** Text made safe in XML. */
-const xml = (text: string) => text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+/** Text made safe in XML: escaped, and without the characters XML 1.0 does not allow at all (a form feed from a PDF, a vertical tab from Word), which make Word call the file unreadable. */
+const xml = (text: string) =>
+    text
+        .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\ufffe\uffff]/g, "")
+        .replace(/[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/g, "\ufffd")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
 
 const NS = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"';
 const RELS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
@@ -40,7 +48,8 @@ export function halfPoints(size: string): number | undefined {
     const value = parseFloat(size);
     if (!Number.isFinite(value) || value <= 0) return undefined;
     const points = size.endsWith("pt") ? value : size.endsWith("px") ? value * 0.75 : size.endsWith("%") ? (value / 100) * 12 : value * 12;
-    return Math.round(points * 2);
+    // Word's sizes run from 1 to 1638 points; a size from a hostile file is held inside them
+    return Math.min(3276, Math.max(2, Math.round(points * 2)));
 }
 
 /** What the writer is given beside the document: its pictures, and a way to turn a CSS color into six hex digits. */
@@ -112,7 +121,9 @@ export async function docx(doc: Document, options: DocxOptions = {}): Promise<Ui
                 if (run.kind !== "link") return leaf(run);
                 const inner = run.runs.map((each) => leaf(each, '<w:rStyle w:val="Hyperlink"/>')).join("");
                 if (run.href.startsWith("#")) return `<w:hyperlink w:anchor="${xml(anchors.get(run.href.slice(1)) ?? anchorOf(run.href.slice(1)))}">${inner}</w:hyperlink>`;
-                return `<w:hyperlink r:id="${link(run.href)}">${inner}</w:hyperlink>`;
+                // only a link to the web or an email address is a link in the Word file: never a file on the disk, a share or a script
+                const href = safeAddress(run.href);
+                return href !== undefined && /^(https?:|mailto:)/i.test(href.trim()) ? `<w:hyperlink r:id="${link(href.trim())}">${inner}</w:hyperlink>` : inner;
             })
             .join("");
 
@@ -123,7 +134,7 @@ export async function docx(doc: Document, options: DocxOptions = {}): Promise<Ui
         if (props.style) pr.push(`<w:pStyle w:val="${props.style}"/>`);
         if (props.list) pr.push(`<w:numPr><w:ilvl w:val="${props.list.level}"/><w:numId w:val="${props.list.num}"/></w:numPr>`);
         if (props.border) pr.push('<w:pBdr><w:bottom w:val="single" w:sz="6" w:space="1" w:color="auto"/></w:pBdr>');
-        if (props.spacing) pr.push(`<w:spacing w:line="${Math.round(props.spacing * 240)}" w:lineRule="auto"/>`);
+        if (props.spacing && Number.isFinite(props.spacing)) pr.push(`<w:spacing w:line="${Math.round(Math.min(10, Math.max(0.5, props.spacing)) * 240)}" w:lineRule="auto"/>`);
         if (props.indent) pr.push(`<w:ind w:left="${props.indent}"/>`);
         if (props.align) pr.push(`<w:jc w:val="${JC[props.align]}"/>`);
         return `<w:p>${pr.length ? `<w:pPr>${pr.join("")}</w:pPr>` : ""}${content}</w:p>`;
