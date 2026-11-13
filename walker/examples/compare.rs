@@ -24,8 +24,17 @@
 //!
 //! The posture terms can be changed too: `knee=` (each second of a knee down), `upright=` (each second
 //! carried tall), `turns=` (each second with one foot down going forward), `down=` (seconds the body may
-//! be down before a run ends), `alive=`, `tall=1`; and `name=` labels the lines. `knee=0 upright=0
-//! turns=0 down=1` is how two legs practised before.
+//! be down before a run ends), `alive=`, `tall=1`; and `name=` labels the lines. `turns=0.5 clock=1
+//! pace=0 stall=0 impact=0 lean=0` is how two legs practised until 13 November 2026, and with
+//! `knee=0 upright=0 turns=0 down=1` as well, how they practised before the posture terms.
+//!
+//! The gait trials' settings too (walker/README.md, "How two legs came to walk"): `pace=` (the top
+//! speed paid for), `stall=`, `impact=`, `lean=`, `spin=`, `bob=`, `swing=`, `torque=`, `smooth=`, `hip=`,
+//! `clock=`, `skip=`, `ease=`, `strength=`, `seconds=`, and learning's `entropy=`, `rate=`, `spread=`,
+//! `gamma=`. `amounts=a,b,c,d` sets the world's four amounts (1 each unless given). Each mark prints
+//! an `open` line beside the main one, the gait on open ground in the same worlds, and with `flat=1` a
+//! `flat` line, on level ground with nothing on it. `kept=<path>` measures a learner the page kept
+//! (`<path>.state` and `<path>.running`, one number to a line) instead of practising.
 //!
 //! For the transfer measurement, `easy=0.1 switch=10000000` has practice spend its first ten million
 //! steps in worlds of difficulty 0.1 and the rest in worlds of the difficulty asked, while it is
