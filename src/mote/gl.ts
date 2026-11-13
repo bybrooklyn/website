@@ -55,12 +55,29 @@ export interface Part {
     emit: number;
 }
 
+/**
+ * What a part is drawn from, on the graphics card: its faces and the words on them. Parts made from
+ * the same mesh with the same words share one, and it is freed once no part uses it.
+ */
+interface Shape {
+    faces: Float32Array;
+    words: Float32Array;
+    facesArray?: WebGLVertexArrayObject;
+    facesBuffer?: WebGLBuffer;
+    marksArray?: WebGLVertexArrayObject;
+    marksBuffer?: WebGLBuffer;
+    count: number;
+    markCount: number;
+    /** How many parts are drawn from it now. */
+    users: number;
+    /** Where it is kept, to be found again and to be forgotten when freed. */
+    home: Map<string, Shape>;
+    key: string;
+}
+
 interface Drawn extends Part {
     look: Look;
-    faces: WebGLVertexArrayObject;
-    count: number;
-    marks?: WebGLVertexArrayObject;
-    markCount: number;
+    shape: Shape;
 }
 
 export interface View {
@@ -321,11 +338,12 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
     let levels: [number, number, number] = [1.6, 0.75, 0.3];
     const probe = document.createElement("canvas").getContext("2d", { willReadFrequently: true })!;
 
-    const filled = (data: number[], sizes: number[]): WebGLVertexArrayObject => {
+    const filled = (data: Float32Array, sizes: number[]): [WebGLVertexArrayObject, WebGLBuffer] => {
         const array = g.createVertexArray();
+        const buffer = g.createBuffer();
         g.bindVertexArray(array);
-        g.bindBuffer(g.ARRAY_BUFFER, g.createBuffer());
-        g.bufferData(g.ARRAY_BUFFER, new Float32Array(data), g.STATIC_DRAW);
+        g.bindBuffer(g.ARRAY_BUFFER, buffer);
+        g.bufferData(g.ARRAY_BUFFER, data, g.STATIC_DRAW);
         const stride = sizes.reduce((sum, size) => sum + size, 0) * 4;
         let offset = 0;
         sizes.forEach((size, index) => {
@@ -334,7 +352,7 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
             offset += size * 4;
         });
         g.bindVertexArray(null);
-        return array;
+        return [array, buffer];
     };
 
     /** The cell of the sheet a word is written in, writing it there the first time. A word on a sign is fitted to the cell's width. */
@@ -362,12 +380,46 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
         }
         return [(at % ACROSS) / ACROSS, Math.floor(at / ACROSS) / ACROSS];
     };
-    const made = (look: Look, faces: number[], words: number[]): Drawn => {
-        const part: Drawn = {
-            at: [0, 0, 0], turn: upright(), hidden: false, lit: -1, shine: 0, scale: 1, emit: 0, look,
-            faces: filled(faces, [3, 3, 2]), count: faces.length / 8,
-            marks: words.length ? filled(words, [3, 3, 2, 1]) : undefined, markCount: words.length / 9,
-        };
+    /** Every shape on the graphics card, by the mesh (or a sign's words) it was made from and then by the words on it. */
+    const shapes = new Map<Mesh | string, Map<string, Shape>>();
+    /** Puts a shape's faces and words on the graphics card. */
+    const upload = (shape: Shape) => {
+        if (shape.count) [shape.facesArray, shape.facesBuffer] = filled(shape.faces, [3, 3, 2]);
+        if (shape.markCount) [shape.marksArray, shape.marksBuffer] = filled(shape.words, [3, 3, 2, 1]);
+    };
+    /** The shape for a mesh and the words on it, made only the first time. */
+    const shaped = (from: Mesh | string, key: string, make: () => [faces: number[], words: number[]]): Shape => {
+        let home = shapes.get(from);
+        if (!home) shapes.set(from, (home = new Map()));
+        let shape = home.get(key);
+        if (!shape) {
+            const [faces, words] = make();
+            shape = { faces: new Float32Array(faces), words: new Float32Array(words), count: faces.length / 8, markCount: words.length / 9, users: 0, home, key };
+            upload(shape);
+            home.set(key, shape);
+        }
+        return shape;
+    };
+    /**
+     * Frees what no part uses. Done before a picture is drawn, not when a part is removed, so that a
+     * scene that takes its parts away and puts the same ones back finds them still there.
+     */
+    const sweep = () => {
+        for (const [from, home] of shapes) {
+            for (const shape of home.values()) {
+                if (shape.users > 0) continue;
+                if (shape.facesArray) g.deleteVertexArray(shape.facesArray);
+                if (shape.facesBuffer) g.deleteBuffer(shape.facesBuffer);
+                if (shape.marksArray) g.deleteVertexArray(shape.marksArray);
+                if (shape.marksBuffer) g.deleteBuffer(shape.marksBuffer);
+                home.delete(shape.key);
+            }
+            if (home.size === 0) shapes.delete(from);
+        }
+    };
+    const made = (look: Look, shape: Shape): Drawn => {
+        shape.users++;
+        const part: Drawn = { at: [0, 0, 0], turn: upright(), hidden: false, lit: -1, shine: 0, scale: 1, emit: 0, look, shape };
         parts.push(part);
         return part;
     };
@@ -377,6 +429,39 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
         const right = unit(cross(Math.abs(back[1]) > 0.999 ? [0, 0, -1] : [0, 1, 0], back));
         return [right, cross(back, right), back];
     };
+
+    /** A mesh's faces as triangles, and the words on them, as the graphics card takes them. */
+    const geometry = (mesh: Mesh, look: Look): [faces: number[], words: number[]] => {
+        const faces: number[] = [];
+        const words: number[] = [];
+        const flat = mesh.faces.map((face) => unit(cross(minus(mesh.points[face[1]!]!, mesh.points[face[0]!]!), minus(mesh.points[face[2]!]!, mesh.points[face[0]!]!))));
+        // a smooth mesh is lit as if round: each corner faces the way the faces around it do, taken together
+        const round = mesh.smooth ? mesh.points.map((_, point) => unit(mesh.faces.reduce<V3>((sum, face, number) => (face.includes(point) ? plus(sum, flat[number]!) : sum), [0, 0, 0]))) : undefined;
+        mesh.faces.forEach((face, number) => {
+            const corners = face.map((corner) => mesh.points[corner]!);
+            const n = flat[number]!;
+            // each face as a fan of triangles, all facing the way the face does
+            for (let i = 1; i + 1 < corners.length; i++) for (const at of [0, i, i + 1]) faces.push(...corners[at]!, ...(round?.[face[at]!] ?? n), 0, 0);
+            const asked = look.marks?.(number);
+            if (!asked) return;
+            const { middle, room } = seat(mesh, number);
+            for (const mark of typeof asked === "string" ? [{ word: asked, group: number } as Mark] : asked) {
+                const [u, v] = cell(mark.word, false);
+                // upright toward a corner of the face (its first, unless one is named), and a hair above the face;
+                // one that sits toward a corner is smaller, and part of the way out to it
+                const toward = minus(corners[mark.corner ?? 0]!, middle);
+                const up = unit(toward);
+                const right = cross(up, n);
+                const [size, out] = mark.corner === undefined ? [room, 0] : [room * 0.5, 0.42];
+                const corner = (x: number, y: number) => [
+                    ...([0, 1, 2].map((axis) => middle[axis]! + toward[axis]! * out + right[axis]! * x * size + up[axis]! * y * size + n[axis]! * 0.002)),
+                    ...n, u + ((x + 1) / 2) / ACROSS, v + ((1 - y) / 2) / ACROSS, mark.group,
+                ];
+                words.push(...corner(-1, -1), ...corner(1, -1), ...corner(1, 1), ...corner(-1, -1), ...corner(1, 1), ...corner(-1, 1));
+            }
+        });
+        return [faces, words];
+};
 
     const view: View = {
         font: "serif",
@@ -390,44 +475,23 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
             return [r! / 255, gg! / 255, b! / 255];
         },
         add(mesh, look) {
-            const faces: number[] = [];
-            const words: number[] = [];
-            const flat = mesh.faces.map((face) => unit(cross(minus(mesh.points[face[1]!]!, mesh.points[face[0]!]!), minus(mesh.points[face[2]!]!, mesh.points[face[0]!]!))));
-            // a smooth mesh is lit as if round: each corner faces the way the faces around it do, taken together
-            const round = mesh.smooth ? mesh.points.map((_, point) => unit(mesh.faces.reduce<V3>((sum, face, number) => (face.includes(point) ? plus(sum, flat[number]!) : sum), [0, 0, 0]))) : undefined;
-            mesh.faces.forEach((face, number) => {
-                const corners = face.map((corner) => mesh.points[corner]!);
-                const n = flat[number]!;
-                // each face as a fan of triangles, all facing the way the face does
-                for (let i = 1; i + 1 < corners.length; i++) for (const at of [0, i, i + 1]) faces.push(...corners[at]!, ...(round?.[face[at]!] ?? n), 0, 0);
-                const asked = look.marks?.(number);
-                if (!asked) return;
-                const { middle, room } = seat(mesh, number);
-                for (const mark of typeof asked === "string" ? [{ word: asked, group: number } as Mark] : asked) {
-                    const [u, v] = cell(mark.word, false);
-                    // upright toward a corner of the face (its first, unless one is named), and a hair above the face;
-                    // one that sits toward a corner is smaller, and part of the way out to it
-                    const toward = minus(corners[mark.corner ?? 0]!, middle);
-                    const up = unit(toward);
-                    const right = cross(up, n);
-                    const [size, out] = mark.corner === undefined ? [room, 0] : [room * 0.5, 0.42];
-                    const corner = (x: number, y: number) => [
-                        ...([0, 1, 2].map((axis) => middle[axis]! + toward[axis]! * out + right[axis]! * x * size + up[axis]! * y * size + n[axis]! * 0.002)),
-                        ...n, u + ((x + 1) / 2) / ACROSS, v + ((1 - y) / 2) / ACROSS, mark.group,
-                    ];
-                    words.push(...corner(-1, -1), ...corner(1, -1), ...corner(1, 1), ...corner(-1, -1), ...corner(1, 1), ...corner(-1, 1));
-                }
-            });
-            return made(look, faces, words);
+            // the words asked for on each face are part of what the shape is
+            const key = look.marks ? JSON.stringify(mesh.faces.map((_, number) => look.marks!(number) ?? 0)) : "";
+            return made(look, shaped(mesh, key, () => geometry(mesh, look)));
         },
         sign(words, color) {
-            const [u, v] = cell(words, true);
-            const corner = (x: number, y: number) => [x / 2, y / 2, 0, 0, 0, 1, u + ((x + 1) / 2) / ACROSS, v + ((1 - y) / 2) / ACROSS, 0];
-            return made({ color, ink: color, over: true, shaded: false }, [], [...corner(-1, -1), ...corner(1, -1), ...corner(1, 1), ...corner(-1, -1), ...corner(1, 1), ...corner(-1, 1)]);
+            const shape = shaped(`sign ${words}`, "", () => {
+                const [u, v] = cell(words, true);
+                const corner = (x: number, y: number) => [x / 2, y / 2, 0, 0, 0, 1, u + ((x + 1) / 2) / ACROSS, v + ((1 - y) / 2) / ACROSS, 0];
+                return [[], [...corner(-1, -1), ...corner(1, -1), ...corner(1, 1), ...corner(-1, -1), ...corner(1, 1), ...corner(-1, 1)]];
+            });
+            return made({ color, ink: color, over: true, shaded: false }, shape);
         },
         remove(part) {
             const at = parts.indexOf(part as Drawn);
-            if (at >= 0) parts.splice(at, 1);
+            if (at < 0) return;
+            parts.splice(at, 1);
+            (part as Drawn).shape.users--;
         },
         look(from, to, degrees) {
             [eyeFrom, eyeTo, eyeDegrees] = [from, to, degrees];
@@ -463,6 +527,7 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
             canvas.height = Math.max(1, Math.round(height * scale));
         },
         draw() {
+            sweep();
             if (stale) {
                 g.bindTexture(g.TEXTURE_2D, marks);
                 g.texImage2D(g.TEXTURE_2D, 0, g.RGBA, g.RGBA, g.UNSIGNED_BYTE, sheet);
@@ -487,10 +552,10 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
             g.disable(g.BLEND);
             g.depthMask(true);
             for (const part of solid) {
-                if (part.look.casts === false || part.look.bare || part.count === 0) continue;
+                if (part.look.casts === false || part.look.bare || part.shape.count === 0) continue;
                 g.uniformMatrix4fv(depth.at("model"), false, models.get(part)!);
-                g.bindVertexArray(part.faces);
-                g.drawArrays(g.TRIANGLES, 0, part.count);
+                g.bindVertexArray(part.shape.facesArray!);
+                g.drawArrays(g.TRIANGLES, 0, part.shape.count);
             }
 
             g.useProgram(main.made);
@@ -507,7 +572,8 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
             g.uniform1i(main.at("marks"), 1);
 
             const paint = (part: Drawn, marked: boolean) => {
-                if ((marked ? part.markCount : part.count) === 0 || (!marked && part.look.bare)) return;
+                const { shape } = part;
+                if ((marked ? shape.markCount : shape.count) === 0 || (!marked && part.look.bare)) return;
                 g.uniformMatrix4fv(main.at("model"), false, models.get(part)!);
                 g.uniform4f(main.at("color"), ...(marked ? (part.look.ink ?? [0.1, 0.06, 0.14]) : part.look.color), marked ? 1 : (part.look.alpha ?? 1));
                 g.uniform1i(main.at("marked"), marked ? 1 : 0);
@@ -516,8 +582,8 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
                 g.uniform1f(main.at("emit"), part.emit);
                 g.uniform1f(main.at("gloss"), part.look.gloss ?? 0);
                 g.uniform1i(main.at("shaded"), part.look.shaded === false ? 0 : 1);
-                g.bindVertexArray(marked ? part.marks! : part.faces);
-                g.drawArrays(g.TRIANGLES, 0, marked ? part.markCount : part.count);
+                g.bindVertexArray((marked ? shape.marksArray : shape.facesArray)!);
+                g.drawArrays(g.TRIANGLES, 0, marked ? shape.markCount : shape.count);
             };
             /** What is solid, then what is written on it, a hair nearer so that it is not lost in the face. */
             const solids = () => {

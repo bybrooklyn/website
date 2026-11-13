@@ -68,4 +68,70 @@ test.skipIf(!chromium())("a cube is drawn, what shines bleeds light, and the sha
     }
 }, 30_000);
 
+/** Runs a page's script in headless Chromium and gives back what it put in `window.result`. */
+async function drawn<T>(script: string): Promise<T> {
+    const folder = await mkdtemp(join(tmpdir(), "mote-gl-"));
+    const tab = await browser({ width: 500, height: 400 });
+    try {
+        await Bun.write(`${folder}/scene.ts`, script);
+        const built = await Bun.build({ entrypoints: [`${folder}/scene.ts`], target: "browser" });
+        await Bun.write(`${folder}/page.html`, `<!doctype html><canvas style="width:400px;height:300px"></canvas><script type="module">${await built.outputs[0]!.text()}</script>`);
+        await tab.open(`file://${folder}/page.html`);
+        expect(tab.errors).toEqual([]);
+        return await tab.run<T>("window.result");
+    } finally {
+        await tab.close();
+        await rm(folder, { recursive: true, force: true });
+    }
+}
+
+/** Counts the buffers and vertex arrays the page has on the graphics card, as `window.live`. */
+const COUNTED = `
+const live = (window.live = { buffers: 0, arrays: 0 });
+const proto = WebGL2RenderingContext.prototype;
+for (const [make, free, name] of [["createBuffer", "deleteBuffer", "buffers"], ["createVertexArray", "deleteVertexArray", "arrays"]]) {
+    const [made, freed] = [proto[make], proto[free]];
+    proto[make] = function () { live[name]++; return made.call(this); };
+    proto[free] = function (thing) { live[name]--; return freed.call(this, thing); };
+}
+`;
+
+test.skipIf(!chromium())("a part taken away frees what it was drawn from, and the same mesh added again is not made again", async () => {
+    const result = await drawn<Record<string, number>>(`
+${COUNTED}
+import { gl } from "${here}/gl.ts";
+import { ball, cube } from "${here}/solids.ts";
+const view = gl(document.querySelector("canvas"));
+view.size(400, 300);
+const empty = live.buffers;
+const round = ball(0.3);
+const look = { color: [1, 1, 1], marks: (face) => String(face + 1) };
+let parts = [view.add(round, { color: [1, 1, 1] }), view.add(cube(), look), view.sign("17", [1, 1, 1])];
+view.draw();
+const one = live.buffers - empty;
+// taken away and put back, again and again, as a board rebuilt on every move of a slider is
+for (let i = 0; i < 200; i++) {
+    for (const part of parts) view.remove(part);
+    parts = [view.add(round, { color: [1, 1, 1] }), view.add(cube(), look), view.sign("17", [1, 1, 1])];
+    view.draw();
+}
+const after = live.buffers - empty;
+// many parts of one mesh share one buffer
+const many = Array.from({ length: 80 }, () => view.add(round, { color: [1, 0, 0] }));
+view.draw();
+const shared = live.buffers - empty;
+for (const part of [...parts, ...many]) view.remove(part);
+view.draw();
+window.result = { one, after, shared, gone: live.buffers - empty, arrays: live.arrays };
+`);
+    // a ball, a cube's faces and a cube's numbers, and a sign: four buffers, and as many after 200 rebuilds
+    // (each new cube() is a new mesh, so its two are made again, and the old two freed)
+    expect(result.one).toBe(4);
+    expect(result.after).toBe(4);
+    expect(result.shared).toBe(4);
+    // nothing left once every part is gone
+    expect(result.gone).toBe(0);
+    expect(result.arrays).toBe(0);
+}, 30_000);
+
 if (!chromium()) console.warn("gl.test.ts: no Chromium on this machine, so the drawing was not looked at.");
