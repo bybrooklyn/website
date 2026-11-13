@@ -3640,6 +3640,7 @@ body.quire-app,
 /* A button or field that cannot be used now looks it: faded, and not lit by the pointer. Without this the
    editor's own colour for buttons hid the browser's grey, and a disabled button looked pressable. */
 .quire-button:disabled,
+.quire-menu-line:disabled,
 .quire-link-field:disabled {
     opacity: 0.5;
     pointer-events: none;

@@ -181,6 +181,60 @@ test("a folding section's arrow folds it away in the editor and back, changing n
     expect(await bodyHeight()).toBeGreaterThan(10);
 });
 
+test("a right-click in a table opens its menu, with every command and those that cannot act here dimmed; the menu key opens it at the cell", async () => {
+    if (skip("a table's menu")) return;
+    const { tab } = page!;
+    const table = "| a | b |\n| --- | --- |\n| 1 | 2 |\n";
+    await page!.reset(table, [0, 1, 1], 0);
+    await tab.wait(100);
+    const lines = () => tab.run<[string, boolean][]>("[...document.querySelectorAll('.quire-table-menu.open .quire-menu-line')].map((line) => [line.querySelector('.quire-menu-label').textContent, line.disabled])");
+    await tab.run("(() => { const cell = document.querySelectorAll('.quire td')[1]; const box = cell.getBoundingClientRect(); cell.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: box.left + 4, clientY: box.top + 4 })); })()");
+    await tab.wait(400);
+    expect(await lines()).toEqual([
+        ["Add a row above", false],
+        ["Add a row below", false],
+        ["Add a column to the left", false],
+        ["Add a column to the right", false],
+        ["Remove this row", false],
+        ["Remove this column", false],
+        ["Remove the table", false],
+        ["Sort the rows A to Z", false],
+        ["Sort the rows Z to A", false],
+        ["Align the column left", false],
+        ["Centre the column", false],
+        ["Align the column right", false],
+    ]);
+    await page!.press(".quire-table-menu.open .quire-menu-line", "Add a row above");
+    await tab.wait(100);
+    expect(await page!.md()).toBe("| a   | b   |\n| --- | --- |\n|     |     |\n| 1   | 2   |\n");
+    expect(await keyboard()).toBe("writing");
+    // in the heading row, the menu key: what cannot act there is dimmed, and the arrows pass over it
+    await page!.reset(table, [0, 0, 0], 0);
+    await tab.wait(100);
+    await tab.run("q.surface.element.dispatchEvent(new KeyboardEvent('keydown', { key: 'ContextMenu', bubbles: true, cancelable: true }))");
+    await tab.wait(400);
+    const dimmed = (await lines()).filter(([, off]) => off).map(([label]) => label);
+    expect(dimmed).toEqual(["Add a row above", "Remove this row"]);
+    expect(await tab.run("document.activeElement.textContent")).toBe("Add a row below");
+    await tab.press("ArrowDown");
+    await tab.press("ArrowDown");
+    await tab.press("ArrowDown");
+    expect(await tab.run("document.activeElement.textContent")).toBe("Remove this column");
+    await tab.press("Escape");
+    await tab.wait(300);
+    expect(await keyboard()).toBe("writing");
+    // and the strip's own remove-row button is dimmed in the heading row rather than live and doing nothing
+    expect(await tab.run("document.querySelector('.quire-table-tools button[aria-label=\"Remove this row\"]').disabled")).toBe(true);
+    await tab.run("q.select([0, 1, 0], 0)");
+    await tab.wait(100);
+    expect(await tab.run("document.querySelector('.quire-table-tools button[aria-label=\"Remove this row\"]').disabled")).toBe(false);
+    // Remove the table leaves an empty line in its place
+    await tab.run("(() => { const cell = document.querySelector('.quire td'); const box = cell.getBoundingClientRect(); cell.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: box.left + 4, clientY: box.top + 4 })); })()");
+    await tab.wait(400);
+    await page!.press(".quire-table-menu.open .quire-menu-line", "Remove the table");
+    expect(await page!.md()).toBe("");
+});
+
 test("a folding section just inserted takes the keyboard into its summary, whose empty word is quiet", async () => {
     if (skip("a new folding section's summary")) return;
     const { tab } = page!;

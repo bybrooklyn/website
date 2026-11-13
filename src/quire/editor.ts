@@ -1132,7 +1132,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
             selectBar.element.remove();
             palette.destroy();
             emojiList.close();
-            tableTools.element.remove();
+            tableTools.destroy();
             pictureTools.destroy();
             blockMenus.destroy();
             notes.destroy();

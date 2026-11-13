@@ -6,7 +6,7 @@ import { expect, test } from "bun:test";
 import type { State } from "./history";
 import { caret } from "./keys";
 import { read } from "./read";
-import { alignHere, columnRight, removeColumnHere, removeRowHere, rowBelow, sortHere, tableAt } from "./tables";
+import { alignHere, columnLeft, columnRight, possible, removeColumnHere, removeRowHere, removeTableHere, rowAbove, rowBelow, sortHere, tableAt } from "./tables";
 import { write } from "./write";
 
 const TABLE = "| a | b |\n| --- | --- |\n| 1 | 2 |\n";
@@ -51,4 +51,28 @@ test("rows sort by the cursor's column, words A to Z or Z to A and numbers by va
     const numbers = sortHere(true)({ doc: read(words), selection: caret([0, 0, 1], 0) });
     expect(write(numbers.doc).split("\n").slice(2, 6).map((line) => line.split("|")[2]!.trim())).toEqual(["1,000", "10", "9", "2"]);
     expect(write(sortHere(false)({ doc: read(TABLE), selection: caret([0, 1, 0], 0) }).doc)).toBe(write(read(TABLE)));
+});
+
+test("a row is added above the cursor's, but never above the heading row, and a column to its left, the cursor going into each", () => {
+    const above = rowAbove(at(1, 1));
+    expect(write(above.doc)).toBe("| a   | b   |\n| --- | --- |\n|     |     |\n| 1   | 2   |\n");
+    expect(above.selection).toEqual(caret([0, 1, 1], 0));
+    expect(rowAbove(at(0, 0)).doc).toEqual(read(TABLE));
+    const left = columnLeft(at(1, 1));
+    expect(write(left.doc)).toBe("| a   |     | b   |\n| --- | --- | --- |\n| 1   |     | 2   |\n");
+    expect(left.selection).toEqual(caret([0, 1, 1], 0));
+});
+
+test("the whole table is removed, an empty line taking its place with the cursor on it", () => {
+    const removed = removeTableHere({ doc: read(`Before\n\n${TABLE}\nAfter\n`), selection: caret([1, 1, 0], 0) });
+    expect(removed.doc.blocks.map((block) => block.kind)).toEqual(["paragraph", "paragraph", "paragraph"]);
+    expect(write(removed.doc).startsWith("Before\n")).toBe(true);
+    expect(removed.selection).toEqual(caret([1], 0));
+});
+
+test("what cannot be done where the cursor is is known, so its button can be dimmed rather than do nothing", () => {
+    const head = tableAt(read(TABLE), [0, 0, 0])!;
+    expect(possible(head)).toEqual({ rowAbove: false, removeRow: false, removeColumn: true });
+    const one = tableAt(read("| a |\n| --- |\n| 1 |\n"), [0, 1, 0])!;
+    expect(possible(one)).toEqual({ rowAbove: true, removeRow: true, removeColumn: false });
 });
