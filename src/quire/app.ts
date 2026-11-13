@@ -352,7 +352,7 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
         }
         host.classList.add("shelved");
         if (!(await editor.leave())) {
-            // typed during the journey home and not saved: back to the document
+            // typed while going home and not saved: back to the document
             host.classList.remove("shelved");
             options.top?.classList.remove("away");
             shelf.hide();
