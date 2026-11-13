@@ -828,6 +828,16 @@ metre, both in the held-out worlds at 20 million steps. Made with `sh examples/c
 (`examples/compare.rs`), four runs at a time on a Ryzen 7 9700X with other work going on: 90 runs,
 93 minutes. The same seed learns the same way to the bit, so every number here comes out again.
 
+Each method is measured under the rules it learned under: evolution's runs end as the run's own rule
+has it (after a second with the body down), and practice's as its way has it (for two legs, at the
+first touch of the body once its costs are all in). Measuring evolution by practice's rule would mark
+it down for something it was never bred to avoid. Until 13 November 2026 `compare.rs` measured
+evolution through practice's way, so for two legs by practice's stricter rule; the two-legged
+evolution rows, run again under evolution's own rule (16 held-out worlds, seeds 1 to 5, 20 million
+steps), came out as below to the bit, in distance, air and J/m, since the table was made before two
+legs had that rule. By the stricter rule they would have been 0.2 to 0.4 m less (at 20 million steps
+4.4, 4.0, 2.2 and 2.0 m, in the air 0.30 to 0.51 of the time).
+
 | legs | difficulty | evolution, 5 M | evolution, 20 M | practice, 5 M | practice, 20 M | 20 M took, evolution / practice | air, evolution / practice | J/m, evolution / practice |
 |---|---|---|---|---|---|---|---|---|
 | 2 | 0.1 | 4.1 ± 3.3 m | 4.6 ± 3.4 m | 14.8 ± 5.4 m | 26.1 ± 5.0 m | 224 / 184 s | 0.23 / 0.21 | 376 / 161 |
