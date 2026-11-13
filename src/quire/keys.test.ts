@@ -3,7 +3,7 @@
 // with the one undo that gives back the characters typed. Run with `bun test src/quire`.
 
 import { expect, test } from "bun:test";
-import { documentOf, paragraph, runsText, type Block, type Run, type Selection } from "./document";
+import { blockPaths, documentOf, paragraph, removeBlock, runsText, type Block, type Run, type Selection } from "./document";
 import { createHistory } from "./history";
 import { activeBlock, activeMarks, caret, fragment, paste, step, type Editor, type Input } from "./keys";
 import { read } from "./read";
@@ -553,4 +553,18 @@ test("a line break typed beside a line the file already broke stays one paragrap
     start.key("Backspace", { mod: true });
     start.key("Enter", { shift: true });
     expect(read(start.markdown).blocks.length).toBe(1);
+});
+
+test("Shift+Tab with a selection that starts in a table's cell keeps that end in the cell", () => {
+    const e = editor("| a |\n|---|\n| 12 |\n\n- one\n  - two\n", [1, 0, 1, 0, 0], 0);
+    e.select({ anchor: { path: [0, 1, 0], offset: 1 }, focus: { path: [1, 0, 1, 0, 0], offset: 2 } });
+    e.key("Tab", { shift: true });
+    expect(e.markdown).toBe("| a |\n|---|\n| 12 |\n\n- one\n- two\n");
+    expect(e.state.selection).toEqual({ anchor: { path: [0, 1, 0], offset: 1 }, focus: { path: [1, 1, 0], offset: 2 } });
+});
+
+test("taking away the only block leaves an empty line to write on", () => {
+    const doc = removeBlock(read("only\n"), [0]);
+    expect(doc.blocks.length).toBe(1);
+    expect(blockPaths(doc)).toEqual([[0]]);
 });

@@ -546,7 +546,8 @@ function tab(state: State, back: boolean): Outcome {
     if (inDefinition(doc, at.path)) return done(doc, state.selection, "move");
     if (inItem(doc, at.path)) {
         const next = back ? outdent(doc, at.path) : indent(doc, at.path);
-        const selection: Selection = { anchor: { path: sameLeaf(doc, state.selection.anchor.path, next), offset: state.selection.anchor.offset }, focus: { path: sameLeaf(doc, at.path, next), offset: at.offset } };
+        // each end follows its own text, the anchor perhaps in a table's cell, where it must stay a cell
+        const selection: Selection = { anchor: follow(doc, next, state.selection.anchor), focus: follow(doc, next, at) };
         return done(next, selection, next === doc ? "move" : "structure");
     }
     if (block?.kind === "code" && !back) {
