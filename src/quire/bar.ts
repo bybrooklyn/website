@@ -51,7 +51,7 @@ import {
     type Selection,
 } from "./document";
 import type { State } from "./history";
-import { activeBlock, caret, collapsed, mark, pageBreakAt, rangeOf, sameLeaf, tableOf } from "./keys";
+import { activeBlock, caret, collapsed, mark, pageBreakAt, paste, rangeOf, sameLeaf, tableOf } from "./keys";
 import type { Surface } from "./surface";
 import { closeOthers, composing, control, dots, flowMenu, glyph, icon, make, moveIndex, still, type Menu, type MenuItem } from "./ui";
 
@@ -380,9 +380,19 @@ function addWithLine(block: Block): Action {
 /** Adds a divider. */
 export const addDivider: Action = addWithLine(divider());
 
-/** Adds a picture by its address. */
+/**
+ * Adds a picture by its address exactly where the cursor is, as a pasted one goes: in the middle of a
+ * paragraph it splits the paragraph there, and on an empty line it takes the line's place. The cursor
+ * goes on after it, onto an empty line of its own when nothing follows.
+ */
 export function addImage(src: string, alt = ""): Action {
-    return addWithLine(imageBlock(src, alt));
+    return (state) => {
+        const placed = paste(state, [imageBlock(src, alt)]);
+        const at = placed.selection.focus.path;
+        if (blockAt(placed.doc, at)?.kind !== "image") return placed;
+        const next = sibling(at);
+        return { doc: blockAt(placed.doc, next) ? placed.doc : insertBlock(placed.doc, at, paragraph()), selection: caret(next, 0) };
+    };
 }
 
 /** Puts a footnote reference at the cursor and its note at the end of the document, the cursor in the note. */

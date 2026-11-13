@@ -122,7 +122,16 @@ test("the + menu adds a table, code, a divider, a picture and a footnote, the cu
     const ruled = run(addDivider, at("Above\n", caret([0], 0)));
     expect(md(ruled)).toBe("Above\n\n---\n");
     expect(ruled.selection).toEqual(caret([2], 0));
-    expect(md(run(addImage("/p.png", "A picture"), at("Above\n", caret([0], 0))))).toBe("Above\n\n![A picture](/p.png)\n");
+    expect(md(run(addImage("/p.png", "A picture"), at("Above\n", caret([0], 5))))).toBe("Above\n\n![A picture](/p.png)\n");
+    // a chosen picture lands exactly at the cursor: it splits a paragraph there, takes an empty line's place, and the cursor goes on after it
+    const split = run(addImage("/p.png", "P"), at("Hello world\n", caret([0], 5)));
+    expect(md(split)).toBe("Hello\n\n![P](/p.png)\n\nworld\n");
+    expect(split.selection).toEqual(caret([2], 0));
+    expect(md(run(addImage("/p.png", "P"), at("Hello world\n", caret([0], 0))))).toBe("![P](/p.png)\n\nHello world\n");
+    const blank = { ...read("One\n\nTwo\n") };
+    blank.blocks = [blank.blocks[0]!, { kind: "paragraph", runs: [], gap: "\n" }, blank.blocks[1]!];
+    expect(md(run(addImage("/p.png", "P"), { doc: blank, selection: caret([1], 0) }))).toBe("One\n\n![P](/p.png)\n\nTwo\n");
+    expect(md(run(addImage("/p.png", "P"), at("- one\n- two\n", caret([0, 0, 0], 2))))).toBe("- on\n\n  ![P](/p.png)\n- e\n- two\n");
     const noted = run(addFootnote, at("A claim.\n", caret([0], 8)));
     expect(md(noted)).toBe("A claim.[^1]\n\n[^1]: \n");
     expect(noted.selection).toEqual(caret([1, 0], 0));
