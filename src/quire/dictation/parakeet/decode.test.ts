@@ -214,6 +214,18 @@ describe("stepFor", () => {
             expect([...new Set(state.prediction.h)]).toEqual([1]);
         });
     }
+    test("makes its tensors once: decoding from a fresh copy of the state at every step keeps nothing more", async () => {
+        const { session } = pretend(2, false);
+        let made = 0;
+        const ort = { Tensor: class { constructor(public type: string, public data: ArrayBufferView, public dims: readonly number[]) { made++; } } as unknown as new (type: string, data: ArrayBufferView, dims: readonly number[]) => Tensor };
+        const step = stepFor(session, ort);
+        const run = createDecoder(step, { vocabulary: vocab, durations: DURATIONS, blank: BLANK });
+        const state = run.start();
+        await run.decode(frames(3), 3, 3, copy(state));
+        const after = made;
+        for (let at = 0; at < 50; at++) await run.decode(frames(3), 3, 3, copy(state));
+        expect(made).toBe(after);
+    });
     test("says plainly when the inputs are not those of a decoder and joint", () => {
         const { session, ort } = pretend(1, false);
         expect(() => stepFor({ ...session, inputMetadata: session.inputMetadata.slice(0, 3) }, ort)).toThrow();
