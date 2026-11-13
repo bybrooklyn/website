@@ -54,6 +54,24 @@ pub struct Shaping {
     /// For each second with its feet taking turns while it goes forward (`gait::taking_turns`, as the
     /// Walker counts it: for two legs exactly one foot down), in full from 0.6 m/s.
     pub turns: f32,
+    /// The fastest progress paid for, in metres a second (0: any): a metre gained quicker than this
+    /// earns only what this pace would have, so going about is asked for and racing is not.
+    pub pace: f32,
+    /// For each metre a second a foot is coming down at when it lands: a stamp costs, a foot set
+    /// down does not.
+    pub impact: f32,
+    /// For each second of the body's spin, squared (radians a second): rocking costs.
+    pub spin: f32,
+    /// For each second of the body's speed up or down, squared (metres a second): bobbing costs.
+    pub bob: f32,
+    /// For each second of each joint's speed, squared (radians a second), summed over the joints.
+    pub swing: f32,
+    /// For each second of each motor's torque, squared (newton metres), summed over the joints: the
+    /// usual stand-in for what a muscle burns, which grows faster than its force.
+    pub torque: f32,
+    /// For a run that ends because it got nowhere for five seconds, as a fall costs: standing still
+    /// is not a way to keep out of trouble.
+    pub stall: f32,
 }
 
 /// The parts of a step's reward, for a reader: the run's own (progress less hazards and twitching),
@@ -85,8 +103,34 @@ pub fn clear_ahead(run: &Run) -> bool {
 pub fn shaped(run: &mut Run, shaping: Shaping, actions: &[f32]) -> Parts {
     let world = &run.stage.world;
     let mut parts = Parts::default();
+    let creature = &run.body.creature;
+    if shaping.impact != 0.0 {
+        for (k, leg) in creature.legs.iter().enumerate() {
+            let foot = &world.bodies[leg.lower as usize];
+            let (falling, was_down) = run.feet[k];
+            if foot.touching && !was_down && falling < 0.0 {
+                parts.effort += shaping.impact * falling;
+            }
+            run.feet[k] = (foot.velocity.y, foot.touching);
+        }
+    }
+    let torso = &world.bodies[creature.torso as usize];
+    if shaping.spin != 0.0 {
+        parts.effort -= shaping.spin * STEP * torso.spin * torso.spin;
+    }
+    if shaping.bob != 0.0 {
+        parts.effort -= shaping.bob * STEP * torso.velocity.y * torso.velocity.y;
+    }
+    if shaping.swing != 0.0 || shaping.torque != 0.0 {
+        let h = STEP / world.substeps.max(1) as f32;
+        for &joint in &creature.joints {
+            let joint = &world.joints[joint as usize];
+            let (speed, torque) = (joint.angular_speed(&world.bodies), joint.motor_torque(h));
+            parts.effort -= STEP * (shaping.swing * speed * speed + shaping.torque * torque * torque);
+        }
+    }
     if shaping.energy != 0.0 {
-        parts.effort = -shaping.energy * run.body.creature.effort(world);
+        parts.effort -= shaping.energy * run.body.creature.effort(world);
     }
     if shaping.air != 0.0 && run.body.creature.flying(world) && !clear_ahead(run) {
         parts.air = -shaping.air * STEP;
@@ -94,12 +138,19 @@ pub fn shaped(run: &mut Run, shaping: Shaping, actions: &[f32]) -> Parts {
     if shaping.knee != 0.0 {
         parts.posture -= shaping.knee * STEP * run.body.creature.kneeling(world) as f32;
     }
+    let before = run.judge.furthest;
     parts.run = run.judge.after_step(&run.stage, &run.body, actions);
+    if shaping.pace > 0.0 {
+        parts.run -= (run.judge.furthest - before - shaping.pace * STEP).max(0.0);
+    }
     if run.judge.end == End::Going && run.judge.seconds_down > 0.0 && run.judge.seconds_down > shaping.down {
         run.judge.end = End::Down;
     }
     if run.judge.end == End::Down {
         parts.fall = -shaping.fall;
+    }
+    if run.judge.end == End::Stalled && shaping.stall != 0.0 {
+        parts.fall = -shaping.stall;
     }
     if run.judge.seconds_down == 0.0 {
         let tallness = if shaping.tall { run.body.creature.tallness(&run.stage.world) } else { 1.0 };
@@ -134,6 +185,12 @@ pub struct Way {
     pub ease: f32,
     /// How strong and quick the joints are when aimed directly (`Body::strength`).
     pub strength: f32,
+    /// The furthest forward a hip may swing, in radians from the leg straight down (0: the body's
+    /// own limit, 1.3): a body that cannot kick high, rather than a rule against kicking.
+    pub hip: f32,
+    /// Whether it senses the legs' rhythm (the sine and cosine of a steady clock): a clock to step
+    /// to, which is a hint about how to move, so it can be taken away.
+    pub clock: bool,
 }
 
 impl Way {
@@ -142,6 +199,18 @@ impl Way {
         body.direct = self.direct;
         body.ease = self.ease;
         body.strength = self.strength;
+        body.clock = self.clock;
+    }
+
+    /// Dresses a run's body (`dress`) and sets its hips' reach forward, if this way changes it.
+    pub fn dress_run(&self, run: &mut Run) {
+        self.dress(&mut run.body);
+        if self.hip > 0.0 {
+            for joints in run.body.creature.joints.chunks(2) {
+                let hip = &mut run.stage.world.joints[joints[0] as usize];
+                hip.upper = self.hip;
+            }
+        }
     }
 
     /// Takes the actions asked into the actions held for the next decision, as practice and the show
@@ -169,12 +238,12 @@ impl Way {
     /// at the first touch of its body once the costs are all in (until then it may be down for a
     /// second, less and less).
     pub fn of(legs: u32) -> Way {
-        let mut shaping = Shaping { alive: 0.25, energy: 0.002, air: 2.0, tall: false, smooth: 0.0, fall: 3.0, knee: 0.0, upright: 0.0, down: 1.0, turns: 0.0 };
+        let mut shaping = Shaping { alive: 0.25, energy: 0.002, air: 2.0, tall: false, smooth: 0.0, fall: 3.0, knee: 0.0, upright: 0.0, down: 1.0, turns: 0.0, pace: 0.0, impact: 0.0, spin: 0.0, bob: 0.0, swing: 0.0, torque: 0.0, stall: 0.0 };
         // two legs went on their belly and knees in lunges without these (README, "How it moves")
         if legs == 2 {
             shaping = Shaping { knee: 1.0, upright: 0.5, down: 0.0, turns: 0.5, ..shaping };
         }
-        Way { legs, direct: true, skip: 4, seconds: 30.0, shaping, hop: false, ramp: 4_000_000, ease: 1.0, strength: 1.0 }
+        Way { legs, direct: true, skip: 4, seconds: 30.0, shaping, hop: false, ramp: 4_000_000, ease: 1.0, strength: 1.0, hip: 0.0, clock: true }
     }
 }
 
@@ -324,7 +393,7 @@ impl Worlds {
 /// A creature at the start of a fresh world of the recipe's kind with this seed.
 fn make(recipe: Recipe, way: Way, seed: u32) -> Option<Run> {
     let mut run = Run::new(Rc::new(Land::new(Recipe { seed, ..recipe }, FIRST_MADE)), way.legs, way.seconds)?;
-    way.dress(&mut run.body);
+    way.dress_run(&mut run);
     Some(run)
 }
 
@@ -456,6 +525,11 @@ impl Practice {
             way.shaping.energy = self.shaping.energy * along;
             way.shaping.air = self.shaping.air * along;
             way.shaping.knee = self.shaping.knee * along;
+            way.shaping.impact = self.shaping.impact * along;
+            way.shaping.spin = self.shaping.spin * along;
+            way.shaping.bob = self.shaping.bob * along;
+            way.shaping.swing = self.shaping.swing * along;
+            way.shaping.torque = self.shaping.torque * along;
             // the time it may be down shortens from the run's own second to what is asked
             way.shaping.down = 1.0 + (self.shaping.down - 1.0) * along;
         }

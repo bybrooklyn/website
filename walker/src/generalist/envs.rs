@@ -133,6 +133,9 @@ pub struct Run {
     pub judge: Judge,
     /// What each ray saw at the last look, for drawing.
     pub seen: [(f32, Seen); RAYS],
+    /// Each foot's speed up (less than 0 falling) after the last step, and whether it was down, so a
+    /// landing's speed can be charged for (`practice::Shaping::impact`).
+    pub feet: [(f32, bool); 4],
 }
 
 impl Run {
@@ -141,7 +144,7 @@ impl Run {
         let mut stage = Stage::new(land);
         let body = Body::build(&mut stage.world, legs)?;
         stage.keep(stage.world.bodies[body.creature.torso as usize].position.x);
-        Some(Run { stage, body, judge: Judge::new(seconds), seen: [(0.0, Seen::Nothing); RAYS] })
+        Some(Run { stage, body, judge: Judge::new(seconds), seen: [(0.0, Seen::Nothing); RAYS], feet: [(0.0, true); 4] })
     }
 
     /// Makes this run the same as another, reusing its memory.
@@ -150,6 +153,7 @@ impl Run {
         self.body.clone_from(&other.body);
         self.judge = other.judge;
         self.seen = other.seen;
+        self.feet = other.feet;
     }
 
     /// How many numbers it senses: the rays, then what it feels of itself.

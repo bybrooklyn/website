@@ -94,6 +94,8 @@ pub struct Body {
     /// muscles, which hold the body up and step but cannot throw it into the air. The hop keeps its
     /// own strength, so leaving the ground is a choice, made with the hop.
     pub strength: f32,
+    /// Whether it feels the legs' rhythm; without, the rhythm's sine and cosine are felt as 0.
+    pub clock: bool,
 }
 
 impl Body {
@@ -105,7 +107,7 @@ impl Body {
         let creature = Creature::build(world, Description { legs, carry: false, leap: false })?;
         let hopping = Hopping::of(legs);
         world.bodies[creature.torso as usize].inverse_inertia /= hopping.steadiness;
-        Some(Body { creature, hop: Hop::Ready, hopping, direct: false, ease: 1.0, aims: Vec::new(), strength: 1.0 })
+        Some(Body { creature, hop: Hop::Ready, hopping, direct: false, ease: 1.0, aims: Vec::new(), strength: 1.0, clock: true })
     }
 
     pub fn legs(&self) -> usize {
@@ -214,8 +216,9 @@ impl Body {
             at += 1;
         }
         let (s, c) = crate::math::sin_cos(2.0 * crate::math::PI * self.creature.phase(world));
-        into[at] = s;
-        into[at + 1] = c;
+        let felt = if self.clock { 1.0 } else { 0.0 };
+        into[at] = felt * s;
+        into[at + 1] = felt * c;
         into[at + 2] = if matches!(self.hop, Hop::Crouch(_) | Hop::Spring(_)) { 1.0 } else { 0.0 };
         into[at + 3] = if self.hop == Hop::Ready { 1.0 } else { 0.0 };
     }
