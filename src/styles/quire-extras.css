@@ -359,7 +359,14 @@
     transition:
         opacity 0.15s ease,
         scale 0.25s var(--ease),
-        top 0.12s var(--ease);
+        top 0.2s var(--ease),
+        left 0.2s var(--ease),
+        width 0.2s var(--ease);
+}
+
+/* while a picture is dragged the text opens where it will land, and closes again behind it */
+.quire-making-room :is(p, h1, h2, h3, h4, h5, h6, li, ul, ol, blockquote, pre, table, figure, hr, div) {
+    transition: margin 0.2s var(--ease);
 }
 
 .quire-drop-line.shown {
@@ -682,6 +689,7 @@
     .quire-picture-panel,
     .quire-lifted,
     .quire-drop-line,
+    .quire-making-room *,
     .quire-own-size,
     .quire-note,
     .quire-note-actions,

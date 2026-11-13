@@ -148,6 +148,36 @@ test("wrap text from the menu floats the picture with the words beside it, as on
     expect(await page!.md()).toBe(`One line.\n\n![A wide picture](${picture})\n\nAnother line.\n`);
 });
 
+test("a picture dragged into a list lands in its item, the text opening there while it is held, and dragged out again it leaves the list", async () => {
+    if (skip()) return;
+    const { tab } = page!;
+    await page!.reset(`![A wide picture](${picture})\n\n- first item\n- second item\n\nThe end.\n`, [2], 0);
+    await tab.run("new Promise((done) => { const img = document.querySelector('.quire-image img'); img.complete ? done() : img.onload = done; })");
+    const img = await tab.run<{ x: number; y: number; width: number; height: number }>("q.box('.quire-image img')");
+    const item = await tab.run<{ x: number; y: number; width: number; height: number }>("q.box('.quire li:last-child')");
+    const start = { x: img.x + 20, y: img.y + 20 };
+    // held below the last item, over its words: the text opens under it and the line is drawn there, indented as the item is;
+    // coming down to it the text opened above the item first, so the item is a room's height lower than it was
+    item.height += 40;
+    await tab.run("window.seen = { room: 0, line: 0 }; new MutationObserver(() => { for (const each of document.querySelectorAll('.quire li, .quire li > *')) seen.room = Math.max(seen.room, parseFloat(each.style.marginBottom) || 0); const line = document.querySelector('.quire-drop-line.shown'); if (line) seen.line = line.getBoundingClientRect().left; }).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['style', 'class'] })");
+    await tab.drag(start, { x: item.x + 60, y: item.y + item.height + 1 }, 14);
+    await tab.wait(300);
+    const seen = await tab.run<{ room: number; line: number }>("seen");
+    expect(seen.room).toBeGreaterThan(30);
+    expect(seen.line).toBeGreaterThan(img.x + 4);
+    expect(await page!.md()).toBe(`- first item\n- second item\n\n  ![A wide picture](${picture})\n\nThe end.\n`);
+    expect(await tab.run("document.querySelectorAll('.quire [style*=margin]').length")).toBe(0);
+    // and out again, below the last line
+    const moved = await tab.run<{ x: number; y: number }>("q.box('.quire-image img')");
+    const end = await tab.run<{ x: number; y: number; height: number }>("q.box('.quire > :last-child')");
+    await tab.drag({ x: moved.x + 20, y: moved.y + 20 }, { x: moved.x + 20, y: end.y + end.height + 60 }, 14);
+    await tab.wait(300);
+    expect(await page!.md()).toBe(`- first item\n- second item\n\nThe end.\n\n![A wide picture](${picture})\n`);
+    await tab.run("q.surface.undo()");
+    await tab.run("q.surface.undo()");
+    expect(await page!.md()).toBe(`![A wide picture](${picture})\n\n- first item\n- second item\n\nThe end.\n`);
+});
+
 test("a picture dragged below the last line lands there, and Delete takes a picked one away", async () => {
     if (skip()) return;
     const { tab } = page!;

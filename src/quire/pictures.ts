@@ -15,7 +15,7 @@
 // only exactly these forms; any other HTML stays raw, as its text. In a `.quire` document the
 // Markdown stays plain and the width and caption go to style.json with the alignment (styling.ts).
 
-import { insertBlock, moveBlock, removeBlock, type Document, type Image } from "./document";
+import { blockAt, insertBlock, moveBlock, removeBlock, type Block, type Document, type Image } from "./document";
 
 /** The widths a picture being resized is drawn to when it comes near them, as shares of the text's width, with their names. */
 export const SNAPS: [number, string][] = [
@@ -294,15 +294,55 @@ export function asPicture<T extends { kind: string; text?: string }>(block: T): 
     return readPicture(block.text) ?? block;
 }
 
-/** Moves the top-level block at `from` so that it stands before the block now at `to` (the end when `to` is the number of blocks). */
-export function moveTo(doc: Document, from: number, to: number): Document {
-    const block = doc.blocks[from];
-    if (!block || to === from || to === from + 1 || to < 0 || to > doc.blocks.length) return doc;
-    let next = removeBlock(doc, [from]);
-    const place = to > from ? to - 1 : to;
-    if (place === 0) {
-        next = insertBlock(next, [0], block);
-        return moveBlock(next, [1], -1);
-    }
-    return insertBlock(next, [place - 1], block);
+/** A place between two blocks a picture can be dropped: before the block at `path`, or after it. */
+export interface Landing {
+    path: number[];
+    after?: boolean;
+}
+
+/**
+ * Every place a block can be dropped, in reading order, at every depth: before each block, in the
+ * document, in a list's items and in quotes, and after the last block of each of those. A list or
+ * quote has a place before it as well as one before its first block, so that a picture can go in or
+ * stay out.
+ */
+export function landings(blocks: Block[], prefix: number[] = []): Landing[] {
+    const out: Landing[] = [];
+    blocks.forEach((block, index) => {
+        const path = [...prefix, index];
+        out.push({ path });
+        if (block.kind === "list") block.items.forEach((item, at) => out.push(...landings(item.blocks, [...path, at])));
+        else if (block.kind === "quote") out.push(...landings(block.blocks, path));
+    });
+    if (blocks.length) out.push({ path: [...prefix, blocks.length - 1], after: true });
+    return out;
+}
+
+const samePath = (a: number[], b: number[]) => a.length === b.length && a.every((step, k) => step === b[k]);
+const nextOf = (path: number[]) => [...path.slice(0, -1), path[path.length - 1]! + 1];
+
+/** True when dropping the block at `from` on a landing leaves it where it is. */
+export const staysPut = (from: number[], to: Landing): boolean => samePath(to.path, from) || (!to.after && samePath(to.path, nextOf(from)));
+
+/** Where the block at `from` stands once moved to a landing (moveBlockTo), when taking it from its old place leaves the blocks round it as they were. */
+export function landedAt(from: number[], to: Landing): number[] {
+    const at = to.after ? nextOf(to.path) : [...to.path];
+    const depth = from.length - 1;
+    if (at.length > depth && from.slice(0, depth).every((step, k) => step === at[k]) && from[depth]! < at[depth]!) at[depth]!--;
+    return at;
+}
+
+/** Moves the block at `from` to a landing, into or out of lists and quotes; one where it already is leaves the document as it was. */
+export function moveBlockTo(doc: Document, from: number[], to: Landing): Document {
+    const block = blockAt(doc, from);
+    if (!block || staysPut(from, to)) return doc;
+    // it is put in first and taken from its old place after, so that the landing's path still means what it did
+    const index = to.path[to.path.length - 1]!;
+    const at = to.after ? nextOf(to.path) : to.path;
+    const next = to.after ? insertBlock(doc, to.path, block) : index > 0 ? insertBlock(doc, [...to.path.slice(0, -1), index - 1], block) : moveBlock(insertBlock(doc, to.path, block), nextOf(to.path), -1);
+    // its old place moved on by one if it went in before it among the same blocks
+    const depth = at.length - 1;
+    const old = [...from];
+    if (old.length > depth && at.slice(0, depth).every((step, k) => step === old[k]) && old[depth]! >= at[depth]!) old[depth]!++;
+    return removeBlock(next, old);
 }

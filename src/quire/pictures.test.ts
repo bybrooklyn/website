@@ -7,7 +7,7 @@ import { expect, test } from "bun:test";
 import { setAlign, setImage, type Image } from "./document";
 import { read } from "./read";
 import sharp from "sharp";
-import { moveTo, pictureHtml, readPicture, snapWidth, withoutMetadata } from "./pictures";
+import { landedAt, landings, moveBlockTo, pictureHtml, readPicture, snapWidth, staysPut, withoutMetadata } from "./pictures";
 import { crc32 } from "./zip";
 import { collect, readStyle, restore } from "./styling";
 import { write } from "./write";
@@ -97,11 +97,43 @@ test("a width being dragged is drawn to the whole, half and a third of the text 
 
 test("a picture moved to another place stands there, the other blocks written as they were", () => {
     const text = "One.\n\n![Moss](m.png)\n\nTwo.\n\nThree.\n";
-    expect(write(moveTo(read(text), 1, 4))).toBe("One.\n\nTwo.\n\nThree.\n\n![Moss](m.png)\n");
-    expect(write(moveTo(read(text), 1, 0))).toBe("![Moss](m.png)\n\nOne.\n\nTwo.\n\nThree.\n");
-    expect(write(moveTo(read(text), 1, 3))).toBe("One.\n\nTwo.\n\n![Moss](m.png)\n\nThree.\n");
+    expect(write(moveBlockTo(read(text), [1], { path: [3], after: true }))).toBe("One.\n\nTwo.\n\nThree.\n\n![Moss](m.png)\n");
+    expect(write(moveBlockTo(read(text), [1], { path: [0] }))).toBe("![Moss](m.png)\n\nOne.\n\nTwo.\n\nThree.\n");
+    expect(write(moveBlockTo(read(text), [1], { path: [3] }))).toBe("One.\n\nTwo.\n\n![Moss](m.png)\n\nThree.\n");
     // to where it already is, nothing changes
-    expect(moveTo(read(text), 1, 2)).toEqual(read(text));
+    for (const to of [{ path: [1] }, { path: [2] }, { path: [1], after: true }]) expect(moveBlockTo(read(text), [1], to)).toEqual(read(text));
+});
+
+test("a picture can be dropped before any block at any depth, into and out of lists and quotes", () => {
+    const text = "![Moss](m.png)\n\n- one\n- two\n\n> quoted\n\nEnd.\n";
+    const doc = read(text);
+    expect(landings(doc.blocks)).toEqual([
+        { path: [0] },
+        { path: [1] },
+        { path: [1, 0, 0] },
+        { path: [1, 0, 0], after: true },
+        { path: [1, 1, 0] },
+        { path: [1, 1, 0], after: true },
+        { path: [2] },
+        { path: [2, 0] },
+        { path: [2, 0], after: true },
+        { path: [3] },
+        { path: [3], after: true },
+    ]);
+    expect(write(moveBlockTo(doc, [0], { path: [1, 1, 0], after: true }))).toBe("- one\n- two\n\n  ![Moss](m.png)\n\n> quoted\n\nEnd.\n");
+    expect(write(moveBlockTo(doc, [0], { path: [2, 0] }))).toBe("- one\n- two\n\n> ![Moss](m.png)\n>\n> quoted\n\nEnd.\n");
+    // and back out of a quote, to the end
+    const quoted = moveBlockTo(doc, [0], { path: [2, 0], after: true });
+    expect(write(moveBlockTo(quoted, [1, 1], { path: [2], after: true }))).toBe("- one\n- two\n\n> quoted\n\nEnd.\n\n![Moss](m.png)\n");
+    // out of a list item that holds nothing else
+    const alone = read("- ![Moss](m.png)\n- two\n\nEnd.\n");
+    expect(write(moveBlockTo(alone, [0, 0, 0], { path: [1], after: true }))).toBe("- two\n\nEnd.\n\n![Moss](m.png)\n");
+    expect(staysPut([1, 0, 0], { path: [1, 0, 0], after: true })).toBe(true);
+    // and where it then stands, for it to be picked there
+    expect(landedAt([0], { path: [2, 0] })).toEqual([1, 0]);
+    expect(landedAt([0], { path: [3], after: true })).toEqual([3]);
+    expect(landedAt([3], { path: [0] })).toEqual([0]);
+    expect(landedAt([1, 1], { path: [1, 0] })).toEqual([1, 0]);
 });
 
 test("in a .quire document the Markdown stays plain and the width and caption go to style.json, and come back", () => {

@@ -2,9 +2,9 @@
 // at each corner grows round it, and a small strip above it sets its alignment, puts it back to its
 // own size, opens its menu or takes it away. Dragging a corner resizes it, keeping its shape, drawn
 // gently to the text's full width, half and a third (pictures.ts counts that); the frame says which.
-// Dragging the picture itself lifts it, a line shows where it will land between the blocks, and
-// letting go puts it there. Each change is one undo step. Pasting or dropping picture files is the
-// surface's (surface.ts).
+// Dragging the picture itself lifts it; the text opens, with a line, where it will land between any
+// two blocks, in and out of lists and quotes too, and letting go puts it there. Each change is one
+// undo step. Pasting or dropping picture files is the surface's (surface.ts).
 //
 // Nothing stands under a picture but its caption, once it has words. Right-clicking it, the
 // keyboard's menu key, or the strip's three dots open its menu at the pointer: caption, description,
@@ -12,14 +12,13 @@
 // panel at the right, quiet labelled lines as the document's own facts there are (details.ts), where
 // they are written and chosen. It grows out of the line pressed and goes back into the picture.
 //
-// Only a picture standing as a block of its own is picked; one inside a line of text is not. One
-// inside a list or quote can be resized but not dragged elsewhere.
+// Only a picture standing as a block of its own is picked; one inside a line of text is not.
 //
 //   const pictures = createPictureTools(surface, { keep, margin });   // pictures.destroy()
 
 import { insetOf, DIALOG } from "./dialog";
 import { blockAt, removeBlock, setAlign, setImage, type Align, type Image } from "./document";
-import { moveTo, snapWidth } from "./pictures";
+import { landedAt, landings, moveBlockTo, snapWidth, staysPut } from "./pictures";
 import type { Operation, Surface } from "./surface";
 import { control, dots, EASE, flowMenu, icon, make, MOTION, springCurve, still, type Box, type MenuItem } from "./ui";
 
@@ -382,24 +381,37 @@ export function createPictureTools(surface: Surface, options: PictureOptions = {
 
     // ---- dragging a picture to another place ----
     const dropLine = make("div", "quire-drop-line");
+    /** How far the text opens where a dragged picture will land, in pixels. */
+    const ROOM = 40;
     function drag(event: PointerEvent, figure: HTMLElement) {
         const path = pathOf(figure);
         const picture = figure.querySelector("img")!;
         const begin = { x: event.clientX, y: event.clientY };
         let lifted: HTMLElement | undefined;
-        let to: number | undefined;
         picture.setPointerCapture(event.pointerId);
-        const gaps = () => {
-            const blocks = [...root.children] as HTMLElement[];
-            return blocks.map((block, index) => {
-                const box = block.getBoundingClientRect();
-                const before = blocks[index - 1]?.getBoundingClientRect();
-                return { index, y: before ? (before.bottom + box.top) / 2 : box.top - 4 };
-            }).concat(blocks.length ? [{ index: blocks.length, y: blocks[blocks.length - 1]!.getBoundingClientRect().bottom + 4 }] : []);
+        // every place it can land, measured once as the drag starts, in the page's own coordinates so that scrolling leaves them be:
+        // the edge of the block it goes before or after, the space there now, and the block's left and width for the line
+        const places = landings(surface.getDocument().blocks).flatMap((landing) => {
+            const element = surface.elementAt(landing.path);
+            if (!element) return [];
+            const box = element.getBoundingClientRect();
+            const style = getComputedStyle(element);
+            const neighbour = landing.after ? element.nextElementSibling : element.previousElementSibling;
+            const near = neighbour?.getBoundingClientRect();
+            const space = near ? (landing.after ? near.top - box.bottom : box.top - near.bottom) : parseFloat(landing.after ? style.marginBottom : style.marginTop);
+            return [{ landing, element, space: Math.max(0, space), y: (landing.after ? box.bottom : box.top) + scrollY, left: box.left, width: box.width }];
+        });
+        let open: (typeof places)[number] | undefined;
+        /** The text opens at a place to show where the picture will land, and closes where it was open before. */
+        const openAt = (place: typeof open) => {
+            if (open === place) return;
+            if (open) open.element.style[open.landing.after ? "marginBottom" : "marginTop"] = "";
+            open = place;
+            if (place) place.element.style[place.landing.after ? "marginBottom" : "marginTop"] = `${place.space + ROOM}px`;
         };
         const move = (moved: PointerEvent) => {
             if (!lifted) {
-                if (Math.hypot(moved.clientX - begin.x, moved.clientY - begin.y) < 6 || path.length !== 1) return;
+                if (Math.hypot(moved.clientX - begin.x, moved.clientY - begin.y) < 6) return;
                 // the picture lifts off the page where it was pressed, smaller, and follows the pointer
                 const box = picture.getBoundingClientRect();
                 lifted = picture.cloneNode() as HTMLElement;
@@ -407,16 +419,26 @@ export function createPictureTools(surface: Surface, options: PictureOptions = {
                 Object.assign(lifted.style, { left: `${box.left}px`, top: `${box.top}px`, width: `${box.width}px`, height: `${box.height}px`, transformOrigin: `${begin.x - box.left}px ${begin.y - box.top}px` });
                 document.body.append(lifted, dropLine);
                 figure.classList.add("quire-moving");
+                root.classList.add("quire-making-room");
                 requestAnimationFrame(() => lifted?.classList.add("up"));
             }
             lifted.style.translate = `${moved.clientX - begin.x}px ${moved.clientY - begin.y}px`;
-            const all = gaps();
-            const near = all.reduce((best, gap) => (Math.abs(gap.y - moved.clientY) < Math.abs(best.y - moved.clientY) ? gap : best), all[0]!);
-            to = near.index;
-            const still = to === path[0] || to === path[0]! + 1;
-            const box = root.getBoundingClientRect();
-            Object.assign(dropLine.style, { left: `${box.left}px`, width: `${box.width}px`, top: `${near.y}px` });
-            dropLine.classList.toggle("shown", !still);
+            // the place whose gap is nearest as the text is drawn now (the open one wider by its room, those after it pushed
+            // down by it); a place inside a list or quote is taken only with the pointer over its words, and then wins over
+            // the one outside it at about the same height
+            const y = moved.clientY + scrollY;
+            const at = open ? places.indexOf(open) : places.length;
+            const middle = (place: (typeof places)[number], index: number) => place.y + ((place.landing.after ? 1 : -1) * place.space) / 2 + (index > at ? ROOM : index === at ? ROOM / 2 : 0);
+            let best = places[0];
+            let score = Infinity;
+            places.forEach((place, index) => {
+                const far = Math.abs(middle(place, index) - y) + (moved.clientX < place.left ? 40 : -8 * place.landing.path.length);
+                if (far <= score) [best, score] = [place, far];
+            });
+            const going = best && !staysPut(path, best.landing) ? best : undefined;
+            openAt(going);
+            if (going) Object.assign(dropLine.style, { left: `${going.left}px`, width: `${going.width}px`, top: `${going.y + ((going.landing.after ? 1 : -1) * going.space + ROOM) / 2 - scrollY}px` });
+            dropLine.classList.toggle("shown", !!going);
             // near the window's top or bottom edge the page scrolls, so that a picture can go anywhere
             if (moved.clientY < 60) scrollBy(0, -12);
             else if (moved.clientY > innerHeight - 60) scrollBy(0, 12);
@@ -426,6 +448,9 @@ export function createPictureTools(surface: Surface, options: PictureOptions = {
             picture.removeEventListener("pointerup", done);
             picture.removeEventListener("pointercancel", done);
             if (!lifted) return;
+            const landing = open?.landing;
+            openAt(undefined);
+            setTimeout(() => root.classList.remove("quire-making-room"), 250);
             figure.classList.remove("quire-moving");
             dropLine.classList.remove("shown");
             const gone = lifted;
@@ -433,12 +458,9 @@ export function createPictureTools(surface: Surface, options: PictureOptions = {
             gone.classList.add("down");
             setTimeout(() => gone.remove(), still() ? 0 : 200);
             setTimeout(() => dropLine.remove(), 200);
-            if (to === undefined || to === path[0] || to === path[0]! + 1) return;
-            const target = to > path[0]! ? to - 1 : to;
-            const from = path[0]!;
-            const landing = to;
-            surface.run((doc) => moveTo(doc, from, landing), "structure");
-            requestAnimationFrame(() => pick([target]));
+            if (!landing) return;
+            surface.run((doc) => moveBlockTo(doc, path, landing), "structure");
+            requestAnimationFrame(() => pick(landedAt(path, landing)));
         };
         picture.addEventListener("pointermove", move);
         picture.addEventListener("pointerup", done);
