@@ -46,7 +46,7 @@ const count = (set: string) => all.filter((photo) => photo.set === set).length;
                 <img src={first.src} srcset={first.srcset} {sizes} width={first.width} height={first.height} alt={first.title} style={`background-color:${first.color}`} />
             </noscript>
         </div>
-        <figcaption>
+        <figcaption aria-live="polite">
             <h2 class="photo-title"><noscript>{first.title}</noscript></h2>
             <p class="photo-caption"><noscript>{first.caption}</noscript></p>
             <p class="photo-taken note"><noscript>{first.taken}</noscript></p>
