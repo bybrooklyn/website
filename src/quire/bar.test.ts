@@ -3,6 +3,10 @@
 // Run with `bun test src/quire`.
 
 import { expect, test } from "bun:test";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { browser, chromium } from "../../scripts/browser";
 import { addCode, addDivider, applyFormat, BASE_SIZE, clearFormat, FOLDS, formatAt, indentBy, nextSize, SIZE_STEPS, sizeNumber, sizeValue, typedSize, addFootnote, addImage, addTable, align, aligned, center, spacedAt, spacing, color, currentStyle, FLAGS, font, FONTS, highlight, link, linkAt, pressedAt, setStyleOf, size, toggle, toggleList, wordAt, type Action } from "./bar";
 import { collect } from "./styling";
 import { markdownOnly, type Paragraph, type TextRun } from "./document";
@@ -204,3 +208,49 @@ test("the tools fold in the order she gave: paint format, print, clear formattin
     const order = Object.entries(FOLDS).sort((a, b) => a[1] - b[1]).map(([name]) => name);
     expect(order.slice(0, 5)).toEqual(["paint", "print", "clear", "indent", "spacing"]);
 });
+
+test.skipIf(!chromium())(
+    "the word count is made after a key, not inside it, and reads again only the block the key changed",
+    async () => {
+        const folder = await mkdtemp(join(tmpdir(), "quire-bar-"));
+        const tab = await browser({ width: 1200, height: 800 });
+        try {
+            await Bun.write(
+                `${folder}/page.ts`,
+                `import { createSurface } from "${import.meta.dir}/surface.ts";
+                import { createBar } from "${import.meta.dir}/bar.ts";
+                import * as model from "${import.meta.dir}/document.ts";
+                import { read } from "${import.meta.dir}/read.ts";
+                const host = document.querySelector("#host");
+                const sheet = document.createElement("div");
+                host.append(sheet);
+                const surface = createSurface(sheet, read(Array.from({ length: 5000 }, (_, index) => "Paragraph " + index + " of five words.").join("\\n\\n") + "\\n"));
+                const bar = createBar(surface, { name: "Test" });
+                host.prepend(bar.element, bar.statusLine);
+                window.surface = surface;
+                window.model = model;`,
+            );
+            const built = await Bun.build({ entrypoints: [`${folder}/page.ts`], target: "browser" });
+            if (!built.success) throw new Error(built.logs.join("\n"));
+            await Bun.write(`${folder}/page.html`, `<!doctype html><meta charset="utf-8"><div id="host"></div><script type="module">${await built.outputs[0]!.text()}</script>`);
+            await tab.open(`file://${folder}/page.html`, 300);
+            const count = () => tab.run<string>("document.querySelector('.quire-count').textContent");
+            expect(await count()).toBe("25,000 words");
+            // the key's own work, from the change to the last listener, leaves the count as it was
+            const during = await tab.run<string>(`(() => {
+                surface.focus();
+                surface.setSelection({ anchor: { path: [2500], offset: 0 }, focus: { path: [2500], offset: 0 } });
+                surface.run((doc, selection) => model.insertText(doc, selection.focus, "two more "));
+                return document.querySelector(".quire-count").textContent;
+            })()`);
+            expect(during).toBe("25,000 words");
+            await tab.wait(300);
+            expect(await count()).toBe("25,002 words");
+            expect(tab.errors).toEqual([]);
+        } finally {
+            await tab.close();
+            await rm(folder, { recursive: true, force: true });
+        }
+    },
+    60_000,
+);

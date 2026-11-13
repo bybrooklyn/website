@@ -933,30 +933,37 @@ export function createBar(surface: Surface, options: BarOptions) {
 
     // ---- keeping it true to the cursor ----
 
+    // each top-level block's words are kept by the block, so that a count after a key reads again only the block it changed
+    const wordsIn = new WeakMap<Block, number>();
     const counted = (doc: Document) => {
-        const words = countWords(doc);
+        let words = 0;
+        for (const block of doc.blocks) {
+            let own = wordsIn.get(block);
+            if (own === undefined) wordsIn.set(block, (own = countWords({ ...doc, blocks: [block] })));
+            words += own;
+        }
         count.textContent = `${words.toLocaleString("en")} ${words === 1 ? "word" : "words"}`;
     };
     counted(surface.getDocument());
-    // it waits for a pause in a run of typing, but a change after a quiet moment (a document opened) is shown at once
+    // The count is made after the keystroke, never inside it (counting a long document's every word
+    // took most of the 16 ms a key may take), and at most every 250 ms in a run of typing; a change
+    // after a quiet moment (a document opened) is shown as soon as the key's work is done.
     let counting: ReturnType<typeof setTimeout> | undefined;
     let countingWaiting: Document | undefined;
+    let countedAt = -Infinity;
     surface.on("change", ({ doc }) => {
-        if (counting) {
-            countingWaiting = doc;
-            return;
-        }
-        counted(doc);
-        const settle = () => {
-            counting = undefined;
-            if (countingWaiting) {
-                const next = countingWaiting;
+        countingWaiting = doc;
+        if (counting) return;
+        counting = setTimeout(
+            () => {
+                counting = undefined;
+                countedAt = performance.now();
+                const next = countingWaiting!;
                 countingWaiting = undefined;
                 counted(next);
-                counting = setTimeout(settle, 250);
-            }
-        };
-        counting = setTimeout(settle, 250);
+            },
+            Math.max(0, countedAt + 250 - performance.now()),
+        );
     });
     surface.on("select", ({ selection, marks }) => {
         const doc = surface.getDocument();
