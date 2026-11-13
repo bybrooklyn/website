@@ -85,9 +85,16 @@ flowcharts from a `mermaid` fence drawn as SVG by its own code (`diagram.ts`), a
 in an `.mdx` file shown as cards of fields (`components.ts`). Typed `->`, `<-`, `=>`, `!=`, `<=` and `>=`
 become their signs.
 
-**Pictures** (`pictures.ts`, `picture-tools.ts`). Picked, resized, aligned and captioned in place. A
-resized or captioned picture is written as one line of HTML the site's Markdown already passes through. A
-picture in a document in the browser is kept in the browser with it.
+**Pictures** (`pictures.ts`, `picture-tools.ts`). A picture lands exactly at the caret (a dropped one where
+it was dropped), splitting a paragraph there. It sits at the left unless moved; centre and right are
+chosen, and written as `<div align>`. Nothing stands under it but its caption, once it has words. Picked,
+it is resized from its corners and dragged between any two blocks, into and out of lists and quotes, the
+text opening where it will land. A right-click, the menu key or the strip's three dots open its menu;
+caption, description, alignment and size are set in a panel at the right, in the manner of the
+document's facts there (on a phone, at the window's foot). Text can flow round a picture at the left or
+right, written as HTML's own `align` on the `<img>`. A resized, captioned or wrapped picture is written as
+one line of HTML the site's Markdown already passes through. A picture in a document in the browser is
+kept in the browser with it.
 
 **Notes** (`comments.ts`, `comment-margin.ts`). Notes on selected words, kept beside the text and never
 written into the Markdown. There are no accounts; a note is the writer's own.

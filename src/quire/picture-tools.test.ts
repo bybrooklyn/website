@@ -149,6 +149,24 @@ test("wrap text from the menu floats the picture with the words beside it, as on
     expect(await page!.md()).toBe(`One line.\n\n![A wide picture](${picture})\n\nAnother line.\n`);
 });
 
+test("Replace in the menu swaps the picture's file and keeps the rest, as one undo step; Remove takes it away", async () => {
+    if (skip()) return;
+    const { tab } = page!;
+    await start();
+    await tab.files([new URL(picture).pathname]);
+    await rightClick();
+    await page!.press(".quire-picture-menu .quire-menu-line", "Replace");
+    await tab.wait(400);
+    // the test page keeps every new picture at /picture.png
+    expect(await page!.md()).toBe("One line.\n\n![A wide picture](/picture.png)\n\nAnother line.\n");
+    await tab.run("q.surface.undo()");
+    expect(await page!.md()).toBe(`One line.\n\n![A wide picture](${picture})\n\nAnother line.\n`);
+    await rightClick();
+    await page!.press(".quire-picture-menu .quire-menu-line", "Remove");
+    await tab.wait(60);
+    expect(await page!.md()).toBe("One line.\n\nAnother line.\n");
+});
+
 test("a picture dragged into a list lands in its item, the text opening there while it is held, and dragged out again it leaves the list", async () => {
     if (skip()) return;
     const { tab } = page!;
