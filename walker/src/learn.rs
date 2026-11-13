@@ -221,7 +221,8 @@ impl Judge {
         let costs = fell + DOWN_COST * self.seconds_down + KNEE_COST * self.seconds_kneeling + WORK_COST * self.work - manner;
         let tall = self.tallness / self.steps.max(1) as f32;
         let early = if self.finished { EARLY_REWARD * (self.most_steps - self.steps.min(self.most_steps)) as f32 * STEP } else { 0.0 };
-        let distance = distance.min(self.length);
+        // a run whose numbers broke claims no distance at all, not an endless one
+        let distance = if distance.is_finite() { distance.min(self.length) } else { 0.0 };
         let score = match self.goal {
             // a little for every second on its feet, so that a dive forward and a fall is not the easy answer
             Goal::Far | Goal::Fast | Goal::Course => distance + UP_REWARD * (self.steps as f32 * STEP - self.seconds_down) + AIR_REWARD * self.seconds_flying,
@@ -231,8 +232,17 @@ impl Judge {
             // distance only while carrying: a dropped ball ends the run and costs as a fall does
             Goal::Carry => distance + UP_REWARD * (self.steps as f32 * STEP - self.seconds_down) - if self.dropped { FALL_COST } else { 0.0 },
         } + early - costs;
+        let (score, distance) = fit_to_rank(score, distance);
         Outcome { score, distance, seconds_down: self.seconds_down, work: self.work }
     }
+}
+
+/// A score and a distance as evolution can rank them: a score that is not a finite number counts as
+/// the worst there is, and such a distance as none. Otherwise a NaN, which is neither better nor
+/// worse than anything, would sit at the top of a generation, be carried on unchanged as one of the
+/// best, and keep the best so far from ever changing again. Finite numbers pass unchanged.
+fn fit_to_rank(score: f32, distance: f32) -> (f32, f32) {
+    (if score.is_finite() { score } else { f32::NEG_INFINITY }, if distance.is_finite() { distance } else { 0.0 })
 }
 
 /// A seeded random number generator, SplitMix64. Small, quick and good enough for evolution.
@@ -626,6 +636,7 @@ impl Trainer {
         if index >= self.settings.population || self.scored[index] {
             return;
         }
+        let (score, distance) = fit_to_rank(score, distance);
         self.scores[index] = score;
         self.distances[index] = distance;
         self.scored[index] = true;
@@ -775,6 +786,43 @@ impl Trainer {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_score_that_is_not_a_number_counts_as_the_worst_and_evolution_goes_on() {
+        let settings = Settings { population: 6, seconds: 2.0, ..Settings::default() };
+        let mut trainer = Trainer::new(Description { legs: 2, carry: false, leap: false }, settings, &flat_ground(), 7).unwrap();
+        // the first member's answer comes back broken, the others' as numbers
+        trainer.record(0, f32::NAN, f32::NAN);
+        for index in 1..6 {
+            trainer.record(index, index as f32, 1.0);
+        }
+        assert_eq!(trainer.generation, 1);
+        assert_eq!(trainer.best_score, 5.0, "the best is the best number, not the broken one");
+        assert_eq!(trainer.history_best, [5.0]);
+        // the broken member is not carried on as one of the best, and the best so far still rises
+        assert!(trainer.scores.iter().all(|score| score.is_finite()));
+        for index in 0..6 {
+            if !trainer.scored[index] {
+                trainer.record(index, 10.0 + index as f32, 2.0);
+            }
+        }
+        assert_eq!(trainer.generation, 2);
+        assert!(trainer.best_score > 5.0, "evolution goes on: {}", trainer.best_score);
+        // a distance that is not finite counts as none
+        assert!(!trainer.scored[5]);
+        trainer.record(5, f32::INFINITY, f32::INFINITY);
+        assert_eq!((trainer.scores[5], trainer.distances[5]), (f32::NEG_INFINITY, 0.0));
+    }
+
+    #[test]
+    fn a_brain_whose_numbers_break_scores_the_worst_and_goes_nowhere() {
+        let settings = Settings { population: 4, ..Settings::default() };
+        let mut trainer = Trainer::new(Description { legs: 2, carry: false, leap: false }, settings, &flat_ground(), 7).unwrap();
+        let broken = vec![f32::NAN; trainer.layout.weights()];
+        let mut into = [0.0; 2];
+        trainer.evaluate(&broken, &mut into);
+        assert_eq!(into, [f32::NEG_INFINITY, 0.0], "not an endless distance");
+    }
 
     #[test]
     fn the_same_seed_learns_the_same_way() {
