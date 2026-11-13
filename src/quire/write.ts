@@ -42,7 +42,7 @@ export function write(doc: Document): string {
     let body = writeBlocks(doc.blocks, context, false);
     // a `---` on the first line opens frontmatter when another such line comes later, so a line across
     // the page that has come to the top is written `***` when it would be read so
-    if (doc.frontmatter === null && doc.lead === "" && doc.blocks[0]?.kind === "divider" && /^---[ \t]*(?=\r?\n|$)/.test(body) && /\n(?:---|\.\.\.)[ \t]*(?:\r?\n|$)/.test(body)) body = body.replace(/^---[ \t]*/, "***");
+    if (doc.frontmatter === null && doc.lead === "" && /^---[ \t]*(?=\r?\n|$)/.test(body) && /\n(?:---|\.\.\.)[ \t]*(?:\r?\n|$)/.test(body)) body = body.replace(/^---[ \t]*/, "***");
     return doc.bom + (doc.frontmatter ?? "") + doc.lead + body;
 }
 
@@ -113,6 +113,13 @@ function writeBlocks(all: Block[], context: Context, inside: boolean): string {
         const each = blocks[index]!;
         texts.push(each.source ?? said(writeBlock(each, context), `a block of kind ${String(each?.kind)}`));
     });
+    // a block written afresh as nothing at all (a list left holding only empty lines) takes no room
+    for (let index = blocks.length - 1; index >= 0; index--) {
+        if (texts[index] !== "" || blocks[index]!.source !== undefined || blocks.length === 1) continue;
+        if (index === blocks.length - 1 && index > 0) blocks[index - 1] = { ...blocks[index - 1]!, gap: blocks[index]!.gap };
+        blocks.splice(index, 1);
+        texts.splice(index, 1);
+    }
     let out = "";
     blocks.forEach((block, index) => {
         out += texts[index];
@@ -439,10 +446,10 @@ function writeLeaves(all: Leaf[], context: Context, cell: boolean, before = " ",
     const items: (Leaf | undefined)[] = [];
     const stack: Sign[] = [];
     let pairs = 0;
-    // a mark closes before the spaces it ends on, as `**bold **` does not read back
+    // a mark closes before the spaces and line breaks it ends on, as `**bold **` does not read back
     const spaces = (index: number) => {
         const leaf = items[index];
-        return leaf?.kind === "text" && !literal(leaf) && /^\s+$/.test(leaf.text);
+        return leaf?.kind === "break" || (leaf?.kind === "text" && !literal(leaf) && /^\s+$/.test(leaf.text));
     };
     const close = () => {
         const sign = stack.pop()!;
