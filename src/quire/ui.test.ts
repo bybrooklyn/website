@@ -85,7 +85,8 @@ const live = !!chromium();
 let folder = "";
 let tab: Browser;
 const page = `
-import { flowMenu } from "${import.meta.dir}/ui.ts";
+import { flowMenu, linkForm } from "${import.meta.dir}/ui.ts";
+window.linkForm = linkForm;
 const lines = (count) => Array.from({ length: count }, (_, at) => ({ label: "Line " + (at + 1), run: () => {} }));
 window.menu = flowMenu("A menu");
 window.other = flowMenu("Another");
@@ -207,6 +208,24 @@ used("a menu opened from the keyboard while writing (a shortcut) gives the focus
     expect(await run<string>("document.activeElement.id")).toBe("writing");
     await settle();
     await run("document.getElementById('writing').remove()");
+});
+
+used("the Enter that picks an input method's word in a field is the input method's: the link field sets its address only on the Enter after", async () => {
+    const set = await run<string[]>(`(() => {
+        const said = [];
+        const form = window.linkForm(undefined, { set: (href) => said.push(href), remove() {}, cancel: () => said.push("cancelled") });
+        document.body.append(form);
+        const field = form.querySelector("input");
+        field.value = "https://example.com/日本";
+        // Chrome and Firefox mark the key as composing; Safari ends the composition first and sends key code 229
+        field.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", isComposing: true, bubbles: true, cancelable: true }));
+        field.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", keyCode: 229, bubbles: true, cancelable: true }));
+        field.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", isComposing: true, bubbles: true, cancelable: true }));
+        field.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+        form.remove();
+        return said;
+    })()`);
+    expect(set).toEqual(["https://example.com/日本"]);
 });
 
 used("closing, it is seen going back onto its control's edge, and opening another menu closes it", async () => {

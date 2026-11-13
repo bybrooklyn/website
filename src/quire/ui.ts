@@ -229,6 +229,15 @@ export function placeNear(target: Box, size: { width: number; height: number }, 
     return { left: Math.round(left), top: Math.round(top), side: chosen };
 }
 
+/**
+ * Whether a key belongs to an input method's composition: the Enter that picks a word in Chinese,
+ * Japanese or Korean, or the Escape that gives it up, is the input method's and not the field's.
+ * Safari ends the composition before that key arrives, so it is known there by its key code, 229.
+ */
+export function composing(event: KeyboardEvent): boolean {
+    return event.isComposing || event.keyCode === 229;
+}
+
 /** A field for a link's address, with a button to set it and, for a link already there, one to take it off. Enter sets, Escape cancels. */
 export function linkForm(current: string | undefined, done: { set(href: string): void; remove(): void; cancel(): void }): HTMLElement {
     const form = make("div", "quire-link");
@@ -241,6 +250,7 @@ export function linkForm(current: string | undefined, done: { set(href: string):
     const set = () => (field.value.trim() ? done.set(field.value.trim()) : current ? done.remove() : done.cancel());
     field.addEventListener("keydown", (event) => {
         event.stopPropagation();
+        if (composing(event)) return;
         if (event.key === "Enter") {
             event.preventDefault();
             set();

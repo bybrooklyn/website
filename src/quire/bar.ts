@@ -50,7 +50,7 @@ import {
 import type { State } from "./history";
 import { activeBlock, caret, collapsed, mark, pageBreakAt, rangeOf, sameLeaf, tableOf } from "./keys";
 import type { Surface } from "./surface";
-import { closeOthers, control, dots, flowMenu, glyph, icon, make, moveIndex, still, type Menu, type MenuItem } from "./ui";
+import { closeOthers, composing, control, dots, flowMenu, glyph, icon, make, moveIndex, still, type Menu, type MenuItem } from "./ui";
 
 /** What a button does: from the state at the cursor to the next one. */
 export type Action = (state: State) => State;
@@ -612,6 +612,7 @@ export function createBar(surface: Surface, options: BarOptions) {
         };
         field.addEventListener("input", show);
         field.addEventListener("keydown", (event) => {
+            if (composing(event)) return;
             if (event.key === "Enter") found.querySelector<HTMLElement>(".quire-menu-line")?.click();
             if (event.key === "ArrowDown") {
                 event.preventDefault();
@@ -720,6 +721,7 @@ export function createBar(surface: Surface, options: BarOptions) {
     sizeField.setAttribute("aria-label", "Text size");
     sizeField.title = "Text size";
     sizeField.addEventListener("keydown", (event) => {
+        if (composing(event)) return;
         if (event.key === "Enter") {
             event.preventDefault();
             setSize(typedSize(parseFloat(sizeField.value), richOn));
