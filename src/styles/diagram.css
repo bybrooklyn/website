@@ -50,11 +50,13 @@
 /*
  * Three columns: who is asking, what carries them, and the server. The two
  * boxes on the left are one width, so both lines start, end and are named at
- * the same places.
+ * the same places. The middle column is never narrower than its name and the
+ * two short lines either side: on the narrowest phones the boxes' words wrap
+ * to give it room, rather than the name running under the server's box.
  */
 .network {
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-columns: auto 1fr auto;
     gap: 0.75rem 0;
     align-items: stretch;
     font-size: 0.95rem;
@@ -72,7 +74,7 @@
     border: 0.0625rem solid var(--rule);
     border-radius: var(--radius);
     background: var(--surface);
-    white-space: nowrap;
+    text-align: center;
 }
 
 /* a line from a node to the server, touching both, named in its middle for what carries it */
