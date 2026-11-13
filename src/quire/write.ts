@@ -658,7 +658,8 @@ function escapeText(value: string, context: Context, cell: boolean, before: stri
         const left = index === 0 ? before : value[index - 1]!;
         const right = index === value.length - 1 ? after : value[index + 1]!;
         const third = index + 2 < value.length ? value[index + 2]! : index + 2 === value.length ? after : "";
-        const space = (other: string) => /\s/.test(other);
+        // a no-break space is written as &nbsp; (below), which is not a space to the reader
+        const space = (other: string) => /\s/.test(other) && other !== "\u00a0";
         const word = (other: string) => /[\p{L}\p{N}]/u.test(other);
         const touching = (sign: string) => (index === 0 && signs[0] === sign) || (index === value.length - 1 && signs[1] === sign);
         const risky =
