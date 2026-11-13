@@ -327,10 +327,11 @@ function put(state: State, block: Block): { doc: Document; path: number[] } {
 
 const sibling = (path: number[]) => [...path.slice(0, -1), path[path.length - 1]! + 1];
 
-/** Adds a table of three columns and three rows, the cursor in its first cell. */
+/** Adds a table of three columns and three rows, the cursor in its first cell; with nothing after it, an empty line follows it, as in Docs, to go on writing under it. */
 export const addTable: Action = (state) => {
-    const { doc, path } = put(state, table(["", "", ""], [["", "", ""], ["", "", ""]]));
-    return { doc, selection: caret([...path, 0, 0], 0) };
+    const placed = put(state, table(["", "", ""], [["", "", ""], ["", "", ""]]));
+    const doc = blockAt(placed.doc, sibling(placed.path)) ? placed.doc : insertBlock(placed.doc, placed.path, paragraph());
+    return { doc, selection: caret([...placed.path, 0, 0], 0) };
 };
 
 /** Adds an empty code block, the cursor in it. */

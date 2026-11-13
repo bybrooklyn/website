@@ -9,7 +9,7 @@ import { join } from "node:path";
 import { browser, chromium, type Browser } from "../../scripts/browser";
 import { addCode, addDivider, applyFormat, BASE_SIZE, clearFormat, FOLDS, formatAt, indentBy, nextSize, SIZE_STEPS, sizeNumber, sizeValue, typedSize, addFootnote, addImage, addTable, align, aligned, center, spacedAt, spacing, color, currentStyle, FLAGS, font, FONTS, highlight, link, linkAt, pressedAt, setStyleOf, size, toggle, toggleList, wordAt, type Action } from "./bar";
 import { collect } from "./styling";
-import { markdownOnly, type Paragraph, type TextRun } from "./document";
+import { blockAt, markdownOnly, type Paragraph, type TextRun } from "./document";
 import type { Selection } from "./document";
 import type { State } from "./history";
 import { caret } from "./keys";
@@ -107,6 +107,9 @@ test("the + menu adds a table, code, a divider, a picture and a footnote, the cu
     const tabled = run(addTable, at("Above\n", caret([0], 5)));
     expect(md(tabled)).toBe("Above\n\n|     |     |     |\n| --- | --- | --- |\n|     |     |     |\n|     |     |     |\n");
     expect(tabled.selection).toEqual(caret([1, 0, 0], 0));
+    // at the end of the document an empty line follows the table, to write under it
+    expect(blockAt(tabled.doc, [2])?.kind).toBe("paragraph");
+    expect(blockAt(run(addTable, at("Above\n\nBelow\n", caret([0], 5))).doc, [2])).toMatchObject({ kind: "paragraph", runs: [{ text: "Below" }] });
     // on an empty line the block takes the line's place
     const empty = run(addCode, { doc: read("A\n\nB\n"), selection: caret([0], 1) });
     expect(empty.selection).toEqual(caret([1], 0));
