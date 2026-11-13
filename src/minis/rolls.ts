@@ -23,19 +23,26 @@ export interface Roll {
     dice: Sides[];
 }
 
+/** The longest roll that is read, in characters once tidied: far more than sixty dice can need, so that a link cannot hand in a megabyte. */
+const LONGEST = 500;
+
+/** A roll as it is read and kept: in small letters, with each run of spaces made one. */
+export const tidy = (text: string): string => text.toLowerCase().replace(/\s+/g, " ").trim();
+
 /** Reads a typed roll. Returns a sentence saying what is wrong if it cannot be read. */
 export function read(text: string): Roll | string {
-    const tidy = text.toLowerCase().replace(/\s+/g, " ").trim();
-    if (!tidy) return "Type a roll, such as 2d6+3.";
+    const written = tidy(text);
+    if (!written) return "Type a roll, such as 2d6+3.";
+    if (written.length > LONGEST) return "That roll is too long to read.";
     const groups: Group[] = [];
     let plus = 0;
     // one piece at a time: a sign, then either dice (with what to drop) or a number
     const piece = /\s*([+-])?\s*(?:(\d*)d(\d+)((?:\s*(?:drop lowest|drop highest|dl|dh|kh|kl|adv(?:antage)?|dis(?:advantage)?)\s*\d*)*)|(\d+))/y;
     let reached = 0;
-    while (reached < tidy.length) {
+    while (reached < written.length) {
         piece.lastIndex = reached;
-        const found = piece.exec(tidy);
-        if (!found || found[0].length === 0) return `I can't read "${tidy.slice(reached).trim()}".`;
+        const found = piece.exec(written);
+        if (!found || found[0].length === 0) return `I can't read "${written.slice(reached).trim()}".`;
         reached = piece.lastIndex;
         const sign = found[1] === "-" ? -1 : 1;
         if (found[5] !== undefined) {

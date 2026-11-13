@@ -1,6 +1,6 @@
 // What reading a typed roll, adding it up and lining its numbers up are held to. Run with `bun run test`.
 import { expect, test } from "bun:test";
-import { lineUp, numbers, read, row, total, type Roll } from "./rolls";
+import { lineUp, numbers, read, row, tidy, total, type Roll } from "./rolls";
 
 const ok = (text: string) => read(text) as Roll;
 
@@ -80,6 +80,18 @@ test("the numbers left out of a roll's sum are marked, and what is not marked ad
     expect(rolled.filter((one) => !one.dropped).reduce((sum, one) => sum + one.sign * one.value, 0) + roll.plus).toBe(total(roll, shown).total);
     const less = ok("d20 - d4");
     expect(numbers(less, [12, 3]).map((one) => one.sign)).toEqual([1, -1]);
+});
+
+test("a roll from a link is kept as its tidy text, and one too long to be a roll is not read", () => {
+    expect(tidy("  D6   +\t2 ")).toBe("d6 + 2");
+    expect(tidy(`d6${" ".repeat(100_000)}`)).toBe("d6");
+    expect(ok(`d6${" ".repeat(100_000)}`).dice).toEqual([6]);
+    // the longest roll the buttons can make is far shorter than this; what is said back stays short too
+    const long = read("1".repeat(1_000_000));
+    expect(typeof long).toBe("string");
+    expect((long as string).length).toBeLessThan(100);
+    expect(typeof read(Array.from({ length: 60 }, () => "1d6").join(" + "))).toBe("object");
+    expect(ok(Array.from({ length: 30 }, () => "2d6 kh1").join(" + ")).dice.length).toBe(60);
 });
 
 test("keeping or dropping the highest or the lowest, for any number below, equal to or above the dice rolled, never turns into its opposite", () => {

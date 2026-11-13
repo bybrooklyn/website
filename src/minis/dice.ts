@@ -14,7 +14,7 @@ import { turn } from "../mote/space";
 import { el, gently, toward, type Mote, type Scene } from "../mote/stage";
 import { copyText } from "../scripts/copy";
 import { still } from "../scripts/opening";
-import { MOST, lineUp, numbers, read, row, total, type Roll } from "./rolls";
+import { MOST, lineUp, numbers, read, row, tidy, total, type Roll } from "./rolls";
 import { SHAPES, TOWER, slabs, throwDice, trayFor, type Sides, type Slab, type Throw, type Tray } from "./tower";
 
 export const label = "A dice tower. Dice dropped in at the top tumble down its ramps into a tray.";
@@ -198,12 +198,14 @@ export default function dice(m: Mote): Scene {
         if (said) said.textContent = text;
     };
     let render = () => {};
-    const send = (text: string, what = text) => {
+    // what is kept, shown and linked is the roll as it was read, so a link's stray spaces and capitals are not
+    const send = (text: string, what = tidy(text)) => {
         const roll = read(text);
         if (typeof roll === "string") return say(roll);
         show(throwDice(roll.dice, chance));
         // a roll opened from a link is no longer the one in the address once another is made
-        if (m.link.get("roll") && m.link.get("roll") !== what) m.link.set("roll", null);
+        const linked = m.link.get("roll");
+        if (linked && tidy(linked) !== what) m.link.set("roll", null);
         waiting = { roll, what };
         last = what;
         say("Rolling…");
