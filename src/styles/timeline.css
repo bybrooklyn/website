@@ -254,8 +254,8 @@
         margin-bottom: 1em;
     }
 
-    .timeline-rail,
-    .timeline-count {
-        display: none !important;
+    .timeline.live .timeline-rail,
+    .timeline.live .timeline-count {
+        display: none;
     }
 }

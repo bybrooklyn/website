@@ -140,9 +140,8 @@
     height: 0.25rem;
     margin-top: -0.125rem;
     border-radius: 0.125rem;
-    background: var(--rule);
+    background: var(--field-edge);
 }
-
 
 /* Placed by the script (inset-inline-start); it swells a little while held and settles back when let go. */
 .spectrum-thumb {
@@ -215,7 +214,7 @@
 .spectrum-share-row input {
     flex: 1 1 16rem;
     min-width: 0;
-    border: 0.0625rem solid var(--rule);
+    border: 0.0625rem solid var(--field-edge);
     border-radius: var(--radius);
     padding: 0.45rem 0.75rem;
     background: var(--surface);
@@ -278,13 +277,6 @@
         opacity 0.2s ease,
         scale 0.5s var(--ease),
         translate 0.5s var(--ease);
-}
-
-/* The words about it, under the thing itself, set apart from it by a rule. */
-.spectrum-about {
-    margin-top: calc(var(--line) * 2.5);
-    padding-top: calc(var(--line) * 0.5);
-    border-top: 0.0625rem solid var(--rule);
 }
 
 @media (prefers-reduced-motion: reduce) {

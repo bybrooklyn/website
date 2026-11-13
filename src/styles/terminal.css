@@ -12,7 +12,8 @@
     --c5: oklch(0.77 0.16 300);
     --c6: oklch(0.82 0.1 200);
     --c7: oklch(0.86 0.02 300);
-    --c8: oklch(0.55 0.04 300);
+    /* bright black, which programs use for quiet notes to be read: just light enough for 4.5:1 here (4.55) */
+    --c8: oklch(0.575 0.04 300);
     --c9: oklch(0.8 0.15 20);
     --c10: oklch(0.87 0.14 150);
     --c11: oklch(0.9 0.12 90);
@@ -208,6 +209,10 @@
 @media (prefers-reduced-motion: reduce) {
     .terminal-screen .cursor {
         animation: none;
+    }
+
+    .terminal-bar button {
+        transition: background-color 0.15s ease;
     }
 
     .terminal-bar .terminal-again {

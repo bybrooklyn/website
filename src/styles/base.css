@@ -26,6 +26,8 @@ body {
     margin: 0 auto;
     padding: calc(var(--line) * 1.25) var(--gutter) calc(var(--line) * 1.5);
     display: grid;
+    /* never wider than the window, however long a word in a table */
+    grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto 1fr auto;
     row-gap: calc(var(--line) * 2.5);
     font-size: var(--text);
@@ -109,18 +111,24 @@ pre {
     font-weight: 400;
 }
 
+/* Above everything fixed on the page (the opened panel and its strip, the viewer at 60), which would
+   otherwise be painted over it. */
 .skip {
     position: absolute;
+    z-index: 70;
     left: var(--gutter);
     top: 0;
     padding: 0.25em 0.75em;
     background: var(--ink);
     color: var(--ground);
     translate: 0 -120%;
+    /* it comes down from the top of the window when reached, and goes back up */
+    transition: translate 0.2s var(--ease);
 }
 
+/* down from the window's edge by a little more than its focus ring, which is then seen whole */
 .skip:focus {
-    translate: 0 0;
+    translate: 0 0.4rem;
 }
 
 /* The page's main part takes focus from the skip link and the to-top button, to move the keyboard there; it is not a control, so no ring. */
@@ -269,7 +277,8 @@ h1 + .lede,
 
 @media (prefers-reduced-motion: reduce) {
     .reveal.ready,
-    .reveal.ready > span {
+    .reveal.ready > span,
+    .skip {
         transition: none;
     }
 }
@@ -314,21 +323,49 @@ h1 + .lede,
     overflow: hidden;
 }
 
+/*
+ * Open and at rest, nothing is clipped, so the focus ring of a button at the fold's edge is seen
+ * whole. While it opens it clips as before: the animation holds overflow hidden for as long as it
+ * grows. Shutting clips at once, as the rule above says.
+ */
+.fold.open > * {
+    overflow: visible;
+    animation: fold-opening var(--grow) step-end;
+}
+
+@keyframes fold-opening {
+    from,
+    to {
+        overflow: hidden;
+    }
+}
+
 @media (prefers-reduced-motion: reduce) {
     .fold {
         transition: none;
+    }
+
+    .fold.open > * {
+        animation: none;
     }
 }
 
 /*
  * The same ring on everything that can be pressed, when it is reached by keyboard: here, once. A thing
- * that needs it to stand further off sets --ring-offset beside its own rules.
+ * that needs it to stand further off sets --ring-offset beside its own rules. A code block that scrolls
+ * and a video's controls take the keyboard too, so they have it as well. Where the focused thing is
+ * drawn by something round it (the search field, the viewer's circle), the ring goes round that.
+ *
+ * Two things fill a frame that clips, so a ring outside them could not be seen: a mini's canvas
+ * (minis.css) and the type tester's text (type.css). They draw the same ring just inside their edge.
  */
 a:focus-visible,
-:where(button, summary, [role="button"], input, select):focus-visible,
+:where(button, summary, [role="button"], input, select, pre, video):focus-visible,
 [data-zoom]:focus-visible,
 .flag:focus-visible,
 .strip:focus-visible .strip-button,
+.viewer-menu:has(.viewer-dots:focus-visible),
+.tonetags-find:has(input:focus-visible),
 .spectrum-track:has(input:focus-visible) .spectrum-thumb {
     outline: 0.125rem solid var(--accent);
     outline-offset: var(--ring-offset, 0.15rem);
@@ -726,13 +763,33 @@ h1 + .about {
     border-color: var(--accent);
 }
 
-/* The line to press, under the picture: written as a link is, with a triangle before it, and beside it where the game comes from. */
+/*
+ * The line to press, under the picture: written as a link is, with a triangle before it, and beside it
+ * where the game comes from. Once pressed it draws shut and the game is in the picture's place: its row
+ * of the grid goes from its whole height to none, so however far it wraps it is never cut short, and
+ * it clips only once it is shutting, so the button's focus ring is seen whole until then.
+ */
+.play-here {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
+    transition: grid-template-rows 0.4s var(--ease);
+}
+
+.play-here.playing {
+    grid-template-rows: auto 0fr;
+}
+
 .play-line {
     display: flex;
     flex-wrap: wrap;
     align-items: baseline;
     gap: 0.2rem 1.2rem;
+    min-height: 0;
     margin: calc(var(--line) * 0.5) 0 0;
+    transition:
+        opacity 0.25s ease,
+        margin 0.4s var(--ease);
 }
 
 .play-button {
@@ -754,23 +811,12 @@ h1 + .about {
     text-decoration-color: var(--accent);
 }
 
-/* once it is pressed the line draws shut, and the game is in the picture's place */
-.play-line {
-    max-height: 4rem;
-    overflow: hidden;
-    transition:
-        max-height 0.4s var(--ease),
-        opacity 0.25s ease,
-        margin 0.4s var(--ease);
-}
-
 .play-here.playing .play-line {
-    max-height: 0;
     margin-top: 0;
+    overflow: hidden;
     opacity: 0;
     visibility: hidden;
     transition:
-        max-height 0.4s var(--ease),
         opacity 0.25s ease,
         margin 0.4s var(--ease),
         visibility 0s 0.4s;
@@ -787,6 +833,7 @@ h1 + .about {
 }
 
 @media (prefers-reduced-motion: reduce) {
+    .play-here,
     .play-line,
     .play-here.playing .play-line {
         transition: none;
@@ -875,7 +922,7 @@ h1 + .about {
         overflow: visible;
         white-space: normal;
         color: var(--muted);
-        font-size: var(--small, 0.85em);
+        font-size: 0.85em;
     }
 
     .reveal.rights .reveal-short {

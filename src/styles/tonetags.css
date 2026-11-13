@@ -11,115 +11,13 @@
     grid-column: 1 / -1;
 }
 
-/* The search: a soft rounded field the width of the list, a magnifier at its start. Its edge takes the accent while it is typed in. */
-/* The search. */
+/* The search: a soft rounded field the width of the list, a magnifier at its start. */
 .tonetags-top {
-    /* how tall the field and the button are; the button at rest is as wide as this too, so that it is a circle */
+    /* how tall the field is */
     --tall: 3rem;
     display: flex;
     align-items: center;
     gap: 0.5rem;
-}
-
-/* NOT ON THE PAGE AT PRESENT, kept to be used again: a button that copies a link to the page (a `button.tonetags-copy` put
-   in `.tonetags-top`, holding a `.tonetags-copy-rest` with the symbol and a `.tonetags-copy-more`, and a `.tonetags-copy-done`;
-   src/scripts/tonetags.ts wires it when it is there). */
-/* A round button the height of the field beside it, with the field's own quiet edge and ground. At rest it is a circle round
-   the copy symbol; its edge takes the accent when it is pointed at, and it gives a little when pressed. */
-.tonetags-copy {
-    flex: none;
-    box-sizing: border-box;
-    /* what is in it is put in its middle both ways; left to the line of text it would sit a little high */
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    height: var(--tall);
-    min-width: var(--tall);
-    /* the symbol sits in the middle of the circle: half of what is left of the width once the symbol and the edges are taken out */
-    padding: 0 calc((var(--tall) - 1.1rem) / 2 - 0.0625rem);
-    border: 0.0625rem solid var(--rule);
-    border-radius: calc(var(--tall) / 2);
-    background: var(--surface);
-    color: var(--ink);
-    font: inherit;
-    white-space: nowrap;
-    cursor: pointer;
-    transition:
-        border-color 0.15s ease,
-        scale 0.2s var(--ease);
-}
-
-.tonetags-copy:is(:hover, :focus-visible) {
-    border-color: var(--accent);
-}
-
-/* the field's and the button's edges show where the keyboard is; no second ring is drawn round the button */
-.tonetags-copy:focus-visible {
-    outline: none;
-}
-
-.tonetags-copy-rest {
-    display: inline-flex;
-    align-items: center;
-}
-
-.tonetags-copy svg {
-    flex: none;
-    width: 1.1rem;
-    height: 1.1rem;
-    fill: none;
-    stroke: currentColor;
-    stroke-width: 1.4;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-}
-
-/* the words are always there, drawn shut beside the symbol; they open out when the button is pointed at or reached by keyboard */
-.tonetags-copy-more {
-    display: grid;
-    grid-template-columns: 0fr;
-    opacity: 0;
-    transition:
-        grid-template-columns 0.3s var(--ease),
-        opacity 0.2s ease;
-}
-
-.tonetags-copy-more > span {
-    min-width: 0;
-    overflow: hidden;
-    white-space: nowrap;
-}
-
-/* the room between the symbol and the words opens with them */
-.tonetags-copy-more > span::before {
-    content: "";
-    display: inline-block;
-    width: 0.55em;
-}
-
-.tonetags-copy:is(:hover, :focus-visible) .tonetags-copy-more {
-    grid-template-columns: 1fr;
-    opacity: 1;
-}
-
-/* once it has copied it says so for a moment, in place of its own words */
-.tonetags-copy-done,
-.tonetags-copy[data-copied] .tonetags-copy-rest {
-    display: none;
-}
-
-.tonetags-copy[data-copied] .tonetags-copy-done {
-    display: inline;
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .tonetags-copy-more {
-        transition: none;
-    }
-}
-
-.tonetags-copy:active {
-    scale: 0.96;
 }
 
 .tonetags-find {
@@ -131,14 +29,9 @@
     align-items: center;
     gap: 0.7rem;
     padding: 0 1.1rem;
-    border: 0.0625rem solid var(--rule);
+    border: 0.0625rem solid var(--field-edge);
     border-radius: 2rem;
     background: var(--surface);
-    transition: border-color 0.15s ease;
-}
-
-.tonetags-find:focus-within {
-    border-color: var(--accent);
 }
 
 .tonetags-find svg {
@@ -162,7 +55,7 @@
     font-size: 1.1rem;
 }
 
-/* the field's own edge shows where the keyboard is, so the box inside it needs no ring of its own */
+/* the site's ring goes round the whole field (base.css), so the box inside it needs none of its own */
 .tonetags-find input:focus {
     outline: none;
 }
@@ -260,10 +153,11 @@
     }
 }
 
-/* One tag: how it is written, then what it means right beside it, and never split between columns. */
+/* One tag: how it is written, then what it means right beside it, and never split between columns. The
+   one tag too long for the column (/gentle) widens its own row, rather than running into its meaning. */
 .tonetag {
     display: grid;
-    grid-template-columns: 3.6rem 1fr;
+    grid-template-columns: minmax(3.6rem, max-content) 1fr;
     align-items: baseline;
     gap: 0 0.5rem;
     padding: 0.08rem 0;

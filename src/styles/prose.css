@@ -79,6 +79,18 @@
     font-variant-numeric: tabular-nums;
 }
 
+/*
+ * On the narrowest phones a table whose longest words (or the type specimen's big letters) are wider
+ * than the column scrolls inside itself, rather than making the whole page scroll sideways. As a block
+ * its table still fills the width, as every table here is wider than that when unwrapped.
+ */
+@media (max-width: 24rem) {
+    .prose table {
+        display: block;
+        overflow-x: auto;
+    }
+}
+
 .prose th,
 .prose td {
     padding: calc(var(--line) * 0.25) 0.75rem calc(var(--line) * 0.25) 0;
