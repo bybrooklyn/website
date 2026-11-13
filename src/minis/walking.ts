@@ -380,9 +380,12 @@ export function encode(weights: Float32Array): string {
     return btoa(text).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
-/** The weights back from a link, or null if the text is not a whole number of them, or any is not a number. */
+/** The longest brain a link may hold, in characters. The largest brain there is (four legs, four layers of 64, eight memories) is about 91,000. */
+export const LONGEST_BRAIN = 120_000;
+
+/** The weights back from a link, or null if the text is too long, is not a whole number of them, or any is not a number. */
 export function decode(text: string): Float32Array | null {
-    if (!/^[A-Za-z0-9_-]*$/.test(text)) return null;
+    if (text.length > LONGEST_BRAIN || !/^[A-Za-z0-9_-]*$/.test(text)) return null;
     let binary: string;
     try {
         binary = atob(text.replace(/-/g, "+").replace(/_/g, "/"));

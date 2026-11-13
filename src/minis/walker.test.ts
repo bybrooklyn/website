@@ -4,7 +4,7 @@
 // link exactly, and each kind of ground is what it says. `bun run wasm` builds it; `bun test` runs this.
 
 import { expect, test } from "bun:test";
-import { COURSE, COURSE_GOAL, DEFAULT_SETUP, KINDS, PRESETS, Terrain, courseAt, decode, encode, engineAddress, fromLink, hasSimd, heightAt, linkParts, linkedSetup, oldLink, pieces, presetOf, valid, workersFor, type Engine, type Setup } from "./walking";
+import { COURSE, COURSE_GOAL, DEFAULT_SETUP, KINDS, PRESETS, Terrain, courseAt, decode, encode, engineAddress, fromLink, hasSimd, heightAt, LONGEST_BRAIN, linkParts, linkedSetup, oldLink, pieces, presetOf, valid, workersFor, type Engine, type Setup } from "./walking";
 
 const path = new URL("../../public/wasm/walker.wasm", import.meta.url);
 const scalarPath = new URL("../../public/wasm/walker-scalar.wasm", import.meta.url);
@@ -224,6 +224,11 @@ test("a brain written into a link reads back exactly, and text that is not one r
     expect(Array.from(new Uint32Array(back.buffer))).toEqual(Array.from(new Uint32Array(weights.buffer)));
     expect(decode(new URLSearchParams(`brain=${text}`).get("brain")!)).toEqual(weights);
     for (const wrong of ["", "abc", "a+b/", "%%%", encode(Float32Array.of(Number.NaN, 1))]) expect(decode(wrong)).toBeNull();
+    // the largest brain there is fits in a link, and a link far longer than any brain is not read at all
+    const largest = encode(new Float32Array(17120).fill(0.5));
+    expect(largest.length).toBeLessThanOrEqual(LONGEST_BRAIN);
+    expect(decode(largest)?.length).toBe(17120);
+    expect(decode(encode(new Float32Array(1_000_000).fill(0.5)))).toBeNull();
 
     // a trained brain taken out of the engine goes through a link and back in unchanged
     const walker = await load();

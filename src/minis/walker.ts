@@ -146,7 +146,11 @@ export default function walker(m: Mote): Scene {
             engine.create(setup.legs, POPULATION, 0, seed, setup.hidden, setup.layers, setup.memory, setup.goal, setup.length);
             write(engine, engine.ground_room(beginning.length / 4), beginning);
             engine.ground_set(beginning.length / 4);
-            if (brain) take(brain);
+            if (brain && !take(brain)) {
+                // a link's brain that is the wrong size for its body is not loaded here or in the workers, and the notice says so
+                brain = undefined;
+                notice = { text: "That link's brain does not fit its walker, so learning starts fresh.", until: m.time + 7 };
+            }
             engine.show_reset();
             // shown small in a list, nothing learns: a walker as it is before learning tries its legs, and tries again
             if (m.preview) shown = true;
@@ -167,14 +171,15 @@ export default function walker(m: Mote): Scene {
         m.wake();
     };
 
-    /** Puts a brain on screen. The engine scores it on loading, by the run the screen will show. */
-    const take = (brain: Float32Array) => {
-        if (!engine || brain.length !== engine.weights_length()) return;
+    /** Puts a brain on screen, if it fits the body. The engine scores it on loading, by the run the screen will show. */
+    const take = (brain: Float32Array): boolean => {
+        if (!engine || brain.length !== engine.weights_length()) return false;
         write(engine, engine.weights_room(), brain);
         engine.weights_load();
         fresh();
         // the furthest a best brain has gone, which never goes down while the setup stays the same
         [shown, distance] = [true, Math.max(distance, engine.best_distance())];
+        return true;
     };
 
     const hear = (report: Report) => {
