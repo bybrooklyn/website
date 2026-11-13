@@ -994,19 +994,14 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     const askUnsaved = (why: string) =>
         new Promise<"retry" | "stay" | "discard">((answer) => {
             let chosen: "retry" | "stay" | "discard" = "stay";
-            // the two other ways sit under the words, as the row at the bottom has room for two buttons
-            const ways = make("p");
-            const way = (label: string, press: () => void) => {
-                const button = make("button", "quire-dialog-dismiss", label);
-                button.type = "button";
-                button.addEventListener("click", press);
-                ways.append(button);
-            };
-            way("Download a copy", () => void (surface.getDocument().quire ? downloadQuire() : download()));
-            way("Leave without saving", () => ((chosen = "discard"), void dialog.close()));
-            const dialog = openDialog(bar.statusLine, {
+            // every way out is in the one row: leaving without saving, which loses the words, stands apart at the far left
+            openDialog(bar.statusLine, {
                 title: "Not saved",
-                body: [make("p", "", `The latest changes to this document have not been saved: ${why}. They are still here.`), ways],
+                body: [make("p", "", `The latest changes to this document have not been saved: ${why}. They are still here.`)],
+                others: [
+                    { label: "Leave without saving", far: true, press: (dialog) => ((chosen = "discard"), void dialog.close()) },
+                    { label: "Download a copy", press: () => void (surface.getDocument().quire ? downloadQuire() : download()) },
+                ],
                 action: { label: "Try again", press: (_, open) => ((chosen = "retry"), void open.close()) },
                 dismiss: "Stay",
                 onClose: () => answer(chosen),

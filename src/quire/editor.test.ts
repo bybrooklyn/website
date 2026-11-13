@@ -914,6 +914,9 @@ used("words that could not be saved keep the writer in the document: she is told
     await tab.run(going);
     await tab.wait(700);
     expect(await tab.run<string>("document.querySelector('dialog.quire-dialog[open]')?.textContent ?? ''")).toContain("have not been saved: the disk is full");
+    // every way out is a button in the one row, leaving without saving at the far left and trying again, filled, at the right
+    expect(await tab.run<string[]>("[...document.querySelectorAll('dialog.quire-dialog[open] .quire-dialog-actions button')].map((b) => b.textContent)")).toEqual(["Leave without saving", "Download a copy", "Stay", "Try again"]);
+    expect(await tab.run<number>("document.querySelectorAll('dialog.quire-dialog[open] .quire-dialog-body button').length")).toBe(0);
     // staying keeps the words and the document
     await press("dialog.quire-dialog[open] button", "Stay");
     await tab.wait(400);
