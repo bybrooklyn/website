@@ -175,3 +175,15 @@ export function find(typed: string): Tag[] {
         .sort((a, b) => b.score - a.score || a.place - b.place)
         .map((each) => each.tag);
 }
+
+/** The tag named after # in an address ("#srs", "#%2Fsrs"), lower case and without its slash. A hash that is not well formed is read as it is, not thrown over. */
+export function named(hash: string): string {
+    const raw = hash.replace(/^#/, "");
+    let read = raw;
+    try {
+        read = decodeURIComponent(raw);
+    } catch {
+        // "#%" and the like: no tag is written that way, so the raw text finds none
+    }
+    return read.toLowerCase().replace(/^\//, "");
+}

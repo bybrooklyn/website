@@ -39,6 +39,10 @@ const { src, title, ratio = "16 / 9", label = "play it here", from } = Astro.pro
             frame.src = place.dataset.playSrc ?? "";
             frame.title = place.dataset.playTitle ?? "";
             frame.allow = "fullscreen; gamepad; autoplay";
+            // The game may run its scripts, keep its settings, lock the pointer and open a link in a
+            // new tab, but it may not move this page somewhere else. The sandbox holds for the game's
+            // own frame inside itch.io's page too.
+            frame.sandbox.add("allow-scripts", "allow-same-origin", "allow-pointer-lock", "allow-popups", "allow-popups-to-escape-sandbox");
             frame.referrerPolicy = "no-referrer";
             still.replaceChildren(frame);
             place.classList.add("playing");

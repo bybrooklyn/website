@@ -46,7 +46,7 @@ const count = (set: string) => all.filter((photo) => photo.set === set).length;
                 <img src={first.src} srcset={first.srcset} {sizes} width={first.width} height={first.height} alt={first.title} style={`background-color:${first.color}`} />
             </noscript>
         </div>
-        <figcaption>
+        <figcaption aria-live="polite">
             <h2 class="photo-title"><noscript>{first.title}</noscript></h2>
             <p class="photo-caption"><noscript>{first.caption}</noscript></p>
             <p class="photo-taken note"><noscript>{first.taken}</noscript></p>
@@ -65,7 +65,8 @@ const count = (set: string) => all.filter((photo) => photo.set === set).length;
         }
     </p>
 
-    <script type="application/json" id="photo-list" set:html={JSON.stringify(all)} />
+    {/* "<" written as <, so that a title holding "</script>" cannot end the list early */}
+    <script type="application/json" id="photo-list" set:html={JSON.stringify(all).replace(/</g, "\\u003c")} />
 </Base>
 
 <script>
@@ -109,9 +110,12 @@ const count = (set: string) => all.filter((photo) => photo.set === set).length;
                 return [];
             }
         };
+        // The picture fetched ahead as the next one has not been seen yet, so it is kept as the
+        // first to come (the list is taken from its end).
         const keep = () => {
+            const toCome = next >= 0 && all[next]!.set === set ? [...waiting, next] : waiting;
             try {
-                localStorage.setItem(kept(), JSON.stringify(waiting.map((index) => all[index]!.src)));
+                localStorage.setItem(kept(), JSON.stringify(toCome.map((index) => all[index]!.src)));
             } catch {
                 // without storage each visit is shuffled afresh, as before
             }
@@ -125,9 +129,7 @@ const count = (set: string) => all.filter((photo) => photo.set === set).length;
                     [waiting[index], waiting[other]] = [waiting[other]!, waiting[index]!];
                 }
             }
-            const drawn = waiting.pop() ?? not;
-            keep();
-            return drawn;
+            return waiting.pop() ?? not;
         };
 
         // Resolves once the picture is fetched and decoded, so it can be shown whole: true if it
@@ -170,6 +172,8 @@ const count = (set: string) => all.filter((photo) => photo.set === set).length;
             const pass = () => {
                 busy = false;
                 if (++missing <= 5) void show(draw(index));
+                // giving up: the figure comes back as it was, not left faded out
+                else delete figure.dataset.state;
             };
             if (image.src && !still.matches) {
                 figure.dataset.state = "leaving";
@@ -214,6 +218,7 @@ const count = (set: string) => all.filter((photo) => photo.set === set).length;
             delete figure.dataset.state;
             // Fetch the one after it now, so "another" never waits on the network.
             next = draw(index);
+            keep();
             void ready(all[next]!);
             busy = false;
             // a set asked for while a picture was changing is switched to now, not forgotten

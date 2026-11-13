@@ -4,7 +4,7 @@
 // folds away while a search is on. A tag pressed is copied; "/" goes to the search; and a tag named
 // after # in the address is lit. The matching itself is in src/tonetags/tags.ts.
 
-import { find, tags } from "../tonetags/tags";
+import { find, named, tags } from "../tonetags/tags";
 import { copyMarked, copyText } from "./copy";
 
 const root = document.querySelector<HTMLElement>("[data-tonetags]");
@@ -63,9 +63,10 @@ if (root) {
 
     // a tag named in the address is brought into view and lit for a moment: /tonetags/#srs
     const light = () => {
-        const named = decodeURIComponent(location.hash.slice(1)).toLowerCase().replace(/^\//, "");
-        const row = named && rows.find((each) => each.dataset.forms!.split(" ").includes(named));
+        const tag = named(location.hash);
+        const row = tag && rows.find((each) => each.dataset.forms!.split(" ").includes(tag));
         if (!row) return;
+        // the named tag wins over a search, ?q= in the same address included, which could fold it away
         if (box.value) {
             box.value = "";
             show();

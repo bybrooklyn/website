@@ -128,7 +128,8 @@ const opened = await openedPages();
                 (panel ?? window).addEventListener("scroll", look, { passive: true });
                 up.addEventListener("click", () => {
                     scroller.scrollTo({ top: 0, behavior: still.matches ? "instant" : "smooth" });
-                    (panel ?? document.body).focus({ preventScroll: true });
+                    // the keyboard goes back to the top with the page; <body> cannot take focus, so it is the panel or <main>
+                    (panel ?? document.getElementById("main"))?.focus({ preventScroll: true });
                 });
                 look();
             }

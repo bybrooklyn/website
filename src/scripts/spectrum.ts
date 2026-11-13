@@ -224,6 +224,8 @@ function run(root: HTMLElement): void {
         });
 
         slider.addEventListener("keydown", (event) => {
+            // with a modifier held the keys are the browser's: Alt+Left goes back, for one
+            if (event.altKey || event.ctrlKey || event.metaKey) return;
             const from = heading[index] ?? (values[index] || before[index]!);
             const to = keyed(from, event.key, text.rtl);
             if (to === undefined) return;

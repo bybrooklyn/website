@@ -44,20 +44,25 @@
   Cache-Control: public, max-age=31536000, immutable
   Cross-Origin-Embedder-Policy: require-corp
 
-# ONNX Runtime's files for dictation keep their names when the library is updated: a day, then check again.
+# ONNX Runtime's files for dictation keep their names when the library is updated, and load one
+# another by those names: cached apart, a new script could meet an old .wasm. So the browser asks
+# every time, and keeps its copy when the answer is "not changed", which costs almost nothing.
 /ort/*
-  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+  Cache-Control: public, max-age=0, must-revalidate
   Cross-Origin-Embedder-Policy: require-corp
 
 # The clip, poster and share image: a day, then check again.
 /assets/*
   Cache-Control: public, max-age=86400, stale-while-revalidate=604800
 
-# Photographs keep their name for good, so a week is safe.
+# Photographs are named by date or at random, not by what is in them, so a picture taken off the
+# site or replaced under the same name must not linger in browsers. Five minutes, then the browser
+# asks again, and the answer "not changed" costs almost nothing.
 /photos/*
-  Cache-Control: public, max-age=604800
+  Cache-Control: public, max-age=300, must-revalidate
 
-# The Walker mini's engine keeps its name when it is rebuilt: a day, then check again.
+# The minis' engines keep their names when rebuilt, but the pages fetch them with a hash of the
+# file in the address (integrations/engine-versions.ts), so a rebuilt engine is a new address.
 /wasm/*
   Cache-Control: public, max-age=86400, stale-while-revalidate=604800
 
