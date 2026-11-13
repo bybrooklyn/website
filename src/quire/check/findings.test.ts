@@ -4,7 +4,7 @@
 
 import { expect, test } from "bun:test";
 import { DEFAULTS, type Finding } from "./engine";
-import { byKind, compare, findingAt, findingKey, loadIgnored, loadOwn, loadPrefs, nextFinding, saveIgnored, saveOwn, savePrefs, shownFindings, type Keep } from "./findings";
+import { around, byKind, compare, findingAt, findingKey, loadIgnored, loadOwn, loadPrefs, nextFinding, saveIgnored, saveOwn, savePrefs, shownFindings, type Keep } from "./findings";
 
 const finding = (path: number[], from: number, to: number, kind: Finding["kind"] = "spelling", word?: string): Finding => ({ rule: kind === "spelling" ? "spelling" : "prose-repeat", kind, severity: "mistake", range: { start: { path, offset: from }, end: { path, offset: to } }, message: "", fixes: [], word });
 const at = (path: number[], offset: number) => ({ path, offset });
@@ -70,4 +70,14 @@ test("settings, her words and what is ignored are kept, and anything kept wrongl
     expect(loadIgnored(keep, "Browser:one")).toEqual({ words: ["teh"], findings: ["rule:x"] });
     expect(loadIgnored(keep, "Browser:two")).toEqual({ words: [], findings: [] });
     expect(loadPrefs(undefined).on).toBe(false);
+});
+
+test("ignoring one finding ignores that one, not every finding of its rule with the same words; keys kept before still work", () => {
+    const dash = (offset: number): Finding => ({ rule: "writing-dash", kind: "prose", severity: "mistake", range: { start: { path: [0], offset }, end: { path: [0], offset: offset + 3 } }, message: "A dash.", fixes: [] });
+    const text = "One — two. Three — four.";
+    const [first, second] = [dash(3), dash(16)];
+    const key = (finding: Finding) => around(text, finding.range.start.offset, finding.range.end.offset);
+    expect(shownFindings([first, second], { words: [], findings: [findingKey(first, key(first))] }, key)).toEqual([second]);
+    // a key kept with only the words, before keys had the text either side
+    expect(shownFindings([first, second], { words: [], findings: ["writing-dash: — "] }, key)).toEqual([]);
 });

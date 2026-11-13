@@ -12,7 +12,7 @@ import type { Position } from "../document";
 import { control, flowMenu, make } from "../ui";
 import { createChecker, KINDS, ruleOn, type Context, type Finding, type Fix, type Job, type Rule, type Unit } from "./engine";
 import { loadDictionary, type Dictionary } from "./dictionary";
-import { byKind, findingAt, findingKey, KIND_NAMES, loadIgnored, loadOwn, loadPrefs, nextFinding, saveIgnored, saveOwn, savePrefs, shownFindings, type Ignored } from "./findings";
+import { around, byKind, findingAt, findingKey, KIND_NAMES, loadIgnored, loadOwn, loadPrefs, nextFinding, saveIgnored, saveOwn, savePrefs, shownFindings, type Ignored } from "./findings";
 import type { CheckingHost } from "./mount";
 import { readability } from "./prose";
 import { RULES } from "./rules";
@@ -152,6 +152,8 @@ export function createChecking(host: CheckingHost & { keep: CheckingHost["keep"]
     }
 
     const textOf = (finding: Finding) => (texts.get(finding.range.start.path.join()) ?? "").slice(finding.range.start.offset, finding.range.end.offset);
+    /** What a finding covers with a little either side, the key it is ignored by. */
+    const keyOf = (finding: Finding) => around(texts.get(finding.range.start.path.join()) ?? "", finding.range.start.offset, finding.range.end.offset);
     // where the cursor was left by the last key typed: a word there is still being written
     let typed: Position | undefined;
     let typing = false;
@@ -175,7 +177,7 @@ export function createChecking(host: CheckingHost & { keep: CheckingHost["keep"]
         }
     }
     function refresh() {
-        shown = prefs.on ? shownFindings(findings, ignored, textOf, typingAt()) : [];
+        shown = prefs.on ? shownFindings(findings, ignored, keyOf, typingAt()) : [];
         paint();
         number.textContent = String(shown.length);
         count.setAttribute("aria-label", `Checking: ${shown.length === 0 ? "nothing found" : shown.length === 1 ? "one thing found" : `${shown.length} things found`}`);
@@ -267,7 +269,7 @@ export function createChecking(host: CheckingHost & { keep: CheckingHost["keep"]
         } else
             more.append(
                 action("Ignore", () => {
-                    ignored = { ...ignored, findings: [...ignored.findings, findingKey(finding, textOf(finding))] };
+                    ignored = { ...ignored, findings: [...ignored.findings, findingKey(finding, keyOf(finding))] };
                     saveIgnored(keep, ignoredFor, ignored);
                     refresh();
                 }),
@@ -339,7 +341,7 @@ export function createChecking(host: CheckingHost & { keep: CheckingHost["keep"]
         surface.on("select", () => {
             if (!prefs.on || !typed) return;
             idle(() => {
-                if (shownFindings(findings, ignored, textOf, typingAt()).length !== shown.length) refresh();
+                if (shownFindings(findings, ignored, keyOf, typingAt()).length !== shown.length) refresh();
             });
         }),
     ];
