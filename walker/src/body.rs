@@ -51,7 +51,7 @@ impl Description {
 
     /// A stride to start from: steady values for the brain's outputs that make the legs walk with no
     /// feedback at all, measured once and written here. For four legs they are the average outputs of
-    /// the best walker of a long training run, and walk 8.5 m in ten seconds; for two legs, whose
+    /// the best walker of a long training run, and walk 7.3 m in ten seconds; for two legs, whose
     /// average falls over, the best of four thousand strides tried at random, which walks 8.4 m. A
     /// brain that learns live starts here, so its first attempt already steps.
     pub fn stride(&self) -> &'static [f32] {
