@@ -182,7 +182,21 @@ async function plan(path: string) {
     };
 }
 
+/** Why publishing must not go ahead from here, or undefined if it may. */
+async function refusal(): Promise<string | undefined> {
+    // Only what is in src/ and public/ is committed, so a file anywhere else would be built without being kept.
+    const strays = (await $`git status --porcelain --untracked-files=all`.cwd(root).text())
+        .split("\n")
+        .filter((line) => line.startsWith("?? "))
+        .map((line) => line.slice(3).replace(/^"|"$/g, ""))
+        .filter((path) => !path.startsWith("src/") && !path.startsWith("public/"));
+    if (strays.length > 0) return `Not publishing: there are new files outside src/ and public/, which the editor does not commit:\n${strays.map((path) => `  ${path}`).join("\n")}\nCommit them, delete them or add them to .gitignore first.`;
+    return undefined;
+}
+
 async function publish(message: string): Promise<{ ok: boolean; log: string }> {
+    const refused = await refusal();
+    if (refused) return { ok: false, log: refused };
     if (dryRun) return { ok: true, log: "Dry run: stopped here, before the commit and the deploy." };
     const log: string[] = [];
     const run = async (label: string, command: ReturnType<typeof $>) => {
@@ -191,9 +205,10 @@ async function publish(message: string): Promise<{ ok: boolean; log: string }> {
         if (result.exitCode !== 0) throw new Error(log.join("\n"));
     };
     try {
-        if ((await $`git status --short`.cwd(root).text()).trim()) {
+        // Only the folders the editor writes to are staged, never everything in the checkout.
+        await run("git add src public", $`git add -A -- src public`);
+        if ((await $`git diff --cached --quiet`.cwd(root).nothrow().quiet()).exitCode !== 0) {
             const text = message.trim() || "Edit the site";
-            await run("git add", $`git add -A`);
             await run("git commit", $`git commit -m ${text}`);
             await run("git push", $`git push`);
         }
