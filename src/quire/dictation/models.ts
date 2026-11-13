@@ -157,7 +157,8 @@ export function deviceNow(): Device {
     const nav = navigator as Navigator & { connection?: { saveData?: boolean; effectiveType?: string }; deviceMemory?: number; userAgentData?: { mobile?: boolean } };
     const connection = nav.connection;
     return {
-        mobile: nav.userAgentData?.mobile ?? /Android|iPhone|iPad|iPod|Mobile/i.test(nav.userAgent),
+        // an iPad says it is a Mac, and gives itself away only by its touch screen
+        mobile: nav.userAgentData?.mobile ?? (/Android|iPhone|iPad|iPod|Mobile/i.test(nav.userAgent) || (/Macintosh/.test(nav.userAgent) && (nav.maxTouchPoints ?? 0) > 1)),
         slow: !!connection?.saveData || /^(slow-2g|2g|3g)$/.test(connection?.effectiveType ?? ""),
         gpu: "gpu" in navigator,
         memory: nav.deviceMemory,
