@@ -16,7 +16,6 @@ import {
     isPageBreak,
     pageBreak,
     paragraph,
-    getField,
     image,
     indent,
     insertBlock,
@@ -28,7 +27,6 @@ import {
     removeColumn,
     removeRow,
     setAlign,
-    setCell,
     setColumnAlign,
     setField,
     setLink,
@@ -312,9 +310,9 @@ test("a table, picture, divider or code block is inserted after a block", () => 
 test("table rows and columns are added and removed, and cells and alignment are set", () => {
     const doc = sample();
     let edited = addRow(doc, [6], 1);
-    edited = setCell(edited, [6], 2, 0, "3");
+    edited = insertText(edited, at([6, 2, 0], 0), "3");
     edited = addColumn(edited, [6], 1);
-    edited = setCell(edited, [6], 0, 1, "middle");
+    edited = insertText(edited, at([6, 0, 1], 0), "middle");
     edited = setColumnAlign(edited, [6], 1, "center");
     kept(doc, edited, 8);
     expect(written(edited, 6)).toBe("| a   | middle | b   |\n| :-- | :----: | --: |\n| 1   |        | 2   |\n| 3   |        |     |");
@@ -349,11 +347,12 @@ test("the outline lists every heading with its level, and words are counted outs
 
 test("frontmatter values are read and set, and every other byte of the file stays", () => {
     const doc = sample();
-    expect(getField(doc, "title")).toBe("A test");
-    expect(getField(doc, "missing")).toBeUndefined();
+    const field = (from: Document, key: string) => fields(from).find(([name]) => name === key)?.[1];
+    expect(field(doc, "title")).toBe("A test");
+    expect(field(doc, "missing")).toBeUndefined();
     const renamed = setField(doc, "title", "New: a title");
     expect(write(renamed)).toBe(SAMPLE.replace("title: A test", 'title: "New: a title"'));
-    expect(getField(renamed, "title")).toBe("New: a title");
+    expect(field(renamed, "title")).toBe("New: a title");
     const added = setField(doc, "tags", "plain");
     expect(write(added)).toBe(SAMPLE.replace("draft: true\n---", "draft: true\ntags: plain\n---"));
     expect(write(setField(read("Body\r\n"), "title", "Hi"))).toBe("---\r\ntitle: Hi\r\n---\r\nBody\r\n");

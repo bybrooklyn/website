@@ -107,7 +107,7 @@ function looks(runs: Run[]): { from: number; to: number; look: Look }[] {
 const plainRuns = (runs: Run[]): Run[] => (looks(runs).length ? tidyRuns(restyleRuns(runs, 0, Infinity, { color: null, size: null, font: null, highlight: null })) : runs);
 
 /** The document with the styling that goes to style.json taken off every block written fresh; an untouched block is written as it was read. */
-export function strip(blocks: Block[]): Block[] {
+function strip(blocks: Block[]): Block[] {
     return blocks.map((block): Block => {
         if (block.source !== undefined) return block;
         switch (block.kind) {

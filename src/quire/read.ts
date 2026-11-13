@@ -938,11 +938,6 @@ const TAG_MARKS: Record<string, Mark> = { u: "underline", sup: "sup", sub: "sub"
 
 const STYLE = /^<span style="(?:color:([^;"<>]+?)(?:; font-size:([^;"<>]+?))?|font-size:([^;"<>]+?))">/;
 
-/** Reads the text of a paragraph, heading or cell into runs. */
-export function parseInline(text: string, options: ReadOptions = {}): Run[] {
-    return runsFrom(text, { mdx: !!options.mdx, refs: new Map() });
-}
-
 const runsFrom = (text: string, context: Context) => tidyRuns(inline(text, context));
 
 function inline(text: string, context: Context): Run[] {

@@ -309,7 +309,7 @@ export function divider(): Divider {
 }
 
 /** How a page break is written: HTML that print, and most things that show Markdown, take as the end of a page. */
-export const PAGE_BREAK = '<div style="break-after: page"></div>';
+const PAGE_BREAK = '<div style="break-after: page"></div>';
 
 /** A new page break, kept in the Markdown as the HTML that makes one. */
 export function pageBreak(): Raw {
@@ -1292,16 +1292,6 @@ export function setColumnAlign(doc: Document, path: number[], column: number, al
     return editTable(doc, path, (found) => (column >= found.header.length ? null : { ...found, align: found.align.map((each, k) => (k === column ? align : each)) }));
 }
 
-/** Sets a cell to plain text. Row 0 is the heading row, row 1 the first row of the body. */
-export function setCell(doc: Document, path: number[], row: number, column: number, value: string | Run[]): Document {
-    const runs = typeof value === "string" ? text(value) : value;
-    return editTable(doc, path, (found) => {
-        if (column >= found.header.length) return null;
-        const swap = (cells: Run[][]) => cells.map((each, k) => (k === column ? runs : each));
-        return { ...found, header: row === 0 ? swap(found.header) : found.header, rows: found.rows.map((each, k) => (k === row - 1 ? swap(each) : each)) };
-    });
-}
-
 // ---- reading the whole ----
 
 /** One heading in the outline. */
@@ -1369,11 +1359,6 @@ function unquote(value: string): string {
     }
     if (/^'(?:[^']|'')*'$/.test(value)) return value.slice(1, -1).replace(/''/g, "'");
     return value;
-}
-
-/** A frontmatter value, or undefined if the key is not there. */
-export function getField(doc: Document, key: string): string | undefined {
-    return fields(doc).find(([name]) => name === key)?.[1];
 }
 
 /**

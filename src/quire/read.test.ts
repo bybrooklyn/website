@@ -5,7 +5,7 @@
 import { expect, test } from "bun:test";
 import { Glob } from "bun";
 import { blockAt, blockPaths, fields, insertText, type Block, type Document, type List, type Paragraph, type Run } from "./document";
-import { parseInline, read } from "./read";
+import { read } from "./read";
 import { write } from "./write";
 
 const root = `${import.meta.dir}/../../`;
@@ -284,6 +284,9 @@ test("a picture alone in a paragraph is an image block", () => {
     same("![A tower](/tower.png)\n");
     expect(read("![A tower](/tower.png \"Tall\")\n").blocks[0]).toMatchObject({ kind: "image", src: "/tower.png", alt: "A tower", title: "Tall" });
 });
+
+/** The runs a line of text is read into. */
+const parseInline = (text: string): Run[] => (read(`${text}\n`).blocks[0] as Paragraph).runs;
 
 test("color, size and underline written as small HTML are read back as marks", () => {
     const runs = parseInline('<span style="color:#c33">red</span>, <span style="font-size:1.5em">big</span>, <span style="color:teal; font-size:2em">both **bold**</span> and <u>under</u>');
