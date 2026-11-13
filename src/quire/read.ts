@@ -807,8 +807,10 @@ function destination(text: string, from: number): { href: string; title?: string
     skip();
     let href = "";
     if (text[index] === "<") {
-        const close = text.indexOf(">", index);
-        if (close < 0 || text.slice(index, close).includes("\n")) return undefined;
+        // the address ends at the first `>` that is not escaped, and holds no `<` and no line ending
+        let close = index + 1;
+        while (close < text.length && text[close] !== ">" && text[close] !== "<" && text[close] !== "\n") close += text[close] === "\\" ? 2 : 1;
+        if (text[close] !== ">") return undefined;
         href = text.slice(index + 1, close);
         index = close + 1;
     } else {

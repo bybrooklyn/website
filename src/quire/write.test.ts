@@ -261,3 +261,11 @@ test("a reference link whose definition has been taken out of the document is wr
     const kept = insertText(read("see [a][r]\n\n> [r]: http://r\n"), { path: [0], offset: 0 }, "z");
     expect(write(kept)).toBe("zsee [a][r]\n\n> [r]: http://r\n");
 });
+
+test("a link's address reads back exactly as it is, angle brackets and backslashes included", () => {
+    for (const href of ["<x>", "a<b", "/with space", "a\\*b", "c:\\dir\\file", "x(y", "a\\", "a>b c"]) {
+        const text = readsBack(made([withRuns([{ kind: "link", href, runs: [{ kind: "text", text: "l", marks: [] }] }])]));
+        const back = read(text).blocks[0];
+        expect({ href, read: back?.kind === "paragraph" && back.runs[0]?.kind === "link" && back.runs[0].href }).toEqual({ href, read: href });
+    }
+});

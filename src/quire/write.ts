@@ -258,8 +258,11 @@ function destination(href: string): string {
         if (char === "(") depth++;
         else if (char === ")" && --depth < 0) balanced = false;
     }
-    if (href === "" || /[\s<>]/.test(href) || !balanced || depth !== 0) return `<${href.replace(/[<>]/g, (char) => encodeURIComponent(char))}>`;
-    return href;
+    // a backslash before punctuation would be read as an escape, so it is escaped itself; in angle
+    // brackets `<` and `>` are escaped, so the address reads back as it is
+    const escaped = href.replace(/\\(?=[!-/:-@[-`{-~]|$)/g, "\\\\");
+    if (href === "" || /[\s<>]/.test(href) || !balanced || depth !== 0) return `<${escaped.replace(/[<>]/g, "\\$&")}>`;
+    return escaped;
 }
 
 const titleText = (title?: string) => (title === undefined ? "" : ` "${title.replace(/["\\]/g, "\\$&")}"`);
