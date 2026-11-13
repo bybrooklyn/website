@@ -285,6 +285,17 @@ see and learn and walk and do things on its own"; "all of this from scratch in o
 - **A visitor's first ten seconds:** "A newborn falling over": the page opens on a creature that knows
   nothing, learning from the first second. No trained creature is shipped to open on.
 
+- **What keeps a visitor watching the first minute:** "The brain beside it, no different than now. you
+  are watching something GROW and learn". The brain is drawn live beside the world from the first second.
+  No narration, no marked "firsts", no speed-up control: she did not tick them.
+- **Layout:** "World left, a column right": the world takes most of the width; a column at the right holds
+  the controls (folding open from its top), then the brain, the senses and the energy, stacked.
+- **The brain builder:** "Sliders within limits" (she chose this over "Everything, as a builder", which she
+  had ticked earlier in the day): a few sliders (how much memory, how much rhythm, how many connections it
+  may afford) and the brain is laid out for her.
+- **Changing the brain's shape:** "It keeps what it can": existing neurons and connections keep their
+  learning; new ones start blank.
+
 Order: speed, then the world and the rays, then PPO, then the teacher, then curiosity and needs, then
 the small vision encoder and the picture experiment.
 
