@@ -44,7 +44,19 @@ anything), `style.json` (colour, size, typeface, highlight, alignment, spacing, 
 which Markdown cannot hold) and `notes.json` (notes on the text). Tools a plain Markdown file cannot keep
 fold away for such files, and a Markdown file can be turned into a `.quire`.
 
-**Around the writing.** A shelf of documents as the home screen (`shelf.ts`), find and replace
+**The home screen** (`shelf.ts`) is a list drawn as the site's posts list is, with no pictures of
+pages. A quiet "new" is followed by the three ways to start as words (blank, blog post, notes); under
+"recent" each document is a ruled row of its name (ended with an ellipsis when long), where it is kept
+(this browser, this computer, or a folder's or repository's own name) and when it was last touched
+(today with the time, yesterday, the day, and the year when not this one), with three dots at the end
+whose menu grows from them: open, rename, duplicate, and delete, which asks once more in the same menu.
+A row is one button, reached by Tab and opened with Enter. The page grows out of the row it was opened
+from and shrinks back into it on leaving, the keyboard landing on that row again; something new grows
+out of the word pressed. Narrower than 40rem a row takes two lines, the name first. Opening a file or a
+folder, connecting a repository and the sample are a quiet row of words under the list, and an empty
+shelf says so in one line.
+
+**Around the writing.** The home screen, find and replace
 (`find.ts`), zoom and page setup (`paper.ts`), page view with page breaks, headers, footers and page
 numbers (`pages.ts`), version history kept in the browser (`versions.ts`), tables (`tables.ts`), an
 outline of the headings (`outline.ts`), a slash menu on an empty line (`slash.ts`) and a bar over

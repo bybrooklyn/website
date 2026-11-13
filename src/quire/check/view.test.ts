@@ -326,8 +326,8 @@ test.skipIf(!built)("in the built page, the checking code and the dictionary are
     await tab.open(`http://localhost:${server!.port}/site/mdquire/`, 1200);
     const before = await tab.run<string[]>("performance.getEntriesByType('resource').map((entry) => entry.name)");
     expect(before.filter((name) => name.includes("words-en"))).toEqual([]);
-    await until("!!document.querySelector('.quire-card-open')");
-    await press(".quire-card-open", "Open Blank");
+    await until("!!document.querySelector('.quire-shelf-word')");
+    await press(".quire-shelf-word", "blank");
     await tab.wait(900);
     await press(".quire-row-word", "Tools");
     await tab.wait(650);

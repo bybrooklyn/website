@@ -2,7 +2,7 @@
 // places documents can live, with the documents list growing out of the name in the bar, the way
 // to open a file or a folder, and the form that connects a GitHub repository. With nothing open it
 // shows the home screen (shelf.ts): ways to start something new and the recent documents from
-// every place, each opening by growing out of its picture. The document the writer was in is
+// every place, a row each, each opening by growing out of its row. The document the writer was in is
 // remembered in this browser and opened again next time; leaving it for the home screen forgets it.
 //
 //   const app = await startApp(element, { colors });
@@ -17,7 +17,7 @@ import { browserStore, indexedTables, memoryTables } from "./store-browser";
 import { filesStore, OPENABLE } from "./store-files";
 import { canOpen, folderStore, oneFileStore, type FileHandle, type FolderHandle } from "./store-folder";
 import { folderPath, forgetSettings, githubStore, keepSettings, readSettings, repository, type Fetcher } from "./store-github";
-import { boxOf, copyName, createShelf, recent, templates, travel, type Card, type Template } from "./shelf";
+import { boxOf, copyName, createShelf, recent, templates, travel, type Listed, type Template } from "./shelf";
 import { flowMenu, make, type Box } from "./ui";
 
 /** What the page gives the app. */
@@ -106,7 +106,7 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
             { label: "Open a file", run: () => chooser.click() },
             ...(able.file ? [{ label: "Open a file to write in place", run: () => void openInPlace() }] : []),
             ...(able.folder ? [{ label: "Open a folder", run: () => ((from = editor.nameElement()), void openFolder()) }] : []),
-            { label: github ? "Repository settings" : "Connect a repository", run: () => ((from = editor.nameElement()), showRepository()) },
+            { label: github ? "repository settings" : "connect a repository", run: () => ((from = editor.nameElement()), showRepository()) },
         ],
         onOpen: remember,
         onName: (button) => {
@@ -267,19 +267,15 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
     const shelf = createShelf({
         templates: templates(new Date()),
         start: (template, from) => void startFrom(template, from),
-        cards: async () => {
+        documents: async () => {
             const places = [browser, github, folder, files].filter((store): store is Store => !!store);
             const lists = await Promise.all(places.map(async (store) => ({ store, entries: await store.list().catch(() => []) })));
-            return recent(lists).map(({ store, id, name, modified }): Card => ({
+            return recent(lists).map(({ store, id, name, modified }): Listed => ({
                 key: keyFor(store, id),
                 name,
-                place: store.label,
+                // the two places that are this machine are said in lowercase, as the row's other words are; a folder or a repository keeps its own name
+                place: store === browser ? "this browser" : store === files ? "this computer" : store.label,
                 modified,
-                preview: async () => {
-                    const found = await store.open(id);
-                    return opened(found.text, found.quire, { mdx: /\.mdx$/i.test(id) });
-                },
-                picture: store.show ? (address) => store.show!(id, address) : undefined,
                 open: (from) => void enter(store, { id, name }, from),
                 rename: store.can.rename ? async (wanted) => void (await store.rename(id, wanted).catch(() => undefined), await shelf.refresh()) : undefined,
                 duplicate: store.can.create ? async () => void (await copyDocument(store, id, copyName(name))) : undefined,
@@ -287,15 +283,15 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
             }));
         },
         ways: () => [
-            { label: "Open a file", run: () => chooser.click() },
-            ...(able.folder ? [{ label: "Open a folder", run: (button: HTMLElement) => ((from = button), void openFolder()) }] : []),
-            { label: github ? "Repository settings" : "Connect a repository", run: (button: HTMLElement) => ((from = button), showRepository()) },
-            ...(options.sample ? [{ label: "See a sample", run: (button: HTMLElement) => void startFrom({ key: "sample", label: "A sample", name: "A sample", text: options.sample!, quire: true }, button) }] : []),
+            { label: "open a file", run: () => chooser.click() },
+            ...(able.folder ? [{ label: "open a folder", run: (button: HTMLElement) => ((from = button), void openFolder()) }] : []),
+            { label: github ? "repository settings" : "connect a repository", run: (button: HTMLElement) => ((from = button), showRepository()) },
+            ...(options.sample ? [{ label: "see a sample", run: (button: HTMLElement) => void startFrom({ key: "sample", label: "A sample", name: "A sample", text: options.sample!, quire: true }, button) }] : []),
         ],
     });
     host.append(shelf.element);
 
-    /** Opens a document from its picture on the home screen. */
+    /** Opens a document from its row on the home screen. */
     async function enter(store: Store, entry: Entry, from: HTMLElement) {
         const picture = boxOf(from);
         if (!(await editor.open(store, entry))) return;
@@ -303,7 +299,7 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
         editor.surface.focus();
     }
 
-    /** Makes something new from a way of starting, and opens it from its picture. */
+    /** Makes something new from a way of starting, and opens it from the word pressed. */
     async function startFrom(template: Template, from: HTMLElement) {
         const picture = boxOf(from);
         if (!(await editor.create(browser, template.name, template.text, template.quire ? emptyParts() : undefined))) return;
@@ -315,7 +311,7 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
         editor.surface.focus();
     }
 
-    /** Puts the home screen away and shows the document, the page growing out of its picture if there is one. */
+    /** Puts the home screen away and shows the document, the page growing out of where it was pressed if there is such a place. */
     async function showEditor(picture?: Box) {
         if (!shelf.shown()) return;
         scrollTo({ top: 0, behavior: "instant" });
@@ -332,7 +328,7 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
         void home();
     });
 
-    /** Leaves the document for the home screen: it is saved, and its page shrinks back into its picture there. */
+    /** Leaves the document for the home screen: it is saved, and its page shrinks back into its row there. */
     async function home() {
         if (shelf.shown()) return;
         menu.close(false);
@@ -343,12 +339,11 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
         scrollTo({ top: 0, behavior: "instant" });
         options.top?.classList.add("away");
         shelf.show();
-        const picture = current.store && current.id ? shelf.pictureOf(keyFor(current.store, current.id)) : undefined;
-        if (picture) {
-            await shelf.drawNow(picture);
-            picture.style.visibility = "hidden";
-            await travel(editor.paper, boxOf(picture), false);
-            picture.style.visibility = "";
+        const row = current.store && current.id ? shelf.rowOf(keyFor(current.store, current.id)) : undefined;
+        if (row) {
+            row.style.visibility = "hidden";
+            await travel(editor.paper, boxOf(row), false);
+            row.style.visibility = "";
         }
         host.classList.add("shelved");
         if (!(await editor.leave())) {
@@ -359,7 +354,8 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
             return;
         }
         local()?.removeItem(PLACE_KEY);
-        shelf.element.querySelector<HTMLElement>(".quire-card-open")?.focus({ preventScroll: true });
+        // the keyboard comes back to the row of the document left, or to the first way to start
+        (row?.querySelector<HTMLElement>(".quire-shelf-open") ?? shelf.element.querySelector<HTMLElement>(".quire-shelf-word"))?.focus({ preventScroll: true });
     }
 
     if (!start) {
