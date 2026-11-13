@@ -96,3 +96,9 @@ test("pictures on the shelf get free names, are shown by their address and follo
     expect([...shelf.get("b.quire").keys()]).toEqual(["my-picture.png", "my-picture-2.png"]);
     expect(shelf.show("b.quire", "https://example.com/x.png")).toBeUndefined();
 });
+
+test("a picture taken out of the writing is not packed into the file", async () => {
+    const pictures = new Map([["kept.png", new Blob(["k"])], ["gone.png", new Blob(["g"])], ["my cat.png", new Blob(["c"])]]);
+    const bundle = await unpackQuire(await packQuire({ markdown: "![Kept](pictures/kept.png)\n\n![Cat](pictures/my%20cat.png)\n", parts, pictures }));
+    expect([...bundle.pictures.keys()].sort()).toEqual(["kept.png", "my cat.png"]);
+});

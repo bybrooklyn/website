@@ -40,9 +40,17 @@ export const isQuire = (name: string) => /\.quire$/i.test(name);
 /** The parts of a document that has no styling yet. */
 export const emptyParts = (): Parts => ({ style: "", notes: "" });
 
-/** Packs a document into the bytes of a `.quire` file. Pictures are stored as they are, being squeezed already. */
+/** True when the document's text still shows a picture of this name. */
+const shown = (markdown: string, name: string) => markdown.includes(`pictures/${name}`) || markdown.includes(`pictures/${encodeURI(name)}`) || markdown.includes(`pictures/${encodeURIComponent(name)}`);
+
+/**
+ * Packs a document into the bytes of a `.quire` file. Pictures are stored as they are, being
+ * squeezed already, and only those its text still shows: a photograph taken out of the writing
+ * does not travel on inside the file given to someone.
+ */
 export async function packQuire(bundle: Bundle, date?: Date): Promise<Uint8Array> {
-    const pictures = await Promise.all([...bundle.pictures].map(async ([name, blob]) => ({ name: `pictures/${name}`, data: new Uint8Array(await blob.arrayBuffer()), store: true })));
+    const kept = [...bundle.pictures].filter(([name]) => shown(bundle.markdown, name));
+    const pictures = await Promise.all(kept.map(async ([name, blob]) => ({ name: `pictures/${name}`, data: new Uint8Array(await blob.arrayBuffer()), store: true })));
     return writeZip(
         [
             { name: "document.md", data: bundle.markdown },
