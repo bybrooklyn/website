@@ -73,6 +73,17 @@ export interface EditorPage {
 export async function editorPage(width = 1300, height = 900): Promise<EditorPage | undefined> {
     if (!chromium()) return undefined;
     const folder = await mkdtemp(join(tmpdir(), "quire-page-"));
+    try {
+        return await opened(folder, width, height);
+    } catch (error) {
+        // a page that could not be built or opened leaves no folder behind
+        await rm(folder, { recursive: true, force: true });
+        throw error;
+    }
+}
+
+/** Builds the page into the folder and opens it in a browser. */
+async function opened(folder: string, width: number, height: number): Promise<EditorPage> {
     await Bun.write(`${folder}/page.ts`, page);
     const built = await Bun.build({ entrypoints: [`${folder}/page.ts`], target: "browser", plugins: [withoutSpeech] });
     if (!built.success) throw new Error(built.logs.join("\n"));
@@ -82,7 +93,12 @@ export async function editorPage(width = 1300, height = 900): Promise<EditorPage
     // a picture 400 by 200, drawn in two colours, for the picture tests
     await Bun.write(`${folder}/wide.svg`, '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="200"><rect width="400" height="200" fill="#6a4c93"/><circle cx="200" cy="100" r="60" fill="#f4a261"/></svg>');
     const tab = await browser({ width, height });
-    await tab.open(`file://${folder}/page.html`, 300);
+    try {
+        await tab.open(`file://${folder}/page.html`, 300);
+    } catch (error) {
+        await tab.close();
+        throw error;
+    }
     const press = async (selector: string, words?: string) => {
         const point = await tab.run<{ x: number; y: number; covered?: string } | null>(`q.at(${JSON.stringify(selector)}, ${JSON.stringify(words ?? "")})`);
         if (!point) throw new Error(`nothing to press: ${selector} ${words ?? ""}`);
