@@ -159,8 +159,7 @@ test("a folding section's arrow folds it away in the editor and back, changing n
     expect(await tab.run("document.querySelector('.quire-fold-readers').getAttribute('aria-pressed')")).toBe("true");
     await page!.press(".quire-fold-turn");
     // it closes over time, not in one step
-    await tab.wait(60);
-    const closing = await bodyHeight();
+    const closing = await tab.run<number>("document.querySelector('.quire-fold-body').getAnimations().length");
     await tab.wait(400);
     expect(closing).toBeGreaterThan(0);
     expect(await bodyHeight()).toBe(0);
@@ -233,6 +232,63 @@ test("a right-click in a table opens its menu, with every command and those that
     await tab.wait(400);
     await page!.press(".quire-table-menu.open .quire-menu-line", "Remove the table");
     expect(await page!.md()).toBe("");
+});
+
+/** Whether a strip's box covers the line of text from `top` to `bottom`, or any of the lines just above and below it, `line` tall. */
+const covers = (strip: { y: number; height: number }, top: number, bottom: number, line: number) => strip.y < bottom + line && strip.y + strip.height > top - line;
+
+test("the bar over selected words covers neither them nor the line above or below them", async () => {
+    if (skip("the selection bar's place")) return;
+    const { tab } = page!;
+    const words = Array.from({ length: 120 }, (_, k) => `word${k}`).join(" ");
+    await page!.reset(`${words}\n`, [0], 0);
+    // a word some lines down the paragraph, with text all round it
+    const start = words.indexOf("word60");
+    await tab.run(`q.select([0], ${start}, [0], ${start + 6})`);
+    await tab.wait(400);
+    const bar = await tab.run<{ y: number; height: number }>("q.box('.quire-select-bar.shown')");
+    const chosen = await tab.run<{ top: number; bottom: number; line: number }>("(() => { const box = document.getSelection().getRangeAt(0).getBoundingClientRect(); return { top: box.top, bottom: box.bottom, line: parseFloat(getComputedStyle(q.surface.element).lineHeight) }; })()");
+    expect(bar).not.toBeNull();
+    expect(covers(bar, chosen.top, chosen.bottom, chosen.line - 1)).toBe(false);
+});
+
+test("find stepping to a match brings no bar over it", async () => {
+    if (skip("find without the selection bar")) return;
+    const { tab } = page!;
+    await page!.reset("One apple here.\n\nAnother apple there.\n", [0], 0);
+    await tab.press("f", { ctrl: true });
+    await tab.wait(300);
+    await tab.type("apple");
+    await tab.press("Enter");
+    await tab.wait(300);
+    expect(await tab.run("!!document.querySelector('.quire-select-bar.shown')")).toBe(false);
+    // Escape leaves the match selected in the text, still with no bar over it
+    await tab.press("Escape");
+    await tab.wait(300);
+    expect(await tab.run("(() => { const { anchor, focus } = q.surface.getSelection(); return Math.abs(focus.offset - anchor.offset); })()")).toBe(5);
+    expect(await tab.run("!!document.querySelector('.quire-select-bar.shown')")).toBe(false);
+});
+
+test("a table's strip and a picture's strip cover neither their table or picture nor the line before it", async () => {
+    if (skip("the table and picture strips' place")) return;
+    const { tab } = page!;
+    await page!.reset("Some words before the table.\n\n| a | b |\n| --- | --- |\n| 1 | 2 |\n\nAfter.\n", [1, 1, 0], 0);
+    await tab.wait(400);
+    const strip = await tab.run<{ y: number; height: number }>("q.box('.quire-table-tools.shown')");
+    const table = await tab.run<{ y: number; height: number }>("q.box('.quire table')");
+    const before = await tab.run<{ y: number; height: number }>("q.box('.quire > p')");
+    expect(strip.y + strip.height).toBeLessThanOrEqual(before.y);
+    expect(strip.y + strip.height).toBeLessThanOrEqual(table.y);
+    const picture = await tab.run<string>("location.href.replace(/page\\.html$/, 'wide.svg')");
+    await page!.reset(`Some words before the picture.\n\n![A picture](${picture})\n\nAfter.\n`, [0], 0);
+    await tab.run("new Promise((done) => { const img = document.querySelector('.quire-image img'); img.complete ? done() : img.onload = done; })");
+    await page!.press(".quire-image img");
+    await tab.wait(400);
+    const tools = await tab.run<{ y: number; height: number }>("q.box('.quire-picture-strip')");
+    const line = await tab.run<{ y: number; height: number }>("q.box('.quire > p')");
+    const shown = await tab.run<{ y: number; height: number }>("q.box('.quire-image img')");
+    expect(tools.y + tools.height <= line.y || tools.y >= shown.y + shown.height).toBe(true);
+    await tab.press("Escape");
 });
 
 test("a folding section just inserted takes the keyboard into its summary, whose empty word is quiet", async () => {

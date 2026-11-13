@@ -190,12 +190,6 @@
     transform-origin: right top;
 }
 
-.quire-frame.start .quire-picture-strip {
-    right: auto;
-    left: 0;
-    transform-origin: left bottom;
-}
-
 .quire-own-size {
     width: auto;
     padding-inline: 0.5rem;

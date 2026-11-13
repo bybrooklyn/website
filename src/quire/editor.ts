@@ -607,7 +607,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     widening?.addEventListener("change", outlineAsKept);
     const emojiList = createEmojiPicker(surface);
     const tableTools = createTableTools(surface, () => bar.element.getBoundingClientRect().bottom);
-    const pictureTools = createPictureTools(surface, { keep: keepPicture, margin: host });
+    const pictureTools = createPictureTools(surface, { keep: keepPicture, margin: host, top: () => bar.element.getBoundingClientRect().bottom });
     // a code block's language and a callout's kind, each a menu from its control in the text
     const blockMenus = createBlockMenus(surface);
     // the writer's notes: marked in the text, in the right margin on a wide window and a list on a narrow one

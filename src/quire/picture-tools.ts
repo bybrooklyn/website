@@ -20,6 +20,7 @@ import { insetOf, DIALOG } from "./dialog";
 import { blockAt, removeBlock, setAlign, setImage, type Align, type Image } from "./document";
 import { enterGivesBack } from "./fields";
 import { landedAt, landings, moveBlockTo, snapWidth, staysPut } from "./pictures";
+import { linesAround, placeClear } from "./strips";
 import type { Operation, Surface } from "./surface";
 import { control, dots, EASE, flowMenu, icon, make, MOTION, springCurve, still, type Box, type MenuItem } from "./ui";
 
@@ -73,6 +74,8 @@ const boxOf = (element: Element): Box => {
 export interface PictureOptions {
     keep?: (file: File) => Promise<string>;
     margin?: HTMLElement;
+    /** How far down the window the editor's own top reaches, which the picture's strip keeps under. */
+    top?: () => number;
 }
 
 /** Builds the picture tools for a surface. */
@@ -151,10 +154,13 @@ export function createPictureTools(surface: Surface, options: PictureOptions = {
         if (document.activeElement !== described) described.value = block.alt;
         own.classList.toggle("absent", block.width === undefined);
         own.tabIndex = block.width === undefined ? -1 : 0;
-        // the strip goes under the picture when there is no room above it in the window, and starts at its left edge when a narrow picture would push it out of the window
-        frame.classList.toggle("low", picture.getBoundingClientRect().top < 120);
-        frame.classList.remove("start");
-        frame.classList.toggle("start", strip.getBoundingClientRect().left < 8);
+        // one rule for every strip over the writing (strips.ts): at the picture's top right corner, never on the picture nor
+        // the line before or after it while there is room, under it when there is none above, and inside the window
+        const shown = picture.getBoundingClientRect();
+        const limit = options.top?.() ?? 0;
+        const at = placeClear(shown, { width: strip.offsetWidth, height: strip.offsetHeight }, { left: 0, top: limit, width: innerWidth, height: innerHeight - limit }, linesAround(root, shown, figure), "above", "end");
+        Object.assign(strip.style, { left: `${at.left - shown.left}px`, top: `${at.top - shown.top}px`, right: "auto", bottom: "auto" });
+        frame.classList.toggle("low", at.side === "below");
     }
 
     /** Picks a picture: the frame grows round it. */
@@ -545,6 +551,7 @@ export function createPictureTools(surface: Surface, options: PictureOptions = {
         place();
     });
     addEventListener("resize", place);
+    addEventListener("scroll", place, { passive: true });
 
     return {
         /** The path of the picked picture, if one is. */
@@ -562,6 +569,7 @@ export function createPictureTools(surface: Surface, options: PictureOptions = {
             document.removeEventListener("pointerdown", onOutside, true);
             document.removeEventListener("keydown", onEscape, true);
             removeEventListener("resize", place);
+            removeEventListener("scroll", place);
             for (const each of [frame, dropLine, anchor, panel, menu.box]) each.remove();
         },
     };

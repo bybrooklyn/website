@@ -1,6 +1,8 @@
 // The small bar that grows out of the top edge of selected text: bold, italic, strike, code, link,
-// and turn the block into a heading, a quote or a list. It follows the selection, never covers it,
-// stays inside the window and below the main bar, and shrinks away when the selection collapses.
+// and turn the block into a heading, a quote or a list. It follows the selection, never covers it
+// nor the line above or below it while there is room (strips.ts), stays inside the window and below
+// the main bar, and shrinks away when the selection collapses. A selection made while the keyboard
+// is elsewhere, as find makes on each match, brings no bar.
 // Its link button turns the same bar into a field for the address: Enter sets it, Escape goes back,
 // and a link already there can be taken off.
 //
@@ -11,7 +13,8 @@ import { blockAt, type Document, type Mark, type Selection } from "./document";
 import { currentStyle, link as linkAction, linkAt, pressedAt, setStyleOf, toggle, toggleList, type Action } from "./bar";
 import { collapsed, rangeOf, tableOf } from "./keys";
 import type { Surface } from "./surface";
-import { control, glyph, icon, linkForm, make, placeNear, still } from "./ui";
+import { placeClear, linesAround } from "./strips";
+import { control, glyph, icon, linkForm, make, still } from "./ui";
 
 /** Whether the selection bar shows for a selection, and which of its buttons are pressed. */
 export function barFor(doc: Document, selection: Selection, marks: Mark[]): { show: boolean; pressed: Record<string, boolean> } {
@@ -30,15 +33,6 @@ export function barFor(doc: Document, selection: Selection, marks: Mark[]): { sh
     };
 }
 
-/**
- * Which side of the selection the bar goes: above only when the space between the selection's top
- * and the text over it is clear for the whole bar, so that it never covers the line above or a
- * heading; below otherwise.
- */
-export function sideFor(selection: { top: number; bottom: number }, textAbove: number, height: number, gap = 10): "above" | "below" {
-    return selection.top - textAbove >= height + gap * 2 ? "above" : "below";
-}
-
 /** Builds the selection bar for a surface. `top` gives how far down the window the main bar reaches, which it keeps clear of. */
 export function createSelectBar(surface: Surface, top: () => number = () => 0): { element: HTMLElement; hide(): void } {
     const bar = make("div", "quire-select-bar");
@@ -50,6 +44,8 @@ export function createSelectBar(surface: Surface, top: () => number = () => 0): 
     document.body.append(bar);
 
     let saved: Selection | undefined;
+    /** The last selection made while the keyboard was elsewhere, as written out, which shows no bar. */
+    let foreign: string | undefined;
     let dragging = false;
     let shown = false;
 
@@ -117,30 +113,19 @@ export function createSelectBar(surface: Surface, top: () => number = () => 0): 
         const range = selection?.rangeCount ? selection.getRangeAt(0) : undefined;
         const rect = range && surface.element.contains(range.commonAncestorContainer) ? range.getBoundingClientRect() : undefined;
         if (!rect || (!rect.width && !rect.height)) return;
+        // one rule for every strip over the writing (strips.ts): never on the selected words nor the line above or below them while there is room
         const limit = top();
-        const side = sideFor(rect, textAbove(range!, rect.top), bar.offsetHeight);
-        const at = placeNear({ left: rect.left, top: rect.top - limit, width: rect.width, height: rect.height }, { width: bar.offsetWidth, height: bar.offsetHeight }, { width: innerWidth, height: innerHeight - limit }, side, 10);
+        const words = { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
+        // the lines the words start and end in, a table's row for a cell, whose neighbours are the lines next to them
+        const lineOf = (node: Node) => {
+            const holder = (node.nodeType === 1 ? (node as Element) : node.parentElement)?.closest("[data-holder]");
+            return (holder?.matches("td, th") ? holder.closest("tr") : holder) ?? surface.element;
+        };
+        const ends = { first: lineOf(range!.startContainer), last: lineOf(range!.endContainer) };
+        const at = placeClear(words, { width: bar.offsetWidth, height: bar.offsetHeight }, { left: 0, top: limit, width: innerWidth, height: innerHeight - limit }, linesAround(surface.element, words, undefined, ends), "above", "center", 10);
         bar.style.left = `${at.left}px`;
-        bar.style.top = `${at.top + limit}px`;
+        bar.style.top = `${at.top}px`;
         bar.classList.toggle("below", at.side === "below");
-    }
-
-    /** How far down the window the text over the selection reaches: the line above, or the block above it. */
-    function textAbove(range: Range, from: number): number {
-        let block: Node | null = range.startContainer;
-        while (block && block.parentNode !== surface.element) block = block.parentNode;
-        if (!block) return -Infinity;
-        const before = document.createRange();
-        before.setStartBefore((block as Element).previousElementSibling ?? block);
-        before.setEnd(range.startContainer, range.startOffset);
-        let reach = -Infinity;
-        for (const box of before.getClientRects()) if (box.height > 0 && box.bottom <= from + 1) reach = Math.max(reach, box.bottom);
-        // over the first block is what stands over the text itself, the document's title, which the bar covered
-        if (!(block as Element).previousElementSibling) {
-            const over = surface.element.previousElementSibling?.getBoundingClientRect();
-            if (over && over.height > 0 && over.bottom <= from + 1) reach = Math.max(reach, over.bottom);
-        }
-        return reach;
     }
 
     function show() {
@@ -167,7 +152,12 @@ export function createSelectBar(surface: Surface, top: () => number = () => 0): 
     function update(selection: Selection, marks: Mark[]) {
         const doc = surface.getDocument();
         const now = barFor(doc, selection, marks);
-        if (!now.show || dragging) {
+        // a selection made from elsewhere, such as find leaving its match selected, is not one the writer made to format, and
+        // brings no bar, even once the text has the keyboard back, until the writer changes it
+        const fromText = surface.element.contains(document.activeElement) || bar.contains(document.activeElement);
+        const said = JSON.stringify(selection);
+        if (!fromText) foreign = said;
+        if (!now.show || dragging || !fromText || said === foreign) {
             if (!bar.contains(document.activeElement)) hide();
             return;
         }

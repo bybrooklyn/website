@@ -11,6 +11,7 @@
 import { addColumn, addRow, blockAt, insertBlock, orderRows, paragraph, removeBlock, removeColumn, removeRow, setColumnAlign, sortedRows, type Align, type Document, type Table } from "./document";
 import type { State } from "./history";
 import { caret, tableOf } from "./keys";
+import { linesAround, placeClear } from "./strips";
 import type { Surface } from "./surface";
 import { control, dots, flowMenu, icon, make, type MenuItem } from "./ui";
 
@@ -191,11 +192,26 @@ export function createTableTools(surface: Surface, top: () => number = () => 0):
     const place = () => {
         if (!shownFor) return;
         const box = shownFor.getBoundingClientRect();
-        tools.style.left = `${Math.max(8, Math.min(box.right - tools.offsetWidth, innerWidth - tools.offsetWidth - 8))}px`;
-        // over the table's top edge; with that scrolled up under the editor's top, just below it, riding
-        // up with the table's foot and away under the top once the table has gone (quire.css stacks it lower)
-        const above = Math.max(box.top - tools.offsetHeight - 6, top() + 6);
-        tools.style.top = `${Math.min(above, box.bottom - tools.offsetHeight)}px`;
+        const size = { width: tools.offsetWidth, height: tools.offsetHeight };
+        const limit = top();
+        // the table scrolled up under the editor's top: the strip rides up with its foot and away under the top (quire.css stacks it lower)
+        if (box.bottom < limit + size.height + 12) {
+            tools.style.left = `${Math.max(8, Math.min(box.right - size.width, innerWidth - size.width - 8))}px`;
+            tools.style.top = `${box.bottom - size.height}px`;
+            return;
+        }
+        // one rule for every strip over the writing (strips.ts): over the table's top right corner, never on the table nor
+        // the line before or after it while there is room; for a table taller than the window, never on the row being
+        // written in nor the rows next to it
+        const bounds = { left: 0, top: limit, width: innerWidth, height: innerHeight - limit };
+        let at = placeClear(box, size, bounds, linesAround(root, box, shownFor), "above", "end", 6);
+        const row = surface.elementAt(surface.getSelection().focus.path)?.closest("tr");
+        if (row && at.top < box.bottom && at.top + size.height > box.top) {
+            const rows = [row.previousElementSibling, row.nextElementSibling].filter((each) => each !== null).map((each) => each!.getBoundingClientRect());
+            at = placeClear(row.getBoundingClientRect(), size, bounds, rows, "above", "end", 6);
+        }
+        tools.style.left = `${at.left}px`;
+        tools.style.top = `${at.top}px`;
     };
     const update = () => {
         const focus = surface.getSelection().focus.path;
