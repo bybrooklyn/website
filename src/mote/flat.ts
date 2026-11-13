@@ -181,6 +181,8 @@ export interface Wall {
 
 const cross = (ax: number, ay: number, bx: number, by: number) => ax * by - ay * bx;
 let count = 0;
+/** One number for a pair of bodies, the same for no other pair while fewer than 2^26 bodies have been made in the page. */
+const pair = (a: Body, b: Body) => a.id * 2 ** 26 + b.id;
 
 function make(x: number, y: number, corners: P[], round: number, stuff: Stuff): Body {
     let points = corners;
@@ -503,7 +505,7 @@ export class Flat {
     }
 
     #pass(a: Body, b: Body, by: number): void {
-        for (const key of [a.id * 1048576 + b.id, b.id * 1048576 + a.id]) {
+        for (const key of [pair(a, b), pair(b, a)]) {
             const left = (this.#through.get(key) ?? 0) + by;
             if (left > 0) this.#through.set(key, left);
             else this.#through.delete(key);
@@ -620,7 +622,7 @@ export class Flat {
                 const margin = MARGIN + Math.min(closing * dt, 400);
                 const reach = a.far + b.far + margin;
                 if ((b.x - a.x) ** 2 + (b.y - a.y) ** 2 > reach * reach) continue;
-                const key = a.id * 1048576 + b.id;
+                const key = pair(a, b);
                 if (this.#through.has(key)) continue;
                 const found = touch(a, b, margin);
                 if (!found) continue;
