@@ -25,6 +25,14 @@
 :root {
     /* the slight overshoot the panels and bars open on */
     --quire-spring: cubic-bezier(0.3, 1.25, 0.4, 1);
+    /* the three corners everything of the editor's own is drawn with: small for what sits inside
+       something (a line, a field, a button), middle for menus, bars, strips and cards, large for
+       dialogs and side panels */
+    --quire-round-small: 0.5rem;
+    --quire-round: 0.75rem;
+    --quire-round-large: 1.25rem;
+    /* where a side panel starts: below the top's two lines (the page sets --stuck there), with a gap */
+    --quire-below-bar: calc(var(--quire-top-bottom, 6.5rem) + 0.75rem);
 }
 
 .quire-editor {
@@ -3059,6 +3067,16 @@ body.quire-app,
     display: none;
 }
 
+/* a way out that leaves something behind stands alone at the far left */
+.quire-dialog-actions .far {
+    margin-right: auto;
+}
+
+/* a narrow window puts the buttons on more than one line, the filled one last */
+.quire-dialog-actions {
+    flex-wrap: wrap;
+}
+
 .quire-dialog button {
     white-space: nowrap;
     border: 0;
@@ -3123,6 +3141,63 @@ body.quire-app,
 .quire-dialog-dismiss:hover {
     background: color-mix(in oklch, var(--ink) 8%, transparent);
     color: var(--ink);
+}
+
+/* a switch (switchButton in dialog.ts), the same wherever one is: its words, a tick before them
+   when it is on, and on, the pressed square the bar's buttons have; its state is never its words */
+.quire-switch {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    min-height: 2.25rem;
+    padding: 0 0.8rem 0 0.55rem;
+    border: 0.0625rem solid var(--rule);
+    border-radius: var(--quire-round-small);
+    background: transparent;
+    color: var(--ink);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition:
+        background 0.15s ease,
+        border-color 0.15s ease,
+        color 0.15s ease;
+}
+
+.quire-switch:hover {
+    background: color-mix(in oklch, var(--ink) 8%, transparent);
+}
+
+.quire-switch-tick {
+    flex: none;
+    width: 1.05rem;
+    height: 1.05rem;
+    border: 0.0625rem solid color-mix(in oklch, var(--muted) 70%, transparent);
+    border-radius: 0.25rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-dasharray: 20;
+    stroke-dashoffset: 20;
+    transition: stroke-dashoffset 0.2s var(--ease), border-color 0.15s ease;
+}
+
+.quire-switch.on {
+    border-color: transparent;
+    background: color-mix(in oklch, var(--accent) 22%, transparent);
+    color: var(--accent);
+}
+
+.quire-switch.on .quire-switch-tick {
+    border-color: currentColor;
+    stroke-dashoffset: 0;
+}
+
+.quire-switch:disabled {
+    opacity: 0.5;
+    cursor: default;
 }
 
 /* what a pressed thing becomes grows out of it in its colour */

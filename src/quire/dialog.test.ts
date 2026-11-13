@@ -11,7 +11,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { browser, chromium, type Browser } from "../../scripts/browser";
-import { insetOf, rippleFrom } from "./dialog";
+import { enterAnswers, insetOf, rippleFrom } from "./dialog";
 
 test("the insets cut the dialog's box down to the control's, negative where the control is outside it", () => {
     const dialog = { left: 100, top: 100, width: 400, height: 300 };
@@ -29,12 +29,17 @@ test("a ripple starts where the button was pressed and reaches its farthest corn
     expect(at.size / 2).toBeCloseTo(Math.hypot(90, 20));
 });
 
+test("Enter answers the dialog from a field of one line, and not from a box to tick or a button", () => {
+    for (const type of ["text", "url", "password", "search", "number"]) expect(enterAnswers(type)).toBe(true);
+    for (const type of ["checkbox", "radio", "button", "submit", "file"]) expect(enterAnswers(type)).toBe(false);
+});
+
 const live = !!chromium();
 let folder = "";
 let tab: Browser;
 
 const page = `
-import { openDialog } from "${import.meta.dir}/dialog.ts";
+import { openDialog, switchButton } from "${import.meta.dir}/dialog.ts";
 const opener = document.querySelector("#opener");
 window.shut = 0;
 window.show = (title = "Asking") => {
@@ -45,6 +50,15 @@ window.show = (title = "Asking") => {
     window.dialog = openDialog(opener, { title, body: [line, field], dismiss: "Not now", action: { label: "Choose", press: (button, dialog) => dialog.change(() => { const cards = document.createElement("div"); cards.className = "cards"; cards.style.height = "12rem"; button.replaceWith(cards); return cards; }, button) }, onClose: () => window.shut++ });
 };
 opener.addEventListener("click", () => window.show());
+window.answered = 0;
+window.form = () => {
+    const field = document.createElement("input");
+    field.setAttribute("aria-label", "A name");
+    window.turned = [];
+    const turn = switchButton("Page numbers", false, (on) => window.turned.push(on));
+    window.dialog = openDialog(opener, { title: "A form", body: [field, turn], dismiss: "Cancel", others: [{ label: "Forget", far: true, press: (dialog) => dialog.close() }, { label: "Copy", press: () => {} }], action: { label: "OK", press: (button, dialog) => { window.answered++; dialog.close(); } } });
+    field.focus();
+};
 `;
 
 beforeAll(async () => {
@@ -168,4 +182,33 @@ used("under reduced motion it is simply open, and simply shut", async () => {
     await run("window.dialog.close()");
     expect(await run<boolean>("!document.querySelector('dialog.quire-dialog')")).toBe(true);
     await tab.media({});
+});
+
+used("its ways out are in one order, the filled button last; Enter in a field answers it as the filled button does", async () => {
+    await run("window.form()");
+    await until("document.querySelector('dialog.quire-dialog')?.open", "the form");
+    const order = await run<string[]>("[...document.querySelectorAll('.quire-dialog-actions button')].map((b) => b.textContent)");
+    expect(order).toEqual(["Forget", "Copy", "Cancel", "OK"]);
+    // the way that leaves something behind stands apart at the far left, the filled button at the far right
+    const edges = await run<number[]>("(() => { const row = document.querySelector('.quire-dialog-actions').getBoundingClientRect(); const all = [...document.querySelectorAll('.quire-dialog-actions button')].map((b) => b.getBoundingClientRect()); return [all[0].left - row.left, row.right - all[3].right, all[1].left - all[0].right]; })()");
+    expect(edges[0]).toBeLessThan(1);
+    expect(edges[1]).toBeLessThan(1);
+    expect(edges[2]).toBeGreaterThan(40);
+    await tab.type("Ada");
+    await tab.press("Enter");
+    await until("!document.querySelector('dialog.quire-dialog')", "answered by Enter");
+    expect(await run<number>("window.answered")).toBe(1);
+});
+
+used("a switch says its state by being pressed, never by its words, and tells what it became", async () => {
+    await run("window.form()");
+    await until("document.querySelector('dialog.quire-dialog')?.open", "the form");
+    const before = await run<{ pressed: string | null; words: string }>("(() => { const s = document.querySelector('.quire-switch'); return { pressed: s.getAttribute('aria-pressed'), words: s.textContent }; })()");
+    expect(before).toEqual({ pressed: "false", words: "Page numbers" });
+    await run("document.querySelector('.quire-switch').click()");
+    const after = await run<{ pressed: string | null; words: string }>("(() => { const s = document.querySelector('.quire-switch'); return { pressed: s.getAttribute('aria-pressed'), words: s.textContent }; })()");
+    expect(after).toEqual({ pressed: "true", words: "Page numbers" });
+    expect(await run<boolean[]>("window.turned")).toEqual([true]);
+    await run("window.dialog.close()");
+    await until("!document.querySelector('dialog.quire-dialog')", "closed");
 });
