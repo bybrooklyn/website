@@ -130,8 +130,12 @@ impl Running {
         self.squares.fill(0.0);
     }
 
-    /// Takes in one more of each number.
+    /// Takes in one more of each number. A row with a number that is not finite (a blow-up in the
+    /// physics) is let go, so it cannot spoil the means for ever.
     pub fn add(&mut self, values: &[f32]) {
+        if values.iter().any(|x| !x.is_finite()) {
+            return;
+        }
         self.count += 1.0;
         for ((mean, squares), &x) in self.mean.iter_mut().zip(&mut self.squares).zip(values) {
             let x = x as f64;
@@ -359,7 +363,9 @@ impl Learner {
     fn rescale(&self, values: &mut [f32]) {
         for row in values.chunks_exact_mut(self.senses) {
             for ((x, &shift), &scale) in row.iter_mut().zip(&self.shift).zip(&self.scale) {
-                *x = clamp((*x - shift) * scale, -SENSE_LIMIT, SENSE_LIMIT);
+                // a NaN is taken as the mean, an infinity as the limit
+                let rescaled = (*x - shift) * scale;
+                *x = if rescaled.is_nan() { 0.0 } else { clamp(rescaled, -SENSE_LIMIT, SENSE_LIMIT) };
             }
         }
     }
@@ -617,6 +623,13 @@ impl Learner {
             None => core::mem::take(&mut self.grads),
         };
         let norm = length(&grads);
+        // a gradient that is not finite would make every weight NaN for good: that step is not taken
+        if !norm.is_finite() {
+            if self.grads.is_empty() {
+                self.grads = grads;
+            }
+            return;
+        }
         if norm > self.settings.most_norm {
             let shorten = self.settings.most_norm / norm;
             grads.iter_mut().for_each(|g| *g *= shorten);

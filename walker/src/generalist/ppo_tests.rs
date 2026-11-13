@@ -171,6 +171,32 @@ fn learner_advantages(learner: &Learner) -> Vec<f32> {
 }
 
 #[test]
+fn a_number_that_is_not_finite_never_gets_into_what_is_learned() {
+    // a running mean is not spoiled by one row with a NaN or an infinity in it
+    let mut running = Running::new(2);
+    running.add(&[1.0, 2.0]);
+    running.add(&[f32::NAN, 5.0]);
+    running.add(&[3.0, f32::INFINITY]);
+    running.add(&[3.0, 4.0]);
+    assert_eq!((running.count, running.mean[0], running.mean[1]), (2.0, 2.0, 3.0));
+    // a sense that is not finite is taken as nothing out of the ordinary, and acting goes on
+    let mut learner = Learner::new(toy(), 2, 1, 4, 3);
+    let mut action = [0.0f32];
+    learner.act(&[f32::NAN, f32::INFINITY], &mut action);
+    assert!(action[0].is_finite());
+    // a gradient that is not finite moves no weight
+    let before = learner.weights.clone();
+    let mut grads = vec![0.01f32; before.len()];
+    grads[3] = f32::NAN;
+    learner.apply(Some(&grads));
+    assert_eq!(learner.weights, before);
+    grads[3] = f32::INFINITY;
+    learner.apply(Some(&grads));
+    assert_eq!(learner.weights, before);
+    assert!(learner.adam.mean.iter().chain(&learner.adam.square).all(|x| x.is_finite()));
+}
+
+#[test]
 fn merged_running_numbers_are_the_numbers_of_all_of_it() {
     let values: Vec<[f32; 2]> = (0..50).map(|i| [(i as f32 * 0.37).sin() * 3.0, i as f32]).collect();
     let mut whole = Running::new(2);

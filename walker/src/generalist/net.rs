@@ -275,9 +275,11 @@ fn dot(a: &[f32], b: &[f32]) -> f32 {
     total
 }
 
-/// The length of a gradient, the square root of the sum of its squares.
+/// The length of a gradient, the square root of the sum of its squares; infinite if that sum is not
+/// finite (a NaN in it, or numbers too large), where `sqrt` would give 0.
 pub fn length(grads: &[f32]) -> f32 {
-    sqrt(dot(grads, grads))
+    let squares = dot(grads, grads);
+    if squares.is_finite() { sqrt(squares) } else { f32::INFINITY }
 }
 
 /// Adam: each weight moves against its gradient, by a step scaled by how large its gradient has been
