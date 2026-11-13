@@ -657,7 +657,10 @@ function editIn(blocks: Block[], path: number[], sep: string, eol: string, chang
 function edit(doc: Document, path: number[], change: Siblings): Document {
     if (path.length === 0) return doc;
     const blocks = editIn(doc.blocks, path, doc.eol + doc.eol, doc.eol, change);
-    return blocks === doc.blocks ? doc : { ...doc, blocks };
+    if (blocks === doc.blocks) return doc;
+    // a document always has a line to write on: taking its last block away leaves an empty paragraph
+    if (blocks.length === 0) return { ...doc, blocks: [{ ...paragraph(), gap: doc.blocks[doc.blocks.length - 1]?.gap ?? "" }] };
+    return { ...doc, blocks };
 }
 
 /** Replaces the block at a path with the blocks `change` gives (none removes it). */
