@@ -77,8 +77,6 @@ export interface Stream {
     finish(): Promise<Heard[]>;
     /** Seconds of sound that have arrived and are not in the last update. */
     behind(): number;
-    /** Milliseconds of work per second of sound advanced, over the last steps. */
-    speed(): number;
 }
 
 /** What a stream needs: the encoder (features in, frames of the encoder's width out), and a decoder to make state with. */
@@ -111,8 +109,6 @@ export function createStream(parts: StreamParts, options: StreamOptions = {}): S
     const words: Heard[] = [];
     let running: Promise<unknown> = Promise.resolve();
     let busy = false;
-    let speed = 0;
-    let steps = 0;
 
     const take = (made: { data: Float32Array; bins: number; frames: number }) => {
         for (let t = 0; t < made.frames; t++) {
@@ -189,9 +185,6 @@ export function createStream(parts: StreamParts, options: StreamOptions = {}): S
         const seconds = (total - covered) / RATE;
         covered = total;
         const ms = performance.now() - started;
-        const rate = ms / Math.max(1, seconds * 1000);
-        speed = steps === 0 ? rate : speed * 0.6 + rate * 0.4;
-        steps++;
         return { words: [...words], tentative, ms, seconds };
     }
 
@@ -222,12 +215,11 @@ export function createStream(parts: StreamParts, options: StreamOptions = {}): S
             // ready for another phrase
             columns = [];
             base = 0;
-            given = covered = settledAt = steps = 0;
+            given = covered = settledAt = 0;
             words.length = 0;
             state = decoder.start();
             return all;
         },
         behind: () => (given - covered) / RATE,
-        speed: () => speed,
     };
 }

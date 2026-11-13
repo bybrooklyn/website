@@ -5,7 +5,7 @@
 // `stepFor` against a pretend session.
 
 import { describe, expect, test } from "bun:test";
-import { copy, createDecoder, frameMajor, stepFor, type DecodeState, type Session, type Step, type Tensor, type Word } from "./decode";
+import { copy, createDecoder, stepFor, type DecodeState, type Session, type Step, type Tensor, type Word } from "./decode";
 import { vocabulary } from "./tokens";
 
 const vocab = vocabulary(["▁the 0", "▁cat 1", "▁sat 2", "▁on 3", "▁mat 4", ". 5", "<blk> 6"].join("\n"));
@@ -165,12 +165,6 @@ describe("resuming", () => {
         await run.decode(frames(6), 6, 3, trial);
         expect([start.token, start.frame, start.open, [...start.prediction.h]]).toEqual([BLANK, 0, null, [0, 0, 0, 0, 0, 0, 0, 0]]);
         expect(trial.frame).toBe(6);
-    });
-});
-
-describe("frame order", () => {
-    test("turns channels of frames into frames of channels", () => {
-        expect([...frameMajor(Float32Array.of(1, 2, 3, 10, 20, 30), 2, 3)]).toEqual([1, 10, 2, 20, 3, 30]);
     });
 });
 

@@ -19,8 +19,7 @@ export type Ask =
     | { type: "stream-open"; stream: number }
     | { type: "stream-push"; stream: number; samples: Float32Array }
     | { type: "stream-finish"; stream: number; id: number }
-    | { type: "stream-cancel"; stream: number }
-    | { type: "release" };
+    | { type: "stream-cancel"; stream: number };
 
 /** A word with its time, as the worker sends it. */
 export type Sent = { text: string; start: number; end: number };
@@ -33,7 +32,6 @@ export type Answer =
     | { type: "stream-update"; stream: number; update: LiveUpdate }
     | { type: "stream-done"; id: number; words: Sent[] }
     | { type: "heard"; id: number; text: string; words: { text: string; start: number; end: number }[]; ms: number }
-    | { type: "released" }
     | { type: "failed"; message: string; cancelled: boolean; id?: number; stream?: number };
 
 /** What the panel and the session use of an engine. */

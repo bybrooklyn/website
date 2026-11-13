@@ -17,7 +17,7 @@ import { textAt } from "../document";
 import type { State } from "../history";
 import type { ChangeKind } from "../history";
 import { textBefore, write, type Pending } from "./insert";
-import { createMerger, spread, type Word } from "./merge";
+import { spread, type Word } from "./merge";
 import { interpret } from "./spoken";
 import { createVoice } from "./voice";
 import { correct, type Custom } from "./words";
@@ -123,7 +123,6 @@ const PRE_ROLL = 0.8;
 export function startSession(options: SessionOptions): Session {
     const { target, recognizer } = options;
     const voice = createVoice({ silence: options.silence, wait: options.wait });
-    const merger = createMerger({ overlap: false });
 
     let buffer = new Float32Array(RATE * (WINDOW + 4));
     let length = 0;
@@ -318,8 +317,7 @@ export function startSession(options: SessionOptions): Session {
                 const heard = said === undefined && count >= 1600 ? await recognize(count) : undefined;
                 if (said?.trim()) settle(said);
                 if (heard) {
-                    const merged = merger.update(heard.words, { final: true });
-                    if (merged.settled.length > 0) settle(merged.settled.map((word) => word.text).join(" "));
+                    if (heard.words.length > 0) settle(heard.words.map((word) => word.text).join(" "));
                 }
                 drop(Math.min(count, length));
                 lastRun = 0;
@@ -349,8 +347,7 @@ export function startSession(options: SessionOptions): Session {
                 const heard = await recognize(count);
                 if (!heard || mine !== generation || finished) return;
                 lastRun = count;
-                const merged = merger.update(heard.words, {});
-                show(correct(merged.provisional.map((word) => word.text).join(" "), options.custom()));
+                show(correct(heard.words.map((word) => word.text).join(" "), options.custom()));
             } catch (error) {
                 fail(error);
             } finally {

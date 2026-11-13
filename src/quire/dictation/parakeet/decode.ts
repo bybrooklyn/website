@@ -103,7 +103,7 @@ export function copy(state: DecodeState): DecodeState {
     return { ...state, prediction: { ...prediction, h: prediction.h.slice(), c: prediction.c.slice() }, open: open && { ...open } };
 }
 
-/** Turns the encoder's output, which is `width` channels of `frames` numbers each, into `frames` frames of `width` numbers each, the order `decode` reads. */
+/** Turns the encoder's output, which is `width` channels of `frames` numbers each, into `frames` frames of `width` numbers each, the order `decode` reads. runtime.ts's `encode` does this to every output. */
 export function frameMajor(channels: Float32Array, width: number, frames: number): Float32Array {
     const out = new Float32Array(frames * width);
     for (let t = 0; t < frames; t++) for (let d = 0; d < width; d++) out[t * width + d] = channels[d * frames + t]!;

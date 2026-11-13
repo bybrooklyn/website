@@ -21,7 +21,6 @@ const FOLDER = "mdquire-dictation";
 const stops = new Set<AbortController>();
 let downloading: Promise<unknown> = Promise.resolve();
 let recognize: ((samples: Float32Array) => Promise<{ text: string; words: { text: string; start: number; end: number }[] }>) | undefined;
-let release: (() => Promise<void>) | undefined;
 /** The Parakeet recognizer, if that is what is loaded, and the phrases being heard live (more than one while a finished phrase is still being worked out). */
 let parakeet: Recognizer | undefined;
 const live = new Map<number, Stream>();
@@ -92,7 +91,6 @@ async function load(tier: Tier, words: string[], id: number) {
             { encoder: await bytesOf(tier, "encoder"), decoder: await bytesOf(tier, "decoder"), tokenizer: new TextDecoder().decode(await bytesOf(tier, "tokenizer")) },
             { executionProviders: ["wasm"], graphOptimizationLevel: "all" },
         );
-        release = () => model.dispose();
         recognize = async (samples) => ({ text: await model.transcribe(samples), words: [] });
         place = here.threads > 1 ? `the processor, ${here.threads} threads` : "the processor";
     } else {
@@ -102,7 +100,6 @@ async function load(tier: Tier, words: string[], id: number) {
             { bins: tier.mels === 80 ? 80 : 128, words, prefer: tier.card ? undefined : "wasm" },
         );
         parakeet = model;
-        release = () => model.release();
         recognize = async (samples) => model.transcribe(samples);
         live_ = true;
         place = model.backend.kind === "webgpu" ? "the graphics card" : model.backend.threads > 1 ? `the processor, ${model.backend.threads} threads` : "the processor";
@@ -161,12 +158,6 @@ self.onmessage = async (event: MessageEvent<Ask>) => {
             say({ type: "stream-done", id: ask.id, words: await mine.finish() });
         } else if (ask.type === "stream-cancel") {
             live.delete(ask.stream);
-        } else if (ask.type === "release") {
-            await release?.();
-            recognize = undefined;
-            parakeet = undefined;
-            live.clear();
-            say({ type: "released" });
         }
     } catch (error) {
         const aborted = error instanceof DOMException && error.name === "AbortError";
