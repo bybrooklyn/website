@@ -156,8 +156,10 @@
     --quire-faint: oklch(from var(--muted) 0.63 c h);
 }
 
-/* C's inks, for the light paper: the site's ink turned dark, the accent deepened to read on it */
-.look-paper .quire-paper {
+/* C's inks, for the light paper: the site's ink turned dark, the accent deepened to read on it;
+   the home screen's list sits on a sheet of the same paper in that look */
+.look-paper .quire-paper,
+.look-paper > .quire-shelf .quire-shelf-inner {
     --paper: oklch(0.965 0.009 300);
     --ink: oklch(0.24 0.04 300);
     --muted: oklch(0.47 0.045 300);
@@ -2524,6 +2526,34 @@ body.quire-app,
         content: "·";
         margin-right: 0.5rem;
     }
+}
+
+/* in light paper the list of documents is on a light sheet, as the page is: the paper's inks, its
+   corners barely eased, its fine line and shadow, and room inside it as a page has */
+.look-paper > .quire-shelf .quire-shelf-inner {
+    min-height: 0;
+    box-sizing: border-box;
+    padding: calc(var(--line) * 1.5) clamp(1.25rem, 5vw, 3.5rem) calc(var(--line) * 2);
+    border-radius: 0.1875rem;
+    color: var(--ink);
+}
+
+/* the round button for the commands is the writing's: with nothing open it shrinks away */
+.quire-editor > .quire-palette-button {
+    transition:
+        opacity 0.2s ease,
+        scale 0.3s var(--ease),
+        visibility 0s;
+}
+
+.quire-editor.shelved > .quire-palette-button {
+    opacity: 0;
+    scale: 0.6;
+    visibility: hidden;
+    transition:
+        opacity 0.2s ease,
+        scale 0.3s var(--ease),
+        visibility 0s 0.3s;
 }
 
 /* the margins' outline and details fade as the home screen comes in over them, while the page shrinks back into its row, and come back as it goes */

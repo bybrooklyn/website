@@ -566,4 +566,24 @@ used("the Blog post on the home screen is made as plain Markdown, and a duplicat
     expect(tab.errors).toEqual([]);
 });
 
+used("in light paper the home screen's list is on a light sheet with dark words, and the round button for the commands is not there", async () => {
+    await tab.run("localStorage.setItem('quire-look', 'paper'); localStorage.removeItem('quire-place')");
+    await load();
+    await tab.wait(600);
+    try {
+        expect(await shelfShown()).toBe(true);
+        // lightness read from the computed colors: the sheet light, its words dark, as the page is in that look
+        const seen = await tab.run<{ sheet: number; words: number; button: string }>(`(() => {
+            const light = (color) => { const canvas = document.createElement("canvas").getContext("2d"); canvas.fillStyle = color; canvas.fillRect(0, 0, 1, 1); const [r, g, b] = canvas.getImageData(0, 0, 1, 1).data; return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255; };
+            const inner = document.querySelector(".quire-shelf-inner");
+            return { sheet: light(getComputedStyle(inner).backgroundColor), words: light(getComputedStyle(inner.querySelector(".quire-shelf-name, .quire-shelf-none")).color), button: getComputedStyle(document.querySelector(".quire-palette-button")).visibility };
+        })()`);
+        expect(seen.sheet).toBeGreaterThan(0.85);
+        expect(seen.words).toBeLessThan(0.35);
+        expect(seen.button).toBe("hidden");
+    } finally {
+        await tab.run("localStorage.removeItem('quire-look')");
+    }
+});
+
 if (!live) console.warn("app.test.ts: no Chromium on this machine, so the app was not used.");
