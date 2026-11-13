@@ -21,7 +21,6 @@ the project's file in [`docs/`](docs/README.md); what has been done is in [`CHAN
 
 - About thirty new sentences a writer can see were written during the audit (the "Not saved" dialog, errors from the stores, errors on opening a damaged file, one about spelling being unavailable) and the wording of dictation's first-launch dialog. All are to be read and approved or reworded.
 - Spelling: everything in [spelling](docs/spelling.md): American, British or both; on or off by default; a personal dictionary; names; a bigger word list.
-- Whether the GitHub token moves from `localStorage` to `sessionStorage`.
 - Where mdQuire differs from what a Docs user expects: a blank document starts in the body and not the title; Enter in a table cell moves down a row; the status reads "Not saved" while typing; the outline does not scroll to keep the current heading in view; arrow down past a picture lands at the end of the next line. Decide which to change.
 - Right-to-left paragraphs are laid out left to right.
 - "Pink" appears twice in Text colour, and the typeface control reads "The page's …".
@@ -139,7 +138,7 @@ What was found and fixed is in [`docs/AUDIT.md`](docs/AUDIT.md). Still open from
 - Subtitle in a plain Markdown file too, kept as a `subtitle:` line in the frontmatter (today it exists only in a `.quire` document).
 - Deploy after the menus and the bar are reworked. mdQuire and its project page are listed once the audit's findings are fixed.
 - The findings of the audit of how mdQuire looks and behaves ([mdQuire-ux-audit](docs/mdQuire-ux-audit.md)), starting with its ten changes.
-- Suggesting the next words while typing (not tracked changes).
+- Suggesting the next words while typing: faint words after the caret that Tab takes, learned from the owner's own documents and posts in the browser, with no model.
 - Spelling: American, on by default, with a personal dictionary.
 - In the light paper look the list of documents sits on a light sheet too.
 - An emoji picker: a grid with search and what was used lately first.
