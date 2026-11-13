@@ -153,3 +153,23 @@ test("a stopped keeper, for a document that was left, keeps no snapshot of what 
     expect(kept.length).toBe(1);
     expect(await storage.load(kept[0]!.id)).toBe("the old document\n");
 });
+
+test("one snapshot that cannot be kept (no more room) does not stop the ones after it, or the history panel waiting on them", async () => {
+    const storage = memoryStorage();
+    const save = storage.save.bind(storage);
+    let full = true;
+    storage.save = async (...args) => {
+        if (full) throw new Error("no more room");
+        return save(...args);
+    };
+    let text = "one\n";
+    const keeper = createKeeper(storage, "doc", () => text);
+    await keeper.opened();
+    await keeper.settled();
+    full = false;
+    text = "two\n";
+    await keeper.now();
+    await keeper.settled();
+    expect((await storage.list("doc")).length).toBe(1);
+    expect(await storage.load((await storage.list("doc"))[0]!.id)).toBe("two\n");
+});

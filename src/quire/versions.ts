@@ -173,6 +173,9 @@ export function createKeeper(
     // once stopped, for a document that was left, no snapshot is taken: `text` reads whatever is shown now
     let stopped = false;
 
+    /** Takes snapshots one after another; one that fails (no more room) does not stop those after it, nor the history panel waiting on them. */
+    const queue = (run: () => Promise<VersionInfo | undefined>) => (busy = busy.then(run).catch(() => undefined));
+
     async function snapshot(opened = false): Promise<VersionInfo | undefined> {
         if (stopped) return undefined;
         const current = text();
@@ -191,18 +194,18 @@ export function createKeeper(
 
     return {
         /** Takes the snapshot for the document as opened, unless it is the same as the last one kept. */
-        opened: () => (busy = busy.then(() => snapshot(true))),
+        opened: () => queue(() => snapshot(true)),
         /** Says the document was changed: a snapshot follows once editing has paused. */
         edited() {
             if (stopped) return;
             cancel?.();
             cancel = wait(() => {
                 cancel = undefined;
-                busy = busy.then(() => snapshot());
+                queue(() => snapshot());
             }, pause);
         },
         /** Takes a snapshot now, if anything changed. */
-        now: () => (busy = busy.then(() => snapshot())),
+        now: () => queue(() => snapshot()),
         /** Resolves once every snapshot asked for is kept. */
         settled: () => busy,
         stop() {
