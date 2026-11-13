@@ -53,6 +53,7 @@ import { mountChecking } from "./check/mount";
 import { createTitle, nameFor, shownName, type OwnTitle } from "./title";
 import { createZoom, pageRule, percent, setPage, setupItems } from "./paper";
 import type { Page } from "./document";
+import { moreCommands } from "./more-commands";
 
 /** What the editor is given by the page. */
 export interface EditorOptions {
@@ -722,6 +723,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
                 // the slash menu opens on the first five again
                 forgetUsed: () => (remember(), bar.setStatus("Forgotten", "What you use most is forgotten: the slash menu opens on its first five again")),
                 tools: () => dictation.items(row.words[5]!),
+                ...moreCommands(surface, { doing, word: (index) => row.words[index]! }),
     };
     const row = createMenuRow(() =>
         headings(

@@ -905,6 +905,22 @@ export function toggleMark(doc: Document, range: Range, mark: Mark, force?: bool
     return doc;
 }
 
+/** Changes the characters of the text in a range, piece by piece, keeping every mark, link, look and note on them. `change` is given each piece's text, where it starts in its block's text, and the part of that block the range covers. */
+export function changeText(doc: Document, range: Range, change: (text: string, at: number, part: { path: number[]; from: number; to: number }) => string): Document {
+    for (const part of covered(doc, range)) {
+        if (!runsAt(doc, part.path) || part.to <= part.from) continue;
+        let at = part.from;
+        doc = editRuns(doc, part.path, (runs) =>
+            mapRuns(runs, part.from, part.to, (piece) => {
+                const from = at;
+                at += leafLength(piece.leaf);
+                return piece.leaf.kind === "text" ? { ...piece, leaf: { ...piece.leaf, text: change(piece.leaf.text, from, part) } } : piece;
+            }),
+        );
+    }
+    return doc;
+}
+
 /** Sets or clears (with null) the color, size, font or highlight of the text in a range. Values cannot hold quotes or semicolons. */
 export function setStyle(doc: Document, range: Range, style: { [key in keyof Look]?: string | null }): Document {
     for (const part of covered(doc, range)) {

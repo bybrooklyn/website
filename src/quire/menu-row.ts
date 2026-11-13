@@ -52,7 +52,8 @@ export type Command =
     | "color" | "size" | "font" | "highlight" | "spacing" | "left" | "center" | "right" | "justify" | "indent" | "outdent" | "bigger" | "smaller" | "clear"
     | "check" | "about" | "wordCount" | "shortcuts" | "searchMenus" | "forgetUsed"
     | "superscript" | "subscript" | "marked" | "typedSigns"
-    | "downloadAs" | "notes" | "nextNote" | "previousNote" | "comment" | "date" | "symbols" | "contents" | "updateContents";
+    | "downloadAs" | "notes" | "nextNote" | "previousNote" | "comment" | "date" | "symbols" | "contents" | "updateContents"
+    | "capitals";
 
 /** The menus of the row, for a document as it stands. A line's shortcut, if it has one, comes from the table in shortcuts.ts. */
 export function headings(state: RowState, act: RowActions): Heading[] {
@@ -142,6 +143,7 @@ export function headings(state: RowState, act: RowActions): Heading[] {
                 ...line("spoiler", "Spoiler"),
                 ...line("superscript", "Superscript"),
                 ...line("subscript", "Subscript"),
+                ...line("capitals", "Capitalisation", { hint: "›" }),
                 ...line("paragraph", "Normal text"),
                 ...line("heading1", "Heading 1"),
                 ...line("heading2", "Heading 2"),
