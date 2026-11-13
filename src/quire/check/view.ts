@@ -37,6 +37,8 @@ export function createChecking(host: CheckingHost & { keep: CheckingHost["keep"]
     let ignored: Ignored = loadIgnored(keep, ignoredFor);
     let dictionary: Dictionary | undefined;
     let loading: Promise<void> | undefined;
+    /** True when the dictionary did not load: spelling is left to the browser's own checker. */
+    let unavailable = false;
     const checker = createChecker(RULES);
     let findings: Finding[] = [];
     let shown: Finding[] = [];
@@ -183,9 +185,12 @@ export function createChecking(host: CheckingHost & { keep: CheckingHost["keep"]
     function apply() {
         savePrefs(keep, prefs);
         const spelling = prefs.on && prefs.settings.kinds.spelling;
-        // the browser's own spelling marks would sit on top of these
-        surface.element.spellcheck = spelling ? false : spellcheckWas;
+        // the browser's own spelling marks would sit on top of these; with no dictionary, the browser's are all there is
+        surface.element.spellcheck = spelling && !unavailable ? false : unavailable || spellcheckWas;
         if (spelling && !dictionary && !loading) {
+            // switching spelling on again after a failure tries again
+            unavailable = false;
+            surface.element.spellcheck = false;
             loading = loadDictionary(host.dictionary ?? "/quire/words-en.dat").then(
                 (loaded) => {
                     dictionary = loaded;
@@ -194,6 +199,9 @@ export function createChecking(host: CheckingHost & { keep: CheckingHost["keep"]
                 },
                 () => {
                     loading = undefined;
+                    unavailable = true;
+                    if (prefs.on && prefs.settings.kinds.spelling) surface.element.spellcheck = true;
+                    refresh();
                 },
             );
         }
@@ -337,6 +345,7 @@ export function createChecking(host: CheckingHost & { keep: CheckingHost["keep"]
         const head = make("div", "quire-check-head");
         head.append(make("p", "quire-check-title", shown.length ? `${shown.length} ${shown.length === 1 ? "thing" : "things"} to look at` : "Nothing to look at"));
         if (score.words) head.append(make("p", "quire-check-score", `Reading ease ${score.ease}, ${score.sentence} words a sentence`));
+        if (unavailable && prefs.settings.kinds.spelling) head.append(make("p", "quire-check-score quire-check-unavailable", "Spelling is unavailable: the dictionary did not load, so the browser's own spelling is on."));
         body.append(head);
         for (const group of byKind(shown)) {
             const section = make("section", "quire-check-group");
