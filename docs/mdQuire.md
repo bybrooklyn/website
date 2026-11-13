@@ -178,12 +178,34 @@ become their signs.
 it was dropped), splitting a paragraph there. It sits at the left unless moved; centre and right are
 chosen, and written as `<div align>`. Nothing stands under it but its caption, once it has words. Picked,
 it is resized from its corners and dragged between any two blocks, into and out of lists and quotes, the
-text opening where it will land. A right-click, the menu key or the strip's three dots open its menu;
-caption, description, alignment and size are set in a panel at the right, in the manner of the
-document's facts there (on a phone, at the window's foot). Text can flow round a picture at the left or
-right, written as HTML's own `align` on the `<img>`. A resized, captioned or wrapped picture is written as
+text opening where it will land, and no caret blinks beside it. A right-click, the menu key or the
+strip's three dots open its menu: Picture options, Wrap text, Replace, Remove. Picture options opens a
+panel at the right, in the manner of the document's facts there (on a phone, at the window's foot),
+where caption, description, alignment and size are set; Enter in a field keeps it, closes the panel and
+gives the keyboard back to the picture. Text can flow round a picture at the left or right, written as
+HTML's own `align` on the `<img>`; Wrap text is one switch in the menu and the panel, dimmed for a
+centred picture with "Left or right only". A resized, captioned or wrapped picture is written as
 one line of HTML the site's Markdown already passes through. A picture in a document in the browser is
 kept in the browser with it.
+
+**In the text.** A field drawn in the writing (a folding section's summary, a component's property, a
+picture's caption, the document's name) keeps what was typed on Enter and gives the keyboard back to the
+writing where the field belongs (`fields.ts`). A code block takes blank lines: Enter is always a new line,
+and only Enter at the end of code that already ends in two empty lines leaves it, taking the two away;
+the down arrow on its last line, with no line of text after it, makes one and goes there. Its language is
+a quiet button, always shown once set and shown as Plain text while the caret is in a block without one,
+whose menu lists the languages highlighted with a field that narrows them and offers any other word as
+written (`block-menus.ts`). A callout's kind is a menu of the five. A folding section's arrow folds it
+away in the editor only, never saved, and a caret that lands inside unfolds it; "Closed for readers" is
+the choice of its own written to the file, and a new section starts in its summary. A table has a menu
+from a right-click, the menu key or its strip's dots: rows above and below, columns left and right,
+removing the row, the column or the table, the sorts and the alignments, with what cannot act there
+dimmed (`tables.ts`). A right-click on words opens cut, copy, link, comment, bold, italic and underline
+(`text-menu.ts`); Shift with it leaves the browser's. The selection bar, a table's strip and a picture's
+are placed by one rule (`strips.ts`): never over what they belong to nor the line above or below it
+while the window has room. The selection bar does not come for a selection made while the keyboard is
+elsewhere, as find makes. Escape in a footnote goes back to just after its mark. A table of contents
+has its own Update.
 
 **Notes** (`comments.ts`, `comment-margin.ts`). Notes on selected words, kept beside the text and never
 written into the Markdown. There are no accounts; a note is the writer's own.
