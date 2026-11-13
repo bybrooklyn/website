@@ -165,44 +165,50 @@ async function documents() {
 
 /** The sheet's width on each frame for a while, as something is pressed: to see it travel. */
 const paperWidths = (ms: number) => tab.run<number[]>(`new Promise((done) => { const seen = []; const start = performance.now(); const step = () => { seen.push(Math.round(document.querySelector('.quire-paper').getBoundingClientRect().width)); if (performance.now() - start < ${ms}) requestAnimationFrame(step); else done(seen); }; requestAnimationFrame(step); })`);
+/** How much of the sheet is seen on each frame for a while, its height on screen less what is cut from its foot: to see it shrink into a row. */
+const paperHeights = (ms: number) => tab.run<number[]>(`new Promise((done) => { const seen = []; const start = performance.now(); const step = () => { const paper = document.querySelector('.quire-paper'); const box = paper.getBoundingClientRect(); const cut = /inset\\(0px 0px ([\\d.]+)px/.exec(getComputedStyle(paper).clipPath); seen.push(Math.round(box.height - (cut ? Number(cut[1]) * (box.width / paper.offsetWidth) : 0))); if (performance.now() - start < ${ms}) requestAnimationFrame(step); else done(seen); }; requestAnimationFrame(step); })`);
 const shelfShown = () => tab.run<boolean>("document.querySelector('.quire-shelf').classList.contains('shown') && getComputedStyle(document.querySelector('.quire-shelf')).visibility === 'visible'");
 
-used("with nothing open the home screen shows ways to start; Blank grows into a page, leaving shrinks it back onto its picture, and a reload comes back to what was open", async () => {
+used("with nothing open the home screen shows ways to start; blank grows into a page, leaving shrinks it back onto its row, and a reload comes back to what was open", async () => {
     await tab.wait(700);
     expect(await shelfShown()).toBe(true);
-    expect(await tab.run("[...document.querySelectorAll('.quire-shelf-row:first-of-type .quire-card-name')].map((name) => name.textContent)")).toEqual(["Blank", "Blog post", "Notes"]);
+    expect(await tab.run("[...document.querySelectorAll('.quire-shelf-kinds .quire-shelf-word')].map((word) => word.textContent)")).toEqual(["blank", "blog post", "notes"]);
     expect(await tab.run("!!document.querySelector('.quire-shelf-none')")).toBe(true);
     // the bar has nothing to act on, and is away
     expect(await tab.run("getComputedStyle(document.querySelector('.quire-bar')).visibility")).toBe("hidden");
-    const card = await tab.run<number>("document.querySelector('.quire-shelf-row .quire-mini-holder').getBoundingClientRect().width");
+    const word = await tab.run<number>("document.querySelector('.quire-shelf-kinds .quire-shelf-word').getBoundingClientRect().width");
     const growing = paperWidths(600);
-    await press(".quire-shelf-row .quire-card-open");
+    await press(".quire-shelf-kinds .quire-shelf-word", "blank");
     const grown = await growing;
-    expect(grown.filter((width) => width < card * 2).length).toBeGreaterThan(0);
+    expect(grown.filter((width) => width < word * 2).length).toBeGreaterThan(0);
     expect(new Set(grown).size).toBeGreaterThan(5);
     expect(await shelfShown()).toBe(false);
     expect(await tab.run("document.querySelector('.quire-name-text').textContent")).toBe("Untitled");
     await tab.type("First words.");
     await tab.wait(1500);
     expect(await status()).toBe("Saved");
-    // leaving: the page shrinks back onto its picture, which shows the words written
-    const shrinking = paperWidths(600);
+    // leaving: the page shrinks back onto its row, which says where it is kept and when
+    const shrinking = paperHeights(600);
     await press(".quire-word");
     const shrunk = await shrinking;
     await tab.wait(300);
-    expect(shrunk.some((width) => width < shrunk[0]! / 2)).toBe(true);
+    const row = await tab.run<number>("document.querySelector('.quire-shelf-doc').getBoundingClientRect().height");
+    expect(shrunk.some((height) => height < row * 1.5)).toBe(true);
     expect(await shelfShown()).toBe(true);
-    expect(await tab.run("document.querySelector('.quire-shelf-recent .quire-card-name').textContent")).toBe("Untitled");
-    expect(await tab.run("document.querySelector('.quire-shelf-recent .quire-mini').textContent")).toContain("First words.");
-    // the small page is set as the page is: its words at the left, in the page's own typeface, not the button's
-    expect(
-        await tab.run(`(() => { const words = getComputedStyle(document.querySelector('.quire-shelf-recent .quire-mini .prose p')); const page = getComputedStyle(document.querySelector('.quire-editor .prose.quire p') ?? document.body); return { align: words.textAlign, same: words.fontFamily === page.fontFamily }; })()`),
-    ).toEqual({ align: "start", same: true });
+    expect(await tab.run("[...document.querySelector('.quire-shelf-list .quire-shelf-open').children].map((part) => part.textContent)")).toEqual(["Untitled", "this browser", expect.stringMatching(/^today \d\d:\d\d$/)]);
+    // the keyboard is back on the row of the document left, and Enter opens it again
+    expect(await tab.run("document.activeElement.matches('.quire-shelf-list .quire-shelf-open')")).toBe(true);
+    await tab.press("Enter");
+    await tab.wait(700);
+    expect(await shelfShown()).toBe(false);
+    expect(await md()).toBe("First words.\n");
+    await press(".quire-word");
+    await tab.wait(900);
     // with nothing open a reload is the home screen again, and a document opened is what a reload comes back to
     await load();
     await tab.wait(300);
     expect(await shelfShown()).toBe(true);
-    await press(".quire-shelf-recent .quire-card-open");
+    await press(".quire-shelf-list .quire-shelf-open");
     await tab.wait(600);
     expect(await md()).toBe("First words.\n");
     await load();
@@ -479,27 +485,27 @@ used("printed, the page is the document alone, dark on white, with none of the e
 used("on the home screen each document's three dots rename it, duplicate it and delete it, asking once more; with less motion nothing travels", async () => {
     await press(".quire-word");
     await tab.wait(900);
-    const names = () => tab.run<string[]>("[...document.querySelectorAll('.quire-shelf-recent .quire-card-name')].map((name) => name.textContent)");
+    const names = () => tab.run<string[]>("[...document.querySelectorAll('.quire-shelf-list .quire-shelf-name')].map((name) => name.textContent)");
     const first = (await names())[0]!;
-    await press(".quire-shelf-recent .quire-dots");
+    await press(".quire-shelf-list .quire-dots");
     await tab.wait(500);
     expect(await tab.run("[...document.querySelectorAll('.quire-menu.open .quire-menu-line')].map((line) => line.textContent)")).toEqual(["Open", "Rename", "Duplicate", "Delete"]);
     await press(".quire-menu.open .quire-menu-line", "Duplicate");
     await tab.wait(600);
     expect(await names()).toContain(`${first} copy`);
-    // renamed in place on its card
+    // renamed in place on its row
     const copy = (await names()).indexOf(`${first} copy`);
-    await press(`.quire-shelf-recent .quire-card:nth-child(${copy + 1}) .quire-dots`);
+    await press(`.quire-shelf-list .quire-shelf-doc:nth-child(${copy + 1}) .quire-dots`);
     await tab.wait(500);
     await press(".quire-menu.open .quire-menu-line", "Rename");
-    await tab.run("document.querySelector('.quire-card-field').select()");
+    await tab.run("document.querySelector('.quire-shelf-field').select()");
     await tab.type("Kept twice");
     await tab.press("Enter");
     await tab.wait(600);
     expect(await names()).toContain("Kept twice");
     // deleting asks once more in the same menu
     const kept = (await names()).indexOf("Kept twice");
-    await press(`.quire-shelf-recent .quire-card:nth-child(${kept + 1}) .quire-dots`);
+    await press(`.quire-shelf-list .quire-shelf-doc:nth-child(${kept + 1}) .quire-dots`);
     await tab.wait(500);
     await press(".quire-menu.open .quire-menu-line", "Delete");
     await tab.wait(500);
@@ -510,7 +516,7 @@ used("on the home screen each document's three dots rename it, duplicate it and 
     await tab.media({ "prefers-reduced-motion": "reduce" });
     try {
         const widths = paperWidths(400);
-        await press(".quire-shelf-recent .quire-card-open");
+        await press(".quire-shelf-list .quire-shelf-open");
         expect(new Set(await widths).size).toBeLessThanOrEqual(2);
     } finally {
         await tab.media({});
@@ -521,7 +527,7 @@ used("on the home screen each document's three dots rename it, duplicate it and 
 used("the Blog post on the home screen is made as plain Markdown, and a duplicated .quire document keeps its pictures", async () => {
     await press(".quire-word");
     await tab.wait(900);
-    await press(".quire-shelf-start .quire-card:nth-child(2) .quire-card-open");
+    await press(".quire-shelf-kinds .quire-shelf-word", "blog post");
     await tab.wait(900);
     expect(await tab.run("[q.app.editor.surface.getDocument().quire === undefined, document.querySelector('.quire-editor').classList.contains('rich')]")).toEqual([true, false]);
     const made = await tab.run<string>(`(async () => {
@@ -532,8 +538,8 @@ used("the Blog post on the home screen is made as plain Markdown, and a duplicat
     })()`);
     await press(".quire-word");
     await tab.wait(900);
-    const index = await tab.run<number>("[...document.querySelectorAll('.quire-shelf-recent .quire-card-name')].findIndex((name) => name.textContent === 'With a picture')");
-    await press(`.quire-shelf-recent .quire-card:nth-child(${index + 1}) .quire-dots`);
+    const index = await tab.run<number>("[...document.querySelectorAll('.quire-shelf-list .quire-shelf-name')].findIndex((name) => name.textContent === 'With a picture')");
+    await press(`.quire-shelf-list .quire-shelf-doc:nth-child(${index + 1}) .quire-dots`);
     await tab.wait(500);
     await press(".quire-menu.open .quire-menu-line", "Duplicate");
     await tab.wait(600);

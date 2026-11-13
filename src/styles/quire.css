@@ -954,8 +954,8 @@
 }
 
 /* each thing on the home screen arrives a moment after the one before */
-.quire-shelf-inner > :not(ul),
-.quire-card {
+.quire-shelf-inner > :not(.quire-shelf-list),
+.quire-shelf-doc {
     opacity: 0;
     translate: 0 -0.35rem;
     transition:
@@ -963,8 +963,8 @@
         translate 0.12s ease;
 }
 
-.quire-shelf.shown .quire-shelf-inner > :not(ul),
-.quire-shelf.shown .quire-card {
+.quire-shelf.shown .quire-shelf-inner > :not(.quire-shelf-list),
+.quire-shelf.shown .quire-shelf-doc {
     opacity: 1;
     translate: 0 0;
     transition:
@@ -2256,7 +2256,7 @@ body.quire-app,
     outline: none;
 }
 
-/* ---- the home screen, with nothing open: ways to start, and the recent documents as small pages ---- */
+/* ---- the home screen, with nothing open: ways to start, and the recent documents as a list ---- */
 
 /* it takes the page's place under the bar, as wide as the page, and fades in and out over it */
 .quire-shelf {
@@ -2279,139 +2279,193 @@ body.quire-app,
 }
 
 .quire-shelf-inner {
-    width: min(60rem, 100%);
+    width: min(52rem, 100%);
     margin-inline: auto;
 }
 
-.quire-shelf-head {
-    margin: 0 0 0.9rem;
-    font-weight: 400;
-    line-height: 1.4;
+/* "new" and "recent" are the site's small quiet headings (.label in base.css), spaced here */
+.quire-shelf .quire-shelf-label {
+    margin: 0;
 }
 
-.quire-shelf-row {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(min(9rem, var(--share, 40%)), 1fr));
-    gap: 1.5rem 1.25rem;
-    margin: 0 0 calc(var(--line) * 1.75);
+/* the ways to start: the label, then the three kinds as words on the same line */
+.quire-shelf-new {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0 1.5rem;
+    margin-bottom: calc(var(--line) * 1.5);
+}
+
+.quire-shelf-new + .quire-shelf-label {
+    margin-bottom: calc(var(--line) * 0.25);
+}
+
+/* words to press, set apart by dots as a post's facts are, and drawn as the site's links */
+.quire-shelf-words {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 0.5rem;
+    margin: 0;
     padding: 0;
     list-style: none;
 }
 
-/* the three ways to start stay one row, even on a phone */
-.quire-shelf-start {
-    --share: 28%;
+.quire-shelf-words > li + li::before {
+    content: "·";
+    margin-right: 0.5rem;
+    color: var(--muted);
 }
 
-.quire-card {
-    position: relative;
-    min-width: 0;
-}
-
-.quire-card-open {
-    display: block;
-    width: 100%;
-    padding: 0;
+/* the words and the rows are buttons drawn wholly by their own rules */
+.quire-shelf-word,
+.quire-shelf-open {
     border: 0;
-    border-radius: calc(var(--radius) * 0.8);
+    padding: 0;
     background: none;
-    /* a button sets its own typeface, size and centring, which the small page inside took for its own:
-       its words were in the system's sans-serif and centred, and a checklist's box hung off its edge */
-    color: inherit;
     font: inherit;
-    text-align: start;
     cursor: pointer;
 }
 
-/* the small page: the real page drawn at its own width and made small, so that it is laid out as the page is */
-.quire-mini {
-    aspect-ratio: 1 / 1.41421;
-    overflow: hidden;
-    border: 0.0625rem solid var(--panel-edge);
-    border-radius: 0.1875rem;
-    background: var(--panel-raised);
-    opacity: 0;
-    transition:
-        opacity 0.3s ease,
-        translate 0.35s var(--ease),
-        border-color 0.2s ease;
+.quire-shelf-word {
+    border-radius: 0.2em;
+    color: var(--accent);
+    line-height: var(--line);
+    text-decoration-line: underline;
+    text-decoration-thickness: 0.06em;
+    text-underline-offset: 0.2em;
+    text-decoration-color: color-mix(in oklch, var(--accent) 45%, transparent);
+    transition: text-decoration-color 0.15s ease;
 }
 
-.quire-mini-holder.drawn > .quire-mini {
-    opacity: 1;
-}
-
-.quire-card-open:hover .quire-mini,
-.quire-card-open:focus-visible .quire-mini {
-    translate: 0 -0.2rem;
-    border-color: var(--accent);
-}
-
-.quire-mini .quire-mini-page {
-    transform-origin: 0 0;
-    scale: var(--mini-scale, 0.18);
-    border: 0;
-    background: none;
-    pointer-events: none;
-}
-
-.quire-card-words {
-    display: grid;
-    gap: 0.1rem;
-    margin-top: 0.6rem;
-    padding-right: 2.2rem;
-    font-family: var(--font-text);
-    line-height: 1.3;
-}
-
-.quire-card-name,
-.quire-card-about {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.quire-card-name {
-    color: var(--ink);
-    font-size: 0.95rem;
-}
-
-.quire-card-about {
-    color: var(--muted);
-    font-size: 0.78rem;
-}
-
-.quire-card > .quire-dots {
-    position: absolute;
-    right: -0.35rem;
-    bottom: 0;
-}
-
-.quire-shelf-none {
-    margin: 0 0 var(--line);
-    color: var(--muted);
+.quire-shelf-word:hover {
+    text-decoration-color: var(--accent);
 }
 
 .quire-shelf-ways {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.4rem;
+    margin-top: calc(var(--line) * 1.25);
     font-size: 0.9rem;
 }
 
-.quire-mini-blank {
+/* the recent documents, ruled as the posts list is: a row each, the name, where, when and the dots
+   in columns that line up down the list */
+.quire-shelf-list {
     display: grid;
-    place-items: center;
+    grid-template-columns: minmax(0, 1fr) auto auto auto;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    border-top: 0.0625rem solid var(--rule);
+}
+
+.quire-shelf-doc {
+    display: grid;
+    grid-column: 1 / -1;
+    grid-template-columns: subgrid;
+    align-items: center;
+    border-bottom: 0.0625rem solid var(--rule);
+}
+
+.quire-shelf-open {
+    display: grid;
+    grid-column: 1 / 4;
+    grid-template-columns: subgrid;
+    align-items: baseline;
+    gap: 0 1.5rem;
+    padding: calc(var(--line) * 0.55) 0;
+    border-radius: 0.2em;
+    color: var(--ink);
+    text-align: start;
+}
+
+.quire-shelf-name {
+    overflow: hidden;
+    font-family: var(--font-head);
+    font-size: 1.5rem;
+    font-weight: var(--head-weight);
+    line-height: 1.25;
+    letter-spacing: -0.005em;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    transition: color 0.15s ease;
+}
+
+.quire-shelf-open:hover .quire-shelf-name {
+    color: var(--accent);
+}
+
+.quire-shelf-place,
+.quire-shelf-when {
     color: var(--muted);
+    font-size: 0.9rem;
+    white-space: nowrap;
 }
 
-.quire-mini-blank .quire-icon {
-    width: 2rem;
-    height: 2rem;
-    opacity: 0.6;
+.quire-shelf-place {
+    max-width: 14rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
-/* the margins' outline and details fade as the home screen comes in over them, while the page shrinks back into its picture, and come back as it goes */
+.quire-shelf-when {
+    min-width: 6.5rem;
+}
+
+.quire-shelf-doc > .quire-dots {
+    width: 2.25rem;
+    height: 2.25rem;
+    margin-left: 0.75rem;
+    border-radius: 50%;
+    color: var(--muted);
+    transition: color 0.15s ease;
+}
+
+.quire-shelf-doc > .quire-dots:is(:hover, .open) {
+    color: var(--ink);
+}
+
+/* renaming: the field takes the name's place, as tall as the name was */
+.quire-shelf-field {
+    width: 100%;
+    height: calc(1.5rem * 1.25);
+    font-size: 1.1rem;
+}
+
+.quire-shelf-none {
+    margin: calc(var(--line) * 0.25) 0 0;
+    color: var(--muted);
+    font-size: 0.9rem;
+}
+
+/* narrow: the name has the row's first line, where and when the second */
+@media (max-width: 40rem) {
+    .quire-shelf-list {
+        grid-template-columns: minmax(0, 1fr) auto;
+    }
+
+    .quire-shelf-open {
+        grid-column: 1;
+        grid-template-columns: auto minmax(0, 1fr);
+        gap: 0.15rem 0.5rem;
+    }
+
+    .quire-shelf-name {
+        grid-column: 1 / -1;
+        font-size: 1.3rem;
+    }
+
+    .quire-shelf-place,
+    .quire-shelf-when {
+        min-width: 0;
+    }
+
+    .quire-shelf-when:not(:empty)::before {
+        content: "·";
+        margin-right: 0.5rem;
+    }
+}
+
+/* the margins' outline and details fade as the home screen comes in over them, while the page shrinks back into its row, and come back as it goes */
 .quire-editor:has(> .quire-shelf.shown) > :is(.quire-outline, .quire-details) {
     opacity: 0;
     transition: opacity 0.2s ease;

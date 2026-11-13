@@ -1,15 +1,15 @@
 // What the home screen is held to: its ways to start are a blank page, a blog post dated today and
-// notes; the recent documents from every place come most recently touched first; a picture is
-// drawn from no more than the first blocks; and a copy's name keeps its ending. The screen itself,
-// and the page growing out of a picture, are used in app.test.ts.
+// notes; the recent documents from every place come most recently touched first; when each was
+// touched is said shortly; and a copy's name keeps its ending. The screen itself, and the page
+// growing out of a row, are used in app.test.ts.
 
 import { expect, test } from "bun:test";
 import { read } from "./read";
-import { copyName, firstBlocks, recent, templates } from "./shelf";
+import { copyName, recent, shortWhen, templates } from "./shelf";
 
-test("the ways to start are Blank, Blog post and Notes, the post dated today and readable as a post", () => {
+test("the ways to start are blank, blog post and notes, the post dated today and readable as a post", () => {
     const made = templates(new Date("2026-11-12T10:00:00Z"));
-    expect(made.map((each) => each.label)).toEqual(["Blank", "Blog post", "Notes"]);
+    expect(made.map((each) => each.label)).toEqual(["blank", "blog post", "notes"]);
     expect(made[0]!.text).toBe("");
     const post = read(made[1]!.text);
     expect(post.frontmatter).toContain("date: 2026-11-12");
@@ -29,11 +29,12 @@ test("recent documents from every place come newest first, those with no time af
     expect(recent([])).toEqual([]);
 });
 
-test("a picture of a page is drawn from its first blocks only, so a long document is as quick to show as a short one", () => {
-    const long = read(Array.from({ length: 5000 }, (_, index) => `Line ${index}.`).join("\n\n"));
-    expect(firstBlocks(long).blocks.length).toBe(10);
-    const short = read("# One\n\nTwo\n");
-    expect(firstBlocks(short)).toBe(short);
+test("when a document was touched is said as a row has room for: the time today, yesterday, the day this year, the year before that", () => {
+    const now = new Date(2026, 10, 13, 15, 30).getTime();
+    expect(shortWhen(new Date(2026, 10, 13, 9, 4).getTime(), now)).toBe("today 09:04");
+    expect(shortWhen(new Date(2026, 10, 12, 23, 59).getTime(), now)).toBe("yesterday");
+    expect(shortWhen(new Date(2026, 10, 3, 12, 0).getTime(), now)).toBe("3 Nov");
+    expect(shortWhen(new Date(2025, 0, 20, 12, 0).getTime(), now)).toBe("20 Jan 2025");
 });
 
 test("a copy is named with copy before its ending", () => {

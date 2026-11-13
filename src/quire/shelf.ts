@@ -1,21 +1,17 @@
-// The home screen: what mdQuire shows with no document open. A row of ways to start something new
-// (a blank page, a blog post, notes), and under it the recent documents from every place that is
-// connected, each a small picture of its first page drawn from its own first blocks in the site's
-// look, with its name, where it lives and when it was last touched. A three-dot menu on each renames,
-// duplicates or deletes it. Pressing one opens it: the page grows out of its picture, and leaving
-// the document it shrinks back there (`travel`).
+// The home screen: what mdQuire shows with no document open. One quiet row of ways to start
+// something new (blank, blog post, notes), and under it the recent documents from every place that
+// is connected, a row each, as the site lists its posts: the name, where it lives and when it was
+// last touched. The three dots at the end of a row open, rename, duplicate or delete it. Pressing a
+// row opens it: the page grows out of the row, and leaving the document it shrinks back there
+// (`travel`). Something new grows out of the word that was pressed.
 //
-//   const shelf = createShelf({ templates, cards, make, ... });
+//   const shelf = createShelf({ templates, documents, start, ... });
 //   host.append(shelf.element); await shelf.refresh(); shelf.show();
 //
-// What is shown and in what order is pure and tested (templates, recent, firstBlocks, copyName);
+// What is shown and in what order is pure and tested (templates, recent, copyName, shortWhen);
 // app.ts says what each choice does.
 
-import { type Document } from "./document";
-import { read } from "./read";
-import { createSurface } from "./surface";
-import { composing, dots, flowMenu, icon, make, still, type Box, type MenuItem } from "./ui";
-import { when } from "./versions";
+import { composing, dots, flowMenu, make, still, type Box, type MenuItem } from "./ui";
 
 /** A way to start something new: what it is called, the name and text it starts with, and whether it is a `.quire` document. */
 export interface Template {
@@ -31,9 +27,9 @@ export function templates(today: Date): Template[] {
     const day = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
     const said = today.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
     return [
-        { key: "blank", label: "Blank", name: "Untitled", text: "", quire: true },
-        { key: "post", label: "Blog post", name: "A new post", text: `---\ntitle: A new post\ndate: ${day}\ndescription: What it is about, in a line.\n---\n\nThe first paragraph.\n`, quire: false },
-        { key: "notes", label: "Notes", name: "Notes", text: `${said}\n\n## To do\n\n- [ ] Something to do\n\n## Thoughts\n\nA first thought.\n`, quire: true },
+        { key: "blank", label: "blank", name: "Untitled", text: "", quire: true },
+        { key: "post", label: "blog post", name: "A new post", text: `---\ntitle: A new post\ndate: ${day}\ndescription: What it is about, in a line.\n---\n\nThe first paragraph.\n`, quire: false },
+        { key: "notes", label: "notes", name: "Notes", text: `${said}\n\n## To do\n\n- [ ] Something to do\n\n## Thoughts\n\nA first thought.\n`, quire: true },
     ];
 }
 
@@ -52,9 +48,14 @@ export function recent<S>(places: { store: S; entries: { id: string; name: strin
     return all.slice(0, limit).map((each) => each.found);
 }
 
-/** The start of a document, as much as a small picture of its first page can show. */
-export function firstBlocks(doc: Document, limit = 10): Document {
-    return doc.blocks.length <= limit ? doc : { ...doc, blocks: doc.blocks.slice(0, limit) };
+/** When a document was last touched, as short as a row can say it: "today 09:04", "yesterday", "3 Nov", or with its year when that is not this one. */
+export function shortWhen(time: number, now: number): string {
+    const date = new Date(time);
+    const today = new Date(now);
+    const sameDay = (a: Date, b: Date) => a.toDateString() === b.toDateString();
+    if (sameDay(date, today)) return `today ${date.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`;
+    if (sameDay(date, new Date(now - 86_400_000))) return "yesterday";
+    return date.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: date.getFullYear() === today.getFullYear() ? undefined : "numeric" });
 }
 
 /** The name for a copy: " copy" before the ending, if there is one. */
@@ -64,15 +65,12 @@ export function copyName(name: string): string {
 }
 
 /** A document on the shelf, and what can be done to it. */
-export interface Card {
+export interface Listed {
     key: string;
     name: string;
     place: string;
     modified?: number;
-    /** The document as it reads now, for its picture; undefined if it cannot be read. */
-    preview(): Promise<Document | undefined>;
-    /** The address a picture in it is shown from. */
-    picture?(address: string): Promise<string | undefined>;
+    /** Opens it; `from` is its row, for the page to grow out of. */
     open(from: HTMLElement): void;
     rename?(name: string): Promise<void>;
     duplicate?(): Promise<void>;
@@ -82,42 +80,12 @@ export interface Card {
 /** What the shelf shows, and what each choice there does. */
 export interface ShelfOptions {
     templates: Template[];
-    /** Starts something new from a template; `from` is its picture, for the page to grow out of. */
+    /** Starts something new from a template; `from` is its word, for the page to grow out of. */
     start(template: Template, from: HTMLElement): void;
     /** The documents to show, most recent first. */
-    cards(): Promise<Card[]>;
+    documents(): Promise<Listed[]>;
     /** Other ways in, quietly under the documents: opening a file, a folder, connecting a repository. */
     ways?: () => { label: string; run: (from: HTMLElement) => void }[];
-}
-
-/** The width of the page a picture is drawn at before it is made small, so that it is laid out as the real page is. */
-const PAGE_WIDTH = 36;
-
-/** Draws a small picture of a page: the name as its title, and its first blocks, drawn as the editor draws them. */
-export function miniature(name: string, doc: Document | undefined, picture?: (address: string) => Promise<string | undefined>): HTMLElement {
-    const frame = make("div", "quire-mini");
-    frame.setAttribute("aria-hidden", "true");
-    const page = make("div", "quire-paper quire-mini-page");
-    page.style.width = `${PAGE_WIDTH}rem`;
-    const title = make("p", "quire-title", name);
-    page.append(title);
-    if (doc) {
-        const text = make("div", "prose");
-        createSurface(text, firstBlocks(doc), picture ? { picture } : {}).destroy();
-        text.removeAttribute("role");
-        text.removeAttribute("contenteditable");
-        text.inert = true;
-        page.append(text);
-    }
-    frame.append(page);
-    return frame;
-}
-
-/** A blank page, with a faint plus on it. */
-function blankPage(): HTMLElement {
-    const frame = make("div", "quire-mini quire-mini-blank");
-    frame.append(icon("plus"));
-    return frame;
 }
 
 /** Builds the shelf. */
@@ -135,135 +103,103 @@ export function createShelf(options: ShelfOptions) {
         return element;
     };
 
-    // pictures are drawn when they come into sight, so that a long shelf of a repository's documents is not all read at once
-    const drawing = typeof IntersectionObserver !== "undefined" ? new IntersectionObserver((seen) => seen.forEach((each) => each.isIntersecting && draw(each.target as HTMLElement)), { rootMargin: "200px" }) : undefined;
-    const waiting = new Map<HTMLElement, () => Promise<HTMLElement>>();
-    const draw = async (holder: HTMLElement) => {
-        const make = waiting.get(holder);
-        if (!make) return;
-        waiting.delete(holder);
-        drawing?.unobserve(holder);
-        holder.replaceChildren(await make());
-        fit();
-        // seen a frame after it is there, so that it fades in
-        requestAnimationFrame(() => holder.classList.add("drawn"));
-    };
-    /** Makes the drawn pages as small as their cards, all being the same width. */
-    const fit = () => {
-        // each row has its own size of card, so each is fitted on its own
-        for (const row of shelf.querySelectorAll<HTMLElement>(".quire-shelf-row")) {
-            const page = row.querySelector<HTMLElement>(".quire-mini-page");
-            const frame = page?.parentElement;
-            if (frame && page?.offsetWidth) row.style.setProperty("--mini-scale", String(frame.clientWidth / page.offsetWidth));
+    /** A row of words to press, set apart by dots as the site sets apart a post's facts. */
+    const words = (className: string, choices: { label: string; run: (from: HTMLElement) => void }[]) => {
+        const list = make("ul", `quire-shelf-words ${className}`);
+        for (const choice of choices) {
+            const item = make("li");
+            const button = make("button", "quire-shelf-word", choice.label);
+            button.type = "button";
+            button.addEventListener("click", (event) => {
+                event.stopPropagation();
+                choice.run(button);
+            });
+            item.append(button);
+            list.append(item);
         }
+        return list;
     };
-    if (typeof ResizeObserver !== "undefined") new ResizeObserver(fit).observe(shelf);
 
-    /** A card: its picture to press, its name, and below that where it lives and when. */
-    const card = (name: string, about: string[], picture: () => Promise<HTMLElement>, press: (from: HTMLElement) => void, menuItems?: () => MenuItem[]) => {
-        const item = next(make("li", "quire-card"));
-        const open = make("button", "quire-card-open");
+    /** A document's row: its name, where it lives and when, all one thing to press, then its three dots. */
+    const row = (each: Listed, now: number) => {
+        const item = next(make("li", "quire-shelf-doc"));
+        item.dataset.key = each.key;
+        const open = make("button", "quire-shelf-open");
         open.type = "button";
-        open.setAttribute("aria-label", `Open ${name}`);
-        const holder = make("div", "quire-mini-holder");
-        holder.append(make("div", "quire-mini"));
-        waiting.set(holder, picture);
-        if (drawing) drawing.observe(holder);
-        else void draw(holder);
-        open.append(holder);
-        open.addEventListener("click", () => press(holder));
-        const words = make("div", "quire-card-words");
-        const label = make("span", "quire-card-name", name);
-        label.title = name;
-        words.append(label);
-        for (const line of about) words.append(make("span", "quire-card-about", line));
-        item.append(open, words);
-        if (menuItems) {
-            const more = dots(`More for ${name}`);
-            more.addEventListener("click", () => (menu.isOpen() ? menu.close(true) : menu.open(more, menuItems(), document.activeElement === more)));
-            item.append(more);
-        }
+        const name = make("span", "quire-shelf-name", each.name);
+        name.title = each.name;
+        open.append(name, make("span", "quire-shelf-place", each.place), make("span", "quire-shelf-when", each.modified ? shortWhen(each.modified, now) : ""));
+        open.addEventListener("click", () => each.open(item));
+        const more = dots(`More for ${each.name}`);
+        const items = (): MenuItem[] => [
+            { label: "Open", run: () => each.open(item) },
+            ...(each.rename ? [{ label: "Rename", run: () => renaming(open, each.name, each.rename!) }] : []),
+            ...(each.duplicate ? [{ label: "Duplicate", run: () => void each.duplicate!().then(refresh) }] : []),
+            // deleting asks once more, in the same menu, rather than in a dialog
+            ...(each.remove ? [{ label: "Delete", icon: "trash", run: () => menu.open(more, [{ label: `Delete ${each.name}`, icon: "trash", run: () => void each.remove!().then(refresh) }, { label: "Keep it", run: () => {} }], true) }] : []),
+        ];
+        more.addEventListener("click", () => (menu.isOpen() ? menu.close(true) : menu.open(more, items(), document.activeElement === more)));
+        item.append(open, more);
         return item;
     };
 
-    /** Puts a field in place of a card's name, to rename it; Enter keeps the new name, Escape the old. */
-    const renaming = (item: HTMLElement, current: string, rename: (name: string) => Promise<void>) => {
-        const label = item.querySelector<HTMLElement>(".quire-card-name")!;
-        const field = make("input", "quire-link-field quire-card-field");
+    /**
+     * Puts a field in place of a row's name, to rename it; Enter keeps the new name, Escape the old.
+     * A field cannot be inside the button that opens the row, so while it is there the row stands
+     * as a plain copy of itself.
+     */
+    const renaming = (open: HTMLElement, current: string, rename: (name: string) => Promise<void>) => {
+        const standing = make("div", "quire-shelf-open quire-shelf-renaming");
+        const field = make("input", "quire-link-field quire-shelf-field");
         field.value = current;
         field.setAttribute("aria-label", `A new name for ${current}`);
+        standing.append(field, ...[...open.children].slice(1).map((part) => part.cloneNode(true)));
         let done = false;
         const finish = async (keep: boolean) => {
             if (done) return;
             done = true;
             const wanted = field.value.trim();
-            field.replaceWith(label);
+            const focused = document.activeElement === field;
+            standing.replaceWith(open);
+            if (focused) open.focus({ preventScroll: true });
             if (keep && wanted && wanted !== current) await rename(wanted);
         };
         field.addEventListener("keydown", (event) => {
             event.stopPropagation();
-            if (composing(event)) return;
-            if (event.key === "Enter") void finish(true);
-            if (event.key === "Escape") void finish(false);
+            if (composing(event) || (event.key !== "Enter" && event.key !== "Escape")) return;
+            // the keyboard goes back to the row's button at once, and the key, let be, would press it and open the document
+            event.preventDefault();
+            void finish(event.key === "Enter");
         });
         field.addEventListener("blur", () => void finish(true));
-        label.replaceWith(field);
+        open.replaceWith(standing);
         field.focus();
         field.select();
     };
 
     async function refresh() {
         count = 0;
-        waiting.clear();
-        drawing?.disconnect();
-        const head = (words: string) => next(make("h2", "quire-outline-title quire-shelf-head", words));
-        const fresh = make("ul", "quire-shelf-row quire-shelf-start");
-        for (const template of options.templates) {
-            fresh.append(card(template.label, [], async () => (template.text ? miniature(template.name, read(template.text)) : blankPage()), (from) => options.start(template, from)));
-        }
-        const cards = await options.cards().catch(() => [] as Card[]);
-        const list = make("ul", "quire-shelf-row quire-shelf-recent");
-        const now = Date.now();
-        for (const each of cards) {
-            const about = [each.place, each.modified ? when(each.modified, now) : ""].filter(Boolean);
-            const item: HTMLElement = card(each.name, about, async () => miniature(shownTitle(each.name), await each.preview().catch(() => undefined), each.picture), (from) => each.open(from), () => [
-                { label: "Open", run: () => each.open(item.querySelector<HTMLElement>(".quire-mini-holder")!) },
-                ...(each.rename ? [{ label: "Rename", run: () => renaming(item, each.name, each.rename!) }] : []),
-                ...(each.duplicate ? [{ label: "Duplicate", run: () => void each.duplicate!().then(refresh) }] : []),
-                // deleting asks once more, in the same menu, rather than in a dialog
-                ...(each.remove ? [{ label: "Delete", icon: "trash", run: () => menu.open(item.querySelector<HTMLElement>(".quire-dots")!, [{ label: `Delete ${each.name}`, icon: "trash", run: () => void each.remove!().then(refresh) }, { label: "Keep it", run: () => {} }], true) }] : []),
-            ]);
-            item.dataset.key = each.key;
-            list.append(item);
-        }
-        const parts: HTMLElement[] = [head("Start something new"), fresh, head("Recent")];
-        if (cards.length) parts.push(list);
-        else parts.push(next(make("p", "quire-shelf-none", "Nothing here yet. What you write is kept in this browser as you type.")));
+        const label = (text: string) => make("h2", "label quire-shelf-label", text);
+        const fresh = next(make("div", "quire-shelf-new"));
+        fresh.append(label("new"), words("quire-shelf-kinds", options.templates.map((template) => ({ label: template.label, run: (from: HTMLElement) => options.start(template, from) }))));
+        const listed = await options.documents().catch(() => [] as Listed[]);
+        const parts: HTMLElement[] = [fresh, next(label("recent"))];
+        if (listed.length) {
+            const list = make("ul", "quire-shelf-list");
+            const now = Date.now();
+            for (const each of listed) list.append(row(each, now));
+            parts.push(list);
+        } else parts.push(next(make("p", "quire-shelf-none", "Nothing here yet. What you write is kept in this browser as you type.")));
         const ways = options.ways?.() ?? [];
-        if (ways.length) {
-            const row = next(make("div", "quire-shelf-ways"));
-            for (const way of ways) {
-                const button = make("button", "quire-button quire-choice", way.label);
-                button.type = "button";
-                button.addEventListener("click", (event) => {
-                    event.stopPropagation();
-                    way.run(button);
-                });
-                row.append(button);
-            }
-            parts.push(row);
-        }
+        if (ways.length) parts.push(next(words("quire-shelf-ways", ways)));
         inner.replaceChildren(...parts);
-        fit();
     }
 
     return {
         element: shelf,
         refresh,
-        /** The picture of a document on the shelf, to grow out of or shrink back to. */
-        pictureOf: (key: string) => shelf.querySelector<HTMLElement>(`.quire-card[data-key="${CSS.escape(key)}"] .quire-mini-holder`) ?? undefined,
-        /** Draws a picture now, rather than when it comes into sight, so that it is there to shrink back to. */
-        drawNow: (holder: HTMLElement) => draw(holder),
+        /** The row of a document on the shelf, to grow out of or shrink back to. */
+        rowOf: (key: string) => shelf.querySelector<HTMLElement>(`.quire-shelf-doc[data-key="${CSS.escape(key)}"]`) ?? undefined,
         shown: () => shelf.classList.contains("shown"),
         show() {
             shelf.inert = false;
@@ -276,15 +212,11 @@ export function createShelf(options: ShelfOptions) {
             shelf.classList.remove("shown");
         },
         destroy() {
-            drawing?.disconnect();
             menu.box.remove();
             shelf.remove();
         },
     };
 }
-
-/** A document's name as the title of its picture: without its folder or ending. */
-const shownTitle = (name: string) => name.replace(/^.*\//, "").replace(/\.(md|mdx|markdown|txt|quire)$/i, "");
 
 /** Where an element is in the window. */
 export function boxOf(element: Element): Box {
@@ -293,12 +225,12 @@ export function boxOf(element: Element): Box {
 }
 
 /**
- * Makes the page travel between a small picture and its own place, as a picture on the site
- * travels open in the viewer (src/scripts/opening.ts and viewer.ts, which this copies, as mdQuire
- * imports nothing from outside itself): the page is laid at its own place, then transformed onto
- * the picture and let go, or the other way round. It is scaled evenly by width and cut to the
- * picture's shape, so that a long document arrives as its first page. Under reduced motion it does
- * not move.
+ * Makes the page travel between a place on the home screen (a document's row, or the word that
+ * started it) and its own place, as a picture on the site travels open in the viewer
+ * (src/scripts/opening.ts and viewer.ts, which this copies, as mdQuire imports nothing from outside
+ * itself): the page is laid at its own place, then transformed onto that place and let go, or the
+ * other way round. It is scaled evenly by width and cut to that place's shape, so that it arrives as
+ * a strip of its top. Under reduced motion it does not move.
  */
 export function travel(page: HTMLElement, picture: Box, opening: boolean, time = opening ? 460 : 380): Promise<void> {
     if (still()) return Promise.resolve();

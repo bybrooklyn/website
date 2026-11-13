@@ -62,7 +62,7 @@ test.skipIf(!live)(
 async function blank(wide: number, high: number) {
     await tab.resize(wide, high);
     await tab.open(`http://localhost:${server!.port}/mdquire/`, 800);
-    await tab.run("document.querySelector('.quire-shelf.shown .quire-card-open')?.click()");
+    await tab.run("document.querySelector('.quire-shelf.shown .quire-shelf-word')?.click()");
     await tab.wait(1200);
 }
 
