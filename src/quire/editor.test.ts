@@ -1427,6 +1427,10 @@ const seenGaps = () =>
             if (e.classList.contains('quire-drawn')) return { top: outer(e.querySelector('.quire-preview > *')).top, bottom: outer(e.querySelector('pre')).bottom };
             if (e.classList.contains('quire-image')) { const words = [...e.querySelectorAll('.quire-caption, .quire-alt')].filter((each) => each.getBoundingClientRect().height > 2).pop(); return { top: outer(e.querySelector('img')).top, bottom: words ? inner(words).bottom : outer(e.querySelector('img')).bottom }; }
             if (e.classList.contains('quire-divider')) return outer(e.querySelector('hr'));
+            // a block drawn as a box (code, a callout, a folding section) has its border for its edge
+            const style = getComputedStyle(e);
+            const filled = !/^(transparent|rgba\\(0, 0, 0, 0\\))$/.test(style.backgroundColor);
+            if (filled || (parseFloat(style.borderTopWidth) > 0 && parseFloat(style.borderBottomWidth) > 0)) return outer(e);
             return inner(e);
         };
         const kids = [...prose.children];
@@ -1440,6 +1444,14 @@ used("a line of space lies between a paragraph and a drawing of maths or a flowc
     const gaps = await seenGaps();
     // a line, and for maths a little more for the room its letters keep above them
     expect(gaps.map(({ name, gap }) => ({ name, near: gap >= 0.95 && gap <= (name.includes("quire-drawn") ? 1.3 : 1.05) }))).toEqual(gaps.map(({ name }) => ({ name, near: true })));
+});
+
+used("a line of space lies above a table's first words and below its last rule, after a paragraph, a heading or code", async () => {
+    await reset("Words.\n\n| a | b |\n| --- | --- |\n| 1 | 2 |\n\n## A heading\n\n| a | b |\n| --- | --- |\n| 1 | 2 |\n\n```\ncode\n```\n\n| a | b |\n| --- | --- |\n| 1 | 2 |\n\nWords.\n", [0], 0);
+    await tab.run("document.activeElement.blur()");
+    await tab.wait(300);
+    const gaps = (await seenGaps()).filter(({ name }) => name.includes("table"));
+    expect(gaps.map(({ name, gap }) => ({ name, near: Math.abs(gap - (name.endsWith("h2") ? 1.4 : 1)) <= 0.05 }))).toEqual(gaps.map(({ name }) => ({ name, near: true })));
 });
 
 used("a faint \"Type / for blocks\" fades in on the empty line the cursor is on, goes when typing starts, and an empty document is never blank", async () => {

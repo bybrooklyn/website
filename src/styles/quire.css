@@ -3347,6 +3347,12 @@ body.quire-app,
     margin-top: calc(var(--line) * 1.4 - var(--crown));
 }
 
+/* a table's edge to the eye is its first row's words, which stand a quarter line down in their cells
+   (prose.css): it is drawn that much higher, the margins collapsing, so the line of space above is one line */
+.prose.quire table {
+    margin-top: calc(var(--line) * -0.25);
+}
+
 .prose.quire > :first-child {
     margin-top: 0;
 }
