@@ -81,9 +81,9 @@ body.lab {
     white-space: nowrap;
 }
 
+/* "by" is a word of the name like the others: the same size, only quieter */
 .lab-by-word {
     color: var(--muted);
-    font-size: 0.72em;
     font-style: italic;
 }
 
