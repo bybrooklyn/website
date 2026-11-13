@@ -285,7 +285,9 @@ interface Cast {
 
 async function load(address: string): Promise<Cast> {
     // a recording: a first line that says its size, then [seconds, "o", text] on each line after
-    const lines = (await (await fetch(address)).text()).trim().split("\n");
+    const answer = await fetch(address);
+    if (!answer.ok) throw new Error(`${address}: ${answer.status}`);
+    const lines = (await answer.text()).trim().split("\n");
     const head = JSON.parse(lines[0]!) as { width: number; height: number; poster?: number };
     const events = lines.slice(1).map((line) => JSON.parse(line) as [number, string, string]).filter(([, kind]) => kind === "o");
     return { cols: head.width, rows: head.height, poster: head.poster ?? Infinity, events: events.map(([at, , text]) => [at, text]) };
@@ -323,7 +325,15 @@ if (typeof document !== "undefined") {
 
         const run = async (whole: boolean): Promise<void> => {
             const mine = ++play;
-            cast ??= await load(host.dataset.cast!);
+            if (!cast) {
+                try {
+                    cast = await load(host.dataset.cast!);
+                } catch {
+                    // offline, or the recording is gone: the screen stays as it is, and it is tried again when next scrolled to
+                    play = 0;
+                    return;
+                }
+            }
             host.style.setProperty("--cols", String(cast.cols));
             host.style.setProperty("--rows", String(cast.rows));
             size();
