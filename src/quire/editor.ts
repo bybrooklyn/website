@@ -34,6 +34,7 @@ import { altGraph, createSurface, type Surface } from "./surface";
 import { createTableTools } from "./tables";
 import { createPictureTools } from "./picture-tools";
 import { createBlockMenus } from "./block-menus";
+import { createTextMenu } from "./text-menu";
 import { createCommentMargin, keptNotes, moveNotes } from "./comment-margin";
 import { addContents, dateText, findContents, specialGrid, typeIn, typeSpecial, updateContents } from "./inserts";
 import { colorHex, countRows, gatherPictures, heldElsewhere, markdownFor, pageHtml, plainText, readingStyles, type Picture } from "./export";
@@ -742,6 +743,8 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     };
     // the command palette: the menus' lines and what fits where the cursor is, from the bottom left corner or a slash on an empty line (palette.ts)
     const palette = createPalette(surface, { menus: () => row.headings(), table: tableTools.lines, picture: pictureTools.lines, pickImage: bar.pickImage, corner: host });
+    // a right-click in the text, or the menu key, opens the menus' own lines for it there
+    const textMenu = createTextMenu(surface, () => row.headings());
     const row = createMenuRow(() =>
         headings(
             { rich: !!surface.getDocument().quire, contents: !!findContents(surface.getDocument()), matches: matchingSpots({ doc: surface.getDocument(), selection: surface.getSelection() }).length, paged: pages.paged(), look, outline: outlineView.isOpen(), markdown: host.classList.contains("markdown"), words: countWords(surface.getDocument()), align: aligned(surface.getDocument(), surface.getSelection().focus.path), symbols: surface.symbols() },
@@ -1131,6 +1134,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
             for (const menu of [...bar.menus, links, row.menu, zooms, setups, about]) menu.box.remove();
             selectBar.element.remove();
             palette.destroy();
+            textMenu.destroy();
             emojiList.close();
             tableTools.destroy();
             pictureTools.destroy();
