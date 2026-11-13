@@ -180,6 +180,26 @@ After the audit (design/mdquire/AUDIT.md), the lab (/mdquire-lab/) and three moc
 - Speeds were left at the lab's starting values (open 200 ms with a slight spring, close 140 ms, lines
   14 ms apart); she has not sent other numbers.
 
+### 13d. mdQuire's top, as it stood at the end of 12 Nov 2026 (this replaces what 13b and 13c say of the wordmark, the row and the bar's order)
+
+- **The corner is a trail:** "charlotte [flags] / mdQuire / the document's name". Her name and the flags
+  first, as they are on every page of the site (so the name does not move when the editor opens);
+  the stroke as the site's trail has it; "mdQuire" in the heading face; then the document's name as the
+  last step. She does not want the word "by" ("The word 'by' itself" was what was wrong). "charlotte"
+  leads home, "mdQuire" to the shelf of documents, and the document's name opens the documents list.
+  Her words on why: "the / mdQuire is a good idea, it fits the rest" (it reads like the trail on an opened
+  project).
+- **Two lines:** the trail and the menu words on top; the tools "under it". (This replaces "One line".)
+- **The tools are in Google Docs' order,** from her screenshot of its toolbar: a search of the menus;
+  undo, redo, print, spelling, paint format; zoom; the style (Title, Normal text); the typeface; the size
+  as a number with minus and plus either side; bold, italic, underline, text colour, highlight; link,
+  comment, picture; alignment; line spacing; checklist, bulleted list, numbered list; indent less, indent
+  more; clear formatting. Her changes to it: the size is "A number with minus and plus"; alignment is
+  "Four buttons, always visible" (left, centre, right, justify), not Docs' one dropdown. Find, the status,
+  the three dots and the microphone stay at the right. What a plain Markdown file cannot keep still folds
+  away for those files.
+- **The credit** is "An 'about mdQuire' line in a menu" (Tools and the three dots).
+
 ### 26. The generalist: a walker that sees, learns and gets about a world by itself
 
 Decided by question and answer on 12 Nov 2026. Her words: "our little walker thing should build general
