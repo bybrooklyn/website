@@ -11,9 +11,12 @@
 // Each hopper holds a marble at the mouth of its box, waiting. Let go, it rolls away, and the next comes
 // out of the box to wait in its place. In centimetres, under real gravity, as Mote's marble space is.
 
-import { MARBLE, marbleSpace, type Solid, type Space } from "../mote/space";
+import type { Strike } from "../mote/sound";
+import { block } from "../mote/solids";
+import { MARBLE, marbleSpace, type Hinge, type Quat, type Solid, type Space } from "../mote/space";
 import { cosine, sine, type Piece } from "../mote/track";
-import { BOWL, CELL, RADIUS, SINK, WOOD, boxToWorld, keyOf, made, shapeOf, toWorld, type Box } from "./pieces";
+import type { Body, Moving } from "./parts";
+import { BOWL, CELL, RADIUS, SINK, WOOD, boxToWorld, keyOf, made, shapeOf, toWorld, wayToWorld, type Box, type Place } from "./pieces";
 import { links, TABLE, type Placed } from "./run";
 import { PILLAR, pillars, type Pillar } from "./supports";
 import type { V3 } from "../mote/solids";
@@ -36,7 +39,107 @@ interface Built {
     room: Box[];
     hopper?: Hopper;
     catches?: Box;
+    mover?: Mover;
 }
+
+/** A piece's moving part in the space: its solids, its hinge if it has one, and for a lift or a hoist the seconds it has run, which say where it is. */
+interface Mover {
+    moving: Moving;
+    solids: Solid[];
+    hinge?: Hinge;
+    clock: number;
+    /** Whether it runs this step: while a marble anywhere is in play, or one waits at it. */
+    running: boolean;
+}
+
+/** What striking a solid sounds like: wood, metal, a chime bar at its note, a bell, a drum; the table's cloth is a soft knock. */
+export interface Heard {
+    kind: Strike;
+    pitch?: number;
+    soft?: boolean;
+}
+
+type Lift = Extract<Moving, { kind: "lift" }>;
+type Hoist = Extract<Moving, { kind: "hoist" }>;
+
+/** Where a lift's car is, as how far it has risen, `seconds` into its run: it waits at the bottom, rises at its speed (easing in and out), waits at the top, and comes down again. */
+export function liftAt(moving: Lift, seconds: number): number {
+    const { rise, speed, ease, waits } = moving;
+    const travel = rise / speed + ease;
+    const period = liftPeriod(moving);
+    const t = seconds - Math.floor(seconds / period) * period;
+    // how far along a travel of `travel` seconds, at a speed reached and left over `ease` seconds
+    const along = (u: number) => {
+        if (u <= 0) return 0;
+        if (u >= travel) return rise;
+        if (u < ease) return (0.5 * speed * u * u) / ease;
+        if (u > travel - ease) return rise - (0.5 * speed * (travel - u) * (travel - u)) / ease;
+        return speed * (u - ease / 2);
+    };
+    if (t < waits[0]) return 0;
+    if (t < waits[0] + travel) return along(t - waits[0]);
+    if (t < waits[0] + travel + waits[1]) return rise;
+    return rise - along(t - waits[0] - travel - waits[1]);
+}
+
+/** How long a lift takes to go round once, in seconds: its waits and two travels. */
+export const liftPeriod = (moving: Lift): number => moving.waits[0] + moving.waits[1] + 2 * (moving.rise / moving.speed + moving.ease);
+
+/** How long a hoist's chain is round, in cm. */
+export function chainLength(moving: Hoist): number {
+    const { bottom, top, radius } = moving.loop;
+    const [dx, dy] = [top[0] - bottom[0], top[1] - bottom[1]];
+    return 2 * Math.sqrt(dx * dx + dy * dy) + 2 * Math.PI * radius;
+}
+
+/** Where a hoist's chain is `along` cm round its loop from the start of its upper run: the point, and the way out from the loop there, as x and y in the piece's own place. */
+export function chainAt(moving: Hoist, along: number): { at: [number, number]; out: [number, number] } {
+    const { bottom, top, radius } = moving.loop;
+    const [dx, dy] = [top[0] - bottom[0], top[1] - bottom[1]];
+    const straight = Math.sqrt(dx * dx + dy * dy);
+    const d: [number, number] = [dx / straight, dy / straight];
+    const n: [number, number] = [-d[1], d[0]];
+    const round = Math.PI * radius;
+    let s = along - Math.floor(along / chainLength(moving)) * chainLength(moving);
+    if (s < straight) return { at: [bottom[0] + radius * n[0] + d[0] * s, bottom[1] + radius * n[1] + d[1] * s], out: n };
+    s -= straight;
+    if (s < round) {
+        const [c, k] = [cosine(s / radius), sine(s / radius)];
+        const out: [number, number] = [n[0] * c + d[0] * k, n[1] * c + d[1] * k];
+        return { at: [top[0] + radius * out[0], top[1] + radius * out[1]], out };
+    }
+    s -= round;
+    if (s < straight) return { at: [top[0] - radius * n[0] - d[0] * s, top[1] - radius * n[1] - d[1] * s], out: [-n[0], -n[1]] };
+    s -= straight;
+    const [c, k] = [cosine(s / radius), sine(s / radius)];
+    const out: [number, number] = [-n[0] * c - d[0] * k, -n[1] * c - d[1] * k];
+    return { at: [bottom[0] + radius * out[0], bottom[1] + radius * out[1]], out };
+}
+
+/** A turn about a unit axis by an angle, by track.ts's sine and cosine, so that it is the same everywhere. */
+function about(axis: V3, angle: number): Quat {
+    const k = sine(angle / 2);
+    return [axis[0] * k, axis[1] * k, axis[2] * k, cosine(angle / 2)];
+}
+
+/** Two turns as one: `b` first, then `a`. */
+function times(a: Quat, b: Quat): Quat {
+    const [ax, ay, az, aw] = a;
+    const [bx, by, bz, bw] = b;
+    return [aw * bx + ax * bw + ay * bz - az * by, aw * by - ax * bz + ay * bw + az * bx, aw * bz + ax * by - ay * bx + az * bw, aw * bw - ax * bx - ay * by - az * bz];
+}
+
+/** A point turned about the line through `at` along a unit axis, by an angle (Rodrigues' rule). */
+function turnedAbout(p: V3, at: V3, axis: V3, angle: number): V3 {
+    const [c, k] = [cosine(angle), sine(angle)];
+    const r: V3 = [p[0] - at[0], p[1] - at[1], p[2] - at[2]];
+    const along = r[0] * axis[0] + r[1] * axis[1] + r[2] * axis[2];
+    const cross: V3 = [axis[1] * r[2] - axis[2] * r[1], axis[2] * r[0] - axis[0] * r[2], axis[0] * r[1] - axis[1] * r[0]];
+    return [0, 1, 2].map((i) => at[i]! + r[i]! * c + cross[i]! * k + axis[i]! * along * (1 - c)) as V3;
+}
+
+/** A body's half sizes in the world: across and along swapped by an odd quarter turn. */
+const halfIn = (place: Place, body: Body): V3 => boxToWorld(place, { at: body.at, half: body.half }).half;
 
 /** A hopper's marbles: the one waiting at its mouth, and the next on its way out of the box. */
 interface Hopper {
@@ -71,6 +174,17 @@ export interface Table {
     mouths(): { id: number; at: V3 }[];
     /** The piece whose room a point is in (with a little more round it), if any: the one a marble there is on. */
     pieceAt(p: V3): number | undefined;
+    /** What striking a solid sounds like, if the table knows: every piece's track, walls and parts, and the cloth. */
+    heard(solid: Solid): Heard | undefined;
+    /** Each piece's moving solids, by its number, to be drawn where they are. */
+    movers(): { id: number; solids: Solid[] }[];
+    /** Whether a marble is in play, awake: lifts and hoists run while one is, or while one waits at them, and not once all is still. */
+    running: boolean;
+    /** Where every moving part is, by piece: a hinge's angle and spin, a lift's or a hoist's seconds; and the same put back, as for a ghost that is to run as the real table will. */
+    parts(): Map<number, number[]>;
+    setParts(state: Map<number, number[]>): void;
+    /** The piece a hinge belongs to. */
+    hingeOf(hinge: Hinge): number | undefined;
 }
 
 /** Where a marble rests in the groove at a point along a piece of track: the nearest point of its middle line, then down by how far a marble sinks. */
@@ -100,6 +214,59 @@ export function makeTable({ filled = true } = {}): Table {
     const marbles: Solid[] = [];
 
     const ball = (at: V3) => space.ball(RADIUS, at, MARBLE);
+    const heard = new Map<Solid, Heard>();
+    const hinges = new Map<Hinge, number>();
+    heard.set(space.solids[0]!, { kind: "wood", soft: true });
+
+    /** A moving part made in the space at a piece's place: its solids on a hinge, or driven by the seconds it has run. */
+    const moverOf = (place: Place, moving: Moving): Mover => {
+        const across = wayToWorld(place, [0, 0, 1]);
+        const stuff = (body: Body) => ({ density: body.density, friction: 0.5, bounce: 0.35, roll: 0.006 });
+        // a body leans about the line along the piece through its middle, then turns
+        const along = wayToWorld(place, [1, 0, 0]);
+        const leaning = (body: Body, turn: Quat): Quat => (body.lean ? times(turn, about(along, body.lean)) : turn);
+        if (moving.kind === "hinge") {
+            const axis = wayToWorld(place, moving.axis);
+            const parts = moving.bodies.map((body) => ({ mesh: block(halfIn(place, body)), at: toWorld(place, turnedAbout(body.at, moving.at, moving.axis, body.turn ?? 0)), stuff: stuff(body), q: leaning(body, about(axis, body.turn ?? 0)) }));
+            const hinge = space.hinge(parts, toWorld(place, moving.at), axis, { low: moving.low, high: moving.high, spring: moving.spring, rest: moving.rest, friction: moving.friction });
+            space.turnTo(hinge, moving.start);
+            return { moving, solids: hinge.parts, hinge, clock: 0, running: false };
+        }
+        const mover: Mover = { moving, solids: [], clock: 0, running: false };
+        // the first driven solid of a part keeps its clock, once a step, while the table runs them
+        const tick = (solid: Solid, dt: number) => {
+            if (mover.running && mover.solids[0] === solid) mover.clock += dt;
+        };
+        if (moving.kind === "lift") {
+            for (const body of moving.bodies) {
+                const q = about(across, body.turn ?? 0);
+                const solid: Solid = space.driven(block(halfIn(place, body)), toWorld(place, body.at), (dt) => {
+                    tick(solid, dt);
+                    return { p: toWorld(place, [body.at[0], body.at[1] + liftAt(moving, mover.clock), body.at[2]]), q };
+                }, stuff(body), q);
+                mover.solids.push(solid);
+            }
+            return mover;
+        }
+        const paddle = moving.bodies[0]!;
+        const long = chainLength(moving);
+        for (let k = 0; k < moving.count; k++) {
+            const pose = (seconds: number) => {
+                const { at, out } = chainAt(moving, (long * k) / moving.count + moving.speed * seconds);
+                // turned about the line across so that the paddle's own up is `out`: by its half angle's cosine and sine
+                const [c, s] = [Math.sqrt(Math.max(0, (1 + out[1]) / 2)), (out[0] > 0 ? -1 : 1) * Math.sqrt(Math.max(0, (1 - out[1]) / 2))];
+                const q: Quat = [across[0] * s, across[1] * s, across[2] * s, c];
+                return { p: toWorld(place, [at[0] + out[0] * paddle.at[1], at[1] + out[1] * paddle.at[1], paddle.at[2]]), q };
+            };
+            const first = pose(0);
+            const solid: Solid = space.driven(block(halfIn(place, paddle)), first.p, (dt) => {
+                tick(solid, dt);
+                return pose(mover.clock);
+            }, stuff(paddle), first.q);
+            mover.solids.push(solid);
+        }
+        return mover;
+    };
     /** A marble made inside a hopper's box and held there, to come out to its mouth. */
     const fill = (hopper: Hopper) => {
         const marble = ball([...hopper.inside]);
@@ -127,7 +294,21 @@ export function makeTable({ filled = true } = {}): Table {
             const placed = boxToWorld(piece.place, box);
             solids.push(space.slab(placed.at, placed.half, undefined, { friction: 0.5, bounce: 0.3, roll: 0.006 }));
         }
-        const one: Built = { piece, key: keyOf(piece.kind) + JSON.stringify(piece.place), lengths, solids, room: shape.room.map((box) => boxToWorld(piece.place, box)) };
+        for (const solid of solids) heard.set(solid, { kind: "wood" });
+        if (shape.struck) {
+            // a mesh about an upright axis, or a box, tilted about the line across the piece
+            const struck = shape.struck;
+            const solid = space.fixed(struck.mesh, toWorld(piece.place, struck.at), { friction: 0.5, bounce: struck.sound === "drum" ? 0.25 : 0.55, roll: 0.006 }, about(wayToWorld(piece.place, [0, 0, 1]), struck.tilt));
+            heard.set(solid, { kind: struck.sound, pitch: struck.pitch });
+            solids.push(solid);
+        }
+        const mover = shape.moving && moverOf(piece.place, shape.moving);
+        if (mover) {
+            solids.push(...mover.solids);
+            for (const solid of mover.solids) heard.set(solid, { kind: mover.moving.sound });
+            if (mover.hinge) hinges.set(mover.hinge, piece.id);
+        }
+        const one: Built = { piece, key: keyOf(piece.kind) + JSON.stringify(piece.place), lengths, solids, room: shape.room.map((box) => boxToWorld(piece.place, box)), mover };
         if (shape.catches) one.catches = boxToWorld(piece.place, shape.catches);
         if (shape.wait && shape.inside) {
             const chute = world.lengths[0]!.piece;
@@ -147,7 +328,11 @@ export function makeTable({ filled = true } = {}): Table {
     };
 
     const unmake = (one: Built) => {
-        for (const solid of one.solids) space.remove(solid);
+        for (const solid of one.solids) {
+            space.remove(solid);
+            heard.delete(solid);
+        }
+        if (one.mover?.hinge) hinges.delete(one.mover.hinge);
         for (const marble of [one.hopper?.waiting, one.hopper?.coming?.marble]) {
             if (!marble) continue;
             space.remove(marble);
@@ -189,9 +374,13 @@ export function makeTable({ filled = true } = {}): Table {
             for (const piece of run) if (!built.has(piece.id)) built.set(piece.id, make(piece));
             joinAll();
             // the pillars, made again: a few slabs, cheap to take away and put back
-            for (const solid of pillarSolids) space.remove(solid);
+            for (const solid of pillarSolids) {
+                space.remove(solid);
+                heard.delete(solid);
+            }
             table.pillars = pillars(table.run);
             pillarSolids = table.pillars.map((pillar) => space.slab([pillar.x, pillar.top / 2, pillar.z], [PILLAR / 2, pillar.top / 2, PILLAR / 2], undefined, { friction: 0.5, bounce: 0.3 }));
+            for (const solid of pillarSolids) heard.set(solid, { kind: "wood" });
         },
         letGo() {
             const out: Solid[] = [];
@@ -230,6 +419,14 @@ export function makeTable({ filled = true } = {}): Table {
                     hopper.coming = undefined;
                 }
             }
+            // Lifts and hoists run while a marble is in play: any let go that is awake. One that waits
+            // at a lift or a hoist, still and so asleep, keeps that one running, or it would wait for ever.
+            const balls = space.solids.filter((solid) => solid.radius !== undefined && !solid.held);
+            table.running = balls.some((ball) => ball.im > 0);
+            for (const one of built.values()) {
+                if (!one.mover || one.mover.hinge) continue;
+                one.mover.running = table.running || balls.some((ball) => ball.rest && one.room.some((box) => [0, 1, 2].every((axis) => Math.abs(ball.p[axis]! - box.at[axis]!) <= box.half[axis]! + 1)));
+            }
             space.step(dt);
             for (let i = marbles.length - 1; i >= 0; i--) {
                 const marble = marbles[i]!;
@@ -260,6 +457,38 @@ export function makeTable({ filled = true } = {}): Table {
             for (const one of built.values()) if (one.room.some((box) => [0, 1, 2].every((axis) => Math.abs(p[axis]! - box.at[axis]!) <= box.half[axis]! + 0.6))) return one.piece.id;
             return undefined;
         },
+        heard: (solid) => heard.get(solid),
+        movers: () => [...built.values()].flatMap((one) => (one.mover ? [{ id: one.piece.id, solids: one.mover.solids }] : [])),
+        running: false,
+        parts() {
+            const state = new Map<number, number[]>();
+            for (const one of built.values()) {
+                const mover = one.mover;
+                if (mover) state.set(one.piece.id, mover.hinge ? [mover.hinge.angle, mover.hinge.spin] : [mover.clock]);
+            }
+            return state;
+        },
+        setParts(state) {
+            for (const one of built.values()) {
+                const mover = one.mover;
+                const values = state.get(one.piece.id);
+                if (!mover || !values) continue;
+                if (mover.hinge) {
+                    space.turnTo(mover.hinge, values[0]!, values[1] ?? 0);
+                    continue;
+                }
+                // each driven solid put where its seconds say, without running on
+                mover.clock = values[0]!;
+                const running = mover.running;
+                mover.running = false;
+                for (const solid of mover.solids) {
+                    const to = solid.driven!(0);
+                    [solid.p, solid.q] = [to.p, to.q];
+                }
+                mover.running = running;
+            }
+        },
+        hingeOf: (hinge) => hinges.get(hinge),
         arrived(marble) {
             for (const one of built.values()) {
                 const box = one.catches;

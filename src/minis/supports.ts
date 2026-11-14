@@ -41,10 +41,12 @@ export function pillars(run: Placed[]): Pillar[] {
             want(at[0], at[2], at[1], piece.id);
         }
     }
+    // the room a moving part sweeps through, which no pillar may cross, not even one of its own piece's
+    const swept = run.flatMap((piece) => (shapeOf(piece.kind).clear ?? []).map((box) => boxToWorld(piece.place, box)));
     const made: Pillar[] = [];
     for (const { pillar, holds } of wanted.values()) {
         const column: Box = { at: [pillar.x, pillar.top / 2, pillar.z], half: [PILLAR / 2, pillar.top / 2, PILLAR / 2] };
-        const blocked = run.some((piece) => !holds.has(piece.id) && rooms.get(piece.id)!.some((box) => crosses(box, column)));
+        const blocked = swept.some((box) => crosses(box, column)) || run.some((piece) => !holds.has(piece.id) && rooms.get(piece.id)!.some((box) => crosses(box, column)));
         if (!blocked) made.push(pillar);
     }
     return made;

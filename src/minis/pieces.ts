@@ -21,6 +21,7 @@
 
 import { cosine, curve, gutter, helix, sine, sweep, turned, type Along, type Path, type Piece, type Section, type V2 } from "../mote/track";
 import { cross, dot3 as dot, minus, plus, scaled, type Mesh, type V3 } from "../mote/solids";
+import { PART_SIZES, designPart, isPart, type Moving, type PartFamily, type Struck } from "./parts";
 
 /** A cell's side, in centimetres: the length of the shortest straight. */
 export const CELL = 8;
@@ -89,8 +90,8 @@ export interface Kind {
     bend?: number[];
 }
 
-/** The letter of each family of piece. */
-export type Family = "s" | "c" | "d" | "z" | "x" | "v" | "f" | "l" | "h" | "t";
+/** The letter of each family of piece; the moving and sounding ones are in parts.ts. */
+export type Family = "s" | "c" | "d" | "z" | "x" | "v" | "f" | "l" | "h" | "t" | PartFamily;
 
 /** How many numbers each family has, and the least and most each may be. */
 export const SIZES: Record<Family, [least: number, most: number][]> = {
@@ -104,6 +105,7 @@ export const SIZES: Record<Family, [least: number, most: number][]> = {
     l: [],
     h: [],
     t: [],
+    ...PART_SIZES,
 };
 
 /** Whether a family and its numbers make a piece that can be made: the right count, whole, in range, and for a curve a radius of 1 or 3. */
@@ -146,6 +148,16 @@ export const BOX: Entry[] = [
     entry("funnel", "f"),
     entry("loop", "l"),
     entry("tray", "t"),
+    entry("gate", "g"),
+    entry("switch", "w"),
+    entry("seesaw", "e", [2]),
+    entry("trapdoor", "j"),
+    entry("spinner", "o", [4]),
+    entry("lift", "u", [8]),
+    entry("chain hoist", "y", [4]),
+    entry("chime bar", "m", [4]),
+    entry("bell", "n"),
+    entry("drum", "q"),
 ];
 
 // ---- a piece in its own place ----
@@ -214,6 +226,14 @@ export interface Shape {
     inside?: V3;
     /** For the tray: the box a marble is in once it has arrived. */
     catches?: Box;
+    /** For a moving piece: what moves and how (parts.ts). */
+    moving?: Moving;
+    /** For a sounding piece: the solid a marble strikes (parts.ts). */
+    struck?: Struck;
+    /** Room a moving part needs as it moves, kept clear of other pieces. */
+    clear?: Box[];
+    /** Where the knob that sets a piece's number is, if not past its far joint. */
+    knob?: V3;
 }
 
 const unit = (a: V3): V3 => scaled(a, 1 / (Math.sqrt(dot(a, a)) || 1));
@@ -276,6 +296,7 @@ const ease = (u: number) => u * u * (3 - 2 * u);
 
 /** The piece of each family, unmirrored, in its own place. */
 function design(family: Family, sizes: number[]): Omit<Shape, "kind" | "cells" | "room" | "low"> & { low?: number } {
+    if (isPart(family)) return designPart(family, sizes);
     const J0: Joint = { at: [0, 0, 4], way: [-1, 0, 0], kind: "groove" };
     const joint = (at: V3, way: V3): Joint => ({ at, way, kind: "groove" });
     const none = { boxes: [] as Box[], stands: [] as Box[], holds: [] as V3[] };
@@ -491,7 +512,7 @@ export function shapeOf(kind: Kind): Shape {
         shape.room.push(bowl);
         cellsOf(bowl, cells);
     }
-    for (const box of [...shape.boxes, ...shape.stands]) {
+    for (const box of [...shape.boxes, ...shape.stands, ...(shape.clear ?? []), ...(shape.struck ? [struckBox(shape.struck)] : [])]) {
         shape.room.push(box);
         cellsOf(box, cells);
     }
@@ -502,6 +523,18 @@ export function shapeOf(kind: Kind): Shape {
     shapes.set(key, shape);
     if (shapes.size > KEPT) shapes.delete(shapes.keys().next().value!);
     return shape;
+}
+
+/** The box round a struck solid, tilted as it is. */
+export function struckBox(struck: Struck): Box {
+    const [c, s] = [cosine(struck.tilt), sine(struck.tilt)];
+    const low: V3 = [Infinity, Infinity, Infinity];
+    const high: V3 = [-Infinity, -Infinity, -Infinity];
+    for (const p of struck.mesh.points) {
+        const q: V3 = [struck.at[0] + p[0] * c - p[1] * s, struck.at[1] + p[0] * s + p[1] * c, struck.at[2] + p[2]];
+        for (let axis = 0; axis < 3; axis++) [low[axis], high[axis]] = [Math.min(low[axis]!, q[axis]!), Math.max(high[axis]!, q[axis]!)];
+    }
+    return { at: [(low[0] + high[0]) / 2, (low[1] + high[1]) / 2, (low[2] + high[2]) / 2], half: [(high[0] - low[0]) / 2, (high[1] - low[1]) / 2, (high[2] - low[2]) / 2] };
 }
 
 /** Reflects a piece across the row of its first joint, in place: a right curve becomes a left one. */

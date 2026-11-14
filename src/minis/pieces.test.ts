@@ -7,6 +7,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { BOX, CELL, LEVEL, STEEPEST, TIGHTEST, WARN_STEEP, WARN_TIGHT, bendAllowed, blockMesh, brokenBy, isBent, keyOf, made, pathOf, pointsAt, pointsIn, pointsOf, shapeOf, strainOf, sweepOf, toWorld, triangles, warned, wayToWorld, withBend, type Kind, type Place } from "./pieces";
+import { isPart } from "./parts";
 import type { V3 } from "../mote/solids";
 
 const close = (a: V3, b: V3, by = 1e-9) => Math.abs(a[0] - b[0]) <= by && Math.abs(a[1] - b[1]) <= by && Math.abs(a[2] - b[2]) <= by;
@@ -42,8 +43,9 @@ describe("each piece of the box", () => {
                     expect(close(frame.up, [0, 1, 0], 1e-9)).toBe(true);
                 });
                 // a piece made of several lengths has them meet end to end, each going on the way the last went
-                // (but for the funnel's chute, which ends over its bowl)
-                for (let i = shape.bowl ? 1 : 0; i + 1 < world.lengths.length; i++) {
+                // (but for the funnel's chute, which ends over its bowl, and a moving or sounding piece, whose
+                // marble drops, rides or is struck from one length to the next)
+                for (let i = shape.bowl ? 1 : 0; i + 1 < world.lengths.length && !isPart(kind.family); i++) {
                     const [a, b] = [world.lengths[i]!.piece.ends![1], world.lengths[i + 1]!.piece.ends![0]];
                     expect(close(a.p, b.p, 1e-9)).toBe(true);
                     expect(close(a.along, b.along, 1e-6)).toBe(true);

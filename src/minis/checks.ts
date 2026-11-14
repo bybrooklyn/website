@@ -9,6 +9,7 @@
 //   checks(run);       // [{ id, why: "open", joint }, { id, why: "fast" }, ...]
 
 import { pathOf, shapeOf, sweepOf, type Kind, type Length } from "./pieces";
+import { isPart } from "./parts";
 import { links, open, type Placed } from "./run";
 import type { V3 } from "../mote/solids";
 
@@ -163,7 +164,8 @@ function walk(run: Placed[]): { speeds: Map<string, number>; marks: Mark[] } {
             speeds.set(`${next.id} ${next.joint}`, Math.sqrt(result.end));
             const joints = shapeOf(piece.kind).joints.length;
             // into a tray, a hopper's mouth, or a piece entered by a way it cannot be gone through
-            if (joints < 2 || piece.kind.family === "h") break;
+            // a moving or sounding piece passes a marble on in its own way, which is not guessed at here: the ghost follows it
+            if (joints < 2 || piece.kind.family === "h" || isPart(piece.kind.family)) break;
             if (piece.kind.family === "f" && next.joint === 1) break;
             result = along(route(piece.kind, next.joint), result.end);
             if (result.stopped) mark(piece.id, "shallow");
