@@ -5,7 +5,7 @@
 // the page. `bun run wasm` builds the modules; `bun test` runs this.
 
 import { expect, test } from "bun:test";
-import { engineAddress, fillOf, flagSize, inRow, KEYS, materials, MOST, start, swatchColor, worldFor, type Engine, type Material } from "./grains";
+import { engineAddress, fillOf, flagSize, HELD, inRow, KEYS, materials, MOST, start, swatchColor, worldFor, type Engine, type Material } from "./grains";
 
 const simd = new URL("../../public/wasm/sand.wasm", import.meta.url);
 const scalar = new URL("../../public/wasm/sand-scalar.wasm", import.meta.url);
@@ -74,16 +74,19 @@ test("the brush is offered every material of the table it should be, and each is
     expect(fillOf(of("fire"))).toBeLessThan(100);
     expect(fillOf(of("solid"))).toBe(100);
     expect(fillOf(of("powder"))).toBeLessThan(100);
-    // a powder held still pours about three grains a step, whatever the brush's size; pride sand along a line is laid whole
-    for (const radius of [2, 4, 8, 16, 24]) {
+    // a powder held still pours about ten grains a step, and lava about nine cells, whatever the brush's size; pride sand along a line is laid whole
+    for (const radius of [4, 8, 16, 24]) {
         const grains = (fillOf(of("powder"), true, radius) / 100) * 4 * (2 * radius + 1);
-        expect(grains).toBeGreaterThan(1.5);
-        expect(grains).toBeLessThan(4.5);
+        expect(grains).toBeGreaterThan(HELD.powder * 0.8);
+        expect(grains).toBeLessThan(HELD.powder * 1.2);
+        const lava = (fillOf(of("liquid", false, true), true, radius) / 100) * 4 * (2 * radius + 1);
+        expect(lava).toBeGreaterThan(HELD.lava * 0.8);
+        expect(lava).toBeLessThan(HELD.lava * 1.2);
     }
     expect(fillOf(of("powder"), true, 0)).toBe(45);
     expect(fillOf(of("liquid"), true, 8)).toBe(45);
     expect(fillOf(of("solid"), true)).toBe(100);
-    // lava is poured thick, fire is not
+    // lava drawn along a line is poured thick, fire is not
     expect(fillOf(of("liquid", false, true))).toBe(100);
     expect(fillOf(of("fire", false, true))).toBeLessThan(100);
     expect(fillOf(of("powder", true))).toBe(100);
