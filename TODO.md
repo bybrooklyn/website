@@ -8,7 +8,6 @@ the project's file in [`docs/`](docs/README.md); what has been done is in [`CHAN
 ### The site and what it publishes
 
 - The drafts preview address is public unless Cloudflare Access is put in front of it.
-- The site says it does not track, while visitors' browsers ask GitHub for star counts. Reword, or fetch the counts at build time only.
 - The setup page lists a download stack that a reader may take as piracy.
 - The Terrustia recording shows a game server's port (the game's default).
 - Page policy: whether the `blob:` allowance for pictures stays as it is ([mdQuire](docs/mdQuire.md#known-weak-spots)).
@@ -94,7 +93,6 @@ What was found and fixed is in [`docs/AUDIT.md`](docs/AUDIT.md). Still open from
 ## Site
 
 - Tools stay as projects, each with a page about it and a way to open it; there is no separate tools section. A converter for any file and a QR code maker are wanted, built on the Quires' core, with ideas from p2r3's convert, ha.mr and envelope (ideas only where the licence is not permissive).
-- The footer is to say what a visitor's browser contacts (GitHub, for star counts) in place of saying nothing is tracked; the wording is the owner's to agree.
 
 - Spectrum: show the credit its license asks for somewhere a visitor sees it.
 - Three details on the resume.
