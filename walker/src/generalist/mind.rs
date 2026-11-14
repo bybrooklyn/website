@@ -263,7 +263,7 @@ pub fn into(learner: &Learner, n: usize) -> Vec<Into> {
 /// (so a reader knows it from `picture`'s), how many dots of what it senses, plain neurons in each plain
 /// layer, memory neurons, rhythms, moods and actions; how lit each neuron is in the order `Kinds` numbers
 /// them (a memory by what it holds, a rhythm by the sine of its phase, a mood by its level); how much each
-/// pool neuron moved at the last decision (a rhythm by how far its phase went); then for every neuron
+/// memory and mood moved at the last decision, and each rhythm's phase; then for every neuron
 /// after what it senses, the three connections into it passing the most just then, three numbers each:
 /// where from (-1 for none), what it passed, and how much its weight has changed in this run.
 pub fn pool_picture(learner: &Learner, senses: &[f32], out: &mut Vec<f32>) {
@@ -297,20 +297,21 @@ pub fn pool_picture(learner: &Learner, senses: &[f32], out: &mut Vec<f32>) {
     out.extend((0..kinds.actions).map(|i| acts.get(i).copied().unwrap_or(0.0).clamp(-1.0, 1.0)));
     let before = &shown.before;
     for i in 0..shape.memory + shape.rhythm + shape.mood {
-        let moved = if have && before.len() == state.len() {
-            let d = state[i] - before[i];
-            // a rhythm's phase goes round: how far it went this decision
-            if i >= shape.memory && i < shape.memory + shape.rhythm && d < 0.0 { d + 2.0 * crate::math::PI } else { d }
+        let moved = if i >= shape.memory && i < shape.memory + shape.rhythm {
+            // a rhythm: its phase, so a picture can show it going round
+            if have { state[i] } else { 0.0 }
+        } else if have && before.len() == state.len() {
+            state[i] - before[i]
         } else {
             0.0
         };
         out.push(moved);
     }
     for n in kinds.first_plain()..kinds.count() {
-        let mut list = into(learner, n);
-        list.sort_by(|x, y| y.passed.abs().partial_cmp(&x.passed.abs()).unwrap_or(core::cmp::Ordering::Equal).then(x.from.cmp(&y.from)));
+        let list = into(learner, n);
+        let order = pool::strongest(&(0..list.len()).collect::<Vec<_>>(), &|k| list[k].passed.abs());
         for k in 0..3 {
-            match list.get(k) {
+            match order.get(k).map(|&k| &list[k]) {
                 Some(c) => out.extend_from_slice(&[c.from as f32, c.passed, c.changed]),
                 None => out.extend_from_slice(&[-1.0, 0.0, 0.0]),
             }

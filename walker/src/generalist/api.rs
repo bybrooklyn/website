@@ -480,7 +480,6 @@ pub extern "C" fn running_room() -> *mut f64 {
 #[unsafe(no_mangle)]
 pub extern "C" fn practice_load() -> u32 {
     let Some(page) = page() else { return 0 };
-    (page.state_room, page.running_room) = (state, running);
     u32::from(page.practice_load())
 }
 

@@ -36,8 +36,17 @@ fn fingerprint() -> u64 {
     fingerprint_of(Way::of(2))
 }
 
+/// The fingerprint of the same with the brain the page practises with (stage 3: a pool of memory, rhythm
+/// and mood neurons beside the plain ones, `page::BRAIN`), which the page's engine must give too. The
+/// plain network's, above, is unchanged by it.
+pub const POOL_FINGERPRINT: u64 = 0x0bb9_a9c8_29d2_868a;
+
 fn fingerprint_of(way: Way) -> u64 {
-    let mut practice = Practice::new(recipe(0.5), way, Settings::default(), 2, 7, 3).unwrap();
+    fingerprint_with(way, Settings::default())
+}
+
+fn fingerprint_with(way: Way, settings: Settings) -> u64 {
+    let mut practice = Practice::new(recipe(0.5), way, settings, 2, 7, 3).unwrap();
     let mut hash = 0xcbf2_9ce4_8422_2325;
     for _ in 0..2 {
         practice.update();
@@ -322,4 +331,10 @@ fn the_feelings_a_mood_reads_first_are_its_energy_and_its_touch() {
         // standing on its feet: nothing presses on its body, nothing holds it, and the jolt up is about 1
         assert_eq!((sensed[feelings[1]], sensed[feelings[2]]), (0.0, 0.0));
     }
+}
+
+#[test]
+fn the_page_s_brain_practises_to_its_own_fingerprint() {
+    let hash = fingerprint_with(Way::of(2), Settings { shape: super::page::BRAIN, ..Settings::default() });
+    assert_eq!(hash, POOL_FINGERPRINT, "{hash:#x}");
 }

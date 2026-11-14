@@ -6,8 +6,9 @@
 //!   every run starts full instead.
 //! - **food**: 6 seconds into each run a piece of food is dropped 1.5 m behind it, and 16 seconds in one
 //!   1.5 m ahead: whether it ate each within 8 seconds, and how much of the second and a half after each
-//!   landed its eye was on it (the middle of its gaze within 10 degrees), against chance (20 degrees of
-//!   the 280 its eye can look over).
+//!   landed its eye was on it (the middle of its gaze within 10 degrees), and over the 8 seconds, against
+//!   chance (20 degrees of the 280 its eye can look over); and whether it went back half a metre or more
+//!   after the food behind.
 //! - **slip**: 10 seconds into each run the ground goes slippery (`Run::slippery`), and the same runs
 //!   without: how far it went in each five seconds from 5 to 25, so whether it slows and comes back.
 //!
@@ -51,9 +52,6 @@ fn eye(page: &Page) -> Vec2 {
     walker::generalist::eyes::eye(&page.show.stage, page.show.body.creature.torso) + Vec2::new(page.show.stage.origin, 0.0)
 }
 
-fn eaten(page: &Page) -> u32 {
-    page.show.body.needs.as_ref().map_or(0, |needs| needs.eaten)
-}
 
 /// Whether its gaze is on a point, within 10 degrees.
 fn looks_at(page: &Page, at: Vec2) -> bool {
@@ -107,7 +105,7 @@ fn main() {
     println!("life {legs} fresh={} energy={:.2} under_a_tenth={:.2} runs={runs} distance={:.1}", u8::from(fresh), energy / samples as f64, low as f64 / samples as f64, got / runs.max(1) as f64);
 
     // food behind and ahead, and the eye on it as it lands
-    let (mut ate, mut on, mut looked) = ([0u32; 2], [0u32; 2], [0u32; 2]);
+    let (mut ate, mut on, mut looked, mut turned, mut on_long, mut looked_long) = ([0u32; 2], [0u32; 2], [0u32; 2], 0u32, [0u32; 2], [0u32; 2]);
     let worlds: Vec<u32> = (2..18).collect();
     for &seed in &worlds {
         let mut page = page_with(Recipe { seed, ..kind }, legs, &kept);
@@ -118,17 +116,26 @@ fn main() {
             if page.show.judge.over() {
                 break;
             }
-            let before = eaten(&page);
             let body = torso(&page);
-            page.show_drop_food(Vec2::new(body.x + side, body.y + 0.8));
+            let drop_x = body.x + side;
+            page.show_drop_food(Vec2::new(drop_x, body.y + 0.8));
             let dropped = page.show.stage.food.len() - 1;
+            // that piece, by where it fell (straight down), if it is still there
+            let there = |page: &Page| page.show.stage.food.iter().any(|food| (food.at.x + page.show.stage.origin - drop_x).abs() < 0.05);
             let mut had = false;
+            let mut back = body.x;
             for k in 0..(8.0 / STEP) as u32 {
                 step(&mut page);
                 if page.show.judge.over() {
                     break;
                 }
-                had |= eaten(&page) > before;
+                had |= !there(&page);
+                back = back.min(torso(&page).x);
+                if k % 4 == 0 && let Some(food) = page.show.stage.food.get(dropped) {
+                    let at = food.at + Vec2::new(page.show.stage.origin, 0.0);
+                    on_long[which] += u32::from(looks_at(&page, at));
+                    looked_long[which] += 1;
+                }
                 if k < (1.5 / STEP) as u32 && k % 4 == 0 {
                     // where that piece is now, if it is still there
                     if let Some(food) = page.show.stage.food.get(dropped) {
@@ -139,15 +146,21 @@ fn main() {
                 }
             }
             ate[which] += u32::from(had);
+            if which == 0 && back < body.x - 0.5 {
+                turned += 1;
+            }
         }
     }
     let share = |a: u32, b: u32| a as f64 / b.max(1) as f64;
     println!(
-        "food {legs} behind_eaten={:.2} ahead_eaten={:.2} eye_on_behind={:.3} eye_on_ahead={:.3} chance={:.3}",
+        "food {legs} behind_eaten={:.2} ahead_eaten={:.2} turned_back={:.2} eye_on_behind={:.3} eye_on_ahead={:.3} over_8s={:.3}/{:.3} chance={:.3}",
         share(ate[0], worlds.len() as u32),
         share(ate[1], worlds.len() as u32),
+        share(turned, worlds.len() as u32),
         share(on[0], looked[0]),
         share(on[1], looked[1]),
+        share(on_long[0], looked_long[0]),
+        share(on_long[1], looked_long[1]),
         20.0 / 280.0
     );
 

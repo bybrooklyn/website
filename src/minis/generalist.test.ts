@@ -5,7 +5,7 @@
 // creatures for a learner work. And what roaming.ts is held to: seeds and links.
 
 import { expect, test } from "bun:test";
-import { DEFAULT_RECIPE, KINDS, anotherSeed, brainColumns, counted, engineRecipe, fromLink, lasted, linkParts, seedNumber, senseLayout, valid, type Engine } from "./roaming";
+import { DEFAULT_RECIPE, DEFAULT_SHAPE, KINDS, SHAPE_CAPS, anotherSeed, brainColumns, brainKinds, counted, engineRecipe, fromLink, lasted, linkParts, neurons, practiceWorkers, seedNumber, senseLayout, valid, validShape, type Engine } from "./roaming";
 
 const path = new URL("../../public/wasm/generalist.wasm", import.meta.url);
 const scalarPath = new URL("../../public/wasm/generalist-scalar.wasm", import.meta.url);
@@ -133,21 +133,58 @@ test("many creatures step together, as fast as this runtime goes", async () => {
     console.log(`64 creatures stepped ${Math.round(steps / seconds)} times a second in the page's engine, here`);
 });
 
-/** The native engine's fingerprint of a small learner's state over two updates of practice (walker/src/generalist/practice_tests.rs). */
+/** The native engine's fingerprints of a small learner's state over two updates of practice (walker/src/generalist/practice_tests.rs): with the brain the page practises with, a pool beside the plain neurons, and with the plain network alone. */
+const POOL_FINGERPRINT = 0x0bb9a9c829d2868an;
 const PRACTICE_FINGERPRINT = 0xb66b94ffb5e3f67cn;
 
-test("practice in the page's engine learns to the bit as natively, with SIMD and without", async () => {
+test("practice in the page's engine learns to the bit as natively, with a pool and without, with SIMD and without", async () => {
     for (const each of [path, scalarPath]) {
-        const engine = await load(each);
-        engine.create(2, 1, 0.5, 1, 1, 1, 1, 8, 8, 1, 0, 30, 1);
-        expect(engine.practice_create(2, 7, 3)).toBeGreaterThan(0);
-        let hash = 0xcbf29ce484222325n;
-        for (let update = 0; update < 2; update++) {
-            engine.practice_update();
-            hash = mix(hash, bits(engine, engine.practice_state()));
+        for (const [plain, wanted] of [[false, POOL_FINGERPRINT], [true, PRACTICE_FINGERPRINT]] as const) {
+            const engine = await load(each);
+            engine.create(2, 1, 0.5, 1, 1, 1, 1, 8, 8, 1, 0, 30, 1);
+            if (plain) engine.brain_shape(0, 0, 0, 0);
+            expect(engine.practice_create(2, 7, 3)).toBeGreaterThan(0);
+            let hash = 0xcbf29ce484222325n;
+            for (let update = 0; update < 2; update++) {
+                engine.practice_update();
+                hash = mix(hash, bits(engine, engine.practice_state()));
+            }
+            expect(hash).toBe(wanted);
         }
-        expect(hash).toBe(PRACTICE_FINGERPRINT);
     }
+});
+
+test("a learner sent with its form goes on in a brain of another shape, and a plain one kept before forms is grown", async () => {
+    const engine = await load();
+    engine.create(2, 4, 0.2, 1, 1, 1, 1, 8, 8, 1, 0, 30, 1);
+    engine.brain_shape(0, 0, 0, 0);
+    engine.practice_create(2, 1, 1);
+    engine.practice_update();
+    const formAt = engine.practice_form();
+    const form = new Float32Array(engine.memory.buffer, formAt, engine.length()).slice();
+    expect(Array.from(form)).toEqual([0, 0, 0, 0]);
+    const state = new Float32Array(engine.memory.buffer, engine.practice_state(), engine.length()).slice();
+    const running = new Float64Array(engine.memory.buffer, engine.practice_running(), engine.length()).slice();
+    const other = await load();
+    other.create(2, 4, 0.2, 1, 1, 1, 1, 8, 8, 1, 0, 30, 1);
+    other.practice_create(2, 1, 1);
+    const formRoom = other.form_room(form.length);
+    new Float32Array(other.memory.buffer, formRoom, form.length).set(form);
+    const [stateRoom, runningRoom] = [other.state_room(0), other.running_room()];
+    expect(other.length()).toBe(running.length);
+    new Float32Array(other.memory.buffer, stateRoom, state.length).set(state);
+    new Float64Array(other.memory.buffer, runningRoom, running.length).set(running);
+    expect(other.practice_load()).toBe(1);
+    const grownAt = other.practice_form();
+    const grown = Array.from(new Float32Array(other.memory.buffer, grownAt, other.length()).subarray(0, 4));
+    expect(grown).toEqual([DEFAULT_SHAPE.memory, DEFAULT_SHAPE.rhythm, DEFAULT_SHAPE.mood, DEFAULT_SHAPE.reads]);
+    expect(other.practice_updates()).toBe(1);
+    other.practice_update();
+    expect(other.practice_updates()).toBe(2);
+    // the caps the page's sliders use are the engine's
+    const capsAt = other.brain_caps();
+    const caps = Array.from(new Float32Array(other.memory.buffer, capsAt, other.length()));
+    expect(caps).toEqual([SHAPE_CAPS.memory, SHAPE_CAPS.rhythm, SHAPE_CAPS.fewestReads, SHAPE_CAPS.reads, DEFAULT_SHAPE.memory, DEFAULT_SHAPE.rhythm, DEFAULT_SHAPE.mood, DEFAULT_SHAPE.reads]);
 });
 
 test("an update shared out as the workers share it, with one worker, is the update done alone", async () => {
@@ -207,6 +244,8 @@ test("the brain on show is drawn as it thinks, evolution's or practice's", async
     // a dot for each ray, then the rest of what it senses; 8 neurons; 13 outputs for evolution's brain
     const bred = brainColumns(new Float32Array(engine.memory.buffer, engine.brain_picture(), engine.length()).slice());
     expect(bred?.lit.map((column) => column.length)).toEqual([16 + 18, 8, 13]);
+    // the plain network practice had before its pool, drawn in columns as evolution's brain is
+    engine.brain_shape(0, 0, 0, 0);
     engine.practice_create(2, 1, 1);
     const state = new Float32Array(engine.memory.buffer, engine.practice_state(), engine.length()).slice();
     const running = new Float64Array(engine.memory.buffer, engine.practice_running(), engine.length()).slice();
@@ -222,6 +261,44 @@ test("the brain on show is drawn as it thinks, evolution's or practice's", async
     expect(policy?.flows.map((flow) => flow.length)).toEqual([43 * 64, 64 * 64, 64 * 6]);
     expect(policy?.flows.every((flow) => flow.every(Number.isFinite) && flow.some((amount) => amount !== 0))).toBe(true);
     expect(brainColumns(new Float32Array([2, 3, 1, 0, 0]))).toBeUndefined();
+    // the page's brain, with a pool, drawn by kind
+    engine.brain_shape(DEFAULT_SHAPE.memory, DEFAULT_SHAPE.rhythm, DEFAULT_SHAPE.mood, DEFAULT_SHAPE.reads);
+    engine.practice_create(2, 1, 1);
+    const pooledFormAt = engine.practice_form();
+    const form = new Float32Array(engine.memory.buffer, pooledFormAt, engine.length()).slice();
+    const pooled = new Float32Array(engine.memory.buffer, engine.practice_state(), engine.length()).slice();
+    const pooledRunning = new Float64Array(engine.memory.buffer, engine.practice_running(), engine.length()).slice();
+    const formRoom = engine.form_room(form.length);
+    new Float32Array(engine.memory.buffer, formRoom, form.length).set(form);
+    const pooledRoom = engine.state_room(0);
+    new Float32Array(engine.memory.buffer, pooledRoom, pooled.length).set(pooled);
+    const pooledRunningRoom = engine.running_room();
+    new Float64Array(engine.memory.buffer, pooledRunningRoom, pooledRunning.length).set(pooledRunning);
+    expect(engine.policy_load()).toBe(1);
+    for (let i = 0; i < 30; i++) engine.show_step(1 / 60);
+    const kinds = brainKinds(new Float32Array(engine.memory.buffer, engine.brain_picture(), engine.length()).slice());
+    expect(kinds?.counts).toEqual({ senses: 43, plain: 64, memory: 32, rhythm: 4, mood: 4, actions: 6 });
+    expect(kinds?.lit.every(Number.isFinite)).toBe(true);
+    expect(neurons(DEFAULT_SHAPE)).toBe(168);
+    // a memory neuron listens to as many as it may afford, each from a neuron there is
+    const heardAt = engine.brain_reads(43 + 64);
+    const heard = Array.from(new Float32Array(engine.memory.buffer, heardAt, engine.length()));
+    expect(heard.length).toBe(3 * DEFAULT_SHAPE.reads);
+    expect(brainKinds(new Float32Array([-1, 1, 1, 0, 0, 0, 1]))).toBeUndefined();
+});
+
+test("practice uses what the machine has, up to four workers, and a shape kept is checked", () => {
+    expect(practiceWorkers("normal", { cores: 4, phone: false })).toBe(3);
+    expect(practiceWorkers("all", { cores: 4, phone: false })).toBe(4);
+    expect(practiceWorkers("normal", { cores: 16, phone: false })).toBe(4);
+    expect(practiceWorkers("normal", { cores: 2, phone: false })).toBe(1);
+    expect(practiceWorkers("gentle", { cores: 16, phone: false })).toBe(1);
+    expect(practiceWorkers("all", { cores: 8, phone: true })).toBe(4);
+    expect(practiceWorkers("normal", { cores: 8, phone: true })).toBe(2);
+    expect(practiceWorkers("all", { cores: 8, memory: 1, phone: false })).toBe(1);
+    expect(validShape(DEFAULT_SHAPE)).toBe(true);
+    expect(validShape({ ...DEFAULT_SHAPE, memory: SHAPE_CAPS.memory + 8 })).toBe(false);
+    expect(validShape({ ...DEFAULT_SHAPE, reads: 2 })).toBe(false);
 });
 
 test("a creature that wants things shows its energy, its food and where it looks, and food can be dropped for it", async () => {

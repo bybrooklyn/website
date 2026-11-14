@@ -491,10 +491,9 @@ impl Pool {
         let (ok, nk) = (old.reads, shape.reads);
         // which old neuron of each kind each new one is: the most used kept, in their old order
         let keep = |count: usize, new: usize, width: &dyn Fn(usize) -> f32| -> Vec<Option<usize>> {
-            let mut order: Vec<usize> = (0..count).collect();
-            order.sort_by(|&a, &b| width(b).partial_cmp(&width(a)).unwrap_or(core::cmp::Ordering::Equal).then(a.cmp(&b)));
-            let mut kept: Vec<usize> = order.into_iter().take(new).collect();
-            kept.sort();
+            let mut kept = strongest(&(0..count).collect::<Vec<_>>(), width);
+            kept.truncate(new);
+            in_order(&mut kept);
             (0..new).map(|n| kept.get(n).copied()).collect()
         };
         let memory_used = |i: usize| used[i];
@@ -556,10 +555,9 @@ impl Pool {
                     let old_reads = &self.reads[(neuron_base[kind] + o) * ok..(neuron_base[kind] + o + 1) * ok];
                     // the old reads still there, strongest first, as many as fit
                     let strength = |r: usize| (0..sets).map(|set| weights[old_at + set * ok + r].abs()).sum::<f32>();
-                    let mut order: Vec<usize> = (0..ok).filter(|&r| renumber(old_reads[r]).is_some()).collect();
-                    order.sort_by(|&a, &b| strength(b).partial_cmp(&strength(a)).unwrap_or(core::cmp::Ordering::Equal).then(a.cmp(&b)));
+                    let mut order = strongest(&(0..ok).filter(|&r| renumber(old_reads[r]).is_some()).collect::<Vec<_>>(), &strength);
                     order.truncate(nk);
-                    order.sort();
+                    in_order(&mut order);
                     for &r in &order {
                         mine.push(renumber(old_reads[r]).unwrap());
                         columns.push(Some(r));
@@ -651,6 +649,29 @@ impl Pool {
         let k = s.reads;
         let at = n * (3 * k + 2);
         weights[at + 2 * k + r] * state.get(s.memory + s.rhythm + s.mood + n * k + r).copied().unwrap_or(0.0)
+    }
+}
+
+/// The numbers given, the one of the greatest `key` first, and of two alike the lower number first. By
+/// insertion, which is small to carry in the module and quick for the few dozen a pool sorts.
+pub(crate) fn strongest(numbers: &[usize], key: &dyn Fn(usize) -> f32) -> Vec<usize> {
+    let mut out: Vec<usize> = Vec::with_capacity(numbers.len());
+    for &n in numbers {
+        let k = key(n);
+        let at = out.iter().position(|&m| { let km = key(m); k > km || (k == km && n < m) }).unwrap_or(out.len());
+        out.insert(at, n);
+    }
+    out
+}
+
+/// Numbers put in order, least first.
+fn in_order(numbers: &mut [usize]) {
+    for i in 1..numbers.len() {
+        let mut j = i;
+        while j > 0 && numbers[j - 1] > numbers[j] {
+            numbers.swap(j - 1, j);
+            j -= 1;
+        }
     }
 }
 
