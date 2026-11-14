@@ -8,14 +8,14 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { packQuire, pictureShelf, unpackQuire } from "./quire-file";
-import { writeZip } from "./zip";
+import { readZip, writeZip } from "./zip";
 
 const parts = { style: '{"quire":1}\n', notes: '{"quire":1}\n' };
 
 test("a .quire file unzipped by the system is a plain Markdown document with its pictures beside it", async () => {
     const where = mkdtempSync(join(tmpdir(), "quire-file-"));
     const path = join(where, "letter.quire");
-    writeFileSync(path, await packQuire({ markdown: "# Letter\n\n![Sea](pictures/sea.png)\n", parts, pictures: new Map([["sea.png", new Blob([new Uint8Array([137, 80, 78, 71])])]]) }));
+    writeFileSync(path, await packQuire({ text: "# Letter\n\n![Sea](pictures/sea.png)\n", parts, pictures: new Map([["sea.png", new Blob([new Uint8Array([137, 80, 78, 71])])]]) }));
     const listed = Bun.spawnSync(["unzip", "-Z1", path]).stdout.toString().trim().split("\n");
     expect(listed).toEqual(["document.md", "style.json", "notes.json", "pictures/sea.png"]);
     expect(Bun.spawnSync(["unzip", "-p", path, "document.md"]).stdout.toString()).toBe("# Letter\n\n![Sea](pictures/sea.png)\n");
@@ -23,8 +23,8 @@ test("a .quire file unzipped by the system is a plain Markdown document with its
 
 test("what is packed unpacks the same, pictures with a type they can be shown with", async () => {
     const webp = "RIFF\u0000\u0000\u0000\u0000WEBPVP8 ";
-    const bundle = await unpackQuire(await packQuire({ markdown: "Words.\n\n![A](pictures/a.webp)\n", parts, pictures: new Map([["a.webp", new Blob([webp])]]) }));
-    expect(bundle.markdown).toBe("Words.\n\n![A](pictures/a.webp)\n");
+    const bundle = await unpackQuire(await packQuire({ text: "Words.\n\n![A](pictures/a.webp)\n", parts, pictures: new Map([["a.webp", new Blob([webp])]]) }));
+    expect(bundle.text).toBe("Words.\n\n![A](pictures/a.webp)\n");
     expect(bundle.parts).toEqual(parts);
     expect(bundle.pictures.get("a.webp")?.type).toBe("image/webp");
     expect(await bundle.pictures.get("a.webp")?.text()).toBe(webp);
@@ -56,7 +56,7 @@ test("only pictures whose names stay in their folder are taken from a .quire fil
 
 test("a .quire zipped from a folder, or without its JSON files, still opens; one without document.md is refused", async () => {
     const nested = await unpackQuire(await writeZip([{ name: "letter/document.md", data: "Hi.\n" }, { name: "letter/pictures/b.png", data: "b" }]));
-    expect(nested.markdown).toBe("Hi.\n");
+    expect(nested.text).toBe("Hi.\n");
     expect(nested.parts).toEqual({ style: "", notes: "" });
     expect([...nested.pictures.keys()]).toEqual(["b.png"]);
     expect(unpackQuire(await writeZip([{ name: "readme.txt", data: "no" }]))).rejects.toThrow("no document.md");
@@ -73,6 +73,28 @@ test("pictures on the shelf get free names, are shown by their address and follo
 
 test("a picture taken out of the writing is not packed into the file", async () => {
     const pictures = new Map([["kept.png", new Blob(["k"])], ["gone.png", new Blob(["g"])], ["my cat.png", new Blob(["c"])]]);
-    const bundle = await unpackQuire(await packQuire({ markdown: "![Kept](pictures/kept.png)\n\n![Cat](pictures/my%20cat.png)\n", parts, pictures }));
+    const bundle = await unpackQuire(await packQuire({ text: "![Kept](pictures/kept.png)\n\n![Cat](pictures/my%20cat.png)\n", parts, pictures }));
     expect([...bundle.pictures.keys()].sort()).toEqual(["kept.png", "my cat.png"]);
+});
+
+test("a Markdown .quire packs to the same bytes as before other kinds came: document.md, style.json, notes.json and its pictures, in that order", async () => {
+    const date = new Date(2026, 10, 1, 9, 30);
+    const pictures = new Map([["a.png", new Blob([new Uint8Array([137, 80, 78, 71])])]]);
+    const before = await writeZip([{ name: "document.md", data: "Hi.\n\n![A](pictures/a.png)\n" }, { name: "style.json", data: "{}\n" }, { name: "notes.json", data: parts.notes }, { name: "pictures/a.png", data: new Uint8Array([137, 80, 78, 71]), store: true }], date);
+    expect(await packQuire({ text: "Hi.\n\n![A](pictures/a.png)\n", parts: { style: "", notes: parts.notes }, pictures }, date)).toEqual(before);
+    const back = await unpackQuire(before, ["steps.json"]);
+    expect(back.main).toBeUndefined();
+    expect(back.parts).toEqual({ style: "{}\n", notes: parts.notes });
+});
+
+test("a .quire of another kind keeps its text in the file it names, its parts as JSON files and its pictures, and opens only where that file is known", async () => {
+    const packed = await packQuire({ text: "{\"original\":\"pictures/cat.png\"}\n", main: "steps.json", parts: { facts: "{}" }, pictures: new Map([["cat.png", new Blob(["png"])], ["gone.png", new Blob(["x"])]]) });
+    const names = [...(await readZip(packed)).keys()];
+    expect(names).toEqual(["steps.json", "facts.json", "pictures/cat.png"]);
+    const back = await unpackQuire(packed, ["steps.json"]);
+    expect(back).toMatchObject({ text: "{\"original\":\"pictures/cat.png\"}\n", main: "steps.json", parts: { facts: "{}" } });
+    expect([...back.pictures.keys()]).toEqual(["cat.png"]);
+    expect(unpackQuire(packed)).rejects.toThrow("no document.md");
+    // a part whose name would leave the top of the zip is not written
+    expect([...(await readZip(await packQuire({ text: "{}", main: "steps.json", parts: { "../x": "{}" }, pictures: new Map() }))).keys()]).toEqual(["steps.json"]);
 });

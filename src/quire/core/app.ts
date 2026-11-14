@@ -12,7 +12,7 @@
 import { kindFor, type Context, type Editing, type Kind } from "./kind";
 import { documentsList, repositoryForm, type Place } from "./documents";
 import { drivePlace, type DriveOptions } from "./drive-place";
-import { emptyParts } from "./quire-file";
+import { emptyParts, isQuire } from "./quire-file";
 import { copyDocument, fileName, type Entry, type Opened, type Store } from "./store";
 import { browserStore, indexedTables, memoryTables } from "./store-browser";
 import { filesStore } from "./store-files";
@@ -51,12 +51,14 @@ function local(): Storage | undefined {
 /** Starts the app on an element. */
 export async function startApp(host: HTMLElement, options: AppOptions) {
     const kinds = options.kinds;
-    const kindOf = (name: string) => kindFor(kinds, name);
+    const kindOf = (name: string, main?: string) => kindFor(kinds, name, main);
+    // which files in a folder or chosen from the computer are documents: those with an ending some kind opens; and the main files a `.quire` may keep its text in
+    const openable = { opens: (name: string) => /\.[a-z0-9]{1,8}$/i.test(name) && kinds.some((each) => each.opens(name)), mains: kinds.flatMap((each) => (each.main ? [each.main] : [])) };
     // a browser that keeps nothing (some private windows, site data blocked) still opens mdQuire: documents
     // are then kept in this tab only, and the status says so, as it does for a file opened from the computer
     const tables = await indexedTables(options.database).catch(() => undefined);
     const browser = tables ? browserStore(tables) : { ...browserStore(memoryTables()), note: "This browser is not keeping documents, so this one is kept in this tab only: download it to keep it." };
-    const files = filesStore();
+    const files = filesStore(openable);
     let folder: Store | undefined;
     let settings = readSettings(local());
     let github = settings ? githubStore(settings, options.fetcher) : undefined;
@@ -118,7 +120,7 @@ export async function startApp(host: HTMLElement, options: AppOptions) {
         },
         start: begin,
     });
-    let kind = kindOf(start?.entry.name ?? "");
+    let kind = kindOf(start?.entry.name ?? "", start?.found.main);
     if (!start) kind = kinds[0]!;
     let editing: Editing = kind.mount(host, context(start));
 
@@ -144,8 +146,11 @@ export async function startApp(host: HTMLElement, options: AppOptions) {
 
     /** Opens a document in its own kind's editor; false when it was not opened. */
     async function openIn(store: Store, entry: Entry): Promise<boolean> {
-        if (!(await into(kindOf(entry.name)))) return false;
-        return editing.open(store, entry);
+        let main = entry.main;
+        // a `.quire` in a folder says which kind it is only inside it, so it is looked into first where a kind keeps its text elsewhere than document.md
+        if (!main && isQuire(entry.name) && openable.mains.length) main = (await store.open(entry.id).catch(() => undefined))?.main;
+        if (!(await into(kindOf(entry.name, main)))) return false;
+        return editing.open(store, main ? { ...entry, main } : entry);
     }
 
     if (start) remember(start.store, start.entry);
@@ -161,18 +166,45 @@ export async function startApp(host: HTMLElement, options: AppOptions) {
         const picked = chooser.files?.[0];
         chooser.value = "";
         if (!picked) return;
+        if (await takeIn(picked)) return;
         const entry = await files.add(picked).catch((error) => void editing.say("Not opened", `${picked.name} was not opened: ${error instanceof Error ? error.message : String(error)}`));
         if (!entry) return;
         if (!(await openIn(files, entry))) return;
         await showEditor();
         editing.focus();
     });
+    /** A file some kind makes a new document of (a picture, for imgQuire): that kind's editor takes it, and the home screen makes way. True when a kind took it. */
+    async function takeIn(file: File): Promise<boolean> {
+        const taker = kinds.find((each) => each.takes?.(file));
+        if (!taker) return false;
+        if (!(await into(taker)) || !(await editing.take?.(file))) return true;
+        await showEditor();
+        editing.focus();
+        return true;
+    }
+    // a picture pasted or dropped on the home screen becomes a document of the kind that takes it; in an editor, the editor's own
+    const fileIn = (data: DataTransfer | null) => [...(data?.files ?? [])].find((file) => kinds.some((each) => each.takes?.(file)));
+    document.addEventListener("paste", (event) => {
+        const file = shelf.shown() && !event.defaultPrevented ? fileIn(event.clipboardData) : undefined;
+        if (!file) return;
+        event.preventDefault();
+        void takeIn(file);
+    });
+    host.addEventListener("dragover", (event) => {
+        if (shelf.shown() && [...(event.dataTransfer?.items ?? [])].some((item) => item.kind === "file")) event.preventDefault();
+    });
+    host.addEventListener("drop", (event) => {
+        const file = shelf.shown() ? fileIn(event.dataTransfer) : undefined;
+        if (!file) return;
+        event.preventDefault();
+        void takeIn(file);
+    });
     const pickers = globalThis as unknown as { showOpenFilePicker?: (options: object) => Promise<FileHandle[]>; showDirectoryPicker?: (options: object) => Promise<FolderHandle> };
     const able = canOpen();
     const openInPlace = async () => {
         const [handle] = (await pickers.showOpenFilePicker?.({ types: kinds.map((each) => ({ description: each.files.description, accept: each.files.accept })) }).catch(() => [])) ?? [];
         if (!handle) return;
-        const store = oneFileStore(handle);
+        const store = oneFileStore(handle, openable);
         if (!(await openIn(store, { id: handle.name, name: handle.name }))) return;
         menu.close(false);
         await showEditor();
@@ -180,7 +212,7 @@ export async function startApp(host: HTMLElement, options: AppOptions) {
     const openFolder = async () => {
         const handle = await pickers.showDirectoryPicker?.({ mode: "readwrite" }).catch(() => undefined);
         if (!handle) return;
-        folder = folderStore(handle);
+        folder = folderStore(handle, openable);
         shown = folder;
         await placesChanged();
     };
@@ -370,14 +402,14 @@ export async function startApp(host: HTMLElement, options: AppOptions) {
         documents: async () => {
             const places = [browser, github, drive.store(), folder, files].filter((store): store is Store => !!store);
             const lists = await Promise.all(places.map(async (store) => ({ store, entries: await store.list().catch(() => []) })));
-            return recent(lists).map(({ store, id, name, modified }): Listed => ({
+            return recent(lists).map(({ store, id, name, modified, main }): Listed => ({
                 key: keyFor(store, id),
                 name,
                 // the two places that are this machine are said in lowercase, as the row's other words are; a folder or a repository keeps its own name;
                 // a document of a kind other than the first says its kind first
-                place: [kindOf(name).row, store === browser ? "this browser" : store === files ? "this computer" : store.label].filter(Boolean).join(", "),
+                place: [kindOf(name, main).row, store === browser ? "this browser" : store === files ? "this computer" : store.label].filter(Boolean).join(", "),
                 modified,
-                open: (from) => void enter(store, { id, name }, from),
+                open: (from) => void enter(store, { id, name, ...(main ? { main } : {}) }, from),
                 rename: store.can.rename ? async (wanted) => void (await store.rename(id, wanted).catch(() => undefined), await shelf.refresh()) : undefined,
                 duplicate: store.can.create ? async () => void (await copyDocument(store, id, copyName(name))) : undefined,
                 remove: store.can.remove ? async () => void (await store.remove(id).catch(() => undefined)) : undefined,

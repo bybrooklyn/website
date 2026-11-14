@@ -85,7 +85,7 @@ test("one file on its own can be written, and says plainly what it cannot do", a
 });
 
 test("a .quire file in a folder is listed, opened, and written back in place as a zip with its pictures inside", async () => {
-    const bytes = await packQuire({ markdown: "Old.\n\n![a](pictures/a.png)\n", parts: { style: '{"quire":1}', notes: "{}" }, pictures: new Map([["a.png", new Blob(["a"])]]) });
+    const bytes = await packQuire({ text: "Old.\n\n![a](pictures/a.png)\n", parts: { style: '{"quire":1}', notes: "{}" }, pictures: new Map([["a.png", new Blob(["a"])]]) });
     const root = memoryFolder("site", { "letters/to-sam.quire": new Blob([bytes as BlobPart]) }, ticking());
     const store = folderStore(root);
     expect((await store.list()).map((entry) => entry.id)).toEqual(["letters/to-sam.quire"]);
@@ -96,7 +96,7 @@ test("a .quire file in a folder is listed, opened, and written back in place as 
     expect(saved.ok).toBe(true);
     const file = await (await (await root.getDirectoryHandle("letters")).getFileHandle("to-sam.quire")).getFile();
     const back = await unpackQuire(new Uint8Array(await file.arrayBuffer()));
-    expect(back.markdown).toBe("New.\n\n![a](pictures/a.png)\n\n![b](pictures/b.png)\n");
+    expect(back.text).toBe("New.\n\n![a](pictures/a.png)\n\n![b](pictures/b.png)\n");
     expect(back.parts.style).toBe('{"quire":1,"count":2}');
     expect([...back.pictures.keys()]).toEqual(["a.png", "b.png"]);
     // nothing was written beside it
@@ -106,7 +106,7 @@ test("a .quire file in a folder is listed, opened, and written back in place as 
 });
 
 test("a .quire file duplicated in a folder keeps its pictures on disk, and after it is opened again", async () => {
-    const bytes = await packQuire({ markdown: "![A cat](pictures/cat.png)\n", parts: { style: '{"quire":1}', notes: "{}" }, pictures: new Map([["cat.png", new Blob(["meow"])]]) });
+    const bytes = await packQuire({ text: "![A cat](pictures/cat.png)\n", parts: { style: '{"quire":1}', notes: "{}" }, pictures: new Map([["cat.png", new Blob(["meow"])]]) });
     const root = memoryFolder("site", { "letter.quire": new Blob([bytes as BlobPart]) }, ticking());
     const store = folderStore(root);
     const copy = await copyDocument(store, "letter.quire", "Letter copy");
@@ -123,7 +123,7 @@ test("a .quire file duplicated in a folder keeps its pictures on disk, and after
 });
 
 test("one .quire file on its own keeps its pictures inside it", async () => {
-    const bytes = await packQuire({ markdown: "Hi.\n", parts: { style: "", notes: "" }, pictures: new Map() });
+    const bytes = await packQuire({ text: "Hi.\n", parts: { style: "", notes: "" }, pictures: new Map() });
     const folder = memoryFolder("x", { "only.quire": new Blob([bytes as BlobPart]) }, ticking());
     const store = oneFileStore((await folder.getFileHandle("only.quire")) as FileHandle);
     const opened = await store.open("only.quire");
@@ -204,4 +204,20 @@ test("a file the browser will not let be used is said as such, not as gone from 
     expect(await folderStore(root).open("a.md").then(() => "", String)).toContain("a.md is in use elsewhere");
     root.getFileHandle = refuse("NotFoundError");
     expect(await folderStore(root).open("a.md").then(() => "", String)).toContain("a.md is not in the folder any more");
+});
+
+test("a .quire of a kind whose text is kept in another file is listed, opened and written back with that file, where the kinds name it", async () => {
+    const root = memoryFolder("pictures");
+    const store = folderStore(root, { mains: ["steps.json"] });
+    const made = await store.create("Cat", "{\"original\":\"pictures/cat.png\"}", {}, "steps.json");
+    expect(made.id).toBe("cat.quire");
+    await store.savePicture(made.id, new Blob(["png"]), "cat.png");
+    const saved = await store.save(made.id, "{\"original\":\"pictures/cat.png\",\"steps\":[]}", made.mark);
+    expect(saved.ok).toBe(true);
+    // read afresh from the disk by a store that has kept nothing
+    const again = folderStore(root, { mains: ["steps.json"] });
+    expect(await again.open(made.id)).toMatchObject({ text: "{\"original\":\"pictures/cat.png\",\"steps\":[]}", main: "steps.json", quire: {} });
+    expect([...(await again.pictures!(made.id)).keys()]).toEqual(["cat.png"]);
+    // a folder store told of no such kind refuses it rather than opening it as Markdown
+    expect(folderStore(root).open(made.id)).rejects.toThrow("no document.md");
 });

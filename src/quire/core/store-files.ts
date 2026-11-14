@@ -2,6 +2,8 @@
 // that works in every browser. An opened file is held in this tab while it is written; the status
 // says so, and Download gives it back with its own name. Pictures cannot go beside a Markdown file
 // that lives nowhere yet, so this store keeps them only for a `.quire` file, which holds its own.
+// Which files are documents is the kinds' to say (`opens`), and a `.quire` whose main text is not
+// document.md is read by the main files the kinds name (`mains`).
 
 import { isQuire, pictureShelf, unpackQuire, type Parts } from "./quire-file";
 import { fileName, freeName, StoreError, type Entry, type Store } from "./store";
@@ -12,12 +14,22 @@ export const OPENABLE = ".md,.mdx,.markdown,.txt,.quire,text/markdown,text/plain
 /** True if a file's name says it is a document mdQuire can open. */
 export const openable = (name: string) => /\.(md|mdx|markdown|txt|quire)$/i.test(name);
 
+/** A held file's main file, as an entry says it: nothing for mdQuire's. */
+const mainOf = (file: { main?: string }): { main?: string } => (file.main ? { main: file.main } : {});
+
 /** True if a file's name says it is plain text or Markdown, the kinds a repository or the writing server keeps. */
 export const markdownFile = (name: string) => /\.(md|mdx|markdown|txt)$/i.test(name);
 
+/** Which files are documents, and the main files a `.quire` may keep its text in besides document.md: the kinds' to say, mdQuire's alone when not given. */
+export interface Openable {
+    opens?: (name: string) => boolean;
+    mains?: string[];
+}
+
 /** The files store. `add` takes a file the visitor chose and gives the entry to open. */
-export function filesStore(): Store & { add(file: Blob & { name: string }): Promise<Entry> } {
-    const held = new Map<string, { name: string; text: string; mark: number; quire?: Parts }>();
+export function filesStore(kinds: Openable = {}): Store & { add(file: Blob & { name: string }): Promise<Entry> } {
+    const opens = kinds.opens ?? openable;
+    const held = new Map<string, { name: string; text: string; mark: number; quire?: Parts; main?: string }>();
     const shelf = pictureShelf();
     let count = 0;
     const find = (id: string) => {
@@ -32,21 +44,21 @@ export function filesStore(): Store & { add(file: Blob & { name: string }): Prom
         quire: true,
         can: { list: true, create: true, rename: true, remove: true, pictures: true, save: true },
         async add(file) {
-            if (!openable(file.name)) throw new StoreError("only Markdown, text and .quire files can be opened");
+            if (!opens(file.name)) throw new StoreError("only Markdown, text and .quire files can be opened");
             const id = `file-${++count}`;
             if (isQuire(file.name)) {
-                const bundle = await unpackQuire(new Uint8Array(await file.arrayBuffer()));
-                held.set(id, { name: freeName(file.name, names()), text: bundle.markdown, mark: 1, quire: bundle.parts });
+                const bundle = await unpackQuire(new Uint8Array(await file.arrayBuffer()), kinds.mains);
+                held.set(id, { name: freeName(file.name, names()), text: bundle.text, mark: 1, quire: bundle.parts, ...(bundle.main ? { main: bundle.main } : {}) });
                 shelf.set(id, bundle.pictures);
             } else held.set(id, { name: freeName(file.name, names()), text: await file.text(), mark: 1 });
-            return { id, name: held.get(id)!.name };
+            return { id, name: held.get(id)!.name, ...mainOf(held.get(id)!) };
         },
         async list() {
-            return [...held.entries()].map(([id, file]) => ({ id, name: file.name }));
+            return [...held.entries()].map(([id, file]) => ({ id, name: file.name, ...mainOf(file) }));
         },
         async open(id) {
             const file = find(id);
-            return { text: file.text, mark: String(file.mark), quire: file.quire };
+            return { text: file.text, mark: String(file.mark), quire: file.quire, ...mainOf(file) };
         },
         async save(id, text, mark, quire) {
             const file = find(id);
@@ -56,9 +68,9 @@ export function filesStore(): Store & { add(file: Blob & { name: string }): Prom
             file.mark++;
             return { ok: true, mark: String(file.mark) };
         },
-        async create(name, text, quire) {
+        async create(name, text, quire, main) {
             const id = `file-${++count}`;
-            held.set(id, { name: freeName(fileName(name, quire ? ".quire" : ".md"), names()), text, mark: 1, quire: quire ? quire : undefined });
+            held.set(id, { name: freeName(fileName(name, quire ? ".quire" : ".md"), names()), text, mark: 1, quire: quire ? quire : undefined, ...(quire && main ? { main } : {}) });
             return { id, mark: "1" };
         },
         async rename(id, name) {

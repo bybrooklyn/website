@@ -7,26 +7,100 @@ remover (`cutout.md`) is to be one of its tools as well as a page of its own.
 
 ## Where the code is
 
-Nowhere yet. Nothing is built. It is to be a kind of document on the Quires' core ([quire-core](quire-core.md)),
-in `src/quire/img/`.
+`src/quire/img/`, a kind of document on the Quires' core ([quire-core](quire-core.md)), importing from
+`core/` and nowhere else in `src/quire/`:
 
-## How it starts on the core
-
-1. Make the stores carry a `.quire` of named files rather than mdQuire's two parts, and let each kind's
-   `opens` say which files in a folder or a repository are documents ([quire-core](quire-core.md#left-tangled)).
-2. Copy `src/quire/note/` to `src/quire/img/` as the starting shape: a `kind.ts` giving `img()` (key, name,
-   the picture endings it opens, its ways to start: a pasted picture, a file, a photograph from the phone)
-   and an editor that makes the core's frame and session.
-3. The body: `writing()` gives the original and the steps as the `.quire`'s files, `load` reads them back,
-   and a `VersionView` draws a version's steps over the original.
-4. Its menus as one table of headings (File, Edit, Image, Tools, Help); its single-key tools in
-   `frame.keys`, its bar in the frame's place, what fits the selection in `frame.palette`.
-5. The facts panel and the export are its own; the dialogs, strips, menus and tooltips are the core's.
-6. Add `img()` to the page's kinds beside `markdown()`; its documents join the same shelf.
+- `steps.ts`: the picture document. The original (its name in the `.quire`, size, type and weight) and a
+  list of steps, each a small plain record: a crop, a resize with a named filter, a cover in a solid color,
+  an arrow, a box, a line of text. `look` applies the steps that are on, in order; every place and size is
+  in the original's pixels. Changing, removing, moving and switching off a step, undo and redo, and
+  `steps.json` written one step to a line and read back checked field by field.
+- `cover.ts`: a cover's color, from a thin ring of the picture round it.
+- `draw.ts`, `gl.ts`, `gpu.ts`, `marks.ts`: drawing. One small interface (`Backend`) with two ways written
+  by hand, WebGPU first and WebGL2 where it is missing; the plan for flattening piece by piece; marks drawn
+  by the 2D canvas for both.
+- `geometry.ts`: fitting, zooming about a point, and the crop's frame dragged, nudged and held to a shape.
+- `stage.ts`: the picture on the screen and the tools that work on it.
+- `export.ts`: the formats as one table, the weight search, file names, the clipboard.
+- `panels.ts`: the steps list, the export panel, the resize box and the tool's strip.
+- `editor.ts`: the frame, the session, the bar, the menus' table, the keys, copying and pictures arriving.
+- `kind.ts`: `img()`.
+- `src/pages/imgquire.astro`, `src/scripts/imgquire.ts` and `src/scripts/quire-page.ts` (shared with
+  `/mdquire/`), `src/styles/quire-img.css`; `scripts/img-page.ts`, the page its browser tests share.
 
 ## Built
 
-Nothing.
+The first slice: the foundations and the four fast jobs.
+
+**One shelf.** `/imgquire/` (hidden, as `/mdquire/` is) and `/mdquire/` both mount the core with both
+kinds, `markdown()` first and `img()` second, over the same database, so either page lists every document
+of both kinds; a picture's row says "picture" before its place. The only change a writer of mdQuire can
+see on `/mdquire/` is that: "picture" among the shelf's ways to start and in File, New, pictures among
+the rows, and pictures among what the file chooser offers. The trail word is each page's own.
+
+**Pictures arrive** by a paste anywhere on the page, a drop, a file chosen (the shelf's "open a file", the
+documents list) or the editor's own Choose a picture. A picture becomes a document kept in this browser,
+named from its file, or for a pasted screenshot (which comes named `image.png`) "Screenshot, 14 Nov 2026
+01:30". The core takes it through `Kind.takes` and `Editing.take`. The original is kept as it came.
+
+**The file.** A `.quire` zip of `steps.json` and the original at `pictures/<its name>`; the stores carry
+it as named files ([quire-core](quire-core.md)), the browser and Drive saying `main: "steps.json"` in
+their lists so the shelf knows the kind without opening it. Nothing in the original ever changes.
+
+**The first second.** The picture fitted under the bar with the crop's frame on it and the strip for the
+crop (five shapes and Apply), the bar above (undo, redo; crop, resize, hide; arrow, box, text; steps and
+export at the right end), and under the picture its size and weight, then the weight it will export at,
+worked out a moment after the steps stop changing.
+
+**Crop.** Handles, the frame dragged, a new frame dragged out from outside it, arrow keys (Shift for ten
+pixels), Shift on a corner or a shape from the strip to hold its shape, Enter to apply; outside dimmed. A
+frame back on the whole picture takes the crop step away.
+
+**Resize.** A box grown from its button: width and height linked (a link button unlinks them), Percent as
+a switch, and 50%, 1920, 1280, 1080 and 800; Enter applies and gives the keyboard to the picture, Escape
+gives it back to the button. The filter (Lanczos, bilinear, nearest) is in Image, Resize filter.
+
+**Hide.** R, then a drag: covered at once in the color round it, no settings and no confirmation; drag
+again for the next. The covers are painted into each piece of the original before anything is sampled,
+so nothing they hide reaches the result through any resize; tests check the bytes.
+
+**Mark.** A (arrow), B (box), T (text, typed where pressed, Enter to keep): six colors and three
+thicknesses in the strip, which also change a picked mark. Every mark, and every cover, is picked by a
+press and moved by a drag or the arrows, and removed with Delete.
+
+**Zoom and pan.** The wheel and a touchpad's pinch about the pointer, two fingers, Space and a drag or the
+middle button, Ctrl+0 to fit, Ctrl+1 for 100%, Ctrl+= and Ctrl+-.
+
+**Steps.** Hidden until the Steps button grows the list open at the left side: each step a switch (its
+words and a tick) that turns it off and on, a bin that removes it, Alt and the arrows to move it.
+
+**Getting it out.** Ctrl+C copies: the first time a dialog asks whether as it looks or as the export is
+set and remembers (`quire-img-copy`; Edit, Copy as changes it). The clipboard is handed a promise of the
+picture at once, so the press counts. The export panel, at the right side: PNG, JPEG or WebP, a quality,
+or a weight to come in under ("200", "1.5 MB") found by halving the quality seven times, the result's size
+and weight, the same middle part of the original and the export side by side at their own pixels, Copy
+(filled) and Save. Saved files are named from the document (`screenshot-14-nov-2026-01-30.webp`). What the
+browser encodes carries no metadata; a picture with no steps given in its own format is its original with
+where, when and with what it was taken cut out (`core/picture-bytes.ts`). The settings are kept in this
+browser (`quire-img-export`), WebP at 0.85 to start; the pen too (`quire-img-pen`).
+
+**As a Quire.** Menus File, Edit, View, Image, Tools, Help, as one table, an icon on every line, ticks for
+what is on, submenus for Download, Copy as, Zoom, Crop shape, Resize filter, Mark color and Thickness;
+single keys C, R, A, T, B and E only while the picture has the keyboard, Enter and Escape; the palette is
+the core's; version history draws a version's steps over the original, small, and restores it as one step.
+
+**Drawing.** WebGPU first, WebGL2 where it is missing, behind `Backend` in `draw.ts`. A picture of up to
+4096 a side is one texture; a larger one a smaller copy and full-size pieces of 2048 made when zoomed in
+(at most twelve kept). Nearest pixels past one to one, the card's smaller copies when zoomed out.
+Flattening goes piece by piece: covers painted in, then resampled across and down. If WebGPU loses its
+device the stage draws again with WebGL2 on a fresh canvas.
+
+Measured in headless Chromium (software drawing), four cores: a 12 megapixel photograph's crop dragged at
+57 frames a second, 50 megapixels at 58; flattened to 2000 wide in 0.3 s and 1.1 s through WebGL2, 1.0 s
+and 2.9 s through WebGPU. The four jobs from paste to clipboard in the browser tests: crop and copy 0.6 s
+(with the first-time question), shrink and convert a 12 megapixel photograph to WebP under 200 KB 1.9 s,
+hide 0.6 s, mark up 0.5 s. Done by hand-paced drags with pauses to photograph each stage: 2.1 s, 5.6 s,
+1.7 s and 1.8 s.
 
 ## Decided
 
@@ -170,8 +244,39 @@ Each of these is a question to settle before building.
 
 ## How to run and test
 
-Not yet applicable.
+```sh
+bun run dev                          # /imgquire/
+bun test src/quire/img               # the document, the arithmetic, and the browser tests
+bun test src/quire/img/kind.test.ts  # the four fast jobs, timed
+```
+
+The browser tests need a Chromium and skip, with a notice, without one. WebGPU runs in headless Chromium
+only with `--enable-unsafe-webgpu`, which the drawing tests pass.
 
 ## Known weak spots
 
-None yet, as nothing is built. The biggest risk is the choice of file model above, which is hard to undo.
+- WebGPU's drawing on the screen has not been seen: headless Chromium loses the device the moment it
+  shows a WebGPU canvas, so there the stage falls back to WebGL2. WebGPU's flattening is tested, the
+  same to within one as WebGL2's, which is the same as the arithmetic done on the processor.
+- A resized picture is drawn on the screen from the original at the screen's zoom, not from the resized
+  pixels, so past one to one it looks finer than the export will be.
+- A `.quire` in a folder says its kind only when opened, so its row on the shelf has no "picture" word.
+- GitHub keeps no `.quire`, so picture documents live in the browser, a folder, a file or Drive.
+- A shrink of more than about two hundred times in one resize reads very wide pieces; not tried.
+- Not tried in Firefox or Safari, nor on a real phone or touch screen; pinch has no test.
+- The text marks use the system's sans serif; typefaces are a later slice.
+- A picture in an mdQuire document does not yet open in imgQuire and come back: the core has the pieces
+  (`takes`, `take`, one editor at a time) but a way for one kind to lend a picture to another and have it
+  back is still to be designed.
+
+## Next slices, in order
+
+1. The encoders: AVIF, JPEG XL, jpegli and oxipng as WebAssembly, each a line in `FORMATS`
+   ([imgQuire-codecs](imgQuire-codecs.md)).
+2. The facts panel and metadata: reading and writing EXIF, IPTC and XMP, strip all or only the place.
+3. Reading text in pictures, and click-a-word redaction, with what looks private offered.
+4. Color grading of the whole picture and of parts, with curves, wheels and `.cube` looks (G).
+5. The cut-out ([cutout](cutout.md)).
+6. More marks: numbered steps, a highlighter, a magnifier, a spotlight, outlined captions.
+7. Many at once: batches through the same steps and export.
+8. From the phone, and opening a picture from mdQuire and back.

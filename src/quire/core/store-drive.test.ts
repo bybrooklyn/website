@@ -238,3 +238,16 @@ test("a checked write refuses a head that moved on, and passes a head that is a 
     expect(passed.ok).toBe(true);
     expect(copy).not.toBe(made.revision);
 });
+
+test("a document of a kind whose text is kept in another file says that file, to another device too; mdQuire's documents name none, as before", async () => {
+    const drive = memoryDrive();
+    const store = await open(drive);
+    const letter = await store.create("Letter", "Dear all,\n", { style: "{}", notes: "{}" });
+    const picture = await store.create("Screenshot", "{\"steps\":[]}", {}, "steps.json");
+    const other = await open(drive);
+    const listed = await other.list();
+    expect(listed.find((entry) => entry.id === picture.id)?.main).toBe("steps.json");
+    expect("main" in listed.find((entry) => entry.id === letter.id)!).toBe(false);
+    expect(await other.open(picture.id)).toMatchObject({ text: "{\"steps\":[]}", quire: {}, main: "steps.json" });
+    expect(await other.open(letter.id)).toEqual({ text: "Dear all,\n", mark: letter.mark, quire: { style: "{}", notes: "{}" } });
+});

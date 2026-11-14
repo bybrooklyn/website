@@ -241,3 +241,29 @@ test("a request the browser refuses at once is said in plain words too, and a st
     await expect(browserStore(tables).save(made.id, "second", made.mark)).rejects.toThrow("this browser has no more room");
     await expect(browserStore(tables).save("nothing", "x", "1")).rejects.toThrow("this document is no longer kept here");
 });
+
+test("a document kept before other kinds came opens as it did, and saving it writes the same row, naming no main file", async () => {
+    const tables = memoryTables();
+    const row = { id: "old-1", name: "Letter", text: "Dear all,\n", mark: 3, modified: 5, quire: { style: "{\"quire\":1}", notes: "{}" } };
+    await tables.put("documents", row);
+    await tables.put("documents", { id: "old-2", name: "Post", text: "Words.\n", mark: 1, modified: 4, markdown: true });
+    const store = browserStore(tables, () => 9);
+    expect(await store.list()).toEqual([{ id: "old-1", name: "Letter", modified: 5 }, { id: "old-2", name: "Post", modified: 4 }]);
+    expect(await store.open("old-1")).toEqual({ text: "Dear all,\n", mark: "3", quire: row.quire });
+    expect(await store.open("old-2")).toEqual({ text: "Words.\n", mark: "1", quire: undefined });
+    await store.save("old-1", "Dear all, again.\n", "3", { style: "{}", notes: "{}" });
+    expect(await tables.get<{ id: string; [field: string]: unknown }>("documents", "old-1")).toEqual({ id: "old-1", name: "Letter", text: "Dear all, again.\n", mark: 4, modified: 9, quire: { style: "{}", notes: "{}" } });
+    const made = await store.create("New", "x", { style: "", notes: "" });
+    expect(Object.keys((await tables.get("documents", made.id))!).sort()).toEqual(["id", "mark", "modified", "name", "quire", "text"]);
+});
+
+test("a document of a kind whose text is kept in another file says that file in the list and when opened, and keeps it through saves", async () => {
+    const store = browserStore(memoryTables());
+    const made = await store.create("Screenshot", "{\"steps\":[]}", {}, "steps.json");
+    expect((await store.list())[0]).toMatchObject({ name: "Screenshot", main: "steps.json" });
+    const saved = await store.save(made.id, "{\"steps\":[1]}", made.mark);
+    expect(await store.open(made.id)).toEqual({ text: "{\"steps\":[1]}", mark: saved.ok ? saved.mark : "", quire: {}, main: "steps.json" });
+    // a document made without parts is plain text, and names no main file even when given one
+    const plain = await store.create("Plain", "x", undefined, "steps.json");
+    expect((await store.open(plain.id)).main).toBeUndefined();
+});

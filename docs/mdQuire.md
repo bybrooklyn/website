@@ -20,7 +20,8 @@ site's first editor. It is hidden for now: its project page (`src/content/projec
 - `src/quire/md/check/`: checking (spelling, prose, the site's writing rules, Markdown tidiness, links).
 - `src/quire/md/dictation/`: dictation, with the speech recognizer in `dictation/parakeet/` and notes on the
   models in `dictation/MODELS.md` and `dictation/parakeet/RUNTIME.md`.
-- `src/pages/mdquire.astro` and `src/scripts/mdquire.ts`: the public page. `src/pages/mdquire-dictation.astro`
+- `src/pages/mdquire.astro` and `src/scripts/mdquire.ts`: the public page, whose shelf it shares with imgQuire's
+  (`src/scripts/quire-page.ts`), listing picture documents among its own ([imgQuire](imgQuire.md)). `src/pages/mdquire-dictation.astro`
   is dictation's test page; `src/pages/mdquire-kinds.astro` has mdQuire and the core's plain note on one
   shelf.
 - `src/styles/quire.css`, `quire-markdown.css`, `quire-extras.css`: the look.

@@ -3,7 +3,9 @@
 // brought back from. Nothing leaves the browser. A document made here is a `.quire` one, its
 // style.json and notes.json kept beside its text, so it can be given every kind of styling, unless
 // it was made as plain Markdown (a blog post, which the site needs as Markdown); either is written
-// out as itself when it is downloaded.
+// out as itself when it is downloaded. A document of another kind names the file its text is kept
+// in (`main`, imgQuire's steps.json) and keeps its original as a picture; mdQuire's never does, so
+// its rows are written exactly as before.
 //
 // The store is written over Tables, three small tables of records by id, so that its workings are
 // tested with tables in memory; indexedTables gives the real ones.
@@ -160,8 +162,10 @@ interface Kept extends Row {
     text: string;
     mark: number;
     modified: number;
-    /** Its style.json and notes.json; a document kept before there were any has none yet. */
+    /** Its parts (mdQuire's style.json and notes.json); a document kept before there were any has none yet. */
     quire?: Parts;
+    /** The file its text is kept in, for a `.quire` document of a kind whose main text is not document.md; never written for mdQuire's. */
+    main?: string;
     /** True for a document made as plain Markdown, which has no parts and is not given any. */
     markdown?: boolean;
     /** When it was taken away, if it was: it is then in the trash. */
@@ -204,6 +208,9 @@ export function tableVersions(tables: Tables): VersionStorage {
 /** A kept document's parts: none for one made as Markdown, empty ones for a `.quire` document kept before there were any. */
 const partsOf = (kept: Kept): Parts | undefined => (kept.markdown ? undefined : (kept.quire ?? emptyParts()));
 
+/** A kept document's main file, as an entry or an opened document says it: nothing for mdQuire's. */
+const mainOf = (kept: Kept): { main?: string } => (kept.main ? { main: kept.main } : {});
+
 /** The browser store, over the given tables. Its extra powers: the trash, and putting a document back from it. */
 export function browserStore(tables: Tables, now: () => number = Date.now): Store & { trash(): Promise<Entry[]>; restore(id: string): Promise<void>; versions: VersionStorage } {
     let made = 0;
@@ -229,18 +236,18 @@ export function browserStore(tables: Tables, now: () => number = Date.now): Stor
         versions: tableVersions(tables),
         async list() {
             const kept = (await tables.all<Kept>("documents")).filter((each) => !each.gone);
-            return kept.sort((a, b) => b.modified - a.modified).map((each) => ({ id: each.id, name: each.name, modified: each.modified }));
+            return kept.sort((a, b) => b.modified - a.modified).map((each) => ({ id: each.id, name: each.name, modified: each.modified, ...mainOf(each) }));
         },
         async open(id) {
             const kept = await find(id);
-            return { text: kept.text, mark: String(kept.mark), quire: partsOf(kept) };
+            return { text: kept.text, mark: String(kept.mark), quire: partsOf(kept), ...mainOf(kept) };
         },
         async save(id, text, mark, quire) {
             // the mark is checked and the text written in one transaction: two tabs saving on one mark cannot both win
             let saved: Saved = { ok: false, message: "this browser would not keep it" };
             await change(id, (kept) => {
                 if (String(kept.mark) !== mark) {
-                    saved = { ok: false, changed: true, theirs: { text: kept.text, mark: String(kept.mark), quire: partsOf(kept) } };
+                    saved = { ok: false, changed: true, theirs: { text: kept.text, mark: String(kept.mark), quire: partsOf(kept), ...mainOf(kept) } };
                     return undefined;
                 }
                 const next = { ...kept, text, mark: kept.mark + 1, modified: now(), quire: kept.markdown ? undefined : (quire ?? kept.quire) };
@@ -250,9 +257,9 @@ export function browserStore(tables: Tables, now: () => number = Date.now): Stor
             return saved;
         },
         // made without parts, a document is plain Markdown and stays so
-        async create(name, text, quire) {
+        async create(name, text, quire, main) {
             const id = `${now().toString(36)}-${(++made).toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
-            await tables.put("documents", { id, name: freeName(name.trim() || "Untitled", await names()), text, mark: 1, modified: now(), ...(quire ? { quire } : { markdown: true }) } as Kept);
+            await tables.put("documents", { id, name: freeName(name.trim() || "Untitled", await names()), text, mark: 1, modified: now(), ...(quire ? { quire } : { markdown: true }), ...(quire && main ? { main } : {}) } as Kept);
             return { id, mark: "1" };
         },
         async rename(id, name) {

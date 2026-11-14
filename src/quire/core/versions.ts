@@ -78,8 +78,11 @@ export function snapshotParts(saved: string): { markdown: string; parts?: Parts 
     const at = saved.indexOf(PARTS_MARK);
     if (at < 0) return { markdown: saved };
     try {
-        const parts = JSON.parse(saved.slice(at + PARTS_MARK.length)) as Partial<Parts>;
-        return { markdown: saved.slice(0, at), parts: { style: typeof parts.style === "string" ? parts.style : "", notes: typeof parts.notes === "string" ? parts.notes : "" } };
+        const read: unknown = JSON.parse(saved.slice(at + PARTS_MARK.length));
+        // every part that is text, whatever its name: mdQuire's style and notes, or another kind's
+        const parts: Parts = {};
+        if (read && typeof read === "object") for (const [name, value] of Object.entries(read)) if (typeof value === "string") parts[name] = value;
+        return { markdown: saved.slice(0, at), parts };
     } catch {
         return { markdown: saved.slice(0, at) };
     }

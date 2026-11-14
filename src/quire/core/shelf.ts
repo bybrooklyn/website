@@ -31,10 +31,12 @@ export interface Found<S> {
     id: string;
     name: string;
     modified?: number;
+    /** The main file of a `.quire` that names one, which says its kind. */
+    main?: string;
 }
 
 /** The documents from every place, most recently touched first; those whose time is not known come after, in the order their places gave them. */
-export function recent<S>(places: { store: S; entries: { id: string; name: string; modified?: number }[] }[], limit = 24): Found<S>[] {
+export function recent<S>(places: { store: S; entries: { id: string; name: string; modified?: number; main?: string }[] }[], limit = 24): Found<S>[] {
     const all = places.flatMap((place, at) => place.entries.map((entry, index) => ({ found: { store: place.store, ...entry }, at, index })));
     all.sort((a, b) => (b.found.modified ?? -Infinity) - (a.found.modified ?? -Infinity) || a.at - b.at || a.index - b.index);
     return all.slice(0, limit).map((each) => each.found);

@@ -41,6 +41,8 @@ interface Kept {
     name: string;
     file: string;
     quire?: boolean;
+    /** The file its text is kept in, for a `.quire` document whose main text is not document.md; never written for mdQuire's. */
+    main?: string;
     /** Its pictures by the name written in the document: the random key each is locked under, and its Drive file. */
     pictures?: Record<string, { key: string; file: string }>;
 }
@@ -202,13 +204,13 @@ export function driveStore(drive: Drive, vault: VaultKey | undefined, place: { f
             const [now, inside] = await Promise.all([index(), call(() => drive.children(place.folder))]);
             const times = new Map(inside.map((file) => [file.id, file.modified]));
             return Object.entries(now.documents)
-                .map(([id, kept]) => ({ id, name: kept.name, modified: times.get(kept.file) }))
+                .map(([id, kept]) => ({ id, name: kept.name, modified: times.get(kept.file), ...(kept.main ? { main: kept.main } : {}) }))
                 .sort((a, b) => (b.modified ?? 0) - (a.modified ?? 0));
         },
         async open(id) {
             const kept = await entry(id, true);
             const read = await call(() => drive.read(kept.file));
-            return reading(id, read.bytes, read.revision);
+            return { ...(await reading(id, read.bytes, read.revision)), ...(kept.main ? { main: kept.main } : {}) };
         },
         async save(id, text, mark, quire): Promise<Saved> {
             const kept = await entry(id);
@@ -218,12 +220,12 @@ export function driveStore(drive: Drive, vault: VaultKey | undefined, place: { f
             const theirs = await reading(id, written.theirs.bytes, written.theirs.revision).catch(() => undefined);
             return { ok: false, changed: true, theirs };
         },
-        async create(name, text, quire) {
+        async create(name, text, quire, main) {
             const id = randomKey();
             const made = await call(async () => drive.create(id, await sealText(opened(), id, writing(text, quire)), place.folder));
             try {
                 await change((index) => {
-                    index.documents[id] = { name: freeName(name.trim() || "Untitled", names(index)), file: made.id, ...(quire ? { quire: true } : {}) };
+                    index.documents[id] = { name: freeName(name.trim() || "Untitled", names(index)), file: made.id, ...(quire ? { quire: true } : {}), ...(quire && main ? { main } : {}) };
                 });
             } catch (error) {
                 // a file the index does not name is of no use to anyone: it goes to the bin

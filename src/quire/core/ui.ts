@@ -134,6 +134,20 @@ const PATHS: Record<string, string> = {
     dictionary: '<path d="M5.5 5.5A1.5 1.5 0 0 1 7 4h11.5v13H7a1.5 1.5 0 0 0-1.5 1.5z"/><path d="M5.5 18.5A1.5 1.5 0 0 0 7 20h11.5v-3"/>',
     ignore: '<path d="M3 12s3.5-6 9-6 9 6 9 6-3.5 6-9 6-9-6-9-6z"/><circle cx="12" cy="12" r="2.5"/><path d="M4.5 4.5l15 15"/>',
     keyboard: '<rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/>',
+    // a picture's tools (imgQuire): the crop's two corners, a size changing, a block over a line, an arrow, a box, steps, a picture leaving
+    crop: '<path d="M7 3.5V17h13.5"/><path d="M3.5 7H17v13.5"/>',
+    resize: '<rect x="3.5" y="9.5" width="11" height="11" rx="1.2"/><path d="M13 4h7v7M20 4l-7.5 7.5"/>',
+    hide: '<rect x="4" y="8.5" width="12" height="7" rx="1" fill="currentColor"/><path d="M18.5 12H20M4 19h16M4 5h16" opacity=".55"/>',
+    arrow: '<path d="M5 19 18.5 5.5M10 5h9v9"/>',
+    box: '<rect x="4" y="6" width="16" height="12" rx="1"/>',
+    steps: '<rect x="4" y="4" width="16" height="4.5" rx="1.2"/><rect x="4" y="10" width="16" height="4.5" rx="1.2"/><path d="M4 18.5h10"/>',
+    export: '<path d="M12 15V4M7.5 8.5 12 4l4.5 4.5"/><path d="M5 13v5.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V13"/>',
+    lock: '<rect x="5.5" y="10.5" width="13" height="9.5" rx="1.5"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/>',
+    square: '<rect x="5.5" y="5.5" width="13" height="13" rx="1"/>',
+    wide: '<rect x="3" y="7" width="18" height="10" rx="1"/>',
+    photo: '<rect x="4" y="6" width="16" height="12" rx="1"/><path d="M4 15.5 9 11l3.5 3 2.5-2 5 4"/>',
+    free: '<rect x="4" y="5" width="16" height="14" rx="1" stroke-dasharray="3 2.5"/>',
+    line: '<path d="M4 12h16"/>',
 };
 
 // the six heading levels: the heading sign with its number beside it

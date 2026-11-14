@@ -1,0 +1,554 @@
+/* imgQuire, the picture editor (src/quire/img/), in the Quires' frame. The picture fills the window
+   under the top, with its size and weight in a quiet line under it; the strip for the tool in hand
+   rests at the top of the picture's room; the steps open at the left side and the export at the
+   right, below the bar; the resize box grows from its button. Nothing is written over the picture.
+   Everything that is not always there grows in and shrinks away, and under reduced motion simply
+   shows. The filled and quiet buttons are the dialogs' own (quire.css), worn here too. */
+
+.quire-img-editor .quire-img-room {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    height: calc(100dvh - var(--quire-top-bottom, 6.5rem));
+    min-height: 16rem;
+}
+
+.quire-img-stage {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    outline: none;
+    touch-action: none;
+    cursor: crosshair;
+}
+
+.quire-img-stage:focus-visible {
+    outline: 0.125rem solid var(--accent);
+    outline-offset: -0.125rem;
+    border-radius: var(--quire-round-small);
+}
+
+.quire-img-stage[data-tool="none"] {
+    cursor: grab;
+}
+
+.quire-img-stage[data-tool="text"] {
+    cursor: text;
+}
+
+.quire-img-stage.panning {
+    cursor: grabbing;
+}
+
+.quire-img-canvas,
+.quire-img-over {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}
+
+/* the crop's frame: a fine light line with a dark one round it, so it shows on any picture, and eight grips */
+.quire-img-frame {
+    position: absolute;
+    box-sizing: border-box;
+    border: 0.0625rem solid oklch(1 0 0 / 0.95);
+    box-shadow: 0 0 0 0.0625rem oklch(0 0 0 / 0.55);
+    cursor: move;
+    opacity: 0;
+    visibility: hidden;
+    transition:
+        opacity 0.2s ease,
+        visibility 0s linear 0.2s;
+}
+
+.quire-img-frame.shown {
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 0.2s ease;
+}
+
+.quire-img-grip {
+    position: absolute;
+    width: 0.75rem;
+    height: 0.75rem;
+    margin: -0.375rem 0 0 -0.375rem;
+    border: 0.0625rem solid oklch(0 0 0 / 0.6);
+    border-radius: 0.2rem;
+    background: oklch(1 0 0);
+}
+
+/* a larger reach for a finger than the grip's look */
+.quire-img-grip::after {
+    position: absolute;
+    inset: -0.6rem;
+    content: "";
+}
+
+.quire-img-grip-nw { left: 0; top: 0; cursor: nwse-resize; }
+.quire-img-grip-n { left: 50%; top: 0; cursor: ns-resize; }
+.quire-img-grip-ne { left: 100%; top: 0; cursor: nesw-resize; }
+.quire-img-grip-e { left: 100%; top: 50%; cursor: ew-resize; }
+.quire-img-grip-se { left: 100%; top: 100%; cursor: nwse-resize; }
+.quire-img-grip-s { left: 50%; top: 100%; cursor: ns-resize; }
+.quire-img-grip-sw { left: 0; top: 100%; cursor: nesw-resize; }
+.quire-img-grip-w { left: 0; top: 50%; cursor: ew-resize; }
+
+/* typing a line of text where the picture was pressed: the words themselves, in the mark's color */
+.quire-img-writing {
+    position: absolute;
+    min-width: 6rem;
+    padding: 0;
+    border: 0;
+    border-bottom: 0.0625rem dashed var(--accent);
+    background: transparent;
+    font-family: system-ui, sans-serif;
+    font-weight: 600;
+    line-height: 1.2;
+    outline: none;
+    opacity: 0;
+    scale: 0.96;
+    transform-origin: 0 0;
+    visibility: hidden;
+    transition:
+        opacity 0.15s ease,
+        scale 0.2s var(--ease),
+        visibility 0s linear 0.2s;
+}
+
+.quire-img-writing.shown {
+    opacity: 1;
+    scale: 1;
+    visibility: visible;
+    transition:
+        opacity 0.15s ease,
+        scale 0.2s var(--quire-spring);
+}
+
+.quire-img-facts {
+    flex: none;
+    margin: 0;
+    padding: 0.45rem var(--gutter) 0.65rem;
+    color: var(--muted);
+    font-family: var(--font-text);
+    font-size: 0.85rem;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+}
+
+/* with no picture yet: one line and one button in the middle of the room */
+.quire-img-empty {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    color: var(--muted);
+    font-family: var(--font-text);
+    opacity: 0;
+    scale: 0.97;
+    visibility: hidden;
+    transition:
+        opacity 0.2s ease,
+        scale 0.3s var(--ease),
+        visibility 0s linear 0.3s;
+}
+
+.quire-img-room.blank .quire-img-empty {
+    opacity: 1;
+    scale: 1;
+    visibility: visible;
+    transition:
+        opacity 0.2s ease,
+        scale 0.4s var(--quire-spring);
+}
+
+.quire-img-empty p {
+    margin: 0;
+}
+
+.quire-img-room.dropping .quire-img-stage {
+    outline: 0.125rem dashed var(--accent);
+    outline-offset: -0.5rem;
+}
+
+/* the filled and quiet buttons, as the dialogs have them */
+:is(.quire-img-room, .quire-img-panel, .quire-img-resize) :is(.quire-dialog-action, .quire-dialog-dismiss) {
+    min-height: 2.4rem;
+    padding: 0 1.1rem;
+    border: 0;
+    border-radius: var(--quire-round-small);
+    font: inherit;
+    cursor: pointer;
+    transition:
+        background 0.15s ease,
+        color 0.15s ease,
+        scale 0.2s var(--ease);
+}
+
+:is(.quire-img-room, .quire-img-panel) .quire-dialog-action {
+    background: var(--accent);
+    color: var(--ground);
+    font-weight: 600;
+}
+
+:is(.quire-img-room, .quire-img-panel) .quire-dialog-action:hover {
+    background: color-mix(in oklch, var(--accent) 88%, var(--ink));
+}
+
+:is(.quire-img-panel, .quire-img-resize) .quire-dialog-dismiss {
+    background: none;
+    color: var(--muted);
+}
+
+:is(.quire-img-panel, .quire-img-resize) .quire-dialog-dismiss:hover {
+    background: color-mix(in oklch, var(--ink) 8%, transparent);
+    color: var(--ink);
+}
+
+/* the strip for the tool in hand, in the menus' skin, at the top of the picture's room */
+.quire-img-strip {
+    position: absolute;
+    top: 0.6rem;
+    left: 50%;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    gap: 0.1rem;
+    max-width: calc(100% - 1.5rem);
+    padding: 0.25rem;
+    overflow-x: auto;
+    border-radius: var(--quire-round);
+    background: var(--panel-raised);
+    box-shadow:
+        0 0.75rem 2rem oklch(0.05 0.02 300 / 0.55),
+        0 0.15rem 0.4rem oklch(0.05 0.02 300 / 0.35);
+    opacity: 0;
+    scale: 0.92;
+    translate: -50% -0.4rem;
+    transform-origin: 50% 0;
+    visibility: hidden;
+    scrollbar-width: none;
+    transition:
+        opacity 0.14s ease,
+        scale 0.14s var(--ease),
+        translate 0.14s var(--ease),
+        visibility 0s linear 0.14s;
+}
+
+.quire-img-strip.open {
+    opacity: 1;
+    scale: 1;
+    translate: -50% 0;
+    visibility: visible;
+    transition:
+        opacity 0.2s ease,
+        scale 0.2s var(--quire-spring),
+        translate 0.2s var(--quire-spring);
+}
+
+.quire-img-strip-rule {
+    flex: none;
+    width: 0.0625rem;
+    height: 1.4rem;
+    margin: 0 0.3rem;
+    background: var(--rule);
+}
+
+.quire-img-swatch {
+    width: 1.05rem;
+    height: 1.05rem;
+    border-radius: 50%;
+    box-shadow: inset 0 0 0 0.0625rem oklch(0.5 0 0 / 0.6);
+}
+
+/* the steps at the left side and the export at the right, starting below the bar, as version history does */
+.quire-img-panel {
+    position: fixed;
+    top: var(--quire-below-bar);
+    bottom: 1rem;
+    z-index: 66;
+    display: flex;
+    flex-direction: column;
+    width: min(22rem, 100vw - 2rem);
+    border: 0.0625rem solid var(--rule);
+    border-radius: var(--quire-round-large);
+    background: var(--surface);
+    overflow: hidden;
+    color: var(--ink);
+    font-family: var(--font-text);
+    opacity: 0;
+    visibility: hidden;
+    transition:
+        translate 0.35s var(--ease),
+        opacity 0.2s ease,
+        visibility 0s linear 0.35s;
+}
+
+.quire-img-steps {
+    left: 1rem;
+    translate: calc(-100% - 2rem) 0;
+}
+
+.quire-img-export {
+    right: 1rem;
+    translate: calc(100% + 2rem) 0;
+}
+
+.quire-img-panel.open {
+    opacity: 1;
+    translate: 0 0;
+    visibility: visible;
+    transition:
+        translate 0.5s var(--quire-spring),
+        opacity 0.15s ease,
+        visibility 0s;
+}
+
+.quire-img-panel-head {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.6rem 0.6rem 0.4rem 1.1rem;
+}
+
+.quire-img-panel-body {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 0.9rem;
+    min-height: 0;
+    padding: 0.4rem 1.1rem 1.1rem;
+    overflow-y: auto;
+}
+
+.quire-img-step-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.quire-img-step {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    border-radius: var(--quire-round-small);
+}
+
+.quire-img-step .quire-switch {
+    flex: 1;
+    min-width: 0;
+}
+
+.quire-img-step.picked {
+    background: color-mix(in oklch, var(--accent) 14%, transparent);
+}
+
+.quire-img-formats {
+    display: flex;
+    gap: 0.25rem;
+}
+
+.quire-img-format {
+    flex: 1;
+    border: 0.0625rem solid var(--rule);
+}
+
+.quire-img-lossy {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    max-height: 8rem;
+    overflow: clip;
+    transition:
+        max-height 0.3s var(--ease),
+        opacity 0.2s ease;
+}
+
+.quire-img-lossy.away {
+    max-height: 0;
+    opacity: 0;
+}
+
+.quire-img-row {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.quire-img-row > span:first-child {
+    min-width: 4rem;
+    color: var(--muted);
+    font-size: 0.9rem;
+}
+
+.quire-img-quality {
+    flex: 1;
+    accent-color: var(--accent);
+}
+
+.quire-img-quality-number {
+    min-width: 2ch;
+    font-variant-numeric: tabular-nums;
+}
+
+:is(.quire-img-panel, .quire-img-resize) .quire-field {
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 2.2rem;
+    padding: 0 0.6rem;
+    border: 0.0625rem solid var(--rule);
+    border-radius: var(--quire-round-small);
+    background: var(--ground);
+    color: var(--ink);
+    font: inherit;
+}
+
+:is(.quire-img-panel, .quire-img-resize) .quire-field:focus-visible {
+    outline: 0.125rem solid var(--accent);
+    outline-offset: 0;
+}
+
+.quire-img-result {
+    margin: 0;
+    font-variant-numeric: tabular-nums;
+}
+
+/* the same part of the original and of the export, at their own pixels, side by side */
+.quire-img-pair {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.6rem;
+}
+
+.quire-img-sample {
+    margin: 0;
+}
+
+.quire-img-sample canvas {
+    display: block;
+    width: 100%;
+    aspect-ratio: 1;
+    border-radius: var(--quire-round-small);
+    background: var(--ground);
+    image-rendering: pixelated;
+    object-fit: contain;
+}
+
+.quire-img-sample figcaption {
+    margin-top: 0.3rem;
+    color: var(--muted);
+    font-size: 0.85rem;
+}
+
+.quire-img-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.4rem;
+    margin-top: auto;
+}
+
+/* the resize box grows from its button */
+.quire-img-resize {
+    position: fixed;
+    z-index: 70;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    width: min(18.5rem, 100vw - 1rem);
+    box-sizing: border-box;
+    padding: 0.75rem;
+    border-radius: var(--quire-round);
+    background: var(--panel-raised);
+    box-shadow:
+        0 0.75rem 2rem oklch(0.05 0.02 300 / 0.55),
+        0 0.15rem 0.4rem oklch(0.05 0.02 300 / 0.35);
+    color: var(--ink);
+    font-family: var(--font-text);
+    opacity: 0;
+    scale: 0.9;
+    visibility: hidden;
+    transition:
+        opacity 0.14s ease,
+        scale 0.14s var(--ease),
+        visibility 0s linear 0.14s;
+}
+
+.quire-img-resize.open {
+    opacity: 1;
+    scale: 1;
+    visibility: visible;
+    transition:
+        opacity 0.2s ease,
+        scale 0.2s var(--quire-spring);
+}
+
+.quire-img-resize .quire-img-row .quire-field {
+    width: 5.5rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.quire-img-by {
+    color: var(--muted);
+}
+
+.quire-img-sizes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.2rem;
+}
+
+.quire-img-sizes .quire-dialog-dismiss {
+    min-height: 2rem;
+    padding: 0 0.6rem;
+}
+
+.quire-img-version {
+    display: block;
+    max-width: 100%;
+    border-radius: var(--quire-round-small);
+}
+
+.quire-img-keys {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.35rem 1.2rem;
+    margin: 0;
+}
+
+.quire-img-keys dt {
+    font-family: var(--font-mono);
+    font-size: 0.9rem;
+}
+
+.quire-img-keys dd {
+    margin: 0;
+    color: var(--muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .quire-img-frame,
+    .quire-img-writing,
+    .quire-img-empty,
+    .quire-img-strip,
+    .quire-img-panel,
+    .quire-img-lossy,
+    .quire-img-resize {
+        transition: none !important;
+    }
+}
+
+/* behind the home screen the picture's room is not seen, nor its line for an empty editor */
+.quire-host.shelved .quire-img-room {
+    visibility: hidden;
+}
