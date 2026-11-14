@@ -29,7 +29,7 @@ import { createSelectBar } from "./select-bar";
 import { createLinkCard } from "./link-card";
 import { boxOf, component, definitionList, drawnBlock } from "./slash";
 import { createPalette } from "./palette";
-import { createEmojiPicker } from "./emoji-picker";
+import { createEmojiPicker, emojiAtCursor, emojiGrid, putter } from "./emoji-picker";
 import { copyDocument, createSaver, fileName, said, type Entry, type Opened, type Status, type Store } from "./store";
 import { copyName } from "./shelf";
 import { altGraph, createSurface, type Surface } from "./surface";
@@ -727,7 +727,9 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     const actions: RowActions = {
                 file: options.fileItems,
                 subs: { ...docs.subs, downloadAs: downloadLines, zoom: () => zoom.items(), ...bar.pickers.lines },
-                forms: { ...docs.forms, symbols: () => specialGrid(typeSpecial(surface)) },
+                forms: { ...docs.forms, symbols: () => specialGrid(typeSpecial(surface)), emoji: () => emojiGrid(putter(surface)) },
+                // from its key the emoji grid grows out of the cursor
+                emoji: emojiAtCursor(surface),
                 title: docs.title,
                 subtitle: docs.subtitle,
                 turnRich: () => void makeRich(),

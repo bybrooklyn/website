@@ -1175,6 +1175,47 @@ const reshaped = (mode: "no page" | "page view") => async () => {
 used("in a 5,000-line document, Enter, Backspace joining two blocks and a pasted line each appear in under 16 ms, with no page", reshaped("no page"));
 used("in a 5,000-line document, Enter, Backspace joining two blocks and a pasted line each appear in under 16 ms, in page view", reshaped("page view"));
 
+used("Ctrl+; grows the emoji grid out of the cursor: a search puts its first in on Enter as the colon list writes it, it stays open for more, the arrows move through the groups and the grid, Escape gives the caret back, and what was used comes first next time", async () => {
+    await tab.run("localStorage.removeItem('quire-emoji-used'); localStorage.removeItem('quire-emoji-tone')");
+    await reset("Hi you\n", [0], 3, [0], 6);
+    await tab.press(";", { ctrl: true });
+    await tab.wait(400);
+    expect(await tab.run<string>("document.activeElement.getAttribute('aria-label')")).toBe("Search the emoji");
+    // with nothing used yet it opens on the first group
+    expect(await tab.run<string>("document.querySelector('.quire-emoji-tab.pressed').title")).toBe("Smileys and people");
+    await tab.type("heart");
+    await tab.press("Enter");
+    await tab.wait(100);
+    expect(await md()).toBe("Hi :heart:\n");
+    expect(await tab.run<boolean>("!!document.querySelector('.quire-emoji-menu:popover-open')")).toBe(true);
+    // down from the search into what it found, along it and down a row, and Enter puts that one in too
+    await tab.press("ArrowDown");
+    await tab.press("ArrowRight");
+    await tab.press("ArrowDown");
+    expect(await tab.run<number>("[...document.querySelectorAll('.quire-emoji .quire-specials-groups .quire-special')].indexOf(document.activeElement)")).toBe(9);
+    await tab.press("Enter");
+    await tab.wait(100);
+    expect(await tab.run<string[]>("q.editor.surface.getDocument().blocks[0].runs.filter((run) => run.kind === 'emoji').map((run) => run.name)")).toEqual(["heart", "green_heart"]);
+    await tab.press("Escape");
+    await tab.wait(300);
+    expect(await tab.run<boolean>("document.activeElement === q.editor.surface.element")).toBe(true);
+    expect(await tab.run<boolean>("!!document.querySelector('.quire-emoji-menu:popover-open')")).toBe(false);
+    // opened again, what was used lately is the first group, the newest first
+    await tab.press(";", { ctrl: true });
+    await tab.wait(400);
+    expect(await tab.run<string>("document.querySelector('.quire-emoji-tab.pressed').title")).toBe("Recently used");
+    expect(await tab.run<string>("document.querySelectorAll('.quire-emoji .quire-specials-groups .quire-special')[1].title")).toBe("heart");
+    // the hand opens the tones in place, and a tone chosen draws the hands in it
+    await press(".quire-emoji-tone");
+    await tab.wait(300);
+    expect(await tab.run<boolean>("document.querySelector('.quire-emoji-tones').classList.contains('open')")).toBe(true);
+    await tab.run("document.querySelectorAll('.quire-emoji-tones .quire-special')[3].click()");
+    expect(await tab.run<string>("localStorage.getItem('quire-emoji-tone')")).toBe("3");
+    expect(await tab.run<string>("document.querySelector('.quire-emoji-tone').textContent")).toBe("\u{270B}\u{1F3FD}");
+    await tab.press("Escape");
+    await tab.wait(300);
+});
+
 used("the sheet is pages of its paper with a gap between: nothing crosses a page's foot, a page break starts the next page, and a new page grows in", async () => {
     await tab.resize(1300, 900);
     await pageView(true);

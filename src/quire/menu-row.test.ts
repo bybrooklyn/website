@@ -12,7 +12,7 @@ const all: Command[] = [
     "turnRich", "downloadAs", "print", "history", "pageSetup", "zoom", "makeCopy", "rename", "fileDetails",
     "undo", "redo", "cut", "copy", "paste", "pastePlain", "selectAll", "selectMatching", "delete", "find", "replace",
     "pageless", "pages", "lookNone", "lookPaper", "outline", "comments", "markdown", "liveCount", "fullScreen",
-    "picture", "table", "date", "link", "symbols", "divider", "pageBreak", "bookmark", "contents", "headerFooter", "footnote", "comment",
+    "picture", "table", "date", "link", "symbols", "emoji", "divider", "pageBreak", "bookmark", "contents", "headerFooter", "footnote", "comment",
     "code", "callout", "details", "definitions", "maths", "diagram", "figure", "terminal", "timeline", "playhere",
     "bold", "italic", "underline", "strike", "superscript", "subscript", "bigger", "smaller", "capitals", "font", "color", "highlight", "inline", "marked", "spoiler", "subtext",
     "paragraph", "title", "subtitle", "heading1", "heading2", "heading3", "heading4", "heading5", "heading6", "quote",
@@ -79,7 +79,7 @@ test("View is the mode, the paper, four things to show and the zoom, each choice
 test("Insert has Docs' own lines, then a comment, then mdQuire's blocks under a rule, the site's components only in an .mdx file", () => {
     expect(menus().Insert).toEqual([
         "Picture", "Table", "Date", "Link Ctrl+K", "Special characters", "---",
-        "Horizontal line", "Page break Ctrl+Enter", "Bookmark", "Table of contents", "Header, footer and page numbers Pages only", "Footnote Ctrl+Alt+F", "---",
+        "Horizontal line", "Emoji Ctrl+;", "Page break Ctrl+Enter", "Bookmark", "Table of contents", "Header, footer and page numbers Pages only", "Footnote Ctrl+Alt+F", "---",
         "Comment Ctrl+Alt+M", "---",
         "Code block", "Callout", "Folding section", "Definition list", "Maths", "Diagram",
     ]);

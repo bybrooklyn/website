@@ -58,7 +58,7 @@ export type Command =
     | "turnRich" | "downloadAs" | "print" | "history" | "pageSetup" | "zoom" | "makeCopy" | "rename" | "fileDetails"
     | "undo" | "redo" | "cut" | "copy" | "paste" | "pastePlain" | "selectAll" | "selectMatching" | "delete" | "find" | "replace"
     | "pageless" | "pages" | "lookNone" | "lookPaper" | "outline" | "comments" | "markdown" | "liveCount" | "fullScreen" | "zoomIn" | "zoomOut" | "zoomReset"
-    | "picture" | "table" | "date" | "link" | "symbols" | "divider" | "pageBreak" | "bookmark" | "contents" | "updateContents" | "headerFooter" | "footnote" | "comment"
+    | "picture" | "table" | "date" | "link" | "symbols" | "emoji" | "divider" | "pageBreak" | "bookmark" | "contents" | "updateContents" | "headerFooter" | "footnote" | "comment"
     | "code" | "callout" | "details" | "definitions" | "maths" | "diagram" | "figure" | "terminal" | "timeline" | "playhere"
     | "bold" | "italic" | "underline" | "strike" | "superscript" | "subscript" | "bigger" | "smaller" | "size" | "capitals" | "font" | "color" | "highlight"
     | "inline" | "marked" | "spoiler" | "subtext"
@@ -141,6 +141,7 @@ export function headings(state: RowState, act: RowActions): Heading[] {
                     [...line("picture", "Picture", "image", { words: ["image"] }), ...line("table", "Table", "table"), ...line("date", "Date", "date"), ...line("link", "Link", "link"), ...line("symbols", "Special characters", "omega", { words: ["symbols"] })],
                     [
                         ...line("divider", "Horizontal line", "divider"),
+                        ...line("emoji", "Emoji", "emoji", { words: ["smiley", "emoticon"] }),
                         ...line("pageBreak", "Page break", "pagebreak"),
                         ...line("bookmark", "Bookmark", "bookmark", state.inHeading ? { disabled: true } : {}),
                         ...(state.contents ? line("updateContents", "Update the table of contents", "contents") : line("contents", "Table of contents", "contents")),

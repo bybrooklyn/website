@@ -137,7 +137,6 @@ What was found and fixed is in [`docs/AUDIT.md`](docs/AUDIT.md). Still open from
 - Suggesting the next words while typing: faint words after the caret that Tab takes, learned from the owner's own documents and posts in the browser, with no model.
 - Spelling: American, on by default, with a personal dictionary.
 - In the light paper look the list of documents sits on a light sheet too.
-- An emoji picker: a grid with search and what was used lately first.
 - The shared core ([quire-core](docs/quire-core.md)): the app as a framework in `src/quire/`, each Quire a plug-in.
 
 ## imgQuire and the background remover

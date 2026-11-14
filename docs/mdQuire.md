@@ -282,7 +282,7 @@ cards, large for dialogs and panels.
 looks and behaves like the others of its kind. A *menu* is a list to pick from, made by `flowMenu` with
 `menuLine`s: a finding's menu (the same lines a misspelling puts first in the right-click menu), the
 list of what checking found, the text's, a table's and a picture's menus, the code language, the callout
-type, the emoji list, the palette. It grows from what was pressed, takes the arrow keys and Enter, and
+type, the emoji list, the emoji grid, the palette. It grows from what was pressed, takes the arrow keys and Enter, and
 Escape gives focus back. A *strip* is a few actions on a thing in the text, icons only, each named in a
 word or two in its tooltip with its shortcut: the bar over selected words, the link card (where the link
 goes, to read, then Open, Copy, Edit, Remove), the chip after a pasted address (its few choices, all in
@@ -319,7 +319,7 @@ The menus as they stand:
   Delete; Find and replace.
 - View: Mode (Pageless or Pages), Paper (Dark or Light); Show outline, Show comments, Show Markdown, Show
   word count; Zoom (in, out, Fit, 50% to 200%), Full screen.
-- Insert: Picture, Table, Date, Link, Special characters; Horizontal line, Page break, Bookmark, Table of
+- Insert: Picture, Table, Date, Link, Special characters; Horizontal line, Emoji, Page break, Bookmark, Table of
   contents, Header, footer and page numbers, Footnote; Comment; then mdQuire's own blocks: Code block,
   Callout, Folding section, Definition list, Maths, Diagram, and Components in an `.mdx` file.
 - Format: Text (bold to subscript; Size, Capitalization; Font, Text color, Highlight color; Inline code,
@@ -429,7 +429,25 @@ until the cursor moves. With the cursor in a link Alt+Enter opens it (Docs' key;
 plain new paragraph), and Ctrl+K edits it as before.
 
 **Inserts and downloads** (`inserts.ts`, `export.ts`, `docx.ts`). Insert adds today's date, special
-characters and a table of contents. File, Download gives Markdown, `.quire`, a web page, plain text and
+characters and a table of contents.
+
+**The emoji grid** (`emoji-picker.ts`). Insert, Emoji (beside its line, as Special characters is), the
+palette, or Ctrl+; (Docs has no key for it on Linux, and Ctrl+. is superscript here) open a grid of the
+emoji in `emoji.ts`, drawn by the system's own emoji font: a search field with the caret in it, a small
+hand beside it for the skin tone, the groups along the top as Docs names them (Smileys and people,
+Animals and nature, Food and drink, Activities, Travel and places, Objects, Symbols, Flags), with
+Recently used first once anything has been used, and under them the group's emoji, eight to a row.
+From the key it grows out of the cursor; from Insert, out of its line. It stays open while several are
+put in. Typing searches every emoji by name and other words, and Enter puts in the first found; Down
+goes from the search to the groups and the grid, the arrows move through the grid by rows, Up from its
+first row goes back, Enter puts one in, and Escape gives the caret back (from Insert, steps back to the
+line). The hand opens the five tones and none in place, growing under the search; holding an emoji that
+takes a tone down for half a second opens the same row for it. An emoji is written as the colon list
+writes it, its shortcode (`:heart:`), which the file shows as the character where a shortcode would not
+read back as one; one in a skin tone, which no shortcode says, and one in code are written as the
+character. What was used lately (24 at most) and the tone are kept in this browser
+(`quire-emoji-used`, `quire-emoji-tone`), read back only as far as they name known emoji and tones.
+The groups come from the table's own order: each group names the first emoji of each of its runs. File, Download gives Markdown, `.quire`, a web page, plain text and
 Word (a `.docx` written from scratch). PDF is File, Print: the browser's print dialog with the page already set up.
 
 ## Decided, not yet built
