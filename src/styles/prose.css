@@ -178,9 +178,10 @@
     line-height: calc(var(--line) * 1.12);
 }
 
-/* A table straight after its heading sits as close as a paragraph would. */
-.prose h2 + table,
-.prose h3 + table {
+/* A table straight after its heading sits as close as a paragraph would. mdQuire's own blocks are left
+   out: it places its tables itself, and a rule that looks at a neighbour slows every block it adds. */
+.prose h2 + table:not(.quire > *),
+.prose h3 + table:not(.quire > *) {
     margin-top: calc(var(--line) * 0.5);
 }
 

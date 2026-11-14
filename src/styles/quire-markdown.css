@@ -219,7 +219,8 @@
     line-height: calc(var(--line) * 0.8);
 }
 
-/* a subtitle (a .quire document's alone): larger than the text and quieter, as Docs draws one under its
+/* the subtitle, the line under the title (style.json keeps it in a .quire document, the frontmatter in
+   Markdown): larger than the text and quieter, as Docs draws one under its
    title, and so as the first paragraph too, which is otherwise the size of the rest */
 .prose .quire-subtitle,
 .prose.quire > p.quire-subtitle:first-child {

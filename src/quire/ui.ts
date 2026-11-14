@@ -85,6 +85,7 @@ const PATHS: Record<string, string> = {
     zoom: '<circle cx="10.5" cy="10.5" r="5.5"/><path d="m15 15 4.5 4.5M8.5 10.5h4M10.5 8.5v4"/>',
     fit: '<path d="M4 12h16M7 9l-3 3 3 3M17 9l3 3-3 3"/>',
     full: '<path d="M4 9V5.5A1.5 1.5 0 0 1 5.5 4H9M15 4h3.5A1.5 1.5 0 0 1 20 5.5V9M20 15v3.5a1.5 1.5 0 0 1-1.5 1.5H15M9 20H5.5A1.5 1.5 0 0 1 4 18.5V15"/>',
+    emoji: '<circle cx="12" cy="12" r="8"/><path d="M8.8 14a4 4 0 0 0 6.4 0"/><circle cx="9.5" cy="10" r=".7" fill="currentColor"/><circle cx="14.5" cy="10" r=".7" fill="currentColor"/>',
     omega: '<path d="M5 19h4v-2.5A6.5 6.5 0 1 1 15 16.5V19h4"/>',
     date: '<rect x="4" y="5.5" width="16" height="14" rx="2"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/>',
     bookmark: '<path d="M7 4h10v16l-5-4-5 4z"/>',

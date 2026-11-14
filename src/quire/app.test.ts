@@ -172,7 +172,7 @@ const shelfShown = () => tab.run<boolean>("document.querySelector('.quire-shelf'
 used("with nothing open the home screen shows ways to start; blank grows into a page, leaving shrinks it back onto its row, and a reload comes back to what was open", async () => {
     await tab.wait(700);
     expect(await shelfShown()).toBe(true);
-    expect(await tab.run("[...document.querySelectorAll('.quire-shelf-kinds .quire-shelf-word')].map((word) => word.textContent)")).toEqual(["blank", "blog post", "notes"]);
+    expect(await tab.run("[...document.querySelectorAll('.quire-shelf-kinds .quire-shelf-word')].map((word) => word.textContent)")).toEqual(["blank", "blog post", "notes", "meeting notes", "changelog entry", "project page"]);
     expect(await tab.run("!!document.querySelector('.quire-shelf-none')")).toBe(true);
     // the bar has nothing to act on, and is away
     expect(await tab.run("getComputedStyle(document.querySelector('.quire-bar')).visibility")).toBe("hidden");

@@ -33,6 +33,20 @@ the document into a `contenteditable` element and cancels every browser edit, so
 the text. Undo, selection and paste are its own. Markdown typed as you go turns into what it means
 (`## `, `**bold**`, `- `), and one undo gives back the characters as typed.
 
+**Speed.** In a 5,000-line document a key, Enter, Backspace joining two blocks and a pasted line are
+each shown in under 16 ms (`editor.test.ts` holds them, with no page and in page view; measured on
+13 November: a key 2 to 4 ms, Enter 4 to 6 ms, where Enter took 61 ms before). Only the blocks that
+changed are drawn again. What made Enter slow was the stylesheet, not the script: rules that look at a
+block's neighbour (`h2 + h3`, the blocks after a wrapped picture as `[data-wrap] + *`) made the browser
+work out the style of every block after a block put in or taken out (59 ms, 50 of them the picture's
+rule). How a block stands to the one before it is now a class the surface sets on the blocks that
+changed and the one after each (`quire-opens-section`, `quire-after-heading`, `quire-contents-list`,
+`quire-beside`). The outline is drawn again only when a heading's words or level change, not when the
+headings move down (7 ms). The rest of a change (checking, page view, the counts, suggestions, version
+history, saving) costs under half a millisecond at once and under 5 ms in any later slice. A rule in
+the editor's styles that looks inside or beside the document's blocks from the document's root (`:has()`,
+`+`, `~`) brings this back.
+
 **Stores.** A document can live in the browser (`store-browser.ts`), in a file opened and downloaded
 (`store-files.ts`), in a real file or folder on the computer where the browser allows it
 (`store-folder.ts`), in a GitHub repository (`store-github.ts`, with a fine-grained token kept only in this
@@ -94,11 +108,18 @@ which Markdown cannot hold) and `notes.json` (notes on the text). Tools a plain 
 fold away for such files, and a Markdown file can be turned into a `.quire`.
 
 **The home screen** (`shelf.ts`) is a list drawn as the site's posts list is, with no pictures of
-pages. A quiet "new" is followed by the three ways to start as words (blank, blog post, notes); under
+pages. A quiet "new" is followed by the six ways to start as words (blank, blog post, notes, meeting
+notes, changelog entry, project page); under
 "recent" each document is a ruled row of its name (ended with an ellipsis when long), where it is kept
 (this browser, this computer, or a folder's or repository's own name) and when it was last touched
 (today with the time, yesterday, the day, and the year when not this one), with three dots at the end
 whose menu grows from them: open, rename, duplicate, and delete, which asks once more in the same menu.
+Meeting notes are a `.quire` document of the date, who was there, what was decided and a checklist of
+what comes next; a changelog entry is Markdown in `CHANGELOG.md`'s form, the day as a heading over
+Added, Changed and Fixed; a project page is an `.mdx` file with the frontmatter the site's projects
+collection needs (`src/content.config.ts`: name, summary, language, a status, order 99 so it comes
+last, and a draft until it is ready) and the sections most project pages have (What it is, What it
+does, Getting it). As with the others, the last line it starts with is selected, for typing over.
 A row is one button, reached by Tab and opened with Enter. The page grows out of the row it was opened
 from and shrinks back into it on leaving, the keyboard landing on that row again; something new grows
 out of the word pressed. Narrower than 40rem a row takes two lines, the name first. Opening a file or a
@@ -261,7 +282,7 @@ cards, large for dialogs and panels.
 looks and behaves like the others of its kind. A *menu* is a list to pick from, made by `flowMenu` with
 `menuLine`s: a finding's menu (the same lines a misspelling puts first in the right-click menu), the
 list of what checking found, the text's, a table's and a picture's menus, the code language, the callout
-type, the emoji list, the palette. It grows from what was pressed, takes the arrow keys and Enter, and
+type, the emoji list, the emoji grid, the palette. It grows from what was pressed, takes the arrow keys and Enter, and
 Escape gives focus back. A *strip* is a few actions on a thing in the text, icons only, each named in a
 word or two in its tooltip with its shortcut: the bar over selected words, the link card (where the link
 goes, to read, then Open, Copy, Edit, Remove), the chip after a pasted address (its few choices, all in
@@ -291,14 +312,14 @@ one for each command, the same in the menus, the palette and the Ctrl+/ panel.
 
 The menus as they stand:
 
-- File: New (Document, Blog post, Notes), Open (the documents list, which has the places to open from), Make
+- File: New (Document, Blog post, Notes, Meeting notes, Changelog entry, Project page), Open (the documents list, which has the places to open from), Make
   a copy, Save as .quire document (for Markdown), Download (Markdown, mdQuire document, Web page, Plain text,
   Word), Rename, Version history, Details, Page setup (for `.quire`), Print.
 - Edit: Undo, Redo; Cut, Copy, Paste, Paste without formatting; Select all, Select all matching text,
   Delete; Find and replace.
 - View: Mode (Pageless or Pages), Paper (Dark or Light); Show outline, Show comments, Show Markdown, Show
   word count; Zoom (in, out, Fit, 50% to 200%), Full screen.
-- Insert: Picture, Table, Date, Link, Special characters; Horizontal line, Page break, Bookmark, Table of
+- Insert: Picture, Table, Date, Link, Special characters; Horizontal line, Emoji, Page break, Bookmark, Table of
   contents, Header, footer and page numbers, Footnote; Comment; then mdQuire's own blocks: Code block,
   Callout, Folding section, Definition list, Maths, Diagram, and Components in an `.mdx` file.
 - Format: Text (bold to subscript; Size, Capitalization; Font, Text color, Highlight color; Inline code,
@@ -373,8 +394,17 @@ a list) chooses the character a bulleted list is written with (Dash, Asterisk or
 since Markdown reads them alike), restarts a numbered list at a number (part way down, the list is cut in two
 and the second written with the other delimiter, `1)`) and carries on the list before (`numbering.ts`). A table's strip sorts its rows by the
 cursor's column (`tables.ts`). The style list has Title, which goes to the title line, since that line
-is the document's name and Markdown has no title, and Subtitle, kept in a `.quire` document's style.json
-and not offered for Markdown. Edit, Select all matching text selects every place the words appear, in capitals or not;
+is the document's name and Markdown has no title, and Subtitle. A document has one subtitle, the
+line under the title: choosing Subtitle on a paragraph or heading moves its words there with the
+cursor, and a subtitle there before goes back to the text where it stood; Normal text on it makes it a
+paragraph again. A `.quire` document keeps it in its style.json; a Markdown file keeps it as the
+frontmatter's `subtitle:` line, which Pandoc and Quarto read (`read.ts` shows that line as the
+subtitle, `write.ts` puts it back): untouched, the frontmatter keeps every byte; changed, only that line
+changes; emptied or taken off, the line goes, and a frontmatter left with no lines goes with it. A
+value written over several lines or as a list is left in the frontmatter, not shown. Made a `.quire`
+document, a Markdown file's subtitle moves into style.json; a `.quire` document downloaded as
+Markdown has its subtitle in the frontmatter. Under `bun run edit` the frontmatter's fields leave the
+subtitle to its line, and the frontmatter as text shows it as it will be written. Edit, Select all matching text selects every place the words appear, in capitals or not;
 typing, Backspace and Format commands change all of them (`matching.ts`). Insert, Bookmark (dimmed in a
 heading, which is a place to link to already) writes an empty anchor, `<a id="name"></a>`, drawn as a small flag, and the link field offers the headings (by the
 ids the site gives them) and the bookmarks (`bookmarks.ts`).
@@ -399,7 +429,25 @@ until the cursor moves. With the cursor in a link Alt+Enter opens it (Docs' key;
 plain new paragraph), and Ctrl+K edits it as before.
 
 **Inserts and downloads** (`inserts.ts`, `export.ts`, `docx.ts`). Insert adds today's date, special
-characters and a table of contents. File, Download gives Markdown, `.quire`, a web page, plain text and
+characters and a table of contents.
+
+**The emoji grid** (`emoji-picker.ts`). Insert, Emoji (beside its line, as Special characters is), the
+palette, or Ctrl+; (Docs has no key for it on Linux, and Ctrl+. is superscript here) open a grid of the
+emoji in `emoji.ts`, drawn by the system's own emoji font: a search field with the caret in it, a small
+hand beside it for the skin tone, the groups along the top as Docs names them (Smileys and people,
+Animals and nature, Food and drink, Activities, Travel and places, Objects, Symbols, Flags), with
+Recently used first once anything has been used, and under them the group's emoji, eight to a row.
+From the key it grows out of the cursor; from Insert, out of its line. It stays open while several are
+put in. Typing searches every emoji by name and other words, and Enter puts in the first found; Down
+goes from the search to the groups and the grid, the arrows move through the grid by rows, Up from its
+first row goes back, Enter puts one in, and Escape gives the caret back (from Insert, steps back to the
+line). The hand opens the five tones and none in place, growing under the search; holding an emoji that
+takes a tone down for half a second opens the same row for it. An emoji is written as the colon list
+writes it, its shortcode (`:heart:`), which the file shows as the character where a shortcode would not
+read back as one; one in a skin tone, which no shortcode says, and one in code are written as the
+character. What was used lately (24 at most) and the tone are kept in this browser
+(`quire-emoji-used`, `quire-emoji-tone`), read back only as far as they name known emoji and tones.
+The groups come from the table's own order: each group names the first emoji of each of its runs. File, Download gives Markdown, `.quire`, a web page, plain text and
 Word (a `.docx` written from scratch). PDF is File, Print: the browser's print dialog with the page already set up.
 
 ## Decided, not yet built

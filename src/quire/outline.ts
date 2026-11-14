@@ -51,7 +51,9 @@ export function createOutline(surface: Surface, top: () => number = () => 0, onC
 
     function draw(doc: Document) {
         entries = outline(doc);
-        const keys = entries.map((entry) => `${entry.level} ${entry.text} ${entry.path.join(",")}`).join("\n");
+        // the headings' places are left out: a block added above them moves every one, and the list
+        // drawn again for that took 7 ms in a 5,000-line document; a click looks its heading's place up
+        const keys = entries.map((entry) => `${entry.level} ${entry.text}`).join("\n");
         if (list.dataset.keys === keys) return;
         list.dataset.keys = keys;
         list.replaceChildren(
@@ -62,8 +64,9 @@ export function createOutline(surface: Surface, top: () => number = () => 0, onC
                 go.title = entry.text || "Untitled heading";
                 go.type = "button";
                 go.addEventListener("click", () => {
-                    surface.setSelection(caret(entry.path, 0));
-                    surface.elementAt(entry.path)?.scrollIntoView({ behavior: still() ? "auto" : "smooth", block: "start" });
+                    const path = entries[index]?.path ?? entry.path;
+                    surface.setSelection(caret(path, 0));
+                    surface.elementAt(path)?.scrollIntoView({ behavior: still() ? "auto" : "smooth", block: "start" });
                     surface.focus();
                     mark(index);
                     if (panelled()) panel.close();

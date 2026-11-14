@@ -117,14 +117,25 @@ test("the alignments and lists are named in American spelling, and no two colors
     expect(new Set(names).size).toBe(names.length);
 });
 
-test("Subtitle makes a heading or paragraph a subtitle, shown as the style, Normal text takes it off, and Title changes nothing in the writing", () => {
+test("Subtitle makes a heading or paragraph the one subtitle, first under the title, shown as the style; in Markdown it is the frontmatter's; Normal text takes it off, and Title changes nothing in the writing", () => {
     const subtitled = run(setStyleOf("subtitle"), at("## Under\n", caret([0], 2)));
     expect((subtitled.doc.blocks[0] as Paragraph).subtitle).toBe(true);
     expect(currentStyle(subtitled.doc, [0])).toBe("subtitle");
-    expect(md(subtitled)).toBe("Under\n");
+    expect(md(subtitled)).toBe("---\nsubtitle: Under\n---\n");
     expect((run(setStyleOf("paragraph"), subtitled).doc.blocks[0] as Paragraph).subtitle).toBeUndefined();
-    const plain = at("Words\n", caret([0], 1));
-    expect(run(setStyleOf("title"), plain).doc).toBe(plain.doc);
+    expect(md(run(setStyleOf("paragraph"), subtitled))).toBe("Under\n");
+    // a paragraph further down moves up to be the subtitle, the cursor with it, and the subtitle before goes back to the text where it stood
+    const moved = run(setStyleOf("subtitle"), at("---\ntitle: A post\nsubtitle: Old\n---\n\nFirst.\n\nNew one.\n", caret([2], 3)));
+    expect(md(moved)).toBe("---\ntitle: A post\nsubtitle: New one.\n---\n\nOld\n\nFirst.\n");
+    expect(moved.selection.focus).toEqual({ path: [0], offset: 3 });
+    expect(moved.doc.blocks.filter((block) => block.kind === "paragraph" && block.subtitle).length).toBe(1);
+    // a .quire document does the same, keeping its subtitle as a paragraph (and in its style.json)
+    const plain = at("First.\n\nSecond.\n", caret([1], 1));
+    const rich = run(setStyleOf("subtitle"), { ...plain, doc: { ...plain.doc, quire: { page: { size: "A4", orientation: "portrait", margins: 25 }, notes: null } } });
+    expect((rich.doc.blocks[0] as Paragraph).subtitle).toBe(true);
+    expect(md(rich)).toBe("Second.\n\nFirst.\n");
+    const words = at("Words\n", caret([0], 1));
+    expect(run(setStyleOf("title"), words).doc).toBe(words.doc);
 });
 
 test("the list buttons make lists of all the touched paragraphs, and pressed again take them off", () => {

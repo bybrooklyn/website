@@ -109,16 +109,22 @@ used("Format, Text, Capitalization changes the selected words, keeping their bol
     expect(await focused()).toBe("Document");
 });
 
-used("Format, Title goes to the title line; Subtitle is offered for a .quire document alone and draws the line as one", async () => {
+used("Format, Title goes to the title line; Subtitle draws the line as one, in a .quire document and in Markdown, where it is the frontmatter's subtitle", async () => {
     await reset("Some words\n", [0], 2);
     await menu("Format", "Paragraph styles", "Title");
     await tab.wait(300);
     expect(await tab.run<string>("document.activeElement.className")).toBe("quire-title");
     await tab.press("Escape");
-    await reset("Some words\n", [0], 2);
-    await menu("Format", "Paragraph styles");
-    await tab.wait(650);
-    expect(await tab.run<string[]>("[...document.querySelectorAll('.quire-menu:popover-open .quire-menu-line')].map((each) => each.querySelector('.quire-menu-label')?.textContent)")).not.toContain("Subtitle");
+    await reset("Some words\n\nUnder the title\n", [1], 2);
+    await menu("Format", "Paragraph styles", "Subtitle");
+    expect(await tab.run<string>("document.querySelector('.quire > p').className")).toBe("quire-subtitle");
+    expect(await tab.run<string>("document.querySelector('.quire > p').textContent")).toBe("Under the title");
+    expect(await md()).toBe("---\nsubtitle: Under the title\n---\n\nSome words\n");
+    // typed in, the subtitle line changes the frontmatter
+    await tab.type("!");
+    expect(await md()).toBe("---\nsubtitle: Un!der the title\n---\n\nSome words\n");
+    await menu("Format", "Paragraph styles", "Normal text");
+    expect(await md()).toBe("Un!der the title\n\nSome words\n");
     await reset("Under the title\n\nThe writing.\n", [0], 2, [0], 2, true);
     await menu("Format", "Paragraph styles", "Subtitle");
     expect(await tab.run<string>("document.querySelector('.quire p').className")).toBe("quire-subtitle");

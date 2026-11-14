@@ -2579,20 +2579,24 @@ body.quire-app,
     margin-bottom: calc(var(--line) * 0.25);
 }
 
-/* words to press, set apart by dots as a post's facts are, and drawn as the site's links */
+/* words to press, set apart by dots as a post's facts are, and drawn as the site's links; each word has
+   its dot before it, and the dot of a word that starts a line lies outside the edge and is cut away, so
+   that a line wrapped on a phone does not start with one */
 .quire-shelf-words {
     display: flex;
     flex-wrap: wrap;
-    gap: 0 0.5rem;
-    margin: 0;
+    margin: 0 0 0 -1.25rem;
     padding: 0;
     list-style: none;
+    clip-path: inset(-0.5rem -0.5rem -0.5rem 0.9rem);
 }
 
-.quire-shelf-words > li + li::before {
+.quire-shelf-words > li::before {
     content: "·";
-    margin-right: 0.5rem;
+    display: inline-block;
+    width: 1.25rem;
     color: var(--muted);
+    text-align: center;
 }
 
 /* the words and the rows are buttons drawn wholly by their own rules */
@@ -3884,7 +3888,9 @@ body.quire-app,
     letter-spacing: -0.015em;
 }
 
-.prose.quire > :not(h1, h2, h3, h4, h5, h6) + :is(h1, h2, h3, h4, h5, h6) {
+/* a heading after something that is not a heading; the surface marks how a block stands to the one
+   before it (surface.ts), since rules that look at a block's neighbours slow every new block */
+.prose.quire > .quire-opens-section {
     margin-top: calc(var(--line) * 1.25 - var(--crown));
 }
 
@@ -3909,7 +3915,8 @@ body.quire-app,
 }
 
 /* a heading straight after a heading: the half line is the first's margin and the room under its tails */
-.prose.quire :is(h1, h2, h3, h4, h5, h6) + :is(h1, h2, h3, h4, h5, h6) {
+.prose.quire > .quire-after-heading,
+.prose.quire :is(h1, h2, h3, h4, h5, h6) + :is(h1, h2, h3, h4, h5, h6):not(.quire > *) {
     margin-top: calc(var(--crown) * -1);
 }
 

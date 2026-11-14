@@ -1,5 +1,5 @@
 // The home screen: what mdQuire shows with no document open. One quiet row of ways to start
-// something new (blank, blog post, notes), and under it the recent documents from every place that
+// something new (blank, blog post, notes, meeting notes, a changelog entry, a project page), and under it the recent documents from every place that
 // is connected, a row each, as the site lists its posts: the name, where it lives and when it was
 // last touched. The three dots at the end of a row open, rename, duplicate or delete it. Pressing a
 // row opens it: the page grows out of the row, and leaving the document it shrinks back there
@@ -30,6 +30,11 @@ export function templates(today: Date): Template[] {
         { key: "blank", label: "blank", name: "Untitled", text: "", quire: true },
         { key: "post", label: "blog post", name: "A new post", text: `---\ntitle: A new post\ndate: ${day}\ndescription: What it is about, in a line.\n---\n\nThe first paragraph.\n`, quire: false },
         { key: "notes", label: "notes", name: "Notes", text: `${said}\n\n## To do\n\n- [ ] Something to do\n\n## Thoughts\n\nA first thought.\n`, quire: true },
+        { key: "meeting", label: "meeting notes", name: "Meeting notes", text: `${said}\n\n## Who was there\n\nNames.\n\n## Decided\n\nWhat was decided.\n\n## Next\n\n- [ ] Something to do\n`, quire: true },
+        // as CHANGELOG.md is written: the day as a heading, what changed under it
+        { key: "changelog", label: "changelog entry", name: "Changelog entry", text: `## ${today.getDate()} ${today.toLocaleDateString("en-US", { month: "long" })} ${today.getFullYear()}\n\n### Added\n\n- What is new.\n\n### Changed\n\n- What works differently.\n\n### Fixed\n\n- What was broken.\n`, quire: false },
+        // the frontmatter the site's projects collection asks for (src/content.config.ts), a draft until it is ready, last in the list
+        { key: "project", label: "project page", name: "A new project.mdx", text: `---\nname: A new project\nsummary: What it is, in one sentence.\nlanguage: TypeScript\nstatus: in development\norder: 99\ndraft: true\n---\n\n## What it is\n\nWhat it is and who it is for.\n\n## What it does\n\nWhat it can do.\n\n## Getting it\n\nWhere to get it.\n`, quire: false },
     ];
 }
 

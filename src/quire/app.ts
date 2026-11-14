@@ -41,7 +41,7 @@ export interface AppOptions {
 const PLACE_KEY = "quire-place";
 
 /** The home screen's ways to start as File, New names them, with their icons. */
-const NEW: Record<string, [string, string]> = { blank: ["Document", "file"], post: ["Blog post", "pen"], notes: ["Notes", "task"] };
+const NEW: Record<string, [string, string]> = { blank: ["Document", "file"], post: ["Blog post", "pen"], notes: ["Notes", "task"], meeting: ["Meeting notes", "comment"], changelog: ["Changelog entry", "history"], project: ["Project page", "component"] };
 
 /** The browser's local storage, or nothing where it may not be used. */
 function local(): Storage | undefined {

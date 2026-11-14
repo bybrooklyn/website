@@ -823,6 +823,11 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
         into.replaceChildren(...from.childNodes);
     }
 
+    /** The blocks drawn beside a picture the text flows round. */
+    let besides = new Set<HTMLElement>();
+    /** The element each drawn block followed when its classes for its neighbour were last set. */
+    let follows = new WeakMap<HTMLElement, HTMLElement | undefined>();
+
     function render() {
         const fresh: HTMLElement[] = [];
         const blocks = editor.state.doc.blocks;
@@ -872,6 +877,29 @@ export function createSurface(root: HTMLElement, initial: Document, options: Sur
             child.remove();
             child = next;
         }
+        // How a block stands to the one before it is marked here with a class, not by stylesheet rules
+        // that look at a block's neighbours (`h2 + h3`, `[data-wrap] + *`): with those, a block put in
+        // or taken out among thousands made the browser work out the style of every block after it,
+        // 60 ms for Enter in a 5,000-line document. Only a block new here or with a new one before it is looked at.
+        const made = new Set(fresh);
+        wanted.forEach((element, index) => {
+            const before = wanted[index - 1];
+            if (follows.get(element) === before && !made.has(element) && !(before && made.has(before))) return;
+            follows.set(element, before);
+            const block = blocks[index]!;
+            const previous = blocks[index - 1];
+            element.classList.toggle("quire-opens-section", block.kind === "heading" && !!previous && previous.kind !== "heading");
+            element.classList.toggle("quire-after-heading", block.kind === "heading" && previous?.kind === "heading");
+            element.classList.toggle("quire-contents-list", block.kind === "list" && !!previous && isContentsMark(previous));
+        });
+        // the few blocks after a picture the text flows round are laid out with it
+        const beside = new Set<HTMLElement>();
+        blocks.forEach((block, index) => {
+            if (block.kind === "image" && block.wrap) for (const element of wanted.slice(index + 1, index + 4)) beside.add(element);
+        });
+        for (const element of besides) if (!beside.has(element)) element.classList.remove("quire-beside");
+        for (const element of beside) element.classList.add("quire-beside");
+        besides = beside;
     }
 
     /** Gives each picture drawn in an element the address it can be shown from, once that is known. */

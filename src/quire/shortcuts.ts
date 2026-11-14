@@ -43,6 +43,7 @@ export const SHORTCUTS: Shortcut[] = [
     { keys: "Ctrl+0", label: "Zoom to 100%", menu: "View", command: "zoomReset" },
     { keys: "Ctrl+Enter", label: "Page break", menu: "Insert", command: "pageBreak", surface: true },
     { keys: "Ctrl+Alt+F", label: "Footnote", menu: "Insert", command: "footnote" },
+    { keys: "Ctrl+;", label: "Emoji", menu: "Insert", command: "emoji" },
     { keys: "Ctrl+Alt+M", label: "Comment", menu: "Insert", command: "comment" },
     { keys: "Ctrl+B", label: "Bold", menu: "Format", command: "bold", surface: true },
     { keys: "Ctrl+I", label: "Italic", menu: "Format", command: "italic", surface: true },
@@ -97,7 +98,7 @@ export interface Chord {
 }
 
 /** The key places the table's keys name, for keys whose character changes with Shift. */
-const CODES: Record<string, string> = { "=": "Equal", "-": "Minus", ".": "Period", ",": "Comma", "/": "Slash", "\\": "Backslash", "[": "BracketLeft", "]": "BracketRight", Enter: "Enter", Tab: "Tab", Backspace: "Backspace" };
+const CODES: Record<string, string> = { "=": "Equal", "-": "Minus", ".": "Period", ",": "Comma", ";": "Semicolon", "/": "Slash", "\\": "Backslash", "[": "BracketLeft", "]": "BracketRight", Enter: "Enter", Tab: "Tab", Backspace: "Backspace" };
 
 /** The chord a shortcut's keys stand for. */
 export function chordOf(keys: string): Chord {

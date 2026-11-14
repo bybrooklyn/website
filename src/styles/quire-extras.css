@@ -52,9 +52,8 @@
     width: 100%;
 }
 
-.quire > [data-wrap] + *,
-.quire > [data-wrap] + * + *,
-.quire > [data-wrap] + * + * + * {
+/* marked by the surface (surface.ts), since a rule that looks at a block's neighbours slows every new block */
+.quire > .quire-beside {
     content-visibility: visible;
 }
 
@@ -698,9 +697,89 @@
     scale: 1.12;
 }
 
+/* ---- the emoji grid: the special characters' parts, with the search and the hand side by side, the
+   groups along the top, and the tones growing open under the search ---- */
+
+.quire-emoji .quire-specials-grid {
+    grid-template-columns: repeat(8, minmax(0, 1fr));
+}
+
+.quire-emoji .quire-special {
+    min-width: 0;
+    padding: 0;
+    font-size: 1.3rem;
+    line-height: 1;
+}
+
+/* room round the scaled emoji under the keyboard, so that its ring is whole */
+.quire-emoji .quire-specials-groups {
+    margin-inline: -0.25rem;
+    padding: 0.25rem;
+}
+
+/* opened at the cursor on a phone, it keeps off the window's edges */
+@media (max-width: 40rem) {
+    .quire-menu.quire-emoji-menu {
+        margin-inline: 0.5rem;
+    }
+}
+
+.quire-emoji-top {
+    display: flex;
+    gap: 0.3rem;
+}
+
+.quire-emoji-top .quire-emoji-tone {
+    flex: 0 0 2.2rem;
+}
+
+.quire-emoji-tones {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 0.2s var(--ease);
+}
+
+.quire-emoji-tones > .quire-specials-grid {
+    min-height: 0;
+    overflow: hidden;
+    visibility: hidden;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    transition: visibility 0.2s;
+}
+
+.quire-emoji-tones.open {
+    grid-template-rows: 1fr;
+}
+
+.quire-emoji-tones.open > * {
+    visibility: visible;
+}
+
+.quire-emoji-tabs {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(1.9rem, 1fr));
+    border-bottom: 0.0625rem solid var(--rule);
+    padding-bottom: 0.2rem;
+}
+
+.quire-emoji-tab {
+    font-size: 1.05rem;
+}
+
+.quire-emoji .quire-special.pressed {
+    background: color-mix(in oklch, var(--accent) 30%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .quire-emoji-tones,
+    .quire-emoji-tones > * {
+        transition: none;
+    }
+}
+
 /* ---- the marker of a table of contents ---- */
 
-.quire-contents-mark + ul {
+.quire > .quire-contents-list {
     margin-top: 0.35rem;
 }
 
