@@ -96,7 +96,8 @@ fn a_box_dragged_into_the_creature_pushes_it_and_a_moving_platform_taken_stays_w
         page.show.stage.made.iter().find(|made| made.thing == super::stage::Thing::Mover).copied()
     });
     let mover = mover.expect("a world of things that move has a moving platform near the start");
-    let at = page.show.stage.world.bodies[mover.body as usize].position;
+    // taken by one end, as a visitor might
+    let at = page.show.stage.world.bodies[mover.body as usize].position + Vec2::new(0.5, 0.0);
     assert_eq!(page.show_grab(at + Vec2::new(page.show.stage.origin, 0.0)), 2);
     page.show_hand(at + Vec2::new(0.0, 0.5));
     for _ in 0..60 {
@@ -109,6 +110,7 @@ fn a_box_dragged_into_the_creature_pushes_it_and_a_moving_platform_taken_stays_w
     }
     assert_eq!(page.show.stage.world.bodies[mover.body as usize].position, left, "it stays where it was let go of");
     assert!(left.y > at.y + 0.3, "and was lifted, to {left:?} from {at:?}");
+    assert!(page.show.stage.world.bodies[mover.body as usize].angle().abs() < 1e-6, "and is level");
 }
 
 #[test]

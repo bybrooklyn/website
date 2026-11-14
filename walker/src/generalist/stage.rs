@@ -231,7 +231,8 @@ impl Stage {
     }
 
     /// Readies a thing to be taken by a hand: a moving platform stops being driven along its way and
-    /// becomes a heavy body that falls, collides and is pushed as any other. Anything else is as it was.
+    /// becomes a heavy body that falls, collides and is pushed as any other, but stays level. Anything
+    /// else is as it was.
     pub fn take(&mut self, body: u32) {
         let world = &self.world;
         if let Some(made) = self.made.iter_mut().find(|made| made.body == body && made.thing == Thing::Mover && world.bodies[body as usize].kinematic) {
@@ -240,6 +241,9 @@ impl Stage {
             platform.kinematic = false;
             platform.velocity = Vec2::ZERO;
             platform.set_mass(MOVER_MASS);
+            // it stays level while held, as a platform does, rather than swinging to hang from the point
+            // held and being let go of standing on end, a wall in the way
+            platform.inverse_inertia = 0.0;
         }
     }
 
