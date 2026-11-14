@@ -103,7 +103,7 @@ test.skipIf(!live)(
 );
 
 test.skipIf(!live)(
-    "the tools fold into the three dots least used first, paint format before print before clear formatting, and the style, the marks and the alignments never",
+    "the tools fold into the three dots least used first, paint format before print before clear formatting, and down to a small window what a writer needs most never",
     async () => {
         const order = ["Paint format", "Print", "Clear formatting", "Indent less", "Line spacing", "Zoom"];
         let before = -1;
@@ -114,7 +114,7 @@ test.skipIf(!live)(
             // what has folded is a run from the start of the order, never one later before one sooner
             const seen = order.map((label) => folded.some((each) => each.startsWith(label) || (label === "Indent less" && each.includes("quire-tool-set"))));
             expect({ wide, ordered: seen.every((on, index) => on || !seen.slice(index + 1).some(Boolean)) }).toEqual({ wide, ordered: true });
-            expect({ wide, kept: folded.filter((label) => /^(Style|Bold|Italic|Underline|Strikethrough|Align left|Centre|Align right|Justify)$/.test(label)) }).toEqual({ wide, kept: [] });
+            expect({ wide, kept: folded.filter((label) => /^(Undo|Style|Bold|Italic|Link|Picture|quire-grow)$/.test(label)) }).toEqual({ wide, kept: [] });
             // narrower, no fewer fold
             expect(at.folded.length).toBeGreaterThanOrEqual(before);
             before = at.folded.length;

@@ -391,17 +391,6 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         specials.open(from, specialGrid(typeSpecial(surface)));
         specials.box.querySelector<HTMLInputElement>("input")?.focus({ preventScroll: true });
     };
-    const more = (): MenuItem[] => [
-        ...(surface.getDocument().quire ? [] : [{ label: "Turn into a .quire document", icon: "file", run: () => void makeRich() }]),
-        { label: host.classList.contains("markdown") ? "Hide the Markdown" : "Show the Markdown", run: () => showMarkdown(!host.classList.contains("markdown")) },
-        { label: "Version history", run: () => void history.open() },
-        ...(options.more?.() ?? []),
-        ...dictation.items(dictation.more),
-        ...(surface.getDocument().quire ? [{ label: "Download", hint: ".quire", run: () => void downloadQuire() }] : []),
-        { label: surface.getDocument().quire ? "Download as Markdown" : "Download", hint: surface.getDocument().mdx ? ".mdx" : ".md", run: download },
-        { label: "About mdQuire", run: () => showAbout(bar.element.querySelector<HTMLElement>(".quire-dots")!) },
-    ];
-
     const bar = createBar(surface, {
         name,
         colors: options.colors,
@@ -413,7 +402,8 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         onSpelling: (from) => checking.open(from),
         onZoom: (from) => (zooms.isOpen() ? zooms.close(true) : zooms.open(from, zoomLines(() => from), document.activeElement === from)),
         onTitle: () => title.focus(),
-        more,
+        // the three dots hold the bar's folded tools; of the page's own only what no menu has (bun run edit's Publish)
+        more: () => options.more?.() ?? [],
     });
     // checking (src/quire/check/): underlines, a count at the bar's end, and its settings from Tools
     const checking = mountChecking({ surface, bar: bar.element, where: () => ({ store, id, name }) });

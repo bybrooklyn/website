@@ -142,6 +142,9 @@ async function menuLine(word: string, line: string) {
     await tab.wait(60);
 }
 
+/** Shows or hides the Markdown beside the page, as View does (the three dots no longer hold it). */
+const markdownView = (shown: boolean) => tab.run(`q.editor.view({ markdown: ${shown} })`).then(() => tab.wait(60));
+
 /** Shows or hides the outline, from the View menu. */
 const outline = () => menuLine("View", "Outline");
 
@@ -586,7 +589,7 @@ used("on a narrow screen the outline is a panel that slides in from its control 
 
 used("a version is kept, listed with what changed, shown as it read, and restored as one undoable step", async () => {
     await reset("First draft.\n", [0], 12);
-    await choose("More", "Version history");
+    await menuLine("File", "Version history");
     await tab.wait(600);
     expect(await tab.run("getComputedStyle(document.querySelector('.quire-history')).visibility")).toBe("visible");
     const first = await tab.run<number>("document.querySelectorAll('.quire-history-item').length");
@@ -599,7 +602,7 @@ used("a version is kept, listed with what changed, shown as it read, and restore
     await tab.press("Enter");
     await tab.type("A second line.");
     expect(await md()).toBe("First draft.\n\nA second line.\n");
-    await choose("More", "Version history");
+    await menuLine("File", "Version history");
     await tab.wait(600);
     const items = await tab.run<string[]>("[...document.querySelectorAll('.quire-history-item')].map((item) => item.textContent)");
     expect(items.length).toBe(first + 1);
@@ -632,7 +635,7 @@ used("a version is kept, listed with what changed, shown as it read, and restore
 
 used("the Markdown view flows open beside the text, and what is typed in either shows in the other", async () => {
     await reset("# Title\n\nSome text.\n", [1], 10);
-    await choose("More", "Show the Markdown");
+    await markdownView(true);
     const source = "document.querySelector('.quire-source')";
     const opening = await tab.run<number[]>(`q.watch('.quire-source', 'opacity', 500)`);
     expect(opening[opening.length - 1]).toBe(1);
@@ -671,7 +674,7 @@ used("the Markdown view flows open beside the text, and what is typed in either 
     await tab.resize(390, 844);
     await tab.wait(600);
     expect(await tab.run("getComputedStyle(document.querySelector('.quire-paper')).visibility")).toBe("hidden");
-    await choose("More", "Hide the Markdown");
+    await markdownView(false);
     await tab.wait(600);
     expect(await tab.run("getComputedStyle(document.querySelector('.quire-paper')).visibility")).toBe("visible");
     expect(await tab.run(`getComputedStyle(${source}).visibility`)).toBe("hidden");
@@ -735,15 +738,13 @@ async function everythingAppearing(): Promise<Record<string, number[]>> {
     seen["slash menu"] = await appearing(".quire-palette", () => tab.type("/"), 600, "height");
     await tab.press("Escape");
     await reset("Text\n", [0], 0);
-    await button("More");
+    await press(".quire-menu-row .quire-row-word", "File");
     await tab.wait(650);
     seen["history panel"] = await appearing(".quire-history", () => press(".quire-menu.open .quire-menu-line", "Version history"));
     await tab.press("Escape");
     await tab.wait(500);
-    await button("More");
-    await tab.wait(650);
-    seen["Markdown view"] = await appearing(".quire-source", () => press(".quire-menu.open .quire-menu-line", "Show the Markdown"));
-    await choose("More", "Hide the Markdown");
+    seen["Markdown view"] = await appearing(".quire-source", () => markdownView(true));
+    await markdownView(false);
     await tab.wait(500);
     return seen;
 }
@@ -871,14 +872,14 @@ used("the selection bar over the first line of the text never covers the documen
 used("typing in the Markdown of a long document reaches the text once typing pauses", async () => {
     const long = Array.from({ length: 1500 }, (_, index) => `Line ${index} of a long document.`).join("\n\n") + "\n";
     await reset(long, [0], 0);
-    await choose("More", "Show the Markdown");
+    await markdownView(true);
     await tab.wait(500);
     await tab.run("(() => { const field = document.querySelector('.quire-source'); field.focus(); field.setSelectionRange(4, 4); })()");
     await tab.type("XY");
     expect(await tab.run("document.querySelector('.quire p').textContent")).toBe("Line 0 of a long document.");
     await tab.wait(500);
     expect(await tab.run("document.querySelector('.quire p').textContent")).toBe("LineXY 0 of a long document.");
-    await choose("More", "Hide the Markdown");
+    await markdownView(false);
     await tab.wait(400);
 });
 
@@ -1212,7 +1213,7 @@ used("with the outline and the Markdown both open, nothing leaves the window at 
         await tab.wait(200);
         if (!(await tab.run<boolean>("document.querySelector('.quire-editor').classList.contains('outlined')"))) await outline();
         await tab.wait(500);
-        if (!(await tab.run<boolean>("document.querySelector('.quire-editor').classList.contains('markdown')"))) await choose("More", "Show the Markdown");
+        if (!(await tab.run<boolean>("document.querySelector('.quire-editor').classList.contains('markdown')"))) await markdownView(true);
         await tab.wait(700);
         const seen = await tab.run<{ outside: string[]; scroll: number; window: number; tops: number; bottoms: number; outline: boolean }>(`(() => {
             const parts = [".quire-bar", ".quire-outline", ".quire-column", ".quire-paper", ".quire-source", ".quire-bar-end", ".quire-outline-head", ...[...document.querySelectorAll(".quire > *")].map((_, index) => ".quire > :nth-child(" + (index + 1) + ")")];
@@ -1229,7 +1230,7 @@ used("with the outline and the Markdown both open, nothing leaves the window at 
         expect({ wide, outside: seen.outside, fits: seen.scroll <= seen.window }).toEqual({ wide, outside: [], fits: true });
         expect({ wide, tops: seen.tops < 1, bottoms: seen.bottoms < 1 }).toEqual({ wide, tops: true, bottoms: true });
         if (process.env.QUIRE_SHOTS) await Bun.write(`${process.env.QUIRE_SHOTS}/outline-and-markdown-${wide}.png`, await tab.picture());
-        await choose("More", "Hide the Markdown");
+        await markdownView(false);
         await tab.wait(400);
         if (seen.outline) await outline();
         await tab.wait(400);
@@ -1241,7 +1242,7 @@ used("with the outline and the Markdown both open, nothing leaves the window at 
 used("typing in the Markdown view saves as typing on the page does, and the status comes back to saved", async () => {
     await tab.run("q.useBrowser()");
     const id = await tab.run<string>(`q.openIn("From the Markdown", "Start.\\n")`);
-    await choose("More", "Show the Markdown");
+    await markdownView(true);
     await tab.wait(600);
     await tab.run("(() => { const field = document.querySelector('.quire-source'); field.focus(); field.setSelectionRange(6, 6); })()");
     await tab.type(" More words.");
@@ -1250,7 +1251,7 @@ used("typing in the Markdown view saves as typing on the page does, and the stat
     await tab.wait(1500);
     expect(await tab.run("q.status()")).toBe("Saved");
     expect(await tab.run(`q.kept(${JSON.stringify(id)})`)).toBe("Start. More words.\n");
-    await choose("More", "Hide the Markdown");
+    await markdownView(false);
     await tab.wait(400);
 });
 
@@ -1893,7 +1894,7 @@ used("page setup, from the zoom control, gives a .quire document's sheet its pap
     expect(tab.errors).toEqual([]);
 });
 
-used("About mdQuire, in Tools and in the three dots, is a dialog that says what it is and who made it, with the way to her site and the project; it grows in, takes the keyboard, and Escape gives the text back", async () => {
+used("About mdQuire, in Tools, is a dialog that says what it is and who made it, with the way to her site and the project; it grows in, takes the keyboard, and Escape gives the text back", async () => {
     await reset("Text\n", [0], 0);
     await press(".quire-menu-row .quire-row-word", "Tools");
     await tab.wait(650);
@@ -1908,11 +1909,6 @@ used("About mdQuire, in Tools and in the three dots, is a dialog that says what 
     await tab.wait(400);
     expect(await tab.run("!!document.querySelector('dialog.quire-dialog')")).toBe(false);
     expect(await tab.run("document.activeElement === q.editor.surface.element")).toBe(true);
-    await choose("More", "About mdQuire");
-    await tab.wait(400);
-    expect(await tab.run("!!document.querySelector('dialog.quire-dialog[open] .quire-about')")).toBe(true);
-    await tab.press("Escape");
-    await tab.wait(400);
 });
 
 used("typing, the caret is never a frame behind: on every frame it is within a pixel of the cursor's own place", async () => {

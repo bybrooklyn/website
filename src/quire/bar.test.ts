@@ -231,9 +231,12 @@ test("indent more puts a list item under the one before, indent less takes it ba
     expect(run(indentBy(1), plain)).toBe(plain);
 });
 
-test("the tools fold in the order she gave: paint format, print, clear formatting, the indents, line spacing, before the rest", () => {
+test("the tools fold in the order she gave: paint format, print, clear formatting, the indents, line spacing, before the rest, and what a writer needs most stays longest", () => {
     const order = Object.entries(FOLDS).sort((a, b) => a[1] - b[1]).map(([name]) => name);
     expect(order.slice(0, 5)).toEqual(["paint", "print", "clear", "indent", "spacing"]);
+    expect(new Set(order.slice(-8))).toEqual(new Set(["undo", "style", "bold", "italic", "link", "lists", "align", "picture"]));
+    expect(order.at(-1)).toBe("undo");
+    expect(new Set(Object.values(FOLDS)).size).toBe(order.length);
 });
 
 // ---- the bar in a browser: a surface and its bar, with the site's styles ----
@@ -331,6 +334,37 @@ inBrowser("a size typed in the field replaces the number, which a click selects,
         await tab.wait(50);
         expect(await tab.run<string>("document.querySelector('.quire-size-field').value")).toBe("12");
         expect(await tab.run<string>("md()")).toBe("a word here\n");
+    }),
+);
+
+inBrowser("at a phone's width the bar starts with undo, bold, italic and the lists, needs no sliding, and its dots hold only the tools that folded, in the bar's order", () =>
+    onPage("Text\n", 390, async (tab) => {
+        await tab.wait(400);
+        const seen = await tab.run<{ shown: string[]; over: number; dots: boolean }>(`(() => {
+            const strip = document.querySelector('.quire-bar-strip');
+            const shown = [...strip.querySelectorAll('.quire-bar-group:not(.quire-bar-end) .quire-tool:not(.folded):not(.away)')].map((each) => each.querySelector('[aria-label]').getAttribute('aria-label'));
+            return { shown, over: strip.scrollWidth - strip.clientWidth, dots: !document.querySelector('.quire-dots').closest('.folded') };
+        })()`);
+        expect(seen.shown[0]).toBe("Undo (Ctrl+Z)");
+        expect(seen.shown).toEqual(expect.arrayContaining(["Bold (Ctrl+B)", "Italic (Ctrl+I)", "Lists"]));
+        expect(seen.over).toBeLessThanOrEqual(0);
+        expect(seen.dots).toBe(true);
+        await tab.run("document.querySelector('.quire-dots').click()");
+        await tab.wait(500);
+        const lines = await tab.run<string[]>("[...document.querySelectorAll('.quire-menu.open .quire-menu-label')].map((each) => each.textContent)");
+        // in the bar's order: print and spelling before the style, the style before the colors
+        expect(lines.indexOf("Print")).toBeLessThan(lines.indexOf("Spelling"));
+        expect(lines.indexOf("Spelling")).toBeLessThan(lines.indexOf("Style"));
+        expect(lines.indexOf("Style")).toBeLessThan(lines.indexOf("Text color"));
+        expect(lines.some((line) => /Version history|Markdown|About|Download/.test(line))).toBe(false);
+    }),
+);
+
+inBrowser("on a wide window nothing folds and the three dots fold away too", () =>
+    onPage("Text\n", 2400, async (tab) => {
+        await tab.wait(400);
+        expect(await tab.run<number>("document.querySelectorAll('.quire-bar-group:not(.quire-bar-end) .quire-tool.folded:not(.away)').length")).toBe(0);
+        expect(await tab.run<boolean>("!!document.querySelector('.quire-dots').closest('.folded')")).toBe(true);
     }),
 );
 

@@ -1,12 +1,13 @@
-// The tools, the second line of the editor's top: in Google Docs' order, as she chose it. A search
-// of the menus; undo, redo, print, spelling and paint format; zoom; the style; the typeface; the size
-// as a number with minus and plus; bold, italic, underline, strikethrough, text colour and highlight;
-// link and picture; the four alignments; line spacing; the three lists; indent less and more; clear
-// formatting; and at the right end find, the three dots and the microphone. What a Markdown file
-// cannot keep (typeface, highlight, line spacing, justified) is away for one. Buttons show as
-// pressed when what they do is true at the cursor. It is a toolbar: Tab reaches it once, the arrow
-// keys move along it. When it has less room than it needs, its least used tools fold into the
-// three dots in a set order (FOLDS); on a narrow window it slides sideways instead.
+// The tools, the second line of the editor's top: in Google Docs' order, as she chose it. Undo,
+// redo, print, spelling and paint format; zoom; the style; the typeface; the size as a number with
+// minus and plus; bold, italic, underline, strikethrough, text color and highlight; link and
+// picture; alignment; line spacing; the lists; indent less and more; clear formatting; and at the
+// right end find, the three dots and the microphone. Alignment and the lists are one button each
+// that grows open in place into its choices (choices, below). What a Markdown file cannot keep
+// (typeface, highlight, line spacing, justified) is away for one. Buttons show as pressed when what
+// they do is true at the cursor. It is a toolbar: Tab reaches it once, the arrow keys move along
+// it. When it has less room than it needs, at any width, its tools fold into the three dots in a
+// set order (FOLDS), those a writer needs least first; the dots hold nothing else of the bar's.
 //
 // The document's name and how saving stands are made here too, for the page to put on the first
 // line. What each button does to a document is a pure Action, below, tested in bar.test.ts; the DOM
@@ -550,7 +551,7 @@ export interface BarOptions {
     /** The colors offered for text, by name. */
     colors?: { name: string; value: string }[];
     onImage?: (file: File) => Promise<string>;
-    /** The lines of the three-dot menu. */
+    /** Lines of the page's own that are in no menu (`bun run edit`'s Publish), put in the three dots after the folded tools. */
     more?: MenuItem[] | (() => MenuItem[]);
     /** Opens the link field for the selection. */
     onLink?: (from: HTMLElement) => void;
@@ -578,12 +579,13 @@ interface Tool {
 }
 
 /**
- * The order the tools fold in as the bar narrows, least used first, as she asked: paint format,
- * print, clear formatting, the indents, line spacing; then zoom, spelling, the search of the menus,
- * link and picture, the lists, the colours, the typeface, the size, undo and redo. The style, the
- * marks and the four alignments never fold.
+ * The order the tools fold in as the bar narrows, least used first: paint format, print, clear
+ * formatting, the indents and line spacing, as she gave them, then zoom, spelling, the typeface, the
+ * highlight, the size, strikethrough, underline, text color and redo. What a writer needs most stays
+ * longest, as she asked: picture, alignment, link, the style, italic, the lists, bold, and undo last.
  */
-export const FOLDS = { paint: 1, print: 2, clear: 3, indent: 4, spacing: 5, zoom: 6, spelling: 7, search: 8, insert: 9, lists: 10, colors: 11, font: 12, size: 13, undo: 14 } as const;
+export const FOLDS = { paint: 1, print: 2, clear: 3, indent: 4, spacing: 5, zoom: 6, spelling: 7, font: 8, highlight: 9, size: 10, strike: 11, underline: 12, color: 13, redo: 14, picture: 15, align: 16, link: 17, style: 18, italic: 19, lists: 20, bold: 21, undo: 22 } as const;
+
 
 /** Builds the bar for a surface. */
 export function createBar(surface: Surface, options: BarOptions) {
@@ -631,7 +633,7 @@ export function createBar(surface: Surface, options: BarOptions) {
     };
 
     // the three dots, made first because folded tools open their menus from them
-    const moreButton = dots("More");
+    const moreButton = dots("More tools");
 
     // the document's name, which the page puts at the end of its trail: pressed, the documents list grows out of it
     const name = make("button", "quire-button quire-name");
@@ -683,12 +685,10 @@ export function createBar(surface: Surface, options: BarOptions) {
     surface.element.addEventListener("pointerup", () => setTimeout(paintNow));
     surface.element.addEventListener("keyup", paintKeys);
     group(
-        tool(cluster(control("Undo (Ctrl+Z)", icon("undo"), undo), control("Redo (Ctrl+Shift+Z)", icon("redo"), redo)), FOLDS.undo, () => [
-            { label: "Undo", icon: "undo", hint: "Ctrl+Z", run: undo },
-            { label: "Redo", icon: "redo", hint: "Ctrl+Shift+Z", run: redo },
-        ]),
-        tool(control("Print (Ctrl+P)", icon("print"), print), FOLDS.print, () => [{ label: "Print", icon: "print", hint: "Ctrl+P", run: print }]),
-        tool(control("Spelling and checking", icon("spelling"), (button) => options.onSpelling?.(button)), FOLDS.spelling, () => [{ label: "Spelling and checking", icon: "spelling", run: () => options.onSpelling?.(moreButton) }]),
+        tool(control(named("Undo", "undo"), icon("undo"), undo), FOLDS.undo, () => [{ label: "Undo", icon: "undo", hint: "Ctrl+Z", run: undo }]),
+        tool(control(named("Redo", "redo"), icon("redo"), redo), FOLDS.redo, () => [{ label: "Redo", icon: "redo", hint: "Ctrl+Shift+Z", run: redo }]),
+        tool(control(named("Print", "print"), icon("print"), print), FOLDS.print, () => [{ label: "Print", icon: "print", hint: "Ctrl+P", run: print }]),
+        tool(control("Spelling", icon("spelling"), (button) => options.onSpelling?.(button)), FOLDS.spelling, () => [{ label: "Spelling", icon: "spelling", run: () => options.onSpelling?.(moreButton) }]),
         tool(paintButton, FOLDS.paint, () => [{ label: "Paint format", icon: "paint", run: () => paintButton.click() }]),
     );
 
@@ -711,7 +711,7 @@ export function createBar(surface: Surface, options: BarOptions) {
     const styleButton = opener(styles, "Style", styleLabel, styleLines);
     styleButton.classList.add("quire-style");
     styleButton.append(icon("chevron"));
-    group(tool(styleButton, 0));
+    group(tool(styleButton, FOLDS.style, () => [{ label: "Style", hint: "›", run: () => styles.open(moreButton, styleLines(), true) }]));
 
     // ---- the typeface ----
     const fonts = flowMenu("Typeface");
@@ -1000,22 +1000,23 @@ export function createBar(surface: Surface, options: BarOptions) {
 
     // ---- indent less, indent more ----
     group(
-        tool(cluster(control("Indent less", icon("outdent"), doing(indentBy(-1))), control("Indent more", icon("indent"), doing(indentBy(1)))), FOLDS.indent, () => [
-            { label: "Indent less", icon: "outdent", run: doing(indentBy(-1)) },
-            { label: "Indent more", icon: "indent", run: doing(indentBy(1)) },
+        tool(cluster(control(named("Indent less", "outdent"), icon("outdent"), doing(indentBy(-1))), control(named("Indent more", "indent"), icon("indent"), doing(indentBy(1)))), FOLDS.indent, () => [
+            { label: "Indent less", icon: "outdent", hint: "Ctrl+[", run: doing(indentBy(-1)) },
+            { label: "Indent more", icon: "indent", hint: "Ctrl+]", run: doing(indentBy(1)) },
         ]),
     );
 
     // ---- clear formatting ----
-    group(tool(control("Clear formatting", icon("clear"), doing(clearFormat)), FOLDS.clear, () => [{ label: "Clear formatting", icon: "clear", run: doing(clearFormat) }]));
+    group(tool(control(named("Clear formatting", "clear"), icon("clear"), doing(clearFormat)), FOLDS.clear, () => [{ label: "Clear formatting", icon: "clear", hint: "Ctrl+\\", run: doing(clearFormat) }]));
 
     // ---- at the right end: find, the three dots and the microphone (the editor adds that) ----
-    const more = flowMenu("More", { align: "right" });
+    // the dots hold the tools that did not fit, in the bar's order, and the page's own lines; with none of either they fold away too
+    const more = flowMenu("More tools", { align: "right" });
+    const own = () => (typeof options.more === "function" ? options.more() : (options.more ?? []));
+    const folded = () => tools.filter((each) => each.element.classList.contains("folded") && !each.element.classList.contains("away"));
     moreButton.addEventListener("click", () => {
         if (more.isOpen()) return more.close(true);
-        const folded = tools.filter((each) => each.element.classList.contains("folded") && !each.element.classList.contains("away"));
-        const own = typeof options.more === "function" ? options.more() : (options.more ?? []);
-        more.open(moreButton, [...folded.flatMap((each) => each.lines()), ...own], document.activeElement === moreButton);
+        more.open(moreButton, [...folded().flatMap((each) => each.lines()), ...own()], document.activeElement === moreButton);
     });
     moreButton.setAttribute("aria-haspopup", "menu");
     const end = make("div", "quire-bar-group quire-bar-end");
@@ -1055,36 +1056,43 @@ export function createBar(surface: Surface, options: BarOptions) {
             each.element.classList.toggle("away", away);
             each.width = (each.element.firstElementChild as HTMLElement).offsetWidth + 2;
         }
-        const narrow = typeof matchMedia !== "undefined" && matchMedia("(max-width: 40rem)").matches;
         const shown = new Set(tools.filter((each) => !each.element.classList.contains("away")));
         const groups = [...strip.querySelectorAll<HTMLElement>(".quire-bar-group:not(.quire-bar-end)")];
         // the rule between two groups and the space each side of it, 0.4rem and 0.4rem and a line (quire.css)
         const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
         const ruleWidth = 0.8 * rem + 1;
+        // a phone has no room to keep for a button to grow into: there it slides the row along instead
+        const narrow = typeof matchMedia !== "undefined" && matchMedia("(max-width: 40rem)").matches;
+        // the end is measured with the three dots in it, as they come back the moment anything folds
+        const endWidth = end.offsetWidth - dotsHolder.offsetWidth + moreButton.offsetWidth;
         const needed = () => {
-            let sum = end.offsetWidth;
+            let sum = endWidth;
             for (const element of groups) {
                 const inside = tools.filter((each) => shown.has(each) && element.contains(each.element));
                 if (inside.length) sum += inside.reduce((total, each) => total + each.width, 0) + ruleWidth;
             }
+            if (!narrow) sum += Math.max(0, ...tools.filter((each) => shown.has(each) && each.extra).map((each) => each.extra!()));
             // the first group shown has no rule before it
             return sum - ruleWidth;
         };
         const room = strip.clientWidth - 2;
-        if (!narrow) {
-            const folding = [...tools].filter((one) => one.fold > 0 && shown.has(one)).sort((a, b) => a.fold - b.fold);
-            const folded: Tool[] = [];
-            for (const each of folding) {
-                if (needed() <= room) break;
-                shown.delete(each);
-                folded.push(each);
-            }
-            // a tool folded on the way that fits in what room is left comes back, so that no room is left empty
-            for (const each of folded.reverse()) {
-                shown.add(each);
-                if (needed() > room) shown.delete(each);
-            }
+        const folding = [...tools].filter((one) => shown.has(one)).sort((a, b) => a.fold - b.fold);
+        const folded: Tool[] = [];
+        for (const each of folding) {
+            if (needed() <= room) break;
+            shown.delete(each);
+            folded.push(each);
         }
+        // what was folded on the way and fits in the room left comes back, most needed first; one that does not fit keeps every less needed one folded too, so that the order holds
+        for (const each of folded.reverse()) {
+            shown.add(each);
+            if (needed() <= room) continue;
+            shown.delete(each);
+            break;
+        }
+        const dotsFold = !tools.some((each) => !shown.has(each) && !each.element.classList.contains("away")) && !own().length;
+        dotsHolder.classList.toggle("folded", dotsFold);
+        dotsHolder.inert = dotsFold;
         for (const each of tools) {
             const fold = !shown.has(each);
             each.element.classList.toggle("folded", fold);

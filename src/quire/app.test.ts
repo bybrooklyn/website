@@ -270,7 +270,7 @@ used("a file is opened from the computer, and downloaded again with its own name
     await tab.type(" Edited.");
     await tab.wait(1300);
     expect(await status()).toBe("Kept here. Download it to keep it.");
-    await press(".quire-dots");
+    await press(".quire-menu-row .quire-row-word", "File");
     await tab.wait(700);
     await press(".quire-menu.open .quire-menu-line", "Download");
     await tab.wait(300);
@@ -365,9 +365,9 @@ used("a .quire file opens with its look, is written in, and downloads as a .quir
     await tab.run("q.app.editor.surface.setSelection({ anchor: { path: [0], offset: 0 }, focus: { path: [0], offset: 0 } })");
     await tab.type("Old. ");
     await tab.wait(1300);
-    await press(".quire-dots");
+    await press(".quire-menu-row .quire-row-word", "File");
     await tab.wait(700);
-    expect(await tab.run("[...document.querySelectorAll('.quire-menu.open .quire-menu-line')].map((line) => line.textContent).filter((text) => text.startsWith('Download'))")).toEqual(["Download.quire", "Download as Markdown.md"]);
+    expect(await tab.run("[...document.querySelectorAll('.quire-menu.open .quire-menu-line')].map((line) => line.textContent).filter((text) => text.startsWith('Download') && !text.endsWith('›'))")).toEqual(["Download.quire", "Download as Markdown.md"]);
     await press(".quire-menu.open .quire-menu-line", "Download.quire");
     await tab.wait(400);
     const bundle = await unpackQuire(new Uint8Array(Object.values(await tab.run<Record<string, number>>("q.bytes['letter.quire']"))));

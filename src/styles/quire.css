@@ -590,8 +590,8 @@
 /* ---- the tools ----
    The top's second line (bar.ts), the lab's: buttons 2.1rem square with 0.5rem corners, each group
    parted by a thin rule with a little space each side. A tool that does not fit folds into the three
-   dots, least used first; what a Markdown file cannot keep is away for one. On a narrow window the
-   line slides sideways instead, find, the dots and the microphone kept at its end. */
+   dots, least used first, at every width; what a Markdown file cannot keep is away for one. Find,
+   the dots and the microphone keep to its end. */
 
 .quire-bar {
     contain: inline-size;
