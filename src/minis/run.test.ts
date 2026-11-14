@@ -101,34 +101,51 @@ test("a run written as text reads back the same, piece for piece, for many runs 
 });
 
 test("text that is not a run of this form is not read, and says why", () => {
-    expect(() => read("v3.s1_0_0_3_0")).toThrow("v2 or v1");
-    expect(() => read("v1.q1_0_0_3_0")).toThrow("not a piece");
+    expect(() => read("v4.s1_0_0_3_0")).toThrow("v3, v2 or v1");
+    expect(() => read("v1.k1_0_0_3_0")).toThrow("not a piece");
     expect(() => read("v1.s9_0_0_3_0")).toThrow("not a piece");
     expect(() => read("v1.s1_0_0_3_8")).toThrow("turned");
     expect(() => read("v1.s1_0_0_3_x")).toThrow("whole number");
     expect(() => read("v1.c2_1_0_0_3_0")).toThrow("not a piece");
     expect(read("v1")).toEqual([]);
     expect(read("v2")).toEqual([]);
-    // a bend only in the new form, only on a piece that bends, two numbers a point
+    expect(read("v3")).toEqual([]);
+    // a bend only from v2 on, only on a piece that bends, two numbers a point
     expect(() => read("v1.s1_0_0_3_0b5_5")).toThrow("bend");
     expect(() => read("v2.t0_0_3_0b5_5")).toThrow("bent");
     expect(() => read("v2.s1_0_0_3_0b5")).toThrow("bent");
     expect(() => read("v2.s1_0_0_3_0b5_5b1_1")).toThrow("bend");
     expect(() => read("v2.s1_0_0_3_0b5_x")).toThrow("whole number");
+    expect(() => read("v3.w0_0_3_0b5_5")).toThrow("bent");
+    // a moving or sounding piece only in v3, with its own number in range
+    expect(() => read("v2.w0_0_3_0")).toThrow("moving or sounding");
+    expect(() => read("v1.m4_0_0_3_0")).toThrow("moving or sounding");
+    expect(() => read("v3.m15_0_0_3_0")).toThrow("not a piece");
+    expect(() => read("v3.u3_0_0_3_0")).toThrow("not a piece");
+    expect(() => read("v3.e_0_0_3_0")).toThrow("whole number");
+    expect(read("v3.m14_0_0_3_0")[0]!.kind).toEqual({ family: "m", sizes: [14], mirror: false });
 });
 
-test("every run of the form before, v1, is read as it was, and written again in the new form says the same", () => {
-    for (const made of RUNS) {
+test("every run of the forms before, v1 and v2, is read as it was, and written again in the new form says the same", () => {
+    const old = RUNS.filter((made) => !made.text.startsWith("v3."));
+    expect(old.length).toBe(3);
+    for (const made of old) {
         expect(made.text.startsWith("v1.")).toBe(true);
         const run = read(made.text);
-        expect(write(run)).toBe(`v2${made.text.slice(2)}`);
+        expect(write(run)).toBe(`v3${made.text.slice(2)}`);
         expect(upgraded(made.text)).toBe(write(run));
         expect(read(upgraded(made.text))).toEqual(run);
+        // and the same run written as v2, as stage 4 did
+        expect(read(`v2${made.text.slice(2)}`)).toEqual(run);
+        expect(upgraded(`v2${made.text.slice(2)}`)).toBe(write(run));
     }
-    expect(upgraded("v2.s1_0_0_3_0b5_5")).toBe("v2.s1_0_0_3_0b5_5");
+    expect(upgraded("v2.s1_0_0_3_0b5_5")).toBe("v3.s1_0_0_3_0b5_5");
+    expect(upgraded("v3.s1_0_0_3_0b5_5")).toBe("v3.s1_0_0_3_0b5_5");
     expect(upgraded("not a run")).toBe("not a run");
     // bent by naught is written as not bent at all
-    expect(write(read("v2.s1_0_0_3_0b0_0"))).toBe("v2.s1_0_0_3_0");
+    expect(write(read("v2.s1_0_0_3_0b0_0"))).toBe("v3.s1_0_0_3_0");
+    // a moving piece written mirrored is read as it is, since it is the same mirrored
+    expect(write(read("v3.w0_0_3_5"))).toBe("v3.w0_0_3_1");
 });
 
 test("a bent piece overlaps another only where their room crosses: one bowed a little into the next row is clear of a straight along it, one bowed further is not; bent below the ground it does not fit", () => {

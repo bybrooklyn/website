@@ -1,5 +1,5 @@
 // What is checked while a run is built, to be shown quietly on the pieces and never enforced: an open
-// end that is not a tray's, where marbles will fall off; a stretch too shallow for a marble to keep
+// end that is not a tray's or over a funnel's bowl, where marbles will fall off; a stretch too shallow for a marble to keep
 // rolling, where it will stop; a turn taken faster than it can hold a marble. Speeds are worked out
 // along the run from each hopper, by a marble's energy: what a drop gives a rolling marble (10/7 g h
 // in v squared), less what rolling and turning cost, at rates fitted to Mote's marbles on the made runs
@@ -8,7 +8,8 @@
 //
 //   checks(run);       // [{ id, why: "open", joint }, { id, why: "fast" }, ...]
 
-import { pathOf, shapeOf, sweepOf, type Kind, type Length } from "./pieces";
+import { pathOf, shapeOf, sweepOf, toWorld, type Kind, type Length } from "./pieces";
+import { isPart } from "./parts";
 import { links, open, type Placed } from "./run";
 import type { V3 } from "../mote/solids";
 
@@ -132,10 +133,27 @@ export function speeds(run: Placed[]): Map<string, number> {
     return walk(run).speeds;
 }
 
+/**
+ * Whether a marble leaving an open end falls into a funnel's bowl: the place a few centimetres on from
+ * the end is over the bowl, well inside its rim, and the end is above the rim. Such an end is not open:
+ * it is how a run feeds a funnel from above, as a loop back to a lift does.
+ */
+export function intoBowl(run: Placed[], at: V3, way: V3): boolean {
+    for (const piece of run) {
+        const bowl = shapeOf(piece.kind).bowl;
+        if (!bowl) continue;
+        const middle = toWorld(piece.place, bowl.at);
+        const [rim, top] = bowl.profile[bowl.profile.length - 1]!;
+        const on: V3 = [at[0] + way[0] * 3, at[1], at[2] + way[2] * 3];
+        if (Math.hypot(on[0] - middle[0], on[2] - middle[2]) < rim - 1.5 && at[1] > middle[1] + top) return true;
+    }
+    return false;
+}
+
 /** Everything marked on a run, each piece and reason once. */
 export function checks(run: Placed[]): Mark[] {
     const marks: Mark[] = [];
-    for (const end of open(run)) if (run.find((piece) => piece.id === end.id)!.kind.family !== "t") marks.push({ id: end.id, why: "open", joint: end.joint });
+    for (const end of open(run)) if (run.find((piece) => piece.id === end.id)!.kind.family !== "t" && !intoBowl(run, end.at, end.way)) marks.push({ id: end.id, why: "open", joint: end.joint });
     marks.push(...walk(run).marks);
     return marks;
 }
@@ -163,7 +181,8 @@ function walk(run: Placed[]): { speeds: Map<string, number>; marks: Mark[] } {
             speeds.set(`${next.id} ${next.joint}`, Math.sqrt(result.end));
             const joints = shapeOf(piece.kind).joints.length;
             // into a tray, a hopper's mouth, or a piece entered by a way it cannot be gone through
-            if (joints < 2 || piece.kind.family === "h") break;
+            // a moving or sounding piece passes a marble on in its own way, which is not guessed at here: the ghost follows it
+            if (joints < 2 || piece.kind.family === "h" || isPart(piece.kind.family)) break;
             if (piece.kind.family === "f" && next.joint === 1) break;
             result = along(route(piece.kind, next.joint), result.end);
             if (result.stopped) mark(piece.id, "shallow");

@@ -14,6 +14,7 @@
 // form of it.
 
 import { BENDABLE, CELL, LEVEL, SIZES, allowed, brokenBy, isBent, keyOf, pointsAt, pointsOf, shapeOf, toWorld, withBend, type Family, type Kind, type Place } from "./pieces";
+import { PARTS } from "./parts";
 import { fits, jointsOf, links, open, read, write, type Open, type Placed } from "./run";
 import type { V3 } from "../mote/solids";
 
@@ -135,8 +136,8 @@ export function groupSnaps(run: Placed[], group: Placed[]): GroupSnap[] {
     return found;
 }
 
-/** Families whose pieces are the same mirrored, kept unmirrored so that a run's text says no more than it must. */
-const PLAIN = new Set<Family>(["s", "d", "v", "h", "t"]);
+/** Families whose pieces are the same mirrored, kept unmirrored so that a run's text says no more than it must: among them every moving and sounding piece. */
+const PLAIN = new Set<Family>(["s", "d", "v", "h", "t", ...(Object.keys(PARTS) as Family[])]);
 
 /**
  * A group reflected left for right across an upright plane: `across` "z" is the plane z = `twice` / 2
@@ -185,16 +186,23 @@ export function mirrorLine(run: Placed[], ids: number[], turn: number): { across
     return { across: "z", twice: Math.round((2 * middle[2]) / CELL) };
 }
 
-/** Which of a family's own numbers its end handle changes; the others it keeps (a curve's quarters, a spiral's turns). */
-export const RESIZABLE: Partial<Record<Family, number[]>> = { s: [0], c: [0], d: [0, 1], z: [0, 1], v: [0], x: [1] };
+/** Which of a family's own numbers its knob changes; the others it keeps (a curve's quarters, a spiral's turns). A lift's height, a hoist's length, how many marbles tip a seesaw, a spinner's arms and a chime bar's note are set the same way. */
+export const RESIZABLE: Partial<Record<Family, number[]>> = { s: [0], c: [0], d: [0, 1], z: [0, 1], v: [0], x: [1], u: [0], y: [0], e: [0], o: [0], m: [0] };
+
+/** Where a piece's knob is in its own place: past its far joint, or where the piece says (a seesaw's weights, a spinner's axle, a chime bar's end). */
+export function knobAt(kind: Kind): V3 {
+    const shape = shapeOf(kind);
+    return shape.knob ?? shape.joints[1]!.at;
+}
 
 /** Whether a piece can be made longer or shorter by its end. */
 export const resizable = (kind: Kind) => RESIZABLE[kind.family] !== undefined;
 
 /**
- * The piece of the same family, made by changing only the numbers its end handle changes, whose far
- * joint is nearest `wanted` (a point in the piece's own place): a straight dragged by its end grows
- * and shrinks by cells, a slope by cells along and levels down, a curve between tight and wide.
+ * The piece of the same family, made by changing only the numbers its knob changes, whose knob would
+ * be nearest `wanted` (a point in the piece's own place): a straight dragged by its end grows and
+ * shrinks by cells, a slope by cells along and levels down, a curve between tight and wide, a chime
+ * bar by its end from one note to the next, a lift by its top from one level to the next.
  */
 export function resized(kind: Kind, wanted: V3): Kind {
     const which = RESIZABLE[kind.family];
@@ -204,7 +212,7 @@ export function resized(kind: Kind, wanted: V3): Kind {
     const tryIt = (sizes: number[]) => {
         if (!allowed(kind.family, sizes)) return;
         const made: Kind = { family: kind.family, sizes, mirror: kind.mirror };
-        const end = shapeOf(made).joints[1]!.at;
+        const end = knobAt(made);
         const d = Math.hypot(end[0] - wanted[0], (end[1] - wanted[1]) * 2, end[2] - wanted[2]);
         if (d < best.d - 1e-9) best = { kind: made, d };
     };

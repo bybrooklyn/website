@@ -3,15 +3,16 @@
 // being placed could snap and how it would be turned and moved to fit, whether pieces overlap, and
 // writes a run as a short line of text and reads it back exactly.
 //
-//   const run: Placed[] = read("v2.h0_0_6_0.s1_-1_0_6_0b0_12");
+//   const run: Placed[] = read("v3.h0_0_6_0.s1_-1_0_6_0b0_12");
 //   links(run);                         // the joints that meet
 //   snaps(run, kind);                   // every place a new piece would fit against an open joint
-//   write(run);                         // "v2.h0_0_6_0.s1_-1_0_6_0b0_12"
+//   write(run);                         // "v3.h0_0_6_0.s1_-1_0_6_0b0_12"
 //
 // Joints are never stored. Two joints of the same kind, at the same place, facing each other, are
 // joined; move a piece and they part. Everything is on the box's grid (pieces.ts), so a joint that
 // meets another meets it exactly, and the test for it allows a hair for rounding only.
 
+import { isPart } from "./parts";
 import { CELL, LEVEL, allowed, bendAllowed, boxToWorld, cellToWorld, isBent, keyOf, shapeOf, toWorld, wayToWorld, withBend, type Box, type Cell, type Kind, type Place } from "./pieces";
 import type { V3 } from "../mote/solids";
 
@@ -164,14 +165,14 @@ export function fits(run: Placed[], piece: Placed): boolean {
 
 // ---- as text ----
 
-/** The form a run is written in. A run of the form before (`v1`, which had no bends) is read too; any other is not. */
-export const VERSION = 2;
+/** The form a run is written in. Runs of the forms before are read too: `v2`, which had no moving or sounding pieces, and `v1`, which had no bends either; any other is not. */
+export const VERSION = 3;
 
 /** One piece as its text: its family, its numbers and its place, and its bend after a `b` if it is bent. */
 const token = (piece: Placed) => piece.kind.family + [...piece.kind.sizes, piece.place.x, piece.place.z, piece.place.y, (((piece.place.turn % 4) + 4) % 4) + (piece.kind.mirror ? 4 : 0)].join("_") + (isBent(piece.kind) ? `b${piece.kind.bend!.join("_")}` : "");
 
 /**
- * A run as one line of text: `v2`, then each piece in order after a dot, as its family letter and then
+ * A run as one line of text: `v3`, then each piece in order after a dot, as its family letter and then
  * its numbers between underscores: its own numbers, the corner of its first cell across and along, the
  * level of its first joint, and its quarter turns (with 4 added if it is mirrored). A long straight one
  * cell across at level 6, turned once, is `s2_1_0_6_1`. A bent piece goes on with `b` and its bend, each
@@ -182,14 +183,15 @@ export function write(run: Placed[]): string {
     return [`v${VERSION}`, ...run.map(token)].join(".");
 }
 
-/** A run read back from its text, `v2` or `v1`, its pieces numbered from 1 in order. Text that is not a run of either form throws, saying why. */
+/** A run read back from its text, `v3`, `v2` or `v1`, its pieces numbered from 1 in order. Text that is not a run of any of them throws, saying why. */
 export function read(text: string): Placed[] {
     const [head, ...pieces] = text.trim().split(".");
-    if (head !== `v${VERSION}` && head !== "v1") throw new Error(`A run starts with v${VERSION} or v1.`);
+    if (head !== `v${VERSION}` && head !== "v2" && head !== "v1") throw new Error(`A run starts with v${VERSION}, v2 or v1.`);
     return pieces.map((token, index) => {
         const [main, bent, ...more] = token.slice(1).split("b");
         if (more.length || (bent !== undefined && head === "v1")) throw new Error(`Piece ${index + 1} has a bend where it cannot.`);
         const [family, rest] = [token.slice(0, 1), main!.split("_")];
+        if (isPart(family) && head !== `v${VERSION}`) throw new Error(`Piece ${index + 1} is a moving or sounding piece, which a ${head} run cannot have.`);
         const bend = bent === undefined ? [] : bent.split("_");
         if (![...rest, ...bend].every((part) => /^-?\d+$/.test(part))) throw new Error(`Piece ${index + 1} has a number that is not a whole number.`);
         const numbers = rest.map(Number);
@@ -197,16 +199,17 @@ export function read(text: string): Placed[] {
         if (numbers.length < 4 || !allowed(family, sizes)) throw new Error(`Piece ${index + 1} is not a piece of the box.`);
         const [x, z, y, turn] = numbers.slice(-4) as [number, number, number, number];
         if (turn < 0 || turn > 7) throw new Error(`Piece ${index + 1} is turned by more than the turns there are.`);
-        const kind: Kind = { family, sizes, mirror: turn >= 4 };
+        // a moving or sounding piece is the same mirrored, and is never written mirrored; read so if it is
+        const kind: Kind = { family, sizes, mirror: turn >= 4 && !isPart(family) };
         if (bent !== undefined) kind.bend = bend.map(Number);
         if (!bendAllowed(kind)) throw new Error(`Piece ${index + 1} is bent in a way it cannot be.`);
         return { id: index + 1, kind: withBend(kind, kind.bend), place: { x, z, y, turn: turn % 4 } };
     });
 }
 
-/** A run's text in the form written now: a `v1` run read and written again, the same run; anything else as it is. */
+/** A run's text in the form written now: a `v1` or `v2` run read and written again, the same run; anything else as it is. */
 export function upgraded(text: string): string {
-    if (!text.startsWith("v1")) return text;
+    if (!text.startsWith("v1") && !text.startsWith("v2")) return text;
     try {
         return write(read(text));
     } catch {

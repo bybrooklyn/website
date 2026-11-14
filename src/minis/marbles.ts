@@ -3,10 +3,11 @@
 // snapping, pillars and marbles; then the editor: a selection of one piece or many, handles to move,
 // turn and resize it, undo without limit, copy, paste and mirror, pieces of one's own, views straight
 // on, and a ghost marble showing where a marble would go; then bending a piece by points along it,
-// within its limits. Moving parts, sound of its own and the look of wood and glass come later; it is
-// drawn flat shaded in the site's colors.
+// within its limits; then moving and sounding pieces (parts.ts), drawn where Mote's physics has them each
+// frame, and the run's own sound, each strike made by Mote's sound code from how fast it was and what
+// was struck. The look of wood and glass comes later; it is drawn flat shaded in the site's colors.
 //
-// What it stands on: pieces.ts (the box), run.ts (a run as data), edit.ts (groups moved, turned,
+// What it stands on: pieces.ts (the box) and parts.ts (its moving and sounding pieces), run.ts (a run as data), edit.ts (groups moved, turned,
 // mirrored, resized), history.ts (undo), ghost.ts (the ghost marble), handles.ts (the handles),
 // table.ts (Mote's physics for a run), supports.ts (pillars), checks.ts (open ends), orbit.ts (the
 // camera), runs.ts (made runs), toolbar.ts (the icons and the bar).
@@ -20,20 +21,21 @@
 import { gl, type Color, type Look, type Part, type View } from "../mote/gl";
 import { turn as turnOf, type Solid } from "../mote/space";
 import { ball, block, type Mesh, type Turn, type V3 } from "../mote/solids";
-import { sounds, type Sounds } from "../mote/sound";
+import { sounds, type Sounds, type Strike } from "../mote/sound";
 import { el, type Hand, type Mote, type Scene } from "../mote/stage";
 import { turned } from "../mote/track";
 import { checks, type Mark } from "./checks";
-import { STILL as NO_MOVE, about, asOwn, groupFits, groupSnaps, joinedTo, matched, middleOf, mirrored, mirrorLine, moved, movedPoint, pivotOf, resizable, resized, rotated, then, type GroupSnap, type Move } from "./edit";
+import { STILL as NO_MOVE, about, asOwn, groupFits, groupSnaps, joinedTo, knobAt, matched, middleOf, mirrored, mirrorLine, moved, movedPoint, pivotOf, RESIZABLE, rebent, resizable, resized, rotated, then, type GroupSnap, type Move } from "./edit";
 import { ghostMarks, makeGhost } from "./ghost";
 import { AXES, ARROW, RING, across, along, arrowMesh, dragged, freedomOf, layout, pixelsOf, pointOf, pointsLayout, ringMesh, snapped, standOff, turnedBy, which, type Freedom, type Handle, type Shown, type Snaps } from "./handles";
 import { begun, canRedo, canUndo, readSteps, recorded, redone, replaced, trimmed, undone, type Steps } from "./history";
 import { NARROW, STRAIGHT, eyeOf, enters, framing, ground, kept, lensed, nearest, panned, project, ray, straightOn, type Orbit } from "./orbit";
-import { BOX, CELL, FURTHEST, LEVEL, RADIUS, bendAllowed, blockMesh, boxToWorld, brokenBy, isBent, keyOf, pointsIn, pointsOf, shapeOf, strainOf, sweepOf, toWorld, warned, wayToWorld, withBend, type Box, type Broken, type Kind, type Place } from "./pieces";
+import { BOX, CELL, FURTHEST, LEVEL, RADIUS, SIZES, allowed, bendAllowed, blockMesh, boxToWorld, brokenBy, isBent, keyOf, pointsIn, pointsOf, shapeOf, strainOf, sweepOf, toWorld, warned, wayToWorld, withBend, type Box, type Broken, type Kind, type Place } from "./pieces";
 import { fits, jointsOf, links, open, read, upgraded, write, type Open, type Placed } from "./run";
 import { RUNS } from "./runs";
 import { PILLAR } from "./supports";
-import { makeTable } from "./table";
+import { NOTES, type Body, type Moving } from "./parts";
+import { chainAt, chainLength, makeTable } from "./table";
 import { fold, icon, stacking, swap, tool } from "./toolbar";
 
 export const label = "A marble run to build: pieces from a box snap together end to end, and marbles roll down what is built.";
@@ -51,14 +53,53 @@ const SETTLE = 0.09;
 const FLY = 0.28;
 /** How often a stream lets a marble go, in seconds. */
 const STREAM = 0.6;
-/** How long the ghost may work each frame, in milliseconds: less while something is carried or a point dragged, so that the drag stays smooth. */
+/** How fast a marble strikes each thing for the strike to sound at its hardest, in cm/s: a metre's drop is 340. */
+const HARD: Record<Strike, number> = { wood: 150, glass: 120, metal: 130, chime: 110, bell: 110, drum: 110 };
+/** How long the ghost may work each frame, in milliseconds: less while something is carried or a point dragged, so that the drag stays smooth, and while marbles are in play, when the moving parts they turn start it again often. */
 const GHOST_WORK = { carrying: 2.5, still: 6 };
 
-/** What a piece is drawn with, in its own place: blocks of track, plain boxes, and glass. */
+/** What a piece is drawn with, in its own place: blocks of track, plain boxes, glass, what is struck and sounds, and its moving part as it rests, which is drawn so only where the physics does not have it (in the box, carried, flying). */
 interface Drawing {
     wood?: Mesh;
     flat?: Mesh;
     glass?: Mesh;
+    metal?: Mesh;
+    moving?: Mesh;
+}
+
+/** A mesh with every point turned about the line through `at` along a unit axis by an angle, for drawing a part as it rests. */
+function turnedMesh(mesh: Mesh, at: V3, axis: V3, angle: number): Mesh {
+    const [c, k] = [Math.cos(angle), Math.sin(angle)];
+    const points = mesh.points.map((p): V3 => {
+        const r: V3 = [p[0] - at[0], p[1] - at[1], p[2] - at[2]];
+        const along = r[0] * axis[0] + r[1] * axis[1] + r[2] * axis[2];
+        const cross: V3 = [axis[1] * r[2] - axis[2] * r[1], axis[2] * r[0] - axis[0] * r[2], axis[0] * r[1] - axis[1] * r[0]];
+        return [0, 1, 2].map((i) => at[i]! + r[i]! * c + cross[i]! * k + axis[i]! * along * (1 - c)) as V3;
+    });
+    return { ...mesh, points };
+}
+
+/** A body of a moving part as a mesh in its piece's own place: a box at its middle, leant and turned as the body is, then turned about `at` along `axis` by `angle` more. */
+function bodyMesh(body: Body, at: V3, axis: V3, angle: number, about = body.at): Mesh {
+    const box = block(body.half);
+    let mesh: Mesh = { ...box, points: box.points.map((p): V3 => [p[0] + body.at[0], p[1] + body.at[1], p[2] + body.at[2]]) };
+    if (body.lean) mesh = turnedMesh(mesh, body.at, [1, 0, 0], body.lean);
+    if (body.turn) mesh = turnedMesh(mesh, about === body.at ? body.at : at, axis, body.turn);
+    return angle ? turnedMesh(mesh, at, axis, angle) : mesh;
+}
+
+/** A moving part as it rests, in its piece's own place: a hinge at its starting angle, a lift's car at the bottom, a hoist's paddles round its chain. */
+function restingMeshes(moving: Moving): Mesh[] {
+    if (moving.kind === "hinge") return moving.bodies.map((body) => bodyMesh(body, moving.at, moving.axis, moving.start, moving.at));
+    if (moving.kind === "lift") return moving.bodies.map((body) => bodyMesh(body, body.at, [0, 0, 1], 0));
+    const paddle = moving.bodies[0]!;
+    const long = chainLength(moving);
+    return Array.from({ length: moving.count }, (_, k) => {
+        const { at, out } = chainAt(moving, (long * k) / moving.count);
+        const angle = Math.atan2(-out[0], out[1]);
+        const middle: V3 = [at[0] + out[0] * paddle.at[1], at[1] + out[1] * paddle.at[1], paddle.at[2]];
+        return turnedMesh(bodyMesh({ ...paddle, at: middle }, middle, [0, 0, 1], 0), middle, [0, 0, 1], angle);
+    });
 }
 
 /** One mesh of several, each moved by `by`: for drawing a piece's parts as one. */
@@ -98,7 +139,11 @@ function drawingOf(kind: Kind): Drawing {
         wood.push({ mesh: turned(at, profile, thick).mesh() });
     }
     const flat = [...shape.boxes, ...shape.stands].map((box) => ({ mesh: block(box.half), by: box.at }));
-    const made: Drawing = { wood: merged(wood, true), flat: merged(flat, false), glass: merged(glass, true) };
+    for (const box of shape.panes ?? []) glass.push({ mesh: { ...block(box.half), points: block(box.half).points.map((p): V3 => [p[0] + box.at[0], p[1] + box.at[1], p[2] + box.at[2]]) } });
+    // what a marble strikes, tilted about the line across the piece as the physics has it
+    const metal = shape.struck ? [{ mesh: turnedMesh({ ...shape.struck.mesh, points: shape.struck.mesh.points.map((p): V3 => [p[0] + shape.struck!.at[0], p[1] + shape.struck!.at[1], p[2] + shape.struck!.at[2]]) }, shape.struck.at, [0, 0, 1], shape.struck.tilt) }] : [];
+    const moving = shape.moving ? restingMeshes(shape.moving).map((mesh) => ({ mesh })) : [];
+    const made: Drawing = { wood: merged(wood, true), flat: merged(flat, false), glass: merged(glass, true), metal: merged(metal, shape.struck?.sound === "bell"), moving: merged(moving, false) };
     drawings.set(key, made);
     // a bend dragged is a new drawing at every millimetre; the oldest are let go
     if (drawings.size > 400) drawings.delete(drawings.keys().next().value!);
@@ -246,6 +291,8 @@ export default function marbles(m: Mote): Scene {
         y: view?.color("oklch(0.8 0.15 145)") ?? ([0.4, 1, 0.4] as Color),
         z: view?.color("oklch(0.72 0.13 250)") ?? ([0.4, 0.6, 1] as Color),
         ghost: tint("--ink", 0.9),
+        metal: tint("--ink", 0.62),
+        moving: tint("--muted", 0.82),
     };
     /** The axes' colours as the 2D canvas writes them, for the little axes in the corner. */
     const css = { x: "oklch(0.7 0.16 25)", y: "oklch(0.8 0.15 145)", z: "oklch(0.72 0.13 250)" };
@@ -297,6 +344,8 @@ export default function marbles(m: Mote): Scene {
 
     // ---- drawing ----
     const drawn = new Map<number, { key: string; parts: Drawn[] }>();
+    /** The moving parts of the run, each solid drawn where Mote's physics has it, by its piece. */
+    const movers = new Map<Solid, { id: number; drawn: Drawn }>();
     const marbleParts = new Map<Solid, Part[]>();
     let pillarParts: Part[] = [];
     let markParts: Part[] = [];
@@ -306,15 +355,15 @@ export default function marbles(m: Mote): Scene {
     const halves = [0, 1].map((side): Mesh => ({ ...marble, faces: marble.faces.filter((_, face) => Math.floor(face / 10) < 9 === (side === 0)) }));
     let hues = 0;
 
-    const lookOf = (which: keyof Drawing, color: Color, alpha = 1): Look => ({ color, gloss: which === "glass" ? 0.5 : 0.12, alpha: which === "glass" ? Math.min(alpha, 0.38) : alpha, casts: which !== "glass" && alpha >= 1 });
-    /** Parts for a kind of piece, in a color; see-through for a piece carried. */
-    const partsOf = (kind: Kind, alpha = 1, color?: Color): Drawn[] => {
+    const lookOf = (which: keyof Drawing, color: Color, alpha = 1): Look => ({ color, gloss: which === "glass" ? 0.5 : which === "metal" ? 0.55 : 0.12, alpha: which === "glass" ? Math.min(alpha, 0.38) : alpha, casts: which !== "glass" && alpha >= 1 });
+    /** Parts for a kind of piece, in a color; see-through for a piece carried. Its moving part as it rests is drawn too unless `still` is false: a piece in the run has its moving part drawn where the physics has it. */
+    const partsOf = (kind: Kind, alpha = 1, color?: Color, still = true): Drawn[] => {
         if (!view) return [];
         const drawing = drawingOf(kind);
         const out: Drawn[] = [];
-        for (const which of ["wood", "flat", "glass"] as const) {
+        for (const which of ["wood", "flat", "glass", "metal", "moving"] as const) {
             const mesh = drawing[which];
-            if (!mesh) continue;
+            if (!mesh || (which === "moving" && !still)) continue;
             const base = which === "glass" ? colors.glass : color ?? colors[which];
             const look = lookOf(which, base, alpha);
             out.push({ part: view.add(mesh, look), look, base, glass: which === "glass" });
@@ -385,7 +434,7 @@ export default function marbles(m: Mote): Scene {
                 one = undefined;
             }
             if (!one) {
-                one = { key, parts: partsOf(piece.kind) };
+                one = { key, parts: partsOf(piece.kind, 1, undefined, false) };
                 drawn.set(piece.id, one);
             }
             pose(one.parts, originOf(piece.place), angleOf(piece.place));
@@ -399,6 +448,7 @@ export default function marbles(m: Mote): Scene {
                 part.look.color = strained === 2 ? mix(color, colors.wrong, 0.6) : strained === 1 ? mix(color, colors.warn, 0.6) : color;
             }
         }
+        drawMovers();
         // the pillars, from the table, each height's mesh made once
         for (const part of pillarParts) view.remove(part);
         pillarParts = table.pillars.map((pillar) => {
@@ -438,6 +488,34 @@ export default function marbles(m: Mote): Scene {
         const [low, high] = bounds(run);
         view.light([low[0] - 80, high[1] + 220, high[2] + 140], [low[0] - 10, 0, low[2] - 10], [high[0] + 10, high[1] + 10, high[2] + 10], 1.5, 0.62, 0.32);
     };
+
+    /** The moving parts' drawings made to match the table: a part for each solid of each moving piece, in its piece's tint, and none for what has gone. */
+    function drawMovers() {
+        if (!view) return;
+        const now = new Set<Solid>();
+        for (const { id, solids } of table.movers()) {
+            const piece = run.find((one) => one.id === id);
+            if (!piece) continue;
+            const metal = shapeOf(piece.kind).moving?.sound === "metal";
+            for (const solid of solids) {
+                now.add(solid);
+                let one = movers.get(solid);
+                if (!one) {
+                    const base = metal ? colors.metal : colors.moving;
+                    const look = lookOf(metal ? "metal" : "moving", base);
+                    one = { id, drawn: { part: view.add({ points: solid.points, faces: solid.faces }, look), look, base, glass: false } };
+                    movers.set(solid, one);
+                }
+                const marked = ghostMarked.some((mark) => mark.id === id);
+                one.drawn.look.color = chosen.has(id) ? mix(one.drawn.base, colors.accent, 0.5) : marked ? mix(one.drawn.base, colors.warn, 0.6) : one.drawn.base;
+            }
+        }
+        for (const [solid, one] of movers) {
+            if (now.has(solid)) continue;
+            view.remove(one.drawn.part);
+            movers.delete(solid);
+        }
+    }
 
     /** The least and greatest corners of pieces, or of a patch of table if there are none. */
     const bounds = (pieces: Placed[]): [V3, V3] => {
@@ -832,7 +910,10 @@ export default function marbles(m: Mote): Scene {
     const knobOf = (pieces: Placed[]): V3 | undefined => {
         if (pieces.length !== 1 || !resizable(pieces[0]!.kind)) return undefined;
         const piece = pieces[0]!;
-        const joint = shapeOf(piece.kind).joints[1];
+        const shape = shapeOf(piece.kind);
+        // a moving or sounding piece says where its knob is: a seesaw's weights, a spinner's axle, a chime bar's end
+        if (shape.knob) return toWorld(piece.place, shape.knob);
+        const joint = shape.joints[1];
         if (!joint) return undefined;
         const at = toWorld(piece.place, joint.at);
         const way = wayToWorld(piece.place, joint.way);
@@ -933,7 +1014,9 @@ export default function marbles(m: Mote): Scene {
                     one.home = [{ ...piece, kind }];
                     for (const { part } of one.parts.get(piece.id) ?? []) view?.remove(part);
                     one.parts.set(piece.id, partsOf(kind, 0.62, colors.accent));
-                    sound?.knock(0.3, 1700);
+                    // a chime bar sounds its new note, so that a tune can be set by ear
+                    if (kind.family === "m") sound?.strike("chime", 0.55, NOTES[kind.sizes[0]!]);
+                    else sound?.knock(0.3, 1700);
                 }
             }
         }
@@ -947,14 +1030,15 @@ export default function marbles(m: Mote): Scene {
     };
     /**
      * Where the pointer's line meets the plane a piece is resized in, in the piece's own place: the
-     * level of its far end for those that grow along or aside, and the upright plane along it for
-     * those that grow down (a slope, a drop, a spiral).
+     * level of its knob for those that grow along or aside (and a chime bar, a spinner), and the upright
+     * plane along it for those that grow down or up (a slope, a drop, a spiral, a lift, a hoist, a
+     * seesaw's weights).
      */
     const ownPoint = (piece: Placed, line: ReturnType<typeof lineAt>): V3 | undefined => {
-        const shape = shapeOf(piece.kind);
-        const far = toWorld(piece.place, shape.joints[1]!.at);
+        const far = toWorld(piece.place, knobAt(piece.kind));
         let hit: V3 | undefined;
-        if (piece.kind.family === "d" || piece.kind.family === "v" || piece.kind.family === "x") {
+        // those that grow up or down are dragged in the upright plane along them: a lift's height, a hoist's length, a seesaw's weights
+        if ("dvxuye".includes(piece.kind.family)) {
             const n = wayToWorld(piece.place, [0, 0, 1]);
             const facing = line.way[0] * n[0] + line.way[2] * n[2];
             if (Math.abs(facing) > 0.08) {
@@ -1152,10 +1236,30 @@ export default function marbles(m: Mote): Scene {
         for (const part of marbleParts.get(one) ?? []) view?.remove(part);
         marbleParts.delete(one);
     };
+    /**
+     * Each strike heard as what was struck: marble on marble glass, on track or a wall wood, on a moving
+     * part wood or metal, a chime bar at its note, a bell, a drum, the cloth a soft low knock; as loud
+     * and as bright as it was fast, against how fast that thing is struck hard (`HARD`). A strike and
+     * its echo in the next step or two are one strike.
+     */
+    const lastStruck = new Map<number, number>();
     table.space.hit = (a, b, speed) => {
         if (!sound) return;
+        const pair = a.id * 65536 + b.id;
+        if (time - (lastStruck.get(pair) ?? -1) < 0.04) return;
+        lastStruck.set(pair, time);
+        if (lastStruck.size > 4000) lastStruck.clear();
         const both = a.radius !== undefined && b.radius !== undefined;
-        sound.knock(Math.min(1, speed / 160), both ? 2600 : a.piece || b.piece ? 900 : 600);
+        const heard = both ? undefined : table.heard(a.radius === undefined ? a : b);
+        const kind: Strike = both ? "glass" : heard?.kind ?? "wood";
+        const hard = (speed / HARD[kind]) * (heard?.soft ? 0.45 : 1);
+        sound.strike(kind, hard, kind === "chime" ? heard?.pitch : heard?.soft ? 0.6 : undefined);
+    };
+    // a seesaw, a trapdoor, a gate or a switch knocking against its stop
+    table.space.knocked = (hinge, speed) => {
+        const id = table.hingeOf(hinge);
+        const piece = run.find((one) => one.id === id);
+        sound?.strike(piece && shapeOf(piece.kind).moving?.sound === "metal" ? "metal" : "wood", speed / HARD.wood, 0.75);
     };
     /** Pieces of the run changed in place, if they fit there; a small no if not. */
     const commit = (changedPieces: Placed[], pitch = 1500) => {
@@ -1315,6 +1419,29 @@ export default function marbles(m: Mote): Scene {
         paintCarried();
         m.wake();
     };
+    /**
+     * The next or last setting of the one piece chosen, by its knob's number: a chime bar's note, a
+     * lift's height, a hoist's length, a spinner's arms, how many marbles tip a seesaw, and a straight's
+     * length or a drop's height as the knob would make them. A small no if it has none or would not fit.
+     */
+    const stepSetting = (by: number) => {
+        const pieces = chosenPieces();
+        const piece = pieces.length === 1 ? pieces[0]! : undefined;
+        const which = piece && RESIZABLE[piece.kind.family];
+        if (!piece || !which || which.length !== 1) return refuse();
+        const index = which[0]!;
+        const [least, most] = SIZES[piece.kind.family][index]!;
+        let size = piece.kind.sizes[index]!;
+        do size += by;
+        while (size >= least && size <= most && !allowed(piece.kind.family, piece.kind.sizes.map((one, i) => (i === index ? size : one))));
+        if (size < least || size > most) return refuse();
+        const kind = rebent(piece.kind, { family: piece.kind.family, sizes: piece.kind.sizes.map((one, i) => (i === index ? size : one)), mirror: piece.kind.mirror });
+        if (!groupFits(run, [{ ...piece, kind }])) return refuse();
+        run = run.map((one) => (one.id === piece.id ? { ...one, kind } : one));
+        if (kind.family === "m") sound?.strike("chime", 0.55, NOTES[kind.sizes[0]!]);
+        else sound?.knock(0.3, 1700);
+        changed();
+    };
     const toggleStream = () => {
         streaming = !streaming;
         streamWait = 0;
@@ -1467,6 +1594,7 @@ export default function marbles(m: Mote): Scene {
             ["bending: arrows, Q, E", "move the point aside, up, down"],
             ["bending: comma, full stop, Delete", "the point before, after; straighten it"],
             ["Alt or a second finger, dragging a point", "no snapping"],
+            ["N, Shift+N", "the next or last setting: a chime bar's note, a lift's height, a spinner's arms, how many marbles tip a seesaw, a length"],
             ["Delete", "take away"],
             ["Ctrl+C, X, V, D", "copy, cut, paste, duplicate"],
             ["Ctrl+Z, Ctrl+Shift+Z", "undo, redo"],
@@ -1686,6 +1814,7 @@ export default function marbles(m: Mote): Scene {
             else if (key === " ") (event.shiftKey ? toggleStream : letGo)();
             else if (lower === "p") togglePause();
             else if (lower === "c") clearMarbles();
+            else if (lower === "n") stepSetting(event.shiftKey ? -1 : 1);
             else if (lower === "m") {
                 sound?.button.click();
                 tell();
@@ -1785,19 +1914,29 @@ export default function marbles(m: Mote): Scene {
         }
         return points.length ? { points, faces, smooth: true } : undefined;
     };
+    /** The state of the real table's parts that changes where the next marble goes: which way each switch leans, and how many marbles wait in each seesaw and on each trapdoor. */
+    const partsKey = () => {
+        const state = table.parts();
+        let key = "";
+        for (const piece of resting()) {
+            if (piece.kind.family === "w") key += `${piece.id}${(state.get(piece.id)?.[0] ?? 0) > 0 ? "+" : "-"}`;
+            if (piece.kind.family === "e" || piece.kind.family === "j") key += `${piece.id}:${table.marbles.filter((one) => one.rest && table.pieceAt(one.p) === piece.id).length}`;
+        }
+        return key;
+    };
     const drawGhost = (dt: number) => {
         if (!view || m.preview) return;
-        const key = write(ghostRun());
+        const key = write(ghostRun()) + partsKey();
         if (key !== ghostKey) {
             ghostKey = key;
-            ghost.start(ghostRun());
+            ghost.start(ghostRun(), table);
             ghostShown = -1;
             ghostPlays = 0;
             if (!carried) ghostClock = 0;
         }
         const before = performance.now();
         if (!ghost.done) {
-            ghost.work(carried || bendDrag ? GHOST_WORK.carrying : GHOST_WORK.still);
+            ghost.work(carried || bendDrag || table.running ? GHOST_WORK.carrying : GHOST_WORK.still);
             if (ghost.done && !carried) {
                 ghostMarked = ghostMarks(ghost.paths, openMarks);
                 redraw();
@@ -1884,7 +2023,27 @@ export default function marbles(m: Mote): Scene {
             ghost: () => ({ done: ghost.done, paths: ghost.paths.map((path) => ({ ending: path.ending, last: path.last, length: path.places.length, end: onScreen(path.places.at(-1)!) })) }),
             owns: () => owns.map((one) => one.name),
             carried: () => carried && { fits: carried.fits, count: carried.home.length, snapped: Boolean(carried.snap), move: carried.move, pivot: carried.pivot, anchor: carried.anchor, handle: carried.handle, kinds: carried.home.map((piece) => keyOf(piece.kind)), snaps: carried.snaps.map((snap) => ({ to: snap.to.id, joint: snap.joint.id, entry: snap.joint.joint, at: onScreen(movedPoint(snap.joint.at, carried!.move)), goal: onScreen(snap.to.at) })) },
-            marbles: () => ({ all: table.marbles.length, arrived: table.marbles.filter(table.arrived).length, asleep: table.marbles.filter((one) => one.rest).length }),
+            marbles: () => ({ all: table.marbles.length, arrived: table.marbles.filter(table.arrived).length, asleep: table.marbles.filter((one) => one.rest).length, places: table.marbles.map((one) => ({ at: [...one.p], piece: table.pieceAt(one.p) ?? null, asleep: Boolean(one.rest) })) }),
+            /** Every moving part: its piece, its family, a hinge's angle or a driven part's seconds, and where its first solid is on the screen. */
+            parts: () => {
+                const state = table.parts();
+                return table.movers().map(({ id, solids }) => ({ id, family: run.find((one) => one.id === id)?.kind.family, state: state.get(id) ?? [], at: onScreen(solids[0]!.p), asleep: solids.every((solid) => Boolean(solid.rest)) }));
+            },
+            running: () => table.running,
+            /** How many strikes have sounded, been left out or cut short, and sound now. */
+            sounding: () => (sound ? { ...sound.sounding } : undefined),
+            /** Steps the table by hand, as many steps of 1/120 s as asked, and lets marbles go every so often: for watching a run go on for minutes without waiting minutes. */
+            run: (steps: number, every = 0, count = 0) => {
+                let [made, wait] = [0, 0];
+                for (let step = 0; step < steps; step++) {
+                    wait -= 1 / 120;
+                    if (every && made < count && wait <= 0 && table.letGo().length) [made, wait] = [made + 1, every];
+                    table.step(1 / 120);
+                }
+                for (const one of table.marbles) show(one);
+                m.wake();
+                return { marbles: table.marbles.length, arrived: table.marbles.filter(table.arrived).length };
+            },
             marks: () => [...openMarks, ...ghostMarked],
             took: () => ({ ...took }),
             settle: () => {
@@ -2134,7 +2293,7 @@ export default function marbles(m: Mote): Scene {
             }
             shake = Math.max(0, shake - dt);
         },
-        resting: () => !m.preview && !carried && !bendDrag && !flying.length && !easing && lens === lensTo && !streaming && shake <= 0 && (!playing || table.marbles.every((one) => one.rest)) && !held.size && ghost.done && ghostPlays >= 1,
+        resting: () => !m.preview && !carried && !bendDrag && !flying.length && !easing && lens === lensTo && !streaming && shake <= 0 && (!playing || (table.marbles.every((one) => one.rest) && table.movers().every(({ solids }) => solids.every((solid) => solid.rest || (solid.driven && !table.running && !solid.v.some((x) => x !== 0)))))) && !held.size && ghost.done && ghostPlays >= 1,
         resize,
         debug: () => [`${run.length} pieces, ${table.marbles.length} marbles, ${table.marbles.filter((one) => one.rest).length} asleep`, `ghost ${took.ghost.toFixed(2)} ms, frame ${took.frame.toFixed(2)} ms`],
         destroy: () => {
@@ -2175,6 +2334,12 @@ export default function marbles(m: Mote): Scene {
                     part.at = one.p;
                     part.turn = turn;
                 }
+            }
+            // each moving part where the physics has it, hidden while its piece is still flying in from the box
+            for (const [solid, one] of movers) {
+                one.drawn.part.at = solid.p;
+                one.drawn.part.turn = turnOf(solid);
+                one.drawn.part.hidden = drawn.get(one.id)?.parts[0]?.part.hidden ?? false;
             }
             drawGhost(dt);
             // the handles, a fingertip's size at any distance, on what is chosen, or on what a handle carries
@@ -2350,10 +2515,10 @@ function paintBox(view: View | undefined, colors: Record<string, Color>, groups:
         const high: V3 = [-Infinity, -Infinity, -Infinity];
         for (const piece of group) {
             const drawing = drawingOf(piece.kind);
-            for (const which of ["wood", "flat", "glass"] as const) {
+            for (const which of ["wood", "flat", "glass", "metal", "moving"] as const) {
                 const mesh = drawing[which];
                 if (!mesh) continue;
-                const part = own.add(mesh, { color: colors[which] ?? colors.wood!, gloss: which === "glass" ? 0.5 : 0.12, alpha: which === "glass" ? 0.38 : 1 });
+                const part = own.add(mesh, { color: colors[which] ?? colors.wood!, gloss: which === "glass" ? 0.5 : which === "metal" ? 0.55 : 0.12, alpha: which === "glass" ? 0.38 : 1 });
                 part.at = [piece.place.x * CELL, piece.place.y * LEVEL, piece.place.z * CELL];
                 part.turn = turnAbout((piece.place.turn * Math.PI) / 2);
                 parts.push(part);
