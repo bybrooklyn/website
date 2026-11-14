@@ -71,8 +71,8 @@ test("a kept learner of another size is refused before it is written, and practi
     leader.onmessage = (event: MessageEvent<Report>) => reports.push(event.data);
     const beating = setInterval(() => leader.postMessage({ kind: "beat" } satisfies Order), 300);
     try {
-        // running numbers of the right length for two legs (1 + 2 * 114 + 3), and a state far too long
-        const kept = { state: new Float32Array(20_000_000), running: new Float64Array(232), seconds: 100, steps: 1e6 };
+        // running numbers of the right length for two legs (1 + 2 * 120 + 3), and a state far too long
+        const kept = { state: new Float32Array(20_000_000), running: new Float64Array(244), seconds: 100, steps: 1e6 };
         leader.postMessage({ kind: "begin", setup: 1, legs: 2, seed: 3, difficulty: 0.2, amounts: [0.6, 0.4, 0.4, 0.4], workers: 1, index: 0, learnerSeed: 1, kept } satisfies Order);
         expect(await until(() => reports.length >= 2, 20_000)).toBe(true);
         const first = reports[0]!;
@@ -139,5 +139,33 @@ test("practice goes on, with its steps rising, after the world is changed twenty
         expect(it.reports.some((report) => report.kind === "failed")).toBe(false);
     } finally {
         it.close();
+    }
+}, 60_000);
+
+test("a new world for the same body goes on with what was learned, and a new body starts afresh", async () => {
+    const reports: Report[] = [];
+    const leader = new Worker(HARNESS, { type: "module" });
+    leader.onmessage = (event: MessageEvent<Report>) => reports.push(event.data);
+    const beating = setInterval(() => leader.postMessage({ kind: "beat" } satisfies Order), 300);
+    const of = (setup: number) => reports.filter((report): report is Extract<Report, { kind: "practised" }> => report.kind === "practised" && report.setup === setup);
+    const begin = (setup: number, legs: number, seed: number): Order => ({ kind: "begin", setup, legs, seed, difficulty: 0.2, amounts: [0.6, 0.4, 0.4, 0.4], workers: 1, index: 0, learnerSeed: 1, carry: true });
+    try {
+        leader.postMessage(begin(1, 2, 3));
+        expect(await until(() => of(1).length >= 3, 20_000)).toBe(true);
+        const learned = of(1).at(-1)!;
+        // another world, harder and of another seed, for two legs again
+        leader.postMessage({ ...begin(2, 2, 9), difficulty: 0.6 });
+        expect(await until(() => of(2).length >= 1, 20_000)).toBe(true);
+        const carried = of(2)[0]!;
+        expect(carried.steps).toBeGreaterThan(learned.steps);
+        expect(carried.updates).toBeGreaterThan(learned.updates);
+        // four legs: a brain of another size, so it starts from nothing
+        leader.postMessage(begin(3, 4, 9));
+        expect(await until(() => of(3).length >= 1, 20_000)).toBe(true);
+        expect(of(3)[0]!.updates).toBe(1);
+        expect(of(3)[0]!.steps).toBeLessThan(learned.steps);
+    } finally {
+        clearInterval(beating);
+        leader.terminate();
     }
 }, 60_000);

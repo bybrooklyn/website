@@ -18,7 +18,8 @@ import { BRAIN, POPULATION, SECONDS, engineAddress, list, list64, start, write, 
 
 /** What the page sends. */
 export type Order =
-    | { kind: "begin"; setup: number; legs: number; seed: number; difficulty: number; amounts: [number, number, number, number]; workers: number; index: number; learnerSeed: number; kept?: Kept }
+    /** Begins practice in a kind of world. With `carry`, a leader already practising with a body of as many legs goes on with what it has learned, in the new kind of world; otherwise it starts from `kept`, or from nothing. */
+    | { kind: "begin"; setup: number; legs: number; seed: number; difficulty: number; amounts: [number, number, number, number]; workers: number; index: number; learnerSeed: number; kept?: Kept; carry?: boolean }
     | { kind: "pause" }
     | { kind: "resume" }
     | { kind: "beat" }
@@ -285,10 +286,13 @@ onmessage = async (event: MessageEvent<Order>) => {
         await loading;
         if (!engine) return;
         heard = performance.now();
+        // the learner it has, taken out before the engine is made again, if it is to be carried into the new world
+        const carried: Kept | undefined = order.carry && begun && begun.legs === order.legs && !lead && setup !== failed ? { state: list(engine, engine.practice_state()).slice(), running: list64(engine, engine.practice_running()).slice(), seconds: practised.seconds, steps: practised.steps } : undefined;
         make(order);
-        practised = { seconds: order.kept?.seconds ?? 0, steps: order.kept?.steps ?? 0, shown: -Infinity, kept: order.kept?.seconds ?? 0 };
+        const from = carried ?? order.kept;
+        practised = { seconds: from?.seconds ?? 0, steps: from?.steps ?? 0, shown: -Infinity, kept: from?.seconds ?? 0 };
         reached = [];
-        if (order.kept && !load(order.kept.state, order.kept.running)) practised = { seconds: 0, steps: 0, shown: -Infinity, kept: 0 };
+        if (from && !load(from.state, from.running)) practised = { seconds: 0, steps: 0, shown: -Infinity, kept: 0 };
         if (lead) {
             for (const work of waitingWork.splice(0)) help(work);
             return;
