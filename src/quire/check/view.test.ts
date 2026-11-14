@@ -1,6 +1,6 @@
 // Checking, used for real in headless Chromium: the whole editor bundled with the site's styles and
 // served over http with the dictionary, then the built /mdquire/ page (`bun run build`). Held true:
-// nothing of checking loads until Tools, Checking is pressed; then the underlines are drawn, the
+// nothing of checking loads until Tools, Spelling and grammar is pressed; then the underlines are drawn, the
 // count is right, a click opens the popover from the word, a fix is one undo step, ignoring and
 // adding to the dictionary take the underline away, the list jumps to its findings, F8 goes to the
 // next, the settings switch a kind off, a word still being typed is not underlined, and a key typed
@@ -152,7 +152,7 @@ used("nothing of checking loads until it is first used; then the underlines are 
     expect(await tab.run("q.surface.element.spellcheck")).toBe(true);
     await press(".quire-row-word", "Tools");
     await tab.wait(650);
-    await press(".quire-menu.open .quire-menu-line", "Checking");
+    await press(".quire-menu.open .quire-menu-line", "Spelling and grammar");
     await until("q.marked().spelling === 2");
     expect(await tab.run<string[]>("q.loaded()")).toHaveLength(1);
     expect(await marked()).toEqual({ spelling: 2, markdown: 0, link: 1, prose: 1 });
@@ -338,7 +338,7 @@ test.skipIf(!built)("in the built page, the checking code and the dictionary are
     await tab.wait(900);
     await press(".quire-row-word", "Tools");
     await tab.wait(650);
-    await press(".quire-menu.open .quire-menu-line", "Checking");
+    await press(".quire-menu.open .quire-menu-line", "Spelling and grammar");
     await until("performance.getEntriesByType('resource').some((entry) => entry.name.includes('words-en'))", 8000);
     const after = await tab.run<string[]>("performance.getEntriesByType('resource').map((entry) => entry.name)");
     const scripts = after.filter((name) => !before.includes(name) && name.endsWith(".js"));

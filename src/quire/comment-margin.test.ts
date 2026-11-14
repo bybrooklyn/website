@@ -66,9 +66,12 @@ test("a note is resolved from its card, the resolve undone, and next goes to it"
     expect(await tab.run("q.doc().comments[0].resolved")).toBe(true);
     expect(await marked()).toBe(0);
     expect(await tab.run("document.querySelectorAll('.quire-notes .quire-note').length")).toBe(0);
-    // with no open note the margin is the details' again, and the resolved one is in the list from View
+    // with no open note the margin is the details' again, and the resolved one is in the list that View, Show comments opens as it shows them
     expect(await tab.run("getComputedStyle(document.querySelector('.quire-details')).visibility")).toBe("visible");
-    await page!.menuLine("View", "Notes");
+    await page!.menuLine("View", "Show comments");
+    await tab.wait(300);
+    expect(await tab.run("document.querySelectorAll('.quire-menu.open .quire-note').length")).toBe(0);
+    await page!.menuLine("View", "Show comments");
     await tab.wait(300);
     expect(await tab.run("[...document.querySelectorAll('.quire-menu.open .quire-note.resolved button')].map((each) => each.textContent)")).toContain("Reopen");
     await tab.press("Escape");

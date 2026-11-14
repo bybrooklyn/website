@@ -125,10 +125,13 @@ and release of Ctrl with no other key between, each press and the wait between t
 held for a shortcut, a click or the wheel, AltGr (sent as Ctrl and Alt on Windows) and typing with an input
 method never count. On a Mac Cmd taps as well as Ctrl. It opens only from the writing, never over a field,
 a menu or a dialog. On a phone it spans the window's foot. The button sits 0.75rem in from the corner and
-is 2.25rem across; anything else at the bottom left starts 3.5rem in. No command is listed in it: its
-lines are the menus' own (with their shortcuts from `shortcuts.ts`), found also by the slash items' words,
-and a table's controls and a picture's menu while they are there, so a new command is in it with no more
-work.
+is 2.25rem across; anything else at the bottom left starts 3.5rem in. Alt+/ opens it too, in place of the
+search of the menus it does the job of. No command is listed in it: its lines are the menus' own (with their
+shortcuts from `shortcuts.ts`), the lines of the menus beside their lines opened out, each of those saying
+quietly where it is ("Format › Text"); they are found also by their former names (Indent more, Typeface,
+Checking and the rest) and the slash items' words, and a table's controls and a picture's menu while they are
+there, so a new command is in it with no more work. A line whose small form opens beside it (Bookmark,
+Special characters) opens the menus down to it.
 
 The slash is the palette's second way in. A `/` typed at the start of an empty line opens the same list
 at the caret, with the things that can be put in there (`slash.ts`): the five the writer makes most and a
@@ -159,8 +162,9 @@ size and who it is for, the one that suits the machine picked; the download's pr
 blog's measure) and light paper; it opens on no page, and paper is chosen from View. The top is two lines:
 a trail (the site's name and flags, then mdQuire, then the document's name; the first leads home, the
 second to the shelf, the third opens the documents list) with the menu words, and under it the tools in
-the order Google Docs has them. Find, the status, the three dots and the microphone are at the right. An
-"About mdQuire" line is in Tools and Help, and opens a dialog. The browser tab shows an italic Q on a dark rounded square
+the order Google Docs has them, with the size as a number between minus and plus. Find, the status, the
+three dots and the microphone are at the right. An "About mdQuire" line is in Help, and opens a dialog. The
+browser tab shows an italic Q on a dark rounded square
 (`public/mdquire/icon.svg`). The caret is one plain line, drawn in the same frame as the letter typed.
 
 **The bar** (`bar.ts`). Undo, redo, print, spelling, paint format; zoom; the style ("Normal text" for a
@@ -213,22 +217,57 @@ way (`switchButton`): its words, a tick before them, and when on, the pressed sq
 have. Corners are three sizes: small for what sits inside something, middle for menus, bars, strips and
 cards, large for dialogs and panels.
 
-**The menus.** Every command is in the menu row by name with its shortcut. A menu is the browser's popover,
-anchored to its word: the word stays in the row, lit, and the menu grows from under it, covering nothing
-above, with the raised look and shortcuts shown as symbols. Tooltips and the find bar grow from where they
-were asked for.
+**The menus** (`menu-row.ts`, `flowMenu` in `ui.ts`). Every command is in the menu row by name with its
+shortcut, in Google Docs' menus, order and words wherever mdQuire has the thing, so that hands that know Docs
+know them. Every line has an icon in the editor's own line style, groups have rules between them, and a line
+that is on shows a tick in its icon's place, never a colour alone. Each thing is in one menu only. A menu is
+the browser's popover, anchored to its word: the word stays in the row, lit, and the menu grows from under
+it, covering nothing above. A long menu is folded into groups as Docs folds it: a line ending in an arrow
+opens a menu of its own beside it, growing sideways out of that line (to the right, else the left, else under
+it on a phone), held inside the first so that the browser keeps both open. No menu is taller than the window;
+one that must scroll fades at the edge where there is more.
+
+A menu holds the keyboard while it is open, however it was opened, so that typing never reaches the document:
+the arrows move, Enter chooses, a letter goes to the line starting with it, Right goes into the menu beside a
+line and on to the next word's menu, Left comes back, and Escape steps back one level, from a menu beside a
+line to that line and from the first to the writing. The pointer resting on a line with an arrow opens its
+menu. Alt and a word's letter (F, E, V, I, O, T, H, as in Docs; Ctrl+Option on a Mac) or F10 open a menu from
+the writing. Shortcuts are written as words on Linux and Windows (Ctrl+Shift+Z) and as symbols only on a Mac,
+one for each command, the same in the menus, the palette and the Ctrl+/ panel.
+
+The menus as they stand:
+
+- File: New (Document, Blog post, Notes), Open (the documents list, which has the places to open from), Make
+  a copy, Save as .quire document (for Markdown), Download (Markdown, mdQuire document, Web page, Plain text,
+  Word), Rename, Version history, Details, Page setup (for `.quire`), Print.
+- Edit: Undo, Redo; Cut, Copy, Paste, Paste without formatting; Select all, Select all matching text,
+  Delete; Find and replace.
+- View: Mode (Pageless or Pages), Paper (Dark or Light); Show outline, Show comments, Show Markdown, Show
+  word count; Zoom (in, out, Fit, 50% to 200%), Full screen.
+- Insert: Picture, Table, Date, Link, Special characters; Horizontal line, Page break, Bookmark, Table of
+  contents, Header, footer and page numbers, Footnote; Comment; then mdQuire's own blocks: Code block,
+  Callout, Folding section, Definition list, Maths, Diagram, and Components in an `.mdx` file.
+- Format: Text (bold to subscript; Size, Capitalization; Font, Text color, Highlight color; Inline code,
+  Marked, Spoiler, Subtext), Paragraph styles, Align and indent, Line and paragraph spacing, Bullets and
+  numbering (the three lists and List options); Clear formatting.
+- Tools: Spelling and grammar, Word count; dictation; Preferences, Forget what I use most.
+- Help: mdQuire help, Keyboard shortcuts; About mdQuire.
+
+Tooltips and the find bar grow from where they were asked for.
 
 **Lines taken from Google Docs** (chosen from `mdQuire-against-docs.md`). File has Make a copy (beside the
 original, its pictures with it), Rename (to the title, selected) and Details (file, where it is kept and when
 last saved, size, length). Edit has Cut, Copy, Paste and Delete with their keys; a menu paste the browser
 refuses says in the status to press Ctrl+V. View has Full screen (Ctrl+Shift+F, the keys of Docs' compact
 mode): the top folds away, the pointer at the window's top edge opens it while it stays there, Escape ends
-it. View, Word count while typing keeps a counter at the lower left (`live-count.ts`), the selection's count
-when there is one, opening to characters and pages on a press; on a phone it opens sideways. Tools, Typing
-preferences (`typing-panel.ts`) has a switch for each row of `vocabulary.ts`, and one for each of
+it. View, Show word count keeps a counter at the lower left (`live-count.ts`), the selection's count
+when there is one, opening to characters and pages on a press; on a phone it opens sideways. View, Show
+comments puts the comments beside the text out of sight or back, and shown, opens the list of every one.
+Tools, Preferences (`typing-panel.ts`) has a switch for each row of `vocabulary.ts`, and one for each of
 Markdown's, GitHub's and mdQuire's own marks; what is off stays as typed. The arrows' switch is the old
 Typed signs, still kept under its own key. Help, mdQuire help (`help.ts`) is a short page whose words have
-not yet been reviewed. Choices kept per browser: `quire-live-count`, `quire-typing-off`, `quire-symbols`.
+not yet been reviewed. Choices kept per browser: `quire-live-count`, `quire-typing-off`, `quire-symbols`,
+`quire-comments`.
 
 **Markdown kinds** (`more-markdown.test.ts` covers them). Highlighted code blocks (`highlight.ts`),
 callouts, definition lists, superscript and subscript, marked text, emoji shortcodes (`emoji.ts`, a short
@@ -273,16 +312,16 @@ has its own Update.
 **Notes** (`comments.ts`, `comment-margin.ts`). Notes on selected words, kept beside the text and never
 written into the Markdown. There are no accounts; a note is the writer's own.
 
-**From Docs' menus** (`more-commands.ts` puts them in the row). Format, Capitalisation changes the
-letters of the selected words (`capitals.ts`). Format, Bullets and numbering chooses the sign a bulleted
-list is written with (`-`, `*` or `+`, all drawn alike, since Markdown reads them alike), restarts a
-numbered list at a number (part way down, the list is cut in two and the second written with the other
-delimiter, `1)`) and carries on the list before (`numbering.ts`). A table's strip sorts its rows by the
+**From Docs' menus** (`more-commands.ts` gives their lines to the row). Format, Text, Capitalization changes
+the letters of the selected words (`capitals.ts`). Format, Bullets and numbering, List options (dimmed outside
+a list) chooses the character a bulleted list is written with (Dash, Asterisk or Plus, all drawn alike,
+since Markdown reads them alike), restarts a numbered list at a number (part way down, the list is cut in two
+and the second written with the other delimiter, `1)`) and carries on the list before (`numbering.ts`). A table's strip sorts its rows by the
 cursor's column (`tables.ts`). The style list has Title, which goes to the title line, since that line
 is the document's name and Markdown has no title, and Subtitle, kept in a `.quire` document's style.json
-and not offered for Markdown. Edit, Select all occurrences selects every place the words appear, in capitals or not;
-typing, Backspace and Format commands change all of them (`matching.ts`). Insert, Bookmark writes an
-empty anchor, `<a id="name"></a>`, drawn as a small flag, and the link field offers the headings (by the
+and not offered for Markdown. Edit, Select all matching text selects every place the words appear, in capitals or not;
+typing, Backspace and Format commands change all of them (`matching.ts`). Insert, Bookmark (dimmed in a
+heading, which is a place to link to already) writes an empty anchor, `<a id="name"></a>`, drawn as a small flag, and the link field offers the headings (by the
 ids the site gives them) and the bookmarks (`bookmarks.ts`).
 
 **Links** (`link-card.ts`). A web address pasted over selected words makes them the link, in one undo
@@ -305,8 +344,8 @@ until the cursor moves. With the cursor in a link Alt+Enter opens it (Docs' key;
 plain new paragraph), and Ctrl+K edits it as before.
 
 **Inserts and downloads** (`inserts.ts`, `export.ts`, `docx.ts`). Insert adds today's date, special
-characters and a table of contents. File, Download as gives Markdown, `.quire`, a web page, plain text and
-Word (a `.docx` written from scratch). PDF is the browser's print dialog with the page already set up.
+characters and a table of contents. File, Download gives Markdown, `.quire`, a web page, plain text and
+Word (a `.docx` written from scratch). PDF is File, Print: the browser's print dialog with the page already set up.
 
 ## Decided, not yet built
 

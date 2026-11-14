@@ -9,6 +9,7 @@ import { caret, handle } from "./keys";
 import { headings, type Command, type RowActions } from "./menu-row";
 import { chordFrom, chordOf, findShortcuts, keysFor, SHORTCUTS, shortcutFor, typing } from "./shortcuts";
 import { altGraph } from "./surface";
+import { everyLine } from "./ui";
 
 test("no two shortcuts with a command share the same keys, unless they run the same command", () => {
     const seen = new Map<string, Command>();
@@ -44,8 +45,9 @@ test("every shortcut the surface keeps is one the keys of the surface really han
 test("every menu line whose command has a shortcut shows the table's keys as its hint", () => {
     const commands = [...new Set(SHORTCUTS.flatMap((each) => (each.command ? [each.command] : [])))];
     const act: RowActions = Object.fromEntries(commands.map((command) => [command, () => {}]));
-    const lines = headings({ rich: true, outline: false, markdown: false, words: 0 }, act).flatMap((heading) => heading.items());
-    for (const command of commands) {
+    const lines = headings({ rich: true, outline: false, markdown: false }, act).flatMap((heading) => everyLine(heading.items()).map((each) => each.item));
+    // the palette and the zoom's lines (paper.ts) show their own keys, from the same table
+    for (const command of commands.filter((each) => !["palette", "find", "zoomIn", "zoomOut", "zoomReset"].includes(each))) {
         const line = lines.find((each) => each.run === act[command]);
         expect({ command, shown: !!line }).toEqual({ command, shown: true });
         expect({ command, hint: line?.hint }).toEqual({ command, hint: keysFor(command) });
@@ -55,7 +57,9 @@ test("every menu line whose command has a shortcut shows the table's keys as its
 test("the panel's search finds a shortcut by its words, its keys or its menu", () => {
     expect(findShortcuts("bullet").map((each) => each.keys)).toContain("Ctrl+Shift+8");
     expect(findShortcuts("ctrl+shift+7").map((each) => each.label)).toContain("Numbered list");
-    expect(findShortcuts("").length).toBe(SHORTCUTS.length);
+    // one shortcut is shown for each command, the one its menu line shows
+    expect(findShortcuts("").map((each) => each.keys)).not.toContain("Ctrl+Y");
+    expect(findShortcuts("strike").map((each) => each.keys)).toEqual(["Alt+Shift+5"]);
 });
 
 test("a shortcut is matched by the letter its key types on US, AZERTY, German, Spanish and Dvorak layouts, and AltGr or a Mac's Alt typing a character is never one", () => {
@@ -93,6 +97,6 @@ test("a shortcut is matched by the letter its key types on US, AZERTY, German, S
     // on a Mac, Alt+Shift+digit and Alt+/ that type a character are typing
     expect(command(press("Digit5", "ﬁ", { alt: true, shift: true }), true)).toBeUndefined();
     expect(command(press("Slash", "÷", { alt: true }), true)).toBeUndefined();
-    expect(command(press("Slash", "/", { alt: true }))).toBe("searchMenus");
+    expect(command(press("Slash", "/", { alt: true }))).toBe("palette");
     expect(command(press("Digit5", "%", { alt: true, shift: true }))).toBe("strike");
 });

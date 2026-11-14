@@ -62,8 +62,8 @@ export interface EditorPage {
     tab: Browser;
     /** Clicks the middle of the first element matching, whose text includes the words if given. */
     press(selector: string, words?: string): Promise<void>;
-    /** Opens a menu of the row of menu words and chooses a line of it. */
-    menuLine(word: string, line: string): Promise<void>;
+    /** Opens a menu of the row of menu words and chooses a line of it, or lines one after another as each opens the menu beside it. */
+    menuLine(word: string, ...lines: string[]): Promise<void>;
     reset(markdown: string, anchor?: number[], from?: number, focus?: number[], to?: number): Promise<void>;
     md(): Promise<string>;
     close(): Promise<void>;
@@ -109,10 +109,12 @@ async function opened(folder: string, width: number, height: number): Promise<Ed
     return {
         tab,
         press,
-        async menuLine(word, line) {
+        async menuLine(word, ...lines) {
             await press(".quire-menu-row .quire-row-word", word);
-            await tab.wait(650);
-            await press(".quire-menu.open .quire-menu-line", line);
+            for (const line of lines) {
+                await tab.wait(650);
+                await press(".quire-menu.open .quire-menu-line", line);
+            }
             await tab.wait(60);
         },
         async reset(markdown, anchor = [0], from = 0, focus = anchor, to = from) {

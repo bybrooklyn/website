@@ -21,6 +21,9 @@ import { control, flowMenu, icon, make, still } from "./ui";
 /** Where a Markdown file's notes are kept in this browser, by the document's place and name. */
 const KEY = "quire-notes:";
 
+/** Where the choice to put the comments out of sight is kept. */
+const HIDDEN = "quire-comments";
+
 /** A plain Markdown document with the notes kept for it in this browser put back on it; a `.quire` document, or one with none kept, as it was. */
 export function keptNotes(doc: Document, place: string | undefined): { doc: Document; lost: number } {
     if (doc.quire || !place) return { doc, lost: 0 };
@@ -63,8 +66,16 @@ export function createCommentMargin(surface: Surface, options: { place: () => st
     margin.setAttribute("aria-label", "Comments");
     const cards = make("div", "quire-notes-cards");
     margin.append(cards);
-    const list = flowMenu("Comments", { className: "quire-notes-menu", align: "right" });
+    const list = flowMenu("Comments", { className: "quire-notes-menu" });
     let current: string | undefined;
+    /** True while the writer has put the comments out of sight (View, Show comments), kept for every document. */
+    let hidden = (() => {
+        try {
+            return localStorage.getItem(HIDDEN) === "hidden";
+        } catch {
+            return false;
+        }
+    })();
     let draft: { range: Range; card: HTMLElement } | undefined;
     let editing: string | undefined;
     let spans = new Map<string, Span[]>();
@@ -166,9 +177,9 @@ export function createCommentMargin(surface: Surface, options: { place: () => st
     function drawMargin() {
         const open = inOrder(doc(), spans).filter((each) => !each.resolved);
         const resolved = comments().length - open.length;
-        const shown = roomy() && (open.length > 0 || !!draft);
+        const shown = (!hidden || !!draft) && roomy() && (open.length > 0 || !!draft);
         margin.closest(".quire-editor")?.classList.toggle("noted", shown);
-        if (!roomy()) {
+        if (!roomy() || (hidden && !draft)) {
             cards.replaceChildren();
             return;
         }
@@ -334,6 +345,20 @@ export function createCommentMargin(surface: Surface, options: { place: () => st
         next: go,
         /** Opens the list of every note from a control. */
         list: showList,
+        /** True while the comments are shown: in the margin where it has room. */
+        shown: () => !hidden,
+        /** Shows the comments or puts them out of sight; shown, the list of every one, resolved ones too, opens from `from`. */
+        show(on: boolean, from: HTMLElement) {
+            hidden = !on;
+            try {
+                localStorage.setItem(HIDDEN, on ? "shown" : "hidden");
+            } catch {
+                // kept for this visit only
+            }
+            redraw();
+            if (on) showList(from);
+            else list.close(false);
+        },
         /** True when the notes have room in the margin. */
         roomy,
         /** Writes now a Markdown file's notes waiting to be kept in this browser: before the document is left, renamed or the page closed. */

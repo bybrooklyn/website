@@ -21,7 +21,7 @@ import { counted, FIRST_FIVE, made, PICKED, remember, remembered, type Counts } 
 import { chooseSlash, filterSlash, SLASH_ITEMS, SLASH_KEYS, slashQuery, type SlashItem } from "./slash";
 import type { Surface } from "./surface";
 import { tableAt } from "./tables";
-import { control, flowMenu, icon, keySymbols, make, markActive, menuLine, still, unmarkActive, type MenuItem } from "./ui";
+import { control, everyLine, flowMenu, icon, keySymbols, make, markActive, menuLine, still, unmarkActive, type MenuItem } from "./ui";
 
 /** Where the cursor is, as far as the palette ranks by it. */
 export type Place = "table" | "picture" | "words" | "list";
@@ -140,16 +140,23 @@ const FITS: Record<string, Place> = Object.fromEntries([
     ...["bullet", "number", "task", "indent", "outdent"].map((key) => [key, "list"]),
 ]);
 
-/** Every line of the menus once (the first of a command in two menus), with its menu, the slash item's words (and its icon, where the line has none), where it fits, and its shortcut when its hint is one. */
-export function commandLines(menus: Heading[]): Line[] {
+/**
+ * Every line of the menus once, the lines of the menus beside their lines opened out, each with the
+ * menus it is in ("Format › Text"), its other names and the slash item's words (and its icon, where
+ * the line has none), where it fits, and its shortcut when its hint is one. A line that opens a form
+ * beside it is run by `reveal`, which opens the menus down to it.
+ */
+export function commandLines(menus: Heading[], reveal?: (path: string[]) => void): Line[] {
     const seen = new Set<string>();
     return menus.flatMap((heading) =>
-        heading.items().flatMap((item) => {
-            const key = item.key ?? `${heading.label}: ${item.label}`;
-            if (item.note || item.disabled || seen.has(key)) return [];
+        everyLine(heading.items(), [heading.label]).flatMap(({ item, within }) => {
+            const menu = within.join(" › ");
+            const key = item.key ?? `${menu}: ${item.label}`;
+            if (item.disabled || seen.has(key)) return [];
             seen.add(key);
             const slash = SLASH_ITEMS.find((each) => commandOf(each.key) === key);
-            return [{ icon: slash?.icon, ...item, key, menu: heading.label, words: slash?.words, fits: FITS[key], hint: item.hint && keySymbols(item.hint).words ? item.hint : undefined }];
+            const run = item.form && reveal ? () => reveal([...within, item.label]) : item.run;
+            return [{ icon: slash?.icon, ...item, run, items: undefined, form: undefined, key, menu, words: [...(item.words ?? []), ...(slash?.words ?? [])], fits: FITS[key], hint: item.hint && keySymbols(item.hint).words ? item.hint : undefined }];
         }),
     );
 }
@@ -165,6 +172,8 @@ export function headingLines(doc: Document, go: (path: number[]) => void): Line[
 export interface PaletteOptions {
     /** The menus as they stand. */
     menus?: () => Heading[];
+    /** Opens the menus down to a line whose form opens beside it (menu-row.ts, reveal). */
+    reveal?: (path: string[]) => void;
     /** A table's controls, while the cursor is in one. */
     table?: () => MenuItem[];
     /** The picked picture's menu, while one is picked. */
@@ -244,7 +253,7 @@ export function createPalette(surface: Surface, options: PaletteOptions = {}): {
         const here = (lines: MenuItem[] | undefined, fits: Place, picture: string): Line[] => (lines ?? []).map((line) => ({ icon: picture, ...line, key: `${fits}: ${line.label}`, fits }));
         const picture = here(options.picture?.(), "picture", "image");
         place = placeOf(surface.getDocument(), kept, picture.length > 0);
-        all = [...picture, ...here(options.table?.(), "table", "table"), ...commandLines(options.menus?.() ?? [])];
+        all = [...picture, ...here(options.table?.(), "table", "table"), ...commandLines(options.menus?.() ?? [], options.reveal)];
         mode = "corner";
         field.value = "";
         show();
@@ -265,6 +274,8 @@ export function createPalette(surface: Surface, options: PaletteOptions = {}): {
         list.replaceChildren(
             ...shown.map((line) => {
                 const row = menuLine(line, MAC);
+                // a line from a menu inside another says quietly where it is
+                if (line.menu?.includes("›")) row.querySelector(".quire-menu-label")?.after(make("span", "quire-palette-where", line.menu));
                 row.setAttribute("role", "option");
                 row.removeAttribute("aria-checked");
                 row.id = `${list.id}-${list.childElementCount}-${Math.random().toString(36).slice(2, 6)}`;
@@ -414,7 +425,7 @@ export function createPalette(surface: Surface, options: PaletteOptions = {}): {
     for (const [name, listener] of listened) addEventListener(name, listener, { capture: true, passive: true });
 
     return {
-        /** Opens it from its corner, as its button and two taps of Ctrl do (Alt+/, Docs' Search the menus, too); open already, the field takes the keyboard again. */
+        /** Opens it from its corner, as Alt+/ does; open, its field takes the keyboard again. */
         open: () => (mode === "corner" ? field.focus({ preventScroll: true }) : openCorner()),
         close: () => menu.close(false),
         destroy() {

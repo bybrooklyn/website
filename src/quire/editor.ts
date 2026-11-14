@@ -14,8 +14,8 @@
 // Without a store the editor writes nowhere, as in the tests of its parts.
 
 import { addCode, addDivider, addFootnote, addTable, align, aligned, clearFormat, createBar, indentBy, link as linkAction, linkAt, setStyleOf, toggle, toggleList, toggleSubtext, type Action } from "./bar";
-import { createMenuRow, headings, type RowActions } from "./menu-row";
-import { blockPaths, countWords, documentOf, lengthOf } from "./document";
+import { createMenuRow, headings, menuFor, type RowActions } from "./menu-row";
+import { blockAt, blockPaths, countWords, documentOf, lengthOf } from "./document";
 import { createConflict } from "./conflict";
 import { createDictation } from "./dictation/dictation";
 import { type Document } from "./document";
@@ -27,7 +27,7 @@ import { createOutline } from "./outline";
 import { read } from "./read";
 import { createSelectBar } from "./select-bar";
 import { createLinkCard } from "./link-card";
-import { boxOf, definitionList, drawnBlock } from "./slash";
+import { boxOf, component, definitionList, drawnBlock } from "./slash";
 import { createPalette } from "./palette";
 import { createEmojiPicker } from "./emoji-picker";
 import { copyDocument, createSaver, fileName, said, type Entry, type Opened, type Status, type Store } from "./store";
@@ -62,6 +62,7 @@ import { createTitle, nameFor, shownName, type OwnTitle } from "./title";
 import { createZoom, pageRule, percent, setPage, setupForm } from "./paper";
 import type { Page } from "./document";
 import { moreCommands } from "./more-commands";
+import { listHere } from "./numbering";
 import { createMatching, matchingSpots } from "./matching";
 import { places } from "./bookmarks";
 
@@ -344,8 +345,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         await create(target, stem(), copy.text, copy.quire);
         surface.focus();
     };
-    // ---- Download as: each kind of file the document can be given as ----
-    const downloads = flowMenu("Download as");
+    // ---- File, Download: each kind of file the document can be given as ----
     const shownPictures = () => gatherPictures(surface.getDocument(), async (src) => (store && id && store.show ? store.show(id, src) : undefined));
     /** Says when a download leaves out pictures it did not fetch, those from elsewhere on the web among them. */
     const sayElsewhere = (pictures: Map<string, Picture>) => {
@@ -361,10 +361,11 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         give(new Blob([(await packQuire({ markdown, parts: quire ?? emptyParts(), pictures })) as BlobPart], { type: "application/zip" }), `${stem()}.quire`);
     };
     const downloadLines = (): MenuItem[] => [
-        { label: "Markdown", hint: surface.getDocument().mdx ? ".mdx" : ".md", run: () => give(new Blob([markdownFor(surface.getDocument())], { type: "text/markdown" }), `${stem()}${surface.getDocument().mdx ? ".mdx" : ".md"}`) },
-        { label: "mdQuire", hint: ".quire", run: () => void downloadAsQuire() },
+        { label: "Markdown", icon: "markdown", hint: surface.getDocument().mdx ? ".mdx" : ".md", run: () => (surface.getDocument().quire ? give(new Blob([markdownFor(surface.getDocument())], { type: "text/markdown" }), `${stem()}${surface.getDocument().mdx ? ".mdx" : ".md"}`) : download()) },
+        { label: "mdQuire document", icon: "file", hint: ".quire", run: () => void downloadAsQuire() },
         {
             label: "Web page",
+            icon: "globe",
             hint: ".html",
             run: async () => {
                 const pictures = await shownPictures();
@@ -372,9 +373,10 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
                 sayElsewhere(pictures);
             },
         },
-        { label: "Plain text", hint: ".txt", run: () => give(new Blob([plainText(surface.getDocument())], { type: "text/plain" }), `${stem()}.txt`) },
+        { label: "Plain text", icon: "text", hint: ".txt", run: () => give(new Blob([plainText(surface.getDocument())], { type: "text/plain" }), `${stem()}.txt`) },
         {
             label: "Word",
+            icon: "word",
             hint: ".docx",
             run: async () => {
                 const pictures = await shownPictures();
@@ -382,15 +384,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
                 sayElsewhere(pictures);
             },
         },
-        // a browser cannot write a PDF itself: its print dialog can, with the page set up already given to it
-        { label: "PDF, through the print dialog", hint: "Ctrl+P", run: () => print() },
     ];
-    // ---- special characters: a grid that stays open while characters are typed from it ----
-    const specials = flowMenu("Special characters", { className: "quire-specials-menu" });
-    const openSpecials = (from: HTMLElement) => {
-        specials.open(from, specialGrid(typeSpecial(surface)));
-        specials.box.querySelector<HTMLInputElement>("input")?.focus({ preventScroll: true });
-    };
     const bar = createBar(surface, {
         name,
         colors: options.colors,
@@ -400,7 +394,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         onFind: () => find.open(),
         onPrint: () => print(),
         onSpelling: (from) => checking.open(from),
-        onZoom: (from) => (zooms.isOpen() ? zooms.close(true) : zooms.open(from, zoomLines(() => from), document.activeElement === from)),
+        onZoom: (from) => (zooms.isOpen() ? zooms.close(true) : zooms.open(from, zoom.items(), document.activeElement === from)),
         onTitle: () => title.focus(),
         // the three dots hold the bar's folded tools; of the page's own only what no menu has (bun run edit's Publish)
         more: () => options.more?.() ?? [],
@@ -521,8 +515,6 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
             onClose: () => surface.focus(),
         });
     };
-    /** The zoom's lines, and for a `.quire` document the page setup, which opens in its place. */
-    const zoomLines = (from: () => HTMLElement): MenuItem[] => [{ label: "Page view", pressed: pages.paged(), run: () => showView(!pages.paged()) }, ...zoom.items(), ...(surface.getDocument().quire ? [{ label: "Page setup", hint: "›", run: () => openSetup(from()) }] : [])];
     // as the Markdown opens beside the sheet, or the window (or the browser's own zoom) changes, the sheet's column narrows and the sheet follows it
     // what the editor listens to on the page and the host, let go when it is destroyed
     const watchers: ResizeObserver[] = [];
@@ -660,7 +652,6 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         surface.run((doc, selection) => matching.apply(action, { doc, selection }));
         surface.focus();
     };
-    const format = () => row.words[4]!;
     // ---- File's Make a copy, Rename and Details, and Edit's Cut, Copy and Paste, which the keys already do ----
     /** Makes a copy of the document beside it, its pictures with it, and opens the copy; where copies cannot be made, in this browser. */
     const makeCopy = async () => {
@@ -725,15 +716,18 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
             bar.setStatus(`Press ${keys}`, `This browser did not let mdQuire read the clipboard: press ${keys} to paste`, "quiet");
         }
     };
-    /** Every command, by name: the menus, their search, the keyboard's shortcuts (shortcuts.ts) and the Ctrl+/ panel all run these. */
+    // the lines of the menus beside Format's and Insert's lines, and the forms beside them
+    const docs = moreCommands(surface, { doing, done: () => row.menu.close(false), title: () => title.focus() });
+    /** Every command, by name: the menus, the palette, the keyboard's shortcuts (shortcuts.ts) and the Ctrl+/ panel all run these. */
     const actions: RowActions = {
                 file: options.fileItems,
+                subs: { ...docs.subs, downloadAs: downloadLines, zoom: () => zoom.items(), ...bar.pickers.lines },
+                forms: { ...docs.forms, symbols: () => specialGrid(typeSpecial(surface)) },
+                title: docs.title,
+                subtitle: docs.subtitle,
                 turnRich: () => void makeRich(),
-                download,
-                downloadQuire: () => void downloadQuire(),
                 history: () => void history.open(),
                 pageSetup: () => openSetup(row.words[0]!),
-                zoom: () => zooms.open(row.words[2]!, zoomLines(() => row.words[2]!), true),
                 print: () => print(),
                 undo: () => (surface.undo(), surface.focus()),
                 redo: () => (surface.redo(), surface.focus()),
@@ -748,7 +742,8 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
                 link: () => openLink(bar.seen("Link")),
                 outline: () => (toggleOutline()),
                 markdown: () => showMarkdown(!host.classList.contains("markdown")),
-                pageView: () => showView(!pages.paged()),
+                pageless: () => showView(false),
+                pages: () => showView(true),
                 lookNone: () => showLook("none"),
                 lookPaper: () => showLook("paper"),
                 table: doing(addTable),
@@ -775,13 +770,8 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
                 center: doing(align("center")),
                 right: doing(align("right")),
                 justify: doing(align("justify")),
-                spacing: () => bar.pickers.spacing(format()),
-                color: () => bar.pickers.color(format()),
-                size: () => bar.pickers.size(format()),
-                font: () => bar.pickers.font(format()),
-                highlight: () => bar.pickers.highlight(format()),
                 check: () => checking.open(row.words[5]!),
-                about: () => showAbout(row.words[5]!),
+                about: () => showAbout(row.words[6]!),
                 marked: doing(toggle("mark")),
                 superscript: doing(toggle("sup")),
                 subscript: doing(toggle("sub")),
@@ -803,13 +793,9 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
                         },
                         onClose: () => surface.focus(),
                     }),
-                downloadAs: () => downloads.open(row.words[0]!, downloadLines(), true),
-                notes: () => notes.list(row.words[2]!),
-                nextNote: () => notes.next(1),
-                previousNote: () => notes.next(-1),
+                comments: () => notes.show(!notes.shown(), row.words[2]!),
                 comment: () => notes.add(row.words[3]!),
                 date: doing((state) => typeIn(state, dateText(new Date()))),
-                symbols: () => openSpecials(row.words[3]!),
                 contents: doing(addContents),
                 updateContents: () => (surface.run((doc) => updateContents(doc)), surface.focus()),
                 fullScreen: () => fullScreen(!full),
@@ -839,6 +825,10 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
                 definitions: doing(definitionList),
                 maths: doing(drawnBlock("math")),
                 diagram: doing(drawnBlock("mermaid")),
+                figure: doing(component("Figure")),
+                terminal: doing(component("Terminal")),
+                timeline: doing(component("Timeline")),
+                playhere: doing(component("PlayHere")),
                 heading4: doing(setStyleOf("heading4")),
                 heading5: doing(setStyleOf("heading5")),
                 heading6: doing(setStyleOf("heading6")),
@@ -850,22 +840,35 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
                 outdent: doing(indentBy(-1)),
                 clear: doing(clearFormat),
                 wordCount: () => showCount(row.words[5]!),
-                shortcuts: () => showShortcuts(row.words[5]!),
-                // Docs' Search the menus (Alt+/) is the command palette, which searches every menu line
-                searchMenus: () => palette.open(),
+                shortcuts: () => showShortcuts(row.words[6]!),
+                // Alt+/, which opened the search of the menus, opens the palette, which does that job
+                palette: () => palette.open(),
                 // the slash menu opens on the first five again
                 forgetUsed: () => (remember(), bar.setStatus("Forgotten", "What you use most is forgotten: the slash menu opens on its first five again")),
                 tools: () => dictation.items(row.words[5]!),
-                ...moreCommands(surface, { doing, word: (index) => row.words[index]!, title: () => title.focus() }),
                 selectMatching: () => matching.start(),
     };
     // the command palette: the menus' lines and what fits where the cursor is, from the bottom left corner or a slash on an empty line (palette.ts)
-    const palette = createPalette(surface, { menus: () => row.headings(), table: tableTools.lines, picture: pictureTools.lines, pickImage: bar.pickImage, corner: host });
+    const palette = createPalette(surface, { menus: () => row.headings(), reveal: (path) => row.reveal(path), table: tableTools.lines, picture: pictureTools.lines, pickImage: bar.pickImage, corner: host });
     // a right-click in the text, or the menu key, opens the menus' own lines for it there
     const textMenu = createTextMenu(surface, () => row.headings());
     const row = createMenuRow(() =>
         headings(
-            { rich: !!surface.getDocument().quire, contents: !!findContents(surface.getDocument()), matches: () => matchingSpots({ doc: surface.getDocument(), selection: surface.getSelection() }).length, paged: pages.paged(), look, outline: outlineView.isOpen(), markdown: host.classList.contains("markdown"), words: countWords(surface.getDocument()), full, counting: counter.shown(), align: aligned(surface.getDocument(), surface.getSelection().focus.path) },
+            {
+                rich: !!surface.getDocument().quire,
+                mdx: surface.getDocument().mdx,
+                contents: !!findContents(surface.getDocument()),
+                matches: () => matchingSpots({ doc: surface.getDocument(), selection: surface.getSelection() }).length,
+                paged: pages.paged(),
+                look,
+                outline: outlineView.isOpen(),
+                markdown: host.classList.contains("markdown"),
+                comments: notes.shown(),
+                counting: counter.shown(),
+                align: aligned(surface.getDocument(), surface.getSelection().focus.path),
+                inList: !!listHere(surface.getDocument(), surface.getSelection().focus.path),
+                inHeading: blockAt(surface.getDocument(), surface.getSelection().focus.path)?.kind === "heading",
+            },
             actions,
         ),
     );
@@ -873,6 +876,9 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     const shortcutKey = (event: KeyboardEvent) => {
         // AltGr types a character (@ # { [ | on many layouts): it is never a shortcut
         if (event.defaultPrevented || event.isComposing || altGraph(event)) return;
+        // Alt and a menu word's letter, or F10, opens that menu holding the keyboard (menu-row.ts)
+        const word = menuFor(event, MAC);
+        if (word !== undefined) return (event.preventDefault(), row.open(word, true));
         const found = shortcutFor(chordFrom(event, MAC));
         if (!found?.command || found.surface || found.browser) return;
         // a field of the editor's own (the find bar, a menu's search) keeps the keys that edit text in it
@@ -1294,7 +1300,6 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
             pictureTools.destroy();
             blockMenus.destroy();
             notes.destroy();
-            for (const menu of [downloads, specials]) menu.box.remove();
             keeper.stop();
             saver?.stop();
             history.element.remove();

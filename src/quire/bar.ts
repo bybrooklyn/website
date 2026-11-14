@@ -853,6 +853,9 @@ export function createBar(surface: Surface, options: BarOptions) {
         return whole;
     };
     const look = () => formatAt(surface.getDocument(), rangeOf(surface.getSelection()).start, !collapsed(surface.getSelection()));
+    /** The colors as lines, for the menus that open beside Format's lines; the bar itself shows them as swatches. */
+    const colorLines = (): MenuItem[] => [{ label: "Default color", run: doing(color(null)) }, ...palette().map((each) => ({ label: each.name, run: doing(color(each.value)) }))];
+    const highlightLines = (): MenuItem[] => [{ label: "No highlight", run: doing(highlight(null)) }, ...palette().map((each) => ({ label: each.name, run: doing(highlight(each.value)) }))];
     const colorGrid = () => swatches(colors, "Default color", look().color, color);
     const highlightGrid = () => swatches(highlights, "No highlight", look().highlight, highlight, true);
     const colorMark = make("span", "quire-color-mark", "A");
@@ -1326,6 +1329,8 @@ export function createBar(surface: Surface, options: BarOptions) {
             font: (from: HTMLElement) => fonts.open(from, fontLines(), true),
             highlight: (from: HTMLElement) => highlights.open(from, highlightGrid(), true),
             spacing: (from: HTMLElement) => spacings.open(from, spacingLines(), true),
+            /** Their lines, for the menus that open beside Format's lines. */
+            lines: { color: colorLines, size: sizeLines, font: fontLines, highlight: highlightLines, spacing: spacingLines },
         },
     };
 }

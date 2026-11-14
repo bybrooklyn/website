@@ -8,14 +8,15 @@
 //   const menu = createTextMenu(surface, () => row.headings());   // menu.destroy()
 
 import type { Surface } from "./surface";
-import { flowMenu, make, type MenuItem } from "./ui";
+import { everyLine, flowMenu, make, type MenuItem } from "./ui";
 
 /** The commands of the text's menu after cut and copy, by their names in the menus' table (menu-row.ts), in its order. */
 export const TEXT_COMMANDS = ["link", "comment", "bold", "italic", "underline"];
 
 /** The menus' own lines for the text's menu, found by command among every menu's lines, in TEXT_COMMANDS' order; one the document does not have (a comment in a file that cannot keep one) is left out. */
 export function linesFor(menus: { items: () => MenuItem[] }[]): MenuItem[] {
-    const all = menus.flatMap((menu) => menu.items());
+    // bold and the rest are in Format, Text, a menu inside a menu
+    const all = menus.flatMap((menu) => everyLine(menu.items()).map((each) => each.item));
     return TEXT_COMMANDS.flatMap((key) => all.find((item) => item.key === key && !item.disabled) ?? []);
 }
 

@@ -13,7 +13,7 @@
 // The sums (paper sizes, the @page rule, the zoom steps and fitting) are pure and tested.
 
 import type { Document, Page } from "./document";
-import { still, type MenuItem } from "./ui";
+import { ruled, still, type MenuItem } from "./ui";
 
 /** Each paper's width and height in millimetres, standing upright. */
 export const PAPERS: Record<Page["size"], [number, number]> = {
@@ -163,14 +163,17 @@ export function createZoom(paper: HTMLElement, room: HTMLElement, space: () => n
         /** Shows the page as it is set up now, after a change to it or to the room it has. */
         refresh: (animate = true) => apply(animate),
         now: () => shown,
-        /** The zoom's lines for a menu: in, out, the steps, and fitting the width. */
-        items: (): MenuItem[] => [
-            { label: "Zoom in", icon: "plus", hint: "Ctrl+=", run: () => set(stepZoom(shown, 1)) },
-            { label: "Zoom out", icon: "minus", hint: "Ctrl+-", run: () => set(stepZoom(shown, -1)) },
-            { label: paged() ? "Usual size (100%, or less to fit)" : "Usual size (100%)", pressed: mode === "auto" || (!paged() && mode === "fit"), hint: "Ctrl+0", run: () => set("auto") },
-            ...[0.5, 0.75, 1, 1.25, 1.5, 2].map((each) => ({ label: percent(each), pressed: mode === each, run: () => set(each) })),
-            ...(paged() ? [{ label: "Fit the width", pressed: mode === "fit", run: () => set("fit") }] : []),
-        ],
+        /** The zoom's lines for a menu, as Docs has them: in and out, then Fit and the steps from 50% to 200%, the one in use ticked; 100% is the usual size. */
+        items: (): MenuItem[] => ruled(
+            [
+                { label: "Zoom in", key: "zoomIn", icon: "plus", hint: "Ctrl+=", run: () => set(stepZoom(shown, 1)) },
+                { label: "Zoom out", key: "zoomOut", icon: "minus", hint: "Ctrl+-", run: () => set(stepZoom(shown, -1)) },
+            ],
+            [
+                { label: "Fit", pressed: mode === "fit", words: ["fit the width"], run: () => set("fit") },
+                ...[0.5, 0.75, 0.9, 1, 1.25, 1.5, 2].map((each): MenuItem => (each === 1 ? { label: "100%", key: "zoomReset", pressed: mode === "auto" || mode === 1, hint: "Ctrl+0", words: ["usual size", "zoom back to the usual"], run: () => set("auto") } : { label: percent(each), pressed: mode === each, run: () => set(each) })),
+            ],
+        ),
     };
 }
 
