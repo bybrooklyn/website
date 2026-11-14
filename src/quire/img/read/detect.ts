@@ -14,8 +14,9 @@ import type { Point, Slanted } from "./pixels";
 
 /** The longest side a picture is read at; a larger one is made smaller first. */
 export const LONGEST = 4000;
-/** A tile's side and how far tiles overlap, in the pixels the detector is given; both multiples of 32, as it needs. */
+/** A tile's side, in the pixels the detector is given: a multiple of 32, as it needs. */
 export const TILE = 1280;
+/** How far tiles overlap, also a multiple of 32. */
 export const OVERLAP = 64;
 
 /** How much smaller a picture is read: 1 up to LONGEST pixels a side. */
