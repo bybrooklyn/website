@@ -107,6 +107,8 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
         colors: options.colors,
         top: options.top,
         richHome: browser,
+        // suggested words are learned from her documents here and in what she has already let mdQuire open; never from GitHub or Drive, which would mean fetching every document
+        learnFrom: () => [browser, folder, files].filter((store): store is Store => !!store),
         // the File menu's first lines, as Docs has them: New, with the home screen's ways to start, and Open, the documents list, where the places to open from are
         fileItems: () => [
             { label: "New", icon: "plus", items: () => templates(new Date()).map((template) => ({ label: NEW[template.key]?.[0] ?? template.label, icon: NEW[template.key]?.[1], words: ["new document"], run: () => void startFrom(template, editor.nameElement()) })), run: () => {} },

@@ -65,6 +65,7 @@ import { moreCommands } from "./more-commands";
 import { listHere } from "./numbering";
 import { createMatching, matchingSpots } from "./matching";
 import { places } from "./bookmarks";
+import { mountSuggestions } from "./suggest-view";
 
 /** What the editor is given by the page. */
 export interface EditorOptions {
@@ -95,6 +96,8 @@ export interface EditorOptions {
     richHome?: Store;
     /** Where the title is kept when it is the document's own (a post's frontmatter title) rather than its name. */
     title?: OwnTitle;
+    /** The places whose documents suggested words are learned from (suggest-learn.ts); none if not given, so only what is written here and saved. */
+    learnFrom?: () => Store[];
 }
 
 /** The editor, as the page sees it. */
@@ -400,7 +403,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         more: () => options.more?.() ?? [],
     });
     // checking (src/quire/check/): underlines, a count at the bar's end, and its settings from Tools
-    const checking = mountChecking({ surface, bar: bar.element, where: () => ({ store, id, name }) });
+    const checking = mountChecking({ surface, bar: bar.element, where: () => ({ store, id, name }), relayout: () => bar.layout() });
     // ---- find and replace, from its button, the Edit menu, Ctrl+F and Ctrl+H ----
     const find = createFind(surface, paper, () => bar.element.getBoundingClientRect().bottom);
     // dictation: a microphone at the end of the bar after the three dots, the shortcut, and its lines in the three-dot menu (src/quire/dictation/)
@@ -630,6 +633,8 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     const widening = typeof matchMedia !== "undefined" ? matchMedia("(min-width: 64rem)") : undefined;
     widening?.addEventListener("change", outlineAsKept);
     const emojiList = createEmojiPicker(surface);
+    // suggested words, faint after the caret, from her own writing (suggest-view.ts); after the emoji list, which takes Tab first
+    const suggestions = mountSuggestions(surface, paper, { stores: () => options.learnFrom?.() ?? [], current: () => ({ store, id }), say: (short, full) => bar.setStatus(short, full) });
     const tableTools = createTableTools(surface, () => bar.element.getBoundingClientRect().bottom);
     const pictureTools = createPictureTools(surface, { keep: keepPicture, margin: host, top: () => bar.element.getBoundingClientRect().bottom });
     // a code block's language and a callout's kind, each a menu from its control in the text
@@ -845,13 +850,13 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
                 palette: () => palette.open(),
                 // the slash menu opens on the first five again
                 forgetUsed: () => (remember(), bar.setStatus("Forgotten", "What you use most is forgotten: the slash menu opens on its first five again")),
-                tools: () => dictation.items(row.words[5]!),
+                tools: () => [{ label: "Personal dictionary", run: () => checking.dictionary(row.words[5]!) }, ...dictation.items(row.words[5]!), ...suggestions.items()],
                 selectMatching: () => matching.start(),
     };
     // the command palette: the menus' lines and what fits where the cursor is, from the bottom left corner or a slash on an empty line (palette.ts)
     const palette = createPalette(surface, { menus: () => row.headings(), reveal: (path) => row.reveal(path), table: tableTools.lines, picture: pictureTools.lines, pickImage: bar.pickImage, corner: host });
     // a right-click in the text, or the menu key, opens the menus' own lines for it there
-    const textMenu = createTextMenu(surface, () => row.headings());
+    const textMenu = createTextMenu(surface, () => row.headings(), (at) => checking.linesAt(at));
     const row = createMenuRow(() =>
         headings(
             {
@@ -1024,7 +1029,10 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         quiet = false;
     }, () => surface.focus());
     const showStatus = (status: Status) => {
-        if (status.state === "saved") savedAt = Date.now();
+        if (status.state === "saved") {
+            savedAt = Date.now();
+            suggestions.saved();
+        }
         showDetails();
         bar.setStatus(short(status, store?.note), said(status, store?.note), status.state === "changed" || status.state === "failed" ? "warn" : "quiet", true);
         if (status.state === "changed" && saver) conflict.open(saver.unsaved() ?? write(surface.getDocument()), status.theirs?.text);
@@ -1296,6 +1304,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
             palette.destroy();
             textMenu.destroy();
             emojiList.close();
+            suggestions.destroy();
             tableTools.destroy();
             pictureTools.destroy();
             blockMenus.destroy();

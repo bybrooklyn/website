@@ -1,11 +1,14 @@
 // The menu a right-click in the text opens, as Docs has one: cut and copy, then the link, a comment,
 // bold, italic and underline, each the menus' own line so it does what that line does, with its
-// shortcut. The keyboard's menu key, or Shift+F10, opens it at the caret. A table and a picture have
-// menus of their own (tables.ts, picture-tools.ts); Shift with the right-click leaves the browser's.
+// shortcut. On a misspelled word its spellings come first, drawn strong, then Add to dictionary and
+// Ignore in this document, with a rule under them, as Docs and the browsers put them (checking gives
+// those lines, check/view.ts). The keyboard's menu key, or Shift+F10, opens it at the caret. A table
+// and a picture have menus of their own (tables.ts, picture-tools.ts); Shift with the right-click
+// leaves the browser's.
 //
-// Which lines it holds is linesFor, which is pure and tested; the rest is DOM.
+// Which lines it holds is linesFor and menuLines, which are pure and tested; the rest is DOM.
 //
-//   const menu = createTextMenu(surface, () => row.headings());   // menu.destroy()
+//   const menu = createTextMenu(surface, () => row.headings(), (at) => checking.linesAt(at));   // menu.destroy()
 
 import type { Surface } from "./surface";
 import { everyLine, flowMenu, make, type MenuItem } from "./ui";
@@ -20,8 +23,16 @@ export function linesFor(menus: { items: () => MenuItem[] }[]): MenuItem[] {
     return TEXT_COMMANDS.flatMap((key) => all.find((item) => item.key === key && !item.disabled) ?? []);
 }
 
-/** Builds the text's menu for a surface; `menus` gives the menus' lines as they stand now. */
-export function createTextMenu(surface: Surface, menus: () => { items: () => MenuItem[] }[]): { destroy(): void } {
+/** Lines put first in the menu (a misspelled word's), and how many of them are spellings, drawn strong. */
+export type FirstLines = { lines: MenuItem[]; strong: number };
+
+/** Every line of the text's menu, in order: the lines given first, then Cut and Copy (dimmed with nothing selected), then the menus' own. */
+export function menuLines(first: MenuItem[], selected: boolean, clip: (how: "cut" | "copy") => () => void, rest: MenuItem[]): MenuItem[] {
+    return [...first, { label: "Cut", hint: "Ctrl+X", disabled: !selected, run: clip("cut") }, { label: "Copy", hint: "Ctrl+C", disabled: !selected, run: clip("copy") }, ...rest];
+}
+
+/** Builds the text's menu for a surface; `menus` gives the menus' lines as they stand now, and `first` the lines for what is under a point pressed (or at the caret, with no point). */
+export function createTextMenu(surface: Surface, menus: () => { items: () => MenuItem[] }[], first?: (at?: { x: number; y: number }) => FirstLines): { destroy(): void } {
     const root = surface.element;
     const menu = flowMenu("Text", { className: "quire-text-menu" });
     const anchor = make("span", "quire-anchor");
@@ -38,8 +49,14 @@ export function createTextMenu(surface: Surface, menus: () => { items: () => Men
             const { anchor: from, focus } = surface.getSelection();
             return from.path.join() !== focus.path.join() || from.offset !== focus.offset;
         })();
-        const lines: MenuItem[] = [{ label: "Cut", hint: "Ctrl+X", disabled: !selected, run: clip("cut") }, { label: "Copy", hint: "Ctrl+C", disabled: !selected, run: clip("copy") }, ...linesFor(menus())];
-        menu.open(anchor, lines, keyboard);
+        const top = first?.(keyboard ? undefined : { x, y }) ?? { lines: [], strong: 0 };
+        menu.open(anchor, menuLines(top.lines, selected, clip, linesFor(menus())), keyboard);
+        // the spellings are drawn strong, and a rule parts what was given first from the rest
+        const drawn = menu.box.querySelectorAll<HTMLElement>(".quire-menu-items > *");
+        drawn.forEach((line, index) => {
+            line.classList.toggle("quire-menu-strong", index < top.strong);
+            line.classList.toggle("quire-menu-parted", top.lines.length > 0 && index === top.lines.length);
+        });
     }
     /** Not in a table, a picture or a control drawn in the text, each of which has its own. */
     const plain = (target: EventTarget | null) => {
@@ -63,7 +80,7 @@ export function createTextMenu(surface: Surface, menus: () => { items: () => Men
         keyedAt = performance.now();
         open(at.left, at.bottom, true);
     }
-    // heard on the page, after every handler on the text itself (a spelling popover, a picture's or a table's menu), any of which comes first
+    // heard on the page, after every handler on the text itself (a checking popover, a picture's or a table's menu), any of which comes first
     document.addEventListener("contextmenu", onMenu);
     root.addEventListener("keydown", onKey);
     return {

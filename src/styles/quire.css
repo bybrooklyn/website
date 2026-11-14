@@ -182,7 +182,7 @@
         0 1.5rem 3rem -1.5rem oklch(0.04 0.02 300 / 0.9);
 }
 
-.quire-paper > :not(.quire-caret, .quire-pages) {
+.quire-paper > :not(.quire-caret, .quire-pages, .quire-suggestion) {
     box-sizing: border-box;
     width: 100%;
     max-width: none;
@@ -446,6 +446,27 @@
 
 .quire-caret.shown.off {
     opacity: 0;
+}
+
+/* Suggested words (suggest-view.ts): laid over the page just after the caret, never part of the text,
+   in the faint ink placeholders use (4.5:1 on its ground, far under the text's own ink, so that it
+   reads as not yet written). One line only, so nothing is drawn over the line below. */
+.quire-suggestion {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 2;
+    white-space: pre;
+    color: var(--quire-faint);
+    pointer-events: none;
+    user-select: none;
+    opacity: 0;
+}
+
+/* it fades in, and goes at once, so that it never lingers over a letter typed where it was */
+.quire-suggestion.shown {
+    opacity: 1;
+    transition: opacity 0.12s var(--ease);
 }
 
 /* while a picture is picked, what the keys act on is the picture, and no caret blinks beside it */
@@ -3729,6 +3750,67 @@ body.quire-app,
     margin-left: 0.5rem;
     color: var(--muted);
     font-family: var(--font-text);
+}
+
+/* a misspelled word's lines first in the text's menu: its spellings strong, as Docs draws them, and a
+   rule under what it put there */
+.quire-menu-strong .quire-menu-label {
+    font-weight: 600;
+}
+
+.quire-menu-parted {
+    margin-top: 0.25rem;
+    border-top: 0.0625rem solid var(--rule);
+    padding-top: 0.25rem;
+}
+
+/* Personal dictionary: her words, a line each with Remove, scrolling inside the dialog */
+.quire-own-intro,
+.quire-own-count,
+.quire-own-none {
+    margin: 0 0 0.5rem;
+}
+
+.quire-own-count:empty {
+    margin: 0;
+}
+
+.quire-own-count,
+.quire-own-none {
+    color: var(--muted);
+    font-size: 0.85rem;
+}
+
+.quire-own-list {
+    max-height: min(22rem, 50vh);
+    margin: 0;
+    padding: 0;
+    overflow-y: auto;
+    list-style: none;
+    border-top: 0.0625rem solid var(--rule);
+}
+
+.quire-own-word {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.2rem 0;
+    border-bottom: 0.0625rem solid var(--rule);
+}
+
+.quire-own-text {
+    overflow-wrap: anywhere;
+}
+
+.quire-own-remove {
+    color: var(--muted);
+    font-size: 0.82rem;
+}
+
+.quire-check-own {
+    align-self: flex-start;
+    margin-top: 0.3rem;
 }
 
 /* the settings, a dialog: the form takes the dialog's width, and the list of rules scrolls inside it */

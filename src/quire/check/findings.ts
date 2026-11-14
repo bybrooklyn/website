@@ -110,17 +110,27 @@ const writeJson = (keep: Keep | undefined, key: string, value: unknown) => {
     }
 };
 
-/** Whether checking is on and how it is set, as kept, with anything missing or wrong taken from the defaults. */
+/**
+ * What a writer who has never set checking starts with: spelling alone, so that a misspelling is
+ * underlined from the first document while the other kinds wait until she switches them on.
+ */
+export const FIRST_KINDS: Settings["kinds"] = { spelling: true, prose: false, markdown: false, link: false };
+
+/**
+ * Whether checking is on and how it is set, as kept, with anything missing or wrong taken from the
+ * defaults. Checking is on unless she switched it off: a writer who has never set it starts with
+ * spelling on, in American, and whoever turned it off keeps it off.
+ */
 export function loadPrefs(keep: Keep | undefined): { on: boolean; settings: Settings } {
     const kept = readJson<{ on: boolean; settings: Partial<Settings> }>(keep, PREFS);
     const settings = kept.settings ?? {};
     const number = (value: unknown, fallback: number) => (typeof value === "number" && value >= 5 && value <= 1000 ? Math.round(value) : fallback);
-    const kinds = { ...DEFAULTS.kinds };
+    const kinds = { ...(settings.kinds && typeof settings.kinds === "object" ? DEFAULTS.kinds : FIRST_KINDS) };
     for (const kind of KINDS) if (typeof settings.kinds?.[kind] === "boolean") kinds[kind] = settings.kinds[kind];
     const rules: Record<string, boolean> = {};
     for (const [id, on] of Object.entries(settings.rules ?? {})) if (typeof on === "boolean") rules[id] = on;
     return {
-        on: kept.on === true,
+        on: kept.on !== false,
         settings: { kinds, rules, sentence: number(settings.sentence, DEFAULTS.sentence), paragraph: number(settings.paragraph, DEFAULTS.paragraph), dialect: settings.dialect === "gb" ? "gb" : "us" },
     };
 }
@@ -128,10 +138,36 @@ export function loadPrefs(keep: Keep | undefined): { on: boolean; settings: Sett
 /** Keeps whether checking is on and how it is set. */
 export const savePrefs = (keep: Keep | undefined, prefs: { on: boolean; settings: Settings }) => writeJson(keep, PREFS, prefs);
 
-/** Her own words, added to the dictionary from the popover. */
+/** The most words her own dictionary keeps. */
+export const MOST_OWN = 20_000;
+
+/**
+ * The words of a list that can be in her dictionary, each once, in their order: a word is trimmed,
+ * one to 64 characters with no space or control character in it, and at most MOST_OWN are taken.
+ * What was kept, and a file she imports, both pass through this, so nothing else is ever read as a word.
+ */
+export function cleanWords(list: unknown[]): string[] {
+    const seen = new Set<string>();
+    for (const item of list) {
+        if (typeof item !== "string") continue;
+        const word = item.trim().normalize("NFC");
+        if (word.length === 0 || word.length > 64 || /[\s\p{Cc}\p{Cf}]/u.test(word)) continue;
+        seen.add(word);
+        if (seen.size >= MOST_OWN) break;
+    }
+    return [...seen];
+}
+
+/** Her dictionary as a plain text file: one word to a line, in order, ending with a new line. */
+export const wordsText = (words: Iterable<string>) => [...words].sort((a, b) => a.localeCompare(b, "en", { sensitivity: "base" }) || (a < b ? -1 : 1)).map((word) => `${word}\n`).join("");
+
+/** The words of a plain text file she imports: one to a line (a comma or tab also parts them), cleaned as cleanWords does. */
+export const wordsOfText = (text: string) => cleanWords(text.replace(/^\uFEFF/, "").split(/[\r\n,\t]+/));
+
+/** Her own words, added to the dictionary from the popover, the text's menu or an imported file. */
 export function loadOwn(keep: Keep | undefined): Set<string> {
     const kept = readJson<{ words: string[] }>(keep, OWN).words;
-    return new Set(Array.isArray(kept) ? kept.filter((word) => typeof word === "string") : []);
+    return new Set(Array.isArray(kept) ? cleanWords(kept) : []);
 }
 
 /** Keeps her own words. */

@@ -1,12 +1,14 @@
 // Checking, used for real in headless Chromium: the whole editor bundled with the site's styles and
 // served over http with the dictionary, then the built /mdquire/ page (`bun run build`). Held true:
-// nothing of checking loads until Tools, Spelling and grammar is pressed; then the underlines are drawn, the
-// count is right, a click opens the popover from the word, a fix is one undo step, ignoring and
-// adding to the dictionary take the underline away, the list jumps to its findings, F8 goes to the
-// next, the settings switch a kind off, a word still being typed is not underlined, and a key typed
-// in a 5,000-line document with checking on is painted in under 16 ms, and a dictionary that does not
-// load leaves spelling to the browser and says so. Skipped, with a notice, on a
-// machine with no Chromium.
+// a writer who never set checking sees misspellings underlined at once, and nothing else; whoever
+// switched it off keeps it off, and nothing of it loads until Tools, Spelling and grammar; the underlines are
+// drawn, the count is right, a click opens the popover from the word, a fix is one undo step, a
+// right-click on a misspelling puts its spellings first in the text's menu, ignoring and adding to
+// the dictionary take the underline away, Personal dictionary lists her words, removes one and adds
+// a text file's, the list jumps to its findings, F8 goes to the next, the settings switch a kind off,
+// a word still being typed is not underlined, a key typed in a 5,000-line document with checking on
+// is painted in under 16 ms, and a dictionary that does not load leaves spelling to the browser and
+// says so. Skipped, with a notice, on a machine with no Chromium.
 
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
@@ -144,7 +146,19 @@ async function clickWord(words: string, nth = 0) {
 
 const TEXT = "Teh cat sat on teh mat. It was the the best.\n\nA [link](#nowhere) here.\n";
 
-used("nothing of checking loads until it is first used; then the underlines are drawn and counted", async () => {
+used("a writer who never set checking sees misspellings underlined from the first document, in American, and nothing else", async () => {
+    await tab.run(`q.reset(${JSON.stringify(TEXT + "\nThe colour of it.\n")})`);
+    await until("q.marked().spelling === 3");
+    expect(await tab.run<string[]>("q.loaded()")).toHaveLength(1);
+    expect(await marked()).toEqual({ spelling: 3, markdown: 0, link: 0, prose: 0 });
+    expect(await counted()).toBe("3");
+    // the browser's own spelling marks are off while these are on
+    expect(await tab.run("q.surface.element.spellcheck")).toBe(false);
+});
+
+used("whoever switched checking off keeps it off: nothing of it loads until Tools, Checking", async () => {
+    await tab.run("localStorage.setItem('quire-check', JSON.stringify({ on: false, settings: { kinds: { spelling: true, prose: true, markdown: true, link: true } } }))");
+    await tab.open(`http://localhost:${server!.port}/`, 300);
     await tab.run(`q.reset(${JSON.stringify(TEXT)})`);
     await tab.wait(400);
     expect(await tab.run("q.loaded()")).toEqual([]);
@@ -157,7 +171,6 @@ used("nothing of checking loads until it is first used; then the underlines are 
     expect(await tab.run<string[]>("q.loaded()")).toHaveLength(1);
     expect(await marked()).toEqual({ spelling: 2, markdown: 0, link: 1, prose: 1 });
     expect(await counted()).toBe("4");
-    // the browser's own spelling marks are off while these are on
     expect(await tab.run("q.surface.element.spellcheck")).toBe(false);
     // what was found opened with it, from Tools, as Docs' Spelling and grammar does
     await until("!!document.querySelector('.quire-check-list.open')");
@@ -179,19 +192,47 @@ used("a click opens the popover from the word, and a fix is one undo step", asyn
     expect(await md()).toBe("Teh cat sat on the mat. It was the the best.\n\nA [link](#nowhere) here.\n");
 });
 
-used("a right click on an underlined word opens its popover in place of the browser's menu", async () => {
-    const point = await tab.run<{ x: number; y: number }>("q.word('Teh')");
-    const opened = await tab.run<boolean>(`!q.surface.element.dispatchEvent(new MouseEvent("contextmenu", { clientX: ${point.x}, clientY: ${point.y}, bubbles: true, cancelable: true }))`);
-    expect(opened).toBe(true);
-    await until("!!document.querySelector('.quire-check-pop.open')");
-    expect(await popped()).toContain("\"Teh\" is not in the dictionary.");
+/** Right-clicks the middle of a word in the text, as the browser would send it. */
+async function rightClick(words: string) {
+    const point = await tab.run<{ x: number; y: number }>(`q.word(${JSON.stringify(words)})`);
+    await tab.run(`q.surface.element.dispatchEvent(new MouseEvent("contextmenu", { clientX: ${point.x}, clientY: ${point.y}, bubbles: true, cancelable: true }))`);
+}
+/** The lines of the text's menu as drawn: their words, and whether each is strong or parted from the line before. */
+const menuLines = () => tab.run<string[]>("[...document.querySelectorAll('.quire-text-menu.open .quire-menu-items > *')].map((line) => (line.classList.contains('quire-menu-strong') ? '*' : '') + (line.classList.contains('quire-menu-parted') ? '| ' : '') + (line.querySelector('.quire-menu-label')?.textContent ?? line.textContent))");
+
+used("a right-click on a misspelled word puts its spellings first in the text's menu, then Add to dictionary and Ignore, then the rest", async () => {
+    await rightClick("Teh");
+    await until("!!document.querySelector('.quire-text-menu.open')");
+    await tab.wait(400);
+    const lines = await menuLines();
+    expect(lines[0]!.startsWith("*")).toBe(true);
+    expect(lines).toContain("*The");
+    const at = lines.indexOf("Add to dictionary");
+    expect(at).toBeGreaterThan(0);
+    expect(lines.slice(at, at + 3)).toEqual(["Add to dictionary", "Ignore in this document", "| Cut"]);
+    expect(lines.slice(0, at).every((line) => line.startsWith("*"))).toBe(true);
+    expect(await tab.run("!!document.querySelector('.quire-check-pop.open')")).toBe(false);
     await tab.press("Escape");
     await tab.wait(300);
-    // anywhere else it is the text's own menu (text-menu.ts), not the popover
-    const plain = await tab.run<{ x: number; y: number }>("q.word('cat')");
-    await tab.run(`q.surface.element.dispatchEvent(new MouseEvent("contextmenu", { clientX: ${plain.x}, clientY: ${plain.y}, bubbles: true, cancelable: true }))`);
+    // a spelling chosen there is put in, as one undo step
+    await rightClick("Teh");
     await until("!!document.querySelector('.quire-text-menu.open')");
-    expect(await tab.run("!!document.querySelector('.quire-check-pop.open')")).toBe(false);
+    await tab.wait(400);
+    await press(".quire-text-menu.open .quire-menu-line", "The");
+    expect(await md()).toBe("The cat sat on the mat. It was the the best.\n\nA [link](#nowhere) here.\n");
+    await tab.run("q.surface.undo()");
+    expect(await md()).toBe("Teh cat sat on the mat. It was the the best.\n\nA [link](#nowhere) here.\n");
+    // a finding that is not a misspelling opens its popover
+    await until("q.marked().spelling === 1");
+    await rightClick("the the");
+    await until("!!document.querySelector('.quire-check-pop.open')");
+    expect(await popped()).toContain("twice");
+    await tab.press("Escape");
+    await tab.wait(300);
+    // and a word with nothing found is the text's own menu, Cut first
+    await rightClick("cat");
+    await until("!!document.querySelector('.quire-text-menu.open')");
+    expect((await menuLines())[0]).toBe("Cut");
     await tab.press("Escape");
     await tab.wait(300);
 });
@@ -211,6 +252,33 @@ used("ignoring and adding to the dictionary take the underline away", async () =
     await press(".quire-check-pop.open .quire-check-action", "Add to dictionary");
     await until("q.marked().spelling === 1");
     expect(await tab.run("JSON.parse(localStorage.getItem('quire-check-words')).words")).toEqual(["Iroh"]);
+});
+
+used("Personal dictionary lists her words: one removed is marked again, and a text file's words are added", async () => {
+    await tab.run(`q.reset("Iroh and wgpu are a wrod.\\n")`);
+    await until("q.marked().spelling === 2");
+    await tab.run(`q.editor.commands.tools().find((item) => item.label === "Personal dictionary").run()`);
+    await until("!!document.querySelector('dialog.quire-own-dialog[open]')");
+    await tab.wait(500);
+    const words = () => tab.run<string[]>("[...document.querySelectorAll('dialog.quire-own-dialog[open] .quire-own-text')].map((word) => word.textContent)");
+    expect(await words()).toEqual(["Iroh"]);
+    expect(await tab.run<string[]>("[...document.querySelectorAll('dialog.quire-own-dialog[open] .quire-dialog-actions button')].map((b) => b.textContent)")).toEqual(["Download as text", "Add from a text file", "Done"]);
+    await press("dialog.quire-own-dialog[open] .quire-own-remove");
+    expect(await words()).toEqual([]);
+    expect(await tab.run<string>("document.querySelector('dialog.quire-own-dialog[open] .quire-own-none').textContent")).toBe("No words yet. Right-click a word marked as misspelled and choose Add to dictionary.");
+    expect(await tab.run("JSON.parse(localStorage.getItem('quire-check-words')).words")).toEqual([]);
+    await until("q.marked().spelling === 3");
+    // a file of words, one to a line, is added to the list
+    await Bun.write(`${folder}/words.txt`, "wgpu\nIroh\n\nnot a word\n");
+    await tab.files([`${folder}/words.txt`]);
+    await press("dialog.quire-own-dialog[open] .quire-dialog-actions button", "Add from a text file");
+    await until("document.querySelectorAll('dialog.quire-own-dialog[open] .quire-own-text').length === 2");
+    expect(await words()).toEqual(["Iroh", "wgpu"]);
+    expect(await tab.run<string>("document.querySelector('dialog.quire-own-dialog[open] .quire-own-count').textContent")).toBe("2 words added.");
+    await press("dialog.quire-own-dialog[open] .quire-dialog-actions button", "Done");
+    await until("!document.querySelector('dialog.quire-own-dialog[open]')");
+    await until("q.marked().spelling === 1");
+    await tab.files([]);
 });
 
 used("the count opens the list of everything, which jumps to a finding; F8 goes to the next", async () => {
@@ -327,9 +395,12 @@ used("when the dictionary does not load, the browser's own spelling is switched 
     }
 });
 
-test.skipIf(!built)("in the built page, the checking code and the dictionary are fetched only when checking is first used", async () => {
+test.skipIf(!built)("in the built page, the dictionary is fetched at once for a writer who never set checking, and only when checking is first used for one who switched it off", async () => {
     await tab.open(`http://localhost:${server!.port}/site/mdquire/`, 800);
     await tab.run("localStorage.clear()");
+    await tab.open(`http://localhost:${server!.port}/site/mdquire/`, 1200);
+    await until("performance.getEntriesByType('resource').some((entry) => entry.name.includes('words-en'))", 8000);
+    await tab.run("localStorage.setItem('quire-check', JSON.stringify({ on: false }))");
     await tab.open(`http://localhost:${server!.port}/site/mdquire/`, 1200);
     const before = await tab.run<string[]>("performance.getEntriesByType('resource').map((entry) => entry.name)");
     expect(before.filter((name) => name.includes("words-en"))).toEqual([]);

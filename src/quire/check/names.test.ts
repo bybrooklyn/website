@@ -7,7 +7,7 @@ import { isName, namesIn } from "./names";
 import { createSpeller } from "./spelling";
 
 test("the site's names are known, whatever their capitals, and with a possessive", () => {
-    for (const word of ["mdQuire", "MDQUIRE", "mdquire", "imgQuire", "Mote", "charlotte", "Charlotte's", "Fraunces", "Torrens", "bybrooklyn"]) expect({ word, known: isName(word) }).toEqual({ word, known: true });
+    for (const word of ["mdQuire", "MDQUIRE", "mdquire", "imgQuire", "Playmatter", "Mote", "charlotte", "Charlotte's", "Fraunces", "Torrens", "bybrooklyn"]) expect({ word, known: isName(word) }).toEqual({ word, known: true });
     expect(isName("mdQuirk")).toBe(false);
 });
 
