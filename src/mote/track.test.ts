@@ -282,8 +282,9 @@ test("a ball let go at the top of a banked spiral runs down it in the gutter and
     const space = marbleSpace();
     space.sleeps = false;
     const spiral = helix([0, 0, 0], 15, -5, 1.5);
-    // banked into the turn, as a real one is: unbanked and faster, a ball climbs the outer wall until friction cannot hold its roll
-    const piece = sweep(spiral, gutter(1.6, Math.PI * 1.1, 0.2), { level: true, bank: 0.35 });
+    // banked into the turn (it turns left, so its up leans left), as a real one is: unbanked and faster, a
+    // ball climbs the outer wall until friction cannot hold its roll
+    const piece = sweep(spiral, gutter(1.6, Math.PI * 1.1, 0.2), { level: true, bank: -0.35 });
     space.track(piece);
     const f = piece.frame(1);
     const ball = space.ball(R, [0, 1, 2].map((k) => f.p[k]! - f.up[k]! * 0.6) as V3, SMOOTH);
