@@ -41,3 +41,6 @@ walker/target/
 
 # the sand engine's build folder
 sand/target/
+
+# what cargo leaves beside imgQuire's Rust encoders (codecs/build.sh builds them elsewhere)
+codecs/rust/target/
