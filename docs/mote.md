@@ -14,7 +14,7 @@ under the MIT license in that folder (`src/mote/LICENSE`), plainer than the rest
 |---|---|
 | `stage.ts` | The canvas, a loop in fixed steps of 1/120 s, mouse and keys, the page's colours, a panel for buttons, a little kept between visits, the address. Runs only while seen and stops when the scene rests. |
 | `flat.ts` | 2D physics: boxes, balls, bars and shapes, walls, pins, rods, ropes, a motor, a hand to grab with. |
-| `space.ts` | 3D physics: solids that fall, tumble and hit each other and fixed slabs. |
+| `space.ts` | 3D physics: solids that fall, tumble and hit each other and fixed slabs, each turning by its own inertia tensor. |
 | `grid.ts` | The broad phase both physics use: which pairs of bodies are near enough to be worth a closer look. |
 | `gl.ts` | 3D drawing on WebGL 2: depth, a sun with shadows, sky light, numbers on faces, floating words, glow. |
 | `solids.ts` | The shapes of dice and other solids, drawn on a 2D canvas where WebGL 2 is missing. |
@@ -63,6 +63,32 @@ Step times from `crowd.test.ts` (one step of 1/120 s, the middle of a few, on fo
 Finding pairs no longer grows with the square of the count. What is left is the work on each pair that
 touches: in 2D that keeps a pile of 1,000 inside its 8.3 ms only on a fast machine, and in 3D the contact
 code (`touch`, which makes many small arrays) is now nearly all of a step.
+
+### How hard a solid is to turn
+
+Until 13 Nov 2026 `space.ts` gave every solid one number for how hard it is to turn, right for a cube
+and the regular dice and wrong for anything long, flat or lopsided. Now each solid has its inertia
+tensor, from its shape.
+
+- **From the shape.** `inertia(points, faces)` sums the tensor over the pyramids from the solid's middle
+  to each triangle of its faces, so it works for any solid that bulges everywhere: a box, a rod, a ball
+  of faces, every die. The test checks a box against its formula exactly and a rod and a ball of many
+  faces against a cylinder and a sphere to within 1%.
+- **Into the world each step.** The tensor's inverse is turned by the solid's turn at the start of each
+  step and used for every push in it.
+- **The spin by itself.** A solid harder to turn one way than another changes its spin with no push (a
+  bar tumbles, a coin wobbles). That is taken on each part of a step in the solid's own frame by the
+  implicit midpoint rule, solved by Newton's method in two or three goes. The rule keeps the energy of the
+  spin and the size of its angular momentum exactly; the plain step adds energy each time. A box spinning
+  free for ten thousand steps keeps its energy to one part in a billion; the direction of its momentum
+  wobbles by 1.2% at 240 steps a second (0.6% at 480), and the wobble does not grow. A bar spun about its
+  middle axis turns right over, again and again, as a real one does; spun about its long or short axis it
+  stays within a few degrees. A lopsided wedge dropped on a corner turns the way its tensor says, to a
+  sixth of a degree, where one number would put it four degrees off.
+- **The same as before where it should be.** Where the tensor is the same about every axis (within one
+  part in a billion: a cube and the four, six, eight, twelve and twenty sided dice) the one number is
+  kept, worked out as before, and those solids step exactly as they did, to the bit. The ten-sided die is
+  not the same about every axis, so it now turns as its shape says; its fairness test still passes.
 
 ## Decided
 
