@@ -620,7 +620,8 @@ export function marbleSpace(): Space {
     space.gravity = [0, -981, 0];
     space.margin = 0.02;
     space.push = 20;
-    space.ahead = 4;
+    // looked ahead far enough for a marble at 2,800 cm/s, five times as fast as a two metre drop gives
+    space.ahead = 12;
     space.knock = 5;
     space.slow = 0.3;
     space.sleeps = true;
@@ -1232,7 +1233,10 @@ export class Space {
         const landing = (now: number, there: number, v: V3, n: V3, end: V3) => {
             const square = dot(n, end);
             const allowed = now < 0 ? Math.min(0, now + this.push * h) : 0;
-            return square > 0.5 ? (there - allowed) / (h * square) - dot(v, n) : (now > 0 ? now / h : 0);
+            // Where the surface turns by more than a few degrees in one part (a thin rail met fast), where
+            // the ball would be at the end says little of what it passed through on the way: then it may
+            // close the gap there is now along the way the surface faces, and no more.
+            return square > 0.95 ? (there - allowed) / (h * square) - dot(v, n) : (now - allowed) / h;
         };
         /**
          * For each contact with a ball, as a part of the step begins: how far apart the two are and the
@@ -1246,8 +1250,13 @@ export class Space {
                 const { a, b, n } = m;
                 for (const s of m.spots) {
                     if (m.piece) {
-                        // where the last part said it would be, put right by where it went
-                        const [now, toward] = part ? [s.there! + dot(sub(b.p, s.going!), s.toward!), s.toward!] : [s.gap, n];
+                        // Where the last part said it would be, put right by where it went; unless the surface
+                        // faced a good deal another way there (it was past a thin rail), when it is measured again.
+                        let [now, toward] = part ? [s.there! + dot(sub(b.p, s.going!), s.toward!), s.toward!] : [s.gap, n];
+                        if (part && dot(toward, n) <= 0.95) {
+                            const again = m.piece.again(m.part!, m.where!, b.p, b.radius!);
+                            [now, toward, m.where] = [again.gap, again.n, again.where];
+                        }
                         aim(m, s, toward, now);
                         const going = add(b.p, mul(b.v, h));
                         const end = m.piece.again(m.part!, m.where!, going, b.radius!);

@@ -7,7 +7,7 @@
 
 import { expect, test } from "bun:test";
 import { MARBLE, join, marbleSpace, type Solid, type Space } from "./space";
-import { cosine, curve, gutter, helix, line, rails, sine, sweep, tube, turned, vee, type Piece, type Touch } from "./track";
+import { cosine, curve, gutter, helix, line, rails, sine, sweep, tube, turned, vee, type Piece, type Section, type Touch } from "./track";
 import type { V3 } from "./solids";
 
 const G = 981;
@@ -326,4 +326,48 @@ test("pieces that meet end to end with the same section are joined; others are n
     expect(a.joined).toEqual([false, true]);
     expect(b.joined).toEqual([true, false]);
     expect(c.joined).toEqual([false, false]);
+});
+
+test("the fastest marble a long steep drop gives does not pass through the thinnest rail, from any side, nor at three times that speed", () => {
+    // How fast a marble gets: let go at the top of a metre's drop down a gutter, steep as it can be.
+    const space = marbleSpace();
+    space.sleeps = false;
+    const drop = sweep(curve([[0, 100, 0], [57, 1, 0], [80, 0, 0], [200, 0, 0]], { start: [1, -1.7, 0], end: [1, 0, 0] }), gutter(1.5, Math.PI, 0.2), { level: true });
+    space.track(drop);
+    const marble = space.ball(R, [0.5, 100 - 0.6, 0], MARBLE);
+    let fastest = 0;
+    run(space, 0.7, () => (fastest = Math.max(fastest, size(marble.v))));
+    // falling free the whole metre it would reach 443 cm/s; down track it is slower, by its rolling and its rubbing
+    expect(fastest).toBeGreaterThan(300);
+    expect(fastest).toBeLessThan(Math.sqrt(2 * G * 100));
+    console.log(`fastest marble after a metre's drop: ${fastest.toFixed(0)} cm/s, ${(fastest / space.rate).toFixed(2)} cm a step`);
+
+    // Marbles spinning any way, fired at a single round rod from every side, squarely and glancing.
+    const rod = (radius: number): Section => [{ from: [0, 0], to: [0, 0], thick: 2 * radius }];
+    let seed = 5;
+    const next = () => (seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 2 ** 32;
+    for (const radius of [0.05, 0.2]) {
+        for (const speed of [450, 750, 1500]) {
+            for (let shot = 0; shot < 30; shot++) {
+                const space = marbleSpace();
+                space.gravity = [0, 0, 0];
+                space.sleeps = false;
+                space.track(sweep(line([-30, 0, 0], [30, 0, 0]), rod(radius)));
+                const angle = next() * 2 * Math.PI;
+                const aside = (next() - 0.5) * 2 * (R + radius) * 0.95;
+                const toward: V3 = [0, Math.cos(angle), Math.sin(angle)];
+                const across: V3 = [0, -Math.sin(angle), Math.cos(angle)];
+                const along = (next() - 0.5) * 0.4;
+                const ball = space.ball(R, [along * 10, -toward[1] * 20 + across[1] * aside, -toward[2] * 20 + across[2] * aside], { ...MARBLE, bounce: 0.3 });
+                ball.v = [along * speed, toward[1] * speed, toward[2] * speed];
+                ball.w = [(next() - 0.5) * 400, (next() - 0.5) * 400, (next() - 0.5) * 400];
+                let deepest = 0;
+                run(space, 0.1, () => (deepest = Math.max(deepest, R + radius - Math.hypot(ball.p[1], ball.p[2]))));
+                // never into the rod by more than a hair, and not out the far side in its shadow
+                expect(deepest).toBeLessThan(0.02);
+                const past = dot(ball.p, toward) > 0 && Math.abs(dot(ball.p, across)) < R + radius - 0.05;
+                expect(past).toBe(false);
+            }
+        }
+    }
 });
