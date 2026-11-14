@@ -76,6 +76,10 @@ struct Out { @builtin(position) at: vec4f, @location(0) place: vec2f };
 @fragment fn fragment(in: Out) -> @location(0) vec4f { return textureSample(before, soft, in.place); }`;
 
 const FILTERS = { lanczos: 0, bilinear: 1, nearest: 2 } as const;
+/** WebGPU's flags by their numbers in the standard, which TypeScript's library here does not name. */
+const TEXTURE = { COPY_SRC: 1, COPY_DST: 2, TEXTURE_BINDING: 4, RENDER_ATTACHMENT: 16 };
+const BUFFER = { MAP_READ: 1, COPY_DST: 8, UNIFORM: 64 };
+const READ = 1;
 /** Room for one draw's numbers in the uniform buffer, as WebGPU wants them spaced. */
 const SLOT = 256;
 
@@ -102,21 +106,21 @@ export async function webgpu(canvas: HTMLCanvasElement | OffscreenCanvas): Promi
     const sharp = device.createSampler({ magFilter: "nearest", minFilter: "nearest" });
     const smooth = device.createSampler({ magFilter: "linear", minFilter: "linear", mipmapFilter: "linear" });
     const textures = new WeakMap<Texture, GPUTexture>();
-    const blank = device.createTexture({ size: [1, 1], format: "rgba8unorm", usage: GPUTextureUsage.TEXTURE_BINDING });
-    let numbers = device.createBuffer({ size: SLOT * 64, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    const blank = device.createTexture({ size: [1, 1], format: "rgba8unorm", usage: TEXTURE.TEXTURE_BINDING });
+    let numbers = device.createBuffer({ size: SLOT * 64, usage: BUFFER.UNIFORM | BUFFER.COPY_DST });
 
     /** Writes each draw's numbers into its own slot, making the buffer larger when a draw has more. */
     const slots = (rows: number[][]) => {
         if (rows.length * SLOT > numbers.size) {
             numbers.destroy();
-            numbers = device.createBuffer({ size: SLOT * Math.max(64, rows.length * 2), usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+            numbers = device.createBuffer({ size: SLOT * Math.max(64, rows.length * 2), usage: BUFFER.UNIFORM | BUFFER.COPY_DST });
         }
         const all = new ArrayBuffer(rows.length * SLOT);
         rows.forEach((row, at) => new Float32Array(all, at * SLOT, row.length).set(row));
         device.queue.writeBuffer(numbers, 0, all);
     };
     const made = (width: number, height: number, levels = 1) =>
-        device.createTexture({ size: [width, height], format: "rgba8unorm", mipLevelCount: levels, usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.COPY_SRC | GPUTextureUsage.RENDER_ATTACHMENT });
+        device.createTexture({ size: [width, height], format: "rgba8unorm", mipLevelCount: levels, usage: TEXTURE.TEXTURE_BINDING | TEXTURE.COPY_DST | TEXTURE.COPY_SRC | TEXTURE.RENDER_ATTACHMENT });
     const upload = (image: ImageBitmap, levels = 1) => {
         const texture = made(image.width, image.height, levels);
         device.queue.copyExternalImageToTexture({ source: image }, { texture, premultipliedAlpha: false }, [image.width, image.height]);
@@ -187,7 +191,7 @@ export async function webgpu(canvas: HTMLCanvasElement | OffscreenCanvas): Promi
             };
             // the covers' numbers first, then the two passes', each in its own slot
             slots(covers.map((cover) => [0, 0, part.width, part.height, part.width, part.height, 0, 0, ...cover.color]));
-            const passes = device.createBuffer({ size: SLOT * 2, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+            const passes = device.createBuffer({ size: SLOT * 2, usage: BUFFER.UNIFORM | BUFFER.COPY_DST });
             device.queue.writeBuffer(passes, 0, job(0));
             device.queue.writeBuffer(passes, SLOT, job(1));
             const encoder = device.createCommandEncoder();
@@ -209,10 +213,10 @@ export async function webgpu(canvas: HTMLCanvasElement | OffscreenCanvas): Promi
                 pass.end();
             }
             const row = Math.ceil((piece.out.width * 4) / 256) * 256;
-            const read = device.createBuffer({ size: row * piece.out.height, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+            const read = device.createBuffer({ size: row * piece.out.height, usage: BUFFER.COPY_DST | BUFFER.MAP_READ });
             encoder.copyTextureToBuffer({ texture: done }, { buffer: read, bytesPerRow: row }, [piece.out.width, piece.out.height]);
             device.queue.submit([encoder.finish()]);
-            await read.mapAsync(GPUMapMode.READ);
+            await read.mapAsync(READ);
             const padded = new Uint8Array(read.getMappedRange());
             const pixels = new Uint8Array(piece.out.width * piece.out.height * 4);
             for (let y = 0; y < piece.out.height; y++) pixels.set(padded.subarray(y * row, y * row + piece.out.width * 4), y * piece.out.width * 4);

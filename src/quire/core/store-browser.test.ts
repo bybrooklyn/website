@@ -252,7 +252,7 @@ test("a document kept before other kinds came opens as it did, and saving it wri
     expect(await store.open("old-1")).toEqual({ text: "Dear all,\n", mark: "3", quire: row.quire });
     expect(await store.open("old-2")).toEqual({ text: "Words.\n", mark: "1", quire: undefined });
     await store.save("old-1", "Dear all, again.\n", "3", { style: "{}", notes: "{}" });
-    expect(await tables.get("documents", "old-1")).toEqual({ id: "old-1", name: "Letter", text: "Dear all, again.\n", mark: 4, modified: 9, quire: { style: "{}", notes: "{}" } });
+    expect(await tables.get<{ id: string; [field: string]: unknown }>("documents", "old-1")).toEqual({ id: "old-1", name: "Letter", text: "Dear all, again.\n", mark: 4, modified: 9, quire: { style: "{}", notes: "{}" } });
     const made = await store.create("New", "x", { style: "", notes: "" });
     expect(Object.keys((await tables.get("documents", made.id))!).sort()).toEqual(["id", "mark", "modified", "name", "quire", "text"]);
 });

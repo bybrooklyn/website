@@ -98,7 +98,7 @@ export function look(picture: Picture): Look {
             down = step.height ? step.height / crop.height : across;
             filter = step.filter;
         } else if (step.type === "cover") covers.push({ rect: within(step.rect, original), color: step.color });
-        else marks.push(withoutId(step));
+        else marks.push(withoutId(step) as Mark);
     }
     const width = clamp(Math.round(crop.width * across), 1, LIMITS.side);
     const height = clamp(Math.round(crop.height * down), 1, LIMITS.side);
@@ -106,9 +106,9 @@ export function look(picture: Picture): Look {
 }
 
 /** A step without the document's own fields. */
-function withoutId<T extends Kept>(step: T): Step {
+function withoutId(step: Kept): Step {
     const { id: _id, off: _off, ...plain } = step;
-    return plain as Step;
+    return plain as unknown as Step;
 }
 
 /** True when a step is on, so that the original cannot be given out as it is. */
