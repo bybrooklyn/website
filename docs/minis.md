@@ -42,6 +42,11 @@ How to add a mini is in `src/mote/README.md`.
   Mote's marbles roll, made for the marble run ([marbles](marbles.md)). Marbles go down a ramp, round a
   loop, along a banked spiral and through a funnel into a tray, one after another; a click lets another go
   and Space rides along with one. It stays a draft.
+- **Marbles** (a draft, 3D; `marbles.ts` on `pieces.ts`, `run.ts`, `table.ts`, `supports.ts`, `checks.ts`,
+  `orbit.ts`, `runs.ts`): the marble run, stage 2 of its plan ([marbles](marbles.md)). A box of pieces whose
+  ends snap together, dragged up from a strip under the scene or pressed to go at the end of the run;
+  pillars made by themselves; hoppers that let marbles go; quiet marks where marbles will fall off, stop or
+  take a turn too fast. Touch first, with the mouse and keys as well.
 
 ## Decided
 

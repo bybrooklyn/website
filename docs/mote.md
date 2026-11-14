@@ -12,7 +12,7 @@ under the MIT license in that folder (`src/mote/LICENSE`), plainer than the rest
 
 | File | What it is |
 |---|---|
-| `stage.ts` | The canvas, a loop in fixed steps of 1/120 s, mouse and keys, the page's colours, a panel for buttons, a little kept between visits, the address. Runs only while seen and stops when the scene rests. |
+| `stage.ts` | The canvas, a loop in fixed steps of 1/120 s, mouse, fingers and keys (several pointers by id, and the wheel, for a scene that asks), the page's colours, a panel for buttons, a little kept between visits, the address. Runs only while seen and stops when the scene rests. |
 | `flat.ts` | 2D physics: boxes, balls, bars and shapes, walls, pins, rods, ropes, a motor, a hand to grab with. |
 | `space.ts` | 3D physics: solids that fall, tumble and hit each other and fixed slabs, each turning by its own inertia tensor; balls that roll; islands that sleep together. |
 | `track.ts` | Fixed track for balls, worked out by formula: sections swept along curves and helices, and profiles turned into funnels. |
@@ -164,6 +164,36 @@ measuring each part of the step against it about 30%, the solver about 15%, the 
 rest is spread over small vectors made and dropped. Keeping each knot's point and slope, and working out a
 curve's point, slope and bend in one go, halved a step in a gutter and took two thirds off one in a funnel.
 
+## For the marble run's stage 2
+
+Added on 14 November 2026 for the marble run's pieces and snapping ([marbles](marbles.md)). Nothing that was
+there draws or steps differently: Blocks, Dice, Plinko and Rolling were photographed before and after (Dice
+and Rolling the same to the pixel; Blocks and Plinko show chance), and `pairs.test.ts` and `replay.test.ts`
+hold as before.
+
+- **How far the eye sees.** `view.range`, `[near, far]` in the scene's units, 0.5 to 120 unless set. The
+  marble run sets 2 to 4000 and draws in centimetres at full size. `gl.test.ts` checks that a cube 300 units
+  off is unseen by default and seen with a longer range.
+- **Several pointers.** A scene that has `down(hand)` is told of every pointer by its id through `down`,
+  `slide` and `up(hand, cancelled)`, with which button pressed it and whether Shift, Alt or Control was held,
+  and is not given `press`, `move` and `release`; the canvas's own menu is kept away so the other button can
+  drag. `wheel(x, y, by, pinch)` is the wheel, or a trackpad's pinch, and keeps the page from scrolling. So
+  two fingers can pan and pinch. Scenes without them are as before.
+- **Ends joined by hand, kept.** A swept piece has `kept`, the ends joined by hand (`along.joined`, or set
+  later by a scene that knows which pieces meet). Each time pieces come or go, `join` starts again from those
+  and finds the rest, so an end whose neighbour was taken away is open again (it used only to add joins).
+  The marble run sets `kept` for pieces that meet end against end, made the other way round, and for a
+  piece's own lengths where a groove becomes a tube, which Mote does not join as their sections differ.
+
+Found on the way, and left as they are:
+
+- An end of track left open costs a marble crossing it about a sixth of its speed, even where the two
+  surfaces are one (149 cm/s down to 124): only joined ends are seamless.
+- A ball rocking across a groove only a little wider than itself loses its rocking: a marble of 0.8 in a
+  groove of 1.1 rocks in 0.08 s and lost two fifths of that motion's energy each second, where theory loses
+  none; in a groove of 1.5 none is lost. The marble run's groove is 1.5. A ball entering a turn loses speed
+  the same way as it is thrown up the wall and rocks, more the faster it comes.
+
 ## Decided
 
 - **No third-party libraries, by rule.** Nothing forked and nothing added: what Mote needs is written in its
@@ -179,10 +209,9 @@ curve's point, slope and bend in one go, halved a step in a gutter and took two 
 - **Features for when a mini needs one:** a camera that pans and zooms; particles; sprites and a tile grid;
   springs and motors between bodies; one-way platforms, and sensors that notice a body without stopping it;
   saving a run and playing it back; a debug view of contacts, joints and sleeping bodies; a frame-time meter
-  beyond the `?debug` step time; touch with two fingers; text input.
+  beyond the `?debug` step time; text input.
 - **For the marble run, later:** ball against a solid of faces is soft, so a moving part (a seesaw, a gate)
-  is met as slabs are, not exactly; only balls meet track; `gl.ts` sees no further than 120 units, so a run in
-  centimetres is drawn at a tenth of its size (Rolling does) until it has a setting for that.
+  is met as slabs are, not exactly; only balls meet track.
 - **For the 3D side:** smooth shading across faces, a shadow under each solid, pictures drawn onto faces,
   loading a simple model from a file, a wireframe view, dice that hit each other corner to corner rather
   than as balls, a camera that can be moved.

@@ -49,7 +49,9 @@ export default function falling(m: Mote): Scene {
 
 A scene can also have `press`, `double`, `move`, `release`, `keydown`, `resize`, `resting` (return
 true when nothing is moving and the loop stops until something wakes it), `debug` (lines to show with
-`?debug` in the address) and `destroy` (the mini is being taken away).  `m.panel()` gives a place under the canvas for
+`?debug` in the address) and `destroy` (the mini is being taken away). A scene that needs several
+pointers at once (two fingers, the mouse's other button) has `down`, `slide` and `up` in place of `press`,
+`move` and `release`, each told which pointer by its id, and may have `wheel`.  `m.panel()` gives a place under the canvas for
 ordinary buttons and text. `m.preview` is true when the mini is being shown small in the list.
 
 `flat.ts` also has `flat.motor(a, b, strength)`: a motor that pushes `b` toward a place beside `a` and
