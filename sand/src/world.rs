@@ -29,7 +29,7 @@ use alloc::vec;
 use alloc::vec::Vec;
 
 use crate::level::Levels;
-use crate::materials::{EMPTY, Kind, MATERIALS, Props, REACTIONS, ROOM, STRIPE, STRIPES, TABLE, VOID, WALL, deepest, widest};
+use crate::materials::{EMPTY, Kind, MATERIALS, Props, REACTIONS, ROLL_ALONG, ROOM, STRIPE, STRIPES, TABLE, VOID, WALL, deepest, widest};
 
 /// The side of a chunk, in cells.
 pub const CHUNK: i32 = 64;
@@ -38,7 +38,7 @@ pub const BORDER: usize = 8;
 /// How far sideways a change can set a cell moving: as far as any material looks.
 const MARGIN_X: i32 = widest();
 /// How far up or down a change can set a cell moving: as far as a powder looks under its side to
-/// slide, 3 for wet dirt.
+/// slide, 3 for wet dirt, or down the slope it rolls off, 3 for sand.
 const MARGIN_Y: i32 = deepest();
 /// The clock runs 1 to this, then every cell's clock is set back to 0.
 const CLOCK_MOST: u32 = 63;
@@ -575,7 +575,8 @@ impl World {
     }
 
     /// The rule for powders and liquids: fall, gathering speed; or slide off a slope; or, for a
-    /// liquid, spread sideways toward somewhere lower, or anywhere when pushed from above.
+    /// liquid, spread sideways toward somewhere lower, or anywhere when pushed from above; or, for
+    /// sand, roll off a slope steeper than it holds.
     #[inline(always)]
     fn fall(&mut self, at: usize, x: i32, y: i32, cell: u32, p: Props) {
         let s = self.stride;
@@ -584,10 +585,10 @@ impl World {
         let open = self.sinks_into(p.density, below);
         // A resting cell whose support has moved away this step goes to a side if it can, rather
         // than following it down: so the face of a heap of water, all resting on cells that have
-        // just left, flows out at once and does not drop a cell at a time.
+        // just left, flows out at once and does not drop a cell at a time. So does a grain of
+        // powder in a crowded column (`drop` says which).
         let undermined = speed == 0 && material(below) == EMPTY && clock_of(below) == self.clock;
-        if open && !undermined {
-            self.drop(at, x, y, below, speed, p);
+        if open && !undermined && self.drop(at, x, y, below, speed, p, true) {
             return;
         }
         let roll = chance(self.seed, self.steps, at);
@@ -602,9 +603,11 @@ impl World {
                     return;
                 }
                 let side = if left && right { if roll & 1 == 0 { -1 } else { 1 } } else if left { -1 } else { 1 };
-                // a grain that rolls keeps a little speed as it slides, so that where it stops it has
-                // landed and may roll on
-                self.swap(at, (at + s).wrapping_add_signed(side), (p.roll != 0) as u32, (x, y), (x + side as i32, y + 1));
+                if p.kind == Kind::Liquid {
+                    self.swap(at, (at + s).wrapping_add_signed(side), 0, (x, y), (x + side as i32, y + 1));
+                    return;
+                }
+                self.slide_down(at, (x, y), side, speed, slide, p);
                 return;
             }
         }
@@ -628,7 +631,10 @@ impl World {
         }
         if open {
             // its support has gone and it can go nowhere to the side: it follows it down
-            self.drop(at, x, y, below, speed, p);
+            self.drop(at, x, y, below, speed, p, false);
+            return;
+        }
+        if p.roll != 0 && self.roll_off(at, (x, y), speed, roll, p) {
             return;
         }
         if speed != 0 {
@@ -650,6 +656,45 @@ impl World {
             self.cells[at] = with_state(cell, clock_of(cell), 0);
             self.touch(x, y, x, y);
         }
+    }
+
+    /// A grain of powder slides down to `side`. One already moving goes on down the slope as far
+    /// as its speed and the slope allow, gathering speed as a falling grain does, so that the sides
+    /// of a heap carry away what lands on it and a collapsing face runs out. It keeps that speed,
+    /// so where it stops it has landed and may roll on. Kept out of `fall`, so the path of a
+    /// falling grain stays short.
+    #[inline(never)]
+    fn slide_down(&mut self, at: usize, (x, y): (i32, i32), side: isize, speed: u32, slide: usize, p: Props) {
+        let s = self.stride;
+        let reach = if speed > 0 { (speed + 1).min(p.fall as u32) } else { 1 };
+        let (mut to, mut gone) = ((at + s).wrapping_add_signed(side), 1);
+        while gone < reach && self.slides(to, side, slide, p.density) {
+            to = (to + s).wrapping_add_signed(side);
+            gone += 1;
+        }
+        self.swap(at, to, (speed + 1).min(3), (x, y), (x + side as i32 * gone as i32, y + gone as i32));
+    }
+
+    /// Sand rolls one cell along a slope steeper than it holds, at rest or not: one where the
+    /// ground `ROLL_ALONG` cells along is as many or more cells lower. A slope of three in four,
+    /// about 37 degrees, holds; one of 45 does not, so a heap built quickly at 45 degrees settles
+    /// to sand's own angle. The margins a change wakes reach as far as this looks. Gives whether
+    /// it rolled.
+    #[inline(never)]
+    fn roll_off(&mut self, at: usize, (x, y): (i32, i32), speed: u32, roll: u32, p: Props) -> bool {
+        const ROLL: isize = ROLL_ALONG as isize;
+        let s = self.stride as isize;
+        let rolls = |side: isize| {
+            let along = |n: isize, down: isize| self.sinks_into(p.density, self.cells[at.wrapping_add_signed(side * n + down * s)]);
+            (1..ROLL).all(|n| along(n, 0)) && (0..ROLL).all(|down| along(ROLL, down))
+        };
+        let (left, right) = (rolls(-1), rolls(1));
+        if !(left || right) {
+            return false;
+        }
+        let side = if left && right { if (roll >> 5) & 1 == 0 { -1 } else { 1 } } else if left { -1 } else { 1 };
+        self.swap(at, at.wrapping_add_signed(side), speed.max(1), (x, y), (x + side as i32, y));
+        true
     }
 
     /// Whether a slow liquid moves this step, by its `pace`. One that does not is reached again
@@ -699,13 +744,22 @@ impl World {
     }
 
     /// Falls: through empty cells, gathering speed, or one cell through a lighter liquid or gas or
-    /// out of an open world.
+    /// out of an open world. Gives whether it fell.
+    ///
+    /// With `spill`, a grain of powder in a crowded column does not fall but is left to go to a
+    /// side, as a resting cell whose support has gone does: one already moving, with powder
+    /// pressing on it, whose support has gone this step but only one cell, so it can follow it only
+    /// one. In a pillar draining from its foot every grain of its face spills outward as it comes
+    /// down, and the pillar gives way all along its height rather than wearing away only where it
+    /// meets the ground. Grains falling freely, as a stream from the brush, are farther apart and
+    /// fall as a stream. It is found here, where how far it can fall is known.
     #[inline(always)]
-    fn drop(&mut self, at: usize, x: i32, y: i32, below: u32, speed: u32, p: Props) {
+    #[allow(clippy::too_many_arguments)]
+    fn drop(&mut self, at: usize, x: i32, y: i32, below: u32, speed: u32, p: Props, spill: bool) -> bool {
         let s = self.stride;
         if material(below) != EMPTY {
             self.swap(at, at + s, 0, (x, y), (x, y + 1));
-            return;
+            return true;
         }
         let reach = (speed + 1).min(p.fall as u32);
         let (mut to, mut fallen) = (at + s, 1);
@@ -713,7 +767,11 @@ impl World {
             to += s;
             fallen += 1;
         }
+        if spill && fallen == 1 && speed > 0 && p.kind == Kind::Powder && clock_of(below) == self.clock && props(self.cells[at - s]).kind == Kind::Powder {
+            return false;
+        }
         self.swap(at, to, (speed + 1).min(3), (x, y), (x, y + fallen as i32));
+        true
     }
 
     /// How far a liquid or gas goes to one side: to the nearest cell within `reach` with an open

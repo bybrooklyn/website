@@ -47,8 +47,9 @@ pub struct Material {
     /// slides there: 1 piles at 45 degrees, 2 at about 63, 3 at about 72. 0 never slides.
     pub slide: u8,
     /// For a powder, how likely a grain that has just landed on a step is to roll on over it
-    /// when the slope goes on below, in 256ths: sand rolls, so its heaps are gentler than 45
-    /// degrees.
+    /// when the slope goes on below, in 256ths. A powder that rolls at all also rolls, at rest
+    /// or not, off any slope steeper than about 37 degrees (`ROLL_ALONG`): sand's heaps rest
+    /// near 35 degrees, not at the 45 its sliding alone would hold.
     pub roll: u8,
     /// For a liquid or gas, how many cells sideways it looks in one step for somewhere to go.
     pub spread: u8,
@@ -88,6 +89,10 @@ pub struct Material {
     /// Offered to the visitor's brush.
     pub paint: bool,
 }
+
+/// How far along a slope a powder that rolls looks: it rolls when the ground this many cells along
+/// is this many cells lower, so a slope of three in four (about 37 degrees) holds and 45 does not.
+pub const ROLL_ALONG: u8 = 4;
 
 /// Room temperature: what empty air and everything the brush lays cold are made at.
 pub const ROOM: u8 = 40;
@@ -140,7 +145,7 @@ pub const STRIPES: u8 = 64;
 /// Every material, by its number.
 pub const MATERIALS: &[Material] = &[
     Material { name: "empty", kind: Kind::Empty, density: 0, slide: 0, roll: 0, spread: 0, fall: 0, pace: 0, level: false, conduct: 12, made: ROOM, latent: 0, warms: -1, toward: ROOM, airy: true, glow: 0, color: [0, 0, 0, 0], vary: [0, 0, 0], paint: false },
-    Material { name: "sand", kind: Kind::Powder, density: 160, slide: 1, roll: 255, spread: 0, fall: 4, pace: 0, level: false, conduct: 12, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [222, 190, 122, 255], vary: [34, 30, 26], paint: true },
+    Material { name: "sand", kind: Kind::Powder, density: 160, slide: 1, roll: 220, spread: 0, fall: 4, pace: 0, level: false, conduct: 12, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [222, 190, 122, 255], vary: [34, 30, 26], paint: true },
     Material { name: "water", kind: Kind::Liquid, density: 100, slide: 0, roll: 0, spread: 5, fall: 4, pace: 0, level: true, conduct: 32, made: ROOM, latent: 8, warms: 0, toward: 0, airy: false, glow: 0, color: [52, 118, 214, 235], vary: [10, 16, 18], paint: true },
     Material { name: "stone", kind: Kind::Solid, density: 255, slide: 0, roll: 0, spread: 0, fall: 0, pace: 0, level: false, conduct: 24, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [122, 120, 126, 255], vary: [22, 22, 22], paint: true },
     Material { name: "dirt", kind: Kind::Powder, density: 150, slide: 2, roll: 0, spread: 0, fall: 4, pace: 0, level: false, conduct: 12, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [118, 84, 56, 255], vary: [26, 20, 16], paint: true },
@@ -157,7 +162,7 @@ pub const MATERIALS: &[Material] = &[
     Material { name: "wet dirt", kind: Kind::Powder, density: 170, slide: 3, roll: 0, spread: 0, fall: 4, pace: 0, level: false, conduct: 12, made: ROOM, latent: 8, warms: 0, toward: 0, airy: false, glow: 0, color: [84, 58, 40, 255], vary: [18, 14, 10], paint: false },
     Material { name: "ember", kind: Kind::Solid, density: 255, slide: 0, roll: 0, spread: 0, fall: 0, pace: 0, level: false, conduct: 20, made: 200, latent: 0, warms: 16, toward: 200, airy: false, glow: 2, color: [196, 70, 26, 255], vary: [70, 80, 30], paint: false },
     Material { name: "ash", kind: Kind::Powder, density: 40, slide: 1, roll: 0, spread: 0, fall: 2, pace: 0, level: false, conduct: 6, made: ROOM, latent: 0, warms: 0, toward: 0, airy: true, glow: 0, color: [150, 146, 140, 255], vary: [24, 24, 24], paint: false },
-    Material { name: "pride sand", kind: Kind::Powder, density: 160, slide: 1, roll: 255, spread: 0, fall: 4, pace: 0, level: false, conduct: 12, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 3, color: [222, 190, 122, 255], vary: [26, 26, 26], paint: true },
+    Material { name: "pride sand", kind: Kind::Powder, density: 160, slide: 1, roll: 220, spread: 0, fall: 4, pace: 0, level: false, conduct: 12, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 3, color: [222, 190, 122, 255], vary: [26, 26, 26], paint: true },
 ];
 
 /// In a reaction, a neighbor of any material that lets air in (`airy`).
@@ -412,13 +417,18 @@ const fn latent() -> [u8; 256] {
     out
 }
 
-/// The widest any material looks sideways in a step, which is how far a change can reach.
+/// The widest any material looks sideways in a step, which is how far a change can reach: as far as
+/// a liquid or gas spreads, or a powder that rolls looks along a slope (`ROLL_ALONG`).
 pub(crate) const fn widest() -> i32 {
     let mut most = 1;
     let mut at = 0;
     while at < MATERIALS.len() {
-        if MATERIALS[at].spread as i32 > most {
-            most = MATERIALS[at].spread as i32;
+        let m = &MATERIALS[at];
+        if m.spread as i32 > most {
+            most = m.spread as i32;
+        }
+        if m.kind as u8 == Kind::Powder as u8 && m.roll != 0 && ROLL_ALONG as i32 > most {
+            most = ROLL_ALONG as i32;
         }
         at += 1;
     }
@@ -426,13 +436,20 @@ pub(crate) const fn widest() -> i32 {
 }
 
 /// The farthest up or down any rule looks from a cell: a powder looks as many cells under its side
-/// as it needs open to slide, and nothing else looks farther than 2.
+/// as it needs open to slide, a powder that rolls looks `ROLL_ALONG - 1` down the slope ahead of it,
+/// and nothing else looks farther than 2.
 pub(crate) const fn deepest() -> i32 {
     let mut most = 2;
     let mut at = 0;
     while at < MATERIALS.len() {
-        if MATERIALS[at].kind as u8 == Kind::Powder as u8 && MATERIALS[at].slide as i32 > most {
-            most = MATERIALS[at].slide as i32;
+        let m = &MATERIALS[at];
+        if m.kind as u8 == Kind::Powder as u8 {
+            if m.slide as i32 > most {
+                most = m.slide as i32;
+            }
+            if m.roll != 0 && ROLL_ALONG as i32 - 1 > most {
+                most = ROLL_ALONG as i32 - 1;
+            }
         }
         at += 1;
     }
