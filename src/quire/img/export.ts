@@ -1,51 +1,80 @@
-// Getting a picture out: the formats it can be written in, each one entry in a table (`FORMATS`), so
-// that a later encoder (AVIF, JPEG XL, docs/imgQuire-codecs.md) is a line added here; a quality, or a
-// weight to come in under that the quality is searched for; the name a saved file gets; and the
-// clipboard, which takes PNG only. What the browser writes carries no metadata at all, so where,
-// when and with what a photograph was taken never leaves with it; an original given out unchanged
-// has those cut out without being encoded again (core/picture-bytes.ts).
+// Getting a picture out: the formats it can be written in, each one entry in a table (`FORMATS`); a
+// quality, or a weight to come in under that the quality is searched for; the name a saved file gets;
+// and the clipboard, which takes PNG only. The encoders are the reference ones built to WebAssembly
+// (codecs/build.sh, docs/imgQuire-codecs.md): jpegli for JPEG, libwebp for WebP, libaom for AVIF,
+// libjxl for JPEG XL and oxipng for PNG, each fetched only when its format is picked (codec-run.ts);
+// should one not arrive, JPEG, WebP and PNG fall back to the browser's own. None of them writes
+// metadata, so where, when and with what a photograph was taken never leaves with it; an original
+// given out unchanged has those cut out without being encoded again (core/picture-bytes.ts).
 
 import { crc32 } from "../core/zip";
 import { withoutMetadata } from "../core/picture-bytes";
 import { fileName } from "../core/store";
+import { encodeWith } from "./codec-run";
 
-/** A format a picture can be written in, and how. `lossy` says whether a quality and a weight to aim for mean anything. */
+/** A format a picture can be written in, and how. `lossy` says whether a quality and a weight to aim for mean anything; `short` is its button's word, `tip` what it is good for. */
 export interface Format {
     key: string;
     label: string;
+    short: string;
+    tip: string;
     type: string;
     ending: string;
     lossy: boolean;
     encode(pixels: ImageData, quality: number): Promise<Blob>;
 }
 
-/** Writes pixels through the browser's own encoder, onto white for a format with no transparency. */
+/** Pixels laid on white, for a format with no transparency, so that what was clear is white rather than black. */
+export function onWhite(pixels: Uint8ClampedArray): Uint8ClampedArray<ArrayBuffer> {
+    const flat = new Uint8ClampedArray(pixels);
+    for (let at = 0; at < flat.length; at += 4) {
+        const alpha = flat[at + 3]! / 255;
+        if (alpha === 1) continue;
+        for (let channel = 0; channel < 3; channel++) flat[at + channel] = Math.round(flat[at + channel]! * alpha + 255 * (1 - alpha));
+        flat[at + 3] = 255;
+    }
+    return flat;
+}
+
+/** Writes pixels with one of the encoders built to WebAssembly, at its speed and with its options (0 = lossless), and with the browser's own encoder if that one cannot be had. */
+const coded =
+    (name: string, type: string, speed: number, options: Record<number, number> = {}, solid = false, otherwise?: (pixels: ImageData, quality: number) => Promise<Blob>) =>
+    async (pixels: ImageData, quality: number): Promise<Blob> => {
+        const given = solid ? new ImageData(onWhite(pixels.data), pixels.width, pixels.height) : pixels;
+        try {
+            return await encodeWith(name, given, Math.round(quality * 100), speed, options, type);
+        } catch (error) {
+            if (!otherwise) throw error;
+            return otherwise(given, quality);
+        }
+    };
+
+/** Writes pixels through the browser's own encoder, for when one built to WebAssembly cannot be had. */
 const browser =
-    (type: string, solid = false) =>
+    (type: string) =>
     async (pixels: ImageData, quality: number): Promise<Blob> => {
         const canvas = new OffscreenCanvas(pixels.width, pixels.height);
-        const context = canvas.getContext("2d")!;
-        context.putImageData(pixels, 0, 0);
-        if (solid) {
-            const flat = new OffscreenCanvas(pixels.width, pixels.height);
-            const under = flat.getContext("2d")!;
-            under.fillStyle = "#ffffff";
-            under.fillRect(0, 0, pixels.width, pixels.height);
-            under.drawImage(canvas, 0, 0);
-            return flat.convertToBlob({ type, quality });
-        }
+        canvas.getContext("2d")!.putImageData(pixels, 0, 0);
         return canvas.convertToBlob({ type, quality });
     };
 
-/** The formats, in the order they are offered. The browser writes these three; the encoders built later add theirs here. */
+/**
+ * The formats, the lossy ones first, in the order they are offered. Speeds are the codec notes'
+ * defaults for one thread: WebP method 4, AVIF speed 8, JPEG XL effort 3, oxipng level 2, WebP
+ * lossless preset 6.
+ */
 export const FORMATS: Format[] = [
-    { key: "png", label: "PNG", type: "image/png", ending: ".png", lossy: false, encode: browser("image/png") },
-    { key: "jpeg", label: "JPEG", type: "image/jpeg", ending: ".jpg", lossy: true, encode: browser("image/jpeg", true) },
-    { key: "webp", label: "WebP", type: "image/webp", ending: ".webp", lossy: true, encode: browser("image/webp") },
+    { key: "jpeg", label: "JPEG", short: "JPEG", tip: "Photographs, opened by anything", type: "image/jpeg", ending: ".jpg", lossy: true, encode: coded("jpegli", "image/jpeg", 0, {}, true, browser("image/jpeg")) },
+    { key: "webp", label: "WebP", short: "WebP", tip: "Photographs on the web, smaller than JPEG", type: "image/webp", ending: ".webp", lossy: true, encode: coded("webp", "image/webp", 4, {}, false, browser("image/webp")) },
+    { key: "avif", label: "AVIF", short: "AVIF", tip: "The smallest photographs, slower to make", type: "image/avif", ending: ".avif", lossy: true, encode: coded("avif", "image/avif", 8) },
+    { key: "jxl", label: "JPEG XL", short: "JPEG XL", tip: "Small and sharp; not every browser shows it", type: "image/jxl", ending: ".jxl", lossy: true, encode: coded("jxl", "image/jxl", 3) },
+    { key: "png", label: "PNG", short: "PNG", tip: "Screenshots, every pixel kept, opened by anything", type: "image/png", ending: ".png", lossy: false, encode: coded("oxipng", "image/png", 2, {}, false, browser("image/png")) },
+    { key: "webp-lossless", label: "WebP lossless", short: "WebP", tip: "Screenshots, every pixel kept, smaller than PNG", type: "image/webp", ending: ".webp", lossy: false, encode: coded("webp", "image/webp", 6, { 0: 1 }) },
+    { key: "jxl-lossless", label: "JPEG XL lossless", short: "JPEG XL", tip: "Every pixel kept, the smallest; not every browser shows it", type: "image/jxl", ending: ".jxl", lossy: false, encode: coded("jxl", "image/jxl", 3, { 0: 1 }) },
 ];
 
 /** A format by its key, PNG if there is no such one. */
-export const formatOf = (key: string): Format => FORMATS.find((format) => format.key === key) ?? FORMATS[0]!;
+export const formatOf = (key: string): Format => FORMATS.find((format) => format.key === key) ?? FORMATS.find((format) => format.key === "png")!;
 
 /** How a picture is to be exported: its format, its quality from 0 to 1, and a weight in bytes to come in under, if one is set. */
 export interface Settings {

@@ -8,7 +8,8 @@
 
 import { expect, test } from "bun:test";
 import { corePage, quire } from "../../../scripts/core-page";
-import { compile, instance, PINS, run, sha256 } from "./codec-run";
+import { browser, chromium } from "../../../scripts/browser";
+import { compile, heicIn, instance, PINS, run, sha256 } from "./codec-run";
 
 const folder = `${import.meta.dir}/../../../public/quire/codecs`;
 const bytesOf = async (name: string) => Bun.file(`${folder}/${name}.wasm`).arrayBuffer();
@@ -109,5 +110,61 @@ test("in Chromium, what each encoder writes reads back to the same pixels within
         expect(heic.psnr).toBeGreaterThan(30);
     } finally {
         await page.close();
+    }
+}, 120_000);
+
+test("a HEIC photograph is known by its first bytes, whatever it is called, and an AVIF (which shares its box) is not", async () => {
+    const fixture = new Uint8Array(await Bun.file(`${import.meta.dir}/fixture.heic`).arrayBuffer());
+    expect(heicIn(fixture)).toBe(true);
+    expect(heicIn(new TextEncoder().encode("\0\0\0\x1cftypavif"))).toBe(false);
+    expect(heicIn(new TextEncoder().encode("\x89PNG\r\n"))).toBe(false);
+});
+
+test("on the built /imgquire/ page, a pasted HEIC photograph is read by its module in a worker, and each format the export offers is made off the page's thread", async () => {
+    const dist = `${import.meta.dir}/../../../dist`;
+    if (!chromium() || !(await Bun.file(`${dist}/imgquire/index.html`).exists())) return console.warn("built page test skipped: needs a Chromium and `bun run build`");
+    const server = Bun.serve({
+        port: 0,
+        async fetch(request) {
+            let path = new URL(request.url).pathname;
+            if (path.endsWith("/")) path += "index.html";
+            const file = Bun.file(dist + path);
+            return (await file.exists()) ? new Response(file) : new Response("missing", { status: 404 });
+        },
+    });
+    const tab = await browser({ width: 1300, height: 820 });
+    try {
+        await tab.open(`http://localhost:${server.port}/imgquire/`, 1000);
+        await tab.click(1296, 400);
+        const heic = Buffer.from(await Bun.file(`${import.meta.dir}/fixture.heic`).arrayBuffer()).toString("base64");
+        await tab.run(`(() => {
+            const bytes = Uint8Array.from(atob(${JSON.stringify(heic)}), (c) => c.charCodeAt(0));
+            const data = new DataTransfer();
+            data.items.add(new File([bytes], "IMG_0001.HEIC", { type: "" }));
+            document.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
+        })()`);
+        const until = async (expression: string, ms = 30_000) => {
+            for (const started = Date.now(); Date.now() - started < ms; await tab.wait(100)) if (await tab.run<boolean>(`!!(${expression})`)) return;
+            throw new Error(`waited for ${expression}`);
+        };
+        await until("/96 × 64 px/.test(document.querySelector('.quire-img-facts')?.textContent ?? '')");
+        expect(await tab.run("document.querySelector('.quire-name-home')?.textContent")).toBe("IMG_0001");
+        await tab.run("document.querySelector('.quire-img-stage').focus()");
+        await tab.press("e");
+        await until("document.querySelector('.quire-img-export.open')");
+        const made: string[] = [];
+        for (const label of ["JPEG", "WebP", "AVIF", "JPEG XL", "PNG"]) {
+            const before = await tab.run<string>("document.querySelector('.quire-img-result')?.textContent ?? ''");
+            await tab.run(`[...document.querySelectorAll('.quire-img-format')].find((each) => each.textContent === ${JSON.stringify(label)}).click()`);
+            const ending = label === "JPEG XL" ? "JPEG XL" : label;
+            await until(`(document.querySelector('.quire-img-result')?.textContent ?? '').endsWith(${JSON.stringify(` ${ending}`)}) && document.querySelector('.quire-img-result').textContent !== ${JSON.stringify(before)}`);
+            made.push(await tab.run<string>("document.querySelector('.quire-img-result').textContent"));
+        }
+        console.log(made.join("\n"));
+        expect(made).toHaveLength(5);
+        expect(tab.errors).toEqual([]);
+    } finally {
+        await tab.close();
+        server.stop(true);
     }
 }, 120_000);

@@ -5,7 +5,7 @@
 // That the browser's encoders carry no metadata is held in the editor's browser test.
 
 import { expect, test } from "bun:test";
-import { exportName, formatOf, FORMATS, readSettings, readWeight, underWeight, untouched, weightSaid } from "./export";
+import { exportName, formatOf, FORMATS, onWhite, readSettings, readWeight, underWeight, untouched, weightSaid } from "./export";
 
 /** An encoder whose result weighs what a quality says, counting how often it is asked. */
 function pretend(weigh: (quality: number) => number) {
@@ -50,7 +50,11 @@ test("a weight is read from what is typed, a bare number being kilobytes, and sa
 test("a saved picture is named from its document, with the format's ending, and every format is one line of the table", () => {
     expect(exportName("Screenshot, 14 Nov 2026 01:30", formatOf("webp"))).toBe("screenshot-14-nov-2026-01-30.webp");
     expect(exportName("cat.png", formatOf("jpeg"))).toBe("cat.jpg");
-    expect(FORMATS.map((format) => format.key)).toEqual(["png", "jpeg", "webp"]);
+    expect(FORMATS.map((format) => format.key)).toEqual(["jpeg", "webp", "avif", "jxl", "png", "webp-lossless", "jxl-lossless"]);
+    // the lossy ones first, every one saying in its tooltip what it is good for
+    expect(FORMATS.map((format) => format.lossy)).toEqual([true, true, true, true, false, false, false]);
+    expect(FORMATS.every((format) => format.tip.length > 10 && format.tip.length < 70)).toBe(true);
+    expect(formatOf("bmp").key).toBe("png");
 });
 
 test("an original given out unchanged has where it was taken cut out and keeps every pixel's bytes", () => {
@@ -60,4 +64,9 @@ test("an original given out unchanged has where it was taken cut out and keeps e
     const clean = untouched(jpeg);
     expect(new TextDecoder().decode(clean)).not.toContain("GPS");
     expect([...clean.slice(-9)]).toEqual([0xff, 0xda, 0, 2, 1, 2, 3, 0xff, 0xd9]);
+});
+
+test("pixels laid on white keep what was solid and turn what was clear to white", () => {
+    const pixels = Uint8ClampedArray.from([10, 20, 30, 255, 0, 0, 0, 0, 200, 0, 0, 128]);
+    expect([...onWhite(pixels)]).toEqual([10, 20, 30, 255, 255, 255, 255, 255, 227, 127, 127, 255]);
 });

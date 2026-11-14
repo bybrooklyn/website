@@ -144,16 +144,18 @@ export function exportPanel(hooks: { closed?(): void; settings(): Settings; set(
 
     function fill() {
         const settings = hooks.settings();
+        // two rows of one set: the lossy formats, then those that keep every pixel, each row under its word
         formats.replaceChildren(
-            ...FORMATS.map((format) => {
-                const button = make("button", "quire-button quire-img-format", format.label);
-                button.type = "button";
-                button.setAttribute("role", "radio");
-                button.setAttribute("aria-checked", String(format.key === settings.format));
-                button.classList.toggle("pressed", format.key === settings.format);
-                button.addEventListener("click", () => changed({ format: format.key }));
-                return button;
-            }),
+            ...[true, false].flatMap((lossy) => [
+                make("span", "quire-img-format-row", lossy ? "Lossy" : "Lossless"),
+                ...FORMATS.filter((format) => format.lossy === lossy).map((format) => {
+                    const button = control(`${format.label}: ${format.tip}`, format.short, () => changed({ format: format.key }), "quire-button quire-img-format");
+                    button.setAttribute("role", "radio");
+                    button.setAttribute("aria-checked", String(format.key === settings.format));
+                    button.classList.toggle("pressed", format.key === settings.format);
+                    return button;
+                }),
+            ]),
         );
         const format = FORMATS.find((each) => each.key === settings.format)!;
         lossy.classList.toggle("away", !format.lossy);
@@ -164,18 +166,18 @@ export function exportPanel(hooks: { closed?(): void; settings(): Settings; set(
     }
 
     /** Shows what the export came to: its size and weight, and the same part of the original and the result at their own pixels. */
-    function shows(found: { width: number; height: number; bytes: number; label: string; over: boolean; quality: number; original: ImageData; exported: ImageBitmap; at: Rect; originalBytes: number }) {
+    function shows(found: { width: number; height: number; bytes: number; label: string; over: boolean; quality: number; original: ImageData; exported?: ImageBitmap; at: Rect; originalBytes: number }) {
         result.textContent = `${found.width} × ${found.height} px · ${weightSaid(found.bytes)} ${found.label}${found.over ? " · over the weight even at the lowest quality" : ""}`;
         for (const [canvas, draw] of [
             [beforeCanvas, (context: CanvasRenderingContext2D) => context.putImageData(found.original, 0, 0)],
-            [afterCanvas, (context: CanvasRenderingContext2D) => context.drawImage(found.exported, found.at.x, found.at.y, found.at.width, found.at.height, 0, 0, found.at.width, found.at.height)],
+            [afterCanvas, (context: CanvasRenderingContext2D) => found.exported && context.drawImage(found.exported, found.at.x, found.at.y, found.at.width, found.at.height, 0, 0, found.at.width, found.at.height)],
         ] as const) {
             canvas.width = found.at.width;
             canvas.height = found.at.height;
             draw(canvas.getContext("2d")!);
         }
         beforeSaid.textContent = `Original · ${weightSaid(found.originalBytes)}`;
-        afterSaid.textContent = `Export · ${weightSaid(found.bytes)}`;
+        afterSaid.textContent = `Export · ${weightSaid(found.bytes)}${found.exported ? "" : " · this browser cannot show it"}`;
     }
     return { ...side, fill, shows, copyButton: copy };
 }

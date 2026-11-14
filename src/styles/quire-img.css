@@ -351,14 +351,31 @@
     }
 }
 
+/* the formats as one set: a row of the lossy ones and a row of those that keep every pixel, each after
+   its word, in four even columns, so that seven read as two tidy rows at any width */
 .quire-img-formats {
-    display: flex;
+    display: grid;
+    grid-template-columns: auto repeat(4, minmax(0, 1fr));
     gap: 0.25rem;
+    align-items: center;
+}
+
+.quire-img-format-row {
+    grid-column: 1;
+    padding-right: 0.35rem;
+    color: var(--muted);
+    font-size: 0.85rem;
 }
 
 .quire-img-format {
-    flex: 1;
+    min-width: 0;
+    padding: 0 0.3rem;
     border: 0.0625rem solid var(--rule);
+}
+
+.quire-img-format .quire-glyph {
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .quire-img-lossy {
@@ -458,6 +475,18 @@
     margin: auto -1.1rem -1.1rem;
     padding: 0.6rem 1.1rem 1.1rem;
     background: var(--surface);
+}
+
+/* a soft edge over the pinned row, so it is plain there is more above it */
+.quire-img-actions::before {
+    position: absolute;
+    right: 0;
+    bottom: 100%;
+    left: 0;
+    height: 1.25rem;
+    background: linear-gradient(to bottom, transparent, var(--surface));
+    content: "";
+    pointer-events: none;
 }
 
 /* the resize box grows from its button */

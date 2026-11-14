@@ -13,7 +13,8 @@ import { packQuire, type Parts } from "../core/quire-file";
 import { openDialog } from "../core/dialog";
 import { createHistoryPanel, snapshotParts } from "../core/versions";
 import { control, fieldForm, icon, make, ruled, type MenuItem } from "../core/ui";
-import { copyPicture, encodeAs, exportName, formatOf, readSettings, untouched, weightSaid, type Settings } from "./export";
+import { copyPicture, encodeAs, exportName, formatOf, FORMATS, readSettings, untouched, weightSaid, type Settings } from "./export";
+import { decodeHeic, heicIn } from "./codec-run";
 import { COLORS, exportPanel, factsSaid, kindOf, nameFor, resizeBox, SHAPES, toolStrip, WEIGHTS } from "./panels";
 import { createStage, type Pen, type Tool } from "./stage";
 import { createHistory, edited, fresh, look, move, readSteps, remove, setOnly, writeSteps, type Filter, type Kept, type Picture } from "./steps";
@@ -60,7 +61,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
     choose.type = "button";
     const chooser = make("input");
     chooser.type = "file";
-    chooser.accept = "image/png,image/jpeg,image/webp,image/gif,image/avif,image/bmp";
+    chooser.accept = "image/png,image/jpeg,image/webp,image/gif,image/avif,image/bmp,image/jxl,image/heic,image/heif,.heic,.heif,.jxl";
     chooser.hidden = true;
     empty.append(make("p", "", "Paste or drop a picture"), choose, chooser);
     const facts = make("p", "quire-img-facts");
@@ -130,7 +131,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
         if (token !== loading) return;
         if (!found) return frame.status.say("No picture", "This document's original picture is missing from where it is kept", "warn");
         original = found;
-        await stage.show(found);
+        await stage.show(await displayable(found).catch(() => found));
         if (token !== loading) return;
         if (read.dropped) frame.status.say("Steps left out", `${read.dropped} of its steps could not be read and were left out`, "warn");
         refresh();
@@ -166,13 +167,23 @@ export function mountEditor(host: HTMLElement, context: Context) {
     const undo = () => history.undo() && changed();
     const redo = () => history.redo() && changed();
 
+    /** A picture the browser can draw: a HEIC photograph (which browsers do not read) read by the HEIC module, made a PNG kept only in memory; any other as it is. The original stays as it came. */
+    async function displayable(file: Blob): Promise<Blob> {
+        if (!heicIn(new Uint8Array(await file.slice(0, 16).arrayBuffer()))) return file;
+        const pixels = await decodeHeic(file);
+        const canvas = new OffscreenCanvas(pixels.width, pixels.height);
+        canvas.getContext("2d")!.putImageData(pixels, 0, 0);
+        return canvas.convertToBlob({ type: "image/png" });
+    }
+
     // ---- a picture arriving: pasted, dropped or chosen, it becomes a document kept in this browser ----
     async function take(file: Blob & { name?: string }): Promise<boolean> {
         const home = context.richHome;
         if (!home) return false;
         let size: { width: number; height: number };
+        const heic = heicIn(new Uint8Array(await file.slice(0, 16).arrayBuffer()));
         try {
-            const bitmap = await createImageBitmap(file);
+            const bitmap = await createImageBitmap(await displayable(file));
             size = { width: bitmap.width, height: bitmap.height };
             bitmap.close();
         } catch {
@@ -180,10 +191,11 @@ export function mountEditor(host: HTMLElement, context: Context) {
             return false;
         }
         const name = nameFor(file.name, new Date());
-        const ending = formatOf(file.type.replace(/^image\//, "").replace("jpg", "jpeg")).type === file.type ? formatOf(file.type.replace(/^image\//, "")).ending : /\.[a-z0-9]{1,5}$/i.exec(file.name ?? "")?.[0] ?? ".png";
+        const type = heic ? "image/heic" : file.type || "image/png";
+        const ending = heic ? ".heic" : FORMATS.find((format) => format.type === type)?.ending ?? /\.[a-z0-9]{1,5}$/i.exec(file.name ?? "")?.[0] ?? ".png";
         const stem = (file.name ?? "").replace(/\.[a-z0-9]{1,5}$/i, "").replace(/[^\w.-]+/g, "-").replace(/^[-.]+|[-.]+$/g, "") || "screenshot";
         const wanted = `${stem}${ending}`;
-        const made: Picture = fresh({ name: `pictures/${wanted}`, width: size.width, height: size.height, type: file.type || "image/png", bytes: file.size });
+        const made: Picture = fresh({ name: `pictures/${wanted}`, width: size.width, height: size.height, type, bytes: file.size });
         try {
             const created = await home.create(name, writeSteps(made), {}, MAIN);
             const address = await home.savePicture(created.id, file, wanted);
@@ -197,7 +209,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
             return false;
         }
     }
-    const pictureIn = (data: DataTransfer | null) => [...(data?.files ?? [])].find((file) => file.type.startsWith("image/"));
+    const pictureIn = (data: DataTransfer | null) => [...(data?.files ?? [])].find((file) => file.type.startsWith("image/") || /\.(heic|heif)$/i.test(file.name));
     const pasted = (event: ClipboardEvent) => {
         if (event.defaultPrevented || host.classList.contains("shelved") || (event.target instanceof HTMLElement && event.target.closest("input, textarea, [contenteditable=true]"))) return;
         const file = pictureIn(event.clipboardData);
@@ -207,7 +219,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
     };
     document.addEventListener("paste", pasted);
     room.addEventListener("dragover", (event) => {
-        if (![...(event.dataTransfer?.items ?? [])].some((item) => item.type.startsWith("image/"))) return;
+        if (![...(event.dataTransfer?.items ?? [])].some((item) => item.kind === "file")) return;
         event.preventDefault();
         room.classList.add("dropping");
     });
@@ -286,14 +298,21 @@ export function mountEditor(host: HTMLElement, context: Context) {
         if (!way) return;
         const shown = look(picture);
         // the clipboard is handed a promise of the picture at once, so the browser counts the press that asked for it
+        // the browser's own PNG, which is quick; the clipboard keeps it only until the next copy
+        const pngOf = (source: ImageData | ImageBitmap) => {
+            const canvas = new OffscreenCanvas(source.width, source.height);
+            const context = canvas.getContext("2d")!;
+            if (source instanceof ImageData) context.putImageData(source, 0, 0);
+            else context.drawImage(source, 0, 0);
+            return canvas.convertToBlob({ type: "image/png" });
+        };
         const png = (async () => {
-            if (way === "looks") return formatOf("png").encode(await flattened(), 1);
+            if (way === "looks") return pngOf(await flattened());
             const done = await exported();
             if (done.blob.type === "image/png") return done.blob;
-            const bitmap = await createImageBitmap(done.blob);
-            const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
-            canvas.getContext("2d")!.drawImage(bitmap, 0, 0);
-            return canvas.convertToBlob({ type: "image/png" });
+            // a format this browser cannot show (JPEG XL in some) is copied as it looks
+            const bitmap = await createImageBitmap(done.blob).catch(() => undefined);
+            return pngOf(bitmap ?? (await flattened()));
         })();
         try {
             await copyPicture(png);
@@ -353,7 +372,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
         const pixels = done.pixels ?? (await flattened());
         const part = new ImageData(side, side);
         for (let row = 0; row < side; row++) part.data.set(pixels.data.subarray(((at.y + row) * shown.width + at.x) * 4, ((at.y + row) * shown.width + at.x + side) * 4), row * side * 4);
-        exporting.shows({ width: shown.width, height: shown.height, bytes: done.blob.size, label: formatOf(settings.format).label, over: done.over, quality: done.quality, original: part, exported: await createImageBitmap(done.blob), at, originalBytes: now.original.bytes });
+        exporting.shows({ width: shown.width, height: shown.height, bytes: done.blob.size, label: formatOf(settings.format).label, over: done.over, quality: done.quality, original: part, exported: await createImageBitmap(done.blob).catch(() => undefined), at, originalBytes: now.original.bytes });
     }
     const resizing = resizeBox({
         size: () => (picture ? look(picture) : { width: 1, height: 1 }),

@@ -141,6 +141,12 @@ export async function encodeWith(name: string, pixels: ImageData, quality: numbe
     return new Blob([bytes as BlobPart], { type });
 }
 
+/** True when a file's first bytes say it is a HEIC or HEIF photograph, as a phone writes them: its box of kinds names one, whatever the file is called. */
+export function heicIn(bytes: Uint8Array): boolean {
+    const kind = new TextDecoder().decode(bytes.subarray(4, 12));
+    return kind.startsWith("ftyp") && ["heic", "heix", "heim", "heis", "hevc", "hevx", "mif1", "msf1"].includes(kind.slice(4));
+}
+
 /** Reads a HEIC photograph into pixels, with the HEIC module. */
 export async function decodeHeic(file: Blob): Promise<ImageData> {
     const { bytes, width, height } = await ask({ name: "heic", file: await file.arrayBuffer() });
