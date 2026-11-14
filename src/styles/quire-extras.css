@@ -162,18 +162,15 @@
     color: var(--ground);
 }
 
-/* the strip over the picture: alignment, its own size, and taking it away */
+/* the strip over the picture: alignment, its own size, and the dots for its menu, in the skin every
+   strip wears (quire.css) */
 .quire-picture-strip {
     position: absolute;
     right: 0;
     bottom: calc(100% + 0.5rem);
     display: flex;
     align-items: center;
-    gap: 0.15rem;
-    padding: 0.2rem;
-    border-radius: var(--quire-round);
-    background: var(--surface);
-    box-shadow: 0 0.5rem 1.5rem -0.5rem oklch(0.04 0.02 300 / 0.8);
+    gap: 0.05rem;
     pointer-events: auto;
     transform-origin: right bottom;
     scale: 0.85;
@@ -969,18 +966,21 @@
     display: grid;
     grid-template-rows: auto minmax(0, 0fr);
     justify-items: start;
+    /* a card, as a comment is: the panel with its fine edge and the middle corner */
     padding: 0.3rem 0.75rem;
-    border: 0.0625rem solid var(--rule);
-    border-radius: 0.9rem;
-    background: var(--surface);
+    border: 0;
+    border-radius: var(--quire-round);
+    background: var(--panel);
+    box-shadow:
+        0 0 0 0.0625rem var(--panel-rule),
+        0 0.5rem 1.25rem -0.75rem oklch(0.05 0.02 300 / 0.7);
     color: var(--ink);
     font: inherit;
-    font-size: 0.8rem;
+    font-size: 0.85rem;
     line-height: 1.5;
     font-variant-numeric: tabular-nums;
     text-align: left;
     cursor: pointer;
-    box-shadow: 0 0.5rem 1.25rem -0.75rem oklch(0.05 0.02 300 / 0.7);
     transform-origin: left bottom;
     opacity: 0;
     scale: 0.6;
@@ -1008,7 +1008,9 @@
 }
 
 .quire-live-count:hover {
-    border-color: color-mix(in oklch, var(--rule) 50%, var(--accent));
+    box-shadow:
+        0 0 0 0.0625rem color-mix(in oklch, var(--panel-rule) 50%, var(--accent)),
+        0 0.5rem 1.25rem -0.75rem oklch(0.05 0.02 300 / 0.7);
 }
 
 .quire-live-count:focus-visible {

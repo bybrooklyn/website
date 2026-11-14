@@ -73,7 +73,7 @@ test("a note is resolved from its card, the resolve undone, and next goes to it"
     expect(await tab.run("document.querySelectorAll('.quire-menu.open .quire-note').length")).toBe(0);
     await page!.menuLine("View", "Show comments");
     await tab.wait(300);
-    expect(await tab.run("[...document.querySelectorAll('.quire-menu.open .quire-note.resolved button')].map((each) => each.textContent)")).toContain("Reopen");
+    expect(await tab.run("[...document.querySelectorAll('.quire-menu.open .quire-note.resolved button')].map((each) => each.getAttribute('aria-label'))")).toContain("Reopen");
     await tab.press("Escape");
     await tab.run("q.surface.undo()");
     await tab.wait(300);
@@ -102,7 +102,7 @@ test("a note whose words are deleted says so in its card, and undo brings the wo
     expect(await marked()).toBe(1);
     await page!.press(".quire-notes .quire-note");
     await tab.wait(300);
-    await page!.press(".quire-notes .quire-note button", "Remove the comment");
+    await page!.press(".quire-notes .quire-note button", "Remove");
     await tab.wait(200);
     expect(await tab.run("q.doc().comments")).toBeUndefined();
     expect(await page!.md()).toBe(TEXT);

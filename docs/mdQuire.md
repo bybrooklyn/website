@@ -256,6 +256,20 @@ way (`switchButton`): its words, a tick before them, and when on, the pressed sq
 have. Corners are three sizes: small for what sits inside something, middle for menus, bars, strips and
 cards, large for dialogs and panels.
 
+**The small surfaces, three kinds.** Everything small that opens over the writing is one of three, and
+looks and behaves like the others of its kind. A *menu* is a list to pick from, made by `flowMenu` with
+`menuLine`s: a finding's menu (the same lines a misspelling puts first in the right-click menu), the
+list of what checking found, the text's, a table's and a picture's menus, the code language, the callout
+type, the emoji list, the palette. It grows from what was pressed, takes the arrow keys and Enter, and
+Escape gives focus back. A *strip* is a few actions on a thing in the text, icons only, each named in a
+word or two in its tooltip with its shortcut: the bar over selected words, the link card (where the link
+goes, to read, then Open, Copy, Edit, Remove), the chip after a pasted address (its few choices, all in
+words), find, a table's strip and a picture's. Every strip wears the menus' skin (the raised surface,
+their shadow, the middle corner, no line) and never covers the line being worked on (`strips.ts`). A
+*card* is something to read with one or two actions: a comment, the word counter. It is the panel with
+its fine edge and the middle corner, and its actions are a strip of icons. Tooltips are the small label
+under a control. No surface says in a sentence what its label already says.
+
 **The menus** (`menu-row.ts`, `flowMenu` in `ui.ts`). Every command is in the menu row by name with its
 shortcut, in Google Docs' menus, order and words wherever mdQuire has the thing, so that hands that know Docs
 know them. Every line has an icon in the editor's own line style, groups have rules between them, and a line
