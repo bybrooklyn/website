@@ -50,7 +50,7 @@ const SETTLE = 0.09;
 const FLY = 0.28;
 /** How often a stream lets a marble go, in seconds. */
 const STREAM = 0.6;
-/** How long the ghost may work each frame, in milliseconds: less while something is carried, so that the carrying stays smooth. */
+/** How long the ghost may work each frame, in milliseconds: less while something is carried or a point dragged, so that the drag stays smooth. */
 const GHOST_WORK = { carrying: 2.5, still: 6 };
 
 /** What a piece is drawn with, in its own place: blocks of track, plain boxes, and glass. */
@@ -1072,7 +1072,8 @@ export default function marbles(m: Mote): Scene {
             // limit that holds it is the one met just past there, not the one far out where the pointer is
             const from = drag.good;
             let [low, high] = [0, 1];
-            for (let go = 0; go < 9; go++) {
+            // seven halvings: within a hundred and twenty-eighth of the move, a millimetre or less for any move of a pointer between two frames
+            for (let go = 0; go < 7; go++) {
                 const mid = (low + high) / 2;
                 const trial = withBend(piece.kind, from.map((value, i) => value + (bend[i]! - value) * mid));
                 const why = bendFails(piece, trial);
@@ -1795,7 +1796,7 @@ export default function marbles(m: Mote): Scene {
         }
         const before = performance.now();
         if (!ghost.done) {
-            ghost.work(carried ? GHOST_WORK.carrying : GHOST_WORK.still);
+            ghost.work(carried || bendDrag ? GHOST_WORK.carrying : GHOST_WORK.still);
             if (ghost.done && !carried) {
                 ghostMarked = ghostMarks(ghost.paths, openMarks);
                 redraw();
