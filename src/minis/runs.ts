@@ -18,9 +18,9 @@ export const RUNS: Made[] = [
         name: "twenty pieces",
         text: "v1.h0_0_33_0.s1_0_1_33_2.d2_2_-1_1_33_2.v4_-3_1_31_2.x2_6_-4_1_27_2.d2_1_-7_1_21_2.l-9_1_20_2.z2_1_-11_0_20_6.c3_1_-13_1_20_2.c1_1_-15_-1_20_7.c1_1_-15_-1_20_2.c3_1_-16_-2_20_3.d2_1_-14_-4_20_0.s3_-12_-4_19_0.s2_-9_-4_19_0.c1_2_-7_-4_19_4.x2_6_-7_-4_19_2.f-10_-4_13_2.s1_-13_-5_5_2.t-14_-5_5_2",
     },
-    // A funnel fed by the hopper turns marbles out into a lift; up it they go, back round over the funnel
-    // and into it again, for as long as they are watched.
-    { name: "a lift that loops", text: "v3.f0_0_11_0.d1_1_3_1_3_0.u11_4_1_2_0.c1_2_6_1_13_0.s2_6_3_13_2.d2_1_4_3_13_2.h0_1_11_2" },
+    // A funnel fed by the hopper turns marbles out straight into a lift; up it they go, round a turn back
+    // and along over the funnel, and into it again, for as long as they are watched, twenty or more.
+    { name: "a lift that loops", text: "v3.f0_0_11_0.u10_3_1_3_0.c1_2_5_1_13_0.s2_5_3_13_2.s1_3_3_13_2.h0_1_11_2" },
     // Eight chime bars down a line, each marble playing G5 C6 E6 D6 B5 G5 A5 C6, a note a second.
     {
         name: "a tune on chime bars",

@@ -185,6 +185,8 @@ export interface Length {
     plain?: boolean;
     /** Which of its ends is a joint of the piece (by number), if any. */
     joints: [start: number | undefined, end: number | undefined];
+    /** Glass, and as smooth as the glass walls are: the funnel's neck. */
+    smooth?: boolean;
     /** A bend: where along it its points are (from 0 to 1), and how far each is moved, in the length's own place (`bentLength`). */
     bend?: { at: number[]; by: V3[] };
 }
@@ -383,7 +385,7 @@ function design(family: Family, sizes: number[]): Omit<Shape, "kind" | "cells" |
                 neck.push([15 + 3 * cosine(angle), -13 + 3 * sine(angle), 12]);
             }
             neck.push([16.5, -16, 12], [18, -16, 12]);
-            const tube = along(neck, [undefined, undefined], { section: "tube", level: false, start: [0, -1, 0] });
+            const tube = { ...along(neck, [undefined, undefined], { section: "tube", level: false, start: [0, -1, 0] }), smooth: true };
             const exit = along([[18, -16, 12], [24, -16, 12]], [undefined, 1]);
             // legs at four places round the bowl, up to its underside where it is 8.5 out
             const under = curve(profile.map(([out, high]): V3 => [out, high, 0]));
@@ -392,7 +394,9 @@ function design(family: Family, sizes: number[]): Omit<Shape, "kind" | "cells" |
             const legTop = under.point(low)[1] - 0.15;
             const out = 8.5 / Math.SQRT2;
             const holds = ([[1, 1], [1, -1], [-1, 1], [-1, -1]] as const).map(([dx, dz]): V3 => [middle[0] + dx * out, legTop, middle[2] + dz * out]);
-            return { joints: [J0, joint([24, -16, 12], [1, 0, 0])], lengths: [chute, tube, exit], bowl: { at: middle, profile, thick: 0.3 }, boxes: [], stands: [], holds, low: -9 };
+            // glass walls along the groove out, so that a marble coming fast out of the tube onto others queued there is kept to it
+            const panes: Box[] = [-1, 1].map((side) => ({ at: [20.8, -14.8, 12 + side * 1.6], half: [3.2, 1.8, 0.15] }));
+            return { joints: [J0, joint([24, -16, 12], [1, 0, 0])], lengths: [chute, tube, exit], bowl: { at: middle, profile, thick: 0.3 }, boxes: [], stands: [], holds, panes, low: -9 };
         }
         case "l": {
             // in along the row, once round a loop of 4.5 cm about a level axis, and on a cell aside. A loop

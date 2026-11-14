@@ -27,6 +27,8 @@ export const MOST = 240;
 export const COMING = 0.3;
 /** How the ground meets a marble: rougher than wood, as a cloth on a table, so that a marble that falls comes to rest. */
 const CLOTH = { friction: 0.5, bounce: 0.3, roll: 0.03 };
+/** How a marble meets glass: smooth, so that marbles pressed against it by others slide down it rather than wedge. */
+const GLASS = { friction: 0.05, bounce: 0.3, roll: 0.006 };
 /** Below this, in centimetres, a marble has fallen off the table and is taken away. */
 const FALLEN = -60;
 
@@ -277,7 +279,7 @@ export function makeTable({ filled = true } = {}): Table {
     const make = (piece: Placed): Built => {
         const shape = shapeOf(piece.kind);
         const world = made(shape, piece.place);
-        const lengths = world.lengths.map(({ piece: track, length }) => ({ solid: space.track(track, WOOD), piece: track as Piece, joints: length.joints }));
+        const lengths = world.lengths.map(({ piece: track, length }) => ({ solid: space.track(track, length.smooth ? GLASS : WOOD), piece: track as Piece, joints: length.joints }));
         // a piece's own lengths that meet end to end are joined by hand: Mote joins only ends of one section,
         // and where a groove becomes a tube an end left open costs a crossing marble a sixth of its speed
         for (let i = 0; i + 1 < lengths.length; i++) {
@@ -290,10 +292,10 @@ export function makeTable({ filled = true } = {}): Table {
         }
         const solids = lengths.map((length) => length.solid);
         if (world.bowl) solids.push(space.track(world.bowl, BOWL));
-        for (const box of [...shape.boxes, ...(shape.panes ?? [])]) {
+        for (const [box, pane] of [...shape.boxes.map((one) => [one, false] as const), ...(shape.panes ?? []).map((one) => [one, true] as const)]) {
             const placed = boxToWorld(piece.place, box);
-            // the walls of a moving or sounding piece are smooth, so that a marble pressed against one by a part slides down it and is not held up by it
-            solids.push(space.slab(placed.at, placed.half, undefined, { friction: shape.moving || shape.struck ? 0.05 : 0.5, bounce: 0.3, roll: 0.006 }));
+            // the walls of a moving or sounding piece, and glass, are smooth, so that a marble pressed against one by a part or by others slides down it and is not held up by it
+            solids.push(space.slab(placed.at, placed.half, undefined, { friction: pane || shape.moving || shape.struck ? 0.05 : 0.5, bounce: 0.3, roll: 0.006 }));
         }
         for (const solid of solids) heard.set(solid, { kind: "wood" });
         if (shape.struck) {

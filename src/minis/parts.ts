@@ -229,8 +229,8 @@ export const TRAPDOOR = { arms: [6.6, 5.0], hold: 9.1, reach: 3, rise: (10 * Mat
 /** The switch's numbers: where its pivot is, below the joint, and how far it leans each way, in radians. */
 export const SWITCH = { pivot: -5, lean: 0.45 };
 
-/** The lift's numbers: its speed in cm/s, how long it eases in and out of that speed, and how long it waits at the bottom and the top, in seconds. */
-export const LIFT = { speed: 20, ease: 0.12, waits: [0.45, 0.5] as [number, number] };
+/** The lift's numbers: its speed in cm/s, how long it eases in and out of that speed, how long it waits at the bottom and the top, in seconds, and how far its track out falls to the joint, in cm. */
+export const LIFT = { speed: 20, ease: 0.12, waits: [0.45, 0.5] as [number, number], out: 1.5 };
 /** The hoist's numbers: its chain's speed in cm/s, and the spacing its paddles are given, about. */
 export const HOIST = { speed: 16, spacing: 9 };
 
@@ -377,17 +377,20 @@ export function designPart(family: PartFamily, sizes: number[]): PartDesign {
             // front closes the way in while it is away.
             const high = sizes[0]! * 2;
             const floor = body([6.1, -2.83, 2.75], [10.7, -2.33, 5.25], 2.7, -0.1);
-            const skirt = body([5.65, -2.33 - high - 2, 2.75], [5.95, -2.2, 5.25], 2.7);
-            const rise = high + 1.71;
+            // the skirt's top is under the floor's front edge: with a lip above it, a marble left half over the threshold as the car rose was lifted on the lip into the shaft's front wall and squeezed out
+            const skirt = body([5.65, -2.33 - high - 2, 2.75], [5.95, -2.6, 5.25], 2.7);
+            // the car rises so far that its floor is a little above the track out, which falls 1.5 cm to the
+            // joint: marbles leave it together at 40 cm/s or more, enough to carry them round a level turn
+            const rise = high + LIFT.out + 1.21;
             return {
                 ...none,
                 joints: [J0, joint([16, high, 4], [1, 0, 0])],
-                lengths: [groove([[0, 0, 4], [5.6, -0.5, 4]], [0, undefined], [1, 0, 0], [1, -0.09, 0]), groove([[11.4, high + 0.5, 4], [16, high, 4]], [undefined, 1], [1, -0.11, 0], [1, 0, 0])],
+                lengths: [groove([[0, 0, 4], [5.6, -0.5, 4]], [0, undefined], [1, 0, 0], [1, -0.09, 0]), groove([[11.4, high + LIFT.out, 4], [13.7, high + LIFT.out * 0.3, 4], [16, high, 4]], [undefined, 1], [1, -0.45, 0], [1, 0, 0])],
                 boxes: [span([10.8, -3, 2.75], [11.4, high - 1, 5.25])],
-                panes: [span([5.8, -3, 2.45], [11.4, high + 1, 2.75]), span([5.8, -3, 5.25], [11.4, high + 1, 5.55]), span([5.4, 0, 2.75], [5.8, high + 1, 5.25]), span([0.3, -0.6, 2.25], [5.8, 1, 2.55]), span([0.3, -0.6, 5.45], [5.8, 1, 5.75])],
+                panes: [span([5.8, -3, 2.45], [11.4, high + 2, 2.75]), span([5.8, -3, 5.25], [11.4, high + 2, 5.55]), span([5.4, 0, 2.75], [5.8, high + 2, 5.25]), span([0.3, -0.6, 2.25], [5.8, 2.5, 2.55]), span([0.3, -0.6, 5.45], [5.8, 2.5, 5.75])],
                 holds: [[8.6, -3, 2.6], [8.6, -3, 5.4]],
                 moving: { kind: "lift", sound: "metal", bodies: [floor, skirt], rise, speed: LIFT.speed, ease: LIFT.ease, waits: LIFT.waits },
-                clear: [span([6, -3, 2.75], [10.8, high + 1, 5.25])],
+                clear: [span([6, -3, 2.75], [10.8, high + 2, 5.25])],
                 low: -2,
             };
         }
