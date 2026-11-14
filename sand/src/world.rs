@@ -596,8 +596,13 @@ impl World {
         // corners: a wall of cells touching only at their corners holds.
         let slide = if p.kind == Kind::Liquid { 1 } else { p.slide as usize };
         if slide > 0 {
-            let left = self.slides(at, -1, slide, p.density);
-            let right = self.slides(at, 1, slide, p.density);
+            // A grain spilling from a crowded column goes only into open air, not into a cell its
+            // neighbor has just left: so the face of a pillar spills outward, while a block of grains
+            // landing together keeps its order (the stripes of a flag poured from high up land as
+            // stripes, not shuffled).
+            let crowded = open && !undermined;
+            let left = self.slides(at, -1, slide, p.density, !crowded);
+            let right = self.slides(at, 1, slide, p.density, !crowded);
             if left || right {
                 if !self.paced(roll, x, y, p) {
                     return;
@@ -668,7 +673,7 @@ impl World {
         let s = self.stride;
         let reach = if speed > 0 { (speed + 1).min(p.fall as u32) } else { 1 };
         let (mut to, mut gone) = ((at + s).wrapping_add_signed(side), 1);
-        while gone < reach && self.slides(to, side, slide, p.density) {
+        while gone < reach && self.slides(to, side, slide, p.density, true) {
             to = (to + s).wrapping_add_signed(side);
             gone += 1;
         }
@@ -794,11 +799,13 @@ impl World {
     }
 
     /// Whether a falling cell can slide down to the side: the cell beside it is open, and so are
-    /// `depth` cells under that.
+    /// `depth` cells under that. Unless it `follows`, the cell beside it must not have been left
+    /// this step.
     #[inline(always)]
-    fn slides(&self, at: usize, side: isize, depth: usize, density: u8) -> bool {
+    fn slides(&self, at: usize, side: isize, depth: usize, density: u8, follows: bool) -> bool {
         let beside = at.wrapping_add_signed(side);
-        if !self.sinks_into(density, self.cells[beside]) {
+        let there = self.cells[beside];
+        if !self.sinks_into(density, there) || (!follows && material(there) == EMPTY && clock_of(there) == self.clock) {
             return false;
         }
         (1..=depth).all(|k| self.sinks_into(density, self.cells[beside + k * self.stride]))
