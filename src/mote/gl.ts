@@ -93,6 +93,8 @@ export interface View {
     ahead(x: number, y: number, far: number): V3;
     /** How far everything is darkened, from 0 to 1, except what is drawn `over`. */
     shade: number;
+    /** How near and how far the eye sees, in the scene's units: 0.5 to 120 unless set, which suits dice; a scene in centimetres sets its own. */
+    range: [near: number, far: number];
     /** Where the sun is, the box it has to light (two opposite corners), and how bright the sun, the sky and the ground are. */
     light(from: V3, low: V3, high: V3, sun?: number, sky?: number, ground?: number): void;
     /** Fit the drawing to a size in CSS pixels. */
@@ -519,6 +521,7 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
     const view: View = {
         font: "serif",
         shade: 0,
+        range: [0.5, 120],
         color(css) {
             // The page gives colors in forms the graphics card cannot read, so a canvas reads them first.
             probe.clearRect(0, 0, 1, 1);
@@ -615,7 +618,7 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
             }
 
             g.useProgram(main.made);
-            g.uniformMatrix4fv(main.at("eye"), false, times(perspective(eyeDegrees, canvas.width / canvas.height, 0.5, 120), facingMatrix(eyeFrom, eyeTo)));
+            g.uniformMatrix4fv(main.at("eye"), false, times(perspective(eyeDegrees, canvas.width / canvas.height, view.range[0], view.range[1]), facingMatrix(eyeFrom, eyeTo)));
             g.uniformMatrix4fv(main.at("sun"), false, sunMatrix);
             g.uniform3fv(main.at("toSun"), toSun);
             g.uniform3fv(main.at("eyeAt"), eyeFrom);

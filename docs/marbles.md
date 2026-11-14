@@ -1,7 +1,8 @@
 # A marble run
 
 A mini: build a marble run in three dimensions and watch marbles go down it. A plan dated 13 November
-2026. Stage 1, what Mote needed, was built on 14 November 2026 (below); nothing of the mini itself is.
+2026. Stage 1, what Mote needed, and stage 2, pieces and snapping, were built on 14 November 2026
+(below). The mini is a draft, Marbles, at `/minis/marbles/`.
 
 ## Decided
 
@@ -91,7 +92,7 @@ Mote's broad phase and inertia; see [mote](mote.md)):
 1. Mote: rolling, track shapes, fast marbles against thin rails, sleeping. Tests against the arithmetic of
    a ball rolling down a slope and round a loop. **Built** (see below).
 2. Pieces and snapping: the box, joints, placing by drag, supports, and marbles rolling down a run built
-   from fixed pieces.
+   from fixed pieces. **Built** (see below).
 3. The editor: camera, handles, selection, undo, copy and groups, touch throughout, building while it
    runs with the ghost marble.
 4. Bending, with its limits and warnings.
@@ -164,9 +165,136 @@ Bun is slower than Chromium by about half again. So a few hundred marbles at onc
 - Only balls meet track. A moving part that is not a ball (a seesaw, a gate) is a solid of faces, met by
   balls as slabs are.
 
+## Stage 2, built
+
+On 14 November 2026: the draft mini Marbles (`src/minis/marbles.ts`, `src/content/minis/marbles.mdx`), on
+`pieces.ts` (the box), `run.ts` (a run as data), `table.ts` (the run as Mote's physics), `supports.ts`
+(pillars), `checks.ts` (the marks), `orbit.ts` (the camera) and `runs.ts` (made runs), each with its
+test. Rolling is left as it was.
+
+**The grid.** A cell is 8 cm square and a level 2 cm high, the height of a block of track. Track runs along
+the middle of a row of cells; a joint is in the middle of a cell's edge, at a whole level, pointing along
+the ground, its up straight up. So any joint meets any other exactly, and two pieces meet only by
+coinciding. A piece's place is the corner of its first cell (whole cells), the level of its first joint,
+quarter turns about that corner, and whether it is mirrored.
+
+**The section.** A groove of 1.5 cm radius cut in a block 4.4 cm across and 2 cm high; a marble of radius
+0.8 sits 0.7 below the groove's middle line and shows 1 mm above the block. A marble meets the groove, the
+block's top either side and its sides. Not a tighter groove: at 1.1 cm a marble rocking from side to side
+lost two fifths of its rocking each second in Mote's steps, where theory loses none; at 1.5 none is lost.
+The loop, the drop and the funnel's neck are tubes whose floor is the groove's circle.
+
+**The box** (19 entries, all on the grid): the hopper; straights of 1, 2 and 3 cells; tight curves (4 cm
+radius) and wide curves (12 cm) a quarter turn, left and right; turns back (a half turn, 4 cm) left and
+right; a gentle slope (a level down over 2 cells) and a steep one (2 levels over 2 cells), each level at both
+ends; a drop (4 levels, through a tube); S bends (a cell aside over 2 cells) left and right; a spiral (2 turns
+of 8 cm radius, 6 levels down, on a post with arms, in 3 cells by 3); a funnel (in 3 by 3, a chute in, a bowl,
+a neck that turns the marbles out level 8 levels lower); a loop (4.5 cm radius, a glass tube, out a cell
+aside); and the tray (2 cells by 3, its floor 3 levels below its joint). Left and right are the same piece
+mirrored. A piece's own numbers are kept (a straight's length, a curve's radius and quarters, a slope's
+length and drop, a spiral's turns and drop), so stage 4 can change them; the box offers these few.
+Curves are banked into their turn as far as a marble at 60 cm/s leans, at most 0.35 rad, easing to none
+at their ends, so that every piece meets every other upright. A round groove banked is the same circle,
+so the bank changes only where its rim is.
+
+**Snapping.** A piece carried looks at every open joint of the run and every one of its own joints, and
+for each pair the quarter turn and place that puts them face to face (`snaps` in `run.ts`), leaving out
+those that overlap or go below the ground. Of those, it takes the one whose middle would be nearest the
+pointer on the screen, if within 40 pixels (60 for a finger), and keeps it until the pointer is half as far
+again away, so that it does not flicker. A snap clicks and the piece eases there in 0.09 s (none with
+reduced motion). Carried over nothing, it rides at the height of the open end nearest the pointer; over a
+piece, at the height of that piece's nearest joint. Let go where it fits, it is placed; where it does not,
+it shows red and goes back where it came from (or, new, goes away); over the box, it is taken away. A piece
+pressed in the box goes at the open end chosen (the last placed, or the piece last pressed), the first way
+round that fits, flying there from the box.
+
+**Overlap.** Each piece takes up cells, each from one level to another: its block and the room a marble
+rolls in above it, worked out from its own track, every centimetre. Two pieces overlap if they share a cell
+at heights that cross. Track two levels above other track fits; one level does not.
+
+**Pillars.** One under every joint off the ground (two pieces that meet share it), and under the spiral's
+post, the funnel's legs, the tray's feet and the hopper's box, 2 cm square, standing on the ground, made again
+whenever the run changes. One that would pass through another piece or the room above one is not made, so
+nothing is ever in a marble's way; a piece then hangs from its joints. They are slabs a falling marble hits.
+
+**Marbles.** Each hopper holds a marble at its mouth; let go (a press, Space, or a stream every 0.6 s), it
+rolls, and the next comes out of the box in 0.3 s. Marbles fall off open ends, land on the table (rougher,
+so they stop), sleep at rest; past 240 the oldest goes, one in a tray first; one that falls off the table
+goes. Pieces can be placed, moved and taken away while marbles roll: a piece taken away takes its track and
+wakes what rested on it, which falls.
+
+**Marks** (shown, never enforced): a small amber square at an open end that is not a tray's; a piece tinted
+amber where a marble will stop, or a turn it will come at faster than 160 cm/s (the fastest any turn of the
+box was measured to carry one; what throws it out is the jolt where a turn begins, so the radius matters
+less than it seems). Speeds are guessed along the run from each hopper by energy, less a rolling cost, a cost
+where a turn begins or ends, and what a tube or the loop keeps, fitted to marbles on the made runs and held
+by test to within a third of them. Not marked: a loop come at too slowly; a marble got round from 133 cm/s
+after a gentle slope and failed from 151 after steep ones, so the guess would mislead.
+
+**Controls.** Touch first. One finger on a piece carries it; on the table it turns the view; two fingers
+pan, pinch and twist it. A press on a piece chooses it, for turn, mirror, raise, lower and take away in the
+panel, each a word a fingertip wide. The mouse: the main button as a finger, the other button or Shift to
+pan, the wheel (or a trackpad's pinch) to zoom. Keys, with the run focused: comma and full stop choose a
+piece; the arrows (or WASD) lift it and move it a cell the way the view looks, Q and E a level; R turns, F
+mirrors, Enter puts it down, Escape puts it back, Delete takes it away; Space lets a marble go, P pauses,
+Home fits the run, plus and minus zoom, Shift with the arrows turns and tips the view. The box's pictures
+are buttons, so Tab reaches them and Enter puts that piece at the open end. "Fit the run" frames it all.
+
+**The camera.** Turned about the upright, tipped over 0.12 to 1.45 rad, 18 to 900 cm off; `gl.ts` now sees
+2 to 4000 cm for this scene (`view.range`), every other mini as before.
+
+**The run as text.** `v1`, then each piece after a dot: its family letter, then its numbers between
+underscores (its own numbers, the corner across and along, the level, the quarter turns with 4 added when
+mirrored). A long straight one cell across at level 6 turned once is `s2_1_0_6_1`. Families: `h` hopper,
+`s` straight, `c` curve, `d` slope, `v` drop, `z` S bend, `x` spiral, `f` funnel, `l` loop, `t` tray. Letters,
+digits, `-`, `.` and `_` only, so it goes in an address unchanged; about 12 characters a piece; a run in
+another version is not read. The run is kept in the browser as it is built.
+
+**Made runs** (`runs.ts`): a first run (8 pieces), every kind of piece (15), twenty pieces. Each carries
+every marble let go to its tray, where they sleep, and has nothing marked; the same run gives the same race
+to the bit.
+
+**Measured.** Built by real drags from the box in headless Chromium: 13 pieces with the mouse at 1440 by
+900, and with one finger at 1024 by 768 and 390 by 800, every piece snapped, nothing marked, every marble
+let go reached the tray. Near a joint the track pushes a marble at 1.0 to 1.1 g in the middle, as inside a
+piece; the hardest pushes are landings (the drop's tube, the funnel, the tray) and an S of two tight curves
+taken fast. With 100 marbles on the twenty piece run (about 15 rolling and the rest heaped in the tray),
+the physics takes 1.6 to 1.9 ms a frame of 1/120 s and handing the drawing over 0.3 ms, on four cores; the
+drawing itself is on the graphics card and was not measured (headless Chromium draws in software). Blocks,
+Dice, Plinko and Rolling draw as before: Dice and Rolling the same to the pixel.
+
+**What stage 3, the editor, can rely on.**
+
+- The model is plain data and pure functions: `Placed { id, kind, place }`, `jointsOf`, `links`, `open`,
+  `neighbours`, `fit`, `snaps`, `overlaps`, `fits`, `write`, `read`. Joints are never stored; moving a piece
+  parts it. Undo can be a list of runs as text.
+- `table.set(run)` rebuilds only what changed, by id, and keeps marbles rolling; it marks joined ends by hand
+  whichever way round the pieces were made, and joins a piece's own lengths where a groove becomes a tube.
+- The scene keeps one carried piece at a time; a selection of several, handles, the long press menu and undo
+  are stage 3's. Turning a placed piece turns it about the corner nearest its middle; at a joint, turning
+  should rather cycle the ways it fits there (`snaps` gives them).
+- The pointer and keys go through `stage.ts`'s `down`, `slide`, `up` and `wheel`, with the pointer's id,
+  button and keys held.
+- Two fingers were checked only in tests of the arithmetic (`orbit.test.ts`): the browser driver has one
+  finger. The second finger's pan, pinch and twist want checking on a real tablet.
+
+**For stage 3 to know.**
+
+- Any end of track left open where a marble crosses costs it about a sixth of its speed, even where the
+  surfaces are one; ends that meet must be joined (Mote joins those of one section; the table the rest).
+- A marble entering a turn loses speed as it is thrown up the wall and rocks; fast into a tight turn, much.
+  Runs that drop a long way between turns throw marbles out.
+- The loop needs about 2.7 times its radius of drop in theory and more in practice, and how the marble
+  arrives matters: after steep slopes it rocks and does not get round.
+- The funnel's hole leaves 1.5 cm clear of its axis for a marble of 0.8; at 1.1 marbles arriving together
+  jammed there and fell asleep.
+
 ## Open
 
 - Its name.
+- Two fingers on a real tablet: whether pan, pinch and twist together feel right, and whether a finger
+  should turn a piece being carried.
+- Whether a touch on a piece should choose it or carry it at once; for now a press chooses and a drag carries.
 - Whether marbles can be of different sizes and weights.
 - How large a run may be before the page slows, and what is said then.
 - Whether a run can be exported for printing in three dimensions.

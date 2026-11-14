@@ -225,4 +225,34 @@ window.result = { before, restored, again, redrawn, disposed: g.isContextLost() 
     expect(result.disposed).toBe(true);
 }, 30_000);
 
+test.skipIf(!chromium())("a cube 300 units off is past what the eye sees unless the scene sets a longer range, and the range left alone is as before", async () => {
+    const result = await drawn<{ near: number[]; plain: number[]; far: number[] }>(`
+import { gl } from "${here}/gl.ts";
+import { cube } from "${here}/solids.ts";
+const canvas = document.querySelector("canvas");
+const view = gl(canvas);
+view.size(400, 300);
+view.light([4, 9, 6], [-3, -2, -3], [3, 2, 3]);
+const part = view.add(cube(), { color: [0.9, 0.2, 0.2] });
+const g = canvas.getContext("webgl2");
+const middle = () => {
+    view.draw();
+    const pixel = new Uint8Array(4);
+    g.readPixels(canvas.width >> 1, canvas.height >> 1, 1, 1, g.RGBA, g.UNSIGNED_BYTE, pixel);
+    return [...pixel];
+};
+view.look([0, 0, 9], [0, 0, 0], 30);
+const near = middle();
+part.scale = 40;
+view.look([0, 0, 300], [0, 0, 0], 30);
+const plain = middle();
+view.range = [2, 1000];
+const far = middle();
+window.result = { near, plain, far };
+`);
+    expect(result.near[3]).toBe(255);
+    expect(result.plain[3]).toBe(0);
+    expect(result.far[3]).toBe(255);
+}, 30_000);
+
 if (!chromium()) console.warn("gl.test.ts: no Chromium on this machine, so the drawing was not looked at.");
