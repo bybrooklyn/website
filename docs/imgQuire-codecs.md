@@ -4,7 +4,9 @@
 
 Which Rust crates could give imgQuire the formats a browser cannot write or read, built to WebAssembly
 and fetched only when a format is picked. Each was looked up on crates.io and in its repository, and the
-leading ones were built and run. Nothing here is in the site yet.
+leading ones were built and run. Since 14 November the site has the encoders of "Revised recommendation per
+format, with C encoders" (jpegli, libwebp, libaom with libavif, libjxl, single-threaded), oxipng and
+heic-rs, built by `codecs/build.sh`; see "The encoders" in [imgQuire](imgQuire.md).
 
 Browsers write only PNG, JPEG and WebP from a canvas. imgQuire wants AVIF and JPEG XL out, better JPEG,
 PNG and WebP than the browser's own encoders, and to read JPEG XL, HEIC, camera raw, TIFF and the rest,

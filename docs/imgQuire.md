@@ -22,6 +22,10 @@ remover (`cutout.md`) is to be one of its tools as well as a page of its own.
 - `geometry.ts`: fitting, zooming about a point, and the crop's frame dragged, nudged and held to a shape.
 - `stage.ts`: the picture on the screen and the tools that work on it.
 - `export.ts`: the formats as one table, the weight search, file names, the clipboard.
+- `codec-run.ts`: running an encoder (or the HEIC reader) built to WebAssembly, in a worker, after
+  checking its bytes against its pin in `codecs.json`. The modules are in `public/quire/codecs/`; they
+  are built from source by `codecs/build.sh` (C wrappers in `codecs/wrap/`, the Rust ones in
+  `codecs/rust/`).
 - `panels.ts`: the export panel, the resize box and the tool's strip.
 - `editor.ts`: the frame, the session, the bar, the menus' table, the keys, copying and pictures arriving.
 - `kind.ts`: `img()`.
@@ -82,13 +86,39 @@ Switching a step off is gone with the list; the file keeps the field and reads i
 set and remembers (`quire-img-copy`; Edit, Copy as changes it). The clipboard is handed a promise of the
 picture at once, so the press counts. The export panel, at the right side (on a phone, a sheet at the
 foot), never lies over the picture: the picture's room gives the panel its width (or height) and the
-picture glides into what is left as it opens and back as it closes: PNG, JPEG or WebP, a quality,
+picture glides into what is left as it opens and back as it closes: the format (below), a quality,
 or a weight to come in under ("200", "1.5 MB") found by halving the quality seven times, the result's size
 and weight, the same middle part of the original and the export side by side at their own pixels, Copy
-(filled) and Save. Saved files are named from the document (`screenshot-14-nov-2026-01-30.webp`). What the
-browser encodes carries no metadata; a picture with no steps given in its own format is its original with
+(filled) and Save. Saved files are named from the document (`screenshot-14-nov-2026-01-30.webp`). No
+encoder writes metadata; a picture with no steps given in its own format is its original with
 where, when and with what it was taken cut out (`core/picture-bytes.ts`). The settings are kept in this
 browser (`quire-img-export`), WebP at 0.85 to start; the pen too (`quire-img-pen`).
+
+**The encoders.** The reference encoders the owner chose, built from source to WebAssembly by
+`codecs/build.sh`, each its own module, fetched only when its format is first picked, checked against
+the SHA-256 pinned in `src/quire/img/codecs.json` before it is compiled, and run in a worker of its own,
+a fresh instance for each picture (`codec-run.ts`). Seven formats in two rows of the export panel, each
+with a tooltip saying what it is good for:
+
+| Format | Encoder, as built | On the wire (brotli) | Setting |
+|---|---|---|---|
+| JPEG | jpegli 031a007, `-Oz` | 32 KB | quality, progressive 4:2:0, laid on white |
+| WebP | libwebp f9c049d, `-Oz` | 58 KB | quality, method 4 |
+| AVIF | libavif 90d3b66 with libaom bcc98e0, `-Os`, 8-bit | 779 KB | quality, speed 8 |
+| JPEG XL | libjxl 9e02071, `-Os` | 552 KB | quality (libjxl's distance), effort 3 |
+| PNG | oxipng 10.2.1, Rust `opt-level "s"` | 62 KB | level 2 |
+| WebP lossless | the WebP module | | preset 6 |
+| JPEG XL lossless | the JPEG XL module | | effort 3 |
+
+HEIC is read the same way, by heic-rs 0.1.4 (54 KB): a phone's photograph pasted, dropped or chosen is
+kept as it came and shown through a PNG made in memory. JPEG, WebP and PNG fall back to the browser's
+own encoder if their module cannot be had; a format the browser cannot show (JPEG XL in some) is copied
+as it looks, and its sample in the panel says so. The clipboard always takes the browser's quick PNG.
+Every encoder reads back in Chromium to the same pixels (the lossless ones exactly; the lossy ones 39
+to 40 dB at quality 85 on the test picture), and the HEIC fixture at 36 dB; the built page makes all
+five lossy and lossless kinds from a pasted HEIC (`codec-run.test.ts`). The modules are single-threaded;
+the trial's times for a 12 megapixel photograph on one thread are JPEG 0.3 s, WebP 1.1 s, AVIF about
+0.7 s at speed 8, JPEG XL 0.5 s at effort 3, PNG about 6 s ([imgQuire-codecs](imgQuire-codecs.md)).
 
 **As a Quire.** Menus File, Edit, View, Image, Tools, Help, as one table, an icon on every line, ticks for
 what is on, submenus for Download, Copy as, Zoom, Crop shape, Resize filter, Mark color and Thickness;
@@ -258,6 +288,7 @@ Each of these is a question to settle before building.
 bun run dev                          # /imgquire/
 bun test src/quire/img               # the document, the arithmetic, and the browser tests
 bun test src/quire/img/kind.test.ts  # the four fast jobs, timed
+codecs/build.sh                      # the encoders again, from the codec trial's sources (see the script)
 ```
 
 The browser tests need a Chromium and skip, with a notice, without one. WebGPU runs in headless Chromium
@@ -275,18 +306,25 @@ only with `--enable-unsafe-webgpu`, which the drawing tests pass.
 - A shrink of more than about two hundred times in one resize reads very wide pieces; not tried.
 - Not tried in Firefox or Safari, nor on a real phone or touch screen; pinch has no test.
 - The text marks use the system's sans serif; typefaces are a later slice.
+- The encoders run on one thread; JPEG XL at effort 7 and AVIF at speed 6 would want the threaded builds
+  the trial measured (four times quicker), which need Emscripten's glue file.
+- libjxl is the trial's 0.13 snapshot, not a release; its lossy files measured 1.2 dB under cjxl 0.12 at
+  the same size, and a release tag is to be built and compared before it is relied on.
+- HEIC is HEVC, which is under patents; whether a free HEVC decoder may be shipped in a page is a legal
+  question asked in the codec notes and not yet answered. iPhone files with grids, 10-bit or gain maps
+  were not tried.
+- The modules are kept in the repository as built files (4.8 MB), since the site's build has no
+  Emscripten; `codecs/build.sh` rebuilds them and their pins.
 - A picture in an mdQuire document does not yet open in imgQuire and come back: the core has the pieces
   (`takes`, `take`, one editor at a time) but a way for one kind to lend a picture to another and have it
   back is still to be designed.
 
 ## Next slices, in order
 
-1. The encoders: AVIF, JPEG XL, jpegli and oxipng as WebAssembly, each a line in `FORMATS`
-   ([imgQuire-codecs](imgQuire-codecs.md)).
-2. The facts panel and metadata: reading and writing EXIF, IPTC and XMP, strip all or only the place.
-3. Reading text in pictures, and click-a-word redaction, with what looks private offered.
-4. Color grading of the whole picture and of parts, with curves, wheels and `.cube` looks (G).
-5. The cut-out ([cutout](cutout.md)).
-6. More marks: numbered steps, a highlighter, a magnifier, a spotlight, outlined captions.
-7. Many at once: batches through the same steps and export.
-8. From the phone, and opening a picture from mdQuire and back.
+1. The facts panel and metadata: reading and writing EXIF, IPTC and XMP, strip all or only the place.
+2. Reading text in pictures, and click-a-word redaction, with what looks private offered.
+3. Color grading of the whole picture and of parts, with curves, wheels and `.cube` looks (G).
+4. The cut-out ([cutout](cutout.md)).
+5. More marks: numbered steps, a highlighter, a magnifier, a spotlight, outlined captions.
+6. Many at once: batches through the same steps and export.
+7. From the phone, and opening a picture from mdQuire and back.
