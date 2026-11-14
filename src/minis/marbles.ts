@@ -1066,15 +1066,17 @@ export default function marbles(m: Mote): Scene {
         bend[2 * drag.point] = most(wanted.up);
         bend[2 * drag.point + 1] = most(wanted.aside);
         let next = withBend(piece.kind, bend);
-        const fails = bendFails(piece, next);
+        let fails = bendFails(piece, next);
         if (fails) {
-            // as far toward what is wanted as can be built, by halves, from the last that could
+            // as far toward what is wanted as can be built, by halves, from the last that could; the
+            // limit that holds it is the one met just past there, not the one far out where the pointer is
             const from = drag.good;
             let [low, high] = [0, 1];
             for (let go = 0; go < 9; go++) {
                 const mid = (low + high) / 2;
                 const trial = withBend(piece.kind, from.map((value, i) => value + (bend[i]! - value) * mid));
-                if (bendFails(piece, trial)) high = mid;
+                const why = bendFails(piece, trial);
+                if (why) [high, fails] = [mid, why];
                 else low = mid;
             }
             next = withBend(piece.kind, from.map((value, i) => value + (bend[i]! - value) * low));
@@ -1875,6 +1877,8 @@ export default function marbles(m: Mote): Scene {
             screen: (p: V3) => onScreen(p),
             text: () => write(run),
             steps: () => ({ at: steps.at, count: steps.texts.length }),
+            /** Every step of undo, as the run's text. */
+            texts: () => [...steps.texts],
             ghost: () => ({ done: ghost.done, paths: ghost.paths.map((path) => ({ ending: path.ending, last: path.last, length: path.places.length, end: onScreen(path.places.at(-1)!) })) }),
             owns: () => owns.map((one) => one.name),
             carried: () => carried && { fits: carried.fits, count: carried.home.length, snapped: Boolean(carried.snap), move: carried.move, pivot: carried.pivot, anchor: carried.anchor, handle: carried.handle, kinds: carried.home.map((piece) => keyOf(piece.kind)), snaps: carried.snaps.map((snap) => ({ to: snap.to.id, joint: snap.joint.id, entry: snap.joint.joint, at: onScreen(movedPoint(snap.joint.at, carried!.move)), goal: onScreen(snap.to.at) })) },
