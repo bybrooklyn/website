@@ -8,7 +8,7 @@
         "preview": "astro preview",
         "check": "astro check && bun scripts/pictures.ts --check && bun scripts/lint.ts",
         "lint": "bun scripts/lint.ts",
-        "deploy": "bun run check && bun run build && wrangler pages deploy --branch main",
+        "deploy": "bun scripts/guard.ts && bun run check && bun run build && wrangler pages deploy --branch main",
         "deploy:preview": "bun run check && bun run build && wrangler pages deploy --branch preview",
         "deploy:drafts": "astro check && bun scripts/photos.ts && SHOW_DRAFTS=1 astro build --outDir .drafts-build && wrangler pages deploy .drafts-build --branch drafts",
         "cf:login": "wrangler login",

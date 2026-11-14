@@ -11,20 +11,15 @@ the project's file in [`docs/`](docs/README.md); what has been done is in [`CHAN
 - The site says it does not track, while visitors' browsers ask GitHub for star counts. Reword, or fetch the counts at build time only.
 - The setup page lists a download stack that a reader may take as piracy.
 - The Terrustia recording shows a game server's port (the game's default).
-- The code and engines of draft minis ship in the live build though their pages are not listed.
 - The share picture of the colophon post is out of date and is to be made again.
-- A guard on `bun run deploy` that refuses a branch other than `main` or uncommitted changes.
 - Page policy: whether the `blob:` allowance for pictures stays as it is ([mdQuire](docs/mdQuire.md#known-weak-spots)).
 - Looks that are a matter of taste, noted and not changed: terminals and the Playmatter clip play when scrolled to; on the photos page "another" falls just below the fold on a laptop; the mdQuire cover card is narrower than the others; on a phone the back-to-top button sits over text while reading; at 1920 wide the main pages leave the right half empty; on Comet the pull band runs off the left edge.
 
 ### mdQuire
 
 - About thirty new sentences a writer can see were written during the audit (the "Not saved" dialog, errors from the stores, errors on opening a damaged file, one about spelling being unavailable) and the wording of dictation's first-launch dialog. All are to be read and approved or reworded.
-- Spelling: everything in [spelling](docs/spelling.md): American, British or both; on or off by default; a personal dictionary; names; a bigger word list.
 - Where mdQuire differs from what a Docs user expects: a blank document starts in the body and not the title; Enter in a table cell moves down a row; the status reads "Not saved" while typing; the outline does not scroll to keep the current heading in view; arrow down past a picture lands at the end of the next line. Decide which to change.
 - Right-to-left paragraphs are laid out left to right.
-- "Pink" appears twice in Text colour, and the typeface control reads "The page's …".
-- The Format menu needs scrolling at 1300 by 800, and long menus run to the window's very bottom.
 - About fifteen panels are sized by the window's full width, so in a narrow desktop window with classic scrollbars they meet the left edge.
 - Dictation: the model files are to be pinned to a revision and checked by digest; the hashes are to be read from Hugging Face and written into `models.ts`.
 
@@ -36,10 +31,6 @@ the project's file in [`docs/`](docs/README.md); what has been done is in [`CHAN
 - Walker's engine: a body faster than about 16 m/s passes through a thin platform. Fixing it changes every result and every shared walker.
 - Mote: screens at 75 and 144 Hz cannot be stepped evenly unless the minis draw between physics steps.
 - Mote: a role and a label on the canvas, and a label on the sound switch, would change what a visitor sees.
-
-### Housekeeping
-
-- Git: delete the leftover local branches once nothing holds them (the fixers' `fix-*` branches and twelve older ones).
 
 ## Not yet verified
 
@@ -103,6 +94,9 @@ What was found and fixed is in [`docs/AUDIT.md`](docs/AUDIT.md). Still open from
 - Finding each other with no server at all: a QR code shown and scanned both ways.
 
 ## Site
+
+- Tools stay as projects, each with a page about it and a way to open it; there is no separate tools section. A converter for any file and a QR code maker are wanted, built on the Quires' core, with ideas from p2r3's convert, ha.mr and envelope (ideas only where the licence is not permissive).
+- The footer is to say what a visitor's browser contacts (GitHub, for star counts) in place of saying nothing is tracked; the wording is the owner's to agree.
 
 - Spectrum: show the credit its license asks for somewhere a visitor sees it.
 - Three details on the resume.

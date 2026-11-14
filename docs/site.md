@@ -56,7 +56,8 @@ owner did not say.
 **LinkedIn** is mentioned on the about page only; the resume leaves it out.
 
 **Deploying is done by hand, only when the owner says.** `bun run deploy` checks, builds and deploys from
-the owner's computer; nothing deploys by itself. `bun run edit` has a publish button
+the owner's computer; nothing deploys by itself. It refuses to run from a branch other than `main` or with
+changes not committed (`scripts/guard.ts`), so that what is live is what is committed. `bun run edit` has a publish button
 that does the same after showing what is about to go live and asking.
 
 **Caching** (`public/_headers`): built files a year (their names carry a hash); photographs a week;
