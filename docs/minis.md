@@ -3,7 +3,7 @@
 Small things to play with at `/minis/`, each opened in the same kind of panel as a post or a project. Each
 mini is one scene file in `src/minis/` and a few lines of words in `src/content/minis/`, and most run on Mote
 (`mote.md`). This file covers the minis page and the small minis; the Walker, the generalist and Comet have
-files of their own (`walker.md`, `generalist.md`, `comet.md`).
+files of their own (`walker.md`, `generalist.md`, `comet.md`, `sand.md`).
 
 ## Where the code is
 
@@ -37,7 +37,7 @@ How to add a mini is in `src/mote/README.md`.
 - **The terminal** (not part of Mote): plays back a recorded run of a command-line program (an asciinema
   `.cast` file) with its timing. Nothing runs. It is used on the mFetchy and Terrustia project pages, and
   opens the way a picture does, on the same opener as the picture viewer.
-- The Walker, the generalist (a draft) and Comet (a draft) are minis too.
+- The Walker, the generalist (a draft), Comet (a draft) and Sand (a draft, stage 1 of its plan) are minis too.
 
 ## Decided
 

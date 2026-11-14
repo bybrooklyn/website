@@ -115,7 +115,7 @@ What was found and fixed is in [`docs/AUDIT.md`](docs/AUDIT.md). Still open from
 ## Minis
 
 - A marble run: the plan is in [marbles](docs/marbles.md); it is built in seven stages, the first of them in Mote.
-- A sand simulator: the plan is in [sand](docs/sand.md); its open points are to be settled, then it is built in four stages.
+- A sand simulator ([sand](docs/sand.md)): stage 1, the engine and its tests, is built and the mini is a draft. To confirm: sand at 45 degrees and dirt at 63, steam as an upside-down liquid, water levelled through a body, cells of one CSS pixel. Then stage 2, heat and reactions.
 
 - A post about writing the physics, with a mini at each step.
 - The Blocks demo on the home page.

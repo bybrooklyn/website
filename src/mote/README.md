@@ -14,6 +14,7 @@ site. It has no dependencies.
 | `solids.ts` | The shapes of the dice, a ball, a rod and other solids, and a way to draw one on a 2D canvas with no WebGL. The dice tower falls back to it where WebGL 2 is missing. |
 | `space.ts` | 3D physics: solids that fall, tumble and hit each other and fixed slabs, corner to corner and edge to edge. Each turns as its shape says (its inertia tensor), so a long bar tumbles as a real one does. The dice tower runs on it. |
 | `grid.ts` | Which pairs of bodies are near enough to be worth a closer look, for both kinds of physics: a hashed grid, with large fixed bodies such as floors and walls kept apart. |
+| `cells.ts` | A grid of cells, each a whole number of pixels, on WebGL 2: four bytes a cell, read straight from wherever they are kept (a WebAssembly module's memory) into one texture, the first byte picking a color from a palette and the second making it lighter or darker. Only the rows that changed are sent again. `fitted` places a grid in a canvas, `cellUnder` finds the cell under the pointer. |
 | `gl.ts` | 3D drawing on WebGL 2: real depth, one sun with shadows, light from the sky, numbers on faces, signs (words that float in front of everything), and glow: a part with `emit` shines and bleeds light around itself. |
 | `sound.ts` | Knocks and notes made by the browser, with no files. Silent until the visitor turns it on. |
 
