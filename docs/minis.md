@@ -37,7 +37,8 @@ How to add a mini is in `src/mote/README.md`.
 - **The terminal** (not part of Mote): plays back a recorded run of a command-line program (an asciinema
   `.cast` file) with its timing. Nothing runs. It is used on the mFetchy and Terrustia project pages, and
   opens the way a picture does, on the same opener as the picture viewer.
-- The Walker, the generalist (a draft), Comet (a draft) and Sand (a draft, stage 2 of its plan) are minis too.
+- The Walker, the generalist (a draft), Comet (a draft) and Sand (a draft, stage 3 of its plan: the page,
+  with pride sand and its flags, glow and links to worlds) are minis too.
 - **Rolling** (a draft, 3D; `rolling.ts`, `course.ts`): not a mini of its own but a plain page for watching
   Mote's marbles roll, made for the marble run ([marbles](marbles.md)). Marbles go down a ramp, round a
   loop, along a banked spiral and through a funnel into a tray, one after another; a click lets another go
@@ -52,6 +53,8 @@ How to add a mini is in `src/mote/README.md`.
 - Every mini is fluid in the site's manner: what opens grows from where it was pressed, as the rest of the
   site does (`STYLE.md`).
 - Glow belongs inside minis only; the rest of the site has none.
+- A mini's world can travel in a link's fragment, after `#`, so it is never sent to a server (Sand); a
+  mini's state that is small goes in its query (`m.link`, Dice).
 - Plinko as a table in real 3D, with a character on every ball, was built and taken back the same day: it
   looked wrong. The balls and round posts it needed are still in Mote's `space.ts`.
 
