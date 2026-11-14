@@ -741,16 +741,31 @@ export function createBar(surface: Surface, options: BarOptions) {
     sizeField.title = "Text size";
     // Enter applies the size and gives the text the focus back, and the field's change on losing the focus must not apply it again
     let entered = false;
-    sizeField.addEventListener("focus", () => (entered = false));
+    // clicked or reached, the number is selected, so that what is typed takes its place (typing 17 into 12 made 1172)
+    let selecting = false;
+    sizeField.addEventListener("focus", () => {
+        entered = false;
+        selecting = true;
+        sizeField.select();
+    });
+    // the click's own mouseup would put a caret where it was let go, so the one that ends the focusing click is held back
+    sizeField.addEventListener("mouseup", (event) => {
+        if (selecting) event.preventDefault();
+        selecting = false;
+    });
     sizeField.addEventListener("keydown", (event) => {
+        selecting = false;
         if (composing(event)) return;
         if (event.key === "Enter") {
             event.preventDefault();
             entered = true;
             setSize(typedSize(parseFloat(sizeField.value), richOn));
         } else if (event.key === "Escape") {
-            showSize();
+            // the old number back and nothing changed: the field is let go first, as showSize leaves a field being typed in alone
+            event.preventDefault();
+            entered = true;
             surface.focus();
+            showSize();
         }
     });
     sizeField.addEventListener("change", () => {

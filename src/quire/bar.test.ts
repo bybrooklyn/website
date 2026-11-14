@@ -308,19 +308,28 @@ inBrowser("the bar has no search of the menus: the magnifier is Find alone", () 
     }),
 );
 
-inBrowser("a size typed in the field and Enter is one step of undo, not two", () =>
+inBrowser("a size typed in the field replaces the number, which a click selects, and Enter is one step of undo and gives the writing back", () =>
     onPage("a word here\n", 1300, async (tab) => {
         await tab.wait(200);
         await tab.run("surface.focus(); surface.setSelection({ anchor: { path: [0], offset: 2 }, focus: { path: [0], offset: 6 } })");
         const at = await tab.run<{ x: number; y: number; inert: boolean }>("(() => { const field = document.querySelector('.quire-size-field'); const box = field.getBoundingClientRect(); return { x: box.left + box.width / 2, y: box.top + box.height / 2, inert: !!field.closest('[inert]') }; })()");
         expect(at.inert ? await tab.run<string>("[...document.querySelectorAll('[inert]')].map((each) => each.className + ' ' + each.offsetWidth).join(', ')") : "").toBe("");
         await tab.click(at.x, at.y);
-        await tab.run("document.querySelector('.quire-size-field').select()");
-        await tab.type("20");
+        // typing 15 into 12 makes 15, not 1215
+        await tab.type("15");
+        expect(await tab.run<string>("document.querySelector('.quire-size-field').value")).toBe("15");
         await tab.press("Enter");
         await tab.wait(50);
-        expect(await tab.run<string>("md()")).toContain("font-size");
+        expect(await tab.run<string>("md()")).toBe('a <span style="font-size:1.25em">word</span> here\n');
+        expect(await tab.run<boolean>("document.activeElement === surface.element")).toBe(true);
         await tab.run("surface.undo()");
+        expect(await tab.run<string>("md()")).toBe("a word here\n");
+        // Escape puts the number back and changes nothing
+        await tab.click(at.x, at.y);
+        await tab.type("24");
+        await tab.press("Escape");
+        await tab.wait(50);
+        expect(await tab.run<string>("document.querySelector('.quire-size-field').value")).toBe("12");
         expect(await tab.run<string>("md()")).toBe("a word here\n");
     }),
 );
