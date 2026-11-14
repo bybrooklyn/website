@@ -4,7 +4,7 @@
 // that makes things and counts what there is more of, and counts apart what is picked from it. The
 // counts are kept in this browser alone and never sent anywhere.
 
-import { isPageBreak, type Block, type Document, type Run } from "./md/document";
+import { isPageBreak, type Block, type Document, type Run } from "../md/document";
 
 /** How many times each thing has been made, by its key in the slash menu. */
 export type Counts = Record<string, number>;

@@ -4,8 +4,8 @@
 
 import { accents } from "../data/theme";
 import { css } from "../lib/color";
-import { startApp } from "../quire/app";
-import { memoryDrive } from "../quire/drive";
+import { startApp } from "../quire/core/app";
+import { memoryDrive } from "../quire/core/drive";
 
 const memory = memoryDrive();
 (window as unknown as { driveTry: typeof memory }).driveTry = memory;

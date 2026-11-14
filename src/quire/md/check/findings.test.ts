@@ -3,7 +3,7 @@
 // to how it starts.
 
 import { expect, test } from "bun:test";
-import type { MenuItem } from "../../ui";
+import type { MenuItem } from "../../core/ui";
 import { DEFAULTS, type Finding, type Fix } from "./engine";
 import { around, byKind, cleanWords, compare, findingLines, FIRST_KINDS, MOST_OWN, sameTogether, findingAt, findingKey, loadIgnored, loadOwn, loadPrefs, nextFinding, saveIgnored, saveOwn, savePrefs, shownFindings, wordsOfText, wordsText, type Keep } from "./findings";
 

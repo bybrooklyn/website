@@ -10,7 +10,7 @@
 import type { Document } from "./document";
 import { read } from "./read";
 import type { Surface } from "./surface";
-import { make } from "../ui";
+import { make } from "../core/ui";
 import { write } from "./write";
 
 /** A newly read document, with each block that is the same as before (same source and gap) replaced by the old block itself. */

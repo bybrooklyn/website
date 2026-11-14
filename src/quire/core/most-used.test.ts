@@ -3,11 +3,11 @@
 // is counted, and reads rubbish kept in the browser as nothing counted.
 
 import { expect, test } from "bun:test";
-import { documentOf, paragraph } from "./md/document";
-import { caret, handle } from "./md/keys";
+import { documentOf, paragraph } from "../md/document";
+import { caret, handle } from "../md/keys";
 import { counted, FIRST_FIVE, made, opening, ranked, readCounts, tally } from "./most-used";
-import { read } from "./md/read";
-import { filterSlash, SLASH_KEYS } from "./md/slash";
+import { read } from "../md/read";
+import { filterSlash, SLASH_KEYS } from "../md/slash";
 
 const keys = (items: { key: string }[]) => items.map((item) => item.key);
 

@@ -4,7 +4,7 @@
 // growing out of a row, are used in app.test.ts.
 
 import { expect, test } from "bun:test";
-import { read } from "./md/read";
+import { read } from "../md/read";
 import { copyName, recent, shortWhen, templates } from "./shelf";
 
 test("the ways to start are blank, blog post, notes, meeting notes, a changelog entry and a project page, the post dated today and readable as a post", () => {

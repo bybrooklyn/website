@@ -7,11 +7,11 @@ import { expect, test } from "bun:test";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { blockAt, setStyle, type Paragraph } from "./md/document";
+import { blockAt, setStyle, type Paragraph } from "../md/document";
 import { asQuire, opened, packQuire, pictureShelf, unpackQuire, written } from "./quire-file";
-import { markdownFor } from "./md/export";
-import { read } from "./md/read";
-import { write } from "./md/write";
+import { markdownFor } from "../md/export";
+import { read } from "../md/read";
+import { write } from "../md/write";
 import { writeZip } from "./zip";
 
 const parts = { style: '{"quire":1}\n', notes: '{"quire":1}\n' };

@@ -16,8 +16,8 @@
 // What is in each menu is built by `headings`, which is pure: the editor gives it how things stand
 // and what each command does.
 
-import type { Align } from "./md/document";
-import { keysFor } from "./md/shortcuts";
+import type { Align } from "../md/document";
+import { keysFor } from "../md/shortcuts";
 import { flowMenu, make, moveIndex, ruled, type Menu, type MenuItem } from "./ui";
 
 /** A word of the row, and the lines of its menu. */

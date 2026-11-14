@@ -16,8 +16,8 @@
 // plain text file, one word to a line.
 
 import type { Position } from "../document";
-import { openDialog, type Dialog } from "../../dialog";
-import { control, flowMenu, make, menuLine, type MenuItem } from "../../ui";
+import { openDialog, type Dialog } from "../../core/dialog";
+import { control, flowMenu, make, menuLine, type MenuItem } from "../../core/ui";
 import { createChecker, KINDS, ruleOn, type Context, type Finding, type Fix, type Job, type Rule, type Unit } from "./engine";
 import { loadDictionary, type Dictionary } from "./dictionary";
 import { around, byKind, findingAt, findingKey, findingLines, KIND_NAMES, loadIgnored, loadOwn, loadPrefs, nextFinding, sameTogether, saveIgnored, saveOwn, savePrefs, shownFindings, wordsOfText, wordsText, type Ignored } from "./findings";

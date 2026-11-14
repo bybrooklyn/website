@@ -17,8 +17,8 @@
 import type { Page } from "./document";
 import { paperSize, setPage } from "./paper";
 import type { Surface } from "./surface";
-import { openDialog, switchButton, type Dialog } from "../dialog";
-import { make } from "../ui";
+import { openDialog, switchButton, type Dialog } from "../core/dialog";
+import { make } from "../core/ui";
 
 /** A piece of the text that goes to the next page whole: where it is laid out, top and bottom, before any piece is moved; and whether it is a page break. */
 export interface Piece {

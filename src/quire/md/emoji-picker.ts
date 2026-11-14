@@ -21,7 +21,7 @@ import type { State } from "./history";
 import { typeIn } from "./inserts";
 import { caret } from "./keys";
 import type { Surface } from "./surface";
-import { composing, flowMenu, make, markActive, unmarkActive, type MenuItem } from "../ui";
+import { composing, flowMenu, make, markActive, unmarkActive, type MenuItem } from "../core/ui";
 
 /** What has been typed after a colon just before the cursor, two letters or more of a name; undefined when no list should be open. */
 export function emojiQuery(doc: Document, path: number[], offset: number): string | undefined {

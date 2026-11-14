@@ -11,9 +11,9 @@
 import { addColumn, addRow, blockAt, insertBlock, orderRows, paragraph, removeBlock, removeColumn, removeRow, setColumnAlign, sortedRows, type Align, type Document, type Table } from "./document";
 import type { State } from "./history";
 import { caret, tableOf } from "./keys";
-import { linesAround, placeClear } from "../strips";
+import { linesAround, placeClear } from "../core/strips";
 import type { Surface } from "./surface";
-import { control, dots, flowMenu, icon, make, type MenuItem } from "../ui";
+import { control, dots, flowMenu, icon, make, type MenuItem } from "../core/ui";
 
 /** The table the cursor is in, and which row (0 is the heading row) and column. */
 export function tableAt(doc: Document, path: number[]): { path: number[]; table: Table; row: number; column: number } | undefined {

@@ -8,7 +8,7 @@
 
 import { blockAt, blockPaths, deleteText, insertText, textAt, type Document, type Position } from "./document";
 import { type Surface } from "./surface";
-import { composing, control, glyph, icon, make, originFor, still } from "../ui";
+import { composing, control, glyph, icon, make, originFor, still } from "../core/ui";
 
 /** How to look: matching capitals or not, and whole words only or not. */
 export interface FindOptions {

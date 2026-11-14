@@ -6,7 +6,7 @@
 import { expect, test } from "bun:test";
 import { addComment } from "./comments";
 import { blockAt, changeKind, insertText, makeBox, makeDefinition, setBox, splitBlock, type Block, type Document, type List, type Quote } from "./document";
-import { opened, written } from "../quire-file";
+import { opened, written } from "../core/quire-file";
 import { read } from "./read";
 import { write } from "./write";
 

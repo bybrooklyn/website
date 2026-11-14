@@ -8,7 +8,7 @@ import { setAlign, setImage, type Image } from "./document";
 import { read } from "./read";
 import sharp from "sharp";
 import { landedAt, landings, moveBlockTo, pictureHtml, readPicture, snapWidth, staysPut, withoutMetadata } from "./pictures";
-import { crc32 } from "../zip";
+import { crc32 } from "../core/zip";
 import { collect, readStyle, restore } from "./styling";
 import { write } from "./write";
 

@@ -3,7 +3,7 @@
 
 import { accents } from "../data/theme";
 import { css } from "../lib/color";
-import { startApp } from "../quire/app";
+import { startApp } from "../quire/core/app";
 
 const SAMPLE = `---
 title: Every kind of block

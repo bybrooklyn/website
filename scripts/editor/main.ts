@@ -7,12 +7,12 @@
 import { accents } from "../../src/data/theme";
 import { css } from "../../src/lib/color";
 import { fields, setField, type Document } from "../../src/quire/md/document";
-import { documentsList } from "../../src/quire/documents";
+import { documentsList } from "../../src/quire/core/documents";
 import { createEditor } from "../../src/quire/md/editor";
 import { read, subtitleFromFront } from "../../src/quire/md/read";
 import { subtitleToFront } from "../../src/quire/md/write";
-import { browserStore, indexedTables } from "../../src/quire/store-browser";
-import { flowMenu, make } from "../../src/quire/ui";
+import { browserStore, indexedTables } from "../../src/quire/core/store-browser";
+import { flowMenu, make } from "../../src/quire/core/ui";
 import { editStore, PHOTOS, server, type Offered } from "./store";
 
 const meta = (name: string) => document.querySelector<HTMLMetaElement>(`meta[name="${name}"]`)?.content ?? "";

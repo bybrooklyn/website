@@ -14,13 +14,13 @@
 // The double tap, how well a line answers what was typed and the order of the lines are pure and
 // tested; the rest is DOM.
 
-import { blockAt, outline, type Document, type Selection } from "./md/document";
-import { caret, collapsed } from "./md/keys";
+import { blockAt, outline, type Document, type Selection } from "../md/document";
+import { caret, collapsed } from "../md/keys";
 import type { Heading } from "./menu-row";
 import { counted, FIRST_FIVE, made, PICKED, remember, remembered, type Counts } from "./most-used";
-import { chooseSlash, filterSlash, SLASH_ITEMS, SLASH_KEYS, slashQuery, type SlashItem } from "./md/slash";
-import type { Surface } from "./md/surface";
-import { tableAt } from "./md/tables";
+import { chooseSlash, filterSlash, SLASH_ITEMS, SLASH_KEYS, slashQuery, type SlashItem } from "../md/slash";
+import type { Surface } from "../md/surface";
+import { tableAt } from "../md/tables";
 import { control, everyLine, flowMenu, icon, keySymbols, make, markActive, menuLine, still, unmarkActive, type MenuItem } from "./ui";
 
 /** Where the cursor is, as far as the palette ranks by it. */

@@ -7,8 +7,8 @@
 //
 // Which rows a group's switch turns (`groupTurned`) is pure and tested.
 
-import { openDialog } from "../dialog";
-import { make } from "../ui";
+import { openDialog } from "../core/dialog";
+import { make } from "../core/ui";
 import { GROUPS } from "./vocabulary";
 
 /** The ids a group's switch leaves switched off: all of the group's rows when they were all on, none of them when any was off. */

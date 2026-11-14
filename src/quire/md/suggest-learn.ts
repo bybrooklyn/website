@@ -13,7 +13,7 @@
 //   learner.predict("I am writing a post about my web");
 //   learner.opened(key, text); learner.saved(key, text); learner.forget(); learner.stop();
 
-import type { Store } from "../store";
+import type { Store } from "../core/store";
 import { createModel, paragraphs, type Model, type ModelData } from "./suggest";
 
 /** A document as learned: a hash of its text, when its store last said it changed, and whether it has changed somewhere else since, past taking back. */

@@ -11,7 +11,7 @@
 //   const menu = createTextMenu(surface, () => row.headings(), (at) => checking.linesAt(at));   // menu.destroy()
 
 import type { Surface } from "./surface";
-import { everyLine, flowMenu, make, RULE, type MenuItem } from "../ui";
+import { everyLine, flowMenu, make, RULE, type MenuItem } from "../core/ui";
 
 /** The commands of the text's menu after cut and copy, by their names in the menus' table (menu-row.ts), in its order. */
 export const TEXT_COMMANDS = ["link", "comment", "bold", "italic", "underline"];

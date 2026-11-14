@@ -16,7 +16,7 @@ import { caret, collapsed, rangeOf } from "./keys";
 import { wordAt } from "./bar";
 import { dateText } from "./inserts";
 import type { Surface } from "./surface";
-import { control, flowMenu, icon, make, still } from "../ui";
+import { control, flowMenu, icon, make, still } from "../core/ui";
 
 /** Where a Markdown file's notes are kept in this browser, by the document's place and name. */
 const KEY = "quire-notes:";

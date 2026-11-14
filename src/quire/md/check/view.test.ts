@@ -28,7 +28,7 @@ const page = `
 import { createEditor } from "${here}/../editor.ts";
 import { read } from "${here}/../read.ts";
 import { write } from "${here}/../write.ts";
-import { closeOthers } from "${here}/../../ui.ts";
+import { closeOthers } from "${here}/../../core/ui.ts";
 const editor = createEditor(document.querySelector("#host"), read(""), { name: "Test" });
 const surface = editor.surface;
 window.q = {

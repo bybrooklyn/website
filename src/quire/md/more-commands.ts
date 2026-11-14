@@ -9,10 +9,10 @@ import { setStyleOf, type Action } from "./bar";
 import { addBookmark, suggestedName } from "./bookmarks";
 import { recase, type Case } from "./capitals";
 import type { List } from "./document";
-import type { RowActions } from "../menu-row";
+import type { RowActions } from "../core/menu-row";
 import { continuePrevious, listHere, markWith, restartAt } from "./numbering";
 import type { Surface } from "./surface";
-import { fieldForm, RULE, type MenuItem } from "../ui";
+import { fieldForm, RULE, type MenuItem } from "../core/ui";
 
 /** What the commands need from the editor: how a change is made, and how the menus are put away once a form is filled in. */
 export interface MoreOptions {

@@ -9,7 +9,7 @@
 // The words it says are made by `countLines`, which is pure and tested; the counting is the word
 // count's own (countRows in export.ts).
 
-import { countRows } from "./md/export";
+import { countRows } from "../md/export";
 import { make } from "./ui";
 
 /** What the counter counts: the whole text, the selected text if any, and the pages in page view. */

@@ -14,7 +14,7 @@ import { blockAt, insertBlock, outline, removeBlock, type Block, type Document, 
 import type { State } from "./history";
 import { handle } from "./keys";
 import type { Surface } from "./surface";
-import { make } from "../ui";
+import { make } from "../core/ui";
 
 // ---- the date ----
 

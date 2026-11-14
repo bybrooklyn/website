@@ -6,7 +6,7 @@
 // frontmatter's title, given through `own`.
 
 import type { Document } from "./document";
-import { composing } from "../ui";
+import { composing } from "../core/ui";
 import { namesIn } from "./check/names";
 
 const extension = /\.(md|mdx|markdown|txt|quire)$/i;

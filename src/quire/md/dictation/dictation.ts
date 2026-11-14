@@ -14,8 +14,8 @@
 // download's progress is shown there and can be cancelled. The model, the microphone and the recognizing are in other files
 // and are given in `options`, so that the browser tests can give a made-up one.
 
-import { filledButton, openDialog, switchButton, type Dialog } from "../../dialog";
-import { closeOthers, flowMenu, make, type Menu, type MenuItem } from "../../ui";
+import { filledButton, openDialog, switchButton, type Dialog } from "../../core/dialog";
+import { closeOthers, flowMenu, make, type Menu, type MenuItem } from "../../core/ui";
 import type { Surface } from "../surface";
 import "./dictation.css";
 import { canListen, MicrophoneError, openMicrophone, type Microphone } from "./capture";

@@ -54,8 +54,8 @@ const page = `
 import { createEditor } from "${here}/editor.ts";
 import { read } from "${here}/read.ts";
 import { write } from "${here}/write.ts";
-import { closeOthers } from "${here}/../ui.ts";
-import { browserStore, memoryTables } from "${here}/../store-browser.ts";
+import { closeOthers } from "${here}/../core/ui.ts";
+import { browserStore, memoryTables } from "${here}/../core/store-browser.ts";
 import { countWords } from "${here}/document.ts";
 const shelf = browserStore(memoryTables());
 for (let index = 0; index < 4; index++) await shelf.create("Notes " + index, ${JSON.stringify(phrases.join("\n\n"))} + "\\n");

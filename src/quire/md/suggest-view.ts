@@ -26,9 +26,9 @@ import { activeBlock, activeMarks, collapsed } from "./keys";
 import { textAt, type Document, type Mark, type Selection } from "./document";
 import { caretBox } from "./caret";
 import { typeIn } from "./inserts";
-import { make, type MenuItem } from "../ui";
+import { make, type MenuItem } from "../core/ui";
 import { write } from "./write";
-import type { Store } from "../store";
+import type { Store } from "../core/store";
 import type { Surface } from "./surface";
 import { browserIdle, createLearner, documentKey, indexedKeeper, type Learner } from "./suggest-learn";
 

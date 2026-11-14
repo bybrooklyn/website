@@ -10,22 +10,22 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { withoutSpeech } from "../../scripts/dictation-stubs";
-import { browser, chromium, type Browser } from "../../scripts/browser";
+import { withoutSpeech } from "../../../scripts/dictation-stubs";
+import { browser, chromium, type Browser } from "../../../scripts/browser";
 import { packQuire, unpackQuire } from "./quire-file";
-import { hash } from "./md/styling";
+import { hash } from "../md/styling";
 
 /** The smallest PNG: one pixel. */
 const DOT = Uint8Array.from(atob("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="), (c) => c.charCodeAt(0));
 
 const here = import.meta.dir;
-const styles = `${here}/../styles`;
+const styles = `${here}/../../styles`;
 
 const page = (database: string) => `
 import { startApp } from "${here}/app.ts";
-import { write } from "${here}/md/write.ts";
+import { write } from "${here}/../md/write.ts";
 import { folderStore, oneFileStore } from "${here}/store-folder.ts";
-import { setStyle } from "${here}/md/document.ts";
+import { setStyle } from "${here}/../md/document.ts";
 import { packQuire, unpackQuire } from "${here}/quire-file.ts";
 
 // GitHub's contents API, as far as the store uses it, over files kept in the page

@@ -20,7 +20,7 @@ import type { Picture } from "./export";
 import { isContentsMark, slug } from "./inserts";
 import { isPageBreak } from "./document";
 import { emojiOf } from "./emoji";
-import { writeZip } from "../zip";
+import { writeZip } from "../core/zip";
 import { safeAddress } from "./html";
 
 /** Text made safe in XML: escaped, and without the characters XML 1.0 does not allow at all (a form feed from a PDF, a vertical tab from Word), which make Word call the file unreadable. */

@@ -10,7 +10,7 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { browser, chromium, type Browser } from "../../scripts/browser";
+import { browser, chromium, type Browser } from "../../../scripts/browser";
 import { keySymbols, MOTION, moveIndex, originAt, placeNear, springCurve, typeAhead } from "./ui";
 
 test("a letter typed in a menu goes to the next line starting with it, round again, and more letters spell more of it", () => {
@@ -103,7 +103,7 @@ beforeAll(async () => {
     await Bun.write(`${folder}/page.ts`, page);
     const built = await Bun.build({ entrypoints: [`${folder}/page.ts`], target: "browser" });
     if (!built.success) throw new Error(built.logs.join("\n"));
-    const styles = `${import.meta.dir}/../styles`;
+    const styles = `${import.meta.dir}/../../styles`;
     const theme = ":root{--ground:oklch(0.16 0.035 300);--surface:oklch(0.21 0.045 300);--rule:oklch(0.32 0.055 300);--ink:oklch(0.93 0.02 300);--muted:oklch(0.73 0.045 300);--accent:oklch(0.77 0.16 300)} body{height:3000px}";
     const css = (await Promise.all(["tokens.css", "base.css", "quire.css"].map((name) => Bun.file(`${styles}/${name}`).text()))).join("\n");
     const at = (id: string, where: string) => `<button class="opener quire-button" id="${id}" style="position:absolute;${where};width:60px;height:30px">${id}</button>`;

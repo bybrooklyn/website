@@ -12,7 +12,7 @@ import { blockAt, changeKind, setBox, type Position } from "./document";
 import { finishes } from "./fields";
 import { LANGUAGES, languageOf } from "./highlight";
 import type { Surface } from "./surface";
-import { flowMenu, make, menuLine, type MenuItem } from "../ui";
+import { flowMenu, make, menuLine, type MenuItem } from "../core/ui";
 
 /** A language a code block can be set to: what the menu calls it, and what is written after the fence. */
 export interface LanguageChoice {

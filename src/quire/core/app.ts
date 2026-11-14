@@ -7,11 +7,11 @@
 //
 //   const app = await startApp(element, { colors });
 
-import { createEditor, type Editor } from "./md/editor";
+import { createEditor, type Editor } from "../md/editor";
 import { documentsList, repositoryForm, type Place } from "./documents";
 import { drivePlace, type DriveOptions } from "./drive-place";
-import { blockPaths, lengthOf } from "./md/document";
-import { read } from "./md/read";
+import { blockPaths, lengthOf } from "../md/document";
+import { read } from "../md/read";
 import { emptyParts, opened, type Parts } from "./quire-file";
 import { copyDocument, fileName, type Entry, type Store } from "./store";
 import { browserStore, indexedTables, memoryTables } from "./store-browser";

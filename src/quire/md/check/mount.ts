@@ -10,8 +10,8 @@
 //   checking.destroy()
 
 import type { Surface } from "../surface";
-import type { Store } from "../../store";
-import type { MenuItem } from "../../ui";
+import type { Store } from "../../core/store";
+import type { MenuItem } from "../../core/ui";
 import { loadPrefs, type Keep } from "./findings";
 
 /** What checking is given by the editor. */

@@ -13,7 +13,7 @@ import { linkAt } from "./bar";
 import { places } from "./bookmarks";
 import { caret, collapsed } from "./keys";
 import type { Surface } from "./surface";
-import { composing, control, icon, make, placeNear, still } from "../ui";
+import { composing, control, icon, make, placeNear, still } from "../core/ui";
 
 /** The address, trimmed, when a pasted text is one web address and nothing else: http, https or mailto, never another scheme such as javascript:. */
 export function webAddress(text: string): string | undefined {

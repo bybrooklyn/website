@@ -96,7 +96,7 @@ test.skipIf(!chromium())(
             await Bun.write(
                 `${folder}/page.ts`,
                 `import { createSurface } from "${import.meta.dir}/surface.ts";
-                import { createPalette } from "${import.meta.dir}/../palette.ts";
+                import { createPalette } from "${import.meta.dir}/../core/palette.ts";
                 import { createEmojiPicker } from "${import.meta.dir}/emoji-picker.ts";
                 import { read } from "${import.meta.dir}/read.ts";
                 const sheet = document.querySelector("#sheet");

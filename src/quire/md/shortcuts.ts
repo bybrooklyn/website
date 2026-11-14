@@ -8,7 +8,7 @@
 // are kept by another piece (dictation's Ctrl+D) or are keys in the text rather than commands (Tab
 // in a list): those have no command and are listed for the panel only.
 
-import type { Command } from "../menu-row";
+import type { Command } from "../core/menu-row";
 
 /** One shortcut. `keys` is written as words, "Ctrl+Shift+8"; `menu` is where the panel groups it. */
 export interface Shortcut {

@@ -4,7 +4,7 @@
 
 import { expect, test } from "bun:test";
 import { linesFor, menuLines } from "./text-menu";
-import type { MenuItem } from "../ui";
+import type { MenuItem } from "../core/ui";
 
 const item = (key: string, label: string, extra: Partial<MenuItem> = {}): MenuItem => ({ key, label, run: () => {}, ...extra });
 

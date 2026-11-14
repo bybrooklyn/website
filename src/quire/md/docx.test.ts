@@ -8,7 +8,7 @@ import { docx, halfPoints } from "./docx";
 import { setImage } from "./document";
 import type { Picture } from "./export";
 import { read } from "./read";
-import { readZip } from "../zip";
+import { readZip } from "../core/zip";
 
 /** True when XML text is well-formed as far as its tags go: each opened tag closed in order, one root. */
 function wellFormed(text: string): boolean {

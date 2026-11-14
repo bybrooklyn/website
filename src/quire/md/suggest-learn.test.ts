@@ -6,7 +6,7 @@
 // passed over.
 
 import { expect, test } from "bun:test";
-import { browserStore, memoryTables } from "../store-browser";
+import { browserStore, memoryTables } from "../core/store-browser";
 import { createLearner, documentKey, hashOf, memoryKeeper, type Idle, type Keeper } from "./suggest-learn";
 
 /** Idle time that comes at once and never runs out. */

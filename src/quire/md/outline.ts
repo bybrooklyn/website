@@ -8,7 +8,7 @@
 import { outline, type Document, type OutlineEntry, type Position } from "./document";
 import { caret } from "./keys";
 import type { Surface } from "./surface";
-import { control, icon, make, still } from "../ui";
+import { control, icon, make, still } from "../core/ui";
 
 const before = (a: number[], b: number[]) => {
     for (let index = 0; index < Math.min(a.length, b.length); index++) if (a[index] !== b[index]) return a[index]! < b[index]!;

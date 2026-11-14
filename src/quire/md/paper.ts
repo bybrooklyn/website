@@ -13,7 +13,7 @@
 // The sums (paper sizes, the @page rule, the zoom steps and fitting) are pure and tested.
 
 import type { Document, Page } from "./document";
-import { ruled, still, type MenuItem } from "../ui";
+import { ruled, still, type MenuItem } from "../core/ui";
 
 /** Each paper's width and height in millimetres, standing upright. */
 export const PAPERS: Record<Page["size"], [number, number]> = {

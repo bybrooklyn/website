@@ -6,10 +6,10 @@
 import { expect, test } from "bun:test";
 import { documentOf, paragraph } from "./document";
 import { caret, handle } from "./keys";
-import { headings, type Command, type RowActions } from "../menu-row";
+import { headings, type Command, type RowActions } from "../core/menu-row";
 import { chordFrom, chordOf, findShortcuts, keysFor, SHORTCUTS, shortcutFor, typing } from "./shortcuts";
 import { altGraph } from "./surface";
-import { everyLine } from "../ui";
+import { everyLine } from "../core/ui";
 
 test("no two shortcuts with a command share the same keys, unless they run the same command", () => {
     const seen = new Map<string, Command>();

@@ -57,7 +57,7 @@ import type { State } from "./history";
 import { activeBlock, caret, collapsed, mark, pageBreakAt, paste, rangeOf, sameLeaf, tableOf } from "./keys";
 import { SHORTCUTS } from "./shortcuts";
 import type { Surface } from "./surface";
-import { closeOthers, composing, control, dots, EASE, flowMenu, glyph, icon, make, MOTION, moveIndex, springCurve, still, tipNow, type Menu, type MenuItem } from "../ui";
+import { closeOthers, composing, control, dots, EASE, flowMenu, glyph, icon, make, MOTION, moveIndex, springCurve, still, tipNow, type Menu, type MenuItem } from "../core/ui";
 
 /** What a button does: from the state at the cursor to the next one. */
 export type Action = (state: State) => State;

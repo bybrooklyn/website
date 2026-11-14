@@ -13,8 +13,8 @@ import { blockAt, type Document, type Mark, type Selection } from "./document";
 import { currentStyle, link as linkAction, linkAt, pressedAt, setStyleOf, tip, toggle, toggleList, type Action } from "./bar";
 import { collapsed, rangeOf, tableOf } from "./keys";
 import type { Surface } from "./surface";
-import { placeClear, linesAround } from "../strips";
-import { control, glyph, icon, linkForm, mac, make, still } from "../ui";
+import { placeClear, linesAround } from "../core/strips";
+import { control, glyph, icon, linkForm, mac, make, still } from "../core/ui";
 
 /** Whether the selection bar shows for a selection, and which of its buttons are pressed. */
 export function barFor(doc: Document, selection: Selection, marks: Mark[]): { show: boolean; pressed: Record<string, boolean> } {

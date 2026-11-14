@@ -2,7 +2,7 @@
 // are kept, what typing does and how to get a file out. Its words are here, in one place, and its
 // test holds them short; `helpBody` draws them, with the keyboard shortcuts a press away.
 
-import { make } from "../ui";
+import { make } from "../core/ui";
 
 /** The help's paragraphs. `{shortcuts}` stands where the way to the keyboard shortcuts goes. */
 export const HELP = [

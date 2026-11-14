@@ -20,13 +20,13 @@ const page = `
 import { createEditor } from "${here}/editor.ts";
 import { read } from "${here}/read.ts";
 import { write } from "${here}/write.ts";
-import { closeOthers } from "${here}/../ui.ts";
+import { closeOthers } from "${here}/../core/ui.ts";
 import * as shortcuts from "${here}/shortcuts.ts";
-import { memoryStorage } from "${here}/../versions.ts";
-import { browserStore, indexedTables } from "${here}/../store-browser.ts";
-import { folderStore, memoryFolder } from "${here}/../store-folder.ts";
+import { memoryStorage } from "${here}/../core/versions.ts";
+import { browserStore, indexedTables } from "${here}/../core/store-browser.ts";
+import { folderStore, memoryFolder } from "${here}/../core/store-folder.ts";
 import { addComment } from "${here}/comments.ts";
-import { filesStore } from "${here}/../store-files.ts";
+import { filesStore } from "${here}/../core/store-files.ts";
 const host = document.querySelector("#host");
 const storage = memoryStorage();
 const editor = createEditor(host, read(""), { name: "Test", colors: [{ name: "Pink", value: "salmon" }], onImage: async () => "/picture.png", versions: storage });

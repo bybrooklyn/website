@@ -6,9 +6,9 @@
 
 import { expect, test } from "bun:test";
 import { headings, type RowActions } from "./menu-row";
-import { caret } from "./md/keys";
+import { caret } from "../md/keys";
 import { commandLines, headingLines, placeOf, rank, score, tap, TAP, type Line, type Stroke, type Taps } from "./palette";
-import { read } from "./md/read";
+import { read } from "../md/read";
 
 /** Plays strokes through the double tap and gives back the times it opened. */
 function play(strokes: Stroke[], keys?: string[]): number[] {

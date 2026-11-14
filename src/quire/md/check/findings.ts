@@ -4,7 +4,7 @@
 // and what she has ignored in each document). view.ts draws what this decides.
 
 import type { Position } from "../document";
-import { RULE, type MenuItem } from "../../ui";
+import { RULE, type MenuItem } from "../../core/ui";
 import { DEFAULTS, KINDS, type Finding, type Fix, type Kind, type Settings } from "./engine";
 
 /** Orders two positions: below zero if `a` is first. */
