@@ -42,8 +42,23 @@ export interface Shown {
     knob?: { x: number; y: number };
 }
 
-/** Where every handle is on the screen for a selection whose middle is at `middle`, and a knob at `knob` if one piece that can be resized is selected. */
-export function layout(orbit: Orbit, degrees: number, width: number, height: number, middle: V3, knob?: V3): Shown {
+/**
+ * How far the handles stand off from the middle, in pixels more than they would, for a selection that
+ * reaches `reach` pixels from its middle on a picture `width` by `height`: far enough that the arrows
+ * start and the ring runs outside it, so that the handles and what is chosen do not cover each other
+ * and a press on a piece is a press on the piece. A selection larger than a fifth of the picture is
+ * stood off from no further, or its handles would leave the picture; on that one they cross it.
+ */
+export function standOff(reach: number, width: number, height: number): number {
+    const most = Math.min(width, height) * 0.2;
+    return Math.max(0, Math.min(most, reach + 10 - GAP));
+}
+
+/**
+ * Where every handle is on the screen for a selection whose middle is at `middle`, and a knob at `knob`
+ * if one piece that can be resized is selected; the arrows and the ring stood off by `stand` pixels.
+ */
+export function layout(orbit: Orbit, degrees: number, width: number, height: number, middle: V3, knob?: V3, stand = 0): Shown {
     const aspect = width / Math.max(1, height);
     const screen = (p: V3) => {
         const seen = project(orbit, degrees, aspect, p);
@@ -51,15 +66,16 @@ export function layout(orbit: Orbit, degrees: number, width: number, height: num
     };
     const size = across(orbit, degrees, height, middle);
     const shown: Shown = { middle: screen(middle), arrows: {}, ring: [] };
+    const [start, end, ring] = [(GAP + stand) * size, (ARROW + stand) * size, (RING + stand) * size];
     for (const [name, axis] of Object.entries(AXES) as ["x" | "y" | "z", V3][]) {
-        const from = screen([middle[0] + axis[0] * GAP * size, middle[1] + axis[1] * GAP * size, middle[2] + axis[2] * GAP * size]);
-        const to = screen([middle[0] + axis[0] * ARROW * size, middle[1] + axis[1] * ARROW * size, middle[2] + axis[2] * ARROW * size]);
+        const from = screen([middle[0] + axis[0] * start, middle[1] + axis[1] * start, middle[2] + axis[2] * start]);
+        const to = screen([middle[0] + axis[0] * end, middle[1] + axis[1] * end, middle[2] + axis[2] * end]);
         // an arrow seen end on is too short to take; it is left out of reach until the view turns
         if (from && to && Math.hypot(to.x - from.x, to.y - from.y) > ARROW * 0.3) shown.arrows[name] = { from, to };
     }
     for (let i = 0; i < 48; i++) {
         const angle = (i / 48) * 2 * Math.PI;
-        const point = screen([middle[0] + Math.cos(angle) * RING * size, middle[1], middle[2] + Math.sin(angle) * RING * size]);
+        const point = screen([middle[0] + Math.cos(angle) * ring, middle[1], middle[2] + Math.sin(angle) * ring]);
         if (point) shown.ring.push(point);
     }
     if (knob) shown.knob = screen(knob);
@@ -90,7 +106,8 @@ export function which(shown: Shown, x: number, y: number, kind: "touch" | "mouse
     }
     if (best) return best.handle;
     const ys = shown.ring.map((point) => point.y);
-    const flat = Math.max(...ys) - Math.min(...ys) < RING * 0.35;
+    const xs = shown.ring.map((point) => point.x);
+    const flat = Math.max(...ys) - Math.min(...ys) < (Math.max(...xs) - Math.min(...xs)) * 0.175;
     if (!flat) for (let i = 0; i < shown.ring.length; i++) if (toSegment(p, shown.ring[i]!, shown.ring[(i + 1) % shown.ring.length]!) < reach) return "ring";
     return undefined;
 }

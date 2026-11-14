@@ -25,7 +25,7 @@ import { turned } from "../mote/track";
 import { checks, type Mark } from "./checks";
 import { STILL as NO_MOVE, about, asOwn, groupFits, groupSnaps, joinedTo, matched, middleOf, mirrored, mirrorLine, moved, movedPoint, pivotOf, resizable, resized, rotated, then, type GroupSnap, type Move } from "./edit";
 import { ghostMarks, makeGhost } from "./ghost";
-import { AXES, ARROW, across, along, arrowMesh, layout, ringMesh, turnedBy, which, type Handle, type Shown } from "./handles";
+import { AXES, ARROW, RING, across, along, arrowMesh, layout, ringMesh, standOff, turnedBy, which, type Handle, type Shown } from "./handles";
 import { begun, canRedo, canUndo, readSteps, recorded, redone, trimmed, undone, type Steps } from "./history";
 import { NARROW, STRAIGHT, eyeOf, enters, framing, ground, kept, lensed, nearest, panned, project, ray, straightOn, type Orbit } from "./orbit";
 import { BOX, CELL, LEVEL, RADIUS, blockMesh, boxToWorld, keyOf, shapeOf, sweepOf, toWorld, wayToWorld, type Box, type Kind, type Place } from "./pieces";
@@ -524,20 +524,38 @@ export default function marbles(m: Mote): Scene {
         lensTo = DEGREES;
     };
 
-    /** The piece of the run under a point of the picture, by the boxes of room it takes up, a little larger for a finger. */
-    const pieceAt = (x: number, y: number, wide = 1.2): Placed | undefined => {
-        const line = lineAt(x, y);
-        let best: { piece: Placed; t: number } | undefined;
-        for (const piece of run) {
-            if (isCarried(piece.id)) continue;
-            for (const box of shapeOf(piece.kind).room) {
-                const placed = boxToWorld(piece.place, box);
-                const t = enters(line, placed.at, [placed.half[0] + wide, placed.half[1] + wide * 0.5, placed.half[2] + wide]);
-                if (t !== undefined && (!best || t < best.t)) best = { piece, t };
+    /**
+     * The piece of the run under a point of the picture, by the boxes of room it takes up with `wide`
+     * centimetres more round them. With `reach`, a fingertip's slack in pixels: if nothing is under the
+     * point itself, the nearest piece under a ring of points that far round it, so that a small piece
+     * far off is as easy to touch as a near one.
+     */
+    const pieceAt = (x: number, y: number, wide = 1.2, reach = 0): Placed | undefined => {
+        const under = (px: number, py: number) => {
+            const line = lineAt(px, py);
+            let best: { piece: Placed; t: number } | undefined;
+            for (const piece of run) {
+                if (isCarried(piece.id)) continue;
+                for (const box of shapeOf(piece.kind).room) {
+                    const placed = boxToWorld(piece.place, box);
+                    const t = enters(line, placed.at, [placed.half[0] + wide, placed.half[1] + wide * 0.5, placed.half[2] + wide]);
+                    if (t !== undefined && (!best || t < best.t)) best = { piece, t };
+                }
+            }
+            return best?.piece;
+        };
+        const found = under(x, y);
+        if (found || !reach) return found;
+        for (const ring of [reach / 2, reach]) {
+            for (let i = 0; i < 8; i++) {
+                const near = under(x + Math.cos((i * Math.PI) / 4) * ring, y + Math.sin((i * Math.PI) / 4) * ring);
+                if (near) return near;
             }
         }
-        return best?.piece;
+        return undefined;
     };
+    /** How far round a finger's press a piece is still taken, in pixels: half a fingertip. */
+    const FINGERTIP = 12;
 
     // ---- carrying ----
     /** Where carried pieces would go now. */
@@ -770,6 +788,26 @@ export default function marbles(m: Mote): Scene {
         const way = wayToWorld(piece.place, joint.way);
         return [at[0] + way[0] * 1.5, at[1] + 1.5, at[2] + way[2] * 1.5];
     };
+    /** How far pieces reach on the screen from a point, in pixels: their boxes of room, each with a block's half width round it. */
+    const reachOn = (pieces: Placed[], middle: V3): number => {
+        const centre = onScreen(middle);
+        if (!centre) return 0;
+        const { orbit: seen, degrees } = cam();
+        const half = 2.2 / across(seen, degrees, m.height, middle);
+        let most = 0;
+        for (const piece of pieces) {
+            for (const box of shapeOf(piece.kind).room) {
+                const at = onScreen(boxToWorld(piece.place, box).at);
+                if (at) most = Math.max(most, Math.hypot(at.x - centre.x, at.y - centre.y) + half);
+            }
+        }
+        return most;
+    };
+    /** How far the handles stand off from what they are on, in pixels: worked out each frame from what is chosen, and kept while a handle is dragged, so that the handles do not breathe under the pointer. */
+    let stand = 0;
+    const standFor = (pieces: Placed[]) => {
+        stand = standOff(reachOn(pieces, handleMiddle(pieces)), m.width, m.height);
+    };
     /** Where the handles are on the screen now, if any are shown. */
     const handlesNow = (): Shown | undefined => {
         if (m.preview || (carried && carried.handle === undefined)) return undefined;
@@ -777,7 +815,21 @@ export default function marbles(m: Mote): Scene {
         if (!pieces.length) return undefined;
         const { orbit: seen, degrees } = cam();
         const middle = carried ? shownPoint(carried, carried.origin!) : handleMiddle(pieces);
-        return layout(seen, degrees, m.width, m.height, middle, carried ? (carried.handle === "knob" ? knobOf(pieces) : undefined) : knobOf(pieces));
+        if (!carried) standFor(pieces);
+        return layout(seen, degrees, m.width, m.height, middle, carried ? (carried.handle === "knob" ? knobOf(pieces) : undefined) : knobOf(pieces), stand);
+    };
+    /**
+     * The handle a press at (x, y) would take once it moves, if any. Never one over the body of a chosen
+     * piece: a press there carries what is chosen, wherever the handles are, and the handles stand off
+     * from a small selection so that both have room. Shift and the select tool are for choosing, so no
+     * handle takes their press.
+     */
+    const handleUnder = (x: number, y: number, kind: "touch" | "mouse", shift = false): Handle | undefined => {
+        const shown = !carried && chosen.size && !shift && !selecting ? handlesNow() : undefined;
+        const handle = shown && which(shown, x, y, kind);
+        if (!handle) return undefined;
+        const body = pieceAt(x, y, 0.2);
+        return body && chosen.has(body.id) ? undefined : handle;
     };
     /** Turning one piece at the joint it hangs from: the ways it fits there, if it hangs from exactly one. */
     const cycleOf = (piece: Placed): Carried["cycle"] => {
@@ -1531,12 +1583,9 @@ export default function marbles(m: Mote): Scene {
             handles: () => handlesNow(),
             pressed: () => pressed,
             /** The handle a press there would take, if any. */
-            handleAt: (x: number, y: number, kind: "touch" | "mouse") => {
-                const shown = !carried && chosen.size ? handlesNow() : undefined;
-                const handle = shown && which(shown, x, y, kind);
-                const piece = pieceAt(x, y);
-                return handle && piece && chosen.has(piece.id) ? which(shown, x, y, "mouse") : handle;
-            },
+            handleAt: (x: number, y: number, kind: "touch" | "mouse") => handleUnder(x, y, kind),
+            /** The piece a press there would take, with a finger's slack if asked. */
+            pieceAt: (x: number, y: number, kind: "touch" | "mouse") => pieceAt(x, y, 1.2, kind === "touch" ? FINGERTIP : 0)?.id,
             screen: (p: V3) => onScreen(p),
             text: () => write(run),
             steps: () => ({ at: steps.at, count: steps.texts.length }),
@@ -1592,14 +1641,8 @@ export default function marbles(m: Mote): Scene {
             if (hand.button === 2 || hand.button === 1 || (hand.button === 0 && hand.shift && !pieceAt(hand.x, hand.y))) one.mode = "pan";
             else {
                 // Shift and the select tool are for choosing, so the handles of what is chosen do not take the press
-                const shown = !carried && chosen.size && !hand.shift && !selecting ? handlesNow() : undefined;
-                const handle = shown && which(shown, hand.x, hand.y, hand.kind === "touch" ? "touch" : "mouse");
-                // a handle is taken once the press moves; still, it is a press on what is under it. Over a
-                // chosen piece, only a press on the handle itself takes it, not one a fingertip from it, so
-                // that what is chosen can still be carried where the handles cross it
-                one.piece = pieceAt(hand.x, hand.y);
-                one.handle = handle || undefined;
-                if (one.handle && one.piece && chosen.has(one.piece.id) && shown) one.handle = which(shown, hand.x, hand.y, "mouse");
+                one.piece = pieceAt(hand.x, hand.y, 1.2, hand.kind === "touch" ? FINGERTIP : 0);
+                one.handle = handleUnder(hand.x, hand.y, hand.kind === "touch" ? "touch" : "mouse", hand.shift);
                 pressed = { x: hand.x, y: hand.y, handle: one.handle, kind: hand.kind };
                 if (!one.piece && !one.handle && hand.ctrl) {
                     one.mode = "box";
@@ -1615,8 +1658,7 @@ export default function marbles(m: Mote): Scene {
                 if (hand.held) return;
                 if (carried?.hand === "hover") follow(hand.x, hand.y, "mouse");
                 else if (hand.kind === "mouse") {
-                    const shown = !carried && chosen.size ? handlesNow() : undefined;
-                    const now = shown && which(shown, hand.x, hand.y, "mouse");
+                    const now = handleUnder(hand.x, hand.y, "mouse");
                     if (now !== hovered) {
                         hovered = now;
                         m.wake();
@@ -1827,14 +1869,18 @@ export default function marbles(m: Mote): Scene {
                 for (const part of Object.values(handleParts)) part.hidden = true;
                 if (shown && pieces.length) {
                     const middle = carried ? shownPoint(carried, carried.origin!) : handleMiddle(pieces);
-                    const size = across(seen, degrees, m.height, middle) * ARROW;
+                    const pixel = across(seen, degrees, m.height, middle);
+                    const size = pixel * ARROW;
                     const lit = carried?.handle ?? hovered;
                     for (const name of ["x", "y", "z", "ring"] as const) {
                         const part = handleParts[name];
                         // while one is dragged, only it is shown
                         part.hidden = (name === "ring" ? false : !shown.arrows[name]) || (carried?.handle !== undefined && carried.handle !== name);
-                        part.at = middle;
-                        part.scale = size;
+                        // stood off from what is chosen: each arrow moved out along itself, the ring made wider
+                        const out = name === "ring" ? 0 : stand * pixel;
+                        const axis = name === "ring" ? AXES.x : AXES[name];
+                        part.at = [middle[0] + axis[0] * out, middle[1] + axis[1] * out, middle[2] + axis[2] * out];
+                        part.scale = name === "ring" ? size * ((RING + stand) / RING) : size;
                         part.emit = lit === name ? 0.35 : 0;
                     }
                     const knob = carried ? (carried.handle === "knob" ? knobOf(pieces) : undefined) : knobOf(pieces);

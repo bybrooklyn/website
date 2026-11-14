@@ -5,7 +5,7 @@
 // not culled. Run with `bun run test`.
 
 import { expect, test } from "bun:test";
-import { ARROW, REACH, across, along, arrowMesh, layout, ringMesh, toSegment, turnedBy, which } from "./handles";
+import { ARROW, GAP, REACH, across, along, arrowMesh, layout, ringMesh, standOff, toSegment, turnedBy, which } from "./handles";
 import { project, type Orbit } from "./orbit";
 import { normals, type V3 } from "../mote/solids";
 
@@ -99,4 +99,25 @@ test("the handles' shapes face outward", () => {
         const long = Math.hypot(m[0], m[2]);
         return [m[0] - (m[0] / long) * r, m[1], m[2] - (m[2] / long) * r];
     })).toBe(1);
+});
+
+test("on a small selection the handles stand off from it: every arrow starts and the ring runs outside what it reaches, and a large one is stood off from no further than a fifth of the picture", () => {
+    const at = picture(middle);
+    const centre = { x: ((at[0] + 1) / 2) * width, y: ((1 - at[1]) / 2) * height };
+    const most = Math.min(width, height) * 0.2;
+    for (const reach of [0, 20, 60, 110]) {
+        const stand = standOff(reach, width, height);
+        const shown = layout(orbit, 38, width, height, middle, undefined, stand);
+        expect(stand).toBeLessThanOrEqual(most);
+        if (reach + 10 - GAP > most) continue;
+        // an arrow seen at a slant is shorter on the screen, so its nearest point is measured
+        for (const arrow of Object.values(shown.arrows)) {
+            const nearest = Math.min(...[0, 0.25, 0.5, 0.75, 1].map((t) => Math.hypot(arrow.from.x + (arrow.to.x - arrow.from.x) * t - centre.x, arrow.from.y + (arrow.to.y - arrow.from.y) * t - centre.y)));
+            expect(nearest).toBeGreaterThan(Math.min(reach, GAP) * 0.55);
+        }
+        const xs = shown.ring.map((point) => point.x);
+        expect((Math.max(...xs) - Math.min(...xs)) / 2).toBeGreaterThan(reach);
+    }
+    expect(standOff(0, width, height)).toBe(0);
+    expect(standOff(10000, width, height)).toBe(most);
 });
