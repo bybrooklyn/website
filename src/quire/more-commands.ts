@@ -1,87 +1,70 @@
-// Commands the menu row gained from Google Docs' menus, kept out of editor.ts: each is a line in
-// the row (menu-row.ts) whose small menu, where it has one, grows from the menu's word and gives the
-// focus back to where it was on Escape. The editor spreads what this gives into its commands.
+// Commands the menu row gained from Google Docs' menus, kept out of editor.ts: the lines of the menus
+// that open beside Format, Text, Capitalization and Format, Bullets and numbering, List options, and
+// the small forms beside Insert, Bookmark and List options, Restart numbering. The editor puts what
+// this gives among its commands.
 //
-//   const actions = { ...theOthers, ...moreCommands(surface, { doing, word: (index) => row.words[index]! }) };
+//   const more = moreCommands(surface, { doing, done: () => row.menu.close(false), title });
 
 import { setStyleOf, type Action } from "./bar";
 import { addBookmark, suggestedName } from "./bookmarks";
 import { recase, type Case } from "./capitals";
-import { blockAt, type List } from "./document";
+import type { List } from "./document";
 import type { RowActions } from "./menu-row";
 import { continuePrevious, listHere, markWith, restartAt } from "./numbering";
 import type { Surface } from "./surface";
-import { fieldForm, flowMenu, type MenuItem } from "./ui";
+import { fieldForm, RULE, type MenuItem } from "./ui";
 
-/** What the commands need from the editor: how a change is made, and the menu row's words to grow from. */
+/** What the commands need from the editor: how a change is made, and how the menus are put away once a form is filled in. */
 export interface MoreOptions {
     doing: (action: Action) => () => void;
-    word: (index: number) => HTMLElement;
+    done: () => void;
     /** Goes to the title, the line above the writing that is the document's name. */
     title: () => void;
 }
 
-/** The three capitalisations, in Docs' order and its words. */
+/** The three capitalizations, in Docs' order and its words. */
 const CASES: [Case, string][] = [
     ["lower", "lowercase"],
     ["upper", "UPPERCASE"],
     ["title", "Title Case"],
 ];
 
-/** The three signs a bullet can be written with. */
+/** The three characters a bullet can be written with. Markdown reads all three as the same bullet, and the site draws them alike: only the character saved changes. */
 const MARKERS: [List["marker"], string][] = [
-    ["-", "Written with a dash"],
-    ["*", "Written with a star"],
-    ["+", "Written with a plus"],
+    ["-", "Dash"],
+    ["*", "Asterisk"],
+    ["+", "Plus"],
 ];
 
 /** The commands, by the names menu-row.ts gives them. */
-export function moreCommands(surface: Surface, options: MoreOptions): RowActions {
-    const { doing, word } = options;
-    const format = () => word(4);
-    const capitals = flowMenu("Capitalisation");
-    const lists = flowMenu("Bullets and numbering");
-    const starting = flowMenu("Restart numbering");
-    const note = (label: string): MenuItem => ({ label, note: true, run: () => {} });
-    const restart = () => {
-        const form = fieldForm({ value: "1", label: "Number to start from", type: "number", button: "Restart", said: "Restart the numbering" }, {
+export function moreCommands(surface: Surface, options: MoreOptions): Pick<RowActions, "title" | "subtitle" | "subs" | "forms"> {
+    const { doing, done } = options;
+    /** A field beside its line: Enter puts the menus away and does what was asked, and Escape steps back to the line. */
+    const form = (field: Parameters<typeof fieldForm>[0], set: (typed: string) => void) => {
+        const made = fieldForm(field, {
             set: (typed) => {
-                starting.close(false);
-                if (/^\d{1,9}$/.test(typed)) doing(restartAt(Number(typed)))();
-                else surface.focus();
+                done();
+                set(typed);
             },
-            cancel: () => starting.close(true),
         });
-        starting.open(format(), form);
-        form.querySelector("input")?.select();
+        requestAnimationFrame(() => made.querySelector("input")?.select());
+        return made;
     };
     const listLines = (): MenuItem[] => {
         const here = listHere(surface.getDocument(), surface.getSelection().focus.path);
-        if (!here) return [note("Put the cursor in a list to choose its bullet or its numbers")];
-        const carry = { label: "Continue previous list", run: doing(continuePrevious) };
-        if (here.list.style === "number") return [{ label: "Restart numbering", hint: "›", run: restart }, carry];
-        // Markdown reads all three as the same bullet, and the site draws them alike: only the character saved changes
-        return [...MARKERS.map(([marker, label]): MenuItem => ({ label, hint: marker, group: "marker", pressed: here.list.marker === marker, run: doing(markWith(marker)) })), note("All three are drawn alike, as Markdown reads them"), carry];
+        if (!here) return [];
+        const carry: MenuItem = { label: "Continue previous list", icon: "continue", run: doing(continuePrevious) };
+        if (here.list.style === "number") return [{ label: "Restart numbering", icon: "number", form: restart, run: () => {} }, carry];
+        return [...MARKERS.map(([marker, label]): MenuItem => ({ label, hint: marker, group: "marker", pressed: here.list.marker === marker, words: ["bullet character"], run: doing(markWith(marker)) })), RULE, carry];
     };
-    const marking = flowMenu("Bookmark");
+    const restart = () => form({ value: "1", label: "Number to start from", type: "number", button: "Restart", said: "Restart the numbering" }, (typed) => (/^\d{1,9}$/.test(typed) ? doing(restartAt(Number(typed)))() : surface.focus()));
     const bookmark = () => {
         const state = { doc: surface.getDocument(), selection: surface.getSelection() };
-        // a heading is a place a link can go to already, by its own id
-        if (blockAt(state.doc, state.selection.focus.path)?.kind === "heading") return marking.open(word(3), [note("A heading is a place to link to already")], true);
-        const form = fieldForm({ value: suggestedName(state), label: "Bookmark name", button: "Add", said: "Add the bookmark" }, {
-            set: (typed) => {
-                marking.close(false);
-                doing(addBookmark(typed || suggestedName(state)))();
-            },
-            cancel: () => marking.close(true),
-        });
-        marking.open(word(3), form);
-        form.querySelector("input")?.select();
+        return form({ value: suggestedName(state), label: "Bookmark name", button: "Add", said: "Add the bookmark" }, (typed) => doing(addBookmark(typed || suggestedName(state)))());
     };
     return {
-        bookmark,
-        capitals: () => capitals.open(format(), CASES.map(([how, label]) => ({ label, run: doing(recase(how)) })), true),
-        lists: () => lists.open(format(), listLines(), true),
+        subs: { capitals: () => CASES.map(([how, label]) => ({ label, run: doing(recase(how)) })), lists: listLines },
+        forms: { bookmark },
         // Markdown has no title: the document's is the line above the writing, its name, and Title goes there
         title: options.title,
         subtitle: doing(setStyleOf("subtitle")),

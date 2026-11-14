@@ -1156,6 +1156,8 @@ export function createBar(surface: Surface, options: BarOptions) {
             font: (from: HTMLElement) => fonts.open(from, fontLines(), true),
             highlight: (from: HTMLElement) => highlights.open(from, highlightLines(), true),
             spacing: (from: HTMLElement) => spacings.open(from, spacingLines(), true),
+            /** Their lines, for the menus that open beside Format's lines. */
+            lines: { color: colorLines, size: sizeLines, font: fontLines, highlight: highlightLines, spacing: spacingLines },
         },
     };
 }

@@ -40,6 +40,9 @@ export interface AppOptions {
 /** Where the writer was, remembered in this browser. */
 const PLACE_KEY = "quire-place";
 
+/** The home screen's ways to start as File, New names them, with their icons. */
+const NEW: Record<string, [string, string]> = { blank: ["Document", "file"], post: ["Blog post", "pen"], notes: ["Notes", "task"] };
+
 /** The browser's local storage, or nothing where it may not be used. */
 function local(): Storage | undefined {
     try {
@@ -104,16 +107,10 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
         colors: options.colors,
         top: options.top,
         richHome: browser,
-        // the File menu's first lines: what the home screen and the documents list offer, by name
+        // the File menu's first lines, as Docs has them: New, with the home screen's ways to start, and Open, the documents list, where the places to open from are
         fileItems: () => [
-            { label: "All documents", icon: "shelf", run: () => void home() },
-            { label: "New document", icon: "plus", run: () => void editor.create(browser, "Untitled", "", emptyParts()).then(() => editor.surface.focus()) },
-            { label: "Documents", run: () => ((from = editor.nameElement()), (shown = editor.current().store ?? browser), void showDocuments()) },
-            { label: "Open a file", run: () => chooser.click() },
-            ...(able.file ? [{ label: "Open a file to write in place", run: () => void openInPlace() }] : []),
-            ...(able.folder ? [{ label: "Open a folder", run: () => ((from = editor.nameElement()), void openFolder()) }] : []),
-            { label: github ? "Repository settings" : "Connect a repository", run: () => ((from = editor.nameElement()), showRepository()) },
-            ...(drive.state() !== "not set up" ? [{ label: "Google Drive", run: () => void openDrive(editor.nameElement()) }] : []),
+            { label: "New", icon: "plus", items: () => templates(new Date()).map((template) => ({ label: NEW[template.key]?.[0] ?? template.label, icon: NEW[template.key]?.[1], words: ["new document"], run: () => void startFrom(template, editor.nameElement()) })), run: () => {} },
+            { label: "Open", icon: "folder", words: ["documents", "open a file", "open a folder", "github", "repository", "google drive"], run: () => ((from = editor.nameElement()), (shown = editor.current().store ?? browser), void showDocuments()) },
         ],
         onOpen: remember,
         onName: (button) => {

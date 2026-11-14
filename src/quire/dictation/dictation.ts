@@ -733,7 +733,7 @@ export function createDictation(surface: Surface, options: DictationOptions = {}
             items(from) {
                 return [
                     { label: state === "listening" ? "Stop dictation" : "Start dictation", hint: KEY, icon: microphoneIcon(), run: () => toggle() },
-                    { label: "Dictation settings", run: () => openPanel(from) },
+                    { label: "Dictation settings", icon: "settings", run: () => openPanel(from) },
                 ];
             },
             toggle,

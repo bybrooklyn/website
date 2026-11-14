@@ -140,7 +140,7 @@ used("a browser that keeps nothing still opens mdQuire, and says a document is k
     expect(await tab.run<string>("document.querySelector('.quire-status').getAttribute('aria-label')")).toContain("kept in this tab only");
     expect(await tab.run(`(() => { const event = new Event("beforeunload", { cancelable: true }); dispatchEvent(event); return event.defaultPrevented; })()`)).toBe(true);
     // back to the page as the other tests have it, with nothing waiting to be downloaded
-    await tab.run("q.app.editor.commands.download()");
+    await tab.run("q.app.editor.commands.subs.downloadAs()[0].run()");
     await load();
 });
 const status = () => tab.run<string>("document.querySelector('.quire-status').getAttribute('aria-label')");
@@ -438,8 +438,23 @@ used("the menu row: a menu flows from its word, slides to the next as the pointe
     await tab.wait(600);
     const format = await open();
     expect(format.word).toBe("Format");
-    expect(format.lines).toContain("Bold⌃B");
-    expect(format.lines).toContain("Heading 2⌃⌥2");
+    expect(format.lines.slice(0, 2)).toEqual(["Text", "Paragraph styles"]);
+    // opened by a press, the menu holds the keyboard: a letter goes to its line and never reaches the document,
+    // Right goes into the menu beside the line, and Left comes back to the line
+    const before = await tab.run<string>("document.querySelector('.quire').innerText");
+    const focused = () => tab.run<string | null>("document.activeElement.querySelector('.quire-menu-label')?.textContent ?? null");
+    await tab.press("p");
+    expect(await focused()).toBe("Paragraph styles");
+    await tab.press("ArrowRight");
+    await tab.wait(400);
+    expect(await focused()).toBe("Normal text");
+    expect(await tab.run("(() => { const line = document.activeElement.getBoundingClientRect(); const from = [...document.querySelectorAll('.quire-row-menu .quire-menu-line')].find((each) => each.textContent.startsWith('Paragraph styles')).getBoundingClientRect(); return line.left >= from.right - 4 && Math.abs(line.top - from.top) < 12; })()")).toBe(true);
+    await tab.press("h");
+    expect(await focused()).toBe("Heading 1");
+    await tab.press("ArrowLeft");
+    await tab.wait(300);
+    expect(await focused()).toBe("Paragraph styles");
+    expect(await tab.run<string>("document.querySelector('.quire').innerText")).toBe(before);
     // the pointer moving onto Insert takes the open menu there, sliding
     await tab.run("document.querySelectorAll('.quire-row-word')[3].dispatchEvent(new PointerEvent('pointerenter'))");
     await tab.wait(500);
@@ -457,11 +472,13 @@ used("the menu row: a menu flows from its word, slides to the next as the pointe
     await tab.press("Enter");
     await tab.wait(400);
     expect((await open()).word).toBe("File");
+    // Right on New, which has an arrow, would go into its menu; on Open it goes on to Edit
+    await tab.press("ArrowDown");
     await tab.press("ArrowRight");
     await tab.wait(400);
     expect((await open()).word).toBe("Edit");
     await tab.press("s");
-    expect(await tab.run("document.activeElement.textContent")).toBe("Select all⌃A");
+    expect(await tab.run("document.activeElement.textContent")).toBe("Select allCtrl+A");
     await tab.press("Enter");
     await tab.wait(200);
     expect(await tab.run("String(getSelection())")).toBe(await tab.run("document.querySelector('.quire').innerText.trim()"));
@@ -475,7 +492,7 @@ used("on a narrow window the menu words have a line of their own under the trail
         expect(row).toEqual({ words: 7, under: true, inside: true });
         await press(".quire-row-word", "Format");
         await tab.wait(600);
-        expect(await tab.run("[...document.querySelectorAll('.quire-row-menu.open .quire-menu-line')].map((line) => line.textContent)[0]")).toBe("Bold⌃B");
+        expect(await tab.run("[...document.querySelectorAll('.quire-row-menu.open .quire-menu-line')].map((line) => line.textContent)[0]")).toBe("Text");
         await tab.press("Escape");
     } finally {
         await tab.resize(1300, 900);

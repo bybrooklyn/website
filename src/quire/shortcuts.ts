@@ -14,7 +14,7 @@ import type { Command } from "./menu-row";
 export interface Shortcut {
     keys: string;
     label: string;
-    menu: "File" | "Edit" | "View" | "Insert" | "Format" | "Tools" | "In the text";
+    menu: "File" | "Edit" | "View" | "Insert" | "Format" | "Tools" | "Help" | "In the text";
     command?: Command;
     /** Handled by the editing surface (keys.ts), which sees it first. */
     surface?: boolean;
@@ -36,11 +36,11 @@ export const SHORTCUTS: Shortcut[] = [
     { keys: "Ctrl+Shift+V", label: "Paste without formatting", menu: "Edit", command: "pastePlain" },
     { keys: "Ctrl+F", label: "Find", menu: "Edit", command: "find" },
     { keys: "Ctrl+H", label: "Find and replace", menu: "Edit", command: "replace" },
-    { keys: "Ctrl+K", label: "Link", menu: "Edit", command: "link", surface: true },
+    { keys: "Ctrl+K", label: "Link", menu: "Insert", command: "link", surface: true },
     { keys: "Ctrl+Shift+F", label: "Full screen", menu: "View", command: "fullScreen" },
     { keys: "Ctrl+=", label: "Zoom in", menu: "View", command: "zoomIn" },
     { keys: "Ctrl+-", label: "Zoom out", menu: "View", command: "zoomOut" },
-    { keys: "Ctrl+0", label: "Zoom back to the usual", menu: "View", command: "zoomReset" },
+    { keys: "Ctrl+0", label: "Zoom to 100%", menu: "View", command: "zoomReset" },
     { keys: "Ctrl+Enter", label: "Page break", menu: "Insert", command: "pageBreak", surface: true },
     { keys: "Ctrl+Alt+F", label: "Footnote", menu: "Insert", command: "footnote" },
     { keys: "Ctrl+Alt+M", label: "Comment", menu: "Insert", command: "comment" },
@@ -63,18 +63,18 @@ export const SHORTCUTS: Shortcut[] = [
     { keys: "Ctrl+Shift+7", label: "Numbered list", menu: "Format", command: "number" },
     { keys: "Ctrl+Shift+8", label: "Bulleted list", menu: "Format", command: "bullet" },
     { keys: "Ctrl+Shift+9", label: "Checklist", menu: "Format", command: "task" },
-    { keys: "Ctrl+]", label: "Indent more", menu: "Format", command: "indent" },
-    { keys: "Ctrl+[", label: "Indent less", menu: "Format", command: "outdent" },
+    { keys: "Ctrl+]", label: "Increase indent", menu: "Format", command: "indent" },
+    { keys: "Ctrl+[", label: "Decrease indent", menu: "Format", command: "outdent" },
     { keys: "Ctrl+Shift+L", label: "Align left", menu: "Format", command: "left" },
-    { keys: "Ctrl+Shift+E", label: "Centre", menu: "Format", command: "center" },
+    { keys: "Ctrl+Shift+E", label: "Center", menu: "Format", command: "center" },
     { keys: "Ctrl+Shift+R", label: "Align right", menu: "Format", command: "right" },
     { keys: "Ctrl+Shift+J", label: "Justify", menu: "Format", command: "justify" },
-    { keys: "Ctrl+Shift+.", label: "Larger text", menu: "Format", command: "bigger" },
-    { keys: "Ctrl+Shift+,", label: "Smaller text", menu: "Format", command: "smaller" },
+    { keys: "Ctrl+Shift+.", label: "Increase font size", menu: "Format", command: "bigger" },
+    { keys: "Ctrl+Shift+,", label: "Decrease font size", menu: "Format", command: "smaller" },
     { keys: "Ctrl+\\", label: "Clear formatting", menu: "Format", command: "clear" },
     { keys: "Ctrl+Shift+C", label: "Word count", menu: "Tools", command: "wordCount" },
-    { keys: "Ctrl+/", label: "Keyboard shortcuts", menu: "Tools", command: "shortcuts" },
-    { keys: "Alt+/", label: "Search the menus", menu: "Tools", command: "searchMenus" },
+    { keys: "Ctrl+/", label: "Keyboard shortcuts", menu: "Help", command: "shortcuts" },
+    { keys: "Alt+/", label: "Commands", menu: "Tools", command: "palette" },
     { keys: "Ctrl, Ctrl", label: "Commands: tap Ctrl twice, or press the button in the bottom left corner", menu: "Tools" },
     { keys: "Ctrl+D", label: "Dictation, start or stop", menu: "Tools" },
     { keys: "Tab", label: "In a list, put the item one level in, with what is under it", menu: "In the text" },
@@ -167,9 +167,12 @@ export function keysFor(command: Command): string | undefined {
     return SHORTCUTS.find((each) => each.command === command)?.keys;
 }
 
+/** Every shortcut but a command's second keys (Ctrl+Y for redo): one is shown for each command, the one its menu line shows, though both work. */
+const SHOWN = SHORTCUTS.filter((each, index) => !each.command || SHORTCUTS.findIndex((other) => other.command === each.command) === index);
+
 /** The shortcuts whose keys or words have what was typed, for the panel's search. */
 export function findShortcuts(query: string): Shortcut[] {
     const wanted = query.trim().toLowerCase();
-    if (!wanted) return SHORTCUTS;
-    return SHORTCUTS.filter((each) => each.label.toLowerCase().includes(wanted) || each.keys.toLowerCase().includes(wanted) || each.menu.toLowerCase().includes(wanted));
+    if (!wanted) return SHOWN;
+    return SHOWN.filter((each) => each.label.toLowerCase().includes(wanted) || each.keys.toLowerCase().includes(wanted) || each.menu.toLowerCase().includes(wanted));
 }

@@ -134,16 +134,25 @@ async function reset(markdown: string, anchor: number[] = [0], from = 0, focus =
     await tab.wait(30);
 }
 
-/** Opens a menu of the row of menu words and chooses a line of it. */
-async function menuLine(word: string, line: string) {
+/** Opens a menu of the row of menu words and chooses a line of it, or lines one after another as each opens the menu beside it. */
+async function menuLine(word: string, ...lines: string[]) {
     await press(".quire-menu-row .quire-row-word", word);
-    await tab.wait(650);
-    await press(".quire-menu.open .quire-menu-line", line);
+    for (const line of lines) {
+        await tab.wait(650);
+        await press(".quire-menu.open .quire-menu-line", line);
+    }
     await tab.wait(60);
 }
 
+/** Chooses one of a choice of lines (Mode, Paper), which leaves the menus open, and puts them away. */
+async function pick(word: string, ...lines: string[]) {
+    await menuLine(word, ...lines);
+    await tab.run("document.querySelectorAll('.quire-menu:popover-open').forEach((each) => each.hidePopover())");
+    await tab.wait(300);
+}
+
 /** Shows or hides the outline, from the View menu. */
-const outline = () => menuLine("View", "Outline");
+const outline = () => menuLine("View", "Show outline");
 
 /** Opens the zoom's menu: from its button on the bar or, when that has folded into the three dots, from View. */
 async function zoomMenu() {
@@ -157,10 +166,8 @@ async function zoomMenu() {
 /** Puts the editor in page view (the sheet as pages of its paper) or writing view, from the View menu. */
 async function pageView(on: boolean) {
     if ((await tab.run<boolean>("document.querySelector('.quire-editor .quire-paper').classList.contains('paged')")) === on) return;
-    await press(".quire-menu-row .quire-row-word", "View");
-    await tab.wait(650);
-    await press(".quire-menu.open .quire-menu-line", "Page view");
-    await tab.wait(500);
+    await pick("View", "Mode", on ? "Pages" : "Pageless");
+    await tab.wait(200);
 }
 
 const live = !!chromium();
@@ -457,7 +464,7 @@ used("on a wide window the outline is open at first in the left margin, where th
     const fading = tab.run<number[]>("q.watch('.quire-outline', 'opacity', 500)");
     await press(".quire-menu-row .quire-row-word", "View");
     await tab.wait(400);
-    await press(".quire-menu.open .quire-menu-line", "Outline");
+    await press(".quire-menu.open .quire-menu-line", "Show outline");
     const fades = await fading;
     expect(fades.some((value) => value > 0 && value < 1)).toBe(true);
     await tab.wait(300);
@@ -466,7 +473,7 @@ used("on a wide window the outline is open at first in the left margin, where th
     expect(await tab.run("localStorage.getItem('quire-outline')")).toBe("shut");
     await press(".quire-menu-row .quire-row-word", "View");
     await tab.wait(400);
-    await press(".quire-menu.open .quire-menu-line", "Outline");
+    await press(".quire-menu.open .quire-menu-line", "Show outline");
     await tab.wait(400);
     expect(await shown()).toBe("visible");
     expect(await paperLeft()).toBe(left);
@@ -519,7 +526,7 @@ used("on a narrow screen the outline is a panel that slides in from its control 
     await press(".quire-menu-row .quire-row-word", "View");
     await tab.wait(650);
     const watching = tab.run<number[]>("q.watch('.quire-outline', 'opacity', 400)");
-    await press(".quire-menu.open .quire-menu-line", "Outline");
+    await press(".quire-menu.open .quire-menu-line", "Show outline");
     const moves = await watching;
     expect(moves[moves.length - 1]).toBe(1);
     expect(moves.some((value) => value > 0 && value < 1)).toBe(true);
@@ -760,7 +767,7 @@ used("Ctrl+K opens a link field that can be seen at every width, from the three 
     }
 });
 
-used("on a phone with the tools scrolled along, Alt+/ opens the search of the menus where it can be seen", async () => {
+used("on a phone with the tools scrolled along, Alt+/ opens the command palette where it can be seen", async () => {
     try {
         await tab.resize(390, 844);
         await reset("Words\n", [0], 0);
@@ -970,7 +977,7 @@ used("words that could not be saved keep the writer in the document: she is told
 async function speed(mode: "no page" | "light paper" | "page view") {
     await pageView(mode === "page view");
     // a look is a choice that leaves View open, to watch the page ease; Escape closes it
-    if (mode !== "page view") await menuLine("View", mode === "light paper" ? "Light paper" : "No page"), await tab.press("Escape");
+    if (mode !== "page view") await pick("View", "Paper", mode === "light paper" ? "Light" : "Dark");
     await tab.wait(600);
     const opened = await tab.run<{ lines: number; open: number }>(`(() => {
         const parts = [];
@@ -1023,8 +1030,7 @@ const measured = (mode: "no page" | "light paper" | "page view") => async () => 
     } finally {
         await reset("Text\n");
         await pageView(false);
-        await menuLine("View", "No page");
-        await tab.press("Escape");
+        await pick("View", "Paper", "Dark");
         await tab.wait(300);
     }
 };
@@ -1204,12 +1210,8 @@ used("typing in the Markdown view saves as typing on the page does, and the stat
 
 used("A, the usual look: no page, the text at the blog's measure centred in the window; C from View: light paper with growing margins, eased into; zoom makes the writing, the page and the caret larger", async () => {
     const look = async (line: string) => {
-        await press(".quire-menu-row .quire-row-word", "View");
-        await tab.wait(400);
-        await press(".quire-menu.open .quire-menu-line", line);
-        await tab.wait(60);
-        await tab.press("Escape");
-        await tab.wait(600);
+        await pick("View", "Paper", line);
+        await tab.wait(300);
     };
     const seen = () =>
         tab.run<{ left: number; right: number; window: number; text: number; textLeft: number; rem: number; ground: string; radius: number }>(`(() => {
@@ -1230,23 +1232,23 @@ used("A, the usual look: no page, the text at the blog's measure centred in the 
         // no page: nothing drawn behind the text, which is the measure wide (or the window less its gutters) and centred
         expect({ wide, ground: a.ground, centred: Math.abs(a.left + a.right - a.window) <= 2, measure: a.text <= 38.05 * a.rem && a.text > Math.min(30 * a.rem, wide - 90) }).toEqual({ wide, ground: "rgba(0, 0, 0, 0)", centred: true, measure: true });
         if (wide === 390) continue;
-        await look("Light paper");
+        await look("Light");
         const c = await seen();
         // light paper, centred, wider than A by a margin each side that grows with the window, the text where it was
         expect({ wide, light: !c.ground.includes("rgba(0, 0, 0, 0)"), centred: Math.abs(c.left + c.right - c.window) <= 2, square: c.radius <= 0.1875 * c.rem + 0.01, wider: c.right - c.left > a.right - a.left + 6 * c.rem, text: Math.abs(c.text - a.text) < 1.5 }).toEqual({ wide, light: true, centred: true, square: true, wider: true, text: true });
         expect(await tab.run("localStorage.getItem('quire-look')")).toBe("paper");
-        await look("No page");
+        await look("Dark");
     }
     // the look eases: its width is seen at several sizes on the way
     await tab.resize(1300, 900);
     await tab.wait(200);
-    await press(".quire-menu-row .quire-row-word", "View");
+    await menuLine("View", "Paper");
     await tab.wait(400);
     const widths = tab.run<number[]>("q.watch('.quire-editor .quire-paper', 'width', 600)");
-    await press(".quire-menu.open .quire-menu-line", "Light paper");
+    await press(".quire-menu.open .quire-menu-line", "Light");
     expect(new Set((await widths).map(Math.round)).size).toBeGreaterThan(4);
-    await tab.press("Escape");
-    await look("No page");
+    await tab.run("document.querySelectorAll('.quire-menu:popover-open').forEach((each) => each.hidePopover())");
+    await look("Dark");
     // zoom makes the writing larger and its page with it, the caret too, and stays centred
     const sizes = () => tab.run<{ page: number; text: number; caret: number; centre: number }>("(() => { const box = document.querySelector('.quire-editor .quire-paper').getBoundingClientRect(); return { page: box.width, text: document.querySelector('.quire > p').getBoundingClientRect().height, caret: document.querySelector('.quire-caret').getBoundingClientRect().height, centre: box.left + box.width / 2 }; })()");
     await reset("A short line.\n", [0], 3);
@@ -1261,16 +1263,15 @@ used("A, the usual look: no page, the text at the blog's measure centred in the 
     expect(after.text).toBeGreaterThan(unzoomed.text);
     expect(after.caret).toBeGreaterThan(unzoomed.caret * 1.05);
     expect(Math.abs(after.centre - unzoomed.centre)).toBeLessThan(2);
-    // the zoom's menu has the usual size and no fitting, and from it page view is chosen and remembered for the document
+    // the zoom's menu has Docs' steps, 100% once, and nothing else; Pages, chosen from View, is remembered for the document
     const kept = () => tab.run<number>("Object.keys(localStorage).filter((key) => key.startsWith('quire-view:') && localStorage.getItem(key) === 'page').length");
     const before = await kept();
     await zoomMenu();
     await tab.wait(650);
     const lines = await tab.run<string[]>("[...document.querySelectorAll('.quire-menu.open .quire-menu-label')].map((each) => each.textContent)");
-    expect(lines).toContain("Usual size (100%)");
-    expect(lines).not.toContain("Fit the width");
-    await press(".quire-menu.open .quire-menu-line", "Page view");
-    await tab.wait(400);
+    expect(lines).toEqual(["Zoom in", "Zoom out", "Fit", "50%", "75%", "90%", "100%", "125%", "150%", "200%"]);
+    await tab.press("Escape");
+    await pageView(true);
     expect(await tab.run("document.querySelector('.quire-editor .quire-paper').classList.contains('paged')")).toBe(true);
     expect(await kept()).toBe(before + 1);
     await pageView(false);
@@ -1482,7 +1483,7 @@ used("a file opened from the computer, changed and not downloaded, makes the bro
     expect(await tab.run("q.status()")).toContain("Download it to keep it");
     expect(await tab.run("q.asksOnClose()")).toBe(true);
     // downloaded, it is kept, and closing is quiet again
-    await tab.run("q.editor.commands.download()");
+    await tab.run("q.editor.commands.subs.downloadAs()[0].run()");
     expect(await tab.run("q.asksOnClose()")).toBe(false);
 });
 
@@ -1801,16 +1802,14 @@ used("zoom: Ctrl with plus, minus and 0 ease the sheet nearer and further about 
     expect(tab.errors).toEqual([]);
 });
 
-used("page setup, from the zoom control, gives a .quire document's sheet its paper, way up and margins, keeps them in its style, and gives them to print", async () => {
+used("page setup, from File, gives a .quire document's sheet its paper, way up and margins, keeps them in its style, and gives them to print", async () => {
     await tab.resize(1300, 900);
     await pageView(true);
     await reset("Words.\n");
     await tab.run("q.editor.surface.setDocument({ ...q.editor.surface.getDocument(), quire: { page: { size: 'A4', orientation: 'portrait', margins: 25 }, notes: null } }); q.editor.surface.focus()");
     const shape = () => tab.run<number>("(() => { const box = document.querySelector('.quire-editor .quire-paper').getBoundingClientRect(); return Math.round((box.width / box.height) * 100) / 100; })()");
     expect(await shape()).toBeCloseTo(210 / 297, 1);
-    await zoomMenu();
-    await tab.wait(650);
-    await press(".quire-menu.open .quire-menu-line", "Page setup");
+    await menuLine("File", "Page setup");
     await tab.wait(650);
     // a dialog: the choices are rows of buttons, and nothing changes until OK
     expect(await tab.run("document.querySelector('dialog.quire-dialog[open] .quire-dialog-title')?.textContent")).toBe("Page setup");
@@ -1830,9 +1829,7 @@ used("page setup, from the zoom control, gives a .quire document's sheet its pap
     await tab.run("q.editor.surface.undo()");
     expect(await tab.run("q.editor.surface.getDocument().quire.page.size")).toBe("A4");
     // Cancel, or Escape, leaves the page as it was
-    await zoomMenu();
-    await tab.wait(650);
-    await press(".quire-menu.open .quire-menu-line", "Page setup");
+    await menuLine("File", "Page setup");
     await tab.wait(650);
     await press("dialog.quire-dialog[open] .quire-setup-choice", "Letter");
     await tab.press("Escape");
@@ -1841,9 +1838,9 @@ used("page setup, from the zoom control, gives a .quire document's sheet its pap
     expect(tab.errors).toEqual([]);
 });
 
-used("About mdQuire, in Tools and in the three dots, is a dialog that says what it is and who made it, with the way to her site and the project; it grows in, takes the keyboard, and Escape gives the text back", async () => {
+used("About mdQuire, in Help and in the three dots, is a dialog that says what it is and who made it, with the way to her site and the project; it grows in, takes the keyboard, and Escape gives the text back", async () => {
     await reset("Text\n", [0], 0);
-    await press(".quire-menu-row .quire-row-word", "Tools");
+    await press(".quire-menu-row .quire-row-word", "Help");
     await tab.wait(650);
     const watching = tab.run<number[]>("q.watch('.quire-dialog-skin', 'height', 400)");
     await press(".quire-menu.open .quire-menu-line", "About mdQuire");

@@ -85,44 +85,50 @@ async function menu(word: string, ...lines: string[]) {
 
 const used = (name: string, run: () => Promise<void>) => test.skipIf(!chromium())(name, run, 30_000);
 
-used("Format, Capitalisation changes the selected words, keeping their bold, and one undo takes it back", async () => {
+used("Format, Text, Capitalization changes the selected words, keeping their bold, and one undo takes it back", async () => {
     await reset("a **bold** move here\n", [0], 0, [0], 11);
-    await menu("Format", "Capitalisation", "Title Case");
+    await menu("Format", "Text", "Capitalization", "Title Case");
     expect(await md()).toBe("A **Bold** Move here\n");
-    await menu("Format", "Capitalisation", "UPPERCASE");
+    await menu("Format", "Text", "Capitalization", "UPPERCASE");
     expect(await md()).toBe("A **BOLD** MOVE here\n");
     await tab.press("z", { ctrl: true });
     expect(await md()).toBe("A **Bold** Move here\n");
-    // Escape in the small menu closes it and gives the focus back to where it was, the text it acts on
-    await menu("Format", "Capitalisation");
+    // Escape steps back one menu at a time, to the line each was opened from, and from the first to the text it acts on
+    await menu("Format", "Text", "Capitalization");
     await tab.wait(400);
+    const focused = () => tab.run<string>("document.activeElement.querySelector('.quire-menu-label')?.textContent ?? document.activeElement.getAttribute('aria-label')");
+    await tab.press("Escape");
+    await tab.wait(300);
+    expect(await focused()).toBe("Capitalization");
+    await tab.press("Escape");
+    await tab.wait(300);
+    expect(await focused()).toBe("Text");
     await tab.press("Escape");
     await tab.wait(300);
     expect(await tab.run<boolean>("!!document.querySelector('.quire-menu:popover-open')")).toBe(false);
-    expect(await tab.run<string>("document.activeElement.getAttribute('aria-label')")).toBe("Document");
+    expect(await focused()).toBe("Document");
 });
 
 used("Format, Title goes to the title line; Subtitle is offered for a .quire document alone and draws the line as one", async () => {
     await reset("Some words\n", [0], 2);
-    await menu("Format", "Title");
+    await menu("Format", "Paragraph styles", "Title");
     await tab.wait(300);
     expect(await tab.run<string>("document.activeElement.className")).toBe("quire-title");
     await tab.press("Escape");
     await reset("Some words\n", [0], 2);
-    await press(".quire-menu-row .quire-row-word", "Format");
+    await menu("Format", "Paragraph styles");
     await tab.wait(650);
     expect(await tab.run<string[]>("[...document.querySelectorAll('.quire-menu:popover-open .quire-menu-line')].map((each) => each.querySelector('.quire-menu-label')?.textContent)")).not.toContain("Subtitle");
-    await tab.press("Escape");
     await reset("Under the title\n\nThe writing.\n", [0], 2, [0], 2, true);
-    await menu("Format", "Subtitle");
+    await menu("Format", "Paragraph styles", "Subtitle");
     expect(await tab.run<string>("document.querySelector('.quire p').className")).toBe("quire-subtitle");
     expect(await md()).toBe("Under the title\n\nThe writing.\n");
     expect(await tab.run<string>("document.querySelector('.quire-style-label').textContent")).toBe("Subtitle");
 });
 
-used("Edit, Select all occurrences selects every place the words appear: typing and a Format key change them all, Escape leaves, one undo takes the typing back", async () => {
+used("Edit, Select all matching text selects every place the words appear: typing and a Format key change them all, Escape leaves, one undo takes the typing back", async () => {
     await reset("The cat sat. A cat ran.\n\nOne cat.\n", [0], 4, [0], 7);
-    await menu("Edit", "Select all occurrences");
+    await menu("Edit", "Select all matching text");
     await tab.wait(300);
     await tab.type("dog");
     expect(await md()).toBe("The dog sat. A dog ran.\n\nOne dog.\n");
@@ -155,16 +161,15 @@ used("Insert, Bookmark puts a named place drawn as a flag, and the link field of
 
 used("Format, Bullets and numbering writes a list with another bullet, restarts its numbers and carries on the list before", async () => {
     await reset("- one\n- two\n", [0, 1, 0], 1);
-    await menu("Format", "Bullets and numbering", "Written with a star");
+    await menu("Format", "Bullets and numbering", "List options", "Asterisk");
     expect(await md()).toBe("* one\n* two\n");
-    await tab.press("Escape");
     await reset("1. a\n2. b\n3. c\n", [0, 2, 0], 1);
-    await menu("Format", "Bullets and numbering", "Restart numbering");
+    await menu("Format", "Bullets and numbering", "List options", "Restart numbering");
     await tab.wait(400);
     await tab.press("Backspace");
     await tab.type("4");
     await tab.press("Enter");
     expect(await md()).toBe("1. a\n2. b\n\n4) c\n");
-    await menu("Format", "Bullets and numbering", "Continue previous list");
+    await menu("Format", "Bullets and numbering", "List options", "Continue previous list");
     expect(await md()).toBe("1. a\n2. b\n3. c\n");
 });
