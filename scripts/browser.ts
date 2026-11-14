@@ -24,6 +24,8 @@ export interface Browser {
     up(x: number, y: number): Promise<void>;
     /** One finger on a touch screen: put down, moved, or lifted at a place. */
     finger(type: "start" | "move" | "end", x: number, y: number): Promise<void>;
+    /** Several fingers at once, each at its place: put down, moved, or all lifted. A finger keeps its place in the list from start to end, and is told apart from the others by it. */
+    fingers(type: "start" | "move" | "end", points: { x: number; y: number }[]): Promise<void>;
     /** Presses one key as the keyboard would, with modifiers held: "Enter", "Backspace", "Tab", "ArrowLeft", a letter for a chord, or a modifier alone ("Control"). */
     press(key: string, held?: { shift?: boolean; ctrl?: boolean; alt?: boolean; meta?: boolean }): Promise<void>;
     /** Types text one key at a time, each a real key press. */
@@ -225,6 +227,16 @@ export async function browser({ width = 1200, height = 800, scale = 1, port = 0,
         await send("Input.dispatchKeyEvent", { type: "keyUp", key: shown, code, windowsVirtualKeyCode: keyCode, nativeVirtualKeyCode: keyCode, modifiers });
     };
 
+    /** Touches as the screen sends them: each finger with an id of its own, the same for as long as it is down. */
+    const touch = async (type: "start" | "move" | "end", points: { x: number; y: number }[]) => {
+        if (!touching) {
+            touching = true;
+            await send("Emulation.setTouchEmulationEnabled", { enabled: true, maxTouchPoints: 5 });
+        }
+        const kind = { start: "touchStart", move: "touchMove", end: "touchEnd" }[type];
+        await send("Input.dispatchTouchEvent", { type: kind, touchPoints: type === "end" ? [] : points.map((point, id) => ({ ...point, id })) });
+    };
+
     return {
         errors,
         wait,
@@ -273,12 +285,10 @@ export async function browser({ width = 1200, height = 800, scale = 1, port = 0,
             await mouse("mouseReleased", x, y);
         },
         async finger(type, x, y) {
-            if (!touching) {
-                touching = true;
-                await send("Emulation.setTouchEmulationEnabled", { enabled: true, maxTouchPoints: 1 });
-            }
-            const kind = { start: "touchStart", move: "touchMove", end: "touchEnd" }[type];
-            await send("Input.dispatchTouchEvent", { type: kind, touchPoints: type === "end" ? [] : [{ x, y }] });
+            await touch(type, [{ x, y }]);
+        },
+        async fingers(type, points) {
+            await touch(type, points);
         },
         press,
         async type(text) {
