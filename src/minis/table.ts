@@ -104,6 +104,16 @@ export function makeTable(): Table {
         const shape = shapeOf(piece.kind);
         const world = made(shape, piece.place);
         const lengths = world.lengths.map(({ piece: track, length }) => ({ solid: space.track(track, WOOD), piece: track as Piece, joints: length.joints }));
+        // a piece's own lengths that meet end to end are joined by hand: Mote joins only ends of one section,
+        // and where a groove becomes a tube an end left open costs a crossing marble a sixth of its speed
+        for (let i = 0; i + 1 < lengths.length; i++) {
+            const [a, b] = [lengths[i]!.piece.ends![1], lengths[i + 1]!.piece.ends![0]];
+            const apart = Math.hypot(a.p[0] - b.p[0], a.p[1] - b.p[1], a.p[2] - b.p[2]);
+            const onward = a.along[0] * b.along[0] + a.along[1] * b.along[1] + a.along[2] * b.along[2];
+            if (apart > 1e-6 || onward < 1 - 1e-6) continue;
+            lengths[i]!.piece.kept![1] = true;
+            lengths[i + 1]!.piece.kept![0] = true;
+        }
         const solids = lengths.map((length) => length.solid);
         if (world.bowl) solids.push(space.track(world.bowl, BOWL));
         for (const box of shape.boxes) {

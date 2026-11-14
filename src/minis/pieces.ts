@@ -371,7 +371,8 @@ function design(family: Family, sizes: number[]): Omit<Shape, "kind" | "cells" |
             const ringOf = { middle: [8, LOOP, 4 + aside] as V3, radius: LOOP, rise: CELL - 2 * aside, turns: 1, axis: [0, 0, 1] as V3, from: [0, -1, 0] as V3 };
             const loop = helix(ringOf.middle, LOOP, ringOf.rise, 1, { axis: ringOf.axis, from: ringOf.from });
             const [into, outof] = [unit(loop.speed(0)), unit(loop.speed(loop.end))];
-            const ring: Length = { section: "block", path: ringOf, level: false, loop: true, joints: [undefined, undefined] };
+            // a tube, not a groove: at the top a marble drifts aside as the loop climbs aside, and in a groove it comes out on the block beside it
+            const ring: Length = { section: "tube", path: ringOf, level: false, loop: true, joints: [undefined, undefined] };
             return {
                 joints: [J0, joint([16, 0, 12], [1, 0, 0])],
                 lengths: [
