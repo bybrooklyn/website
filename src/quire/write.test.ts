@@ -295,3 +295,25 @@ test("the old maths mark, which nothing makes now, is written as plain text and 
     expect(tidyRuns([{ kind: "text", text: "a", marks: ["math", "bold"] }])).toEqual([{ kind: "text", text: "a", marks: ["bold"] }]);
     expect(read("$x$ and $5\n").blocks[0]).toMatchObject({ kind: "paragraph", runs: [{ kind: "text", text: "$x$ and $5", marks: [] }] });
 });
+
+test("a Markdown file's subtitle is its frontmatter's subtitle line: shown first as the subtitle, the frontmatter kept byte for byte while it is untouched, and changed, emptied or added there alone", () => {
+    const source = "---\r\ntitle: A post\r\nsubtitle: 'It''s here'   \r\ndate: 2026-11-13\r\n---\r\n\r\nThe text.\r\n";
+    const doc = read(source);
+    expect(doc.blocks[0]).toMatchObject({ kind: "paragraph", subtitle: true, runs: [{ text: "It's here" }] });
+    expect(write(doc)).toBe(source);
+    const typed = insertText(doc, { path: [0], offset: 9 }, "!");
+    expect(write(typed)).toBe("---\r\ntitle: A post\r\nsubtitle: It's here!\r\ndate: 2026-11-13\r\n---\r\n\r\nThe text.\r\n");
+    expect(write(deleteText(doc, { start: { path: [0], offset: 0 }, end: { path: [0], offset: 9 } }))).toBe("---\r\ntitle: A post\r\ndate: 2026-11-13\r\n---\r\n\r\nThe text.\r\n");
+    expect(write(removeBlock(doc, [0]))).toBe("---\r\ntitle: A post\r\ndate: 2026-11-13\r\n---\r\n\r\nThe text.\r\n");
+    // a frontmatter made for the subtitle alone, and gone again with it
+    const text = read("The text.\n");
+    const added = { ...text, blocks: [{ ...paragraph("Under it"), subtitle: true, gap: "\n\n" }, ...text.blocks] };
+    expect(write(added)).toBe("---\nsubtitle: Under it\n---\n\nThe text.\n");
+    expect(write(removeBlock(read(write(added)), [0]))).toBe("The text.\n");
+    // a value this does not read as one line stays in the frontmatter as it is, and a .quire document's document.md keeps its frontmatter
+    for (const kept of ["---\nsubtitle: >\n  Two\n  lines\n---\n\nText.\n", "---\nsubtitle: [a, b]\n---\n\nText.\n", "---\nsubtitle:\n---\n\nText.\n"]) {
+        expect(read(kept).blocks.some((block) => block.kind === "paragraph" && block.subtitle)).toBe(false);
+        expect(write(read(kept))).toBe(kept);
+    }
+    expect(read("---\nsubtitle: Kept\n---\n\nText.\n", { quire: true }).blocks.length).toBe(1);
+});

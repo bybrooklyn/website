@@ -50,7 +50,9 @@ function unkeep(blocks: Block[]): Block[] {
 export function markdownFor(doc: Document): string {
     if (!doc.quire) return write(doc);
     const { quire: _quire, ...plain } = doc;
-    return write({ ...plain, blocks: unkeep(markdownOnly(doc.blocks)) });
+    // the subtitle goes into the frontmatter, as a Markdown file keeps it (write.ts)
+    const subtitle = doc.blocks.findIndex((block) => block.kind === "paragraph" && block.subtitle);
+    return write({ ...plain, blocks: unkeep(markdownOnly(doc.blocks)).map((block, index) => (index === subtitle ? { ...block, subtitle: true } : block)) });
 }
 
 // ---- plain text ----

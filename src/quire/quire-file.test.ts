@@ -8,7 +8,8 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { blockAt, setStyle, type Paragraph } from "./document";
-import { opened, packQuire, pictureShelf, unpackQuire, written } from "./quire-file";
+import { asQuire, opened, packQuire, pictureShelf, unpackQuire, written } from "./quire-file";
+import { markdownFor } from "./export";
 import { read } from "./read";
 import { write } from "./write";
 import { writeZip } from "./zip";
@@ -101,4 +102,13 @@ test("a picture taken out of the writing is not packed into the file", async () 
     const pictures = new Map([["kept.png", new Blob(["k"])], ["gone.png", new Blob(["g"])], ["my cat.png", new Blob(["c"])]]);
     const bundle = await unpackQuire(await packQuire({ markdown: "![Kept](pictures/kept.png)\n\n![Cat](pictures/my%20cat.png)\n", parts, pictures }));
     expect([...bundle.pictures.keys()].sort()).toEqual(["kept.png", "my cat.png"]);
+});
+
+test("a Markdown document's subtitle becomes a .quire document's, in style.json and out of the frontmatter, and goes back into the frontmatter when downloaded as Markdown", () => {
+    const doc = read("---\ntitle: A post\nsubtitle: Under it\n---\n\nThe text.\n");
+    const saved = written(asQuire(doc), write);
+    expect(saved.text).toBe("---\ntitle: A post\n---\n\nUnder it\n\nThe text.\n");
+    const back = opened(saved.text, saved.quire);
+    expect((back.blocks[0] as Paragraph).subtitle).toBe(true);
+    expect(markdownFor(back)).toBe("---\ntitle: A post\nsubtitle: Under it\n---\n\nThe text.\n");
 });

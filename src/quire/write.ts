@@ -4,7 +4,7 @@
 // underline `<u>`, and alignment a `<div align>` around the block, the forms the reader reads back.
 
 import { pictureHtml, sized } from "./pictures";
-import type { Align, Block, Document, Leaf, LinkRun, List, ListItem, Run, TextRun } from "./document";
+import { dropField, plainField, runsText, setField, type Align, type Block, type Document, type Leaf, type LinkRun, type List, type ListItem, type Run, type TextRun } from "./document";
 import { addresses, emojiOf, inAddress } from "./emoji";
 import { definedLabels, followed, normalLabel, standsApart } from "./read";
 
@@ -35,8 +35,31 @@ function said(value: unknown, what: string): string {
     return "";
 }
 
+/**
+ * A Markdown file's subtitle, the first paragraph marked so (read.ts makes it from the frontmatter),
+ * goes back into the frontmatter as its `subtitle:` line rather than into the text: unchanged, the
+ * frontmatter is kept byte for byte; emptied or taken off, the line goes. A `.quire` document keeps
+ * its subtitle in style.json and writes it as a paragraph.
+ */
+export function subtitleToFront(doc: Document): Document {
+    if (doc.quire) return doc;
+    const at = doc.blocks.findIndex((block) => block.kind === "paragraph" && block.subtitle);
+    const was = plainField(doc, "subtitle");
+    if (at < 0) return was ? dropField(doc, "subtitle") : doc;
+    const block = doc.blocks[at]!;
+    const words = block.kind === "paragraph" ? runsText(block.runs).replace(/\s+/g, " ").replace(/\uFFFC/g, "").trim() : "";
+    // the block before a last block taken out takes the file's end
+    const blocks = doc.blocks.filter((_, index) => index !== at).map((each, index, kept) => (at === doc.blocks.length - 1 && index === kept.length - 1 ? { ...each, gap: block.gap } : each));
+    const rest = { ...doc, blocks };
+    if (words === (was ?? "")) return rest;
+    if (!words) return dropField(rest, "subtitle");
+    // a frontmatter made for the subtitle alone is followed by a blank line, as a post's is
+    return setField(rest.frontmatter === null && blocks.length ? { ...rest, lead: rest.lead || doc.eol } : rest, "subtitle", words);
+}
+
 /** Writes a whole document. */
-export function write(doc: Document): string {
+export function write(whole: Document): string {
+    const doc = subtitleToFront(whole);
     let defined: Set<string> | undefined;
     const context: Context = { eol: doc.eol, mdx: doc.mdx, references: !!doc.references, defined: () => (defined ??= definedLabels(doc.blocks)) };
     let body = writeBlocks(doc.blocks, context, false);

@@ -121,7 +121,7 @@ export interface Paragraph extends Kept {
     spacing?: number;
     /** Small, quiet text, written `-# text` as Discord has it. */
     subtext?: boolean;
-    /** A subtitle, larger than the text and quieter. Markdown has none, so only a `.quire` document keeps it, in its style.json. */
+    /** A subtitle, larger than the text and quieter: one to a document, under the title. A `.quire` document keeps it in its style.json, a Markdown file as `subtitle:` in its frontmatter (subtitle.ts). */
     subtitle?: boolean;
 }
 
@@ -1229,13 +1229,28 @@ export function setSubtext(doc: Document, path: number[], on: boolean): Document
     });
 }
 
-/** Makes the paragraph at a path a subtitle (no longer subtext), or ordinary text again. Only a `.quire` document keeps it. */
+/** Makes the paragraph at a path a subtitle (no longer subtext), or ordinary text again, where it stands. */
 export function setSubtitle(doc: Document, path: number[], on: boolean): Document {
     return replace(doc, path, (block) => {
         if (block.kind !== "paragraph" || !!block.subtitle === on) return null;
         const { subtitle: _subtitle, subtext: _subtext, ...rest } = block;
         return [on ? { ...rest, subtitle: true, source: undefined } : { ...rest, source: undefined }];
     });
+}
+
+/**
+ * Makes the paragraph or heading at a path the document's subtitle, which stands first, under the
+ * title: its words move to the top, and a subtitle there before becomes ordinary text where it stood,
+ * so that a document has one. The same in a `.quire` document and a Markdown file.
+ */
+export function makeSubtitle(doc: Document, path: number[]): Document {
+    const block = blockAt(doc, path);
+    if (block?.kind !== "paragraph" && block?.kind !== "heading") return doc;
+    let next = doc;
+    for (const each of blockPaths(doc)) if (each.join() !== path.join()) next = setSubtitle(next, each, false);
+    if (path.length === 1 && path[0] === 0) return setSubtitle(block.kind === "paragraph" ? next : changeKind(next, path, { kind: "paragraph" }), path, true);
+    next = removeAt(next, path);
+    return { ...next, blocks: [{ ...paragraph(), runs: block.runs, subtitle: true, gap: doc.eol + doc.eol }, ...next.blocks] };
 }
 
 /** Puts the block at a path and every block after it among its neighbours into one quote, as Discord's `>>> ` does. */
@@ -1449,6 +1464,31 @@ function unquote(value: string): string {
     }
     if (/^'(?:[^']|'')*'$/.test(value)) return value.slice(1, -1).replace(/''/g, "'");
     return value;
+}
+
+/**
+ * A frontmatter value written on its own line as one plain or quoted value, with quotes taken off;
+ * undefined when the key is not there, or is written in a form this does not read (a block of lines
+ * after `|` or `>`, a list, a value going on to the next line), which is then left as it is.
+ */
+export function plainField(doc: Document, key: string): string | undefined {
+    if (!doc.frontmatter) return undefined;
+    const lines = frontLines(doc.frontmatter);
+    const index = lines.findIndex((line, k) => k > 0 && k < lines.length - 1 && FIELD.exec(line.replace(/\r?\n$/, ""))?.[1] === key);
+    if (index < 0) return undefined;
+    const raw = FIELD.exec(lines[index]!.replace(/\r?\n$/, ""))![2]!;
+    if (/^[|>[{&*!]/.test(raw) || (index + 1 < lines.length - 1 && /^[ \t]/.test(lines[index + 1]!))) return undefined;
+    return unquote(raw);
+}
+
+/** Takes a frontmatter line away; a frontmatter left with no lines goes, with the blank lines after it. */
+export function dropField(doc: Document, key: string): Document {
+    if (!doc.frontmatter) return doc;
+    const lines = frontLines(doc.frontmatter);
+    const kept = lines.filter((line, k) => k === 0 || k === lines.length - 1 || FIELD.exec(line.replace(/\r?\n$/, ""))?.[1] !== key);
+    if (kept.length === lines.length) return doc;
+    if (kept.length === 2) return { ...doc, frontmatter: null, lead: "" };
+    return { ...doc, frontmatter: kept.join("") };
 }
 
 /**

@@ -177,7 +177,7 @@ export function headings(state: RowState, act: RowActions): Heading[] {
                             [...rich(line("font", "Font", "font", { words: ["typeface"] })), ...line("color", "Text color", "color", { words: ["colour"] }), ...rich(line("highlight", "Highlight color", "highlight", { words: ["highlight"] }))],
                             [...line("inline", "Inline code", "code"), ...line("marked", "Marked", "marked"), ...line("spoiler", "Spoiler", "spoiler"), ...line("subtext", "Subtext", "subtext")],
                         ),
-                        ...group("Paragraph styles", "styles", [...line("paragraph", "Normal text", "paragraph"), ...line("title", "Title", "title"), ...rich(line("subtitle", "Subtitle", "subtitle")), ...headingLines], line("quote", "Quote", "quote")),
+                        ...group("Paragraph styles", "styles", [...line("paragraph", "Normal text", "paragraph"), ...line("title", "Title", "title"), ...line("subtitle", "Subtitle", "subtitle"), ...headingLines], line("quote", "Quote", "quote")),
                         ...group(
                             "Align and indent",
                             "left",

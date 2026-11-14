@@ -394,8 +394,17 @@ a list) chooses the character a bulleted list is written with (Dash, Asterisk or
 since Markdown reads them alike), restarts a numbered list at a number (part way down, the list is cut in two
 and the second written with the other delimiter, `1)`) and carries on the list before (`numbering.ts`). A table's strip sorts its rows by the
 cursor's column (`tables.ts`). The style list has Title, which goes to the title line, since that line
-is the document's name and Markdown has no title, and Subtitle, kept in a `.quire` document's style.json
-and not offered for Markdown. Edit, Select all matching text selects every place the words appear, in capitals or not;
+is the document's name and Markdown has no title, and Subtitle. A document has one subtitle, the
+line under the title: choosing Subtitle on a paragraph or heading moves its words there with the
+cursor, and a subtitle there before goes back to the text where it stood; Normal text on it makes it a
+paragraph again. A `.quire` document keeps it in its style.json; a Markdown file keeps it as the
+frontmatter's `subtitle:` line, which Pandoc and Quarto read (`read.ts` shows that line as the
+subtitle, `write.ts` puts it back): untouched, the frontmatter keeps every byte; changed, only that line
+changes; emptied or taken off, the line goes, and a frontmatter left with no lines goes with it. A
+value written over several lines or as a list is left in the frontmatter, not shown. Made a `.quire`
+document, a Markdown file's subtitle moves into style.json; a `.quire` document downloaded as
+Markdown has its subtitle in the frontmatter. Under `bun run edit` the frontmatter's fields leave the
+subtitle to its line, and the frontmatter as text shows it as it will be written. Edit, Select all matching text selects every place the words appear, in capitals or not;
 typing, Backspace and Format commands change all of them (`matching.ts`). Insert, Bookmark (dimmed in a
 heading, which is a place to link to already) writes an empty anchor, `<a id="name"></a>`, drawn as a small flag, and the link field offers the headings (by the
 ids the site gives them) and the bookmarks (`bookmarks.ts`).

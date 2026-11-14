@@ -54,7 +54,7 @@ export function createMarkdownView(surface: Surface): { element: HTMLTextAreaEle
         timer = undefined;
         const current = surface.getDocument();
         // a .quire document stays one when its Markdown is typed in
-        const next = keepSame(current, { ...read(field.value, { mdx: current.mdx }), quire: current.quire });
+        const next = keepSame(current, { ...read(field.value, { mdx: current.mdx, quire: !!current.quire }), quire: current.quire });
         if (next !== current) surface.run(() => next, "type");
     };
     field.addEventListener("input", () => {

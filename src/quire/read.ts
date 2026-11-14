@@ -6,12 +6,14 @@
 
 import { asPicture } from "./pictures";
 import { BOOKMARK } from "./bookmarks";
-import { tidyRuns, type Align, type Block, type Document, type Leaf, type Level, type ListItem, type ListStyle, type Mark, type Paragraph, type Run, type TextRun } from "./document";
+import { plainField, text, tidyRuns, type Align, type Block, type Document, type Leaf, type Level, type ListItem, type ListStyle, type Mark, type Paragraph, type Run, type TextRun } from "./document";
 import { addresses, shortcodeAt } from "./emoji";
 
 /** How to read a file. MDX turns on imports, exports, components and `{expressions}`, and turns off indented code. */
 export interface ReadOptions {
     mdx?: boolean;
+    /** Read as a `.quire` document's document.md, whose subtitle is kept in its style.json: a `subtitle:` in its frontmatter stays there as it is. */
+    quire?: boolean;
 }
 
 interface Line {
@@ -71,7 +73,20 @@ export function read(source: string, options: ReadOptions = {}): Document {
     }
     const doc: Document = { bom, frontmatter, lead, blocks, eol, mdx: context.mdx };
     if (references > 0) doc.references = true;
-    return doc;
+    return options.quire ? doc : subtitleFromFront(doc);
+}
+
+/**
+ * A Markdown file keeps its subtitle in its frontmatter, as a `subtitle:` line that Pandoc and Quarto
+ * read; the editor shows it as the subtitle line, the first paragraph, under the title, in place of
+ * one there before (write.ts puts it back).
+ */
+export function subtitleFromFront(doc: Document): Document {
+    const subtitle = plainField(doc, "subtitle");
+    const shown = (block: Block) => block.kind === "paragraph" && !!block.subtitle;
+    if (!subtitle && !doc.blocks.some(shown)) return doc;
+    const blocks = doc.blocks.filter((block) => !shown(block));
+    return { ...doc, blocks: subtitle ? [{ kind: "paragraph", runs: text(subtitle), subtitle: true, gap: doc.eol + doc.eol }, ...blocks] : blocks };
 }
 
 // ---- lines ----

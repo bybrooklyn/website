@@ -35,6 +35,7 @@ import {
     setLink,
     setSpacing,
     setSubtext,
+    makeSubtitle,
     setSubtitle,
     splitBlock,
     setStyle,
@@ -208,9 +209,17 @@ export function size(value: string | null): Action {
 
 // ---- kinds of block ----
 
-/** Makes the touched blocks a paragraph, a subtitle, a heading, a quote or code. Quote, pressed in a quote, takes the quote off. Title changes nothing here: the title is the line above the writing, which the editor goes to. */
+/** Makes the touched blocks a paragraph, a heading, a quote or code, or the cursor's paragraph the subtitle. Quote, pressed in a quote, takes the quote off. Title changes nothing here: the title is the line above the writing, which the editor goes to. */
 export function setStyleOf(style: Style): Action {
     return (state) => {
+        // a document has one subtitle, first under the title: the cursor's paragraph goes there, and the cursor with it
+        if (style === "subtitle") {
+            const { anchor, focus } = state.selection;
+            const doc = makeSubtitle(state.doc, focus.path);
+            if (doc === state.doc) return state;
+            const same = anchor.path.join() === focus.path.join();
+            return { doc, selection: { anchor: { path: [0], offset: same ? anchor.offset : 0 }, focus: { path: [0], offset: focus.offset } } };
+        }
         let doc = state.doc;
         const quoted = currentStyle(doc, state.selection.focus.path) === "quote";
         for (const index of touched(state.doc, state.selection)) {
@@ -229,7 +238,6 @@ export function setStyleOf(style: Style): Action {
             }
             else if (style === "code") doc = changeKind(doc, path, { kind: "code", language: "" });
             else if (style === "title") continue;
-            else if (style === "subtitle") doc = setSubtitle(block.kind === "paragraph" ? doc : changeKind(doc, path, { kind: "paragraph" }), path, true);
             else if (style === "paragraph") doc = block.kind === "paragraph" ? (block.subtitle ? setSubtitle(doc, path, false) : inQuote ? changeKind(doc, path, { kind: "paragraph" }) : doc) : changeKind(doc, path, { kind: "paragraph" });
             else doc = changeKind(doc, path, { kind: "heading", level: Number(style.slice(-1)) as Level });
         }
@@ -712,9 +720,7 @@ export function createBar(surface: Surface, options: BarOptions) {
     };
     const styleLines = (): MenuItem[] => {
         const now = currentStyle(surface.getDocument(), surface.getSelection().focus.path);
-        // a subtitle is kept only by a .quire document
-        const offered = STYLES.filter(([style]) => style !== "subtitle" || !!surface.getDocument().quire);
-        return offered.map(([style, label]) => ({ label, pressed: style === now, icon: sample(style), run: style === "title" ? toTitle : doing(setStyleOf(style)) }));
+        return STYLES.map(([style, label]) => ({ label, pressed: style === now, icon: sample(style), run: style === "title" ? toTitle : doing(setStyleOf(style)) }));
     };
     const styleButton = opener(styles, "Style", styleLabel, styleLines);
     styleButton.classList.add("quire-style");

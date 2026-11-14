@@ -110,7 +110,9 @@ test("Format folds into Text, Paragraph styles, Align and indent, spacing and Bu
     ]);
     // what a Markdown file cannot keep is not offered for one
     const plain = menus({ rich: false }).Format!.join("\n");
-    for (const kept of ["Font", "Highlight color", "Justify", "Subtitle", "Line and paragraph spacing"]) expect(plain).not.toContain(kept);
+    for (const kept of ["Font", "Highlight color", "Justify", "Line and paragraph spacing"]) expect(plain).not.toContain(kept);
+    // a Markdown file keeps a subtitle in its frontmatter
+    expect(plain).toContain("Subtitle");
     expect(plain).toContain("Center Ctrl+Shift+E");
 });
 

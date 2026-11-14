@@ -132,7 +132,6 @@ What was found and fixed is in [`docs/AUDIT.md`](docs/AUDIT.md). Still open from
   - mdQuire's own things go where they would fit in Docs: blocks under Insert after Docs' own lines, marks under Format, Text, each with a sign.
 - In the bar, alignment (left, centre, right, justify) as one button that grows open in place, and the three lists as another.
 - Links: an address pasted over selected words links them; a pasted bare address gets a small chip to show it as words or a short form; resting on a link shows a card with open, copy, edit and remove.
-- Subtitle in a plain Markdown file too, kept as a `subtitle:` line in the frontmatter (today it exists only in a `.quire` document).
 - Deploy after the menus and the bar are reworked. mdQuire and its project page are listed once the audit's findings are fixed.
 - The findings of the audit of how mdQuire looks and behaves ([mdQuire-ux-audit](docs/mdQuire-ux-audit.md)), starting with its ten changes.
 - Suggesting the next words while typing: faint words after the caret that Tab takes, learned from the owner's own documents and posts in the browser, with no model.

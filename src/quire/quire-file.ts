@@ -13,9 +13,9 @@
 // so that a store need not know what is in them; pictures each store keeps its own way. The editor
 // turns a document into those and back with `written` and `opened`.
 
-import { type Document } from "./document";
+import { dropField, type Document } from "./document";
 import { read } from "./read";
-import { collect, readStyle, restore, type StyleFile } from "./styling";
+import { collect, PAGE, readStyle, restore, type StyleFile } from "./styling";
 import { notesData, withNotes } from "./comments";
 import { readZip, writeZip, ZipError } from "./zip";
 import { freeName } from "./store";
@@ -94,9 +94,15 @@ export function written(doc: Document, plain: (doc: Document) => string): { text
     return { text: markdown, quire: { style: styleText(style), notes: notesText(notesData(doc, doc.quire.notes)) } };
 }
 
+/** A Markdown document as a `.quire` one: the same words, with a subtitle kept in style.json and no longer in the frontmatter. */
+export function asQuire(doc: Document): Document {
+    const moved = doc.blocks.some((block) => block.kind === "paragraph" && block.subtitle);
+    return { ...(moved ? dropField(doc, "subtitle") : doc), mdx: false, quire: { page: PAGE, notes: null } };
+}
+
 /** A document as opened from a store: read from its text, and with its parts put back if it is a `.quire` one. */
 export function opened(text: string, quire: Parts | undefined, options: { mdx?: boolean } = {}): Document {
-    const doc = read(text, { mdx: !quire && !!options.mdx });
+    const doc = read(text, { mdx: !quire && !!options.mdx, quire: !!quire });
     if (!quire) return doc;
     let notes: unknown = null;
     try {

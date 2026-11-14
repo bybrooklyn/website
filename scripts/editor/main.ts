@@ -9,7 +9,8 @@ import { css } from "../../src/lib/color";
 import { fields, setField, type Document } from "../../src/quire/document";
 import { documentsList } from "../../src/quire/documents";
 import { createEditor } from "../../src/quire/editor";
-import { read } from "../../src/quire/read";
+import { read, subtitleFromFront } from "../../src/quire/read";
+import { subtitleToFront } from "../../src/quire/write";
 import { browserStore, indexedTables } from "../../src/quire/store-browser";
 import { flowMenu, make } from "../../src/quire/ui";
 import { editStore, PHOTOS, server, type Offered } from "./store";
@@ -121,9 +122,9 @@ const front = (() => {
         shownFront = doc.frontmatter;
         box.classList.toggle("absent", !markdown || doc.frontmatter === null);
         rows.replaceChildren(
-            // the title is the large line on the sheet, not a field here
+            // the title is the large line on the sheet, and the subtitle the line under it, not fields here
             ...fields(doc)
-                .filter(([name]) => name !== "title")
+                .filter(([name]) => name !== "title" && name !== "subtitle")
                 .map(([name, value]) => {
                 const row = make("label", "edit-front-row");
                 row.append(make("span", "edit-front-name", name));
@@ -139,7 +140,9 @@ const front = (() => {
                 return row;
             }),
         );
-        raw.value = doc.frontmatter ? parts(doc.frontmatter).middle : "";
+        // as it will be written, with the subtitle line as typed under the title
+        const written = subtitleToFront(doc).frontmatter;
+        raw.value = written ? parts(written).middle : "";
     }
 
     raw.addEventListener("input", () => {
@@ -147,7 +150,8 @@ const front = (() => {
             if (!now.frontmatter) return now;
             const { open, close } = parts(now.frontmatter);
             const eol = now.eol;
-            return { ...now, frontmatter: open + raw.value + (raw.value.endsWith("\n") || raw.value === "" ? "" : eol) + close };
+            // a subtitle typed here is the line under the title
+            return subtitleFromFront({ ...now, frontmatter: open + raw.value + (raw.value.endsWith("\n") || raw.value === "" ? "" : eol) + close });
         }, "type");
         shownFront = editor.surface.getDocument().frontmatter;
     });

@@ -49,7 +49,7 @@ import { openTyping } from "./typing-panel";
 import { helpBody } from "./help";
 import { changes, createHistoryPanel, createKeeper, memoryStorage, moveVersions, snapshotParts, snapshotText, type VersionStorage } from "./versions";
 import { write } from "./write";
-import { emptyParts, opened, packQuire, written, type Parts } from "./quire-file";
+import { asQuire, emptyParts, opened, packQuire, written, type Parts } from "./quire-file";
 import { pictureType, withoutMetadata } from "./pictures";
 import { crc32 } from "./zip";
 import { PAGE } from "./styling";
@@ -338,7 +338,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     const makeRich = async () => {
         const doc = surface.getDocument();
         if (doc.quire) return;
-        const copy = written({ ...doc, mdx: false, quire: { page: PAGE, notes: null } }, write);
+        const copy = written(asQuire(doc), write);
         const target = store?.quire && store.can.create ? store : options.richHome;
         if (!target) {
             const pictures = new Map<string, Blob>();
@@ -359,7 +359,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         if (doc.quire) return downloadQuire();
         undownloaded = false;
         // a Markdown document goes into the zip as it is, with its notes, as a .quire document of its own
-        const { text: markdown, quire } = written({ ...doc, mdx: false, quire: { page: PAGE, notes: null } }, write);
+        const { text: markdown, quire } = written(asQuire(doc), write);
         const pictures = (store && id && (await store.pictures?.(id).catch(() => undefined))) || new Map<string, Blob>();
         give(new Blob([(await packQuire({ markdown, parts: quire ?? emptyParts(), pictures })) as BlobPart], { type: "application/zip" }), `${stem()}.quire`);
     };
