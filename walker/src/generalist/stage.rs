@@ -29,6 +29,8 @@ pub const REBASE: f32 = 512.0;
 /// The mass of a loose box, in kilograms for each square metre, and of a see-saw's plank.
 const BOX_DENSITY: f32 = 30.0;
 const PLANK_DENSITY: f32 = 40.0;
+/// The mass of a moving platform while a hand holds it, in kilograms: heavy, so it lags the hand.
+const MOVER_MASS: f32 = 15.0;
 /// How far a see-saw tips either way, in radians.
 const TIP: f32 = 0.6;
 
@@ -41,12 +43,15 @@ pub enum Thing {
 }
 
 /// A thing made from the land: which, its number in the land's list of that sort, and its body (for
-/// a see-saw, the plank; its pivot is the body after).
+/// a see-saw, the plank; its pivot is the body after). A box put down by a visitor is a loose box with
+/// no number in the land (`usize::MAX`). A moving platform is `driven` along its way until a hand takes
+/// it; then it is a heavy thing like any other while held, and stays where it was let go of.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Made {
     pub thing: Thing,
     pub index: usize,
     pub body: u32,
+    pub driven: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -143,7 +148,7 @@ impl Stage {
             body.friction = 0.5;
             body.spin_damping = 0.5;
             let index = self.world.add_body(body);
-            self.made.push(Made { thing: Thing::Loose, index: self.next[0], body: index });
+            self.made.push(Made { thing: Thing::Loose, index: self.next[0], body: index, driven: false });
             self.next[0] += 1;
         }
         while let Some(mover) = geometry.movers.get(self.next[1]).filter(|mover| mover.left.x - MOVER_HALF.x < along + NEAR) {
@@ -152,7 +157,7 @@ impl Stage {
             body.kinematic = true;
             body.friction = 0.9;
             let index = self.world.add_body(body);
-            self.made.push(Made { thing: Thing::Mover, index: self.next[1], body: index });
+            self.made.push(Made { thing: Thing::Mover, index: self.next[1], body: index, driven: true });
             self.next[1] += 1;
         }
         while let Some(seesaw) = geometry.seesaws.get(self.next[2]).filter(|seesaw| seesaw.pivot.x - seesaw.half < along + NEAR) {
@@ -168,7 +173,7 @@ impl Stage {
             joint.lower = -TIP;
             joint.upper = TIP;
             self.world.add_joint(joint);
-            self.made.push(Made { thing: Thing::Seesaw, index: self.next[2], body: index });
+            self.made.push(Made { thing: Thing::Seesaw, index: self.next[2], body: index, driven: false });
             self.next[2] += 1;
         }
     }
@@ -181,6 +186,7 @@ impl Stage {
             let body = &self.world.bodies[made.body as usize];
             let right = match made.thing {
                 Thing::Loose => body.position.x + 0.5,
+                Thing::Mover if !made.driven => body.position.x + MOVER_HALF.x,
                 Thing::Mover => self.land.geometry.movers[made.index].left.x + self.land.geometry.movers[made.index].travel + MOVER_HALF.x - self.origin,
                 Thing::Seesaw => body.position.x + self.land.geometry.seesaws[made.index].half,
             };
@@ -205,11 +211,51 @@ impl Stage {
     /// Sets each moving platform's velocity to bring it to where it is to be at the end of the step.
     fn drive(&mut self) {
         let next = (self.world.steps + 1) as f32 * STEP;
-        for made in self.made.iter().filter(|made| made.thing == Thing::Mover) {
+        for made in self.made.iter().filter(|made| made.thing == Thing::Mover && made.driven) {
             let mover = &self.land.geometry.movers[made.index];
             let body = &mut self.world.bodies[made.body as usize];
             let target = mover.left.x + mover.along(next) - self.origin;
             body.velocity = Vec2::new((target - body.position.x) / STEP, 0.0);
+        }
+    }
+
+    /// Puts a loose box of this half size with its middle at `at` in the physics, as a visitor would,
+    /// and returns its body. It is taken away once far behind, as the land's boxes are.
+    pub fn place_box(&mut self, at: Vec2, half: f32) -> u32 {
+        let mut body = Body::new(Shape::Box { half_width: half, half_height: half }, at, 0.0, BOX_DENSITY);
+        body.friction = 0.5;
+        body.spin_damping = 0.5;
+        let index = self.world.add_body(body);
+        self.made.push(Made { thing: Thing::Loose, index: usize::MAX, body: index, driven: false });
+        index
+    }
+
+    /// Readies a thing to be taken by a hand: a moving platform stops being driven along its way and
+    /// becomes a heavy body that falls, collides and is pushed as any other, but stays level. Anything
+    /// else is as it was.
+    pub fn take(&mut self, body: u32) {
+        let world = &self.world;
+        if let Some(made) = self.made.iter_mut().find(|made| made.body == body && made.thing == Thing::Mover && world.bodies[body as usize].kinematic) {
+            made.driven = false;
+            let platform = &mut self.world.bodies[body as usize];
+            platform.kinematic = false;
+            platform.velocity = Vec2::ZERO;
+            platform.set_mass(MOVER_MASS);
+            // it stays level while held, as a platform does, rather than swinging to hang from the point
+            // held and being let go of standing on end, a wall in the way
+            platform.inverse_inertia = 0.0;
+        }
+    }
+
+    /// After a hand lets go of a thing: a moving platform it held stops where it is and stays there,
+    /// as a floating platform does, and is no longer pushed by anything.
+    pub fn let_go_of(&mut self, body: u32) {
+        if self.made.iter().any(|made| made.body == body && made.thing == Thing::Mover && !made.driven) {
+            let platform = &mut self.world.bodies[body as usize];
+            platform.set_mass(0.0);
+            platform.kinematic = true;
+            platform.velocity = Vec2::ZERO;
+            platform.spin = 0.0;
         }
     }
 

@@ -90,7 +90,7 @@ test("a generation shared out among helpers, as the workers share it, learns exa
     expect(bits(lead, lead.history_best())).toEqual(bits(alone, alone.history_best()));
 });
 
-test("the show walks, can be held, dropped and pushed, and the world comes out to draw", async () => {
+test("the show walks, can be taken hold of and let go, and the world comes out to draw", async () => {
     const engine = await load();
     engine.create(2, 12, 0.4, 1, 1, 1, 1, 8, 8, 1, 0, 8, 1);
     expect(engine.legs_length()).toBe(2);
@@ -102,14 +102,19 @@ test("the show walks, can be held, dropped and pushed, and the world comes out t
     expect(floats(engine, engine.land_blocks(0)).length % 4).toBe(0);
     expect(floats(engine, engine.land_hazards(0)).length % 5).toBe(0);
     const [x, y] = floats(engine, engine.show_bodies());
-    engine.show_hold(x! + 1, y! + 1);
-    for (let i = 0; i < 60; i++) engine.show_step(1 / 60);
+    // taken by its body, it hangs a little under the hand, and falls when let go
+    expect(engine.show_under(x!, y!)).toBe(1);
+    expect(engine.show_under(x!, y! + 3)).toBe(0);
+    expect(engine.show_grab(x!, y!)).toBe(1);
+    engine.show_hand(x! + 1, y! + 1);
+    for (let i = 0; i < 90; i++) engine.show_step(1 / 60);
     const [heldX, heldY] = floats(engine, engine.show_bodies());
-    expect(Math.hypot(heldX! - x! - 1, heldY! - y! - 1)).toBeLessThan(0.15);
-    engine.show_drop();
+    expect(Math.hypot(heldX! - x! - 1, heldY! - y! - 1)).toBeLessThan(0.2);
+    expect(floats(engine, engine.show_held())[0]).toBe(1);
+    engine.show_let_go();
+    expect(floats(engine, engine.show_held())[0]).toBe(0);
     for (let i = 0; i < 60; i++) engine.show_step(1 / 60);
     expect(floats(engine, engine.show_bodies())[1]!).toBeLessThan(heldY! - 0.5);
-    expect(engine.show_push(heldX!, heldY! - 0.8, 10, 0)).toBeGreaterThanOrEqual(0);
     expect(floats(engine, engine.picture(32)).length).toBe(32);
     // and with no creature made, nothing breaks
     const empty = await load();
@@ -129,7 +134,7 @@ test("many creatures step together, as fast as this runtime goes", async () => {
 });
 
 /** The native engine's fingerprint of a small learner's state over two updates of practice (walker/src/generalist/practice_tests.rs). */
-const PRACTICE_FINGERPRINT = 0x8731a34efbe80f5cn;
+const PRACTICE_FINGERPRINT = 0x6cf0f880cc3fbf10n;
 
 test("practice in the page's engine learns to the bit as natively, with SIMD and without", async () => {
     for (const each of [path, scalarPath]) {
@@ -211,8 +216,9 @@ test("the brain on show is drawn as it thinks, evolution's or practice's", async
     expect(engine.policy_load()).toBe(1);
     for (let i = 0; i < 30; i++) engine.show_step(1 / 60);
     const policy = brainColumns(new Float32Array(engine.memory.buffer, engine.brain_picture(), engine.length()).slice());
-    expect(policy?.lit.map((column) => column.length)).toEqual([16 + 18, 64, 64, 5]);
-    expect(policy?.flows.map((flow) => flow.length)).toEqual([34 * 64, 64 * 64, 64 * 5]);
+    // practice's policy feels touch too: its body, two feet, being held, and the jolt across and up
+    expect(policy?.lit.map((column) => column.length)).toEqual([16 + 18 + 6, 64, 64, 5]);
+    expect(policy?.flows.map((flow) => flow.length)).toEqual([40 * 64, 64 * 64, 64 * 5]);
     expect(policy?.flows.every((flow) => flow.every(Number.isFinite) && flow.some((amount) => amount !== 0))).toBe(true);
     expect(brainColumns(new Float32Array([2, 3, 1, 0, 0]))).toBeUndefined();
 });

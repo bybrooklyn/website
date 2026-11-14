@@ -9,7 +9,7 @@ doing things, all written from scratch in that engine. An article about it is pl
 
 - `walker/src/generalist/`: the engine side, behind the crate's `generalist` feature. `walker/README.md`,
   section "The generalist", is the full reference, with every measurement.
-- `public/wasm/generalist.wasm` (and its scalar twin): the built module, 304 KiB with SIMD.
+- `public/wasm/generalist.wasm` (and its scalar twin): the built module, 320 KiB with SIMD.
 - `src/minis/generalist.ts`: the page's scene; `src/minis/roaming.ts`: what the page and its workers share;
   `src/scripts/generalist-worker.ts` (evolution) and `src/scripts/generalist-practice.ts` (practice).
 - `src/content/minis/generalist.mdx`: the mini's words. It is marked `draft: true`.
@@ -36,8 +36,17 @@ doing things, all written from scratch in that engine. An article about it is pl
 - **The page**: a wide mini, the world on the left and a column on the right with the controls, then the
   brain drawn live beside the world from the first second, what it senses, and the reward words (forward,
   up, effort, in the air for nothing, fell). The page opens on practice: a creature that knows nothing,
-  learning from the first second; nothing trained is shipped. What is learned is kept in the browser and
-  taken up again next visit; "start over" forgets it.
+  learning from the first second; nothing trained is shipped. What is learned is kept in the browser, one
+  learner for each body, and taken up again next visit; a new world goes on with it, a new body takes up
+  its own or starts afresh, and the page says which; "start over" forgets it.
+- **Touching it** (13 November 2026, stage 1 of the plan): a press takes hold of the creature by the part
+  pressed, or of a box, a moving platform or a see-saw, with a hand that is a spring with a damper and a
+  cap on its force (`walker/src/physics`, `Hand`): what is held hangs and swings, a heavy thing lags, and
+  nothing dragged passes through anything. The pointer is a hand over what can be taken; a finger drags
+  without the page scrolling; Space takes hold and lets go and the arrows move the hand. A moving platform
+  taken is a heavy thing while held and stays where it is let go of. Practice's creatures feel touch: how
+  hard things press on the body and each foot, a hand holding them, and the jolt the body feels. While
+  held, nothing is paid but effort and nothing but time ends a run.
 - **Measures**: a gait measure that says whether a run counts as walking, printed three ways (in the
   held-out worlds as a whole, which is the test; on open ground in them; on level ground); a comparison of evolution and
   practice on the same compute (practice goes three to six times as far through unseen worlds for about
@@ -120,6 +129,19 @@ well-trodden.
 
 ## Open
 
+- **Touch, for her to say** (13 November 2026). Two legs practise with a visitor every 8 s who lifts,
+  nudges and shoves; four legs feel touch but practise with none, since with one they went less far and
+  learned nothing measurable. Whether four legs should have one anyway, and whether 8 s is right, are
+  hers. Two legs learned to come through a box dropped or slid into them and a nudge, but not to land
+  when let go from a height or by a foot; in the page's own learner the reactions are weaker than in the
+  native runs. A moving platform taken by the hand stays level while held and floats where it is let go
+  of, as the floating platforms do; whether it should fall instead is hers. The creature on show is never
+  learned from, so playing with it changes nothing that is learned.
+- **The page text** needs to say, once it is reviewed: that the creature and the boxes and platforms can
+  be picked up and moved with the pointer or a finger, or with Space and the arrows; that it feels being
+  touched and learns what to do about it by practice, with nothing telling it how; and that a new world
+  goes on with what it learned while a new body starts again or takes up its own.
+
 - **The reward for one foot down is gone** (13 November 2026). Without it and with nothing else changed, the
   feet stopped taking turns; it turned out the rhythm in the senses was what made two legs run, and with
   that taken away and progress paid only up to 1 m/s, they take turns without the reward.
@@ -148,6 +170,7 @@ cd walker && cargo test                                 # both minis; tests/unch
 bun test src/minis/generalist.test.ts                   # the built module against the native engine, to the bit
 cd walker && cargo run --release --example practice     # practice, with its learning curve
 cd walker && sh examples/compare.sh                     # evolution against practice (about an hour and a half)
+cd walker && cargo run --release --example touched -- legs=2 seed=1 steps=20000000   # whether being touched changes what it does, and helps
 ```
 
 ## Known weak spots

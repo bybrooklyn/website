@@ -24,12 +24,14 @@ pub mod api;
 mod tests;
 #[cfg(test)]
 mod world_tests;
+#[cfg(test)]
+mod hand_tests;
 
 use alloc::rc::Rc;
 use alloc::vec::Vec;
 
 use crate::math::{Rotation, Vec2, clamp};
-use collide::{AHEAD, collide};
+use collide::{AHEAD, collide_within};
 use contact::{BLOCK, Contact, GROUND};
 pub use joint::Joint;
 use joint::Pose;
@@ -172,6 +174,56 @@ impl Soft {
     }
 }
 
+/// A hand holding one body at a point: a spring with a damper from that point to where the hand is,
+/// solved as a soft constraint as the hinges and contacts are, with a cap on its force, so whatever it
+/// holds is pulled along and never put anywhere. It never sets where a body is or how fast it goes.
+///
+/// The spring has a stiffness in newtons a metre whatever it holds, so a heavy thing lags behind the
+/// hand and a light one follows it closely, and the cap on its force is the same for all, so a heavy
+/// thing is also slower to get going. The hand itself goes toward where it is asked to (`goal`) at no
+/// more than `fastest`, so a pointer flicked across the picture does not fling anything. While it holds
+/// a body, that body and the others of its group are looked at for contacts as far ahead as they could
+/// go in a step (`World::find_contacts`), so nothing dragged passes through anything thin.
+#[derive(Clone, Copy, Debug)]
+pub struct Hand {
+    pub body: u32,
+    /// The point held, in the body's own frame.
+    pub local: Vec2,
+    /// Where the hand is asked to go, where it is, and how fast it moved in the last step.
+    pub goal: Vec2,
+    pub at: Vec2,
+    pub velocity: Vec2,
+    /// The hand's fastest, in metres a second.
+    pub fastest: f32,
+    /// The spring's stiffness in newtons a metre, its damping (1 is just enough not to bounce), and
+    /// the most force the hand gives, in newtons.
+    pub stiffness: f32,
+    pub damping: f32,
+    pub most: f32,
+    /// The push it gave in the last substep, in newton seconds, applied again at the start of the next.
+    impulse: Vec2,
+    soft: Soft,
+}
+
+impl Hand {
+    /// A hand holding `body` at the point `at` in the world.
+    pub fn new(bodies: &[Body], body: u32, at: Vec2, stiffness: f32, damping: f32, most: f32, fastest: f32) -> Hand {
+        let held = &bodies[body as usize];
+        Hand { body, local: held.rotation.undo(at - held.position), goal: at, at, velocity: Vec2::ZERO, fastest, stiffness, damping, most, impulse: Vec2::ZERO, soft: Soft::default() }
+    }
+
+    /// The force the hand gave in its last substep, in newtons, given the substep's length.
+    pub fn force(&self, h: f32) -> Vec2 {
+        if h > 0.0 { self.impulse * (1.0 / h) } else { Vec2::ZERO }
+    }
+
+    /// Where the point held is now.
+    pub fn held_at(&self, bodies: &[Body]) -> Vec2 {
+        let body = &bodies[self.body as usize];
+        body.position + body.rotation.apply(self.local)
+    }
+}
+
 /// The ground: its pieces, sorted by where each starts on the left, each piece's solid slab and the
 /// box around it, worked out once rather than at every step, and the widest piece, to know how far
 /// left of a body to start looking. Every world copied from another shares the other's ground, so a
@@ -231,6 +283,8 @@ pub struct World {
     /// A clock for whatever drives the bodies to keep its own time by, in turns; the physics leaves
     /// it alone, and copies it with the rest.
     pub clock: f32,
+    /// A hand holding a body, if one is (`Hand`).
+    pub hand: Option<Hand>,
 }
 
 impl World {
@@ -258,6 +312,7 @@ impl World {
         self.leftover = other.leftover;
         self.steps = other.steps;
         self.clock = other.clock;
+        self.hand = other.hand;
     }
 
     pub fn add_body(&mut self, body: Body) -> u32 {
@@ -367,6 +422,8 @@ impl World {
         }
         self.bodies.remove(index as usize);
         let moved = |k: u32| if k > index && k != GROUND { k - 1 } else { k };
+        // a hand holding the body taken out lets go; one holding a later body is told its new place
+        self.hand = self.hand.filter(|hand| hand.body != index).map(|hand| Hand { body: moved(hand.body), ..hand });
         self.joints.retain(|joint| joint.a != index && joint.b != index);
         for joint in &mut self.joints {
             joint.a = moved(joint.a);
@@ -387,6 +444,10 @@ impl World {
         for body in &mut self.bodies {
             body.position.x -= dx;
         }
+        if let Some(hand) = &mut self.hand {
+            hand.goal.x -= dx;
+            hand.at.x -= dx;
+        }
         let ground = Rc::make_mut(&mut self.ground);
         for piece in &mut ground.pieces {
             piece.a.x -= dx;
@@ -402,6 +463,69 @@ impl World {
                 *corner -= left;
             }
         }
+    }
+
+    /// Holds a body at a point in the world with a hand (`Hand`), letting go of anything held before.
+    /// A body that never moves cannot be held.
+    pub fn hold(&mut self, body: u32, at: Vec2, stiffness: f32, damping: f32, most: f32, fastest: f32) {
+        if (body as usize) < self.bodies.len() && self.bodies[body as usize].moves() {
+            self.hand = Some(Hand::new(&self.bodies, body, at, stiffness, damping, most, fastest));
+        }
+    }
+
+    /// Lets go of what the hand holds, if anything, and returns the hand. What was held keeps going as
+    /// it was, but no faster than `fastest` metres a second: the body held and the others of its group
+    /// are slowed together, by the same share, so a flick of the hand is not a throw.
+    pub fn let_go(&mut self, fastest: f32) -> Option<Hand> {
+        let hand = self.hand.take()?;
+        let held = &self.bodies[hand.body as usize];
+        let (speed, group) = (held.velocity.length(), held.group);
+        if speed > fastest && speed > 0.0 {
+            let share = fastest / speed;
+            for (k, body) in self.bodies.iter_mut().enumerate() {
+                if k as u32 == hand.body || group != 0 && body.group == group {
+                    body.velocity = body.velocity * share;
+                }
+            }
+        }
+        Some(hand)
+    }
+
+    /// How hard everything touching a body pressed on it in the last substep of the last step, in
+    /// newtons: the sum of what each contact point pushed it with, from the ground, a block or another
+    /// body. What a sense of touch reads.
+    pub fn pressed(&self, body: u32) -> f32 {
+        let h = self.stiffness.h;
+        if h <= 0.0 {
+            return 0.0;
+        }
+        let mut total = 0.0;
+        for contact in self.contacts.iter().filter(|contact| contact.a == body || contact.b == body) {
+            for point in &contact.points[..contact.count] {
+                total += point.normal_impulse;
+            }
+        }
+        total / h
+    }
+
+    /// Whether this body is held by the hand, or is of the same group as the body it holds.
+    pub fn careful(&self, body: usize) -> bool {
+        self.hand.is_some_and(|hand| {
+            let group = self.bodies[hand.body as usize].group;
+            hand.body as usize == body || group != 0 && self.bodies[body].group == group
+        })
+    }
+
+    /// How far ahead to look for contacts of this body: `AHEAD`, or for a careful body (`careful`) as
+    /// far as it could go in a step besides, by its speed and its spin at its widest.
+    fn reach(&self, body: usize) -> f32 {
+        if !self.careful(body) {
+            return AHEAD;
+        }
+        let (low, high) = self.placed[body].bounds(0.0);
+        let widest = (high - low).length() * 0.5;
+        let body = &self.bodies[body];
+        AHEAD + STEP * (body.velocity.length() + body.spin.abs() * widest)
     }
 
     /// The height of the highest ground straight below or above x, if there is any there.
@@ -470,6 +594,7 @@ impl World {
                 }
             }
             for world in worlds.iter_mut().filter(|world| going(world)) {
+                world.solve_hand();
                 world.solve_contacts(true);
                 world.integrate();
             }
@@ -508,6 +633,19 @@ impl World {
         for joint in &mut self.joints {
             joint.prepare(bodies);
         }
+        if let Some(hand) = &mut self.hand {
+            // the hand goes toward its goal no faster than it may, and its spring is as stiff for what it
+            // holds as its stiffness in newtons a metre makes it, but never stiffer than the substeps allow
+            let way = hand.goal - hand.at;
+            let far = way.length();
+            let most = hand.fastest * STEP;
+            let moved = if far > most && far > 0.0 { way * (most / far) } else { way };
+            hand.at += moved;
+            hand.velocity = moved * (1.0 / STEP);
+            let mass = bodies[hand.body as usize].mass.max(1e-3);
+            let hertz = (crate::math::sqrt(hand.stiffness / mass) / (2.0 * crate::math::PI)).min(0.25 * inverse_h);
+            hand.soft = Soft::new(hertz, hand.damping, h);
+        }
         self.pose();
     }
 
@@ -538,6 +676,48 @@ impl World {
         for contact in &self.contacts {
             contact::warm_start(bodies, contact);
         }
+        if let Some(hand) = &self.hand {
+            let body = &mut bodies[hand.body as usize];
+            let r = body.rotation.apply(hand.local);
+            body.velocity += hand.impulse * body.inverse_mass;
+            body.spin += body.inverse_inertia * r.cross(hand.impulse);
+        }
+    }
+
+    /// One pass of the hand's spring, in the pushing pass of each substep only: it is soft, so the
+    /// gentle pass, which takes out speed that pushing added, leaves it alone.
+    fn solve_hand(&mut self) {
+        let Some(hand) = &mut self.hand else { return };
+        let h = self.stiffness.h;
+        let body = &mut self.bodies[hand.body as usize];
+        if !body.moves() {
+            return;
+        }
+        let r = body.rotation.apply(hand.local);
+        let point = body.position + r;
+        let (m, i) = (body.inverse_mass, body.inverse_inertia);
+        // the point's speed against the hand's, and how far it is from the hand
+        let closing = body.velocity + r.spun(body.spin) - hand.velocity;
+        let bias = (point - hand.at) * hand.soft.bias_rate;
+        let (k11, k12, k22) = (m + i * r.y * r.y, -i * r.x * r.y, m + i * r.x * r.x);
+        let det = k11 * k22 - k12 * k12;
+        if det <= 0.0 {
+            return;
+        }
+        let rhs = closing + bias;
+        let solved = Vec2::new((k22 * rhs.x - k12 * rhs.y) / det, (k11 * rhs.y - k12 * rhs.x) / det);
+        let impulse = solved * -hand.soft.mass_scale - hand.impulse * hand.soft.impulse_scale;
+        let old = hand.impulse;
+        let mut total = old + impulse;
+        let most = hand.most * h;
+        let size = total.length();
+        if size > most && size > 0.0 {
+            total = total * (most / size);
+        }
+        let impulse = total - old;
+        hand.impulse = total;
+        body.velocity += impulse * m;
+        body.spin += i * r.cross(impulse);
     }
 
     fn solve_joint(&mut self, index: usize, push: bool) {
@@ -575,18 +755,22 @@ impl World {
             body.touching = false;
         }
         let count = self.bodies.len();
+        // only while a hand holds something does any body look further ahead than AHEAD
+        let holding = self.hand.is_some();
         for a in 0..count {
-            let (low_a, high_a) = self.placed[a].bounds(AHEAD);
+            let reach_a = if holding { self.reach(a) } else { AHEAD };
+            let (low_a, high_a) = self.placed[a].bounds(reach_a);
             for b in a + 1..count {
                 let (one, two) = (&self.bodies[a], &self.bodies[b]);
                 if !one.moves() && !two.moves() || one.group != 0 && one.group == two.group || self.joined(a as u32, b as u32) {
                     continue;
                 }
-                let (low_b, high_b) = self.placed[b].bounds(0.0);
+                let more_b = if holding { self.reach(b) - AHEAD } else { 0.0 };
+                let (low_b, high_b) = self.placed[b].bounds(more_b);
                 if low_a.x > high_b.x || low_b.x > high_a.x || low_a.y > high_b.y || low_b.y > high_a.y {
                     continue;
                 }
-                let manifold = collide(&self.placed[a], &self.placed[b]);
+                let manifold = collide_within(&self.placed[a], &self.placed[b], reach_a + more_b);
                 if manifold.count > 0 {
                     let contact = contact::begin(&self.bodies, a as u32, b as u32, 0, &manifold);
                     self.keep_contact(contact);
@@ -608,7 +792,7 @@ impl World {
                 if high.x < low_a.x || low.x > high_a.x || low.y > high_a.y || high.y < low_a.y {
                     continue;
                 }
-                let manifold = collide(&self.placed[a], slab);
+                let manifold = collide_within(&self.placed[a], slab, reach_a);
                 if manifold.count > 0 {
                     let contact = contact::begin(&self.bodies, a as u32, GROUND, index as u32, &manifold);
                     self.keep_contact(contact);
@@ -624,7 +808,7 @@ impl World {
                 if high.x < low_a.x || low.y > high_a.y || high.y < low_a.y {
                     continue;
                 }
-                let manifold = collide(&self.placed[a], block);
+                let manifold = collide_within(&self.placed[a], block, reach_a);
                 if manifold.count > 0 {
                     let contact = contact::begin(&self.bodies, a as u32, GROUND, BLOCK | index as u32, &manifold);
                     self.keep_contact(contact);

@@ -28,26 +28,89 @@ fn the_show_plays_the_very_run_the_best_brain_was_scored_on() {
 }
 
 #[test]
-fn a_held_creature_goes_where_the_hand_goes_and_falls_when_dropped() {
+fn a_creature_taken_by_its_body_hangs_under_the_hand_and_falls_when_let_go() {
     let mut page = page(2);
     let torso = page.show.body.creature.torso as usize;
     let start = page.show.stage.world.bodies[torso].position;
-    page.held = Some(start + Vec2::new(1.0, 1.5));
-    for _ in 0..90 {
+    assert_eq!(page.show_under(start), 1);
+    assert_eq!(page.show_grab(start), 1);
+    let goal = start + Vec2::new(1.0, 1.5);
+    page.show_hand(goal);
+    for _ in 0..120 {
         page.show_step(1.0 / 60.0);
     }
     let lifted = page.show.stage.world.bodies[torso].position;
-    assert!((lifted - (start + Vec2::new(1.0, 1.5))).length() < 0.1, "held at {lifted:?}");
-    page.held = None;
+    assert!((lifted.x - goal.x).abs() < 0.1 && lifted.y < goal.y && lifted.y > goal.y - 0.2, "hangs just under the hand, at {lifted:?}");
+    assert_eq!(page.show_held().0, 1);
+    assert!(!page.show.judge.over(), "and its run is not ended in the air");
+    page.show_let_go();
+    assert_eq!(page.show_held().0, 0);
     for _ in 0..90 {
         page.show_step(1.0 / 60.0);
     }
-    assert!(page.show.stage.world.bodies[torso].position.y < lifted.y - 0.8, "and fell when dropped");
-    // a push moves it
-    let before = page.show.stage.world.bodies[torso].velocity.x;
-    let at = page.show.stage.world.bodies[torso].position;
-    assert!(page.show_push(at, Vec2::new(20.0, 0.0)) >= 0);
-    assert!(page.show.stage.world.bodies[torso].velocity.x > before + 1.0);
+    assert!(page.show.stage.world.bodies[torso].position.y < lifted.y - 0.8, "and fell when let go");
+}
+
+#[test]
+fn a_creature_taken_by_a_foot_hangs_from_it_and_nothing_flies_off() {
+    let mut page = page(4);
+    let foot = page.show.body.creature.legs[0].lower as usize;
+    let at = page.show.stage.world.bodies[foot].position;
+    assert_eq!(page.show_grab(at), 1);
+    page.show_hand(at + Vec2::new(0.0, 1.0));
+    let (mut body, mut parts): (f32, f32) = (0.0, 0.0);
+    for _ in 0..180 {
+        page.show_step(1.0 / 60.0);
+        body = body.max(page.show.stage.world.bodies[0].velocity.length());
+        parts = page.show.stage.world.bodies.iter().take(9).fold(parts, |most, body| most.max(body.velocity.length()));
+    }
+    let world = &page.show.stage.world;
+    assert!((world.bodies[foot].position.y - (at.y + 1.0)).abs() < 0.15, "the foot is up by the hand");
+    assert!(world.bodies[0].position.y < world.bodies[foot].position.y + 0.3, "the rest hangs from it");
+    // the hand goes at 4 m/s at most; its legs swing faster by their own motors, as they do on the ground
+    assert!(body < 4.5 && parts < 10.0, "its body went at {body} m/s and its parts at {parts}");
+}
+
+#[test]
+fn a_box_dragged_into_the_creature_pushes_it_and_a_moving_platform_taken_stays_where_it_is_let_go() {
+    let mut page = page(2);
+    let torso = page.show.body.creature.torso as usize;
+    let start = page.show.stage.world.bodies[torso].position;
+    let ground = page.show.stage.world.ground_height(start.x + 1.2).unwrap();
+    let body = page.show.stage.place_box(Vec2::new(start.x + 1.2, ground + 0.16), 0.15);
+    let at = page.show.stage.world.bodies[body as usize].position;
+    assert_eq!(page.show_grab(at), 2);
+    page.show_hand(Vec2::new(start.x - 1.0, at.y));
+    for _ in 0..120 {
+        page.show_step(1.0 / 60.0);
+    }
+    let world = &page.show.stage.world;
+    assert!(world.bodies[torso].position.x < start.x - 0.2, "the creature was pushed back, to {:?}", world.bodies[torso].position);
+    assert!(world.bodies[body as usize].position.x > world.bodies[torso].position.x, "and the box never went through it");
+    page.show_let_go();
+    // a moving platform: made dynamic while held, and still where it was let go
+    let mut page = super::page::Page::new(Recipe { seed: 3, difficulty: 0.2, amounts: [0.0, 0.0, 0.0, 1.0] }, 2, 8, 8, 1, 0, 6.0, 2).unwrap();
+    page.ground(60.0, 0);
+    let mover = (0..600).find_map(|_| {
+        page.show.stage.keep(page.show.stage.world.bodies[0].position.x + 10.0);
+        page.show.stage.made.iter().find(|made| made.thing == super::stage::Thing::Mover).copied()
+    });
+    let mover = mover.expect("a world of things that move has a moving platform near the start");
+    // taken by one end, as a visitor might
+    let at = page.show.stage.world.bodies[mover.body as usize].position + Vec2::new(0.5, 0.0);
+    assert_eq!(page.show_grab(at + Vec2::new(page.show.stage.origin, 0.0)), 2);
+    page.show_hand(at + Vec2::new(0.0, 0.5));
+    for _ in 0..60 {
+        page.show_step(1.0 / 60.0);
+    }
+    page.show_let_go();
+    let left = page.show.stage.world.bodies[mover.body as usize].position;
+    for _ in 0..60 {
+        page.show.stage.world.step();
+    }
+    assert_eq!(page.show.stage.world.bodies[mover.body as usize].position, left, "it stays where it was let go of");
+    assert!(left.y > at.y + 0.3, "and was lifted, to {left:?} from {at:?}");
+    assert!(page.show.stage.world.bodies[mover.body as usize].angle().abs() < 1e-6, "and is level");
 }
 
 #[test]
@@ -104,7 +167,8 @@ fn the_brain_is_drawn_as_it_thinks_whichever_way_it_learns() {
             page.show_step(1.0 / 60.0);
         }
         let (sizes, lit, flows) = columns(page.brain_picture());
-        assert_eq!(sizes, vec![senses - 16 * 5, 64, 64, page.actions()]);
+        // a policy feels touch as well, so it senses more than evolution's brain
+        assert_eq!(sizes, vec![page.show.senses() - 16 * 5, 64, 64, page.actions()]);
         let policy = page.policy.as_ref().unwrap();
         for (column, net_layer) in [(0, 0), (1, 1)] {
             let start = super::mind::layer_start(&policy.trunk, net_layer);

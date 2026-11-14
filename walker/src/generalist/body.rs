@@ -96,6 +96,9 @@ pub struct Body {
     pub strength: f32,
     /// Whether it feels the legs' rhythm; without, the rhythm's sine and cosine are felt as 0.
     pub clock: bool,
+    /// Whether it feels touch (`touch::feel`): pressure on its body and feet, a hand holding it, and
+    /// the jolt its body feels. Practice's creatures do; evolution's feel as they always did.
+    pub touch: bool,
 }
 
 impl Body {
@@ -107,7 +110,7 @@ impl Body {
         let creature = Creature::build(world, Description { legs, carry: false, leap: false })?;
         let hopping = Hopping::of(legs);
         world.bodies[creature.torso as usize].inverse_inertia /= hopping.steadiness;
-        Some(Body { creature, hop: Hop::Ready, hopping, direct: false, ease: 1.0, aims: Vec::new(), strength: 1.0, clock: true })
+        Some(Body { creature, hop: Hop::Ready, hopping, direct: false, ease: 1.0, aims: Vec::new(), strength: 1.0, clock: true, touch: false })
     }
 
     pub fn legs(&self) -> usize {
@@ -192,9 +195,10 @@ impl Body {
 
     /// How many numbers it feels of itself (`feel`): its body's angle, spin and speed forward and
     /// up; each joint's angle and speed; each foot on something or not; the rhythm's sine and
-    /// cosine; and whether it is hopping and whether it can hop.
+    /// cosine; and whether it is hopping and whether it can hop. Then, if it feels touch, what
+    /// `touch::feel` writes after these.
     pub fn feelings(&self) -> usize {
-        4 + 2 * self.creature.joints.len() + self.legs() + 2 + 2
+        4 + 2 * self.creature.joints.len() + self.legs() + 2 + 2 + if self.touch { super::touch::felt(self.legs()) } else { 0 }
     }
 
     /// What it feels of itself, written into `into`, `feelings()` long, each about one at most.

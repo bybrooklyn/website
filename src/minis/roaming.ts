@@ -45,9 +45,11 @@ export interface Engine {
     show_things(): number;
     show_rays(): number;
     ray_angles(): number;
-    show_push(x: number, y: number, impulseX: number, impulseY: number): number;
-    show_hold(x: number, y: number): void;
-    show_drop(): void;
+    show_under(x: number, y: number): number;
+    show_grab(x: number, y: number): number;
+    show_hand(x: number, y: number): void;
+    show_let_go(): void;
+    show_held(): number;
     land_ground(until: number, from: number): number;
     land_blocks(from: number): number;
     land_hazards(from: number): number;

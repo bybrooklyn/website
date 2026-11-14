@@ -7,7 +7,9 @@
 // (src/scripts/generalist-worker.ts), in workers each with its own copy of the engine; this page runs
 // one more copy that shows the newest policy, or the best brain so far, walking the world from the
 // start, with its brain drawn beside it as it thinks. Its rays can be drawn, faint, so a visitor sees
-// what it sees. It can be picked up and dropped, or pushed.
+// what it sees. A press takes hold of it, by its body or a leg, or of a box, a moving platform or a
+// see-saw, with the engine's hand (walker/src/generalist/touch.rs): a spring to the pointer with a cap
+// on its force, so what is held hangs and swings and a heavy thing lags; the keyboard has the same hand.
 //
 // The world's and the body's controls are in a strip under the world, and the brain, a chart of how far
 // it gets and the learning in a column beside it, in the panel style the minis use. What this and the
@@ -19,34 +21,29 @@ import type { Order, Report } from "../scripts/generalist-worker";
 import { BRAIN, DEFAULT_RECIPE, KINDS, LEGS, POPULATION, SECONDS, SEEN, anotherSeed, brainColumns, counted, engineAddress, rewarded, engineRecipe, fromLink, lasted, linkParts, list, start as startEngine, valid, write, write64, type Engine, type Kind, type Recipe } from "./roaming";
 import { EFFORTS, machine, tenths, workersFor, type Effort } from "./walking";
 
-export const label = "A little creature with legs, seen from the side, finding its way over gaps, ledges, water and boxes in a world made from a seed. Faint lines from its eye show what it sees.";
+export const label = "A little creature with legs, seen from the side, finding its way over gaps, ledges, water and boxes in a world made from a seed. Faint lines from its eye show what it sees. It and the boxes and platforms can be picked up and moved: with the pointer, or with Space to take hold and the arrows to move the hand.";
 
 /** How long the creature rests where its run ended before starting again, in seconds. */
 const REST = 1;
 /** The world is made this far ahead of what is drawn, in metres. */
 const AHEAD = 40;
-/** How hard a drag on a box or a leg pushes, in newton seconds for each metre dragged, and the most one move gives. */
-const PUSH = 25;
-const MOST_PUSH = 12;
-/** How near the body a press must be to pick the creature up, in metres. */
-const GRAB = 0.6;
+/** How far an arrow key moves the keyboard's hand, in metres. */
+const KEY_STEP = 0.25;
 
 /** How the creature learns: by evolution, the best of many tries kept and varied, or by practice (PPO, in walker/src/generalist/ppo.rs). */
 type How = "evolution" | "practice";
 
-/** What practice has learned is kept in the browser between visits, one learner for each kind of world and body. */
+/** What practice has learned is kept in the browser between visits, one learner for each body: a new world carries on with what was learned. */
 const KEEPING = "generalist-practice";
-const keptKey = (recipe: Recipe) => {
-    const { difficulty, amounts } = engineRecipe(recipe);
-    return [recipe.legs, difficulty, ...amounts].join(" ");
-};
+const keptKey = (recipe: Recipe) => String(recipe.legs);
 
 /**
  * The store's version. At 2 two legs began to practise for a pace, without sensing a rhythm (walker/README.md,
- * "How two legs came to walk"), so a two-legged learner kept before is the same size but learned for another
- * task: opening the store at 2 forgets those, and keeps four-legged ones, which practise as they did.
+ * "How two legs came to walk"), and opening the store at 2 forgot two-legged learners kept before. At 3 the
+ * creatures began to feel touch, so every learner kept before has too few senses to be taken up: opening the
+ * store at 3 forgets them all, and learners are kept by body alone from then on, not by kind of world.
  */
-const KEEPING_VERSION = 2;
+const KEEPING_VERSION = 3;
 
 /** Opens the browser's store for kept learners. */
 function store(): Promise<IDBDatabase> {
@@ -57,15 +54,8 @@ function store(): Promise<IDBDatabase> {
                 asked.result.createObjectStore("kept");
                 return;
             }
-            const kept = asked.transaction?.objectStore("kept");
-            const walking = kept?.openCursor();
-            if (!walking) return;
-            walking.onsuccess = () => {
-                const at = walking.result;
-                if (!at) return;
-                if (String(at.key).startsWith("2 ")) at.delete();
-                at.continue();
-            };
+            // every learner kept before version 3 senses too little to be taken up
+            asked.transaction?.objectStore("kept").clear();
         };
         asked.onsuccess = () => opened(asked.result);
         asked.onerror = () => failed(asked.error);
@@ -109,6 +99,12 @@ export default function generalist(m: Mote): Scene {
     let heardRewards = 0;
     /** A learner being forgotten ("start over"), which must be gone before the kept one is read again. */
     let forgetting: Promise<unknown> = Promise.resolve();
+    /** The policy last put on show, put on show again at once when the world changes and practice carries on. */
+    let onShow: { weights: Float32Array; running: Float64Array } | undefined;
+    /** Said when the store has been read after a change of body: whether it took up a learner kept for that body. */
+    let tellKept: ((found: boolean) => void) | undefined;
+    /** A few words for a screen reader, said by the live line in the column. */
+    let speak = (_words: string) => {};
 
     let engine: Engine | undefined;
     let worker: Worker | undefined;
@@ -134,9 +130,9 @@ export default function generalist(m: Mote): Scene {
     const camera = { x: 0, y: 0.5 };
     let looking = { x: 1, y: 0 };
     let last: { x: number; y: number } | undefined;
-    /** What the pointer has: the creature, held; or a body being pushed, by where it was last. */
-    let holding = false;
-    let pushing: { x: number; y: number } | undefined;
+    /** What the hand holds: 0 nothing, 1 the creature, 2 a thing; and the keyboard's hand, where it is, once a key has moved it. */
+    let holding = 0;
+    let keyHand: { x: number; y: number } | undefined;
     let notice = { text: "", until: 0 };
     /** Why learning has stopped, said in the status line in place of how it goes, if it has. */
     let stopped = "";
@@ -161,9 +157,12 @@ export default function generalist(m: Mote): Scene {
         reached = until + AHEAD;
     };
 
-    const begin = () => {
+    /** Begins learning in the world described. With `carry`, practice goes on with what it has learned (the body is the same and only the world changed). */
+    const begin = (carry = false) => {
         id += 1;
-        [generation, runs, waiting, shown, furthest, ended, learned] = [0, 0, undefined, false, 0, 0, []];
+        [generation, runs, waiting, shown, furthest, ended] = [0, 0, undefined, false, 0, 0];
+        carry &&= how === "practice";
+        if (!carry) learned = [];
         const { seed, difficulty, amounts } = engineRecipe(recipe);
         const brainSeed = (Math.random() * 2 ** 32) >>> 0;
         if (engine) {
@@ -171,20 +170,27 @@ export default function generalist(m: Mote): Scene {
             [ground, blocks, hazards, reached] = [[], [], [], 0];
             extend(20);
             angles = list(engine, engine.ray_angles());
-            [camera.x, camera.y, last, holding, pushing] = [0, 0.5, undefined, false, undefined];
+            [camera.x, camera.y, last, holding, keyHand] = [0, 0.5, undefined, 0, undefined];
         }
         made = { kind: "begin", setup: id, legs: recipe.legs, seed, difficulty, amounts, brainSeed };
         stopped = "";
         if (how === "practice") {
-            practice = { seconds: 0, steps: 0, reached: 0, here: -1, speed: 0, waited: [0, 0], hard: 0 };
+            practice = carry ? { ...practice, reached: 0, here: -1 } : { seconds: 0, steps: 0, reached: 0, here: -1, speed: 0, waited: [0, 0], hard: 0 };
             policy = undefined;
             engine?.policy_off();
+            // carrying on, the policy on show goes straight on in the new world
+            if (carry && onShow) {
+                policy = onShow;
+                takePolicy();
+            }
             const setup = id;
-            // the learner kept for this kind of world, if there is one; workers start once it is read
+            // the learner kept for this body, if there is one; workers start once it is read
             void forgetting.then(() => keeping<Kept>((kept) => kept.get(keptKey(recipe)))).then((kept) => {
                 if (setup !== id) return;
-                if (kept) [practice.seconds, practice.steps] = [kept.seconds, kept.steps];
-                tell(practiceOrder(0, kept));
+                if (kept && !carry) [practice.seconds, practice.steps] = [kept.seconds, kept.steps];
+                tellKept?.(!!kept);
+                tellKept = undefined;
+                tell(practiceOrder(0, kept, carry));
                 helpers.forEach((helper, k) => helper.postMessage(practiceOrder(k + 1)));
                 tell({ kind: paused ? "pause" : "resume" });
             });
@@ -198,9 +204,9 @@ export default function generalist(m: Mote): Scene {
     };
 
     /** What a practice worker is told to begin with: which of the workers it is, and for the first, the learner kept. */
-    const practiceOrder = (index: number, kept?: Kept): PracticeOrder => {
+    const practiceOrder = (index: number, kept?: Kept, carry = false): PracticeOrder => {
         const { seed, difficulty, amounts } = engineRecipe(recipe);
-        return { kind: "begin", setup: id, legs: recipe.legs, seed, difficulty, amounts, workers: helpers.length + 1, index, learnerSeed: 1, kept };
+        return { kind: "begin", setup: id, legs: recipe.legs, seed, difficulty, amounts, workers: helpers.length + 1, index, learnerSeed: 1, kept, carry };
     };
 
     /** Puts the newest policy from practice on show, from the start. */
@@ -210,7 +216,10 @@ export default function generalist(m: Mote): Scene {
         if (engine.length() === policy.running.length) {
             write(engine, stateRoom, policy.weights);
             write64(engine, runningRoom, policy.running);
-            if (engine.policy_load() === 1) shown = true;
+            if (engine.policy_load() === 1) {
+                shown = true;
+                onShow = policy;
+            }
         }
         policy = undefined;
         last = undefined;
@@ -376,17 +385,38 @@ export default function generalist(m: Mote): Scene {
         };
 
         const describe = () => `${recipe.legs} legs, in the world "${recipe.seed}", ${recipe.hard} of 100 hard`;
-        const restart = (forget = false) => {
+        const say = (text: string) => {
+            notice = { text, until: m.time + 5 };
+            said.textContent = text;
+        };
+        speak = (words: string) => (said.textContent = words);
+        // a finger that has taken hold of something drags it, and the page does not scroll under it; one that
+        // has not scrolls the page as usual (a touch's pointerdown comes before its touchstart and touchmove)
+        const still = (event: TouchEvent) => holding && event.cancelable && event.preventDefault();
+        m.canvas.addEventListener("touchstart", still, { passive: false });
+        m.canvas.addEventListener("touchmove", still, { passive: false });
+        /**
+         * Learning after a change, said plainly. By practice, a new world goes on with what was learned; a new body
+         * takes up what was learned with that body before, or starts from nothing; "start over" forgets. By
+         * evolution, every change starts again, since its brains learn the one world they are bred in.
+         */
+        const restart = (forget = false, newBody = false) => {
             if (forget && how === "practice") forgetting = keeping((kept) => kept.delete(keptKey(recipe)));
             m.keep("generalist", recipe, 1);
             for (const [name, value] of linkParts(recipe)) m.link.set(name, value);
-            notice = { text: `Learning again from the start: ${describe()}.`, until: m.time + 5 };
-            said.textContent = notice.text;
-            begin();
+            const carry = how === "practice" && !forget && !newBody;
+            if (how !== "practice" || forget) say(`Learning again from the start: ${describe()}.`);
+            else if (carry) say(`A new world. It goes on with what it has learned: ${describe()}.`);
+            else {
+                say(`A new body: ${describe()}.`);
+                tellKept = (found) => say(found ? `A new body. It takes up what it learned with ${recipe.legs} legs before.` : `A new body. With ${recipe.legs} legs it learns from the start.`);
+            }
+            begin(carry);
         };
         const set = (change: Partial<Recipe>) => {
+            const newBody = change.legs !== undefined && change.legs !== recipe.legs;
             recipe = { ...recipe, ...change };
-            restart();
+            restart(false, newBody);
         };
 
         // the world: its seed, how hard, and what is in it
@@ -627,6 +657,8 @@ export default function generalist(m: Mote): Scene {
     const toScreen = (x: number, y: number): [number, number] => [(x - camera.x) * scale + m.width * KEPT_AT, horizon() - (y - camera.y) * scale];
     const toWorld = (sx: number, sy: number): [number, number] => [(sx - m.width * KEPT_AT) / scale + camera.x, (horizon() - sy) / scale + camera.y];
     const seen = (left: number, right: number, a: number, b: number) => Math.max(a, b) >= left - 1 && Math.min(a, b) <= right + 1;
+    // with ?debug, where a point of the world is on the canvas and back, for a test to find the creature by
+    if (m.debug) Object.assign(globalThis, { generalistView: { toScreen, toWorld, holding: () => holding } });
 
     /** The height of the ground's surface at x, the highest piece over it, or none over a gap. */
     const heightAt = (x: number): number | undefined => {
@@ -923,6 +955,57 @@ export default function generalist(m: Mote): Scene {
         ctx.fill();
     };
 
+    /** The hand: while it holds something, a thin line from where the hand is to where it holds, and a ring at the hand; the keyboard's hand as a ring, once it has been moved. */
+    const drawHand = (engine: Engine) => {
+        const { ctx } = m;
+        const [kind, hx, hy, ax, ay] = list(engine, engine.show_held());
+        ctx.strokeStyle = m.color("--accent");
+        ctx.lineWidth = 2;
+        if (kind) {
+            const [sx, sy] = toScreen(hx!, hy!);
+            const [tx, ty] = toScreen(ax!, ay!);
+            ctx.globalAlpha = 0.6;
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(sx, sy);
+            ctx.lineTo(tx, ty);
+            ctx.stroke();
+            ctx.globalAlpha = 1;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(sx, sy, 6, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.fillStyle = m.color("--accent");
+            ctx.beginPath();
+            ctx.arc(tx, ty, 2.5, 0, Math.PI * 2);
+            ctx.fill();
+        } else if (keyHand) {
+            const [sx, sy] = toScreen(keyHand.x, keyHand.y);
+            ctx.globalAlpha = 0.8;
+            ctx.beginPath();
+            ctx.arc(sx, sy, 7, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.globalAlpha = 1;
+        }
+    };
+
+    /** Takes hold of what is at a point in the world, and says so for a screen reader. */
+    const grab = (x: number, y: number) => {
+        if (!engine) return;
+        holding = engine.show_grab(x, y);
+        if (holding) {
+            m.canvas.style.cursor = "grabbing";
+            speak(holding === 1 ? "Holding the creature." : "Holding it.");
+        }
+    };
+
+    const letGo = () => {
+        if (!engine || !holding) return;
+        engine.show_let_go();
+        holding = 0;
+        speak("Let go.");
+    };
+
     const torso = (): [number, number] => {
         if (!engine) return [0, 0];
         const [x, y] = list(engine, engine.show_bodies());
@@ -947,6 +1030,11 @@ export default function generalist(m: Mote): Scene {
                 }
             }
             if (shown || holding) engine.show_step(dt);
+            // the keyboard's hand stays with what it holds
+            if (holding && keyHand) {
+                const [, hx, hy] = list(engine, engine.show_held());
+                if (hx !== undefined && hy !== undefined) keyHand = { x: hx, y: hy };
+            }
             // twice a second, what it was rewarded and charged for since the last time
             if (how === "practice" && m.time - heardRewards > 0.5) {
                 heardRewards = m.time;
@@ -982,38 +1070,46 @@ export default function generalist(m: Mote): Scene {
         },
         press(x, y) {
             if (!engine) return;
-            const [wx, wy] = toWorld(x, y);
-            const [tx, ty] = torso();
-            if (Math.hypot(tx - wx, ty - wy) < GRAB) {
-                holding = true;
-                engine.show_hold(wx, wy);
-                return;
-            }
-            pushing = { x: wx, y: wy };
+            keyHand = undefined;
+            grab(...toWorld(x, y));
+            m.wake();
         },
         move(x, y) {
-            if (!engine || !m.pointer.down) return;
+            if (!engine) return;
             const [wx, wy] = toWorld(x, y);
             if (holding) {
-                engine.show_hold(wx, wy);
+                engine.show_hand(wx, wy);
                 return;
             }
-            if (!pushing) return;
-            let [ix, iy] = [(wx - pushing.x) * PUSH, (wy - pushing.y) * PUSH];
-            const size = Math.hypot(ix, iy);
-            if (size > MOST_PUSH) [ix, iy] = [(ix * MOST_PUSH) / size, (iy * MOST_PUSH) / size];
-            engine.show_push(wx, wy, ix, iy);
-            pushing = { x: wx, y: wy };
+            // the pointer says what can be taken hold of: a hand over the creature and over things that move
+            if (!m.pointer.down) {
+                const cursor = engine.show_under(wx, wy) ? "grab" : "";
+                if (m.canvas.style.cursor !== cursor) m.canvas.style.cursor = cursor;
+            }
         },
-        release() {
-            if (holding) engine?.show_drop();
-            [holding, pushing] = [false, undefined];
+        release(x, y) {
+            letGo();
+            if (engine) m.canvas.style.cursor = engine.show_under(...toWorld(x, y)) ? "grab" : "";
         },
+        /** The keyboard's hand: it starts at the creature's body; the arrows move it, and what it holds; Space or Enter takes hold, and lets go. */
         keydown(name) {
             if (!engine) return;
-            const [x, y] = torso();
-            const push = { left: [-10, 0], right: [10, 0], up: [0, 12], down: [0, -10], action: [10, 4] }[name];
-            engine.show_push(x, y + 0.05, push[0]!, push[1]!);
+            if (!keyHand) {
+                const [x, y] = torso();
+                keyHand = { x, y };
+            }
+            if (name === "action") {
+                if (holding) letGo();
+                else {
+                    grab(keyHand.x, keyHand.y);
+                    if (!holding) speak("Nothing there to take hold of. The arrows move the hand.");
+                }
+            } else {
+                const [dx, dy] = { left: [-KEY_STEP, 0], right: [KEY_STEP, 0], up: [0, KEY_STEP], down: [0, -KEY_STEP] }[name];
+                keyHand = { x: keyHand.x + dx!, y: keyHand.y + dy! };
+                if (holding) engine.show_hand(keyHand.x, keyHand.y);
+            }
+            m.wake();
         },
         resting: () => !m.preview && paused && !!engine && engine.show_over() === 1,
         debug: () => [`${here ? "learning on the page" : `learning ${how === "practice" ? "by practice" : "by evolution"} in ${helpers.length + 1} workers, ${effort}`}, ${how === "practice" ? `${Math.round(practice.speed)} steps a second, an update ${practice.waited.map((ms) => ms.toFixed(0)).join(" ms working and ")} ms waiting` : `generation ${generation}`}, ${ground.length / 4} pieces of ground made to ${reached.toFixed(0)} m`],
@@ -1025,7 +1121,7 @@ export default function generalist(m: Mote): Scene {
             if (!engine) return;
             drawFlag();
             drawThings(engine);
-            if (showRays && (shown || holding)) drawRays(engine);
+            if (showRays && (shown || holding === 1)) drawRays(engine);
             drawCreature(engine);
             if (how === "practice") drawRewarded(engine);
             // the brain beside it, at half the frame rate, which is as often as a policy decides; and always the
@@ -1034,14 +1130,7 @@ export default function generalist(m: Mote): Scene {
                 brainAt = ticks;
                 drawBrain();
             }
-            if ((holding || pushing) && m.pointer.down) {
-                const { ctx } = m;
-                ctx.beginPath();
-                ctx.arc(m.pointer.x, m.pointer.y, 5, 0, Math.PI * 2);
-                ctx.strokeStyle = m.color("--accent");
-                ctx.lineWidth = 2;
-                ctx.stroke();
-            }
+            drawHand(engine);
         },
     };
 }
