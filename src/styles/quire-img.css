@@ -677,3 +677,191 @@
 .quire-img-fields .quire-field {
     font-size: 0.9rem;
 }
+
+/* ---- reading text (src/quire/img/reading.ts) ---- */
+
+/* over a word the pointer says it can be pressed: to hide it while reading, to select it with no tool */
+.quire-img-stage[data-tool="read"][data-over="word"] {
+    cursor: pointer;
+}
+
+.quire-img-stage[data-tool="none"][data-over="word"] {
+    cursor: text;
+}
+
+/* the reading's few words and buttons in the tool's strip: quiet text, the one thing to press filled */
+.quire-img-strip-said {
+    flex: none;
+    padding: 0 0.6rem;
+    color: var(--muted);
+    font-family: var(--font-text);
+    font-size: 0.9rem;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.quire-img-strip-words {
+    flex: none;
+    min-height: 2rem;
+    padding: 0 0.75rem;
+    border: 0;
+    border-radius: var(--quire-round-small);
+    background: none;
+    color: var(--ink);
+    font: inherit;
+    font-size: 0.9rem;
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+        background 0.15s ease,
+        color 0.15s ease;
+}
+
+.quire-img-strip-words:hover {
+    background: color-mix(in oklch, var(--ink) 8%, transparent);
+}
+
+.quire-img-strip-words.filled {
+    background: var(--accent);
+    color: var(--ground);
+    font-weight: 600;
+}
+
+.quire-img-strip-words.filled:hover {
+    background: color-mix(in oklch, var(--accent) 88%, var(--ink));
+}
+
+/* what is new in the strip grows in from where it sits */
+.quire-img-strip .grows {
+    animation: quire-img-grow 0.24s var(--quire-spring) both;
+}
+
+@keyframes quire-img-grow {
+    from {
+        opacity: 0;
+        scale: 0.85;
+    }
+}
+
+/* the first time: the three sizes as cards, as dictation's dialog has its models */
+.quire-img-read-dialog {
+    width: min(40rem, 100vw - 2rem);
+}
+
+.quire-img-read-plain {
+    line-height: 1.4;
+}
+
+.quire-img-read-cards {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.6rem;
+}
+
+.quire-dialog .quire-img-read-card {
+    display: grid;
+    align-content: start;
+    gap: 0.3rem;
+    padding: 0.8rem 0.85rem 0.9rem;
+    border: 0.0625rem solid var(--rule);
+    border-radius: var(--quire-round);
+    background: color-mix(in oklch, var(--ground) 40%, transparent);
+    color: var(--ink);
+    font: inherit;
+    text-align: left;
+    white-space: normal;
+    cursor: pointer;
+    transition:
+        border-color 0.2s ease,
+        background 0.2s ease,
+        opacity 0.2s ease;
+}
+
+.quire-img-read-card:hover {
+    border-color: color-mix(in oklch, var(--rule) 50%, var(--accent));
+}
+
+.quire-img-read-card[aria-checked="true"] {
+    border-color: var(--accent);
+    background: color-mix(in oklch, var(--accent) 12%, transparent);
+}
+
+.quire-img-read-card:focus-visible {
+    outline: 0.125rem solid var(--ink);
+    outline-offset: 0.15rem;
+}
+
+.quire-img-read-card:disabled {
+    opacity: 0.55;
+}
+
+.quire-img-read-card-name {
+    font-family: var(--font-head);
+    font-size: 1.15rem;
+    font-weight: 600;
+}
+
+.quire-img-read-card-size {
+    font-variant-numeric: tabular-nums;
+}
+
+.quire-img-read-card-who,
+.quire-img-read-where,
+.quire-img-read-count {
+    color: var(--muted);
+    font-size: 0.85rem;
+    line-height: 1.35;
+}
+
+.quire-img-read-warn {
+    color: var(--accent);
+    font-size: 0.88rem;
+}
+
+.quire-img-read-progress-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    gap: 0.35rem 0.8rem;
+    width: 100%;
+}
+
+.quire-img-read-progress {
+    grid-column: 1 / -1;
+    height: 0.4rem;
+    border-radius: 0.2rem;
+    background: color-mix(in oklch, var(--ink) 12%, transparent);
+    overflow: hidden;
+}
+
+.quire-img-read-progress i {
+    display: block;
+    width: var(--done, 0%);
+    height: 100%;
+    border-radius: inherit;
+    background: var(--accent);
+    transition: width 0.3s var(--ease);
+}
+
+.quire-img-read-progress-row .quire-img-read-count {
+    margin: 0;
+    font-size: 0.9rem;
+}
+
+@media (max-width: 34rem) {
+    .quire-img-read-cards {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .quire-img-strip .grows {
+        animation: none;
+    }
+
+    .quire-img-read-card,
+    .quire-img-read-progress i,
+    .quire-img-strip-words {
+        transition: none;
+    }
+}

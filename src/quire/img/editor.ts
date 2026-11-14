@@ -3,7 +3,9 @@
 // Quires' own. It gives the frame its bar, its menus as one table, its single-key tools and the
 // palette; it makes a new document of any picture pasted, dropped or opened; and it gets the picture
 // out: Ctrl+C copies (asking the first time whether as it looks or as the export is set, and then
-// remembering), and the export panel saves.
+// remembering), and the export panel saves. It reads the picture's text when asked (reading.ts): W,
+// the bar's Read text or Tools, Read text; with words selected on the picture, Ctrl+C copies them as
+// text instead of the picture.
 
 import { createFrame } from "../core/frame";
 import type { Context, Editing } from "../core/kind";
@@ -18,6 +20,8 @@ import { decodeHeic, heicIn } from "./codec-run";
 import { COLORS, exportPanel, factsPanel, factsSaid, kindOf, nameFor, resizeBox, SHAPES, toolStrip, WEIGHTS } from "./panels";
 import { blocksOut, factsOf, type Facts, type Keep } from "./metadata";
 import { createStage, type Pen, type Tool } from "./stage";
+import { createReading } from "./reading";
+import { megabytes, sizeOf, TIERS } from "./read/models";
 import { createHistory, edited, fresh, look, move, readSteps, remove, setOnly, writeSteps, type Filter, type Kept, type Picture } from "./steps";
 
 /** The file a picture document keeps its steps in, inside its `.quire`. */
@@ -41,7 +45,7 @@ const keep = (key: string, value: string) => {
 };
 
 /** The single keys that pick a tool, while the picture has the keyboard. */
-const TOOL_KEYS: Record<string, Tool | "export" | "facts"> = { KeyC: "crop", KeyR: "hide", KeyA: "arrow", KeyT: "text", KeyB: "box", KeyE: "export", KeyI: "facts" };
+const TOOL_KEYS: Record<string, Tool | "export" | "facts"> = { KeyC: "crop", KeyR: "hide", KeyA: "arrow", KeyT: "text", KeyB: "box", KeyE: "export", KeyI: "facts", KeyW: "read" };
 
 /** Hands the writer a file. */
 function give(blob: Blob, name: string) {
@@ -96,6 +100,13 @@ export function mountEditor(host: HTMLElement, context: Context) {
     });
     room.append(stage.element, empty, facts);
     host.append(room);
+    // the picture's text, read when asked, kept for the picture while it is open
+    const reading = createReading({
+        stage,
+        key: () => (picture && original && stage.loaded() ? `${where.id ?? ""} ${picture.original.name}` : ""),
+        say: (short, full, tone) => frame.status.say(short, full, tone),
+        moved: () => refresh(),
+    });
 
     // ---- the document as a store keeps it, through the core's session ----
     let loading = 0;
@@ -128,6 +139,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
         said = { rows: [], everything: [], found: {} };
         // the new picture's size at once, its weight when it is worked out; never the last document's
         facts.textContent = picture ? factsSaid(look(picture), picture.original.bytes, kindOf(picture.original)) : "";
+        reading.clear();
         stage.clear();
         stage.setTool("crop");
         refresh();
@@ -304,6 +316,8 @@ export function mountEditor(host: HTMLElement, context: Context) {
     /** Copies the picture, as it looks or as the export is set; the first time, asks which and remembers. */
     async function copy() {
         if (!picture || !stage.loaded()) return;
+        // words selected on the picture are copied as text, and the picture is not
+        if (stage.selected()) return copyText();
         if (stage.tool() === "crop") stage.applyCrop();
         const asked = local()?.getItem(KEYS.copy);
         const way = asked === "looks" || asked === "export" ? asked : await askCopy();
@@ -331,6 +345,18 @@ export function mountEditor(host: HTMLElement, context: Context) {
             frame.status.say("Copied", `Copied, ${shown.width} × ${shown.height} px${way === "export" ? `, as the export is set (${formatOf(settings.format).label})` : ""}`);
         } catch (error) {
             frame.status.say("Not copied", `The picture was not copied: ${error instanceof Error ? error.message : String(error)}`, "warn");
+        }
+    }
+    /** Copies the words selected, or every word read when none are, as text. */
+    async function copyText() {
+        const text = stage.selected() || stage.words().length && (stage.selectAll(true), stage.selected());
+        if (!text) return;
+        try {
+            await navigator.clipboard.writeText(text);
+            const count = text.split(/\s+/).filter(Boolean).length;
+            frame.status.say("Copied", `Copied ${count} ${count === 1 ? "word" : "words"} as text`);
+        } catch (error) {
+            frame.status.say("Not copied", `The text was not copied: ${error instanceof Error ? error.message : String(error)}`, "warn");
         }
     }
     /** The first Ctrl+C asks how to copy, in a dialog; the answer is remembered and Edit, Copy as changes it. */
@@ -421,6 +447,13 @@ export function mountEditor(host: HTMLElement, context: Context) {
             stage.setAspect(chosen === "original" && picture ? picture.original.width / picture.original.height : (chosen as number | undefined));
         },
         apply: () => applyCrop(),
+        read: () => {
+            const found = reading.found();
+            return { state: reading.state(), progress: reading.progress(), words: found ? found.lines.reduce((sum, line) => sum + line.words.length, 0) : 0, private: stage.findings().length, model: reading.tier().name };
+        },
+        hideAll: () => void stage.hideFindings(),
+        chooseModel: (from) => reading.choose(from),
+        readAgain: () => void reading.start(buttons.read),
     });
     const pickedMark = () => {
         const step = history.now().find((each) => each.id === stage.picked());
@@ -465,6 +498,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
         crop: tool("Crop (C)", "crop", () => pickTool("crop")),
         resize: tool("Resize", "resize", () => (resizing.isOpen() ? resizing.close() : resizing.open(buttons.resize))),
         hide: tool("Hide (R)", "hide", () => pickTool("hide")),
+        read: tool("Read text (W)", "find", () => pickTool("read")),
         arrow: tool("Arrow (A)", "arrow", () => pickTool("arrow")),
         box: tool("Box (B)", "box", () => pickTool("box")),
         text: tool("Text (T)", "text", () => pickTool("text")),
@@ -482,7 +516,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
     };
     const end = group(buttons.facts, buttons.export);
     end.classList.add("quire-bar-end");
-    strip0.append(group(buttons.undo, buttons.redo), group(buttons.crop, buttons.resize, buttons.hide), group(buttons.arrow, buttons.box, buttons.text), end);
+    strip0.append(group(buttons.undo, buttons.redo), group(buttons.crop, buttons.resize, buttons.hide, buttons.read), group(buttons.arrow, buttons.box, buttons.text), end);
     bar.append(strip0);
     frame.place("bar").append(bar);
 
@@ -491,6 +525,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
         if (stage.tool() === "crop" && next !== "crop") stage.applyCrop();
         stage.setTool(stage.tool() === next && next !== "crop" ? "none" : next);
         stage.element.focus({ preventScroll: true });
+        if (stage.tool() === "read") void reading.start(buttons.read);
     }
     function applyCrop() {
         stage.applyCrop();
@@ -546,7 +581,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
         }
         buttons.undo.disabled = !history.canUndo();
         buttons.redo.disabled = !history.canRedo();
-        const kind = !has ? "none" : stage.tool() === "crop" ? "crop" : stage.tool() === "arrow" || stage.tool() === "box" || stage.tool() === "text" || pickedMark() ? "mark" : "none";
+        const kind = !has ? "none" : stage.tool() === "crop" ? "crop" : stage.tool() === "read" ? "read" : stage.tool() === "arrow" || stage.tool() === "box" || stage.tool() === "text" || pickedMark() ? "mark" : "none";
         strip.fill(kind);
         if (picture && !facts.textContent) facts.textContent = factsSaid(look(picture), picture.original.bytes, kindOf(picture.original));
         if (!picture) facts.textContent = "";
@@ -600,6 +635,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
                             ],
                             run: () => {},
                         },
+                        { label: "Copy text", icon: "copy", key: "copy-text", disabled: !stage.words().length, run: () => void copyText() },
                         { label: "Paste", icon: "paste", hint: "Ctrl+V", key: "paste", run: () => void pasteFromMenu() },
                     ],
                     [
@@ -672,6 +708,16 @@ export function mountEditor(host: HTMLElement, context: Context) {
                         ] as const
                     ).map(([label, name, key]): MenuItem => ({ label, icon: tick(stage.tool() === name, name), hint: key, key: name, pressed: stage.tool() === name, disabled: !picture, run: () => pickTool(name) })),
                     [
+                        { label: "Read text", icon: tick(stage.tool() === "read", "find"), hint: "W", key: "read", pressed: stage.tool() === "read", disabled: !picture, run: () => pickTool("read") },
+                        {
+                            label: "Text model",
+                            icon: "settings",
+                            items: () => TIERS.map((each) => ({ label: each.name, icon: tick(reading.tier().id === each.id, "find"), hint: reading.kept(each.id) ? "On this device" : megabytes(sizeOf(each)), pressed: reading.tier().id === each.id, run: () => void (pickTool("read"), reading.use(each.id, buttons.read)) })),
+                            run: () => {},
+                        },
+                        { label: "Hide what looks private", icon: "hide", key: "hide-private", disabled: !stage.findings().length, run: () => void stage.hideFindings() },
+                    ],
+                    [
                         { label: "Mark color", icon: "color", items: () => COLORS.map((each) => ({ label: each.name, icon: tick(pen.color === each.value, "color"), pressed: pen.color === each.value, run: () => strip && ((pen = { ...pen, color: each.value }), keep(KEYS.pen, JSON.stringify(pen)), refresh()) })), run: () => {} },
                         { label: "Thickness", icon: "line", items: () => WEIGHTS.map((each) => ({ label: each.name, icon: tick(pen.weight === each.value, "line"), pressed: pen.weight === each.value, run: () => ((pen = { ...pen, weight: each.value }), keep(KEYS.pen, JSON.stringify(pen)), refresh()) })), run: () => {} },
                     ],
@@ -729,6 +775,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
         const rows: [string, string][] = [
             ["C", "Crop"],
             ["R", "Hide"],
+            ["W", "Read text: press a word to hide it, drag to hide a run"],
             ["A", "Arrow"],
             ["B", "Box"],
             ["T", "Text"],
@@ -744,6 +791,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
             ["Ctrl+0", "Fit"],
             ["Ctrl+1", "100%"],
             ["Space and drag", "Move the picture"],
+            ["Drag across words", "Select text, with no tool on; Ctrl+C copies it"],
         ];
         const list = make("dl", "quire-img-keys");
         for (const [key, said] of rows) list.append(make("dt", "", key), make("dd", "", said));
@@ -774,6 +822,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
         if (event.key === "Enter" && stage.tool() === "crop") return applyCrop;
         if (event.key === "Escape") {
             if (stage.picked()) return () => stage.pick(undefined);
+            if (stage.selected()) return () => stage.selectAll(false);
             if (stage.tool() !== "none") return () => (stage.tool() === "crop" ? stage.setTool("none") : stage.setTool("none"));
             return undefined;
         }
@@ -807,11 +856,13 @@ export function mountEditor(host: HTMLElement, context: Context) {
         take,
         // for a page or a test that reaches further in than the app does
         stage,
+        reading,
         steps: () => history.now(),
         changeStep: (id: string, to: Partial<Kept>) => commit(history.now().map((step) => (step.id === id ? ({ ...step, ...to } as Kept) : step))),
         downloadQuire,
         destroy() {
             estimate.cancel();
+            reading.destroy();
             document.removeEventListener("paste", pasted);
             session.destroy();
             frame.destroy();

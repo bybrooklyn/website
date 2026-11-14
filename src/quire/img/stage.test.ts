@@ -6,7 +6,21 @@
 
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { imgPage, type ImgPage } from "../../../scripts/img-page";
-import { thickness } from "./stage";
+import { placeWords, runCovers, runText, thickness } from "./stage";
+
+/** Two lines of words, each word 40 wide and 20 high, the second line 60 below the first. */
+const LINES = [0, 1].map((row) => ({ text: "", sure: 1, box: { at: { x: 0, y: row * 60 }, along: { x: 1, y: 0 }, length: 300, height: 30 }, words: ["one", "two", "three"].map((text, at) => ({ text: `${text}${row}`, sure: 1, line: row, box: { at: { x: 10 + at * 60, y: 5 + row * 60 }, along: { x: 1, y: 0 }, length: 40, height: 20 } })) }));
+
+test("a word's cover is its box grown by a tenth of its line's height, a run's covers are one a line round its words, and a run's text keeps its lines", () => {
+    const words = placeWords(LINES);
+    expect(words).toHaveLength(6);
+    // a tenth of 30 is 3
+    expect(words[0]!.cover).toEqual({ x: 7, y: 2, width: 46, height: 26 });
+    expect(runCovers(words, [0, 1])).toEqual([{ x: 7, y: 2, width: 106, height: 26 }]);
+    expect(runCovers(words, [1, 2, 3])).toEqual([{ x: 67, y: 2, width: 106, height: 26 }, { x: 7, y: 62, width: 46, height: 26 }]);
+    expect(runCovers(words, [0, 2])).toHaveLength(2);
+    expect(runText(words, 4, 1)).toBe("two0 three0\none1 two1");
+});
 
 test("a mark's thickness follows the pen and the picture's longer side, never thinner than two pixels", () => {
     expect(thickness({ color: "#000000", weight: 0.005 }, { width: 4000, height: 3000 })).toBe(20);

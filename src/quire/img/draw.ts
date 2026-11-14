@@ -262,6 +262,8 @@ export async function loadPicture(backend: Backend, blob: Blob) {
             }
             return result;
         },
+        /** A copy of the original's pixels as a bitmap, to hand to the text reader's worker. */
+        bitmap: (): Promise<ImageBitmap> => createImageBitmap(full),
         /** The pixels of a part of the original, for choosing a cover's color. */
         async pixels(rect: Rect): Promise<Uint8ClampedArray> {
             const canvas = new OffscreenCanvas(rect.width, rect.height);

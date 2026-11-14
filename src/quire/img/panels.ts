@@ -351,8 +351,29 @@ export function resizeBox(hooks: { size(): { width: number; height: number }; ap
     };
 }
 
-/** The strip for the tool in hand: the crop's shapes and Apply, or a mark's colors and thickness. Icons only, each named in its tooltip. */
-export function toolStrip(hooks: { color(): string; weight(): number; setColor(value: string): void; setWeight(value: number): void; shape(): string; setShape(name: string): void; apply(): void }) {
+/** What the strip shows while reading text: where the reading is, how far, what was found, and the size of model. */
+export interface ReadSaid {
+    state: "idle" | "asking" | "fetching" | "reading" | "read" | "failed";
+    progress: number;
+    words: number;
+    private: number;
+    model: string;
+}
+
+/** What the strip says of the reading, in a few quiet words. */
+export function readSaid(read: ReadSaid): string {
+    if (read.state === "reading") return `Reading text ${Math.round(read.progress * 100)}%`;
+    if (read.state === "fetching") return "Downloading the model";
+    if (read.state === "asking") return "Choosing a model";
+    if (read.state === "failed") return "Not read";
+    if (read.state === "idle") return "Read text";
+    if (!read.words) return "No text found";
+    const count = `${read.words} ${read.words === 1 ? "word" : "words"}`;
+    return read.private ? `${count}, ${read.private} ${read.private === 1 ? "looks" : "look"} private` : count;
+}
+
+/** The strip for the tool in hand: the crop's shapes and Apply, a mark's colors and thickness, or the reading's few words and buttons. Icons only where it can be, each named in its tooltip. */
+export function toolStrip(hooks: { color(): string; weight(): number; setColor(value: string): void; setWeight(value: number): void; shape(): string; setShape(name: string): void; apply(): void; read?(): ReadSaid; hideAll?(): void; chooseModel?(from: HTMLElement): void; readAgain?(): void }) {
     const strip = make("div", "quire-img-strip");
     strip.setAttribute("role", "toolbar");
     strip.setAttribute("aria-label", "Tool");
@@ -366,7 +387,14 @@ export function toolStrip(hooks: { color(): string; weight(): number; setColor(v
         line.style.strokeWidth = String(1.2 + at * 1.4);
         return control(`${each.name} line`, line, () => hooks.setWeight(each.value));
     };
-    function fill(kind: "crop" | "mark" | "none") {
+    const words = (label: string, press: (button: HTMLButtonElement) => void, tip: string, filled = false) => {
+        const button = make("button", filled ? "quire-img-strip-words filled" : "quire-img-strip-words", label);
+        button.type = "button";
+        button.title = tip;
+        button.addEventListener("click", () => press(button));
+        return button;
+    };
+    function fill(kind: "crop" | "mark" | "read" | "none") {
         strip.classList.toggle("open", kind !== "none");
         strip.inert = kind === "none";
         if (kind === "crop") {
@@ -393,6 +421,18 @@ export function toolStrip(hooks: { color(): string; weight(): number; setColor(v
                     return button;
                 }),
             );
+        } else if (kind === "read" && hooks.read) {
+            const read = hooks.read();
+            const said = make("span", "quire-img-strip-said", readSaid(read));
+            said.setAttribute("role", "status");
+            const parts: HTMLElement[] = [said];
+            if (read.state === "failed" && hooks.readAgain) parts.push(words("Try again", () => hooks.readAgain?.(), "Read the text again"));
+            if (read.state === "read" && read.private && hooks.hideAll) parts.push(words("Hide all", () => hooks.hideAll?.(), "Cover everything that looks private, as one step", true));
+            parts.push(make("span", "quire-img-strip-rule"), words(read.model, (button) => hooks.chooseModel?.(button), "Model"));
+            // what is new in the strip grows in, rather than appearing
+            const before = new Set([...strip.children].map((each) => each.textContent));
+            strip.replaceChildren(...parts);
+            if (!still()) for (const part of parts) if (part.textContent && !before.has(part.textContent) && part !== said) part.classList.add("grows");
         }
         if (still()) strip.style.transition = "none";
     }

@@ -7,16 +7,72 @@
 // the picture is pressed, and each mark can be picked and moved afterwards, since every one is a step.
 // While a drag goes on the steps it would make are drawn as they are; only letting go makes the change,
 // so that one drag is one undo.
+//
+// Once the text reader has read the picture, its words are known here (`setWords`). With the tool for
+// reading on, every word is tinted lightly and the one under the pointer more, what looks private is
+// outlined, and pressing a word hides it: a cover over exactly its box and a stated margin, the same
+// cover Hide makes; a drag across words hides the run, one cover a line. With no tool, a drag across
+// words selects them, to be copied as text.
 
 import { backendFor, loadPicture, type Loaded, type Scene, type View } from "./draw";
 import { coverColor, ringArea } from "./cover";
 import { dragFrame, fit, HANDLES, oneToOne, shapeFrame, spanned, zoomAt, type Handle } from "./geometry";
 import { allAt, drawMarks, markBox, moved, type Place } from "./marks";
 import { add, change, look, within, type Kept, type Look, type Mark, type Picture, type Point, type Rect } from "./steps";
+import { corners } from "./read/pixels";
+import { coverFor, type Line } from "./read/words";
+import type { Finding } from "./read/private";
 import { make } from "../core/ui";
 
-/** The tools: the crop's frame, hiding, the three marks, or none (dragging then picks and moves). */
-export type Tool = "crop" | "hide" | "arrow" | "box" | "text" | "none";
+/** The tools: the crop's frame, hiding, the three marks, reading text, or none (dragging then picks and moves, or selects words). */
+export type Tool = "crop" | "hide" | "arrow" | "box" | "text" | "read" | "none";
+
+/** A word on the stage: its text and box, its line, and the cover pressing it makes. */
+export interface PlacedWord {
+    text: string;
+    box: Line["box"];
+    line: number;
+    cover: Rect;
+}
+
+/** The words of lines, in reading order, each with its cover: its box grown by a tenth of its line's height. */
+export function placeWords(lines: Line[]): PlacedWord[] {
+    return lines.flatMap((line, index) => line.words.map((word) => ({ text: word.text, box: word.box, line: index, cover: coverFor(word, line.box.height) })));
+}
+
+/** The covers for a run of words (indices into `words`): one over each stretch of the run on one line, round the covers of its words. */
+export function runCovers(words: PlacedWord[], indices: number[]): Rect[] {
+    const sorted = [...new Set(indices)].sort((a, b) => a - b);
+    const covers: Rect[] = [];
+    let stretch: number[] = [];
+    const close = () => {
+        if (!stretch.length) return;
+        const rects = stretch.map((at) => words[at]!.cover);
+        const left = Math.min(...rects.map((rect) => rect.x));
+        const top = Math.min(...rects.map((rect) => rect.y));
+        covers.push({ x: left, y: top, width: Math.max(...rects.map((rect) => rect.x + rect.width)) - left, height: Math.max(...rects.map((rect) => rect.y + rect.height)) - top });
+        stretch = [];
+    };
+    for (const at of sorted) {
+        const last = stretch.at(-1);
+        if (last !== undefined && (at !== last + 1 || words[at]!.line !== words[last]!.line)) close();
+        stretch.push(at);
+    }
+    close();
+    return covers;
+}
+
+/** The text of a run of words: words of a line joined by spaces, lines by line breaks. */
+export function runText(words: PlacedWord[], from: number, to: number): string {
+    let text = "";
+    for (let at = Math.min(from, to); at <= Math.max(from, to); at++) {
+        const word = words[at];
+        if (!word) continue;
+        if (text) text += words[at - 1]?.line === word.line ? " " : "\n";
+        text += word.text;
+    }
+    return text;
+}
 
 /** How new marks are drawn: their color, and their thickness as a share of the picture's longer side. */
 export interface Pen {
@@ -69,6 +125,12 @@ export function createStage(hooks: StageHooks) {
     let picked: string | undefined;
     let drawn = 0;
     let sizeOf = { width: 0, height: 0 };
+    // the words the reader found, what of them looks private, the word under the pointer, and a run being dragged or selected
+    let words: PlacedWord[] = [];
+    let findings: number[][] = [];
+    let hover: number | undefined;
+    let run: [number, number] | undefined;
+    let selection: [number, number] | undefined;
 
     const picture = () => {
         const found = hooks.picture();
@@ -133,6 +195,7 @@ export function createStage(hooks: StageHooks) {
         context.rect(kept.x * ratio, kept.y * ratio, kept.width * ratio, kept.height * ratio);
         context.clip();
         drawMarks(context, now.marks, scaled);
+        if (words.length && (tool === "read" || selection)) drawWords(context, scaled, ratio);
         context.restore();
         // what is picked: a fine ring round it in the page's accent
         const chosen = picture()?.steps.find((step) => step.id === picked);
@@ -147,6 +210,84 @@ export function createStage(hooks: StageHooks) {
             const box = toStage(cropFrame);
             Object.assign(frame.style, { left: `${box.x}px`, top: `${box.y}px`, width: `${box.width}px`, height: `${box.height}px` });
         }
+    }
+
+    /** The words lightly tinted while reading, the one under the pointer more, a run or a selection fully, and what looks private outlined. */
+    function drawWords(context: CanvasRenderingContext2D, where: Place, ratio: number) {
+        const accent = getComputedStyle(element).getPropertyValue("--accent").trim() || "#b48cff";
+        const quad = (index: number) => {
+            const points = corners(words[index]!.box).map((point) => ({ x: where.x + point.x * where.across, y: where.y + point.y * where.down }));
+            context.beginPath();
+            context.moveTo(points[0]!.x, points[0]!.y);
+            for (const point of points.slice(1)) context.lineTo(point.x, point.y);
+            context.closePath();
+        };
+        const chosen = run ?? selection;
+        const low = chosen ? Math.min(...chosen) : -1;
+        const high = chosen ? Math.max(...chosen) : -1;
+        context.fillStyle = accent;
+        words.forEach((_, index) => {
+            const on = index >= low && index <= high;
+            if (tool !== "read" && !on) return;
+            context.globalAlpha = on ? 0.38 : index === hover ? 0.3 : 0.12;
+            quad(index);
+            context.fill();
+        });
+        context.globalAlpha = 1;
+        if (tool !== "read") return;
+        // what looks private: a warm dashed line round each stretch of it
+        context.strokeStyle = "#ff9f0a";
+        context.lineWidth = 1.5 * ratio;
+        context.setLineDash([4 * ratio, 3 * ratio]);
+        for (const finding of uncovered())
+            for (const cover of runCovers(words, finding)) context.strokeRect(where.x + cover.x * where.across, where.y + cover.y * where.down, cover.width * where.across, cover.height * where.down);
+        context.setLineDash([]);
+    }
+
+    /** What looks private and is not yet under a cover: each thing whose words are not all inside covers already made. */
+    function uncovered(): number[][] {
+        const found = picture();
+        if (!found) return findings;
+        const covers = look(found).covers.map((cover) => cover.rect);
+        const inside = (rect: Rect) => covers.some((cover) => cover.x <= rect.x && cover.y <= rect.y && cover.x + cover.width >= rect.x + rect.width && cover.y + cover.height >= rect.y + rect.height);
+        return findings.filter((finding) => runCovers(words, finding).some((rect) => !inside(within(rect, found.original))));
+    }
+
+    /** The word whose cover a place in the original's pixels is in, the smallest where covers overlap. */
+    function wordAt(at: Point): number | undefined {
+        let best: number | undefined;
+        words.forEach((word, index) => {
+            const { cover } = word;
+            if (at.x < cover.x || at.y < cover.y || at.x > cover.x + cover.width || at.y > cover.y + cover.height) return;
+            if (best === undefined || cover.width * cover.height < words[best]!.cover.width * words[best]!.cover.height) best = index;
+        });
+        return best;
+    }
+    /** The word nearest a place, for a drag that has left the words. */
+    function nearestWord(at: Point): number | undefined {
+        let best: number | undefined;
+        let far = Infinity;
+        words.forEach(({ cover }, index) => {
+            const dx = Math.max(cover.x - at.x, 0, at.x - cover.x - cover.width);
+            const dy = Math.max(cover.y - at.y, 0, at.y - cover.y - cover.height);
+            // a line above or below counts for more than a word along the same line
+            const distance = dx + dy * 4;
+            if (distance < far) [far, best] = [distance, index];
+        });
+        return best;
+    }
+
+    /** Hides words: one cover over each stretch of them on a line, each in the color round it, all as one change. */
+    async function hideWords(indices: number[]) {
+        const found = hooks.picture();
+        if (!found || !loaded || !indices.length) return;
+        let steps = found.steps;
+        for (const cover of runCovers(words, indices)) {
+            const rect = within(cover, found.original);
+            const area = ringArea(rect, loaded.size);
+            steps = add(steps, { type: "cover", rect, color: coverColor(await loaded.pixels(area), area, rect) });
+        }
+        hooks.change(steps);
     }
 
     // ---- the view ----
@@ -170,6 +311,10 @@ export function createStage(hooks: StageHooks) {
         const was = cropping();
         tool = next;
         picked = undefined;
+        hover = undefined;
+        run = undefined;
+        selection = undefined;
+        element.dataset.over = "";
         if (next === "crop") cropFrame = shown()?.crop;
         element.dataset.tool = next;
         if (was !== cropping()) fitView();
@@ -200,7 +345,7 @@ export function createStage(hooks: StageHooks) {
     }
 
     // ---- dragging ----
-    type Drag = { kind: "pan"; from: Point; view: View } | { kind: "frame"; handle: Handle; from: Point; start: Rect } | { kind: "draw"; from: Point } | { kind: "move"; id: string; from: Point; steps: Kept[]; beneath?: string };
+    type Drag = { kind: "pan"; from: Point; view: View } | { kind: "frame"; handle: Handle; from: Point; start: Rect } | { kind: "draw"; from: Point } | { kind: "move"; id: string; from: Point; steps: Kept[]; beneath?: string } | { kind: "words"; from: number } | { kind: "select"; from: number };
     let drag: Drag | undefined;
     let spaceHeld = false;
     const fingers = new Map<number, Point>();
@@ -256,7 +401,7 @@ export function createStage(hooks: StageHooks) {
         // (covers only with Hide or no tool, so that an arrow can start inside one); pressed again where one
         // is picked and let go without moving, the one beneath it is picked, round to the top again
         const steps = found.steps;
-        const pickable = steps.filter((step) => !step.off && (step.type === "arrow" || step.type === "box" || step.type === "text" || (step.type === "cover" && (tool === "hide" || tool === "none")))) as (Kept & (Mark | { type: "cover"; rect: Rect }))[];
+        const pickable = steps.filter((step) => !step.off && (step.type === "arrow" || step.type === "box" || step.type === "text" || (step.type === "cover" && (tool === "hide" || tool === "none" || tool === "read")))) as (Kept & (Mark | { type: "cover"; rect: Rect }))[];
         const under = allAt(pickable, there, 6 / place().across).map((at) => pickable[at]!);
         const now = under.findIndex((step) => step.id === picked);
         const target = under[Math.max(0, now)];
@@ -268,8 +413,20 @@ export function createStage(hooks: StageHooks) {
             return;
         }
         picked = undefined;
-        if (tool === "none") drag = { kind: "pan", from: at, view };
-        else drag = { kind: "draw", from: there };
+        // a word pressed: hidden when reading, selected with no tool
+        const word = words.length && (tool === "read" || tool === "none") ? wordAt(there) : undefined;
+        if (word !== undefined) {
+            if (tool === "read") {
+                drag = { kind: "words", from: word };
+                run = [word, word];
+            } else {
+                drag = { kind: "select", from: word };
+                selection = [word, word];
+            }
+        } else if (tool === "none" || tool === "read") {
+            selection = undefined;
+            drag = { kind: "pan", from: at, view };
+        } else drag = { kind: "draw", from: there };
         hooks.moved();
         paint();
     });
@@ -287,8 +444,23 @@ export function createStage(hooks: StageHooks) {
                 return paint();
             }
         }
+        if (!drag && loaded && words.length && event.pointerType !== "touch" && (tool === "read" || tool === "none")) {
+            // the word under the pointer, lit while reading, and the pointer saying text can be pressed
+            const over = wordAt(toOriginal(at));
+            element.dataset.over = over === undefined ? "" : "word";
+            if (tool === "read" && over !== hover) {
+                hover = over;
+                paint();
+            }
+        }
         if (!drag || !loaded) return;
         const there = toOriginal(at);
+        if (drag.kind === "words" || drag.kind === "select") {
+            const to = wordAt(there) ?? nearestWord(there) ?? drag.from;
+            if (drag.kind === "words") run = [drag.from, to];
+            else selection = [drag.from, to];
+            return paint();
+        }
         if (drag.kind === "pan") view = { ...drag.view, x: drag.view.x + at.x - drag.from.x, y: drag.view.y + at.y - drag.from.y };
         else if (drag.kind === "frame") cropFrame = dragFrame(drag.start, drag.handle, { x: there.x - drag.from.x, y: there.y - drag.from.y }, loaded.size, aspect ?? (event.shiftKey && drag.handle.length === 2 ? drag.start.width / drag.start.height : undefined));
         else if (drag.kind === "draw") live = drawing(drag.from, there);
@@ -300,6 +472,11 @@ export function createStage(hooks: StageHooks) {
         paint();
     }
     element.addEventListener("pointermove", follow);
+    element.addEventListener("pointerleave", () => {
+        if (hover === undefined) return;
+        hover = undefined;
+        paint();
+    });
 
     const letGo = async (event: PointerEvent) => {
         // the browser may hand over the last move only after letting go, so where it was let go counts
@@ -312,6 +489,18 @@ export function createStage(hooks: StageHooks) {
         const made = live;
         live = undefined;
         if (was.kind === "frame") return hooks.moved();
+        if (was.kind === "select") return hooks.moved();
+        if (was.kind === "words") {
+            const chosen = run;
+            run = undefined;
+            if (chosen) {
+                const indices: number[] = [];
+                for (let index = Math.min(...chosen); index <= Math.max(...chosen); index++) indices.push(index);
+                await hideWords(indices);
+            }
+            hooks.moved();
+            return paint();
+        }
         if (was.kind === "move") {
             const still = !made || made.every((step, at) => step === was.steps[at] || JSON.stringify(step) === JSON.stringify(was.steps[at]));
             if (!still) hooks.change(made!.map((step) => (step.type === "cover" && step.id === was.id ? { ...step, rect: within(step.rect, hooks.picture()!.original) } : step)));
@@ -343,6 +532,7 @@ export function createStage(hooks: StageHooks) {
     element.addEventListener("pointercancel", (event) => {
         live = undefined;
         drag = undefined;
+        run = undefined;
         fingers.delete(event.pointerId);
         pinch = undefined;
         paint();
@@ -466,7 +656,36 @@ export function createStage(hooks: StageHooks) {
             loaded = undefined;
             blob = undefined;
             picked = undefined;
+            words = [];
+            findings = [];
+            hover = run = selection = undefined;
             paint();
+        },
+        /** The words the reader found, and what of them looks private (each finding as the places of its words). */
+        setWords(lines: Line[], found: Finding[] = []) {
+            words = placeWords(lines);
+            const index = new Map<string, number>();
+            let at = 0;
+            lines.forEach((line, number) => line.words.forEach((_, word) => index.set(`${number},${word}`, at++)));
+            findings = found.map((finding) => finding.words.map((place) => index.get(`${place.line},${place.word}`)).filter((each): each is number => each !== undefined));
+            hover = run = selection = undefined;
+            paint();
+        },
+        /** The words on the stage. */
+        words: () => words,
+        /** Hides words by their indices, one cover a stretch of a line, as one change. */
+        hideWords,
+        /** Hides everything that looks private, as one change. */
+        hideFindings: () => hideWords(uncovered().flat()),
+        /** What looks private and is not yet covered, each thing as the indices of its words. */
+        findings: uncovered,
+        /** The text selected, or nothing. */
+        selected: (): string => (selection ? runText(words, selection[0], selection[1]) : ""),
+        /** Selects every word, or none. */
+        selectAll(all: boolean) {
+            selection = all && words.length ? [0, words.length - 1] : undefined;
+            paint();
+            hooks.moved();
         },
         loaded: () => loaded,
         tool: () => tool,

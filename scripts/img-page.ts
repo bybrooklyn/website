@@ -9,8 +9,8 @@ import { corePage, quire } from "./core-page";
 
 const TOP = '<header class="quire-top"><div class="quire-top-in"><div class="quire-top-line"><nav class="quire-trail"><a class="quire-word" href="/imgquire/">imgQuire</a><span class="quire-stroke quire-name-stroke">/</span><span class="quire-name-home"></span></nav><div class="quire-menus-home"></div><div class="quire-status-home"></div></div><div class="quire-bar-home"></div></div></header>';
 
-/** Opens the page with a database of its own, or gives undefined where there is no Chromium. */
-export async function imgPage(database: string, size = { width: 1300, height: 820 }) {
+/** Opens the page with a database of its own, or gives undefined where there is no Chromium; with `files`, served over HTTP as corePage says. */
+export async function imgPage(database: string, size = { width: 1300, height: 820 }, files?: (path: string) => Promise<Response | undefined>) {
     const page = await corePage(
         `
         import { startApp } from "${quire}/core/app.ts";
@@ -70,7 +70,7 @@ export async function imgPage(database: string, size = { width: 1300, height: 82
         window.box = (selector) => { const box = document.querySelector(selector)?.getBoundingClientRect(); return box && { x: box.x, y: box.y, width: box.width, height: box.height }; };
         startApp(document.querySelector("#host"), { kinds: [markdown({}), img()], database: ${JSON.stringify(database)}, top: document.querySelector(".quire-top") }).then((app) => (window.app = app));
     `,
-        { body: `${TOP}<div id="host" class="quire-host"></div>`, ...size },
+        { body: `${TOP}<div id="host" class="quire-host"></div>`, ...size, files },
     );
     if (!page) return undefined;
     const tab = page.tab;

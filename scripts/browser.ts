@@ -50,6 +50,14 @@ export interface Browser {
     wait(ms: number): Promise<void>;
     /** A PNG of the window, or of one rectangle of the page. */
     picture(clip?: { x: number; y: number; width: number; height: number }): Promise<Buffer>;
+    /**
+     * From now on, every request the page or its workers make is noted in `requests`, and one whose
+     * address starts with one of `prefixes` is answered by `answer` instead of the network (with
+     * nothing from `answer`, it fails). For a test that must reach nothing outside this machine.
+     */
+    serve(prefixes: string[], answer: (url: string) => Promise<{ body: Uint8Array; type?: string } | undefined>): Promise<void>;
+    /** The requests noted since `serve`: the method, the address, and whether a body was sent. */
+    requests: { method: string; url: string; body: boolean }[];
     /** Errors the page has thrown or logged since it was opened. */
     errors: string[];
     close(): Promise<void>;
@@ -148,6 +156,8 @@ export async function browser({ width = 1200, height = 800, scale = 1, port = 0,
     watch();
 
     const errors: string[] = [];
+    const requests: { method: string; url: string; body: boolean }[] = [];
+    let answering: { prefixes: string[]; answer: (url: string) => Promise<{ body: Uint8Array; type?: string } | undefined> } | undefined;
     const waiting = new Map<number, { answer: (said: any) => void; fail: (error: Error) => void }>();
     let loaded: { done: () => void; fail: (error: Error) => void } | undefined;
     let chosen: string[] = [];
@@ -199,6 +209,7 @@ export async function browser({ width = 1200, height = 800, scale = 1, port = 0,
             if (said.id) waiting.get(said.id)?.answer(said.result ?? {});
             if (said.method === "Page.loadEventFired") loaded?.done();
             if (said.method === "Page.fileChooserOpened" && said.params.backendNodeId) send("DOM.setFileInputFiles", { files: chosen, backendNodeId: said.params.backendNodeId }).catch(() => {});
+            if (said.method === "Fetch.requestPaused") void paused(said.params);
             if (said.method === "Runtime.exceptionThrown") errors.push(said.params.exceptionDetails.exception?.description ?? said.params.exceptionDetails.text);
             if (said.method === "Runtime.consoleAPICalled" && said.params.type === "error") errors.push(said.params.args.map((arg: any) => arg.value ?? arg.description).join(" "));
         };
@@ -213,6 +224,25 @@ export async function browser({ width = 1200, height = 800, scale = 1, port = 0,
         socket?.close();
         tidy();
         throw error;
+    }
+    /** A request held by `serve`: noted, then answered here or let through. */
+    async function paused(params: { requestId: string; request: { url: string; method: string; postData?: string; hasPostData?: boolean } }) {
+        const { url, method } = params.request;
+        requests.push({ method, url, body: !!(params.request.postData || params.request.hasPostData) });
+        const mine = answering?.prefixes.some((prefix) => url.startsWith(prefix));
+        if (!mine) return send("Fetch.continueRequest", { requestId: params.requestId }).catch(() => {});
+        const found = await answering!.answer(url).catch(() => undefined);
+        if (!found) return send("Fetch.failRequest", { requestId: params.requestId, errorReason: "ConnectionRefused" }).catch(() => {});
+        await send("Fetch.fulfillRequest", {
+            requestId: params.requestId,
+            responseCode: 200,
+            responseHeaders: [
+                { name: "Content-Type", value: found.type ?? "application/octet-stream" },
+                { name: "Access-Control-Allow-Origin", value: "*" },
+                { name: "Cross-Origin-Resource-Policy", value: "cross-origin" },
+            ],
+            body: Buffer.from(found.body).toString("base64"),
+        }).catch(() => {});
     }
     const flags = (keys: Held = {}) => (keys.alt ? 1 : 0) | (keys.ctrl ? 2 : 0) | (keys.meta ? 4 : 0) | (keys.shift ? 8 : 0);
     const mouse = (type: string, x: number, y: number, held = type === "mousePressed", keys: Held = {}) => send("Input.dispatchMouseEvent", { type, x, y, button: "left", buttons: held ? 1 : 0, clickCount: 1, modifiers: flags(keys) });
@@ -249,6 +279,12 @@ export async function browser({ width = 1200, height = 800, scale = 1, port = 0,
 
     return {
         errors,
+        requests,
+        async serve(prefixes, answer) {
+            answering = { prefixes, answer };
+            requests.length = 0;
+            await send("Fetch.enable", { patterns: [{ urlPattern: "*", requestStage: "Request" }] });
+        },
         wait,
         async open(url, settle = 500) {
             errors.length = 0;
