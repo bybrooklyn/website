@@ -23,10 +23,11 @@ import { gradingFor } from "./draw";
 import { createStage, type Pen, type Tool } from "./stage";
 import { createReading } from "./reading";
 import { gradePanel } from "./grade-panel";
+import { gradeMore } from "./grade-more";
 import { createMeasure } from "./measure";
 import { autoFix, averageAround, balanceFrom } from "./fix";
 import { prepared } from "./draw";
-import { isNeutral, neutral, trimGrade, type Grade } from "./grade";
+import { gradeOne, hueOf, isNeutral, MOST, neutral, space, trimGrade, type Grade } from "./grade";
 import { megabytes, sizeOf, TIERS } from "./read/models";
 import { createHistory, edited, fresh, gradeOf, look, move, readSteps, remove, setOnly, writeSteps, type Filter, type Kept, type Picture } from "./steps";
 
@@ -198,7 +199,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
         refresh();
         estimate.soon();
         if (grading.isOpen()) {
-            grading.fill();
+            fillGrade();
             void measureGrade();
         }
     }
@@ -642,12 +643,63 @@ export function mountEditor(host: HTMLElement, context: Context) {
         setSplit: (on) => stage.setSplit(on ? stage.element.clientWidth / 2 : undefined),
     });
     document.body.append(grading.panel);
+    // More: the tint, the curve, the wheels and colors on their own
+    const deeper = gradeMore({
+        grade: () => currentGrade(),
+        preview: (grade) => {
+            const steps = withGrade(grade);
+            stage.preview(steps);
+            void measureGrade(steps);
+        },
+        set: (grade) => {
+            stage.preview(undefined);
+            commit(withGrade(grade));
+        },
+        pickColor: () => {
+            if (asking) return cancelPick();
+            if (currentGrade().colors.length >= MOST.colors) return;
+            asking = { said: "Press a color in the picture" };
+            stage.arm((at) => void colorAt(at));
+            fillGrade();
+            refresh();
+        },
+        picking: () => asking?.said === "Press a color in the picture",
+    });
+    grading.deeper.append(deeper.element);
+    grading.more.addEventListener("toggle", () => grading.more.open && deeper.fill());
+    /** The surface and its deeper controls, as the grade now is. */
+    const fillGrade = () => {
+        grading.fill();
+        if (grading.more.open) deeper.fill();
+    };
+    /** A color picked: its hue as the shift will see it (the original's pixels round the place, graded up to the shift), added with nothing moved yet. */
+    async function colorAt(at: { x: number; y: number }) {
+        asking = undefined;
+        const loaded = stage.loaded();
+        if (!loaded) return;
+        const x = Math.round(Math.max(0, Math.min(loaded.size.width - 1, at.x)));
+        const y = Math.round(Math.max(0, Math.min(loaded.size.height - 1, at.y)));
+        const area = { x: Math.max(0, x - 2), y: Math.max(0, y - 2), width: Math.min(5, loaded.size.width - Math.max(0, x - 2)), height: Math.min(5, loaded.size.height - Math.max(0, y - 2)) };
+        const color = averageAround(await loaded.pixels(area), area.width, area.height, x - area.x, y - area.y);
+        const grade = currentGrade();
+        const seen = hueOf(gradeOne(color, prepared(grade, colors.space), space(colors.space), "colors"));
+        if (seen.chroma < 0.03) {
+            frame.status.say("Too gray", "That place is too near gray to pick a color from; press a stronger color");
+            fillGrade();
+            return refresh();
+        }
+        const hue = Math.round((((seen.hue * 180) / Math.PI) % 360 + 360) % 360);
+        commit(withGrade({ ...grade, colors: [...grade.colors, { hue, shift: 0, saturation: 0, lightness: 0 }] }));
+        frame.status.say("Color picked", `Hue ${hue}: its sliders are under Colors`);
+        fillGrade();
+        refresh();
+    }
     /** Lets a press asked for go, as Escape or Cancel does. */
     function cancelPick() {
         if (!asking) return;
         asking = undefined;
         stage.arm(undefined);
-        grading.fill();
+        fillGrade();
         refresh();
     }
     /** Balance: the warmth and tint that make the place pressed neutral, from the original's own pixels round it. */

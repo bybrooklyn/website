@@ -1181,10 +1181,132 @@
     }
 }
 
+/* More: the curve's square under its four channels, the three wheels in a row, and colors picked, each a small group of sliders */
+.quire-img-grade-more-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.quire-img-grade-heading {
+    margin: 0.5rem 0 0;
+    color: var(--muted);
+    font-size: 0.85rem;
+}
+
+.quire-img-curve {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.quire-img-curve-channels {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.25rem;
+}
+
+.quire-img-curve-channel {
+    min-height: 2rem;
+    border: 0.0625rem solid var(--rule);
+    border-radius: var(--quire-round-small);
+    background: none;
+    color: var(--muted);
+    font: inherit;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition:
+        border-color 0.15s ease,
+        color 0.15s ease;
+}
+
+.quire-img-curve-channel.moved {
+    color: var(--ink);
+}
+
+.quire-img-curve-channel.pressed {
+    border-color: var(--accent);
+    color: var(--ink);
+}
+
+.quire-img-curve-square {
+    display: block;
+    width: 100%;
+    aspect-ratio: 1;
+    border-radius: var(--quire-round-small);
+    background: color-mix(in oklch, var(--ground) 70%, transparent);
+    color: var(--ink);
+    cursor: crosshair;
+    touch-action: none;
+}
+
+.quire-img-curve-square:focus-visible,
+.quire-img-wheel-disc:focus-visible {
+    outline: 0.125rem solid var(--accent);
+    outline-offset: 0.1rem;
+}
+
+.quire-img-wheels {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.5rem;
+}
+
+.quire-img-wheel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.quire-img-wheel-disc {
+    display: block;
+    width: 100%;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    color: var(--ink);
+    cursor: crosshair;
+    touch-action: none;
+}
+
+.quire-img-wheel-label {
+    color: var(--muted);
+    font-size: 0.8rem;
+}
+
+.quire-img-wheel.moved .quire-img-wheel-label {
+    color: var(--ink);
+}
+
+.quire-img-own-colors {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+
+.quire-img-own-head {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+}
+
+.quire-img-own-head .quire-button {
+    margin-left: auto;
+}
+
+.quire-img-own-swatch {
+    width: 1rem;
+    height: 1rem;
+    border-radius: 50%;
+    box-shadow: inset 0 0 0 0.0625rem oklch(0.5 0 0 / 0.6);
+}
+
 @media (prefers-reduced-motion: reduce) {
     .quire-img-split,
     .quire-img-slider-thumb,
-    .quire-img-slider-label {
+    .quire-img-slider-label,
+    .quire-img-curve-channel {
         transition: none !important;
     }
 }
