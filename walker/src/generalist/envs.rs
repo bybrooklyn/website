@@ -24,6 +24,8 @@ use super::eyes::{self, PER_RAY, RAYS, Seen};
 use super::land::Land;
 use super::recipe::Recipe;
 use super::stage::Stage;
+use super::touch::{self, Visits};
+use crate::math::Vec2;
 use crate::physics::{STEP, World};
 
 /// What falling into a hazard or a gap costs, and what each unit of change in the actions costs.
@@ -86,6 +88,17 @@ impl Judge {
         let world = &stage.world;
         let torso = &world.bodies[body.creature.torso as usize];
         let along = torso.position.x + stage.origin - body.creature.start.x;
+        // while a hand holds it, where it is carried is not its doing: nothing is paid for it, and only
+        // its time can end its run
+        if touch::held(&body.creature, world) {
+            self.furthest = self.furthest.max(along);
+            self.stall_mark = self.furthest;
+            self.stall_steps = 0;
+            self.seconds_down = 0.0;
+            self.end = if self.steps >= self.most_steps { End::Time } else { End::Going };
+            self.score += reward;
+            return reward;
+        }
         if along > self.furthest {
             reward += along - self.furthest;
             self.furthest = along;
@@ -123,6 +136,17 @@ impl Judge {
     pub fn over(&self) -> bool {
         self.end != End::Going
     }
+
+    /// Takes up a run that had ended, as it is, when the visitor picks the creature up again: it goes
+    /// on being judged from here, with its time and its furthest as they were.
+    pub fn revive(&mut self) {
+        if self.end != End::Time {
+            self.end = End::Going;
+            self.stall_mark = self.furthest;
+            self.stall_steps = 0;
+            self.seconds_down = 0.0;
+        }
+    }
 }
 
 /// One creature in one world, from its start.
@@ -136,6 +160,12 @@ pub struct Run {
     /// Each foot's speed up (less than 0 falling) after the last step, and whether it was down, so a
     /// landing's speed can be charged for (`practice::Shaping::impact`).
     pub feet: [(f32, bool); 4],
+    /// The jolt its body feels (`touch::jolt`), and its body's speed after the last step, from which
+    /// the next jolt is found. Kept only for a body that feels touch.
+    pub jolt: Vec2,
+    last_velocity: Vec2,
+    /// Practice's visitor, for a run that has one (`touch::Visits`).
+    pub visits: Option<Visits>,
 }
 
 impl Run {
@@ -144,7 +174,8 @@ impl Run {
         let mut stage = Stage::new(land);
         let body = Body::build(&mut stage.world, legs)?;
         stage.keep(stage.world.bodies[body.creature.torso as usize].position.x);
-        Some(Run { stage, body, judge: Judge::new(seconds), seen: [(0.0, Seen::Nothing); RAYS], feet: [(0.0, true); 4] })
+        // the jolt of a body at rest: gravity, felt as one up
+        Some(Run { stage, body, judge: Judge::new(seconds), seen: [(0.0, Seen::Nothing); RAYS], feet: [(0.0, true); 4], jolt: Vec2::new(0.0, 1.0), last_velocity: Vec2::ZERO, visits: None })
     }
 
     /// Makes this run the same as another, reusing its memory.
@@ -154,6 +185,9 @@ impl Run {
         self.judge = other.judge;
         self.seen = other.seen;
         self.feet = other.feet;
+        self.jolt = other.jolt;
+        self.last_velocity = other.last_velocity;
+        self.visits.clone_from(&other.visits);
     }
 
     /// How many numbers it senses: the rays, then what it feels of itself.
@@ -168,6 +202,27 @@ impl Run {
         let (rays, feelings) = into.split_at_mut(RAYS * PER_RAY);
         eyes::see(&self.stage, torso, group, rays, &mut self.seen);
         self.body.feel(&self.stage.world, feelings);
+        if self.body.touch {
+            let at = feelings.len() - touch::felt(self.body.legs());
+            touch::feel(&self.body.creature, &self.stage.world, self.jolt, &mut feelings[at..]);
+        }
+    }
+
+    /// What comes after each step of the physics, before it is judged: the jolt its body felt, for a
+    /// body that feels touch. Practice and the page's show both call it at every step, so the jolt is
+    /// the same however often it is sensed.
+    pub fn after_step(&mut self) {
+        if self.body.touch {
+            let world = &self.stage.world;
+            let now = world.bodies[self.body.creature.torso as usize].velocity;
+            self.jolt = touch::jolt(self.jolt, self.last_velocity, now, world.gravity);
+            self.last_velocity = now;
+        }
+    }
+
+    /// Whether a hand holds it.
+    pub fn held(&self) -> bool {
+        touch::held(&self.body.creature, &self.stage.world)
     }
 
     /// What comes before a step: the world kept around the creature, and its joints set by the actions.
@@ -264,6 +319,7 @@ impl Envs {
         self.steps += count as u64;
         for i in 0..count {
             let run = &mut self.runs[i];
+            run.after_step();
             rewards[i] = run.judge.after_step(&run.stage, &run.body, &actions[i * wide..(i + 1) * wide]);
             let over = run.judge.over();
             done[i] = if over { 1.0 } else { 0.0 };

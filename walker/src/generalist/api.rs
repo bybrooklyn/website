@@ -159,7 +159,7 @@ pub extern "C" fn show_step(seconds: f32) -> u32 {
     page().map_or(0, |page| page.show_step(seconds))
 }
 
-number!(show_over, u32, 0, |page| u32::from(page.show.judge.over() && page.held.is_none()));
+number!(show_over, u32, 0, |page| u32::from(page.show.judge.over() && page.show.stage.world.hand.is_none()));
 number!(show_end, u32, 0, |page| page.show.judge.end as u32);
 number!(show_distance, f32, 0.0, |page| page.show.distance());
 number!(show_furthest, f32, 0.0, |page| page.show.judge.furthest);
@@ -171,24 +171,48 @@ list!(show_things, |page| page.things());
 list!(show_rays, |page| page.rays());
 list!(ray_angles, |page| page.ray_angles());
 
-/// Pushes the body or box nearest (x, y) with an impulse in newton seconds; its number, or -1.
+/// What a press at (x, y) would take hold of: 0 nothing, 1 the creature, 2 a thing that moves (a box,
+/// a moving platform, a see-saw's plank). For the pointer to show what can be taken hold of.
 #[unsafe(no_mangle)]
-pub extern "C" fn show_push(x: f32, y: f32, impulse_x: f32, impulse_y: f32) -> i32 {
-    page().map_or(-1, |page| page.show_push(Vec2::new(x, y), Vec2::new(impulse_x, impulse_y)))
+pub extern "C" fn show_under(x: f32, y: f32) -> u32 {
+    page().map_or(0, |page| page.show_under(Vec2::new(x, y)))
 }
 
-/// Holds the creature's body toward (x, y), as a hand carrying it, until `show_drop`.
+/// Takes hold of what is under (x, y) with the hand (`touch`), the creature by the part pressed or a
+/// thing; returns what it took hold of, as `show_under` says.
 #[unsafe(no_mangle)]
-pub extern "C" fn show_hold(x: f32, y: f32) {
+pub extern "C" fn show_grab(x: f32, y: f32) -> u32 {
+    page().map_or(0, |page| page.show_grab(Vec2::new(x, y)))
+}
+
+/// Moves the hand toward (x, y); what it holds follows as its spring and its weight let it.
+#[unsafe(no_mangle)]
+pub extern "C" fn show_hand(x: f32, y: f32) {
     if let Some(page) = page() {
-        page.held = Some(Vec2::new(x, y));
+        page.show_hand(Vec2::new(x, y));
     }
 }
 
+/// Lets go of what the hand holds.
 #[unsafe(no_mangle)]
-pub extern "C" fn show_drop() {
+pub extern "C" fn show_let_go() {
     if let Some(page) = page() {
-        page.held = None;
+        page.show_let_go();
+    }
+}
+
+/// What the hand holds, five f32: 0 nothing, 1 the creature, 2 a thing; where the hand is, x and y;
+/// and where on what it holds it holds it, x and y.
+#[unsafe(no_mangle)]
+pub extern "C" fn show_held() -> *const f32 {
+    match page() {
+        Some(page) => {
+            let (kind, hand, at) = page.show_held();
+            page.out.clear();
+            page.out.extend_from_slice(&[kind as f32, hand.x, hand.y, at.x, at.y]);
+            give(&page.out)
+        }
+        None => give(&[]),
     }
 }
 

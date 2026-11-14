@@ -491,6 +491,23 @@ impl World {
         Some(hand)
     }
 
+    /// How hard everything touching a body pressed on it in the last substep of the last step, in
+    /// newtons: the sum of what each contact point pushed it with, from the ground, a block or another
+    /// body. What a sense of touch reads.
+    pub fn pressed(&self, body: u32) -> f32 {
+        let h = self.stiffness.h;
+        if h <= 0.0 {
+            return 0.0;
+        }
+        let mut total = 0.0;
+        for contact in self.contacts.iter().filter(|contact| contact.a == body || contact.b == body) {
+            for point in &contact.points[..contact.count] {
+                total += point.normal_impulse;
+            }
+        }
+        total / h
+    }
+
     /// Whether this body is held by the hand, or is of the same group as the body it holds.
     pub fn careful(&self, body: usize) -> bool {
         self.hand.is_some_and(|hand| {

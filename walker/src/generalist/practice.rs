@@ -102,8 +102,20 @@ pub fn clear_ahead(run: &Run) -> bool {
     })
 }
 
-/// The shaped reward of a step just taken by `run` with `actions`, in its parts.
+/// The shaped reward of a step just taken by `run` with `actions`, in its parts. While a hand holds it,
+/// only what it does itself is charged, the motors' work and twitching: nothing is paid for where it
+/// is carried, and nothing is charged for how it hangs.
 pub fn shaped(run: &mut Run, shaping: Shaping, actions: &[f32]) -> Parts {
+    if run.held() {
+        let creature = &run.body.creature;
+        for (k, leg) in creature.legs.iter().enumerate() {
+            let foot = &run.stage.world.bodies[leg.lower as usize];
+            run.feet[k] = (foot.velocity.y, foot.touching);
+        }
+        let effort = -shaping.energy * creature.effort(&run.stage.world);
+        let run_part = run.judge.after_step(&run.stage, &run.body, actions);
+        return Parts { run: run_part, effort, ..Parts::default() };
+    }
     let world = &run.stage.world;
     let mut parts = Parts::default();
     let creature = &run.body.creature;
@@ -198,6 +210,13 @@ pub struct Way {
     /// Whether it senses the legs' rhythm (the sine and cosine of a steady clock): a clock to step
     /// to, which is a hint about how to move, so it can be taken away.
     pub clock: bool,
+    /// Whether it feels touch (`touch::feel`).
+    pub touch: bool,
+    /// How many seconds apart, on average, practice's visitor comes (`touch::Visits`), lifting it,
+    /// nudging it or pushing a box into it; 0 for no visitor. And the share of the visits due that it
+    /// makes, which `Practice::ramp` brings in with the costs.
+    pub visitor: f32,
+    pub visiting: f32,
 }
 
 impl Way {
@@ -207,6 +226,7 @@ impl Way {
         body.ease = self.ease;
         body.strength = self.strength;
         body.clock = self.clock;
+        body.touch = self.touch;
     }
 
     /// Dresses a run's body (`dress`) and sets its hips' reach forward, if this way changes it.
@@ -255,12 +275,15 @@ impl Way {
         if legs == 2 {
             shaping = Shaping { knee: 1.0, upright: 0.5, down: 0.0, lean: 1.0, pace: 1.0, stall: 3.0, impact: 0.05, ..shaping };
         }
-        Way { legs, direct: true, skip: 4, seconds: 30.0, shaping, hop: false, ramp: 4_000_000, ease: 1.0, strength: 1.0, hip: 0.0, clock: legs != 2 }
+        Way { legs, direct: true, skip: 4, seconds: 30.0, shaping, hop: false, ramp: 4_000_000, ease: 1.0, strength: 1.0, hip: 0.0, clock: legs != 2, touch: true, visitor: VISITOR, visiting: 1.0 }
     }
 }
 
 /// How far a world is made when a run starts, in metres; the stage makes more as the creature goes.
 const FIRST_MADE: f32 = 30.0;
+
+/// How many seconds apart practice's visitor comes, on average (`Way::visitor`).
+pub const VISITOR: f32 = 8.0;
 
 /// The seed of a practice world: run `run` of creature `creature` of stream `stream`, mixed, with the
 /// top bit set so it is never one of the held-out worlds.
@@ -316,8 +339,12 @@ impl Worlds {
         let mut worlds = Worlds::alone(recipe, way, &seeds)?;
         worlds.renew = true;
         worlds.stream = stream;
+        for (run, &seed) in worlds.runs.iter_mut().zip(&seeds) {
+            visit(run, way, seed);
+        }
         Some(worlds)
     }
+
 
     /// One creature in each world of these seeds, each stopping when its run ends.
     pub fn alone(recipe: Recipe, way: Way, seeds: &[u32]) -> Option<Worlds> {
@@ -351,9 +378,15 @@ impl Worlds {
         let shaping = self.way.shaping;
         for _ in 0..self.way.skip.max(1) {
             self.active.clear();
+            let (visitor, visiting) = (self.way.visitor, self.way.visiting);
             for i in 0..count {
                 if self.going[i] {
-                    self.runs[i].before_step(&self.held[i * wide..(i + 1) * wide]);
+                    let run = &mut self.runs[i];
+                    if let Some(mut visits) = run.visits.take() {
+                        visits.before_step(run, visitor, visiting);
+                        run.visits = Some(visits);
+                    }
+                    run.before_step(&self.held[i * wide..(i + 1) * wide]);
                     self.active.push(i);
                 }
             }
@@ -371,6 +404,7 @@ impl Worlds {
             for k in 0..self.active.len() {
                 let i = self.active[k];
                 let run = &mut self.runs[i];
+                run.after_step();
                 let parts = shaped(run, shaping, &self.held[i * wide..(i + 1) * wide]);
                 let idle = run.body.creature.flying(&run.stage.world) && !clear_ahead(run);
                 self.idle_air += u64::from(idle);
@@ -403,7 +437,8 @@ impl Worlds {
                         }
                         self.made[i] += 1;
                         let seed = practice_seed(self.stream, i as u32, self.made[i]);
-                        if let Some(fresh) = make(self.recipe, self.way, seed) {
+                        if let Some(mut fresh) = make(self.recipe, self.way, seed) {
+                            visit(&mut fresh, self.way, seed);
                             self.runs[i] = fresh;
                         }
                     }
@@ -414,6 +449,13 @@ impl Worlds {
 }
 
 /// A creature at the start of a fresh world of the recipe's kind with this seed.
+/// Gives a run practice's visitor, seeded by its world, if this way has one.
+fn visit(run: &mut Run, way: Way, seed: u32) {
+    if way.visitor > 0.0 {
+        run.visits = Some(super::touch::Visits::new(seed));
+    }
+}
+
 fn make(recipe: Recipe, way: Way, seed: u32) -> Option<Run> {
     let mut run = Run::new(Rc::new(Land::new(Recipe { seed, ..recipe }, FIRST_MADE)), way.legs, way.seconds)?;
     way.dress_run(&mut run);
@@ -560,6 +602,8 @@ impl Practice {
             way.shaping.lean = self.shaping.lean * along;
             // the time it may be down shortens from the run's own second to what is asked
             way.shaping.down = 1.0 + (self.shaping.down - 1.0) * along;
+            // and the visitor comes more often, from never to as often as asked
+            way.visiting = along;
         }
     }
 

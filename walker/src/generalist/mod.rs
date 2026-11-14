@@ -38,6 +38,7 @@ pub mod ppo;
 pub mod practice;
 pub mod recipe;
 pub mod stage;
+pub mod touch;
 
 #[cfg(test)]
 mod body_tests;
@@ -57,3 +58,5 @@ mod practice_tests;
 mod stage_tests;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod touch_tests;

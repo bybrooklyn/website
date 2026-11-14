@@ -30,7 +30,8 @@
 //!
 //! The gait trials' settings too (walker/README.md, "How two legs came to walk"): `pace=` (the top
 //! speed paid for), `stall=`, `impact=`, `lean=`, `spin=`, `bob=`, `swing=`, `torque=`, `smooth=`, `hip=`,
-//! `clock=`, `skip=`, `ease=`, `strength=`, `seconds=`, and learning's `entropy=`, `rate=`, `spread=`,
+//! `clock=`, `skip=`, `ease=`, `strength=`, `seconds=`, touch's `touch=` (0 for a body that feels no
+//! touch) and `visitor=` (seconds between practice's visitor's visits, 0 for none), and learning's `entropy=`, `rate=`, `spread=`,
 //! `gamma=`. `amounts=a,b,c,d` sets the world's four amounts (1 each unless given). Each mark prints
 //! an `open` line beside the main one, the gait on open ground in the same worlds, and with `flat=1` a
 //! `flat` line, on level ground with nothing on it. `kept=<path>` measures a learner the page kept
@@ -170,6 +171,8 @@ fn main() {
                 "smooth" => way.shaping.smooth = value,
                 "hip" => way.hip = value,
                 "clock" => way.clock = on,
+                "touch" => way.touch = on,
+                "visitor" => way.visitor = value,
                 "skip" => way.skip = value as u32,
                 "ease" => way.ease = value,
                 "strength" => way.strength = value,

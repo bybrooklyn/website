@@ -1,5 +1,6 @@
 //! Everything the generalist's page reaches, as one value: evolution learning in a world, a show of
-//! the best brain so far walking it in real time (to draw, push, pick up and drop), the world's ground,
+//! the best brain so far walking it in real time (to draw, and to take hold of: the creature by any part
+//! of it, and boxes, moving platforms and see-saws, with the hand of `touch`), the world's ground,
 //! platforms and hazards to draw, and many creatures stepped together for a learner. `api` hands each
 //! of these to the page as a plain exported function; this holds the work, so it is tested natively.
 //!
@@ -18,13 +19,13 @@ use super::ppo::{Learner, Settings};
 use super::practice::{Practice, Way};
 use super::recipe::Recipe;
 use super::stage::Thing;
+use super::touch;
 use crate::brain::Brain;
 use crate::math::Vec2;
 use crate::physics::STEP;
 
-/// How hard a held creature is drawn toward the hand, per second, and the fastest it goes.
-const HOLD_PULL: f32 = 12.0;
-const HOLD_FASTEST: f32 = 6.0;
+/// How near a body's surface a press must be to take hold of it, in metres.
+const REACH: f32 = 0.15;
 /// The most steps one call to `show_step` takes, so a page hidden a while does not freeze catching up.
 const MOST_STEPS: u32 = 8;
 
@@ -39,7 +40,6 @@ pub struct Page {
     brain: Brain,
     senses: Vec<f32>,
     leftover: f32,
-    pub held: Option<Vec2>,
     /// Lists the page reads, kept here between calls.
     pub out: Vec<f32>,
     pub weights_room: Vec<f32>,
@@ -82,7 +82,7 @@ impl Page {
         let land = Rc::new(super::land::Land::new(recipe, super::envs::MADE));
         let start = Run::new(land, legs, seconds)?;
         let layout = evolution.layout;
-        let mut page = Page { recipe, legs, seconds, brain: Brain::new(layout), senses: vec![0.0; layout.inputs], show: start.clone(), start, evolution, leftover: 0.0, held: None, out: Vec::new(), weights_room: vec![0.0; layout.weights()], evaluate_room: Vec::new(), evaluated: Vec::new(), envs: None, practice: None, policy: None, held_actions: Vec::new(), asked: Vec::new(), running_out: Vec::new(), running_room: Vec::new(), state_room: Vec::new(), parts: Default::default(), shown_weights: Vec::new() };
+        let mut page = Page { recipe, legs, seconds, brain: Brain::new(layout), senses: vec![0.0; layout.inputs], show: start.clone(), start, evolution, leftover: 0.0, out: Vec::new(), weights_room: vec![0.0; layout.weights()], evaluate_room: Vec::new(), evaluated: Vec::new(), envs: None, practice: None, policy: None, held_actions: Vec::new(), asked: Vec::new(), running_out: Vec::new(), running_room: Vec::new(), state_room: Vec::new(), parts: Default::default(), shown_weights: Vec::new() };
         page.show_reset();
         Some(page)
     }
@@ -94,6 +94,8 @@ impl Page {
         self.brain.load(&weights);
         self.shown_weights = weights;
         self.show.copy_from(&self.start);
+        // a policy that feels touch senses more than evolution's brain does
+        self.senses.resize(self.show.senses(), 0.0);
         self.show.sense(&mut self.senses);
         self.leftover = 0.0;
     }
@@ -103,7 +105,8 @@ impl Page {
     pub fn show_step(&mut self, seconds: f32) -> u32 {
         self.leftover += seconds;
         let mut taken = 0;
-        while self.leftover >= STEP && taken < MOST_STEPS && (!self.show.judge.over() || self.held.is_some()) {
+        // a run that has ended stands still, unless a hand holds something in its world
+        while self.leftover >= STEP && taken < MOST_STEPS && (!self.show.judge.over() || self.show.stage.world.hand.is_some()) {
             let actions = match &mut self.policy {
                 Some(policy) => {
                     // a policy decides every few steps, as it practised, and its actions are held between
@@ -123,20 +126,10 @@ impl Page {
                 }
             };
             self.show.before_step(&actions);
-            if let Some(hand) = self.held {
-                let world = &mut self.show.stage.world;
-                let torso = &mut world.bodies[self.show.body.creature.torso as usize];
-                let mut pull = (hand - Vec2::new(self.show.stage.origin, 0.0) - torso.position) * HOLD_PULL;
-                let speed = pull.length();
-                if speed > HOLD_FASTEST {
-                    pull = pull * (HOLD_FASTEST / speed);
-                }
-                torso.velocity = pull;
-                torso.spin *= 0.8;
-            }
             self.show.stage.world.step();
-            // while it is held its run does not go on being judged, so it is not ended in the air
-            if self.held.is_none() {
+            self.show.after_step();
+            // judged as it practised, held or not (`Judge::after_step` pays nothing while it is held)
+            if !self.show.judge.over() {
                 // the policy's run is judged as it practised, so the page can show what it is rewarded and charged for
                 if self.policy.is_some() {
                     let parts = super::practice::shaped(&mut self.show, Way::of(self.legs).shaping, &actions);
@@ -164,16 +157,74 @@ impl Page {
         taken
     }
 
-    /// The body or box nearest a point, pushed there with an impulse in newton seconds.
-    pub fn show_push(&mut self, at: Vec2, impulse: Vec2) -> i32 {
-        let world = &mut self.show.stage.world;
+    /// What is under a point, in metres from the start, to take hold of: the creature's part or the thing
+    /// (a box, a moving platform, a see-saw's plank) whose surface is nearest it within `REACH`, with
+    /// where on it the hand would hold, in the physics, and 1 for the creature or 2 for a thing.
+    fn under(&self, at: Vec2) -> Option<(u32, Vec2, u32)> {
+        let world = &self.show.stage.world;
         let at = at - Vec2::new(self.show.stage.origin, 0.0);
-        match world.nearest_body(at) {
-            Some((index, _)) if world.bodies[index as usize].moves() => {
-                world.bodies[index as usize].push(at, impulse);
-                index as i32
+        let creature = &self.show.body.creature;
+        let parts = core::iter::once(creature.torso).chain(creature.legs.iter().flat_map(|leg| [leg.upper, leg.lower])).map(|part| (part, 1));
+        let things = self.show.stage.made.iter().map(|made| (made.body, 2));
+        let mut best: Option<(u32, f32, u32)> = None;
+        for (body, kind) in parts.chain(things) {
+            let distance = world.bodies[body as usize].distance_to(at);
+            if distance < REACH && best.is_none_or(|(_, nearest, _)| distance < nearest) {
+                best = Some((body, distance, kind));
             }
-            _ => -1,
+        }
+        let (body, distance, kind) = best?;
+        // a press just off a body takes hold of the nearest point of its surface
+        let outline = world.bodies[body as usize].placed();
+        let (normal, _, _) = crate::physics::collide::nearest_to(&outline, at);
+        let point = if distance > 0.0 { at - normal * distance } else { at };
+        Some((body, point, kind))
+    }
+
+    /// What a press at a point would take hold of: 0 nothing, 1 the creature, 2 a thing that moves.
+    pub fn show_under(&self, at: Vec2) -> u32 {
+        self.under(at).map_or(0, |(_, _, kind)| kind)
+    }
+
+    /// Takes hold of what is under a point (`under`) with the hand, letting go of anything held before.
+    /// Picking up a creature whose run has ended takes its run up again from there. Returns what it
+    /// took hold of, as `show_under` says.
+    pub fn show_grab(&mut self, at: Vec2) -> u32 {
+        self.show_let_go();
+        let Some((body, point, kind)) = self.under(at) else { return 0 };
+        self.show.stage.take(body);
+        self.show.stage.world.hold(body, point, touch::STIFFNESS, touch::DAMPING, touch::MOST_FORCE, touch::FASTEST);
+        if kind == 1 {
+            self.show.judge.revive();
+        }
+        if self.show.stage.world.hand.is_none() { 0 } else { kind }
+    }
+
+    /// Moves the hand toward a point, in metres from the start; what it holds follows as its spring and
+    /// its weight let it.
+    pub fn show_hand(&mut self, at: Vec2) {
+        let origin = self.show.stage.origin;
+        if let Some(hand) = &mut self.show.stage.world.hand {
+            hand.goal = at - Vec2::new(origin, 0.0);
+        }
+    }
+
+    /// Lets go of what the hand holds: it keeps going as it was, no faster than `touch::THROW`, and a
+    /// moving platform stays where it was let go of.
+    pub fn show_let_go(&mut self) {
+        if let Some(hand) = self.show.stage.world.let_go(touch::THROW) {
+            self.show.stage.let_go_of(hand.body);
+        }
+    }
+
+    /// What the hand holds: 0 nothing, 1 the creature, 2 a thing; and where the hand is and where it
+    /// holds, in metres from the start.
+    pub fn show_held(&self) -> (u32, Vec2, Vec2) {
+        let world = &self.show.stage.world;
+        let origin = Vec2::new(self.show.stage.origin, 0.0);
+        match world.hand {
+            Some(hand) => (if self.show.held() { 1 } else { 2 }, hand.at + origin, hand.held_at(&world.bodies) + origin),
+            None => (0, Vec2::ZERO, Vec2::ZERO),
         }
     }
 
@@ -335,6 +386,7 @@ impl Page {
             self.start.body.ease = 1.0;
             self.start.body.strength = 1.0;
             self.start.body.clock = true;
+            self.start.body.touch = false;
             self.show_reset();
         }
     }
@@ -344,7 +396,7 @@ impl Page {
         let way = Way::of(self.legs);
         let mut body = self.start.body.clone();
         way.dress(&mut body);
-        let learner = Learner::new(Settings::default(), self.start.senses(), body.actions(), 1, 0);
+        let learner = Learner::new(Settings::default(), RAYS * eyes::PER_RAY + body.feelings(), body.actions(), 1, 0);
         (learner.state().len(), learner.running().len())
     }
 
