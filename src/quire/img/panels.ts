@@ -58,7 +58,7 @@ export function nameFor(file: string | undefined, now: Date): string {
 export const factsSaid = (size: { width: number; height: number }, bytes: number, format: string) => `${size.width} × ${size.height} px · ${weightSaid(bytes)} ${format}`;
 
 /** A panel at the side that starts below the bar, with its title and a way to close it; it slides in, and closing gives the keyboard back to what opened it. */
-function sidePanel(title: string, className: string) {
+function sidePanel(title: string, className: string, closed?: () => void) {
     const panel = make("aside", `quire-img-panel ${className}`);
     panel.setAttribute("aria-label", title);
     panel.inert = true;
@@ -67,9 +67,12 @@ function sidePanel(title: string, className: string) {
     let back: HTMLElement | undefined;
     const close = () => {
         if (!panel.classList.contains("open")) return;
+        // the keyboard goes back to what opened it before the panel stops taking it
+        const had = panel.contains(document.activeElement);
         panel.classList.remove("open");
         panel.inert = true;
-        if (panel.contains(document.activeElement)) back?.focus({ preventScroll: true });
+        if (had) back?.focus({ preventScroll: true });
+        closed?.();
     };
     head.append(make("span", "quire-outline-title", title), control("Close", icon("close"), close));
     panel.append(head, body);
@@ -93,8 +96,8 @@ function sidePanel(title: string, className: string) {
 }
 
 /** The steps list: every step in order, each switched on or off by its line, picked by pressing it, removed by its bin, and moved up or down with Alt and the arrows. */
-export function stepsPanel(hooks: { steps(): Kept[]; picked(): string | undefined; pick(id: string): void; toggle(id: string): void; remove(id: string): void; move(id: string, by: -1 | 1): void }) {
-    const side = sidePanel("Steps", "quire-img-steps");
+export function stepsPanel(hooks: { closed?(): void; steps(): Kept[]; picked(): string | undefined; pick(id: string): void; toggle(id: string): void; remove(id: string): void; move(id: string, by: -1 | 1): void }) {
+    const side = sidePanel("Steps", "quire-img-steps", () => hooks.closed?.());
     const list = make("ol", "quire-img-step-list");
     side.body.append(list);
     function fill() {

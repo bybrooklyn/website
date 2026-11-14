@@ -2,7 +2,7 @@
 
 One core that every Quire is built on, so that a new one is only a kind of document, its tools and its
 menus. The core is the app; each Quire is a kind of document plugged into it. mdQuire is the first kind,
-a plain note the second (kept to prove the interface and to start imgQuire from), and imgQuire is to be
+a plain note the second (kept to prove the interface and to start imgQuire from), and imgQuire, the picture editor, is
 the third.
 
 ## Where the code is
@@ -12,12 +12,16 @@ the third.
 - `src/quire/md/`: mdQuire, the Markdown word processor, with checking (`md/check/`) and dictation
   (`md/dictation/`). 97 source files, about 26,900 lines.
 - `src/quire/note/`: the plain note, the smallest kind. One file of about 130 lines and its test.
+- `src/quire/img/`: imgQuire, the picture editor ([imgQuire](imgQuire.md)). `kind.ts` registers it; its
+  editor takes a picture through `Editing.take`, and its `.quire` keeps its text in `steps.json` (`Kind.main`).
+- `src/pages/imgquire.astro` and `/mdquire/` mount the app with both mdQuire and imgQuire, over one database
+  (`src/scripts/quire-page.ts`), so the two pages show one shelf.
 - `src/pages/mdquire-kinds.astro` and `src/scripts/mdquire-kinds.ts`: a hidden page with both kinds on one
   shelf, its documents in a database of its own.
 - `scripts/core-page.ts`: the page the core's browser tests open.
 
 The core is a folder of its own rather than the top of `src/quire/`, so that `src/quire/` reads as the
-core and its kinds side by side (`core/`, `md/`, `note/`, later `img/`), and so that the rule for what may
+core and its kinds side by side (`core/`, `md/`, `note/`, `img/`), and so that the rule for what may
 import what is one line: nothing in `core/` reaches into another folder of `src/quire/`.
 
 ## Built
@@ -45,6 +49,7 @@ interface Kind {
     quiet?(): Template[];              // ways to start offered under the shelf's list (mdQuire's sample)
     files: { description; accept; chooser };  // what the file choosers offer for it
     row?: string;                      // a word in its shelf rows ("note"); none for the first kind
+    takes?(file): boolean;             // a file it makes a new document of when chosen, pasted or dropped on the shelf (pictures, for imgQuire)
     mount(host, context): Editing;     // its editor, on the app's element
 }
 ```

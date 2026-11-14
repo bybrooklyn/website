@@ -547,3 +547,8 @@
         transition: none !important;
     }
 }
+
+/* behind the home screen the picture's room is not seen, nor its line for an empty editor */
+.quire-host.shelved .quire-img-room {
+    visibility: hidden;
+}

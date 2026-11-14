@@ -332,6 +332,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
 
     // ---- what opens round the picture ----
     const steps = stepsPanel({
+        closed: () => refresh(),
         steps: () => history.now(),
         picked: () => stage.picked(),
         pick: (id) => stage.pick(id),
