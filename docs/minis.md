@@ -37,7 +37,7 @@ How to add a mini is in `src/mote/README.md`.
 - **The terminal** (not part of Mote): plays back a recorded run of a command-line program (an asciinema
   `.cast` file) with its timing. Nothing runs. It is used on the mFetchy and Terrustia project pages, and
   opens the way a picture does, on the same opener as the picture viewer.
-- The Walker, the generalist (a draft), Comet (a draft) and Sand (a draft, stage 1 of its plan) are minis too.
+- The Walker, the generalist (a draft), Comet (a draft) and Sand (a draft, stage 2 of its plan) are minis too.
 
 ## Decided
 
