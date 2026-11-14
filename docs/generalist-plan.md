@@ -3,8 +3,8 @@
 Dated 13 November 2026. Everything decided for the Generalist is in [generalist](generalist.md) under
 "Decided, not yet built". This file puts it in an order to build in, a stage at a time. The owner has
 agreed this order. The stages run one after another without waiting for her; she watches when she likes
-and the course changes if she says so. Whether the strict walking test stays the bar for shipping is
-decided after stage 2.
+and the course changes if she says so. The strict walking test is not the bar for
+shipping (decided 14 November 2026, after stage 2): it is still measured and printed, and does not block.
 
 ## Where it stands
 
