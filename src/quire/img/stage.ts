@@ -11,7 +11,7 @@
 import { backendFor, loadPicture, type Loaded, type Scene, type View } from "./draw";
 import { coverColor, ringArea } from "./cover";
 import { dragFrame, fit, HANDLES, oneToOne, shapeFrame, spanned, zoomAt, type Handle } from "./geometry";
-import { drawMarks, markAt, markBox, moved, type Place } from "./marks";
+import { allAt, drawMarks, markBox, moved, type Place } from "./marks";
 import { add, change, look, within, type Kept, type Look, type Mark, type Picture, type Point, type Rect } from "./steps";
 import { make } from "../core/ui";
 
@@ -200,7 +200,7 @@ export function createStage(hooks: StageHooks) {
     }
 
     // ---- dragging ----
-    type Drag = { kind: "pan"; from: Point; view: View } | { kind: "frame"; handle: Handle; from: Point; start: Rect } | { kind: "draw"; from: Point } | { kind: "move"; id: string; from: Point; steps: Kept[] };
+    type Drag = { kind: "pan"; from: Point; view: View } | { kind: "frame"; handle: Handle; from: Point; start: Rect } | { kind: "draw"; from: Point } | { kind: "move"; id: string; from: Point; steps: Kept[]; beneath?: string };
     let drag: Drag | undefined;
     let spaceHeld = false;
     const fingers = new Map<number, Point>();
@@ -221,6 +221,8 @@ export function createStage(hooks: StageHooks) {
     element.addEventListener("pointerdown", (event) => {
         if (event.button !== 0 && event.button !== 1) return;
         element.focus({ preventScroll: true });
+        // no selection and no dragging of what is under the pointer by the browser, which would cancel the drag part way
+        if (event.pointerType === "mouse") event.preventDefault();
         if (event.pointerType === "touch") {
             fingers.set(event.pointerId, pointer(event));
             if (fingers.size === 2) {
@@ -251,14 +253,16 @@ export function createStage(hooks: StageHooks) {
             return;
         }
         // a mark or a cover under the pointer is picked and can be moved, whatever the tool
+        // (covers only with Hide or no tool, so that an arrow can start inside one); pressed again where one
+        // is picked and let go without moving, the one beneath it is picked, round to the top again
         const steps = found.steps;
-        const marks = steps.filter((step) => !step.off && (step.type === "arrow" || step.type === "box" || step.type === "text")) as (Kept & Mark)[];
-        const hit = markAt(marks, there, 6 / place().across);
-        const cover = [...steps].reverse().find((step) => !step.off && step.type === "cover" && there.x >= step.rect.x && there.x <= step.rect.x + step.rect.width && there.y >= step.rect.y && there.y <= step.rect.y + step.rect.height);
-        const target = hit >= 0 ? marks[hit] : tool === "hide" || tool === "none" ? cover : undefined;
+        const pickable = steps.filter((step) => !step.off && (step.type === "arrow" || step.type === "box" || step.type === "text" || (step.type === "cover" && (tool === "hide" || tool === "none")))) as (Kept & (Mark | { type: "cover"; rect: Rect }))[];
+        const under = allAt(pickable, there, 6 / place().across).map((at) => pickable[at]!);
+        const now = under.findIndex((step) => step.id === picked);
+        const target = under[Math.max(0, now)];
         if (target) {
             picked = target.id;
-            drag = { kind: "move", id: target.id, from: there, steps };
+            drag = { kind: "move", id: target.id, from: there, steps, beneath: now >= 0 && under.length > 1 ? under[(now + 1) % under.length]!.id : undefined };
             hooks.moved();
             paint();
             return;
@@ -309,7 +313,12 @@ export function createStage(hooks: StageHooks) {
         live = undefined;
         if (was.kind === "frame") return hooks.moved();
         if (was.kind === "move") {
-            if (made && made !== was.steps) hooks.change(made.map((step) => (step.type === "cover" && step.id === was.id ? { ...step, rect: within(step.rect, hooks.picture()!.original) } : step)));
+            const still = !made || made.every((step, at) => step === was.steps[at] || JSON.stringify(step) === JSON.stringify(was.steps[at]));
+            if (!still) hooks.change(made!.map((step) => (step.type === "cover" && step.id === was.id ? { ...step, rect: within(step.rect, hooks.picture()!.original) } : step)));
+            else if (was.beneath) {
+                picked = was.beneath;
+                hooks.moved();
+            }
             return paint();
         }
         if (was.kind !== "draw" || !made) return paint();
@@ -330,7 +339,14 @@ export function createStage(hooks: StageHooks) {
         paint();
     };
     element.addEventListener("pointerup", (event) => void letGo(event));
-    element.addEventListener("pointercancel", (event) => void letGo(event));
+    // a drag the browser took away changes nothing
+    element.addEventListener("pointercancel", (event) => {
+        live = undefined;
+        drag = undefined;
+        fingers.delete(event.pointerId);
+        pinch = undefined;
+        paint();
+    });
 
     element.addEventListener(
         "wheel",

@@ -1,13 +1,13 @@
 // What opens round the picture, each the kind of surface the Quires give a job of its kind
-// (core/dialog.ts says the rule): the steps, something to consult, a side panel that starts below
-// the bar; the export, a side panel too, since it is looked at while choosing; resizing, a small
-// box of fields grown from its button; and a strip for the tool in hand, its few choices as icons.
+// (core/dialog.ts says the rule): the export, a side panel that starts below the bar, since it is
+// looked at while choosing, the picture making room beside it rather than lying under it;
+// resizing, a small box of fields grown from its button; and a strip for the tool in hand, its few choices as icons.
 // Each grows from what opened it and gives the keyboard back there when it closes.
 
-import { control, icon, make, still } from "../core/ui";
+import { control, icon, make, still, tipAway } from "../core/ui";
 import { switchButton } from "../core/dialog";
 import { FORMATS, readWeight, weightSaid, type Settings } from "./export";
-import type { Kept, Original, Rect } from "./steps";
+import type { Original, Rect } from "./steps";
 
 /** The colors a mark can be drawn in, named in their tooltips. */
 export const COLORS = [
@@ -34,16 +34,6 @@ export const SHAPES: { name: string; icon: string; value?: number | "original" }
     { name: "4:3", icon: "box", value: 4 / 3 },
     { name: "16:9", icon: "wide", value: 16 / 9 },
 ];
-
-/** A step in a few words, as the steps list shows it. */
-export function stepLabel(step: Kept): string {
-    if (step.type === "crop") return `Crop to ${Math.round(step.rect.width)} × ${Math.round(step.rect.height)}`;
-    if (step.type === "resize") return `Resize to ${step.width}${step.height ? ` × ${step.height}` : " wide"}`;
-    if (step.type === "cover") return "Hide";
-    if (step.type === "arrow") return "Arrow";
-    if (step.type === "box") return "Box";
-    return `Text “${step.text.length > 24 ? `${step.text.slice(0, 23).trimEnd()}…` : step.text}”`;
-}
 
 /** A document's name for a picture that arrived: the file's own name without its ending, or for a pasted screenshot (which comes named `image.png`) the day and time. */
 export function nameFor(file: string | undefined, now: Date): string {
@@ -88,6 +78,7 @@ function sidePanel(title: string, className: string, closed?: () => void) {
         isOpen: () => panel.classList.contains("open"),
         open(from: HTMLElement) {
             back = from;
+            tipAway();
             panel.inert = false;
             panel.classList.add("open");
         },
@@ -95,38 +86,9 @@ function sidePanel(title: string, className: string, closed?: () => void) {
     };
 }
 
-/** The steps list: every step in order, each switched on or off by its line, picked by pressing it, removed by its bin, and moved up or down with Alt and the arrows. */
-export function stepsPanel(hooks: { closed?(): void; steps(): Kept[]; picked(): string | undefined; pick(id: string): void; toggle(id: string): void; remove(id: string): void; move(id: string, by: -1 | 1): void }) {
-    const side = sidePanel("Steps", "quire-img-steps", () => hooks.closed?.());
-    const list = make("ol", "quire-img-step-list");
-    side.body.append(list);
-    function fill() {
-        const steps = hooks.steps();
-        list.replaceChildren(
-            ...steps.map((step, index) => {
-                const line = make("li", "quire-img-step");
-                line.classList.toggle("picked", step.id === hooks.picked());
-                line.style.setProperty("--line-at", String(Math.min(index, 12)));
-                const on = switchButton(stepLabel(step), !step.off, () => hooks.toggle(step.id));
-                on.addEventListener("focus", () => hooks.pick(step.id));
-                on.addEventListener("keydown", (event) => {
-                    if (!event.altKey || (event.key !== "ArrowUp" && event.key !== "ArrowDown")) return;
-                    event.preventDefault();
-                    hooks.move(step.id, event.key === "ArrowUp" ? -1 : 1);
-                    list.querySelectorAll<HTMLElement>(".quire-switch")[Math.max(0, Math.min(steps.length - 1, index + (event.key === "ArrowUp" ? -1 : 1)))]?.focus();
-                });
-                line.append(on, control("Remove", icon("trash"), () => hooks.remove(step.id)));
-                return line;
-            }),
-        );
-        if (!steps.length) list.append(make("li", "quire-history-none", "No steps yet."));
-    }
-    return { ...side, fill };
-}
-
 /** The export panel: the format, its quality or a weight to come in under, the result's size, the original and the result side by side at their own pixels, and Copy and Save. */
-export function exportPanel(hooks: { settings(): Settings; set(settings: Settings): void; copy(): void; save(): void }) {
-    const side = sidePanel("Export", "quire-img-export");
+export function exportPanel(hooks: { closed?(): void; settings(): Settings; set(settings: Settings): void; copy(): void; save(): void }) {
+    const side = sidePanel("Export", "quire-img-export", () => hooks.closed?.());
     const formats = make("div", "quire-img-formats");
     formats.setAttribute("role", "radiogroup");
     formats.setAttribute("aria-label", "Format");
@@ -280,10 +242,12 @@ export function resizeBox(hooks: { size(): { width: number; height: number }; ap
         }
     });
     /** Closes the box: back to its button, or to the picture once a size was applied. */
+    let opener: HTMLElement | undefined;
     function close(applied = false) {
         if (!box.classList.contains("open")) return;
         box.classList.remove("open");
         box.inert = true;
+        opener?.classList.remove("open");
         if (applied) hooks.done();
         else hooks.back();
     }
@@ -292,6 +256,10 @@ export function resizeBox(hooks: { size(): { width: number; height: number }; ap
         box,
         isOpen: () => box.classList.contains("open"),
         open(from: HTMLElement) {
+            // its button is lit while the box is open, and so shows no tooltip under it, as the bar's buttons do in mdQuire
+            opener = from;
+            from.classList.add("open");
+            tipAway();
             const size = hooks.size();
             percent = false;
             unit.set(false);
