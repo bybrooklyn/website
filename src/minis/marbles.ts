@@ -55,7 +55,7 @@ const FLY = 0.28;
 const STREAM = 0.6;
 /** How fast a marble strikes each thing for the strike to sound at its hardest, in cm/s: a metre's drop is 340. */
 const HARD: Record<Strike, number> = { wood: 150, glass: 120, metal: 130, chime: 110, bell: 110, drum: 110 };
-/** How long the ghost may work each frame, in milliseconds: less while something is carried or a point dragged, so that the drag stays smooth. */
+/** How long the ghost may work each frame, in milliseconds: less while something is carried or a point dragged, so that the drag stays smooth, and while marbles are in play, when the moving parts they turn start it again often. */
 const GHOST_WORK = { carrying: 2.5, still: 6 };
 
 /** What a piece is drawn with, in its own place: blocks of track, plain boxes, glass, what is struck and sounds, and its moving part as it rests, which is drawn so only where the physics does not have it (in the box, carried, flying). */
@@ -1936,7 +1936,7 @@ export default function marbles(m: Mote): Scene {
         }
         const before = performance.now();
         if (!ghost.done) {
-            ghost.work(carried || bendDrag ? GHOST_WORK.carrying : GHOST_WORK.still);
+            ghost.work(carried || bendDrag || table.running ? GHOST_WORK.carrying : GHOST_WORK.still);
             if (ghost.done && !carried) {
                 ghostMarked = ghostMarks(ghost.paths, openMarks);
                 redraw();
