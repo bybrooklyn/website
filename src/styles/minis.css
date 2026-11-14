@@ -376,7 +376,8 @@
 }
 
 .mote-panel .marbles-tool[aria-pressed="true"],
-.mote-panel .marbles-tool[aria-expanded="true"] {
+.mote-panel .marbles-tool[aria-expanded="true"],
+.marbles-strip .marbles-tool[aria-pressed="true"] {
     color: var(--accent);
     background: color-mix(in oklch, var(--accent) 22%, transparent);
 }
@@ -386,7 +387,8 @@
     scale: 0.94;
 }
 
-.mote-panel .marbles-tool:disabled {
+.mote-panel .marbles-tool:disabled,
+.marbles-strip .marbles-tool:disabled {
     opacity: 0.35;
     cursor: default;
 }

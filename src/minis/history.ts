@@ -26,6 +26,13 @@ export function recorded(steps: Steps, text: string): Steps {
     return { texts: [...steps.texts.slice(0, steps.at + 1), text], at: steps.at + 1 };
 }
 
+/** The state shown put in place of itself, and whatever had been undone past it gone: for a change that goes on from the last one as part of it, such as presses of a key moving one point. Changing the first state is a new step instead. */
+export function replaced(steps: Steps, text: string): Steps {
+    if (steps.at === 0) return recorded(steps, text);
+    if (steps.texts[steps.at - 1] === text) return { texts: steps.texts.slice(0, steps.at), at: steps.at - 1 };
+    return { texts: [...steps.texts.slice(0, steps.at), text], at: steps.at };
+}
+
 /** A step back, if there is one. */
 export const undone = (steps: Steps): Steps => ({ ...steps, at: Math.max(0, steps.at - 1) });
 /** A step forward again, if one was undone. */
