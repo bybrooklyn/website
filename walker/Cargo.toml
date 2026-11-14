@@ -57,3 +57,7 @@ panic = "abort"
 # Tests run the physics for many seconds, which is slow without optimising.
 [profile.test]
 opt-level = 3
+
+[[example]]
+name = "touched"
+required-features = ["generalist"]
