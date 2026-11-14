@@ -229,7 +229,7 @@ export const TRAPDOOR = { arms: [6.6, 5.0], hold: 9.1, reach: 3, rise: (10 * Mat
 export const SWITCH = { pivot: -5, lean: 0.45 };
 
 /** The lift's numbers: its speed in cm/s, how long it eases in and out of that speed, and how long it waits at the bottom and the top, in seconds. */
-export const LIFT = { speed: 15, ease: 0.12, waits: [0.5, 0.6] as [number, number] };
+export const LIFT = { speed: 20, ease: 0.12, waits: [0.45, 0.5] as [number, number] };
 /** The hoist's numbers: its chain's speed in cm/s, and the spacing its paddles are given, about. */
 export const HOIST = { speed: 16, spacing: 9 };
 
