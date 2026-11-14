@@ -18,11 +18,10 @@
 
 import { insetOf, DIALOG, switchButton } from "../core/dialog";
 import { blockAt, removeBlock, setAlign, setImage, type Align, type Image } from "./document";
-import { enterGivesBack } from "./fields";
+import { type Box, control, dots, EASE, enterGivesBack, flowMenu, icon, make, type MenuItem, MOTION, springCurve, still } from "../core/ui";
 import { landedAt, landings, moveBlockTo, snapWidth, staysPut } from "./pictures";
 import { linesAround, placeClear } from "../core/strips";
 import type { Operation, Surface } from "./surface";
-import { control, dots, EASE, flowMenu, icon, make, MOTION, springCurve, still, type Box, type MenuItem } from "../core/ui";
 
 /** Draws a picture block for the surface: the picture at its width, and its caption under it when it has one. */
 export function drawPicture(block: Image, inner: number[]): HTMLElement {

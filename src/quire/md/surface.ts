@@ -52,7 +52,8 @@ import { calloutName, languageLabel } from "./block-menus";
 import { maths } from "./maths";
 import { namesIn } from "./check/names";
 import { bookmarkName } from "./bookmarks";
-import { afterField, finishes, freshFold, type FieldKind } from "./fields";
+import { afterField, freshFold, type FieldKind } from "./fields";
+import { finishes } from "../core/ui";
 import { webAddress } from "./link-card";
 
 /** What the host gives the surface. `onImage` stores a pasted or dropped picture and gives back its address. */

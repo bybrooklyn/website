@@ -5,9 +5,8 @@
 // What is shown is built here; app.ts says what each choice does. Filtering a long list is pure and
 // tested.
 
-import { enterGivesBack } from "../md/fields";
 import type { Entry } from "./store";
-import { composing, control, icon, make } from "./ui";
+import { composing, control, enterGivesBack, icon, make } from "./ui";
 
 /** The entries whose name has every word of the query in it, in the order they came. */
 export function filterEntries(entries: Entry[], query: string): Entry[] {

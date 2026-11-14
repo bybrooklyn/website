@@ -14,7 +14,8 @@
 // Without a store the editor writes nowhere, as in the tests of its parts.
 
 import { addCode, addDivider, addFootnote, addTable, align, aligned, clearFormat, createBar, indentBy, link as linkAction, linkAt, setStyleOf, toggle, toggleList, toggleSubtext, type Action } from "./bar";
-import { createMenuRow, headings, menuFor, type RowActions } from "../core/menu-row";
+import { createMenuRow, menuFor } from "../core/menu-row";
+import { headings, type RowActions } from "./menus";
 import { blockAt, blockPaths, countWords, documentOf, lengthOf } from "./document";
 import { createConflict } from "../core/conflict";
 import { createDictation } from "./dictation/dictation";
@@ -29,6 +30,7 @@ import { createSelectBar } from "./select-bar";
 import { createLinkCard } from "./link-card";
 import { boxOf, component, definitionList, drawnBlock } from "./slash";
 import { createPalette } from "../core/palette";
+import { createSlashMenu, paletteFor } from "./slash-menu";
 import { createEmojiPicker, emojiAtCursor, emojiGrid, putter } from "./emoji-picker";
 import { copyDocument, createSaver, fileName, said, type Entry, type Opened, type Status, type Store } from "../core/store";
 import { copyName } from "../core/shelf";
@@ -39,7 +41,7 @@ import { createBlockMenus } from "./block-menus";
 import { createTextMenu } from "./text-menu";
 import { createCommentMargin, keptNotes, moveNotes } from "./comment-margin";
 import { addContents, dateText, findContents, specialGrid, typeIn, typeSpecial, updateContents } from "./inserts";
-import { colorHex, countRows, gatherPictures, heldElsewhere, markdownFor, pageHtml, pictureAddresses, plainText, readingStyles, type Picture } from "./export";
+import { colorHex, gatherPictures, heldElsewhere, markdownFor, pageHtml, pictureAddresses, plainText, readingStyles, type Picture } from "./export";
 import { docx } from "./docx";
 import { aboutPanel, control, flowMenu, keySymbols, linkForm, make, type MenuItem } from "../core/ui";
 import { openDialog } from "../core/dialog";
@@ -54,7 +56,7 @@ import { pictureType, withoutMetadata } from "./pictures";
 import { crc32 } from "../core/zip";
 import { PAGE } from "./styling";
 import { createCaret, FLAG, FLAG_ON_PAPER } from "./caret";
-import { createLiveCount } from "../core/live-count";
+import { countRows, createLiveCount } from "../core/live-count";
 import { createDetails, keptLine, lengthLine, sizeLine } from "../core/details";
 import { createFind } from "./find";
 import { mountChecking } from "./check/mount";
@@ -856,7 +858,9 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
                 selectMatching: () => matching.start(),
     };
     // the command palette: the menus' lines and what fits where the cursor is, from the bottom left corner or a slash on an empty line (palette.ts)
-    const palette = createPalette(surface, { menus: () => row.headings(), reveal: (path) => row.reveal(path), table: tableTools.lines, picture: pictureTools.lines, pickImage: bar.pickImage, corner: host });
+    // the slash menu first, so that its list is the first of the two in the page, as when they were one
+    const slash = createSlashMenu(surface, { pickImage: bar.pickImage });
+    const palette = createPalette({ ...paletteFor(surface, { table: tableTools.lines, picture: pictureTools.lines }), menus: () => row.headings(), reveal: (path) => row.reveal(path), corner: host });
     // a right-click in the text, or the menu key, opens the menus' own lines for it there
     const textMenu = createTextMenu(surface, () => row.headings(), (at) => checking.linesAt(at));
     const row = createMenuRow(() =>
@@ -1304,6 +1308,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
             selectBar.element.remove();
             linkCard.element.remove();
             palette.destroy();
+            slash.destroy();
             textMenu.destroy();
             emojiList.close();
             suggestions.destroy();

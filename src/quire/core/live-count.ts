@@ -7,10 +7,24 @@
 //   counter.show(true); counter.update();
 //
 // The words it says are made by `countLines`, which is pure and tested; the counting is the word
-// count's own (countRows in export.ts).
+// count's own (countRows, here, which mdQuire's Word count dialog uses too). It counts plain text, which
+// the kind of document gives it.
 
-import { countRows } from "../md/export";
 import { make } from "./ui";
+
+/** The rows of the word count, as Docs shows them: words, characters, characters without spaces, and paragraphs, for the whole text and for a part of it if given. */
+export function countRows(whole: string, part?: string): [string, number, number | undefined][] {
+    const words = (text: string) => (text.match(/[\p{L}\p{N}][\p{L}\p{N}'’_-]*/gu) ?? []).length;
+    const characters = (text: string) => [...text.replace(/\n/g, "")].length;
+    const solid = (text: string) => [...text.replace(/\s/g, "")].length;
+    const paragraphs = (text: string) => text.split(/\n\s*\n/).filter((each) => each.trim() !== "").length;
+    return [
+        ["Words", words(whole), part === undefined ? undefined : words(part)],
+        ["Characters", characters(whole), part === undefined ? undefined : characters(part)],
+        ["Characters, no spaces", solid(whole), part === undefined ? undefined : solid(part)],
+        ["Paragraphs", paragraphs(whole), part === undefined ? undefined : paragraphs(part)],
+    ];
+}
 
 /** What the counter counts: the whole text, the selected text if any, and the pages in page view. */
 export interface Counted {

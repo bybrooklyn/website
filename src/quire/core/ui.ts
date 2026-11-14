@@ -328,6 +328,35 @@ export function composing(event: KeyboardEvent): boolean {
     return event.isComposing || event.keyCode === 229;
 }
 
+/** Whether a key is the Enter that finishes a field, and not one an input method uses to choose a word. */
+export function finishes(event: KeyboardEvent): boolean {
+    return event.key === "Enter" && !event.shiftKey && !event.isComposing && event.keyCode !== 229;
+}
+
+/**
+ * Makes Enter in a field keep what was typed, by `keep` with the value trimmed, and then give the
+ * keyboard back by `back`. The field's own change event, when it is left another way, keeps it too,
+ * once: a value already kept is not kept again.
+ */
+export function enterGivesBack(field: HTMLInputElement, keep: (value: string) => void, back: () => void) {
+    let kept = field.value.trim();
+    const once = () => {
+        const value = field.value.trim();
+        if (value === kept) return;
+        kept = value;
+        keep(value);
+    };
+    field.addEventListener("focus", () => (kept = field.value.trim()));
+    field.addEventListener("change", once);
+    field.addEventListener("keydown", (event) => {
+        if (!finishes(event)) return;
+        event.preventDefault();
+        event.stopPropagation();
+        once();
+        back();
+    });
+}
+
 /** A field for a link's address, with a button to set it and, for a link already there, one to take it off. Enter sets, Escape cancels. */
 export function linkForm(current: string | undefined, done: { set(href: string): void; remove(): void; cancel(): void }, places: { label: string; href: string; kind: string }[] = []): HTMLElement {
     const form = fieldForm({ value: current, label: "Link address", placeholder: "Paste or type an address", type: "url", button: "Set", said: "Set the link" }, { set: (href) => (href ? done.set(href) : current ? done.remove() : done.cancel()), cancel: done.cancel });

@@ -3,8 +3,8 @@
 // gives the keyboard back to the writing, at the place the field belongs to, so the next key typed
 // goes on with the work. It never leaves the keyboard on the page's body, where keys do nothing.
 //
-// Where the caret goes is decided by afterField, which is pure and tested; enterGivesBack is the one
-// DOM helper the fields outside the text use.
+// Where the caret goes is decided by afterField, which is pure and tested; enterGivesBack, the one
+// DOM helper the fields outside the text use, is the core's (core/ui.ts), as the documents list uses it too.
 
 import { blockAt, blockPaths, type Document, type Position } from "./document";
 
@@ -54,31 +54,3 @@ export function freshFold(before: Document, after: Document, caret: number[]): n
     return undefined;
 }
 
-/** Whether a key is the Enter that finishes a field, and not one an input method uses to choose a word. */
-export function finishes(event: KeyboardEvent): boolean {
-    return event.key === "Enter" && !event.shiftKey && !event.isComposing && event.keyCode !== 229;
-}
-
-/**
- * Makes Enter in a field keep what was typed, by `keep` with the value trimmed, and then give the
- * keyboard back by `back`. The field's own change event, when it is left another way, keeps it too,
- * once: a value already kept is not kept again.
- */
-export function enterGivesBack(field: HTMLInputElement, keep: (value: string) => void, back: () => void) {
-    let kept = field.value.trim();
-    const once = () => {
-        const value = field.value.trim();
-        if (value === kept) return;
-        kept = value;
-        keep(value);
-    };
-    field.addEventListener("focus", () => (kept = field.value.trim()));
-    field.addEventListener("change", once);
-    field.addEventListener("keydown", (event) => {
-        if (!finishes(event)) return;
-        event.preventDefault();
-        event.stopPropagation();
-        once();
-        back();
-    });
-}

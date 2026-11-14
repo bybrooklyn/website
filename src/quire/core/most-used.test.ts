@@ -1,82 +1,20 @@
-// What the slash menu's learning is held to: it counts what a change made however it was made,
-// ranks the most made first with ties in the menu's order, opens on the first five before anything
-// is counted, and reads rubbish kept in the browser as nothing counted.
+// What the counts of what is used most are held to, for any kind of document: one more for each
+// thing counted, the most used first with ties keeping their order, and rubbish kept in the browser
+// read as nothing counted. mdQuire's own counting is held in md/made.test.ts.
 
 import { expect, test } from "bun:test";
-import { documentOf, paragraph } from "../md/document";
-import { caret, handle } from "../md/keys";
-import { counted, FIRST_FIVE, made, opening, ranked, readCounts, tally } from "./most-used";
-import { read } from "../md/read";
-import { filterSlash, SLASH_KEYS } from "../md/slash";
+import { counted, ranked, readCounts } from "./most-used";
 
-const keys = (items: { key: string }[]) => items.map((item) => item.key);
-
-/** Types each character into an empty document, as the keyboard would, and gives back what the last one made, if it was a Markdown mark. */
-function typed(text: string): string[] {
-    let state = { doc: documentOf([paragraph()]), selection: caret([0], 0) };
-    let last: string[] = [];
-    for (const character of text) {
-        const outcome = handle(state, { type: "text", text: character });
-        if (!outcome || !("state" in outcome)) throw new Error(`nothing came of ${character}`);
-        last = outcome.kind === "shortcut" ? made(state.doc, outcome.state.doc) : [];
-        state = { doc: outcome.state.doc, selection: outcome.state.selection };
-    }
-    return last;
-}
-
-test("before anything is counted, the menu opens on Heading 2, Bulleted list, Checklist, Picture and Code block", () => {
-    expect(keys(filterSlash("", false)).slice(0, 5)).toEqual(FIRST_FIVE);
-    expect(keys(filterSlash("", false)).slice(0, 5)).toEqual(["heading2", "bullet", "task", "image", "code"]);
-    // the rest follow in the menu's own order
-    expect(keys(filterSlash("", false)).slice(5, 8)).toEqual(["heading1", "heading3", "number"]);
+test("one more is counted for each key, and a key not counted before starts at one", () => {
+    expect(counted({ stamp: 2 }, ["stamp", "tidy"])).toEqual({ stamp: 3, tidy: 1 });
 });
 
-test("the most made come first, and those made as often keep the order they had", () => {
-    expect(keys(filterSlash("", false, { bullet: 3 })).slice(0, 5)).toEqual(["bullet", "heading2", "task", "image", "code"]);
-    expect(keys(filterSlash("", false, { table: 2, quote: 2, code: 1 })).slice(0, 5)).toEqual(["quote", "table", "code", "heading2", "bullet"]);
-    expect(keys(ranked([{ key: "a" }, { key: "b" }, { key: "c" }], { c: 1 }))).toEqual(["c", "a", "b"]);
-    expect(keys(opening([{ key: "x" }, { key: "code" }], {}))).toEqual(["code", "x"]);
+test("the most used come first, and those used as often keep the order they came in", () => {
+    const items = ["a", "b", "c", "d"].map((key) => ({ key }));
+    expect(ranked(items, { c: 2, d: 2, a: 1 }).map((item) => item.key)).toEqual(["c", "d", "a", "b"]);
 });
 
-test("typing after the slash puts the most made first among those that match as well", () => {
-    expect(keys(filterSlash("head", false, { heading3: 4 }))).toEqual(["heading3", "heading1", "heading2"]);
-    // a match by name still comes before a match by another word, however often the other is made
-    expect(keys(filterSlash("list", false, { definitions: 9 }))).toEqual(["definitions", "bullet", "number"]);
-    // Horizontal line has "li" in its name, so it is a match by name, and the most made of those comes first
-    expect(keys(filterSlash("li", false, { divider: 9 }))).toEqual(["divider", "bullet", "number", "definitions"]);
-});
-
-test("the site's components stay in MDX files alone, however often they were made", () => {
-    expect(filterSlash("", false, { figure: 50 }).some((item) => item.mdx)).toBe(false);
-    expect(keys(filterSlash("", true, { figure: 50 }))[0]).toBe("figure");
-});
-
-test("rubbish kept in the browser reads as nothing counted, and only whole counts of known things are kept", () => {
-    for (const kept of [null, "", "not json", "[1,2]", "null", "7", '"text"']) expect(readCounts(kept, SLASH_KEYS)).toEqual({});
-    expect(readCounts('{"bullet":3,"nonsense":4,"code":-1,"table":1.5,"quote":"2","task":0,"__proto__":5}', SLASH_KEYS)).toEqual({ bullet: 3 });
-});
-
-test("one more is counted for each thing made", () => {
-    expect(counted({ bullet: 1 }, ["bullet", "code"])).toEqual({ bullet: 2, code: 1 });
-});
-
-test("a typed Markdown mark counts what it made", () => {
-    expect(typed("* ")).toEqual(["bullet"]);
-    expect(typed("## ")).toEqual(["heading2"]);
-    expect(typed("``` ")).toEqual(["code"]);
-    expect(typed("```rust ")).toEqual(["code"]);
-    expect(typed("> ")).toEqual(["quote"]);
-    expect(typed("[ ] ")).toEqual(["task"]);
-    expect(typed("1. ")).toEqual(["number"]);
-    expect(typed("---")).toEqual(["divider"]);
-    expect(typed("$$")).toEqual(["maths"]);
-});
-
-test("what a change made is what there is more of after it, so a new item of a list already there counts and a changed one does not", () => {
-    expect(made(read("- a\n"), read("- a\n- b\n"))).toEqual(["bullet"]);
-    expect(made(read("# A\n"), read("## A\n"))).toEqual(["heading2"]);
-    expect(made(read("- a\n"), read("1. a\n"))).toEqual(["number"]);
-    expect(made(read("Text\n"), read("Text\n"))).toEqual([]);
-    expect(made(read("## A\n"), read("A\n"))).toEqual([]);
-    expect(tally(read("> [!NOTE]\n> a\n\n![x](y.png)\n\n| a |\n| - |\n| b |\n\n```mermaid\nA\n```\n"))).toEqual({ callout: 1, image: 1, table: 1, diagram: 1 });
+test("rubbish reads as nothing counted, and with nothing known given any whole count is kept", () => {
+    for (const kept of [null, "", "not json", "[1,2]", "null", "7"]) expect(readCounts(kept)).toEqual({});
+    expect(readCounts('{"stamp":3,"tidy":0,"odd":1.5}')).toEqual({ stamp: 3 });
 });

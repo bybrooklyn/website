@@ -9,7 +9,7 @@ import { setStyleOf, type Action } from "./bar";
 import { addBookmark, suggestedName } from "./bookmarks";
 import { recase, type Case } from "./capitals";
 import type { List } from "./document";
-import type { RowActions } from "../core/menu-row";
+import type { RowActions } from "./menus";
 import { continuePrevious, listHere, markWith, restartAt } from "./numbering";
 import type { Surface } from "./surface";
 import { fieldForm, RULE, type MenuItem } from "../core/ui";

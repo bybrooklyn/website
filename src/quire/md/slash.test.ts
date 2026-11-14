@@ -96,12 +96,12 @@ test.skipIf(!chromium())(
             await Bun.write(
                 `${folder}/page.ts`,
                 `import { createSurface } from "${import.meta.dir}/surface.ts";
-                import { createPalette } from "${import.meta.dir}/../core/palette.ts";
+                import { createSlashMenu } from "${import.meta.dir}/slash-menu.ts";
                 import { createEmojiPicker } from "${import.meta.dir}/emoji-picker.ts";
                 import { read } from "${import.meta.dir}/read.ts";
                 const sheet = document.querySelector("#sheet");
                 const surface = createSurface(sheet, read(""));
-                createPalette(surface);
+                createSlashMenu(surface);
                 createEmojiPicker(surface);
                 surface.focus();
                 window.surface = surface;`,

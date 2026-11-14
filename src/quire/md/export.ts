@@ -57,20 +57,6 @@ export function markdownFor(doc: Document): string {
 
 // ---- plain text ----
 
-/** The rows of the word count, as Docs shows them: words, characters, characters without spaces, and paragraphs, for the whole text and for a part of it if given. */
-export function countRows(whole: string, part?: string): [string, number, number | undefined][] {
-    const words = (text: string) => (text.match(/[\p{L}\p{N}][\p{L}\p{N}'’_-]*/gu) ?? []).length;
-    const characters = (text: string) => [...text.replace(/\n/g, "")].length;
-    const solid = (text: string) => [...text.replace(/\s/g, "")].length;
-    const paragraphs = (text: string) => text.split(/\n\s*\n/).filter((each) => each.trim() !== "").length;
-    return [
-        ["Words", words(whole), part === undefined ? undefined : words(part)],
-        ["Characters", characters(whole), part === undefined ? undefined : characters(part)],
-        ["Characters, no spaces", solid(whole), part === undefined ? undefined : solid(part)],
-        ["Paragraphs", paragraphs(whole), part === undefined ? undefined : paragraphs(part)],
-    ];
-}
-
 /** The words of a document alone, laid out to read: headings on their own lines, lists with bullets and numbers, a table's cells apart by tabs, a picture by what it shows. */
 export function plainText(doc: Document): string {
     const runs = (list: Run[]): string =>

@@ -15,7 +15,8 @@ import { importFor, TEMPLATES } from "./components";
 import { blockAt, changeKind, deleteText, insertBlock, insertText, makeBox, moveBlock, paragraph, removeBlock, runsText, setRaw, textAt, type Details, type Document } from "./document";
 import type { State } from "./history";
 import { caret, pageBreakAt, sameLeaf } from "./keys";
-import { opening, ranked, type Counts } from "../core/most-used";
+import { ranked, type Counts } from "../core/most-used";
+import { opening } from "./made";
 
 /** One thing the slash menu can make. `image` asks the host for a picture instead of running an action. An item for `mdx` is offered in MDX files alone. */
 export interface SlashItem {

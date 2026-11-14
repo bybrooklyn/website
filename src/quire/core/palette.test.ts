@@ -5,10 +5,7 @@
 // commands. Run with `bun test src/quire`.
 
 import { expect, test } from "bun:test";
-import { headings, type RowActions } from "./menu-row";
-import { caret } from "../md/keys";
-import { commandLines, headingLines, placeOf, rank, score, tap, TAP, type Line, type Stroke, type Taps } from "./palette";
-import { read } from "../md/read";
+import { commandLines, rank, score, tap, TAP, type Line, type Stroke, type Taps } from "./palette";
 
 /** Plays strokes through the double tap and gives back the times it opened. */
 function play(strokes: Stroke[], keys?: string[]): number[] {
@@ -91,55 +88,16 @@ test("among answers as good, what fits where the cursor is comes first, then the
     expect(rank([line("Bold", { fits: "words" }), line("Clear formatting")], "clear", "words", {}).map((each) => each.label)).toEqual(["Clear formatting"]);
 });
 
-test("with nothing typed it opens on what fits, then the most used, then the first five, and no headings", () => {
-    const lines = [line("Print", { key: "print" }), line("Code block", { key: "code" }), line("Heading 2", { key: "heading2" }), line("Remove", { fits: "picture" }), line("Go to: Intro", { heading: "Intro" })];
-    expect(rank(lines, "", undefined, {}).map((each) => each.key)).toEqual(["heading2", "code", "print", "remove"]);
-    expect(rank(lines, "", "picture", { print: 2 }).map((each) => each.key)).toEqual(["remove", "print", "heading2", "code"]);
-    expect(rank(lines, "", undefined, {}, 2)).toHaveLength(2);
+test("with nothing typed it opens on what fits, then the most used, then the kind's first commands, and no headings", () => {
+    const lines = [line("Print", { key: "print" }), line("Stamp", { key: "stamp" }), line("Remove", { fits: "picture" }), line("Go to: Intro", { heading: "Intro" })];
+    expect(rank(lines, "", undefined, {}, 8, ["stamp"]).map((each) => each.key)).toEqual(["stamp", "print", "remove"]);
+    expect(rank(lines, "", "picture", { print: 2 }, 8, ["stamp"]).map((each) => each.key)).toEqual(["remove", "print", "stamp"]);
 });
 
-test("typing words of a heading offers to go to it", () => {
-    const doc = read("# Mote and its moons\n\nText.\n\n## Minis\n\n## \n");
-    const went: number[][] = [];
-    const lines = headingLines(doc, (path) => went.push(path));
-    expect(lines.map((each) => each.label)).toEqual(["Go to: Mote and its moons", "Go to: Minis"]);
-    const found = rank([line("Mode"), ...lines], "moons", undefined, {});
-    expect(found.map((each) => each.label)).toEqual(["Go to: Mote and its moons"]);
-    found[0]!.run();
-    expect(went).toEqual([[0]]);
-    // a heading is found by its own words, not by "go to"
-    expect(rank(lines, "go", undefined, {})).toEqual([]);
-});
-
-test("where the cursor is: a picked picture, a table, selected words, a list", () => {
-    const doc = read("Words here.\n\n- one\n- two\n\n| a | b |\n| --- | --- |\n| c | d |\n");
-    expect(placeOf(doc, caret([0], 2))).toBeUndefined();
-    expect(placeOf(doc, caret([0], 2), true)).toBe("picture");
-    expect(placeOf(doc, { anchor: { path: [0], offset: 0 }, focus: { path: [0], offset: 5 } })).toBe("words");
-    expect(placeOf(doc, caret([1, 0, 0], 1))).toBe("list");
-    expect(placeOf(doc, caret([2, 1, 0], 0))).toBe("table");
-});
-
-test("its commands are the menus' own lines, each once, those inside a group with the group's path, with their other names, the slash items' words, where they fit and their shortcuts", () => {
-    const given: Record<string, unknown> = { file: undefined, tools: undefined, subs: { size: () => [{ label: "12", hint: "12", run: () => {} }] }, forms: { bookmark: () => ({}) } };
-    const act = new Proxy(given, { get: (_, name: string) => (name in given ? given[name] : () => {}) }) as RowActions;
-    const revealed: string[][] = [];
-    const lines = commandLines(headings({ rich: false, outline: false, markdown: false }, act), (path) => revealed.push(path));
-    const find = (key: string) => lines.find((each) => each.key === key)!;
-    expect(find("bold")).toMatchObject({ label: "Bold", menu: "Format › Text", hint: "Ctrl+B", fits: "words" });
-    expect(find("bullet")).toMatchObject({ menu: "Format › Bullets and numbering", fits: "list" });
-    expect(find("task").words).toContain("todo");
-    expect(find("picture").words).toContain("photo");
-    // a hint that is not a shortcut is not shown as one, and a line that only opens a group is not a command
-    expect(find("Format › Text › Size: 12").hint).toBeUndefined();
-    expect(lines.some((each) => each.label === "Text" || each.label === "Size")).toBe(false);
-    // what the wording renamed is found by its old name
-    expect(rank(lines, "indent more", undefined, {})[0]!.key).toBe("indent");
-    expect(rank(lines, "typeface", undefined, {}).length).toBe(0);
-    expect(rank(lines, "the markdown beside", undefined, {})[0]!.key).toBe("markdown");
-    expect(rank(lines, "todo", undefined, {})[0]!.key).toBe("task");
-    expect(rank(lines, "bold", "words", {})[0]!.key).toBe("bold");
-    // a line whose form opens beside it opens the menus down to it
-    find("bookmark").run();
-    expect(revealed).toEqual([["Insert", "Bookmark"]]);
+test("a kind's menus are its commands, each once, with what the kind adds to each line", () => {
+    const menus = [{ label: "Edit", items: () => [{ label: "Insert the date", key: "stamp", hint: "Ctrl+Shift+D", run: () => {} }, { label: "Tidy", key: "tidy", run: () => {} }, { label: "Tidy", key: "tidy", run: () => {} }] }];
+    const lines = commandLines(menus, undefined, (key) => (key === "tidy" ? { words: ["trim"], fits: "words" } : {}));
+    expect(lines.map((each) => each.key)).toEqual(["stamp", "tidy"]);
+    expect(lines[0]).toMatchObject({ menu: "Edit", hint: "Ctrl+Shift+D" });
+    expect(rank(lines, "trim", undefined, {})[0]!.key).toBe("tidy");
 });
