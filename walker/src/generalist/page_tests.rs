@@ -158,7 +158,8 @@ fn the_brain_is_drawn_as_it_thinks_whichever_way_it_learns() {
             assert!((crate::math::tanh(sum + bias) - gave).abs() < 1e-4, "neuron {j}: {sum} + {bias} against {gave}");
         }
 
-        // the policy practice trains, on show
+        // the plain policy practice trained before it had a pool, on show
+        page.brain_shape(0, 0, 0, 0);
         page.practice_create(4, 3, 3);
         let learner = &page.practice.as_ref().unwrap().learner;
         (page.state_room, page.running_room) = (learner.state(), learner.running());
@@ -206,9 +207,11 @@ fn a_policy_on_show_moves_exactly_as_it_would_in_practice() {
         // the hop's middle pushed to its top, as noise in learning could drift it: practice has no hop,
         // so what is shown must not hop either
         let (hidden, senses, actions) = (learner.settings.hidden, learner.senses, learner.actions);
+        assert!(learner.pool().is_some(), "the page practises with a pool");
         state[learner.at[1] + hidden * actions + actions - 1] = 5.0;
-        let mut policy = Learner::new(Settings::default(), senses, actions, 1, 0);
+        let mut policy = Learner::of_form(Settings::default(), &learner.form(), senses, actions, 1, 0).unwrap();
         assert!(policy.load(&state, &running));
+        page.form_room = learner.form();
         (page.state_room, page.running_room) = (state, running);
         assert!(page.policy_load());
 
@@ -239,4 +242,83 @@ fn a_policy_on_show_moves_exactly_as_it_would_in_practice() {
         assert_eq!(page.show.judge.end, worlds.runs[0].judge.end);
         assert!(decisions > 10, "{legs} legs: {decisions} decisions");
     }
+}
+
+#[test]
+fn a_brain_with_a_pool_is_drawn_by_kind_and_what_a_neuron_listens_to_adds_up_to_it() {
+    for legs in [2, 4] {
+        let mut page = page(legs);
+        page.practice_create(4, 3, 3);
+        let learner = &page.practice.as_ref().unwrap().learner;
+        page.form_room = learner.form();
+        (page.state_room, page.running_room) = (learner.state(), learner.running());
+        assert!(page.policy_load());
+        for _ in 0..40 {
+            page.show_step(1.0 / 60.0);
+        }
+        let picture = page.brain_picture().to_vec();
+        let shape = super::page::BRAIN;
+        let (dots, plain, actions) = (page.show.senses() - 16 * 5, 64, page.actions());
+        assert_eq!(&picture[..7], &[-1.0, dots as f32, plain as f32, shape.memory as f32, shape.rhythm as f32, shape.mood as f32, actions as f32]);
+        let neurons = dots + 2 * plain + shape.neurons() + actions;
+        assert_eq!(picture.len(), 7 + neurons + shape.neurons() + 9 * (neurons - dots));
+        let lit = &picture[7..7 + neurons];
+        // a first-layer neuron: what flows into it, with its bias, is what it gave
+        let weights = page.policy.as_ref().unwrap().weights.clone();
+        let senses = page.show.senses();
+        for j in 0..plain {
+            page.brain_reads(dots + j);
+            let sum: f32 = page.out.chunks_exact(3).map(|c| c[2]).sum();
+            let bias = weights[senses * plain + j];
+            assert!((crate::math::tanh(sum + bias) - lit[dots + j]).abs() < 1e-3, "{legs} legs, plain neuron {j}");
+        }
+        // a second-layer neuron: the same, through its mood's gain
+        let start = page.policy.as_ref().unwrap().trunk.layers[0].weights() + (plain + shape.outputs()) * plain;
+        let second = dots + plain + shape.neurons();
+        let moods = &lit[dots + plain + shape.memory + shape.rhythm..second];
+        for j in 0..plain {
+            let bias = weights[start + j];
+            page.brain_reads(second + j);
+            let sum: f32 = page.out.chunks_exact(3).map(|c| c[2]).sum();
+            let gain = 1.0 + moods[j % shape.mood];
+            assert!((crate::math::tanh(gain * (sum + bias)) - lit[second + j]).abs() < 1e-3, "{legs} legs, second-layer neuron {j}");
+        }
+        // every memory neuron reads as many as its shape says, from neurons there are
+        page.brain_reads(dots + plain);
+        assert_eq!(page.out.len(), 3 * shape.reads);
+        assert!(page.out.chunks_exact(3).all(|c| (c[0] as usize) < neurons));
+    }
+}
+
+#[test]
+fn a_learner_kept_goes_on_in_a_brain_of_another_shape_doing_what_it_did() {
+    let mut page = page(2);
+    page.practice_create(4, 3, 3);
+    page.practice.as_mut().unwrap().update();
+    let learner = &page.practice.as_ref().unwrap().learner;
+    let (form, state, running) = (learner.form(), learner.state(), learner.running());
+    let acts = |learner: &mut super::ppo::Learner| {
+        let senses: alloc::vec::Vec<f32> = (0..learner.senses).map(|k| ((k * 37) % 11) as f32 * 0.1 - 0.5).collect();
+        let mut action = alloc::vec![0.0; learner.actions];
+        learner.forget_show();
+        for _ in 0..5 {
+            learner.act(&senses, &mut action);
+        }
+        action
+    };
+    let mut before = super::ppo::Learner::of_form(super::ppo::Settings::default(), &form, learner.senses, learner.actions, 1, 0).unwrap();
+    assert!(before.load(&state, &running));
+    let wanted = acts(&mut before);
+    page.brain_shape(96, 12, 4, 24);
+    page.form_room = form;
+    (page.state_room, page.running_room) = (state, running);
+    assert!(page.practice_load());
+    let learner = &mut page.practice.as_mut().unwrap().learner;
+    assert_eq!(learner.pool().unwrap().shape, super::pool::Shape { memory: 96, rhythm: 12, mood: 4, reads: 24 });
+    let got = acts(learner);
+    for (a, b) in wanted.iter().zip(&got) {
+        assert!((a - b).abs() < 1e-4, "{wanted:?} became {got:?}");
+    }
+    page.practice.as_mut().unwrap().update();
+    assert!(page.practice.as_ref().unwrap().learner.weights.iter().all(|w| w.is_finite()));
 }

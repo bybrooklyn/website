@@ -828,6 +828,16 @@ impl Learner {
         }
     }
 
+    /// What the creature on show sensed at its last decision, rescaled, as the policy took it.
+    pub fn shown_input(&self) -> &[f32] {
+        &self.shown_input
+    }
+
+    /// The middle of each action at the creature on show's last decision.
+    pub fn shown_actions(&self) -> &[f32] {
+        self.showing[1].output()
+    }
+
     /// The creature on show starts a run: its pool afresh.
     pub fn forget_show(&mut self) {
         if let Some(r) = &mut self.recurrent {

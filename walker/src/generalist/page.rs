@@ -15,6 +15,7 @@ use super::envs::{Envs, Run, SECONDS};
 use super::evolve::Evolution;
 use super::eyes::{self, RAYS};
 use super::land::Hazard;
+use super::pool::Shape;
 use super::ppo::{Learner, Settings};
 use super::practice::{Practice, Way};
 use super::recipe::Recipe;
@@ -28,6 +29,16 @@ use crate::physics::STEP;
 const REACH: f32 = 0.15;
 /// The most steps one call to `show_step` takes, so a page hidden a while does not freeze catching up.
 const MOST_STEPS: u32 = 8;
+
+/// The brain practice starts with on the page: the two plain layers of 64, and a pool of 32 memory
+/// neurons, 4 rhythms and 4 moods, each reading 16 others (walker/README.md, "The brain that was
+/// discussed", has why). A visitor changes how much memory, how much rhythm and how many reads, within
+/// these caps, set by what the browser can practise at the page's rate.
+pub const BRAIN: Shape = Shape { memory: 32, rhythm: 4, mood: 4, reads: 16 };
+pub const MOST_MEMORY: usize = 128;
+pub const MOST_RHYTHM: usize = 16;
+pub const MOST_READS: usize = 32;
+pub const FEWEST_READS: usize = 4;
 
 pub struct Page {
     pub recipe: Recipe,
@@ -55,6 +66,10 @@ pub struct Page {
     pub running_out: Vec<f64>,
     pub running_room: Vec<f64>,
     pub state_room: Vec<f32>,
+    /// The form of a learner written into the rooms (`Learner::form`), and the brain practice is to
+    /// have here.
+    pub form_room: Vec<f32>,
+    pub shape: Shape,
     /// What the show's creature has been rewarded and charged for since the page last asked.
     pub parts: super::practice::Parts,
     /// The weights of evolution's brain on show, to draw it.
@@ -82,7 +97,7 @@ impl Page {
         let land = Rc::new(super::land::Land::new(recipe, super::envs::MADE));
         let start = Run::new(land, legs, seconds)?;
         let layout = evolution.layout;
-        let mut page = Page { recipe, legs, seconds, brain: Brain::new(layout), senses: vec![0.0; layout.inputs], show: start.clone(), start, evolution, leftover: 0.0, out: Vec::new(), weights_room: vec![0.0; layout.weights()], evaluate_room: Vec::new(), evaluated: Vec::new(), envs: None, practice: None, policy: None, held_actions: Vec::new(), asked: Vec::new(), running_out: Vec::new(), running_room: Vec::new(), state_room: Vec::new(), parts: Default::default(), shown_weights: Vec::new() };
+        let mut page = Page { recipe, legs, seconds, brain: Brain::new(layout), senses: vec![0.0; layout.inputs], show: start.clone(), start, evolution, leftover: 0.0, out: Vec::new(), weights_room: vec![0.0; layout.weights()], evaluate_room: Vec::new(), evaluated: Vec::new(), envs: None, practice: None, policy: None, held_actions: Vec::new(), asked: Vec::new(), running_out: Vec::new(), running_room: Vec::new(), state_room: Vec::new(), form_room: Vec::new(), shape: BRAIN, parts: Default::default(), shown_weights: Vec::new() };
         page.show_reset();
         Some(page)
     }
@@ -105,6 +120,57 @@ impl Page {
         self.senses.resize(self.show.senses(), 0.0);
         self.show.sense(&mut self.senses);
         self.leftover = 0.0;
+        if let Some(policy) = &mut self.policy {
+            policy.forget_show();
+        }
+    }
+
+    /// The brain practice is to have here: memory, rhythm and moods, and how many each reads, kept
+    /// within the caps (moods 0 or 4, and a plain network if all are 0).
+    pub fn brain_shape(&mut self, memory: usize, rhythm: usize, mood: usize, reads: usize) {
+        let mut shape = Shape { memory: memory.min(MOST_MEMORY), rhythm: rhythm.min(MOST_RHYTHM), mood: if mood > 0 { 4 } else { 0 }, reads: reads.clamp(FEWEST_READS, MOST_READS) };
+        if shape.neurons() == 0 {
+            shape = Shape::PLAIN;
+        }
+        self.shape = shape;
+    }
+
+    /// A learner for `count` creatures of the form written into `form_room`, or of the brain practice
+    /// is to have here if none is written; none if the form does not hold together.
+    fn learner_of_form(&self, count: usize) -> Option<Learner> {
+        let dressed = self.dressed();
+        let (senses, actions) = (dressed.senses(), dressed.body.actions());
+        if self.form_room.is_empty() {
+            Some(Learner::new(Settings { shape: self.shape, ..Settings::default() }, senses, actions, count, 0))
+        } else {
+            Learner::of_form(Settings::default(), &self.form_room, senses, actions, count, 0)
+        }
+    }
+
+    /// The show's start dressed as practice dresses its creatures, to count what they sense.
+    fn dressed(&self) -> Run {
+        let mut start = self.start.clone();
+        Way::of(self.legs).dress_run(&mut start, self.recipe.seed);
+        start
+    }
+
+    /// Takes the learner written into the rooms (its form, state and running numbers) as this module's
+    /// practice, reshaped to the brain practice is to have here if it is another shape, keeping what it
+    /// learned (`Learner::reshaped`). False, and nothing changed, if it does not fit.
+    pub fn practice_load(&mut self) -> bool {
+        let Some(count) = self.practice.as_ref().map(|practice| practice.learner.count) else { return false };
+        let Some(mut learner) = self.learner_of_form(count) else { return false };
+        if !learner.load(&self.state_room, &self.running_room) {
+            return false;
+        }
+        if learner.settings.shape != self.shape {
+            learner = learner.reshaped(self.shape, self.recipe.seed as u64);
+        }
+        let practice = self.practice.as_mut().unwrap();
+        learner.begin(&mut practice.worlds);
+        practice.worlds.steps = learner.practised;
+        practice.learner = learner;
+        true
     }
 
     /// Moves the show on by `seconds` in whole steps, the brain deciding before each. Returns the
@@ -410,7 +476,7 @@ impl Page {
     /// Starts learning by practice here, `count` creatures in fresh worlds of this recipe's kind, the
     /// first weights from `seed` and the worlds' seeds from `stream`. Returns the length of `state`.
     pub fn practice_create(&mut self, count: usize, seed: u64, stream: u32) -> usize {
-        self.practice = Practice::new(self.recipe, Way::of(self.legs), Settings::default(), count.clamp(1, 256), seed, stream);
+        self.practice = Practice::new(self.recipe, Way::of(self.legs), Settings { shape: self.shape, ..Settings::default() }, count.clamp(1, 256), seed, stream);
         self.practice.as_ref().map_or(0, |practice| practice.learner.state().len())
     }
 
@@ -428,7 +494,10 @@ impl Page {
             }
             start.stage.feeds = true;
         }
-        let mut learner = Learner::new(Settings::default(), start.senses(), start.body.actions(), 1, 0);
+        let Some(mut learner) = self.learner_of_form(1) else {
+            self.policy_off();
+            return false;
+        };
         if !learner.load(&self.state_room, &self.running_room) {
             self.policy_off();
             return false;
@@ -460,22 +529,32 @@ impl Page {
     }
 
     /// Room for a learner's state, or a policy's weights, and for its running numbers.
+    /// Room for a learner's state and running numbers, of the form written into `form_room` (or of the
+    /// brain practice is to have here); none if that form does not hold together.
     pub fn rooms(&mut self) -> (usize, usize) {
-        let way = Way::of(self.legs);
-        let mut start = self.start.clone();
-        way.dress_run(&mut start, self.recipe.seed);
-        let learner = Learner::new(Settings::default(), start.senses(), start.body.actions(), 1, 0);
-        (learner.state().len(), learner.running().len())
+        self.learner_of_form(1).map_or((0, 0), |learner| (learner.state().len(), learner.running().len()))
     }
 
     /// The brain driving the show, drawn as it last thought (`mind::picture`): the policy if practice
     /// is on show, else evolution's brain.
     pub fn brain_picture(&mut self) -> &[f32] {
         match &self.policy {
+            Some(policy) if policy.pool().is_some() => super::mind::pool_picture(policy, &self.senses, &mut self.out),
             Some(policy) => super::mind::picture(policy, &self.senses, &mut self.out),
             None => super::mind::picture(&super::mind::Bred { brain: &self.brain, weights: &self.shown_weights }, &self.senses, &mut self.out),
         }
         &self.out
+    }
+
+    /// What neuron `n` of the brain on show listens to, into `out` (`api::brain_reads`): for a learner with a
+    /// pool, every connection into it; for any other brain, nothing.
+    pub fn brain_reads(&mut self, n: usize) {
+        self.out.clear();
+        if let Some(policy) = self.policy.as_ref().filter(|policy| policy.pool().is_some()) {
+            for c in super::mind::into(policy, n) {
+                self.out.extend_from_slice(&[c.from as f32, c.weight, c.passed]);
+            }
+        }
     }
 
     /// How many numbers a creature senses, and how many actions it takes.
