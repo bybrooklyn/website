@@ -260,6 +260,26 @@ fn a_sealed_box_of_steam_stays_sealed_even_with_walls_that_touch_only_at_corners
 }
 
 #[test]
+fn steam_rises_and_gathers_level_under_a_lid() {
+    let mut world = World::new(160, 100, 5);
+    world.paint(STONE, 10, 90, 150, 90, 0, 100, false);
+    world.paint(STONE, 10, 20, 150, 20, 0, 100, false);
+    world.paint(STONE, 10, 20, 10, 90, 0, 100, false);
+    world.paint(STONE, 150, 20, 150, 90, 0, 100, false);
+    // poured in one heap at the bottom, off to one side
+    world.paint(STEAM, 40, 75, 40, 75, 12, 100, false);
+    let steam = world.count(STEAM);
+    run(&mut world, 1500);
+    assert_eq!(world.count(STEAM), steam);
+    // gathered at the top, its underside level to a cell
+    let depths: Vec<i32> = (11..150).map(|x| (21..90).filter(|&y| world.at(x, y) == STEAM).count() as i32).collect();
+    let (most, least) = (*depths.iter().max().unwrap(), *depths.iter().min().unwrap());
+    assert!(most - least <= 1, "{depths:?}\n{}", picture(&world, 8, 18, 152, 92));
+    assert!((11..150).all(|x| world.at(x, 21) == STEAM));
+    assert_eq!(world.awake(), 0);
+}
+
+#[test]
 fn sleeping_chunks_never_hide_work_in_either_order() {
     for order in [Order::Rows, Order::Phases] {
         for seed in [21, 22] {

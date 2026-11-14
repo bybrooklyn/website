@@ -1,14 +1,17 @@
-//! How water finds its level through a connected body, as in two joined vessels.
+//! How water finds its level through a connected body, as in two joined vessels; and, upside down,
+//! how steam gathers level under a lid.
 //!
 //! Cell by cell, a liquid only falls and spreads toward somewhere lower beside it, so the water in
 //! one arm of a U never reaches the other: the bend between them is full. After the cells have
 //! moved, each step therefore looks at every body of liquid near anything that changed: the cells
-//! of one liquid joined by their sides, leaving out those that moved this step (a stream still
-//! falling is not yet part of the pool). If its highest cell with open space above lies higher
+//! of one liquid joined by their sides. If its highest cell with open space above lies higher
 //! than the lowest open cell it touches (above it, or beside it with something under it), the top
-//! cell goes there, as the pressure through the body would push it. A few go each step, highest to
+//! cell goes there, as the pressure through the body would push it. Cells that moved this step join
+//! a body, so the busy edge of a spreading pool does not cut it in two, but are never taken from
+//! its top: a stream still falling is not drawn back up. A few go each step, highest to
 //! lowest, until the body's surfaces are within one cell of each other. Every move lowers a cell,
-//! so it always comes to rest and never flickers.
+//! so it always comes to rest and never flickers. A gas is the same turned over: its surface faces
+//! down, its lowest cells go to the highest open places it touches.
 //!
 //! What a body does depends only on its own cells, never on the order bodies are found in, so a
 //! world run with sleeping off, where every body is looked at, comes out the same to the byte.
@@ -18,7 +21,7 @@ use crate::world::{World, clock_of, material, with_state};
 use alloc::vec::Vec;
 
 /// How many cells a body moves in one step.
-const PER_BODY: usize = 16;
+const PER_BODY: usize = 64;
 /// How many bodies may move cells in one step. Past this, those with the lowest first cell go
 /// first and the rest wait a step.
 const BODIES: usize = 64;
@@ -38,13 +41,13 @@ pub(crate) struct Levels {
     /// This step's bodies that move cells, by their first cell, smallest first.
     count: usize,
     keys: [u32; BODIES],
-    moves: [[(u32, u32); PER_BODY]; BODIES],
+    moves: Vec<[(u32, u32); PER_BODY]>,
     lengths: [usize; BODIES],
     /// The body being found: its highest surface cells and lowest open places, best first, each
     /// with the number it is ranked by.
-    tops: [(u64, u32); PER_BODY],
+    tops: Vec<(u64, u32)>,
     tops_count: usize,
-    places: [(u64, u32); PER_BODY],
+    places: Vec<(u64, u32)>,
     places_count: usize,
 }
 
@@ -58,18 +61,19 @@ impl Levels {
             stack: Vec::with_capacity(cells + 16),
             count: 0,
             keys: [0; BODIES],
-            moves: [[(0, 0); PER_BODY]; BODIES],
+            // made on the heap, filled with zeros, so the module does not carry a copy of them
+            moves: alloc::vec![[(0, 0); PER_BODY]; BODIES],
             lengths: [0; BODIES],
-            tops: [(0, 0); PER_BODY],
+            tops: alloc::vec![(0, 0); PER_BODY],
             tops_count: 0,
-            places: [(0, 0); PER_BODY],
+            places: alloc::vec![(0, 0); PER_BODY],
             places_count: 0,
         }
     }
 }
 
 /// Keeps the `PER_BODY` smallest ranks in `list`, smallest first.
-fn keep(list: &mut [(u64, u32); PER_BODY], count: &mut usize, rank: u64, cell: u32) {
+fn keep(list: &mut [(u64, u32)], count: &mut usize, rank: u64, cell: u32) {
     if *count == PER_BODY && rank >= list[PER_BODY - 1].0 {
         return;
     }
@@ -82,15 +86,20 @@ fn keep(list: &mut [(u64, u32); PER_BODY], count: &mut usize, rank: u64, cell: u
     *count = (*count + 1).min(PER_BODY);
 }
 
-/// Whether a liquid can move into a cell holding this: it is empty or a gas.
+/// Whether a cell of this kind can move into a cell holding `cell`: a liquid into an empty cell or a
+/// gas, a gas into an empty cell.
 #[inline(always)]
-fn open(cell: u32) -> bool {
-    matches!(TABLE[material(cell) as usize].kind, Kind::Empty | Kind::Gas)
+fn open(kind: Kind, cell: u32) -> bool {
+    match TABLE[material(cell) as usize].kind {
+        Kind::Empty => true,
+        Kind::Gas => kind == Kind::Liquid,
+        _ => false,
+    }
 }
 
 impl World {
-    /// Looks at every body of liquid near a change this step, and moves the tops of those not
-    /// level toward their lowest open places.
+    /// Looks at every body of liquid or gas near a change this step, and moves the tops of those
+    /// not level toward their lowest open places (for a gas, upside down).
     pub(crate) fn level(&mut self) {
         if self.levels.body > PLACE - (self.cells.len() as u32) - 2 {
             self.levels.marks.fill(0);
@@ -107,7 +116,7 @@ impl World {
                 for x in rect.x0..=rect.x1 {
                     let at = self.index(x, y);
                     let cell = self.cells[at];
-                    if TABLE[material(cell) as usize].kind == Kind::Liquid && clock_of(cell) != self.clock && !self.counted(at) {
+                    if matches!(TABLE[material(cell) as usize].kind, Kind::Liquid | Kind::Gas) && !self.counted(at) {
                         self.body(at);
                     }
                 }
@@ -120,9 +129,10 @@ impl World {
                 let (from, to) = (from as usize, to as usize);
                 let (here, there) = (self.cells[from], self.cells[to]);
                 let (fx, fy) = self.place(from);
-                let still = TABLE[material(here) as usize].kind == Kind::Liquid && clock_of(here) != self.clock;
+                let kind = TABLE[material(here) as usize].kind;
+                let still = matches!(kind, Kind::Liquid | Kind::Gas) && clock_of(here) != self.clock;
                 let empty = material(there) == crate::materials::EMPTY;
-                if still && open(there) && (empty || clock_of(there) != self.clock) {
+                if still && open(kind, there) && (empty || clock_of(there) != self.clock) {
                     self.cells[to] = with_state(here, self.clock, 0);
                     self.cells[from] = if empty { self.clock << 24 } else { with_state(there, self.clock, 0) };
                     let (tx, ty) = self.place(to);
@@ -148,18 +158,26 @@ impl World {
         ((at % self.stride) as i32 - crate::world::BORDER as i32, (at / self.stride) as i32 - crate::world::BORDER as i32)
     }
 
-    /// Finds the body of liquid that the cell at `seed` belongs to, a row of cells at a time, and
-    /// keeps what it should move.
+    /// Finds the body of liquid or gas that the cell at `seed` belongs to, a row of cells at a time,
+    /// and keeps what it should move.
     fn body(&mut self, seed: usize) {
         self.levels.body += 1;
         let id = self.levels.body;
         let liquid = material(self.cells[seed]);
+        let kind = TABLE[liquid as usize].kind;
         let clock = self.clock;
         let s = self.stride;
+        // A liquid's surface faces up and a gas's down. `out` is the way a surface faces, and
+        // `height` how far a row lies that way: the highest top and the lowest place of a liquid,
+        // the lowest top and the highest place of a gas.
+        let gas = kind == Kind::Gas;
+        let out = |at: usize| if gas { at + s } else { at - s };
+        let under = |at: usize| if gas { at - s } else { at + s };
         // ties go to the left on one step and the right on the next, so nothing drifts
         let leftward = self.steps.is_multiple_of(2);
         let tie = |at: usize| if leftward { at as u64 } else { u32::MAX as u64 - at as u64 };
-        let bottom = (self.height + crate::world::BORDER as i32) as u64;
+        let bottom = (self.height + 2 * crate::world::BORDER as i32) as u64;
+        let height = |row: u64| if gas { row } else { bottom - row };
         self.levels.tops_count = 0;
         self.levels.places_count = 0;
         let mut first = u32::MAX;
@@ -171,7 +189,7 @@ impl World {
             let start = start as usize;
             let joins = |marks: &[u32], at: usize| {
                 let cell = cells[at];
-                material(cell) == liquid && clock_of(cell) != clock && marks[at] != id
+                material(cell) == liquid && marks[at] != id
             };
             if !joins(&levels.marks, start) {
                 continue;
@@ -185,23 +203,25 @@ impl World {
             }
             first = first.min(a as u32);
             let row = (a / s) as u64;
+            let beyond = (out(a) / s) as u64;
             for at in a..=b {
                 levels.marks[at] = id;
-                let above = cells[at - s];
-                if open(above) {
-                    // a surface cell, and an open place above it
-                    keep(&mut levels.tops, &mut levels.tops_count, (row << 32) | tie(at), at as u32);
-                    if levels.marks[at - s] != PLACE | id {
-                        levels.marks[at - s] = PLACE | id;
-                        keep(&mut levels.places, &mut levels.places_count, ((bottom - (row - 1)) << 32) | tie(at - s), (at - s) as u32);
+                let past = out(at);
+                if open(kind, cells[past]) && clock_of(cells[at]) != clock {
+                    // a surface cell, and an open place past it
+                    keep(&mut levels.tops, &mut levels.tops_count, ((bottom - height(row)) << 32) | tie(at), at as u32);
+                    if levels.marks[past] != PLACE | id {
+                        levels.marks[past] = PLACE | id;
+                        keep(&mut levels.places, &mut levels.places_count, (height(beyond) << 32) | tie(past), past as u32);
                     }
                 }
             }
-            // open places at either end of the row, with something under them to stand on
+            // open places at either end of the row, with something on the other side to rest against
             for end in [a - 1, b + 1] {
-                if open(cells[end]) && !open(cells[end + s]) && material(cells[end + s]) != crate::materials::VOID && levels.marks[end] != PLACE | id {
+                let rest = cells[under(end)];
+                if open(kind, cells[end]) && !open(kind, rest) && material(rest) != crate::materials::VOID && levels.marks[end] != PLACE | id {
                     levels.marks[end] = PLACE | id;
-                    keep(&mut levels.places, &mut levels.places_count, ((bottom - row) << 32) | tie(end), end as u32);
+                    keep(&mut levels.places, &mut levels.places_count, (height(row) << 32) | tie(end), end as u32);
                 }
             }
             // the rows above and below: one start for each run of cells that join
@@ -222,9 +242,7 @@ impl World {
         for k in 0..levels.tops_count.min(levels.places_count) {
             let (top_rank, top) = levels.tops[k];
             let (place_rank, place) = levels.places[k];
-            let top_row = top_rank >> 32;
-            let place_row = bottom - (place_rank >> 32);
-            if place_row <= top_row {
+            if place_rank >> 32 >= bottom - (top_rank >> 32) {
                 break;
             }
             moves[length] = (top, place);
