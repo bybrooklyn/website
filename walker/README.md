@@ -336,7 +336,7 @@ of 64 about doubles that. A large brain has more to learn and gets there slower.
 ## The physics alone
 
 Built with `cargo build --release --target wasm32-unknown-unknown --no-default-features`, the module
-holds only the physics, with these functions instead (about 37 KiB):
+holds only the physics, with these functions instead (about 40 KiB, 37 before the hand):
 
 - `physics_reset(gravity_x: f32, gravity_y: f32)` Empties the world and sets its gravity.
 - `physics_body(kind: u32, a: f32, b: f32, x: f32, y: f32, angle: f32, density: f32, friction: f32, restitution: f32, group: u32) -> u32`
@@ -505,8 +505,14 @@ The senses, in the order the brain takes them:
 | feet | 1 for each | 1 if on something, else 0 |
 | rhythm | 2 | the sine and cosine of the legs' rhythm (0 and 0 for two legs practising: "How two legs came to walk") |
 | hop | 2 | 1 while it hops, else 0; 1 when it can hop, else 0 |
+| touch, body | 1 | how hard everything touching its body presses on it, in its own weights, at most 2 (practice only) |
+| touch, feet | 1 for each | the same for each foot: the ground, a box or a platform under it (practice only) |
+| held | 1 | 1 while a hand holds any part of it (practice only) |
+| jolt | 2 | what its body feels pushing it, across and up, in g: its acceleration less gravity, eased over a few steps (35 percent of the way each step), at most 3 either way; standing still it is 0 and 1, falling 0 and 0, lifted more than 1 up, pushed sideways (practice only) |
 
-So two legs sense 96 + 18 = 114 numbers and four legs 96 + 28 = 124.
+So two legs sense 96 + 18 = 114 numbers and four legs 96 + 28 = 124, as evolution's brains do; practice's
+creatures feel touch as well (`touch::feel`, "Touching it" below), 6 more for two legs and 8 for four, so
+120 and 132.
 
 `eyes::picture` makes, from the same world, the picture the creature would see instead: a strip of
 greyscale pixels from 80 degrees down to 60 degrees up, each lit by what its ray meets (a hazard
@@ -929,6 +935,149 @@ page learns from one seed only (the learner's seed is fixed), so this is one lea
 seeds natively. The page's status line said it got 13 to 15 m in "meadow" and 11 to 16 m on average in
 practice runs, all ten minutes.
 
+### Touching it
+
+Stage 1 of the plan (`docs/generalist-plan.md`), 13 November 2026. Picking the creature up flung it or
+tangled it, things dragged behaved strangely or went through others, and it took no notice of being
+touched. The page set the held body's speed straight at the pointer each step and pushed the nearest
+body with impulses as the pointer moved; nothing of it reached the creature's brain.
+
+**The hand.** One hand for everything (`physics::Hand`, `generalist::touch`): a spring with a damper from
+the point pressed to where the hand is, solved as a soft constraint as the hinges and contacts are, with
+a stiffness of 1,500 N a metre, damping of 0.7, a cap of 400 N on its force, the hand going toward the
+pointer at no more than 4 m/s, and what it lets go of keeping on at no more than 3 m/s. So the creature,
+about 10 kg, hangs about 7 cm under the hand and swings; a 1.6 kg box keeps within 5 cm of a hand moving
+at 3 m/s and a 40 kg one lags over 10 cm; a thing of 75 kg is not lifted at all. A press within 15 cm of a
+body's surface takes hold of the nearest: the creature's body or a leg's part (so a leg held is a leg
+held), a box, a see-saw's plank, or a moving platform, which leaves its way and is a 15 kg body while
+held, kept level, and stays where it is let go of, floating as the platforms do. While anything is held,
+it and the rest of its group look for contacts as far ahead as they could go in the step, so a box
+dragged at 20 m/s onto a block 5 cm thick stops on it, where without that it went through from 8 of 32
+starts at 10 m/s (`physics::hand_tests`). With nothing held, every result is the same to the bit, the
+Walker's included.
+
+On the page the pointer is a hand ("grab") over the creature and over things that move, and a closed
+hand while holding; a thin line goes from the hand to the point held. A finger drags as the mouse does,
+and the page does not scroll while a finger holds something (a touch that takes hold of nothing scrolls
+as usual). The keyboard has the same hand: Space or Enter takes hold of what is under it and lets go,
+and the arrows move it a quarter of a metre a press, starting at the creature's body. A creature picked
+up after its run ended has its run taken up again.
+
+**What a touch does to learning.** The creature on show is never learned from: practice happens in the
+workers, in fresh worlds, so a visitor playing with the show changes nothing that is learned, and
+practice goes on beside it (on the page, below, its average stayed where it was). While the creature is
+held, its run is judged as practice judges it, but nothing is paid but the motors' work and twitching,
+nothing is charged for how it hangs, and only its time can end it (`Judge::after_step`, `shaped`);
+where it is carried counts as where it has been, so it is not paid for getting there again.
+
+**It notices.** Practice's creatures feel touch (`touch::feel`, the senses table above): the pressure on
+their body and on each foot, a hand holding them, and a jolt, what the body feels pushing it as an inner
+ear does. Two legs sense 120 numbers and four legs 132. And two legs practise being touched: a visitor
+(`touch::Visits`) comes every 8 seconds or so, brought in with the costs over the first 4 million steps,
+seeded by each run's world, and does one of five things: lifts it by its body 0.4 to 0.8 m and lets it
+go, from there or after setting it down near the ground (35 in 100), lifts it by a foot and lets go (15),
+nudges its body 0.35 to 0.5 m to one side for a fifth of a second or so (20), puts a box on the ground
+1.3 m away and slides it into it and past at 1 m/s (20), or drops a box from a metre up near it (10). No
+rule says what to do about any of it: a fall costs what it always did, and two legs' run ends at the first
+touch of the body.
+
+What each did, in the page's kind of world ("meadow", 20 of 100 hard), 20 million steps, distance in
+the sixteen held-out worlds with no visitor (`compare.rs` with `touch=` and `visitor=`), each the mean
+and spread over the seeds:
+
+| | seeds | 2 legs | 4 legs |
+|---|---|---|---|
+| before | 1 to 8 | 13.0 ± 5.9 m | 40.4 ± 4.1 m |
+| touch felt, no visitor | 1 to 4 / 1 to 8 | 16.2 ± 2.2 m (before, seeds 1 to 4: 16.5 ± 1.7) | 41.4 m (before 40.4) |
+| touch felt, a visitor every 4 s | 1 to 4 | 11.3 ± 3.2 m | 31.6 ± 5.9 m |
+| touch felt, a visitor every 8 s | 1 to 8 | 14.3 ± 2.3 m | 34.2 ± 9.8 m |
+| touch felt, a visitor every 16 s | 1 to 4 | 12.8 ± 4.3 m | 40.1 ± 10.0 m |
+
+Feeling touch costs nothing. A visitor every 4 s costs both bodies a quarter to a third. Every 8 s, two
+legs go as far as before and more steadily (two of eight seeds before stalled at 3 to 6 m; none with the
+visitor), and four legs go less far, two seeds in eight collapsing to 14 and 26 m with their knees down
+twice as often. Every 16 s is no better than 8 for either: the seeds vary more than the visitor does.
+
+Whether being touched changes what it does, and whether what it learned helps (`examples/touched.rs`):
+each learner above, at 20 million steps, walks each of the sixteen held-out worlds; at 3, 7 and 11
+seconds the run is copied three times: one copy is touched, one is not, and one is touched the same way
+but its touch senses are given what the untouched one felt then, so its brain is moved only by what the
+touch did to its body. Lift is by the body 0.6 m for a second then let go; set down is lifted 0.3 m and
+lowered to where its feet touch; nudge is 0.45 m backward for 0.3 s; shove is a box slid into it from
+1.3 m ahead; drop is a box dropped from a metre up 0.9 m ahead. "Actions" is how far its actions over the
+second after the touch are from the untouched copy's, then from the numb copy's (the mean size of the
+difference, each action from -1 to 1); "fell" is the share of runs ending in a fall within three seconds
+of the touch, touched, then numb (untouched, 0.03 to 0.10 for two legs, 0.14 to 0.23 for four). Seeds 1
+to 4, 116 to 167 touches each:
+
+| 2 legs | actions, no visitor | actions, visitor every 8 s | fell, no visitor | fell, visitor every 8 s |
+|---|---|---|---|---|
+| lift | 0.29 / 0.09 | 0.25 / 0.11 | 0.40 / 0.39 | 0.43 / 0.43 |
+| set down | 0.28 / 0.16 | 0.26 / 0.15 | 0.26 / 0.32 | 0.23 / 0.32 |
+| nudge | 0.25 / 0.16 | 0.23 / 0.15 | 0.49 / 0.52 | **0.39 / 0.55** |
+| shove | 0.30 / 0.27 | 0.26 / 0.19 | 0.20 / 0.22 | **0.07 / 0.08** |
+| box dropped | 0.68 / 0.11 | 0.40 / 0.11 | 0.66 / 0.73 | **0.28 / 0.26** |
+
+| 4 legs | actions, no visitor | actions, visitor every 8 s | fell, no visitor | fell, visitor every 8 s |
+|---|---|---|---|---|
+| lift | 0.51 / 0.39 | 0.58 / 0.36 | 0.22 / 0.22 | 0.25 / 0.25 |
+| set down | 0.53 / 0.48 | 0.57 / 0.47 | 0.21 / 0.28 | 0.23 / 0.27 |
+| nudge | 0.52 / 0.35 | 0.57 / 0.35 | 0.52 / 0.51 | 0.45 / 0.49 |
+| shove | 0.52 / 0.50 | 0.57 / 0.51 | 0.18 / 0.15 | 0.22 / 0.12 |
+| box dropped | 0.92 / 0.23 | 0.60 / 0.30 | 0.44 / 0.47 | 0.43 / 0.37 |
+
+What that says, plainly:
+
+- **Every touch changes what it does**, by a quarter to nine tenths of an action's range over the next
+  second, and much of that is its feeling it: the copy moved the same way but numb acts closer to
+  untouched (0.09 to 0.27 of the range for two legs, against 0.23 to 0.68). While held, its legs move
+  differently from the untouched copy's by 0.2 to 0.5 of their range: it kicks.
+- **Two legs practised with the visitor learned to come through some touches.** A box dropped near it
+  ends its run in a fall 0.28 of the time against 0.66 without the visitor; a box slid into it 0.07
+  against 0.20; and after a nudge, the copy that feels it falls 0.39 of the time against 0.55 for the
+  numb copy, where without the visitor the two are alike (0.49 and 0.52), so that is a reaction to what
+  it felt, learned. No rule was written for any of it.
+- **It has not learned to land.** Let go from 0.6 m by its body, it falls 0.4 of the time with or without
+  the visitor; set down, a quarter. Lifted by a foot and let go, on the page, it falls nearly every time.
+- **Four legs gained nothing measurable** from the visitor and went less far with it, so four legs feel
+  touch and practise with no visitor (`Way::of`); their reactions are what feeling touch gives a policy
+  that never practised being touched: it acts differently, but falls as often as when numb.
+
+**In the page.** The built site (drafts shown) served locally, the mini opened fresh in headless
+Chromium (`scripts/browser.ts`, held to four cores with other work going on), two legs in "meadow",
+practising from nothing at normal effort (about 160,000 to 230,000 steps a second). At two minutes and at
+ten, with the mouse pressed on the creature, carried up 1.6 m over a second, waved, and set down near the
+ground (every other time) or let go from there, ten times by its body and ten by a foot; then the world
+changed to more boxes and a box slid into it, carried onto its head and dragged away; then more moving
+platforms and one taken, carried and put down low just ahead of it; then a finger and the keyboard. Each
+touch was watched for 2.5 s afterwards, the creature sampled every tenth of a second, and photographed:
+
+| | took hold | fastest its body went | under the ground | froze | its run ended in a fall |
+|---|---|---|---|---|---|
+| by the body, 2 min | 10 of 10 | 4.4 m/s | never | never | 2 of 10 (set down, 1 of 5) |
+| by the body, 10 min | 10 of 10 | 3.1 m/s | never | never | 2 of 10 (set down, 1 of 5) |
+| by a foot, 2 min | 10 of 10 | 2.3 m/s | never | never | 10 of 10 |
+| by a foot, 10 min | 10 of 10 | 2.5 m/s | never | never | 10 of 10 |
+
+Held by its body it hangs with its legs reaching down and moving; by a foot it hangs head down. Set down,
+it mostly lands on its feet and walks on; let go from 1.6 m it lands and walks on or falls, as the body
+falls; let go from a foot it lands on its head every time. A box slid into it pushed it back and it stayed
+up; a box carried over its head and let go knocked it down (both times); a box dragged away went, and
+nothing passed through anything. A platform put down just ahead stayed there, level, and it stepped onto
+it (both times; before platforms were kept level, one taken by its end hung from it and was let go of
+standing on end, a wall it stalled against). A finger took hold and the page did not scroll; Space took
+hold and four presses of the up arrow lifted it 0.92 m. Changing the world (twice each round) carried the
+learner on: its steps went on rising and its average in practice did not fall. That average, every half
+minute, read 8.1, 8.1, 8.8, 9.3 m in the first two minutes, then 9.4 to 11.4 m to the end at thirteen
+minutes, through every touch; the page's console showed no error. The learner the page kept at twelve
+minutes (149 million steps) goes 18.5 m on average through the sixteen held-out worlds (15.5 m for the
+page's learner at ten minutes before touch) and 28.9 m on level ground, measured natively (`compare.rs
+kept=`). Through `touched.rs` that learner reacts more weakly than the native seeds above: a box slid into
+it ends in a fall 0.07 of the time against 0.12 numb, but a dropped box 0.56 against 0.58, a nudge 0.43
+against 0.43, a lift 0.52 against 0.57. It is one learner of one seed.
+
+A look, which would need eyes that move, is stage 2.
+
 ### Practice in the browser
 
 On the page, "how it learns" chooses evolution or "by practice", and the page opens on practice: a
@@ -951,12 +1100,19 @@ visitor's world, each time its run ends, its actions held between decisions by p
 the show and practice to the same trajectory, to the bit. Above it, twice a second, small words say what it was just
 rewarded and charged for: forward, up, effort, in the air for nothing, fell. The status line says how
 long it has practised, how many steps, how far it gets in this world now and on average in practice.
-Everything learned is kept in the browser (IndexedDB) every half minute, for that body and that kind
-of world, and taken up again on the next visit; "start over" forgets it. What is kept holds the steps
-practised, so the costs brought in over the first 4 million steps go on from where they were; a
-learner kept before that was added, or of another size, is refused and practice starts afresh. The store is at
-version 2 since two legs were asked for a pace: opening it forgets two-legged learners kept before, which
-are the right size but learned for another task, and keeps four-legged ones. A two-legged learner's
+Everything learned is kept in the browser (IndexedDB) every half minute, for that body, and taken up
+again on the next visit; "start over" forgets it. A new world for the same body goes on with what was
+learned: the leading worker takes its learner out of the engine before the engine is made for the new
+world, and puts it back (`carry` in the worker's order), so neither the learner nor its steps start
+again, and the page says "A new world. It goes on with what it has learned". A new body (two legs for
+four, or back) has a brain of another size: it takes up the learner kept for that body, or starts from
+nothing, and the page says which. Evolution starts again at every change, since its brains learn the
+one world they are bred in, and says so. What is kept holds the steps practised, so the costs brought
+in over the first 4 million steps go on from where they were; a learner kept before that was added, or
+of another size, is refused and practice starts afresh. The store was at version 2 once two legs were
+asked for a pace (it forgot two-legged learners kept before, which learned for another task); at version 3,
+since the creatures feel touch, every learner kept before has too few senses, so opening the store at 3
+forgets them all, and learners are kept by body alone from then on, not by kind of world. A two-legged learner's
 weights are 23,435 numbers, and all that is kept of it 70,309 (the weights, Adam's two running
 averages as long, its updates, Adam's steps and the steps practised), which does not fit in a link, so
 a link carries the world and not the brain.
@@ -1089,9 +1245,13 @@ creature and its learning per module instance. A function that gives a list give
   and lower part), `show_things()` (six f32 for each box, moving platform and see-saw plank made: 0, 1
   or 2 for which, x, y, angle, half width, half height), `show_rays()` (the eye's x and y, then for
   each ray its distance and what it saw: 0 nothing, 1 ground, 2 an edge, 3 a box, 4 a hazard, 5 a
-  moving thing, 6 food), `ray_angles()`, `show_push(x, y, impulse_x, impulse_y)`, `show_hold(x, y)`
-  (carries the body toward the point until `show_drop()`; its run is not judged while held).
-  Positions are in metres from the start.
+  moving thing, 6 food), `ray_angles()`,
+  `show_under(x, y)` (what a press there would take hold of: 0 nothing, 1 the creature, 2 a box, a
+  moving platform or a see-saw's plank), `show_grab(x, y)` (takes hold of it with the hand, "Touching
+  it"), `show_hand(x, y)` (moves the hand), `show_let_go()`, `show_held()` (five f32: what is held, as
+  `show_under` says, where the hand is, and where on the thing it holds). While the creature is held
+  its run is judged, but nothing is paid but its effort and nothing but its time ends it. Positions
+  are in metres from the start.
 - The world to draw: `land_ground(until, from)` (the world made at least to `until` metres; four f32
   for each piece of ground from number `from` on), `land_blocks(from)` (four f32 for each floating
   platform), `land_hazards(from)` (five: the box, then 0 water or 1 spikes), `picture(count)` (what
@@ -1100,9 +1260,9 @@ creature and its learning per module instance. A function that gives a list give
   `envs_observations()`, `envs_rewards()`, `envs_done()`, `senses_length()`, `actions_length()`,
   `rays_length()`.
 
-The module is 304 KiB with SIMD, 296 KiB without (299 and 291 before two legs were asked for a pace,
+The module is 320 KiB with SIMD, 310 KiB without (304 and 296 before touch and the hand, 299 and 291 before two legs were asked for a pace,
 with the costs on landing and leaning; 295 and 287 before the posture terms for two legs,
-which cost 2.8 KiB, and the bonus for taking turns, 1.2 KiB; the gait measures are left out of it; the Walker's is 127 KiB, the physics alone
+which cost 2.8 KiB, and the bonus for taking turns, 1.2 KiB; the gait measures are left out of it; the Walker's is 131 KiB, the physics alone
 37 KiB; what the generalist added to the Walker's own module is 1.3 KiB of physics it does not use,
 which the compiler mostly leaves out). Learning by practice costs 94 KiB of that: before it the module
 was 190 KiB; the brain's picture costs 11 KiB more. The functions for practice (`practice_create`,
@@ -1127,6 +1287,16 @@ Only what the world needs, none of it used by the Walker, which learns to the sa
   told their new places, so taking out a box far behind changes nothing else, to the bit.
 - Loose boxes and see-saws needed nothing new: boxes, hinges and limits were there. Hazards are not
   physics: a run ends when any part of the creature's box overlaps one.
+- **A hand** (`physics::Hand`, `World::hold`, `World::let_go`), for touching the world (below,
+  "Touching it"): a spring with a damper from a point of one body to where the hand is, solved as a
+  soft constraint in the pushing pass of each substep, as Box2D's mouse joint is, with a cap on its
+  force. It never sets where a body is or how fast it goes. While it holds a body, that body and the
+  others of its group look for contacts as far ahead as they could go in the step (`World::reach`:
+  `AHEAD` and their speed and spin times a step), so the solver sees a thin thing coming and nothing
+  dragged goes through it; with nothing held every body looks `AHEAD`, as before, and every result is
+  the same to the bit. And `World::pressed`, how hard everything touching a body pushed on it in the
+  last substep, which touch reads. The Walker's module carries the hand without using it: 2.9 KiB
+  more (128 to 131 KiB with SIMD).
 
 `generalist::stage` keeps a world around one creature: the land laid 50 m ahead a stretch at a time
 and dropped 40 m behind, boxes, moving platforms and see-saws made 14 m before the creature reaches

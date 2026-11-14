@@ -42,6 +42,17 @@ The foundation, since everything after is shown by touching the world.
   saying how.
 - Learning does not start over or get worse when the world is touched or a setting changed.
 
+**State (13 November 2026): built, on its branch, to be looked at.** One hand for everything, a spring
+with a cap on its force, so the creature hangs and kicks and nothing is flung, tangled or dragged through
+anything; boxes lag by their weight, a moving platform taken stays level and where it is let go of.
+Touch on the body and feet, being held, and a jolt reach the brain, and two legs practise with a visitor
+who lifts, nudges and shoves. Every touch changes what it does; two legs learned to come through a box
+dropped or slid into them and a nudge, with no rule written for it. They have not learned to land when
+let go from a height or by a foot, and four legs learned nothing from the visitor, so they practise
+without one. A new world goes on with what was learned; a new body takes up its own or starts afresh, and
+the page says which. Both bodies go as far through worlds as before. The numbers are in
+`walker/README.md`, "Touching it".
+
 ### 2. It wants things
 
 - Energy that runs down and food to find. Tired, its muscles weaken and it slows; it rests to recover. It
