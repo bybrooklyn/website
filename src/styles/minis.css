@@ -67,8 +67,8 @@
     color: var(--muted);
 }
 
-/* The marble run's panel: the box of pieces as a strip of small pictures, then what to press, then a
-   quiet line of what is marked. The strip scrolls sideways; a piece is dragged up out of it. */
+/* The marble run's panel: the box of pieces as a strip of small pictures, then the tools as a bar of
+   icons. The strip scrolls sideways; a piece is dragged up out of it. */
 .mini-stage[data-mini="marbles"] {
     --panel-room: 15rem;
 }
@@ -120,28 +120,298 @@
     pointer-events: none;
 }
 
-.marbles-go {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: 0.5rem 0;
-    margin-bottom: 0.5rem;
+/* A piece of one's own, after the made ones: a cross in its corner takes it out of the box. It grows
+   in when it is kept and shrinks away when it is taken out. */
+.mote-panel .marbles-own {
+    position: relative;
+    animation: none;
+    transition:
+        scale 0.25s var(--ease),
+        opacity 0.2s ease;
 }
 
-.mote-panel .marbles-go button:disabled {
-    color: color-mix(in oklch, var(--muted) 55%, transparent);
+.mote-panel .marbles-own.arriving {
+    animation: marbles-arrive 0.45s cubic-bezier(0.3, 1.5, 0.4, 1);
+}
+
+.mote-panel .marbles-own.leaving {
+    scale: 0.4;
+    opacity: 0;
+}
+
+@keyframes marbles-arrive {
+    from {
+        scale: 0.3;
+        opacity: 0;
+    }
+}
+
+.marbles-unkeep {
+    position: absolute;
+    top: 0;
+    right: 0;
+    display: grid;
+    place-items: center;
+    width: 1.6rem;
+    height: 1.6rem;
+    border-radius: 50%;
+    color: var(--muted);
+    background: var(--ground);
+    cursor: pointer;
+}
+
+.marbles-unkeep:hover {
+    color: var(--ink);
+}
+
+.marbles-unkeep .marbles-icon {
+    width: 0.85rem;
+    height: 0.85rem;
+}
+
+/* The tools: one raised surface of icon buttons in groups parted by thin rules, as mdQuire's bar is
+   (quire.css), wrapping into a second row where the page is narrow. */
+.marbles-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem 0;
+    width: fit-content;
+    max-width: 100%;
+    padding: 0.2rem;
+    border-radius: 0.75rem;
+    background: var(--panel-raised);
+}
+
+.marbles-group {
+    display: flex;
+    gap: 0.1rem;
+}
+
+.marbles-group + .marbles-group {
+    margin-left: 0.35rem;
+    padding-left: 0.35rem;
+    border-left: 0.0625rem solid var(--rule);
+}
+
+.marbles-icon {
+    width: 1.2rem;
+    height: 1.2rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.7;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+/* (more particular than the panel's own buttons, which are words) */
+.mote-panel .marbles-tool,
+.marbles-strip .marbles-tool {
+    display: grid;
+    place-items: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0.5rem;
+    color: var(--ink);
+    background: none;
+    text-decoration: none;
+    cursor: pointer;
+    transition:
+        background 0.15s ease,
+        color 0.15s ease,
+        opacity 0.15s ease,
+        scale 0.2s var(--ease);
+}
+
+/* a fingertip's width where the pointer is a finger */
+@media (pointer: coarse) {
+    .mote-panel .marbles-tool,
+    .marbles-strip .marbles-tool {
+        width: 2.75rem;
+        height: 2.75rem;
+    }
+}
+
+.mote-panel .marbles-tool:hover:not(:disabled),
+.marbles-strip .marbles-tool:hover:not(:disabled) {
+    background: color-mix(in oklch, var(--ink) 8%, transparent);
+}
+
+.mote-panel .marbles-tool[aria-pressed="true"],
+.mote-panel .marbles-tool[aria-expanded="true"] {
+    color: var(--accent);
+    background: color-mix(in oklch, var(--accent) 22%, transparent);
+}
+
+.mote-panel .marbles-tool:active:not(:disabled),
+.marbles-strip .marbles-tool:active:not(:disabled) {
+    scale: 0.94;
+}
+
+.mote-panel .marbles-tool:disabled {
+    opacity: 0.35;
     cursor: default;
 }
 
-.marbles-said,
-.marbles-runs {
-    margin: 0.2rem 0 0;
+/* The strip by what is chosen, in the scene: the same raised surface, grown out of the selection's
+   edge a little past its size and back, and shrunk away when nothing is chosen. */
+.marbles-strip {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 2;
+    display: grid;
+    padding: 0.2rem;
+    border-radius: 0.75rem;
+    background: var(--panel-raised);
+    box-shadow:
+        0 0.75rem 2rem oklch(0.05 0.02 300 / 0.55),
+        0 0.15rem 0.4rem oklch(0.05 0.02 300 / 0.35);
+    opacity: 0;
+    scale: 0.55;
+    transform-origin: 50% 100%;
+    visibility: hidden;
+    pointer-events: none;
+    transition:
+        opacity 0.16s ease,
+        scale 0.25s var(--ease),
+        visibility 0s linear 0.25s;
+}
+
+.marbles-strip.below {
+    transform-origin: 50% 0;
+}
+
+.marbles-strip.shown {
+    opacity: 1;
+    scale: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transition:
+        opacity 0.15s ease,
+        scale 0.45s cubic-bezier(0.3, 1.5, 0.4, 1),
+        visibility 0s;
+}
+
+/* its tools and the line to name a piece of one's own share one place, one fading as the other grows */
+.marbles-strip-tools,
+.marbles-strip-name {
+    grid-area: 1 / 1;
+    display: flex;
+    align-items: center;
+    gap: 0.1rem;
+    transition:
+        opacity 0.18s ease,
+        scale 0.3s var(--ease);
+}
+
+.marbles-strip-name,
+.marbles-strip.naming .marbles-strip-tools {
+    opacity: 0;
+    scale: 0.85;
+    pointer-events: none;
+}
+
+.marbles-strip.naming .marbles-strip-name {
+    opacity: 1;
+    scale: 1;
+    pointer-events: auto;
+}
+
+.marbles-name {
+    flex: 1;
+    min-width: 0;
+    height: 2.2rem;
+    padding: 0 0.6rem;
+    border: 0;
+    border-bottom: 0.0625rem solid var(--field-edge);
+    color: var(--ink);
+    background: none;
+    font: inherit;
+    font-size: 0.95rem;
+}
+
+.marbles-name:focus {
+    outline: none;
+    border-bottom-color: var(--accent);
+}
+
+/* A fold under the bar (the keys, the runs to start from) grows open from the button that opened it
+   and shrinks back into it. */
+.marbles-fold {
+    display: grid;
+    grid-template-rows: 0fr;
+    opacity: 0;
+    scale: 0.92;
+    transform-origin: var(--from, 50%) 0;
+    transition:
+        grid-template-rows 0.35s var(--ease),
+        opacity 0.2s ease,
+        scale 0.35s var(--ease);
+}
+
+.marbles-fold.open {
+    grid-template-rows: 1fr;
+    opacity: 1;
+    scale: 1;
+}
+
+.marbles-fold-inner {
+    min-height: 0;
+    overflow: hidden;
+}
+
+.marbles-keys-list {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 0.2rem 1rem;
+    margin: 0.8rem 0 0.2rem;
+    font-size: 0.85rem;
+}
+
+.marbles-keys-list dt {
+    color: var(--ink);
+}
+
+.marbles-keys-list dd {
+    margin: 0;
     color: var(--muted);
 }
 
-/* the made runs are words with dots between, so they need no step apart of their own */
-.mote-panel .marbles-runs button + button {
-    margin-inline-start: 0;
+.marbles-runs {
+    margin: 0.8rem 0 0.2rem;
+    padding: 0;
+    list-style: none;
+}
+
+.marbles-runs li {
+    padding: 0.2rem 0;
+}
+
+@media (max-width: 30rem) {
+    .marbles-keys-list {
+        grid-template-columns: 1fr;
+        gap: 0 0;
+    }
+
+    .marbles-keys-list dd {
+        margin-bottom: 0.35rem;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .marbles-strip,
+    .marbles-strip.shown,
+    .marbles-fold,
+    .marbles-strip-tools,
+    .marbles-strip-name,
+    .mote-panel .marbles-own {
+        transition: none;
+        animation: none;
+    }
 }
 
 /* A mini drawn in 3D has a second canvas for it, under the one that takes the mouse. */
