@@ -727,6 +727,10 @@ export class Space {
     #wasOn = new Map<number, Manifold[]>();
     #nextOn = new Map<number, Manifold[]>();
     #touches: Touch[] = [];
+    /** When islands sleep: what is asleep, in a table of its own, made again when that changes. */
+    #sleepers = new Kept();
+    #sleeping: Solid[] = [];
+    #sleepersBuilt = false;
     #low = new Float64Array(3);
     #high = new Float64Array(3);
 
@@ -768,6 +772,7 @@ export class Space {
         const at = this.solids.indexOf(solid);
         if (at < 0) return;
         this.solids.splice(at, 1);
+        this.#sleepersBuilt = false;
         if (solid.piece) {
             this.#pieces.splice(this.#pieces.indexOf(solid), 1);
             this.#built = false;
@@ -797,6 +802,7 @@ export class Space {
         solid.rest = [solid.im, solid.ii];
         [solid.im, solid.ii] = [0, 0];
         solid.held = true;
+        this.#sleepersBuilt = false;
     }
 
     wake(solid: Solid): void {
@@ -810,6 +816,7 @@ export class Space {
 
     /** Wakes a sleeping solid that is not held, and every solid that went to sleep with it. */
     #rouse(solid: Solid): void {
+        this.#sleepersBuilt = false;
         for (const one of solid.together ?? [solid]) {
             if (!one.rest || one.held) continue;
             [one.im, one.ii] = one.rest;
@@ -817,6 +824,100 @@ export class Space {
             one.quiet = 0;
         }
         for (const one of solid.together ?? []) one.together = undefined;
+    }
+
+    /** Two solids the broad phase found near each other: where they touch, if they do, added to `manifolds`. */
+    #pair(a: Solid, b: Solid, dt: number, was: Map<number, Manifold>, manifolds: Manifold[]): void {
+        if (!a.im && !b.im) return;
+        // a ball is met by its own rules, below
+        if (a.radius !== undefined || b.radius !== undefined) {
+            const made = this.#round(a, b, dt, was.get(a.id * 2 ** 26 + b.id));
+            if (made) manifolds.push(made);
+            return;
+        }
+        const closing = size(sub(b.v, a.v)) + size(a.w) * (a.im ? a.far : 0) + size(b.w) * (b.im ? b.far : 0);
+        const margin = this.margin + Math.min(closing * dt, this.ahead);
+        // Too far off to matter: by their middles, or for something fixed, by how far the other is outside its faces.
+        if (a.im && b.im) {
+            if (size(sub(b.p, a.p)) > a.far + b.far + margin) return;
+        } else {
+            const [box, ball] = a.im ? [b, a] : [a, b];
+            let out = false;
+            for (let f = 0; f < box.wn.length && !out; f++) out = dot(box.wn[f]!, ball.p) - box.offsets[f]! > ball.far + margin;
+            if (out) return;
+        }
+        const found = touch(a, b, margin);
+        if (!found) return;
+        // something asleep is woken by anything that reaches it while moving; something held is not
+        for (const [lying, other] of [[a, b], [b, a]] as const) {
+            if (lying.rest && !lying.held && other.im && size(other.v) + size(other.w) * other.far > 8 * this.slow) this.#rouse(lying);
+        }
+        const before = was.get(a.id * 2 ** 26 + b.id);
+        const n = found.n;
+        const t1 = unit(Math.abs(n[0]) < 0.8 ? cross(n, [1, 0, 0]) : cross(n, [0, 1, 0]));
+        const t2 = cross(n, t1);
+        const back: Quat = [-a.q[0], -a.q[1], -a.q[2], a.q[3]];
+        manifolds.push({
+            a, b, n, t1, t2,
+            friction: Math.sqrt(a.friction * b.friction),
+            bounce: Math.max(a.bounce, b.bounce),
+            stiff: !a.im || !b.im,
+            spots: found.spots.map(([at, gap]): Spot => {
+                const [ra, rb] = [sub(at, a.p), sub(at, b.p)];
+                const la = spin(back, ra);
+                // Found again from last step by where it is on the first solid, so that it starts from last step's answer.
+                let [old, near]: [Spot | undefined, number] = [undefined, 0.06 * Math.max(a.im ? a.far : 0, b.im ? b.far : 0)];
+                for (const spot of before?.spots ?? []) {
+                    const away = size(sub(spot.la, la));
+                    if (away < near) [old, near] = [spot, away];
+                }
+                const [oldOne, oldTwo] = old && before ? [old.one * dot(before.t1, t1) + old.two * dot(before.t2, t1), old.one * dot(before.t1, t2) + old.two * dot(before.t2, t2)] : [0, 0];
+                const ca = sub(ra, mul(n, gap / 2));
+                const cb = add(rb, mul(n, gap / 2));
+                const k = (d: V3) => {
+                    const [xa, xb] = [cross(ra, d), cross(rb, d)];
+                    const sum = a.im + b.im + hardness(a, xa) + hardness(b, xb);
+                    return sum > 0 ? 1 / sum : 0;
+                };
+                return {
+                    ra, rb, ca, cb, la, gap,
+                    adjusted: gap - dot(sub(cb, ca), n),
+                    normalMass: k(n), oneMass: k(t1), twoMass: k(t2),
+                    push: old?.push ?? 0, one: oldOne, two: oldTwo, speed: 0, springy: false, start: 0,
+                    closing: dot(sub(add(b.v, cross(b.w, rb)), add(a.v, cross(a.w, ra))), n),
+                    most: 0,
+                };
+            }),
+        });
+    }
+
+    /**
+     * When islands sleep, what is asleep is kept out of the grid, in a table of its own made again only
+     * when something falls asleep or wakes, and only what moves is set against it: so a tray of
+     * sleeping marbles costs almost nothing while others still roll. Pairs go lower number first.
+     */
+    #nearSleepers(dt: number, was: Map<number, Manifold>, manifolds: Manifold[]): void {
+        if (!this.#sleepersBuilt) {
+            this.#sleepers.clear();
+            this.#sleeping = this.solids.filter((s) => s.rest && !s.held);
+            for (const s of this.#sleeping) this.#sleepers.add([s.p[0] - s.far, s.p[1] - s.far, s.p[2] - s.far], [s.p[0] + s.far, s.p[1] + s.far, s.p[2] + s.far]);
+            this.#sleepers.build();
+            this.#sleepersBuilt = true;
+        }
+        if (!this.#sleeping.length) return;
+        const [low, high] = [this.#low, this.#high];
+        for (const a of this.solids) {
+            if (!a.im) continue;
+            const reach = a.far + this.margin + Math.min((length(a.v) + length(a.w) * a.far) * dt, this.ahead) + 1e-6;
+            for (let axis = 0; axis < 3; axis++) [low[axis], high[axis]] = [a.p[axis]! - reach, a.p[axis]! + reach];
+            const found = this.#sleepers.find(low, high);
+            for (let k = 0; k < found; k++) {
+                const b = this.#sleeping[this.#sleepers.found[k]!]!;
+                if (b === a || (b.im && b.id < a.id)) continue;
+                if (b.id < a.id) this.#pair(b, a, dt, was, manifolds);
+                else this.#pair(a, b, dt, was, manifolds);
+            }
+        }
     }
 
     /** Where a ball meets another ball or a solid of faces, or comes within reach of it this step: a contact of one point, or none. */
@@ -980,6 +1081,12 @@ export class Space {
         const { low, high } = pairs;
         for (let i = 0; i < count; i++) {
             const s = solids[i]!;
+            if (this.islands && s.rest && !s.held) {
+                // asleep in an island: in the table of sleepers instead, and in no pair here
+                pairs.moves[i] = 0;
+                for (let axis = 0; axis < 3; axis++) [low[i * 3 + axis], high[i * 3 + axis]] = [Infinity, -Infinity];
+                continue;
+            }
             pairs.moves[i] = s.im || s.rest ? 1 : 0;
             if (!s.im && !s.rest) {
                 // Fixed, which only a slab is: a box whose faces are pushed out by `reach` is a box
@@ -1015,71 +1122,10 @@ export class Space {
         const { start, other } = pairs;
         for (let i = 0; i < count; i++) {
             const a = solids[i]!;
-            for (let k = start[i]!; k < start[i + 1]!; k++) {
-                const b = solids[other[k]!]!;
-                if (!a.im && !b.im) continue;
-                // a ball is met by its own rules, below
-                if (a.radius !== undefined || b.radius !== undefined) {
-                    const made = this.#round(a, b, dt, was.get(a.id * 2 ** 26 + b.id));
-                    if (made) manifolds.push(made);
-                    continue;
-                }
-                const closing = size(sub(b.v, a.v)) + size(a.w) * (a.im ? a.far : 0) + size(b.w) * (b.im ? b.far : 0);
-                const margin = this.margin + Math.min(closing * dt, this.ahead);
-                // Too far off to matter: by their middles, or for something fixed, by how far the other is outside its faces.
-                if (a.im && b.im) {
-                    if (size(sub(b.p, a.p)) > a.far + b.far + margin) continue;
-                } else {
-                    const [box, ball] = a.im ? [b, a] : [a, b];
-                    let out = false;
-                    for (let f = 0; f < box.wn.length && !out; f++) out = dot(box.wn[f]!, ball.p) - box.offsets[f]! > ball.far + margin;
-                    if (out) continue;
-                }
-                const found = touch(a, b, margin);
-                if (!found) continue;
-                // something asleep is woken by anything that reaches it while moving; something held is not
-                for (const [lying, other] of [[a, b], [b, a]] as const) {
-                    if (lying.rest && !lying.held && other.im && size(other.v) + size(other.w) * other.far > 8 * this.slow) this.#rouse(lying);
-                }
-                const before = was.get(a.id * 2 ** 26 + b.id);
-                const n = found.n;
-                const t1 = unit(Math.abs(n[0]) < 0.8 ? cross(n, [1, 0, 0]) : cross(n, [0, 1, 0]));
-                const t2 = cross(n, t1);
-                const back: Quat = [-a.q[0], -a.q[1], -a.q[2], a.q[3]];
-                manifolds.push({
-                    a, b, n, t1, t2,
-                    friction: Math.sqrt(a.friction * b.friction),
-                    bounce: Math.max(a.bounce, b.bounce),
-                    stiff: !a.im || !b.im,
-                    spots: found.spots.map(([at, gap]): Spot => {
-                        const [ra, rb] = [sub(at, a.p), sub(at, b.p)];
-                        const la = spin(back, ra);
-                        // Found again from last step by where it is on the first solid, so that it starts from last step's answer.
-                        let [old, near]: [Spot | undefined, number] = [undefined, 0.06 * Math.max(a.im ? a.far : 0, b.im ? b.far : 0)];
-                        for (const spot of before?.spots ?? []) {
-                            const away = size(sub(spot.la, la));
-                            if (away < near) [old, near] = [spot, away];
-                        }
-                        const [oldOne, oldTwo] = old && before ? [old.one * dot(before.t1, t1) + old.two * dot(before.t2, t1), old.one * dot(before.t1, t2) + old.two * dot(before.t2, t2)] : [0, 0];
-                        const ca = sub(ra, mul(n, gap / 2));
-                        const cb = add(rb, mul(n, gap / 2));
-                        const k = (d: V3) => {
-                            const [xa, xb] = [cross(ra, d), cross(rb, d)];
-                            const sum = a.im + b.im + hardness(a, xa) + hardness(b, xb);
-                            return sum > 0 ? 1 / sum : 0;
-                        };
-                        return {
-                            ra, rb, ca, cb, la, gap,
-                            adjusted: gap - dot(sub(cb, ca), n),
-                            normalMass: k(n), oneMass: k(t1), twoMass: k(t2),
-                            push: old?.push ?? 0, one: oldOne, two: oldTwo, speed: 0, springy: false, start: 0,
-                            closing: dot(sub(add(b.v, cross(b.w, rb)), add(a.v, cross(a.w, ra))), n),
-                            most: 0,
-                        };
-                    }),
-                });
-            }
+            for (let k = start[i]!; k < start[i + 1]!; k++) this.#pair(a, solids[other[k]!]!, dt, was, manifolds);
         }
+        // islands asleep are kept out of the grid; the moving are set against them here
+        if (this.islands) this.#nearSleepers(dt, was, manifolds);
         // Kept by pair for the next step to find each again; the two maps take turns, so neither is made anew.
         this.#was = this.#next;
         this.#next = was;
@@ -1189,12 +1235,14 @@ export class Space {
             }
         };
         /** A turning push `j` about `d` on b, and back on a. */
+        const turnOne = (solid: Solid, d: V3, by: number) => {
+            if (!solid.im) return;
+            const t = solid.turned;
+            for (let axis = 0; axis < 3; axis++) solid.w[axis]! += t ? (t[axis * 3]! * d[0] + t[axis * 3 + 1]! * d[1] + t[axis * 3 + 2]! * d[2]) * by : solid.ii * d[axis]! * by;
+        };
         const twist = (m: Manifold, d: V3, j: number) => {
-            for (const [solid, by] of [[m.a, -j], [m.b, j]] as const) {
-                if (!solid.im) continue;
-                const t = solid.turned;
-                for (let axis = 0; axis < 3; axis++) solid.w[axis]! += t ? (t[axis * 3]! * d[0] + t[axis * 3 + 1]! * d[1] + t[axis * 3 + 2]! * d[2]) * by : solid.ii * d[axis]! * by;
-            }
+            turnOne(m.a, d, -j);
+            turnOne(m.b, d, j);
         };
         /** A contact with a ball turned to face `toward` (any length), the two `gap` apart: its point, its directions across, and how much each push takes, made again. */
         const aim = (m: Manifold, s: Spot, toward: V3, gap: number) => {
@@ -1401,6 +1449,7 @@ export class Space {
             if (!list) members.set(top, (list = []));
             list.push(s);
         }
+        if (members.size) this.#sleepersBuilt = false;
         for (const list of members.values()) {
             for (const s of list) {
                 if (s.im) {

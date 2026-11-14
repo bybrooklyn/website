@@ -1,13 +1,15 @@
 // How long a step takes with many bodies: 100, 500, 1,000 and 5,000, as balls loose in a box and
-// as a pile, in both kinds of physics. It prints its numbers, so that a change to how pairs are
-// found can be measured, and holds a step only to a generous bound, since the machine it runs on
-// may be busy. `docs/mote.md` keeps the numbers it gave before and after the broad phase.
+// as a pile, in both kinds of physics; and marbles, rolling down a long spiral gutter, circling a
+// funnel, heaped in a tray awake and asleep. It prints its numbers, so that a change can be measured,
+// and holds a step only to a generous bound, since the machine it runs on may be busy. `docs/mote.md`
+// keeps the numbers it gave.
 
 import { expect, test } from "bun:test";
 import { TICK } from "./stage";
 import { Flat } from "./flat";
 import { cube, twenty, type Mesh, type V3 } from "./solids";
-import { Space } from "./space";
+import { MARBLE, Space, marbleSpace } from "./space";
+import { gutter, helix, sweep, turned } from "./track";
 
 /** Numbers that look random and are the same every time. */
 const dealer = (seed: number) => () => (seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 2 ** 32;
@@ -121,4 +123,63 @@ test("a step with many solids in 3D: printed, and held to a generous bound", () 
     // The pile is held to more: there it is the work on each touching pair that counts, not finding them.
     expect(loose1000).toBeLessThan(400);
     expect(pile1000).toBeLessThan(2500);
+}, 600_000);
+
+/** Marbles spaced along a long spiral gutter, sixteen turns, all rolling down it. */
+function gutters(count: number): Space {
+    const space = marbleSpace();
+    const spiral = helix([0, 200, 0], 30, -9, 16);
+    const piece = sweep(spiral, gutter(1.6, Math.PI * 1.1, 0.2), { level: true, bank: -0.25 });
+    space.track(piece);
+    for (let i = 0; i < count; i++) {
+        const f = piece.frame((spiral.end * (i + 0.5)) / count);
+        const ball = space.ball(0.8, [f.p[0] - f.up[0] * 0.6, f.p[1] - f.up[1] * 0.6, f.p[2] - f.up[2] * 0.6], MARBLE);
+        ball.v = [f.along[0] * 60, f.along[1] * 60, f.along[2] * 60];
+    }
+    return space;
+}
+
+/** Marbles sent circling round a wide funnel, in three layers, so that they jostle. */
+function funnelled(count: number): Space {
+    const space = marbleSpace();
+    const next = dealer(7);
+    space.track(turned([0, 0, 0], [[3, 0], [15, 6], [35, 16], [60, 34]], 0.3));
+    for (let i = 0; i < count; i++) {
+        const [out, angle] = [12 + next() * 40, next() * 2 * Math.PI];
+        const high = out < 15 ? (out - 3) * 0.5 : out < 35 ? 6 + (out - 15) * 0.5 : 16 + (out - 35) * 0.72;
+        const ball = space.ball(0.8, [out * Math.cos(angle), high + 1.5 + (i % 3) * 1.7, out * Math.sin(angle)], MARBLE);
+        const speed = Math.sqrt(981 * out * 0.55) * 0.9;
+        ball.v = [-Math.sin(angle) * speed, 0, Math.cos(angle) * speed];
+    }
+    return space;
+}
+
+/** Marbles in layers over a walled tray, let fall into a heap. */
+function heaped(count: number): Space {
+    const space = marbleSpace();
+    const next = dealer(9);
+    const wide = Math.ceil(Math.sqrt(count * 2.6) / 2) + 1;
+    space.slab([0, -1, 0], [wide + 1, 1, wide + 1]);
+    for (const [x, z, hx, hz] of [[-wide - 0.5, 0, 0.5, wide + 1], [wide + 0.5, 0, 0.5, wide + 1], [0, -wide - 0.5, wide + 1, 0.5], [0, wide + 0.5, wide + 1, 0.5]] as const) space.slab([x, 40, z], [hx, 40, hz]);
+    const across = Math.floor((2 * wide - 2) / 1.8);
+    for (let i = 0; i < count; i++) {
+        const [x, z, y] = [i % across, Math.floor(i / across) % across, Math.floor(i / (across * across))];
+        space.ball(0.8, [-wide + 1.5 + x * 1.8 + next() * 0.1, 1 + y * 1.8, -wide + 1.5 + z * 1.8 + next() * 0.1], MARBLE);
+    }
+    return space;
+}
+
+test("a step of 1/120 s with many marbles, rolling in a gutter, circling a funnel, heaped awake and asleep: printed, and held to a generous bound", () => {
+    const lines: string[] = [];
+    let worst200 = 0;
+    for (const count of [100, 200, 400, 800]) {
+        const [g, f, h] = [gutters(count), funnelled(count), heaped(count)];
+        const times = [timed(() => g.step(TICK), 30, 30), timed(() => f.step(TICK), 30, 30), timed(() => h.step(TICK), 30, 30)];
+        for (let i = 0; i < 120 * 8; i++) h.step(TICK);
+        const asleep = timed(() => h.step(TICK), 5, 60);
+        if (count === 200) worst200 = Math.max(...times);
+        lines.push(`marbles ${String(count).padStart(4)}  gutter ${times[0]!.toFixed(2).padStart(6)} ms  funnel ${times[1]!.toFixed(2).padStart(6)} ms  heap ${times[2]!.toFixed(2).padStart(6)} ms  heap asleep ${asleep.toFixed(3)} ms`);
+    }
+    console.log(lines.join("\n"));
+    expect(worst200).toBeLessThan(100);
 }, 600_000);

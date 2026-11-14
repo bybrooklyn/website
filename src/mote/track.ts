@@ -67,6 +67,8 @@ export interface Path {
     point(t: number): V3;
     speed(t: number): V3;
     bend(t: number): V3;
+    /** All three at once into `out`, point then first change then second, nine numbers: what finding the nearest point asks for at every go. */
+    local(t: number, out: Float64Array): void;
 }
 
 /**
@@ -130,6 +132,18 @@ function cubic(knots: number[], values: number[], second: number[], t: number, o
     return (m0 * a) / h + (m1 * b) / h;
 }
 
+/** A cubic spline's value, slope and second change at `t`, in span `i`, into `out` at `at`, `at + 3` and `at + 6`. */
+function cubics(knots: number[], values: number[], second: number[], t: number, i: number, out: Float64Array, at: number): void {
+    const [t0, t1] = [knots[i]!, knots[i + 1]!];
+    const h = t1 - t0;
+    const [a, b] = [t1 - t, t - t0];
+    const [m0, m1] = [second[i]!, second[i + 1]!];
+    const [y0, y1] = [values[i]! / h - (m0 * h) / 6, values[i + 1]! / h - (m1 * h) / 6];
+    out[at] = (m0 * a * a * a) / (6 * h) + (m1 * b * b * b) / (6 * h) + y0 * a + y1 * b;
+    out[at + 3] = (-m0 * a * a) / (2 * h) + (m1 * b * b) / (2 * h) - y0 + y1;
+    out[at + 6] = (m0 * a) / h + (m1 * b) / h;
+}
+
 /** Which way a path leaves its first point and comes into its last, if they are to be held: for a piece that must meet another squarely. */
 export interface Ends {
     start?: V3;
@@ -155,7 +169,16 @@ export function curve(points: V3[], ends: Ends = {}): Path {
         return { values, second: seconds(knots, values, start?.[axis], end?.[axis]) };
     });
     const at = (t: number, order: 0 | 1 | 2): V3 => [cubic(knots, axes[0]!.values, axes[0]!.second, t, order), cubic(knots, axes[1]!.values, axes[1]!.second, t, order), cubic(knots, axes[2]!.values, axes[2]!.second, t, order)];
-    return { end: knots[knots.length - 1]!, point: (t) => at(t, 0), speed: (t) => at(t, 1), bend: (t) => at(t, 2) };
+    return {
+        end: knots[knots.length - 1]!,
+        point: (t) => at(t, 0),
+        speed: (t) => at(t, 1),
+        bend: (t) => at(t, 2),
+        local(t, out) {
+            const i = span(knots, t);
+            for (let axis = 0; axis < 3; axis++) cubics(knots, axes[axis]!.values, axes[axis]!.second, t, i, out, axis);
+        },
+    };
 }
 
 /** A straight path from one point to another. */
@@ -200,6 +223,14 @@ export function helix(middle: V3, radius: number, rise: number, turns: number, w
         bend(t) {
             const [c, s] = out(t);
             return mul(add(mul(from, -radius * c), mul(other, -radius * s)), rate * rate);
+        },
+        local(t, into) {
+            const [c, s] = out(t);
+            for (let k = 0; k < 3; k++) {
+                into[k] = middle[k]! + from[k]! * radius * c + other[k]! * radius * s + axis[k]! * climb * t * rate;
+                into[k + 3] = (from[k]! * -radius * s + other[k]! * radius * c + axis[k]! * climb) * rate;
+                into[k + 6] = (from[k]! * -radius * c + other[k]! * -radius * s) * rate * rate;
+            }
         },
     };
 }
@@ -387,17 +418,24 @@ function carry(x: V3, from: V3, to: V3): V3 {
     return add(add(mul(x, c), cross(v, x)), mul(v, dot(v, x) / (1 + c)));
 }
 
+/** Room for a path's point and its two changes, used over and over while a nearest point is found. */
+const here = new Float64Array(9);
+
+/** (c - P) . P' and its change with t, at `t`, from what `here` holds once `path.local` has filled it. */
+function change(path: Path, c: V3, t: number): [g: number, slope: number] {
+    path.local(t, here);
+    const [wx, wy, wz] = [c[0] - here[0]!, c[1] - here[1]!, c[2] - here[2]!];
+    const [dx, dy, dz] = [here[3]!, here[4]!, here[5]!];
+    return [wx * dx + wy * dy + wz * dz, wx * here[6]! + wy * here[7]! + wz * here[8]! - (dx * dx + dy * dy + dz * dz)];
+}
+
 /** The point of a path nearest `c` within [low, high], given the change of distance there: a root of (c - P) . P' found by Newton's method kept inside by halving. */
 function closest(path: Path, c: V3, low: number, high: number, gLow: number, gHigh: number): number {
     let t = low + ((high - low) * gLow) / (gLow - gHigh);
     for (let go = 0; go < 30; go++) {
-        const p = path.point(t);
-        const d = path.speed(t);
-        const w = sub(c, p);
-        const g = dot(w, d);
+        const [g, slope] = change(path, c, t);
         if (g > 0) low = t;
         else high = t;
-        const slope = dot(w, path.bend(t)) - dot(d, d);
         let next = slope < 0 ? t - g / slope : (low + high) / 2;
         if (!(next > low && next < high)) next = (low + high) / 2;
         if (Math.abs(next - t) <= 1e-13 * (1 + Math.abs(t))) return next;
@@ -409,11 +447,9 @@ function closest(path: Path, c: V3, low: number, high: number, gLow: number, gHi
 /** Newton's method for the nearest point of a path to `c`, from `t`, with no chunk to keep it in: for a ball found last step, a little further on. */
 function settle(path: Path, c: V3, t: number): number {
     for (let go = 0; go < 6; go++) {
-        const d = path.speed(t);
-        const w = sub(c, path.point(t));
-        const slope = dot(w, path.bend(t)) - dot(d, d);
+        const [g, slope] = change(path, c, t);
         if (!(slope < 0)) break;
-        const next = Math.max(0, Math.min(path.end, t - dot(w, d) / slope));
+        const next = Math.max(0, Math.min(path.end, t - g / slope));
         if (Math.abs(next - t) <= 1e-13 * (1 + Math.abs(t))) return next;
         t = next;
     }
@@ -499,7 +535,12 @@ export function sweep(path: Path, section: Section, along: Along = {}): Piece & 
         const n = long > 1e-12 ? mul(d, 1 / long) : f.up;
         return { at: add(q, mul(n, part.thick / 2)), n, gap: long - part.thick / 2 - r, part: index, where: t };
     };
-    const g = (t: number, c: V3) => dot(sub(c, path.point(t)), path.speed(t));
+    // the point and the way along at each knot, kept, so that a chunk is looked at by its ends without working out the curve
+    const atKnots = knots.map((t) => [path.point(t), path.speed(t)] as const);
+    const g = (k: number, c: V3) => {
+        const [p, d] = atKnots[k]!;
+        return (c[0] - p[0]) * d[0] + (c[1] - p[1]) * d[1] + (c[2] - p[2]) * d[2];
+    };
 
     return {
         path,
@@ -522,7 +563,7 @@ export function sweep(path: Path, section: Section, along: Along = {}): Piece & 
         },
         touch(k, c, r, within, out) {
             const [t0, t1] = [knots[k]!, knots[k + 1]!];
-            const [g0, g1] = [g(t0, c), g(t1, c)];
+            const [g0, g1] = [g(k, c), g(k + 1, c)];
             let t: number;
             if (g0 > 0 && g1 <= 0) t = closest(path, c, t0, t1, g0, g1);
             // past an end: the ball meets the section's rim there, unless the end is joined to another piece
@@ -592,7 +633,11 @@ export function turned(at: V3, profile: V2[], thick: number, step?: number): Pie
         const surface: V3 = [at[0] + away[0] * q[0] * sign, at[1] + q[1], at[2] + away[2] * q[0] * sign];
         return { at: add(surface, mul(n, thick / 2)), n, gap: long - thick / 2 - r, part: side, where: t };
     };
-    const g = (t: number, plane: V3) => dot(sub(plane, path.point(t)), path.speed(t));
+    const atKnots = knots.map((t) => [path.point(t), path.speed(t)] as const);
+    const g = (k: number, plane: V3) => {
+        const [p, d] = atKnots[k]!;
+        return (plane[0] - p[0]) * d[0] + (plane[1] - p[1]) * d[1];
+    };
     return {
         chunks: count,
         knots,
@@ -613,7 +658,7 @@ export function turned(at: V3, profile: V2[], thick: number, step?: number): Pie
                 const point: V3 = side ? [-plane[0], plane[1], 0] : plane;
                 if (side && plane[0] > reach + r + within) continue;
                 const [t0, t1] = [knots[k]!, knots[k + 1]!];
-                const [g0, g1] = [g(t0, point), g(t1, point)];
+                const [g0, g1] = [g(k, point), g(k + 1, point)];
                 let t: number;
                 if (g0 > 0 && g1 <= 0) t = closest(path, point, t0, t1, g0, g1);
                 else if (k === 0 && g0 <= 0) t = 0;
