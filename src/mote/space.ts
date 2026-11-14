@@ -1594,7 +1594,18 @@ export class Space {
         // ---- the step, in parts ----
         const stopping = this.#hinges.length > 0;
         for (let part = 0; part < this.parts; part++) {
-            // a hinge is turned by gravity on each of its solids, its spring and its friction
+            for (const s of solids) {
+                if (!s.im || s.hinge) continue;
+                const [slow, turnSlow] = [1 / (1 + h * s.damping), 1 / (1 + h * s.spinDamping)];
+                s.v = [(s.v[0] + this.gravity[0] * h) * slow, (s.v[1] + this.gravity[1] * h) * slow, (s.v[2] + this.gravity[2] * h) * slow];
+                s.w = mul(s.w, turnSlow);
+                if (s.inertia) s.w = gyroscope(s.q, s.inertia, s.w, h);
+            }
+            // a contact with a ball is aimed for this part before last part's pushes are given again along it
+            if (round) measure(part);
+            // A hinge is turned by gravity on each of its solids, its spring and its friction: after the
+            // speeds a ball strikes at are measured, so that a light flap pressed up by a strong spring
+            // under a marble is not taken to strike it anew in every part.
             for (const hinge of this.#hinges) {
                 if (!hinge.parts[0]!.im) continue;
                 let push = -hinge.spring * (hinge.angle - hinge.rest);
@@ -1606,15 +1617,6 @@ export class Space {
                 hinge.spin = hinge.spin / (1 + h * hinge.friction) + push * hinge.turning * h;
                 synced(hinge);
             }
-            for (const s of solids) {
-                if (!s.im || s.hinge) continue;
-                const [slow, turnSlow] = [1 / (1 + h * s.damping), 1 / (1 + h * s.spinDamping)];
-                s.v = [(s.v[0] + this.gravity[0] * h) * slow, (s.v[1] + this.gravity[1] * h) * slow, (s.v[2] + this.gravity[2] * h) * slow];
-                s.w = mul(s.w, turnSlow);
-                if (s.inertia) s.w = gyroscope(s.q, s.inertia, s.w, h);
-            }
-            // a contact with a ball is aimed for this part before last part's pushes are given again along it
-            if (round) measure(part);
             for (const m of manifolds) {
                 for (const s of m.spots) {
                     shove(m, s, m.n, s.push);
