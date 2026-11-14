@@ -183,23 +183,41 @@ used("each mark button on the bar marks the selection", async () => {
     }
 });
 
-used("the three list buttons, the four alignments, undo and redo do what they say", async () => {
-    for (const [label, expected] of [
-        ["Bulleted list", "- Line\n"],
-        ["Numbered list", "1. Line\n"],
-        ["Checklist", "- [ ] Line\n"],
-        ["Align right", '<div align="right">\n\nLine\n\n</div>\n'],
-        ["Centre", '<div align="center">\n\nLine\n\n</div>\n'],
+/** Opens one of the bar's buttons that grow open in place and presses one of its choices, once it has grown. */
+async function grownPick(label: string, choice: string) {
+    await press(`.quire-bar .quire-grow-main[aria-label="${label}"]`);
+    await tab.wait(350);
+    await press(".quire-bar .quire-grow.open .quire-grow-line", choice);
+    await tab.wait(300);
+}
+
+used("the lists button, the alignment button, undo and redo do what they say", async () => {
+    for (const [label, choice, expected] of [
+        ["Lists", "Bulleted list", "- Line\n"],
+        ["Lists", "Numbered list", "1. Line\n"],
+        ["Lists", "Checklist", "- [ ] Line\n"],
+        ["Alignment", "Align right", '<div align="right">\n\nLine\n\n</div>\n'],
+        ["Alignment", "Center", '<div align="center">\n\nLine\n\n</div>\n'],
     ]) {
         await reset("Line\n", [0], 2);
-        await button(label!);
+        await grownPick(label!, choice!);
         expect(await md()).toBe(expected!);
+        // it has closed again, showing what was chosen
+        expect(await tab.run(`document.querySelector('.quire-grow-main[aria-label="${label}"]').getAttribute("aria-expanded")`)).toBe("false");
     }
-    // in a list its button is lit, and so is the alignment the line has
+    // in a list the lists button shows its kind, pressed, and the same kind again takes the list off
     await reset("1. Line\n", [0, 0, 0], 2);
-    expect(await tab.run(`["Numbered list", "Bulleted list", "Align left"].map((label) => document.querySelector('.quire-bar button[aria-label="' + label + '"]').getAttribute("aria-pressed"))`)).toEqual(["true", "false", "true"]);
+    expect(await tab.run(`(() => { const main = document.querySelector('.quire-grow-main[aria-label="Lists"]'); return [main.classList.contains("pressed"), main.innerHTML === document.querySelector('[id$="-number"] svg').outerHTML]; })()`)).toEqual([true, true]);
+    await grownPick("Lists", "Numbered list");
+    expect(await md()).toBe("Line\n");
+    // the shortcut moves the alignment and the button follows it
     await reset("Line\n", [0], 2);
-    await button("Centre");
+    await tab.press("E", { ctrl: true, shift: true });
+    await tab.wait(50);
+    expect(await md()).toBe('<div align="center">\n\nLine\n\n</div>\n');
+    expect(await tab.run(`document.querySelector('.quire-grow-main[aria-label="Alignment"]').innerHTML === document.querySelector('[id$="-center"] svg').outerHTML`)).toBe(true);
+    await reset("Line\n", [0], 2);
+    await grownPick("Alignment", "Center");
     await button("Undo");
     expect(await md()).toBe("Line\n");
     await button("Redo");
@@ -252,6 +270,40 @@ used("the bar is a toolbar: the arrow keys move along it and Escape closes a men
     await tab.press("Escape");
     expect(await tab.run("document.activeElement.getAttribute('aria-label')")).toBe("Style");
     expect(await tab.run("[...document.querySelectorAll('.quire-bar-strip button')].filter((b) => b.tabIndex === 0).length")).toBe(1);
+});
+
+used("the alignment button works from the keyboard alone: Enter opens it, the arrows move along, Enter takes one and Escape takes none, the keyboard staying on it", async () => {
+    await reset("Line\n", [0], 2);
+    const main = `document.querySelector('.quire-grow-main[aria-label="Alignment"]')`;
+    await tab.run(`${main}.focus()`);
+    await tab.press("Enter");
+    await tab.wait(300);
+    expect(await tab.run(`${main}.getAttribute("aria-expanded")`)).toBe("true");
+    // the tools after it slid aside: it is as wide as its four choices
+    expect(await tab.run<number>(`document.querySelector('.quire-grow.open').offsetWidth / document.querySelector('.quire-grow.open .quire-grow-line').offsetWidth`)).toBeGreaterThan(2.5);
+    await tab.press("ArrowRight");
+    await tab.press("ArrowRight");
+    expect(await tab.run(`${main}.getAttribute("aria-activedescendant")`)).toEndWith("-right");
+    await tab.press("Enter");
+    await tab.wait(300);
+    expect(await md()).toBe('<div align="right">\n\nLine\n\n</div>\n');
+    expect(await tab.run(`[${main}.getAttribute("aria-expanded"), document.activeElement === ${main}]`)).toEqual(["false", true]);
+    // Space opens it too, and Escape closes it with nothing changed
+    await tab.press(" ");
+    await tab.wait(300);
+    await tab.press("ArrowLeft");
+    await tab.press("Escape");
+    await tab.wait(300);
+    expect(await md()).toBe('<div align="right">\n\nLine\n\n</div>\n');
+    expect(await tab.run(`[${main}.getAttribute("aria-expanded"), document.activeElement === ${main}]`)).toEqual(["false", true]);
+    // it opens over time, its width easing out from one button's
+    await tab.run(`${main}.blur()`);
+    const watching = tab.run<number[]>("q.watch('.quire-bar .quire-grow', 'width', 400)");
+    await press(`.quire-bar .quire-grow-main[aria-label="Alignment"]`);
+    const widths = (await watching).filter((value) => !Number.isNaN(value));
+    expect(new Set(widths.map(Math.round)).size).toBeGreaterThan(4);
+    await tab.press("Escape");
+    await tab.wait(300);
 });
 
 used("a menu grows open over time, and with less motion asked for it does not", async () => {

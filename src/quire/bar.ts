@@ -53,8 +53,10 @@ import {
 } from "./document";
 import type { State } from "./history";
 import { activeBlock, caret, collapsed, mark, pageBreakAt, paste, rangeOf, sameLeaf, tableOf } from "./keys";
+import { growsFrom } from "./dialog";
+import { SHORTCUTS } from "./shortcuts";
 import type { Surface } from "./surface";
-import { closeOthers, composing, control, dots, flowMenu, glyph, icon, make, moveIndex, still, type Menu, type MenuItem } from "./ui";
+import { closeOthers, composing, control, dots, EASE, flowMenu, glyph, icon, make, MOTION, moveIndex, springCurve, still, type Menu, type MenuItem } from "./ui";
 
 /** What a button does: from the state at the cursor to the next one. */
 export type Action = (state: State) => State;
@@ -339,10 +341,28 @@ export const SPACINGS: [string, number][] = [
 /** The ways a block can sit across the page, by name, with their icons; justified is for `.quire` documents alone. */
 export const ALIGNS: [Align, string][] = [
     ["left", "Align left"],
-    ["center", "Centre"],
+    ["center", "Center"],
     ["right", "Align right"],
     ["justify", "Justify"],
 ];
+
+/** The kinds of list, by name, in the bar's order. */
+export const LISTS: [ListStyle, string][] = [
+    ["task", "Checklist"],
+    ["bullet", "Bulleted list"],
+    ["number", "Numbered list"],
+];
+
+/** A control's tooltip: its name, with its shortcut in words where it has one, "Bold (Ctrl+B)"; on a Mac Ctrl is said as Cmd. */
+export function tip(label: string, command?: string, onMac = false): string {
+    const keys = command && SHORTCUTS.find((each) => each.command === command)?.keys;
+    return keys ? `${label} (${onMac ? keys.replace("Ctrl", "Cmd") : keys})` : label;
+}
+
+/** The sizes the size menu offers: Google Docs' own for a `.quire` document, which keeps any size, and the five a Markdown file can keep for one. */
+export function sizesOffered(rich: boolean): number[] {
+    return rich ? [8, 9, 10, 11, 12, 14, 18, 24, 30, 36, 48, 60, 72, 96] : SIZE_STEPS;
+}
 
 // ---- adding blocks ----
 
@@ -554,6 +574,8 @@ interface Tool {
     lines: () => MenuItem[];
     /** For a `.quire` document alone: away while the document is Markdown. */
     rich?: boolean;
+    /** How much wider it is open than shut, for a button that grows open in place; the bar keeps that much room for it. */
+    extra?: () => number;
     width: number;
 }
 
@@ -592,6 +614,9 @@ export function createBar(surface: Surface, options: BarOptions) {
         return element;
     };
     const tool = (element: HTMLElement, fold: number, lines: () => MenuItem[] = () => [], rich = false) => ({ element, fold, lines, rich });
+    const apple = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+    /** A tooltip with its shortcut, as this computer writes it. */
+    const named = (label: string, command?: string) => tip(label, command, apple);
     /** Several controls folding as one. */
     const cluster = (...controls: HTMLElement[]) => {
         const element = make("span", "quire-tool-set");
@@ -861,20 +886,147 @@ export function createBar(surface: Surface, options: BarOptions) {
     });
     bar.append(chooser);
     group(
-        tool(control("Link (Ctrl+K)", icon("link"), (button) => options.onLink?.(button)), FOLDS.insert, () => [{ label: "Link", icon: "link", hint: "Ctrl+K", run: () => options.onLink?.(moreButton) }]),
-        tool(control("Picture", icon("image"), () => chooser.click()), FOLDS.insert, () => [{ label: "Picture", icon: "image", run: () => chooser.click() }]),
+        tool(control(named("Link", "link"), icon("link"), (button) => options.onLink?.(button)), FOLDS.link, () => [{ label: "Link", icon: "link", hint: "Ctrl+K", run: () => options.onLink?.(moreButton) }]),
+        tool(control("Picture", icon("image"), () => chooser.click()), FOLDS.picture, () => [{ label: "Picture", icon: "image", run: () => chooser.click() }]),
     );
 
-    // ---- alignment: four buttons, always there, the current one lit (justified for a .quire document alone) ----
-    const alignButtons = new Map<Align, HTMLButtonElement>();
-    group(
-        ...ALIGNS.map(([value, label]) => {
-            const button = control(label, icon(value), doing(align(value)));
-            button.setAttribute("aria-pressed", "false");
-            alignButtons.set(value, button);
-            return tool(button, 0, () => [], value === "justify");
-        }),
-    );
+    // ---- alignment and the lists: one button each, growing open in place into its choices ----
+
+    /** Lays the bar out again once a button that grew open has closed (layout is made below). */
+    let settled = () => {};
+    /**
+     * One button for a few choices side by side, showing the one at the cursor. Pressed, it grows
+     * open in place into all of them, as dictation's Choose grows into its cards (growsFrom), the
+     * tools after it sliding aside to make room and back again after; it is not a menu and covers
+     * nothing. A choice, Escape or a press elsewhere closes it back to one. The keyboard stays on the
+     * button: while it is open the side arrows move a lit mark along the choices, and Enter or Space
+     * takes the lit one. Each choice's value is also the name of its command, for its shortcut.
+     */
+    const choices = <T extends string>(label: string, kinds: [T, string][], take: (value: T) => Action, offered: () => T[]) => {
+        const element = make("span", "quire-grow");
+        const main = control(label, icon(kinds[0]![0]), () => (open ? pick(lit, true) : grow()), "quire-button quire-grow-main");
+        const row = make("span", "quire-grow-row");
+        row.id = `quire-grow-row-${label.toLowerCase()}`;
+        row.setAttribute("role", "listbox");
+        row.setAttribute("aria-label", label);
+        main.setAttribute("role", "combobox");
+        main.setAttribute("aria-haspopup", "listbox");
+        main.setAttribute("aria-expanded", "false");
+        main.setAttribute("aria-controls", row.id);
+        const buttons = new Map(
+            kinds.map(([value, name]) => {
+                const button = control(named(name, value), icon(value), () => pick(value, false), "quire-button quire-grow-line");
+                button.id = `${row.id}-${value}`;
+                button.setAttribute("role", "option");
+                return [value, button] as const;
+            }),
+        );
+        element.append(main, row);
+        let open = false;
+        let now: T | undefined;
+        let lit = kinds[0]![0];
+        const mark = () => {
+            for (const [value, button] of buttons) button.classList.toggle("lit", value === lit);
+            main.setAttribute("aria-activedescendant", buttons.get(lit)!.id);
+        };
+        /** The change from shut to open or back, made at once; the width it makes is then eased to, and the new face grows out of `from`. */
+        const move = (from: HTMLElement, change: () => void, opening: boolean) => {
+            const before = element.offsetWidth;
+            const sweep = growsFrom(from);
+            change();
+            const after = element.offsetWidth;
+            // on a phone, where no room is kept for it, the row slides along so that the open choices are clear of the end
+            const over = element.getBoundingClientRect().left + after - end.getBoundingClientRect().left;
+            if (opening && over > 0) strip.scrollBy({ left: over + 4, behavior: still() ? "instant" : "smooth" });
+            if (still()) return settled();
+            element.classList.add("moving");
+            sweep(opening ? row : main, element, MOTION.open);
+            const width = element.animate([{ width: `${before}px` }, { width: `${after}px` }], { duration: opening ? MOTION.open : MOTION.close + 60, easing: opening ? springCurve(MOTION.bounce) : EASE });
+            const done = () => {
+                element.classList.remove("moving");
+                if (!open) settled();
+            };
+            void width.finished.then(done, done);
+        };
+        // while it is open a press anywhere else, or Escape wherever the keyboard is, closes it with nothing changed
+        const outside = (event: PointerEvent) => !element.contains(event.target as Node) && shut();
+        const escape = (event: KeyboardEvent) => {
+            if (event.key !== "Escape") return;
+            event.preventDefault();
+            event.stopPropagation();
+            shut();
+        };
+        const grow = () => {
+            closeOthers();
+            row.replaceChildren(...offered().map((value) => buttons.get(value)!));
+            lit = now && offered().includes(now) ? now : offered()[0]!;
+            mark();
+            main.classList.add("open");
+            move(main, () => {
+                open = true;
+                element.classList.add("open");
+                main.setAttribute("aria-expanded", "true");
+            }, true);
+            document.addEventListener("pointerdown", outside, true);
+            document.addEventListener("keydown", escape, true);
+        };
+        const shut = (from = buttons.get(lit)!) => {
+            if (!open) return;
+            open = false;
+            document.removeEventListener("pointerdown", outside, true);
+            document.removeEventListener("keydown", escape, true);
+            move(from, () => {
+                element.classList.remove("open");
+                main.classList.remove("open");
+                main.setAttribute("aria-expanded", "false");
+                main.removeAttribute("aria-activedescendant");
+            }, false);
+        };
+        /** A choice taken: from the keyboard the focus stays on the button, from the mouse it goes back to the writing. */
+        const pick = (value: T, keyboard: boolean) => {
+            const action = take(value);
+            surface.run((doc, selection) => action({ doc, selection }));
+            shut(buttons.get(value));
+            if (!keyboard) surface.focus();
+        };
+        main.addEventListener("keydown", (event) => {
+            if (!open) return;
+            const all = offered();
+            const next = moveIndex(all.indexOf(lit), event.key, all.length);
+            // up and down would open it again or move along the bar; while it is open they do nothing
+            if (next === undefined && event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+            event.preventDefault();
+            event.stopPropagation();
+            if (next === undefined) return;
+            lit = all[next]!;
+            mark();
+        });
+        main.addEventListener("blur", () => shut());
+        let shownIcon = kinds[0]![0];
+        return {
+            element,
+            /** Shows the choice at the cursor on the button, pressed when `pressed`, and the same among the choices. */
+            show(value: T | undefined, pressed: boolean) {
+                now = value;
+                const face = value ?? kinds[0]![0];
+                if (face !== shownIcon) main.replaceChildren(icon((shownIcon = face)));
+                main.classList.toggle("pressed", pressed);
+                for (const [each, button] of buttons) {
+                    button.classList.toggle("pressed", each === value);
+                    button.setAttribute("aria-selected", String(each === value));
+                }
+            },
+            /** Its choices as lines of the three dots, for when it has folded there. */
+            lines: (): MenuItem[] => offered().map((value) => ({ label: kinds.find(([each]) => each === value)![1], icon: value, pressed: value === now, run: doing(take(value)) })),
+            /** How much wider it is open than shut. */
+            extra: () => Math.max(0, offered().length - 1) * (main.offsetWidth + 2),
+            shut: () => shut(),
+        };
+    };
+
+    // justified is for a .quire document alone
+    const alignment = choices("Alignment", ALIGNS, align, () => ALIGNS.map(([value]) => value).filter((value) => value !== "justify" || richOn));
+    group({ ...tool(alignment.element, FOLDS.align, alignment.lines), extra: alignment.extra });
 
     // ---- line spacing ----
     const spacings = flowMenu("Line spacing");
@@ -884,15 +1036,9 @@ export function createBar(surface: Surface, options: BarOptions) {
     };
     group(tool(opener(spacings, "Line spacing", icon("spacing"), spacingLines), FOLDS.spacing, () => [{ label: "Line spacing", icon: "spacing", hint: "›", run: () => spacings.open(moreButton, spacingLines(), true) }], true));
 
-    // ---- checklist, bulleted list, numbered list ----
-    const listKinds: [ListStyle, string][] = [
-        ["task", "Checklist"],
-        ["bullet", "Bulleted list"],
-        ["number", "Numbered list"],
-    ];
-    group(
-        tool(cluster(...listKinds.map(([kind, label]) => press(kind, label, icon(kind), doing(toggleList(kind))))), FOLDS.lists, () => listKinds.map(([kind, label]) => ({ label, icon: kind, run: doing(toggleList(kind)) }))),
-    );
+    // ---- checklist, bulleted list, numbered list: the button shows the cursor's list, and its own kind again turns the list off ----
+    const lists = choices("Lists", LISTS, toggleList, () => LISTS.map(([kind]) => kind));
+    group({ ...tool(lists.element, FOLDS.lists, lists.lines), extra: lists.extra });
 
     // ---- indent less, indent more ----
     group(
@@ -936,8 +1082,14 @@ export function createBar(surface: Surface, options: BarOptions) {
     /** Gives the bar its Tab stop back when the control that held it has folded away (set once the stops are known, below). */
     let keepStop: (() => void) | undefined;
 
-    /** Folds the tools that do not fit, least used first, so that nothing wraps; on a narrow window nothing folds and the bar slides sideways instead. */
+    /**
+     * Folds the tools that do not fit, least used first, so that nothing wraps and nothing has to be
+     * slid to, at every width; but for a phone's, room is kept for the widest button that grows open
+     * in place to open into. While one is open, or moving, the bar is left as it is, so that nothing
+     * moves by itself.
+     */
     function layout() {
+        if (strip.querySelector(".quire-grow:is(.open, .moving)")) return;
         for (const each of tools) {
             const away = !!each.rich && !richOn;
             each.element.classList.toggle("away", away);
@@ -987,6 +1139,7 @@ export function createBar(surface: Surface, options: BarOptions) {
     // laid out again when the room changes, when a tool's own width does (a label, a typeface arriving) and when the fonts have come
     let waiting = 0;
     const soon = () => (waiting ||= requestAnimationFrame(() => ((waiting = 0), layout())));
+    settled = soon;
     if (typeof ResizeObserver !== "undefined") {
         const watcher = new ResizeObserver(soon);
         watcher.observe(strip);
@@ -1036,11 +1189,9 @@ export function createBar(surface: Surface, options: BarOptions) {
             button.setAttribute("aria-pressed", String(on));
             button.classList.toggle("pressed", on);
         }
-        const sits = aligned(doc, selection.focus.path);
-        for (const [value, button] of alignButtons) {
-            button.setAttribute("aria-pressed", String(value === sits));
-            button.classList.toggle("pressed", value === sits);
-        }
+        alignment.show(aligned(doc, selection.focus.path), false);
+        const list = activeBlock(doc, selection.focus.path).list;
+        lists.show(list, !!list);
         const style = currentStyle(doc, selection.focus.path);
         styleLabel.textContent = STYLES.find(([each]) => each === style)![1];
         const format = formatAt(doc, rangeOf(selection).start, !collapsed(selection));
@@ -1051,7 +1202,8 @@ export function createBar(surface: Surface, options: BarOptions) {
 
     // ---- the keyboard: one stop for Tab, the arrows along it ----
 
-    const stops = () => [...strip.querySelectorAll<HTMLElement>("button, input")].filter((each) => !each.closest(".folded, .away"));
+    // a grown button's choices are not stops of their own: the keyboard stays on the button while they are open
+    const stops = () => [...strip.querySelectorAll<HTMLElement>("button, input")].filter((each) => !each.closest(".folded, .away, .quire-grow-row"));
     const rove = (current: HTMLElement) => {
         for (const each of strip.querySelectorAll<HTMLElement>("button, input")) each.tabIndex = each === current ? 0 : -1;
     };
@@ -1148,13 +1300,16 @@ export function createBar(surface: Surface, options: BarOptions) {
         },
         destroy() {
             surface.element.removeEventListener("keyup", paintKeys);
+            clearTimeout(passing);
+            alignment.shut();
+            lists.shut();
         },
-        // the menus of the colours, size, typeface, highlight and line spacing, opened from somewhere else, as the menu row does
+        // the menus of the colors, size, typeface, highlight and line spacing, opened from somewhere else, as the menu row does
         pickers: {
-            color: (from: HTMLElement) => colors.open(from, colorLines(), true),
+            color: (from: HTMLElement) => colors.open(from, colorGrid(), true),
             size: (from: HTMLElement) => sizes.open(from, sizeLines(), true),
             font: (from: HTMLElement) => fonts.open(from, fontLines(), true),
-            highlight: (from: HTMLElement) => highlights.open(from, highlightLines(), true),
+            highlight: (from: HTMLElement) => highlights.open(from, highlightGrid(), true),
             spacing: (from: HTMLElement) => spacings.open(from, spacingLines(), true),
         },
     };

@@ -118,6 +118,31 @@ const boxOf = (element: Element): Box => {
 };
 const px = (inset: number[]) => inset.map((each) => `${each}px`).join(" ");
 
+/**
+ * What replaced a pressed thing grows out of where it was, as the dialog's "Choose" becomes the
+ * three cards and the bar's one alignment button becomes the four: a sweep in the pressed thing's
+ * colour and corners spreads from its place to the new thing's, fading as it goes, and the new thing
+ * comes clear behind it. Called before the change with the pressed thing; what it gives back is
+ * called after, with the new thing and the positioned box the sweep is drawn in.
+ */
+export function growsFrom(pressed: HTMLElement): (made: HTMLElement, holder: HTMLElement, time?: number) => void {
+    const was = boxOf(pressed);
+    const { backgroundColor, borderRadius } = getComputedStyle(pressed);
+    return (made, holder, time = DIALOG.change) => {
+        if (still()) return;
+        const at = boxOf(holder);
+        const local = (box: Box) => ({ left: `${box.left - at.left}px`, top: `${box.top - at.top}px`, width: `${box.width}px`, height: `${box.height}px` });
+        const sweep = make("div", "quire-dialog-sweep");
+        sweep.style.background = backgroundColor;
+        holder.append(sweep);
+        const gone = () => sweep.remove();
+        // it ends at the new thing's own corners, or the middle corner for a thing that has none
+        const ends = parseFloat(getComputedStyle(made).borderRadius) ? getComputedStyle(made).borderRadius : corner("--quire-round");
+        sweep.animate([{ ...local(was), borderRadius, opacity: 1 }, { ...local(boxOf(made)), borderRadius: ends, opacity: 0 }], { duration: time + 80, easing: EASE, fill: "both" }).finished.then(gone, gone);
+        made.animate([{ opacity: 0 }, { opacity: 1 }], { duration: time, delay: time * 0.3, easing: EASE, fill: "backwards" });
+    };
+}
+
 let current: Dialog | undefined;
 
 /** The filled button, whose press spreads from where it was pressed. */
@@ -165,9 +190,7 @@ export function openDialog(from: HTMLElement | undefined, parts: DialogParts): D
         isOpen: () => open,
         change(update, grower) {
             const before = boxOf(element);
-            const was = grower?.isConnected ? boxOf(grower) : undefined;
-            const shade = grower ? getComputedStyle(grower).backgroundColor : "";
-            const radius = grower ? getComputedStyle(grower).borderRadius : "";
+            const grow = grower?.isConnected ? growsFrom(grower) : undefined;
             const made = update();
             if (still() || !open) return;
             const after = boxOf(element);
@@ -179,16 +202,7 @@ export function openDialog(from: HTMLElement | undefined, parts: DialogParts): D
                 // what is inside is shown as far as the skin has reached, so that nothing new stands outside it
                 inner.animate([{ clipPath: `inset(${px(from.map((each) => Math.max(0, each)))} round ${corner("--quire-round-large")})` }, { clipPath: `inset(0px round ${corner("--quire-round-large")})` }], { duration: DIALOG.change, easing: EASE }),
             );
-            if (!made || !was) return;
-            // what replaced the pressed thing grows out of where it was, in its colour, which fades as it goes
-            const to = boxOf(made);
-            const sweep = make("div", "quire-dialog-sweep");
-            sweep.style.background = shade;
-            inner.append(sweep);
-            const local = (box: Box) => ({ left: `${box.left - after.left}px`, top: `${box.top - after.top}px`, width: `${box.width}px`, height: `${box.height}px` });
-            const gone = () => sweep.remove();
-            sweep.animate([{ ...local(was), borderRadius: radius, opacity: 1 }, { ...local(to), borderRadius: corner("--quire-round"), opacity: 0 }], { duration: DIALOG.change + 80, easing: EASE, fill: "both" }).finished.then(gone, gone);
-            made.animate([{ opacity: 0 }, { opacity: 1 }], { duration: DIALOG.change, delay: DIALOG.change * 0.3, easing: EASE, fill: "backwards" });
+            if (made && grow) grow(made, inner);
         },
         close() {
             if (closing) return closing;

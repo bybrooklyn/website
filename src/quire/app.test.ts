@@ -282,8 +282,8 @@ used("in a Markdown file the tools it cannot keep are not offered, and turning i
     expect(await tab.run("document.querySelector('.quire-name-text').textContent")).toBe("post.md");
     // the tools a Markdown file cannot keep are away from the bar for one
     const away = () => tab.run<string[]>("[...document.querySelectorAll('.quire-tool.away')].map((tool) => tool.firstElementChild.getAttribute('aria-label'))");
-    expect(await away()).toEqual(["Typeface", "Highlight", "Justify", "Line spacing"]);
-    await press(".quire-dots");
+    expect(await away()).toEqual(["Typeface", "Highlight", "Line spacing"]);
+    await press(".quire-menu-row .quire-row-word", "File");
     await tab.wait(700);
     const lines = await tab.run<string[]>("[...document.querySelectorAll('.quire-menu.open .quire-menu-line')].map((line) => line.textContent)");
     expect(lines).toContain("Turn into a .quire document");
