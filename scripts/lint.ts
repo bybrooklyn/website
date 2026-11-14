@@ -2,8 +2,10 @@
 // `bun run check`. It is here so that code written by anyone, an agent included, comes out the way
 // the rest is written. STYLE.md says the same things in words.
 //
-//   dependencies   package.json may not gain a library; Mote and mdQuire import nothing from outside their folders
+//   dependencies   package.json may not gain a library; Mote and the Quires import nothing from outside their folders
 //                  (onnxruntime-web, from src/quire/md/dictation/ only, is the one allowed exception)
+//   the core       the Quires' core (src/quire/core/) imports nothing from a kind of document (md/, note/), and no
+//                  kind from another (lint-bounds.ts)
 //   comments       a source file opens by saying what it is; in Mote and mdQuire every exported thing has a sentence
 //   leftovers      no console.log in src/
 //   words          comments and page text in plain words: no dash as punctuation, no emoji, none of the tells
@@ -15,6 +17,7 @@
 import { Glob } from "bun";
 import { pageTells, TELL_NAMES, tellsIn } from "../src/quire/md/check/tells";
 import { at } from "./lib";
+import { crossing } from "./lint-bounds";
 
 /** The libraries the site has. A new one fails the lint: add it here on purpose or do without it. */
 const LIBRARIES = ["@astrojs/check", "@astrojs/markdown-satteri", "@astrojs/mdx", "@astrojs/rss", "@astrojs/sitemap", "@types/bun", "astro", "onnxruntime-web", "sharp", "simple-icons", "typescript", "wrangler"];
@@ -86,6 +89,9 @@ for (const file of sources) {
             const leaves = (path.match(/\.\.\//g) ?? []).length > depth;
             if (!path.startsWith(".") || leaves) say(file, number, `imports ${path}, from outside ${alone}`);
         }
+        // ---- the core: it imports nothing from a kind of document, and no kind from another ----
+        const crossed = path ? crossing(file, path) : undefined;
+        if (crossed) say(file, number, `${crossed} (the core is built for every kind; a kind uses the core)`);
         // ---- comments: every exported thing in such a folder has a sentence above it ----
         if (SPOKEN.some((folder) => file.startsWith(folder)) && !test && /^export (default\b|(async |declare |abstract )*(function|const|let|var|class|interface|type|enum) )/.test(line) && !/^\s*(\*\/|\/\/|\*)/.test(lines[index - 1] ?? "") && !/\*\/\s*$/.test(lines[index - 1] ?? "")) say(file, number, "exported with no sentence above it");
         // ---- leftovers ----
