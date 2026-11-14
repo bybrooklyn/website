@@ -40,6 +40,24 @@
     --panel-room: 24rem;
 }
 
+/* Comet's panel is one quiet line: which field and the shots on it, and the sound. */
+.mini-stage[data-mini="comet"] {
+    --panel-room: 4.5rem;
+}
+
+.comet-line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.3rem 1.5rem;
+}
+
+.comet-said {
+    margin: 0;
+    color: var(--muted);
+}
+
 /* A mini drawn in 3D has a second canvas for it, under the one that takes the mouse. */
 .mote canvas.mote-gl {
     position: absolute;
