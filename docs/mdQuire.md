@@ -112,8 +112,9 @@ numbers (`pages.ts`), version history kept in the browser (`versions.ts`), table
 outline of the headings (`outline.ts`), a command palette (`palette.ts`, below) and a bar over
 selected text (`select-bar.ts`).
 
-**The command palette** (`palette.ts`). Two quick taps of Ctrl, or the quiet round button resting in
-the window's bottom left corner, grow it up out of that corner: a search field with the caret in it, and
+**The command palette** (`palette.ts`). Two quick taps of Ctrl, Alt+/ (Docs' Search the menus), or the
+quiet round button resting in the window's bottom left corner, whose sign is a prompt (a chevron and a
+short line, not the magnifier, which is Find's), grow it up out of that corner: a search field with the caret in it, and
 under it seven lines, first what fits where the cursor is (a table's controls in a table, a picked
 picture's menu on a picture, the formatting with words selected, the list commands in a list), then what
 the writer uses most. Typing searches every command by its name, its other words and its menu, and the
@@ -158,10 +159,42 @@ size and who it is for, the one that suits the machine picked; the download's pr
 blog's measure) and light paper; it opens on no page, and paper is chosen from View. The top is two lines:
 a trail (the site's name and flags, then mdQuire, then the document's name; the first leads home, the
 second to the shelf, the third opens the documents list) with the menu words, and under it the tools in
-the order Google Docs has them, with the size as a number between minus and plus and alignment as four
-buttons always shown. Find, the status, the three dots and the microphone are at the right. An "About
-mdQuire" line is in Tools and the three dots, and opens a dialog. The browser tab shows an italic Q on a dark rounded square
+the order Google Docs has them. Find, the status, the three dots and the microphone are at the right. An
+"About mdQuire" line is in Tools and Help, and opens a dialog. The browser tab shows an italic Q on a dark rounded square
 (`public/mdquire/icon.svg`). The caret is one plain line, drawn in the same frame as the letter typed.
+
+**The bar** (`bar.ts`). Undo, redo, print, spelling, paint format; zoom; the style ("Normal text" for a
+paragraph, as Format says, also in a list or a callout); the typeface; the size as a number between minus
+and plus; bold, italic, underline, strikethrough, text color, highlight; link, picture; alignment; line
+spacing; the lists; indent less and more; clear formatting. Alignment is one button showing the cursor's
+alignment, and the lists one button showing the cursor's list, pressed when it is in one. Pressed, such a
+button grows open in place into its choices side by side (left, center, right and justify; checklist,
+bulleted and numbered), by the motion dictation's Choose grows into its cards with (`growsFrom` in
+`dialog.ts`), the tools after it sliding aside and back; it is not a menu and covers nothing. A choice, a
+press elsewhere or Escape closes it to one button again. From the keyboard Enter or Space opens it, the
+side arrows move a lit mark along the choices while the keyboard stays on the button, Enter or Space takes
+the lit one, and Escape closes it with nothing changed. The list's own kind again turns the list off. The
+shortcuts (Ctrl+Shift+L, E, R, J and Ctrl+Shift+7, 8, 9) work as before and the buttons follow them. Every
+tooltip is a word or two with its shortcut in words ("Bold (Ctrl+B)", Cmd on a Mac), from `shortcuts.ts`.
+The size field selects its number when clicked or reached, so typing replaces it; Enter applies and gives
+the writing back, Escape puts the number back. In a `.quire` document the size menu offers Docs' sizes
+from 8 to 96, in a Markdown file the five it can keep. Text color and highlight are a grid of swatches
+named in their tooltips, the highlight's marker line drawn in the highlight at the cursor. The style's
+Title goes to the title line and the status says so. The magnifier is Find alone; searching the menus is
+the command palette's job (Alt+/ opens it).
+
+When the bar has less room than it needs, at any width, its tools fold into the three dots in a set order
+(`FOLDS`): paint format, print, clear formatting, the indents and line spacing first, as she gave them,
+then zoom, spelling, typeface, highlight, size, strikethrough, underline, text color and redo; picture,
+alignment, link, the style, italic, the lists, bold and undo stay longest, undo last. A tool comes back
+only when every one more needed is back. The dots hold those tools in the bar's order and nothing of the
+document (print, version history, the Markdown and About are in the menus); under `bun run edit` its own
+Show the page and Publish follow them, being in no menu. With nothing folded and none of those, the dots
+fold away too. Room is kept beside the tools for the widest button to grow open into, except on a phone,
+where the row slides along instead. At 390 wide the bar is undo, bold, italic and the lists, then find,
+the dots and the microphone. While a grown button is open, nothing is laid out again. A message in the
+status passes after five seconds and how saving stands comes back. A new document fills the window under
+the top and does not scroll.
 
 **Which surface a job gets.** One rule (`dialog.ts` says it at its head). A form of several fields, or
 something to read, is a dialog: About, Page setup, Header and footer, Word count, Keyboard shortcuts,
