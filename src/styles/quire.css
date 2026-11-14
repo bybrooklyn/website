@@ -1322,6 +1322,24 @@
     line-height: 1;
 }
 
+/* the site's own inks, as worked out on the page itself, for a strip drawn inside the light paper, which
+   keeps the dark skin and so needs the inks that read on it */
+:root {
+    --quire-site-ink: var(--ink);
+    --quire-site-muted: var(--muted);
+    --quire-site-accent: var(--accent);
+    --quire-site-rule: var(--rule);
+}
+
+.look-paper .quire-picture-strip {
+    --ink: var(--quire-site-ink);
+    --muted: var(--quire-site-muted);
+    --accent: var(--quire-site-accent);
+    --rule: var(--quire-site-rule);
+    color-scheme: dark;
+    color: var(--ink);
+}
+
 .quire-select-bar,
 .quire-find {
     position: fixed;
