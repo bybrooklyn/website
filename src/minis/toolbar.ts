@@ -72,6 +72,30 @@ export function swap(button: HTMLButtonElement, name: string, label: string, key
 }
 
 /**
+ * Keeps a bar of groups in one row while they fit there, and otherwise stacks them, one group to a row,
+ * by the class `stacked`: a row that wraps would start with the rule that parts it from the group
+ * before, left hanging. Measured, not guessed from the page's width, since the room the panel has
+ * depends on the page round it. The width one row needs is read with the bar laid out in one row for
+ * a moment (the class `measuring`), within the same frame, so nothing is seen of it.
+ */
+export function stacking(bar: HTMLElement): void {
+    const fit = () => {
+        const parent = bar.parentElement;
+        if (!parent) return;
+        const style = getComputedStyle(parent);
+        const room = parent.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+        if (room <= 0) return;
+        bar.classList.add("measuring");
+        bar.classList.remove("stacked");
+        const needed = bar.getBoundingClientRect().width;
+        bar.classList.remove("measuring");
+        bar.classList.toggle("stacked", needed > room + 0.5);
+    };
+    if (bar.parentElement) new ResizeObserver(fit).observe(bar.parentElement);
+    fit();
+}
+
+/**
  * A fold under the bar that grows open from the button that opens it and shrinks back into it: its
  * height from none to what it holds, its scale and its fade, from the button's place. Never hidden.
  */

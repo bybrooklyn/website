@@ -33,7 +33,7 @@ import { jointsOf, links, open, read, write, type Open, type Placed } from "./ru
 import { RUNS } from "./runs";
 import { PILLAR } from "./supports";
 import { makeTable } from "./table";
-import { fold, icon, swap, tool } from "./toolbar";
+import { fold, icon, stacking, swap, tool } from "./toolbar";
 
 export const label = "A marble run to build: pieces from a box snap together end to end, and marbles roll down what is built.";
 
@@ -1171,6 +1171,7 @@ export default function marbles(m: Mote): Scene {
         });
         const group = (...tools: HTMLElement[]) => el("div", { class: "marbles-group" }, ...tools);
         const bar = el("div", { class: "marbles-bar", role: "toolbar", ariaLabel: "tools" }, group(selectTool, undoTool, redoTool, pasteTool), group(goTool, streamTool, pauseTool, resetTool), group(fitTool, soundTool, keysTool, runsTool));
+        queueMicrotask(() => stacking(bar));
 
         // the keys, a plain list, and the runs to start from, each in a fold under the bar
         const KEYS: [string, string][] = [
