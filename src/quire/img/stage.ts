@@ -259,16 +259,10 @@ export function createStage(hooks: StageHooks) {
         }
         context.globalAlpha = 1;
         if (tool !== "read") return;
-        // what looks private: a warm line round each stretch of it, dashed where it is large enough to show the dashes
+        // what looks private: a warm solid line round each line of it, the same at every size, where its cover would go
         context.strokeStyle = "#ff9f0a";
         context.lineWidth = 1.5 * ratio;
-        for (const finding of uncovered())
-            for (const cover of findingCovers(words, finding)) {
-                const [x, y, width, height] = rect(cover);
-                context.setLineDash(height >= 12 * ratio ? [4 * ratio, 3 * ratio] : []);
-                context.strokeRect(x, y, width, height);
-            }
-        context.setLineDash([]);
+        for (const finding of uncovered()) for (const cover of findingCovers(words, finding)) context.strokeRect(...rect(cover));
     }
 
     /** What looks private and is not yet under a cover: each thing whose words are not all inside covers already made. */

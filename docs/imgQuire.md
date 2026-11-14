@@ -187,7 +187,7 @@ by their makers' shapes (GitHub, GitLab, npm, Hugging Face, OpenAI and Anthropic
 Google, Slack, a JSON web token, a private key's first line) and by long random runs, numbers shaped
 like a card that pass Luhn, street addresses and a town with a ZIP code, machine addresses (v4 and
 v6), and what follows a label such as password, token, PIN or API key (or the next line, under a
-label alone). Each thing is outlined on the picture in a warm dashed line, and the strip says "42
+label alone). Each thing is outlined on the picture in a warm line, one rectangle a line of it, exactly where its cover would go, and the strip says "42
 words, 4 look private" with Hide all, which covers what is still uncovered as one step; each can also
 be hidden by pressing it. Nothing is hidden by itself.
 

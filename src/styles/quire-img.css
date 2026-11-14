@@ -848,9 +848,22 @@
     font-size: 0.9rem;
 }
 
+/* on a phone the cards stand in one column, each a row: its name and size on one line, who it suits under, so the dialog fits the screen */
 @media (max-width: 34rem) {
     .quire-img-read-cards {
         grid-template-columns: 1fr;
+        gap: 0.4rem;
+    }
+
+    .quire-dialog .quire-img-read-card {
+        grid-template-columns: 1fr auto;
+        align-items: baseline;
+        gap: 0.15rem 0.6rem;
+        padding: 0.55rem 0.8rem 0.6rem;
+    }
+
+    .quire-img-read-card-who {
+        grid-column: 1 / -1;
     }
 }
 
