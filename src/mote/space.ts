@@ -643,6 +643,8 @@ export function join(pieces: Piece[]): void {
     const near = (a: V3, b: V3, by: number) => length(sub(a, b)) <= by;
     const at = new Map<string, [Piece, number][]>();
     const key = (p: V3) => p.map((value) => Math.round(value * 1000)).join(" ");
+    // begun again each time, from what was joined by hand, so that an end left alone by a piece taken away is open
+    for (const piece of pieces) [piece.joined[0], piece.joined[1]] = [piece.kept?.[0] ?? false, piece.kept?.[1] ?? false];
     for (const piece of pieces) piece.ends?.forEach((end, which) => {
         for (const dx of [-1, 0, 1]) for (const dy of [-1, 0, 1]) for (const dz of [-1, 0, 1]) {
             const found = at.get(key(add(end.p, [dx / 1000, dy / 1000, dz / 1000])));

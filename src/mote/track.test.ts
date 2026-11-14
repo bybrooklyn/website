@@ -329,6 +329,24 @@ test("pieces that meet end to end with the same section are joined; others are n
     expect(c.joined).toEqual([false, false]);
 });
 
+test("an end whose neighbour is taken away is open again, and an end joined by hand stays joined", () => {
+    const space = marbleSpace();
+    const a = sweep(curve([[0, 0, 0], [10, 0, 0]]), gutter(1.5, Math.PI, 0.2));
+    const b = sweep(curve([[10, 0, 0], [20, 0, 0]]), gutter(1.5, Math.PI, 0.2));
+    space.track(a);
+    const held = space.track(b);
+    space.step(1 / 240);
+    expect(a.joined).toEqual([false, true]);
+    space.remove(held);
+    space.step(1 / 240);
+    expect(a.joined).toEqual([false, false]);
+    // a piece that meets its neighbour the other way round, end against end, is joined by the scene that knows it
+    a.kept![1] = true;
+    space.track(sweep(curve([[20, 0, 0], [10, 0, 0]]), gutter(1.5, Math.PI, 0.2), { joined: [false, true] }));
+    space.step(1 / 240);
+    expect(a.joined).toEqual([false, true]);
+});
+
 test("the fastest marble a long steep drop gives does not pass through the thinnest rail, from any side, nor at three times that speed", () => {
     // How fast a marble gets: let go at the top of a metre's drop down a gutter, steep as it can be.
     const space = marbleSpace();

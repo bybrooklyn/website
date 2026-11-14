@@ -29,6 +29,23 @@ export interface Pointer {
 
 export type Key = "left" | "right" | "up" | "down" | "action";
 
+/** One pointer on the canvas, for a scene that tells several apart (two fingers that pinch, a mouse's other button): which it is, where, and how it pressed. */
+export interface Hand {
+    /** The same number from the press to the lift, and different for each finger held at once. */
+    id: number;
+    x: number;
+    y: number;
+    kind: "mouse" | "touch" | "pen";
+    /** Which mouse button pressed it: 0 the main one, 1 the wheel, 2 the other. A finger or a pen is 0. */
+    button: number;
+    /** Held down, rather than a mouse passing over. */
+    held: boolean;
+    shift: boolean;
+    alt: boolean;
+    /** Control, or Command on a Mac. */
+    ctrl: boolean;
+}
+
 export interface Mote {
     readonly canvas: HTMLCanvasElement;
     readonly ctx: CanvasRenderingContext2D;
@@ -69,6 +86,18 @@ export interface Scene {
     double?(x: number, y: number): void;
     move?(x: number, y: number): void;
     release?(x: number, y: number): void;
+    /**
+     * A pointer went down, with any button. A scene that has this is told of every pointer by its id,
+     * through `down`, `slide` and `up`, and is not given `press`, `double`, `move` or `release`; the
+     * canvas's own menu is kept away so that the other mouse button can drag.
+     */
+    down?(hand: Hand): void;
+    /** A pointer moved over the canvas, held or not. */
+    slide?(hand: Hand): void;
+    /** A pointer was lifted, or taken away by the system mid-drag (`cancelled`, as by a gesture of the browser's own). */
+    up?(hand: Hand, cancelled: boolean): void;
+    /** The wheel, or two fingers on a trackpad, over the canvas: how far, in pixels, toward the bottom; `pinch` when it is a pinch of a trackpad (the browser marks it as the wheel with Control). The page does not scroll from it. */
+    wheel?(x: number, y: number, by: number, pinch: boolean): void;
     /** A key went down. */
     keydown?(name: Key): void;
     /** True when nothing is moving, so the loop can stop until something wakes it. */
@@ -287,7 +316,34 @@ export function mote(host: HTMLElement, make: (m: Mote) => Scene, { label = "An 
     const place = (event: PointerEvent) => {
         [m.pointer.x, m.pointer.y] = [event.offsetX, event.offsetY];
     };
+    /** The pointers held now, for a scene that tells them apart, so that each is let go of once. */
+    const holding = new Set<number>();
+    const hand = (event: PointerEvent, held: boolean): Hand => ({
+        id: event.pointerId,
+        x: event.offsetX,
+        y: event.offsetY,
+        kind: event.pointerType === "touch" ? "touch" : event.pointerType === "pen" ? "pen" : "mouse",
+        button: event.pointerType === "mouse" ? event.button : 0,
+        held,
+        shift: event.shiftKey,
+        alt: event.altKey,
+        ctrl: event.ctrlKey || event.metaKey,
+    });
     canvas.addEventListener("pointerdown", (event) => {
+        if (scene.down) {
+            event.preventDefault();
+            holding.add(event.pointerId);
+            canvas.setPointerCapture(event.pointerId);
+            canvas.dataset.touched = "";
+            canvas.focus({ preventScroll: true });
+            if (event.isPrimary) {
+                place(event);
+                m.pointer.down = true;
+            }
+            scene.down(hand(event, true));
+            start();
+            return;
+        }
         // Only the main button presses: a right click, or a click with ctrl on a Mac, opens a menu and may never be let go.
         if (event.pointerType === "mouse" && event.button !== 0) return;
         // a drag that starts on the canvas is the mini's, and must not begin selecting the page's text
@@ -306,10 +362,24 @@ export function mote(host: HTMLElement, make: (m: Mote) => Scene, { label = "An 
         start();
     });
     canvas.addEventListener("pointermove", (event) => {
+        if (scene.down) {
+            if (event.isPrimary) place(event);
+            scene.slide?.(hand(event, holding.has(event.pointerId)));
+            return;
+        }
         place(event);
         scene.move?.(m.pointer.x, m.pointer.y);
     });
     const up = (event: PointerEvent) => {
+        if (scene.down) {
+            if (!holding.delete(event.pointerId)) return;
+            if (event.isPrimary) {
+                place(event);
+                m.pointer.down = false;
+            }
+            scene.up?.(hand(event, false), event.type === "pointercancel");
+            return;
+        }
         place(event);
         if (m.pointer.down) scene.release?.(m.pointer.x, m.pointer.y);
         m.pointer.down = false;
@@ -317,6 +387,22 @@ export function mote(host: HTMLElement, make: (m: Mote) => Scene, { label = "An 
     canvas.addEventListener("pointerup", up);
     canvas.addEventListener("pointercancel", up);
     canvas.addEventListener("lostpointercapture", up);
+    // the canvas's own menu would end a drag with the other button
+    canvas.addEventListener("contextmenu", (event) => {
+        if (scene.down) event.preventDefault();
+    });
+    canvas.addEventListener(
+        "wheel",
+        (event) => {
+            if (!scene.wheel) return;
+            event.preventDefault();
+            // a wheel that counts in lines or pages is taken as so many pixels
+            const by = event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? m.height : 1);
+            scene.wheel(event.offsetX, event.offsetY, by, event.ctrlKey);
+            start();
+        },
+        { passive: false },
+    );
     canvas.addEventListener("pointerenter", () => {
         m.pointer.inside = true;
         if (allowed) start();

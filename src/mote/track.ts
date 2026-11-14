@@ -374,6 +374,12 @@ export interface Piece {
      * to the next piece meets one surface. `space.ts` joins pieces that meet end to end by itself.
      */
     readonly joined: [start: boolean, end: boolean];
+    /**
+     * The ends joined by hand (`along.joined`, or set here later by a scene that knows which pieces
+     * meet): each time pieces are added or taken away, `joined` starts again from these, and the ends
+     * that meet another piece are found again. So an end whose neighbour was taken away is open again.
+     */
+    readonly kept?: [start: boolean, end: boolean];
     /** For a swept piece, the frame at each end and its section written out, by which pieces that meet are found. */
     readonly ends?: [Frame, Frame];
     readonly shape?: string;
@@ -547,6 +553,7 @@ export function sweep(path: Path, section: Section, along: Along = {}): Piece & 
         chunks: count,
         knots,
         joined,
+        kept: [joined[0], joined[1]],
         ends: [frame(0), frame(path.end)],
         shape: JSON.stringify(section),
         frame,
