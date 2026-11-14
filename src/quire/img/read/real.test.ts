@@ -1,9 +1,10 @@
 // The text reader with the real PP-OCRv6 models, on the site's own ONNX Runtime build, in Chromium,
 // on fixtures drawn in the page (known words on a canvas, so no picture made elsewhere is used):
 // a settings screenshot at 1920 by 1080 in a light and a dark theme with UI text from 11 to 28
-// pixels, lines turned by 10, -12, 90 and 180 degrees, and a 12 megapixel photograph with a sign.
-// Held true: each size runs on WebAssembly and reads the screenshots with every character right; the
-// words' boxes lie on their ink within a pixel and a half; the two larger sizes read every turned line;
+// pixels, lines turned by 10, -12, 90 and 180 degrees, a page turned a quarter either way, and a 12
+// megapixel photograph with a sign. Held true: each size runs on WebAssembly and reads the screenshots
+// with every character right; the words' boxes lie on their ink within a pixel and a half; the two
+// larger sizes read every turned line, and the largest sets a page on its side upright;
 // what looks private is found on the screenshot and nothing else is; and on a graphics card where
 // Chromium gives one, the same. Times are printed. The models are read from where they were fetched
 // for trials (~/.cache/quire-model-trials/ocr/); without them, or without a Chromium, this is skipped
@@ -127,5 +128,17 @@ test("on a graphics card, where Chromium gives one, each size reads the screensh
         }
     } finally {
         await card.close();
+    }
+}, 300_000);
+
+test("the large size sets a page taken on its side upright: its lines read in order, and their words run the way the page was turned", async () => {
+    if (!page) return;
+    for (const [kind, along] of [["sideways-right", 1], ["sideways-left", -1]] as const) {
+        const found = await page.read(kind, "large", "wasm");
+        const result = score(found);
+        said(`large, a page turned ${kind === "sideways-right" ? "clockwise" : "counter-clockwise"}`, found, result);
+        expect(result.misses).toEqual([]);
+        expect(found.read.slice(0, 4).map((line) => line.text)).toEqual(found.expected.map((line) => line.text));
+        expect(Math.round(found.read[0]!.words[0]!.box.along.y)).toBe(along);
     }
 }, 300_000);

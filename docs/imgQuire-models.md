@@ -115,6 +115,52 @@ verified. That is the first thing to test.
 | Medium | v6 small det + v6 small rec + text line orientation | 37.8 MB | The best value. Beats v5 server. Handles rotated lines |
 | Large | v6 medium det + v6 medium rec + text line and document orientation | 152.2 MB | Best open small OCR seen. Handwriting is better (67.8 on English handwriting), though still not good |
 
+### Verified on the site's build (14 November 2026)
+
+Every PP-OCRv6 file and both PP-LCNet files run on the site's onnxruntime-web 1.24.1, on WebAssembly
+(`ort.wasm.min.mjs`) and on WebGPU (the JSEP build, `ort.min.mjs`), with no patching: their operators
+are all plain ones (Conv, ConvTranspose, Resize, Erf, HardSigmoid, ReduceMean, MatMul, Softmax and the
+shape arithmetic; no TopK, no NonMaxSuppression, no quantized operator). The outputs on the two agree
+to four places. Read out of the files by a small protobuf walk:
+
+- detectors (opset 14): Add, Concat, Conv, ConvTranspose, Div, Erf, GlobalAveragePool (not medium),
+  HardSigmoid, MaxPool, Mul, ReduceMean, Relu, Resize, Sigmoid;
+- recognizers (opset 11): Add, AveragePool, BatchNormalization, Concat, Conv, Div, Erf, HardSigmoid,
+  Identity, MatMul, MaxPool, Mul, Pow, ReduceMean, Relu, Reshape, Shape, Sigmoid, Slice, Softmax, Sqrt,
+  Squeeze, Sub, Transpose, Unsqueeze (tiny has fewer);
+- PP-LCNet (opset 7): Add, BatchNormalization, Concat, Conv, GlobalAveragePool, HardSigmoid, Identity,
+  MatMul, Mul, Relu, Reshape, Shape, Slice, Softmax.
+
+The recognizers' outputs are the CTC blank, the dictionary in `inference.yml` (6,904 characters for
+tiny, 18,708 for small and medium), and a space: 6,906 and 18,710 classes. One model run, a random input,
+in headless Chromium on four cores (two WebAssembly threads where the page is isolated: in milliseconds,
+warm, the first run on the card compiling its programs and taking 75 to 350 ms more):
+
+| Model | WebAssembly, 960 square | WebAssembly, 1920 by 1088 | WebGPU (RTX 3070 Ti), 960 square | WebGPU, 1920 by 1088 |
+|---|---|---|---|---|
+| tiny det | 64 | 156 | 53 | 122 |
+| small det | 162 | 375 | 60 | 135 |
+| medium det | 975 | 2,195 | 50 | 114 |
+
+| Model | WebAssembly, 1 line 320 wide | WebAssembly, 8 lines 480 wide | WebGPU, 1 line | WebGPU, 8 lines |
+|---|---|---|---|---|
+| tiny rec | 5 to 11 | 41 | 4 | 10 |
+| small rec | 15 | 173 | 6 | 21 |
+| medium rec | 85 | 1,045 | 7 | 38 |
+| text line orientation (160 by 80) | 4 (8 lines: 30) | | 4 | |
+| document orientation (224 square) | 3 | | 4 | |
+
+Whole readings with imgQuire's own steps, and how well they read, are in [imgQuire](imgQuire.md) under
+Reading text. In short: every size read a 1920 by 1080 settings screenshot, light and dark, with all
+454 characters right; tiny took 0.6 s on WebAssembly and 0.25 s on the card, large 12.4 s and 0.38 s.
+Without a graphics card headless Chromium has no WebGPU, and a software one is not used.
+
+The files' own settings, from their `inference.yml`: the detectors take ImageNet's mean and spread
+applied to blue, green and red in that order (OpenCV's order), cut the map at 0.2, keep a line above
+0.4 (tiny) or 0.45 (small, medium) and grow it by 1.4; the recognizers take 48 high, each value from
+-1 to 1; the orientation models take 160 by 80 (lines: 0 or 180 degrees) and 224 square after the
+shorter side is made 256 (pages: 0, 90, 180 or 270).
+
 Add-ons worth offering separately:
 
 - **English handwriting:** TrOCR small handwritten, int8, 63.6 MB, run on lines PP-OCRv6 has found.
@@ -364,8 +410,9 @@ stretching and curves are exact, instant and invent nothing. The models below ar
 
 ## Not verified
 
-- Whether PP-OCRv6 (any tier) runs on ORT Web, on WebGPU or WASM, and on the site's 1.24.1 build. PP-OCRv5
-  is known to run; `ffocr` had to patch v5 for WebGPU, and what it patched is not documented.
+- (Verified since: PP-OCRv6, every tier, runs on the site's 1.24.1 build on WebGPU and WASM; see
+  "Verified on the site's build" under OCR.) What `ffocr` patched in v5 for WebGPU is still not known,
+  and v6 needed no patch.
 - Which languages PP-OCRv6's single recogniser covers. Its cards say both 50 and 48 languages and do not
   list them. Third-party Cyrillic fine-tunes of v6 suggest Cyrillic is not covered well.
 - PP-OCRv6's accuracy figures are the maker's own in-house benchmark. No independent comparison was found.

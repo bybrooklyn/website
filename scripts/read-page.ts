@@ -63,6 +63,21 @@ window.draw = (kind) => {
         const put = (text, x, y, degrees) => { c.save(); c.translate(x, y); c.rotate(degrees * Math.PI / 180); c.fillText(text, 0, 0); c.restore(); return { text, size: 26, degrees }; };
         return { canvas, lines: [put("A level line to start with", 80, 80, 0), put("Turned by ten degrees here", 80, 200, 10), put("Turned by minus twelve", 600, 420, -12), put("Upside down line of text", 1300, 820, 180), put("Standing on its side", 1250, 120, 90)] };
     }
+    if (kind === "sideways-right" || kind === "sideways-left") {
+        // a page of text, then the whole page turned a quarter, clockwise or not, as a photograph of a page taken sideways
+        const page = new OffscreenCanvas(900, 1200);
+        const p = page.getContext("2d");
+        p.fillStyle = "#ffffff"; p.fillRect(0, 0, 900, 1200); p.fillStyle = "#111111";
+        const lines = ["Minutes of the meeting", "Present were four of us", "The garden plan was agreed", "Next we meet in spring"];
+        lines.forEach((text, at) => { p.font = (at ? "30px" : "bold 40px") + " serif"; p.fillText(text, 80, 140 + at * 90); });
+        for (let at = 0; at < 14; at++) { p.font = "24px serif"; p.fillText("A line of the minutes, number " + (at + 1), 80, 520 + at * 44); }
+        const canvas = new OffscreenCanvas(1200, 900);
+        const c = canvas.getContext("2d");
+        c.translate(kind === "sideways-right" ? 1200 : 0, kind === "sideways-right" ? 0 : 900);
+        c.rotate(kind === "sideways-right" ? Math.PI / 2 : -Math.PI / 2);
+        c.drawImage(page, 0, 0);
+        return { canvas, lines: lines.map((text) => ({ text, size: 30 })) };
+    }
     if (kind === "photo") {
         const canvas = new OffscreenCanvas(4000, 3000);
         const c = canvas.getContext("2d");

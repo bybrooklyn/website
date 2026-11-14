@@ -29,6 +29,12 @@ remover (`cutout.md`) is to be one of its tools as well as a page of its own.
   checking its bytes against its pin in `codecs.json`. The modules are in `public/quire/codecs/`; they
   are built from source by `codecs/build.sh` (C wrappers in `codecs/wrap/`, the Rust ones in
   `codecs/rust/`).
+- `read/`: reading the text in a picture, all by hand but the models and ONNX Runtime. `models.ts`, the
+  three sizes of PP-OCRv6 pinned to commits and digests; `store.ts`, fetching and keeping them;
+  `runtime.ts`, the site's ONNX Runtime fetched from `/ort/`; `pixels.ts`, `detect.ts`, `ctc.ts`,
+  `words.ts` and `read.ts`, the steps from pixels to lines and words; `dictionary.ts`, the recognizer's
+  characters out of its YAML; `private.ts`, the rules for what looks private; `engine.ts`, the worker.
+- `reading.ts`: the tool as the editor offers it: the first time's dialog, the reading, what was read.
 - `panels.ts`: the export panel, the resize box and the tool's strip.
 - `editor.ts`: the frame, the session, the bar, the menus' table, the keys, copying and pictures arriving.
 - `kind.ts`: `img()`.
@@ -151,9 +157,77 @@ five lossy and lossless kinds from a pasted HEIC (`codec-run.test.ts`). The modu
 the trial's times for a 12 megapixel photograph on one thread are JPEG 0.3 s, WebP 1.1 s, AVIF about
 0.7 s at speed 8, JPEG XL 0.5 s at effort 3, PNG about 6 s ([imgQuire-codecs](imgQuire-codecs.md)).
 
+**Reading text.** W, the bar's Read text (a magnifier, after Hide) or Tools, Read text. Nothing is
+fetched until then. The first time a dialog grows from the button, as dictation's does: what reading
+needs (a model, downloaded once from Hugging Face and kept in this browser, run on this machine, the
+picture never leaving it), then Choose, then the three sizes as cards (Tiny 6 MB, Small 38 MB, Large
+152 MB, each with who it suits and "On this device" once kept), the source and licence under them, and
+Download and read, whose progress takes the buttons' place with Cancel. The size is remembered
+(`quire-img-read`) and changed from the strip's model button or Tools, Text model; one kept is read
+with at once. The next picture is read with no dialog.
+
+The reading runs in a worker of its own (`read/engine.ts`) on the ONNX Runtime build the site already
+ships, the graphics card where a real one gives a device and WebAssembly otherwise; while it reads,
+the tool's strip says "Reading text 40%" and the picture stays in use. The picture goes to the worker
+as a bitmap and nowhere else: the only requests are for ONNX Runtime's files and the model's, each a
+GET with no body, and the browser test holds that. Each file is fetched from Hugging Face at its pinned
+commit, with no referrer and no cookies, checked against its SHA-256 before it is kept in the
+browser's private storage, and checked again before a model is made of it.
+
+What was read is kept for the picture while it is open, not in the document. With the tool on, every
+word is tinted lightly on the picture and the one under the pointer more; nothing is listed anywhere.
+Pressing a word hides it: a cover over its box grown by a tenth of its line's height (at least two
+pixels) on every side, rounded outward to whole pixels, in the color of the ring round it, the same
+cover Hide makes, removable and undone the same way. The same press always gives the same cover.
+Dragging across words hides the run, one cover over each line's stretch of it, as one step. A press
+on a cover already made picks it, as with Hide.
+
+What looks private is found by plain rules (`read/private.ts`): emails, phone numbers, keys and tokens
+by their makers' shapes (GitHub, GitLab, npm, Hugging Face, OpenAI and Anthropic, Stripe, Amazon,
+Google, Slack, a JSON web token, a private key's first line) and by long random runs, numbers shaped
+like a card that pass Luhn, street addresses and a town with a ZIP code, machine addresses (v4 and
+v6), and what follows a label such as password, token, PIN or API key (or the next line, under a
+label alone). Each thing is outlined on the picture in a warm dashed line, and the strip says "42
+words, 4 look private" with Hide all, which covers what is still uncovered as one step; each can also
+be hidden by pressing it. Nothing is hidden by itself.
+
+With no tool, a drag across words selects them, filled as selected text is. Ctrl+C then copies the
+words as text (words of a line by spaces, lines by line breaks) and not the picture; with nothing
+selected it copies the picture as before. Escape lets the selection go. Edit, Copy text copies the
+selection, or every word read when there is none.
+
+How it reads (`read/read.ts`): a page turned on its side is set upright first (Large only); the picture
+goes to the detector at its own size up to 4000 a side, in tiles of 1280 that overlap by 64 and whose
+middles make one map, so small UI text is kept; lines are the map's patches above 0.2, each the
+smallest turned rectangle round its hull, kept when the map's average inside is above the model's
+`box_thresh` and grown by its area times 1.4 over its edge (PaddleOCR's DB steps, written here); each
+line is cut from the original at full size along its slant, 48 high; lines upside down are turned
+(Small and Large); the recognizer reads eight at a time, each batch as wide as its widest and at least
+320; CTC gives each character and the slices it was seen in; a word's box is placed tight round its own
+ink, split from its neighbours at the widest gap in the ink between where their letters were seen.
+Lines the recognizer is unsure of are left out: below 0.5, or one or two characters below 0.9, which is
+how the pattern of a photograph reads.
+
+Measured in headless Chromium, the reader's worker, four cores (two WebAssembly threads), and an RTX
+3070 Ti for WebGPU; a 1920 by 1080 settings screenshot and a 4000 by 3000 photograph drawn in the test:
+
+| Size | Screenshot, WebAssembly | Screenshot, WebGPU | Photograph, WebAssembly | Photograph, WebGPU |
+|---|---|---|---|---|
+| Tiny | 0.6 s | 0.25 s | 3.0 s | 1.5 s |
+| Small | 2.1 s | 0.33 s | 7.6 s | 1.7 s |
+| Large | 12.4 s | 0.38 s | 41 s | 1.6 s |
+
+Every size read the light and the dark screenshot with all 454 characters right, UI text from 11 to 28
+pixels; the words' boxes lay within 1.3 pixels of their ink (60 words measured); Small and Large read
+all five lines of a page with lines turned by 10, -12, 90 and 180 degrees (118 characters), Tiny all but
+the upside-down one; Large set a page photographed on its side (either way) upright and read it in
+order, where Small reads its lines right but not in order; the photograph's sign was read whole by all
+three. What looks private was found on
+the screenshot (6 things) and nothing else was (`read/real.test.ts`, `reading.test.ts`).
+
 **As a Quire.** Menus File, Edit, View, Image, Tools, Help, as one table, an icon on every line, ticks for
 what is on, submenus for Download, Copy as, Zoom, Crop shape, Resize filter, Mark color and Thickness;
-single keys C, R, A, T, B and E only while the picture has the keyboard, Enter and Escape; the palette is
+single keys C, R, A, T, B, E, I and W only while the picture has the keyboard, Enter and Escape; the palette is
 the core's; version history draws a version's steps over the original, small, and restores it as one step.
 
 **Drawing.** WebGPU first, WebGL2 where it is missing, behind `Backend` in `draw.ts`. A picture of up to
@@ -296,8 +370,9 @@ Each of these is a question to settle before building.
 - **Export.** Formats (WebP, AVIF, JPEG, PNG, others); a target weight in kilobytes; exact pixels; several
   sizes at once; a live preview beside the original with its size in bytes; location and camera data
   stripped by default; how files are named; presets for the site's own sizes; many files at once.
-- **Hiding things.** Blur can sometimes be undone and a solid block cannot: which is the default. Whether
-  to find text to hide by itself (names, addresses, tokens), which needs reading text in pictures.
+- **Hiding things.** Blur can sometimes be undone and a solid block cannot: which is the default. Text
+  that looks private is now found and offered (Reading text, above), never hidden by itself; whether
+  it should also be offered as a picture arrives, without the tool being chosen, is still open.
 - **Marking up.** Which of arrows, boxes, numbered steps, text, a highlighter, a magnifier and a pointer;
   whether marks stay editable after saving, which needs a file format of its own.
 - **Photo fixing.** Which of light, colour, curves, white balance, straightening, perspective, sharpening,
@@ -351,15 +426,31 @@ only with `--enable-unsafe-webgpu`, which the drawing tests pass.
   PNG's compressed text and colour profile are noted but not opened; Exif's pixel width and height are
   kept as the original's when a crop changes the size; an IPTC caption in a language other than UTF-8 is
   read as UTF-8.
+- Reading text: the Large size on WebAssembly is slow (12 s for a screenshot, 41 s for a 12 megapixel
+  photograph on two threads); on a graphics card it is as quick as the others. The fixtures are drawn
+  in the browser with its sans serif, so they are cleaner than a real screenshot; real screenshots,
+  photographs of signs and handwriting were not tried here, nor scripts other than Latin.
+- A line longer than 3200 pixels once brought to 48 high is squeezed to 3200, which loses letters.
+- A word's cover is level with the picture's edges, so a word on a slanted line is covered by the
+  rectangle round it, which takes in some of its neighbours' corners.
+- What was read is not kept in the document: a picture opened again is read again. It is kept per
+  picture only while open.
+- The rules for what looks private see only text: faces, number plates and names are not found; a
+  label of "key" or "pin" offers whatever follows it ("Key: Escape" too); a long hash is offered as
+  a key. Phone numbers are matched by shape, so a long reference number may be offered.
+- The few lines that find and load ONNX Runtime are written twice, in dictation and in `read/runtime.ts`,
+  since a kind may not import another's code; moving them into the core would let both share them.
+- The tests hold that requests carry nothing of the picture through Chromium's own record of requests,
+  with Hugging Face answered from the trial copies; a visitor's real download from Hugging Face (its
+  redirects to its content network) was not made here.
 - A picture in an mdQuire document does not yet open in imgQuire and come back: the core has the pieces
   (`takes`, `take`, one editor at a time) but a way for one kind to lend a picture to another and have it
   back is still to be designed.
 
 ## Next slices, in order
 
-1. Reading text in pictures, and click-a-word redaction, with what looks private offered.
-2. Color grading of the whole picture and of parts, with curves, wheels and `.cube` looks (G).
-3. The cut-out ([cutout](cutout.md)).
-4. More marks: numbered steps, a highlighter, a magnifier, a spotlight, outlined captions.
-5. Many at once: batches through the same steps and export.
-6. From the phone, and opening a picture from mdQuire and back.
+1. Color grading of the whole picture and of parts, with curves, wheels and `.cube` looks (G).
+2. The cut-out ([cutout](cutout.md)).
+3. More marks: numbered steps, a highlighter, a magnifier, a spotlight, outlined captions.
+4. Many at once: batches through the same steps and export.
+5. From the phone, and opening a picture from mdQuire and back.
