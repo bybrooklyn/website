@@ -135,6 +135,8 @@ const md = () => tab.run<string>("q.md()");
 const marked = () => tab.run<Record<string, number>>("q.marked()");
 const counted = () => tab.run<string>("document.querySelector('.quire-check-count')?.textContent ?? ''");
 const popped = () => tab.run<string>("document.querySelector('.quire-check-pop.open')?.textContent ?? ''");
+/** The lines of a finding's menu as drawn: a rule as "|", a strong line with "*" before it. */
+const popLines = () => tab.run<string[]>("[...document.querySelectorAll('.quire-check-pop.open .quire-menu-items > *')].map((line) => line.matches('hr') ? '|' : (line.classList.contains('quire-menu-strong') ? '*' : '') + (line.querySelector('.quire-menu-label')?.textContent ?? line.textContent))");
 
 /** Clicks the middle of a word in the text. */
 async function clickWord(words: string, nth = 0) {
@@ -178,12 +180,34 @@ used("whoever switched checking off keeps it off: nothing of it loads until Tool
     await tab.wait(300);
 });
 
-used("a click opens the popover from the word, and a fix is one undo step", async () => {
+used("a click opens the word's menu from it: its spellings strong, a rule, Add to dictionary and Ignore, and nothing to switch off", async () => {
     await clickWord("teh", 0);
     await until("!!document.querySelector('.quire-check-pop.open')");
-    expect(await popped()).toContain("\"teh\" is not in the dictionary.");
     await tab.wait(500);
-    await press(".quire-check-pop.open .quire-check-fix", "the");
+    const lines = await popLines();
+    expect(lines).toContain("*the");
+    expect(lines.slice(-3)).toEqual(["|", "Add to dictionary", "Ignore in this document"]);
+    expect(lines.slice(0, -3).every((line) => line.startsWith("*"))).toBe(true);
+    expect(await popped()).not.toContain("Switch");
+    // the keyboard stayed in the text; Down goes into the menu, and Escape gives the caret back where it was
+    expect(await tab.run("document.activeElement === q.surface.element")).toBe(true);
+    const caret = await tab.run("q.surface.getSelection().focus");
+    await tab.press("ArrowDown");
+    expect(await tab.run<string>("document.activeElement.closest('.quire-check-pop') ? document.activeElement.textContent : ''")).toBe(lines[0]!.slice(1));
+    await tab.press("ArrowDown");
+    expect(await tab.run<string>("document.activeElement.textContent")).toBe(lines[1]!.replace("*", ""));
+    await tab.press("Escape");
+    await until("!document.querySelector('.quire-check-pop.open')");
+    expect(await tab.run("document.activeElement === q.surface.element")).toBe(true);
+    expect(await tab.run("q.surface.getSelection().focus")).toEqual(caret);
+    await tab.wait(300);
+});
+
+used("a spelling chosen from the word's menu is one undo step", async () => {
+    await clickWord("teh", 0);
+    await until("!!document.querySelector('.quire-check-pop.open')");
+    await tab.wait(500);
+    await press(".quire-check-pop.open .quire-menu-strong", "the");
     expect(await md()).toBe("Teh cat sat on the mat. It was the the best.\n\nA [link](#nowhere) here.\n");
     await until("q.marked().spelling === 1");
     await tab.run("q.surface.undo()");
@@ -198,7 +222,7 @@ async function rightClick(words: string) {
     await tab.run(`q.surface.element.dispatchEvent(new MouseEvent("contextmenu", { clientX: ${point.x}, clientY: ${point.y}, bubbles: true, cancelable: true }))`);
 }
 /** The lines of the text's menu as drawn: their words, and whether each is strong or parted from the line before. */
-const menuLines = () => tab.run<string[]>("[...document.querySelectorAll('.quire-text-menu.open .quire-menu-items > *')].map((line) => (line.classList.contains('quire-menu-strong') ? '*' : '') + (line.classList.contains('quire-menu-parted') ? '| ' : '') + (line.querySelector('.quire-menu-label')?.textContent ?? line.textContent))");
+const menuLines = () => tab.run<string[]>("[...document.querySelectorAll('.quire-text-menu.open .quire-menu-items > *')].map((line) => line.matches('hr') ? '|' : (line.classList.contains('quire-menu-strong') ? '*' : '') + (line.querySelector('.quire-menu-label')?.textContent ?? line.textContent))");
 
 used("a right-click on a misspelled word puts its spellings first in the text's menu, then Add to dictionary and Ignore, then the rest", async () => {
     await rightClick("Teh");
@@ -209,8 +233,8 @@ used("a right-click on a misspelled word puts its spellings first in the text's 
     expect(lines).toContain("*The");
     const at = lines.indexOf("Add to dictionary");
     expect(at).toBeGreaterThan(0);
-    expect(lines.slice(at, at + 3)).toEqual(["Add to dictionary", "Ignore in this document", "| Cut"]);
-    expect(lines.slice(0, at).every((line) => line.startsWith("*"))).toBe(true);
+    expect(lines.slice(at - 1, at + 4)).toEqual(["|", "Add to dictionary", "Ignore in this document", "|", "Cut"]);
+    expect(lines.slice(0, at - 1).every((line) => line.startsWith("*"))).toBe(true);
     expect(await tab.run("!!document.querySelector('.quire-check-pop.open')")).toBe(false);
     await tab.press("Escape");
     await tab.wait(300);
@@ -241,7 +265,7 @@ used("ignoring and adding to the dictionary take the underline away", async () =
     await clickWord("Teh");
     await until("!!document.querySelector('.quire-check-pop.open')");
     await tab.wait(500);
-    await press(".quire-check-pop.open .quire-check-action", "Ignore in this document");
+    await press(".quire-check-pop.open .quire-menu-line", "Ignore in this document");
     await until("q.marked().spelling === 0");
     expect(await tab.run("JSON.parse(localStorage.getItem('quire-check-ignore:name:Test')).words")).toEqual(["Teh"]);
     await tab.run(`q.reset("Iroh is a wrod.\\n")`);
@@ -249,7 +273,7 @@ used("ignoring and adding to the dictionary take the underline away", async () =
     await clickWord("Iroh");
     await until("!!document.querySelector('.quire-check-pop.open')");
     await tab.wait(500);
-    await press(".quire-check-pop.open .quire-check-action", "Add to dictionary");
+    await press(".quire-check-pop.open .quire-menu-line", "Add to dictionary");
     await until("q.marked().spelling === 1");
     expect(await tab.run("JSON.parse(localStorage.getItem('quire-check-words')).words")).toEqual(["Iroh"]);
 });
@@ -296,11 +320,11 @@ used("the count opens the list of everything, which jumps to a finding; F8 goes 
     await press(".quire-check-list.open .quire-check-line", "wrdo");
     await until("!!document.querySelector('.quire-check-pop.open')");
     expect(await tab.run("q.surface.getSelection().focus")).toEqual({ path: [2], offset: 12 });
-    expect(await popped()).toContain("\"wrdo\" is not in the dictionary.");
+    expect(await popped()).toContain("Add to dictionary");
     await tab.press("Escape");
     await tab.run("q.select([0], 0)");
     await tab.press("F8");
-    await until("document.querySelector('.quire-check-pop.open')?.textContent.includes('wrod')");
+    await until("!!document.querySelector('.quire-check-pop.open') && q.surface.getSelection().focus.offset === 6");
     await tab.press("Escape");
     await tab.wait(100);
     await tab.press("F8");
@@ -323,7 +347,7 @@ used("the settings switch a kind off, and it stays off", async () => {
     await until("q.marked().spelling === 1 && q.marked().prose === 1");
     await press(".quire-check-count");
     await tab.wait(600);
-    await press(".quire-check-list.open .quire-check-action", "Settings");
+    await press(".quire-check-list.open .quire-menu-line", "Settings");
     // the settings are a dialog
     await until("!!document.querySelector('dialog.quire-check-settings[open]')");
     await tab.wait(600);

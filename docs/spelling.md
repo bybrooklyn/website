@@ -15,10 +15,11 @@ that night's fixes ("after"); how is under "How it was measured".
   small built-in list, known in every document from the start.
 - `src/quire/check/withheld.ts`: words that stay known but are never suggested (slurs, explicit words).
 - `scripts/dictionary.ts`: builds `public/quire/words-en.dat` and its licence from SCOWL, by hand.
-- `src/quire/check/view.ts`: the underlines, the popover, "Add to dictionary" and "Ignore", the lines a
-  misspelling puts first in the text's right-click menu, and the Personal dictionary dialog.
-- `src/quire/check/findings.ts`: what is kept in the browser (whether checking is on, her own words, what
-  is ignored), and the cleaning every word of her dictionary passes through.
+- `src/quire/check/view.ts`: the underlines, a finding's small menu, the list, and the Personal
+  dictionary dialog.
+- `src/quire/check/findings.ts`: the lines of a finding's menu (`findingLines`, the same for a click and
+  for the top of the text's right-click menu), what is kept in the browser (whether checking is on, her
+  own words, what is ignored), and the cleaning every word of her dictionary passes through.
 
 ## How it works now
 
@@ -55,13 +56,20 @@ The word list (230 KB, fetched once and then cached by the browser) is fetched w
 While spelling is on, the browser's own checker is off for the document; if the word list does not load
 the browser's checker is put back and the list of findings says so.
 
-**The right-click menu.** A right-click on a misspelled word opens the text's own menu (`text-menu.ts`)
-with, at the top as Docs and the browsers have them, its spellings in strong type (up to five, or "No
-suggestions"), then Add to dictionary and Ignore in this document, a rule, and then Cut, Copy and the
-rest. The menu key or Shift+F10 does the same at the caret. A right-click on any other finding still
-opens its popover; Shift with the right-click is the browser's own menu.
+**A misspelled word's menu.** A click on a misspelled word grows a small menu from it, as the
+right-click menu is drawn: its spellings in strong type (up to five, the likeliest first, or a quiet "No
+suggestions"), a rule, then Add to dictionary and Ignore in this document, each with its icon. No
+sentences: the word is underlined, so nothing says it again. The keyboard stays in the text, so typing
+goes on there; Down or Up goes into the menu, Enter takes a line, and Escape gives the caret back.
+Any other finding's menu is a quiet line naming it in its rule's few words, its fixes, a rule and
+Ignore. Switching a kind of checking off is only in the checking settings.
 
-**What she can teach it.** "Add to dictionary" (in the right-click menu and the popover) keeps a word in
+**The right-click menu.** A right-click on a misspelled word opens the text's own menu (`text-menu.ts`)
+with the very lines of the word's own menu at the top, as Docs and the browsers have them, a rule, and
+then Cut, Copy and the rest. The menu key or Shift+F10 does the same at the caret. A right-click on any
+other finding opens its menu; Shift with the right-click is the browser's own menu.
+
+**What she can teach it.** "Add to dictionary" (in the right-click menu and the word's own) keeps a word in
 this browser for good (`localStorage`, `quire-check-words`, every word read back cleaned: trimmed, one to
 64 characters, no space or control character, at most 20,000). Tools, Personal dictionary (also a button
 in the checking settings) is a dialog listing her words in order, each with Remove, with Download as text

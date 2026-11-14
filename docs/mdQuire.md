@@ -147,7 +147,8 @@ clears them.
 **Checking** (`check/`). Markdown tidiness, the site's writing rules (written once in `check/tells.ts`,
 which `scripts/lint.ts` imports, so the two give the same verdict), links and pictures that lead nowhere, spelling
 against an English dictionary of its own (about 126,000 words), and prose rules with a reading score.
-Findings are faint underlines, a popover with fixes, a count and a list. Spelling is on, alone and in
+Findings are faint underlines, a small menu on each (the same lines a misspelling puts first in the
+right-click menu), a count and a list. Spelling is on, alone and in
 American, for a writer who has never set checking, and stays off for one who switched it off, for whom
 nothing of it loads until Tools, Checking. A right-click on a misspelled word puts its spellings first in
 the text's menu, then Add to dictionary and Ignore in this document; Tools, Personal dictionary lists the

@@ -13,6 +13,6 @@ test("with checking switched off, mounting it loads nothing and touches nothing"
     const checking = mountChecking(host);
     await Bun.sleep(10);
     expect(asked).toEqual(["quire-check"]);
-    expect(checking.linesAt({ x: 10, y: 10 })).toEqual({ lines: [], strong: 0 });
+    expect(checking.linesAt({ x: 10, y: 10 })).toEqual([]);
     checking.destroy();
 });

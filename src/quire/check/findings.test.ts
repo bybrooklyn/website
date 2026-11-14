@@ -3,8 +3,9 @@
 // to how it starts.
 
 import { expect, test } from "bun:test";
-import { DEFAULTS, type Finding } from "./engine";
-import { around, byKind, cleanWords, compare, FIRST_KINDS, MOST_OWN, sameTogether, findingAt, findingKey, loadIgnored, loadOwn, loadPrefs, nextFinding, saveIgnored, saveOwn, savePrefs, shownFindings, wordsOfText, wordsText, type Keep } from "./findings";
+import type { MenuItem } from "../ui";
+import { DEFAULTS, type Finding, type Fix } from "./engine";
+import { around, byKind, cleanWords, compare, findingLines, FIRST_KINDS, MOST_OWN, sameTogether, findingAt, findingKey, loadIgnored, loadOwn, loadPrefs, nextFinding, saveIgnored, saveOwn, savePrefs, shownFindings, wordsOfText, wordsText, type Keep } from "./findings";
 
 const finding = (path: number[], from: number, to: number, kind: Finding["kind"] = "spelling", word?: string): Finding => ({ rule: kind === "spelling" ? "spelling" : "prose-repeat", kind, severity: "mistake", range: { start: { path, offset: from }, end: { path, offset: to } }, message: "", fixes: [], word });
 const at = (path: number[], offset: number) => ({ path, offset });
@@ -108,4 +109,26 @@ test("the same words found by one rule are one line of the list, in the order fi
     const found = [finding([0], 0, 3), finding([1], 0, 3), finding([2], 0, 4), finding([3], 0, 3)];
     const lines = sameTogether(found, (one) => text[one.range.start.path[0]!]!);
     expect(lines.map((line) => line.map((one) => one.range.start.path[0]))).toEqual([[0, 1, 3], [2]]);
+});
+
+/** A finding's menu as words: a rule as "|", a quiet line in brackets, a strong one with "*". */
+const said = (lines: MenuItem[]) => lines.map((line) => (line.rule ? "|" : line.note ? `(${line.label})` : `${line.strong ? "*" : ""}${line.label}`));
+const fix = (label: string): Fix => ({ label, edit: (doc) => doc });
+
+test("a misspelled word's menu is its spellings, at most five and strong, a rule, then Add to dictionary and Ignore in this document, with nothing said in sentences", () => {
+    const word = { ...finding([0], 0, 3, "spelling", "teh"), message: '"teh" is not in the dictionary.', suggest: () => ["the", "ten", "tea", "tech", "eh", "te"].map(fix) };
+    const done: string[] = [];
+    const lines = findingLines(word, "Words not in the dictionary", { fix: (one) => done.push(one.label), add: (one) => done.push(`add ${one}`), ignoreWord: (one) => done.push(`ignore ${one}`), ignore: () => done.push("ignore") });
+    expect(said(lines)).toEqual(["*the", "*ten", "*tea", "*tech", "*eh", "|", "Add to dictionary", "Ignore in this document"]);
+    expect(lines.slice(-2).map((line) => line.icon)).toEqual(["dictionary", "ignore"]);
+    for (const line of lines) line.run();
+    expect(done).toEqual(["the", "ten", "tea", "tech", "eh", "add teh", "ignore teh"]);
+    expect(said(findingLines({ ...word, suggest: undefined }, "", { fix() {}, add() {}, ignoreWord() {}, ignore() {} }))).toEqual(["(No suggestions)", "|", "Add to dictionary", "Ignore in this document"]);
+});
+
+test("any other finding's menu names it in a few words, then its fixes, a rule and Ignore; switching the rule off is not there", () => {
+    const twice = { ...finding([0], 4, 7, "prose"), message: '"is" is written twice.', fixes: [fix("Take one out")] };
+    const lines = said(findingLines(twice, "A word written twice", { fix() {}, add() {}, ignoreWord() {}, ignore() {} }));
+    expect(lines).toEqual(["(A word written twice)", "Take one out", "|", "Ignore"]);
+    expect(said(findingLines({ ...twice, fixes: [] }, "Links and pictures that point at nothing", { fix() {}, add() {}, ignoreWord() {}, ignore() {} }))).toEqual(["(Links and pictures that point at nothing)", "|", "Ignore"]);
 });

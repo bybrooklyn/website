@@ -1,25 +1,26 @@
 // Checking, drawn: a faint underline under each finding (the browser's highlights, as find and
-// replace uses them, so the text's own elements are never touched), a popover that grows from the
-// word when it is clicked or reached by keyboard, with what is wrong and the fixes, a count at the
-// end of the bar that opens the list of everything found, and the settings. Loaded by mount.ts the
-// first time checking is used.
+// replace uses them, so the text's own elements are never touched), a small menu that grows from
+// the word when it is clicked or reached by keyboard (its fixes, then the ways to leave it be, as
+// findingLines makes them), a count at the end of the bar that opens the list of everything found,
+// and the settings. Loaded by mount.ts the first time checking is used.
 //
 // Checking runs in idle time, a slice at a time, after a pause in typing; the checker looks again
 // only at the blocks that changed. Keys, in the text: F8 and Shift+F8 go to the next finding and
-// the one before, Alt+Enter opens the one at the cursor.
+// the one before, Alt+Enter opens the one at the cursor. A finding's menu opened by a click leaves
+// the keyboard in the text; Down or Up goes into the menu, and Escape there gives the caret back.
 //
-// A right-click on a misspelled word opens the text's own menu (text-menu.ts) with the spellings
-// first, then Add to dictionary and Ignore in this document, as Docs and the browsers put them; a
-// right-click on any other finding opens its popover. Her own dictionary is listed in a dialog,
+// A right-click on a misspelled word opens the text's own menu (text-menu.ts) with the very lines of
+// the word's own menu first, as Docs and the browsers put them; a right-click on any other finding
+// opens its menu. Her own dictionary is listed in a dialog,
 // Personal dictionary, where a word is removed and the whole list is downloaded or added to as a
 // plain text file, one word to a line.
 
 import type { Position } from "../document";
 import { openDialog, type Dialog } from "../dialog";
-import { control, flowMenu, make, type MenuItem } from "../ui";
+import { control, flowMenu, make, menuLine, type MenuItem } from "../ui";
 import { createChecker, KINDS, ruleOn, type Context, type Finding, type Fix, type Job, type Rule, type Unit } from "./engine";
 import { loadDictionary, type Dictionary } from "./dictionary";
-import { around, byKind, findingAt, findingKey, KIND_NAMES, loadIgnored, loadOwn, loadPrefs, nextFinding, sameTogether, saveIgnored, saveOwn, savePrefs, shownFindings, wordsOfText, wordsText, type Ignored } from "./findings";
+import { around, byKind, findingAt, findingKey, findingLines, KIND_NAMES, loadIgnored, loadOwn, loadPrefs, nextFinding, sameTogether, saveIgnored, saveOwn, savePrefs, shownFindings, wordsOfText, wordsText, type Ignored } from "./findings";
 import type { CheckingHost } from "./mount";
 import { readability } from "./prose";
 import { RULES } from "./rules";
@@ -243,16 +244,6 @@ export function createChecking(host: CheckingHost & { keep: CheckingHost["keep"]
         surface.run((doc) => fix.edit(doc, finding.range));
         surface.focus();
     }
-    function action(label: string, act: () => void, className = "quire-check-action") {
-        const button = make("button", `quire-button ${className}`, label);
-        button.type = "button";
-        button.addEventListener("mousedown", (event) => event.preventDefault());
-        button.addEventListener("click", () => {
-            pop.close(false);
-            act();
-        });
-        return button;
-    }
     /** Adds a word to her dictionary: never marked again, in any document. */
     function addWord(word: string) {
         own.add(word);
@@ -268,49 +259,26 @@ export function createChecking(host: CheckingHost & { keep: CheckingHost["keep"]
         refresh();
         soon(0);
     }
-    function card(finding: Finding): HTMLElement {
-        const body = make("div", "quire-check-card");
-        body.setAttribute("role", "dialog");
-        const known = rule(finding.rule);
-        body.append(make("p", `quire-check-kind ${finding.kind}`, known?.label ?? KIND_NAMES[finding.kind]), make("p", "quire-check-message", finding.message));
-        if (known?.why) body.lastElementChild!.setAttribute("title", known.why);
-        const fixes = [...finding.fixes, ...(finding.suggest?.() ?? [])];
-        if (fixes.length) {
-            const row = make("div", "quire-check-fixes");
-            for (const fix of fixes) row.append(action(fix.label, () => run(fix, finding), "quire-check-fix"));
-            body.append(row);
-        } else if (finding.kind === "spelling") body.append(make("p", "quire-check-none", "No suggestions."));
-        const more = make("div", "quire-check-more");
-        if (finding.word) {
-            const word = finding.word;
-            more.append(
-                action("Add to dictionary", () => addWord(word)),
-                action("Ignore in this document", () => ignoreWord(word)),
-            );
-        } else
-            more.append(
-                action("Ignore", () => {
-                    ignored = { ...ignored, findings: [...ignored.findings, findingKey(finding, keyOf(finding))] };
-                    saveIgnored(keep, ignoredFor, ignored);
-                    refresh();
-                }),
-            );
-        more.append(
-            action("Switch this rule off", () => {
-                prefs.settings.rules[finding.rule] = false;
-                apply();
-            }),
-        );
-        body.append(more);
-        return body;
-    }
+    /** A finding's menu, the same lines a misspelling puts at the top of the text's menu (findingLines). */
+    const linesOf = (finding: Finding) =>
+        findingLines(finding, rule(finding.rule)?.label ?? KIND_NAMES[finding.kind], {
+            fix: (fix) => run(fix, finding),
+            add: addWord,
+            ignoreWord,
+            ignore: () => {
+                ignored = { ...ignored, findings: [...ignored.findings, findingKey(finding, keyOf(finding))] };
+                saveIgnored(keep, ignoredFor, ignored);
+                refresh();
+                surface.focus();
+            },
+        });
     function openPop(finding: Finding, focusFirst: boolean) {
         const range = surface.rangeOf(finding.range.start, finding.range.end);
         const rects = range?.getClientRects();
         const box = rects?.[0] ?? range?.getBoundingClientRect();
         if (!box) return;
         Object.assign(anchor.style, { left: `${box.left}px`, top: `${box.top}px`, width: `${Math.max(box.width, 8)}px`, height: `${box.height}px` });
-        pop.open(anchor, card(finding), focusFirst);
+        pop.open(anchor, linesOf(finding), focusFirst);
     }
     /** Selects a finding, brings it into sight and opens its popover. */
     function go(finding: Finding, focusFirst = true) {
@@ -346,20 +314,25 @@ export function createChecking(host: CheckingHost & { keep: CheckingHost["keep"]
         openPop(found, true);
     };
     /**
-     * The lines a misspelled word puts at the top of the text's menu: its spellings (drawn strong, up
-     * to five, or a line saying there are none), Add to dictionary and Ignore in this document. At a
-     * point pressed, or at the caret for the menu key. None anywhere else.
+     * The lines a misspelled word puts at the top of the text's menu, the very lines its own menu has
+     * (findingLines), ending in their rule. At a point pressed, or at the caret for the menu key. None
+     * anywhere else.
      */
-    function linesAt(at?: { x: number; y: number }): { lines: MenuItem[]; strong: number } {
-        if (!prefs.on) return { lines: [], strong: 0 };
+    function linesAt(at?: { x: number; y: number }): MenuItem[] {
+        if (!prefs.on) return [];
         const found = at ? findingUnder(at.x, at.y, ["spelling"]) : findingAt(shown.filter((one) => one.kind === "spelling"), surface.getSelection().focus);
-        const word = found?.word;
-        if (!found || !word) return { lines: [], strong: 0 };
-        const fixes = [...found.fixes, ...(found.suggest?.() ?? [])].slice(0, 5);
-        const lines: MenuItem[] = fixes.length ? fixes.map((fix) => ({ label: fix.label, run: () => run(fix, found) })) : [{ label: "No suggestions", note: true, run: () => {} }];
-        lines.push({ label: "Add to dictionary", run: () => addWord(word) }, { label: "Ignore in this document", run: () => ignoreWord(word) });
-        return { lines, strong: fixes.length };
+        return found?.word ? linesOf(found) : [];
     }
+    // a finding's menu opened by a click leaves the keyboard in the text, so that typing goes on there; Down or Up goes into the menu
+    const onArrow = (event: KeyboardEvent) => {
+        if (!pop.isOpen() || (event.key !== "ArrowDown" && event.key !== "ArrowUp") || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+        const lines = [...pop.box.querySelectorAll<HTMLElement>(".quire-menu-items button:not(:disabled)")];
+        const line = event.key === "ArrowDown" ? lines[0] : lines[lines.length - 1];
+        if (!line) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        line.focus({ preventScroll: true });
+    };
     const onKey = (event: KeyboardEvent) => {
         if (!prefs.on) return;
         if (event.key === "F8" && !event.ctrlKey && !event.altKey && !event.metaKey) {
@@ -376,6 +349,7 @@ export function createChecking(host: CheckingHost & { keep: CheckingHost["keep"]
     };
     surface.element.addEventListener("click", onClick);
     surface.element.addEventListener("keydown", onKey);
+    surface.element.addEventListener("keydown", onArrow, true);
     surface.element.addEventListener("contextmenu", onMenu);
     surface.element.addEventListener("beforeinput", onInput);
     const stops = [
@@ -407,17 +381,19 @@ export function createChecking(host: CheckingHost & { keep: CheckingHost["keep"]
         body.append(head);
         for (const group of byKind(shown)) {
             const section = make("section", "quire-check-group");
-            section.append(make("h3", `quire-check-kind ${group.kind}`, `${KIND_NAMES[group.kind]} ${group.findings.length}`));
+            section.append(make("h3", `quire-menu-note quire-check-kind ${group.kind}`, `${KIND_NAMES[group.kind]} ${group.findings.length}`));
             // the same words found again by the same rule are one line, saying how many times
             const lines = sameTogether(group.findings, textOf);
             for (const same of lines.slice(0, LISTED)) {
                 const finding = same[0]!;
-                const line = make("button", "quire-check-line");
+                const line = make("button", "quire-menu-line quire-check-line");
                 line.type = "button";
                 const words = textOf(finding).replace(/\s+/g, " ").trim();
                 const shownWords = make("span", "quire-check-words", words.length > 40 ? `${words.slice(0, 38)}…` : words || "(here)");
                 if (same.length > 1) shownWords.append(make("span", "quire-check-times", `${same.length} times`));
-                line.append(shownWords, make("span", "quire-check-said", finding.message));
+                line.append(shownWords);
+                // under a misspelled word nothing more need be said; under anything else, what it is, in its rule's few words
+                if (!finding.word) line.append(make("span", "quire-check-said", rule(finding.rule)?.label ?? ""));
                 line.addEventListener("mousedown", (event) => event.preventDefault());
                 line.addEventListener("click", () => {
                     list.close(false);
@@ -426,15 +402,15 @@ export function createChecking(host: CheckingHost & { keep: CheckingHost["keep"]
                 });
                 section.append(line);
             }
-            if (lines.length > LISTED) section.append(make("p", "quire-check-none", `and ${lines.length - LISTED} more`));
+            if (lines.length > LISTED) section.append(make("p", "quire-menu-note", `and ${lines.length - LISTED} more`));
             body.append(section);
         }
-        const foot = make("div", "quire-check-foot");
-        const settings = make("button", "quire-button quire-check-action", "Settings");
-        settings.type = "button";
+        // at the foot, after a rule as in any menu, the settings' line and the keys that go through what was found
+        const settings = menuLine({ label: "Settings", icon: "settings", run: () => {} });
+        settings.classList.add("quire-check-settings-line");
+        settings.addEventListener("mousedown", (event) => event.preventDefault());
         settings.addEventListener("click", () => openSettings(settings, false));
-        foot.append(settings, make("span", "quire-check-keys", "F8 next, Shift+F8 back"));
-        body.append(foot);
+        body.append(make("hr", "quire-menu-rule"), settings, make("p", "quire-menu-note quire-check-keys", "F8 next, Shift+F8 back"));
         return body;
     }
     function openList(from: HTMLElement, focusFirst = document.activeElement === from) {
@@ -649,6 +625,7 @@ export function createChecking(host: CheckingHost & { keep: CheckingHost["keep"]
             for (const stop of stops) stop();
             surface.element.removeEventListener("click", onClick);
             surface.element.removeEventListener("keydown", onKey);
+            surface.element.removeEventListener("keydown", onArrow, true);
             surface.element.removeEventListener("contextmenu", onMenu);
             surface.element.removeEventListener("beforeinput", onInput);
             surface.element.spellcheck = spellcheckWas;
