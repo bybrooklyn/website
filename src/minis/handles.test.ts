@@ -68,6 +68,9 @@ test("a pointer on a handle takes it, a fingertip from it still, and further awa
     const point = [...shown.ring].sort((a, b) => clear(b) - clear(a))[0]!;
     expect(which(shown, point.x, point.y, "touch")).toBe("ring");
     expect(which(shown, shown.middle!.x + 300, shown.middle!.y + 300, "touch")).toBeUndefined();
+    // an arrow's part near the middle is left to the pieces under it
+    const near = shown.arrows.y!;
+    expect(which(shown, near.from.x + (near.to.x - near.from.x) * 0.1, near.from.y + (near.to.y - near.from.y) * 0.1, "touch")).not.toBe("y");
 });
 
 test("the handles' shapes face outward", () => {

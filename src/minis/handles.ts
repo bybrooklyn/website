@@ -73,14 +73,19 @@ export function toSegment(p: { x: number; y: number }, a: { x: number; y: number
     return Math.hypot(p.x - a.x - dx * t, p.y - a.y - dy * t);
 }
 
-/** Which handle a pointer at (x, y) takes, if any: the knob first, then the nearest arrow, then the ring (a ring seen nearly edge on is not offered). */
+/** Which handle a pointer at (x, y) takes, if any: the knob first, then the nearest arrow by its outer part, then the ring (a ring seen nearly edge on is not offered). */
 export function which(shown: Shown, x: number, y: number, kind: "touch" | "mouse"): Handle | undefined {
     const reach = REACH[kind];
     const p = { x, y };
     if (shown.knob && Math.hypot(shown.knob.x - x, shown.knob.y - y) < reach * 1.1) return "knob";
     let best: { handle: Handle; d: number } | undefined;
     for (const [name, arrow] of Object.entries(shown.arrows) as ["x" | "y" | "z", { from: { x: number; y: number }; to: { x: number; y: number } }][]) {
-        const d = toSegment(p, arrow.from, arrow.to);
+        // by its outer part and head only: the part near the middle is over the pieces, which a finger
+        // pressing there means to carry
+        const [dx, dy] = [arrow.to.x - arrow.from.x, arrow.to.y - arrow.from.y];
+        const along = ((x - arrow.from.x) * dx + (y - arrow.from.y) * dy) / (dx * dx + dy * dy || 1);
+        if (along < 0.4) continue;
+        const d = toSegment(p, { x: arrow.from.x + dx * 0.4, y: arrow.from.y + dy * 0.4 }, { x: arrow.to.x + dx * 0.12, y: arrow.to.y + dy * 0.12 });
         if (d < reach && (!best || d < best.d)) best = { handle: name, d };
     }
     if (best) return best.handle;

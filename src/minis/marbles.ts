@@ -184,6 +184,8 @@ interface Held {
     piece?: Placed;
     /** The way of the little axes in the corner that was pressed. */
     gizmo?: Way;
+    /** The handle under the press, taken if it moves. */
+    handle?: Handle;
 }
 
 /** The views straight on, by the way the eye looks from. */
@@ -1495,6 +1497,8 @@ export default function marbles(m: Mote): Scene {
         });
     };
 
+    /** The last press, for a browser test to read. */
+    let pressed: { x: number; y: number; handle?: Handle; kind: string } | undefined;
     let time = 0;
     /** How long the physics, the ghost and the drawing take, in milliseconds, evened out over the last frames; and the longest frame lately: for measuring. */
     const took = { step: 0, draw: 0, ghost: 0, frame: 0, most: 0 };
@@ -1524,6 +1528,14 @@ export default function marbles(m: Mote): Scene {
                 return shapeOf(piece.kind).room.map((box) => onScreen(boxToWorld(piece.place, box).at)).filter((p): p is { x: number; y: number } => Boolean(p) && pieceAt(p!.x, p!.y)?.id === id);
             },
             handles: () => handlesNow(),
+            pressed: () => pressed,
+            /** The handle a press there would take, if any. */
+            handleAt: (x: number, y: number, kind: "touch" | "mouse") => {
+                const shown = !carried && chosen.size ? handlesNow() : undefined;
+                const handle = shown && which(shown, x, y, kind);
+                const piece = pieceAt(x, y);
+                return handle && piece && chosen.has(piece.id) ? which(shown, x, y, "mouse") : handle;
+            },
             screen: (p: V3) => onScreen(p),
             text: () => write(run),
             steps: () => ({ at: steps.at, count: steps.texts.length }),
@@ -1581,14 +1593,14 @@ export default function marbles(m: Mote): Scene {
                 // Shift and the select tool are for choosing, so the handles of what is chosen do not take the press
                 const shown = !carried && chosen.size && !hand.shift && !selecting ? handlesNow() : undefined;
                 const handle = shown && which(shown, hand.x, hand.y, hand.kind === "touch" ? "touch" : "mouse");
-                if (handle) {
-                    one.mode = "handle";
-                    held.set(hand.id, one);
-                    startHandle(handle, hand);
-                    return;
-                }
+                // a handle is taken once the press moves; still, it is a press on what is under it. Over a
+                // chosen piece, only a press on the handle itself takes it, not one a fingertip from it, so
+                // that what is chosen can still be carried where the handles cross it
                 one.piece = pieceAt(hand.x, hand.y);
-                if (!one.piece && hand.ctrl) {
+                one.handle = handle || undefined;
+                if (one.handle && one.piece && chosen.has(one.piece.id) && shown) one.handle = which(shown, hand.x, hand.y, "mouse");
+                pressed = { x: hand.x, y: hand.y, handle: one.handle, kind: hand.kind };
+                if (!one.piece && !one.handle && hand.ctrl) {
                     one.mode = "box";
                     boxing = { from: one.start, to: one.start, adding: hand.shift };
                 }
@@ -1624,7 +1636,11 @@ export default function marbles(m: Mote): Scene {
                 pinch = now;
             } else if (one.mode === "press") {
                 if (Math.hypot(hand.x - one.start.x, hand.y - one.start.y) < STILL) return;
-                if (one.piece) {
+                if (one.handle) {
+                    one.mode = "handle";
+                    startHandle(one.handle, { ...hand, x: one.start.x, y: one.start.y });
+                    dragHandle(hand.x, hand.y);
+                } else if (one.piece) {
                     one.mode = "carry";
                     // a piece of the choice carries all of it; another piece, itself alone
                     if (!chosen.has(one.piece.id)) {
@@ -1697,7 +1713,7 @@ export default function marbles(m: Mote): Scene {
             time += dt;
             // a finger held still is a long press: on a piece it adds it to the choice, on the table it starts a box
             for (const one of held.values()) {
-                if (one.mode !== "press" || one.hand.kind !== "touch" || time - one.since < LONG) continue;
+                if (one.mode !== "press" || one.hand.kind !== "touch" || time - one.since < LONG || (one.handle && !one.piece)) continue;
                 if (one.piece) {
                     if (chosen.has(one.piece.id)) chosen.delete(one.piece.id);
                     else chosen.add(one.piece.id);
