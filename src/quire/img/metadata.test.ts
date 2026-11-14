@@ -8,6 +8,7 @@
 import { expect, test } from "bun:test";
 import sharp from "sharp";
 import { crc32 } from "../core/zip";
+import { browser, chromium } from "../../../scripts/browser";
 import { blocksOf, blocksOut, BOUNDS, exifOut, factsOf, readExif, readIptc, readXmp, withMetadata } from "./metadata";
 
 /** A photograph as a phone gives one, in a format. */
@@ -106,3 +107,79 @@ test("a hostile file is read quickly to what can be read of it and never throws:
     expect(performance.now() - started).toBeLessThan(500);
     expect(BOUNDS.directories).toBeLessThan(100);
 });
+
+test("on the built /imgquire/ page, a phone's photograph shows upright with its facts beside it; a caption written there goes out in JPEG, WebP, PNG, AVIF and JPEG XL as chosen, and none of it unless chosen", async () => {
+    const dist = `${import.meta.dir}/../../../dist`;
+    if (!chromium() || !(await Bun.file(`${dist}/imgquire/index.html`).exists())) return console.warn("built page test skipped: needs a Chromium and `bun run build`");
+    const server = Bun.serve({
+        port: 0,
+        async fetch(request) {
+            let path = new URL(request.url).pathname;
+            if (path.endsWith("/")) path += "index.html";
+            const file = Bun.file(dist + path);
+            return (await file.exists()) ? new Response(file) : new Response("missing", { status: 404 });
+        },
+    });
+    const tab = await browser({ width: 1300, height: 820 });
+    const until = async (expression: string, ms = 30_000) => {
+        for (const started = Date.now(); Date.now() - started < ms; await tab.wait(100)) if (await tab.run<boolean>(`!!(${expression})`)) return;
+        throw new Error(`waited for ${expression}`);
+    };
+    try {
+        await tab.open(`http://localhost:${server.port}/imgquire/`, 1000);
+        await tab.click(1296, 400);
+        const photo = Buffer.from(await photograph("jpeg")).toString("base64");
+        await tab.run(`(() => {
+            window.saved = {};
+            HTMLAnchorElement.prototype.click = function () { if (!this.download) return; const name = this.download; fetch(this.href).then((answer) => answer.arrayBuffer()).then((buffer) => (window.saved[name] = btoa(String.fromCharCode(...new Uint8Array(buffer))))); };
+            const bytes = Uint8Array.from(atob(${JSON.stringify(photo)}), (c) => c.charCodeAt(0));
+            const data = new DataTransfer();
+            data.items.add(new File([bytes], "IMG_0002.JPG", { type: "image/jpeg" }));
+            document.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
+        })()`);
+        // shown upright: the 12 by 8 picture turned a quarter is 8 by 12
+        await until("/8 × 12 px/.test(document.querySelector('.quire-img-facts')?.textContent ?? '')");
+        await tab.run("document.querySelector('.quire-img-stage').focus()");
+        await tab.press("i");
+        await until("document.querySelector('.quire-img-facts-panel.open')");
+        const rows = await tab.run<string>("document.querySelector('.quire-img-fact-rows').textContent");
+        expect(rows).toContain("PhoneMaker Pocket 9");
+        expect(rows).toContain("turned a quarter right, shown upright (Exif 6)");
+        expect(rows).toContain("51.50343, -0.12777");
+        expect(await tab.run("document.querySelector('.quire-img-room').classList.contains('beside')")).toBe(true);
+        await tab.run("const caption = document.querySelector('.quire-img-fields input'); caption.value = 'A cat on a wall'; caption.dispatchEvent(new Event('change'))");
+        const saved: Record<string, Uint8Array> = {};
+        for (const [label, keep] of [["JPEG", "None"], ["JPEG", "All but place"], ["WebP", "All but place"], ["PNG", "All but place"], ["AVIF", "All"], ["JXL", "All"]] as const) {
+            await tab.run("document.querySelector('.quire-img-stage').focus()");
+            if (!(await tab.run<boolean>("!!document.querySelector('.quire-img-export.open:not(.quire-img-facts-panel)')"))) await tab.press("e");
+            await until("document.querySelector('.quire-img-export.open:not(.quire-img-facts-panel)')");
+            await tab.run(`[...document.querySelectorAll('.quire-img-format')].find((each) => each.textContent === ${JSON.stringify(keep)}).click()`);
+            await tab.run(`[...document.querySelectorAll('.quire-img-format')].find((each) => each.textContent === ${JSON.stringify(label)}).click()`);
+            await tab.wait(300);
+            const before = await tab.run<number>("Object.keys(window.saved).length");
+            await tab.run("[...document.querySelectorAll('.quire-img-export .quire-dialog-dismiss')].find((each) => each.textContent === 'Save').click()");
+            await until(`Object.keys(window.saved).length > ${before}`);
+            const [name, base64] = await tab.run<[string, string]>("Object.entries(window.saved).at(-1)");
+            saved[`${label} ${keep}`] = Uint8Array.from(Buffer.from(base64, "base64"));
+            await tab.run("delete window.saved[" + JSON.stringify(name) + "]");
+        }
+        const none = factsOf(saved["JPEG None"]!);
+        // a picture with no steps going out in its own format is its original with where, when and with what cut out: only how it is turned and its colour profile, which change how it looks, stay
+        expect(none.rows.map(([name]) => name).filter((name) => name !== "Color profile" && name !== "Orientation")).toEqual([]);
+        expect(none.found.caption).toBeUndefined();
+        for (const key of ["JPEG All but place", "WebP All but place", "PNG All but place"]) {
+            const read = factsOf(saved[key]!);
+            expect({ key, caption: read.found.caption, place: read.place, camera: read.rows.find(([name]) => name === "Camera")?.[1] }).toEqual({ key, caption: "A cat on a wall", place: undefined, camera: "PhoneMaker Pocket 9" });
+            const theirs = await sharp(saved[key]!).metadata();
+            expect([theirs.width, theirs.height, theirs.orientation ?? 1]).toEqual([8, 12, 1]);
+        }
+        for (const key of ["AVIF All", "JXL All"]) {
+            const read = factsOf(saved[key]!);
+            expect({ key, caption: read.found.caption, place: !!read.place }).toEqual({ key, caption: "A cat on a wall", place: true });
+        }
+        expect(tab.errors).toEqual([]);
+    } finally {
+        await tab.close();
+        server.stop(true);
+    }
+}, 180_000);

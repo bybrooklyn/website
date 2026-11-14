@@ -104,3 +104,9 @@ test("a file of many thousands of steps is read in a moment, and only the first 
     expect(read?.steps).toHaveLength(LIMITS.steps);
     expect(new Set(read?.steps.map((step) => step.id)).size).toBe(LIMITS.steps);
 });
+
+test("what she wrote for the metadata is kept in steps.json and read back, each field text and bounded", () => {
+    const picture = { original, steps: [], edits: { caption: "A cat", author: "Someone" } };
+    expect(readSteps(writeSteps(picture))).toEqual({ ...picture, dropped: 0 });
+    expect(readSteps(JSON.stringify({ quire: 1, original, steps: [], edits: { caption: 5, author: "x".repeat(5000), evil: "y" } }))!.edits).toEqual({ author: "x".repeat(2000) });
+});

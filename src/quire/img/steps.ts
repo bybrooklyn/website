@@ -10,6 +10,8 @@
 //   const shown = look(picture);           { crop, width, height, filter, covers, marks }
 //   const next = add(picture.steps, { type: "cover", rect, color: "#ffffff" });
 
+import type { Edits } from "./metadata";
+
 /** A rectangle in the original's pixels. */
 export interface Rect {
     x: number;
@@ -52,6 +54,8 @@ export interface Original {
 export interface Picture {
     original: Original;
     steps: Kept[];
+    /** What she wrote in the facts for the picture's metadata (metadata.ts), kept with the steps and written into an export that keeps metadata. */
+    edits?: Edits;
 }
 
 /** The picture as the steps make it look. */
@@ -203,7 +207,8 @@ export function createHistory(first: Kept[]) {
 /** steps.json for a picture: its original and its steps, one step to a line. */
 export function writeSteps(picture: Picture): string {
     const steps = picture.steps.map((step) => `    ${JSON.stringify(step)}`).join(",\n");
-    return `{\n  "quire": 1,\n  "original": ${JSON.stringify(picture.original)},\n  "steps": [${steps ? `\n${steps}\n  ` : ""}]\n}\n`;
+    const edits = picture.edits && Object.values(picture.edits).some((value) => value !== undefined) ? `,\n  "edits": ${JSON.stringify(picture.edits)}` : "";
+    return `{\n  "quire": 1,\n  "original": ${JSON.stringify(picture.original)},\n  "steps": [${steps ? `\n${steps}\n  ` : ""}]${edits}\n}\n`;
 }
 
 const isNumber = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value);
@@ -299,5 +304,9 @@ export function readSteps(text: string): (Picture & { dropped: number }) | undef
         return { ...step!, id, ...(each.off === true ? { off: true } : {}) } as Kept;
     });
     const dropped = (Array.isArray(raw.steps) ? raw.steps.length : 0) - steps.length;
-    return { original, steps, dropped };
+    // what she wrote for the metadata: the five fields, each text and not too long
+    const wrote = (raw as { edits?: Record<string, unknown> }).edits;
+    const edits: Edits = {};
+    for (const key of ["caption", "alt", "author", "copyright", "date"] as const) if (typeof wrote?.[key] === "string") edits[key] = (wrote[key] as string).slice(0, 2000);
+    return { original, steps, dropped, ...(Object.keys(edits).length ? { edits } : {}) };
 }

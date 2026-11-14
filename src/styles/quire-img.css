@@ -596,3 +596,74 @@
         padding-left: 0.15rem;
     }
 }
+
+/* the facts: quiet rows of a label and its value, the fields she may change, and everything else folded away */
+.quire-img-fact-rows {
+    display: grid;
+    grid-template-columns: minmax(5.5rem, auto) 1fr;
+    gap: 0.35rem 0.9rem;
+    margin: 0;
+    font-size: 0.9rem;
+}
+
+.quire-img-fact-rows dt {
+    color: var(--muted);
+}
+
+.quire-img-fact-rows dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+.quire-img-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+}
+
+.quire-img-fields .quire-img-row > span:first-child {
+    min-width: 5.5rem;
+}
+
+.quire-img-everything summary {
+    color: var(--muted);
+    cursor: pointer;
+}
+
+.quire-img-everything[open] summary {
+    margin-bottom: 0.6rem;
+}
+
+.quire-img-everything.away {
+    display: none;
+}
+
+.quire-img-keep {
+    display: grid;
+    grid-template-columns: auto repeat(3, minmax(0, 1fr));
+    gap: 0.25rem;
+    align-items: center;
+}
+
+/* "Everything" grows open and folds away rather than appearing */
+.quire-img-everything {
+    interpolate-size: allow-keywords;
+}
+
+.quire-img-everything::details-content {
+    block-size: 0;
+    overflow: clip;
+    transition:
+        block-size 0.3s var(--ease),
+        content-visibility 0.3s allow-discrete;
+}
+
+.quire-img-everything[open]::details-content {
+    block-size: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .quire-img-everything::details-content {
+        transition: none;
+    }
+}
