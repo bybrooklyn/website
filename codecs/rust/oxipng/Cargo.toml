@@ -1,0 +1,11 @@
+[package]
+name = "quire-oxipng"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+glue = { path = "../glue" }
+oxipng = { version = "=10.2.1", default-features = false, features = ["freestanding"] }

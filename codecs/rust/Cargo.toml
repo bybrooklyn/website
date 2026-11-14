@@ -1,0 +1,12 @@
+[workspace]
+resolver = "3"
+members = ["glue", "oxipng", "heic"]
+
+# small and quick enough: the size the codec notes measured best on a stable toolchain
+[profile.release]
+opt-level = "s"
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = true
+debug = false

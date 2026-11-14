@@ -11,9 +11,12 @@ For anyone adding to it, a person or an agent. `bun run lint` checks what can be
 - **Comments say why**, or what cannot be seen from the line. They are sentences in plain words.
   No dash used as punctuation, no emoji, no sales words.
 - **No new libraries.** `src/mote/` and `src/quire/` import nothing from outside their own folders.
-  What is needed is written, with a test that measures the thing it is for. Two exceptions: their
-  tests may import from elsewhere, and dictation (`src/quire/md/dictation/`, and only there) runs its
-  speech models on ONNX Runtime (`onnxruntime-web`), the one library she chose not to rewrite.
+  What is needed is written, with a test that measures the thing it is for. Three exceptions: their
+  tests may import from elsewhere; dictation (`src/quire/md/dictation/`, and only there) runs its
+  speech models on ONNX Runtime (`onnxruntime-web`), the one library she chose not to rewrite; and
+  imgQuire's encoders are the reference ones she chose (libjxl, libaom with libavif, jpegli, libwebp,
+  oxipng, and heic-rs for reading), built from source to WebAssembly by `codecs/build.sh` and fetched
+  as files, never imported.
 - **Logic has tests** beside it (`thing.ts`, `thing.test.ts`), which say in their names what is
   held true. `bun run test` runs them. The linter holds Mote, mdQuire and the minis' engines to
   this; a file that only wires a browser feature (a worker, an audio worklet) is tested in the browser.

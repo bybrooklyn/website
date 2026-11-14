@@ -1,0 +1,11 @@
+[package]
+name = "quire-heic"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+glue = { path = "../glue" }
+heic-rs = { version = "=0.1.4", default-features = false, features = ["std"] }
