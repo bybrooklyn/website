@@ -104,3 +104,16 @@ test("a line the line model says is upside down is turned, and its words read fr
     expect(Math.abs(second!.x - 100)).toBeLessThan(1.5);
     expect(lines[0]!.words[0]!.box.along.x).toBe(-1);
 });
+
+test("what the recognizer is unsure of is left out: a line below 0.5, and one or two characters below 0.9", async () => {
+    const unsure = (likely: number) => async (input: Float32Array, batch: number, width: number) => {
+        const read = await fakeRecognize(input, batch, width);
+        return { ...read, data: read.data.map((value) => (value === 1 ? likely : value)) };
+    };
+    const long = picture(600, 200, [[100, 80, 40, 24], [160, 80, 40, 24], [220, 80, 40, 24]]);
+    const short = picture(600, 200, [[100, 80, 40, 24]]);
+    expect(await readText(long, { ...models, recognize: unsure(0.45) }, { dictionary: DICTIONARY, sure: 0.5 })).toEqual([]);
+    expect(await readText(long, { ...models, recognize: unsure(0.6) }, { dictionary: DICTIONARY, sure: 0.5 })).toHaveLength(1);
+    expect(await readText(short, { ...models, recognize: unsure(0.8) }, { dictionary: DICTIONARY, sure: 0.5 })).toEqual([]);
+    expect(await readText(short, { ...models, recognize: unsure(0.95) }, { dictionary: DICTIONARY, sure: 0.5 })).toHaveLength(1);
+});

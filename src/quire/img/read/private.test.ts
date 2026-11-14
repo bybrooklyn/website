@@ -59,6 +59,8 @@ const ORDINARY = [
     "4111 1111 1111 1112",
     "I walked down Main to the station",
     "Room 101",
+    "Build 3b18e512 deployed 2026-11-14 10:30",
+    "Sent 14/11/2026 09:15",
 ];
 
 test("each rule finds what it is for", () => {

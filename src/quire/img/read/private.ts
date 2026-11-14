@@ -75,7 +75,7 @@ const EMAIL = /[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}
 const CARD = /(?<![\d-])\d(?:[ -]?\d){12,18}(?![\d-])/g;
 const IPV4 = /(?<![\d.])(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?![\d.])/g;
 const IPV6 = /(?<![0-9A-Fa-f:])(?:[0-9A-Fa-f]{0,4}:){2,7}[0-9A-Fa-f]{1,4}(?![0-9A-Fa-f:])/g;
-const PHONE = /(?<![\w+])(?:\+\d{1,3}[\s.-]?)?(?:\(\d{1,4}\)[\s.-]?)?\d{2,5}(?:[\s.-]\d{2,6}){1,4}(?![\w])/g;
+const PHONE = /(?<![\w+])(?:\+\d{1,3}[\s.-]?)?(?:\(\d{1,4}\)[\s.-]?)?\d{2,5}(?:[\s.-]\d{2,6}){1,4}(?![\w]|:\d)/g;
 const STREET_WORDS = "Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Lane|Ln|Drive|Dr|Way|Court|Ct|Place|Pl|Terrace|Ter|Circle|Cir|Highway|Hwy|Parkway|Pkwy|Square|Sq|Close|Crescent|Cres";
 const STREET = new RegExp(`\\b\\d{1,6}[A-Za-z]?\\s+(?:[A-Z][A-Za-z'-]*\\.?\\s+){1,4}(?:${STREET_WORDS})\\b\\.?(?:,?\\s*(?:Apt|Apartment|Suite|Unit|Flat|#)\\.?\\s*[\\w-]+)?(?:,\\s*[A-Z][a-z]+(?:\\s[A-Z][a-z]+)*,?\\s*[A-Z]{2}\\s+\\d{5}(?:-\\d{4})?)?`, "g");
 const TOWN = /\b[A-Z][a-z]+(?:\s[A-Z][a-z]+)*,\s*[A-Z]{2}\s+\d{5}(?:-\d{4})?\b/g;
@@ -88,7 +88,8 @@ const LABEL_ALONE = new RegExp(`^(?:${LABELS.map((label) => label.replace(" ", "
 function phoneLike(match: string): boolean {
     const digits = match.replace(/\D/g, "");
     if (digits.length < 7 || digits.length > 15) return false;
-    if (/^\d{4}[-./]\d{1,2}[-./]\d{1,2}$/.test(match) || /^\d{1,2}[-./]\d{1,2}[-./]\d{2,4}$/.test(match)) return false;
+    // a date, alone or with a time after it
+    if (/^\d{4}[-./]\d{1,2}[-./]\d{1,2}(?:\s|$)/.test(match) || /^\d{1,2}[-./]\d{1,2}[-./]\d{2,4}(?:\s|$)/.test(match)) return false;
     if (/^\d+(?:\.\d+){3}$/.test(match)) return false;
     return match.startsWith("+") || match.includes("(") || digits.length >= 10 || /^\d{3}[-.\s]\d{4}$/.test(match);
 }

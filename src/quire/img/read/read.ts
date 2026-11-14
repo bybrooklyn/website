@@ -43,6 +43,10 @@ export interface ReadOptions {
 
 /** How sure an orientation model must be before a page or a line is turned. */
 export const TURN_SURE = 0.85;
+/** How sure the recognizer must be of a line for it to be kept. */
+export const LEAST_SURE = 0.5;
+/** How sure the recognizer must be of a line of one or two characters, which a pattern in a photograph often reads as. */
+export const SPECK_SURE = 0.9;
 /** Lines read in one go by the recognizer. */
 export const BATCH = 8;
 /** The narrowest a batch of lines is given to the recognizer, as PaddleOCR gives it. */
@@ -133,9 +137,11 @@ export async function readText(picture: Pixels, models: Models, options: ReadOpt
         batch.forEach((each, at) => {
             const characters = decode(answer.data, answer.frames, answer.classes, options.dictionary, at * answer.frames * answer.classes, Math.ceil((each.size.width * answer.frames) / width));
             const text = textOf(characters).trim();
-            if (!text) return;
+            const sure = sureOf(characters);
+            // what the recognizer is unsure of is left out: below PaddleOCR's own 0.5, or a speck of one or two characters below 0.9, which is how a pattern in a photograph reads
+            if (!text || sure < LEAST_SURE || (text.length <= 2 && sure < SPECK_SURE)) return;
             const words = wordsOf(characters, each.crop, each.line.box, each.turned, 0);
-            lines[each.index] = { text, box: each.line.box, sure: sureOf(characters), words };
+            lines[each.index] = { text, box: each.line.box, sure, words };
         });
         went();
     }
