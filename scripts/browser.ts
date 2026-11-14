@@ -16,6 +16,14 @@ export interface Browser {
     click(x: number, y: number): Promise<void>;
     /** Presses the mouse at one place, moves it in `steps` even steps to another with the button held, and lets go there. */
     drag(from: { x: number; y: number }, to: { x: number; y: number }, steps?: number): Promise<void>;
+    /** Presses the mouse at a place and keeps it held, for a drag that takes its time: `move` it, then `up`. */
+    down(x: number, y: number): Promise<void>;
+    /** Moves the mouse to a place, with the button held if it is down. */
+    move(x: number, y: number): Promise<void>;
+    /** Lets go of the mouse at a place. */
+    up(x: number, y: number): Promise<void>;
+    /** One finger on a touch screen: put down, moved, or lifted at a place. */
+    finger(type: "start" | "move" | "end", x: number, y: number): Promise<void>;
     /** Presses one key as the keyboard would, with modifiers held: "Enter", "Backspace", "Tab", "ArrowLeft", a letter for a chord, or a modifier alone ("Control"). */
     press(key: string, held?: { shift?: boolean; ctrl?: boolean; alt?: boolean; meta?: boolean }): Promise<void>;
     /** Types text one key at a time, each a real key press. */
@@ -196,6 +204,9 @@ export async function browser({ width = 1200, height = 800, scale = 1, port = 0,
         throw error;
     }
     const mouse = (type: string, x: number, y: number, held = type === "mousePressed") => send("Input.dispatchMouseEvent", { type, x, y, button: "left", buttons: held ? 1 : 0, clickCount: 1 });
+    /** Whether the mouse is held down by `down`, and whether touch has been switched on for `finger`. */
+    let pressed = false;
+    let touching = false;
     // the keys that are not characters, with the numbers Chromium needs as well as their names to act on them
     const named: Record<string, [number, string?]> = { Control: [17], Shift: [16], Alt: [18], Meta: [91], Enter: [13, "\r"], Backspace: [8], Tab: [9], Delete: [46], Escape: [27], " ": [32, " "], PageUp: [33], PageDown: [34], Home: [36], End: [35], ArrowLeft: [37], ArrowUp: [38], ArrowRight: [39], ArrowDown: [40] };
     const press = async (key: string, held: { shift?: boolean; ctrl?: boolean; alt?: boolean; meta?: boolean } = {}) => {
@@ -249,6 +260,25 @@ export async function browser({ width = 1200, height = 800, scale = 1, port = 0,
                 await wait(16);
             }
             await mouse("mouseReleased", to.x, to.y);
+        },
+        async down(x, y) {
+            pressed = true;
+            await mouse("mousePressed", x, y);
+        },
+        async move(x, y) {
+            await mouse("mouseMoved", x, y, pressed);
+        },
+        async up(x, y) {
+            pressed = false;
+            await mouse("mouseReleased", x, y);
+        },
+        async finger(type, x, y) {
+            if (!touching) {
+                touching = true;
+                await send("Emulation.setTouchEmulationEnabled", { enabled: true, maxTouchPoints: 1 });
+            }
+            const kind = { start: "touchStart", move: "touchMove", end: "touchEnd" }[type];
+            await send("Input.dispatchTouchEvent", { type: kind, touchPoints: type === "end" ? [] : [{ x, y }] });
         },
         press,
         async type(text) {
