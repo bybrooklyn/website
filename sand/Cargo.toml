@@ -1,0 +1,31 @@
+# The sand mini's engine: a grid of cells, each of one material, that fall, flow and rise.
+# Built for the browser as a plain WebAssembly module with `bun run wasm`; see README.md.
+
+[package]
+name = "sand"
+version = "0.1.0"
+edition = "2024"
+publish = false
+license = "MIT"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+# Leaves out the hand-written SIMD that skips runs of empty cells, so that its gain can be measured
+# (`cargo run --release --example speed --features scalar`). The results are the same either way.
+scalar = []
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+[profile.dev]
+panic = "abort"
+
+# The tests step large worlds for thousands of steps, which is slow without optimising.
+[profile.test]
+opt-level = 3

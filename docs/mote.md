@@ -2,7 +2,7 @@
 
 A small engine for tiny demos and games in the browser, in TypeScript, so that each mini does not write its
 own loop, canvas and input again. Every mini on the site runs on it except the Walker and the generalist,
-whose engine is the Rust crate in `walker/`. It has a project page at `/projects/mote/` and a logo, a speck
+whose engine is the Rust crate in `walker/`; the sand mini's engine is the Rust crate in `sand/`, drawn through Mote. It has a project page at `/projects/mote/` and a logo, a speck
 in a beam of light.
 
 ## Where the code is
@@ -17,6 +17,7 @@ under the MIT license in that folder (`src/mote/LICENSE`), plainer than the rest
 | `space.ts` | 3D physics: solids that fall, tumble and hit each other and fixed slabs, each turning by its own inertia tensor. |
 | `grid.ts` | The broad phase both physics use: which pairs of bodies are near enough to be worth a closer look. |
 | `gl.ts` | 3D drawing on WebGL 2: depth, a sun with shadows, sky light, numbers on faces, floating words, glow. |
+| `cells.ts` | A grid of cells drawn in whole pixels on WebGL 2: four bytes a cell read straight from where they are kept into one texture, colored from a palette and a shade, only changed rows sent. The sand mini draws with it. |
 | `solids.ts` | The shapes of dice and other solids, drawn on a 2D canvas where WebGL 2 is missing. |
 | `sound.ts` | Knocks and notes made by the browser with no files, silent until turned on. |
 

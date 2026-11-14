@@ -20,7 +20,7 @@ Other scripts:
 - `bun run pictures` makes the pictures shown when a page is shared (`bun run pictures post-<name>` for one). `bun run check` fails when one is missing or out of date.
 - `bun run photos` adds the pictures waiting in `photos/` (it also runs before `dev` and `build`).
 - `bun run langs` (the language bar) and `bun run projects` (facts from GitHub) read from GitHub and write `src/data/`.
-- `bun run wasm` builds the walking mini's engine from the Rust in `walker/`, after changing it.
+- `bun run wasm` builds the minis' engines from the Rust in `walker/` (the Walker and the generalist) and `sand/` (the sand mini), after changing them.
 - `bun run preview` serves `dist/`; `bun run clean` removes `dist/` and `.astro/`; `bun run cf:login` and `cf:whoami` sign in to Cloudflare.
 - By hand: `python3 scripts/fraunces-soft.py` then `python3 scripts/trim-fonts.py` after changing a font; `bun scripts/dictionary.ts` remakes mdQuire's dictionary; `bun scripts/dictation-check.ts` runs the real speech models on the built site.
 

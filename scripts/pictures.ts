@@ -64,9 +64,9 @@ const escape = (text: string) => text.replace(/[&<>]/g, (sign) => `&#${sign.char
 
 /**
  * How each mini is photographed, where the plain way (the middle of it, as it starts) shows too little:
- * what to add to its address, script to run in its page, how long to wait, how much of its width to take, and from where (or how far down, from 0 to 1).
+ * what to add to its address, script to run in its page, strokes to drag across it, how long to wait, how much of its width to take, and from where (or how far down, from 0 to 1).
  */
-const shots: Record<string, { query?: string; script?: string; wait?: number; across?: number; from?: "middle" | "bottom" | number }> = {
+const shots: Record<string, { query?: string; script?: string; pours?: Pour[]; wait?: number; across?: number; from?: "middle" | "bottom" | number }> = {
     // a roll by link, photographed once the numbers have lined up
     dice: { query: "?roll=2d20%2B2d6%2Bd8%2Bd4%2B3", wait: 15000 },
     blocks: { across: 0.45, from: "bottom" },
@@ -78,7 +78,32 @@ const shots: Record<string, { query?: string; script?: string; wait?: number; ac
     comet: { query: "?seed=lumen&field=6", ...aimed("lumen", 6) },
     // learning some way into a world with everything in it, the ground and what it sees showing
     generalist: { query: "?seed=meadow&hard=50&ground=100&hazards=100&boxes=100&moving=100&off=&legs=2", wait: 20000, from: 0.72 },
+    // a ledge of stone and a cup, with sand, dirt and water poured onto them and steam under the ledge
+    sand: {
+        pours: [
+            { pick: "stone", size: 2, from: [0.08, 0.92], to: [0.55, 0.92] },
+            { pick: "stone", size: 2, from: [0.08, 0.55], to: [0.08, 0.92] },
+            { pick: "stone", size: 2, from: [0.55, 0.55], to: [0.55, 0.92] },
+            { pick: "stone", size: 2, from: [0.62, 0.45], to: [0.95, 0.7] },
+            { pick: "water", size: 10, from: [0.2, 0.2], to: [0.24, 0.2], steps: 150 },
+            { pick: "sand", size: 6, from: [0.42, 0.15], to: [0.43, 0.15], steps: 120 },
+            { pick: "sand", size: 6, from: [0.75, 0.15], to: [0.76, 0.15], steps: 100 },
+            { pick: "dirt", size: 6, from: [0.88, 0.2], to: [0.89, 0.2], steps: 80 },
+            { pick: "steam", size: 8, from: [0.7, 0.95], to: [0.85, 0.95], steps: 60 },
+        ],
+        wait: 9000,
+        from: "bottom",
+    },
 };
+
+/** A stroke of a mini's brush for its picture: the button to press first, the brush's size, and from and to as parts of the canvas's width and height. */
+interface Pour {
+    pick: string;
+    size: number;
+    from: [number, number];
+    to: [number, number];
+    steps?: number;
+}
 
 /** The keys that aim a field's winning shot from where the keyboard's aim starts (at the hole, at 0.6 of full strength) and let go; and how long to wait for the comet to be most of the way there. */
 function aimed(seed: string, level: number): { script: string; wait: number } {
@@ -91,9 +116,15 @@ function aimed(seed: string, level: number): { script: string; wait: number } {
 
 function mini(id: string): Wanted["make"] {
     return async (tab) => {
-        const { query = "", script, wait = 2500, across = 1, from = "middle" } = shots[id] ?? {};
+        const { query = "", script, pours = [], wait = 2500, across = 1, from = "middle" } = shots[id] ?? {};
         await tab.open(`${await served()}/minis/${id}/${query}`, 1500);
         if (script) await tab.run(`${script}; 1`);
+        for (const pour of pours) {
+            await tab.run(`(() => { [...document.querySelectorAll(".mote-panel button")].find((b) => b.textContent === ${JSON.stringify(pour.pick)}).click(); const size = document.querySelector(".mote-panel input[type=range]"); size.value = "${pour.size}"; size.dispatchEvent(new Event("input")); return 1; })()`);
+            const b = await tab.run<{ x: number; y: number; width: number; height: number }>(`(() => { const b = document.querySelector(".mini-stage canvas:not(.mote-gl)").getBoundingClientRect(); return { x: b.x, y: b.y, width: b.width, height: b.height }; })()`);
+            const point = ([x, y]: [number, number]) => ({ x: b.x + b.width * x, y: b.y + b.height * y });
+            await tab.drag(point(pour.from), point(pour.to), pour.steps ?? 20);
+        }
         await tab.wait(wait);
         if (tab.errors.length > 0) throw new Error(`${id}: ${tab.errors.join("; ")}`);
         const box = await tab.run<{ x: number; y: number; width: number; height: number }>(`(() => { const b = document.querySelector(".mini-stage canvas").getBoundingClientRect(); return { x: b.x + scrollX, y: b.y + scrollY, width: b.width, height: b.height }; })()`);

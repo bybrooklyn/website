@@ -17,7 +17,7 @@ open, how to run and test it, and its known weak spots.
 - [imgQuire-models.md](imgQuire-models.md): the models imgQuire's tools could run in the browser, at three sizes, with their licences.
 - [imgQuire-codecs.md](imgQuire-codecs.md): the Rust crates that could write and read picture formats for imgQuire, built to WebAssembly and measured.
 - [marbles.md](marbles.md): a marble run mini with an editor in three dimensions, as planned; nothing built.
-- [sand.md](sand.md): a sand simulator mini, as planned; nothing built.
+- [sand.md](sand.md): a sand simulator mini and its Rust engine in `sand/`: the plan, and stage 1 (the engine and its tests) as built, a draft.
 - [cutout.md](cutout.md): a background remover, a page of its own and a tool of imgQuire; nothing built.
 - [mote.md](mote.md): the small engine the minis run on, with no third-party libraries.
 - [minis.md](minis.md): the minis page and the small minis (Blocks, Dice, Plinko) and the terminal player.
@@ -41,5 +41,5 @@ open, how to run and test it, and its known weak spots.
   now and leaves the story to the changelog.
 - **What is still to do lives in `TODO.md`,** one line an item, drawn from the Open sections here.
 - The docs are documentation: no quotations of people and no accounts of conversations. Reference material
-  that belongs beside code stays there (`walker/README.md`, `src/mote/README.md`,
+  that belongs beside code stays there (`walker/README.md`, `sand/README.md`, `src/mote/README.md`,
   `src/quire/dictation/MODELS.md`, `design/`).
