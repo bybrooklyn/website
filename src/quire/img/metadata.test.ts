@@ -9,7 +9,7 @@ import { expect, test } from "bun:test";
 import sharp from "sharp";
 import { crc32 } from "../core/zip";
 import { browser, chromium } from "../../../scripts/browser";
-import { blocksOf, blocksOut, BOUNDS, exifOut, factsOf, readExif, readIptc, readXmp, withMetadata } from "./metadata";
+import { blocksOf, blocksOut, BOUNDS, exifOut, factsOf, readExif, readIptc, readXmp, spaceOf, withMetadata } from "./metadata";
 
 /** A photograph as a phone gives one, in a format. */
 async function photograph(format: "jpeg" | "png" | "webp") {
@@ -83,6 +83,17 @@ test("XMP and IPTC are read for their simple properties and records", () => {
     expect(readXmp('<x:xmpmeta><rdf:Description dc:format="image/jpeg" xmp:Rating="3"><dc:title><rdf:Alt><rdf:li xml:lang="x-default">A &amp; B</rdf:li></rdf:Alt></dc:title></rdf:Description></x:xmpmeta>')).toEqual({ "dc:format": "image/jpeg", "xmp:Rating": "3", "dc:title": "A & B" });
     const iim = new Uint8Array([0x1c, 2, 120, 0, 3, 0x48, 0x69, 0x21, 0x1c, 2, 90, 0, 2, 0x4f, 0x78]);
     expect(readIptc(iim).map((each) => [each.name, each.value])).toEqual([["Caption", "Hi!"], ["City", "Ox"]]);
+});
+
+test("a picture's space for grading is told by its profile's primaries: Display P3 as P3, sRGB or none as sRGB, and any other as sRGB said to be a guess", async () => {
+    const make = (profile?: string) => {
+        const made = sharp({ create: { width: 4, height: 4, channels: 3, background: { r: 200, g: 40, b: 90 } } });
+        return (profile ? made.withIccProfile(profile) : made).jpeg().toBuffer().then((buffer) => new Uint8Array(buffer));
+    };
+    expect(spaceOf(await make("p3"))).toMatchObject({ space: "p3", known: true });
+    expect(spaceOf(await make("srgb"))).toMatchObject({ space: "srgb", known: true });
+    expect(spaceOf(await make())).toEqual({ space: "srgb", known: true });
+    expect(spaceOf(await make("cmyk")).known).toBe(false);
 });
 
 test("a hostile file is read quickly to what can be read of it and never throws: directories that point at each other, counts and offsets past the end, a huge count, garbage", () => {

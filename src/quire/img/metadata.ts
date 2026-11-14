@@ -366,6 +366,36 @@ export function profileName(icc: Uint8Array): string | undefined {
     return undefined;
 }
 
+/** The primaries of a colour profile, from its red and green XYZ tags (D50, as profiles keep them), or undefined. */
+export function primariesOf(icc: Uint8Array): { red: [number, number]; green: [number, number] } | undefined {
+    if (icc.length < 132) return undefined;
+    const view = new DataView(icc.buffer, icc.byteOffset, icc.byteLength);
+    const count = Math.min(view.getUint32(128), 200);
+    const found: Record<string, [number, number]> = {};
+    for (let index = 0; index < count; index++) {
+        const at = 132 + index * 12;
+        if (at + 12 > icc.length) break;
+        const tag = ascii(icc.subarray(at, at + 4));
+        if (tag !== "rXYZ" && tag !== "gXYZ") continue;
+        const offset = view.getUint32(at + 4);
+        if (offset + 20 > icc.length || ascii(icc.subarray(offset, offset + 4)) !== "XYZ ") continue;
+        found[tag] = [view.getInt32(offset + 8) / 65536, view.getInt32(offset + 12) / 65536];
+    }
+    return found.rXYZ && found.gXYZ ? { red: found.rXYZ, green: found.gXYZ } : undefined;
+}
+
+/** The space a picture is graded in, from its colour profile: sRGB with none or an sRGB one, Display P3 for a P3 one (by its primaries), and for any other sRGB, said to be a guess. */
+export function spaceOf(bytes: Uint8Array): { space: "srgb" | "p3"; known: boolean; profile?: string } {
+    const icc = blocksOf(bytes).icc;
+    if (!icc) return { space: "srgb", known: true };
+    const profile = profileName(icc);
+    const primaries = primariesOf(icc);
+    const near = (a: [number, number], b: [number, number]) => Math.abs(a[0] - b[0]) < 0.01 && Math.abs(a[1] - b[1]) < 0.01;
+    if (primaries && near(primaries.red, [0.4361, 0.2225]) && near(primaries.green, [0.3851, 0.7169])) return { space: "srgb", known: true, ...(profile ? { profile } : {}) };
+    if (primaries && near(primaries.red, [0.5151, 0.2412]) && near(primaries.green, [0.292, 0.6922])) return { space: "p3", known: true, ...(profile ? { profile } : {}) };
+    return { space: "srgb", known: false, ...(profile ? { profile } : {}) };
+}
+
 // ---- the facts ----
 
 /** A picture's facts, as the panel shows them: the plain rows, everything else, what can be changed, the place and the orientation. */
