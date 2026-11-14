@@ -62,6 +62,20 @@ the page says which. Both bodies go as far through worlds as before. The numbers
 - Play: stretches with no task.
 - The page opens on a newborn falling over, with the brain, the senses and the energy drawn live.
 
+**State (14 November 2026): built, on its branch, to be looked at.** Energy in the body, spent by the
+motors' work and being awake, restored by food and by resting still and low; tired, its muscles weaken
+to a third, and hunger ends nothing. Food laid with the land from its own generator and dropped near it
+now and then; paid for the fall in its discomfort. Curiosity for new places and new things seen, bounded
+for what comes again. An eye it turns, its rays close together in the middle. One run in five is play.
+The page opens on a newborn, the controls folded at the column's top, the brain with its eye neuron
+ringed, the senses and an energy bar drawn live; food is a dot, its body glows with its energy, a line
+goes where it looks, and a tap drops food. It eats what is in front of it, tires, rests and goes on; it
+does not yet look at things or turn for food behind it. Progress is still paid: without it both bodies
+stood still. Two legs go about two thirds as far through worlds as before and walk more cleanly with
+play; four legs go 35 m against 43. The strict walking test is measured and not passed, before or after;
+the view is that it should not be the bar for shipping. The numbers are in `walker/README.md`, "It wants
+things".
+
 ### 3. The brain that was discussed
 
 - A larger pool of neurons under a cap, with growth going into connections.
