@@ -221,9 +221,10 @@ function seesawTray(_count: number): Body[] {
  * 3 cm long rising 10 degrees, hold it closed against its own weight and half way between those,
  * 9.1 m g. As it opens their arms turn toward upright, so they hold it less while the marbles still
  * press it open nearly as much: it opens all the way at once, and once the marbles are gone, with
- * nothing on it, they close it again.
+ * nothing on it, they close it again. Closed, it slopes down to its lip by 0.04 radians, so that a
+ * marble that comes onto it slowly still rolls to the lip.
  */
-export const TRAPDOOR = { arms: [6.6, 5.0], hold: 9.1, reach: 3, rise: (10 * Math.PI) / 180 };
+export const TRAPDOOR = { arms: [6.6, 5.0], hold: 9.1, reach: 3, rise: (10 * Math.PI) / 180, closed: -0.04 };
 
 /** The switch's numbers: where its pivot is, below the joint, and how far it leans each way, in radians. */
 export const SWITCH = { pivot: -5, lean: 0.45 };
@@ -345,7 +346,7 @@ export function designPart(family: PartFamily, sizes: number[]): PartDesign {
                 boxes: [span([12, -1.7, 3.05], [12.4, 1, 4.95])],
                 panes: [span([4, -1.6, 2.75], [12.4, 0.6, 3.05]), span([4, -1.6, 4.95], [12.4, 0.6, 5.25]), span([4.5, -12.2, 1.9], [16, -8.4, 2.2]), span([4.5, -12.2, 5.8], [16, -8.4, 6.1])],
                 holds: [],
-                moving: { kind: "hinge", sound: "wood", bodies: [...flap, lip, ...weights], at: [4, -1.75, 4], axis: [0, 0, 1], low: -1.25, high: 0, spring: 0, rest: 0, friction: 1, start: 0 },
+                moving: { kind: "hinge", sound: "wood", bodies: [...flap, lip, ...weights], at: [4, -1.75, 4], axis: [0, 0, 1], low: -1.25, high: TRAPDOOR.closed, spring: 0, rest: 0, friction: 1, start: TRAPDOOR.closed },
                 clear: [span([3.8, -9.5, 2.8], [12.3, -1.0, 5.2]), span([0.4, -2.5, 0.5], [4.2, 1.6, 1.7]), span([0.4, -2.5, 6.3], [4.2, 1.6, 7.5])],
                 low: -7,
             };

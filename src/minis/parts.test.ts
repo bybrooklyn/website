@@ -15,7 +15,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { browser, chromium } from "../../scripts/browser";
 import { makeGhost } from "./ghost";
-import { HOIST, LIFT, NOTES, SEESAW, counterweight, designPart, seesawArms, seesawOwn, type Moving } from "./parts";
+import { HOIST, LIFT, NOTES, SEESAW, TRAPDOOR, counterweight, designPart, seesawArms, seesawOwn, type Moving } from "./parts";
 import { boxToWorld, shapeOf, type Kind } from "./pieces";
 import { fit, jointsOf, read, type Placed } from "./run";
 import { RUNS } from "./runs";
@@ -156,12 +156,14 @@ test("a trapdoor holds one marble at its lip, and opens under two, which drop to
     let widest = 0;
     roll(table, 1, 3, 4, () => (widest = Math.min(widest, hinge.angle)));
     expect(inTrays(table)).toBe(0);
-    expect(widest).toBeGreaterThan(-0.05);
+    // struck as it comes on, the flap gives a little, and no more
+    expect(widest).toBeGreaterThan(-0.15);
+    expect(hinge.angle).toBeCloseTo(TRAPDOOR.closed, 2);
     roll(table, 1, 3, 5, () => (widest = Math.min(widest, hinge.angle)));
     expect(inTrays(table)).toBe(2);
     // it opened all the way, onto its stop, and is shut again
     expect(widest).toBeLessThan(-1.2);
-    expect(hinge.angle).toBeGreaterThan(-0.01);
+    expect(hinge.angle).toBeGreaterThan(TRAPDOOR.closed - 0.01);
 }, 60_000);
 
 test("a lift waits, rises at its stated speed, waits, and comes down, in the period its numbers give", () => {
