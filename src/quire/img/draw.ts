@@ -14,11 +14,18 @@
 // again), and it is resampled to its size in two passes, across and then down, by the filter the
 // resize names. The plan for the pieces is worked out here (`plan`), and tested; the marks are drawn
 // last, by the browser's 2D canvas, the same for both ways (marks.ts).
+//
+// A grade is drawn by the card too, as a few more sums in the same programs: on the screen each pixel
+// is graded as it is drawn, and when flattening it is graded in the pass down, before the result is
+// rounded to 8 bits (grade-shader.ts). The grades' numbers and the parts' masks are handed to the
+// backend when they change (`Backend.grading`), so dragging a slider sends a few kilobytes and draws.
 
 import { webgl2 } from "./gl";
 import { webgpu } from "./gpu";
 import { drawMarks } from "./marks";
 import type { Filter, Look, Rect } from "./steps";
+import { pack, type Packed, type PackedGrade } from "./grade-shader";
+import { isNeutral, prepare, space, type Grade, type Prepared, type Space, type SpaceNumbers } from "./grade";
 
 /** The card's best way on a canvas: WebGPU where the browser has it, else WebGL2 (or WebGL2 when asked, for comparing the two). */
 export async function backendFor(canvas: HTMLCanvasElement | OffscreenCanvas, only?: Backend["name"]): Promise<Backend | undefined> {
@@ -125,6 +132,27 @@ export interface Drawn {
     sharp: boolean;
 }
 
+/** The parts' masks as the card takes them: layers of one size, each its values from 0 to 1 row by row, the size fitted to the original's shape. */
+export interface MaskStack {
+    width: number;
+    height: number;
+    layers: Float32Array[];
+}
+
+/** What the card grades with: the grades packed, the space's numbers, the original's size (which the masks are laid over), and the masks of the parts. */
+export interface Grading {
+    packed: Packed;
+    numbers: SpaceNumbers;
+    picture: { width: number; height: number };
+    masks?: MaskStack;
+}
+
+/** On the screen, where a canvas pixel is in the original (`x + canvas * across`, the same down) and where the split between the original and the graded falls, in canvas pixels from the left; pixels left of it are drawn as they were. */
+export interface ScreenGrade {
+    toOriginal: [number, number, number, number];
+    split: number;
+}
+
 /** What each of the card's two ways does: the little that differs between them. */
 export interface Backend {
     name: "WebGPU" | "WebGL2";
@@ -135,10 +163,12 @@ export interface Backend {
     /** Puts an image on the card, with its smaller copies for drawing it small. */
     texture(image: ImageBitmap): Texture;
     free(texture: Texture): void;
-    /** Draws the canvas: its ground, the images, clipped to `clip` if given, then solid rectangles over them. Rectangles are in the canvas's pixels. */
-    draw(images: Drawn[], fills: { rect: Rect; color: Color }[], clip?: Rect): void;
-    /** Resamples one piece: the part of the original given, covers painted into it, then the two passes, giving the result's pixels, RGBA, row by row from the top. */
-    resample(part: ImageBitmap, covers: { rect: Rect; color: Color }[], piece: Piece): Promise<Uint8Array>;
+    /** Draws the canvas: its ground, the images, clipped to `clip` if given, then solid rectangles over them. Rectangles are in the canvas's pixels. With `graded`, the images and the fills marked graded are graded as they are drawn, by what `grading` was last given. */
+    draw(images: Drawn[], fills: { rect: Rect; color: Color; graded?: boolean }[], clip?: Rect, graded?: ScreenGrade): void;
+    /** Resamples one piece: the part of the original given, covers painted into it, then the two passes, giving the result's pixels, RGBA, row by row from the top. With `graded` (where a result pixel of the piece is in the original: `x + column * across`, the same down), the pass down grades each pixel before it is rounded. */
+    resample(part: ImageBitmap, covers: { rect: Rect; color: Color }[], piece: Piece, graded?: [number, number, number, number]): Promise<Uint8Array>;
+    /** Hands the card the grades and masks to grade with; nothing to stop grading. Masks are sent again only when their stack is another. */
+    grading(given: Grading | undefined): void;
     destroy(): void;
 }
 
@@ -154,6 +184,9 @@ export interface Scene {
     look: Look;
     view: View;
     cropping?: Rect;
+    /** The grades to draw it with, and where the split to the original falls (in canvas pixels; none, all graded). */
+    grading?: Grading;
+    split?: number;
     /** The canvas's size in its own pixels. */
     canvas: { width: number; height: number };
 }
@@ -228,7 +261,7 @@ export async function loadPicture(backend: Backend, blob: Blob) {
                         else void makeTile(column, row);
                     }
             }
-            const fills = look.covers.map((cover) => ({ rect: place(cover.rect), color: rgba(cover.color) }));
+            const fills: { rect: Rect; color: Color; graded?: boolean }[] = look.covers.map((cover) => ({ rect: place(cover.rect), color: rgba(cover.color), graded: true }));
             if (scene.cropping) {
                 // the outside of the crop dimmed, so the frame shows what is kept
                 const inside = place(look.crop);
@@ -241,15 +274,22 @@ export async function loadPicture(backend: Backend, blob: Blob) {
                     { rect: { x: inside.x + inside.width, y: inside.y, width: all.x + all.width - inside.x - inside.width, height: inside.height }, color: dim },
                 );
             }
-            backend.draw(images, fills, scene.cropping ? undefined : place(look.crop));
+            backend.grading(scene.grading);
+            // a canvas pixel's place in the original, for the grade's masks
+            const graded: ScreenGrade | undefined = scene.grading ? { toOriginal: [shown.x - view.x / across, shown.y - view.y / down, 1 / across, 1 / down], split: scene.split ?? -1 } : undefined;
+            backend.draw(images, fills, scene.cropping ? undefined : place(look.crop), graded);
         },
         /** The picture as it looks, at full size: its pixels, the covers painted in before resampling so that nothing they hide is read, and the marks drawn over. */
-        async flatten(look: Look, most = PIECE): Promise<ImageData> {
+        async flatten(look: Look, most = PIECE, grading?: Grading): Promise<ImageData> {
             const result = new ImageData(look.width, look.height);
+            backend.grading(grading);
+            const stepX = look.crop.width / look.width;
+            const stepY = look.crop.height / look.height;
             for (const piece of plan(look, Math.min(most, backend.most))) {
                 const part = await createImageBitmap(full, piece.source.x, piece.source.y, piece.source.width, piece.source.height, { colorSpaceConversion: "none", premultiplyAlpha: "none" });
                 const covers = look.covers.map((cover) => ({ rect: { x: cover.rect.x - piece.source.x, y: cover.rect.y - piece.source.y, width: cover.rect.width, height: cover.rect.height }, color: rgba(cover.color) }));
-                const pixels = await backend.resample(part, covers, piece);
+                const graded: [number, number, number, number] | undefined = grading ? [look.crop.x + piece.out.x * stepX, look.crop.y + piece.out.y * stepY, stepX, stepY] : undefined;
+                const pixels = await backend.resample(part, covers, piece, graded);
                 part.close();
                 for (let row = 0; row < piece.out.height; row++) result.data.set(pixels.subarray(row * piece.out.width * 4, (row + 1) * piece.out.width * 4), ((piece.out.y + row) * look.width + piece.out.x) * 4);
             }
@@ -261,6 +301,18 @@ export async function loadPicture(backend: Backend, blob: Blob) {
                 return context.getImageData(0, 0, look.width, look.height);
             }
             return result;
+        },
+        /** The whole original made small, its longer side at most `long`, as pixels: for the histogram and the fixes, which are worked out on the processor. */
+        async small(long = 256): Promise<ImageData> {
+            const scale = Math.min(1, long / Math.max(size.width, size.height));
+            const width = Math.max(1, Math.round(size.width * scale));
+            const height = Math.max(1, Math.round(size.height * scale));
+            const made = await createImageBitmap(full, { resizeWidth: width, resizeHeight: height, resizeQuality: "medium", colorSpaceConversion: "none", premultiplyAlpha: "none" });
+            const canvas = new OffscreenCanvas(width, height);
+            const context = canvas.getContext("2d")!;
+            context.drawImage(made, 0, 0);
+            made.close();
+            return context.getImageData(0, 0, width, height);
         },
         /** A copy of the original's pixels as a bitmap, to hand to the text reader's worker. */
         bitmap: (): Promise<ImageBitmap> => createImageBitmap(full),
@@ -282,3 +334,30 @@ export async function loadPicture(backend: Backend, blob: Blob) {
 
 /** A picture kept on the card. */
 export type Loaded = Awaited<ReturnType<typeof loadPicture>>;
+
+// a grade's numbers, worked out once for each grade and space, so that a frame drawn again reads them once
+const readied = new WeakMap<Grade, Map<Space, Prepared>>();
+/** A grade made into numbers for a space, kept for as long as the grade is. */
+export function prepared(grade: Grade, name: Space): Prepared {
+    let found = readied.get(grade);
+    if (!found) readied.set(grade, (found = new Map()));
+    let ready = found.get(name);
+    if (!ready) found.set(name, (ready = prepare(grade, name)));
+    return ready;
+}
+
+/**
+ * What the card grades a look with, or nothing when its grades change nothing. Worked out again only
+ * when the look's grades or the masks are others than last time, so drawing a frame again packs nothing.
+ */
+export function gradingFor(look: Look, name: Space, picture: { width: number; height: number }, masks?: MaskStack, layers: (id: string) => { layer?: number; invert?: boolean } = () => ({})): Grading | undefined {
+    const live = look.grades.filter((each) => !isNeutral(each.grade));
+    if (!live.length) return undefined;
+    const last = lastGrading;
+    if (last && last.name === name && last.masks === masks && last.grading.picture.width === picture.width && last.grading.picture.height === picture.height && last.grades.length === live.length && last.grades.every((each, at) => each.grade === live[at]!.grade && each.id === live[at]!.id && JSON.stringify(last.layers[at]) === JSON.stringify(layers(each.id)))) return last.grading;
+    const list: PackedGrade[] = live.map((each) => ({ ready: prepared(each.grade, name), ...layers(each.id) }));
+    const grading: Grading = { packed: pack(list), numbers: space(name), picture, ...(masks ? { masks } : {}) };
+    lastGrading = { name, masks, grades: live, layers: live.map((each) => layers(each.id)), grading };
+    return grading;
+}
+let lastGrading: { name: Space; masks?: MaskStack; grades: Look["grades"]; layers: { layer?: number; invert?: boolean }[]; grading: Grading } | undefined;

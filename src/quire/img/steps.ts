@@ -11,6 +11,7 @@
 //   const next = add(picture.steps, { type: "cover", rect, color: "#ffffff" });
 
 import type { Edits } from "./metadata";
+import { readGrade, trimGrade, type Grade, type KeptGrade } from "./grade";
 
 /** A rectangle in the original's pixels. */
 export interface Rect {
@@ -35,8 +36,11 @@ export type Mark =
     | { type: "box"; rect: Rect; color: string; thickness: number }
     | { type: "text"; at: Point; text: string; color: string; size: number };
 
+/** The whole picture's grade, as steps.json keeps it: only what is away from its zero (grade.ts). */
+export type GradeStep = { type: "grade"; grade: KeptGrade };
+
 /** One thing done to the picture. A resize with no height keeps the crop's shape. */
-export type Step = { type: "crop"; rect: Rect } | { type: "resize"; width: number; height?: number; filter: Filter } | { type: "cover"; rect: Rect; color: string } | Mark;
+export type Step = { type: "crop"; rect: Rect } | { type: "resize"; width: number; height?: number; filter: Filter } | { type: "cover"; rect: Rect; color: string } | GradeStep | Mark;
 
 /** A step as the document keeps it: with an id of its own, and switched off if it is. */
 export type Kept = Step & { id: string; off?: boolean };
@@ -66,6 +70,8 @@ export interface Look {
     filter: Filter;
     covers: { rect: Rect; color: string }[];
     marks: Mark[];
+    /** The grades, in the order they are applied: the whole picture's. */
+    grades: { id: string; grade: Grade }[];
 }
 
 /** The largest side a picture may be made, and the most steps a file is read with: beyond these a file is taken to be damaged. */
@@ -94,9 +100,11 @@ export function look(picture: Picture): Look {
     let filter: Filter = "lanczos";
     const covers: Look["covers"] = [];
     const marks: Mark[] = [];
+    const grades: Look["grades"] = [];
     for (const step of picture.steps) {
         if (step.off) continue;
-        if (step.type === "crop") crop = within(step.rect, original);
+        if (step.type === "grade") grades.push({ id: step.id, grade: gradeOf(step) });
+        else if (step.type === "crop") crop = within(step.rect, original);
         else if (step.type === "resize") {
             across = step.width / crop.width;
             down = step.height ? step.height / crop.height : across;
@@ -106,7 +114,16 @@ export function look(picture: Picture): Look {
     }
     const width = clamp(Math.round(crop.width * across), 1, LIMITS.side);
     const height = clamp(Math.round(crop.height * down), 1, LIMITS.side);
-    return { crop, width, height, filter, covers, marks };
+    return { crop, width, height, filter, covers, marks, grades };
+}
+
+// a grade step's whole grade, worked out once for each step as kept, so that drawing many times a second reads it once
+const gradesRead = new WeakMap<object, Grade>();
+/** The whole grade of a grade step, with every field it leaves out at its zero. */
+export function gradeOf(step: GradeStep): Grade {
+    let found = gradesRead.get(step.grade);
+    if (!found) gradesRead.set(step.grade, (found = readGrade(step.grade)));
+    return found;
 }
 
 /** A step without the document's own fields. */
@@ -156,8 +173,8 @@ export function toggle(steps: Kept[], id: string): Kept[] {
     return steps.map((step) => (step.id === id ? ({ ...step, off: !step.off || undefined } as Kept) : step));
 }
 
-/** The list with the picture's one crop (or one resize) set: the step changed where there is one, added where there is not. */
-export function setOnly(steps: Kept[], step: Extract<Step, { type: "crop" | "resize" }>): Kept[] {
+/** The list with the picture's one crop (or one resize, or its whole grade) set: the step changed where there is one, added where there is not. */
+export function setOnly(steps: Kept[], step: Extract<Step, { type: "crop" | "resize" | "grade" }>): Kept[] {
     const there = steps.find((each) => each.type === step.type);
     return there ? change(steps, there.id, step) : add(steps, step);
 }
@@ -250,6 +267,7 @@ function readStep(value: unknown): Step | undefined {
         const filter = step.filter === "bilinear" || step.filter === "nearest" ? step.filter : "lanczos";
         return width === undefined ? undefined : { type: "resize", width: Math.round(width), ...(height ? { height: Math.round(height) } : {}), filter };
     }
+    if (step.type === "grade") return { type: "grade", grade: trimGrade(readGrade(step.grade)) };
     if (step.type === "cover") {
         const rect = readRect(step.rect);
         return rect && color ? { type: "cover", rect, color } : undefined;

@@ -1,9 +1,12 @@
 // The picture drawn through WebGL2, for browsers without WebGPU (gpu.ts is the other way, and
 // draw.ts says what the two share). Two small programs: one draws images and solid rectangles on
-// the screen, the other resamples a piece of the picture along one axis by the resize's filter.
+// the screen, the other resamples a piece of the picture along one axis by the resize's filter. Both
+// grade as they go when given a grade (grade-shader.ts): the screen each pixel drawn, the resampler
+// in its pass down, before the result is rounded.
 
-import type { Backend, Color, Drawn, Piece, Texture } from "./draw";
+import type { Backend, Color, Drawn, Grading, Piece, ScreenGrade, Texture } from "./draw";
 import type { Rect } from "./steps";
+import { GRADE_GLSL, ROW } from "./grade-shader";
 
 const SCREEN = `#version 300 es
 in vec2 corner;
@@ -16,14 +19,27 @@ void main() {
     gl_Position = vec4(at.x / canvas.x * 2.0 - 1.0, 1.0 - at.y / canvas.y * 2.0, 0.0, 1.0);
 }`;
 
-const PAINT = `#version 300 es
+// with no grade the programs are built with a `graded` that gives the color back, so that drawing without one costs what it did
+const UNGRADED = "vec3 graded(vec3 c, vec2 place) { return c; }";
+
+const PAINT = (grading: boolean) => `#version 300 es
 precision highp float;
+precision highp int;
 in vec2 place;
 uniform sampler2D image;
 uniform vec4 fill;
+uniform int grade;
+uniform vec4 toOriginal;
+uniform float split;
+uniform float canvasHeight;
 out vec4 color;
+${grading ? GRADE_GLSL : UNGRADED}
 void main() {
     vec4 found = fill.a >= 0.0 ? fill : texture(image, place);
+    if (grade == 1) {
+        vec2 at = vec2(gl_FragCoord.x, canvasHeight - gl_FragCoord.y);
+        if (at.x >= split) found.rgb = graded(clamp(found.rgb, 0.0, 1.0), toOriginal.xy + at * toOriginal.zw);
+    }
     color = vec4(found.rgb * found.a, found.a);
 }`;
 
@@ -33,7 +49,7 @@ void main() { gl_Position = vec4(corner * 2.0 - 1.0, 0.0, 1.0); }`;
 
 // one pass of resampling: each pixel of the result is the filter's weighted sum of the samples of
 // the input along one axis, read only between low and high, so that nothing past the crop is read
-const RESAMPLE = `#version 300 es
+const RESAMPLE = (grading: boolean) => `#version 300 es
 precision highp float;
 precision highp int;
 uniform highp sampler2D source;
@@ -45,7 +61,10 @@ uniform float low;
 uniform float high;
 uniform float support;
 uniform float scale;
+uniform int grade;
+uniform vec4 toOriginal;
 out vec4 color;
+${grading ? GRADE_GLSL : UNGRADED}
 float weight(float x) {
     x = abs(x);
     if (curve == 1) return max(0.0, 1.0 - x);
@@ -58,11 +77,10 @@ vec4 read(float t, ivec2 at) {
     int i = int(clamp(t, low, high));
     return texelFetch(source, axis == 0 ? ivec2(i, at.y) : ivec2(at.x, i), 0);
 }
-void main() {
-    ivec2 at = ivec2(gl_FragCoord.xy);
+vec4 sampled(ivec2 at) {
     float center = start + float(axis == 0 ? at.x : at.y) * step;
     // nearest: a sample exactly half way between two pixels falls the same way in every implementation
-    if (curve == 2) { color = read(floor(center + 0.501), at); return; }
+    if (curve == 2) return read(floor(center + 0.501), at);
     vec4 sum = vec4(0.0);
     float total = 0.0;
     float first = ceil(center - support);
@@ -73,7 +91,14 @@ void main() {
         sum += w * read(t, at);
         total += w;
     }
-    color = sum / total;
+    return sum / total;
+}
+void main() {
+    ivec2 at = ivec2(gl_FragCoord.xy);
+    vec4 found = sampled(at);
+    // the pass down grades the pixel it makes, before it is rounded
+    if (grade == 1) found.rgb = graded(clamp(found.rgb, 0.0, 1.0), toOriginal.xy + (vec2(at) + 0.5) * toOriginal.zw);
+    color = found;
 }`;
 
 /** The filters by their number in the shaders. */
@@ -98,8 +123,10 @@ export function webgl2(canvas: HTMLCanvasElement | OffscreenCanvas): Backend | u
         const places = new Map<string, WebGLUniformLocation | null>();
         return { made, at: (name: string) => (places.has(name) ? places.get(name)! : places.set(name, gl.getUniformLocation(made, name)).get(name)!) };
     };
-    const screen = program(SCREEN, PAINT);
-    const resampler = program(WHOLE, RESAMPLE);
+    const plain = program(SCREEN, PAINT(false));
+    const resampling = program(WHOLE, RESAMPLE(false));
+    const screenGraded = program(SCREEN, PAINT(true));
+    const resamplerGraded = program(WHOLE, RESAMPLE(true));
     // one square, two triangles, from 0 to 1, for every draw
     const square = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, square);
@@ -107,14 +134,56 @@ export function webgl2(canvas: HTMLCanvasElement | OffscreenCanvas): Backend | u
     gl.enableVertexAttribArray(0);
     gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
     const textures = new WeakMap<Texture, WebGLTexture>();
+    // the grades' numbers on unit 1 and the parts' masks on unit 2, kept until they change
+    const gradeData = gl.createTexture()!;
+    const gradeMasks = gl.createTexture()!;
+    let gradeRows = 0;
+    let given: Grading | undefined;
+    let masksGiven: Grading["masks"] | null = null;
+    const setFloat = (target: number, texture: WebGLTexture) => {
+        gl.bindTexture(target, texture);
+        for (const [name, value] of [[gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE], [gl.TEXTURE_MIN_FILTER, gl.NEAREST], [gl.TEXTURE_MAG_FILTER, gl.NEAREST]]) gl.texParameteri(target, name, value);
+    };
+    setFloat(gl.TEXTURE_2D_ARRAY, gradeMasks);
+    gl.texImage3D(gl.TEXTURE_2D_ARRAY, 0, gl.R32F, 1, 1, 1, 0, gl.RED, gl.FLOAT, new Float32Array(1));
+    setFloat(gl.TEXTURE_2D, gradeData);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, ROW, 1, 0, gl.RGBA, gl.FLOAT, new Float32Array(ROW * 4));
+    // the grade's samplers are on units of their own from the start, so that they never share unit 0 with the picture, which WebGL refuses
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, gradeData);
+    gl.activeTexture(gl.TEXTURE2);
+    gl.bindTexture(gl.TEXTURE_2D_ARRAY, gradeMasks);
+    gl.activeTexture(gl.TEXTURE0);
+    for (const made of [screenGraded, resamplerGraded]) {
+        gl.useProgram(made.made);
+        gl.uniform1i(made.at("gradeData"), 1);
+        gl.uniform1i(made.at("gradeMasks"), 2);
+    }
+    /** Points a program's grade at the numbers and masks, or tells it not to grade. */
+    const gradeUniforms = (made: ReturnType<typeof program>, on: boolean) => {
+        gl.uniform1i(made.at("grade"), on && given ? 1 : 0);
+        if (!on || !given) return;
+        gl.uniform1i(made.at("gradeCount"), given.packed.count);
+        const { luma, back } = given.numbers;
+        gl.uniform3f(made.at("luma"), luma[0], luma[1], luma[2]);
+        gl.uniform3f(made.at("backR"), back[0]!, back[1]!, back[2]!);
+        gl.uniform3f(made.at("backG"), back[3]!, back[4]!, back[5]!);
+        gl.uniform3f(made.at("backB"), back[6]!, back[7]!, back[8]!);
+        const masks = given.masks;
+        gl.uniform2f(made.at("maskSize"), masks?.width ?? 1, masks?.height ?? 1);
+        gl.uniform2f(made.at("pictureSize"), given.picture.width, given.picture.height);
+    };
 
-    const store = (width: number, height: number, image?: ImageBitmap, small = false): WebGLTexture => {
+    // half floats can be drawn into where the card allows it, so that a graded picture is never held in 8 bits between the passes
+    const halves = !!gl.getExtension("EXT_color_buffer_float");
+    const store = (width: number, height: number, image?: ImageBitmap, small = false, half = false): WebGLTexture => {
         const texture = gl.createTexture()!;
         gl.bindTexture(gl.TEXTURE_2D, texture);
         gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
         gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
         gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);
         if (image) gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, image);
+        else if (half) gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, width, height, 0, gl.RGBA, gl.HALF_FLOAT, null);
         else gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
         if (small) gl.generateMipmap(gl.TEXTURE_2D);
         for (const [name, value] of [[gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE], [gl.TEXTURE_MIN_FILTER, gl.NEAREST], [gl.TEXTURE_MAG_FILTER, gl.NEAREST]]) gl.texParameteri(gl.TEXTURE_2D, name, value);
@@ -148,15 +217,42 @@ export function webgl2(canvas: HTMLCanvasElement | OffscreenCanvas): Backend | u
             if (found) gl.deleteTexture(found);
             textures.delete(texture);
         },
-        draw(images: Drawn[], fills: { rect: Rect; color: Color }[], clip?: Rect) {
+        grading(next) {
+            if (next === given) return;
+            given = next;
+            if (!next) return;
+            gl.activeTexture(gl.TEXTURE1);
+            if (next.packed.rows !== gradeRows) {
+                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, ROW, next.packed.rows, 0, gl.RGBA, gl.FLOAT, next.packed.data);
+                gradeRows = next.packed.rows;
+            } else gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, ROW, next.packed.rows, gl.RGBA, gl.FLOAT, next.packed.data);
+            if (next.masks !== masksGiven) {
+                masksGiven = next.masks;
+                const masks = next.masks;
+                gl.activeTexture(gl.TEXTURE2);
+                if (masks && masks.layers.length) {
+                    gl.texImage3D(gl.TEXTURE_2D_ARRAY, 0, gl.R32F, masks.width, masks.height, masks.layers.length, 0, gl.RED, gl.FLOAT, null);
+                    masks.layers.forEach((layer, at) => gl.texSubImage3D(gl.TEXTURE_2D_ARRAY, 0, 0, 0, at, masks.width, masks.height, 1, gl.RED, gl.FLOAT, layer));
+                } else gl.texImage3D(gl.TEXTURE_2D_ARRAY, 0, gl.R32F, 1, 1, 1, 0, gl.RED, gl.FLOAT, new Float32Array(1));
+            }
+            gl.activeTexture(gl.TEXTURE0);
+        },
+        draw(images: Drawn[], fills: { rect: Rect; color: Color; graded?: boolean }[], clip?: Rect, graded?: ScreenGrade) {
             const { width, height } = canvas;
             gl.bindFramebuffer(gl.FRAMEBUFFER, null);
             gl.viewport(0, 0, width, height);
             gl.disable(gl.SCISSOR_TEST);
             gl.clearColor(0, 0, 0, 0);
             gl.clear(gl.COLOR_BUFFER_BIT);
+            const screen = graded && given ? screenGraded : plain;
             gl.useProgram(screen.made);
             gl.uniform2f(screen.at("canvas"), width, height);
+            gl.uniform1f(screen.at("canvasHeight"), height);
+            gradeUniforms(screen, !!graded);
+            if (graded) {
+                gl.uniform4f(screen.at("toOriginal"), ...graded.toOriginal);
+                gl.uniform1f(screen.at("split"), graded.split);
+            }
             gl.enable(gl.BLEND);
             gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
             if (clip) {
@@ -171,11 +267,13 @@ export function webgl2(canvas: HTMLCanvasElement | OffscreenCanvas): Backend | u
                 gl.bindTexture(gl.TEXTURE_2D, texture);
                 gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, image.sharp ? gl.NEAREST : gl.LINEAR_MIPMAP_LINEAR);
                 gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, image.sharp ? gl.NEAREST : gl.LINEAR);
+                gl.uniform1i(screen.at("grade"), graded && given ? 1 : 0);
                 gl.uniform4f(screen.at("fill"), 0, 0, 0, -1);
                 gl.uniform4f(screen.at("to"), image.to.x, image.to.y, image.to.width, image.to.height);
                 gl.drawArrays(gl.TRIANGLES, 0, 6);
             }
             for (const fill of fills) {
+                gl.uniform1i(screen.at("grade"), graded && given && fill.graded ? 1 : 0);
                 gl.uniform4f(screen.at("fill"), ...fill.color);
                 gl.uniform4f(screen.at("to"), fill.rect.x, fill.rect.y, fill.rect.width, fill.rect.height);
                 gl.drawArrays(gl.TRIANGLES, 0, 6);
@@ -183,7 +281,7 @@ export function webgl2(canvas: HTMLCanvasElement | OffscreenCanvas): Backend | u
             gl.disable(gl.SCISSOR_TEST);
             gl.disable(gl.BLEND);
         },
-        async resample(part, covers, piece: Piece) {
+        async resample(part, covers, piece: Piece, graded?: [number, number, number, number]) {
             const input = store(part.width, part.height, part);
             const frames: WebGLFramebuffer[] = [target(input)];
             // the covers painted straight into the piece read, so that what they hide is gone before any of it is sampled
@@ -195,11 +293,12 @@ export function webgl2(canvas: HTMLCanvasElement | OffscreenCanvas): Backend | u
             }
             gl.disable(gl.SCISSOR_TEST);
             gl.disable(gl.BLEND);
-            gl.useProgram(resampler.made);
-            gl.uniform1i(resampler.at("source"), 0);
             gl.activeTexture(gl.TEXTURE0);
             const pass = (from: WebGLTexture, width: number, height: number, axis: 0 | 1) => {
-                const into = store(width, height);
+                const resampler = axis === 1 && graded && given ? resamplerGraded : resampling;
+                gl.useProgram(resampler.made);
+                gl.uniform1i(resampler.at("source"), 0);
+                const into = store(width, height, undefined, false, axis === 0 && !!graded && !!given && halves);
                 frames.push(target(into));
                 gl.viewport(0, 0, width, height);
                 gl.bindTexture(gl.TEXTURE_2D, from);
@@ -207,6 +306,9 @@ export function webgl2(canvas: HTMLCanvasElement | OffscreenCanvas): Backend | u
                 gl.uniform1i(resampler.at("axis"), axis);
                 gl.uniform1i(resampler.at("curve"), FILTERS[along.filter]);
                 for (const name of ["start", "step", "low", "high", "support", "scale"] as const) gl.uniform1f(resampler.at(name), along[name]);
+                gradeUniforms(resampler, axis === 1 && !!graded);
+                if (axis === 1 && graded) gl.uniform4f(resampler.at("toOriginal"), ...graded);
+                gl.bindTexture(gl.TEXTURE_2D, from);
                 gl.drawArrays(gl.TRIANGLES, 0, 6);
                 return into;
             };

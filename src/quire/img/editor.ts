@@ -18,7 +18,9 @@ import { control, fieldForm, icon, make, ruled, type MenuItem } from "../core/ui
 import { copyPicture, encodeAs, exportName, formatOf, FORMATS, readSettings, untouched, weightSaid, type Settings } from "./export";
 import { decodeHeic, heicIn } from "./codec-run";
 import { COLORS, exportPanel, factsPanel, factsSaid, kindOf, nameFor, resizeBox, SHAPES, toolStrip, WEIGHTS } from "./panels";
-import { blocksOut, factsOf, type Facts, type Keep } from "./metadata";
+import { blocksOut, factsOf, spaceOf, type Facts, type Keep } from "./metadata";
+import { gradingFor } from "./draw";
+import type { Space } from "./grade";
 import { createStage, type Pen, type Tool } from "./stage";
 import { createReading } from "./reading";
 import { megabytes, sizeOf, TIERS } from "./read/models";
@@ -78,6 +80,8 @@ export function mountEditor(host: HTMLElement, context: Context) {
     let said: Facts = { rows: [], everything: [], found: {} };
     // what of it goes out with an export: none, unless she chooses, for as long as the document is open
     let keeping: Keep = "none";
+    // the space it is graded in, from its colour profile, and whether that was known or guessed
+    let colors: { space: Space; known: boolean; profile?: string } = { space: "srgb", known: true };
     let where: { store?: Store; id?: string; name: string } = { name: "Untitled" };
     const history = createHistory([]);
     let pen: Pen = (() => {
@@ -97,6 +101,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
         pen: () => pen,
         moved: () => refresh(),
         say: (short, full) => frame.status.say(short, full, "warn"),
+        space: () => colors.space,
     });
     room.append(stage.element, empty, facts);
     host.append(room);
@@ -137,6 +142,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
         history.reset(read?.steps ?? []);
         original = undefined;
         said = { rows: [], everything: [], found: {} };
+        colors = { space: "srgb", known: true };
         // the new picture's size at once, its weight when it is worked out; never the last document's
         facts.textContent = picture ? factsSaid(look(picture), picture.original.bytes, kindOf(picture.original)) : "";
         reading.clear();
@@ -149,7 +155,9 @@ export function mountEditor(host: HTMLElement, context: Context) {
         if (token !== loading) return;
         if (!found) return frame.status.say("No picture", "This document's original picture is missing from where it is kept", "warn");
         original = found;
-        said = factsOf(new Uint8Array(await found.arrayBuffer()));
+        const bytes = new Uint8Array(await found.arrayBuffer());
+        said = factsOf(bytes);
+        colors = spaceOf(bytes);
         if (showing.isOpen()) showing.fill();
         await stage.show(await displayable(found).catch(() => found));
         if (token !== loading) return;
@@ -264,7 +272,8 @@ export function mountEditor(host: HTMLElement, context: Context) {
     const flattened = async () => {
         const loaded = stage.loaded();
         if (!loaded || !picture) throw new Error("the picture is not shown yet");
-        return loaded.flatten(look(picture));
+        const shown = look(picture);
+        return loaded.flatten(shown, undefined, gradingFor(shown, colors.space, loaded.size));
     };
     /** The export as set, worked out once for each set of steps and settings. */
     function exported() {
@@ -473,7 +482,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
                 const small = look({ original: read.original, steps: [...read.steps, { id: "s0", type: "resize", width, filter: "bilinear" }] });
                 const canvas = make("canvas", "quire-img-version");
                 into.append(canvas, make("p", "quire-history-when", `${shown.width} × ${shown.height} px · ${read.steps.length} ${read.steps.length === 1 ? "step" : "steps"}`));
-                void loaded.flatten(small).then((pixels) => {
+                void loaded.flatten(small, undefined, gradingFor(small, colors.space, loaded.size)).then((pixels) => {
                     canvas.width = pixels.width;
                     canvas.height = pixels.height;
                     canvas.getContext("2d")!.putImageData(pixels, 0, 0);
@@ -755,7 +764,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
         }
     }
     /** The first step drawn over the picture (a cover or a mark), which nothing picked can go behind. */
-    const firstMarked = () => history.now().find((step) => step.type !== "crop" && step.type !== "resize")?.id;
+    const firstMarked = () => history.now().find((step) => step.type !== "crop" && step.type !== "resize" && step.type !== "grade")?.id;
     /** Moves what is picked one place forward (over the next thing drawn) or back (under the one before), skipping the crop and the resize, which are drawn under everything. */
     function restack(by: 1 | -1) {
         const id = stage.picked();
@@ -763,7 +772,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
         const at = steps.findIndex((step) => step.id === id);
         if (!id || at < 0) return;
         let to = at + by;
-        while (steps[to] && (steps[to]!.type === "crop" || steps[to]!.type === "resize")) to += by;
+        while (steps[to] && (steps[to]!.type === "crop" || steps[to]!.type === "resize" || steps[to]!.type === "grade")) to += by;
         if (to < 0 || to >= steps.length) return;
         commit(move(steps, id, to));
     }

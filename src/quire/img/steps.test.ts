@@ -10,7 +10,7 @@ import { add, change, createHistory, edited, fresh, LIMITS, look, move, readStep
 const original = { name: "pictures/cat.png", width: 1200, height: 800, type: "image/png", bytes: 52_000 };
 
 test("with no steps the picture looks as the original does, whole and at its own size", () => {
-    expect(look(fresh(original))).toEqual({ crop: { x: 0, y: 0, width: 1200, height: 800 }, width: 1200, height: 800, filter: "lanczos", covers: [], marks: [] });
+    expect(look(fresh(original))).toEqual({ crop: { x: 0, y: 0, width: 1200, height: 800 }, width: 1200, height: 800, filter: "lanczos", covers: [], marks: [], grades: [] });
     expect(edited(fresh(original))).toBe(false);
 });
 
@@ -109,4 +109,22 @@ test("what she wrote for the metadata is kept in steps.json and read back, each 
     const picture = { original, steps: [], edits: { caption: "A cat", author: "Someone" } };
     expect(readSteps(writeSteps(picture))).toEqual({ ...picture, dropped: 0 });
     expect(readSteps(JSON.stringify({ quire: 1, original, steps: [], edits: { caption: 5, author: "x".repeat(5000), evil: "y" } }))!.edits).toEqual({ author: "x".repeat(2000) });
+});
+
+test("the whole picture's grade is one step, kept with only what is away from its zero, set where it is and read back the same, its hostile numbers held in", () => {
+    const one = setOnly([], { type: "grade", grade: { light: 20 } });
+    const two = setOnly(one, { type: "grade", grade: { light: 30, curves: { red: [{ x: 0, y: 0.1 }, { x: 1, y: 1 }] } } });
+    expect(two).toHaveLength(1);
+    const picture = { original, steps: two };
+    const shown = look(picture);
+    expect(shown.grades).toHaveLength(1);
+    expect(shown.grades[0]!.grade.light).toBe(30);
+    expect(shown.grades[0]!.grade.contrast).toBe(0);
+    // drawn again from the same step, the grade is the same object, so nothing is worked out twice
+    expect(look(picture).grades[0]!.grade).toBe(shown.grades[0]!.grade);
+    expect(edited(picture)).toBe(true);
+    const back = readSteps(writeSteps(picture))!;
+    expect(back.steps).toEqual(two);
+    const hostile = readSteps(JSON.stringify({ quire: 1, original, steps: [{ id: "s1", type: "grade", grade: { light: 1e99, color: "lots", curves: { all: "no" } } }] }))!;
+    expect(hostile.steps[0]).toEqual({ id: "s1", type: "grade", grade: { light: 100 } });
 });

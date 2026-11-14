@@ -14,7 +14,8 @@
 // cover Hide makes; a drag across words hides the run, one cover a line. With no tool, a drag across
 // words selects them, to be copied as text.
 
-import { backendFor, loadPicture, type Loaded, type Scene, type View } from "./draw";
+import { backendFor, gradingFor, loadPicture, type Loaded, type Scene, type View } from "./draw";
+import type { Space } from "./grade";
 import { coverColor, ringArea } from "./cover";
 import { dragFrame, fit, HANDLES, oneToOne, shapeFrame, spanned, zoomAt, type Handle } from "./geometry";
 import { allAt, drawMarks, markBox, moved, type Place } from "./marks";
@@ -103,6 +104,8 @@ export interface StageHooks {
     /** The tool changed, or the frame, or what is picked: the bar and the strip follow. */
     moved(): void;
     say(short: string, full: string): void;
+    /** The space the picture is graded in (sRGB unless its profile says Display P3). */
+    space?(): Space;
 }
 
 /** The thickness of a mark from a pen, in the original's pixels: at least two. */
@@ -145,6 +148,9 @@ export function createStage(hooks: StageHooks) {
     let hover: number | undefined;
     let run: [number, number] | undefined;
     let selection: [number, number] | undefined;
+    // the original shown in place of the grade while it is held, and where the split between the two falls (in the stage's own pixels from its left), if it is on
+    let holding = false;
+    let split: number | undefined;
 
     const picture = () => {
         const found = hooks.picture();
@@ -197,7 +203,10 @@ export function createStage(hooks: StageHooks) {
         context.clearRect(0, 0, width, height);
         frame.classList.toggle("shown", !!now && !!loaded && cropping() && !!cropFrame);
         if (!now || !loaded) return;
-        const scene: Scene = { look: cropping() && cropFrame ? { ...now, crop: cropFrame } : now, view: { scale: view.scale * ratio, x: view.x * ratio, y: view.y * ratio }, canvas: { width, height }, ...(cropping() ? { cropping: { x: 0, y: 0, ...loaded.size } } : {}) };
+        const seen = cropping() && cropFrame ? { ...now, crop: cropFrame } : now;
+        // the grade drawn unless the original is held in view; left of the split, the original
+        const grading = holding ? undefined : gradingFor(seen, hooks.space?.() ?? "srgb", loaded.size);
+        const scene: Scene = { look: seen, view: { scale: view.scale * ratio, x: view.x * ratio, y: view.y * ratio }, canvas: { width, height }, ...(cropping() ? { cropping: { x: 0, y: 0, ...loaded.size } } : {}), ...(grading ? { grading } : {}), ...(split !== undefined ? { split: split * ratio } : {}) };
         loaded.draw(scene, paint);
         drawn++;
         const where = place();
@@ -691,6 +700,24 @@ export function createStage(hooks: StageHooks) {
             if (tool === "crop") cropFrame = shown()?.crop;
             fitView();
             return loaded;
+        },
+        /** Shows the original, ungraded, while `held` is true. */
+        hold(held: boolean) {
+            if (holding === held) return;
+            holding = held;
+            paint();
+        },
+        held: () => holding,
+        /** Puts the split between the original (left) and the graded (right) at a place in the stage's own pixels, or takes it away. */
+        setSplit(at: number | undefined) {
+            split = at === undefined ? undefined : Math.max(0, Math.min(element.clientWidth, at));
+            paint();
+        },
+        split: () => split,
+        /** Draws the steps given in place of the document's, as a drag does before letting go makes them a change; nothing to go back to the document's. */
+        preview(steps: Kept[] | undefined) {
+            live = steps;
+            paint();
         },
         /** Shows nothing. */
         clear() {

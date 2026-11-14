@@ -103,8 +103,11 @@ export function isNeutral(grade: Grade): boolean {
 
 // ---- kept in steps.json: only what is not at its zero, read back checked field by field ----
 
+/** A grade as steps.json keeps it: only what is away from its zero, a curve or a wheel too. */
+export type KeptGrade = Partial<Omit<Grade, "curves" | "wheels">> & { curves?: Partial<Curves>; wheels?: Partial<Grade["wheels"]> };
+
 /** A grade as steps.json keeps it: only the fields away from their zero. */
-export function trimGrade(grade: Grade): Partial<Grade> {
+export function trimGrade(grade: Grade): KeptGrade {
     const out: Record<string, unknown> = {};
     for (const slider of SLIDERS) if (grade[slider.key]) out[slider.key] = grade[slider.key];
     const curves: Partial<Curves> = {};
@@ -115,7 +118,7 @@ export function trimGrade(grade: Grade): Partial<Grade> {
     if (Object.keys(wheels).length) out.wheels = wheels;
     if (grade.colors.length) out.colors = grade.colors;
     if (grade.lut) out.lut = grade.lut;
-    return out as Partial<Grade>;
+    return out as KeptGrade;
 }
 
 const isNumber = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value);
