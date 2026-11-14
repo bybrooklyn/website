@@ -5,7 +5,7 @@
 //
 // The trials are seeded, so a failure repeats. The usual run makes a thousand runs of fifteen random
 // edits, checking after every edit, and writes four thousand lines of randomly marked text;
-// QUIRE_FUZZ=<number> runs that many times more (`QUIRE_FUZZ=20 bun test src/quire/round-trip.test.ts`),
+// QUIRE_FUZZ=<number> runs that many times more (`QUIRE_FUZZ=20 bun test src/quire/md/round-trip.test.ts`),
 // QUIRE_SEED starts from another seed, and QUIRE_ALL=1 counts every failure instead of stopping at five.
 
 import { expect, test } from "bun:test";

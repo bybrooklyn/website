@@ -17,7 +17,7 @@ marked.
 ## Things that apply to every tool
 
 **The runtime.** The site ships onnxruntime-web 1.24.1, JSEP build only (WebGPU kernels written in
-JavaScript), with the plain WASM build as the fallback (see `src/quire/dictation/parakeet/RUNTIME.md`). The
+JavaScript), with the plain WASM build as the fallback (see `src/quire/md/dictation/parakeet/RUNTIME.md`). The
 latest on npm today is 1.31.1. ORT's WebGPU operator table on `main` lists most vision operators, including
 Conv, ConvTranspose, Resize, GridSample (opsets 16 to 19), DFT, Einsum, InstanceNormalization,
 LayerNormalization, GatherND, ScatterND and MatMulNBits. It does **not** list TopK, NonMaxSuppression,
@@ -502,4 +502,4 @@ Runtime and browser OCR:
 - https://arxiv.org/pdf/2606.13108 (PP-OCRv6 technical report)
 - https://data.jsdelivr.com/v1/packages/npm/tesseract.js-core@7.0.0 (WASM sizes)
 - https://bria.ai/bria-huggingface-model-license-agreement/ (returned 404)
-- `src/quire/dictation/parakeet/RUNTIME.md` in this repository
+- `src/quire/md/dictation/parakeet/RUNTIME.md` in this repository

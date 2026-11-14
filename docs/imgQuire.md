@@ -7,7 +7,22 @@ remover (`cutout.md`) is to be one of its tools as well as a page of its own.
 
 ## Where the code is
 
-Nowhere yet. Nothing is built.
+Nowhere yet. Nothing is built. It is to be a kind of document on the Quires' core ([quire-core](quire-core.md)),
+in `src/quire/img/`.
+
+## How it starts on the core
+
+1. Make the stores carry a `.quire` of named files rather than mdQuire's two parts, and let each kind's
+   `opens` say which files in a folder or a repository are documents ([quire-core](quire-core.md#left-tangled)).
+2. Copy `src/quire/note/` to `src/quire/img/` as the starting shape: a `kind.ts` giving `img()` (key, name,
+   the picture endings it opens, its ways to start: a pasted picture, a file, a photograph from the phone)
+   and an editor that makes the core's frame and session.
+3. The body: `writing()` gives the original and the steps as the `.quire`'s files, `load` reads them back,
+   and a `VersionView` draws a version's steps over the original.
+4. Its menus as one table of headings (File, Edit, Image, Tools, Help); its single-key tools in
+   `frame.keys`, its bar in the frame's place, what fits the selection in `frame.palette`.
+5. The facts panel and the export are its own; the dialogs, strips, menus and tooltips are the core's.
+6. Add `img()` to the page's kinds beside `markdown()`; its documents join the same shelf.
 
 ## Built
 
@@ -128,9 +143,9 @@ exported as an animated picture or a small video.
 
 Each of these is a question to settle before building.
 
-- **The name and the suite.** What makes it a suite is what the two would share: the shelf, the places a
-  document lives (`src/quire/store*.ts`), the zip (`zip.ts`), the menus, popovers, dialog and tooltips
-  (`ui.ts`, `dialog.ts`), version history and the trail at the top. Those would move to a shared folder.
+- **The name and the suite.** What makes it a suite is what the two share: the shelf, the places a
+  document lives (`src/quire/core/store*.ts`), the zip (`zip.ts`), the menus, popovers, dialog and tooltips
+  (`ui.ts`, `dialog.ts`), version history and the trail at the top. Those are the core now (`src/quire/core/`).
   To settle: one address each (`/imgquire/`) or one front door; one shelf showing both kinds of document
   or two; whether mdQuire opens a picture in imgQuire in place.
 - **Export.** Formats (WebP, AVIF, JPEG, PNG, others); a target weight in kilobytes; exact pixels; several

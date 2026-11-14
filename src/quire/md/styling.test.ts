@@ -1,7 +1,7 @@
 // What a `.quire` document's styling is held to: its Markdown is plain, its look comes back whole
 // when nothing else touched it, and when document.md was edited somewhere else the styling follows
 // its words and blocks, and what lost its text is dropped without an error. Run with
-// `bun test src/quire/styling.test.ts`.
+// `bun test src/quire/md/styling.test.ts`.
 
 import { expect, test } from "bun:test";
 import { blockAt, markdownOnly, setAlign, setStyle, setSubtitle, type Document, type Paragraph, type TextRun } from "./document";

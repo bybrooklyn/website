@@ -1,6 +1,6 @@
 // What the zip reader and writer are held to: the checksum is the standard one, what is written
 // reads back the same, a file written here opens with the system's `unzip`, and one made by the
-// system's `zip` opens here. Run with `bun test src/quire/zip.test.ts`.
+// system's `zip` opens here. Run with `bun test src/quire/core/zip.test.ts`.
 
 import { expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";

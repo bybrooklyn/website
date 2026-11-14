@@ -11,14 +11,14 @@ Severity words: **blocks work**, **wrong**, **confusing**, **rough**, **taste**.
 ## 1. Menus
 
 ### 1.1 Typing with a menu open goes into the document
-- Where: any menu word pressed with the mouse. `src/quire/menu-row.ts`, `createMenuRow` (`open(index, document.activeElement === word)`), and `flowMenu` in `src/quire/ui.ts`.
+- Where: any menu word pressed with the mouse. `src/quire/core/menu-row.ts`, `createMenuRow` (`open(index, document.activeElement === word)`), and `flowMenu` in `src/quire/core/ui.ts`.
 - What happens: a menu opened by a click does not take the keyboard. Arrow keys do nothing in the menu. A letter is typed into the text behind it. I pressed File, then `f`, and "two" became "twof".
 - Expected: as in Docs, arrows move through the open menu, a letter jumps to a line, Enter runs it, and nothing reaches the document.
 - How bad: **wrong**. It changes the document without the writer seeing it.
 - Smallest fix: always give the menu the focus when it opens (`menu.open(..., true)`), or swallow keydown on the document while any `flowMenu` is open.
 
 ### 1.2 A line with an arrow is not a submenu. It replaces the menu
-- Where: every line ending in `›`. `src/quire/editor.ts` `actions` (lines 630 to 739), `src/quire/more-commands.ts`.
+- Where: every line ending in `›`. `src/quire/md/editor.ts` `actions` (lines 630 to 739), `src/quire/md/more-commands.ts`.
 - File: Download as, Page setup.
 - View: Notes, Zoom.
 - Insert: Special characters; Header, footer and page numbers.
@@ -36,19 +36,19 @@ Severity words: **blocks work**, **wrong**, **confusing**, **rough**, **taste**.
 - Zoom opens to the left of View (x 396). Notes opens further left (x 235).
 - Search the menus, run from Tools, opens under the three dots at the far right (x 905).
 - Zoom chosen from the palette at the bottom left opens under View at the top.
-- Cause: `flowMenu("Zoom", { align: "right" })` and `flowMenu("Page setup", { align: "right" })` in `src/quire/editor.ts` lines 449 and 450; `notes.list`; `bar.search()` always uses the bar's own button.
+- Cause: `flowMenu("Zoom", { align: "right" })` and `flowMenu("Page setup", { align: "right" })` in `src/quire/md/editor.ts` lines 449 and 450; `notes.list`; `bar.search()` always uses the bar's own button.
 - How bad: **rough**. It breaks the rule that things flow from where they were pressed.
 - Smallest fix: drop `align: "right"` for menus opened from a menu word. Pass the pressed element to `bar.search` and to palette commands that open a menu.
 - Pictures: `sub-file-page.png`, `sub-view-zoom.png`.
 
 ### 1.4 The View menu
-- Where: `src/quire/menu-row.ts`, `headings`, the View block. Picture: `menu-view.png`.
+- Where: `src/quire/core/menu-row.ts`, `headings`, the View block. Picture: `menu-view.png`.
 - What a writer sees, top to bottom: Outline, The Markdown beside the page, Notes ›, Next note, Previous note, No page, Light paper, Page view, Zoom ›, Zoom in, Zoom out, Zoom back to the usual. No rules between groups. No ticks. A line that is on is only drawn in violet.
 - Problems:
 1. **No page, Light paper and Page view read as one choice of three. They are not.** No page and Light paper are a choice of two, and the menu stays open when one is pressed. Page view is a separate switch, and the menu closes. In page view two of the three are violet at once. **confusing**.
 2. **The names do not say what they do.** "No page" sounds as if the document goes away. "Light paper" already shows a white sheet that looks like a page. "Page view" shows much the same sheet cut into pages. A Docs writer knows "Print layout" (a tick) and may know "Pageless" (from memory, in Page setup). **confusing**.
 3. **Zoom is there four times, with two names for one thing.** Zoom ›, Zoom in, Zoom out, Zoom back to the usual. Inside Zoom › are Zoom in, Zoom out and "Usual size (100%)" again, then a "100%" line, so 100% is offered twice. **confusing**.
-4. **The Zoom child holds things that belong elsewhere.** Its first line is Page view and its last is Page setup ›. Page view is also in View. Page setup is also in File. (`zoomLines`, `src/quire/editor.ts` line 512.) **confusing**.
+4. **The Zoom child holds things that belong elsewhere.** Its first line is Page view and its last is Page setup ›. Page view is also in View. Page setup is also in File. (`zoomLines`, `src/quire/md/editor.ts` line 512.) **confusing**.
 5. **Next note and Previous note sit loose** between Notes › and the looks. The Notes child already has them as its first two lines, in the other order. **rough**.
 6. **"The Markdown beside the page" is a sentence.** The three dots call the same switch "Show the Markdown" and "Hide the Markdown". **confusing**.
 7. **State is not drawn consistently.** Outline is violet with an icon. No page is violet with none. A switch and a choice look the same.
@@ -68,14 +68,14 @@ Severity words: **blocks work**, **wrong**, **confusing**, **rough**, **taste**.
 - Picture: `menu-format.png`.
 
 ### 1.6 Shortcuts are shown as Mac symbols on Linux and Windows
-- Where: `keySymbols` in `src/quire/ui.ts` line 359. Menus, the palette, the shortcuts dialog.
+- Where: `keySymbols` in `src/quire/core/ui.ts` line 359. Menus, the palette, the shortcuts dialog.
 - What happens: Ctrl is drawn `⌃` and Alt `⌥`, so Footnote shows `⌃⌥F`. The bar's tooltips say "Ctrl+B". The status line says "Press Ctrl+Shift+V". One Download as line says "Ctrl+P" in words.
 - Expected: Docs on Linux and Windows writes "Ctrl+Alt+F".
 - How bad: **confusing**.
 - Smallest fix: when `onMac` is false, show the words.
 
 ### 1.7 Strikethrough shows a different shortcut in each place
-- The Format menu and palette show Alt+Shift+5. The bar's tooltip shows Ctrl+Shift+X (`src/quire/bar.ts` line 841, `src/quire/shortcuts.ts` lines 43 and 44). Docs uses Alt+Shift+5.
+- The Format menu and palette show Alt+Shift+5. The bar's tooltip shows Ctrl+Shift+X (`src/quire/md/bar.ts` line 841, `src/quire/md/shortcuts.ts` lines 43 and 44). Docs uses Alt+Shift+5.
 - How bad: **rough**. Fix: the tooltip takes its keys from `keysFor("strike")`.
 
 ### 1.8 The same thing in several menus under different names (Decided; listed so none is missed)
@@ -111,20 +111,20 @@ Severity words: **blocks work**, **wrong**, **confusing**, **rough**, **taste**.
 
 ### 2.1 Table
 - **Size.** Insert, Table drops a 3 by 3 table at once. Docs shows a grid to drag out the size. **taste**.
-- **The strip covers what is above the table.** It floats over the table's top right corner, 38 px high, on the line before the table. `createTableTools`, `src/quire/tables.ts`. **rough**. Fix: use a real gap above, else go below, else into the bar. Picture: `table-strip2.png`.
+- **The strip covers what is above the table.** It floats over the table's top right corner, 38 px high, on the line before the table. `createTableTools`, `src/quire/md/tables.ts`. **rough**. Fix: use a real gap above, else go below, else into the bar. Picture: `table-strip2.png`.
 - **No row above, no column to the left, no delete table.** The strip has only "Add a row below", "Remove this row", "Add a column to the right", "Remove this column", three alignments and two sorts. **wrong**. Fix: add the three, or put all of them in a right-click menu.
 - **Right-click in a table opens nothing of mdQuire's.** Docs' right-click has insert row and column, delete row, column and table. **confusing**. Fix: reuse `tableTools.lines`, already built for the palette.
 - **Live buttons that do nothing.** "Remove this row" in the heading row (`removeRowHere` returns the state unchanged), and "Remove this column" on the last column. **rough**. Fix: disable and dim them.
 - **The four add and remove icons are hard to tell apart** at 15 px. The sort buttons are text ("A→Z"). **rough**.
 - **Enter moves to the cell below**, as a spreadsheet does. Docs starts a new line in the cell. Markdown cells cannot hold a line break, so that is defensible.
-- **Enter in an empty last row deletes that row and leaves the table.** A writer who tabbed into a new row and pressed Enter loses the row. `src/quire/keys.ts`. **confusing**. Fix: never delete, or only a row Tab just made.
+- **Enter in an empty last row deletes that row and leaves the table.** A writer who tabbed into a new row and pressed Enter loses the row. `src/quire/md/keys.ts`. **confusing**. Fix: never delete, or only a row Tab just made.
 - Shift+Enter does nothing.
 - These work: Tab past the last cell adds a row. Sort orders numbers by value and keeps empty rows last. Centre shows as pressed.
 - Sort buttons do not show which way the column is sorted now. **taste**.
 
 ### 2.2 Picture
 - **The strip covers the last line of the paragraph above.** Picture: `pic-2.png`.
-- **A blank slot sits in the strip** when the picture is at its own size. The "Its own size" button is hidden but keeps its room (`own.classList.toggle("absent")`, `src/quire/picture-tools.ts`). When shown it is the words "Own size" among icons. **rough**. Fix: collapse the slot and use an icon.
+- **A blank slot sits in the strip** when the picture is at its own size. The "Its own size" button is hidden but keeps its room (`own.classList.toggle("absent")`, `src/quire/md/picture-tools.ts`). When shown it is the words "Own size" among icons. **rough**. Fix: collapse the slot and use an icon.
 - **Four menu lines open one panel.** Caption, Description, Alignment and Size differ only in which field gets the focus. Alignment is already in the strip. **confusing**. Fix: one line, "Picture options", then Wrap text, Replace, Remove. Docs has one "Image options" line.
 - **Enter in Caption or Description throws the keyboard away.** Focus lands on the page body (`input.blur()` on Enter). **wrong**. Fix: focus the picture or the next field.
 - **Wrap text is three different controls.**
@@ -144,11 +144,11 @@ Severity words: **blocks work**, **wrong**, **confusing**, **rough**, **taste**.
 - **Enter in the language field throws the keyboard away.** **wrong**. Fix: put the caret back in the code.
 
 ### 2.4 Callout
-- **Pressing the label steps round five kinds** (Note, Tip, Important, Warning, Caution). The choices cannot be seen, and going back one takes four presses. `src/quire/surface.ts` line 513. **confusing**. Fix: the label opens a menu of the five.
+- **Pressing the label steps round five kinds** (Note, Tip, Important, Warning, Caution). The choices cannot be seen, and going back one takes four presses. `src/quire/md/surface.ts` line 513. **confusing**. Fix: the label opens a menu of the five.
 - The bar's style box says "Quote" in a callout. **rough**.
 
 ### 2.5 Folding section
-- **The arrow does not fold the section.** It sets whether readers first see it open ("Starts closed; press to start it open"). The body always shows in the editor. `src/quire/surface.ts` line 487. **confusing**. Fix: let the arrow fold it in the editor too, or label the control in words.
+- **The arrow does not fold the section.** It sets whether readers first see it open ("Starts closed; press to start it open"). The body always shows in the editor. `src/quire/md/surface.ts` line 487. **confusing**. Fix: let the arrow fold it in the editor too, or label the control in words.
 - **The placeholder "What is folded away" is bold at heading size** and reads as real text. The caret starts in the body, so the summary is easy to miss. **rough**. Fix: caret in the summary first, a quiet "Summary" placeholder.
 - **Enter in the summary throws the keyboard away.** **wrong**. Fix: Enter moves the caret into the body.
 
@@ -194,7 +194,7 @@ Severity words: **blocks work**, **wrong**, **confusing**, **rough**, **taste**.
 - A field prefilled "bookmark" and an "Add" button, opening over the bar. Works. The suggested name is always "bookmark". **taste**.
 
 ### 2.16 Link
-- **An address typed without a scheme is kept as typed.** "example.com" becomes `href="example.com"`, a link to a page on the writer's own site that does not exist. Docs adds the scheme. `linkForm`, `src/quire/ui.ts` line 246. **wrong**. Fix: add `https://` when there is a dot and no scheme, no leading `/` or `#`.
+- **An address typed without a scheme is kept as typed.** "example.com" becomes `href="example.com"`, a link to a page on the writer's own site that does not exist. Docs adds the scheme. `linkForm`, `src/quire/core/ui.ts` line 246. **wrong**. Fix: add `https://` when there is a dot and no scheme, no leading `/` or `#`.
 - **The link box opens in two places.** From the selection bar it replaces that bar, by the words. From Ctrl+K or the menus it drops from the three dots at the top right, because the Link button has folded into the dots at 1300 wide. **confusing**. Fix: Ctrl+K always opens at the selection. Pictures: `sel-link.png`, `sel-link2.png`.
 - **At the selection, the box covers the next line**, and the selected words lose their highlight while the field has the focus. **rough**. Fix: keep the selection drawn, as find does.
 - **Clicking a link shows nothing.** Docs shows a card with the address, copy, edit and remove. Here Ctrl+K is the only way. **confusing**.
@@ -231,7 +231,7 @@ Severity words: **blocks work**, **wrong**, **confusing**, **rough**, **taste**.
 - Smallest fix: primary filled at the right, cancel quiet to its left, wherever a pair exists.
 
 ### 3.3 Find and replace
-- **The selection bar pops up on every match.** Find selects the match, so the bold and heading bar appears under it and covers the next line. `src/quire/find.ts`, `src/quire/select-bar.ts`. **wrong**. Fix: no selection bar while find is open. Picture: `dlg-replace.png`.
+- **The selection bar pops up on every match.** Find selects the match, so the bold and heading bar appears under it and covers the next line. `src/quire/md/find.ts`, `src/quire/md/select-bar.ts`. **wrong**. Fix: no selection bar while find is open. Picture: `dlg-replace.png`.
 - **Ctrl+H puts the caret in "Replace with".** Docs puts it in Find. **rough**.
 - **"Find" opens with the replace row if it was open last time.** **rough**.
 - **Names.** The tooltip is "Find and replace (Ctrl+F)"; Edit has Find on Ctrl+F and Find and replace on Ctrl+H. The steps are "The one before" and "The next"; Docs says Previous and Next. Two controls are called "Replace". **rough**.
@@ -268,8 +268,8 @@ Severity words: **blocks work**, **wrong**, **confusing**, **rough**, **taste**.
 - The settings menu names the models "Parakeet Ultra", "Parakeet Redux", "Moonshine tiny" and ends with a licence paragraph. **taste**. Move the credits to About.
 
 ### 3.10 "Not saved" and the conflict panel (read in the code, not reached)
-- Not saved (`askUnsaved`, `src/quire/editor.ts` line 979) has four ways out in two styles. "Try again" is filled and "Stay" is quiet beside it. "Download a copy" and "Leave without saving" are links inside the text. A destructive choice drawn as a link is easy to miss and easy to hit. **rough**. Fix: all in the button row, with "Leave without saving" quiet at the far left.
-- Conflict (`src/quire/conflict.ts`): "Keep mine", "Take theirs", "See both", and a close button named "Not now". Clear.
+- Not saved (`askUnsaved`, `src/quire/md/editor.ts` line 979) has four ways out in two styles. "Try again" is filled and "Stay" is quiet beside it. "Download a copy" and "Leave without saving" are links inside the text. A destructive choice drawn as a link is easy to miss and easy to hit. **rough**. Fix: all in the button row, with "Leave without saving" quiet at the far left.
+- Conflict (`src/quire/core/conflict.ts`): "Keep mine", "Take theirs", "See both", and a close button named "Not now". Clear.
 
 ### 3.11 The documents list under the name
 - Picture: `dlg-documents.png`. A "Name" field; "This browser" as a heading with the documents; "Places" with "This browser" again as a line; then "Open a file", "Open a file to write in place", "Open a folder", "Connect a repository"; then "Google Drive is not set up yet."
@@ -310,7 +310,7 @@ Severity words: **blocks work**, **wrong**, **confusing**, **rough**, **taste**.
 - Both search every menu line by name. The palette also offers headings and what fits the cursor. Keep the palette. Bind Alt+/ (Docs' "Search the menus") to it.
 
 ### 4.3 The text size field
-- **Clicking the number does not select it.** Typing 17 into "12" made "1172". Enter clamped it to 96 and the word became eight times its size. `sizeField`, `src/quire/bar.ts` line 769. **wrong**. Fix: `sizeField.select()` on focus.
+- **Clicking the number does not select it.** Typing 17 into "12" made "1172". Enter clamped it to 96 and the word became eight times its size. `sizeField`, `src/quire/md/bar.ts` line 769. **wrong**. Fix: `sizeField.select()` on focus.
 - **Three scales.** Format's "Text size ›" offers only 10, 12, 15, 18, 24. The field takes any number. Plus and minus step by one. **rough**.
 
 ### 4.4 Colour and highlight
@@ -333,7 +333,7 @@ Severity words: **blocks work**, **wrong**, **confusing**, **rough**, **taste**.
 
 ### 4.7 What folds, and where it goes
 - At 1300 wide Print, Spelling, Paint format, Zoom, Link, Line spacing, Indent and Clear formatting are already in the three dots. **rough**. The decided single buttons will free room; check that Link and Zoom come back first.
-- The fold order (`FOLDS`, `src/quire/bar.ts` line 566) drops Zoom and Link before the four alignment buttons.
+- The fold order (`FOLDS`, `src/quire/md/bar.ts` line 566) drops Zoom and Link before the four alignment buttons.
 - **The three dots hold two unrelated things**: tools that did not fit, and document commands (Show the Markdown, Version history, dictation, Download, About). Its contents change with the window's width. **confusing**. Picture: `bar-dots.png`. Fix: the dots hold only what did not fit.
 - **At 390 wide the bar slides sideways and starts with the least used tools.**
 - The first screen is Search the menus, Undo, Redo, Print, Spelling, a cut sliver of Paint format, then Find, dots, microphone.
@@ -346,7 +346,7 @@ Severity words: **blocks work**, **wrong**, **confusing**, **rough**, **taste**.
 
 ### 4.9 The status at the right
 - The status word is also where messages go. A message stays until the next save; the paste message was still there two commands later. **rough**. Fix: clear a message after a few seconds.
-- "1 places are selected". `src/quire/editor.ts` line 617.
+- "1 places are selected". `src/quire/md/editor.ts` line 617.
 
 ### 4.10 A new document scrolls with nothing in it
 - An empty document is 911 px tall in an 800 px window. The page scrolls 111 px for no reason. **rough**. Fix: `min-height` of the window less the top.
@@ -356,7 +356,7 @@ Severity words: **blocks work**, **wrong**, **confusing**, **rough**, **taste**.
 ## 5. Selection
 
 ### 5.1 The bar over selected words covers the next line
-- With text above the selection, the bar goes below and sits on the following line. `sideFor`, `src/quire/select-bar.ts` line 38, goes above only when the gap above is empty, which in running text it never is. **rough**. Fix: sit it above, over the line already read. Picture: `sel-comment2.png`.
+- With text above the selection, the bar goes below and sits on the following line. `sideFor`, `src/quire/md/select-bar.ts` line 38, goes above only when the gap above is empty, which in running text it never is. **rough**. Fix: sit it above, over the line already read. Picture: `sel-comment2.png`.
 
 ### 5.2 What is in the bar
 - Bold, Italic, Strikethrough, Inline code, Link, then heading, quote, list. No Underline, no Comment. The main bar has Underline and no Inline code. **rough**. Fix: Bold, Italic, Underline, Strikethrough, Link, Comment, then the three block buttons.
@@ -537,7 +537,7 @@ After these: the phone bar's order (4.7), the wording table (7), Mac symbols on 
 - **Tooltips as drawn.** The driver has no hover. Labels were read from `aria-label` and `title`.
 - **The browser's own right-click menu on text.** Headless shows none. I confirmed only that mdQuire opens nothing of its own on text or in a table.
 - **Print and PDF.** The print dialog is the browser's.
-- **"Not saved" and the conflict panel.** Not reached. Wording and layout were read in `src/quire/editor.ts` and `src/quire/conflict.ts`.
+- **"Not saved" and the conflict panel.** Not reached. Wording and layout were read in `src/quire/md/editor.ts` and `src/quire/core/conflict.ts`.
 - **Google Drive.** Only the "not set up yet" sentence. The sign-in and passphrase dialog were not opened; `/mdquire-drive-try/` was not visited.
 - **Dictation past the first dialog.** Cancelled before any download. Recording and "Custom words" were not seen.
 - **Open a file to write in place, Open a folder.** System pickers. Not driven.

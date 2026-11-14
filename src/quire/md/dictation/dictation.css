@@ -253,7 +253,7 @@
     font-size: 0.85rem;
 }
 
-/* ---- the first launch (a dialog, src/quire/dialog.ts): the three models as cards ---- */
+/* ---- the first launch (a dialog, src/quire/core/dialog.ts): the three models as cards ---- */
 
 .quire-dictation-dialog {
     width: min(40rem, 100vw - 2rem);

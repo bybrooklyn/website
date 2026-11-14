@@ -99,7 +99,7 @@ export default defineConfig({
                 // blob: lets mdQuire read back such a picture, to put it inside a web page or Word file it is downloaded as.
                 // mdQuire's Google Drive store sends its locked files to Drive's API at www.googleapis.com, and nowhere
                 // else at Google. Signing in needs nothing here: it is a window of its own at accounts.google.com, which
-                // sends the window back to /mdquire/drive/, a page of the site (src/quire/google-sign-in.ts).
+                // sends the window back to /mdquire/drive/, a page of the site (src/quire/core/google-sign-in.ts).
                 "connect-src 'self' blob: https://api.github.com https://huggingface.co https://*.hf.co https://www.googleapis.com",
                 // The one thing the site frames: Playmatter's demo, from itch.io (PlayHere.astro). The game
                 // itself is a frame inside itch.io's page, which itch.io's own policy governs, not this one.

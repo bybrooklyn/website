@@ -7,13 +7,13 @@ open, how to run and test it, and its known weak spots.
 
 - [site.md](site.md): the site itself, its pages, the rules for what goes on them, caching and deploying.
 - [publishing.md](publishing.md): writing in the browser, drafts, held posts, photos and share pictures.
-- [mdQuire.md](mdQuire.md): the Markdown word processor at `/mdquire/`, also behind `bun run edit`.
+- [mdQuire.md](mdQuire.md): the Markdown word processor at `/mdquire/`, also behind `bun run edit`, the first kind of document on the core.
 - [mdQuire-ux-audit.md](mdQuire-ux-audit.md): an audit of how mdQuire looks and behaves, finding by finding, with the changes that would most improve it.
 - [mdQuire-against-docs.md](mdQuire-against-docs.md): what Google Docs' menus have that mdQuire does not, each marked small, big or not fitting.
 - [AUDIT.md](AUDIT.md): the audit of 13 November 2026: what was read, found, fixed and left.
 - [spelling.md](spelling.md): mdQuire's spelling check as it is, measured, and the questions for its rebuild.
 - [imgQuire.md](imgQuire.md): an image editor to sit beside mdQuire; nothing built.
-- [quire-core.md](quire-core.md): the shared core every Quire is to be built on; nothing built.
+- [quire-core.md](quire-core.md): the shared core every Quire is built on, in `src/quire/core/`: the interface a kind of document gives it, where things are, and what is still tied to Markdown.
 - [imgQuire-models.md](imgQuire-models.md): the models imgQuire's tools could run in the browser, at three sizes, with their licences.
 - [imgQuire-codecs.md](imgQuire-codecs.md): the Rust crates that could write and read picture formats for imgQuire, built to WebAssembly and measured.
 - [marbles.md](marbles.md): a marble run mini with an editor in three dimensions, as planned; nothing built.
@@ -42,4 +42,4 @@ open, how to run and test it, and its known weak spots.
 - **What is still to do lives in `TODO.md`,** one line an item, drawn from the Open sections here.
 - The docs are documentation: no quotations of people and no accounts of conversations. Reference material
   that belongs beside code stays there (`walker/README.md`, `src/mote/README.md`,
-  `src/quire/dictation/MODELS.md`, `design/`).
+  `src/quire/md/dictation/MODELS.md`, `design/`).

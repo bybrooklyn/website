@@ -16,7 +16,7 @@
 // that SCOWL's size 60 leaves out, and that her writing uses, is added at the largest size (EXTRA).
 //
 // The file is gzip of lines in sorted order (by UTF-16 code units, as JavaScript compares strings).
-// Each line is one letter for the word's size and country (src/quire/check/dictionary.ts reads it),
+// Each line is one letter for the word's size and country (src/quire/md/check/dictionary.ts reads it),
 // one for how many letters it shares with the word before, and the rest of the word. Its licence
 // goes beside it as words-en.LICENSE.txt.
 
