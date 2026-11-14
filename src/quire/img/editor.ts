@@ -15,7 +15,8 @@ import { createHistoryPanel, snapshotParts } from "../core/versions";
 import { control, fieldForm, icon, make, ruled, type MenuItem } from "../core/ui";
 import { copyPicture, encodeAs, exportName, formatOf, FORMATS, readSettings, untouched, weightSaid, type Settings } from "./export";
 import { decodeHeic, heicIn } from "./codec-run";
-import { COLORS, exportPanel, factsSaid, kindOf, nameFor, resizeBox, SHAPES, toolStrip, WEIGHTS } from "./panels";
+import { COLORS, exportPanel, factsPanel, factsSaid, kindOf, nameFor, resizeBox, SHAPES, toolStrip, WEIGHTS } from "./panels";
+import { blocksOut, factsOf, type Facts, type Keep } from "./metadata";
 import { createStage, type Pen, type Tool } from "./stage";
 import { createHistory, edited, fresh, look, move, readSteps, remove, setOnly, writeSteps, type Filter, type Kept, type Picture } from "./steps";
 
@@ -40,7 +41,7 @@ const keep = (key: string, value: string) => {
 };
 
 /** The single keys that pick a tool, while the picture has the keyboard. */
-const TOOL_KEYS: Record<string, Tool | "export"> = { KeyC: "crop", KeyR: "hide", KeyA: "arrow", KeyT: "text", KeyB: "box", KeyE: "export" };
+const TOOL_KEYS: Record<string, Tool | "export" | "facts"> = { KeyC: "crop", KeyR: "hide", KeyA: "arrow", KeyT: "text", KeyB: "box", KeyE: "export", KeyI: "facts" };
 
 /** Hands the writer a file. */
 function give(blob: Blob, name: string) {
@@ -69,6 +70,10 @@ export function mountEditor(host: HTMLElement, context: Context) {
 
     let picture: Picture | undefined;
     let original: Blob | undefined;
+    // what the original says about itself, read once when it is opened; looking never changes it
+    let said: Facts = { rows: [], everything: [], found: {} };
+    // what of it goes out with an export: none, unless she chooses, for as long as the document is open
+    let keeping: Keep = "none";
     let where: { store?: Store; id?: string; name: string } = { name: "Untitled" };
     const history = createHistory([]);
     let pen: Pen = (() => {
@@ -120,6 +125,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
         picture = read && { original: read.original, steps: read.steps };
         history.reset(read?.steps ?? []);
         original = undefined;
+        said = { rows: [], everything: [], found: {} };
         // the new picture's size at once, its weight when it is worked out; never the last document's
         facts.textContent = picture ? factsSaid(look(picture), picture.original.bytes, kindOf(picture.original)) : "";
         stage.clear();
@@ -131,6 +137,8 @@ export function mountEditor(host: HTMLElement, context: Context) {
         if (token !== loading) return;
         if (!found) return frame.status.say("No picture", "This document's original picture is missing from where it is kept", "warn");
         original = found;
+        said = factsOf(new Uint8Array(await found.arrayBuffer()));
+        if (showing.isOpen()) showing.fill();
         await stage.show(await displayable(found).catch(() => found));
         if (token !== loading) return;
         if (read.dropped) frame.status.say("Steps left out", `${read.dropped} of its steps could not be read and were left out`, "warn");
@@ -248,22 +256,26 @@ export function mountEditor(host: HTMLElement, context: Context) {
     };
     /** The export as set, worked out once for each set of steps and settings. */
     function exported() {
-        const key = `${picture ? writeSteps(picture) : ""}\n${JSON.stringify(settings)}`;
+        const key = `${picture ? writeSteps(picture) : ""}\n${JSON.stringify(settings)}\n${keeping}`;
         if (exportCache.key === key && exportCache.done) return exportCache.done;
         exportCache.key = key;
         const now = picture!;
         const format = formatOf(settings.format);
         exportCache.done = (async () => {
             // a picture with no steps given in its own format is its original, with where and when it was taken cut out
-            if (!edited(now) && !settings.target && format.type === now.original.type && original) {
+            // a picture with no steps given in its own format keeping all it says, and nothing changed in it, is its original byte for byte
+            const changedNothing = !now.edits || Object.values(now.edits).every((value) => value === undefined);
+            if (!edited(now) && !settings.target && format.type === now.original.type && original && (keeping === "none" || (keeping === "all" && changedNothing))) {
                 try {
-                    return { blob: new Blob([untouched(new Uint8Array(await original.arrayBuffer())) as BlobPart], { type: format.type }), quality: settings.quality, over: false };
+                    const bytes = new Uint8Array(await original.arrayBuffer());
+                    return { blob: new Blob([(keeping === "all" ? bytes : untouched(bytes)) as BlobPart], { type: format.type }), quality: settings.quality, over: false };
                 } catch {
                     // one that cannot be read through is written again, which leaves everything out
                 }
             }
             const pixels = await flattened();
-            return { ...(await encodeAs(pixels, settings)), pixels };
+            const meta = keeping === "none" || !original ? {} : blocksOut(new Uint8Array(await original.arrayBuffer()), keeping, now.edits ?? {});
+            return { ...(await encodeAs(pixels, settings, meta)), pixels };
         })();
         exportCache.done.catch(() => (exportCache.key = undefined));
         return exportCache.done;
@@ -353,7 +365,9 @@ export function mountEditor(host: HTMLElement, context: Context) {
 
     // ---- what opens round the picture ----
     const exporting = exportPanel({
-        closed: () => (room.classList.remove("beside"), refresh()),
+        closed: () => (beside(), refresh()),
+        keep: () => keeping,
+        setKeep: (next) => ((keeping = next), void showExport(), estimate.soon()),
         settings: () => settings,
         set: (next) => ((settings = next), keep(KEYS.export, JSON.stringify(next)), void showExport(), estimate.soon()),
         copy: () => void copy(),
@@ -454,6 +468,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
         arrow: tool("Arrow (A)", "arrow", () => pickTool("arrow")),
         box: tool("Box (B)", "box", () => pickTool("box")),
         text: tool("Text (T)", "text", () => pickTool("text")),
+        facts: tool("Facts (I)", "info", () => showFacts()),
         export: tool("Export (E)", "export", () => showExportPanel()),
     };
     const bar = make("div", "quire-bar quire-img-bar");
@@ -465,7 +480,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
         made.append(...items);
         return made;
     };
-    const end = group(buttons.export);
+    const end = group(buttons.facts, buttons.export);
     end.classList.add("quire-bar-end");
     strip0.append(group(buttons.undo, buttons.redo), group(buttons.crop, buttons.resize, buttons.hide), group(buttons.arrow, buttons.box, buttons.text), end);
     bar.append(strip0);
@@ -482,10 +497,38 @@ export function mountEditor(host: HTMLElement, context: Context) {
         stage.setTool("none");
         stage.element.focus({ preventScroll: true });
     }
+    /** The picture keeps its room narrowed while one of the two panels is open, and has it back when neither is. */
+    const beside = () => room.classList.toggle("beside", exporting.isOpen() || showing.isOpen());
+    const showing = factsPanel({
+        closed: () => (beside(), refresh()),
+        facts: () => ({ ...said, size: picture ? `${picture.original.width} × ${picture.original.height} px, ${weightSaid(picture.original.bytes)} ${kindOf(picture.original)}` : "" }),
+        edits: () => picture?.edits ?? {},
+        setEdit: (key, value) => {
+            if (!picture) return;
+            // a field put back to what the picture says is no change at all
+            const edits = { ...picture.edits, [key]: value === (said.found[key] ?? "") ? undefined : value };
+            picture = { ...picture, edits };
+            session.changed();
+            estimate.soon();
+        },
+    });
+    document.body.append(showing.panel);
+    /** Opens the facts in the export's place, or closes them. */
+    function showFacts(from: HTMLElement = buttons.facts) {
+        if (showing.isOpen()) return showing.close();
+        if (!picture) return;
+        exporting.close();
+        showing.fill();
+        showing.open(from);
+        beside();
+        refresh();
+        showing.panel.querySelector<HTMLElement>("input")?.focus({ preventScroll: true });
+    }
     function showExportPanel(from: HTMLElement = buttons.export) {
         if (exporting.isOpen()) return exporting.close();
         if (stage.tool() === "crop") stage.applyCrop();
         // the picture makes room for the panel, gliding into what is left, rather than lying under it
+        showing.close();
         room.classList.add("beside");
         exporting.open(from);
         void showExport();
@@ -499,7 +542,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
         empty.inert = has;
         for (const [name, button] of Object.entries(buttons)) {
             button.disabled = !has;
-            button.classList.toggle("pressed", stage.tool() === name || (name === "export" && exporting.isOpen()));
+            button.classList.toggle("pressed", stage.tool() === name || (name === "export" && exporting.isOpen()) || (name === "facts" && showing.isOpen()));
         }
         buttons.undo.disabled = !history.canUndo();
         buttons.redo.disabled = !history.canRedo();
@@ -583,6 +626,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
                             run: () => {},
                         },
                     ],
+                    [{ label: "Facts", icon: tick(showing.isOpen(), "info"), hint: "I", key: "facts", pressed: showing.isOpen(), disabled: !picture, run: () => showFacts(frame.name) }],
                     [{ label: "Full screen", icon: "full", hint: "Ctrl+Shift+F", key: "full-screen", run: () => frame.fullScreen(!frame.isFull()) }],
                 ),
         },
@@ -634,7 +678,14 @@ export function mountEditor(host: HTMLElement, context: Context) {
                     [{ label: "Export", icon: "export", hint: "E", key: "export-tool", disabled: !picture, run: () => showExportPanel() }],
                 ),
         },
-        { label: "Help", items: () => [{ label: "Keyboard shortcuts", icon: "keyboard", hint: "Ctrl+/", key: "shortcuts", run: () => showKeys() }] },
+        {
+            label: "Help",
+            items: () => [
+                { label: "Keyboard shortcuts", icon: "keyboard", hint: "Ctrl+/", key: "shortcuts", run: () => showKeys() },
+                // the copyright and license texts of the encoders built into the page, beside them
+                { label: "Open-source notices", icon: "file", key: "notices", run: () => void window.open("/quire/codecs/NOTICES.txt", "_blank", "noopener") },
+            ],
+        },
     ]);
 
     /** Edit, Paste: the browser's clipboard if it lets the page read it, else the keys to press. */
@@ -719,7 +770,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
         // single keys only while the picture, not a field, has the keyboard
         if (!onPicture || event.altKey || control) return undefined;
         const picked = TOOL_KEYS[event.code];
-        if (picked && !event.shiftKey) return () => (picked === "export" ? showExportPanel() : pickTool(picked));
+        if (picked && !event.shiftKey) return () => (picked === "export" ? showExportPanel() : picked === "facts" ? showFacts() : pickTool(picked));
         if (event.key === "Enter" && stage.tool() === "crop") return applyCrop;
         if (event.key === "Escape") {
             if (stage.picked()) return () => stage.pick(undefined);
@@ -766,6 +817,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
             frame.destroy();
             stage.destroy();
             exporting.panel.remove();
+            showing.panel.remove();
             resizing.box.remove();
             historyPanel.close();
             historyPanel.element.remove();

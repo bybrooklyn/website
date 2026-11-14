@@ -1,5 +1,5 @@
 [
-  {"name": "avif", "sha256": "1aff2f1ab90308a28852d37435529bef72bb73c9b43ee43ae620c8934879fe43", "bytes": 2690176, "brotli": 797667, "source": "libavif 90d3b66 with libaom bcc98e0"},
+  {"name": "avif", "sha256": "f7b7608b6aeaebd53f0d4182f8cc5eab6d3dca58551f635183fb33d77849faf1", "bytes": 2691310, "brotli": 797406, "source": "libavif 90d3b66 with libaom bcc98e0"},
   {"name": "heic", "sha256": "5e7e83b6a29d22f1244c954a1876d57ca76d8653ba29a610f9dd6a03732fcf14", "bytes": 159575, "brotli": 54955, "source": "heic-rs 0.1.4"},
   {"name": "jpegli", "sha256": "54f9ecd825f914ff3ae3471dc62fa4d20ad32ce2db80f44da2177e94bbf476a8", "bytes": 90311, "brotli": 32895, "source": "jpegli 031a007"},
   {"name": "jxl", "sha256": "661edf39ff05446c5a7da9b2263391ff2c31ef529831597b3e045392aa80a817", "bytes": 1763342, "brotli": 565558, "source": "libjxl 9e02071"},

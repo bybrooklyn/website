@@ -114,7 +114,12 @@ avif() {
         -DAVIF_CODEC_AOM=SYSTEM -DAVIF_CODEC_AOM_DECODE=OFF -DAVIF_CODEC_AOM_ENCODE=ON -DAOM_INCLUDE_DIR="$SOURCES/aom" \
         -DAOM_LIBRARY="$WORK/aom/libaom.a" -DAVIF_LIBYUV=OFF -DAVIF_LIBSHARPYUV=OFF -DAVIF_LIBXML2=OFF -DAVIF_JPEG=OFF \
         -DAVIF_ZLIBPNG=OFF -DAVIF_BUILD_APPS=OFF
-    module avif "$flags" avif.c -I"$SOURCES/libavif/include" "$WORK/avif/libavif_internal.a" "$WORK/aom/libaom.a"
+    avifmodule
+}
+
+# the AVIF module linked again from the libraries already built, after a change to its wrapper
+avifmodule() {
+    module avif "-Os -msimd128 -flto -DNDEBUG -sSUPPORT_LONGJMP=wasm" avif.c -I"$SOURCES/libavif/include" "$WORK/avif/libavif_internal.a" "$WORK/aom/libaom.a"
 }
 
 # the two written in Rust: oxipng for PNG and heic-rs for reading HEIC, built offline from Cargo's cache
@@ -132,7 +137,109 @@ again() {
     finish "$WORK/rust/wasm32-unknown-unknown/release/quire_heic.wasm" heic
 }
 
-for each in ${@:-webp jpegli jxl avif rust}; do $each; done
+# notices only: codecs/build.sh notices
+notices_only() { :; }
+for each in ${@:-webp jpegli jxl avif rust}; do [ "$each" = notices ] || $each; done
+
+# the libraries' notices, beside the modules: for each module, what it was built from and the copyright
+# and license text of everything linked into it, copied from the very files it was built from
+REGISTRY=$(ls -d "${CARGO_HOME:-$HOME/.cargo}"/registry/src/*/ | head -1)
+RUNTIME=$EMSDK/upstream/emscripten
+notice() { # <title> <file>
+    [ -f "$2" ] || { echo "no notice file $2"; exit 1; }
+    printf '\n----- %s -----\n\n' "$1"
+    cat "$2"
+}
+crate() { # <name-version> <license used> <files...>
+    local folder=$REGISTRY$1
+    shift
+    local used=$1
+    shift
+    printf '\n%s (%s), from crates.io\n' "${folder##*/}" "$used"
+    for file in "$@"; do notice "${folder##*/} $file" "$folder/$file"; done
+}
+emscripten() {
+    printf '\nEmscripten runtime linked into the module: musl libc, emmalloc, libc++, libc++abi, compiler-rt\n'
+    notice "Emscripten LICENSE" "$RUNTIME/LICENSE"
+    notice "musl COPYRIGHT" "$RUNTIME/system/lib/libc/musl/COPYRIGHT"
+    notice "libc++ LICENSE.TXT" "$RUNTIME/system/lib/libcxx/LICENSE.TXT"
+    notice "libc++abi LICENSE.TXT" "$RUNTIME/system/lib/libcxxabi/LICENSE.TXT"
+    notice "compiler-rt LICENSE.TXT" "$RUNTIME/system/lib/compiler-rt/LICENSE.TXT"
+}
+rustlib() {
+    printf '\nThe Rust standard library linked into the module, used under the MIT license (The Rust Project Developers)\n'
+    notice "Rust MIT" "$(rustc --print sysroot)/share/doc/rust/licenses/MIT.txt"
+}
+section() { printf '\n\n================ %s ================\n' "$1"; }
+{
+    echo "Open-source notices for imgQuire's encoders"
+    echo
+    echo "Each module in this folder is a binary copy of the libraries named under it, built by codecs/build.sh"
+    echo "in the site's source. Their copyright notices and license texts follow, copied from the sources built."
+
+    section "jpegli.wasm: JPEG"
+    printf '\njpegli, commit %s, from https://github.com/google/jpegli\n' "${COMMIT[jpegli]}"
+    notice "jpegli LICENSE" "$SOURCES/jpegli/LICENSE"
+    notice "jpegli PATENTS" "$SOURCES/jpegli/PATENTS"
+    notice "jpegli AUTHORS" "$SOURCES/jpegli/AUTHORS"
+    printf '\nHighway, bundled with jpegli\n'
+    notice "Highway LICENSE" "$SOURCES/jpegli/third_party/highway/LICENSE"
+    printf '\nskcms, bundled with jpegli\n'
+    notice "skcms LICENSE" "$SOURCES/jpegli/third_party/skcms/LICENSE"
+    emscripten
+
+    section "webp.wasm: WebP"
+    printf '\nlibwebp, commit %s, from https://chromium.googlesource.com/webm/libwebp\n' "${COMMIT[libwebp]}"
+    notice "libwebp COPYING" "$SOURCES/libwebp/COPYING"
+    notice "libwebp PATENTS" "$SOURCES/libwebp/PATENTS"
+    notice "libwebp AUTHORS" "$SOURCES/libwebp/AUTHORS"
+    emscripten
+
+    section "avif.wasm: AVIF"
+    printf '\nlibavif, commit %s, from https://github.com/AOMediaCodec/libavif\n' "${COMMIT[libavif]}"
+    notice "libavif LICENSE" "$SOURCES/libavif/LICENSE"
+    printf '\nlibaom, commit %s, from https://aomedia.googlesource.com/aom\n' "${COMMIT[aom]}"
+    notice "libaom LICENSE" "$SOURCES/aom/LICENSE"
+    notice "libaom PATENTS" "$SOURCES/aom/PATENTS"
+    notice "libaom AUTHORS" "$SOURCES/aom/AUTHORS"
+    printf '\nfastfeat, bundled with libaom\n'
+    notice "fastfeat LICENSE" "$SOURCES/aom/third_party/fastfeat/LICENSE"
+    emscripten
+
+    section "jxl.wasm: JPEG XL"
+    printf '\nlibjxl, commit %s, from https://github.com/libjxl/libjxl\n' "${COMMIT[libjxl]}"
+    notice "libjxl LICENSE" "$SOURCES/libjxl/LICENSE"
+    notice "libjxl PATENTS" "$SOURCES/libjxl/PATENTS"
+    notice "libjxl AUTHORS" "$SOURCES/libjxl/AUTHORS"
+    printf '\nHighway, brotli and skcms, bundled with libjxl\n'
+    notice "Highway LICENSE" "$SOURCES/libjxl/third_party/highway/LICENSE"
+    notice "brotli LICENSE" "$SOURCES/libjxl/third_party/brotli/LICENSE"
+    notice "skcms LICENSE" "$SOURCES/libjxl/third_party/skcms/LICENSE"
+    emscripten
+
+    section "oxipng.wasm: PNG"
+    crate oxipng-10.2.1 MIT LICENSE
+    crate libdeflater-1.26.1 Apache-2.0 LICENSE
+    crate libdeflate-sys-1.26.1 Apache-2.0 LICENSE
+    printf '\nlibdeflate, inside libdeflate-sys 1.26.1\n'
+    notice "libdeflate COPYING" "${REGISTRY}libdeflate-sys-1.26.1/libdeflate/COPYING"
+    crate bytemuck-1.25.2 "used under MIT; also Zlib or Apache-2.0" LICENSE-MIT
+    crate equivalent-1.0.3 "used under MIT; also Apache-2.0" LICENSE-MIT
+    crate hashbrown-0.17.1 "used under MIT; also Apache-2.0" LICENSE-MIT
+    crate indexmap-2.14.2 "used under MIT; also Apache-2.0" LICENSE-MIT
+    crate log-0.4.35 "used under MIT; also Apache-2.0" LICENSE-MIT
+    crate rgb-0.8.53 MIT LICENSE
+    crate rustc-hash-2.1.3 "used under MIT; also Apache-2.0" LICENSE-MIT
+    rustlib
+
+    section "heic.wasm: reading HEIC"
+    crate heic-rs-0.1.4 "used under MIT; also Apache-2.0" LICENSE-MIT NOTICE
+    rustlib
+} > "$OUT/NOTICES.txt"
+# every crate linked into a Rust module has its notice, so that the file cannot fall out of step with Cargo.lock
+for each in $(cd "$HERE/rust" && cargo tree --offline --target wasm32-unknown-unknown -e normal --prefix none | grep -v -e "(/" -e "^$" | sort -u | awk '{ print $1 "-" substr($2, 2) }'); do
+    grep -q "^$each (" "$OUT/NOTICES.txt" || { echo "no notice for the crate $each"; exit 1; }
+done
 
 # the pins, one module to a line, read by src/quire/img/codecs.ts
 {

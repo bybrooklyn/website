@@ -168,3 +168,10 @@ test("on the built /imgquire/ page, a pasted HEIC photograph is read by its modu
         server.stop(true);
     }
 }, 120_000);
+
+test("the notices beside the modules have an entry for every module, with its copyright and license text", async () => {
+    const notices = await Bun.file(`${folder}/NOTICES.txt`).text();
+    for (const pin of Object.values(PINS)) expect(notices).toContain(`================ ${pin.name}.wasm: `);
+    expect(notices).toContain("Copyright");
+    expect(notices).toContain("Alliance for Open Media Patent License");
+});

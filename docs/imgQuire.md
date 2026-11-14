@@ -22,6 +22,9 @@ remover (`cutout.md`) is to be one of its tools as well as a page of its own.
 - `geometry.ts`: fitting, zooming about a point, and the crop's frame dragged, nudged and held to a shape.
 - `stage.ts`: the picture on the screen and the tools that work on it.
 - `export.ts`: the formats as one table, the weight search, file names, the clipboard.
+- `metadata.ts`: a picture's Exif, XMP, IPTC and colour profile read and written by hand, through the
+  core's walkers of a JPEG, PNG and WebP (`core/picture-bytes.ts`) and its own of AVIF, HEIC and JPEG XL
+  boxes.
 - `codec-run.ts`: running an encoder (or the HEIC reader) built to WebAssembly, in a worker, after
   checking its bytes against its pin in `codecs.json`. The modules are in `public/quire/codecs/`; they
   are built from source by `codecs/build.sh` (C wrappers in `codecs/wrap/`, the Rust ones in
@@ -93,6 +96,34 @@ and weight, the same middle part of the original and the export side by side at 
 encoder writes metadata; a picture with no steps given in its own format is its original with
 where, when and with what it was taken cut out (`core/picture-bytes.ts`). The settings are kept in this
 browser (`quire-img-export`), WebP at 0.85 to start; the pen too (`quire-img-pen`).
+
+**Facts and metadata.** The facts open as the export does, in its place at the side (a sheet at the
+foot on a phone), with I, the bar's Facts button or View, Facts; the picture refits beside them, and only
+one of the two panels is open at a time. Quiet rows of a label and a value: size, camera, lens, exposure,
+date taken, color profile, orientation and place, the place as numbers only, with no map and nothing
+asked of any other service. A photograph with an Exif orientation is shown and exported upright, and the
+facts say how it was turned. Five fields can be changed, as the notes decide: caption, alt text, author,
+copyright (the licence) and date taken. What she writes is kept in the document's `steps.json`; the
+original is never changed. Everything else the picture says (every Exif tag by name, XMP's simple
+properties, IPTC's records, comments) is under Everything, which grows open.
+
+The export asks, for each export, what metadata goes with it: None (the start, and what every export was
+before), No place, or All. Kept, the original's Exif goes out byte for byte but for its orientation, set
+upright as the pixels are; without the place, the GPS directory's entries and values are emptied in place;
+a field she changed is emptied in Exif and IPTC and written in XMP, so that what she wrote is what is read.
+It goes into a JPEG's APP1 and APP13 segments, a PNG's eXIf and iTXt chunks, a WebP's EXIF and XMP chunks
+(with the extended header made where there was none), a JPEG XL's Exif and xml boxes (a bare codestream
+put into a container first), and an AVIF through its encoder. A PNG has no place for IPTC, so its records
+are not written there. A picture with no steps given in its own format is its original: with None, with
+its metadata cut out as before (only its orientation and colour profile stay, which change how it looks);
+with All and nothing changed, its own bytes.
+
+Reading takes nothing on trust: every count, offset and length is checked against the bytes there are,
+Exif directories that point back at each other are read once, and how much is read is bounded (16 MB of
+metadata, 1,000 entries to a directory, 16 directories, 4,096 values to an entry, 2,000 boxes). The tests
+read a phone's photograph made by sharp in each format, write each back and read it again here and with
+sharp, read hostile, cut short, looping and huge files quickly to nothing, and on the built page export a
+captioned photograph in all five formats and read each back (`metadata.test.ts`).
 
 **The encoders.** The reference encoders the owner chose, built from source to WebAssembly by
 `codecs/build.sh`, each its own module, fetched only when its format is first picked, checked against
@@ -314,17 +345,21 @@ only with `--enable-unsafe-webgpu`, which the drawing tests pass.
   question asked in the codec notes and not yet answered. iPhone files with grids, 10-bit or gain maps
   were not tried.
 - The modules are kept in the repository as built files (4.8 MB), since the site's build has no
-  Emscripten; `codecs/build.sh` rebuilds them and their pins.
+  Emscripten; `codecs/build.sh` rebuilds them and their pins, and `public/quire/codecs/NOTICES.txt`, the
+  libraries' copyright and license texts, which Help, Open-source notices opens.
+- Metadata: XMP is read for its simple properties only, by a bounded scan rather than an XML parser; a
+  PNG's compressed text and colour profile are noted but not opened; Exif's pixel width and height are
+  kept as the original's when a crop changes the size; an IPTC caption in a language other than UTF-8 is
+  read as UTF-8.
 - A picture in an mdQuire document does not yet open in imgQuire and come back: the core has the pieces
   (`takes`, `take`, one editor at a time) but a way for one kind to lend a picture to another and have it
   back is still to be designed.
 
 ## Next slices, in order
 
-1. The facts panel and metadata: reading and writing EXIF, IPTC and XMP, strip all or only the place.
-2. Reading text in pictures, and click-a-word redaction, with what looks private offered.
-3. Color grading of the whole picture and of parts, with curves, wheels and `.cube` looks (G).
-4. The cut-out ([cutout](cutout.md)).
-5. More marks: numbered steps, a highlighter, a magnifier, a spotlight, outlined captions.
-6. Many at once: batches through the same steps and export.
-7. From the phone, and opening a picture from mdQuire and back.
+1. Reading text in pictures, and click-a-word redaction, with what looks private offered.
+2. Color grading of the whole picture and of parts, with curves, wheels and `.cube` looks (G).
+3. The cut-out ([cutout](cutout.md)).
+4. More marks: numbered steps, a highlighter, a magnifier, a spotlight, outlined captions.
+5. Many at once: batches through the same steps and export.
+6. From the phone, and opening a picture from mdQuire and back.

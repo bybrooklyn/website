@@ -2,7 +2,8 @@
 // first bytes rather than its name, and the same picture with where, when and with what it was taken
 // cut out of it (Exif, XMP, IPTC, comments), its orientation kept and not one pixel changed. The
 // `.quire` zip and Google Drive's store read a picture's kind here; mdQuire cleans each picture that
-// comes into a document; imgQuire is to read and strip metadata the same way.
+// comes into a document; imgQuire reads and writes metadata through the same walkers of a JPEG, a PNG
+// and a WebP (`jpegParts`, `pngParts`, `webpParts`, used by img/metadata.ts).
 
 /**
  * A picture's real kind, read from its first bytes rather than its name: PNG, JPEG, GIF, WebP, AVIF
@@ -68,15 +69,22 @@ const joined = (parts: Uint8Array[]) => {
     return out;
 };
 
-/** A JPEG without its metadata segments: Exif, XMP, IPTC, comments, thumbnails, and whatever follows its end. Colour profile, JFIF and Adobe segments, which change how it looks, stay. */
-function cleanJpeg(bytes: Uint8Array): Uint8Array {
-    const kept: Uint8Array[] = [bytes.subarray(0, 2)];
-    let orientation: number | undefined;
+/** One part of a picture's file, as its container divides it: a JPEG segment (named by its marker, "ffe1"), a PNG chunk or a WebP chunk (named by its type), where it starts and ends in the file, and its body. */
+export interface Part {
+    name: string;
+    start: number;
+    end: number;
+    body: Uint8Array;
+}
+
+/**
+ * A JPEG's segments, in order, from its start marker to its end marker. A scan runs on to the next
+ * marker that is not part of it. Anything after the end marker is left out. Throws on a file that is
+ * not a JPEG or is cut short.
+ */
+export function jpegParts(bytes: Uint8Array): Part[] {
+    const parts: Part[] = [{ name: "ffd8", start: 0, end: 2, body: bytes.subarray(2, 2) }];
     let at = 2;
-    let afterJfif = 1;
-    const segment = (start: number, end: number, keep: boolean) => {
-        if (keep) kept.push(bytes.subarray(start, end));
-    };
     while (at + 1 < bytes.length) {
         if (bytes[at] !== 0xff) throw new Error("not a JPEG marker");
         const marker = bytes[at + 1]!;
@@ -84,33 +92,79 @@ function cleanJpeg(bytes: Uint8Array): Uint8Array {
             at++;
             continue;
         }
+        const name = `ff${marker.toString(16).padStart(2, "0")}`;
         if (marker === 0xd9) {
-            kept.push(bytes.subarray(at, at + 2));
+            parts.push({ name, start: at, end: at + 2, body: bytes.subarray(at, at) });
             break;
         }
         if ((marker >= 0xd0 && marker <= 0xd7) || marker === 0x01) {
-            kept.push(bytes.subarray(at, at + 2));
+            parts.push({ name, start: at, end: at + 2, body: bytes.subarray(at, at) });
             at += 2;
             continue;
         }
         if (at + 4 > bytes.length) throw new Error("a JPEG cut short");
         const end = at + 2 + ((bytes[at + 2]! << 8) | bytes[at + 3]!);
         if (end > bytes.length) throw new Error("a JPEG cut short");
-        const body = bytes.subarray(at + 4, end);
         if (marker === 0xda) {
             // a scan: its header, then the compressed picture up to the next marker that is not part of it
             let next = end;
             while (next + 1 < bytes.length && !(bytes[next] === 0xff && bytes[next + 1] !== 0 && !(bytes[next + 1]! >= 0xd0 && bytes[next + 1]! <= 0xd7))) next++;
-            kept.push(bytes.subarray(at, next));
+            parts.push({ name, start: at, end: next, body: bytes.subarray(at + 4, end) });
             at = next;
             continue;
         }
+        parts.push({ name, start: at, end, body: bytes.subarray(at + 4, end) });
+        at = end;
+    }
+    return parts;
+}
+
+/** A PNG's chunks, in order, up to and with its end chunk. Throws on one cut short. */
+export function pngParts(bytes: Uint8Array): Part[] {
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const parts: Part[] = [];
+    let at = 8;
+    while (at + 12 <= bytes.length) {
+        const length = view.getUint32(at);
+        const end = at + 12 + length;
+        if (end > bytes.length) throw new Error("a PNG cut short");
+        const name = String.fromCharCode(...bytes.subarray(at + 4, at + 8));
+        parts.push({ name, start: at, end, body: bytes.subarray(at + 8, at + 8 + length) });
+        at = end;
+        if (name === "IEND") break;
+    }
+    return parts;
+}
+
+/** A WebP's chunks after its RIFF header, in order; a chunk's end takes in its padding byte. Throws on one cut short. */
+export function webpParts(bytes: Uint8Array): Part[] {
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const parts: Part[] = [];
+    let at = 12;
+    while (at + 8 <= bytes.length) {
+        const name = String.fromCharCode(...bytes.subarray(at, at + 4));
+        const size = view.getUint32(at + 4, true);
+        if (at + 8 + size > bytes.length) throw new Error("a WebP cut short");
+        const end = Math.min(at + 8 + size + (size & 1), bytes.length);
+        parts.push({ name, start: at, end, body: bytes.subarray(at + 8, at + 8 + size) });
+        at = at + 8 + size + (size & 1);
+    }
+    return parts;
+}
+
+/** A JPEG without its metadata segments: Exif, XMP, IPTC, comments, thumbnails, and whatever follows its end. Colour profile, JFIF and Adobe segments, which change how it looks, stay. */
+function cleanJpeg(bytes: Uint8Array): Uint8Array {
+    const kept: Uint8Array[] = [];
+    let orientation: number | undefined;
+    let afterJfif = 1;
+    for (const part of jpegParts(bytes)) {
+        const marker = parseInt(part.name.slice(2), 16);
+        const body = part.body;
         if (marker === 0xe1 && startsWith(body, EXIF_HEAD)) orientation ??= orientationIn(body.subarray(6));
         const app = marker >= 0xe0 && marker <= 0xef;
         const keep = (!app && marker !== 0xfe) || (marker === 0xe0 && startsWith(body, "JFIF\0")) || (marker === 0xe2 && startsWith(body, "ICC_PROFILE\0")) || (marker === 0xee && startsWith(body, "Adobe"));
-        segment(at, end, keep);
+        if (keep) kept.push(bytes.subarray(part.start, part.end));
         if (marker === 0xe0 && keep) afterJfif = kept.length;
-        at = end;
     }
     if (orientation && orientation !== 1) {
         const tiff = orientationOnly(orientation);
@@ -122,17 +176,11 @@ function cleanJpeg(bytes: Uint8Array): Uint8Array {
 
 /** A PNG without its text, time and Exif chunks, the orientation kept in an Exif chunk of its own. */
 function cleanPng(bytes: Uint8Array, crc: (bytes: Uint8Array) => number): Uint8Array {
-    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     const kept: Uint8Array[] = [bytes.subarray(0, 8)];
     let orientation: number | undefined;
-    let at = 8;
-    while (at + 12 <= bytes.length) {
-        const length = view.getUint32(at);
-        const end = at + 12 + length;
-        if (end > bytes.length) throw new Error("a PNG cut short");
-        const type = String.fromCharCode(...bytes.subarray(at + 4, at + 8));
-        if (type === "eXIf") orientation ??= orientationIn(bytes.subarray(at + 8, at + 8 + length));
-        if (type === "IDAT" && orientation && orientation !== 1) {
+    for (const part of pngParts(bytes)) {
+        if (part.name === "eXIf") orientation ??= orientationIn(part.body);
+        if (part.name === "IDAT" && orientation && orientation !== 1) {
             // the Exif chunk must come before the picture's data
             const chunk = new Uint8Array(12 + 26);
             const out = new DataView(chunk.buffer);
@@ -143,33 +191,23 @@ function cleanPng(bytes: Uint8Array, crc: (bytes: Uint8Array) => number): Uint8A
             kept.push(chunk);
             orientation = undefined;
         }
-        if (!["tEXt", "zTXt", "iTXt", "eXIf", "tIME"].includes(type)) kept.push(bytes.subarray(at, end));
-        at = end;
-        if (type === "IEND") break;
+        if (!["tEXt", "zTXt", "iTXt", "eXIf", "tIME"].includes(part.name)) kept.push(bytes.subarray(part.start, part.end));
     }
     return joined(kept);
 }
 
 /** A WebP without its Exif and XMP chunks, the orientation kept in an Exif chunk of its own. */
 function cleanWebp(bytes: Uint8Array): Uint8Array {
-    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     const chunks: Uint8Array[] = [];
     let orientation: number | undefined;
     let flags: Uint8Array | undefined;
-    let at = 12;
-    while (at + 8 <= bytes.length) {
-        const type = String.fromCharCode(...bytes.subarray(at, at + 4));
-        const size = view.getUint32(at + 4, true);
-        const end = at + 8 + size + (size & 1);
-        if (at + 8 + size > bytes.length) throw new Error("a WebP cut short");
-        const body = bytes.subarray(at + 8, at + 8 + size);
-        if (type === "EXIF") orientation ??= orientationIn(startsWith(body, EXIF_HEAD) ? body.subarray(6) : body);
-        else if (type !== "XMP ") {
-            const chunk = bytes.slice(at, Math.min(end, bytes.length));
-            if (type === "VP8X") flags = chunk;
+    for (const part of webpParts(bytes)) {
+        if (part.name === "EXIF") orientation ??= orientationIn(startsWith(part.body, EXIF_HEAD) ? part.body.subarray(6) : part.body);
+        else if (part.name !== "XMP ") {
+            const chunk = bytes.slice(part.start, part.end);
+            if (part.name === "VP8X") flags = chunk;
             chunks.push(chunk);
         }
-        at = end;
     }
     const keepTurn = !!orientation && orientation !== 1;
     // the extended header says which of these chunks there are

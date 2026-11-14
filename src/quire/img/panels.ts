@@ -8,6 +8,63 @@ import { control, icon, make, still, tipAway } from "../core/ui";
 import { switchButton } from "../core/dialog";
 import { FORMATS, readWeight, weightSaid, type Settings } from "./export";
 import type { Original, Rect } from "./steps";
+import type { Edits, Facts, Keep } from "./metadata";
+
+/** What of the metadata an export keeps, as its three buttons say it, each with its tooltip. */
+export const KEEPS: { key: Keep; label: string; tip: string }[] = [
+    { key: "none", label: "None", tip: "Nothing about the picture goes with it" },
+    { key: "noplace", label: "No place", tip: "Camera, date and the rest, but not where it was taken" },
+    { key: "all", label: "All", tip: "Everything the picture says about itself, where it was taken too" },
+];
+
+/** The fields she may change, in the order the facts show them. */
+export const FIELDS: { key: keyof Edits; label: string }[] = [
+    { key: "caption", label: "Caption" },
+    { key: "alt", label: "Alt text" },
+    { key: "author", label: "Author" },
+    { key: "copyright", label: "Copyright" },
+    { key: "date", label: "Date taken" },
+];
+
+/**
+ * The facts: a side panel, as the export is, the picture making room beside it. Quiet rows of a label
+ * and a value, the five fields she may change, and everything else the picture says under
+ * "Everything", folded until she opens it.
+ */
+export function factsPanel(hooks: { closed?(): void; facts(): Facts & { size: string }; edits(): Edits; setEdit(key: keyof Edits, value: string): void }) {
+    const side = sidePanel("Facts", "quire-img-export quire-img-facts-panel", () => hooks.closed?.());
+    const rows = make("dl", "quire-img-fact-rows");
+    const fields = make("div", "quire-img-fields");
+    const more = make("details", "quire-img-everything");
+    const summary = make("summary", "", "Everything");
+    const all = make("dl", "quire-img-fact-rows");
+    more.append(summary, all);
+    side.body.append(rows, fields, more);
+    function fill() {
+        const facts = hooks.facts();
+        const pairs = [["Size", facts.size], ...facts.rows] as [string, string][];
+        rows.replaceChildren(...pairs.flatMap(([label, value]) => [make("dt", "", label), make("dd", "", value)]));
+        const edits = hooks.edits();
+        fields.replaceChildren(
+            ...FIELDS.map((field) => {
+                const row = make("label", "quire-img-row");
+                const input = make("input", "quire-field");
+                input.value = edits[field.key] ?? facts.found[field.key] ?? "";
+                input.addEventListener("change", () => hooks.setEdit(field.key, input.value));
+                input.addEventListener("keydown", (event) => {
+                    if (event.key !== "Enter") return;
+                    event.preventDefault();
+                    hooks.setEdit(field.key, input.value);
+                });
+                row.append(make("span", "", field.label), input);
+                return row;
+            }),
+        );
+        all.replaceChildren(...facts.everything.flatMap(([label, value]) => [make("dt", "", label), make("dd", "", value)]));
+        more.classList.toggle("away", !facts.everything.length);
+    }
+    return { ...side, fill };
+}
 
 /** The colors a mark can be drawn in, named in their tooltips. */
 export const COLORS = [
@@ -87,7 +144,7 @@ function sidePanel(title: string, className: string, closed?: () => void) {
 }
 
 /** The export panel: the format, its quality or a weight to come in under, the result's size, the original and the result side by side at their own pixels, and Copy and Save. */
-export function exportPanel(hooks: { closed?(): void; settings(): Settings; set(settings: Settings): void; copy(): void; save(): void }) {
+export function exportPanel(hooks: { closed?(): void; settings(): Settings; set(settings: Settings): void; keep(): Keep; setKeep(keep: Keep): void; copy(): void; save(): void }) {
     const side = sidePanel("Export", "quire-img-export", () => hooks.closed?.());
     const formats = make("div", "quire-img-formats");
     formats.setAttribute("role", "radiogroup");
@@ -126,7 +183,11 @@ export function exportPanel(hooks: { closed?(): void; settings(): Settings; set(
     copy.type = "button";
     copy.addEventListener("click", () => hooks.copy());
     actions.append(save, copy);
-    side.body.append(formats, lossy, result, pair, actions);
+    // what of the picture's metadata goes with it: none unless she chooses, for this export
+    const keeping = make("div", "quire-img-keep");
+    keeping.setAttribute("role", "radiogroup");
+    keeping.setAttribute("aria-label", "Metadata");
+    side.body.append(formats, lossy, keeping, result, pair, actions);
 
     const changed = (to: Partial<Settings>) => {
         const next = { ...hooks.settings(), ...to };
@@ -144,6 +205,16 @@ export function exportPanel(hooks: { closed?(): void; settings(): Settings; set(
 
     function fill() {
         const settings = hooks.settings();
+        keeping.replaceChildren(
+            make("span", "quire-img-format-row", "Metadata"),
+            ...KEEPS.map((each) => {
+                const button = control(each.tip, each.label, () => (hooks.setKeep(each.key), fill()), "quire-button quire-img-format");
+                button.setAttribute("role", "radio");
+                button.setAttribute("aria-checked", String(hooks.keep() === each.key));
+                button.classList.toggle("pressed", hooks.keep() === each.key);
+                return button;
+            }),
+        );
         // two rows of one set: the lossy formats, then those that keep every pixel, each row under its word
         formats.replaceChildren(
             ...[true, false].flatMap((lossy) => [

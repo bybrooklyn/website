@@ -11,6 +11,7 @@ import { crc32 } from "../core/zip";
 import { withoutMetadata } from "../core/picture-bytes";
 import { fileName } from "../core/store";
 import { encodeWith } from "./codec-run";
+import { withMetadata } from "./metadata";
 
 /** A format a picture can be written in, and how. `lossy` says whether a quality and a weight to aim for mean anything; `short` is its button's word, `tip` what it is good for. */
 export interface Format {
@@ -21,8 +22,11 @@ export interface Format {
     type: string;
     ending: string;
     lossy: boolean;
-    encode(pixels: ImageData, quality: number): Promise<Blob>;
+    encode(pixels: ImageData, quality: number, meta?: Meta): Promise<Blob>;
 }
+
+/** The metadata that goes out with a picture, as metadata.ts makes it: an Exif block, an XMP packet, IPTC records. */
+export type Meta = { exif?: Uint8Array; xmp?: string; iptc?: Uint8Array };
 
 /** Pixels laid on white, for a format with no transparency, so that what was clear is white rather than black. */
 export function onWhite(pixels: Uint8ClampedArray): Uint8ClampedArray<ArrayBuffer> {
@@ -39,14 +43,19 @@ export function onWhite(pixels: Uint8ClampedArray): Uint8ClampedArray<ArrayBuffe
 /** Writes pixels with one of the encoders built to WebAssembly, at its speed and with its options (0 = lossless), and with the browser's own encoder if that one cannot be had. */
 const coded =
     (name: string, type: string, speed: number, options: Record<number, number> = {}, solid = false, otherwise?: (pixels: ImageData, quality: number) => Promise<Blob>) =>
-    async (pixels: ImageData, quality: number): Promise<Blob> => {
+    async (pixels: ImageData, quality: number, meta: Meta = {}): Promise<Blob> => {
         const given = solid ? new ImageData(onWhite(pixels.data), pixels.width, pixels.height) : pixels;
+        // AVIF's encoder writes the metadata into its file itself; the others' files take it afterwards
+        const itself = name === "avif" ? { exif: meta.exif, xmp: meta.xmp === undefined ? undefined : new TextEncoder().encode(meta.xmp) } : undefined;
+        let made: Blob;
         try {
-            return await encodeWith(name, given, Math.round(quality * 100), speed, options, type);
+            made = await encodeWith(name, given, Math.round(quality * 100), speed, options, type, itself);
         } catch (error) {
             if (!otherwise) throw error;
-            return otherwise(given, quality);
+            made = await otherwise(given, quality);
         }
+        if (itself || (!meta.exif && !meta.xmp && !meta.iptc)) return made;
+        return new Blob([withMetadata(new Uint8Array(await made.arrayBuffer()), meta, crc32, pixels) as BlobPart], { type });
     };
 
 /** Writes pixels through the browser's own encoder, for when one built to WebAssembly cannot be had. */
@@ -122,11 +131,11 @@ export async function underWeight(encode: (quality: number) => Promise<Blob>, ta
     return { blob, quality: lowest, over: blob.size > target };
 }
 
-/** Exports pixels as the settings say: at the quality given, or searched for under the weight set. */
-export async function encodeAs(pixels: ImageData, settings: Settings): Promise<{ blob: Blob; quality: number; over: boolean }> {
+/** Exports pixels as the settings say: at the quality given, or searched for under the weight set, with the metadata given. */
+export async function encodeAs(pixels: ImageData, settings: Settings, meta: Meta = {}): Promise<{ blob: Blob; quality: number; over: boolean }> {
     const format = formatOf(settings.format);
-    if (format.lossy && settings.target) return underWeight((quality) => format.encode(pixels, quality), settings.target);
-    const blob = await format.encode(pixels, settings.quality);
+    if (format.lossy && settings.target) return underWeight((quality) => format.encode(pixels, quality, meta), settings.target);
+    const blob = await format.encode(pixels, settings.quality, meta);
     return { blob, quality: settings.quality, over: !!settings.target && blob.size > settings.target };
 }
 
