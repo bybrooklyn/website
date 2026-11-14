@@ -4,7 +4,7 @@
 // no more. Run with `bun test src/quire`.
 
 import { expect, test } from "bun:test";
-import { changes, createKeeper, KEPT, memoryStorage, snapshotText, thin, when } from "./versions";
+import { changes, createKeeper, KEPT, memoryStorage, snapshotParts, snapshotText, thin, when } from "./versions";
 
 test("the lines added and removed are counted in the Markdown alone, not in the styling kept after it", async () => {
     const storage = memoryStorage();
@@ -146,4 +146,11 @@ test("one snapshot that cannot be kept (no more room) does not stop the ones aft
     await keeper.settled();
     expect((await storage.list("doc")).length).toBe(1);
     expect(await storage.load((await storage.list("doc"))[0]!.id)).toBe("two\n");
+});
+
+test("a snapshot keeps every part that is text: mdQuire's style and notes as before, and another kind's by their names", () => {
+    expect(snapshotParts(snapshotText("Words.\n", { style: "{}", notes: "{}" }))).toEqual({ markdown: "Words.\n", parts: { style: "{}", notes: "{}" } });
+    expect(snapshotParts(snapshotText("{\"steps\":[]}", {}))).toEqual({ markdown: "{\"steps\":[]}", parts: {} });
+    expect(snapshotParts("Words.\n\n\u0000quire parts\n{\"style\":\"{}\",\"notes\":5}").parts).toEqual({ style: "{}" });
+    expect(snapshotParts("Words.")).toEqual({ markdown: "Words." });
 });

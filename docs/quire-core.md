@@ -40,6 +40,7 @@ interface Kind {
     key: string;                       // "md": kept nowhere a writer reads it
     name: string;                      // "mdQuire"
     opens(name: string): boolean;      // its documents, by their names; the first kind listed takes the rest
+    main?: string;                     // the file its .quire keeps its text in, if not document.md ("steps.json")
     starts(today: Date): Template[];   // the shelf's "new" words and File, New
     quiet?(): Template[];              // ways to start offered under the shelf's list (mdQuire's sample)
     files: { description; accept; chooser };  // what the file choosers offer for it
@@ -118,19 +119,32 @@ an editor that makes a frame, a session and a body; its menus as one table of he
 frame's place; its stylesheet rules; its tests beside its files; and its line in the page's `kinds`. It
 imports from `core/` and from nowhere else in `src/quire/`.
 
+**The stores carry named files.** A `.quire` is a zip of named files, the same for every kind
+(`quire-file.ts`). Every store carries a `.quire` document as three things and never looks inside them:
+its main text, its `Parts` (other text files by name, each kept as `name.json` in the zip) and its
+pictures (named files each store keeps its own way: a table of blobs in the browser, the zip's
+`pictures/` in a folder or a file, locked files in Drive). The main text is `document.md` unless the
+document names another file, `main`: imgQuire's is `steps.json`, with its original kept as one of its
+pictures. A kind says which file it keeps its text in (`Kind.main`), and `kindFor` takes a `.quire`
+naming that file to be that kind's whatever its name; the browser store and Drive say a document's
+`main` in their lists, so the shelf knows a row's kind without opening it, and a `.quire` in a folder is
+looked into once when opened. Which files in a folder, or chosen from the computer, are documents is
+the kinds' to say: those whose ending some kind `opens` (`Openable` in `store-files.ts`, given by the
+app), so that a note's `.note` files are found in a folder too.
+
+mdQuire's documents are kept exactly as before: its parts are `style` and `notes`, it never names a
+main file, its browser rows and Drive index entries gain no field, its zips pack to the same bytes in
+the same order, and an old version snapshot reads back the same. Tests hold each of these with
+documents written in the old shape (`store-browser.test.ts`, `store-drive.test.ts`,
+`quire-file.test.ts`, `versions.test.ts`).
+
 ## Left tangled
 
-Each of these works, and each is what imgQuire will need changed first.
+Each of these works, and each is what a new kind may need changed.
 
-- **The stores carry mdQuire's parts.** Every store saves a document as text and, for a `.quire`, two
-  strings, `style.json` and `notes.json` (`Parts` in `quire-file.ts`), and `quire-file.ts` packs exactly
-  that layout. imgQuire's `.quire` holds an original picture and its steps, so the stores must carry a set
-  of named files instead. Changing it now would change how every store keeps documents already saved
-  (IndexedDB rows, folder and repository files, Drive's locked files), so it waits for imgQuire.
-- **The stores know mdQuire's endings.** A folder, a repository and a file opened from the computer treat
-  `.md`, `.mdx`, `.markdown`, `.txt` and `.quire` as documents (`openable` and `markdownFile` in
-  `store-files.ts`). The kinds' `opens` should decide that. The note therefore lives in the browser and in
-  Drive only.
+- **A repository knows mdQuire's endings.** GitHub lists `.md`, `.mdx`, `.markdown` and `.txt` files
+  (`markdownFile` in `store-files.ts`) and keeps no `.quire`, so a picture document cannot live there yet.
+
 - **The stylesheets are not split.** `src/styles/quire.css`, `quire-markdown.css` and `quire-extras.css`
   hold the core's look and mdQuire's together (the shelf, the menus and dialogs beside the bar and the
   writing), and a rule often serves both. They are left as they are; the note's few rules are at the end
@@ -161,4 +175,3 @@ the move and compared.
 ## Open
 
 - Whether the minis that want imgQuire's engine (the flag assembler) use the core or only the engine.
-- Whether the stores' parts become a set of named files before imgQuire starts or as its first step.

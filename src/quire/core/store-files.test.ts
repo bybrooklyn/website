@@ -29,7 +29,7 @@ test("an opened file is saved on its mark, and the status says to download it", 
 
 test("a .quire file opens with its Markdown, its parts and its pictures, and keeps new pictures inside it", async () => {
     const store = filesStore();
-    const bytes = await packQuire({ markdown: "# Hi\n\n![a](pictures/a.png)\n", parts: { style: '{"quire":1}', notes: "{}" }, pictures: new Map([["a.png", new Blob(["png"])]]) });
+    const bytes = await packQuire({ text: "# Hi\n\n![a](pictures/a.png)\n", parts: { style: '{"quire":1}', notes: "{}" }, pictures: new Map([["a.png", new Blob(["png"])]]) });
     const entry = await store.add(new File([bytes as BlobPart], "Letter.quire"));
     expect(entry.name).toBe("Letter.quire");
     expect(await store.open(entry.id)).toMatchObject({ text: "# Hi\n\n![a](pictures/a.png)\n", quire: { style: '{"quire":1}', notes: "{}" } });
@@ -48,4 +48,14 @@ test("a new or renamed file keeps a plain name, never the same as another open o
     expect((await store.list()).map((entry) => entry.name)).toEqual(["notes.md", "notes-2.md"]);
     await store.rename(made.id, "My Plans");
     expect((await store.list()).map((entry) => entry.name)).toEqual(["notes.md", "my-plans.md"]);
+});
+
+test("which files open is the kinds' to say, and a .quire keeping its text in a file a kind names opens with it", async () => {
+    const store = filesStore({ opens: (name) => /\.(note|quire)$/.test(name), mains: ["steps.json"] });
+    expect((await store.add(new File(["Hello"], "a.note"))).name).toBe("a.note");
+    expect(store.add(new File(["# Hi"], "a.md"))).rejects.toThrow();
+    const bytes = await packQuire({ text: "{}", main: "steps.json", parts: {}, pictures: new Map() });
+    const entry = await store.add(new File([bytes as BlobPart], "cat.quire"));
+    expect(entry.main).toBe("steps.json");
+    expect(await store.open(entry.id)).toMatchObject({ text: "{}", main: "steps.json" });
 });

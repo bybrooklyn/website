@@ -15,14 +15,18 @@ export interface Entry {
     id: string;
     name: string;
     modified?: number;
+    /** For a `.quire` document whose main text is not document.md, that file's name ("steps.json"), where the store knows it without opening the document: it says which kind the document is (kind.ts). */
+    main?: string;
 }
 
 /** A document as opened: its text, and a mark of the version it is, which saving hands back. */
 export interface Opened {
     text: string;
     mark: string;
-    /** For a `.quire` document, what it carries beside its Markdown. */
+    /** For a `.quire` document, what it carries beside its main text. */
     quire?: Parts;
+    /** For a `.quire` document whose main text is not document.md, that file's name. */
+    main?: string;
 }
 
 /** What a document is saved as: its text, and for a `.quire` document its parts too. */
@@ -45,8 +49,8 @@ export interface Store {
     list(): Promise<Entry[]>;
     open(id: string): Promise<Opened>;
     save(id: string, text: string, mark: string, quire?: Parts): Promise<Saved>;
-    /** Makes a document; given parts, it is made as a `.quire` document. */
-    create(name: string, text: string, quire?: Parts): Promise<{ id: string; mark: string }>;
+    /** Makes a document; given parts, it is made as a `.quire` document, with its main text in `main` when that is not document.md. */
+    create(name: string, text: string, quire?: Parts, main?: string): Promise<{ id: string; mark: string }>;
     /** Renames a document and gives its id afterwards, which is a new one where the id is a path. */
     rename(id: string, name: string): Promise<string>;
     /** The mark of the version kept now, where a rename changes the id and so the saver needs it afresh. */
@@ -129,7 +133,7 @@ export function relative(from: string, to: string): string {
 /** Makes a copy of a document in the same store under a new name: its text, its parts and, for a `.quire` document, its pictures, which keep their names so that the copy's text still finds them. */
 export async function copyDocument(store: Store, id: string, name: string): Promise<{ id: string; mark: string }> {
     const found = await store.open(id);
-    const made = await store.create(name, found.text, found.quire);
+    const made = await store.create(name, found.text, found.quire, found.main);
     const pictures = found.quire && store.pictures ? await store.pictures(id) : new Map<string, Blob>();
     if (pictures.size === 0) return made;
     for (const [each, picture] of pictures) await store.savePicture(made.id, picture, each);
@@ -263,8 +267,8 @@ export function createSaver(
 }
 
 /** A store kept wholly in memory: for tests, and for a document with nowhere else to go. */
-export function memoryStore(label = "Memory"): Store & { files: Map<string, { name: string; text: string; mark: number; gone?: boolean; quire?: Parts }> } {
-    const files = new Map<string, { name: string; text: string; mark: number; gone?: boolean; quire?: Parts }>();
+export function memoryStore(label = "Memory"): Store & { files: Map<string, { name: string; text: string; mark: number; gone?: boolean; quire?: Parts; main?: string }> } {
+    const files = new Map<string, { name: string; text: string; mark: number; gone?: boolean; quire?: Parts; main?: string }>();
     let count = 0;
     const find = (id: string) => {
         const file = files.get(id);
@@ -277,11 +281,11 @@ export function memoryStore(label = "Memory"): Store & { files: Map<string, { na
         can: { list: true, create: true, rename: true, remove: true, pictures: true, save: true },
         renameAsTyped: true,
         async list() {
-            return [...files.entries()].filter(([, file]) => !file.gone).map(([id, file]) => ({ id, name: file.name }));
+            return [...files.entries()].filter(([, file]) => !file.gone).map(([id, file]) => ({ id, name: file.name, ...(file.main ? { main: file.main } : {}) }));
         },
         async open(id) {
             const file = find(id);
-            return { text: file.text, mark: String(file.mark), quire: file.quire };
+            return { text: file.text, mark: String(file.mark), quire: file.quire, ...(file.main ? { main: file.main } : {}) };
         },
         async save(id, text, mark, quire) {
             const file = find(id);
@@ -291,9 +295,9 @@ export function memoryStore(label = "Memory"): Store & { files: Map<string, { na
             file.mark++;
             return { ok: true, mark: String(file.mark) };
         },
-        async create(name, text, quire) {
+        async create(name, text, quire, main) {
             const id = `doc-${++count}`;
-            files.set(id, { name: freeName(name, [...files.values()].filter((file) => !file.gone).map((file) => file.name)), text, mark: 1, quire });
+            files.set(id, { name: freeName(name, [...files.values()].filter((file) => !file.gone).map((file) => file.name)), text, mark: 1, quire, ...(main ? { main } : {}) });
             return { id, mark: "1" };
         },
         async rename(id, name) {

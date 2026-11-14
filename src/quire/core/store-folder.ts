@@ -3,7 +3,8 @@
 // is when it was last changed and how long it is, so a change made elsewhere is noticed. Pictures
 // are written into the document's own folder. A file taken away is moved into a `.quire-trash`
 // folder beside it, from where it can be brought back by hand. A `.quire` file is read and written
-// whole as a zip, its pictures inside it rather than beside it.
+// whole as a zip, its pictures inside it rather than beside it. Which files are documents is the
+// kinds' to say (`opens`), and a `.quire` keeps its text in the main file the kinds name.
 //
 // Browsers without the API (Firefox and Safari, as this is written) have no such choice; `canOpen`
 // says which way it is. The store works over the shapes of the API's handles, so it is tested with
@@ -11,7 +12,7 @@
 
 import { isQuire, packQuire, pictureShelf, unpackQuire, type Parts } from "./quire-file";
 import { besideDocument, fileName, freeName, type Opened, type Store, StoreError } from "./store";
-import { openable } from "./store-files";
+import { openable, type Openable } from "./store-files";
 import { utf8 } from "./store-github";
 
 /** The part of a file handle the store uses. */
@@ -45,17 +46,20 @@ const markOf = (file: { lastModified: number; size: number }) => `${file.lastMod
 const SKIPPED = /^(\.|node_modules$|dist$|build$)/;
 
 /** What a file holds, as a store opens it: a `.quire` file unpacked, its pictures put on the shelf. */
-async function readFile(file: Blob & { lastModified: number; size: number }, id: string, shelf: ReturnType<typeof pictureShelf>, keep = true): Promise<Opened> {
+async function readFile(file: Blob & { lastModified: number; size: number }, id: string, shelf: ReturnType<typeof pictureShelf>, mains: string[] | undefined, keep = true): Promise<Opened> {
     if (!isQuire(id)) return { text: utf8(new Uint8Array(await file.arrayBuffer()), id), mark: markOf(file) };
-    const bundle = await unpackQuire(new Uint8Array(await file.arrayBuffer()));
+    const bundle = await unpackQuire(new Uint8Array(await file.arrayBuffer()), mains);
     if (keep) shelf.set(id, bundle.pictures);
-    return { text: bundle.markdown, mark: markOf(file), quire: bundle.parts };
+    return { text: bundle.text, mark: markOf(file), quire: bundle.parts, ...(bundle.main ? { main: bundle.main } : {}) };
 }
 
+/** What a `.quire` file was last saved with, so that a save with the text alone keeps it: its parts, and its main file if not document.md. */
+type Kept = { parts?: Parts; main?: string };
+
 /** What is written into a file: the text, or for a `.quire` file the zip of it with its pictures. */
-async function fileData(id: string, text: string, quire: Parts | undefined, shelf: ReturnType<typeof pictureShelf>): Promise<string | Blob> {
+async function fileData(id: string, text: string, kept: Kept | undefined, shelf: ReturnType<typeof pictureShelf>): Promise<string | Blob> {
     if (!isQuire(id)) return text;
-    return new Blob([(await packQuire({ markdown: text, parts: quire ?? { style: "", notes: "" }, pictures: shelf.get(id) })) as BlobPart], { type: "application/zip" });
+    return new Blob([(await packQuire({ text, main: kept?.main, parts: kept?.parts ?? { style: "", notes: "" }, pictures: shelf.get(id) })) as BlobPart], { type: "application/zip" });
 }
 
 async function write(handle: FileHandle, data: string | Blob) {
@@ -73,10 +77,12 @@ async function write(handle: FileHandle, data: string | Blob) {
 }
 
 /** A store over a folder: its Markdown files, a few folders deep, by their paths inside it. */
-export function folderStore(root: FolderHandle): Store {
+export function folderStore(root: FolderHandle, kinds: Openable = {}): Store {
+    const opens = kinds.opens ?? openable;
     const shelf = pictureShelf();
     // the parts last saved for each `.quire` file, so that a save with the text alone keeps them
-    const kept = new Map<string, Parts>();
+    const kept = new Map<string, Kept>();
+    const keep = (id: string, opened: { quire?: Parts; main?: string }) => kept.set(id, { parts: opened.quire, ...(opened.main ? { main: opened.main } : {}) });
     const parts = (path: string) => path.split("/").filter(Boolean);
     async function folderOf(path: string, create = false): Promise<FolderHandle> {
         let folder = root;
@@ -98,7 +104,7 @@ export function folderStore(root: FolderHandle): Store {
         for await (const entry of folder.values()) {
             if (entry.kind === "directory") {
                 if (depth < 3 && !SKIPPED.test(entry.name)) await walk(entry, `${prefix}${entry.name}/`, depth + 1, found);
-            } else if (openable(entry.name)) found.push({ id: `${prefix}${entry.name}`, name: `${prefix}${entry.name}`, modified: (await entry.getFile()).lastModified });
+            } else if (opens(entry.name)) found.push({ id: `${prefix}${entry.name}`, name: `${prefix}${entry.name}`, modified: (await entry.getFile()).lastModified });
         }
         return found;
     }
@@ -117,24 +123,24 @@ export function folderStore(root: FolderHandle): Store {
             return found.sort((a, b) => a.id.localeCompare(b.id));
         },
         async open(id) {
-            const opened = await readFile(await (await fileAt(id)).getFile(), id, shelf);
-            if (opened.quire) kept.set(id, opened.quire);
+            const opened = await readFile(await (await fileAt(id)).getFile(), id, shelf, kinds.mains);
+            if (opened.quire) keep(id, opened);
             return opened;
         },
         async save(id, text, mark, quire) {
             const handle = await fileAt(id);
             const before = await handle.getFile();
-            if (markOf(before) !== mark) return { ok: false, changed: true, theirs: await readFile(before, id, shelf, false) };
-            if (quire) kept.set(id, quire);
+            if (markOf(before) !== mark) return { ok: false, changed: true, theirs: await readFile(before, id, shelf, kinds.mains, false) };
+            if (quire) kept.set(id, { ...kept.get(id), parts: quire });
             await write(handle, await fileData(id, text, kept.get(id), shelf));
             return { ok: true, mark: markOf(await handle.getFile()) };
         },
-        async create(name, text, quire) {
+        async create(name, text, quire, main) {
             const wanted = quire ? fileName(name.replace(/\.(md|mdx|markdown|txt)$/i, ""), ".quire") : fileName(name);
             const path = freeName(wanted, await taken(wanted));
             const handle = await fileAt(path, true);
-            if (quire) kept.set(path, quire);
-            await write(handle, await fileData(path, text, quire, shelf));
+            if (quire) keep(path, { quire, main });
+            await write(handle, await fileData(path, text, kept.get(path), shelf));
             return { id: path, mark: markOf(await handle.getFile()) };
         },
         async markOf(id) {
@@ -198,10 +204,10 @@ export function folderStore(root: FolderHandle): Store {
 }
 
 /** A store over one file chosen on its own: it can be written, but there is no folder to keep pictures or other documents in. */
-export function oneFileStore(handle: FileHandle): Store {
+export function oneFileStore(handle: FileHandle, kinds: Openable = {}): Store {
     const shelf = pictureShelf();
     const id = handle.name;
-    let kept: Parts | undefined;
+    let kept: Kept | undefined;
     return {
         label: handle.name,
         // a `.quire` file keeps its pictures inside it; a Markdown file alone has nowhere to put them
@@ -210,14 +216,14 @@ export function oneFileStore(handle: FileHandle): Store {
             return [{ id, name: handle.name }];
         },
         async open() {
-            const opened = await readFile(await handle.getFile(), id, shelf);
-            kept = opened.quire;
+            const opened = await readFile(await handle.getFile(), id, shelf, kinds.mains);
+            kept = opened.quire ? { parts: opened.quire, ...(opened.main ? { main: opened.main } : {}) } : undefined;
             return opened;
         },
         async save(_id, text, mark, quire) {
             const before = await handle.getFile();
-            if (markOf(before) !== mark) return { ok: false, changed: true, theirs: await readFile(before, id, shelf, false) };
-            if (quire) kept = quire;
+            if (markOf(before) !== mark) return { ok: false, changed: true, theirs: await readFile(before, id, shelf, kinds.mains, false) };
+            if (quire) kept = { ...kept, parts: quire };
             await write(handle, await fileData(id, text, kept, shelf));
             return { ok: true, mark: markOf(await handle.getFile()) };
         },

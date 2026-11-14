@@ -1,4 +1,5 @@
-// The `.quire` file: a zip holding the document as plain Markdown and what Markdown cannot hold.
+// The `.quire` file: a zip of named files, the same for every kind of document. mdQuire's holds the
+// document as plain Markdown and what Markdown cannot hold:
 //
 //   name.quire
 //     document.md     the words, plain Markdown, readable alone by anything
@@ -9,25 +10,28 @@
 // Unzipped, the folder is an ordinary Markdown document with its pictures beside it. A zip whose
 // document.md sits inside one folder (as zipping a folder gives) opens too.
 //
-// Stores carry a `.quire` document as its Markdown text and its Parts, the two JSON files as text,
-// so that a store need not know what is in them; pictures each store keeps its own way. mdQuire
-// turns a document into those and back (md/quire-parts.ts). The layout is mdQuire's today; a kind
-// whose `.quire` holds other files (imgQuire's original and steps) will need the parts widened to
-// a set of named files, which every store then carries the same way.
+// Every store carries a `.quire` document as three things, so that a store need not know what is in
+// them: its main text, its Parts (other text files by name, each `name.json` in the zip) and its
+// pictures, which each store keeps its own way. The main text is `document.md` unless the document
+// says another file (`main`): imgQuire's is `steps.json`, its original kept as a picture beside it.
+// mdQuire's parts are `style` and `notes`, and it never names a main file, so its documents are
+// kept exactly as they were before other kinds came. mdQuire turns a document into these and back
+// in md/quire-parts.ts.
 
 import { readZip, writeZip, ZipError } from "./zip";
 import { freeName } from "./store";
 import { pictureType } from "./picture-bytes";
 
-/** What a `.quire` document carries beside its Markdown: style.json and notes.json, as text. */
-export interface Parts {
-    style: string;
-    notes: string;
-}
+/** What a `.quire` document carries beside its main text: text files by name, each kept as `name.json` (mdQuire's `style` and `notes`). */
+export type Parts = Record<string, string>;
 
-/** A whole `.quire` file, unpacked: the Markdown, the two JSON files and the pictures by name. */
+/** The main text's file when a document names none. */
+export const MAIN = "document.md";
+
+/** A whole `.quire` file, unpacked: the main text and its file's name if not `document.md`, the parts, and the pictures by name. */
 export interface Bundle {
-    markdown: string;
+    text: string;
+    main?: string;
     parts: Parts;
     pictures: Map<string, Blob>;
 }
@@ -39,7 +43,10 @@ export const isQuire = (name: string) => /\.quire$/i.test(name);
 export const emptyParts = (): Parts => ({ style: "", notes: "" });
 
 /** True when the document's text still shows a picture of this name. */
-const shown = (markdown: string, name: string) => markdown.includes(`pictures/${name}`) || markdown.includes(`pictures/${encodeURI(name)}`) || markdown.includes(`pictures/${encodeURIComponent(name)}`);
+const shown = (text: string, name: string) => text.includes(`pictures/${name}`) || text.includes(`pictures/${encodeURI(name)}`) || text.includes(`pictures/${encodeURIComponent(name)}`);
+
+/** The name a part may have: plain letters, digits and dashes, so that its file stays at the top of the zip. */
+const PART_NAME = /^[\w-]{1,40}$/;
 
 /**
  * Packs a document into the bytes of a `.quire` file. Pictures are stored as they are, being
@@ -47,33 +54,49 @@ const shown = (markdown: string, name: string) => markdown.includes(`pictures/${
  * does not travel on inside the file given to someone.
  */
 export async function packQuire(bundle: Bundle, date?: Date): Promise<Uint8Array> {
-    const kept = [...bundle.pictures].filter(([name]) => shown(bundle.markdown, name));
+    const kept = [...bundle.pictures].filter(([name]) => shown(bundle.text, name));
     const pictures = await Promise.all(kept.map(async ([name, blob]) => ({ name: `pictures/${name}`, data: new Uint8Array(await blob.arrayBuffer()), store: true })));
+    const main = bundle.main ?? MAIN;
+    // a Markdown document always has its style.json and notes.json, written as an empty object when it has no styling yet, as it always has
+    const parts = main === MAIN ? { style: "", notes: "", ...bundle.parts } : bundle.parts;
     return writeZip(
         [
-            { name: "document.md", data: bundle.markdown },
-            { name: "style.json", data: bundle.parts.style || "{}\n" },
-            { name: "notes.json", data: bundle.parts.notes || "{}\n" },
+            { name: main, data: bundle.text },
+            ...Object.entries(parts)
+                .filter(([name]) => PART_NAME.test(name) && `${name}.json` !== main)
+                .map(([name, data]) => ({ name: `${name}.json`, data: data || "{}\n" })),
             ...pictures,
         ],
         date,
     );
 }
 
-/** Unpacks the bytes of a `.quire` file. Only a missing document.md is a reason to refuse it. */
-export async function unpackQuire(bytes: Uint8Array): Promise<Bundle> {
+/**
+ * Unpacks the bytes of a `.quire` file. Its main text is `document.md`, or the first of `mains` (the
+ * main files other kinds name) that it holds; only having none of them is a reason to refuse it.
+ */
+export async function unpackQuire(bytes: Uint8Array, mains: string[] = []): Promise<Bundle> {
     const files = await readZip(bytes);
-    const document = [...files.keys()].filter((name) => /(^|\/)document\.md$/.test(name)).sort((a, b) => a.length - b.length)[0];
-    if (document === undefined) throw new ZipError("this .quire file has no document.md in it");
-    const folder = document.slice(0, -"document.md".length);
+    const found = (main: string) => [...files.keys()].filter((name) => name === main || name.endsWith(`/${main}`)).sort((a, b) => a.length - b.length)[0];
+    const main = [MAIN, ...mains].find((each) => found(each) !== undefined);
+    if (main === undefined) throw new ZipError("this .quire file has no document.md in it");
+    const document = found(main)!;
+    const folder = document.slice(0, -main.length);
     const text = (name: string) => (files.has(folder + name) ? new TextDecoder().decode(files.get(folder + name)) : "");
+    // a Markdown document's parts are its two files, as they always were; another kind's are every JSON file beside its main one
+    const parts: Parts = main === MAIN ? { style: text("style.json"), notes: text("notes.json") } : {};
+    if (main !== MAIN)
+        for (const name of files.keys()) {
+            const part = name.startsWith(folder) ? /^([\w-]{1,40})\.json$/.exec(name.slice(folder.length))?.[1] : undefined;
+            if (part && `${part}.json` !== main) parts[part] = text(name.slice(folder.length));
+        }
     const pictures = new Map<string, Blob>();
     for (const [name, data] of files) {
         const inside = name.startsWith(`${folder}pictures/`) ? name.slice(folder.length + "pictures/".length) : "";
         // only names that stay in their folder: nothing a reader unpacking the file again could take as a way out of it
         if (PICTURE_NAME.test(inside)) pictures.set(inside, new Blob([data as BlobPart], { type: pictureType(data, inside) }));
     }
-    return { markdown: text("document.md"), parts: { style: text("style.json"), notes: text("notes.json") }, pictures };
+    return { text: text(main), ...(main === MAIN ? {} : { main }), parts, pictures };
 }
 
 /** The names a picture inside a `.quire` file may have: no folder, no backslash, drive or control character, not starting with a dot. */

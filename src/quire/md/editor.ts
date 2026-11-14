@@ -329,7 +329,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         session.downloaded();
         const { text: markdown, quire } = written(surface.getDocument(), write);
         const pictures = (store && id && (await store.pictures?.(id).catch(() => undefined))) || new Map<string, Blob>();
-        give(new Blob([(await packQuire({ markdown, parts: quire ?? emptyParts(), pictures })) as BlobPart], { type: "application/zip" }), `${stem()}.quire`);
+        give(new Blob([(await packQuire({ text: markdown, parts: quire ?? emptyParts(), pictures })) as BlobPart], { type: "application/zip" }), `${stem()}.quire`);
     };
     /** Makes a `.quire` copy of a Markdown document and opens it: in the same place if it can keep one, in the browser if not, or as a download. */
     const makeRich = async () => {
@@ -339,7 +339,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         const target = store?.quire && store.can.create ? store : options.richHome;
         if (!target) {
             const pictures = new Map<string, Blob>();
-            give(new Blob([(await packQuire({ markdown: copy.text, parts: copy.quire ?? emptyParts(), pictures })) as BlobPart], { type: "application/zip" }), `${stem()}.quire`);
+            give(new Blob([(await packQuire({ text: copy.text, parts: copy.quire ?? emptyParts(), pictures })) as BlobPart], { type: "application/zip" }), `${stem()}.quire`);
             return;
         }
         await create(target, stem(), copy.text, copy.quire);
@@ -358,7 +358,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         // a Markdown document goes into the zip as it is, with its notes, as a .quire document of its own
         const { text: markdown, quire } = written(asQuire(doc), write);
         const pictures = (store && id && (await store.pictures?.(id).catch(() => undefined))) || new Map<string, Blob>();
-        give(new Blob([(await packQuire({ markdown, parts: quire ?? emptyParts(), pictures })) as BlobPart], { type: "application/zip" }), `${stem()}.quire`);
+        give(new Blob([(await packQuire({ text: markdown, parts: quire ?? emptyParts(), pictures })) as BlobPart], { type: "application/zip" }), `${stem()}.quire`);
     };
     const downloadLines = (): MenuItem[] => [
         { label: "Markdown", icon: "markdown", hint: surface.getDocument().mdx ? ".mdx" : ".md", run: () => (surface.getDocument().quire ? give(new Blob([markdownFor(surface.getDocument())], { type: "text/markdown" }), `${stem()}${surface.getDocument().mdx ? ".mdx" : ".md"}`) : download()) },

@@ -22,8 +22,10 @@ export interface Kind {
     key: string;
     /** Its name, as a writer reads it: "mdQuire". */
     name: string;
-    /** True when a document of this name is this kind's (by its ending). The first kind listed is asked last and takes whatever no other claims. */
+    /** True when a document of this name is this kind's (by its ending), and which files in a folder are documents. The first kind listed is asked last and takes whatever no other claims. */
     opens(name: string): boolean;
+    /** The file its `.quire` documents keep their main text in, when it is not document.md ("steps.json"): a `.quire` holding it is this kind's, whatever its name. */
+    main?: string;
     /** The ways to start one, as the shelf's "new" words and File, New give them. */
     starts(today: Date): Template[];
     /** Ways to start one offered quietly under the shelf's list, as mdQuire offers its sample. */
@@ -62,8 +64,8 @@ export interface Editing {
     paper: HTMLElement;
     /** Moves to another document; false when the writer chose to stay (the old one could not be saved) or it could not be opened. */
     open(store: Store, entry: Entry): Promise<boolean>;
-    /** Makes a new document there and opens it; given parts, it is made as a `.quire` document. */
-    create(store: Store, name: string, text?: string, quire?: Parts): Promise<boolean>;
+    /** Makes a new document there and opens it; given parts, it is made as a `.quire` document, its text in `main` when that is not document.md. */
+    create(store: Store, name: string, text?: string, quire?: Parts, main?: string): Promise<boolean>;
     /** Saves what is waiting, asking the writer when it cannot be: true when the document may be left. */
     ready(): Promise<boolean>;
     /** Saves what is waiting and lets the document go, so that nothing is open; false when the writer stays. */
@@ -83,7 +85,8 @@ export interface Editing {
     destroy(): void;
 }
 
-/** The kind a document of this name is: the others are asked first, in order, and the first kind listed takes whatever none of them claims. */
-export function kindFor<K extends Pick<Kind, "opens">>(kinds: K[], name: string): K {
-    return kinds.slice(1).find((kind) => kind.opens(name)) ?? kinds[0]!;
+/** The kind a document is: by the main file of a `.quire` when it names one, else by its name, the others asked first, in order, and the first kind listed taking whatever none of them claims. */
+export function kindFor<K extends Pick<Kind, "opens" | "main">>(kinds: K[], name: string, main?: string): K {
+    const held = main ? kinds.find((kind) => kind.main === main) : undefined;
+    return held ?? kinds.slice(1).find((kind) => kind.opens(name)) ?? kinds[0]!;
 }

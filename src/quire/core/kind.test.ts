@@ -17,3 +17,11 @@ test("the first kind takes what no other claims, even when it would say no itsel
     expect(kindFor([first, note], "Untitled").key).toBe("first");
     expect(kindFor([{ key: "picky", opens: () => false }, note], "letter.odt").key).toBe("picky");
 });
+
+test("a .quire naming its main file is the kind that keeps its text there, whatever its name; one naming none goes by its name", () => {
+    const steps = { key: "steps", opens: () => false, main: "steps.json" };
+    expect(kindFor([first, note, steps], "cat.quire", "steps.json").key).toBe("steps");
+    expect(kindFor([first, note, steps], "Screenshot", "steps.json").key).toBe("steps");
+    expect(kindFor([first, note, steps], "letter.quire").key).toBe("first");
+    expect(kindFor([first, note], "odd.quire", "unknown.json").key).toBe("first");
+});

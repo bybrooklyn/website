@@ -15,7 +15,7 @@ test("style.json and notes.json cannot change what every object has, whatever ke
     const hostile = '{"__proto__": {"polluted": "yes"}, "constructor": {"prototype": {"polluted": "yes"}}, "quire": 1, "blocks": [{"__proto__": {"polluted": "yes"}, "path": [0]}], "runs": [{"path": [0], "from": 0, "to": 1, "__proto__": {"polluted": "yes"}, "color": "red"}]}';
     const notes = '{"__proto__": {"polluted": "yes"}, "comments": [{"__proto__": {"polluted": "yes"}, "id": "a", "path": [0], "from": 0, "to": 2, "quote": "Hi", "text": "x"}]}';
     const bundle = await unpackQuire(await writeZip([{ name: "document.md", data: "Hi there.\n" }, { name: "style.json", data: hostile }, { name: "notes.json", data: notes }]));
-    const doc = opened(bundle.markdown, bundle.parts);
+    const doc = opened(bundle.text, bundle.parts);
     written(doc, write);
     expect(({} as Record<string, unknown>).polluted).toBeUndefined();
     expect((Object.prototype as Record<string, unknown>).polluted).toBeUndefined();
@@ -23,7 +23,7 @@ test("style.json and notes.json cannot change what every object has, whatever ke
 
 test("a .quire zipped from a folder without its JSON files opens on the page's defaults", async () => {
     const nested = await unpackQuire(await writeZip([{ name: "letter/document.md", data: "Hi.\n" }]));
-    expect(opened(nested.markdown, nested.parts).quire?.page.size).toBe("A4");
+    expect(opened(nested.text, nested.parts).quire?.page.size).toBe("A4");
 });
 
 test("a styled document written for a store and opened again is the same document", () => {

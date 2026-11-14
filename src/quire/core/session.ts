@@ -213,10 +213,10 @@ export function createSession(body: Body, options: SessionOptions) {
         body.moved?.(before, historyKey());
     }
 
-    /** Makes a new document there and opens it; given parts, it is made as a `.quire` document. */
-    async function create(next: Store, wanted: string, text = "", quire?: Parts) {
-        const made = await next.create(wanted, text, quire);
-        const entry = (await next.list().catch(() => [])).find((each) => each.id === made.id) ?? { id: made.id, name: wanted };
+    /** Makes a new document there and opens it; given parts, it is made as a `.quire` document, its text in `main` when that is not document.md. */
+    async function create(next: Store, wanted: string, text = "", quire?: Parts, main?: string) {
+        const made = await next.create(wanted, text, quire, main);
+        const entry = (await next.list().catch(() => [])).find((each) => each.id === made.id) ?? { id: made.id, name: wanted, ...(main ? { main } : {}) };
         return open(next, entry);
     }
 
