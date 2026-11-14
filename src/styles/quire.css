@@ -1,4 +1,4 @@
-/* mdQuire, the editor (src/quire/editor.ts), as its try-out page shows it (src/pages/mdquire.astro).
+/* mdQuire, the editor (src/quire/md/editor.ts), as its try-out page shows it (src/pages/mdquire.astro).
    The text itself takes the site's prose styles; these are the pieces an editor adds: the bar, the
    menus that flow out of it, and the marks of a document being edited. Every control that is not
    always there grows in and shrinks away, as the picture viewer's menu does (viewer.css), and all
@@ -3575,7 +3575,7 @@ body.quire-app,
     }
 }
 
-/* ---- checking (src/quire/check/) ----
+/* ---- checking (src/quire/md/check/) ----
    Faint underlines under what was found, by the browser's highlights: wavy for spelling, dotted for
    the rest, in the muted ink or a little of the accent, never a glow. The count at the bar's end
    grows in when checking is switched on; the popover, the list and the settings are menus that flow

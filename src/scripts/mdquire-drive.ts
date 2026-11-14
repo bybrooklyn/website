@@ -2,7 +2,7 @@
 // goes to the mdQuire tab that asked, over a BroadcastChannel, leaves the address at once, and the
 // window closes; if the browser keeps it open, it says the window can be closed.
 
-import { CHANNEL, handBack } from "../quire/google-sign-in";
+import { CHANNEL, handBack } from "../quire/core/google-sign-in";
 
 const said = document.querySelector("#said");
 const result = handBack({

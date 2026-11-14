@@ -1,4 +1,4 @@
-/* mdQuire's further Markdown, as the surface draws it (src/quire/surface.ts): highlighted code and
+/* mdQuire's further Markdown, as the surface draws it (src/quire/md/surface.ts): highlighted code and
    its language, callouts, definition lists, folding sections, the marks beyond bold and italic,
    maths, diagrams, and the site's own components as cards. Kept apart from quire.css so that each
    can change without the other. Colors are the site's tokens; on light paper quire.css gives the

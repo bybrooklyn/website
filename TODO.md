@@ -137,8 +137,8 @@ What was found and fixed is in [`docs/AUDIT.md`](docs/AUDIT.md). Still open from
 - Suggesting the next words while typing: faint words after the caret that Tab takes, learned from the owner's own documents and posts in the browser, with no model.
 - Spelling: American, on by default, with a personal dictionary.
 - In the light paper look the list of documents sits on a light sheet too.
-- The shared core ([quire-core](docs/quire-core.md)): the app as a framework in `src/quire/`, each Quire a plug-in.
 
 ## imgQuire and the background remover
 
 - Settle the questions in [imgQuire](docs/imgQuire.md#open) and [cutout](docs/cutout.md#open) before building; first, what imgQuire's file is.
+- Before imgQuire starts, what the core still leaves to Markdown ([quire-core](docs/quire-core.md#left-tangled)): the stores carry mdQuire's two parts and know its file endings, and the stylesheets are not yet split into the core's and mdQuire's.

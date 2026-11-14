@@ -2,8 +2,10 @@
 // `bun run check`. It is here so that code written by anyone, an agent included, comes out the way
 // the rest is written. STYLE.md says the same things in words.
 //
-//   dependencies   package.json may not gain a library; Mote and mdQuire import nothing from outside their folders
-//                  (onnxruntime-web, from src/quire/dictation/ only, is the one allowed exception)
+//   dependencies   package.json may not gain a library; Mote and the Quires import nothing from outside their folders
+//                  (onnxruntime-web, from src/quire/md/dictation/ only, is the one allowed exception)
+//   the core       the Quires' core (src/quire/core/) imports nothing from a kind of document (md/, note/), and no
+//                  kind from another (lint-bounds.ts)
 //   comments       a source file opens by saying what it is; in Mote and mdQuire every exported thing has a sentence
 //   leftovers      no console.log in src/
 //   words          comments and page text in plain words: no dash as punctuation, no emoji, none of the tells
@@ -13,21 +15,22 @@
 //                  but for the few kinds in SAFE below
 
 import { Glob } from "bun";
-import { pageTells, TELL_NAMES, tellsIn } from "../src/quire/check/tells";
+import { pageTells, TELL_NAMES, tellsIn } from "../src/quire/md/check/tells";
 import { at } from "./lib";
+import { crossing } from "./lint-bounds";
 
 /** The libraries the site has. A new one fails the lint: add it here on purpose or do without it. */
 const LIBRARIES = ["@astrojs/check", "@astrojs/markdown-satteri", "@astrojs/mdx", "@astrojs/rss", "@astrojs/sitemap", "@types/bun", "astro", "onnxruntime-web", "sharp", "simple-icons", "typescript", "wrangler"];
 /**
  * The one exception to the editor importing nothing from outside itself, by the owner's choice:
  * the speech models run on ONNX Runtime, which is not rewritten. Only this package may be imported,
- * and only from src/quire/dictation/, where it is loaded when dictation is first switched on so
+ * and only from src/quire/md/dictation/, where it is loaded when dictation is first switched on so
  * that a visitor who never dictates downloads none of it. (The pages fetch its files from /ort/.)
  */
 const SPEECH = ["onnxruntime-web"];
-const SPEECH_HOME = "src/quire/dictation/";
+const SPEECH_HOME = "src/quire/md/dictation/";
 /** Files that only wire a browser feature (a worker, an audio worklet) to code that is tested; they cannot be loaded outside a browser, so their test is the browser test. */
-const SHELLS = ["src/quire/dictation/engine-worker.ts", "src/quire/dictation/capture-worklet.ts", "src/quire/dictation/capture.ts", "src/quire/dictation/engine.ts", "src/quire/dictation/page.ts"];
+const SHELLS = ["src/quire/md/dictation/engine-worker.ts", "src/quire/md/dictation/capture-worklet.ts", "src/quire/md/dictation/capture.ts", "src/quire/md/dictation/engine.ts", "src/quire/md/dictation/page.ts"];
 /** Folders whose code stands alone: nothing in them imports from outside them. */
 const ALONE = ["src/mote/", "src/quire/"];
 /** Logic files that had no test when this rule was made. Do not add to it: write the test. */
@@ -37,7 +40,7 @@ const SPOKEN = ["src/quire/"];
 /** Stylesheets with colors that are not the theme's: the pride flags, print on white paper, the timeline's marks. */
 const OWN_COLORS = ["src/styles/base.css", "src/styles/resume.css", "src/styles/timeline.css"];
 // The words rules (dashes used as punctuation, emoji, the keep-out words, a "not just X" framing) and
-// her own pages that they leave alone are written once, in src/quire/check/tells.ts, which mdQuire's
+// her own pages that they leave alone are written once, in src/quire/md/check/tells.ts, which mdQuire's
 // checking reads too, so the editor and this linter give the same verdict.
 
 /** What looks like an address of her machines in a tracked file: an IPv4 address, a Tailscale name, a port after a host. */
@@ -86,6 +89,9 @@ for (const file of sources) {
             const leaves = (path.match(/\.\.\//g) ?? []).length > depth;
             if (!path.startsWith(".") || leaves) say(file, number, `imports ${path}, from outside ${alone}`);
         }
+        // ---- the core: it imports nothing from a kind of document, and no kind from another ----
+        const crossed = path ? crossing(file, path) : undefined;
+        if (crossed) say(file, number, `${crossed} (the core is built for every kind; a kind uses the core)`);
         // ---- comments: every exported thing in such a folder has a sentence above it ----
         if (SPOKEN.some((folder) => file.startsWith(folder)) && !test && /^export (default\b|(async |declare |abstract )*(function|const|let|var|class|interface|type|enum) )/.test(line) && !/^\s*(\*\/|\/\/|\*)/.test(lines[index - 1] ?? "") && !/\*\/\s*$/.test(lines[index - 1] ?? "")) say(file, number, "exported with no sentence above it");
         // ---- leftovers ----

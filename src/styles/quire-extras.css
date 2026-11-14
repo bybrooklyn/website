@@ -1,5 +1,5 @@
 /* mdQuire's pictures, notes and inserts: the frame round a picked picture with its handles and
-   strip (src/quire/picture-tools.ts), the writer's notes marked on her text and set in the margin
+   strip (src/quire/md/picture-tools.ts), the writer's notes marked on her text and set in the margin
    beside it (comments.ts), the grid of special characters (inserts.ts), and the setup of the page
    for print as PDF (export.ts), and the command palette (palette.ts). Loaded after quire.css, whose tokens it uses. Everything here that
    is not always there grows in from where it was asked for and goes back there, and holds still
@@ -933,7 +933,7 @@
     }
 }
 
-/* ---- Google Drive's dialog (src/quire/drive-place.ts): the passphrase fields under the words, and
+/* ---- Google Drive's dialog (src/quire/core/drive-place.ts): the passphrase fields under the words, and
    the quieter lines about what Google sees and where the passphrase is kept ---- */
 
 .quire-drive-row {
@@ -1251,4 +1251,20 @@ html.quire-counting {
     outline: 0.125rem solid var(--accent);
     outline-offset: 0.15rem;
     border-radius: 0.2rem;
+}
+
+/* ---- a plain note (src/quire/note/note.ts), the core's smallest kind of document: its text field
+   is the sheet's writing, in the writing's own type ---- */
+.quire-plain-text {
+    display: block;
+    width: 100%;
+    min-height: 60vh;
+    padding: 0;
+    border: 0;
+    outline: none;
+    resize: none;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    line-height: 1.6;
 }

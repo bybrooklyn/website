@@ -1,0 +1,1055 @@
+// mdQuire's editor: the bar, the writing column with the surface in it, and everything around it,
+// put together on one element in the core's frame (core/frame.ts: the top, the menu row, the keys,
+// the palette, full screen), writing to one document in one store at a time through the core's
+// session (core/session.ts: saving, conflicts, version history, renaming, moving between
+// documents). The app mounts it as mdQuire's kind (kind.ts); `bun run edit` calls createEditor.
+//
+//   const editor = createEditor(element, read(text), { name, store, id, mark, versions, colors });
+//   editor.surface              the editing surface (surface.ts)
+//   editor.open(store, entry)   leaves the document (saving what is waiting) and opens another;
+//                               words that cannot be saved keep the writer there until she chooses
+//   editor.ready()              saves what is waiting, asking the writer if it cannot be: may it be left?
+//   editor.create(store, name)  makes a new document there and opens it
+//   editor.flush()              saves now what is waiting
+//   editor.getName(), editor.current(), editor.destroy()
+//
+// Without a store the editor writes nowhere, as in the tests of its parts.
+
+import { addCode, addDivider, addFootnote, addTable, align, aligned, clearFormat, createBar, indentBy, link as linkAction, linkAt, setStyleOf, toggle, toggleList, toggleSubtext, type Action } from "./bar";
+import { headings, type RowActions } from "./menus";
+import { blockAt, blockPaths, countWords, documentOf, lengthOf } from "./document";
+import { createFrame } from "../core/frame";
+import { createSession, type Body } from "../core/session";
+import { createDictation } from "./dictation/dictation";
+import { type Document } from "./document";
+import { collapsed, fragment, handle, pageBreakAt } from "./keys";
+import { createPages } from "./pages";
+import { createMarkdownView } from "./markdown-view";
+import { remember } from "../core/most-used";
+import { createOutline } from "./outline";
+import { read } from "./read";
+import { createSelectBar } from "./select-bar";
+import { createLinkCard, linkForm } from "./link-card";
+import { boxOf, component, definitionList, drawnBlock } from "./slash";
+import { createSlashMenu, paletteFor } from "./slash-menu";
+import { createEmojiPicker, emojiAtCursor, emojiGrid, putter } from "./emoji-picker";
+import { copyDocument, fileName, type Entry, type Status, type Store } from "../core/store";
+import { copyName } from "../core/shelf";
+import { createSurface, type Surface } from "./surface";
+import { createTableTools } from "./tables";
+import { createPictureTools } from "./picture-tools";
+import { createBlockMenus } from "./block-menus";
+import { createTextMenu } from "./text-menu";
+import { createCommentMargin, keptNotes, moveNotes } from "./comment-margin";
+import { addContents, dateText, findContents, specialGrid, typeIn, typeSpecial, updateContents } from "./inserts";
+import { colorHex, gatherPictures, heldElsewhere, markdownFor, pageHtml, pictureAddresses, plainText, readingStyles, type Picture } from "./export";
+import { docx } from "./docx";
+import { control, flowMenu, keySymbols, make, type MenuItem } from "../core/ui";
+import { openDialog } from "../core/dialog";
+import { chordFrom, findShortcuts, shortcutFor } from "./shortcuts";
+import { findTyping, readOff } from "./vocabulary";
+import { openTyping } from "./typing-panel";
+import { aboutPanel, helpBody } from "./help";
+import { versionView } from "./history-view";
+import { createHistoryPanel, memoryStorage, type VersionStorage } from "../core/versions";
+import { write } from "./write";
+import { emptyParts, packQuire, type Parts } from "../core/quire-file";
+import { asQuire, opened, written } from "./quire-parts";
+import { pictureType, withoutMetadata } from "../core/picture-bytes";
+import { crc32 } from "../core/zip";
+import { PAGE } from "./styling";
+import { createCaret, FLAG, FLAG_ON_PAPER } from "./caret";
+import { countRows, createLiveCount } from "../core/live-count";
+import { createDetails, keptLine, lengthLine, sizeLine } from "../core/details";
+import { createFind } from "./find";
+import { mountChecking } from "./check/mount";
+import { createTitle, nameFor, shownName, type OwnTitle } from "./title";
+import { createZoom, pageRule, percent, setPage, setupForm } from "./paper";
+import type { Page } from "./document";
+import { moreCommands } from "./more-commands";
+import { listHere } from "./numbering";
+import { createMatching, matchingSpots } from "./matching";
+import { places } from "./bookmarks";
+import { mountSuggestions } from "./suggest-view";
+
+/** What the editor is given by the page. */
+export interface EditorOptions {
+    /** The document's name, shown in the bar and used for downloads. */
+    name: string;
+    /** Where the document lives, its id there and the mark of the version opened. Without a store it is saved nowhere. */
+    store?: Store;
+    id?: string;
+    mark?: string;
+    /** Where version history is kept, for every store; in memory if not given. */
+    versions?: VersionStorage;
+    /** The colors offered for text. */
+    colors?: { name: string; value: string }[];
+    onRename?: (name: string) => void;
+    /** Told whenever the editor moves to another document, so the page can remember it. */
+    onOpen?: (store: Store, entry: Entry) => void;
+    /** Opens the documents list from the name in the bar. */
+    onName?: (from: HTMLElement) => void;
+    /** The page's own lines at the head of the File menu: new documents, opening files and folders. */
+    fileItems?: () => MenuItem[];
+    /** More lines for the three-dot menu, from the page. */
+    more?: () => MenuItem[];
+    /** The page's top, with places marked for the document's name, the menu words, how saving stands and the tools (src/pages/mdquire.astro). Made above the editor if not given. */
+    top?: HTMLElement;
+    /** Takes a picture file when there is no store to keep it. */
+    onImage?: (file: File) => Promise<string>;
+    /** Where a Markdown document turned into a `.quire` one is made when its own store keeps no `.quire` documents; downloaded if not given. */
+    richHome?: Store;
+    /** Where the title is kept when it is the document's own (a post's frontmatter title) rather than its name. */
+    title?: OwnTitle;
+    /** The places whose documents suggested words are learned from (suggest-learn.ts); none if not given, so only what is written here and saved. */
+    learnFrom?: () => Store[];
+}
+
+/** The editor, as the page sees it. */
+export interface Editor {
+    surface: Surface;
+    /** Every command by name, as the menus, the shortcuts and the Ctrl+/ panel run them. */
+    commands: RowActions;
+    getName(): string;
+    current(): { store?: Store; id?: string; name: string };
+    /** Moves to another document; false when the writer chose to stay (the old one could not be saved) or it could not be opened. */
+    open(store: Store, entry: Entry): Promise<boolean>;
+    /** Makes a new document there and opens it; given parts, it is made as a `.quire` document. */
+    create(store: Store, name: string, text?: string, quire?: Parts): Promise<boolean>;
+    /** Says something went wrong, in the status: a few words, and the whole of it. */
+    say(short: string, full: string): void;
+    /** Saves what is waiting; when it cannot be saved, asks the writer whether to try again, stay or leave it. True when the document may be left. */
+    ready(): Promise<boolean>;
+    flush(): Promise<void>;
+    status(): Status | undefined;
+    /** The bar's name, from which the documents list grows. */
+    nameElement(): HTMLElement;
+    /** Renames the document where it lives. */
+    rename(name: string): Promise<void>;
+    /** Saves what is waiting and lets the document go, so that nothing is open; false when the writer stays. */
+    leave(): Promise<boolean>;
+    /** The sheet, which grows out of a picture of it on the home screen and shrinks back. */
+    paper: HTMLElement;
+    /** Shows or hides the outline and the Markdown; `plain` shows the text alone, for a file that is not Markdown. */
+    view(options: { outline?: boolean; markdown?: boolean; plain?: boolean }): void;
+    destroy(): void;
+}
+
+/** The two looks of the writing: A, no page, on the site's ground; C, light paper on the dark desk. */
+export type Look = "none" | "paper";
+
+/** Where the look chosen is kept, for every document. */
+const LOOK_KEY = "quire-look";
+/** True on a Mac, where Cmd does what Ctrl does elsewhere. */
+const MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
+
+/** Where typed signs being turned off is kept. */
+const SYMBOLS_KEY = "quire-symbols";
+/** Where the rest of what typing turns into, switched off in Typing preferences, is kept: a list of the typing table's ids. */
+const TYPING_KEY = "quire-typing-off";
+
+/** Where the outline being open or shut on a wide window is kept. */
+const OUTLINE_KEY = "quire-outline";
+
+/** True when the window has room for the outline in the margin beside the writing. */
+const wide = () => typeof matchMedia !== "undefined" && matchMedia("(min-width: 64rem)").matches;
+
+/** Builds the editor on an element. */
+export function createEditor(host: HTMLElement, doc: Document, options: EditorOptions): Editor {
+    host.classList.add("quire-editor");
+    // where the document is: told by the session (core/session.ts) whenever it moves
+    let name = options.name;
+    let store = options.store;
+    let id = options.id;
+    const versions = options.versions ?? memoryStorage();
+    // the core's frame: the top with the name and the status in it, and later the menu row, the keys and the palette
+    const frame = createFrame(host, { top: options.top, name, onName: (from) => options.onName?.(from) });
+    const column = make("div", "quire-column");
+    const paper = make("div", "quire-paper");
+    const text = make("div", "prose");
+    text.setAttribute("aria-label", "Document");
+    paper.append(text);
+    host.append(column);
+
+    /** A picture as it comes into a document: where and when it was taken cut out of it (pictures.ts), and its type read from its bytes. */
+    const cleaned = async (picked: File) => {
+        const bytes = withoutMetadata(new Uint8Array(await picked.arrayBuffer()), crc32);
+        const sniffed = pictureType(bytes, picked.name);
+        // a phone's HEIC, which this cannot read through, keeps the type it came with
+        const type = sniffed === "application/octet-stream" && /^image\/hei[cf]$/.test(picked.type) ? picked.type : sniffed;
+        return new File([bytes as BlobPart], picked.name || "picture.png", { type });
+    };
+    // pictures are kept by the document's store, beside the document
+    const keepPicture = async (picked: File) => {
+        let file: File;
+        try {
+            file = await cleaned(picked);
+        } catch (error) {
+            bar.setStatus("No picture", `The picture was not added: ${error instanceof Error ? error.message : String(error)}`, "warn");
+            throw error;
+        }
+        if (store && id) {
+            try {
+                if (!store.can.pictures) throw new Error("pictures cannot be kept here");
+                return await store.savePicture(id, file, file.name || "picture.png");
+            } catch (error) {
+                const why = error instanceof Error ? error.message : String(error);
+                bar.setStatus("No picture", `The picture was not added: ${why}`, "warn");
+                throw error;
+            }
+        }
+        if (options.onImage) return options.onImage(file);
+        return URL.createObjectURL(file);
+    };
+    /** Where a Markdown file's notes are kept in this browser: its place and name. */
+    const notesPlace = () => (store && id ? `${store.label}:${id}` : undefined);
+    const surface = createSurface(text, keptNotes(doc, notesPlace()).doc, { onImage: keepPicture, picture: async (address) => (store && id && store.show ? store.show(id, address) : undefined) });
+    const caret = createCaret(surface.element, paper, FLAG);
+    // typed signs are on unless the writer turned them off, for every document
+    try {
+        if (localStorage.getItem(SYMBOLS_KEY) === "off") surface.setSymbols(false);
+        surface.setTyping(readOff(localStorage.getItem(TYPING_KEY)));
+    } catch {
+        // a browser keeping nothing has them on
+    }
+
+    // ---- the title, the first line on the sheet: the document's name ----
+    let typing: ReturnType<typeof setTimeout> | undefined;
+    /** True when the title shown is kept in the document rather than its name. */
+    const owned = () => !!options.title && options.title.read(surface.getDocument()) !== null;
+    // the name typed belongs to the document it was typed in, not to one opened before the rename comes round (the session sees to it)
+    const renameTo = (typed: string) => session.renameTo(nameFor(name, typed));
+    const title = createTitle({
+        goOn: () => {
+            surface.setSelection({ anchor: { path: [0], offset: 0 }, focus: { path: [0], offset: 0 } });
+            surface.focus();
+        },
+        typed: (value) => {
+            if (owned()) {
+                surface.run((now) => options.title!.write(now, value), "type");
+                return;
+            }
+            // the bar follows as it is typed; where renaming is cheap the document is renamed a moment after
+            bar.setName(nameFor(name, value));
+            clearTimeout(typing);
+            if (store?.renameAsTyped || !store || !id) typing = setTimeout(() => renameTo(value), 400);
+        },
+        settled: (value) => {
+            if (owned()) return;
+            clearTimeout(typing);
+            renameTo(value);
+        },
+    });
+    paper.prepend(title.element);
+    /** Shows the title for the document as it is now, and its name in the margin. */
+    const showTitle = () => {
+        showDetails();
+        const own = options.title?.read(surface.getDocument());
+        if (own !== null && own !== undefined) title.show(own);
+        else title.show(shownName(name) === "Untitled" ? "" : shownName(name), !options.title && (!store || !id || store.can.rename));
+    };
+    // ---- a faint "Type / for blocks" on the empty line the cursor is on, and on an empty document ----
+    let hinted: HTMLElement | undefined;
+    const hint = () => {
+        const blocks = surface.getDocument().blocks;
+        const focused = surface.element.contains(document.activeElement) || document.activeElement === surface.element;
+        const empty = (element: HTMLElement | undefined) => !!element && element.tagName === "P" && element.textContent === "";
+        const line = focused ? surface.elementAt(surface.getSelection().focus.path.slice(0, 1)) : blocks.length === 1 ? surface.elementAt([0]) : undefined;
+        const next = empty(line) && surface.getSelection().anchor.path[0] === surface.getSelection().focus.path[0] ? line : undefined;
+        if (next === hinted) return;
+        hinted?.classList.remove("quire-hinted");
+        hinted = next;
+        if (!next) return;
+        next.dataset.hint = "Type / for blocks";
+        // the words are there first and seen a frame later, so they fade in
+        requestAnimationFrame(() => next === hinted && next.classList.add("quire-hinted"));
+    };
+    surface.on("select", hint);
+    surface.on("change", hint);
+    surface.element.addEventListener("focus", hint);
+    surface.element.addEventListener("blur", () => setTimeout(hint));
+
+    // ArrowUp at the very start of the writing goes up to the title
+    surface.element.addEventListener("keydown", (event) => {
+        if (event.key !== "ArrowUp" || event.shiftKey || event.ctrlKey || event.metaKey || event.defaultPrevented) return;
+        const { anchor, focus } = surface.getSelection();
+        if (focus.offset === 0 && anchor.offset === 0 && focus.path.every((step) => step === 0) && anchor.path.every((step) => step === 0)) {
+            event.preventDefault();
+            title.focus();
+        }
+    });
+    const dictation = createDictation(surface);
+
+    // ---- the link field, from the bar's button or Ctrl+K ----
+    const links = flowMenu("Link");
+    const openLink = (from: HTMLElement) => {
+        if (links.isOpen()) return links.close(true);
+        const selection = surface.getSelection();
+        const current = linkAt(surface.getDocument(), collapsed(selection) ? selection.focus : selection.anchor);
+        const finish = () => {
+            links.close(false);
+            surface.focus();
+        };
+        const form = linkForm(current?.href, {
+            set: (href) => {
+                surface.run((d) => linkAction(href)({ doc: d, selection }).doc);
+                finish();
+            },
+            remove: () => {
+                surface.run((d) => linkAction(null)({ doc: d, selection }).doc);
+                finish();
+            },
+            cancel: finish,
+        }, places(surface.getDocument()));
+        links.open(from, form);
+        form.querySelector("input")?.focus({ preventScroll: true });
+    };
+
+    // ---- About mdQuire, from Tools and the three dots: something to read, so a dialog grown out of where it was asked for ----
+    const showAbout = (from: HTMLElement) => openDialog(from, { title: "About mdQuire", body: [aboutPanel()], action: { label: "Done", press: (_, dialog) => void dialog.close() }, onClose: () => surface.focus() });
+
+    // ---- the three-dot menu ----
+    const give = (file: Blob, fileName: string) => {
+        const anchor = make("a");
+        anchor.href = URL.createObjectURL(file);
+        anchor.download = fileName;
+        anchor.click();
+        setTimeout(() => URL.revokeObjectURL(anchor.href), 1000);
+    };
+    /** The document's name without its folder or ending, for a download's name. */
+    const stem = () => name.replace(/^.*\//, "").replace(/\.(md|mdx|markdown|txt|quire)$/i, "") || "Untitled";
+    const download = () => {
+        const doc = surface.getDocument();
+        if (!doc.quire) session.downloaded();
+        // a .quire document's Markdown is downloaded with its color, size and centring as small HTML, as a Markdown file keeps them
+        const ending = doc.mdx ? ".mdx" : ".md";
+        give(new Blob([write(doc)], { type: "text/markdown" }), /\.(md|mdx|markdown|txt)$/i.test(name) ? name.replace(/^.*\//, "") : `${stem()}${ending}`);
+    };
+    const downloadQuire = async () => {
+        session.downloaded();
+        const { text: markdown, quire } = written(surface.getDocument(), write);
+        const pictures = (store && id && (await store.pictures?.(id).catch(() => undefined))) || new Map<string, Blob>();
+        give(new Blob([(await packQuire({ markdown, parts: quire ?? emptyParts(), pictures })) as BlobPart], { type: "application/zip" }), `${stem()}.quire`);
+    };
+    /** Makes a `.quire` copy of a Markdown document and opens it: in the same place if it can keep one, in the browser if not, or as a download. */
+    const makeRich = async () => {
+        const doc = surface.getDocument();
+        if (doc.quire) return;
+        const copy = written(asQuire(doc), write);
+        const target = store?.quire && store.can.create ? store : options.richHome;
+        if (!target) {
+            const pictures = new Map<string, Blob>();
+            give(new Blob([(await packQuire({ markdown: copy.text, parts: copy.quire ?? emptyParts(), pictures })) as BlobPart], { type: "application/zip" }), `${stem()}.quire`);
+            return;
+        }
+        await create(target, stem(), copy.text, copy.quire);
+        surface.focus();
+    };
+    // ---- File, Download: each kind of file the document can be given as ----
+    const shownPictures = () => gatherPictures(surface.getDocument(), async (src) => (store && id && store.show ? store.show(id, src) : undefined));
+    /** Says when a download leaves out pictures it did not fetch, those from elsewhere on the web among them. */
+    const sayElsewhere = (pictures: Map<string, Picture>) => {
+        if (heldElsewhere(surface.getDocument(), pictures).length) bar.setStatus("Downloaded", "Pictures from elsewhere on the web were not fetched, so the download does not hold them", "quiet");
+    };
+    const downloadAsQuire = async () => {
+        const doc = surface.getDocument();
+        if (doc.quire) return downloadQuire();
+        session.downloaded();
+        // a Markdown document goes into the zip as it is, with its notes, as a .quire document of its own
+        const { text: markdown, quire } = written(asQuire(doc), write);
+        const pictures = (store && id && (await store.pictures?.(id).catch(() => undefined))) || new Map<string, Blob>();
+        give(new Blob([(await packQuire({ markdown, parts: quire ?? emptyParts(), pictures })) as BlobPart], { type: "application/zip" }), `${stem()}.quire`);
+    };
+    const downloadLines = (): MenuItem[] => [
+        { label: "Markdown", icon: "markdown", hint: surface.getDocument().mdx ? ".mdx" : ".md", run: () => (surface.getDocument().quire ? give(new Blob([markdownFor(surface.getDocument())], { type: "text/markdown" }), `${stem()}${surface.getDocument().mdx ? ".mdx" : ".md"}`) : download()) },
+        { label: "mdQuire document", icon: "file", hint: ".quire", run: () => void downloadAsQuire() },
+        {
+            label: "Web page",
+            icon: "globe",
+            hint: ".html",
+            run: async () => {
+                const pictures = await shownPictures();
+                give(new Blob([pageHtml(surface.getDocument(), { title: shownName(name), styles: await readingStyles(), pictures })], { type: "text/html" }), `${stem()}.html`);
+                sayElsewhere(pictures);
+            },
+        },
+        { label: "Plain text", icon: "text", hint: ".txt", run: () => give(new Blob([plainText(surface.getDocument())], { type: "text/plain" }), `${stem()}.txt`) },
+        {
+            label: "Word",
+            icon: "word",
+            hint: ".docx",
+            run: async () => {
+                const pictures = await shownPictures();
+                give(new Blob([(await docx(surface.getDocument(), { pictures, hex: colorHex, title: shownName(name) })) as BlobPart], { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" }), `${stem()}.docx`);
+                sayElsewhere(pictures);
+            },
+        },
+    ];
+    const bar = createBar(surface, {
+        name,
+        nameButton: frame.name,
+        status: frame.status,
+        colors: options.colors,
+        onImage: keepPicture,
+        onName: (from) => options.onName?.(from),
+        onLink: openLink,
+        onFind: () => find.open(),
+        onPrint: () => print(),
+        onSpelling: (from) => checking.open(from),
+        onZoom: (from) => (zooms.isOpen() ? zooms.close(true) : zooms.open(from, zoom.items(), document.activeElement === from)),
+        onTitle: () => title.focus(),
+        // the three dots hold the bar's folded tools; of the page's own only what no menu has (bun run edit's Publish)
+        more: () => options.more?.() ?? [],
+    });
+    // checking (src/quire/md/check/): underlines, a count at the bar's end, and its settings from Tools
+    const checking = mountChecking({ surface, bar: bar.element, where: () => ({ store, id, name }), relayout: () => bar.layout() });
+    // ---- find and replace, from its button, the Edit menu, Ctrl+F and Ctrl+H ----
+    const find = createFind(surface, paper, () => bar.element.getBoundingClientRect().bottom);
+    // dictation: a microphone at the end of the bar after the three dots, the shortcut, and its lines in the three-dot menu (src/quire/md/dictation/)
+    if (!dictation.why) dictation.mount(bar.element.querySelector<HTMLElement>(".quire-bar-end")!);
+    // the rich view and the Markdown, side by side when there is room and one in place of the other when not
+    const markdown = createMarkdownView(surface);
+    const panes = make("div", "quire-panes");
+    panes.append(paper, markdown.element);
+    const showMarkdown = (shown: boolean) => {
+        // three columns need room: on a smaller window the outline folds away when the Markdown comes
+        if (shown && outlineView.isOpen() && host.getBoundingClientRect().width < 80 * parseFloat(getComputedStyle(document.documentElement).fontSize)) outlineView.close();
+        host.classList.toggle("markdown", shown);
+        markdown.element.inert = !shown;
+        markdown.refresh();
+        // on a narrow screen the Markdown takes the text's place, so focus goes with it
+        if (getComputedStyle(paper).visibility === "hidden" || (shown && matchMedia("(max-width: 60rem)").matches)) (shown ? markdown.element : surface.element).focus({ preventScroll: true });
+    };
+    markdown.element.inert = true;
+    // the top is the frame's: the page's own, or one made above the editor in the same shape; the bar goes in its place
+    frame.place("bar").append(bar.element);
+    bar.element.querySelector('[aria-label="Outline"]')?.setAttribute("data-outline-control", "");
+    column.append(panes);
+
+    // ---- the paper and how near it is seen: a small control at the window's lower right, the View and File menus, and Ctrl with plus, minus and 0 ----
+    const pageNow = (): Page => surface.getDocument().quire?.page ?? PAGE;
+    /** The width the page may fill in page view: the window less its gutters, and half of that while the Markdown is beside it. */
+    const space = () => {
+        const gutter = parseFloat(getComputedStyle(host).getPropertyValue("--edge")) || 16;
+        return (host.clientWidth - gutter * 2) / (host.classList.contains("markdown") ? 2 : 1);
+    };
+    const zooms = flowMenu("Zoom", { align: "right" });
+    // the page as pages of that paper in page view, with the header, footer and numbers of a .quire document
+    const pages = createPages(paper, surface, { page: pageNow, rich: () => !!surface.getDocument().quire });
+    const zoom = createZoom(paper, column, space, pageNow, pages.paged, (now) => {
+        bar.setZoom(percent(now));
+        requestAnimationFrame(() => roomBeside());
+    });
+    // ---- the two looks, A (no page) and C (light paper), kept for every document; and page view, kept for each ----
+    const looked = (): Look => {
+        try {
+            return localStorage.getItem(LOOK_KEY) === "paper" ? "paper" : "none";
+        } catch {
+            return "none";
+        }
+    };
+    let look: Look = looked();
+    let easing: ReturnType<typeof setTimeout> | undefined;
+    /** Shows the writing in a look, easing from the one it was in; `keep` remembers it for every document. */
+    const showLook = (next: Look, keep = true) => {
+        look = next;
+        if (keep) {
+            host.classList.add("easing");
+            clearTimeout(easing);
+            easing = setTimeout(() => host.classList.remove("easing"), 600);
+        }
+        host.classList.toggle("look-paper", next === "paper");
+        caret.setColours(next === "paper" ? FLAG_ON_PAPER : FLAG);
+        if (keep) {
+            try {
+                localStorage.setItem(LOOK_KEY, next);
+            } catch {
+                // a browser keeping nothing still shows the look; it is only not remembered
+            }
+        }
+        // the page's width eases from one look to the other; the zoom looks again once it has
+        setTimeout(() => zoom.refresh(false), 500);
+    };
+    showLook(look, false);
+    const viewKey = () => `quire-view:${store && id ? `${store.label}:${id}` : name}`;
+    const rememberedView = () => {
+        try {
+            return localStorage.getItem(viewKey()) === "page";
+        } catch {
+            return false;
+        }
+    };
+    /** Shows the document in page view or in its look; `keep` remembers the choice for it. */
+    const showView = (paged: boolean, keep = true) => {
+        pages.set(paged);
+        host.classList.toggle("paged", paged);
+        if (keep) {
+            try {
+                localStorage.setItem(viewKey(), paged ? "page" : "writing");
+            } catch {
+                // a browser keeping nothing still shows the view; it is only not remembered
+            }
+        }
+        zoom.refresh();
+    };
+    showView(rememberedView(), false);
+    // page setup is a form of three choices, so a dialog, as Docs has it: nothing changes until OK, and Cancel leaves the page as it was
+    const openSetup = (from: HTMLElement) => {
+        const form = setupForm(pageNow());
+        openDialog(from, {
+            title: "Page setup",
+            body: [form.element],
+            className: "quire-setup-dialog",
+            dismiss: "Cancel",
+            action: {
+                label: "OK",
+                press: (_, dialog) => {
+                    surface.run((doc) => setPage(doc, form.page()));
+                    void dialog.close();
+                },
+            },
+            onClose: () => surface.focus(),
+        });
+    };
+    // as the Markdown opens beside the sheet, or the window (or the browser's own zoom) changes, the sheet's column narrows and the sheet follows it
+    // what the editor listens to on the page and the host, let go with the frame when it is destroyed
+    const watch = frame.watch;
+    // only a change of width matters: the editor grows taller with every line typed
+    let wideAt = 0;
+    watch(markdown.element, () => zoom.refresh(false));
+    watch(host, () => {
+        if (host.clientWidth === wideAt) return;
+        wideAt = host.clientWidth;
+        zoom.refresh(false);
+    });
+    // print is given the paper and margins of the page set up, in a stylesheet made in script: the page's
+    // policy refuses a <style> element added at run time, but not a sheet built through the CSSOM and adopted
+    const printing = typeof CSSStyleSheet === "function" && "adoptedStyleSheets" in document ? new CSSStyleSheet() : undefined;
+    if (printing) document.adoptedStyleSheets = [...document.adoptedStyleSheets, printing];
+    let printed = "";
+    // looked at only when the page set up has changed, so that typing measures nothing
+    const showPage = () => {
+        const rule = `@media print { ${pageRule(pageNow())} }`;
+        if (printed === rule) return;
+        printed = rule;
+        printing?.replaceSync(rule);
+        zoom.refresh();
+    };
+    surface.on("change", showPage);
+    showPage();
+    // Ctrl with + (as well as =) zooms in too, as a browser does
+    const zoomKey = (event: KeyboardEvent) => {
+        if (!(event.ctrlKey || event.metaKey) || event.altKey || event.key !== "+" || event.code === "Equal") return;
+        event.preventDefault();
+        zoom.step(1);
+    };
+    host.addEventListener("keydown", zoomKey);
+    surface.on("link", () => openLink(bar.seen("Link")));
+    const selectBar = createSelectBar(surface, () => bar.element.getBoundingClientRect().bottom, (from) => notes.add(from));
+    const linkCard = createLinkCard(surface, openLink, () => bar.element.getBoundingClientRect().bottom);
+    const outlineView = createOutline(surface, () => bar.element.getBoundingClientRect().bottom, (open) => {
+        host.classList.toggle("outlined", open);
+    });
+    /** Opens or shuts the outline as the writer asks; on a wide window, where it is part of the look, it is kept as they left it. */
+    function toggleOutline() {
+        if (outlineView.isOpen()) outlineView.close();
+        else outlineView.open();
+        if (!wide()) return;
+        try {
+            localStorage.setItem(OUTLINE_KEY, outlineView.isOpen() ? "open" : "shut");
+        } catch {
+            // kept for this visit only
+        }
+    }
+    host.insertBefore(outlineView.element, column);
+    // the document's file, length and where it is kept, in the right margin of the look with no page
+    const details = createDetails();
+    host.append(details.element);
+    // the word count while typing, at the window's lower left, as View shows or hides it
+    const counter = createLiveCount(() => {
+        const doc = surface.getDocument();
+        const selection = surface.getSelection();
+        return { whole: plainText(doc), part: collapsed(selection) ? undefined : plainText(documentOf(fragment(doc, selection))), pages: pages.paged() ? pages.now() : undefined };
+    });
+    host.append(counter.element);
+    /** Says on the editor, and on the page for its scrolling, whether the counter is shown. */
+    const counting = () => {
+        host.classList.toggle("counting", counter.shown());
+        document.documentElement.classList.toggle("quire-counting", counter.shown());
+    };
+    counting();
+    surface.on("change", () => counter.update());
+    surface.on("select", () => counter.update());
+    // the outline and the details stand in the margins beside the sheet; when the sheet, zoomed or on a small
+    // window, leaves them too little room to be read whole, they fade away rather than be cut or run under it
+    const roomBeside = () => {
+        const room = parseFloat(getComputedStyle(details.element).width);
+        const least = 8.5 * parseFloat(getComputedStyle(document.documentElement).fontSize);
+        host.classList.toggle("cramped", Number.isFinite(room) && room < least);
+    };
+    let besideAt = 0;
+    watch(host, () => {
+        if (host.clientWidth === besideAt) return;
+        besideAt = host.clientWidth;
+        roomBeside();
+    });
+    let savedAt: number | undefined;
+    const showDetails = () => details.show({ file: fileName(name, surface.getDocument().quire ? ".quire" : surface.getDocument().mdx ? ".mdx" : ".md"), words: countWords(surface.getDocument()), place: store?.label, saved: savedAt });
+    let detailing: ReturnType<typeof setTimeout> | undefined;
+    surface.on("change", () => {
+        clearTimeout(detailing);
+        detailing = setTimeout(showDetails, 400);
+    });
+    // on a wide window the outline opens with the editor, unless the writer shut it last time; as the
+    // window narrows it goes, rather than become a panel over the page, and comes back as it widens
+    const outlineAsKept = () => {
+        let kept: string | null = null;
+        try {
+            kept = localStorage.getItem(OUTLINE_KEY);
+        } catch {
+            // nothing kept: the outline opens
+        }
+        if (!wide()) outlineView.close();
+        else if (kept !== "shut" && !outlineView.isOpen()) outlineView.open();
+    };
+    outlineAsKept();
+    const widening = typeof matchMedia !== "undefined" ? matchMedia("(min-width: 64rem)") : undefined;
+    widening?.addEventListener("change", outlineAsKept);
+    const emojiList = createEmojiPicker(surface);
+    // suggested words, faint after the caret, from her own writing (suggest-view.ts); after the emoji list, which takes Tab first
+    const suggestions = mountSuggestions(surface, paper, { stores: () => options.learnFrom?.() ?? [], current: () => ({ store, id }), say: (short, full) => bar.setStatus(short, full) });
+    const tableTools = createTableTools(surface, () => bar.element.getBoundingClientRect().bottom);
+    const pictureTools = createPictureTools(surface, { keep: keepPicture, margin: host, top: () => bar.element.getBoundingClientRect().bottom });
+    // a code block's language and a callout's kind, each a menu from its control in the text
+    const blockMenus = createBlockMenus(surface);
+    // the writer's notes: marked in the text, in the right margin on a wide window and a list on a narrow one
+    const notes = createCommentMargin(surface, { place: notesPlace });
+    host.append(notes.element);
+    notes.opened();
+
+    // ---- the menu row: every command by name, above the bar ----
+    // with every match selected (Edit, Select all occurrences) a command goes on each; a Format key does too
+    const matching = createMatching(surface, { command: (event) => !!formatKey(event), told: (count) => bar.setStatus(`${count} selected`, `${count} ${count === 1 ? "place is" : "places are"} selected: typing or a Format command changes every one, and Escape leaves them`, "quiet") });
+    const formatKey = (event: KeyboardEvent) => {
+        const found = shortcutFor(chordFrom(event, MAC));
+        const run = found?.menu === "Format" && found.command ? actions[found.command] : undefined;
+        run?.();
+        return run;
+    };
+    const doing = (action: Action) => () => {
+        surface.run((doc, selection) => matching.apply(action, { doc, selection }));
+        surface.focus();
+    };
+    // ---- File's Make a copy, Rename and Details, and Edit's Cut, Copy and Paste, which the keys already do ----
+    /** Makes a copy of the document beside it, its pictures with it, and opens the copy; where copies cannot be made, in this browser. */
+    const makeCopy = async () => {
+        if (!(await ready())) return;
+        const wanted = copyName(name);
+        try {
+            if (store?.can.create && id) {
+                const made = await copyDocument(store, id, wanted);
+                const entry = (await store.list().catch(() => [])).find((each) => each.id === made.id) ?? { id: made.id, name: wanted };
+                await open(store, entry);
+            } else if (options.richHome) {
+                const { text: markdown, quire } = written(surface.getDocument(), write);
+                await create(options.richHome, wanted, markdown, quire);
+            }
+            surface.focus();
+        } catch (error) {
+            bar.setStatus("No copy", `The copy was not made: ${error instanceof Error ? error.message : String(error)}`, "warn");
+        }
+    };
+    /** Rename goes to the title, its words selected, since typing there renames the document. */
+    const renameHere = () => {
+        if (title.element.readOnly) return bar.setStatus("Not renamed", "A document kept here cannot be renamed", "quiet");
+        title.focus();
+        title.element.select();
+    };
+    /** What is known about the document, in a small dialog: the margin's facts, with its size. */
+    const showFacts = (from: HTMLElement) => {
+        const doc = surface.getDocument();
+        const { text: markdown, quire } = written(doc, write);
+        const bytes = new Blob([markdown, quire?.style ?? "", quire?.notes ?? ""]).size;
+        const list = make("dl", "quire-facts");
+        const facts: [string, string][] = [
+            ["File", fileName(name, doc.quire ? ".quire" : doc.mdx ? ".mdx" : ".md")],
+            ["Kept", keptLine(store?.label, savedAt, Date.now())],
+            ["Size", sizeLine(bytes, doc.quire ? new Set(pictureAddresses(doc)).size : 0)],
+            ["Length", lengthLine(countWords(doc))],
+        ];
+        for (const [term, value] of facts) list.append(make("dt", "", term), make("dd", "", value));
+        openDialog(from, { title: "Details", body: [list], action: { label: "Done", press: (_, dialog) => void dialog.close() }, onClose: () => surface.focus() });
+    };
+    /** The keys' own cut and copy, asked for from a menu: the surface takes them as it takes the keys. */
+    const clip = (how: "cut" | "copy") => {
+        surface.focus();
+        const keys = `${MAC ? "Cmd" : "Ctrl"}+${how === "cut" ? "X" : "C"}`;
+        if (!document.execCommand(how)) bar.setStatus(`Press ${keys}`, `This browser did not let the menu ${how}: press ${keys}`, "quiet");
+    };
+    /** Paste from a menu asks the clipboard for what it holds; a browser that will not give it says so in the status, and the keys still paste. */
+    const pasteHere = async () => {
+        try {
+            const data = new DataTransfer();
+            for (const item of await navigator.clipboard.read()) {
+                for (const type of item.types) {
+                    const blob = await item.getType(type);
+                    if (type === "text/html" || type === "text/plain") data.setData(type, await blob.text());
+                    else if (type.startsWith("image/")) data.items.add(new File([blob], `picture.${type.slice(6)}`, { type }));
+                }
+            }
+            surface.focus();
+            surface.pasteData(data);
+        } catch {
+            const keys = MAC ? "Cmd+V" : "Ctrl+V";
+            bar.setStatus(`Press ${keys}`, `This browser did not let mdQuire read the clipboard: press ${keys} to paste`, "quiet");
+        }
+    };
+    // the lines of the menus beside Format's and Insert's lines, and the forms beside them
+    const docs = moreCommands(surface, { doing, done: () => row.menu.close(false), title: () => title.focus() });
+    /** Every command, by name: the menus, the palette, the keyboard's shortcuts (shortcuts.ts) and the Ctrl+/ panel all run these. */
+    const actions: RowActions = {
+                file: options.fileItems,
+                subs: { ...docs.subs, downloadAs: downloadLines, zoom: () => zoom.items(), ...bar.pickers.lines },
+                forms: { ...docs.forms, symbols: () => specialGrid(typeSpecial(surface)), emoji: () => emojiGrid(putter(surface)) },
+                // from its key the emoji grid grows out of the cursor
+                emoji: emojiAtCursor(surface),
+                title: docs.title,
+                subtitle: docs.subtitle,
+                turnRich: () => void makeRich(),
+                history: () => void history.open(),
+                pageSetup: () => openSetup(row.words[0]!),
+                print: () => print(),
+                undo: () => (surface.undo(), surface.focus()),
+                redo: () => (surface.redo(), surface.focus()),
+                find: () => find.open(),
+                replace: () => find.open(true),
+                selectAll: () => {
+                    const paths = blockPaths(surface.getDocument());
+                    const last = paths[paths.length - 1] ?? [0];
+                    surface.setSelection({ anchor: { path: paths[0] ?? [0], offset: 0 }, focus: { path: last, offset: lengthOf(surface.getDocument(), last) } });
+                    surface.focus();
+                },
+                link: () => openLink(bar.seen("Link")),
+                outline: () => (toggleOutline()),
+                markdown: () => showMarkdown(!host.classList.contains("markdown")),
+                pageless: () => showView(false),
+                pages: () => showView(true),
+                lookNone: () => showLook("none"),
+                lookPaper: () => showLook("paper"),
+                table: doing(addTable),
+                picture: () => bar.pickImage(),
+                divider: doing(addDivider),
+                code: doing(addCode),
+                footnote: doing(addFootnote),
+                pageBreak: doing(pageBreakAt),
+                headerFooter: () => pages.edit(row.words[3]!),
+                bullet: doing(toggleList("bullet")),
+                number: doing(toggleList("number")),
+                task: doing(toggleList("task")),
+                bold: doing(toggle("bold")),
+                italic: doing(toggle("italic")),
+                underline: doing(toggle("underline")),
+                strike: doing(toggle("strike")),
+                inline: doing(toggle("code")),
+                paragraph: doing(setStyleOf("paragraph")),
+                heading1: doing(setStyleOf("heading1")),
+                heading2: doing(setStyleOf("heading2")),
+                heading3: doing(setStyleOf("heading3")),
+                quote: doing(setStyleOf("quote")),
+                left: doing(align("left")),
+                center: doing(align("center")),
+                right: doing(align("right")),
+                justify: doing(align("justify")),
+                check: () => checking.open(row.words[5]!),
+                about: () => showAbout(row.words[6]!),
+                marked: doing(toggle("mark")),
+                superscript: doing(toggle("sup")),
+                subscript: doing(toggle("sub")),
+                help: () => openDialog(row.words[6]!, { title: "mdQuire help", body: helpBody(showShortcuts), className: "quire-help", action: { label: "Done", press: (_, dialog) => void dialog.close() }, onClose: () => surface.focus() }),
+                typing: () =>
+                    openTyping(row.words[5]!, {
+                        // the arrows and signs are the switch that was there first, kept where it always was
+                        off: () => new Set([...surface.typingOff(), ...(surface.symbols() ? [] : ["signs"])]),
+                        set: (off) => {
+                            surface.setSymbols(!off.has("signs"));
+                            off.delete("signs");
+                            surface.setTyping(off);
+                            try {
+                                localStorage.setItem(SYMBOLS_KEY, surface.symbols() ? "on" : "off");
+                                localStorage.setItem(TYPING_KEY, JSON.stringify([...off]));
+                            } catch {
+                                // kept for this visit only
+                            }
+                        },
+                        onClose: () => surface.focus(),
+                    }),
+                comments: () => notes.show(!notes.shown(), row.words[2]!),
+                comment: () => notes.add(row.words[3]!),
+                date: doing((state) => typeIn(state, dateText(new Date()))),
+                contents: doing(addContents),
+                updateContents: () => (surface.run((doc) => updateContents(doc)), surface.focus()),
+                fullScreen: () => fullScreen(!frame.isFull()),
+                liveCount: () => (counter.show(!counter.shown()), counting()),
+                makeCopy: () => void makeCopy(),
+                rename: renameHere,
+                fileDetails: () => showFacts(row.words[0]!),
+                cut: () => clip("cut"),
+                copy: () => clip("copy"),
+                paste: () => void pasteHere(),
+                delete: doing((state) => {
+                    const outcome = handle(state, { type: "key", key: "Delete" });
+                    return outcome && "state" in outcome ? outcome.state : state;
+                }),
+                pastePlain: () => {
+                    // the menu line asks the clipboard for its text; a browser that will not give it says so, and Ctrl+Shift+V still does it
+                    void navigator.clipboard?.readText().then(
+                        (text) => (surface.pasteText(text), surface.focus()),
+                        () => bar.setStatus("Press Ctrl+Shift+V", "This browser did not let mdQuire read the clipboard: press Ctrl+Shift+V (Cmd+Shift+V on a Mac) to paste without formatting", "warn"),
+                    );
+                },
+                zoomIn: () => zoom.step(1),
+                zoomOut: () => zoom.step(-1),
+                zoomReset: () => zoom.reset(),
+                callout: doing(boxOf({ callout: "NOTE" })),
+                details: doing(boxOf({ details: { summary: "", open: false } })),
+                definitions: doing(definitionList),
+                maths: doing(drawnBlock("math")),
+                diagram: doing(drawnBlock("mermaid")),
+                figure: doing(component("Figure")),
+                terminal: doing(component("Terminal")),
+                timeline: doing(component("Timeline")),
+                playhere: doing(component("PlayHere")),
+                heading4: doing(setStyleOf("heading4")),
+                heading5: doing(setStyleOf("heading5")),
+                heading6: doing(setStyleOf("heading6")),
+                subtext: doing(toggleSubtext),
+                spoiler: doing(toggle("spoiler")),
+                bigger: () => (bar.sizeBy(1), surface.focus()),
+                smaller: () => (bar.sizeBy(-1), surface.focus()),
+                indent: doing(indentBy(1)),
+                outdent: doing(indentBy(-1)),
+                clear: doing(clearFormat),
+                wordCount: () => showCount(row.words[5]!),
+                shortcuts: () => showShortcuts(row.words[6]!),
+                // Alt+/, which opened the search of the menus, opens the palette, which does that job
+                palette: () => palette.open(),
+                // the slash menu opens on the first five again
+                forgetUsed: () => (remember(), bar.setStatus("Forgotten", "What you use most is forgotten: the slash menu opens on its first five again")),
+                tools: () => [{ label: "Personal dictionary", run: () => checking.dictionary(row.words[5]!) }, ...dictation.items(row.words[5]!), ...suggestions.items()],
+                selectMatching: () => matching.start(),
+    };
+    // the command palette: the menus' lines and what fits where the cursor is, from the bottom left corner or a slash on an empty line (palette.ts)
+    // the slash menu first, so that its list is the first of the two in the page, as when they were one
+    const slash = createSlashMenu(surface, { pickImage: bar.pickImage });
+    const palette = frame.palette(paletteFor(surface, { table: tableTools.lines, picture: pictureTools.lines }));
+    // a right-click in the text, or the menu key, opens the menus' own lines for it there
+    const textMenu = createTextMenu(surface, () => row.headings(), (at) => checking.linesAt(at));
+    const row = frame.menus(() =>
+        headings(
+            {
+                rich: !!surface.getDocument().quire,
+                mdx: surface.getDocument().mdx,
+                contents: !!findContents(surface.getDocument()),
+                matches: () => matchingSpots({ doc: surface.getDocument(), selection: surface.getSelection() }).length,
+                paged: pages.paged(),
+                look,
+                outline: outlineView.isOpen(),
+                markdown: host.classList.contains("markdown"),
+                comments: notes.shown(),
+                counting: counter.shown(),
+                align: aligned(surface.getDocument(), surface.getSelection().focus.path),
+                inList: !!listHere(surface.getDocument(), surface.getSelection().focus.path),
+                inHeading: blockAt(surface.getDocument(), surface.getSelection().focus.path)?.kind === "heading",
+            },
+            actions,
+        ),
+    );
+    // ---- the keyboard's shortcuts: each runs its command from the one table (shortcuts.ts); the surface's own it has already taken ----
+    // the frame opens a menu on Alt and its letter, or F10 (menu-row.ts), and asks here for the rest
+    frame.keys((event) => {
+        const found = shortcutFor(chordFrom(event, MAC));
+        if (!found?.command || found.surface || found.browser) return;
+        // a field of the editor's own (the find bar, a menu's search) keeps the keys that edit text in it
+        const field = event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement;
+        if (field && ["selectAll", "pastePlain"].includes(found.command)) return;
+        // Ctrl+Shift+V pastes through the browser's own paste, which the surface takes as plain text
+        if (found.command === "pastePlain") return;
+        return actions[found.command];
+    });
+    // ---- the word count, Ctrl+Shift+C: a small dialog, as Docs has ----
+    const showCount = (from: HTMLElement) => {
+        const doc = surface.getDocument();
+        const all = plainText(doc);
+        const selection = surface.getSelection();
+        const picked = collapsed(selection) ? undefined : plainText(documentOf(fragment(doc, selection)));
+        const rows = countRows(all, picked);
+        const table = make("table", "quire-count");
+        for (const [label, whole, part] of rows) {
+            const tr = make("tr");
+            tr.append(make("th", "", label), make("td", "", whole.toLocaleString("en")));
+            if (picked !== undefined) tr.append(make("td", "", (part ?? 0).toLocaleString("en")));
+            table.append(tr);
+        }
+        if (picked !== undefined) {
+            const head = make("tr", "quire-count-head");
+            head.append(make("th"), make("th", "", "Document"), make("th", "", "Selected"));
+            table.prepend(head);
+        }
+        openDialog(from, { title: "Word count", body: [table], action: { label: "Done", press: (_, dialog) => void dialog.close() }, onClose: () => surface.focus() });
+    };
+    // ---- every shortcut and every piece of typing, Ctrl+/: a dialog with a search, grown from where it was asked for ----
+    const showShortcuts = (from: HTMLElement) => {
+        // a plain field, not a search one, so that Escape closes the dialog at once rather than first clearing what was typed
+        const field = make("input", "quire-link-field quire-keys-search");
+        field.type = "text";
+        field.placeholder = "Search shortcuts";
+        field.setAttribute("aria-label", "Search shortcuts");
+        const list = make("div", "quire-keys");
+        const fill = () => {
+            const found = findShortcuts(field.value);
+            const typed = findTyping(field.value);
+            list.replaceChildren();
+            const section = (title: string, rows: [string, string][]) => {
+                if (rows.length === 0) return;
+                list.append(make("h3", "quire-keys-head", title));
+                const table = make("table", "quire-keys-table");
+                for (const [keys, label] of rows) {
+                    const tr = make("tr");
+                    const { shown, words } = keySymbols(keys, MAC);
+                    const cell = make("td", "quire-keys-keys", shown);
+                    if (words) cell.title = words;
+                    tr.append(cell, make("td", "", label));
+                    table.append(tr);
+                }
+                list.append(table);
+            };
+            for (const menu of ["File", "Edit", "View", "Insert", "Format", "Tools", "In the text"] as const) section(menu === "In the text" ? "Keys in the text" : menu, found.filter((each) => each.menu === menu).map((each) => [each.keys, each.label]));
+            section("Typing", typed.map((each) => [each.typed, `${each.becomes}${each.origin === "extra" ? "" : `, as ${each.origin} has it`}`]));
+            if (!list.firstChild) list.append(make("p", "quire-keys-none", "Nothing has those words."));
+        };
+        field.addEventListener("input", fill);
+        fill();
+        openDialog(from, { title: "Keyboard shortcuts", body: [field, list], className: "quire-keys-dialog", action: { label: "Done", press: (_, dialog) => void dialog.close() }, onClose: () => surface.focus() });
+        field.focus({ preventScroll: true });
+    };
+
+    // ---- full screen, from View or Ctrl+Shift+F: the frame folds the top away (core/frame.ts) and the keyboard comes back to the writing ----
+    const fullScreen = frame.fullScreen;
+    frame.onFull(() => surface.focus());
+
+    // ---- the document as the core's session holds it: saving as it changes, conflicts, version history, renaming, moving between documents ----
+    const body: Body = {
+        writing: () => written(surface.getDocument(), write),
+        load: (found, entry) => {
+            surface.setDocument(keptNotes(opened(found.text, found.quire, { mdx: /\.mdx$/i.test(entry.id) || /\.mdx$/i.test(entry.name) }), notesPlace()).doc);
+            notes.opened();
+            showTitle();
+            showView(rememberedView(), false);
+        },
+        replace: (theirs) => surface.run(() => opened(theirs.text, theirs.quire ?? (surface.getDocument().quire ? emptyParts() : undefined), { mdx: surface.getDocument().mdx })),
+        empty: () => {
+            fullScreen(false);
+            if (!wide()) outlineView.close();
+            surface.setDocument(read(""));
+            notes.opened();
+            showTitle();
+        },
+        placed: (where) => {
+            store = where.store;
+            id = where.id;
+            name = where.name;
+        },
+        named: (value) => {
+            bar.setName(value);
+            showTitle();
+        },
+        status: (status) => {
+            if (status.state === "saved") {
+                savedAt = Date.now();
+                suggestions.saved();
+            }
+            showDetails();
+        },
+        leaving: () => notes.keep(),
+        moved: (before) => moveNotes(before, notesPlace() ?? before),
+        download: () => void (surface.getDocument().quire ? downloadQuire() : download()),
+        from: () => bar.statusLine,
+        focus: () => surface.focus(),
+    };
+    const session = createSession(body, { name, store, id, mark: options.mark, versions, say: bar.setStatus, onRename: options.onRename, onOpen: options.onOpen });
+    // a rename typed in the title and not yet sent is sent before the document is left
+    session.settle(() => clearTimeout(typing));
+    const { open, create, ready, rename } = session;
+    const history = createHistoryPanel(versionView(surface), versions, session.historyKey, session.keeper);
+
+    // what only a .quire document can keep folds away from the bar while the document is Markdown
+    const richNow = () => {
+        const on = !!surface.getDocument().quire;
+        bar.setRich(on);
+        host.classList.toggle("rich", on);
+    };
+    surface.on("change", richNow);
+    richNow();
+    showTitle();
+    hint();
+    // a title kept in the document follows a change from elsewhere (undo, the Markdown, a form)
+    surface.on("change", () => {
+        if (options.title && document.activeElement !== title.element) showTitle();
+    });
+    // each edit is saved once typing pauses and kept in the history; a document being put in place of another is not an edit (the session sees to it)
+    surface.on("change", () => session.changed());
+
+    return {
+        surface,
+        /** Every command by name, as the menus, the shortcuts and the Ctrl+/ panel run them. */
+        commands: actions,
+        paper,
+        leave: session.leave,
+        getName: () => name,
+        current: () => ({ store, id, name }),
+        open,
+        create,
+        ready,
+        say: (short, full) => bar.setStatus(short, full, "warn"),
+        flush: session.flush,
+        status: session.status,
+        nameElement: () => bar.name,
+        rename,
+        view({ outline, markdown: shown, plain }) {
+            if (outline !== undefined) (outline ? outlineView.open() : outlineView.close());
+            if (plain !== undefined) host.classList.toggle("plain", plain);
+            if (shown !== undefined || plain) showMarkdown(plain || !!shown);
+        },
+        destroy() {
+            caret.destroy();
+            details.destroy();
+            counter.destroy();
+            document.documentElement.classList.remove("quire-counting");
+            widening?.removeEventListener("change", outlineAsKept);
+            checking.destroy();
+            pages.destroy();
+            if (printing) document.adoptedStyleSheets = document.adoptedStyleSheets.filter((sheet) => sheet !== printing);
+            find.destroy();
+            bar.destroy();
+            dictation.destroy();
+            surface.destroy();
+            for (const menu of [...bar.menus, links, zooms]) menu.box.remove();
+            selectBar.element.remove();
+            linkCard.element.remove();
+            slash.destroy();
+            textMenu.destroy();
+            emojiList.close();
+            suggestions.destroy();
+            tableTools.destroy();
+            pictureTools.destroy();
+            blockMenus.destroy();
+            notes.destroy();
+            session.destroy();
+            history.element.remove();
+            host.removeEventListener("keydown", zoomKey);
+            frame.destroy();
+            for (const timer of [typing, easing, detailing]) clearTimeout(timer);
+            host.replaceChildren();
+        },
+    };
+}

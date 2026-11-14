@@ -16,12 +16,12 @@ const quire = `${import.meta.dir}/../src/quire`;
 const styles = `${import.meta.dir}/../src/styles`;
 
 const page = `
-import { createEditor } from "${quire}/editor.ts";
-import { read } from "${quire}/read.ts";
-import { write } from "${quire}/write.ts";
-import { closeOthers } from "${quire}/ui.ts";
-import { memoryStorage } from "${quire}/versions.ts";
-import { opened } from "${quire}/quire-file.ts";
+import { createEditor } from "${quire}/md/editor.ts";
+import { read } from "${quire}/md/read.ts";
+import { write } from "${quire}/md/write.ts";
+import { closeOthers } from "${quire}/core/ui.ts";
+import { memoryStorage } from "${quire}/core/versions.ts";
+import { opened } from "${quire}/md/quire-parts.ts";
 const host = document.querySelector("#host");
 const editor = createEditor(host, read(""), { name: "Test", onImage: async () => "/picture.png", versions: memoryStorage() });
 const surface = editor.surface;

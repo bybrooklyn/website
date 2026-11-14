@@ -1,0 +1,41 @@
+---
+// The Quires' core with two kinds of document on one shelf: mdQuire's and a plain note
+// (src/quire/note/note.ts), the smallest kind the core takes. It is here to show that the core is a
+// frame any kind fills, and for its browser test; it is not a product. Its documents are kept in a
+// database of its own, apart from /mdquire/'s. Unlisted, and out of search and the sitemap.
+import Document from "../layouts/Document.astro";
+import Flags from "../components/Flags.astro";
+import { site } from "../data/site";
+import "../styles/quire.css";
+import "../styles/quire-markdown.css";
+import "../styles/quire-extras.css";
+---
+
+<Document title="Quire" description="Two kinds of document on one shelf." unlisted bodyClass="quire-app" icon="/mdquire/icon.svg">
+    <header class="quire-top">
+        <div class="quire-top-in">
+            <div class="quire-top-line">
+                <nav class="quire-trail" aria-label="Where you are">
+                    <div class="site-id">
+                        <a class="site-name" href="/">{site.name.toLowerCase()}</a>
+                        <Flags />
+                    </div>
+                    <span class="quire-stroke quire-word-stroke" aria-hidden="true">/</span>
+                    <a class="quire-word" href="/mdquire-kinds/" aria-label="Quire: all documents">Quire</a>
+                    <span class="quire-stroke quire-name-stroke" aria-hidden="true">/</span>
+                    <span class="quire-name-home"></span>
+                </nav>
+                <div class="quire-menus-home"></div>
+                <div class="quire-status-home"></div>
+            </div>
+            <div class="quire-bar-home"></div>
+        </div>
+    </header>
+    <main id="main" tabindex="-1">
+        <div id="quire" class="quire-host"></div>
+    </main>
+</Document>
+
+<script>
+    import "../scripts/mdquire-kinds";
+</script>

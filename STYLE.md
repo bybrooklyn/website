@@ -12,7 +12,7 @@ For anyone adding to it, a person or an agent. `bun run lint` checks what can be
   No dash used as punctuation, no emoji, no sales words.
 - **No new libraries.** `src/mote/` and `src/quire/` import nothing from outside their own folders.
   What is needed is written, with a test that measures the thing it is for. Two exceptions: their
-  tests may import from elsewhere, and dictation (`src/quire/dictation/`, and only there) runs its
+  tests may import from elsewhere, and dictation (`src/quire/md/dictation/`, and only there) runs its
   speech models on ONNX Runtime (`onnxruntime-web`), the one library she chose not to rewrite.
 - **Logic has tests** beside it (`thing.ts`, `thing.test.ts`), which say in their names what is
   held true. `bun run test` runs them. The linter holds Mote, mdQuire and the minis' engines to

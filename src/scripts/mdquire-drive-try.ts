@@ -4,8 +4,9 @@
 
 import { accents } from "../data/theme";
 import { css } from "../lib/color";
-import { startApp } from "../quire/app";
-import { memoryDrive } from "../quire/drive";
+import { startApp } from "../quire/core/app";
+import { markdown } from "../quire/md/kind";
+import { memoryDrive } from "../quire/core/drive";
 
 const memory = memoryDrive();
 (window as unknown as { driveTry: typeof memory }).driveTry = memory;
@@ -15,7 +16,7 @@ const colors = Object.entries(accents).map(([key, value]) => ({ name: names[key]
 
 if (host)
     void startApp(host, {
-        colors,
+        kinds: [markdown({ colors })],
         // a database of its own, so that nothing here mixes with documents kept by /mdquire/
         database: "quire-drive-try",
         top: document.querySelector<HTMLElement>(".quire-top") ?? undefined,

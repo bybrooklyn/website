@@ -4,7 +4,7 @@
 // are made by the server's own new-post endpoint, with its frontmatter. Files are not renamed or
 // taken away from here: that is done in the repository.
 
-import { StoreError, type Entry, type Store } from "../../src/quire/store";
+import { StoreError, type Entry, type Store } from "../../src/quire/core/store";
 
 /** One file the server offers, in a group of the list. */
 export interface Offered {

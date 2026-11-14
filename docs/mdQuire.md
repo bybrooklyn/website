@@ -7,13 +7,22 @@ site's first editor. It is hidden for now: its project page (`src/content/projec
 
 ## Where the code is
 
-- `src/quire/`: the editor. It imports nothing from outside its folder (`STYLE.md`, `scripts/lint.ts`);
-  the one exception is ONNX Runtime, imported only from `src/quire/dictation/`.
-- `src/quire/check/`: checking (spelling, prose, the site's writing rules, Markdown tidiness, links).
-- `src/quire/dictation/`: dictation, with the speech recognizer in `dictation/parakeet/` and notes on the
+- `src/quire/md/`: mdQuire, the first kind of document on the Quires' core ([quire-core](quire-core.md)).
+  `kind.ts` registers it with the core's app, `editor.ts` fills the core's frame, and the rest is its own:
+  the document model, reading and writing Markdown, typing, the surface, the bar, the menus' table
+  (`menus.ts`) and the rest named below. File names in this document are in `src/quire/md/` unless they
+  say `core/`.
+- `src/quire/core/`: the core it is built on: the app, the shelf, the documents list, the stores and Google
+  Drive, the `.quire` zip, the frame (the top, the menu row, the keys, the palette, full screen), the
+  session (saving, conflicts, version history), dialogs, menus and strips. Nothing in `src/quire/` imports
+  from outside it (`STYLE.md`, `scripts/lint.ts`); the one exception is ONNX Runtime, imported only from
+  `src/quire/md/dictation/`.
+- `src/quire/md/check/`: checking (spelling, prose, the site's writing rules, Markdown tidiness, links).
+- `src/quire/md/dictation/`: dictation, with the speech recognizer in `dictation/parakeet/` and notes on the
   models in `dictation/MODELS.md` and `dictation/parakeet/RUNTIME.md`.
 - `src/pages/mdquire.astro` and `src/scripts/mdquire.ts`: the public page. `src/pages/mdquire-dictation.astro`
-  is dictation's test page.
+  is dictation's test page; `src/pages/mdquire-kinds.astro` has mdQuire and the core's plain note on one
+  shelf.
 - `src/styles/quire.css`, `quire-markdown.css`, `quire-extras.css`: the look.
 - `scripts/write.ts` and `scripts/editor/`: `bun run edit`, the local server that opens mdQuire on the
   site's own posts and pages.
@@ -47,18 +56,18 @@ history, saving) costs under half a millisecond at once and under 5 ms in any la
 the editor's styles that looks inside or beside the document's blocks from the document's root (`:has()`,
 `+`, `~`) brings this back.
 
-**Stores.** A document can live in the browser (`store-browser.ts`), in a file opened and downloaded
-(`store-files.ts`), in a real file or folder on the computer where the browser allows it
-(`store-folder.ts`), in a GitHub repository (`store-github.ts`, with a fine-grained token kept only in this
-browser and sent only to GitHub), in Google Drive locked with a passphrase (`store-drive.ts`, below), or on
+**Stores.** A document can live in the browser (`core/store-browser.ts`), in a file opened and downloaded
+(`core/store-files.ts`), in a real file or folder on the computer where the browser allows it
+(`core/store-folder.ts`), in a GitHub repository (`core/store-github.ts`, with a fine-grained token kept only in this
+browser and sent only to GitHub), in Google Drive locked with a passphrase (`core/store-drive.ts`, below), or on
 the site's own writing server under `bun run edit`. A save whose document changed elsewhere is refused, and
-nothing is written over it (`conflict.ts`).
+nothing is written over it (`core/conflict.ts`).
 
 **Google Drive, locked.** Documents can be kept in her Google Drive, locked in the browser with a
 passphrase before they are sent, so that Drive holds only scrambled files. They cannot be opened in Google
 Docs or by Google. The parts:
 
-- `vault.ts` locks and opens bytes with the browser's own Web Crypto: AES-256-GCM, a fresh random 96-bit
+- `core/vault.ts` locks and opens bytes with the browser's own Web Crypto: AES-256-GCM, a fresh random 96-bit
   nonce for every file written, and the key made from the passphrase by PBKDF2-HMAC-SHA-256 at 600,000
   iterations over a random 16-byte salt kept with the vault. Argon2 would be stronger against guessing, but
   Web Crypto does not have it and no library is added. The key is a `CryptoKey` the page cannot read back
@@ -72,7 +81,7 @@ Docs or by Google. The parts:
   under that name as its label, so that a file put in another's place does not open. Real names, which file
   holds each document, and the pictures' names are in one locked `index` file. All of it is in a folder
   named `mdQuire` that the app makes.
-- `drive.ts` is the few Drive API v3 calls, behind an interface with a Drive kept in memory
+- `core/drive.ts` is the few Drive API v3 calls, behind an interface with a Drive kept in memory
   (`memoryDrive`) for tests and for the page `/mdquire-drive-try/`, which runs the whole app on it with no
   Google account.
 - Saving. Drive v3 documents no conditional write (`files.update` takes no `If-Match`), so a save is checked
@@ -83,15 +92,15 @@ Docs or by Google. The parts:
   let go once a later save is in place. The index is changed the same way, and a change refused because the
   index changed elsewhere is made again on the newer one, so two devices making documents at once both keep
   theirs.
-- `google-sign-in.ts` signs in with no script of Google's and no server, by the OAuth 2.0 flow for
+- `core/google-sign-in.ts` signs in with no script of Google's and no server, by the OAuth 2.0 flow for
   JavaScript web apps: a small window at `accounts.google.com/o/oauth2/v2/auth` with
   `response_type=token`, a random `state` that is checked, and the scope `drive.file` alone (the app sees
   only the files it made). Google sends the window back to `/mdquire/drive/`, which hands the token to the
   tab that asked over a `BroadcastChannel` (the pages are cross-origin isolated, so the window cannot reach
   its opener) and closes. The token lasts about an hour and is kept in the tab's `sessionStorage` only; when
   it runs out, a refused call asks the writer to sign in again, and what she typed waits to be saved.
-- `drive-place.ts` is the dialog: what Google can see, Sign in with Google, then the passphrase (twice for a
-  new vault). `drive-config.ts` holds the client ID; while it is empty the place says "Google Drive is not set
+- `core/drive-place.ts` is the dialog: what Google can see, Sign in with Google, then the passphrase (twice for a
+  new vault). `core/drive-config.ts` holds the client ID; while it is empty the place says "Google Drive is not set
   up yet." and does nothing. The page policy allows `https://www.googleapis.com` in `connect-src` and nothing
   else for it; the sign-in window is a page of its own and needs nothing in the policy.
 
@@ -102,12 +111,12 @@ files change together. It cannot read names, text, notes, styles or pictures, an
 is a picture and which a document except by size and timing. It could delete or roll back files: a rolled
 back or swapped file is found and refused, not shown as hers, but a deletion is not prevented.
 
-**The `.quire` file.** A zip (`zip.ts`, written here) holding `document.md` (plain Markdown, readable by
+**The `.quire` file.** A zip (`core/zip.ts`, written here) holding `document.md` (plain Markdown, readable by
 anything), `style.json` (colour, size, typeface, highlight, alignment, spacing, picture sizes and the page,
 which Markdown cannot hold) and `notes.json` (notes on the text). Tools a plain Markdown file cannot keep
 fold away for such files, and a Markdown file can be turned into a `.quire`.
 
-**The home screen** (`shelf.ts`) is a list drawn as the site's posts list is, with no pictures of
+**The home screen** (`core/shelf.ts`) is a list drawn as the site's posts list is, with no pictures of
 pages. A quiet "new" is followed by the six ways to start as words (blank, blog post, notes, meeting
 notes, changelog entry, project page); under
 "recent" each document is a ruled row of its name (ended with an ellipsis when long), where it is kept
@@ -129,11 +138,11 @@ round button for the commands is not shown while the home screen is.
 
 **Around the writing.** The home screen, find and replace
 (`find.ts`), zoom and page setup (`paper.ts`), page view with page breaks, headers, footers and page
-numbers (`pages.ts`), version history kept in the browser (`versions.ts`), tables (`tables.ts`), an
-outline of the headings (`outline.ts`), a command palette (`palette.ts`, below) and a bar over
+numbers (`pages.ts`), version history kept in the browser (`core/versions.ts`), tables (`tables.ts`), an
+outline of the headings (`outline.ts`), a command palette (`core/palette.ts`, below) and a bar over
 selected text (`select-bar.ts`).
 
-**The command palette** (`palette.ts`). Two quick taps of Ctrl, Alt+/ (Docs' Search the menus), or the
+**The command palette** (`core/palette.ts`, with what mdQuire gives it in `slash-menu.ts`). Two quick taps of Ctrl, Alt+/ (Docs' Search the menus), or the
 quiet round button resting in the window's bottom left corner, whose sign is a prompt (a chevron and a
 short line, not the magnifier, which is Find's), grow it up out of that corner: a search field with the caret in it, and
 under it seven lines, first what fits where the cursor is (a table's controls in a table, a picked
@@ -161,7 +170,7 @@ Bulleted list, Checklist, Picture and Code block. Typing after the slash narrows
 slash closes it and leaves the line empty, and Escape leaves what was typed. A slash anywhere else is a
 slash. The site's components are offered only in an `.mdx` file. What is made is counted however it was
 made (the palette, the bar, a menu, a shortcut, a typed Markdown mark) by comparing the document before
-and after each change that makes things (`most-used.ts`), and what is picked from the palette is counted
+and after each change that makes things (`made.ts`, counted by `core/most-used.ts`), and what is picked from the palette is counted
 as well. The counts stay in the browser's own storage, are never sent, and Tools, Forget what I use most,
 clears them.
 
@@ -214,7 +223,7 @@ memory, learned in 0.6 s of idle time; a suggestion takes about 3 microseconds.
 audio features and decoder for Parakeet-family models, a Moonshine path for phones, three tiers (Accurate,
 Light for desktops and laptops, Tiny for phones), spoken punctuation and commands, and custom words the
 decoder leans toward. The model is downloaded once into the browser's storage, resuming if cut off. Its
-first launch is a dialog (`dialog.ts`, a piece other things can use): the page darkens, a rounded panel in
+first launch is a dialog (`core/dialog.ts`, a piece other things can use): the page darkens, a rounded panel in
 the middle explains and has a filled Choose button, which grows into three cards, one per model, with its
 size and who it is for, the one that suits the machine picked; the download's progress is shown there.
 
@@ -261,7 +270,7 @@ the dots and the microphone. While a grown button is open, nothing is laid out a
 status passes after five seconds and how saving stands comes back. A new document fills the window under
 the top and does not scroll.
 
-**Which surface a job gets.** One rule (`dialog.ts` says it at its head). A form of several fields, or
+**Which surface a job gets.** One rule (`core/dialog.ts` says it at its head). A form of several fields, or
 something to read, is a dialog: About, Page setup, Header and footer, Word count, Keyboard shortcuts,
 Checking settings, connecting GitHub, Google Drive, dictation's first launch, Not saved. A single value is
 one small field at the caret or the control (a link, a bookmark, a list's number). A list to pick from is a
@@ -287,12 +296,12 @@ Escape gives focus back. A *strip* is a few actions on a thing in the text, icon
 word or two in its tooltip with its shortcut: the bar over selected words, the link card (where the link
 goes, to read, then Open, Copy, Edit, Remove), the chip after a pasted address (its few choices, all in
 words), find, a table's strip and a picture's. Every strip wears the menus' skin (the raised surface,
-their shadow, the middle corner, no line) and never covers the line being worked on (`strips.ts`). A
+their shadow, the middle corner, no line) and never covers the line being worked on (`core/strips.ts`). A
 *card* is something to read with one or two actions: a comment, the word counter. It is the panel with
 its fine edge and the middle corner, and its actions are a strip of icons. Tooltips are the small label
 under a control. No surface says in a sentence what its label already says.
 
-**The menus** (`menu-row.ts`, `flowMenu` in `ui.ts`). Every command is in the menu row by name with its
+**The menus** (`menus.ts`, shown by the core's `core/menu-row.ts`, `flowMenu` in `core/ui.ts`). Every command is in the menu row by name with its
 shortcut, in Google Docs' menus, order and words wherever mdQuire has the thing, so that hands that know Docs
 know them. Every line has an icon in the editor's own line style, groups have rules between them, and a line
 that is on shows a tick in its icon's place, never a colour alone. Each thing is in one menu only. A menu is
@@ -335,7 +344,7 @@ original, its pictures with it), Rename (to the title, selected) and Details (fi
 last saved, size, length). Edit has Cut, Copy, Paste and Delete with their keys; a menu paste the browser
 refuses says in the status to press Ctrl+V. View has Full screen (Ctrl+Shift+F, the keys of Docs' compact
 mode): the top folds away, the pointer at the window's top edge opens it while it stays there, Escape ends
-it. View, Show word count keeps a counter at the lower left (`live-count.ts`), the selection's count
+it. View, Show word count keeps a counter at the lower left (`core/live-count.ts`), the selection's count
 when there is one, opening to characters and pages on a press; on a phone it opens sideways. View, Show
 comments puts the comments beside the text out of sight or back, and shown, opens the list of every one.
 Tools, Preferences (`typing-panel.ts`) has a switch for each row of `vocabulary.ts`, and one for each of
@@ -346,7 +355,7 @@ not yet been reviewed. Choices kept per browser: `quire-live-count`, `quire-typi
 
 **Markdown kinds** (`more-markdown.test.ts` covers them). Highlighted code blocks (`highlight.ts`),
 callouts, definition lists, superscript and subscript, marked text, emoji shortcodes (`emoji.ts`, a short
-table written by hand), folding sections (`details.ts`), maths laid out by its own code (`maths.ts`),
+table written by hand), folding sections (`core/details.ts`), maths laid out by its own code (`maths.ts`),
 flowcharts from a `mermaid` fence drawn as SVG by its own code (`diagram.ts`), and the site's components
 in an `.mdx` file shown as cards of fields (`components.ts`). Typed `->`, `<-`, `=>`, `!=`, `<=` and `>=`
 become their signs.
@@ -380,7 +389,7 @@ removing the row, the column or the table, the sorts and the alignments, with wh
 dimmed (`tables.ts`). A right-click on words opens cut, copy, link, comment, bold, italic and underline
 (`text-menu.ts`), with a misspelled word's spellings, Add to dictionary and Ignore in this document above
 them; Shift with it leaves the browser's. The selection bar, a table's strip and a picture's
-are placed by one rule (`strips.ts`): never over what they belong to nor the line above or below it
+are placed by one rule (`core/strips.ts`): never over what they belong to nor the line above or below it
 while the window has room. The selection bar does not come for a selection made while the keyboard is
 elsewhere, as find makes. Escape in a footnote goes back to just after its mark. A table of contents
 has its own Update.
@@ -517,7 +526,7 @@ console's menus move from time to time.
    - the same local address followed by `/mdquire/drive/`
    Create. No client secret is used.
 7. Copy the client ID (it ends in `.apps.googleusercontent.com`) into `GOOGLE_CLIENT_ID` in
-   `src/quire/drive-config.ts`. It is public, not a secret. `bun test src/quire` checks its shape.
+   `src/quire/core/drive-config.ts`. It is public, not a secret. `bun test src/quire` checks its shape.
 8. Build and open mdQuire. Google Drive appears among the places; signing in shows Google's warning that the
    app is not verified, which is expected for an app in testing; Continue.
 
@@ -531,12 +540,12 @@ bun run dev                    # /mdquire/
 bun run edit                   # mdQuire on the site's own files, on a local server
 bun test src/quire             # the model, reading and writing, keys, stores, checking, dictation
 bun run build                  # needed first by the browser tests below
-bun test src/quire/check/view.test.ts                # checking in headless Chromium
-bun test src/quire/dictation/dictation.test.ts       # dictation's control with a made-up engine
+bun test src/quire/md/check/view.test.ts                # checking in headless Chromium
+bun test src/quire/md/dictation/dictation.test.ts       # dictation's control with a made-up engine
 bun scripts/dictation-check.ts                       # dictation with the real models (downloads them)
 ```
 
-`src/quire/read.test.ts` holds every Markdown file on the site, and `docs/minis.md`, to a round trip byte
+`src/quire/md/read.test.ts` holds every Markdown file on the site, and `docs/minis.md`, to a round trip byte
 for byte. The browser tests need a Chromium and skip, with a notice, without one.
 
 ## Known weak spots

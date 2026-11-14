@@ -8,16 +8,16 @@ that night's fixes ("after"); how is under "How it was measured".
 
 ## Where the code is
 
-- `src/quire/check/dictionary.ts`: unpacks the word list, says whether a word is known, and suggests.
-- `src/quire/check/spelling.ts`: the rule, the speller it asks, and what is never checked.
-- `src/quire/check/text.ts`: where the words of a block are (Unicode's word boundaries).
-- `src/quire/check/names.ts`: about sixty names of the site's (her name, her projects', tools, places): the
+- `src/quire/md/check/dictionary.ts`: unpacks the word list, says whether a word is known, and suggests.
+- `src/quire/md/check/spelling.ts`: the rule, the speller it asks, and what is never checked.
+- `src/quire/md/check/text.ts`: where the words of a block are (Unicode's word boundaries).
+- `src/quire/md/check/names.ts`: about sixty names of the site's (her name, her projects', tools, places): the
   small built-in list, known in every document from the start.
-- `src/quire/check/withheld.ts`: words that stay known but are never suggested (slurs, explicit words).
+- `src/quire/md/check/withheld.ts`: words that stay known but are never suggested (slurs, explicit words).
 - `scripts/dictionary.ts`: builds `public/quire/words-en.dat` and its licence from SCOWL, by hand.
-- `src/quire/check/view.ts`: the underlines, a finding's small menu, the list, and the Personal
+- `src/quire/md/check/view.ts`: the underlines, a finding's small menu, the list, and the Personal
   dictionary dialog.
-- `src/quire/check/findings.ts`: the lines of a finding's menu (`findingLines`, the same for a click and
+- `src/quire/md/check/findings.ts`: the lines of a finding's menu (`findingLines`, the same for a click and
   for the top of the text's right-click menu), what is kept in the browser (whether checking is on, her
   own words, what is ignored), and the cleaning every word of her dictionary passes through.
 
@@ -206,7 +206,7 @@ row has 1 cells" in the Markdown rules (a plural she may want changed).
 ## How it was measured
 
 Scripts kept outside the repository, run with `bun` on the night's tree and on a copy of `main`: the
-audit's hundred misspellings (now `src/quire/check/misspellings-audit.fixture.txt`), the repo's fixture,
+audit's hundred misspellings (now `src/quire/md/check/misspellings-audit.fixture.txt`), the repo's fixture,
 thirty sound-spelled words, keyboard slips made from her blog's words (a neighbouring QWERTY key, or two
 letters swapped), her posts and pages through the real reader and the spelling rule (drafts on hold left
 out; words counted outside frontmatter, code fences and imports), the audit's eight stress texts, and
