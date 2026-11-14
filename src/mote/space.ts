@@ -1,7 +1,8 @@
 // Mote's 3D physics: solid things with flat faces that fall, tumble and come
 // to rest. It is here for the dice, and has only what they need: solids that
-// bulge everywhere, fixed slabs to land on, friction and bounce. Units are
-// whatever the scene uses; y points up.
+// bulge everywhere, fixed slabs to land on, friction and bounce. Each solid
+// turns as its shape says, by its inertia tensor, so a long or lopsided one
+// tumbles as a real one does. Units are whatever the scene uses; y points up.
 //
 //   const space = new Space();
 //   space.slab([0, -0.5, 0], [10, 0.5, 10]);          // a floor
@@ -9,12 +10,16 @@
 //   space.step(dt);
 //   die.p, turn(die)                                   // where it is and how it is turned
 //
-// A step goes as flat.ts's does: where things touch is found once, then the
+// A step goes as flat.ts's does: the grid in grid.ts finds which pairs are
+// near enough to look at, where things touch is found once, then the
 // step is taken in small parts, each solving every touch as a stiff, heavily
 // damped spring, moving the solids, and solving once more without the spring.
+// Before the touches are solved in each part, a solid that is not equally hard
+// to turn every way has its spin changed by itself (`gyroscope`).
 //
 // What it is held to is in space.test.ts.
 
+import { Grid, type Pairs } from "./grid";
 import { block, cross, dot3 as dot, minus as sub, plus as add, scaled as mul, type Mesh, type Turn, type V3 } from "./solids";
 
 export type Quat = [x: number, y: number, z: number, w: number];
@@ -45,10 +50,21 @@ export interface Solid {
     readonly edges: [number, number][];
     readonly runs: V3[];
     readonly far: number;
+    /** How far its nearest face is from its middle. */
+    readonly inner: number;
     readonly mass: number;
-    /** 1 / mass and 1 / how hard it is to turn: both 0 for something that does not move, or is asleep. */
+    /**
+     * 1 / mass and 1 / how hard it is to turn: both 0 for something that does not move, or is asleep.
+     * For a solid not equally hard to turn every way, `ii` is 1 / the mean of the three, and the
+     * tensor below is what is used.
+     */
     im: number;
     ii: number;
+    /** For a solid not equally hard to turn every way: its inertia tensor and the tensor's inverse in its own frame, three rows of three. */
+    readonly inertia?: number[];
+    readonly turning?: number[];
+    /** The inverse turned into the world, worked out afresh each step. */
+    turned?: number[];
     /** Asleep: lying still, and left out of the work until something moving reaches it. What it weighs is kept here meanwhile. */
     rest?: [im: number, ii: number];
     /** Held by `hold`: kept where it is, and not woken by what touches it, until `wake`. */
@@ -135,6 +151,72 @@ export function turn(solid: { q: Quat }): Turn {
     ];
 }
 
+/** Three rows of three, turned by `q` into the world, `q m q'`, written into `out`. */
+function toWorld(q: Quat, m: number[], out: number[]): void {
+    const r = turn({ q });
+    for (let i = 0; i < 3; i++) {
+        for (let j = 0; j < 3; j++) {
+            let sum = 0;
+            for (let k = 0; k < 3; k++) for (let l = 0; l < 3; l++) sum += r[i]![k]! * m[k * 3 + l]! * r[j]![l]!;
+            out[i * 3 + j] = sum;
+        }
+    }
+}
+
+/** How much a solid turns for a push whose turning part is `x` (the push across from its middle), along `x`: `x` against 1 / its inertia. */
+function hardness(s: Solid, x: V3): number {
+    const t = s.turned;
+    if (!t) return s.ii * dot(x, x);
+    if (!s.ii) return 0;
+    return x[0] * (t[0]! * x[0] + t[1]! * x[1] + t[2]! * x[2]) + x[1] * (t[3]! * x[0] + t[4]! * x[1] + t[5]! * x[2]) + x[2] * (t[6]! * x[0] + t[7]! * x[1] + t[8]! * x[2]);
+}
+
+/** Three rows of three times a vector. */
+const times = (m: number[], v: V3): V3 => [m[0]! * v[0] + m[1]! * v[1] + m[2]! * v[2], m[3]! * v[0] + m[4]! * v[1] + m[5]! * v[2], m[6]! * v[0] + m[7]! * v[1] + m[8]! * v[2]];
+
+/**
+ * A spinning solid that is harder to turn one way than another changes how it spins by itself (the
+ * gyroscopic term: a bar tumbles, a coin wobbles). This takes that on by `h` seconds, in the solid's
+ * own frame, by the implicit midpoint rule: the new spin is the one for which the old and the new,
+ * averaged, explain the change. That rule keeps both the energy of the spin and the size of its
+ * angular momentum exactly, where a plain step adds energy each time and the spin flies apart. The
+ * equation is solved by Newton's method, which needs two or three goes. Returns the new spin, in the world.
+ */
+export function gyroscope(q: Quat, tensor: number[], w: V3, h: number): V3 {
+    const r = turn({ q });
+    // into the solid's own frame
+    const before: V3 = [r[0][0] * w[0] + r[1][0] * w[1] + r[2][0] * w[2], r[0][1] * w[0] + r[1][1] * w[1] + r[2][1] * w[2], r[0][2] * w[0] + r[1][2] * w[1] + r[2][2] * w[2]];
+    let mid: V3 = [...before];
+    for (let go = 0; go < 6; go++) {
+        const held = times(tensor, mid);
+        // what is left over: 2 I (mid - before) + h mid x (I mid)
+        const over = add(mul(times(tensor, sub(mid, before)), 2), mul(cross(mid, held), h));
+        // and how it changes with mid: 2 I + h (mid x I - (I mid) x)
+        const slope: number[] = [];
+        for (let i = 0; i < 3; i++) {
+            for (let j = 0; j < 3; j++) {
+                const column: V3 = [tensor[j]!, tensor[3 + j]!, tensor[6 + j]!];
+                const across = cross(mid, column)[i]! - (cross(held, [j === 0 ? 1 : 0, j === 1 ? 1 : 0, j === 2 ? 1 : 0])[i] ?? 0);
+                slope.push(2 * tensor[i * 3 + j]! + h * across);
+            }
+        }
+        const change = times(inverse(slope), over);
+        mid = sub(mid, change);
+        if (size(change) <= 1e-15 * (size(mid) + 1e-300)) break;
+    }
+    const after = sub(mul(mid, 2), before);
+    // back into the world
+    return [r[0][0] * after[0] + r[0][1] * after[1] + r[0][2] * after[2], r[1][0] * after[0] + r[1][1] * after[1] + r[1][2] * after[2], r[2][0] * after[0] + r[2][1] * after[1] + r[2][2] * after[2]];
+}
+
+/** How far a box one unit from its middle along each of its own axes reaches along one of the world's, turned by `q`: a row of `turn`, each part made positive and added up. */
+function across(q: Quat, axis: number): number {
+    const [x, y, z, w] = q;
+    if (axis === 0) return Math.abs(1 - 2 * (y * y + z * z)) + Math.abs(2 * (x * y - z * w)) + Math.abs(2 * (x * z + y * w));
+    if (axis === 1) return Math.abs(2 * (x * y + z * w)) + Math.abs(1 - 2 * (x * x + z * z)) + Math.abs(2 * (y * z - x * w));
+    return Math.abs(2 * (x * z - y * w)) + Math.abs(2 * (y * z + x * w)) + Math.abs(1 - 2 * (x * x + y * y));
+}
+
 /** A quaternion from angles about x, then y, then z. */
 export function angled(x: number, y: number, z: number): Quat {
     let q: Quat = [0, 0, 0, 1];
@@ -152,9 +234,52 @@ export function angled(x: number, y: number, z: number): Quat {
 
 let count = 0;
 
+/**
+ * How hard a solid is to turn about each axis through a point, as three rows of three (its inertia
+ * tensor), for a solid that bulges everywhere and whose faces wind outward, at this density. It is
+ * summed over the pyramids from the point to each triangle of each face; give the points measured
+ * from where the solid balances to have it about its middle.
+ */
+export function inertia(points: V3[], faces: number[][], density = 1): number[] {
+    // the second moments: how far the solid reaches along each axis and each pair of axes, squared
+    let [volume, xx, yy, zz, xy, xz, yz] = [0, 0, 0, 0, 0, 0, 0];
+    for (const face of faces) {
+        for (let i = 1; i + 1 < face.length; i++) {
+            const [a, b, c] = [points[face[0]!]!, points[face[i]!]!, points[face[i + 1]!]!];
+            const six = dot(a, cross(b, c));
+            const s = add(add(a, b), c);
+            const k = six / 120;
+            volume += six / 6;
+            xx += k * (a[0] * a[0] + b[0] * b[0] + c[0] * c[0] + s[0] * s[0]);
+            yy += k * (a[1] * a[1] + b[1] * b[1] + c[1] * c[1] + s[1] * s[1]);
+            zz += k * (a[2] * a[2] + b[2] * b[2] + c[2] * c[2] + s[2] * s[2]);
+            xy += k * (a[0] * a[1] + b[0] * b[1] + c[0] * c[1] + s[0] * s[1]);
+            xz += k * (a[0] * a[2] + b[0] * b[2] + c[0] * c[2] + s[0] * s[2]);
+            yz += k * (a[1] * a[2] + b[1] * b[2] + c[1] * c[2] + s[1] * s[2]);
+        }
+    }
+    // faces wound the other way round give everything the other sign
+    const by = (volume < 0 ? -1 : 1) * density;
+    [xx, yy, zz, xy, xz, yz] = [xx * by, yy * by, zz * by, xy * by, xz * by, yz * by];
+    return [yy + zz, -xy, -xz, -xy, xx + zz, -yz, -xz, -yz, xx + yy];
+}
+
+/** The inverse of three rows of three, or all zeros if it has none. */
+function inverse(m: number[]): number[] {
+    const [a, b, c, d, e, f, g, h, k] = m as [number, number, number, number, number, number, number, number, number];
+    const [A, B, C] = [e * k - f * h, f * g - d * k, d * h - e * g];
+    const det = a * A + b * B + c * C;
+    if (!det) return [0, 0, 0, 0, 0, 0, 0, 0, 0];
+    return [A / det, (c * h - b * k) / det, (b * f - c * e) / det, B / det, (a * k - c * g) / det, (c * d - a * f) / det, C / det, (b * g - a * h) / det, (a * e - b * d) / det];
+}
+
+/** Within this share of each other, a solid's turning about its three axes is taken to be one number. */
+const EVEN = 1e-9;
+
 function make(mesh: Mesh, at: V3, q: Quat, fixed: boolean, stuff: Stuff): Solid {
-    // its middle is where it balances, and how hard it is to turn is taken as the same about every axis,
-    // which is true of a cube and of every regular die
+    // Its middle is where it balances. How hard it is to turn is its inertia tensor; where that is the
+    // same about every axis (a ball, a cube, every die but the ten) one number stands for it, as it
+    // always did, so that those turn exactly as they did before the tensor.
     let [volume, around] = [0, 0];
     let middle: V3 = [0, 0, 0];
     for (const face of mesh.faces) {
@@ -189,14 +314,21 @@ function make(mesh: Mesh, at: V3, q: Quat, fixed: boolean, stuff: Stuff): Solid 
         });
     }
     const mass = Math.abs(volume) * (stuff.density ?? 1);
+    const tensor = inertia(points, mesh.faces, stuff.density ?? 1);
+    const mean = (tensor[0]! + tensor[4]! + tensor[8]!) / 3;
+    const even = [tensor[0]! - mean, tensor[4]! - mean, tensor[8]! - mean, tensor[1]!, tensor[2]!, tensor[5]!].every((part) => Math.abs(part) <= EVEN * mean);
     const solid: Solid = {
         id: ++count,
         p: add(at, spin(q, middle)), q, v: [0, 0, 0], w: [0, 0, 0],
         points, faces: mesh.faces, normals, edges, runs,
         far: Math.max(...points.map(size)),
+        inner: Math.min(...normals.map((n, i) => dot(n, points[mesh.faces[i]![0]!]!))),
         mass,
         im: fixed ? 0 : 1 / mass,
-        ii: fixed ? 0 : 1 / ((2 / 3) * around * (stuff.density ?? 1)),
+        ii: fixed ? 0 : even ? 1 / ((2 / 3) * around * (stuff.density ?? 1)) : 1 / mean,
+        inertia: even ? undefined : tensor,
+        turning: even ? undefined : inverse(tensor),
+        turned: even ? undefined : [0, 0, 0, 0, 0, 0, 0, 0, 0],
         friction: stuff.friction ?? 0.4,
         bounce: stuff.bounce ?? 0,
         damping: 0, spinDamping: 0, quiet: 0,
@@ -386,7 +518,14 @@ export class Space {
     nap = 0.6;
     /** Told of each pair that met hard this step, and how fast they were closing. For a sound, or a flash. */
     hit?: (a: Solid, b: Solid, speed: number) => void;
-    #was: Manifold[] = [];
+    /**
+     * How pairs of solids near enough to touch are found: a grid, which hands them over in the order a
+     * loop over every pair would. A test puts every pair here instead, to check the grid changes nothing.
+     */
+    pairs: Pairs = new Grid(3);
+    /** Last step's contacts by pair, to start from; and the map the next step's go in. */
+    #was = new Map<number, Manifold>();
+    #next = new Map<number, Manifold>();
     #owed = 0;
 
     /** A solid that moves, from a shape that bulges everywhere, with its middle at `at`. */
@@ -438,14 +577,67 @@ export class Space {
     #advance(dt: number): void {
         const { solids } = this;
         const h = dt / this.parts;
-        for (const s of solids) if (s.im) place(s);
+        for (const s of solids) {
+            if (s.im) place(s);
+            // how hard it is to turn, as it is turned now: the same for the whole step
+            if (s.turning && s.turned && (s.im || s.rest)) toWorld(s.q, s.turning, s.turned);
+        }
+
+        // ---- which pairs are near enough to look at ----
+        // The test below sets two moving solids against each other by their middles, and a moving one
+        // against one that is not (fixed, asleep or held) by how far its middle is outside the other's
+        // faces. Each solid is given a box that holds every place either test could let a pair through.
+        const pairs = this.pairs;
+        const count = solids.length;
+        pairs.ready(count);
+        // the most any solid that moves reaches: its size, and the most a pair's margin can be
+        let far = 0;
+        let fastest = 0;
+        for (const s of solids) {
+            if (s.im || s.rest) far = Math.max(far, s.far);
+            fastest = Math.max(fastest, size(s.v) + size(s.w) * s.far);
+        }
+        const reach = far + MARGIN + Math.min(2 * fastest * dt, 1.5) + 1e-6;
+        const { low, high } = pairs;
+        for (let i = 0; i < count; i++) {
+            const s = solids[i]!;
+            pairs.moves[i] = s.im || s.rest ? 1 : 0;
+            if (!s.im && !s.rest) {
+                // Fixed, which only a slab is: a box whose faces are pushed out by `reach` is a box
+                // `reach` larger along each of its own axes, which reaches this much further along the world's.
+                for (let axis = 0; axis < 3; axis++) {
+                    let least = Infinity;
+                    let most = -Infinity;
+                    for (const p of s.wp) {
+                        least = Math.min(least, p[axis]!);
+                        most = Math.max(most, p[axis]!);
+                    }
+                    const grow = reach * across(s.q, axis) + 1e-6;
+                    low[i * 3 + axis] = least - grow;
+                    high[i * 3 + axis] = most + grow;
+                }
+                continue;
+            }
+            // as the one that moves: its middle, its size and its share of the margin
+            let out = s.far + MARGIN / 2 + Math.min((size(s.v) + size(s.w) * s.far) * dt, 1.5) + 1e-6;
+            // Asleep or held, it may also be the one that does not move, its faces each pushed out by
+            // `reach`: that lies inside the solid grown about its middle until its nearest face has moved that far.
+            if (!s.im) out = Math.max(out, s.far * (1 + reach / s.inner) + 1e-6);
+            for (let axis = 0; axis < 3; axis++) {
+                low[i * 3 + axis] = s.p[axis]! - out;
+                high[i * 3 + axis] = s.p[axis]! + out;
+            }
+        }
+        pairs.find(count);
 
         // ---- where things touch ----
         const manifolds: Manifold[] = [];
-        for (let i = 0; i < solids.length; i++) {
+        const was = this.#was;
+        const { start, other } = pairs;
+        for (let i = 0; i < count; i++) {
             const a = solids[i]!;
-            for (let j = i + 1; j < solids.length; j++) {
-                const b = solids[j]!;
+            for (let k = start[i]!; k < start[i + 1]!; k++) {
+                const b = solids[other[k]!]!;
                 if (!a.im && !b.im) continue;
                 const closing = size(sub(b.v, a.v)) + size(a.w) * (a.im ? a.far : 0) + size(b.w) * (b.im ? b.far : 0);
                 const margin = MARGIN + Math.min(closing * dt, 1.5);
@@ -468,7 +660,7 @@ export class Space {
                         lying.quiet = 0;
                     }
                 }
-                const before = this.#was.find((old) => old.a === a && old.b === b);
+                const before = was.get(a.id * 2 ** 26 + b.id);
                 const n = found.n;
                 const t1 = unit(Math.abs(n[0]) < 0.8 ? cross(n, [1, 0, 0]) : cross(n, [0, 1, 0]));
                 const t2 = cross(n, t1);
@@ -492,7 +684,7 @@ export class Space {
                         const cb = add(rb, mul(n, gap / 2));
                         const k = (d: V3) => {
                             const [xa, xb] = [cross(ra, d), cross(rb, d)];
-                            const sum = a.im + b.im + a.ii * dot(xa, xa) + b.ii * dot(xb, xb);
+                            const sum = a.im + b.im + hardness(a, xa) + hardness(b, xb);
                             return sum > 0 ? 1 / sum : 0;
                         };
                         return {
@@ -507,7 +699,11 @@ export class Space {
                 });
             }
         }
-        this.#was = manifolds;
+        // Kept by pair for the next step to find each again; the two maps take turns, so neither is made anew.
+        this.#was = this.#next;
+        this.#next = was;
+        this.#next.clear();
+        for (const m of manifolds) this.#was.set(m.a.id * 2 ** 26 + m.b.id, m);
 
         for (const s of solids) {
             s.dp = [0, 0, 0];
@@ -520,9 +716,11 @@ export class Space {
         const push = (solid: Solid, r: V3, d: V3, j: number) => {
             if (!solid.im) return;
             const x = cross(r, d);
+            const t = solid.turned;
             for (let axis = 0; axis < 3; axis++) {
                 solid.v[axis]! += solid.im * d[axis]! * j;
-                solid.w[axis]! += solid.ii * x[axis]! * j;
+                if (t) solid.w[axis]! += (t[axis * 3]! * x[0] + t[axis * 3 + 1]! * x[1] + t[axis * 3 + 2]! * x[2]) * j;
+                else solid.w[axis]! += solid.ii * x[axis]! * j;
             }
         };
         const shove = (m: Manifold, s: Spot, d: V3, j: number) => {
@@ -586,6 +784,7 @@ export class Space {
                 const [slow, turnSlow] = [1 / (1 + h * s.damping), 1 / (1 + h * s.spinDamping)];
                 s.v = [(s.v[0] + this.gravity[0] * h) * slow, (s.v[1] + this.gravity[1] * h) * slow, (s.v[2] + this.gravity[2] * h) * slow];
                 s.w = mul(s.w, turnSlow);
+                if (s.inertia) s.w = gyroscope(s.q, s.inertia, s.w, h);
             }
             for (const m of manifolds) {
                 for (const s of m.spots) {
