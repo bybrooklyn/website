@@ -927,8 +927,17 @@ impl World {
                 }
                 let shade = match striped {
                     Some((first, count)) => {
-                        let across = ((px * nx + py * ny + reach) / (2.0 * reach) * count as f32) as i32;
-                        stripe_shade(first, across.clamp(0, count as i32 - 1) as u32, roll)
+                        // which stripe by where it lies across the line, its edge moved a little by
+                        // chance so the stripes meet grainily, as poured sand's do; now and then a
+                        // grain near an edge has strayed across it
+                        let wide = 2.0 * reach / count as f32;
+                        let jitter = (wide * 0.25).min(0.6) * (((roll >> 16) & 255) as f32 / 128.0 - 1.0);
+                        let across = ((px * nx + py * ny + reach + jitter) / wide).max(0.0);
+                        let (mut stripe, into) = (across as i32, across - (across as i32) as f32);
+                        if roll >> 24 < STRAY {
+                            stripe += if into < 0.3 { -1 } else if into > 0.7 { 1 } else { 0 };
+                        }
+                        stripe_shade(first, stripe.clamp(0, count as i32 - 1) as u32, roll)
                     }
                     None => (roll >> 8) & 0xff,
                 };
@@ -942,8 +951,13 @@ impl World {
         }
     }
 
-    /// Lays a block of `of`, `wide` by `high` cells with its top left at (x, y), in `count` level
-    /// stripes of equal height whose colors are numbered from `first`, top to bottom: a whole flag.
+    /// Lays a block of `of`, `wide` by `high` cells with its top left at (x, y), in `count` stripes
+    /// whose colors are numbered from `first`, top to bottom: a whole flag, laid as sand is layered
+    /// in a jar. Each edge between two stripes wanders smoothly along the flag, by up to a quarter of
+    /// a stripe and never more than two rows, so a stripe is a little thicker in one place than
+    /// another; each grain's edge is moved a little more by chance, so the stripes meet grainily;
+    /// and now and then a grain near an edge has strayed across it. Every stripe stays in its order.
+    /// All of it comes from the world's seed and the press, so the same press lays the same flag.
     /// Only empty cells are filled, every one of them.
     #[allow(clippy::too_many_arguments)]
     pub fn flag(&mut self, of: u8, x: i32, y: i32, wide: i32, high: i32, first: u8, count: u8) {
@@ -955,16 +969,32 @@ impl World {
         if of == EMPTY || left > right || top > bottom {
             return;
         }
+        // heights in 256ths of a row: a stripe's, how far an edge wanders, how far a grain's edge is
+        // moved; each a quarter of a stripe at most, so no two edges ever meet
+        let band = high as i64 * 256 / count as i64;
+        let (wander, jitter) = ((band / 4).min(2 * 256), (band / 4).min(160));
+        let mut edges = [0i64; STRIPES as usize];
         let mut painted = false;
-        for row in top..=bottom {
-            let stripe = ((row - y) as u32 * count / high as u32).min(count - 1);
-            for column in left..=right {
+        for column in left..=right {
+            for (k, edge) in edges.iter_mut().enumerate().take(count as usize).skip(1) {
+                *edge = k as i64 * high as i64 * 256 / count as i64 + wander * wandering(self.seed, self.strokes, k, column - x) / 256;
+            }
+            for row in top..=bottom {
                 let at = self.index(column, row);
                 if material(self.cells[at]) != EMPTY {
                     continue;
                 }
                 let roll = chance(self.seed ^ 0xf1a6, self.strokes, at);
-                self.cells[at] = of as u32 | stripe_shade(first, stripe, roll) << 8 | (MATERIALS[of as usize].made as u32) << 16;
+                let middle = (row - y) as i64 * 256 + 128 + (((roll >> 16) & 255) as i64 - 128) * jitter / 128;
+                let mut stripe = edges[1..count as usize].iter().filter(|&&edge| edge <= middle).count();
+                if roll >> 24 < STRAY {
+                    // the nearest edge, if it is within two rows: the grain is of the stripe across it
+                    let near = (1..count as usize).min_by_key(|&k| (edges[k] - middle).abs());
+                    if let Some(k) = near.filter(|&k| (edges[k] - middle).abs() < (2 * 256).min(band)) {
+                        stripe = if middle >= edges[k] { k - 1 } else { k };
+                    }
+                }
+                self.cells[at] = of as u32 | stripe_shade(first, stripe as u32, roll) << 8 | (MATERIALS[of as usize].made as u32) << 16;
                 painted = true;
             }
         }
@@ -1036,6 +1066,22 @@ fn root(of: f32) -> f32 {
         guess = 0.5 * (guess + of / guess);
     }
     guess
+}
+
+/// How likely a grain laid in stripes near an edge is to have strayed across it, in 256ths.
+const STRAY: u32 = 9;
+
+/// How far edge `edge` of the flag laid by stroke `stroke` wanders up or down at `column` of it,
+/// from -256 to 255: a smooth curve through a height chosen by chance every `ALONG` columns.
+fn wandering(seed: u64, stroke: u64, edge: usize, column: i32) -> i64 {
+    const ALONG: i32 = 12;
+    let height = |knot: i32| (chance(seed ^ 0xed6e, stroke, edge << 16 | (knot as usize & 0xffff)) >> 23) as i64 - 256;
+    let (knot, into) = (column.div_euclid(ALONG), column.rem_euclid(ALONG) as i64);
+    let (a, b) = (height(knot), height(knot + 1));
+    // eased from one height to the next, so the edge has no corners
+    let t = into * 256 / ALONG as i64;
+    let eased = t * t * (3 * 256 - 2 * t) / (256 * 256);
+    a + (b - a) * eased / 256
 }
 
 /// The shade of a cell of stripe `stripe` of stripes whose colors begin at `first`, with a slight
@@ -1150,8 +1196,12 @@ mod tests {
             world.paint_striped(PRIDE, from, 20, to, 20, 5, 100, 7, 3);
             // the brush where the line starts was laid by the line before it
             assert_eq!(world.at(from, 20), EMPTY);
+            // the middle of each stripe is certain; near an edge a grain may be of either side
             let rows: Vec<u32> = (15..=25).map(|y| stripe(&world, 35, y)).collect();
-            assert_eq!(rows, vec![7, 7, 7, 7, 8, 8, 8, 9, 9, 9, 9], "{from} to {to}");
+            assert_eq!((rows[0], rows[1], rows[5], rows[9], rows[10]), (7, 7, 8, 9, 9), "{from} to {to}: {rows:?}");
+            // and along the stroke the stripes meet grainily: an edge is not one straight line
+            let edge = |x: i32| (15..=25).position(|y| stripe(&world, x, y) == 8).unwrap();
+            assert!((20..50).any(|x| edge(x) != edge(20)), "{from} to {to}");
         }
         // straight down: the first stripe on the left
         let mut world = World::new(40, 80, 1);
@@ -1164,18 +1214,59 @@ mod tests {
     }
 
     #[test]
-    fn a_flag_is_laid_whole_in_level_stripes_of_equal_height_into_empty_cells_only() {
-        let mut world = World::new(60, 40, 2);
-        world.paint(STONE, 30, 12, 30, 12, 0, 100, false);
-        world.flag(PRIDE, 10, 5, 30, 20, 10, 5);
-        assert_eq!(world.count(PRIDE), 30 * 20 - 1, "every cell but the stone");
+    fn a_flag_is_laid_whole_as_layered_sand_every_stripe_in_order_into_empty_cells_only() {
+        let lay = |seed: u64| {
+            let mut world = World::new(160, 100, seed);
+            world.paint(STONE, 30, 12, 30, 12, 0, 100, false);
+            world.flag(PRIDE, 10, 5, 120, 80, 10, 5);
+            world
+        };
+        let world = lay(2);
+        assert_eq!(world.count(PRIDE), 120 * 80 - 1, "every cell but the stone");
         assert_eq!(world.at(30, 12), STONE);
-        for y in 5..25 {
-            assert_eq!(stripe(&world, 12, y), 10 + (y as u32 - 5) / 4, "row {y}");
+        // each stripe about its share, every one of them in every column
+        let mut each = [0usize; 5];
+        for y in 5..85 {
+            for x in 10..130 {
+                if world.at(x, y) == PRIDE {
+                    each[stripe(&world, x, y) as usize - 10] += 1;
+                }
+            }
         }
+        assert!(each.iter().all(|&n| (1700..2140).contains(&n)), "{each:?}");
+        // down every column the stripes come in order, but for a few grains that have strayed
+        // across an edge, never more than a stripe
+        let (mut strayed, mut grains) = (0, 0);
+        for x in 10..130 {
+            let column: Vec<u32> = (5..85).filter(|&y| world.at(x, y) == PRIDE).map(|y| stripe(&world, x, y)).collect();
+            assert_eq!((column[0], *column.last().unwrap()), (10, 14), "column {x}");
+            assert!((10..15).all(|s| column.contains(&s)), "column {x}");
+            for pair in column.windows(2) {
+                assert!(pair[1] + 1 >= pair[0] && pair[1] <= pair[0] + 1, "column {x}: {column:?}");
+                strayed += (pair[1] < pair[0]) as usize;
+            }
+            grains += column.len();
+        }
+        assert!(strayed > 0 && strayed * 100 < grains, "a few strays: {strayed} of {grains}");
+        // each edge wanders along the flag, up to two rows from where it would be level
+        let edge = |w: &World, x: i32| (5..85).filter(|&y| stripe(w, x, y) < 12).count() as i32;
+        let edges: Vec<i32> = (10..130).map(|x| edge(&world, x)).collect();
+        let (low, high) = (*edges.iter().min().unwrap(), *edges.iter().max().unwrap());
+        assert!(high - low >= 2 && (29..=35).contains(&low) && (29..=35).contains(&high), "{edges:?}");
+        // the same press lays the same flag, another world another
+        assert!(lay(2).cells == world.cells);
+        assert!(lay(3).cells != world.cells);
         // a flag cut by the world's edge, and stripes past the colors there are, stay inside it
-        world.flag(PRIDE, 50, 30, 30, 30, 62, 9);
-        assert!((30..40).all(|y| stripe(&world, 55, y) >= 62 && stripe(&world, 55, y) < 64));
+        let mut world = lay(2);
+        world.flag(PRIDE, 150, 80, 30, 30, 62, 9);
+        assert!((80..100).all(|y| stripe(&world, 155, y) >= 62 && stripe(&world, 155, y) < 64));
+        // a flag too small to wander still has every stripe, in order
+        let mut world = World::new(40, 40, 4);
+        world.flag(PRIDE, 5, 5, 12, 8, 0, 4);
+        for x in 5..17 {
+            let column: Vec<u32> = (5..13).map(|y| stripe(&world, x, y)).collect();
+            assert!(column.windows(2).all(|pair| pair[1] + 1 >= pair[0]), "{column:?}");
+        }
     }
 
     #[test]
@@ -1196,7 +1287,7 @@ mod tests {
                 }
             }
         }
-        assert_eq!(each, [160; 6]);
+        assert!(each.iter().all(|&n| (120..200).contains(&n)), "{each:?}");
         // and lie mostly in their order: the middle column of the heap, from the top down, never goes back more than a stripe
         let column: Vec<u32> = (0..100).filter(|&y| world.at(60, y) == PRIDE).map(|y| stripe(&world, 60, y)).collect();
         assert!(column.windows(2).all(|pair| pair[1] + 1 >= pair[0]), "{column:?}");

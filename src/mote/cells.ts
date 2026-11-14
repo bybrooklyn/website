@@ -76,7 +76,7 @@ export interface Cells {
      * second is how far the second byte, from 0 to 255, moves red, green and blue, from darker to
      * lighter, and how it is drawn (`STRIPED`, `LIGHT`, `SOFT`, added together). The third row is
      * the colors a striped cell picks from: its second byte over 4 is which, and its lowest two bits
-     * a slight shade.
+     * a step of lightness, toward black or white by up to the second row's red.
      */
     palette(colors: Uint8Array): void;
     /** Where the grid is drawn. A new size makes a new texture, so the next `draw` should send every row. */
@@ -109,7 +109,12 @@ vec4 colorOf(uvec4 cell, out uint mode) {
     mode = uint(vary.a * 255.0 + 0.5);
     vec3 rgb;
     if ((mode & 1u) != 0u) {
-        rgb = texelFetch(colors, ivec2(int(cell.g >> 2), 2), 0).rgb + (float(cell.g & 3u) / 3.0 - 0.5) * vary.rgb;
+        // the stripe's color, each grain a step lighter or darker by its lowest two bits, toward
+        // white or black by up to the shade range's red, as plain sand's grains vary: white can
+        // only darken and near black only lighten, and the stripe still reads as its own color
+        vec3 stripe = texelFetch(colors, ivec2(int(cell.g >> 2), 2), 0).rgb;
+        float by = (float(cell.g & 3u) / 1.5 - 1.0) * vary.r;
+        rgb = by < 0.0 ? stripe * (1.0 + by) : stripe + (1.0 - stripe) * by;
     } else {
         rgb = base.rgb + (float(cell.g) / 255.0 - 0.5) * vary.rgb;
     }

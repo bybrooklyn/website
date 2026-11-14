@@ -165,15 +165,20 @@ export const STEPS_PER_SECOND = 60;
 /**
  * The color of a cell of `material` with this shade, red, green, blue and opacity from 0 to 255, as
  * Mote's grid draws it from `palette` (src/mote/cells.ts): the material's color moved lighter or
- * darker by its shade, or for a striped material the stripe's color from the third row, moved a
- * little by the shade's lowest two bits. What the row of materials draws each swatch with.
+ * darker by its shade, or for a striped material the stripe's color from the third row, each grain a
+ * step lighter or darker by the shade's lowest two bits, toward white or black by up to the shade
+ * range's red. What the row of materials draws each swatch with.
  */
 export function swatchColor(palette: Uint8Array, material: number, shade: number): [number, number, number, number] {
     const base = palette.subarray(material * 4, material * 4 + 4);
     const vary = palette.subarray(1024 + material * 4, 1024 + material * 4 + 4);
-    const striped = (vary[3]! & 1) === 1;
-    const from = striped ? palette.subarray(2048 + (shade >> 2) * 4, 2048 + (shade >> 2) * 4 + 3) : base;
-    const by = striped ? (shade & 3) / 3 - 0.5 : shade / 255 - 0.5;
-    const channel = (k: number) => Math.max(0, Math.min(255, Math.round(from[k]! + by * vary[k]!)));
+    if ((vary[3]! & 1) === 1) {
+        const stripe = palette.subarray(2048 + (shade >> 2) * 4, 2048 + (shade >> 2) * 4 + 3);
+        const by = ((shade & 3) / 1.5 - 1) * (vary[0]! / 255);
+        const channel = (k: number) => Math.max(0, Math.min(255, Math.round(by < 0 ? stripe[k]! * (1 + by) : stripe[k]! + (255 - stripe[k]!) * by)));
+        return [channel(0), channel(1), channel(2), base[3]!];
+    }
+    const by = shade / 255 - 0.5;
+    const channel = (k: number) => Math.max(0, Math.min(255, Math.round(base[k]! + by * vary[k]!)));
     return [channel(0), channel(1), channel(2), base[3]!];
 }

@@ -180,7 +180,11 @@ test("a swatch is colored as the grid draws the cell: a shade moves the color, a
     expect(swatchColor(palette, 1, 128)).toEqual([100, 100, 100, 255]);
     expect(swatchColor(palette, 1, 255)).toEqual([120, 110, 100, 255]);
     expect(swatchColor(palette, 1, 0)).toEqual([80, 90, 100, 255]);
-    // stripe 5, the slightest shade either way
-    expect(swatchColor(palette, 2, 5 * 4)).toEqual([185, 0, 0, 255]);
-    expect(swatchColor(palette, 2, 5 * 4 + 3)).toEqual([215, 25, 25, 255]);
+    // stripe 5, its grains a step darker toward black or lighter toward white, by up to the range's red (30 in 255)
+    expect(swatchColor(palette, 2, 5 * 4)).toEqual([176, 9, 9, 255]);
+    expect(swatchColor(palette, 2, 5 * 4 + 3)).toEqual([206, 39, 39, 255]);
+    // white only darkens
+    palette.set([255, 255, 255, 255], 2048 + 6 * 4);
+    expect(swatchColor(palette, 2, 6 * 4 + 3)).toEqual([255, 255, 255, 255]);
+    expect(swatchColor(palette, 2, 6 * 4)).toEqual([225, 225, 225, 255]);
 });
