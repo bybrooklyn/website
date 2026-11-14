@@ -1,9 +1,10 @@
 // The marble run, a draft: build a run from a box of pieces whose ends click together, and let marbles
-// go down it, editing it while they roll. Stages 2 and 3 of its plan (docs/marbles.md): the box, joints,
+// go down it, editing it while they roll. Stages 2 to 4 of its plan (docs/marbles.md): the box, joints,
 // snapping, pillars and marbles; then the editor: a selection of one piece or many, handles to move,
 // turn and resize it, undo without limit, copy, paste and mirror, pieces of one's own, views straight
-// on, and a ghost marble showing where a marble would go. Bending, moving parts, sound of its own and the
-// look of wood and glass come later; it is drawn flat shaded in the site's colours.
+// on, and a ghost marble showing where a marble would go; then bending a piece by points along it,
+// within its limits. Moving parts, sound of its own and the look of wood and glass come later; it is
+// drawn flat shaded in the site's colors.
 //
 // What it stands on: pieces.ts (the box), run.ts (a run as data), edit.ts (groups moved, turned,
 // mirrored, resized), history.ts (undo), ghost.ts (the ghost marble), handles.ts (the handles),

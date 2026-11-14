@@ -194,6 +194,16 @@ Found on the way, and left as they are:
   none; in a groove of 1.5 none is lost. The marble run's groove is 1.5. A ball entering a turn loses speed
   the same way as it is thrown up the wall and rocks, more the faster it comes.
 
+## For the marble run's stage 4
+
+Nothing in Mote changed for bending ([marbles](marbles.md)): a `Path` is anything with a point and its
+first and second change at each place along it, and `local` for all three at once, so the marble run's
+bent pieces are paths of its own (`displaced` in `pieces.ts`, a made path moved by a smooth bend, worked
+out by adding, taking away, multiplying and dividing only) that `sweep` carries a section along and a
+ball meets as it meets a curve or a helix. Every
+other mini steps as before: the branch left `src/mote/` alone, and `bun test src/mote` passes unchanged. A
+bent run gives the same race in Chromium as in Bun, to the bit (`table.test.ts`).
+
 ## Decided
 
 - **No third-party libraries, by rule.** Nothing forked and nothing added: what Mote needs is written in its
