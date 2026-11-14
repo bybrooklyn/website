@@ -35,8 +35,8 @@ pub struct Manifold {
 }
 
 impl Manifold {
-    fn push(&mut self, point: Vec2, separation: f32, id: u32) {
-        if separation <= AHEAD && self.count < 2 {
+    fn push(&mut self, point: Vec2, separation: f32, id: u32, ahead: f32) {
+        if separation <= ahead && self.count < 2 {
             self.points[self.count] = Touch { point, separation, id };
             self.count += 1;
         }
@@ -53,14 +53,21 @@ fn id(a: usize, b: usize) -> u32 {
 
 /// Where two placed outlines touch.
 pub fn collide(a: &Outline, b: &Outline) -> Manifold {
+    collide_within(a, b, AHEAD)
+}
+
+/// Where two placed outlines touch, with points kept as far as `ahead` apart rather than `AHEAD`: for
+/// a body moving fast enough to pass through something thin in one step, as a dragged one can, so the
+/// solver sees it coming. `collide` is this with `AHEAD`, to the bit.
+pub fn collide_within(a: &Outline, b: &Outline, ahead: f32) -> Manifold {
     if b.count == 1 {
-        collide_round(a, b.corners[0], b.radius)
+        collide_round(a, b.corners[0], b.radius, ahead)
     } else if a.count == 1 {
-        let mut manifold = collide_round(b, a.corners[0], a.radius);
+        let mut manifold = collide_round(b, a.corners[0], a.radius, ahead);
         manifold.normal = -manifold.normal;
         manifold
     } else {
-        collide_outlines(a, b)
+        collide_outlines(a, b, ahead)
     }
 }
 
@@ -98,18 +105,18 @@ pub fn nearest_to(a: &Outline, center: Vec2) -> (Vec2, f32, Vec2) {
 }
 
 /// An outline against a circle.
-fn collide_round(a: &Outline, center: Vec2, radius: f32) -> Manifold {
+fn collide_round(a: &Outline, center: Vec2, radius: f32, ahead: f32) -> Manifold {
     let mut manifold = Manifold::default();
     let reach = a.radius + radius;
     let (normal, distance, near) = nearest_to(a, center);
-    if distance > reach + AHEAD {
+    if distance > reach + ahead {
         return manifold;
     }
     manifold.normal = normal;
     // midway between the outline's surface and the circle's
     let on_a = near + normal * a.radius;
     let on_b = center - normal * radius;
-    manifold.push(on_a.lerp(on_b, 0.5), distance - reach, 0);
+    manifold.push(on_a.lerp(on_b, 0.5), distance - reach, 0, ahead);
     manifold
 }
 
@@ -181,11 +188,11 @@ pub fn nearest_on_lines(p1: Vec2, p2: Vec2, q1: Vec2, q2: Vec2) -> (f32, f32) {
 }
 
 /// Two outlines of two or more corners each.
-fn collide_outlines(a: &Outline, b: &Outline) -> Manifold {
+fn collide_outlines(a: &Outline, b: &Outline, ahead: f32) -> Manifold {
     let (mut side_a, apart_a) = furthest_side(a, b);
     let (mut side_b, apart_b) = furthest_side(b, a);
     let reach = a.radius + b.radius;
-    if apart_a > reach + AHEAD || apart_b > reach + AHEAD {
+    if apart_a > reach + ahead || apart_b > reach + ahead {
         return Manifold::default();
     }
     // the side to cut against belongs to whichever outline separates them more, with a slight
@@ -210,22 +217,22 @@ fn collide_outlines(a: &Outline, b: &Outline) -> Manifold {
             let gap = b.corners[j] - a.corners[i];
             let distance = gap.length();
             let mut manifold = Manifold::default();
-            if distance > reach + AHEAD || distance < 1e-6 {
+            if distance > reach + ahead || distance < 1e-6 {
                 return manifold;
             }
             let normal = gap * (1.0 / distance);
             manifold.normal = normal;
             let on_a = a.corners[i] + normal * a.radius;
             let on_b = b.corners[j] - normal * b.radius;
-            manifold.push(on_a.lerp(on_b, 0.5), distance - reach, id(i, j));
+            manifold.push(on_a.lerp(on_b, 0.5), distance - reach, id(i, j), ahead);
             return manifold;
         }
     }
-    cut(a, b, side_a, side_b, flip)
+    cut(a, b, side_a, side_b, flip, ahead)
 }
 
 /// Cuts the facing side of one outline to the length of the other's side, giving up to two points.
-fn cut(a: &Outline, b: &Outline, side_a: usize, side_b: usize, flip: bool) -> Manifold {
+fn cut(a: &Outline, b: &Outline, side_a: usize, side_b: usize, flip: bool, ahead: f32) -> Manifold {
     let (one, two, i11, i21) = if flip { (b, a, side_b, side_a) } else { (a, b, side_a, side_b) };
     let i12 = next(i11, one.count);
     let i22 = next(i21, two.count);
@@ -251,12 +258,12 @@ fn cut(a: &Outline, b: &Outline, side_a: usize, side_b: usize, flip: bool) -> Ma
     let mut manifold = Manifold::default();
     if flip {
         manifold.normal = -normal;
-        manifold.push(high, apart_high - reach, id(i21, i12) | 0x10000);
-        manifold.push(low, apart_low - reach, id(i22, i11) | 0x10000);
+        manifold.push(high, apart_high - reach, id(i21, i12) | 0x10000, ahead);
+        manifold.push(low, apart_low - reach, id(i22, i11) | 0x10000, ahead);
     } else {
         manifold.normal = normal;
-        manifold.push(low, apart_low - reach, id(i11, i22));
-        manifold.push(high, apart_high - reach, id(i12, i21));
+        manifold.push(low, apart_low - reach, id(i11, i22), ahead);
+        manifold.push(high, apart_high - reach, id(i12, i21), ahead);
     }
     manifold
 }
