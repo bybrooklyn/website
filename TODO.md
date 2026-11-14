@@ -139,7 +139,6 @@ What was found and fixed is in [`docs/AUDIT.md`](docs/AUDIT.md). Still open from
 - Spelling: American, on by default, with a personal dictionary.
 - In the light paper look the list of documents sits on a light sheet too.
 - An emoji picker: a grid with search and what was used lately first.
-- New kinds to start from: meeting notes, a changelog entry, a project page.
 - The shared core ([quire-core](docs/quire-core.md)): the app as a framework in `src/quire/`, each Quire a plug-in.
 
 ## imgQuire and the background remover

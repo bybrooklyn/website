@@ -94,11 +94,18 @@ which Markdown cannot hold) and `notes.json` (notes on the text). Tools a plain 
 fold away for such files, and a Markdown file can be turned into a `.quire`.
 
 **The home screen** (`shelf.ts`) is a list drawn as the site's posts list is, with no pictures of
-pages. A quiet "new" is followed by the three ways to start as words (blank, blog post, notes); under
+pages. A quiet "new" is followed by the six ways to start as words (blank, blog post, notes, meeting
+notes, changelog entry, project page); under
 "recent" each document is a ruled row of its name (ended with an ellipsis when long), where it is kept
 (this browser, this computer, or a folder's or repository's own name) and when it was last touched
 (today with the time, yesterday, the day, and the year when not this one), with three dots at the end
 whose menu grows from them: open, rename, duplicate, and delete, which asks once more in the same menu.
+Meeting notes are a `.quire` document of the date, who was there, what was decided and a checklist of
+what comes next; a changelog entry is Markdown in `CHANGELOG.md`'s form, the day as a heading over
+Added, Changed and Fixed; a project page is an `.mdx` file with the frontmatter the site's projects
+collection needs (`src/content.config.ts`: name, summary, language, a status, order 99 so it comes
+last, and a draft until it is ready) and the sections most project pages have (What it is, What it
+does, Getting it). As with the others, the last line it starts with is selected, for typing over.
 A row is one button, reached by Tab and opened with Enter. The page grows out of the row it was opened
 from and shrinks back into it on leaving, the keyboard landing on that row again; something new grows
 out of the word pressed. Narrower than 40rem a row takes two lines, the name first. Opening a file or a
@@ -291,7 +298,7 @@ one for each command, the same in the menus, the palette and the Ctrl+/ panel.
 
 The menus as they stand:
 
-- File: New (Document, Blog post, Notes), Open (the documents list, which has the places to open from), Make
+- File: New (Document, Blog post, Notes, Meeting notes, Changelog entry, Project page), Open (the documents list, which has the places to open from), Make
   a copy, Save as .quire document (for Markdown), Download (Markdown, mdQuire document, Web page, Plain text,
   Word), Rename, Version history, Details, Page setup (for `.quire`), Print.
 - Edit: Undo, Redo; Cut, Copy, Paste, Paste without formatting; Select all, Select all matching text,
