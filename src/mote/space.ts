@@ -135,6 +135,7 @@ interface Spot {
     going?: V3;
     there?: number;
     toward?: V3;
+    firm?: number;
     calm?: number;
     rollOne?: number;
     rollTwo?: number;
@@ -1137,7 +1138,7 @@ export class Space {
                             // passes; against flat faces, a ball is pushed out softly as a solid is.
                             const gap = s.now!;
                             s.springy = s.calm === undefined && gap <= 0 && bias;
-                            s.speed = s.calm ?? (gap > 0 ? gap / h : bias ? Math.max(spring.rate * gap, -this.push) : 0);
+                            s.speed = (bias ? s.firm : s.calm) ?? (gap > 0 ? gap / h : bias ? Math.max(spring.rate * gap, -this.push) : 0);
                             s.start = s.push;
                         } else if (!sweep) {
                             // how far apart they are now, from how far each has moved and turned since the step began
@@ -1223,26 +1224,29 @@ export class Space {
          * so that it ends the part just on the surface, by the surface's own formula: `there` is how far
          * apart they would be at the end if nothing pushed, `end` the way the surface faces there, `v`
          * the speed at which they close now, and the push along `n`, the way the surface faces now. A
-         * ball already in deeper than it should be is let stay in, and pushed out at no more than `push`.
+         * ball already in deeper than it should be is let stay in, and pushed out at no more than `push`;
+         * the second number is the same without that push out, for the pass after the move, so that
+         * putting an overlap right moves the ball and leaves it no faster, as the soft solver does.
          *
          * This is the rule molecular dynamics calls SHAKE: the push is square to the surface where the
          * ball is, and just enough to land it on the surface. Round a curve or a funnel it keeps both the
          * ball's energy and its turning about the funnel's axis, where a push aimed anywhere else would
          * lean along the ball's path and speed it up or slow it down a little every part.
          */
-        const landing = (now: number, there: number, v: V3, n: V3, end: V3) => {
+        const landing = (now: number, there: number, v: V3, n: V3, end: V3): [number, number] => {
             const square = dot(n, end);
-            const allowed = now < 0 ? Math.min(0, now + this.push * h) : 0;
+            const [allowed, kept] = [now < 0 ? Math.min(0, now + this.push * h) : 0, Math.min(0, now)];
             // Where the surface turns by more than a few degrees in one part (a thin rail met fast), where
             // the ball would be at the end says little of what it passed through on the way: then it may
             // close the gap there is now along the way the surface faces, and no more.
-            return square > 0.95 ? (there - allowed) / (h * square) - dot(v, n) : (now - allowed) / h;
+            if (square > 0.95) return [(there - allowed) / (h * square) - dot(v, n), (there - kept) / (h * square) - dot(v, n)];
+            return [(now - allowed) / h, (now - kept) / h];
         };
         /**
          * For each contact with a ball, as a part of the step begins: how far apart the two are and the
-         * speed the ball may come in at. Against track or another ball, that is by where the ball would
-         * be at the end of the part, so that one held round a loop or a funnel is turned with it; the
-         * contact is aimed at the way the surface faces where the ball is now.
+         * speed the ball may come in at. Against track, that is by where the ball would be at the end
+         * of the part, so that one held round a loop or a funnel is turned with it; the contact is aimed
+         * at the way the surface faces where the ball is now.
          */
         const measure = (part: number) => {
             for (const m of manifolds) {
@@ -1262,18 +1266,21 @@ export class Space {
                         const end = m.piece.again(m.part!, m.where!, going, b.radius!);
                         [m.where, s.there, s.going, s.toward] = [end.where, end.gap, going, end.n];
                         s.now = now;
-                        s.calm = landing(now, end.gap, b.v, m.n, end.n);
+                        [s.firm, s.calm] = landing(now, end.gap, b.v, m.n, end.n);
                     } else if (a.radius !== undefined && b.radius !== undefined) {
-                        const [apart, ahead] = [sub(b.p, a.p), sub(add(b.p, mul(b.v, h)), add(a.p, mul(a.v, h)))];
-                        const [near, far] = [length(apart), length(ahead)];
+                        // Ball against ball: measured afresh and aimed between the two middles, but soft, as
+                        // solids are. In a heap one ball often rests on several and against a wall, more
+                        // than can all be held exactly; soft, they share it and settle.
+                        const apart = sub(b.p, a.p);
+                        const near = length(apart);
                         s.now = near - a.radius - b.radius;
                         if (near > 0) aim(m, s, apart, s.now);
-                        s.calm = far > 0 ? landing(s.now, far - a.radius - b.radius, sub(b.v, a.v), m.n, mul(ahead, 1 / far)) : s.now > 0 ? s.now / h : 0;
+                        [s.firm, s.calm] = [undefined, undefined];
                     } else {
                         // against flat faces: from how far each has moved, a ball's surface not turning with it
                         const [ca, cb] = [a.radius === undefined && a.im ? spin(a.dq, s.ca) : s.ca, b.radius === undefined && b.im ? spin(b.dq, s.cb) : s.cb];
                         s.now = dot(add(sub(b.dp, a.dp), sub(cb, ca)), n) + s.adjusted;
-                        s.calm = undefined;
+                        [s.firm, s.calm] = [undefined, undefined];
                     }
                     // A ball strikes at the speed it has when it gets there, gravity's last part included,
                     // not at the speed it had as the step began; its bounce and its sound go by that.

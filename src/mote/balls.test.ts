@@ -152,7 +152,6 @@ test("the nearest point of a solid of faces to a ball's middle is found exactly,
             expect(size([found.q[0] + found.n[0] * found.d - c[0], found.q[1] + found.n[1] * found.d - c[1], found.q[2] + found.n[2] * found.d - c[2]])).toBeLessThan(1e-9);
         }
     }
-    void cube;
 });
 
 test("a ball is as hard to turn as 2/5 of its mass times its radius squared, which the solver takes as it takes a cube", () => {
@@ -177,7 +176,90 @@ test("balls and a block dropped on each other and on a floor are never more than
             for (const other of balls) if (other !== ball) deepest = Math.max(deepest, 2 * R - size([ball.p[0] - other.p[0], ball.p[1] - other.p[1], ball.p[2] - other.p[2]]));
         }
     });
-    // Ball against ball is exact; ball against a solid of faces is soft, as solid against solid is, and a
-    // block five times a ball's weight lying on three of them sinks in by up to a twelfth of a ball's radius.
+    // A ball against another or against a solid of faces is soft, as solid against solid is, and a block
+    // five times a ball's weight lying on three of them sinks in by up to a twelfth of a ball's radius.
     expect(deepest).toBeLessThan(R / 12);
+});
+
+// ---- sleeping, as islands ----
+
+/** Sixty marbles poured into a walled tray, in a marble space, where islands sleep together. */
+function tray(count = 60): { space: Space; marbles: Solid[] } {
+    const space = marbleSpace();
+    const wide = 6;
+    space.slab([0, -1, 0], [wide + 1, 1, wide + 1]);
+    // walls high enough that no marble bounces out
+    for (const [x, z, hx, hz] of [[-wide - 0.5, 0, 0.5, wide + 1], [wide + 0.5, 0, 0.5, wide + 1], [0, -wide - 0.5, wide + 1, 0.5], [0, wide + 0.5, wide + 1, 0.5]] as const) space.slab([x, 30, z], [hx, 30, hz]);
+    let seed = 3;
+    const next = () => (seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 2 ** 32;
+    const marbles = Array.from({ length: count }, (_, i) => space.ball(R, [(next() - 0.5) * (2 * wide - 2), 2 + i * 0.9, (next() - 0.5) * (2 * wide - 2)], MARBLE));
+    return { space, marbles };
+}
+
+test("marbles poured into a tray settle and sleep in islands, all of an island at once, and a sleeping marble costs almost nothing", () => {
+    const { space, marbles } = tray();
+    const asleepAt = new Map<Solid, number>();
+    let step = 0;
+    for (; step < 8 * space.rate && asleepAt.size < marbles.length; step++) {
+        space.step(1 / space.rate);
+        for (const marble of marbles) if (marble.rest && !asleepAt.has(marble)) asleepAt.set(marble, step);
+    }
+    expect(asleepAt.size).toBe(marbles.length);
+    // each island went to sleep in one step, every marble in it told of all the others
+    for (const marble of marbles) {
+        expect(marble.together).toContain(marble);
+        for (const other of marble.together!) expect(asleepAt.get(other)).toBe(asleepAt.get(marble));
+    }
+    // a step with all of them asleep, against one with them awake
+    const timed = (steps: number) => {
+        const before = performance.now();
+        for (let i = 0; i < steps; i++) space.step(1 / space.rate);
+        return (performance.now() - before) / steps;
+    };
+    const asleep = timed(200);
+    const awake = tray();
+    for (let i = 0; i < 60; i++) awake.space.step(1 / awake.space.rate);
+    const moving = (() => {
+        const before = performance.now();
+        for (let i = 0; i < 60; i++) awake.space.step(1 / awake.space.rate);
+        return (performance.now() - before) / 60;
+    })();
+    expect(asleep).toBeLessThan(moving / 5);
+});
+
+test("a marble dropped on a sleeping heap wakes the whole island it lands on, and they sleep again together", () => {
+    const { space, marbles } = tray(30);
+    for (let i = 0; i < 6 * space.rate; i++) space.step(1 / space.rate);
+    expect(marbles.every((marble) => marble.rest)).toBe(true);
+    // the island under the middle
+    const under = marbles.reduce((best, marble) => (Math.hypot(marble.p[0], marble.p[2]) < Math.hypot(best.p[0], best.p[2]) ? marble : best));
+    const island = under.together!;
+    const falling = space.ball(R, [under.p[0], under.p[1] + 6, under.p[2]], MARBLE);
+    let woke = false;
+    for (let i = 0; i < 0.5 * space.rate; i++) {
+        space.step(1 / space.rate);
+        if (island.every((marble) => !marble.rest)) woke = true;
+    }
+    expect(woke).toBe(true);
+    for (let i = 0; i < 6 * space.rate; i++) space.step(1 / space.rate);
+    expect([...marbles, falling].every((marble) => marble.rest)).toBe(true);
+});
+
+test("a marble rolling slowly down a one degree slope does not fall asleep on the way, and reaches the bottom", () => {
+    const space = marbleSpace();
+    const angle = Math.PI / 180;
+    // a plank a metre long, tilted one degree, with a low rolling cost (less than the slope's rise over run)
+    space.slab([0, 0, 0], [50, 0.5, 5], angled(0, 0, -angle));
+    const marble = space.ball(R, [-48 * Math.cos(angle), 48 * Math.sin(angle) + (0.5 + R) / Math.cos(angle), 0], { ...MARBLE, roll: 0.002 });
+    let slept = false;
+    let time = 0;
+    for (; time < 12 && marble.p[0] < 48 * Math.cos(angle); time += 1 / space.rate) {
+        space.step(1 / space.rate);
+        slept ||= marble.rest !== undefined;
+    }
+    expect(slept).toBe(false);
+    expect(marble.p[0]).toBeGreaterThan(48 * Math.cos(angle) - 0.1);
+    // at about the time theory gives: 96 cm at 5/7 g (sin - roll cos)
+    const theory = Math.sqrt((2 * 96) / ((5 / 7) * G * (Math.sin(angle) - 0.002 * Math.cos(angle))));
+    expect(Math.abs(time / theory - 1)).toBeLessThan(0.03);
 });
