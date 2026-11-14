@@ -21,6 +21,10 @@ const PATHS: Record<string, string> = {
     remove: '<path d="M4.5 7h15M9.5 7V5a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v2M6.5 7l.8 12a1.5 1.5 0 0 0 1.5 1.4h6.4a1.5 1.5 0 0 0 1.5-1.4l.8-12M10 11v6M14 11v6"/>',
     // two links of a chain: what is joined to this
     joined: '<path d="M10 14a3.5 3.5 0 0 0 5 0l3-3a3.5 3.5 0 0 0-5-5l-.8.8"/><path d="M14 10a3.5 3.5 0 0 0-5 0l-3 3a3.5 3.5 0 0 0 5 5l.8-.8"/>',
+    // a length of track bowed up through two of its points: bend it
+    bend: '<path d="M3 17.5c3.5-9.5 14.5-9.5 18 0"/><circle cx="8.2" cy="11.4" r="1.9"/><circle cx="15.8" cy="11.4" r="1.9"/>',
+    // the same length laid straight again, the bow it had faint above it
+    straighten: '<path d="M3 16h18"/><circle cx="8.2" cy="16" r="1.9"/><circle cx="15.8" cy="16" r="1.9"/><path d="M6 10.5c3.5-3.3 8.5-3.3 12 0" stroke-dasharray="1.6 2"/>',
     // a box with a plus: kept as a piece of one's own
     keep: '<path d="M4.5 8 12 4l7.5 4v8L12 20l-7.5-4z"/><path d="M12 9.5v5M9.5 12h5"/>',
     // a marble with a line under it, going
@@ -69,6 +73,30 @@ export function swap(button: HTMLButtonElement, name: string, label: string, key
     button.replaceChildren(icon(name));
     button.title = key ? `${label} (${key})` : label;
     button.setAttribute("aria-label", label);
+}
+
+/**
+ * Keeps a bar of groups in one row while they fit there, and otherwise stacks them, one group to a row,
+ * by the class `stacked`: a row that wraps would start with the rule that parts it from the group
+ * before, left hanging. Measured, not guessed from the page's width, since the room the panel has
+ * depends on the page round it. The width one row needs is read with the bar laid out in one row for
+ * a moment (the class `measuring`), within the same frame, so nothing is seen of it.
+ */
+export function stacking(bar: HTMLElement): void {
+    const fit = () => {
+        const parent = bar.parentElement;
+        if (!parent) return;
+        const style = getComputedStyle(parent);
+        const room = parent.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+        if (room <= 0) return;
+        bar.classList.add("measuring");
+        bar.classList.remove("stacked");
+        const needed = bar.getBoundingClientRect().width;
+        bar.classList.remove("measuring");
+        bar.classList.toggle("stacked", needed > room + 0.5);
+    };
+    if (bar.parentElement) new ResizeObserver(fit).observe(bar.parentElement);
+    fit();
 }
 
 /**

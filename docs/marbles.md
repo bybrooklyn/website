@@ -1,8 +1,8 @@
 # A marble run
 
 A mini: build a marble run in three dimensions and watch marbles go down it. A plan dated 13 November
-2026. Stage 1, what Mote needed, and stage 2, pieces and snapping, were built on 14 November 2026,
-and stage 3, the editor, on 14 November 2026 too (below). The mini is a draft, Marbles, at `/minis/marbles/`.
+2026. Stage 1, what Mote needed, stage 2, pieces and snapping, stage 3, the editor, and stage 4,
+bending, were all built on 14 November 2026 (below). The mini is a draft, Marbles, at `/minis/marbles/`.
 
 ## Decided
 
@@ -40,9 +40,9 @@ and stage 3, the editor, on 14 November 2026 too (below). The mini is a draft, M
   Moving pieces: a lift, a chain hoist, a seesaw, a spinner, an alternating switch, a trapdoor, a gate
   that a marble opens. Sounding pieces: chime bars tuned to notes, a bell, a drum.
 - Bending: a piece's path is a curve with a few control points. Dragging a point bends it; the ends stay
-  on their joints, and the pieces joined to it follow or resist as chosen (a joint can be pinned). Limits
-  keep a bend buildable: no kink tighter than a marble can take, shown as the piece turning a warning
-  color before the limit.
+  on their joints, and what is joined to it never moves (stage 4 chose this over pieces that follow or
+  resist). Limits keep a bend buildable: no kink tighter than a marble can take, shown as the piece
+  turning a warning color before the limit.
 - Supports are made by themselves under track that needs them and can be moved or taken away.
 - Checks while building, shown and never enforced: a slope too shallow to roll, a gap, a turn too tight
   for the speed a marble will have there.
@@ -95,7 +95,7 @@ Mote's broad phase and inertia; see [mote](mote.md)):
    from fixed pieces. **Built** (see below).
 3. The editor: camera, handles, selection, undo, copy and groups, touch throughout, building while it
    runs with the ghost marble. **Built**, waiting to be looked at (see below).
-4. Bending, with its limits and warnings.
+4. Bending, with its limits and warnings. **Built**, waiting to be looked at (see below).
 5. Moving parts and sound.
 6. The look: wood, glass, shadows.
 7. Cameras, races, sharing, and the runs to start from.
@@ -456,13 +456,182 @@ real screen were not measured.
 - The little axes and the strip are drawn over the canvas; their places are worked out each frame.
 - The keys are nearly all taken (the list in the keys panel); bending will want few.
 
+## Stage 4, built
+
+On 14 November 2026, in the draft Marbles: the bend in `pieces.ts` (what it is, its limits), `run.ts` (the
+text's `v2`, overlap by room), `edit.ts` (mirror, resize, pieces of one's own and undo carry a bend),
+`handles.ts` (points as handles, how a drag moves one, snapping; the handles standing off), `history.ts`
+(presses of a key as one step), `toolbar.ts` (two icons, the bar that stacks) and `marbles.ts` (the
+editor), each with its test. Mote is unchanged: nothing in `src/mote/` was touched, so every other mini
+steps exactly as before (`bun test src/mote`, its replay and pair tests among them, passes unchanged).
+
+**Left over from stage 3.**
+
+- *The tray by finger.* It could be taken all along. The stage 3 runs measured where the canvas was before
+  their first finger, and the browser driver turns touch on at the first finger: the page then matches
+  `(pointer: coarse)`, which pads the site's header links and moves the canvas down 9.6 pixels, so every
+  press by finger landed that much above where it was aimed, and a far small piece such as the tray was
+  missed. A phone is coarse from the start, so this was the test's and not the page's. The runs now turn
+  touch on before measuring. Shown at 1024 by 768 and 390 by 800 by real touches: each of the first run's
+  eight pieces chosen by a tap and carried by a drag, the tray too, and the ghost going from arriving to
+  falling while the tray was held off the end, and back to arriving when it was put back.
+- *Handles on a small selection.* They stand off from it by its size on the screen (`standOff`): the
+  arrows start and the ring runs outside the pieces' reach, up to a fifth of the picture; a larger
+  selection is stood off no further, and its handles cross it. A press on the body of a chosen piece now
+  always carries it and never a handle. A finger's press up to 12 pixels off a piece still takes it (the
+  nearest piece under a ring of points round the press), so a far piece is as easy to touch as a near one.
+- *The phone panel.* Under 30rem the stray rule was already gone, but between about 480 and 620 pixels the
+  groups still wrapped with a rule at a row's start. The bar now measures whether its groups fit in one
+  row (`stacking`) and otherwise stacks them, one to a row, lined up at the left, with no rules, the bar as
+  wide as its rows.
+- *Found on the way:* two names left unused in the scene's overlay, tidied. Not changed, as they are as
+  meant: undo gives a piece whose bend or place changed a new number (only what changed is rebuilt), and
+  the fit button fits what is chosen when something is.
+
+**What a bend is.** A few whole numbers in the piece's kind (`kind.bend`), so in its key and its text:
+for each of its points, the millimetres it is moved up and aside (to the right looking along the piece),
+as the piece is designed before it is mirrored. A straight, a slope and an S bend have one point if a cell
+long, two up to three cells, three beyond; a tight quarter curve one, a wide half turn three, the others
+two. The spiral, the drop, the loop, the funnel, the hopper and the tray do not bend. The bend fades in
+from each end over half the piece by the smoothest step (10x^3 - 15x^4 + 6x^5), whose first and second
+change are naught at both its ends, times the curve of least degree that makes it pass through each
+point's move (`displaced`). So the track passes through every point, a point dragged carries the track
+under it, and at the joints the track is where it was, pointing as it did and curving as it did: a marble
+crosses a joint of a bent piece as of a made one. Two points moved alike bow the track a little more
+between them, as a rod held at both ends does. Fading in only as far as the first point instead gave a
+straight of two cells 8 mm before it was too tight; over half the piece it goes 28 mm, one of three cells
+72, of six 113, a wide curve 39, a slope of three cells 57, an S bend of three 76. A tight curve and a
+straight of one cell are stiff (2 and 8 mm): they are too short to bend more and stay as gentle as the
+box's own curves. Only + - * / are used, so a bent run is the same to the bit everywhere.
+
+**Joined ends stay put.** Bending a piece never moves its ends: the bend changes only the path between
+them, and nothing joined to it moves. Joints stay on the grid, so every joint still meets its neighbor
+exactly, every rule of snapping, overlap, mirroring and undo holds unchanged, and a person can tell what
+will move: the piece under the finger, and nothing else. A piece is made longer or shorter by its knob as
+before, and keeps its bend where it can (`rebent`: the bend read at the new points from the old, else the
+piece as made).
+
+**Limits, and how each shows.** A bend is checked as it is made (`brokenBy`, then `fits`):
+
+| Limit | What it is | Near it | At it |
+|---|---|---|---|
+| Too tight | a radius under 3.5 cm anywhere (or tighter than the piece was made) | warm from 4.5 cm | the point stops where it can still be built; the piece turns red while held there, with a low knock |
+| Too steep | a slope over 55 degrees (or steeper than made, for a steep slope resized) | warm from 45 degrees | as above |
+| Crossing itself | two places 10 cm apart along it within a block of each other | | as above |
+| Crossing another piece | their boxes of room cross (cells alone are not enough for a bent piece) | | as above |
+| Leaving the table, or the ground | a cell past the edge, or a block below level 0 | | as above |
+
+A warm piece (warned) is warm even while chosen, with a small warm mark lying on its top where it is
+nearest a limit. The ghost marble runs on the bend as it is dragged, so its marks show what the bend does
+to a marble: a hump a marble cannot climb is marked where the marble stops, one it is thrown from where
+it leaves. The keys refuse a press that would pass a limit, with the small shake.
+
+**Bending in the editor.** With one piece that bends chosen, K or the strip's bend button shows its points,
+small accent balls on the track, as its only handles; the arrows, ring and knob go while it is bent. A
+point is taken from a fingertip and a quarter (30 pixels for a finger, 16 for the mouse), even over the
+piece, which in bending is what a press near a point means; elsewhere on the piece a drag still carries
+it. A point dragged moves in the plane of up and aside where the view sees both (`freedomOf`), and stays
+under the pointer: measured, within 0.16 pixels by mouse and by finger. Seen from straight above it moves
+only aside, from along the piece's way aside only up, decided when the drag begins. It snaps, each way on
+its own, to straight, to a whole level, and to its partner's numbers alike or aside the other way (a
+symmetric bow, or an S), from 8 pixels with the mouse and 12 with a finger, with a soft click; Alt, or a
+second finger held down, lets it go free. Let go, it is one step of undo. A tap on a point picks it for the
+keys: the arrows (or WASD, Q and E) move it 5 mm aside and up, aside as the screen sees it, comma and full
+stop pick the point before and after, Delete straightens it, and Escape, Enter or K ends bending; presses
+on one point are one step of undo (`replaced`). The strip's straighten button makes the piece as made. The
+strip keeps out of the way while a point is dragged. Choosing anything else ends bending.
+
+**The physics.** A run of long pieces bent gently, down, aside and both, against the same run unbent, one
+marble at 240 steps a second (`table.test.ts`): the track's push near a joint 1.53 g bent against 1.18 g
+unbent, near a bent piece's points 1.82 g, at most 2.0 g anywhere but the tray (a curve bent down and in),
+against 1.47 g unbent; the push changing by at most 0.28 g from one step to the next, against 0.24 g. The
+test holds them under 2.5 g and 0.4 g a step. A bent run gives the same race every time and in Chromium
+as in Bun, to the bit (the test compares every number's bits). Two things a bend does that are true to a
+real marble and not faults: a marble fast over a crest whose radius is under its speed squared over g
+leaves the track for a moment and lands with a jolt (a made run does the same at the start of a turn, 4.1
+g once), and a groove that wiggles aside every 12 to 16 cm makes a marble near 60 cm/s rock ever higher,
+since a marble rocks across the groove about every 0.2 s, until it rides out; the ghost marks both. Banking
+a bent piece more finely (every 2 or 3 cm rather than 6) did not calm the rocking, so the bank is worked
+out as for made pieces.
+
+**The text.** `v2`: a bent piece goes on with `b` and its numbers, each point up then aside
+(`s3_-6_-1_17_2b0_0_-36_0`); a piece as made is written as before. Every `v1` run is read, the made runs
+and kept pieces of one's own among them; undo steps kept in the browser in `v1` are read again in `v2` on
+load, so they still end at the run kept.
+
+**Finer turns** are left for later: a turn finer than a quarter would put a piece's far joint off the
+grid, where it would meet nothing exactly, and bending gives the curves a run needs while keeping every
+joint on the grid. The ring still turns by quarters (`turnedBy`).
+
+**Measured**, by `scripts/browser.ts` in headless Chromium, built with `SHOW_DRAFTS=1` and served from
+`.drafts-build`. One script, by mouse at 1440 by 900 and by finger at 1024 by 768 and 390 by 800: an empty
+table from the runs to start from; a hopper pressed in the box and raised 19 levels by its green arrow;
+ten pieces pressed in after it (long straight, steep slope, longer straight, wide curve, longer straight,
+steep slope, S bend, longer straight, steep slope, tray), the ghost in the tray; five pieces bent by
+dragging a point, the bend button by the strip (and K by mouse), each one buildable; a point dragged far
+up, stopped by the tightness limit and held there red; by mouse, the keys: a point picked with full stop,
+moved by five presses as one step of undo, straightened by Delete, put back by undo, bending ended by
+Escape; the humped piece straightened by the strip; marbles streamed for six seconds, every one of 11 (by
+mouse) and 12 (by finger) reaching the tray, the ghost arriving; undone all the way back to the run the
+page began with (20 or 21 steps, by Control and Z, or by the bar's button by finger) and redone all the
+way forward, the text the same to the character; three pieces from the first bent one chosen (Shift and
+clicks, or the select tool and taps), copied and pasted at the open end by the strip and the bar, bends
+and all, and mirrored (F, or the strip), still bent; the page loaded again and the run found as it was, to
+the character, undo carrying on; and the made `v1` run with every kind of piece opened, written as `v2`,
+its ghost in the tray. No error on the page in any of the three.
+
+With 100 marbles on the twenty piece run (most heaped in the tray, the stream still going) and its long
+straight bent by the mouse back and forth for four seconds: the physics 1.2 ms a frame, the ghost 2.3 ms,
+handing the drawing over 0.3 ms, everything the scene does in a frame 3.2 ms on average and 4.9 at most;
+a move of a point, everything it does (the shape, the limits, the table, the drawing), 1.3 ms on average
+and 6.6 at most, when it searches for where a limit stops it. Before this stage's change the ghost worked
+its larger budget while a point was dragged, and a frame took 6.5 ms. Headless Chromium draws in software
+at about ten frames a second whatever the scene does, and the driver's moves came about ten a second, so
+the drawing's own time on a graphics card, and how a drag feels at a real screen's rate, were not
+measured.
+
+**Choices to confirm.**
+
+- Ends always stay put; nothing joined to a bent piece moves, and there is no pinning to choose.
+- Which pieces bend (straights, curves, slopes, S bends) and how many points each has; short pieces are
+  stiff.
+- The limits: a radius of 3.5 cm, 55 degrees, warned from 4.5 cm and 45 degrees.
+- Bending as a mode (K, or the strip's button) in which the points are the only handles, rather than
+  points shown beside the arrows and ring.
+- Points taken over the piece itself while bending; a tap on a point picks it for the keys.
+- What a point snaps to (straight, whole levels, its partner alike or against) and that Alt or a second
+  finger lets it go free.
+- The run changes as a point is dragged, so marbles roll on the bend as it is made.
+- The handles standing off from a small selection, and a press on a chosen piece always carrying it.
+- No finer turns than quarters for now.
+
+**What the next stages can rely on, and should know** (moving parts and sound, then the look of wood and
+glass).
+
+- A piece's shape is `shapeOf(kind)`, bend and all; its path is `pathOf(length)`, a Mote `Path` (bent ones
+  are the run's own `displaced`, which Mote takes like any other). `pointsIn` gives a piece's points in the
+  world and `strainOf` how hard it is bent and where.
+- A bent piece is drawn as a block along its path every 0.7 cm, like a made curve; a straight bent is no
+  longer drawn as one long box. Wood grain should follow the path's frame (`sweep(...).frame(t)`), which
+  carries the bank, so that it bends with the piece.
+- While a point is dragged a new shape and a new mesh are made at every millimetre and sent to the
+  graphics card; shapes are kept up to 3,000 and drawings up to 400, the oldest let go. A look that costs
+  more to make per piece should be made once the drag ends, or more cheaply while it goes.
+- The warning is shown by mixing colors (warm, red when held at a limit) and a flat mark; with wood and
+  glass it wants a way of its own that still reads on wood.
+- Shapes and strains are cached by key, and a kind whose bend is all naught has no `bend` at all
+  (`withBend`), so the same piece always has one key.
+
 ## Open
 
 - Its name.
 - Two fingers on a real tablet: whether pan, pinch and twist together feel right, and whether a finger
   should turn a piece being carried.
 - Whether a touch on a piece should choose it or carry it at once; for now a press chooses and a drag carries.
-- How the strip and the handles should share a small selection on a phone, where the handles cover it.
+- How dragging a point feels at a real screen's rate and under a real finger (measured only in headless
+  Chromium, about ten moves a second).
+- Whether the ends of a bent piece should ever move, carrying what is joined to it (stage 4 keeps them on
+  the grid always), and whether turns finer than quarters are wanted at all.
 - Whether marbles can be of different sizes and weights.
 - How large a run may be before the page slows, and what is said then.
 - Whether a run can be exported for printing in three dimensions.

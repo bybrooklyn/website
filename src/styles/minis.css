@@ -289,17 +289,27 @@
 }
 
 /* The tools: one raised surface of icon buttons in groups parted by thin rules, as mdQuire's bar is
-   (quire.css), wrapping into a second row where the page is narrow. */
+   (quire.css). Where one row does not fit, the groups stack, one to a row, lined up at the left and
+   with no rules (toolbar.ts measures which: `stacked`); a row that wrapped would start with a rule. */
 .marbles-bar {
     display: flex;
-    flex-wrap: wrap;
     align-items: center;
-    gap: 0.25rem 0;
     width: fit-content;
     max-width: 100%;
     padding: 0.2rem;
     border-radius: 0.75rem;
     background: var(--panel-raised);
+}
+
+.marbles-bar.measuring {
+    width: max-content;
+    max-width: none;
+}
+
+.marbles-bar.stacked {
+    display: grid;
+    justify-items: start;
+    gap: 0.25rem;
 }
 
 .marbles-group {
@@ -311,6 +321,12 @@
     margin-left: 0.35rem;
     padding-left: 0.35rem;
     border-left: 0.0625rem solid var(--rule);
+}
+
+.marbles-bar.stacked .marbles-group + .marbles-group {
+    margin-left: 0;
+    padding-left: 0;
+    border-left: 0;
 }
 
 .marbles-icon {
@@ -360,7 +376,8 @@
 }
 
 .mote-panel .marbles-tool[aria-pressed="true"],
-.mote-panel .marbles-tool[aria-expanded="true"] {
+.mote-panel .marbles-tool[aria-expanded="true"],
+.marbles-strip .marbles-tool[aria-pressed="true"] {
     color: var(--accent);
     background: color-mix(in oklch, var(--accent) 22%, transparent);
 }
@@ -370,7 +387,8 @@
     scale: 0.94;
 }
 
-.mote-panel .marbles-tool:disabled {
+.mote-panel .marbles-tool:disabled,
+.marbles-strip .marbles-tool:disabled {
     opacity: 0.35;
     cursor: default;
 }
@@ -510,14 +528,7 @@
     padding: 0.2rem 0;
 }
 
-/* on a phone each group is a row of its own, so no rule hangs at the start of a row */
 @media (max-width: 30rem) {
-    .marbles-group + .marbles-group {
-        margin-left: 0;
-        padding-left: 0;
-        border-left: 0;
-    }
-
     .marbles-keys-list {
         grid-template-columns: 1fr;
         gap: 0 0;

@@ -1,12 +1,13 @@
 // The marble run's editing is held to what it says: a group turned about a corner keeps its joints
 // joined and comes back after four turns; a group mirrored is exactly the reflection of what it was,
-// joint for joint and box for box, and mirrored twice is itself; a group fitted by any open joint
-// meets the joint it is fitted to; a straight's end dragged makes it longer by whole cells; a run read
-// back keeps the numbers of the pieces it shares with the run before. Run with `bun run test`.
+// joint for joint and box for box, bent ones point for point and along their track, and mirrored twice
+// is itself; a group fitted by any open joint meets the joint it is fitted to; a straight's end dragged
+// makes it longer by whole cells, a bent one staying bent where it can; a run read back keeps the
+// numbers of the pieces it shares with the run before, bend and all. Run with `bun run test`.
 
 import { expect, test } from "bun:test";
-import { BOX, CELL, boxToWorld, shapeOf, type Kind } from "./pieces";
-import { about, asOwn, groupFits, groupSnaps, joinedTo, matched, middleOf, mirrored, mirrorLine, moved, pivotOf, resized, then } from "./edit";
+import { BOX, CELL, boxToWorld, brokenBy, made, pathOf, pointsIn, shapeOf, withBend, type Kind } from "./pieces";
+import { about, asOwn, groupFits, groupSnaps, joinedTo, matched, middleOf, mirrored, mirrorLine, moved, pivotOf, rebent, resized, then } from "./edit";
 import { jointsOf, links, meets, open, read, write, type Placed } from "./run";
 import { RUNS } from "./runs";
 import type { V3 } from "../mote/solids";
@@ -55,6 +56,59 @@ test("a group mirrored is the reflection of what it was, joint for joint and box
             expect(write(mirrored(flipped, across, twice))).toBe(write(group));
         }
     }
+});
+
+test("a bent group mirrored is the reflection of what it was, point for point and along every track, and twice is itself", () => {
+    // a straight and a slope, which stay unmirrored, and a curve and an S bend, which become their other forms
+    const group = read("v2.s3_0_0_10_0b20_15_-10_-25.d2_1_3_0_10_1b8_6_-4_9.c3_1_-2_2_12_2b12_-8_-6_10.z3_1_-6_-3_12_3b10_-6_14_8");
+    for (const across of ["x", "z"] as const) {
+        for (const twice of [-3, 4]) {
+            const flipped = mirrored(group, across, twice);
+            const line = (twice * CELL) / 2;
+            const reflect = (p: V3): V3 => (across === "x" ? [2 * line - p[0], p[1], p[2]] : [p[0], p[1], 2 * line - p[2]]);
+            group.forEach((piece, i) => {
+                const after = flipped[i]!;
+                expect(after.kind.bend).toBeDefined();
+                // each point where the reflection of the point was, the plain ones by a bend reflected
+                expect(pointsIn(after.kind, after.place).map((point) => round(point.at)).sort()).toEqual(pointsIn(piece.kind, piece.place).map((point) => round(reflect(point.at))).sort());
+                // and the track, every centimetre, the track reflected
+                const track = (one: Placed) => {
+                    const path = pathOf(made(shapeOf(one.kind), one.place).lengths[0]!.length);
+                    return Array.from({ length: 41 }, (_, k) => round(path.point((path.end * k) / 40)));
+                };
+                const before = pathOf(made(shapeOf(piece.kind), piece.place).lengths[0]!.length);
+                expect(track(after).sort()).toEqual(Array.from({ length: 41 }, (_, k) => round(reflect(before.point((before.end * k) / 40)))).sort());
+            });
+            expect(write(mirrored(flipped, across, twice))).toBe(write(group));
+        }
+    }
+});
+
+test("a bent piece made longer stays bent where it can, read at its new points from the old; where it cannot, it is made straight", () => {
+    const bowed = withBend(kind("s", [2]), [20, 0, 20, 0]);
+    const longer = resized(bowed, [32, 0, 4]);
+    expect(longer.sizes).toEqual([4]);
+    // three points now, at a quarter, a half and three quarters: a bow still, highest in the middle
+    expect(longer.bend!.length).toBe(6);
+    expect(longer.bend![2]).toBeGreaterThanOrEqual(longer.bend![0]!);
+    expect(brokenBy(longer)).toBeUndefined();
+    // dragged to where it already is, it keeps its bend exactly
+    expect(resized(bowed, [16, 0, 4])).toBe(bowed);
+    // a bow of 28 mm on two cells cannot be built on one: the piece of one cell is as made
+    const short = resized(withBend(kind("s", [2]), [28, 0, 28, 0]), [8, 0, 4]);
+    expect(short.sizes).toEqual([1]);
+    expect(short.bend).toBeUndefined();
+    expect(rebent(bowed, kind("s", [2]))).toEqual(bowed);
+});
+
+test("bends are kept by pieces of one's own, and a run read back keeps the number of a piece only if its bend is the same", () => {
+    const group = read("v2.s2_0_0_6_0b10_5_-10_5.s1_2_0_6_0");
+    expect(read(asOwn(group))[0]!.kind.bend).toEqual([10, 5, -10, 5]);
+    const before = group.map((piece, i) => ({ ...piece, id: 40 + i }));
+    const same = matched(before, write(group), 90);
+    expect(same.run.map((piece) => piece.id)).toEqual([40, 41]);
+    const rebentRun = matched(before, "v2.s2_0_0_6_0b10_5_-10_6.s1_2_0_6_0", 90);
+    expect(rebentRun.run.map((piece) => piece.id)).toEqual([90, 41]);
 });
 
 test("left becomes right: a curve, an S bend, a spiral and a funnel mirror to their other forms; a straight stays a straight", () => {

@@ -1,9 +1,10 @@
 // The marble run, a draft: build a run from a box of pieces whose ends click together, and let marbles
-// go down it, editing it while they roll. Stages 2 and 3 of its plan (docs/marbles.md): the box, joints,
+// go down it, editing it while they roll. Stages 2 to 4 of its plan (docs/marbles.md): the box, joints,
 // snapping, pillars and marbles; then the editor: a selection of one piece or many, handles to move,
 // turn and resize it, undo without limit, copy, paste and mirror, pieces of one's own, views straight
-// on, and a ghost marble showing where a marble would go. Bending, moving parts, sound of its own and the
-// look of wood and glass come later; it is drawn flat shaded in the site's colours.
+// on, and a ghost marble showing where a marble would go; then bending a piece by points along it,
+// within its limits. Moving parts, sound of its own and the look of wood and glass come later; it is
+// drawn flat shaded in the site's colors.
 //
 // What it stands on: pieces.ts (the box), run.ts (a run as data), edit.ts (groups moved, turned,
 // mirrored, resized), history.ts (undo), ghost.ts (the ghost marble), handles.ts (the handles),
@@ -25,15 +26,15 @@ import { turned } from "../mote/track";
 import { checks, type Mark } from "./checks";
 import { STILL as NO_MOVE, about, asOwn, groupFits, groupSnaps, joinedTo, matched, middleOf, mirrored, mirrorLine, moved, movedPoint, pivotOf, resizable, resized, rotated, then, type GroupSnap, type Move } from "./edit";
 import { ghostMarks, makeGhost } from "./ghost";
-import { AXES, ARROW, across, along, arrowMesh, layout, ringMesh, turnedBy, which, type Handle, type Shown } from "./handles";
-import { begun, canRedo, canUndo, readSteps, recorded, redone, trimmed, undone, type Steps } from "./history";
+import { AXES, ARROW, RING, across, along, arrowMesh, dragged, freedomOf, layout, pixelsOf, pointOf, pointsLayout, ringMesh, snapped, standOff, turnedBy, which, type Freedom, type Handle, type Shown, type Snaps } from "./handles";
+import { begun, canRedo, canUndo, readSteps, recorded, redone, replaced, trimmed, undone, type Steps } from "./history";
 import { NARROW, STRAIGHT, eyeOf, enters, framing, ground, kept, lensed, nearest, panned, project, ray, straightOn, type Orbit } from "./orbit";
-import { BOX, CELL, LEVEL, RADIUS, blockMesh, boxToWorld, keyOf, shapeOf, sweepOf, toWorld, wayToWorld, type Box, type Kind, type Place } from "./pieces";
-import { jointsOf, links, open, read, write, type Open, type Placed } from "./run";
+import { BOX, CELL, FURTHEST, LEVEL, RADIUS, bendAllowed, blockMesh, boxToWorld, brokenBy, isBent, keyOf, pointsIn, pointsOf, shapeOf, strainOf, sweepOf, toWorld, warned, wayToWorld, withBend, type Box, type Broken, type Kind, type Place } from "./pieces";
+import { fits, jointsOf, links, open, read, upgraded, write, type Open, type Placed } from "./run";
 import { RUNS } from "./runs";
 import { PILLAR } from "./supports";
 import { makeTable } from "./table";
-import { fold, icon, swap, tool } from "./toolbar";
+import { fold, icon, stacking, swap, tool } from "./toolbar";
 
 export const label = "A marble run to build: pieces from a box snap together end to end, and marbles roll down what is built.";
 
@@ -50,7 +51,7 @@ const SETTLE = 0.09;
 const FLY = 0.28;
 /** How often a stream lets a marble go, in seconds. */
 const STREAM = 0.6;
-/** How long the ghost may work each frame, in milliseconds: less while something is carried, so that the carrying stays smooth. */
+/** How long the ghost may work each frame, in milliseconds: less while something is carried or a point dragged, so that the drag stays smooth. */
 const GHOST_WORK = { carrying: 2.5, still: 6 };
 
 /** What a piece is drawn with, in its own place: blocks of track, plain boxes, and glass. */
@@ -87,7 +88,7 @@ function drawingOf(kind: Kind): Drawing {
         if (length.section === "tube") glass.push({ mesh: piece.mesh() });
         else {
             const path = length.path;
-            const straight = "points" in path && path.points.length === 2 && path.start[0] * path.end[0] + path.start[1] * path.end[1] + path.start[2] * path.end[2] > 1 - 1e-12;
+            const straight = !length.bend && "points" in path && path.points.length === 2 && path.start[0] * path.end[0] + path.start[1] * path.end[1] + path.start[2] * path.end[2] > 1 - 1e-12;
             wood.push({ mesh: blockMesh(piece, straight) });
         }
     }
@@ -99,6 +100,8 @@ function drawingOf(kind: Kind): Drawing {
     const flat = [...shape.boxes, ...shape.stands].map((box) => ({ mesh: block(box.half), by: box.at }));
     const made: Drawing = { wood: merged(wood, true), flat: merged(flat, false), glass: merged(glass, true) };
     drawings.set(key, made);
+    // a bend dragged is a new drawing at every millimetre; the oldest are let go
+    if (drawings.size > 400) drawings.delete(drawings.keys().next().value!);
     return made;
 }
 
@@ -169,6 +172,22 @@ interface Carried {
     parts: Map<number, Drawn[]>;
 }
 
+/** A point of a bent piece being dragged (see `bendDrag` in the scene). */
+interface BendDrag {
+    id: number;
+    point: number;
+    original: Placed;
+    at: V3;
+    up: V3;
+    aside: V3;
+    freedom: Freedom;
+    press: { x: number; y: number };
+    start: [up: number, aside: number];
+    good: number[];
+    stopped?: Broken | "room";
+    why: string;
+}
+
 /** A part of a piece as drawn: its look, kept to change its color, the color it has when nothing is said of it, and whether it is glass, which keeps its color. */
 type Drawn = { part: Part; look: Look; base: Color; glass: boolean };
 
@@ -179,7 +198,7 @@ interface Held {
     last: { x: number; y: number };
     /** When it went down, in seconds of the scene's time: for a long press. */
     since: number;
-    mode: "press" | "turn" | "pan" | "carry" | "pinch" | "handle" | "box" | "done" | "gizmo";
+    mode: "press" | "turn" | "pan" | "carry" | "pinch" | "handle" | "box" | "done" | "gizmo" | "bend" | "loose";
     /** The piece pressed, before the press is known to be a drag. */
     piece?: Placed;
     /** The way of the little axes in the corner that was pressed. */
@@ -249,6 +268,15 @@ export default function marbles(m: Mote): Scene {
     /** The select tool: a drag on the table draws a box, and a tap adds a piece to the choice. */
     let selecting = false;
     let carried: Carried | undefined;
+    /** Bending: the one piece chosen shows the points it is bent by in place of its other handles; and which of them the keys move. */
+    let bending = false;
+    let bendPoint = 0;
+    /** A point being dragged: of which piece and which point, the piece as it was, the point's place and ways when the drag began, how the drag is taken, the numbers it began at and the last that could be built, and whether a limit holds it now. */
+    let bendDrag: BendDrag | undefined;
+    /** A second finger held while a point is dragged, or Alt with the mouse: no snapping. */
+    let loose = false;
+    /** The point the keys moved last, so that presses on one point are one step of undo. */
+    let keyBend: { id: number; point: number } | undefined;
     const held = new Map<number, Held>();
     /** Pieces flying from the box to their place, or back to it, drawn until they arrive. */
     const flying: { parts: { part: Part }[]; from: Pose; to: Pose; time: number; then: () => void }[] = [];
@@ -259,7 +287,7 @@ export default function marbles(m: Mote): Scene {
     let lens = DEGREES;
     let lensTo = DEGREES;
     /** Every state of the run, for undo; what was copied; the pieces of one's own. */
-    let steps: Steps = begun("v1");
+    let steps: Steps = begun(write([]));
     let clip = "";
     let owns: Own[] = m.preview ? [] : m.recall<Own[]>("marbles-own", [], 1).filter((one) => typeof one?.name === "string" && typeof one?.text === "string");
     /** The handle the mouse is over, lit a little. */
@@ -325,6 +353,10 @@ export default function marbles(m: Mote): Scene {
               z: view.add(arrowMesh("z"), { color: colors.z, over: true, gloss: 0.2 }),
               ring: view.add(ringMesh(), { color: colors.accent, over: true, gloss: 0.2 }),
               knob: view.add(ball(0.11, 16, 10), { color: colors.accent, over: true, gloss: 0.3 }),
+              // the points a piece is bent by, as many as any piece has
+              point0: view.add(ball(0.1, 16, 10), { color: colors.accent, over: true, gloss: 0.3 }),
+              point1: view.add(ball(0.1, 16, 10), { color: colors.accent, over: true, gloss: 0.3 }),
+              point2: view.add(ball(0.1, 16, 10), { color: colors.accent, over: true, gloss: 0.3 }),
           }
         : undefined;
     if (handleParts) for (const part of Object.values(handleParts)) part.hidden = true;
@@ -358,10 +390,13 @@ export default function marbles(m: Mote): Scene {
             }
             pose(one.parts, originOf(piece.place), angleOf(piece.place));
             const marked = marks.some((mark) => mark.id === piece.id && mark.why !== "open");
+            // a bend near a limit is warmer even while chosen, so that it is seen as it is bent; held at a limit by a drag, warmer still
+            const strained = bendDrag?.id === piece.id && bendDrag.stopped ? 2 : warned(piece.kind) ? 1 : 0;
             for (const part of one.parts) {
                 if (part.glass) continue;
                 // chosen is a lift in tone toward the accent; marked a warmer one
-                part.look.color = chosen.has(piece.id) ? mix(part.base, colors.accent, 0.5) : marked ? mix(part.base, colors.warn, 0.6) : part.base;
+                const color = chosen.has(piece.id) ? mix(part.base, colors.accent, 0.5) : marked ? mix(part.base, colors.warn, 0.6) : part.base;
+                part.look.color = strained === 2 ? mix(color, colors.wrong, 0.6) : strained === 1 ? mix(color, colors.warn, 0.6) : color;
             }
         }
         // the pillars, from the table, each height's mesh made once
@@ -388,6 +423,15 @@ export default function marbles(m: Mote): Scene {
             const part = view.add(disc, { color: colors.accent, gloss: 0, casts: false });
             part.at = [end.at[0] + end.way[0] * 1.4, end.at[1] + 0.35, end.at[2] + end.way[2] * 1.4];
             part.scale = 0.8;
+            markParts.push(part);
+        }
+        // and where a bent piece is nearest its limit, a small warm mark lying on its top
+        for (const piece of run) {
+            if (isCarried(piece.id) || !warned(piece.kind)) continue;
+            const part = view.add(disc, { color: colors.warn, gloss: 0, casts: false });
+            const at = toWorld(piece.place, strainOf(piece.kind).at);
+            part.at = [at[0], at[1] + 0.25, at[2]];
+            part.scale = 0.7;
             markParts.push(part);
         }
         // the sun's box, round the run
@@ -422,6 +466,12 @@ export default function marbles(m: Mote): Scene {
         openMarks = checks(now).filter((mark) => mark.why === "open");
         ghostMarked = ghostMarked.filter((mark) => now.some((piece) => piece.id === mark.id));
         for (const id of [...chosen]) if (!run.some((piece) => piece.id === id)) chosen.delete(id);
+        // presses of a key on one point are one step only until anything else changes
+        keyBend = undefined;
+        if (bending && !bentPiece()) {
+            bending = false;
+            bendPoint = 0;
+        }
         if (end && !open(now).some((joint) => joint.id === end!.id && joint.joint === end!.joint)) end = undefined;
         if (!end) end = lastEnd();
         if (!m.preview) m.keep("marbles-run", write(run), 1);
@@ -524,20 +574,38 @@ export default function marbles(m: Mote): Scene {
         lensTo = DEGREES;
     };
 
-    /** The piece of the run under a point of the picture, by the boxes of room it takes up, a little larger for a finger. */
-    const pieceAt = (x: number, y: number, wide = 1.2): Placed | undefined => {
-        const line = lineAt(x, y);
-        let best: { piece: Placed; t: number } | undefined;
-        for (const piece of run) {
-            if (isCarried(piece.id)) continue;
-            for (const box of shapeOf(piece.kind).room) {
-                const placed = boxToWorld(piece.place, box);
-                const t = enters(line, placed.at, [placed.half[0] + wide, placed.half[1] + wide * 0.5, placed.half[2] + wide]);
-                if (t !== undefined && (!best || t < best.t)) best = { piece, t };
+    /**
+     * The piece of the run under a point of the picture, by the boxes of room it takes up with `wide`
+     * centimetres more round them. With `reach`, a fingertip's slack in pixels: if nothing is under the
+     * point itself, the nearest piece under a ring of points that far round it, so that a small piece
+     * far off is as easy to touch as a near one.
+     */
+    const pieceAt = (x: number, y: number, wide = 1.2, reach = 0): Placed | undefined => {
+        const under = (px: number, py: number) => {
+            const line = lineAt(px, py);
+            let best: { piece: Placed; t: number } | undefined;
+            for (const piece of run) {
+                if (isCarried(piece.id)) continue;
+                for (const box of shapeOf(piece.kind).room) {
+                    const placed = boxToWorld(piece.place, box);
+                    const t = enters(line, placed.at, [placed.half[0] + wide, placed.half[1] + wide * 0.5, placed.half[2] + wide]);
+                    if (t !== undefined && (!best || t < best.t)) best = { piece, t };
+                }
+            }
+            return best?.piece;
+        };
+        const found = under(x, y);
+        if (found || !reach) return found;
+        for (const ring of [reach / 2, reach]) {
+            for (let i = 0; i < 8; i++) {
+                const near = under(x + Math.cos((i * Math.PI) / 4) * ring, y + Math.sin((i * Math.PI) / 4) * ring);
+                if (near) return near;
             }
         }
-        return best?.piece;
+        return undefined;
     };
+    /** How far round a finger's press a piece is still taken, in pixels: half a fingertip. */
+    const FINGERTIP = 12;
 
     // ---- carrying ----
     /** Where carried pieces would go now. */
@@ -770,14 +838,53 @@ export default function marbles(m: Mote): Scene {
         const way = wayToWorld(piece.place, joint.way);
         return [at[0] + way[0] * 1.5, at[1] + 1.5, at[2] + way[2] * 1.5];
     };
+    /** How far pieces reach on the screen from a point, in pixels: their boxes of room, each with a block's half width round it. */
+    const reachOn = (pieces: Placed[], middle: V3): number => {
+        const centre = onScreen(middle);
+        if (!centre) return 0;
+        const { orbit: seen, degrees } = cam();
+        const half = 2.2 / across(seen, degrees, m.height, middle);
+        let most = 0;
+        for (const piece of pieces) {
+            for (const box of shapeOf(piece.kind).room) {
+                const at = onScreen(boxToWorld(piece.place, box).at);
+                if (at) most = Math.max(most, Math.hypot(at.x - centre.x, at.y - centre.y) + half);
+            }
+        }
+        return most;
+    };
+    /** How far the handles stand off from what they are on, in pixels: worked out each frame from what is chosen, and kept while a handle is dragged, so that the handles do not breathe under the pointer. */
+    let stand = 0;
+    const standFor = (pieces: Placed[]) => {
+        stand = standOff(reachOn(pieces, handleMiddle(pieces)), m.width, m.height);
+    };
     /** Where the handles are on the screen now, if any are shown. */
     const handlesNow = (): Shown | undefined => {
         if (m.preview || (carried && carried.handle === undefined)) return undefined;
         const pieces = carried ? placedOf(carried) : chosenPieces();
         if (!pieces.length) return undefined;
         const { orbit: seen, degrees } = cam();
+        // while a piece is bent, its points are its only handles
+        const bent = bentPiece();
+        if (bent && !carried) return pointsLayout(seen, degrees, m.width, m.height, pointsIn(bent.kind, bent.place).map((point) => point.at));
         const middle = carried ? shownPoint(carried, carried.origin!) : handleMiddle(pieces);
-        return layout(seen, degrees, m.width, m.height, middle, carried ? (carried.handle === "knob" ? knobOf(pieces) : undefined) : knobOf(pieces));
+        if (!carried) standFor(pieces);
+        return layout(seen, degrees, m.width, m.height, middle, carried ? (carried.handle === "knob" ? knobOf(pieces) : undefined) : knobOf(pieces), stand);
+    };
+    /**
+     * The handle a press at (x, y) would take once it moves, if any. Never one over the body of a chosen
+     * piece: a press there carries what is chosen, wherever the handles are, and the handles stand off
+     * from a small selection so that both have room. Shift and the select tool are for choosing, so no
+     * handle takes their press.
+     */
+    const handleUnder = (x: number, y: number, kind: "touch" | "mouse", shift = false): Handle | undefined => {
+        const shown = !carried && chosen.size && !shift && !selecting ? handlesNow() : undefined;
+        const handle = shown && which(shown, x, y, kind);
+        if (!handle) return undefined;
+        // a point sits on its piece's track, so it is taken over the piece too: while it is bent, that is what a press near a point means
+        if (pointOf(handle) !== undefined) return handle;
+        const body = pieceAt(x, y, 0.2);
+        return body && chosen.has(body.id) ? undefined : handle;
     };
     /** Turning one piece at the joint it hangs from: the ways it fits there, if it hangs from exactly one. */
     const cycleOf = (piece: Placed): Carried["cycle"] => {
@@ -860,6 +967,175 @@ export default function marbles(m: Mote): Scene {
         const [x, z] = rotated(hit[0] - piece.place.x * CELL, hit[2] - piece.place.z * CELL, -piece.place.turn);
         return [x, hit[1] - piece.place.y * LEVEL, z];
     };
+
+    // ---- bending ----
+    // One piece chosen that bends can be bent: its points are then its only handles. A point is dragged
+    // in the plane of up and aside where the view sees both, staying under the pointer, or along the one
+    // way the view sees; it snaps to straight, to a whole level, and to its partner's numbers (alike, or
+    // aside the other way), each way on its own; a limit stops it where the bend can still be built. The
+    // run changes as it is dragged, so marbles and the ghost roll on the bend as it is made, and one step
+    // of undo is kept when it is let go. The piece's ends never move: what it is joined to stays put.
+
+    /** The piece being bent, if bending is on and one piece that bends is chosen. */
+    const bentPiece = (): Placed | undefined => {
+        if (!bending || chosen.size !== 1) return undefined;
+        const piece = run.find((one) => chosen.has(one.id));
+        return piece && pointsOf(piece.kind) ? piece : undefined;
+    };
+    /** The numbers of a piece's bend, naught if it is not bent. */
+    const bendOf = (kind: Kind) => kind.bend ?? new Array<number>(2 * pointsOf(kind)).fill(0);
+    /** Why a piece bent so cannot be: a limit of the bend itself, or no room for it where it is (another piece, the ground, the table's edge). */
+    const bendFails = (piece: Placed, kind: Kind): Broken | "room" | undefined => (bendAllowed(kind) ? brokenBy(kind) ?? (fits(run.filter((one) => one.id !== piece.id), { ...piece, kind }) ? undefined : "room") : "tight");
+    /** A piece of the run given a new bend, while it is dragged or by a key: the table and the drawing follow at once, and the step for undo comes after. */
+    const setBend = (id: number, kind: Kind) => {
+        run = run.map((piece) => (piece.id === id ? { ...piece, kind } : piece));
+        table.set(resting());
+        redraw();
+        m.wake();
+    };
+    const toggleBending = (on = !bending) => {
+        const pieces = chosenPieces();
+        if (on && (pieces.length !== 1 || !pointsOf(pieces[0]!.kind))) return refuse();
+        bending = on;
+        bendPoint = 0;
+        keyBend = undefined;
+        sound?.knock(0.2, on ? 1900 : 1400);
+        tell();
+        m.wake();
+    };
+    const straightenChosen = () => {
+        const piece = chosenPieces().length === 1 ? chosenPieces()[0] : undefined;
+        if (!piece || !isBent(piece.kind)) return refuse();
+        const kind = withBend(piece.kind);
+        if (bendFails(piece, kind)) return refuse();
+        setBend(piece.id, kind);
+        keyBend = undefined;
+        sound?.knock(0.3, 1300);
+        changed();
+    };
+    const startBend = (point: number, hand: Hand) => {
+        const piece = bentPiece();
+        const here = piece && pointsIn(piece.kind, piece.place)[point];
+        if (!piece || !here) return;
+        const { orbit: seen, degrees } = cam();
+        const up: V3 = [0, 1, 0];
+        const long = Math.hypot(...here.aside) || 1;
+        const aside: V3 = [here.aside[0] / long, here.aside[1] / long, here.aside[2] / long];
+        const bend = bendOf(piece.kind);
+        bendPoint = point;
+        keyBend = undefined;
+        bendDrag = { id: piece.id, point, original: { ...piece }, at: here.at, up, aside, freedom: freedomOf(seen, degrees, aspect(), here.at, up, aside), press: { x: hand.x, y: hand.y }, start: [bend[2 * point]!, bend[2 * point + 1]!], good: bend, why: "" };
+        sound?.knock(0.2, 1600);
+        m.wake();
+    };
+    /** Where a dragged point may snap: straight each way, its height a whole level, and its partner's numbers, alike or aside the other way. */
+    const snapsOf = (piece: Placed, point: number): Snaps => {
+        const count = pointsOf(piece.kind);
+        const bend = bendOf(piece.kind);
+        const made = pointsIn(withBend(piece.kind), piece.place)[point]!.made;
+        const snaps: Snaps = { up: [{ at: 0, why: "straight" }], aside: [{ at: 0, why: "straight" }] };
+        // the heights of whole levels near it, as millimetres up from where the point is made
+        const level = Math.round(made[1] / LEVEL);
+        for (let k = level - 6; k <= level + 6; k++) if (k !== level || Math.abs(made[1] - k * LEVEL) > 1e-9) snaps.up.push({ at: Math.round((k * LEVEL - made[1]) * 10), why: `level ${k}` });
+        const partner = count - 1 - point;
+        if (partner !== point) {
+            snaps.up.push({ at: bend[2 * partner]!, why: "like its partner" });
+            snaps.aside.push({ at: bend[2 * partner + 1]!, why: "like its partner" }, { at: -bend[2 * partner + 1]!, why: "against its partner" });
+        }
+        return snaps;
+    };
+    const dragBend = (x: number, y: number, kind: "touch" | "mouse", free: boolean) => {
+        const began = performance.now();
+        const drag = bendDrag;
+        const piece = drag && run.find((one) => one.id === drag.id);
+        if (!drag || !piece) return;
+        const { orbit: seen, degrees } = cam();
+        const moved = dragged(seen, degrees, aspect(), drag.at, drag.up, drag.aside, drag.freedom, toPicture(drag.press.x, drag.press.y), toPicture(x, y));
+        // in millimetres, the point's own numbers; the way the view cannot see is held where it was
+        let wanted = { up: drag.start[0] + moved.up * 10, aside: drag.start[1] + moved.aside * 10 };
+        let why = "";
+        if (!free) {
+            const pixels = pixelsOf(seen, degrees, m.width, m.height, drag.at, drag.up, drag.aside);
+            const held = { up: drag.freedom === "aside" ? 0 : pixels.up, aside: drag.freedom === "up" ? 0 : pixels.aside };
+            const snap = snapped(wanted, snapsOf(piece, drag.point), held, kind === "touch" ? 12 : 8);
+            wanted = { up: snap.up, aside: snap.aside };
+            why = snap.why.join(" ");
+        }
+        const bend = [...drag.good];
+        // no further than a bend can be written; the limits stop it long before
+        const most = (value: number) => Math.max(-FURTHEST, Math.min(FURTHEST, Math.round(value)));
+        bend[2 * drag.point] = most(wanted.up);
+        bend[2 * drag.point + 1] = most(wanted.aside);
+        let next = withBend(piece.kind, bend);
+        let fails = bendFails(piece, next);
+        if (fails) {
+            // as far toward what is wanted as can be built, by halves, from the last that could; the
+            // limit that holds it is the one met just past there, not the one far out where the pointer is
+            const from = drag.good;
+            let [low, high] = [0, 1];
+            // seven halvings: within a hundred and twenty-eighth of the move, a millimetre or less for any move of a pointer between two frames
+            for (let go = 0; go < 7; go++) {
+                const mid = (low + high) / 2;
+                const trial = withBend(piece.kind, from.map((value, i) => value + (bend[i]! - value) * mid));
+                const why = bendFails(piece, trial);
+                if (why) [high, fails] = [mid, why];
+                else low = mid;
+            }
+            next = withBend(piece.kind, from.map((value, i) => value + (bend[i]! - value) * low));
+            // a small knock the moment a limit first holds it
+            if (!drag.stopped) sound?.knock(0.25, 420);
+        }
+        drag.stopped = fails;
+        drag.good = bendOf(next);
+        // a soft click on coming to a snap
+        if (why && why !== drag.why && !fails) sound?.knock(0.22, 2300);
+        drag.why = why;
+        if (keyOf(next) !== keyOf(piece.kind)) setBend(piece.id, next);
+        else redraw();
+        // how long a move of a point takes, everything it does, for measuring
+        const spent = performance.now() - began;
+        took.bend += (spent - took.bend) * 0.2;
+        took.bendMost = Math.max(took.bendMost, spent);
+
+    };
+    /** Lets go of a dragged point: the bend kept as a step of undo, or, cancelled, the piece put back as it was. */
+    const endBend = (cancelled: boolean) => {
+        const drag = bendDrag;
+        if (!drag) return;
+        bendDrag = undefined;
+        const now = run.find((one) => one.id === drag.id);
+        if (cancelled && now) setBend(drag.id, drag.original.kind);
+        if (now && keyOf(now.kind) !== keyOf(drag.original.kind) && !cancelled) sound?.knock(0.3, 1500);
+        changed(!cancelled);
+    };
+    /** The keys' way of bending: the chosen point moved up or aside by `step` millimetres a press, aside as the screen sees it. */
+    const nudgeBend = (up: number, aside: number) => {
+        const piece = bentPiece();
+        if (!piece) return;
+        const here = pointsIn(piece.kind, piece.place)[bendPoint];
+        if (!here) return;
+        // the arrow to the right moves the point to the right on the screen, whichever way the piece runs
+        const [a, b] = [onScreen(here.at), onScreen([here.at[0] + here.aside[0] * 100, here.at[1], here.at[2] + here.aside[2] * 100])];
+        const sign = a && b && b.x < a.x ? -1 : 1;
+        const bend = [...bendOf(piece.kind)];
+        bend[2 * bendPoint] = bend[2 * bendPoint]! + up;
+        bend[2 * bendPoint + 1] = bend[2 * bendPoint + 1]! + aside * sign;
+        const kind = withBend(piece.kind, bend);
+        if (bendFails(piece, kind)) return refuse();
+        const same = keyBend?.id === piece.id && keyBend.point === bendPoint;
+        setBend(piece.id, kind);
+        changed(!same);
+        // presses on one point after the first are one step with it
+        if (same) {
+            steps = replaced(steps, write(run));
+            keepSteps();
+            tell();
+        }
+        keyBend = { id: piece.id, point: bendPoint };
+        sound?.knock(0.15, 2000);
+    };
+    /** How far a key moves a point, in millimetres. */
+    const KEY_BEND = 5;
 
     // ---- what the bar, the strip and the keys do ----
     const letGo = () => {
@@ -994,6 +1270,8 @@ export default function marbles(m: Mote): Scene {
     const chosenChanged = () => {
         const last = chosenPieces().at(-1);
         if (last) end = open(run).find((joint) => joint.id === last.id) ?? end;
+        // bending is of one piece: choosing another, or more, or none, ends it
+        if (bending && !bentPiece()) toggleBending(false);
         redraw();
         tell();
         m.wake();
@@ -1171,6 +1449,7 @@ export default function marbles(m: Mote): Scene {
         });
         const group = (...tools: HTMLElement[]) => el("div", { class: "marbles-group" }, ...tools);
         const bar = el("div", { class: "marbles-bar", role: "toolbar", ariaLabel: "tools" }, group(selectTool, undoTool, redoTool, pasteTool), group(goTool, streamTool, pauseTool, resetTool), group(fitTool, soundTool, keysTool, runsTool));
+        queueMicrotask(() => stacking(bar));
 
         // the keys, a plain list, and the runs to start from, each in a fold under the bar
         const KEYS: [string, string][] = [
@@ -1184,6 +1463,10 @@ export default function marbles(m: Mote): Scene {
             ["Q, E, Alt+up and down", "a level down, up"],
             ["Enter", "put down"],
             ["R, F", "turn, mirror"],
+            ["K", "bend what is chosen by its points"],
+            ["bending: arrows, Q, E", "move the point aside, up, down"],
+            ["bending: comma, full stop, Delete", "the point before, after; straighten it"],
+            ["Alt or a second finger, dragging a point", "no snapping"],
             ["Delete", "take away"],
             ["Ctrl+C, X, V, D", "copy, cut, paste, duplicate"],
             ["Ctrl+Z, Ctrl+Shift+Z", "undo, redo"],
@@ -1242,7 +1525,9 @@ export default function marbles(m: Mote): Scene {
             if (event.key === "Enter") keepIt();
             if (event.key === "Escape") naming(false);
         });
-        const tools = el("div", { class: "marbles-strip-tools" }, turnTool, mirrorTool, joinedTool, copyTool, duplicateTool, keepTool, removeTool);
+        const bendTool = tool("bend", "Bend: drag its points", "K", () => toggleBending(), true);
+        const straightenTool = tool("straighten", "Straighten", "", straightenChosen);
+        const tools = el("div", { class: "marbles-strip-tools" }, turnTool, mirrorTool, bendTool, straightenTool, joinedTool, copyTool, duplicateTool, keepTool, removeTool);
         const form = el("div", { class: "marbles-strip-name" }, name, tool("done", "Keep it", "Enter", keepIt), tool("close", "Not now", "Escape", () => naming(false)));
         form.inert = true;
         strip.append(tools, form);
@@ -1264,6 +1549,10 @@ export default function marbles(m: Mote): Scene {
             undoTool.disabled = !canUndo(steps);
             redoTool.disabled = !canRedo(steps);
             pasteTool.disabled = !clip;
+            const one = chosen.size === 1 ? run.find((piece) => chosen.has(piece.id)) : undefined;
+            bendTool.setAttribute("aria-pressed", String(bending));
+            bendTool.disabled = !one || !pointsOf(one.kind);
+            straightenTool.disabled = !one || !isBent(one.kind);
             if (playing) swap(pauseTool, "pause", "Pause", "P");
             else swap(pauseTool, "play", "Play", "P");
             const on = sound?.button.getAttribute("aria-pressed") === "true";
@@ -1285,6 +1574,8 @@ export default function marbles(m: Mote): Scene {
         }
         nextId = run.reduce((most, piece) => Math.max(most, piece.id), 0) + 1;
         const kept = m.preview ? undefined : readSteps(m.recall("marbles-steps", undefined, 1));
+        // steps kept in the form before bends are read in the form written now, so that they still end at the run
+        if (kept) kept.texts = kept.texts.map(upgraded);
         // undo carries on from the last visit, if it was left at this run
         steps = kept && kept.texts[kept.at] === write(run) ? kept : begun(write(run));
         changed(false);
@@ -1323,11 +1614,48 @@ export default function marbles(m: Mote): Scene {
                 m.wake();
                 return;
             }
-            if (event.altKey) {
+            // while a piece is bent, the keys that would move it move its chosen point instead, and
+            // comma and full stop choose the point; Escape or Enter (or K) ends bending
+            const bent = bentPiece();
+            if (bent && !event.shiftKey && !bendDrag) {
+                let done = true;
+                if (key === "ArrowLeft" || lower === "a") nudgeBend(0, -KEY_BEND);
+                else if (key === "ArrowRight" || lower === "d") nudgeBend(0, KEY_BEND);
+                else if (key === "ArrowUp" || lower === "w" || lower === "e" || key === "PageUp") nudgeBend(KEY_BEND, 0);
+                else if (key === "ArrowDown" || lower === "s" || lower === "q" || key === "PageDown") nudgeBend(-KEY_BEND, 0);
+                else if (key === "," || key === "[" || key === "." || key === "]") {
+                    const count = pointsOf(bent.kind);
+                    bendPoint = (bendPoint + (key === "," || key === "[" ? count - 1 : 1)) % count;
+                    keyBend = undefined;
+                    sound?.knock(0.15, 2000);
+                } else if (key === "Delete" || key === "Backspace") {
+                    // the chosen point back where the piece as made has it
+                    const bend = [...bendOf(bent.kind)];
+                    bend[2 * bendPoint] = 0;
+                    bend[2 * bendPoint + 1] = 0;
+                    const kind = withBend(bent.kind, bend);
+                    if (keyOf(kind) === keyOf(bent.kind) || bendFails(bent, kind)) refuse();
+                    else {
+                        setBend(bent.id, kind);
+                        changed();
+                    }
+                } else if (key === "Escape" || key === "Enter" || lower === "k") toggleBending(false);
+                else done = false;
+                if (done) {
+                    event.preventDefault();
+                    m.wake();
+                    return;
+                }
+            }
+            if (key === "Escape" && bendDrag) {
+                endBend(true);
+                for (const one of held.values()) if (one.mode === "bend") one.mode = "done";
+            } else if (event.altKey) {
                 if (key === "ArrowUp") nudge(0, 0, 1);
                 else if (key === "ArrowDown") nudge(0, 0, -1);
                 else return;
-            } else if (event.shiftKey && key.startsWith("Arrow")) {
+            } else if (lower === "k") toggleBending();
+            else if (event.shiftKey && key.startsWith("Arrow")) {
                 free();
                 if (key === "ArrowLeft") orbit = kept({ ...orbit, turn: orbit.turn - 0.15 }, orbit);
                 if (key === "ArrowRight") orbit = kept({ ...orbit, turn: orbit.turn + 0.15 }, orbit);
@@ -1469,7 +1797,7 @@ export default function marbles(m: Mote): Scene {
         }
         const before = performance.now();
         if (!ghost.done) {
-            ghost.work(carried ? GHOST_WORK.carrying : GHOST_WORK.still);
+            ghost.work(carried || bendDrag ? GHOST_WORK.carrying : GHOST_WORK.still);
             if (ghost.done && !carried) {
                 ghostMarked = ghostMarks(ghost.paths, openMarks);
                 redraw();
@@ -1501,7 +1829,7 @@ export default function marbles(m: Mote): Scene {
     let pressed: { x: number; y: number; handle?: Handle; kind: string } | undefined;
     let time = 0;
     /** How long the physics, the ghost and the drawing take, in milliseconds, evened out over the last frames; and the longest frame lately: for measuring. */
-    const took = { step: 0, draw: 0, ghost: 0, frame: 0, most: 0 };
+    const took = { step: 0, draw: 0, ghost: 0, frame: 0, most: 0, bend: 0, bendMost: 0 };
     let lastFrame = 0;
     // With `?test` in the address, a browser test can find pieces and handles on the screen, choose, and
     // read the run, the ghost and the time a frame takes. Nothing is drawn for it.
@@ -1509,7 +1837,22 @@ export default function marbles(m: Mote): Scene {
         (window as unknown as { marbles: unknown }).marbles = {
             ends: () => open(run).map((joint) => ({ id: joint.id, joint: joint.joint, at: onScreen(joint.at), family: run.find((piece) => piece.id === joint.id)!.kind.family })),
             end: () => end && { id: end.id, joint: end.joint, at: onScreen(end.at) },
-            pieces: () => run.map((piece) => ({ id: piece.id, family: piece.kind.family, sizes: piece.kind.sizes, at: onScreen(toWorld(piece.place, handleOf(piece.kind))) })),
+            pieces: () => run.map((piece) => ({ id: piece.id, family: piece.kind.family, sizes: piece.kind.sizes, bend: piece.kind.bend, at: onScreen(toWorld(piece.place, handleOf(piece.kind))) })),
+            /** Bending: whether it is on, of which piece, the point the keys move, and a drag of a point if one is going on. */
+            bending: () => ({ on: bending, piece: bentPiece()?.id, point: bendPoint, drag: bendDrag && { point: bendDrag.point, freedom: bendDrag.freedom, stopped: bendDrag.stopped ?? null, why: bendDrag.why } }),
+            bend: (on?: boolean) => toggleBending(on),
+            /** The points of the piece being bent, on the screen. */
+            points: () => {
+                const piece = bentPiece();
+                return piece ? pointsIn(piece.kind, piece.place).map((point) => onScreen(point.at)) : [];
+            },
+            /** How hard a piece is bent: its tightest radius and steepest slope, whether it is warned of, and why it could not be built if it could not. */
+            strain: (id: number) => {
+                const piece = run.find((one) => one.id === id);
+                if (!piece) return undefined;
+                const strain = strainOf(piece.kind);
+                return { tight: strain.tight, steep: strain.steep, warned: warned(piece.kind), broken: bendFails({ ...piece, kind: withBend(piece.kind) }, piece.kind) ?? null };
+            },
             choose: (ids: number[]) => {
                 chosen.clear();
                 for (const id of ids) chosen.add(id);
@@ -1530,15 +1873,14 @@ export default function marbles(m: Mote): Scene {
             handles: () => handlesNow(),
             pressed: () => pressed,
             /** The handle a press there would take, if any. */
-            handleAt: (x: number, y: number, kind: "touch" | "mouse") => {
-                const shown = !carried && chosen.size ? handlesNow() : undefined;
-                const handle = shown && which(shown, x, y, kind);
-                const piece = pieceAt(x, y);
-                return handle && piece && chosen.has(piece.id) ? which(shown, x, y, "mouse") : handle;
-            },
+            handleAt: (x: number, y: number, kind: "touch" | "mouse") => handleUnder(x, y, kind),
+            /** The piece a press there would take, with a finger's slack if asked. */
+            pieceAt: (x: number, y: number, kind: "touch" | "mouse") => pieceAt(x, y, 1.2, kind === "touch" ? FINGERTIP : 0)?.id,
             screen: (p: V3) => onScreen(p),
             text: () => write(run),
             steps: () => ({ at: steps.at, count: steps.texts.length }),
+            /** Every step of undo, as the run's text. */
+            texts: () => [...steps.texts],
             ghost: () => ({ done: ghost.done, paths: ghost.paths.map((path) => ({ ending: path.ending, last: path.last, length: path.places.length, end: onScreen(path.places.at(-1)!) })) }),
             owns: () => owns.map((one) => one.name),
             carried: () => carried && { fits: carried.fits, count: carried.home.length, snapped: Boolean(carried.snap), move: carried.move, pivot: carried.pivot, anchor: carried.anchor, handle: carried.handle, kinds: carried.home.map((piece) => keyOf(piece.kind)), snaps: carried.snaps.map((snap) => ({ to: snap.to.id, joint: snap.joint.id, entry: snap.joint.joint, at: onScreen(movedPoint(snap.joint.at, carried!.move)), goal: onScreen(snap.to.at) })) },
@@ -1547,6 +1889,7 @@ export default function marbles(m: Mote): Scene {
             took: () => ({ ...took }),
             settle: () => {
                 took.most = 0;
+                took.bendMost = 0;
             },
             gizmo: () => gizmo,
             orbit: (next?: Partial<Orbit>) => {
@@ -1572,6 +1915,13 @@ export default function marbles(m: Mote): Scene {
             // pieces lifted by the keys are put down when the pointer is used
             if (carried && carried.hand === undefined) drop();
             const fingers = [...held.values()].filter((other) => other.hand.kind === "touch");
+            if (hand.kind === "touch" && fingers.some((other) => other.mode === "bend")) {
+                // a second finger while a point is dragged lets it go free of its snaps, for as long as it is down
+                one.mode = "loose";
+                held.set(hand.id, one);
+                loose = true;
+                return;
+            }
             if (hand.kind === "touch" && fingers.length === 1 && (fingers[0]!.mode === "press" || fingers[0]!.mode === "turn" || fingers[0]!.mode === "pan")) {
                 // a second finger: the two pan, pinch and twist the view together
                 fingers[0]!.mode = "pinch";
@@ -1591,14 +1941,8 @@ export default function marbles(m: Mote): Scene {
             if (hand.button === 2 || hand.button === 1 || (hand.button === 0 && hand.shift && !pieceAt(hand.x, hand.y))) one.mode = "pan";
             else {
                 // Shift and the select tool are for choosing, so the handles of what is chosen do not take the press
-                const shown = !carried && chosen.size && !hand.shift && !selecting ? handlesNow() : undefined;
-                const handle = shown && which(shown, hand.x, hand.y, hand.kind === "touch" ? "touch" : "mouse");
-                // a handle is taken once the press moves; still, it is a press on what is under it. Over a
-                // chosen piece, only a press on the handle itself takes it, not one a fingertip from it, so
-                // that what is chosen can still be carried where the handles cross it
-                one.piece = pieceAt(hand.x, hand.y);
-                one.handle = handle || undefined;
-                if (one.handle && one.piece && chosen.has(one.piece.id) && shown) one.handle = which(shown, hand.x, hand.y, "mouse");
+                one.piece = pieceAt(hand.x, hand.y, 1.2, hand.kind === "touch" ? FINGERTIP : 0);
+                one.handle = handleUnder(hand.x, hand.y, hand.kind === "touch" ? "touch" : "mouse", hand.shift);
                 pressed = { x: hand.x, y: hand.y, handle: one.handle, kind: hand.kind };
                 if (!one.piece && !one.handle && hand.ctrl) {
                     one.mode = "box";
@@ -1614,8 +1958,7 @@ export default function marbles(m: Mote): Scene {
                 if (hand.held) return;
                 if (carried?.hand === "hover") follow(hand.x, hand.y, "mouse");
                 else if (hand.kind === "mouse") {
-                    const shown = !carried && chosen.size ? handlesNow() : undefined;
-                    const now = shown && which(shown, hand.x, hand.y, "mouse");
+                    const now = handleUnder(hand.x, hand.y, "mouse");
                     if (now !== hovered) {
                         hovered = now;
                         m.wake();
@@ -1636,7 +1979,12 @@ export default function marbles(m: Mote): Scene {
                 pinch = now;
             } else if (one.mode === "press") {
                 if (Math.hypot(hand.x - one.start.x, hand.y - one.start.y) < STILL) return;
-                if (one.handle) {
+                const point = pointOf(one.handle);
+                if (point !== undefined) {
+                    one.mode = "bend";
+                    startBend(point, { ...hand, x: one.start.x, y: one.start.y });
+                    dragBend(hand.x, hand.y, hand.kind === "touch" ? "touch" : "mouse", loose || hand.alt);
+                } else if (one.handle) {
                     one.mode = "handle";
                     startHandle(one.handle, { ...hand, x: one.start.x, y: one.start.y });
                     dragHandle(hand.x, hand.y);
@@ -1658,6 +2006,7 @@ export default function marbles(m: Mote): Scene {
                     free();
                 }
             } else if (one.mode === "carry") follow(hand.x, hand.y, hand.kind === "touch" ? "touch" : "mouse");
+            else if (one.mode === "bend") dragBend(hand.x, hand.y, hand.kind === "touch" ? "touch" : "mouse", loose || hand.alt);
             else if (one.mode === "handle") dragHandle(hand.x, hand.y);
             else if (one.mode === "box" && boxing) boxing.to = { x: hand.x, y: hand.y };
             else if (one.mode === "turn") orbit = kept({ ...orbit, turn: orbit.turn - dx * 0.008, tip: orbit.tip + dy * 0.006 }, orbit);
@@ -1675,6 +2024,11 @@ export default function marbles(m: Mote): Scene {
             } else if (one.mode === "carry" || one.mode === "handle") {
                 if (cancelled) cancel();
                 else drop();
+            } else if (one.mode === "bend") {
+                endBend(cancelled);
+                loose = false;
+            } else if (one.mode === "loose") {
+                loose = [...held.values()].some((other) => other.mode === "loose");
             } else if (one.mode === "gizmo") {
                 if (Math.hypot(hand.x - one.start.x, hand.y - one.start.y) < STILL * 2 && one.gizmo) look(one.gizmo);
             } else if (one.mode === "box" && boxing) {
@@ -1688,6 +2042,10 @@ export default function marbles(m: Mote): Scene {
                 boxing = undefined;
                 sound?.knock(0.2, 1900);
                 chosenChanged();
+            } else if (one.mode === "press" && pointOf(one.handle) !== undefined) {
+                // a tap on a point picks it for the keys, and leaves the choice as it is
+                bendPoint = pointOf(one.handle)!;
+                sound?.knock(0.15, 2000);
             } else if (one.mode === "press") {
                 // a press that did not move: on a piece it is chosen (added with Shift or the select
                 // tool); on the table, the choice is let go
@@ -1713,7 +2071,7 @@ export default function marbles(m: Mote): Scene {
             time += dt;
             // a finger held still is a long press: on a piece it adds it to the choice, on the table it starts a box
             for (const one of held.values()) {
-                if (one.mode !== "press" || one.hand.kind !== "touch" || time - one.since < LONG || (one.handle && !one.piece)) continue;
+                if (one.mode !== "press" || one.hand.kind !== "touch" || time - one.since < LONG || (one.handle && (!one.piece || pointOf(one.handle) !== undefined))) continue;
                 if (one.piece) {
                     if (chosen.has(one.piece.id)) chosen.delete(one.piece.id);
                     else chosen.add(one.piece.id);
@@ -1776,7 +2134,7 @@ export default function marbles(m: Mote): Scene {
             }
             shake = Math.max(0, shake - dt);
         },
-        resting: () => !m.preview && !carried && !flying.length && !easing && lens === lensTo && !streaming && shake <= 0 && (!playing || table.marbles.every((one) => one.rest)) && !held.size && ghost.done && ghostPlays >= 1,
+        resting: () => !m.preview && !carried && !bendDrag && !flying.length && !easing && lens === lensTo && !streaming && shake <= 0 && (!playing || table.marbles.every((one) => one.rest)) && !held.size && ghost.done && ghostPlays >= 1,
         resize,
         debug: () => [`${run.length} pieces, ${table.marbles.length} marbles, ${table.marbles.filter((one) => one.rest).length} asleep`, `ghost ${took.ghost.toFixed(2)} ms, frame ${took.frame.toFixed(2)} ms`],
         destroy: () => {
@@ -1824,16 +2182,32 @@ export default function marbles(m: Mote): Scene {
                 const shown = handlesNow();
                 const pieces = carried ? placedOf(carried) : chosenPieces();
                 for (const part of Object.values(handleParts)) part.hidden = true;
-                if (shown && pieces.length) {
+                const bent = !carried ? bentPiece() : undefined;
+                if (bent) {
+                    // the points, on the track, a fingertip's size; the one the keys move, or the one dragged, lit
+                    pointsIn(bent.kind, bent.place).forEach((point, i) => {
+                        const part = handleParts[`point${i}` as "point0"];
+                        if (!part) return;
+                        part.hidden = false;
+                        part.at = point.at;
+                        part.scale = across(seen, degrees, m.height, point.at) * ARROW;
+                        const lit = bendDrag ? bendDrag.point === i : hovered === `point${i}` || bendPoint === i;
+                        part.emit = lit ? 0.4 : 0;
+                    });
+                } else if (shown && pieces.length) {
                     const middle = carried ? shownPoint(carried, carried.origin!) : handleMiddle(pieces);
-                    const size = across(seen, degrees, m.height, middle) * ARROW;
+                    const pixel = across(seen, degrees, m.height, middle);
+                    const size = pixel * ARROW;
                     const lit = carried?.handle ?? hovered;
                     for (const name of ["x", "y", "z", "ring"] as const) {
                         const part = handleParts[name];
                         // while one is dragged, only it is shown
                         part.hidden = (name === "ring" ? false : !shown.arrows[name]) || (carried?.handle !== undefined && carried.handle !== name);
-                        part.at = middle;
-                        part.scale = size;
+                        // stood off from what is chosen: each arrow moved out along itself, the ring made wider
+                        const out = name === "ring" ? 0 : stand * pixel;
+                        const axis = name === "ring" ? AXES.x : AXES[name];
+                        part.at = [middle[0] + axis[0] * out, middle[1] + axis[1] * out, middle[2] + axis[2] * out];
+                        part.scale = name === "ring" ? size * ((RING + stand) / RING) : size;
                         part.emit = lit === name ? 0.35 : 0;
                     }
                     const knob = carried ? (carried.handle === "knob" ? knobOf(pieces) : undefined) : knobOf(pieces);
@@ -1870,11 +2244,10 @@ export default function marbles(m: Mote): Scene {
             ctx.setLineDash([]);
         }
         // the little axes: each end where that axis points on the screen, the near ends drawn over the far
-        const { orbit: seen, degrees } = cam();
+        const { orbit: seen } = cam();
         const middle = { x: m.width - GIZMO.margin - GIZMO.radius - GIZMO.dot, y: GIZMO.margin + GIZMO.radius + GIZMO.dot };
         const eye = eyeOf(seen);
         const back: V3 = [eye[0] - seen.at[0], eye[1] - seen.at[1], eye[2] - seen.at[2]];
-        const long = Math.hypot(...back);
         // the eye's own right and up, as orbit.ts and gl.ts work them out
         const unit = (v: V3): V3 => {
             const l = Math.hypot(...v) || 1;
@@ -1929,7 +2302,7 @@ export default function marbles(m: Mote): Scene {
         ctx.globalAlpha = 1;
         // the strip grows by what is chosen, above it, or under it where there is no room above
         const pieces = chosenPieces();
-        const shownStrip = pieces.length > 0 && !carried && !boxing && ![...held.values()].some((one) => one.mode === "turn" || one.mode === "pinch" || one.mode === "pan");
+        const shownStrip = pieces.length > 0 && !carried && !bendDrag && !boxing && ![...held.values()].some((one) => one.mode === "turn" || one.mode === "pinch" || one.mode === "pan");
         strip.classList.toggle("shown", shownStrip);
         strip.inert = !shownStrip;
         if (!shownStrip) return;

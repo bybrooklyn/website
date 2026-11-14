@@ -4,7 +4,7 @@
 // browser is the newest steps that fit, read back the same. Run with `bun run test`.
 
 import { expect, test } from "bun:test";
-import { begun, canRedo, canUndo, readSteps, recorded, redone, trimmed, undone } from "./history";
+import { begun, canRedo, canUndo, readSteps, recorded, redone, replaced, trimmed, undone } from "./history";
 import { read, write, type Placed } from "./run";
 import { RUNS } from "./runs";
 
@@ -76,4 +76,21 @@ test("what is kept in the browser is the newest steps that fit, with the one sho
     expect(trimmed(steps).texts.length).toBe(101);
     expect(readSteps(JSON.parse(JSON.stringify(kept)))).toEqual(kept);
     for (const wrong of [undefined, null, 3, { texts: [], at: 0 }, { texts: ["v1"], at: 1 }, { texts: [4], at: 0 }]) expect(readSteps(wrong)).toBeUndefined();
+});
+
+test("a change that goes on from the last replaces it: presses of a key moving one point are one step, which one undo takes back", () => {
+    let steps = begun("a");
+    steps = recorded(steps, "b");
+    // the first press is a step; each press after it puts its run in that step's place
+    steps = recorded(steps, "c1");
+    steps = replaced(steps, "c2");
+    steps = replaced(steps, "c3");
+    expect(steps).toEqual({ texts: ["a", "b", "c3"], at: 2 });
+    expect(undone(steps).texts[undone(steps).at]).toBe("b");
+    // pressed back to where it began, the step is gone
+    expect(replaced(steps, "b")).toEqual({ texts: ["a", "b"], at: 1 });
+    // what had been undone past it is gone
+    expect(replaced({ texts: ["a", "b", "c"], at: 1 }, "b2")).toEqual({ texts: ["a", "b2"], at: 1 });
+    // the first state is never replaced
+    expect(replaced(begun("a"), "b")).toEqual({ texts: ["a", "b"], at: 1 });
 });
