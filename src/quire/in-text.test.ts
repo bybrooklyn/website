@@ -200,7 +200,7 @@ test("a right-click in a table opens its menu, with every command and those that
         ["Sort the rows A to Z", false],
         ["Sort the rows Z to A", false],
         ["Align the column left", false],
-        ["Centre the column", false],
+        ["Center the column", false],
         ["Align the column right", false],
     ]);
     await page!.press(".quire-table-menu.open .quire-menu-line", "Add a row above");
@@ -223,10 +223,10 @@ test("a right-click in a table opens its menu, with every command and those that
     await tab.wait(300);
     expect(await keyboard()).toBe("writing");
     // and the strip's own remove-row button is dimmed in the heading row rather than live and doing nothing
-    expect(await tab.run("document.querySelector('.quire-table-tools button[aria-label=\"Remove this row\"]').disabled")).toBe(true);
+    expect(await tab.run("document.querySelector('.quire-table-tools button[aria-label=\"Remove row\"]').disabled")).toBe(true);
     await tab.run("q.select([0, 1, 0], 0)");
     await tab.wait(100);
-    expect(await tab.run("document.querySelector('.quire-table-tools button[aria-label=\"Remove this row\"]').disabled")).toBe(false);
+    expect(await tab.run("document.querySelector('.quire-table-tools button[aria-label=\"Remove row\"]').disabled")).toBe(false);
     // Remove the table leaves an empty line in its place
     await tab.run("(() => { const cell = document.querySelector('.quire td'); const box = cell.getBoundingClientRect(); cell.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: box.left + 4, clientY: box.top + 4 })); })()");
     await tab.wait(400);
@@ -257,7 +257,7 @@ test("the bar over selected words holds bold, italic, underline, strikethrough, 
     const { tab } = page!;
     await page!.reset("Some words here.\n", [0], 5, [0], 10);
     await tab.wait(400);
-    expect(await tab.run("[...document.querySelectorAll('.quire-select-bar.shown button')].map((each) => each.getAttribute('aria-label'))")).toEqual(["Bold", "Italic", "Underline", "Strikethrough", "Link", "Comment", "Turn into a heading", "Turn into a quote", "Turn into a list"]);
+    expect(await tab.run("[...document.querySelectorAll('.quire-select-bar.shown button')].map((each) => each.getAttribute('aria-label'))")).toEqual(["Bold (Ctrl+B)", "Italic (Ctrl+I)", "Underline (Ctrl+U)", "Strikethrough (Alt+Shift+5)", "Link (Ctrl+K)", "Comment (Ctrl+Alt+M)", "Heading (Ctrl+Alt+2)", "Quote", "Bulleted list (Ctrl+Shift+8)"]);
     await page!.press(".quire-select-bar button", "Underline");
     expect(await page!.md()).toBe("Some <u>words</u> here.\n");
     await page!.press(".quire-select-bar button", "Comment");

@@ -10,11 +10,11 @@
 // is DOM. Its styles are in src/styles/quire.css.
 
 import { blockAt, type Document, type Mark, type Selection } from "./document";
-import { currentStyle, link as linkAction, linkAt, pressedAt, setStyleOf, toggle, toggleList, type Action } from "./bar";
+import { currentStyle, link as linkAction, linkAt, pressedAt, setStyleOf, tip, toggle, toggleList, type Action } from "./bar";
 import { collapsed, rangeOf, tableOf } from "./keys";
 import type { Surface } from "./surface";
 import { placeClear, linesAround } from "./strips";
-import { control, glyph, icon, linkForm, make, still } from "./ui";
+import { control, glyph, icon, linkForm, mac, make, still } from "./ui";
 
 /** Whether the selection bar shows for a selection, and which of its buttons are pressed. */
 export function barFor(doc: Document, selection: Selection, marks: Mark[]): { show: boolean; pressed: Record<string, boolean> } {
@@ -31,13 +31,6 @@ export function barFor(doc: Document, selection: Selection, marks: Mark[]): { sh
         show,
         pressed: { bold: now.bold, italic: now.italic, underline: now.underline, strike: now.strike, link: !!linkAt(doc, start), heading: style.startsWith("heading"), quote: style === "quote", list: now.bullet },
     };
-}
-
-/** A speech bubble, drawn as mdQuire's line icons are (ui.ts), for the bar's Comment. */
-function commentIcon(): SVGSVGElement {
-    const svg = icon("");
-    svg.innerHTML = '<path d="M5 6.5A1.5 1.5 0 0 1 6.5 5h11A1.5 1.5 0 0 1 19 6.5v8a1.5 1.5 0 0 1-1.5 1.5H10l-4 3.5V16h-.5A.5.5 0 0 1 5 15.5z"/>';
-    return svg;
 }
 
 /** Builds the selection bar for a surface. `top` gives how far down the window the main bar reaches, which it keeps clear of; `comment` starts a comment on the selected words, growing from the button pressed. */
@@ -67,18 +60,19 @@ export function createSelectBar(surface: Surface, top: () => number = () => 0, c
         buttons.set(key, button);
         row.append(button);
     };
-    // the main bar's marks in its order, then a link and a comment, as Docs offers them on selected words
-    add("bold", "Bold", glyph("B", "bold"), doing(toggle("bold")));
-    add("italic", "Italic", glyph("I", "italic"), doing(toggle("italic")));
-    add("underline", "Underline", glyph("U", "underline"), doing(toggle("underline")));
-    add("strike", "Strikethrough", glyph("S", "strike"), doing(toggle("strike")));
-    add("link", "Link", icon("link"), () => openLink());
+    // the main bar's marks in its order, then a link and a comment, as Docs offers them on selected words; each tooltip a word or two with its shortcut, as the bar's are
+    const apple = mac();
+    add("bold", tip("Bold", "bold", apple), glyph("B", "bold"), doing(toggle("bold")));
+    add("italic", tip("Italic", "italic", apple), glyph("I", "italic"), doing(toggle("italic")));
+    add("underline", tip("Underline", "underline", apple), glyph("U", "underline"), doing(toggle("underline")));
+    add("strike", tip("Strikethrough", "strike", apple), glyph("S", "strike"), doing(toggle("strike")));
+    add("link", tip("Link", "link", apple), icon("link"), () => openLink());
     // a comment is made, not switched on, so its button has no pressed state
-    if (comment) row.append(control("Comment", commentIcon(), (button) => comment(button)));
+    if (comment) row.append(control(tip("Comment", "comment", apple), icon("comment"), (button) => comment(button)));
     row.append(make("span", "quire-select-rule"));
-    add("heading", "Turn into a heading", icon("heading"), doing((state) => setStyleOf(currentStyle(state.doc, state.selection.focus.path).startsWith("heading") ? "paragraph" : "heading2")(state)));
-    add("quote", "Turn into a quote", icon("quote"), doing(setStyleOf("quote")));
-    add("list", "Turn into a list", icon("bullet"), doing(toggleList("bullet")));
+    add("heading", tip("Heading", "heading2", apple), icon("heading"), doing((state) => setStyleOf(currentStyle(state.doc, state.selection.focus.path).startsWith("heading") ? "paragraph" : "heading2")(state)));
+    add("quote", "Quote", icon("quote"), doing(setStyleOf("quote")));
+    add("list", tip("Bulleted list", "bullet", apple), icon("bullet"), doing(toggleList("bullet")));
 
     /** Flows the bar's width from what it holds now to what it will hold. */
     function swap(content: HTMLElement) {

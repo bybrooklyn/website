@@ -1303,18 +1303,30 @@
    It grows out of the top edge of the selected text (or the bottom edge when it sits below),
    a little past its size and back, and shrinks away plainly when the selection goes. */
 
+/* Every strip over the writing (the selection bar, the link card and the chip after a pasted address,
+   find, a table's strip and a picture's) wears one skin, the menus': the raised surface and their
+   shadow, the middle corner, no line round it, buttons of the bar's size and the menus' type. */
+.quire-select-bar,
+.quire-find,
+.quire-table-tools,
+.quire-picture-strip {
+    padding: 0.2rem;
+    border: 0;
+    border-radius: var(--quire-round);
+    background: var(--panel-raised);
+    box-shadow:
+        0 0.75rem 2rem oklch(0.05 0.02 300 / 0.55),
+        0 0.15rem 0.4rem oklch(0.05 0.02 300 / 0.35);
+    font-family: var(--font-text);
+    font-size: 0.95rem;
+    line-height: 1;
+}
+
 .quire-select-bar,
 .quire-find {
     position: fixed;
     z-index: 60;
     display: flex;
-    padding: 0.2rem;
-    border: 0.0625rem solid color-mix(in oklch, var(--accent) 55%, var(--rule));
-    border-radius: var(--quire-round);
-    background: var(--surface);
-    font-family: var(--font-text);
-    font-size: 0.95rem;
-    line-height: 1;
     opacity: 0;
     scale: 0.55;
     transform-origin: 50% 100%;
@@ -1509,12 +1521,6 @@
     width: max-content;
     max-width: calc(100vw - 1rem);
     align-items: center;
-    padding: 0.15rem;
-    border: 0.0625rem solid var(--rule);
-    border-radius: var(--quire-round);
-    background: var(--surface);
-    font-family: var(--font-text);
-    line-height: 1;
     opacity: 0;
     scale: 0.6;
     transform-origin: 100% 100%;
@@ -1543,11 +1549,6 @@
     transition: none;
 }
 
-.quire-table-tools .quire-button {
-    min-width: 1.9rem;
-    height: 1.9rem;
-}
-
 .quire-signed {
     display: inline-flex;
     align-items: center;
@@ -1559,14 +1560,9 @@
     font-weight: 700;
 }
 
-/* sorting is said in letters, A→Z, a little smaller than the text */
 .quire-table-sorts {
     display: flex;
     align-items: center;
-}
-
-.quire-table-tools .quire-sort {
-    font-size: 0.8rem;
 }
 
 /* the cell the cursor is in, so that the controls' row and column are plain */

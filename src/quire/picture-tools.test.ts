@@ -78,10 +78,10 @@ test("a picture sits at the left until moved; the strip puts it in the centre an
     await start();
     await page!.press(".quire-image img");
     await tab.wait(400);
-    expect(await tab.run("document.querySelector('.quire-picture-strip [aria-label=\"Picture to the left\"]').getAttribute('aria-pressed')")).toBe("true");
-    await page!.press(".quire-picture-strip button", "Picture in the centre");
+    expect(await tab.run("document.querySelector('.quire-picture-strip [aria-label=\"Align left\"]').getAttribute('aria-pressed')")).toBe("true");
+    await page!.press(".quire-picture-strip button", "Center");
     expect(await page!.md()).toContain(`<div align="center">\n\n![A wide picture](${picture})\n\n</div>`);
-    await page!.press(".quire-picture-strip button", "Picture to the left");
+    await page!.press(".quire-picture-strip button", "Align left");
     expect(await page!.md()).toBe(`One line.\n\n![A wide picture](${picture})\n\nAnother line.\n`);
 });
 
@@ -155,7 +155,7 @@ test("wrap text from the menu floats the picture with the words beside it, as on
     await tab.wait(500);
     await page!.press(".quire-picture-panel button", "Half width");
     expect(await page!.md()).toContain(`<img src="${picture}" alt="A wide picture" width="50%" align="left" />`);
-    await page!.press(".quire-picture-panel button", "Picture to the right");
+    await page!.press(".quire-picture-panel button", "Align right");
     expect(await page!.md()).toContain(`<img src="${picture}" alt="A wide picture" width="50%" align="right" />`);
     await tab.run("q.surface.undo()");
     await tab.run("q.surface.undo()");

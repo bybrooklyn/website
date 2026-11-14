@@ -124,6 +124,11 @@ const PATHS: Record<string, string> = {
     typing: '<path d="M3.5 17 7.5 7l4 10M5 13.5h5M14 12h6M17 9l3 3-3 3"/>',
     forget: '<path d="m14 5 5 5-8.5 8.5H6L4 16.5zM9.5 9.5l5 5M10.5 18.5H20"/>',
     help: '<circle cx="12" cy="12" r="8"/><path d="M9.8 9.5a2.3 2.3 0 1 1 3.2 2.1c-.6.3-1 .8-1 1.5v.4"/><circle cx="12" cy="16.5" r=".6" fill="currentColor"/>',
+    // a link opened in a new tab: a box with an arrow leaving it
+    open: '<path d="M13.5 4.5H19.5V10.5M19.5 4.5l-8 8"/><path d="M17.5 14v4a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 18V8A1.5 1.5 0 0 1 6 6.5h4"/>',
+    // sorting a table: lines growing longer (A to Z) or shorter (Z to A) beside an arrow down
+    sortup: '<path d="M4 6.5h4M4 12h6.5M4 17.5h9"/><path d="M17.5 5v14M15 16.5l2.5 2.5 2.5-2.5"/>',
+    sortdown: '<path d="M4 6.5h9M4 12h6.5M4 17.5h4"/><path d="M17.5 5v14M15 16.5l2.5 2.5 2.5-2.5"/>',
     // checking's: a book for her dictionary, and an eye shut for what she ignores
     dictionary: '<path d="M5.5 5.5A1.5 1.5 0 0 1 7 4h11.5v13H7a1.5 1.5 0 0 0-1.5 1.5z"/><path d="M5.5 18.5A1.5 1.5 0 0 0 7 20h11.5v-3"/>',
     ignore: '<path d="M3 12s3.5-6 9-6 9 6 9 6-3.5 6-9 6-9-6-9-6z"/><circle cx="12" cy="12" r="2.5"/><path d="M4.5 4.5l15 15"/>',

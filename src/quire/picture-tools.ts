@@ -52,9 +52,9 @@ const CORNERS = ["nw", "ne", "sw", "se"] as const;
 
 /** The ways a picture can sit, with their names. */
 const SIDES: [Align, string][] = [
-    ["left", "Picture to the left"],
-    ["center", "Picture in the centre"],
-    ["right", "Picture to the right"],
+    ["left", "Align left"],
+    ["center", "Center"],
+    ["right", "Align right"],
 ];
 
 /** A "1:1" drawn as mdQuire's line icons are (ui.ts), for putting a picture back to its original size among the strip's icons. */
@@ -114,7 +114,7 @@ export function createPictureTools(surface: Surface, options: PictureOptions = {
         strip.append(button);
     }
     const own = control("Original size", originalIcon(), () => change((path) => (doc) => setImage(doc, path, { width: undefined })), "quire-button quire-own-size");
-    const more = dots("More for this picture");
+    const more = dots("More");
     more.addEventListener("click", () => (menu.isOpen() ? menu.close(true) : openMenu(more)));
     strip.append(make("span", "quire-select-rule"), own, more);
     frame.append(label, strip);
@@ -302,7 +302,7 @@ export function createPictureTools(surface: Surface, options: PictureOptions = {
     const wrapNote = make("span", "quire-picture-note", "Left or right only");
     line("Wrap text", wrap, wrapNote);
     const actions = make("div", "quire-picture-actions");
-    actions.append(control("Replace the picture", "Replace", () => chooser.click(), "quire-button quire-picture-action"), control("Take the picture away", "Remove", removePicked, "quire-button quire-picture-action"));
+    actions.append(control("Replace", "Replace", () => chooser.click(), "quire-button quire-picture-action"), control("Remove", "Remove", removePicked, "quire-button quire-picture-action"));
     inside.append(head, facts, actions, chooser);
 
     const moving: Animation[] = [];
