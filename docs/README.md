@@ -16,6 +16,7 @@ open, how to run and test it, and its known weak spots.
 - [quire-core.md](quire-core.md): the shared core every Quire is to be built on; nothing built.
 - [imgQuire-models.md](imgQuire-models.md): the models imgQuire's tools could run in the browser, at three sizes, with their licences.
 - [imgQuire-codecs.md](imgQuire-codecs.md): the Rust crates that could write and read picture formats for imgQuire, built to WebAssembly and measured.
+- [sand.md](sand.md): a sand simulator mini, as planned; nothing built.
 - [cutout.md](cutout.md): a background remover, a page of its own and a tool of imgQuire; nothing built.
 - [mote.md](mote.md): the small engine the minis run on, with no third-party libraries.
 - [minis.md](minis.md): the minis page and the small minis (Blocks, Dice, Plinko) and the terminal player.
