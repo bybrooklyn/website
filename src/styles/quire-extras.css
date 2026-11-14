@@ -52,9 +52,8 @@
     width: 100%;
 }
 
-.quire > [data-wrap] + *,
-.quire > [data-wrap] + * + *,
-.quire > [data-wrap] + * + * + * {
+/* marked by the surface (surface.ts), since a rule that looks at a block's neighbours slows every new block */
+.quire > .quire-beside {
     content-visibility: visible;
 }
 
@@ -700,7 +699,7 @@
 
 /* ---- the marker of a table of contents ---- */
 
-.quire-contents-mark + ul {
+.quire > .quire-contents-list {
     margin-top: 0.35rem;
 }
 

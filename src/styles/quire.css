@@ -3888,7 +3888,9 @@ body.quire-app,
     letter-spacing: -0.015em;
 }
 
-.prose.quire > :not(h1, h2, h3, h4, h5, h6) + :is(h1, h2, h3, h4, h5, h6) {
+/* a heading after something that is not a heading; the surface marks how a block stands to the one
+   before it (surface.ts), since rules that look at a block's neighbours slow every new block */
+.prose.quire > .quire-opens-section {
     margin-top: calc(var(--line) * 1.25 - var(--crown));
 }
 
@@ -3913,7 +3915,8 @@ body.quire-app,
 }
 
 /* a heading straight after a heading: the half line is the first's margin and the room under its tails */
-.prose.quire :is(h1, h2, h3, h4, h5, h6) + :is(h1, h2, h3, h4, h5, h6) {
+.prose.quire > .quire-after-heading,
+.prose.quire :is(h1, h2, h3, h4, h5, h6) + :is(h1, h2, h3, h4, h5, h6):not(.quire > *) {
     margin-top: calc(var(--crown) * -1);
 }
 

@@ -1106,6 +1106,75 @@ used("a 5,000-line document opens in under a second, and a key typed in its midd
 used("a 5,000-line document opens in under a second, and a key typed in its middle appears in under 16 ms, on light paper", measured("light paper"));
 used("a 5,000-line document opens in under a second, and a key typed in its middle appears in under 16 ms, in page view", measured("page view"));
 
+/** Opens the 5,000-line document and changes its shape in the middle: Enter splitting a paragraph, Backspace joining it again, and a pasted line; each is shown in under 16 ms. */
+async function shaped(mode: "no page" | "page view") {
+    await pageView(mode === "page view");
+    await tab.wait(300);
+    await tab.run(`(() => {
+        const parts = [];
+        for (let index = 0; parts.length < 5000; index++) {
+            parts.push("## Section " + index, "", "A paragraph of ordinary length, with **bold**, *italic* and a [link](https://example.com) in it, long enough to wrap onto a second line. Number " + index + ".", "", "- one point", "- another point", "", "\\u0060\\u0060\\u0060js", "let n = " + index + ";", "\\u0060\\u0060\\u0060", "", "| a | b |", "| - | - |", "| 1 | 2 |", "");
+        }
+        q.reset(parts.slice(0, 5000).join("\\n") + "\\n");
+        const blocks = q.editor.surface.getDocument().blocks;
+        window.middle = blocks.findIndex((block, index) => index > blocks.length / 2 && block.kind === "paragraph");
+        q.select([window.middle], 10);
+        window.shapes = [];
+        if (window.shaping) return;
+        window.shaping = true;
+        q.editor.surface.element.addEventListener("keydown", (event) => ((window.shapeStart = performance.now()), (window.kind = event.key)), true);
+        q.editor.surface.element.addEventListener("paste", () => ((window.shapeStart = performance.now()), (window.kind = "paste")), true);
+        q.editor.surface.on("change", () => {
+            document.body.offsetHeight;
+            if (window.shapeStart !== undefined) window.shapes.push([window.kind, performance.now() - window.shapeStart]);
+            window.shapeStart = undefined;
+        });
+    })()`);
+    await tab.wait(600);
+    // Enter splits the paragraph, Backspace at the start of its second half joins it again, a line is pasted and undone: the document stays as it was
+    for (let round = 0; round < 8; round++) {
+        await tab.press("Enter");
+        await tab.wait(40);
+        await tab.press("Backspace");
+        await tab.wait(40);
+        await tab.run(`(() => {
+            const data = new DataTransfer();
+            data.setData("text/plain", "A pasted line\\nand the next");
+            q.editor.surface.element.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
+        })()`);
+        await tab.wait(40);
+        await tab.press("z", { ctrl: true });
+        await tab.wait(40);
+    }
+    const keys = await tab.run<[string, number][]>("window.shapes");
+    const timed = (kind: string, what: string) => {
+        const sorted = keys.filter(([each]) => each === kind).map(([, ms]) => ms).sort((a, b) => a - b);
+        expect(sorted.length).toBe(8);
+        const median = sorted[Math.floor(sorted.length / 2)]!;
+        const worst = sorted[sorted.length - 1]!;
+        console.log(`5,000 lines, ${mode}, ${what}: median ${median.toFixed(1)} ms, slowest ${worst.toFixed(1)} ms`);
+        return { median, worst };
+    };
+    return { enter: timed("Enter", "Enter"), join: timed("Backspace", "Backspace joining two blocks"), pasted: timed("paste", "a pasted line") };
+}
+
+/** The test of a changed shape in a mode, held as typing is held there, leaving a short document with no page behind it. */
+const reshaped = (mode: "no page" | "page view") => async () => {
+    try {
+        for (const each of Object.values(await shaped(mode))) {
+            expect(each.median).toBeLessThan(16);
+            // the slowest in page view as a key's is held there (speed, above)
+            expect(each.worst).toBeLessThan(mode === "page view" ? 24 : 16);
+        }
+    } finally {
+        await reset("Text\n");
+        await pageView(false);
+    }
+};
+
+used("in a 5,000-line document, Enter, Backspace joining two blocks and a pasted line each appear in under 16 ms, with no page", reshaped("no page"));
+used("in a 5,000-line document, Enter, Backspace joining two blocks and a pasted line each appear in under 16 ms, in page view", reshaped("page view"));
+
 used("the sheet is pages of its paper with a gap between: nothing crosses a page's foot, a page break starts the next page, and a new page grows in", async () => {
     await tab.resize(1300, 900);
     await pageView(true);
@@ -1643,8 +1712,26 @@ const seenGaps = () =>
             return inner(e);
         };
         const kids = [...prose.children];
-        return kids.slice(1).map((kid, index) => ({ name: kids[index].tagName.toLowerCase() + ' to ' + kid.tagName.toLowerCase() + (kid.className ? '.' + kid.className.split(' ')[0] : ''), gap: +((edges(kid).top - edges(kids[index]).bottom) / line).toFixed(2) }));
+        // the classes saying how a block stands to the one before it are not its kind
+        const kind = (kid) => kid.className.split(' ').filter((name) => name && !['quire-opens-section', 'quire-after-heading', 'quire-contents-list', 'quire-beside'].includes(name))[0];
+        return kids.slice(1).map((kid, index) => ({ name: kids[index].tagName.toLowerCase() + ' to ' + kid.tagName.toLowerCase() + (kind(kid) ? '.' + kind(kid) : ''), gap: +((edges(kid).top - edges(kids[index]).bottom) / line).toFixed(2) }));
     })()`);
+
+used("how a block stands to the one before it is marked on it, and follows as blocks come and go: a heading opening a section, a heading after a heading, the blocks beside a picture the text flows round", async () => {
+    const tiny = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+    const marks = () => tab.run<string[]>("[...document.querySelectorAll('.prose.quire > *')].map((each) => ['quire-opens-section', 'quire-after-heading', 'quire-beside'].filter((name) => each.classList.contains(name)).join(' '))");
+    await reset("Words.\n\n## One\n\n## Two\n\nMore.\n", [2], 0);
+    expect(await marks()).toEqual(["", "quire-opens-section", "quire-after-heading", ""]);
+    await tab.press("Enter");
+    expect(await marks()).toEqual(["", "quire-opens-section", "", "quire-opens-section", ""]);
+    await tab.press("z", { ctrl: true });
+    expect(await marks()).toEqual(["", "quire-opens-section", "quire-after-heading", ""]);
+    await reset(`<img src="${tiny}" alt="" align="left" />\n\nOne.\n\nTwo.\n\nThree.\n\nFour.\n`, [2], 4);
+    expect(await marks()).toEqual(["", "quire-beside", "quire-beside", "quire-beside", ""]);
+    await tab.press("Enter");
+    expect(await marks()).toEqual(["", "quire-beside", "quire-beside", "quire-beside", "", ""]);
+    expect(await tab.run("document.querySelectorAll('.prose.quire > *')[3].textContent")).toBe("");
+});
 
 used("half a line of space lies between a paragraph and a drawing of maths or a flowchart, as between any two blocks", async () => {
     await reset("Words.\n\n```mermaid\nflowchart LR\n  A --> B\n```\n\nWords.\n\n$$\nx + y\n$$\n\nWords.\n", [0], 0);

@@ -321,6 +321,9 @@ export async function gatherPictures(doc: Document, show: (src: string) => Promi
 /** Selectors of the site's reading styles: the ground, the type, and what a post's Markdown makes. Anything of the editor's own is left out. */
 const READING = /^(:root|html|body|\.prose\b[^,]*|h[1-6]|p|a|ul|ol|li|blockquote|code|pre|kbd|table|thead|tbody|tr|th|td|img|figure|figcaption|hr|em|strong|sup|sub|mark|s|u|del|small)(\s*[:>+~\s].*)?$/;
 
+/** How a reading rule in prose.css leaves out the editor's own blocks. */
+const EDITOR_LEFT_OUT = ":not(.quire > *)";
+
 /** The site's reading styles, taken from the page's own stylesheets, with its colors and the fonts they use inlined, for a web page that stands alone. */
 export async function readingStyles(): Promise<string> {
     const kept: string[] = [];
@@ -329,8 +332,9 @@ export async function readingStyles(): Promise<string> {
         for (const rule of rules) {
             if (rule instanceof CSSFontFaceRule) faces.push(rule);
             else if (rule instanceof CSSStyleRule) {
-                const parts = rule.selectorText.split(",").map((part) => part.trim());
-                if (parts.every((part) => READING.test(part) && !part.includes("quire"))) into.push(rule.cssText);
+                // a reading rule that leaves the editor's own blocks out (prose.css) is the reader's still
+                const parts = rule.selectorText.replaceAll(EDITOR_LEFT_OUT, "").split(",").map((part) => part.trim());
+                if (parts.every((part) => READING.test(part) && !part.includes("quire"))) into.push(rule.cssText.replaceAll(EDITOR_LEFT_OUT, ""));
             } else if (rule instanceof CSSMediaRule && /prefers-color-scheme|max-width|min-width/.test(rule.conditionText)) {
                 const inner: string[] = [];
                 take(rule.cssRules, inner);

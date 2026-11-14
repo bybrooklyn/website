@@ -33,6 +33,20 @@ the document into a `contenteditable` element and cancels every browser edit, so
 the text. Undo, selection and paste are its own. Markdown typed as you go turns into what it means
 (`## `, `**bold**`, `- `), and one undo gives back the characters as typed.
 
+**Speed.** In a 5,000-line document a key, Enter, Backspace joining two blocks and a pasted line are
+each shown in under 16 ms (`editor.test.ts` holds them, with no page and in page view; measured on
+13 November: a key 2 to 4 ms, Enter 4 to 6 ms, where Enter took 61 ms before). Only the blocks that
+changed are drawn again. What made Enter slow was the stylesheet, not the script: rules that look at a
+block's neighbour (`h2 + h3`, the blocks after a wrapped picture as `[data-wrap] + *`) made the browser
+work out the style of every block after a block put in or taken out (59 ms, 50 of them the picture's
+rule). How a block stands to the one before it is now a class the surface sets on the blocks that
+changed and the one after each (`quire-opens-section`, `quire-after-heading`, `quire-contents-list`,
+`quire-beside`). The outline is drawn again only when a heading's words or level change, not when the
+headings move down (7 ms). The rest of a change (checking, page view, the counts, suggestions, version
+history, saving) costs under half a millisecond at once and under 5 ms in any later slice. A rule in
+the editor's styles that looks inside or beside the document's blocks from the document's root (`:has()`,
+`+`, `~`) brings this back.
+
 **Stores.** A document can live in the browser (`store-browser.ts`), in a file opened and downloaded
 (`store-files.ts`), in a real file or folder on the computer where the browser allows it
 (`store-folder.ts`), in a GitHub repository (`store-github.ts`, with a fine-grained token kept only in this
