@@ -273,6 +273,8 @@ used("a file is opened from the computer, and downloaded again with its own name
     await press(".quire-menu-row .quire-row-word", "File");
     await tab.wait(700);
     await press(".quire-menu.open .quire-menu-line", "Download");
+    await tab.wait(500);
+    await press(".quire-menu-line", "Markdown");
     await tab.wait(300);
     expect(await tab.run("q.downloads.at(-1)")).toEqual({ name: "post.md", text: "# A post\n\nFrom a file. Edited.\n" });
 });
@@ -286,9 +288,9 @@ used("in a Markdown file the tools it cannot keep are not offered, and turning i
     await press(".quire-menu-row .quire-row-word", "File");
     await tab.wait(700);
     const lines = await tab.run<string[]>("[...document.querySelectorAll('.quire-menu.open .quire-menu-line')].map((line) => line.textContent)");
-    expect(lines).toContain("Turn into a .quire document");
+    expect(lines).toContain("Save as .quire document");
     expect(lines.some((line) => line.startsWith("Typeface") || line.startsWith("Highlight"))).toBe(false);
-    await press(".quire-menu.open .quire-menu-line", "Turn into a .quire document");
+    await press(".quire-menu.open .quire-menu-line", "Save as .quire document");
     await tab.wait(900);
     expect(await tab.run("document.querySelector('.quire-name-text').textContent")).toBe("post.quire");
     expect(await md()).toBe("# A post\n\nFrom a file. Edited.\n");
@@ -367,8 +369,12 @@ used("a .quire file opens with its look, is written in, and downloads as a .quir
     await tab.wait(1300);
     await press(".quire-menu-row .quire-row-word", "File");
     await tab.wait(700);
-    expect(await tab.run("[...document.querySelectorAll('.quire-menu.open .quire-menu-line')].map((line) => line.textContent).filter((text) => text.startsWith('Download') && !text.endsWith('›'))")).toEqual(["Download.quire", "Download as Markdown.md"]);
-    await press(".quire-menu.open .quire-menu-line", "Download.quire");
+    await press(".quire-menu.open .quire-menu-line", "Download");
+    await tab.wait(500);
+    const kinds = await tab.run<string[]>("[...document.querySelectorAll('.quire-menu-line')].map((line) => line.textContent)");
+    expect(kinds).toContain("mdQuire document.quire");
+    expect(kinds).toContain("Markdown.md");
+    await press(".quire-menu-line", "mdQuire document");
     await tab.wait(400);
     const bundle = await unpackQuire(new Uint8Array(Object.values(await tab.run<Record<string, number>>("q.bytes['letter.quire']"))));
     expect(bundle.markdown).toBe("# Old. A letter\n\nDear Sam, hello.\n\n![A dot](pictures/dot.png)\n");
