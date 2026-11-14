@@ -13,6 +13,8 @@
 //! - `evolve`: learning by evolution, as the Walker learns, its runs going through `envs`.
 //! - `ppo`: learning by practice, proximal policy optimisation over `net`.
 //! - `practice`: the worlds it practises in, fresh for every run, and measuring on held-out worlds.
+//! - `needs`: energy that runs down and is restored by food and rest; `curious`: something for reaching
+//!   and seeing what it has not before.
 //! - `gait`: how a creature moves, in numbers: on its feet or its belly, upright, taking turns.
 //! - `mind`: a brain drawn as it thinks, whichever way it learns.
 //! - `net`: a small network with its backward pass written by hand, and Adam, for gradient learning.
@@ -26,18 +28,21 @@
 pub mod api;
 pub mod body;
 pub mod check;
+pub mod curious;
 pub mod envs;
 pub mod evolve;
 pub mod eyes;
 pub mod gait;
 pub mod land;
 pub mod mind;
+pub mod needs;
 pub mod net;
 pub mod page;
 pub mod ppo;
 pub mod practice;
 pub mod recipe;
 pub mod stage;
+pub mod tally;
 pub mod touch;
 
 #[cfg(test)]
@@ -60,3 +65,5 @@ mod stage_tests;
 mod tests;
 #[cfg(test)]
 mod touch_tests;
+#[cfg(test)]
+mod wants_tests;

@@ -26,17 +26,32 @@ fn mix(hash: &mut u64, values: &[f32]) {
 
 /// The fingerprint of a small learner's state after two updates, which the page's engine must give.
 /// It changed when practice's creatures began to feel touch (`touch`), which made the brain's input
-/// larger, and to practise with a visitor.
-pub const FINGERPRINT: u64 = 0x6cf0_f880_cc3f_bf10;
+/// larger, and to practise with a visitor; and again when they began to want things (stage 2: energy
+/// and food, an eye they turn, curiosity), which gave them three senses and an action more.
+pub const FINGERPRINT: u64 = 0xb66b_94ff_b5e3_f67c;
+/// What it was before stage 2, which practice with needs, the eye and curiosity switched off still gives.
+const BEFORE_WANTS: u64 = 0x6cf0_f880_cc3f_bf10;
 
 fn fingerprint() -> u64 {
-    let mut practice = Practice::new(recipe(0.5), Way::of(2), Settings::default(), 2, 7, 3).unwrap();
+    fingerprint_of(Way::of(2))
+}
+
+fn fingerprint_of(way: Way) -> u64 {
+    let mut practice = Practice::new(recipe(0.5), way, Settings::default(), 2, 7, 3).unwrap();
     let mut hash = 0xcbf2_9ce4_8422_2325;
     for _ in 0..2 {
         practice.update();
         mix(&mut hash, &practice.learner.state());
     }
     hash
+}
+
+#[test]
+fn with_its_wants_switched_off_it_practises_as_it_did_before_them_to_the_bit() {
+    let mut way = Way::of(2);
+    (way.needs, way.gaze, way.appear) = (false, false, 0.0);
+    (way.shaping.comfort, way.shaping.place, way.shaping.sight) = (0.0, 0.0, 0.0);
+    assert_eq!(fingerprint_of(way), BEFORE_WANTS);
 }
 
 #[test]
@@ -117,8 +132,9 @@ fn it_learns_to_get_past_the_start_of_worlds_it_never_practised_in() {
 
 /// How far, on average, it must get through the held-out worlds after 2.5 million steps. It got
 /// 10.9 m when this was written (5.2 m before the costs on effort, flight and falls, and the smaller
-/// first spread); this leaves room for small changes that shift learning a little.
-const LEARNED: f32 = 8.0;
+/// first spread), and 6.9 m once it wanted things (stage 2), since it stops to rest and to eat and
+/// starts measured runs part tired; this leaves room for small changes that shift learning a little.
+const LEARNED: f32 = 5.0;
 
 #[test]
 fn both_bodies_can_step_forward_without_leaving_the_ground_and_it_costs_less_than_hopping() {

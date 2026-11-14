@@ -58,7 +58,7 @@ struct Walk {
 impl Walk {
     fn new(recipe: Recipe, way: Way, seed: u32) -> Walk {
         let mut run = Run::new(Rc::new(Land::new(Recipe { seed, ..recipe }, 30.0)), way.legs, 60.0).unwrap();
-        way.dress_run(&mut run);
+        way.dress_run(&mut run, seed);
         let mut senses = vec![0.0; run.senses()];
         run.sense(&mut senses);
         Walk { held: vec![0.0; run.body.actions()], senses, run, fell_at: None }

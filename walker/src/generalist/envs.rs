@@ -20,6 +20,8 @@ use alloc::vec;
 use alloc::vec::Vec;
 
 use super::body::Body;
+use super::curious::Curiosity;
+use super::needs;
 use super::eyes::{self, PER_RAY, RAYS, Seen};
 use super::land::Land;
 use super::recipe::Recipe;
@@ -137,6 +139,14 @@ impl Judge {
         self.end != End::Going
     }
 
+    /// Lets a run that was ending for getting nowhere go on, as if it had just got somewhere: for a
+    /// tired creature resting.
+    pub fn forgive_stall(&mut self) {
+        self.end = End::Going;
+        self.stall_mark = self.furthest;
+        self.stall_steps = 0;
+    }
+
     /// Takes up a run that had ended, as it is, when the visitor picks the creature up again: it goes
     /// on being judged from here, with its time and its furthest as they were.
     pub fn revive(&mut self) {
@@ -166,6 +176,11 @@ pub struct Run {
     last_velocity: Vec2,
     /// Practice's visitor, for a run that has one (`touch::Visits`).
     pub visits: Option<Visits>,
+    /// Whether, at the last look, there was something ahead worth leaving the ground for
+    /// (`practice::clear_ahead`).
+    pub ahead: bool,
+    /// What it has been and seen in this run, for a creature that is curious (`curious`).
+    pub curiosity: Option<Curiosity>,
 }
 
 impl Run {
@@ -175,7 +190,7 @@ impl Run {
         let body = Body::build(&mut stage.world, legs)?;
         stage.keep(stage.world.bodies[body.creature.torso as usize].position.x);
         // the jolt of a body at rest: gravity, felt as one up
-        Some(Run { stage, body, judge: Judge::new(seconds), seen: [(0.0, Seen::Nothing); RAYS], feet: [(0.0, true); 4], jolt: Vec2::new(0.0, 1.0), last_velocity: Vec2::ZERO, visits: None })
+        Some(Run { stage, body, judge: Judge::new(seconds), seen: [(0.0, Seen::Nothing); RAYS], feet: [(0.0, true); 4], jolt: Vec2::new(0.0, 1.0), last_velocity: Vec2::ZERO, visits: None, ahead: false, curiosity: None })
     }
 
     /// Makes this run the same as another, reusing its memory.
@@ -188,6 +203,8 @@ impl Run {
         self.jolt = other.jolt;
         self.last_velocity = other.last_velocity;
         self.visits.clone_from(&other.visits);
+        self.ahead = other.ahead;
+        self.curiosity.clone_from(&other.curiosity);
     }
 
     /// How many numbers it senses: the rays, then what it feels of itself.
@@ -200,7 +217,25 @@ impl Run {
         let torso = self.body.creature.torso;
         let group = self.stage.world.bodies[torso as usize].group;
         let (rays, feelings) = into.split_at_mut(RAYS * PER_RAY);
-        eyes::see(&self.stage, torso, group, rays, &mut self.seen);
+        if self.body.gazing {
+            let angles = eyes::gazed(self.body.gaze);
+            eyes::see_along(&self.stage, torso, group, &angles, rays, &mut self.seen);
+            self.ahead = eyes::ahead(&self.stage, torso, group);
+            if let Some(curiosity) = &mut self.curiosity {
+                let eye = eyes::eye(&self.stage, torso) + Vec2::new(self.stage.origin, 0.0);
+                curiosity.saw(eye, angles.iter().zip(&self.seen).map(|(&angle, &(distance, what))| {
+                    let (s, c) = crate::math::sin_cos(angle);
+                    (eye + Vec2::new(c, s) * distance, what.number())
+                }));
+            }
+        } else {
+            eyes::see(&self.stage, torso, group, rays, &mut self.seen);
+            self.ahead = self.seen.iter().enumerate().any(|(k, &(distance, seen))| match k {
+                0..=4 => matches!(seen, Seen::Edge | Seen::Box | Seen::Hazard | Seen::Moving),
+                11 | 12 => seen != Seen::Nothing && distance < 1.0,
+                _ => false,
+            });
+        }
         self.body.feel(&self.stage.world, feelings);
         if self.body.touch {
             let at = feelings.len() - touch::felt(self.body.legs());
@@ -211,12 +246,19 @@ impl Run {
     /// What comes after each step of the physics, before it is judged: the jolt its body felt, for a
     /// body that feels touch. Practice and the page's show both call it at every step, so the jolt is
     /// the same however often it is sensed.
+    /// For a creature that eats, what it spent, rested and ate (`needs::after_step`); for one that is
+    /// curious, where it has been.
     pub fn after_step(&mut self) {
         if self.body.touch {
             let world = &self.stage.world;
             let now = world.bodies[self.body.creature.torso as usize].velocity;
             self.jolt = touch::jolt(self.jolt, self.last_velocity, now, world.gravity);
             self.last_velocity = now;
+        }
+        needs::after_step(self);
+        if let Some(curiosity) = &mut self.curiosity {
+            let torso = self.stage.world.bodies[self.body.creature.torso as usize].position;
+            curiosity.been(torso + Vec2::new(self.stage.origin, 0.0));
         }
     }
 
@@ -229,6 +271,12 @@ impl Run {
     pub fn before_step(&mut self, actions: &[f32]) {
         let x = self.stage.world.bodies[self.body.creature.torso as usize].position.x;
         self.stage.keep(x);
+        if let Some(mut appearing) = self.body.needs.as_mut().and_then(|needs| needs.appearing.take()) {
+            appearing.before_step(self);
+            if let Some(needs) = &mut self.body.needs {
+                needs.appearing = Some(appearing);
+            }
+        }
         self.body.drive(&mut self.stage.world, actions);
     }
 

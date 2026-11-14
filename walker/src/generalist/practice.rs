@@ -17,11 +17,11 @@ use alloc::vec;
 use alloc::vec::Vec;
 
 use super::envs::{End, Run};
-use super::eyes::Seen;
 use super::gait::{Gait, Watch};
 use super::land::Land;
 use super::ppo::{CUT, GOING, Learner, OVER, Settings, Task};
 use super::recipe::Recipe;
+use super::tally::{Tally, Wants};
 use crate::physics::{STEP, World};
 
 /// What is added to a run's own reward while practising.
@@ -75,6 +75,16 @@ pub struct Shaping {
     /// For each second of the body's lean, squared (radians from upright): a posture term, as the
     /// knee and upright terms are.
     pub lean: f32,
+    /// How much a unit of discomfort is worth (`needs::discomfort`), for a creature that eats: what
+    /// eating takes away is paid, what the motors' work and being awake add is charged.
+    pub comfort: f32,
+    /// What curiosity pays (`curious`): for each unit of coming into new places, and of seeing new
+    /// things at a look.
+    pub place: f32,
+    pub sight: f32,
+    /// How much of each metre further than before is paid (1 all of it, as it always was; 0 none, so
+    /// it goes on only for what it finds there).
+    pub progress: f32,
 }
 
 /// The parts of a step's reward, for a reader: the run's own (progress less hazards and twitching),
@@ -88,18 +98,53 @@ pub struct Parts {
     pub fall: f32,
     /// The cost of knees on the ground and the bonus for standing tall (with `up` on the page).
     pub posture: f32,
+    /// What its comfort gained by eating, what it lost by spending (less what resting gave back), and
+    /// what coming into new places was worth (seeing new things is paid with the decision, in
+    /// `Worlds`).
+    pub food: f32,
+    pub energy: f32,
+    pub curious: f32,
+}
+
+impl Parts {
+    /// All of it.
+    pub fn sum(&self) -> f32 {
+        self.run + self.up + self.effort + self.air + self.fall + self.posture + self.food + self.energy + self.curious
+    }
 }
 
 /// Whether the creature's eyes, at their last look, show something ahead worth leaving the ground
 /// for: an edge, a box, a hazard or a moving thing where the five nearest rays looking down land
 /// (within about 1.7 m for an eye a metre up, nearer for a lower one: about a hop), or a wall within
 /// a metre of the rays looking level and a little up. Further off, there is time to walk up to it.
+/// For a creature that turns its eye, the same is seen by rays of its own (`eyes::ahead`), so where it
+/// looks changes nothing it is charged for.
 pub fn clear_ahead(run: &Run) -> bool {
-    run.seen.iter().enumerate().any(|(k, &(distance, seen))| match k {
-        0..=4 => matches!(seen, Seen::Edge | Seen::Box | Seen::Hazard | Seen::Moving),
-        11 | 12 => seen != Seen::Nothing && distance < 1.0,
-        _ => false,
-    })
+    run.ahead
+}
+
+/// What its needs and its curiosity gave in the step just taken, into `parts`; and the progress it was
+/// paid that a creature at play, or one paid less for progress, is not paid.
+fn wants(run: &mut Run, shaping: Shaping, parts: &mut Parts, progress: f32) {
+    let play = run.body.needs.as_ref().is_some_and(|needs| needs.play);
+    if let Some(needs) = &run.body.needs {
+        let [before, rested, fed] = needs.comfort;
+        parts.energy = shaping.comfort * (before - rested);
+        parts.food = shaping.comfort * (rested - fed);
+    }
+    if let Some(curiosity) = &mut run.curiosity {
+        let mut place = curiosity.place;
+        if shaping.pace > 0.0 {
+            // a new place reached quicker than the pace earns what the pace would have, as progress does
+            curiosity.allowance = (curiosity.allowance + shaping.pace * STEP / super::curious::PLACE).min(2.0);
+            place = place.min(curiosity.allowance);
+            curiosity.allowance -= place;
+        }
+        parts.curious = if matches!(run.judge.end, End::Going | End::Time) { shaping.place * place } else { 0.0 };
+        curiosity.place = 0.0;
+    }
+    let paid = if play { 0.0 } else { shaping.progress };
+    parts.run -= (1.0 - paid) * progress;
 }
 
 /// The shaped reward of a step just taken by `run` with `actions`, in its parts. While a hand holds it,
@@ -114,7 +159,11 @@ pub fn shaped(run: &mut Run, shaping: Shaping, actions: &[f32]) -> Parts {
         }
         let effort = -shaping.energy * creature.effort(&run.stage.world);
         let run_part = run.judge.after_step(&run.stage, &run.body, actions);
-        return Parts { run: run_part, effort, ..Parts::default() };
+        let mut parts = Parts { run: run_part, effort, ..Parts::default() };
+        wants(run, shaping, &mut parts, 0.0);
+        // where it is carried is not somewhere it went
+        parts.curious = 0.0;
+        return parts;
     }
     let world = &run.stage.world;
     let mut parts = Parts::default();
@@ -159,8 +208,14 @@ pub fn shaped(run: &mut Run, shaping: Shaping, actions: &[f32]) -> Parts {
     }
     let before = run.judge.furthest;
     parts.run = run.judge.after_step(&run.stage, &run.body, actions);
+    let mut progress = run.judge.furthest - before;
     if shaping.pace > 0.0 {
-        parts.run -= (run.judge.furthest - before - shaping.pace * STEP).max(0.0);
+        parts.run -= (progress - shaping.pace * STEP).max(0.0);
+        progress = progress.min(shaping.pace * STEP);
+    }
+    // a creature that eats may stop to rest when it is tired, and a run is not ended for that
+    if run.judge.end == End::Stalled && run.body.needs.as_ref().is_some_and(|needs| needs.energy < RESTFUL && !needs.play) {
+        run.judge.forgive_stall();
     }
     if run.judge.end == End::Going && run.judge.seconds_down > 0.0 && run.judge.seconds_down > shaping.down {
         run.judge.end = End::Down;
@@ -182,6 +237,7 @@ pub fn shaped(run: &mut Run, shaping: Shaping, actions: &[f32]) -> Parts {
             parts.posture += shaping.upright * STEP * run.body.creature.tallness(&run.stage.world);
         }
     }
+    wants(run, shaping, &mut parts, progress);
     parts
 }
 
@@ -217,6 +273,15 @@ pub struct Way {
     /// makes, which `Practice::ramp` brings in with the costs.
     pub visitor: f32,
     pub visiting: f32,
+    /// Whether it has energy and eats (`needs`), whether it turns its eye (`Body::gazing`), the
+    /// share of runs that are play (`needs::Needs::play`), and how many seconds apart food appears
+    /// near it, on average (0: never).
+    pub needs: bool,
+    pub gaze: bool,
+    pub play: f32,
+    pub appear: f32,
+    /// The energy a run starts with; less than 0 for any, drawn evenly from `LOWEST_START` to full.
+    pub energy: f32,
 }
 
 impl Way {
@@ -229,9 +294,26 @@ impl Way {
         body.touch = self.touch;
     }
 
-    /// Dresses a run's body (`dress`) and sets its hips' reach forward, if this way changes it.
-    pub fn dress_run(&self, run: &mut Run) {
+    /// Dresses a run's body (`dress`) and sets its hips' reach forward, if this way changes it; gives
+    /// it its eye, its energy (from `seed`: how much, and whether this run is play), its food and its
+    /// curiosity.
+    pub fn dress_run(&self, run: &mut Run, seed: u32) {
         self.dress(&mut run.body);
+        run.body.gazing = self.gaze;
+        if self.needs {
+            let mut random = crate::learn::Random::new(seed as u64 ^ 0x656e_6572_6779_0000);
+            let (energy, play) = (random.unit(), random.unit() < self.play);
+            let mut needs = super::needs::Needs::of(if self.energy >= 0.0 { self.energy } else { LOWEST_START + (1.0 - LOWEST_START) * energy }, &run.body.creature, &run.stage.world);
+            needs.play = play;
+            if self.appear > 0.0 && !play {
+                needs.appearing = Some(super::needs::Appearing::new(seed, self.appear));
+            }
+            run.stage.feeds = !play;
+            run.body.needs = Some(needs);
+        }
+        if self.needs || self.gaze {
+            run.curiosity = Some(super::curious::Curiosity::default());
+        }
         if self.hip > 0.0 {
             for joints in run.body.creature.joints.chunks(2) {
                 let hip = &mut run.stage.world.joints[joints[0] as usize];
@@ -272,18 +354,40 @@ impl Way {
     ///
     /// Both feel touch (`touch`). Two legs practise with a visitor every 8 seconds or so, brought in with
     /// the costs, who lifts, nudges and shoves; four legs practise with none.
+    ///
+    /// Both want things (stage 2, walker/README.md "It wants things"): energy that the motors' work and
+    /// being awake spend and food and rest restore, its change in comfort paid at `COMFORT`; curiosity,
+    /// `PLACE` for each new half metre reached (no quicker than the pace, for two legs) and `SIGHT` for
+    /// each new thing seen; an eye they turn; food appearing every `APPEAR` seconds or so; and one run in
+    /// five is play. Progress is still paid, as it was.
     pub fn of(legs: u32) -> Way {
-        let mut shaping = Shaping { alive: 0.25, energy: 0.002, air: 2.0, tall: false, smooth: 0.0, fall: 3.0, knee: 0.0, upright: 0.0, down: 1.0, turns: 0.0, pace: 0.0, impact: 0.0, spin: 0.0, bob: 0.0, swing: 0.0, torque: 0.0, stall: 0.0, lean: 0.0 };
+        let mut shaping = Shaping { alive: 0.25, energy: 0.002, air: 2.0, tall: false, smooth: 0.0, fall: 3.0, knee: 0.0, upright: 0.0, down: 1.0, turns: 0.0, pace: 0.0, impact: 0.0, spin: 0.0, bob: 0.0, swing: 0.0, torque: 0.0, stall: 0.0, lean: 0.0, comfort: COMFORT, place: PLACE, sight: SIGHT, progress: 1.0 };
         // two legs went on their belly and knees in lunges without these (README, "How it moves")
         if legs == 2 {
             shaping = Shaping { knee: 1.0, upright: 0.5, down: 0.0, lean: 1.0, pace: 1.0, stall: 3.0, impact: 0.05, ..shaping };
         }
-        Way { legs, direct: true, skip: 4, seconds: 30.0, shaping, hop: false, ramp: 4_000_000, ease: 1.0, strength: 1.0, hip: 0.0, clock: legs != 2, touch: true, visitor: if legs == 2 { VISITOR } else { 0.0 }, visiting: 1.0 }
+        Way { legs, direct: true, skip: 4, seconds: 30.0, shaping, hop: false, ramp: 4_000_000, ease: 1.0, strength: 1.0, hip: 0.0, clock: legs != 2, touch: true, visitor: if legs == 2 { VISITOR } else { 0.0 }, visiting: 1.0, needs: true, gaze: true, play: PLAY, appear: APPEAR, energy: -1.0 }
     }
 }
 
 /// How far a world is made when a run starts, in metres; the stage makes more as the creature goes.
 const FIRST_MADE: f32 = 30.0;
+
+/// The least energy a practice run starts with (`Way::energy`), the energy a run measured in held-out
+/// worlds starts with, and below what energy a creature that eats may stand still as long as it likes.
+pub const LOWEST_START: f32 = 0.2;
+pub const MEASURED_ENERGY: f32 = 0.7;
+pub const RESTFUL: f32 = 0.6;
+
+/// What a unit of discomfort is worth, what curiosity pays for each unit of new places and of new
+/// things seen, and how many seconds apart food appears, on average (`Shaping`, `Way`).
+pub const COMFORT: f32 = 4.0;
+pub const PLACE: f32 = 0.3;
+pub const SIGHT: f32 = 0.02;
+pub const APPEAR: f32 = 20.0;
+/// The share of practice runs that are play: energy held full, no food, progress not paid, so only
+/// curiosity and its own costs apply (walker/README.md, "It wants things").
+pub const PLAY: f32 = 0.2;
 
 /// How many seconds apart practice's visitor comes, on average (`Way::visitor`), for two legs. Four legs
 /// feel touch but practise with no visitor: with one they went less far (34 m against 40 in held-out
@@ -335,6 +439,8 @@ pub struct Worlds {
     /// The same, watching only while nothing ahead asks for anything but walking (`clear_ahead`):
     /// how it moves on open ground, with what it does at each thing in its way left out.
     pub open_watches: Option<Vec<Watch>>,
+    /// What each creature wanted and did about it, when measuring (`Tally`).
+    pub tallies: Option<Vec<Tally>>,
 }
 
 impl Worlds {
@@ -356,7 +462,7 @@ impl Worlds {
         let runs = seeds.iter().map(|&seed| make(recipe, way, seed)).collect::<Option<Vec<Run>>>()?;
         let (senses, actions) = (runs.first()?.senses(), runs.first()?.body.actions());
         let count = runs.len();
-        Some(Worlds { recipe, way, stream: 0, spare: (0..count).map(|_| World::new()).collect(), going: vec![true; count], active: Vec::with_capacity(count), made: vec![0; count], renew: false, held: vec![0.0; count * actions], senses, actions, finished: Vec::new(), steps: 0, tally: (0, 0), goal: f32::INFINITY, idle_air: 0, joules: 0.0, watches: None, open_watches: None, runs })
+        Some(Worlds { recipe, way, stream: 0, spare: (0..count).map(|_| World::new()).collect(), going: vec![true; count], active: Vec::with_capacity(count), made: vec![0; count], renew: false, held: vec![0.0; count * actions], senses, actions, finished: Vec::new(), steps: 0, tally: (0, 0), goal: f32::INFINITY, idle_air: 0, joules: 0.0, watches: None, open_watches: None, tallies: None, runs })
     }
 
     /// Whether creature i is still going (only a creature alone can stop).
@@ -427,7 +533,11 @@ impl Worlds {
                     }
                 }
                 self.joules += run.body.creature.effort(&run.stage.world) as f64;
-                rewards[i] += parts.run + parts.up + parts.effort + parts.air + parts.fall + parts.posture;
+                rewards[i] += parts.sum();
+                #[cfg(not(target_arch = "wasm32"))]
+                if let Some(tallies) = &mut self.tallies {
+                    tallies[i].after_step(run);
+                }
                 if run.judge.over() {
                     self.going[i] = false;
                     self.finished.push(run.judge.furthest);
@@ -463,7 +573,7 @@ fn visit(run: &mut Run, way: Way, seed: u32) {
 
 fn make(recipe: Recipe, way: Way, seed: u32) -> Option<Run> {
     let mut run = Run::new(Rc::new(Land::new(Recipe { seed, ..recipe }, FIRST_MADE)), way.legs, way.seconds)?;
-    way.dress_run(&mut run);
+    way.dress_run(&mut run, seed);
     Some(run)
 }
 
@@ -490,6 +600,23 @@ impl Task for Worlds {
     fn step(&mut self, actions: &[f32], into: &mut [f32], rewards: &mut [f32], ends: &mut [u8], last: &mut [f32]) {
         self.advance(actions, rewards, ends, last);
         self.observe(into);
+        // what it saw that was new at this look is paid with the decision that led to it, unless its run
+        // ended and this is a fresh run's first look
+        let sight = self.way.shaping.sight;
+        for (i, run) in self.runs.iter_mut().enumerate() {
+            if let Some(curiosity) = &mut run.curiosity {
+                if ends[i] == GOING && self.going[i] {
+                    rewards[i] += sight * curiosity.sight;
+                }
+                curiosity.sight = 0.0;
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            if let Some(tallies) = &mut self.tallies
+                && self.going[i]
+            {
+                tallies[i].look(run);
+            }
+        }
     }
 }
 
@@ -510,6 +637,8 @@ pub struct Measured {
     pub gait: Gait,
     /// How it moved on open ground alone (`Worlds::open_watches`).
     pub open_gait: Gait,
+    /// What it wanted and did about it, for a creature that eats (`tally`).
+    pub wants: Wants,
 }
 
 impl Measured {
@@ -519,10 +648,13 @@ impl Measured {
 }
 
 /// `evaluate`, with how it moved as well as how far.
+/// A creature that eats starts each with `MEASURED_ENERGY`, and none is at play.
 pub fn measure(recipe: Recipe, way: Way, seeds: &[u32], mut act: impl FnMut(usize, &[f32], &mut [f32])) -> Measured {
+    let way = Way { energy: if way.energy < 0.0 { MEASURED_ENERGY } else { way.energy }, play: 0.0, ..way };
     let Some(mut worlds) = Worlds::alone(recipe, way, seeds) else { return Measured::default() };
     worlds.watches = Some(vec![Watch::default(); seeds.len()]);
     worlds.open_watches = Some(vec![Watch::default(); seeds.len()]);
+    worlds.tallies = Some(super::tally::fresh(seeds.len()));
     let (count, senses, wide) = (seeds.len(), worlds.senses, worlds.actions);
     let (mut sensed, mut actions, mut rewards, mut ends, mut last) = (vec![0.0; count * senses], vec![0.0; count * wide], vec![0.0; count], vec![GOING; count], vec![0.0; count * senses]);
     worlds.observe(&mut sensed);
@@ -538,7 +670,8 @@ pub fn measure(recipe: Recipe, way: Way, seeds: &[u32], mut act: impl FnMut(usiz
     let metres = distances.iter().sum::<f32>().max(0.01);
     let gait = Gait::of(worlds.watches.as_deref().unwrap_or(&[]));
     let open_gait = Gait::of(worlds.open_watches.as_deref().unwrap_or(&[]));
-    Measured { idle_air: worlds.idle_air as f32 / worlds.steps.max(1) as f32, joules_per_metre: (worlds.joules / metres as f64) as f32, distances, gait, open_gait }
+    let wants = Wants::of(worlds.tallies.as_deref().unwrap_or(&[]));
+    Measured { idle_air: worlds.idle_air as f32 / worlds.steps.max(1) as f32, joules_per_metre: (worlds.joules / metres as f64) as f32, distances, gait, open_gait, wants }
 }
 
 /// A learner practising in fresh worlds of a recipe's kind: what the page runs, and the native runs

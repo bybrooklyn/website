@@ -19,7 +19,7 @@ use crate::math::Vec2;
 
 fn run(legs: u32, amounts: [f32; 4]) -> Run {
     let mut run = Run::new(Rc::new(Land::new(Recipe { seed: 5, difficulty: 0.2, amounts }, 60.0)), legs, 30.0).unwrap();
-    Way::of(legs).dress_run(&mut run);
+    Way::of(legs).dress_run(&mut run, 1);
     run
 }
 
@@ -31,13 +31,17 @@ fn felt(run: &mut Run) -> Vec<f32> {
     senses[senses.len() - count..].to_vec()
 }
 
-/// The actions that hold every joint at the angle it was built at, standing, and no hop.
+/// The actions that hold every joint at the angle it was built at, standing, the eye where it rests,
+/// and no hop.
 fn standing(run: &Run) -> Vec<f32> {
     let world = &run.stage.world;
     let mut actions: Vec<f32> = run.body.creature.joints.iter().map(|&joint| {
         let joint = &world.joints[joint as usize];
         2.0 * (joint.angle(&world.bodies) - joint.lower) / (joint.upper - joint.lower) - 1.0
     }).collect();
+    if run.body.gazing {
+        actions.push(0.0);
+    }
     actions.push(-1.0);
     actions
 }
@@ -58,7 +62,8 @@ fn a_creature_that_feels_touch_senses_more_and_one_that_does_not_senses_as_befor
         let mut plain = touching.clone();
         plain.body.touch = false;
         assert_eq!(touching.senses(), plain.senses() + touch::felt(legs as usize));
-        assert_eq!(plain.senses(), RAYS * PER_RAY + if legs == 2 { 18 } else { 28 });
+        // and its energy, whether it has just eaten, and where its eye looks
+        assert_eq!(plain.senses(), RAYS * PER_RAY + 3 + if legs == 2 { 18 } else { 28 });
     }
 }
 

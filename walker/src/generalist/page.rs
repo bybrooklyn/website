@@ -93,7 +93,14 @@ impl Page {
         let weights = if self.evolution.best_score > f32::NEG_INFINITY { self.evolution.best.clone() } else { self.evolution.weights(0).to_vec() };
         self.brain.load(&weights);
         self.shown_weights = weights;
+        // a creature that eats keeps its energy from one run to the next: one life, starting again
+        let carried = self.show.body.needs.as_ref().map(|needs| needs.energy);
         self.show.copy_from(&self.start);
+        if let (Some(energy), Some(needs)) = (carried, &mut self.show.body.needs) {
+            let (appearing, full) = (needs.appearing.take(), needs.full);
+            *needs = super::needs::Needs { full, ..super::needs::Needs::new(energy) };
+            needs.appearing = appearing;
+        }
         // a policy that feels touch senses more than evolution's brain does
         self.senses.resize(self.show.senses(), 0.0);
         self.show.sense(&mut self.senses);
@@ -228,6 +235,51 @@ impl Page {
         }
     }
 
+    /// Drops a piece of food at a point, in metres from the start, from where it falls to what is under
+    /// it, for a creature that eats; returns whether it did.
+    pub fn show_drop_food(&mut self, at: Vec2) -> bool {
+        if !self.show.stage.feeds {
+            return false;
+        }
+        let origin = self.show.stage.origin;
+        self.show.stage.drop_food(at - Vec2::new(origin, 0.0));
+        true
+    }
+
+    /// The food put out in the show's world, two numbers each: x and y of its middle, in metres from
+    /// the start.
+    pub fn food(&mut self) -> &[f32] {
+        self.out.clear();
+        for food in &self.show.stage.food {
+            self.out.extend_from_slice(&[food.at.x + self.show.stage.origin, food.at.y]);
+        }
+        &self.out
+    }
+
+    /// What the show's creature wants and where it looks, six numbers: its energy (-1 for a creature
+    /// that does not eat), how strong its muscles are, whether it has just eaten (fading from 1), how
+    /// much it is resting, where its eye looks (radians from level ahead, or the fixed eyes' -30
+    /// degrees), and how many pieces it has eaten in this run.
+    pub fn needs(&mut self) -> &[f32] {
+        self.out.clear();
+        let body = &self.show.body;
+        match &body.needs {
+            Some(needs) => self.out.extend_from_slice(&[needs.energy, needs.vigour(), needs.ate, needs.resting]),
+            None => self.out.extend_from_slice(&[-1.0, 1.0, 0.0, 0.0]),
+        }
+        self.out.push(body.gaze);
+        self.out.push(body.needs.as_ref().map_or(0.0, |needs| needs.eaten as f32));
+        &self.out
+    }
+
+    /// What the show's creature sensed at its last look, as its brain took it in (walker/README.md, "What
+    /// it senses", gives the layout).
+    pub fn sensed(&mut self) -> &[f32] {
+        self.out.clear();
+        self.out.extend_from_slice(&self.senses);
+        &self.out
+    }
+
     /// The show's bodies, six numbers each as the Walker's are (x, y, angle, kind, two sizes): the
     /// creature's, its torso first and then each leg's upper and lower part.
     pub fn bodies(&mut self) -> &[f32] {
@@ -272,10 +324,12 @@ impl Page {
         &self.out
     }
 
-    /// The direction of each ray, in radians from straight ahead, turning up.
+    /// The direction of each ray, in radians from straight ahead, turning up: the fixed eyes', or the
+    /// moving eye's where it looks now.
     pub fn ray_angles(&mut self) -> &[f32] {
         self.out.clear();
-        self.out.extend_from_slice(&eyes::angles());
+        let angles = if self.show.body.gazing { eyes::gazed(self.show.body.gaze) } else { eyes::angles() };
+        self.out.extend_from_slice(&angles);
         &self.out
     }
 
@@ -365,7 +419,15 @@ impl Page {
     pub fn policy_load(&mut self) -> bool {
         let way = Way::of(self.legs);
         let mut start = self.start.clone();
-        way.dress(&mut start.body);
+        way.dress_run(&mut start, self.recipe.seed);
+        // the creature on show is never at play, and is born full
+        if let Some(needs) = &mut start.body.needs {
+            *needs = super::needs::Needs::of(1.0, &start.body.creature, &start.stage.world);
+            if way.appear > 0.0 {
+                needs.appearing = Some(super::needs::Appearing::new(self.recipe.seed, way.appear));
+            }
+            start.stage.feeds = true;
+        }
         let mut learner = Learner::new(Settings::default(), start.senses(), start.body.actions(), 1, 0);
         if !learner.load(&self.state_room, &self.running_room) {
             self.policy_off();
@@ -387,6 +449,12 @@ impl Page {
             self.start.body.strength = 1.0;
             self.start.body.clock = true;
             self.start.body.touch = false;
+            self.start.body.gazing = false;
+            self.start.body.gaze = super::eyes::GAZE_REST;
+            self.start.body.needs = None;
+            self.start.curiosity = None;
+            self.start.stage.feeds = false;
+            self.start.stage.food.clear();
             self.show_reset();
         }
     }
@@ -394,9 +462,9 @@ impl Page {
     /// Room for a learner's state, or a policy's weights, and for its running numbers.
     pub fn rooms(&mut self) -> (usize, usize) {
         let way = Way::of(self.legs);
-        let mut body = self.start.body.clone();
-        way.dress(&mut body);
-        let learner = Learner::new(Settings::default(), RAYS * eyes::PER_RAY + body.feelings(), body.actions(), 1, 0);
+        let mut start = self.start.clone();
+        way.dress_run(&mut start, self.recipe.seed);
+        let learner = Learner::new(Settings::default(), start.senses(), start.body.actions(), 1, 0);
         (learner.state().len(), learner.running().len())
     }
 
