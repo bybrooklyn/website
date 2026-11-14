@@ -1252,3 +1252,19 @@ html.quire-counting {
     outline-offset: 0.15rem;
     border-radius: 0.2rem;
 }
+
+/* ---- a plain note (src/quire/note/note.ts), the core's smallest kind of document: its text field
+   is the sheet's writing, in the writing's own type ---- */
+.quire-note-text {
+    display: block;
+    width: 100%;
+    min-height: 60vh;
+    padding: 0;
+    border: 0;
+    outline: none;
+    resize: none;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    line-height: 1.6;
+}
