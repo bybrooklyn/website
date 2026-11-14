@@ -222,9 +222,10 @@ function seesawTray(_count: number): Body[] {
  * 9.1 m g. As it opens their arms turn toward upright, so they hold it less while the marbles still
  * press it open nearly as much: it opens all the way at once, and once the marbles are gone, with
  * nothing on it, they close it again. Closed, it slopes down to its lip by 0.04 radians, so that a
- * marble that comes onto it slowly still rolls to the lip.
+ * marble that comes onto it slowly still rolls to the lip; and the way in falls by `fall` cm from the
+ * joint to the flap, so that a marble that comes to the joint slowly still rolls onto it.
  */
-export const TRAPDOOR = { arms: [6.6, 5.0], hold: 9.1, reach: 3, rise: (10 * Math.PI) / 180, closed: -0.04 };
+export const TRAPDOOR = { arms: [6.6, 5.0], hold: 9.1, reach: 3, rise: (10 * Math.PI) / 180, closed: -0.04, fall: 0.35 };
 
 /** The switch's numbers: where its pivot is, below the joint, and how far it leans each way, in radians. */
 export const SWITCH = { pivot: -5, lean: 0.45 };
@@ -330,24 +331,27 @@ export function designPart(family: PartFamily, sizes: number[]): PartDesign {
             // at the lip (TRAPDOOR): one waits there; a second opens it, it swings down, and both roll
             // over the lip and drop to the track below. The lip is low enough (4 mm) that a marble rolls
             // over it once the flap hangs steeper than 60 degrees.
-            const flap = vee(4.1, 11.7, -1.55, 0.6);
-            const lip = body([11.4, -1.55, 3.05], [11.7, -1.15, 4.95], 0.6);
+            // The way in falls 0.35 cm from the joint, and everything after it is that much lower, so
+            // that a marble that comes to the joint however slowly rolls on onto the flap.
+            const down = TRAPDOOR.fall;
+            const flap = vee(4.1, 11.7, -1.55 - down, 0.6);
+            const lip = body([11.4, -1.55 - down, 3.05], [11.7, -1.15 - down, 4.95], 0.6);
             const mass = (4 / 3) * Math.PI * 0.8 ** 3 * 2.5;
             const turning = (one: Body) => one.half[0] * one.half[1] * one.half[2] * 8 * one.density * (one.at[0] - 4);
             // steel blocks a centimetre square, as long as they need to be, either side beyond the walls
             const weight = (flap.reduce((sum, one) => sum + turning(one), 0) + turning(lip) + mass * TRAPDOOR.hold) / (TRAPDOOR.reach * cosine(TRAPDOOR.rise));
             const long = weight / (2 * 7.8);
-            const [wx, wy] = [4 - TRAPDOOR.reach * cosine(TRAPDOOR.rise), -1.75 + TRAPDOOR.reach * sine(TRAPDOOR.rise)];
+            const [wx, wy] = [4 - TRAPDOOR.reach * cosine(TRAPDOOR.rise), -1.75 - down + TRAPDOOR.reach * sine(TRAPDOOR.rise)];
             const weights = [0.6, 6.4].map((z) => body([wx - long / 2, wy - 0.5, z], [wx + long / 2, wy + 0.5, z + 1], 7.8));
             return {
                 ...none,
                 joints: [J0, joint([16, -12, 4], [1, 0, 0])],
-                lengths: [groove([[0, 0, 4], [4, 0, 4]], [0, undefined]), groove([[4.5, -10, 4], [10, -10.9, 4], [16, -12, 4]], [undefined, 1])],
-                boxes: [span([12, -1.7, 3.05], [12.4, 1, 4.95])],
-                panes: [span([4, -1.6, 2.75], [12.4, 0.6, 3.05]), span([4, -1.6, 4.95], [12.4, 0.6, 5.25]), span([4.5, -12.2, 1.9], [16, -8.4, 2.2]), span([4.5, -12.2, 5.8], [16, -8.4, 6.1])],
+                lengths: [groove([[0, 0, 4], [2, -0.12, 4], [4, -down, 4]], [0, undefined], [1, 0, 0], [1, -0.12, 0]), groove([[4.5, -10, 4], [10, -10.9, 4], [16, -12, 4]], [undefined, 1])],
+                boxes: [span([12, -1.7 - down, 3.05], [12.4, 1, 4.95])],
+                panes: [span([4, -1.6 - down, 2.75], [12.4, 0.6, 3.05]), span([4, -1.6 - down, 4.95], [12.4, 0.6, 5.25]), span([4.5, -12.2, 1.9], [16, -8.4, 2.2]), span([4.5, -12.2, 5.8], [16, -8.4, 6.1])],
                 holds: [],
-                moving: { kind: "hinge", sound: "wood", bodies: [...flap, lip, ...weights], at: [4, -1.75, 4], axis: [0, 0, 1], low: -1.25, high: TRAPDOOR.closed, spring: 0, rest: 0, friction: 1, start: TRAPDOOR.closed },
-                clear: [span([3.8, -9.5, 2.8], [12.3, -1.0, 5.2]), span([0.4, -2.5, 0.5], [4.2, 1.6, 1.7]), span([0.4, -2.5, 6.3], [4.2, 1.6, 7.5])],
+                moving: { kind: "hinge", sound: "wood", bodies: [...flap, lip, ...weights], at: [4, -1.75 - down, 4], axis: [0, 0, 1], low: -1.25, high: TRAPDOOR.closed, spring: 0, rest: 0, friction: 1, start: TRAPDOOR.closed },
+                clear: [span([3.8, -9.5, 2.8], [12.3, -1.0 - down, 5.2]), span([0.4, -2.5 - down, 0.5], [4.2, 1.6 - down, 1.7]), span([0.4, -2.5 - down, 6.3], [4.2, 1.6 - down, 7.5])],
                 low: -7,
             };
         }

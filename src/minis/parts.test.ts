@@ -166,6 +166,29 @@ test("a switch needs a quarter of a second between marbles: two let go together 
     expect(ways.join("")).toMatch(/LL|RR/);
 }, 60_000);
 
+test("a marble that comes to a trapdoor or a lift as slowly as can be, at 2 cm/s over level track, rolls on in: onto the flap, or into the car and up", () => {
+    for (const family of ["j", "u"] as const) {
+        const run = chain(18, [kind("s", [2]), kind(family, family === "u" ? [4] : []), kind("s", [1]), kind("t")]);
+        const table = makeTable();
+        table.set(run);
+        // resting in the groove a millimetre before the joint, rolling toward it
+        const joint = jointsOf(run[2]!)[0]!;
+        const into = [-joint.way[0], 0, -joint.way[2]] as const;
+        const marble = table.space.ball(0.8, [joint.at[0] - into[0] * 0.1, joint.at[1] - 0.7, joint.at[2] - into[2] * 0.1], { friction: 0.5, bounce: 0.5, roll: 0.004, twist: 0.005, density: 2.5 });
+        marble.v = [into[0] * 2, 0, into[2] * 2];
+        table.marbles.push(marble);
+        for (let step = 0; step < 120 * 8; step++) table.step(1 / 120);
+        if (family === "u") expect(inTrays(table)).toBe(1);
+        else {
+            // waiting at the lip, on the flap
+            expect(table.pieceAt(marble.p)).toBe(run[2]!.id);
+            const flap = jointsOf(run[2]!)[0]!;
+            const went = Math.abs(marble.p[0] - flap.at[0]) + Math.abs(marble.p[2] - flap.at[2]);
+            expect(went).toBeGreaterThan(9);
+        }
+    }
+}, 60_000);
+
 test("a trapdoor holds one marble at its lip, and opens under two, which drop to the track below, and closes again", () => {
     const run = chain(18, [kind("s", [2]), kind("j"), kind("s", [1]), kind("t")]);
     const table = makeTable();
