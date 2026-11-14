@@ -38,6 +38,10 @@ How to add a mini is in `src/mote/README.md`.
   `.cast` file) with its timing. Nothing runs. It is used on the mFetchy and Terrustia project pages, and
   opens the way a picture does, on the same opener as the picture viewer.
 - The Walker, the generalist (a draft) and Comet (a draft) are minis too.
+- **Rolling** (a draft, 3D; `rolling.ts`, `course.ts`): not a mini of its own but a plain page for watching
+  Mote's marbles roll, made for the marble run ([marbles](marbles.md)). Marbles go down a ramp, round a
+  loop, along a banked spiral and through a funnel into a tray, one after another; a click lets another go
+  and Space rides along with one. It stays a draft.
 
 ## Decided
 

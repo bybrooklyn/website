@@ -1,7 +1,7 @@
 # A marble run
 
 A mini: build a marble run in three dimensions and watch marbles go down it. A plan dated 13 November
-2026. Nothing is built.
+2026. Stage 1, what Mote needed, was built on 14 November 2026 (below); nothing of the mini itself is.
 
 ## Decided
 
@@ -89,7 +89,7 @@ Mote's broad phase and inertia; see [mote](mote.md)):
 ## Stages
 
 1. Mote: rolling, track shapes, fast marbles against thin rails, sleeping. Tests against the arithmetic of
-   a ball rolling down a slope and round a loop.
+   a ball rolling down a slope and round a loop. **Built** (see below).
 2. Pieces and snapping: the box, joints, placing by drag, supports, and marbles rolling down a run built
    from fixed pieces.
 3. The editor: camera, handles, selection, undo, copy and groups, touch throughout, building while it
@@ -98,6 +98,71 @@ Mote's broad phase and inertia; see [mote](mote.md)):
 5. Moving parts and sound.
 6. The look: wood, glass, shadows.
 7. Cameras, races, sharing, and the runs to start from.
+
+## Stage 1, built
+
+On 14 November 2026, in Mote (`src/mote/space.ts`, `src/mote/track.ts`; [mote](mote.md) has the detail).
+A draft page, Rolling (`src/minis/rolling.ts` on `src/minis/course.ts`), shows it: a ramp, a loop, a
+banked spiral, a funnel and a tray, marbles let go one after another. It is a draft, seen in `bun run dev`
+and in a build with `SHOW_DRAFTS=1`, and is no part of the mini to come.
+
+**Held to theory, by test.** A marble on a slope rolls at 5/7 of g sin(slope) to within half a percent and
+slides as friction says where it cannot hold the roll; one rocking across a gutter keeps the period of a
+rolling ball to 0.01%; one let go into a loop stays on from 2.71 loop radii and comes off from 2.66 (theory
+2.70); on two rails it rolls slower, as rolling on a smaller circle says, to 0.2%; smooth in a funnel it
+keeps its turning about the axis to one part in ten thousand and its energy to 0.2%; with a rolling cost it
+circles down and drops through the hole; pieces that meet are one surface to it; a 0.5 mm rod stops it at
+up to 1,500 cm/s from any side (a metre's drop gives 340 cm/s); twelve marbles racing end the same to the
+bit twice over and in Chromium as in Bun.
+
+**What stage 2 can rely on.**
+
+```ts
+import { MARBLE, marbleSpace, turn } from "../mote/space";
+import { curve, gutter, helix, sweep, turned } from "../mote/track";
+
+const space = marbleSpace();                     // centimetres, real gravity, islands that sleep
+const path = curve([[0, 30, 0], [40, 22, 0], [70, 18, 25]], { start: [1, -0.2, 0] });
+const piece = sweep(path, gutter(1.6, Math.PI, 0.25), { level: true, bank: [0, -0.2, 0] });
+space.track(piece, { friction: 0.5, bounce: 0.4, roll: 0.003 });
+const marble = space.ball(0.8, [1, 29.4, 0], MARBLE);
+space.step(dt);                                  // fixed steps of 1/240 s inside
+view.add(piece.mesh(), look);                    // gl.ts draws the piece from the same numbers
+part.at = marble.p; part.turn = turn(marble);
+```
+
+- A piece is a path and a section. Paths: `curve(points, { start, end })` (a smooth curve through the
+  points, its end directions held if given: the joints), `line`, `helix` (a spiral, or with a level axis a
+  loop; its `facing` is the twist that keeps a section facing the axis). Sections: `gutter`, `vee`, `bed`,
+  `tube`, `rails`, or any list of lines and arcs with a thickness. `turned(at, profile, thick)` is a funnel
+  or a bowl.
+- A piece's ends are `piece.ends[0]` and `[1]`: a place, the way along, up and across, which is what a
+  joint is. Two pieces whose ends meet with the same section, facing on the same way and up the same way,
+  are joined by Mote itself and are one surface to a marble. A bank that changes along a piece starts and
+  ends where its neighbours are, or the join is a step.
+- `along`: `up` (the start's up, or the up to stay level to), `level` (for anything that is not a loop),
+  `bank` (radians, leaning the up to the right; a left turn leans left, so its bank is less than none),
+  `twist` (a corkscrew), `joined` (by hand), `step` (chunk length).
+- Pieces can be added and taken away (`space.remove`) while it runs; the table of chunks is made again.
+- Same input, same race, on any machine: keep to track, balls and level slabs. A slab turned by `angled`
+  uses the browser's own sine and may differ in its last bit between browsers. Bodies are solved in the
+  order they were added; add racers in a fixed order.
+
+**How many.** At 120 steps a second (one frame of 1/120 s is two steps of the solver), in headless
+Chromium on four cores of this computer: 200 marbles rolling in a gutter take 2.6 ms a frame, 400 take
+6.6 ms; 200 circling a funnel and jostling 3.4 ms; 400 heaped in a tray 4.6 ms awake and 0.1 ms asleep.
+Bun is slower than Chromium by about half again. So a few hundred marbles at once, with room left to draw.
+
+**For stage 2 to know.**
+
+- A marble's scale is real: radius 0.8 cm, real gravity. A metre's drop is 340 cm/s. Slower, toy-like
+  gravity would be a choice of look, not of physics.
+- A fast marble in an unbanked tight spiral climbs the outer wall until friction cannot hold its roll and
+  slips; bank turns into their curve, as real track is.
+- Ball against ball and ball against a solid of faces are soft, as the dice are; ball against track is
+  exact. A heavy solid resting on marbles sinks in by up to a twelfth of a marble's radius.
+- Only balls meet track. A moving part that is not a ball (a seesaw, a gate) is a solid of faces, met by
+  balls as slabs are.
 
 ## Open
 
