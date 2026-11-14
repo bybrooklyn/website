@@ -75,6 +75,8 @@ export async function imgPage(database: string, size = { width: 1300, height: 82
     if (!page) return undefined;
     const tab = page.tab;
     await tab.wait(800);
+    // a press on nothing, so that the page has the keyboard as it would once a person has used it
+    await tab.click(size.width - 4, Math.round(size.height / 2));
     /** Waits until an expression in the page is true, or gives up after a while. */
     async function until(expression: string, ms = 15_000) {
         const started = Date.now();
@@ -89,6 +91,11 @@ export async function imgPage(database: string, size = { width: 1300, height: 82
         close: page.close,
         until,
         boxOf: (selector: string) => tab.run<{ x: number; y: number; width: number; height: number }>(`window.box(${JSON.stringify(selector)})`),
+        /** The middle of an element on the screen. */
+        middle: async (selector: string) => {
+            const box = await tab.run<{ x: number; y: number; width: number; height: number }>(`window.box(${JSON.stringify(selector)})`);
+            return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+        },
         /** Pastes a picture and waits for it to be shown with the keyboard on it, giving how many copies the clipboard had before. */
         async paste(kind: "screenshot" | "photo") {
             const before = await tab.run<number>("window.copied.length");
