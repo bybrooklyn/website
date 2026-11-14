@@ -11,6 +11,10 @@
 //! unit. Every cell reads only temperatures from before the pass and its result is written back
 //! after all are found, so the order cells are reached in changes nothing.
 //!
+//! A cell falling through the air passes heat at a quarter of its rate: it meets each cell of air
+//! for only a moment, and in a world where a cell of air holds as much heat as a cell of lava, a
+//! stream of lava poured from high up would otherwise land cold, as drops that each harden alone.
+//!
 //! Between two cells that can flow (air, a liquid, a gas, a flame) heat goes up twice as fast as
 //! across and down half as fast: hot air and smoke carry heat upward. A cell's four sides together
 //! pass at most about half of the difference a step, so nothing overshoots. Two cells within
@@ -38,6 +42,15 @@ fn across(t: i32, n: i32, k: i32, roll: u32) -> i32 {
     }
     let units = (d.abs() * k + roll as i32) >> 8;
     if d > 0 { units } else { -units }
+}
+
+/// How readily heat passes through a cell: its material's `conduct`, or a quarter of it while the
+/// cell is falling, since it meets each cell of air it passes only for a moment. Both cells of a
+/// side see the same, so heat is still kept.
+#[inline(always)]
+fn conducts(cell: u32) -> i32 {
+    let c = WARMTH[material(cell) as usize].conduct;
+    if cell >> 30 != 0 { c >> 2 } else { c }
 }
 
 impl World {
@@ -100,7 +113,7 @@ impl World {
                     let mut could = false;
                     if w.conduct != 0 && !(near(tl) && near(tr) && near(tu) && near(td)) {
                         for (tn, n, side) in [(tl, left, (at - 1) * 2), (tr, right, at * 2)] {
-                            let c = w.conduct.min(WARMTH[material(n) as usize].conduct);
+                            let c = conducts(cell).min(conducts(n));
                             if c > 0 && !near(tn) {
                                 flow += across(t, tn, c, roll(side));
                                 could = true;
@@ -109,7 +122,7 @@ impl World {
                         // above, this cell is the lower of the two; below, the upper
                         for (tn, n, side, lower_is_here) in [(tu, up, (at - s) * 2 + 1, true), (td, down, at * 2 + 1, false)] {
                             let nw = WARMTH[material(n) as usize];
-                            let mut c = w.conduct.min(nw.conduct);
+                            let mut c = conducts(cell).min(conducts(n));
                             if c > 0 && !near(tn) {
                                 if w.flows && nw.flows {
                                     let lower_hotter = if lower_is_here { t > tn } else { tn > t };

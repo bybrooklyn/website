@@ -8,7 +8,7 @@
 mod common;
 
 use common::{by_the_lines, counts, heat_area, picture, run};
-use sand::materials::{ACID, ASH, DIRT, EMBER, FIRE, ICE, LAVA, OIL, ROOM, SAND, SMOKE, STEAM, STONE, WATER, WET_DIRT, WOOD};
+use sand::materials::{ACID, ASH, DIRT, EMBER, EMPTY, FIRE, ICE, LAVA, OIL, ROOM, SAND, SMOKE, STEAM, STONE, WATER, WET_DIRT, WOOD};
 use sand::world::World;
 
 /// A stone basin from x0 to x1, its floor at row `floor`, its walls up to row `top`, two cells thick.
@@ -69,6 +69,58 @@ fn lava_poured_into_water_makes_a_stone_crust_and_steam_and_the_counts_add_up() 
     assert_eq!(counts(&world), by_the_lines(&before, &fired, &world));
     assert!(made > lava / 3, "a crust of stone forms\n{}", picture(&world, 8, 15, 152, 97));
     assert!(lava_on_water > 0 && most_steam >= 5, "the water boils where the lava meets it");
+}
+
+#[test]
+fn lava_poured_in_one_place_makes_a_molten_pool_with_a_crust_and_not_a_pillar() {
+    for seed in [1, 2] {
+        // held still high over the floor, poured about eleven cells a step, for ten seconds
+        let mut world = World::new(240, 120, seed);
+        let mut poured = 0;
+        for _ in 0..600 {
+            let before = world.count(LAVA) + world.count(STONE);
+            world.paint(LAVA, 120, 30, 120, 30, 4, 20, false);
+            poured += world.count(LAVA) + world.count(STONE) - before;
+            world.step();
+        }
+        // the top of what has landed: the highest row with six cells side by side of lava or stone at rest
+        let resting = |w: &World, x: i32, y: i32| matches!(w.at(x, y), LAVA | STONE) && w.get(x, y) >> 30 == 0;
+        let top = (0..120).find(|&y| (0..234).any(|x| (x..x + 6).all(|x| resting(&world, x, y)))).unwrap();
+        let high = 120 - top;
+        let (lava, stone) = (world.count(LAVA), world.count(STONE));
+        println!("seed {seed}: poured {poured}, {lava} lava and {stone} stone, {high} high");
+        assert_eq!(lava + stone, poured, "every cell poured is lava or stone");
+        assert!(high <= 40, "a pool, not a pillar: {high} high\n{}", picture(&world, 40, 20, 200, 119));
+        assert!(lava > stone, "mostly molten\n{}", picture(&world, 40, 20, 200, 119));
+        // left alone it hardens from its edges in: the share of its lava with air beside it falls as
+        // it cools, and in the end it is all stone
+        let open = |w: &World| {
+            let (mut lava, mut open) = (0, 0);
+            for y in 1..119 {
+                for x in 1..239 {
+                    if w.at(x, y) == LAVA {
+                        lava += 1;
+                        open += [(1, 0), (-1, 0), (0, 1), (0, -1)].iter().any(|&(dx, dy)| w.at(x + dx, y + dy) == EMPTY) as i32;
+                    }
+                }
+            }
+            open as f64 / lava.max(1) as f64
+        };
+        let at_first = open(&world);
+        let mut halfway = None;
+        for k in 0..20000 {
+            world.step();
+            if halfway.is_none() && world.count(LAVA) * 2 <= lava {
+                halfway = Some((k + 1, open(&world)));
+            }
+            if world.count(LAVA) == 0 {
+                println!("  open to the air at first {at_first:.2}, at half hardened {halfway:?}, all stone after {} steps", k + 1);
+                break;
+            }
+        }
+        assert!(halfway.is_some_and(|(_, open)| open < at_first), "the lava open to the air hardens first");
+        assert_eq!((world.count(LAVA), world.count(STONE)), (0, poured), "and it all hardens in the end");
+    }
 }
 
 #[test]
