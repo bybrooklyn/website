@@ -248,7 +248,11 @@ used("the style picker, the Insert menu, the color menu and the size do what the
     expect(await md()).toBe("Above\n\n![tiny](/picture.png)\n");
 
     await reset("a word here\n", [0], 2, [0], 6);
-    await choose("Text color", "Pink");
+    // the colors are a grid of swatches, each named in its tooltip
+    await button("Text color");
+    await tab.wait(650);
+    await press(".quire-menu.open .quire-swatch-button", "Pink");
+    await tab.wait(60);
     expect(await md()).toBe('a <span style="color:salmon">word</span> here\n');
     await reset("a word here\n", [0], 2, [0], 6);
     // the size is a number: plus steps a Markdown file to the next size it can keep, and the field says it
@@ -265,11 +269,11 @@ used("the bar is a toolbar: the arrow keys move along it and Escape closes a men
     expect(await tab.run("document.activeElement.getAttribute('aria-label')")).toBe("Italic (Ctrl+I)");
     await tab.press("ArrowLeft");
     await tab.press("ArrowLeft");
-    expect(await tab.run("document.activeElement.getAttribute('aria-label')")).toBe("Larger");
+    expect(await tab.run("document.activeElement.getAttribute('aria-label')")).toBe("Larger (Ctrl+Shift+.)");
     await tab.run(`document.querySelector('.quire-bar button[aria-label="Style"]').focus()`);
     await tab.press("ArrowDown");
     await tab.wait(100);
-    expect(await tab.run("document.activeElement.textContent")).toContain("Paragraph");
+    expect(await tab.run("document.activeElement.textContent")).toContain("Normal text");
     await tab.press("Escape");
     expect(await tab.run("document.activeElement.getAttribute('aria-label')")).toBe("Style");
     expect(await tab.run("[...document.querySelectorAll('.quire-bar-strip button')].filter((b) => b.tabIndex === 0).length")).toBe(1);

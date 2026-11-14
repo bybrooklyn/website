@@ -67,7 +67,7 @@ export type Style = "paragraph" | "title" | "subtitle" | "heading1" | "heading2"
 
 /** The style picker's lines, in order, with their names. */
 export const STYLES: [Style, string][] = [
-    ["paragraph", "Paragraph"],
+    ["paragraph", "Normal text"],
     ["title", "Title"],
     ["subtitle", "Subtitle"],
     ["heading1", "Heading 1"],
@@ -94,12 +94,16 @@ function touched(doc: Document, selection: Selection): number[] {
     return Array.from({ length: Math.max(0, last - first) + 1 }, (_, index) => first + index);
 }
 
-/** Which style the cursor's block has, as the style picker shows it. */
+/** Which style the cursor's block has, as the style picker shows it. Text in a callout or a folding section is normal text: only a plain quote is Quote. */
 export function currentStyle(doc: Document, path: number[]): Style {
     const block = activeBlock(doc, path);
     if (block.kind === "heading") return `heading${block.level ?? 1}` as Style;
     if (block.kind === "code") return "code";
-    if (block.quoted) return "quote";
+    const plainQuote = (depth: number) => {
+        const holder = blockAt(doc, path.slice(0, depth + 1));
+        return holder?.kind === "quote" && !holder.callout && !holder.details;
+    };
+    if (path.some((_, depth) => plainQuote(depth))) return "quote";
     const here = blockAt(doc, path);
     return here?.kind === "paragraph" && here.subtitle ? "subtitle" : "paragraph";
 }
@@ -194,7 +198,7 @@ export const FLAGS: { name: string; value: string }[] = [
     { name: "White", value: "#ffffff" },
     { name: "Dark orange", value: "#d52d00" },
     { name: "Orange", value: "#ff9a56" },
-    { name: "Pink", value: "#d362a4" },
+    { name: "Orchid", value: "#d362a4" },
     { name: "Dark rose", value: "#a30262" },
 ];
 
@@ -586,6 +590,8 @@ interface Tool {
  */
 export const FOLDS = { paint: 1, print: 2, clear: 3, indent: 4, spacing: 5, zoom: 6, spelling: 7, font: 8, highlight: 9, size: 10, strike: 11, underline: 12, color: 13, redo: 14, picture: 15, align: 16, link: 17, style: 18, italic: 19, lists: 20, bold: 21, undo: 22 } as const;
 
+/** How long a message in the status stays before how saving stands comes back, in milliseconds. */
+export const STATUS_PASSES = 5000;
 
 /** Builds the bar for a surface. */
 export function createBar(surface: Surface, options: BarOptions) {
@@ -662,7 +668,7 @@ export function createBar(surface: Surface, options: BarOptions) {
     const print = () => options.onPrint?.();
     // paint format: the look of the selection is held, and given to the next text selected
     let held: Format | undefined;
-    const paintButton = control("Paint format: copy the formatting of the selection, then select where it goes", icon("paint"), () => (held ? hold(undefined) : hold(formatAt(surface.getDocument(), rangeOf(surface.getSelection()).start, !collapsed(surface.getSelection())))));
+    const paintButton = control("Paint format", icon("paint"), () => (held ? hold(undefined) : hold(formatAt(surface.getDocument(), rangeOf(surface.getSelection()).start, !collapsed(surface.getSelection())))));
     paintButton.setAttribute("aria-pressed", "false");
     const hold = (format: Format | undefined) => {
         held = format;
@@ -701,12 +707,17 @@ export function createBar(surface: Surface, options: BarOptions) {
 
     // ---- the style ----
     const styles = flowMenu("Style");
-    const styleLabel = make("span", "quire-style-label", "Paragraph");
+    const styleLabel = make("span", "quire-style-label", STYLES[0]![1]);
+    // Title does not restyle the line: the title is the line above the writing, and the status says the cursor went there
+    const toTitle = () => {
+        options.onTitle?.();
+        say("At the title", "The title is the line above the writing: the cursor is there now");
+    };
     const styleLines = (): MenuItem[] => {
         const now = currentStyle(surface.getDocument(), surface.getSelection().focus.path);
         // a subtitle is kept only by a .quire document
         const offered = STYLES.filter(([style]) => style !== "subtitle" || !!surface.getDocument().quire);
-        return offered.map(([style, label]) => ({ label, pressed: style === now, icon: sample(style), run: style === "title" ? () => options.onTitle?.() : doing(setStyleOf(style)) }));
+        return offered.map(([style, label]) => ({ label, pressed: style === now, icon: sample(style), run: style === "title" ? toTitle : doing(setStyleOf(style)) }));
     };
     const styleButton = opener(styles, "Style", styleLabel, styleLines);
     styleButton.classList.add("quire-style");
@@ -783,11 +794,11 @@ export function createBar(surface: Surface, options: BarOptions) {
     };
     const sizeLines = (): MenuItem[] => {
         const now = sizeAt();
-        return SIZE_STEPS.map((number) => ({ label: String(number), pressed: number === now, run: () => setSize(number) }));
+        return sizesOffered(richOn).map((number) => ({ label: String(number), pressed: number === now, run: () => setSize(number) }));
     };
     group(
         tool(
-            cluster(control("Smaller", icon("minus"), () => setSize(nextSize(sizeAt(), -1, richOn)), "quire-button quire-size-step"), sizeField, control("Larger", icon("plus"), () => setSize(nextSize(sizeAt(), 1, richOn)), "quire-button quire-size-step")),
+            cluster(control(named("Smaller", "smaller"), icon("minus"), () => setSize(nextSize(sizeAt(), -1, richOn)), "quire-button quire-size-step"), sizeField, control(named("Larger", "bigger"), icon("plus"), () => setSize(nextSize(sizeAt(), 1, richOn)), "quire-button quire-size-step")),
             FOLDS.size,
             () => [{ label: "Text size", hint: "›", run: () => sizes.open(moreButton, sizeLines(), true) }],
         ),
@@ -801,29 +812,59 @@ export function createBar(surface: Surface, options: BarOptions) {
         pressable.set(key, button);
         return button;
     };
-    const swatch = (value: string | null) => {
-        const dot = make("span", "quire-swatch");
-        if (value) dot.style.background = value;
-        return dot;
-    };
-    const marker = (value: string | null) => {
-        const dot = make("span", "quire-swatch quire-swatch-mark");
-        if (value) dot.style.background = value;
-        return dot;
-    };
     const palette = () => [...(options.colors ?? []), ...FLAGS];
     const colors = flowMenu("Text color");
     const highlights = flowMenu("Highlight");
-    const colorLines = (): MenuItem[] => [{ label: "Default color", icon: swatch(null), run: doing(color(null)) }, ...palette().map((each) => ({ label: each.name, icon: swatch(each.value), run: doing(color(each.value)) }))];
-    const highlightLines = (): MenuItem[] => [{ label: "No highlight", icon: marker(null), run: doing(highlight(null)) }, ...palette().map((each) => ({ label: each.name, icon: marker(each.value), run: doing(highlight(each.value)) }))];
+    /**
+     * A grid of swatches, as Docs has, each named in its tooltip, under a line that takes the color
+     * off; the one at the cursor is pressed. The arrows move across and down it.
+     */
+    const swatches = (menu: Menu, none: string, now: string | undefined, give: (value: string | null) => Action, mark = false) => {
+        const whole = make("div", "quire-swatches");
+        const take = (value: string | null) => () => {
+            menu.close(false);
+            doing(give(value))();
+        };
+        const off = control(none, make("span", "quire-menu-label", none), take(null), "quire-menu-line");
+        const grid = make("div", "quire-swatch-grid");
+        grid.setAttribute("role", "group");
+        grid.setAttribute("aria-label", menu.box.getAttribute("aria-label") ?? "");
+        for (const each of palette()) {
+            const dot = make("span", `quire-swatch${mark ? " quire-swatch-mark" : ""}`);
+            dot.style.background = each.value;
+            const button = control(each.name, dot, take(each.value), "quire-button quire-swatch-button");
+            button.setAttribute("aria-pressed", String(each.value === now));
+            button.classList.toggle("pressed", each.value === now);
+            grid.append(button);
+        }
+        // across a row with the side arrows and between rows with up and down, the way the swatches are drawn
+        grid.addEventListener("keydown", (event) => {
+            const all = [...grid.children] as HTMLElement[];
+            const at = all.indexOf(document.activeElement as HTMLElement);
+            const across = Math.round(grid.offsetWidth / (all[0]?.offsetWidth || 1)) || 1;
+            const by = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -across, ArrowDown: across }[event.key];
+            if (by === undefined || at < 0) return;
+            event.preventDefault();
+            event.stopPropagation();
+            const next = at + by;
+            (next < 0 ? off : all[Math.min(next, all.length - 1)])!.focus();
+        });
+        whole.append(off, grid);
+        return whole;
+    };
+    const look = () => formatAt(surface.getDocument(), rangeOf(surface.getSelection()).start, !collapsed(surface.getSelection()));
+    const colorGrid = () => swatches(colors, "Default color", look().color, color);
+    const highlightGrid = () => swatches(highlights, "No highlight", look().highlight, highlight, true);
     const colorMark = make("span", "quire-color-mark", "A");
+    const highlightButton = opener(highlights, "Highlight", icon("highlight"), highlightGrid);
+    highlightButton.classList.add("quire-highlight-button");
     group(
-        tool(press("bold", "Bold (Ctrl+B)", glyph("B", "bold"), doing(toggle("bold"))), 0),
-        tool(press("italic", "Italic (Ctrl+I)", glyph("I", "italic"), doing(toggle("italic"))), 0),
-        tool(press("underline", "Underline (Ctrl+U)", glyph("U", "underline"), doing(toggle("underline"))), 0),
-        tool(press("strike", "Strikethrough (Ctrl+Shift+X)", glyph("S", "strike"), doing(toggle("strike"))), 0),
-        tool(opener(colors, "Text color", colorMark, colorLines), FOLDS.colors, () => [{ label: "Text color", hint: "›", run: () => colors.open(moreButton, colorLines(), true) }]),
-        tool(opener(highlights, "Highlight", icon("highlight"), highlightLines), FOLDS.colors, () => [{ label: "Highlight", icon: "highlight", hint: "›", run: () => highlights.open(moreButton, highlightLines(), true) }], true),
+        tool(press("bold", named("Bold", "bold"), glyph("B", "bold"), doing(toggle("bold"))), FOLDS.bold, () => [{ label: "Bold", hint: "Ctrl+B", run: doing(toggle("bold")) }]),
+        tool(press("italic", named("Italic", "italic"), glyph("I", "italic"), doing(toggle("italic"))), FOLDS.italic, () => [{ label: "Italic", hint: "Ctrl+I", run: doing(toggle("italic")) }]),
+        tool(press("underline", named("Underline", "underline"), glyph("U", "underline"), doing(toggle("underline"))), FOLDS.underline, () => [{ label: "Underline", hint: "Ctrl+U", run: doing(toggle("underline")) }]),
+        tool(press("strike", named("Strikethrough", "strike"), glyph("S", "strike"), doing(toggle("strike"))), FOLDS.strike, () => [{ label: "Strikethrough", hint: "Alt+Shift+5", run: doing(toggle("strike")) }]),
+        tool(opener(colors, "Text color", colorMark, colorGrid), FOLDS.color, () => [{ label: "Text color", hint: "›", run: () => colors.open(moreButton, colorGrid(), true) }]),
+        tool(highlightButton, FOLDS.highlight, () => [{ label: "Highlight", icon: "highlight", hint: "›", run: () => highlights.open(moreButton, highlightGrid(), true) }], true),
     );
 
     // ---- link, picture ----
@@ -1037,6 +1078,30 @@ export function createBar(surface: Surface, options: BarOptions) {
     const dot = make("span", "quire-status-dot", "·");
     dot.setAttribute("aria-hidden", "true");
     statusLine.append(status, dot, count);
+    const showStatus = (short: string, full: string, tone: "quiet" | "warn") => {
+        status.title = full;
+        status.setAttribute("aria-label", full);
+        status.classList.toggle("warn", tone === "warn");
+        // with nothing said about saving, the dot goes with it (a class, so that no rule has to look inside to know)
+        statusLine.classList.toggle("unsaid", !short);
+        if (words.textContent === short) return;
+        // the new words fade in where the old ones fade out, so that nothing beside them moves
+        const leaving = words;
+        words = make("span", "quire-status-words", short);
+        status.append(words);
+        leaving.classList.remove("here");
+        requestAnimationFrame(() => words.classList.add("here"));
+        setTimeout(() => leaving.remove(), 400);
+    };
+    /** How saving stands, which stays until it changes; a message passes after a few seconds and gives the place back to it. */
+    let standing: [string, string, "quiet" | "warn"] = ["", "", "quiet"];
+    let passing: ReturnType<typeof setTimeout> | undefined;
+    const say = (short: string, full: string, tone: "quiet" | "warn" = "quiet", stays = false) => {
+        clearTimeout(passing);
+        if (stays) standing = [short, full, tone];
+        else passing = setTimeout(() => showStatus(...standing), STATUS_PASSES);
+        showStatus(short, full, tone);
+    };
 
     // ---- folding what does not fit ----
 
@@ -1165,6 +1230,7 @@ export function createBar(surface: Surface, options: BarOptions) {
         const format = formatAt(doc, rangeOf(selection).start, !collapsed(selection));
         fontLabel.textContent = FONTS.find(([, value]) => value === (format.font ?? null))?.[0] ?? FONTS[0]![0];
         colorMark.style.borderBottomColor = format.color ?? "";
+        highlightButton.style.setProperty("--mark", format.highlight ?? "currentColor");
         showSize();
     });
 
@@ -1229,19 +1295,8 @@ export function createBar(surface: Surface, options: BarOptions) {
         setZoom(text: string) {
             zoomLabel.textContent = text;
         },
-        setStatus(short: string, full: string, tone: "quiet" | "warn" = "quiet") {
-            status.title = full;
-            status.setAttribute("aria-label", full);
-            status.classList.toggle("warn", tone === "warn");
-            if (words.textContent === short) return;
-            // the new words fade in where the old ones fade out, so that nothing beside them moves
-            const leaving = words;
-            words = make("span", "quire-status-words", short);
-            status.append(words);
-            leaving.classList.remove("here");
-            requestAnimationFrame(() => words.classList.add("here"));
-            setTimeout(() => leaving.remove(), 400);
-        },
+        /** Says something at the right of the first line. A message passes after a few seconds; with `stays`, how saving stands, it stays until the next. */
+        setStatus: say,
         name,
         setRich(on: boolean) {
             if (on === richOn) return;

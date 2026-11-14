@@ -59,6 +59,11 @@
     min-height: 100vh;
 }
 
+/* with the top made by the page above it, the editor fills only the window under it, so that a new document does not scroll with nothing in it */
+.quire-editor.bar-away {
+    min-height: calc(100vh - var(--stuck));
+}
+
 /* the page's width and margins ease only as the look changes, not as the window is resized (editor.ts sets this for a moment) */
 .quire-editor.easing .quire-column {
     transition:
@@ -863,6 +868,32 @@
 /* the choice the arrows have reached, while the button keeps the keyboard */
 .quire-grow-main:focus-visible ~ .quire-grow-row > .lit:not(.pressed) {
     background: color-mix(in oklch, var(--ink) 12%, transparent);
+}
+
+/* the highlight's marker line is drawn in the highlight at the cursor */
+.quire-highlight-button .quire-icon path:last-child {
+    stroke: var(--mark, currentColor);
+}
+
+/* the colors as a grid of swatches under the line that takes the color off, each named in its tooltip */
+.quire-swatch-grid {
+    display: grid;
+    grid-template-columns: repeat(6, auto);
+    gap: 0.15rem;
+    padding: 0.25rem 0.35rem 0.35rem;
+}
+
+.quire-button.quire-swatch-button {
+    min-width: 0;
+    width: 1.9rem;
+    height: 1.9rem;
+    padding: 0;
+}
+
+.quire-swatch-button .quire-swatch {
+    width: 1.1rem;
+    height: 1.1rem;
+    box-shadow: inset 0 0 0 0.0625rem color-mix(in oklch, var(--ink) 25%, transparent);
 }
 
 /* paint format, held: the text shows it is waiting for where the format goes */
@@ -2039,8 +2070,8 @@
     opacity: 1;
 }
 
-/* with nothing said about saving, the dot goes with it */
-.quire-status:has(.here:empty) + .quire-status-dot {
+/* with nothing said about saving, the dot goes with it (bar.ts sets the class) */
+.quire-status-line.unsaid > .quire-status-dot {
     display: none;
 }
 

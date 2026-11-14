@@ -1020,12 +1020,12 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     const showStatus = (status: Status) => {
         if (status.state === "saved") savedAt = Date.now();
         showDetails();
-        bar.setStatus(short(status, store?.note), said(status, store?.note), status.state === "changed" || status.state === "failed" ? "warn" : "quiet");
+        bar.setStatus(short(status, store?.note), said(status, store?.note), status.state === "changed" || status.state === "failed" ? "warn" : "quiet", true);
         if (status.state === "changed" && saver) conflict.open(saver.unsaved() ?? write(surface.getDocument()), status.theirs?.text);
     };
     let stopListening = saver?.on(showStatus);
     if (saver) showStatus(saver.status());
-    else bar.setStatus("", "This document is not being saved anywhere");
+    else bar.setStatus("", "This document is not being saved anywhere", "quiet", true);
 
     // what only a .quire document can keep folds away from the bar while the document is Markdown
     const richNow = () => {
@@ -1241,7 +1241,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         notes.opened();
         showTitle();
         keeper = createKeeper(memoryStorage(), "", snapshot);
-        bar.setStatus("", "Nothing is open");
+        bar.setStatus("", "Nothing is open", "quiet", true);
         return true;
     }
 

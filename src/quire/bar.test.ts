@@ -7,7 +7,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { browser, chromium, type Browser } from "../../scripts/browser";
-import { addCode, addDivider, applyFormat, BASE_SIZE, clearFormat, FOLDS, formatAt, indentBy, nextSize, SIZE_STEPS, sizeNumber, sizeValue, typedSize, addFootnote, addImage, addTable, align, aligned, center, spacedAt, spacing, color, currentStyle, FLAGS, font, FONTS, highlight, link, linkAt, pressedAt, setStyleOf, size, toggle, toggleList, wordAt, type Action } from "./bar";
+import { addCode, addDivider, ALIGNS, applyFormat, BASE_SIZE, clearFormat, FOLDS, formatAt, indentBy, LISTS, nextSize, SIZE_STEPS, sizeNumber, sizesOffered, sizeValue, STATUS_PASSES, STYLES, tip, typedSize, addFootnote, addImage, addTable, align, aligned, center, spacedAt, spacing, color, currentStyle, FLAGS, font, FONTS, highlight, link, linkAt, pressedAt, setStyleOf, size, toggle, toggleList, wordAt, type Action } from "./bar";
 import { collect } from "./styling";
 import { blockAt, markdownOnly, type Paragraph, type TextRun } from "./document";
 import type { Selection } from "./document";
@@ -84,6 +84,37 @@ test("the style picker makes headings, quotes, code and paragraphs, and shows wh
     expect(md(run(setStyleOf("code"), at("let a\n", caret([0], 0))))).toBe("```\nlet a\n```\n");
     expect(md(run(setStyleOf("heading1"), at("One\n\nTwo\n", span([0], 0, 0))))).toBe("# One\n\nTwo\n");
     expect(md(run(setStyleOf("heading3"), at("One\n\nTwo\n", { anchor: { path: [0], offset: 1 }, focus: { path: [1], offset: 1 } })))).toBe("### One\n\n### Two\n");
+});
+
+test("the style box calls a paragraph Normal text, as Format does, and text in a callout or a list is normal text, not Quote", () => {
+    expect(STYLES[0]).toEqual(["paragraph", "Normal text"]);
+    const callout = read("> [!NOTE]\n> Inside the note\n");
+    expect(currentStyle(callout, [0, 0])).toBe("paragraph");
+    expect(currentStyle(read("- an item\n"), [0, 0, 0])).toBe("paragraph");
+    expect(currentStyle(read("> [!NOTE]\n> > quoted in it\n"), [0, 0, 0])).toBe("quote");
+});
+
+test("a tooltip names the control and says its shortcut in words, Cmd on a Mac, and nothing more where there is none", () => {
+    expect(tip("Bold", "bold")).toBe("Bold (Ctrl+B)");
+    expect(tip("Bold", "bold", true)).toBe("Bold (Cmd+B)");
+    expect(tip("Center", "center")).toBe("Center (Ctrl+Shift+E)");
+    expect(tip("Checklist", "task")).toBe("Checklist (Ctrl+Shift+9)");
+    // strikethrough shows the key Format shows, though both work
+    expect(tip("Strikethrough", "strike")).toBe("Strikethrough (Alt+Shift+5)");
+    expect(tip("Picture")).toBe("Picture");
+    expect(tip("Spelling", "nothing")).toBe("Spelling");
+});
+
+test("the size menu offers Docs' sizes for a .quire document and only the five a Markdown file can keep for one", () => {
+    expect(sizesOffered(false)).toEqual(SIZE_STEPS);
+    expect(sizesOffered(true)).toEqual([8, 9, 10, 11, 12, 14, 18, 24, 30, 36, 48, 60, 72, 96]);
+});
+
+test("the alignments and lists are named in American spelling, and no two colors have the same name", () => {
+    expect(ALIGNS.map(([, name]) => name)).toEqual(["Align left", "Center", "Align right", "Justify"]);
+    expect(LISTS.map(([, name]) => name)).toEqual(["Checklist", "Bulleted list", "Numbered list"]);
+    const names = [...["Violet", "Pink", "Blue", "Mint", "Amber"], ...FLAGS.map((each) => each.name)];
+    expect(new Set(names).size).toBe(names.length);
 });
 
 test("Subtitle makes a heading or paragraph a subtitle, shown as the style, Normal text takes it off, and Title changes nothing in the writing", () => {
@@ -334,6 +365,18 @@ inBrowser("a size typed in the field replaces the number, which a click selects,
         await tab.wait(50);
         expect(await tab.run<string>("document.querySelector('.quire-size-field').value")).toBe("12");
         expect(await tab.run<string>("md()")).toBe("a word here\n");
+    }),
+);
+
+inBrowser("a message in the status passes after a few seconds, and how saving stands comes back", () =>
+    onPage("Text\n", 1300, async (tab) => {
+        const words = () => tab.run<string>("document.querySelector('.quire-status-words.here')?.textContent ?? ''");
+        await tab.run("bar.setStatus('Saved', 'Saved here', 'quiet', true); bar.setStatus('Press Ctrl+V', 'This browser did not let the menu paste')");
+        await tab.wait(500);
+        expect(await words()).toBe("Press Ctrl+V");
+        await tab.wait(STATUS_PASSES);
+        expect(await words()).toBe("Saved");
+        expect(await tab.run<string>("document.querySelector('.quire-status').getAttribute('aria-label')")).toBe("Saved here");
     }),
 );
 
