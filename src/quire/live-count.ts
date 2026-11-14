@@ -38,7 +38,7 @@ export function createLiveCount(count: () => Counted) {
     const button = make("button", "quire-live-count");
     button.type = "button";
     button.setAttribute("aria-expanded", "false");
-    button.title = "Word count: press for characters and pages";
+    button.title = "Word count";
     const first = make("span", "quire-live-words");
     const more = make("span", "quire-live-more");
     const inner = make("span", "quire-live-more-in");

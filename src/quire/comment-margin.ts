@@ -122,16 +122,17 @@ export function createCommentMargin(surface: Surface, options: { place: () => st
         const said = [writtenWhen(comment.created), comment.resolved ? "Resolved" : ""].filter(Boolean).join(", ");
         if (said) element.append(make("p", "quire-note-meta", said));
         if (gone) element.append(make("p", "quire-note-gone", comment.quote ? `Its words, “${comment.quote.length > 60 ? `${comment.quote.slice(0, 60)}…` : comment.quote}”, are gone from the text. Undo brings them back.` : "Its words are gone from the text."));
+        // a strip of icons, each named in its tooltip, as every row of actions on a thing in the text is
         const actions = make("div", "quire-note-actions");
-        if (!gone) actions.append(control(comment.resolved ? "Reopen the comment" : "Resolve the comment", comment.resolved ? "Reopen" : "Resolve", () => keep((now) => changeComment(now, comment.id, { resolved: !comment.resolved })), "quire-button quire-note-button"));
+        if (!gone) actions.append(control(comment.resolved ? "Reopen" : "Resolve", icon(comment.resolved ? "undo" : "tick"), () => keep((now) => changeComment(now, comment.id, { resolved: !comment.resolved }))));
         if (!gone && !comment.resolved)
             actions.append(
-                control("Edit the comment", "Edit", () => {
+                control("Edit", icon("pen"), () => {
                     editing = comment.id;
                     redraw();
-                }, "quire-button quire-note-button"),
+                }),
             );
-        actions.append(control("Remove the comment", icon("trash"), () => keep((now) => deleteComment(now, comment.id))));
+        actions.append(control("Remove", icon("trash"), () => keep((now) => deleteComment(now, comment.id))));
         element.append(actions);
         element.addEventListener("click", (event) => {
             if ((event.target as HTMLElement).closest("button, textarea")) return;

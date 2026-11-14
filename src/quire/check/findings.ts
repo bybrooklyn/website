@@ -4,7 +4,8 @@
 // and what she has ignored in each document). view.ts draws what this decides.
 
 import type { Position } from "../document";
-import { DEFAULTS, KINDS, type Finding, type Kind, type Settings } from "./engine";
+import { RULE, type MenuItem } from "../ui";
+import { DEFAULTS, KINDS, type Finding, type Fix, type Kind, type Settings } from "./engine";
 
 /** Orders two positions: below zero if `a` is first. */
 export function compare(a: Position, b: Position): number {
@@ -77,6 +78,29 @@ export function sameTogether(findings: Finding[], words: (finding: Finding) => s
         else lines.set(key, [one]);
     }
     return [...lines.values()];
+}
+
+/** The most spellings a misspelled word's menu offers. */
+export const SPELLINGS = 5;
+
+/**
+ * The lines of a finding's menu, one design wherever it opens: a click on the finding, the keys, or
+ * for a misspelling the top of the text's right-click menu. A misspelling has its spellings, the
+ * likeliest first and drawn strong, or a quiet "No suggestions"; any other finding has a quiet line
+ * naming it in a few words (`name`, its rule's label) and its fixes. Then a rule, and the ways to
+ * leave it be: Add to dictionary and Ignore in this document for a word, Ignore for anything else.
+ * Switching a kind of checking off is the settings' alone.
+ */
+export function findingLines(finding: Finding, name: string, act: { fix(fix: Fix): void; add(word: string): void; ignoreWord(word: string): void; ignore(): void }): MenuItem[] {
+    const word = finding.word;
+    const fixes = [...finding.fixes, ...(finding.suggest?.() ?? [])].slice(0, word ? SPELLINGS : undefined);
+    const lines: MenuItem[] = word ? [] : [{ label: name, note: true, run: () => {} }];
+    lines.push(...fixes.map((fix): MenuItem => ({ label: fix.label, strong: !!word, run: () => act.fix(fix) })));
+    if (word && !fixes.length) lines.push({ label: "No suggestions", note: true, run: () => {} });
+    lines.push(RULE);
+    if (word) lines.push({ label: "Add to dictionary", icon: "dictionary", run: () => act.add(word) }, { label: "Ignore in this document", icon: "ignore", run: () => act.ignoreWord(word) });
+    else lines.push({ label: "Ignore", icon: "ignore", run: act.ignore });
+    return lines;
 }
 
 /** What each kind is called in the list and the settings. */

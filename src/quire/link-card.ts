@@ -1,5 +1,5 @@
 // Links in the writing: the small card that grows from a link when the pointer rests on it or the
-// cursor is in it (where it goes, then Open or Go to, Copy, Edit and Remove), and the chip that grows
+// cursor is in it (where it goes, then icons for Open or Go to, Copy, Edit and Remove), and the chip that grows
 // from under an address just pasted on its own, offering to show it as words guessed from it or in a
 // short form. Both are drawn as the selection bar is (select-bar.ts) so that the three feel like one
 // thing, and Alt+Enter with the cursor in a link opens it.
@@ -13,7 +13,7 @@ import { linkAt } from "./bar";
 import { places } from "./bookmarks";
 import { caret, collapsed } from "./keys";
 import type { Surface } from "./surface";
-import { composing, control, make, placeNear, still } from "./ui";
+import { composing, control, icon, make, placeNear, still } from "./ui";
 
 /** The address, trimmed, when a pasted text is one web address and nothing else: http, https or mailto, never another scheme such as javascript:. */
 export function webAddress(text: string): string | undefined {
@@ -182,36 +182,44 @@ export function createLinkCard(surface: Surface, edit: (from: HTMLElement) => vo
     }
 
     const opener = (href: string) => {
-        const open = make("a", "quire-button quire-link-word", "Open");
+        const open = make("a", "quire-button");
         open.href = href;
         open.target = "_blank";
         open.rel = "noopener noreferrer";
-        open.title = "Open in a new tab (Alt+Enter)";
+        open.title = "Open (Alt+Enter)";
+        open.setAttribute("aria-label", open.title);
+        open.append(icon("open"));
         return open;
     };
 
+    /** The card: where the link goes, to read, then a strip of icons, each named in its tooltip. */
     function card(range: Range, href: string, pointer: boolean) {
         const row = make("div", "quire-select-row");
         const where = make("span", "quire-link-where", cutMiddle(href, 40));
         where.title = href;
         row.append(where, make("span", "quire-select-rule"));
         const place = href.startsWith("#") ? places(surface.getDocument()).find((each) => each.href === href) : undefined;
-        if (place) row.append(control(`Go to ${place.label} (Alt+Enter)`, word("Go to"), () => follow(href)));
+        if (place) row.append(control("Go to (Alt+Enter)", icon("next"), () => follow(href)));
         else if (webAddress(href)) {
             const open = opener(href);
             open.addEventListener("click", () => hide());
             row.append(open);
         }
         row.append(
-            control("Copy the address", word("Copy"), (button) => {
-                void navigator.clipboard?.writeText(href).then(() => (button.firstElementChild!.textContent = "Copied"));
+            control("Copy", icon("copy"), (button) => {
+                // copied, its icon becomes a tick and its name says so
+                void navigator.clipboard?.writeText(href).then(() => {
+                    button.replaceChildren(icon("tick"));
+                    button.setAttribute("aria-label", "Copied");
+                    button.title = "Copied";
+                });
             }),
-            control("Edit the link (Ctrl+K)", word("Edit"), (button) => {
+            control("Edit (Ctrl+K)", icon("pen"), (button) => {
                 // the link field works on the link the cursor is in
                 surface.setSelection(caret(range.start.path, range.start.offset + 1));
                 edit(button);
             }),
-            control("Remove the link, keeping its words", word("Remove"), () => {
+            control("Remove", icon("trash"), () => {
                 surface.run((doc) => setLink(doc, range, null));
                 back();
             }),
@@ -241,8 +249,8 @@ export function createLinkCard(surface: Surface, edit: (from: HTMLElement) => vo
         });
         const short = shortFor(href, 32);
         row.append(make("span", "quire-link-where", "Show as"), field);
-        if (short !== field.value) row.append(control(`Show it as ${shortFor(href, 200)}`, word(short), () => choose(shortFor(href, 200))));
-        row.append(control("Leave the address as it is", word(cutMiddle(href, 24)), () => back(range.end)));
+        if (short !== field.value) row.append(control("Short form", word(short), () => choose(shortFor(href, 200))));
+        row.append(control("Keep address", word(cutMiddle(href, 24)), () => back(range.end)));
         show("chip", range, href, row);
         later(hide, 5000);
     }

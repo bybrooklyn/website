@@ -451,16 +451,16 @@ used("a table's controls grow at its edge with the cursor in it, and add a row a
     await tab.press("ArrowRight");
     await tab.wait(500);
     expect(await tab.run("getComputedStyle(document.querySelector('.quire-table-tools')).opacity")).toBe("1");
-    await press(".quire-table-tools button", "Add a row below");
+    await press(".quire-table-tools button", "Row below");
     await tab.type("3");
     expect(await md()).toBe("| a   | b   |\n| --- | --- |\n| 1   | 2   |\n|     | 3   |\n");
-    await press(".quire-table-tools button", "Add a column to the right");
+    await press(".quire-table-tools button", "Column right");
     await tab.type("c");
     expect(await md()).toBe("| a   | b   |     |\n| --- | --- | --- |\n| 1   | 2   |     |\n|     | 3   | c   |\n");
-    await press(".quire-table-tools button", "Centre the column");
+    await press(".quire-table-tools button", "Center");
     expect(await md()).toBe("| a   | b   |     |\n| --- | --- | :-: |\n| 1   | 2   |     |\n|     | 3   | c   |\n");
-    await press(".quire-table-tools button", "Remove this column");
-    await press(".quire-table-tools button", "Remove this row");
+    await press(".quire-table-tools button", "Remove column");
+    await press(".quire-table-tools button", "Remove row");
     expect(await md()).toBe("| a   | b   |\n| --- | --- |\n| 1   | 2   |\n");
     // Tab goes on to the next cell
     await reset("| a | b |\n| --- | --- |\n| 1 | 2 |\n", [0, 0, 0], 1);

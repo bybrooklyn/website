@@ -34,8 +34,8 @@ export interface Checking {
     open(from: HTMLElement): void;
     /** Opens Personal dictionary, her own words, from a control. */
     dictionary(from: HTMLElement): void;
-    /** The lines a misspelled word at a point (or at the caret, with none) puts first in the text's menu, and how many of them are spellings; none until checking has loaded. */
-    linesAt(at?: { x: number; y: number }): { lines: MenuItem[]; strong: number };
+    /** The lines a misspelled word at a point (or at the caret, with none) puts first in the text's menu, ending in their rule; none until checking has loaded. */
+    linesAt(at?: { x: number; y: number }): MenuItem[];
     destroy(): void;
 }
 
@@ -67,7 +67,7 @@ export function mountChecking(host: CheckingHost): Checking {
         dictionary(from) {
             void load().then((shown) => !gone && shown.openDictionary(from));
         },
-        linesAt: (at) => (loaded && !gone ? loaded.linesAt(at) : { lines: [], strong: 0 }),
+        linesAt: (at) => (loaded && !gone ? loaded.linesAt(at) : []),
         destroy() {
             gone = true;
             void view?.then((shown) => shown.destroy());

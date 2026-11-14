@@ -11,7 +11,7 @@
 //   const menu = createTextMenu(surface, () => row.headings(), (at) => checking.linesAt(at));   // menu.destroy()
 
 import type { Surface } from "./surface";
-import { everyLine, flowMenu, make, type MenuItem } from "./ui";
+import { everyLine, flowMenu, make, RULE, type MenuItem } from "./ui";
 
 /** The commands of the text's menu after cut and copy, by their names in the menus' table (menu-row.ts), in its order. */
 export const TEXT_COMMANDS = ["link", "comment", "bold", "italic", "underline"];
@@ -23,16 +23,13 @@ export function linesFor(menus: { items: () => MenuItem[] }[]): MenuItem[] {
     return TEXT_COMMANDS.flatMap((key) => all.find((item) => item.key === key && !item.disabled) ?? []);
 }
 
-/** Lines put first in the menu (a misspelled word's), and how many of them are spellings, drawn strong. */
-export type FirstLines = { lines: MenuItem[]; strong: number };
-
-/** Every line of the text's menu, in order: the lines given first, then Cut and Copy (dimmed with nothing selected), then the menus' own. */
+/** Every line of the text's menu, in order: the lines given first (a misspelled word's) with a rule under them, then Cut and Copy (dimmed with nothing selected), then the menus' own. */
 export function menuLines(first: MenuItem[], selected: boolean, clip: (how: "cut" | "copy") => () => void, rest: MenuItem[]): MenuItem[] {
-    return [...first, { label: "Cut", hint: "Ctrl+X", disabled: !selected, run: clip("cut") }, { label: "Copy", hint: "Ctrl+C", disabled: !selected, run: clip("copy") }, ...rest];
+    return [...first, ...(first.length ? [RULE] : []), { label: "Cut", icon: "cut", hint: "Ctrl+X", disabled: !selected, run: clip("cut") }, { label: "Copy", icon: "copy", hint: "Ctrl+C", disabled: !selected, run: clip("copy") }, ...rest];
 }
 
 /** Builds the text's menu for a surface; `menus` gives the menus' lines as they stand now, and `first` the lines for what is under a point pressed (or at the caret, with no point). */
-export function createTextMenu(surface: Surface, menus: () => { items: () => MenuItem[] }[], first?: (at?: { x: number; y: number }) => FirstLines): { destroy(): void } {
+export function createTextMenu(surface: Surface, menus: () => { items: () => MenuItem[] }[], first?: (at?: { x: number; y: number }) => MenuItem[]): { destroy(): void } {
     const root = surface.element;
     const menu = flowMenu("Text", { className: "quire-text-menu" });
     const anchor = make("span", "quire-anchor");
@@ -49,14 +46,7 @@ export function createTextMenu(surface: Surface, menus: () => { items: () => Men
             const { anchor: from, focus } = surface.getSelection();
             return from.path.join() !== focus.path.join() || from.offset !== focus.offset;
         })();
-        const top = first?.(keyboard ? undefined : { x, y }) ?? { lines: [], strong: 0 };
-        menu.open(anchor, menuLines(top.lines, selected, clip, linesFor(menus())), keyboard);
-        // the spellings are drawn strong, and a rule parts what was given first from the rest
-        const drawn = menu.box.querySelectorAll<HTMLElement>(".quire-menu-items > *");
-        drawn.forEach((line, index) => {
-            line.classList.toggle("quire-menu-strong", index < top.strong);
-            line.classList.toggle("quire-menu-parted", top.lines.length > 0 && index === top.lines.length);
-        });
+        menu.open(anchor, menuLines(first?.(keyboard ? undefined : { x, y }) ?? [], selected, clip, linesFor(menus())), keyboard);
     }
     /** Not in a table, a picture or a control drawn in the text, each of which has its own. */
     const plain = (target: EventTarget | null) => {

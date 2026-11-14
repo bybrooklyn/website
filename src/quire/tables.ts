@@ -116,20 +116,21 @@ export function createTableTools(surface: Surface, top: () => number = () => 0):
         surface.focus();
     };
     const aligns = new Map<Align, HTMLButtonElement>();
-    const removeRowButton = control("Remove this row", withSign(icon("row"), "−"), doing(removeRowHere));
-    const removeColumnButton = control("Remove this column", withSign(icon("column"), "−"), doing(removeColumnHere));
-    tools.append(control("Add a row below", withSign(icon("row"), "+"), doing(rowBelow)), removeRowButton, control("Add a column to the right", withSign(icon("column"), "+"), doing(columnRight)), removeColumnButton, make("span", "quire-select-rule"));
-    for (const [align, label] of ALIGNS) {
-        const button = control(label, icon(align === "center" ? "center" : align), doing(alignHere(align)));
+    // a strip of icons, each named in a word or two in its tooltip; the menu's lines say the same at more length
+    const removeRowButton = control("Remove row", withSign(icon("row"), "−"), doing(removeRowHere));
+    const removeColumnButton = control("Remove column", withSign(icon("column"), "−"), doing(removeColumnHere));
+    tools.append(control("Row below", withSign(icon("row"), "+"), doing(rowBelow)), removeRowButton, control("Column right", withSign(icon("column"), "+"), doing(columnRight)), removeColumnButton, make("span", "quire-select-rule"));
+    for (const [align, , short] of ALIGNS) {
+        const button = control(short, icon(align === "center" ? "center" : align), doing(alignHere(align)));
         button.setAttribute("aria-pressed", "false");
         aligns.set(align, button);
         tools.append(button);
     }
     // the two sorts go together, onto a line of their own where the window is too narrow for the strip, with the dots that open the whole menu
-    const more = dots("More for this table");
+    const more = dots("More");
     more.addEventListener("click", () => (menu.isOpen() ? menu.close(true) : openMenu(more, true)));
     const sorts = make("span", "quire-table-sorts");
-    sorts.append(make("span", "quire-select-rule"), control("Sort the rows by this column, A to Z", "A→Z", doing(sortHere(false)), "quire-button quire-sort"), control("Sort the rows by this column, Z to A", "Z→A", doing(sortHere(true)), "quire-button quire-sort"), more);
+    sorts.append(make("span", "quire-select-rule"), control("Sort A to Z", icon("sortup"), doing(sortHere(false))), control("Sort Z to A", icon("sortdown"), doing(sortHere(true))), more);
     tools.append(sorts);
 
     // ---- the menu, at the pointer, at the cell for the menu key, or under the strip's dots ----
@@ -149,8 +150,8 @@ export function createTableTools(surface: Surface, top: () => number = () => 0):
             { label: "Remove this row", icon: "trash", disabled: !can.removeRow, run: doing(removeRowHere) },
             { label: "Remove this column", icon: "trash", disabled: !can.removeColumn, run: doing(removeColumnHere) },
             { label: "Remove the table", icon: "trash", run: doing(removeTableHere) },
-            { label: "Sort the rows A to Z", run: doing(sortHere(false)) },
-            { label: "Sort the rows Z to A", run: doing(sortHere(true)) },
+            { label: "Sort the rows A to Z", icon: "sortup", run: doing(sortHere(false)) },
+            { label: "Sort the rows Z to A", icon: "sortdown", run: doing(sortHere(true)) },
             ...ALIGNS.map(([align, label]): MenuItem => ({ label, icon: align === "center" ? "center" : align, pressed: found.table.align[found.column] === align, run: doing(alignHere(align)) })),
         ];
     }
@@ -264,11 +265,11 @@ export function createTableTools(surface: Surface, top: () => number = () => 0):
     };
 }
 
-/** A column's three alignments, with their names. */
-const ALIGNS: [Align, string][] = [
-    ["left", "Align the column left"],
-    ["center", "Centre the column"],
-    ["right", "Align the column right"],
+/** A column's three alignments, with their names in the menu (which the command palette tells from the text's own by) and on the strip. */
+const ALIGNS: [Align, string, string][] = [
+    ["left", "Align the column left", "Align left"],
+    ["center", "Center the column", "Center"],
+    ["right", "Align the column right", "Align right"],
 ];
 
 /** An icon with a small + or minus beside it. */
