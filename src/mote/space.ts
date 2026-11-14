@@ -9,12 +9,14 @@
 //   space.step(dt);
 //   die.p, turn(die)                                   // where it is and how it is turned
 //
-// A step goes as flat.ts's does: where things touch is found once, then the
+// A step goes as flat.ts's does: the grid in grid.ts finds which pairs are
+// near enough to look at, where things touch is found once, then the
 // step is taken in small parts, each solving every touch as a stiff, heavily
 // damped spring, moving the solids, and solving once more without the spring.
 //
 // What it is held to is in space.test.ts.
 
+import { Grid, type Pairs } from "./grid";
 import { block, cross, dot3 as dot, minus as sub, plus as add, scaled as mul, type Mesh, type Turn, type V3 } from "./solids";
 
 export type Quat = [x: number, y: number, z: number, w: number];
@@ -45,6 +47,8 @@ export interface Solid {
     readonly edges: [number, number][];
     readonly runs: V3[];
     readonly far: number;
+    /** How far its nearest face is from its middle. */
+    readonly inner: number;
     readonly mass: number;
     /** 1 / mass and 1 / how hard it is to turn: both 0 for something that does not move, or is asleep. */
     im: number;
@@ -135,6 +139,14 @@ export function turn(solid: { q: Quat }): Turn {
     ];
 }
 
+/** How far a box one unit from its middle along each of its own axes reaches along one of the world's, turned by `q`: a row of `turn`, each part made positive and added up. */
+function across(q: Quat, axis: number): number {
+    const [x, y, z, w] = q;
+    if (axis === 0) return Math.abs(1 - 2 * (y * y + z * z)) + Math.abs(2 * (x * y - z * w)) + Math.abs(2 * (x * z + y * w));
+    if (axis === 1) return Math.abs(2 * (x * y + z * w)) + Math.abs(1 - 2 * (x * x + z * z)) + Math.abs(2 * (y * z - x * w));
+    return Math.abs(2 * (x * z - y * w)) + Math.abs(2 * (y * z + x * w)) + Math.abs(1 - 2 * (x * x + y * y));
+}
+
 /** A quaternion from angles about x, then y, then z. */
 export function angled(x: number, y: number, z: number): Quat {
     let q: Quat = [0, 0, 0, 1];
@@ -194,6 +206,7 @@ function make(mesh: Mesh, at: V3, q: Quat, fixed: boolean, stuff: Stuff): Solid 
         p: add(at, spin(q, middle)), q, v: [0, 0, 0], w: [0, 0, 0],
         points, faces: mesh.faces, normals, edges, runs,
         far: Math.max(...points.map(size)),
+        inner: Math.min(...normals.map((n, i) => dot(n, points[mesh.faces[i]![0]!]!))),
         mass,
         im: fixed ? 0 : 1 / mass,
         ii: fixed ? 0 : 1 / ((2 / 3) * around * (stuff.density ?? 1)),
@@ -386,7 +399,14 @@ export class Space {
     nap = 0.6;
     /** Told of each pair that met hard this step, and how fast they were closing. For a sound, or a flash. */
     hit?: (a: Solid, b: Solid, speed: number) => void;
-    #was: Manifold[] = [];
+    /**
+     * How pairs of solids near enough to touch are found: a grid, which hands them over in the order a
+     * loop over every pair would. A test puts every pair here instead, to check the grid changes nothing.
+     */
+    pairs: Pairs = new Grid(3);
+    /** Last step's contacts by pair, to start from; and the map the next step's go in. */
+    #was = new Map<number, Manifold>();
+    #next = new Map<number, Manifold>();
     #owed = 0;
 
     /** A solid that moves, from a shape that bulges everywhere, with its middle at `at`. */
@@ -440,12 +460,61 @@ export class Space {
         const h = dt / this.parts;
         for (const s of solids) if (s.im) place(s);
 
+        // ---- which pairs are near enough to look at ----
+        // The test below sets two moving solids against each other by their middles, and a moving one
+        // against one that is not (fixed, asleep or held) by how far its middle is outside the other's
+        // faces. Each solid is given a box that holds every place either test could let a pair through.
+        const pairs = this.pairs;
+        const count = solids.length;
+        pairs.ready(count);
+        // the most any solid that moves reaches: its size, and the most a pair's margin can be
+        let far = 0;
+        let fastest = 0;
+        for (const s of solids) {
+            if (s.im || s.rest) far = Math.max(far, s.far);
+            fastest = Math.max(fastest, size(s.v) + size(s.w) * s.far);
+        }
+        const reach = far + MARGIN + Math.min(2 * fastest * dt, 1.5) + 1e-6;
+        const { low, high } = pairs;
+        for (let i = 0; i < count; i++) {
+            const s = solids[i]!;
+            pairs.moves[i] = s.im || s.rest ? 1 : 0;
+            if (!s.im && !s.rest) {
+                // Fixed, which only a slab is: a box whose faces are pushed out by `reach` is a box
+                // `reach` larger along each of its own axes, which reaches this much further along the world's.
+                for (let axis = 0; axis < 3; axis++) {
+                    let least = Infinity;
+                    let most = -Infinity;
+                    for (const p of s.wp) {
+                        least = Math.min(least, p[axis]!);
+                        most = Math.max(most, p[axis]!);
+                    }
+                    const grow = reach * across(s.q, axis) + 1e-6;
+                    low[i * 3 + axis] = least - grow;
+                    high[i * 3 + axis] = most + grow;
+                }
+                continue;
+            }
+            // as the one that moves: its middle, its size and its share of the margin
+            let out = s.far + MARGIN / 2 + Math.min((size(s.v) + size(s.w) * s.far) * dt, 1.5) + 1e-6;
+            // Asleep or held, it may also be the one that does not move, its faces each pushed out by
+            // `reach`: that lies inside the solid grown about its middle until its nearest face has moved that far.
+            if (!s.im) out = Math.max(out, s.far * (1 + reach / s.inner) + 1e-6);
+            for (let axis = 0; axis < 3; axis++) {
+                low[i * 3 + axis] = s.p[axis]! - out;
+                high[i * 3 + axis] = s.p[axis]! + out;
+            }
+        }
+        pairs.find(count);
+
         // ---- where things touch ----
         const manifolds: Manifold[] = [];
-        for (let i = 0; i < solids.length; i++) {
+        const was = this.#was;
+        const { start, other } = pairs;
+        for (let i = 0; i < count; i++) {
             const a = solids[i]!;
-            for (let j = i + 1; j < solids.length; j++) {
-                const b = solids[j]!;
+            for (let k = start[i]!; k < start[i + 1]!; k++) {
+                const b = solids[other[k]!]!;
                 if (!a.im && !b.im) continue;
                 const closing = size(sub(b.v, a.v)) + size(a.w) * (a.im ? a.far : 0) + size(b.w) * (b.im ? b.far : 0);
                 const margin = MARGIN + Math.min(closing * dt, 1.5);
@@ -468,7 +537,7 @@ export class Space {
                         lying.quiet = 0;
                     }
                 }
-                const before = this.#was.find((old) => old.a === a && old.b === b);
+                const before = was.get(a.id * 2 ** 26 + b.id);
                 const n = found.n;
                 const t1 = unit(Math.abs(n[0]) < 0.8 ? cross(n, [1, 0, 0]) : cross(n, [0, 1, 0]));
                 const t2 = cross(n, t1);
@@ -507,7 +576,11 @@ export class Space {
                 });
             }
         }
-        this.#was = manifolds;
+        // Kept by pair for the next step to find each again; the two maps take turns, so neither is made anew.
+        this.#was = this.#next;
+        this.#next = was;
+        this.#next.clear();
+        for (const m of manifolds) this.#was.set(m.a.id * 2 ** 26 + m.b.id, m);
 
         for (const s of solids) {
             s.dp = [0, 0, 0];

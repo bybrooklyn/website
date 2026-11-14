@@ -13,6 +13,7 @@ site. It has no dependencies.
 | `flat.ts` | 2D physics: boxes, balls, bars and shapes, with rounded corners if wanted; walls; pins, rods and ropes; a motor; a hand to grab with. Friction, bounce, sleep. `flat.hit` is told of every hard knock. |
 | `solids.ts` | The shapes of the dice, a ball, a rod and other solids, and a way to draw one on a 2D canvas with no WebGL. The dice tower falls back to it where WebGL 2 is missing. |
 | `space.ts` | 3D physics: solids that fall, tumble and hit each other and fixed slabs, corner to corner and edge to edge. The dice tower runs on it. |
+| `grid.ts` | Which pairs of bodies are near enough to be worth a closer look, for both kinds of physics: a hashed grid, with large fixed bodies such as floors and walls kept apart. |
 | `gl.ts` | 3D drawing on WebGL 2: real depth, one sun with shadows, light from the sky, numbers on faces, signs (words that float in front of everything), and glow: a part with `emit` shines and bleeds light around itself. |
 | `sound.ts` | Knocks and notes made by the browser, with no files. Silent until the visitor turns it on. |
 

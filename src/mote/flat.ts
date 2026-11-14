@@ -8,7 +8,8 @@
 //   flat.step(dt);
 //   trace(ctx, crate); ctx.fill();
 //
-// How a step goes. Where bodies touch is found once. The step is then taken
+// How a step goes. Which pairs are near enough to look at is found by the grid in grid.ts, and
+// then where bodies touch is found once. The step is then taken
 // in a few small parts, and in each one every contact and joint is solved as
 // a very stiff, heavily damped spring, the bodies are moved, and everything
 // is solved once more without the spring. This is the "soft step" method
@@ -16,6 +17,8 @@
 //
 // What it is held to is in flat.test.ts: friction angles, a pile that does
 // not move once it has settled, a chain that keeps its length.
+
+import { Grid, type Pairs } from "./grid";
 
 export type P = [number, number];
 
@@ -420,6 +423,11 @@ export class Flat {
     #joints: Joint[] = [];
     /** Pairs that are joined, which pass through each other. */
     #through = new Map<number, number>();
+    /**
+     * How pairs of bodies near enough to touch are found: a grid, which hands them over in the order a
+     * loop over every pair would. A test puts every pair here instead, to check the grid changes nothing.
+     */
+    pairs: Pairs = new Grid(2);
     /** Last step's contacts, to start from. */
     #was = new Map<number, Manifold>();
     #owed = 0;
@@ -607,15 +615,33 @@ export class Flat {
         let manifolds: Manifold[] = [];
         let now = new Map<number, Manifold>();
         let woke = false;
+        // Which pairs are near enough to look at: each body's box is as far as it could reach this step,
+        // so that every pair the test below lets through is among them, and they come in its order.
+        const pairs = this.pairs;
+        pairs.ready(bodies.length);
+        for (let i = 0; i < bodies.length; i++) {
+            const b = bodies[i]!;
+            // what a pair is allowed below, split between the two, and a hair more for rounding
+            const reach = b.far + MARGIN / 2 + Math.min((Math.hypot(b.vx, b.vy) + Math.abs(b.w) * b.far) * dt, 400) + 1e-3;
+            const empty = !b.points.length;
+            pairs.low[i * 2] = empty ? Infinity : b.x - reach;
+            pairs.low[i * 2 + 1] = b.y - reach;
+            pairs.high[i * 2] = empty ? -Infinity : b.x + reach;
+            pairs.high[i * 2 + 1] = b.y + reach;
+            // anything that can move may be woken by a pair before it in the loop
+            pairs.moves[i] = b.im > 0 ? 1 : 0;
+        }
+        pairs.find(bodies.length);
         const find = () => {
             manifolds = [];
             now = new Map();
             woke = false;
+            const { start, other } = pairs;
             for (let i = 0; i < bodies.length; i++) {
                 const a = bodies[i]!;
                 if (!a.points.length) continue;
-                for (let j = i + 1; j < bodies.length; j++) {
-                    const b = bodies[j]!;
+                for (let k = start[i]!; k < start[i + 1]!; k++) {
+                    const b = bodies[other[k]!]!;
                     if ((!live(a) && !live(b)) || !b.points.length || (a.family && a.family === b.family)) continue;
                     const closing = Math.hypot(b.vx - a.vx, b.vy - a.vy) + Math.abs(a.w) * a.far + Math.abs(b.w) * b.far;
                     // Anything that could reach it this step is found now, so that nothing fast gets through anything.

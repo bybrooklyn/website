@@ -14,7 +14,8 @@ under the MIT license in that folder (`src/mote/LICENSE`), plainer than the rest
 |---|---|
 | `stage.ts` | The canvas, a loop in fixed steps of 1/120 s, mouse and keys, the page's colours, a panel for buttons, a little kept between visits, the address. Runs only while seen and stops when the scene rests. |
 | `flat.ts` | 2D physics: boxes, balls, bars and shapes, walls, pins, rods, ropes, a motor, a hand to grab with. |
-| `space.ts` | 3D physics: solids that fall, tumble and hit each other and fixed slabs; balls and round posts. |
+| `space.ts` | 3D physics: solids that fall, tumble and hit each other and fixed slabs. |
+| `grid.ts` | The broad phase both physics use: which pairs of bodies are near enough to be worth a closer look. |
 | `gl.ts` | 3D drawing on WebGL 2: depth, a sun with shadows, sky light, numbers on faces, floating words, glow. |
 | `solids.ts` | The shapes of dice and other solids, drawn on a 2D canvas where WebGL 2 is missing. |
 | `sound.ts` | Knocks and notes made by the browser with no files, silent until turned on. |
@@ -24,6 +25,44 @@ under the MIT license in that folder (`src/mote/LICENSE`), plainer than the rest
 All of the above. The physics in `flat.ts` and `space.ts` follows the soft step method Erin Catto described
 for Box2D 3. Mote began on 10 Nov 2026 on forked libraries (planck, cannon and three) and by 11 Nov had
 none: what was needed was written into it.
+
+### The broad phase
+
+Until 13 Nov 2026 both physics tested every pair of bodies in a nested loop: 1,000 bodies are 499,500
+pairs a step. Now `grid.ts` finds the pairs worth a look, and the same test as before is run on those
+alone.
+
+- **What it is.** A hashed grid: space is cut into cubes about the size of a moving body's box, each body
+  is listed under the cubes its box covers, and two bodies under one cube are a pair. A body that would
+  cover more than sixteen cubes (a floor, a wall, a long ramp) is kept out of the grid and set against
+  every body by its box. A grid suits the minis, which have many small moving things of about one size and
+  a few large fixed ones; sweep and prune on one axis does badly in a tall pile, where a whole column shares
+  an axis, and a tree of boxes is more code for no gain at these sizes.
+- **The same answers.** Each body's box holds every place the old test could let a pair through: in 2D a
+  body's middle, its size and its share of the margin; in 3D the same for a solid that moves, and for one
+  that does not (fixed, asleep or held) the space its faces pushed out by the most any moving solid
+  reaches, since that is what the old test measured against. The pairs are put back in the order the loop
+  met them, by first body and then second, so the solver, which depends on order, does the same work.
+  `pairs.test.ts` runs Blocks, Plinko's board, the dice tower and two crowded heaps with the grid and with a
+  loop over every pair, and every body ends in the same place, turned the same way, to the bit. A check
+  against the old files themselves gave the same.
+- **Nothing made in a step.** The grid keeps its arrays and grows them only when a scene grows.
+- **Also in 3D:** last step's contacts were found again by a search through all of them for each new one,
+  which in a pile of thousands cost more than the pairs did. They are kept in a map by pair.
+
+Step times from `crowd.test.ts` (one step of 1/120 s, the middle of a few, on four cores of this computer;
+"loose" is balls thrown about a box, "pile" is blocks or cubes stacked touching):
+
+| Bodies | 2D loose, before | after | 2D pile, before | after | 3D loose, before | after | 3D pile, before | after |
+|---|---|---|---|---|---|---|---|---|
+| 100 | 1.1 ms | 1.0 ms | 4.3 ms | 4.6 ms | 17 ms | 14 ms | 35 ms | 35 ms |
+| 500 | 5.5 ms | 1.6 ms | 12 ms | 11 ms | 77 ms | 54 ms | 263 ms | 227 ms |
+| 1,000 | 17 ms | 2.6 ms | 32 ms | 18 ms | 201 ms | 107 ms | 627 ms | 473 ms |
+| 5,000 | 421 ms | 7.3 ms | 471 ms | 95 ms | 2,260 ms | 113 ms | 6,338 ms | 2,292 ms |
+
+Finding pairs no longer grows with the square of the count. What is left is the work on each pair that
+touches: in 2D that keeps a pile of 1,000 inside its 8.3 ms only on a fast machine, and in 3D the contact
+code (`touch`, which makes many small arrays) is now nearly all of a step.
 
 ## Decided
 
@@ -51,11 +90,14 @@ none: what was needed was written into it.
 ## How to run and test
 
 ```sh
-bun test src/mote     # flat.test.ts, space.test.ts, replay.test.ts, gl.test.ts
+bun test src/mote     # flat, space, grid, pairs, replay, crowd, gl and the rest
 ```
 
 `gl.test.ts` draws a scene in headless Chromium and reads its pixels. `replay.test.ts` checks that a scene
-run twice ends the same and that a step is fast enough.
+run twice ends the same and that a step is fast enough. `grid.test.ts` checks the broad phase against a
+loop over every pair, and `pairs.test.ts` the minis' scenes with it and without, to the bit. `crowd.test.ts`
+prints step times for 100 to 5,000 bodies and takes about forty seconds; run it on its own with
+`bun test src/mote/crowd.test.ts` when measuring.
 
 ## Known weak spots
 
