@@ -124,6 +124,7 @@ What was found and fixed is in [`docs/AUDIT.md`](docs/AUDIT.md). Still open from
 
 ## Minis
 
+- A marble run: the plan is in [marbles](docs/marbles.md); it is built in seven stages, the first of them in Mote.
 - A sand simulator: the plan is in [sand](docs/sand.md); its open points are to be settled, then it is built in four stages.
 
 - A post about writing the physics, with a mini at each step.
