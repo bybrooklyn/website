@@ -24,10 +24,14 @@ import { cross, dot3 as dot, minus, plus, scaled, type Mesh, type V3 } from "../
 export const CELL = 8;
 /** A level's height, in centimetres: the height of a block of track, and the least step up or down. */
 export const LEVEL = 2;
-/** The groove's radius, where a marble rolls: a marble of radius 0.8 sits 0.3 below the groove's middle line. */
-export const GROOVE = 1.1;
+/**
+ * The groove's radius, where a marble rolls: a marble of radius 0.8 sits 0.7 below the groove's middle line.
+ * Not tighter: a marble rocking from side to side in a groove only a little wider than itself rocks so
+ * quickly (in 0.08 s, at 1.1) that Mote's steps lose two fifths of its rocking in a second; at 1.5 none.
+ */
+export const GROOVE = 1.5;
 /** A block of track, across and high. */
-export const WIDE = 4;
+export const WIDE = 4.4;
 export const DEEP = 2;
 /** How thick each surface Mote meets is: thin, since only its face counts. */
 const SKIN = 0.1;
@@ -51,7 +55,7 @@ export const BLOCK: Section = [
 export const TUBE: Section = [{ middle: [0, 0], radius: GROOVE + SKIN / 2, from: -Math.PI, to: Math.PI, thick: SKIN }];
 
 /** The loop's radius, to the line its track is made along. */
-export const LOOP = 5.5;
+export const LOOP = 4.5;
 
 /** How a marble meets wood: the friction, bounce and rolling cost of track, and the funnel's rougher bowl. */
 export const WOOD = { friction: 0.5, bounce: 0.4, roll: 0.006 };
@@ -125,7 +129,7 @@ export const BOX: Entry[] = [
     entry("turn back left", "c", [1, 2], true),
     entry("turn back right", "c", [1, 2]),
     entry("gentle slope", "d", [2, 1]),
-    entry("steep slope", "d", [1, 2]),
+    entry("steep slope", "d", [2, 2]),
     entry("drop", "v", [4]),
     entry("S bend left", "z", [2, 1], true),
     entry("S bend right", "z", [2, 1]),
@@ -156,6 +160,8 @@ export interface Length {
     bank?: number[];
     /** A loop is carried round with the twist that keeps it facing its axis. */
     loop?: boolean;
+    /** Not banked: the leads into a loop, which bend only a little, and must meet it upright. */
+    plain?: boolean;
     /** Which of its ends is a joint of the piece (by number), if any. */
     joints: [start: number | undefined, end: number | undefined];
 }
@@ -312,7 +318,7 @@ function design(family: Family, sizes: number[]): Omit<Shape, "kind" | "cells" |
         case "v": {
             // a short groove, then a tube that turns straight down, falls, and turns level again, then a short groove
             const drop = sizes[0]! * LEVEL;
-            const bend = 1.5;
+            const bend = 2;
             const fall = drop - 2 * bend;
             const top: V3 = [3, 0, 4];
             const curl = (centre: V3, from: number, to: number, count: number) => Array.from({ length: count + 1 }, (_, i): V3 => {
@@ -335,7 +341,7 @@ function design(family: Family, sizes: number[]): Omit<Shape, "kind" | "cells" |
             // a chute along the row into a bowl about the middle of three cells by three, that marbles
             // circle down and drop through; under the hole a tube turns them level and out the far side
             const middle: V3 = [12, 0, 12];
-            const profile: V2[] = [[1.25, -11.5], [3, -9.6], [6, -6.2], [8, -4.4], [10, -3.2]];
+            const profile: V2[] = [[1.65, -11.5], [3, -9.8], [6, -6.2], [8, -4.4], [10, -3.2]];
             const chute = along([[0, 0, 4], [6, -0.45, 4], [12, -1.5, 4]], [0, undefined], { end: unit([1, -0.2, 0]) });
             const neck: V3[] = [[12, -11.5, 12], [12, -12.25, 12], [12, -13, 12]];
             for (let i = 1; i <= 8; i++) {
@@ -355,14 +361,24 @@ function design(family: Family, sizes: number[]): Omit<Shape, "kind" | "cells" |
             return { joints: [J0, joint([24, -16, 12], [1, 0, 0])], lengths: [chute, tube, exit], bowl: { at: middle, profile, thick: 0.3 }, boxes: [], stands: [], holds, low: -9 };
         }
         case "l": {
-            // in along the row, once round a loop of 5.5 cm about a level axis that comes out a cell aside, and on
-            const ringOf = { middle: [8, LOOP, 4] as V3, radius: LOOP, rise: CELL, turns: 1, axis: [0, 0, 1] as V3, from: [0, -1, 0] as V3 };
-            const loop = helix(ringOf.middle, LOOP, CELL, 1, { axis: ringOf.axis, from: ringOf.from });
+            // in along the row, once round a loop of 4.5 cm about a level axis, and on a cell aside. A loop
+            // that climbs `rise` aside as it goes round leans that way; each lead bends once, gently, by
+            // `aside`, into the way the loop leans, so that the loop climbs only what is left of the cell:
+            // a lead that bends as a parabola from straight to the loop's lean ends 4 tan(lean) aside, and
+            // the lean is the climb over the loop's round, so tan(lean) = (8 - 8 tan(lean)) / (2 pi r).
+            const lean = CELL / (2 * Math.PI * LOOP + CELL);
+            const aside = (CELL / 2) * lean;
+            const ringOf = { middle: [8, LOOP, 4 + aside] as V3, radius: LOOP, rise: CELL - 2 * aside, turns: 1, axis: [0, 0, 1] as V3, from: [0, -1, 0] as V3 };
+            const loop = helix(ringOf.middle, LOOP, ringOf.rise, 1, { axis: ringOf.axis, from: ringOf.from });
             const [into, outof] = [unit(loop.speed(0)), unit(loop.speed(loop.end))];
             const ring: Length = { section: "block", path: ringOf, level: false, loop: true, joints: [undefined, undefined] };
             return {
                 joints: [J0, joint([16, 0, 12], [1, 0, 0])],
-                lengths: [along([[0, 0, 4], [4, 0, 4 - 0.15], [8, 0, 4]], [0, undefined], { end: into }), ring, along([[8, 0, 12], [12, 0, 12 + 0.15], [16, 0, 12]], [undefined, 1], { start: outof })],
+                lengths: [
+                    { ...along([[0, 0, 4], [8, 0, 4 + aside]], [0, undefined], { end: into }), plain: true },
+                    ring,
+                    { ...along([[8, 0, 12 - aside], [16, 0, 12]], [undefined, 1], { start: outof }), plain: true },
+                ],
                 ...none,
             };
         }
@@ -441,7 +457,7 @@ export function shapeOf(kind: Kind): Shape {
     const shape: Shape = { kind, ...made, cells: [], room: [], low: made.low ?? -1 };
     if (kind.mirror) mirrored(shape);
     for (const length of shape.lengths) {
-        if (length.level && !length.loop && length.section === "block") length.bank = banked(pathOf(length));
+        if (length.level && !length.loop && !length.plain && length.section === "block") length.bank = banked(pathOf(length));
     }
     // the cells it takes up and the room it needs, from its track and its boxes
     const cells = new Map<string, Cell>();
