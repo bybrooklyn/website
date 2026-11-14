@@ -166,11 +166,38 @@ export async function startApp(host: HTMLElement, options: AppOptions) {
         const picked = chooser.files?.[0];
         chooser.value = "";
         if (!picked) return;
+        if (await takeIn(picked)) return;
         const entry = await files.add(picked).catch((error) => void editing.say("Not opened", `${picked.name} was not opened: ${error instanceof Error ? error.message : String(error)}`));
         if (!entry) return;
         if (!(await openIn(files, entry))) return;
         await showEditor();
         editing.focus();
+    });
+    /** A file some kind makes a new document of (a picture, for imgQuire): that kind's editor takes it, and the home screen makes way. True when a kind took it. */
+    async function takeIn(file: File): Promise<boolean> {
+        const taker = kinds.find((each) => each.takes?.(file));
+        if (!taker) return false;
+        if (!(await into(taker)) || !(await editing.take?.(file))) return true;
+        await showEditor();
+        editing.focus();
+        return true;
+    }
+    // a picture pasted or dropped on the home screen becomes a document of the kind that takes it; in an editor, the editor's own
+    const fileIn = (data: DataTransfer | null) => [...(data?.files ?? [])].find((file) => kinds.some((each) => each.takes?.(file)));
+    document.addEventListener("paste", (event) => {
+        const file = shelf.shown() && !event.defaultPrevented ? fileIn(event.clipboardData) : undefined;
+        if (!file) return;
+        event.preventDefault();
+        void takeIn(file);
+    });
+    host.addEventListener("dragover", (event) => {
+        if (shelf.shown() && [...(event.dataTransfer?.items ?? [])].some((item) => item.kind === "file")) event.preventDefault();
+    });
+    host.addEventListener("drop", (event) => {
+        const file = shelf.shown() ? fileIn(event.dataTransfer) : undefined;
+        if (!file) return;
+        event.preventDefault();
+        void takeIn(file);
     });
     const pickers = globalThis as unknown as { showOpenFilePicker?: (options: object) => Promise<FileHandle[]>; showDirectoryPicker?: (options: object) => Promise<FolderHandle> };
     const able = canOpen();

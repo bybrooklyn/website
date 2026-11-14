@@ -1,0 +1,43 @@
+---
+// imgQuire, the picture editor, in the same frame as mdQuire: a top of two lines, the trail
+// "charlotte [flags] / imgQuire / the document's name" with the menu words and how saving stands,
+// and under it the tools. It shares mdQuire's shelf: the same documents of both kinds, kept in the
+// same database, so a picture made here is on /mdquire/'s shelf too and the other way round. It is
+// unlisted, and kept out of search and the sitemap, until she says otherwise.
+import Document from "../layouts/Document.astro";
+import Flags from "../components/Flags.astro";
+import { site } from "../data/site";
+import "../styles/quire.css";
+import "../styles/quire-markdown.css";
+import "../styles/quire-extras.css";
+import "../styles/quire-img.css";
+---
+
+<Document title="imgQuire" description="A picture editor." unlisted bodyClass="quire-app" icon="/mdquire/icon.svg">
+    <header class="quire-top">
+        <div class="quire-top-in">
+            <div class="quire-top-line">
+                <nav class="quire-trail" aria-label="Where you are">
+                    <div class="site-id">
+                        <a class="site-name" href="/">{site.name.toLowerCase()}</a>
+                        <Flags />
+                    </div>
+                    <span class="quire-stroke quire-word-stroke" aria-hidden="true">/</span>
+                    <a class="quire-word" href="/imgquire/" aria-label="imgQuire: all documents">imgQuire</a>
+                    <span class="quire-stroke quire-name-stroke" aria-hidden="true">/</span>
+                    <span class="quire-name-home"></span>
+                </nav>
+                <div class="quire-menus-home"></div>
+                <div class="quire-status-home"></div>
+            </div>
+            <div class="quire-bar-home"></div>
+        </div>
+    </header>
+    <main id="main" tabindex="-1">
+        <div id="quire" class="quire-host"></div>
+    </main>
+</Document>
+
+<script>
+    import "../scripts/imgquire";
+</script>

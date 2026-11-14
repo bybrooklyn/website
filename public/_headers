@@ -12,9 +12,13 @@
   Content-Security-Policy: frame-ancestors 'none'
 
 # mdQuire's dictation listens through the microphone, which the rule above switches off for the
-# whole site. These pages take that header back and send one that allows the microphone to the
+# whole site. These pages (and imgQuire's, which shares their shelf and so their editor) take that header back and send one that allows the microphone to the
 # page itself and to nothing embedded in it.
 /mdquire/*
+  ! Permissions-Policy
+  Permissions-Policy: camera=(), microphone=(self), geolocation=(), payment=(), usb=(), interest-cohort=()
+
+/imgquire/*
   ! Permissions-Policy
   Permissions-Policy: camera=(), microphone=(self), geolocation=(), payment=(), usb=(), interest-cohort=()
 
@@ -23,12 +27,16 @@
   Permissions-Policy: camera=(), microphone=(self), geolocation=(), payment=(), usb=(), interest-cohort=()
 
 # mdQuire's pages are cross-origin isolated, so that the speech model can run on several threads
-# (SharedArrayBuffer needs it). Only these two paths: nothing else on the site is isolated.
+# (SharedArrayBuffer needs it). Only these paths, with imgQuire's, which can open mdQuire's documents: nothing else on the site is isolated.
 # "require-corp" rather than "credentialless" because Safari does not know the second and would
 # stay on one thread. It costs these pages nothing the page policy did not already take: images,
 # scripts, styles and fonts may only come from the site itself (the <meta> policy), and the model
 # and the GitHub and Google Drive stores are fetched with CORS, which all three answer.
 /mdquire/*
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: require-corp
+
+/imgquire/*
   Cross-Origin-Opener-Policy: same-origin
   Cross-Origin-Embedder-Policy: require-corp
 

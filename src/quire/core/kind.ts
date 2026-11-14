@@ -34,6 +34,8 @@ export interface Kind {
     files: { description: string; accept: Record<string, string[]>; chooser: string };
     /** A word said in its shelf rows beside the place, for a kind that is not the first ("note"); none for the first. */
     row?: string;
+    /** True for a file it makes a new document of when one is chosen, or pasted or dropped on the home screen (imgQuire takes pictures). */
+    takes?(file: { name: string; type: string }): boolean;
     /** Mounts its editor on the app's element, in the frame. */
     mount(host: HTMLElement, context: Context): Editing;
 }
@@ -82,6 +84,8 @@ export interface Editing {
     focus(): void;
     /** After a document started from a way to start: mdQuire selects its last line, for typing over. */
     started?(): void;
+    /** For a kind that `takes` files: makes a new document of one and opens it; false when it could not. */
+    take?(file: File): Promise<boolean>;
     destroy(): void;
 }
 
