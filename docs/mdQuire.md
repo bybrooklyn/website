@@ -143,8 +143,11 @@ clears them.
 **Checking** (`check/`). Markdown tidiness, the site's writing rules (written once in `check/tells.ts`,
 which `scripts/lint.ts` imports, so the two give the same verdict), links and pictures that lead nowhere, spelling
 against an English dictionary of its own (about 126,000 words), and prose rules with a reading score.
-Findings are faint underlines, a popover with fixes, a count and a list. Nothing of it loads until it is
-first switched on.
+Findings are faint underlines, a popover with fixes, a count and a list. Spelling is on, alone and in
+American, for a writer who has never set checking, and stays off for one who switched it off, for whom
+nothing of it loads until Tools, Checking. A right-click on a misspelled word puts its spellings first in
+the text's menu, then Add to dictionary and Ignore in this document; Tools, Personal dictionary lists the
+words added, with Remove, Download as text and Add from a text file (`spelling.md`).
 
 **Suggested words** (`suggest.ts`, `suggest-learn.ts`, `suggest-view.ts`). As Smart Compose in Gmail and
 Docs: the rest of the word being typed, or the next few words, drawn faintly after the caret. Tab takes
@@ -266,7 +269,8 @@ the choice of its own written to the file, and a new section starts in its summa
 from a right-click, the menu key or its strip's dots: rows above and below, columns left and right,
 removing the row, the column or the table, the sorts and the alignments, with what cannot act there
 dimmed (`tables.ts`). A right-click on words opens cut, copy, link, comment, bold, italic and underline
-(`text-menu.ts`); Shift with it leaves the browser's. The selection bar, a table's strip and a picture's
+(`text-menu.ts`), with a misspelled word's spellings, Add to dictionary and Ignore in this document above
+them; Shift with it leaves the browser's. The selection bar, a table's strip and a picture's
 are placed by one rule (`strips.ts`): never over what they belong to nor the line above or below it
 while the window has room. The selection bar does not come for a selection made while the keyboard is
 elsewhere, as find makes. Escape in a footnote goes back to just after its mark. A table of contents
@@ -331,7 +335,9 @@ title size.
 
 **Shortcuts.** Google Docs' everyday keyboard shortcuts.
 
-**Spelling.** To be improved, with a word list of its own. How it works now, its numbers and the questions to settle are in `spelling.md`.
+**Spelling.** To be improved, with a word list of its own. How it works now, its numbers, what was decided
+(American and on by default, a personal dictionary, her names built in, the right-click menu) and what is
+still open are in `spelling.md`.
 
 All of the above is built and on `main`. Lists are drawn as Docs draws them, and a list mark typed after a
 soft line break turns only that line into an item.

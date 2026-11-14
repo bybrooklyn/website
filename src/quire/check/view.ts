@@ -7,13 +7,19 @@
 // Checking runs in idle time, a slice at a time, after a pause in typing; the checker looks again
 // only at the blocks that changed. Keys, in the text: F8 and Shift+F8 go to the next finding and
 // the one before, Alt+Enter opens the one at the cursor.
+//
+// A right-click on a misspelled word opens the text's own menu (text-menu.ts) with the spellings
+// first, then Add to dictionary and Ignore in this document, as Docs and the browsers put them; a
+// right-click on any other finding opens its popover. Her own dictionary is listed in a dialog,
+// Personal dictionary, where a word is removed and the whole list is downloaded or added to as a
+// plain text file, one word to a line.
 
 import type { Position } from "../document";
 import { openDialog, type Dialog } from "../dialog";
-import { control, flowMenu, make } from "../ui";
+import { control, flowMenu, make, type MenuItem } from "../ui";
 import { createChecker, KINDS, ruleOn, type Context, type Finding, type Fix, type Job, type Rule, type Unit } from "./engine";
 import { loadDictionary, type Dictionary } from "./dictionary";
-import { around, byKind, findingAt, findingKey, KIND_NAMES, loadIgnored, loadOwn, loadPrefs, nextFinding, sameTogether, saveIgnored, saveOwn, savePrefs, shownFindings, type Ignored } from "./findings";
+import { around, byKind, findingAt, findingKey, KIND_NAMES, loadIgnored, loadOwn, loadPrefs, nextFinding, sameTogether, saveIgnored, saveOwn, savePrefs, shownFindings, wordsOfText, wordsText, type Ignored } from "./findings";
 import type { CheckingHost } from "./mount";
 import { readability } from "./prose";
 import { RULES } from "./rules";
@@ -82,6 +88,8 @@ export function createChecking(host: CheckingHost & { keep: CheckingHost["keep"]
     const count = control("Checking", make("span", "quire-check-number", "0"), () => (list.isOpen() ? list.close(true) : openList(count)), "quire-button quire-check-count");
     count.setAttribute("aria-haspopup", "menu");
     host.bar.querySelector(".quire-bar-end")?.prepend(count);
+    // the count grows in and out: once it has, the bar folds its tools to the room left
+    count.addEventListener("transitionend", (event) => event.propertyName === "max-width" && host.relayout?.());
     const number = count.firstElementChild as HTMLElement;
 
     const list = flowMenu("Everything found", { align: "right", className: "quire-check-list" });
@@ -185,7 +193,10 @@ export function createChecking(host: CheckingHost & { keep: CheckingHost["keep"]
     function refresh() {
         shown = prefs.on ? shownFindings(findings, ignored, keyOf, typingAt()) : [];
         paint();
+        // a number of more or fewer digits makes the count wider or narrower, and the bar is laid out again a frame later
+        const digits = number.textContent?.length;
         number.textContent = String(shown.length);
+        if (digits !== number.textContent.length || count.classList.contains("shown") !== prefs.on) requestAnimationFrame(() => host.relayout?.());
         count.setAttribute("aria-label", `Checking: ${shown.length === 0 ? "nothing found" : shown.length === 1 ? "one thing found" : `${shown.length} things found`}`);
         count.classList.toggle("shown", prefs.on);
         count.classList.toggle("clear", prefs.on && shown.length === 0);
@@ -242,6 +253,21 @@ export function createChecking(host: CheckingHost & { keep: CheckingHost["keep"]
         });
         return button;
     }
+    /** Adds a word to her dictionary: never marked again, in any document. */
+    function addWord(word: string) {
+        own.add(word);
+        saveOwn(keep, own);
+        checker.forget();
+        soon(0);
+    }
+    /** Ignores a word in this document only. */
+    function ignoreWord(word: string) {
+        ignored = { ...ignored, words: [...ignored.words, word] };
+        saveIgnored(keep, ignoredFor, ignored);
+        checker.forget();
+        refresh();
+        soon(0);
+    }
     function card(finding: Finding): HTMLElement {
         const body = make("div", "quire-check-card");
         body.setAttribute("role", "dialog");
@@ -258,19 +284,8 @@ export function createChecking(host: CheckingHost & { keep: CheckingHost["keep"]
         if (finding.word) {
             const word = finding.word;
             more.append(
-                action("Add to dictionary", () => {
-                    own.add(word);
-                    saveOwn(keep, own);
-                    checker.forget();
-                    soon(0);
-                }),
-                action("Ignore in this document", () => {
-                    ignored = { ...ignored, words: [...ignored.words, word] };
-                    saveIgnored(keep, ignoredFor, ignored);
-                    checker.forget();
-                    refresh();
-                    soon(0);
-                }),
+                action("Add to dictionary", () => addWord(word)),
+                action("Ignore in this document", () => ignoreWord(word)),
             );
         } else
             more.append(
@@ -317,15 +332,34 @@ export function createChecking(host: CheckingHost & { keep: CheckingHost["keep"]
         const found = findingAt(shown, focus);
         if (found && found.range.end.offset - found.range.start.offset <= 60) openPop(found, false);
     };
-    // a right click on an underline opens its popover: with these marks on, the browser's own menu has no spelling to offer
+    /** The finding under a point on screen, of those short enough to be pressed. */
+    const findingUnder = (x: number, y: number, kinds?: Finding["kind"][]) => {
+        const inside = (box: DOMRect) => x >= box.left && x <= box.right && y >= box.top && y <= box.bottom;
+        return shown.find((one) => (!kinds || kinds.includes(one.kind)) && one.range.end.offset - one.range.start.offset <= 60 && [...(surface.rangeOf(one.range.start, one.range.end)?.getClientRects() ?? [])].some(inside));
+    };
+    // a right click on an underline other than a misspelling opens its popover; a misspelling's spellings come first in the text's own menu (linesAt)
     const onMenu = (event: MouseEvent) => {
-        if (!prefs.on) return;
-        const inside = (box: DOMRect) => event.clientX >= box.left && event.clientX <= box.right && event.clientY >= box.top && event.clientY <= box.bottom;
-        const found = shown.find((one) => one.range.end.offset - one.range.start.offset <= 60 && [...(surface.rangeOf(one.range.start, one.range.end)?.getClientRects() ?? [])].some(inside));
-        if (!found) return;
+        if (!prefs.on || event.shiftKey) return;
+        const found = findingUnder(event.clientX, event.clientY);
+        if (!found || found.kind === "spelling") return;
         event.preventDefault();
         openPop(found, true);
     };
+    /**
+     * The lines a misspelled word puts at the top of the text's menu: its spellings (drawn strong, up
+     * to five, or a line saying there are none), Add to dictionary and Ignore in this document. At a
+     * point pressed, or at the caret for the menu key. None anywhere else.
+     */
+    function linesAt(at?: { x: number; y: number }): { lines: MenuItem[]; strong: number } {
+        if (!prefs.on) return { lines: [], strong: 0 };
+        const found = at ? findingUnder(at.x, at.y, ["spelling"]) : findingAt(shown.filter((one) => one.kind === "spelling"), surface.getSelection().focus);
+        const word = found?.word;
+        if (!found || !word) return { lines: [], strong: 0 };
+        const fixes = [...found.fixes, ...(found.suggest?.() ?? [])].slice(0, 5);
+        const lines: MenuItem[] = fixes.length ? fixes.map((fix) => ({ label: fix.label, run: () => run(fix, found) })) : [{ label: "No suggestions", note: true, run: () => {} }];
+        lines.push({ label: "Add to dictionary", run: () => addWord(word) }, { label: "Ignore in this document", run: () => ignoreWord(word) });
+        return { lines, strong: fixes.length };
+    }
     const onKey = (event: KeyboardEvent) => {
         if (!prefs.on) return;
         if (event.key === "F8" && !event.ctrlKey && !event.altKey && !event.metaKey) {
@@ -480,6 +514,10 @@ export function createChecking(host: CheckingHost & { keep: CheckingHost["keep"]
         });
         dialect.append(make("span", "", "Spelling"), choose);
         numbers.append(dialect);
+        const words = make("button", "quire-button quire-check-action quire-check-own", "Personal dictionary");
+        words.type = "button";
+        words.addEventListener("click", () => openDictionary(words));
+        numbers.append(words);
         body.append(numbers);
         return body;
     }
@@ -499,6 +537,93 @@ export function createChecking(host: CheckingHost & { keep: CheckingHost["keep"]
         });
     }
 
+    // ---- her own dictionary ----
+    let dictionaryDialog: Dialog | undefined;
+    /** The words, each with Remove, or a line saying there are none yet. */
+    function dictionaryList(): HTMLElement {
+        const words = [...own].sort((a, b) => a.localeCompare(b, "en", { sensitivity: "base" }));
+        if (!words.length) return make("p", "quire-own-none", "No words yet. Right-click a word marked as misspelled and choose Add to dictionary.");
+        const list = make("ul", "quire-own-list");
+        list.setAttribute("aria-label", "Your words");
+        for (const word of words) {
+            const line = make("li", "quire-own-word");
+            const remove = make("button", "quire-button quire-own-remove", "Remove");
+            remove.type = "button";
+            remove.setAttribute("aria-label", `Remove ${word}`);
+            remove.addEventListener("click", () => {
+                const near = (line.nextElementSibling ?? line.previousElementSibling)?.querySelector<HTMLElement>(".quire-own-remove")?.getAttribute("aria-label");
+                own.delete(word);
+                saveOwn(keep, own);
+                checker.forget();
+                soon(0);
+                if (dictionaryDialog) dictionaryDialog.change(() => showWords());
+                // the keyboard goes on to the word that took its place
+                const buttons = [...(dictionaryDialog?.body.querySelectorAll<HTMLElement>("button") ?? [])];
+                (buttons.find((button) => button.getAttribute("aria-label") === near) ?? buttons[0] ?? dictionaryDialog?.actions.querySelector<HTMLElement>("button"))?.focus({ preventScroll: true });
+            });
+            line.append(make("span", "quire-own-text", word), remove);
+            list.append(line);
+        }
+        return list;
+    }
+    /** Draws the list again, and says how many words there are, or what an import did. */
+    function showWords(said?: string) {
+        const dialog = dictionaryDialog;
+        if (!dialog) return;
+        const holder = dialog.body.querySelector(".quire-own-holder");
+        const count = dialog.body.querySelector(".quire-own-count");
+        if (count) count.textContent = said ?? (own.size === 0 ? "" : own.size === 1 ? "One word." : `${own.size.toLocaleString("en")} words.`);
+        holder?.replaceChildren(dictionaryList());
+    }
+    /** Personal dictionary: her words listed, each with Remove, and the list downloaded or added to as a plain text file. */
+    function openDictionary(from: HTMLElement) {
+        const intro = make("p", "quire-own-intro", "Words here are never marked as misspelled, in any document. They are kept in this browser.");
+        const count = make("p", "quire-own-count");
+        count.setAttribute("role", "status");
+        const holder = make("div", "quire-own-holder");
+        const chooser = make("input", "quire-file");
+        chooser.type = "file";
+        chooser.accept = ".txt,text/plain";
+        chooser.tabIndex = -1;
+        chooser.setAttribute("aria-hidden", "true");
+        chooser.addEventListener("change", async () => {
+            const file = chooser.files?.[0];
+            chooser.value = "";
+            if (!file) return;
+            // a file far larger than any list of words is not read
+            if (file.size > 2_000_000) return showWords("That file is too large to be a list of words.");
+            const before = own.size;
+            for (const word of wordsOfText(await file.text())) own.add(word);
+            saveOwn(keep, own);
+            checker.forget();
+            soon(0);
+            const added = own.size - before;
+            dictionaryDialog?.change(() => showWords(added === 0 ? "No new words in that file." : added === 1 ? "One word added." : `${added.toLocaleString("en")} words added.`));
+        });
+        dictionaryDialog = openDialog(from, {
+            title: "Personal dictionary",
+            className: "quire-own-dialog",
+            body: [intro, count, holder, chooser],
+            returnTo: from.isConnected ? from : undefined,
+            action: { label: "Done", press: (_, dialog) => void dialog.close() },
+            others: [
+                {
+                    label: "Download as text",
+                    press: () => {
+                        const link = make("a");
+                        link.href = URL.createObjectURL(new Blob([wordsText(own)], { type: "text/plain" }));
+                        link.download = "dictionary.txt";
+                        link.click();
+                        setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+                    },
+                },
+                { label: "Add from a text file", press: () => chooser.click() },
+            ],
+            onClose: () => (dictionaryDialog = undefined),
+        });
+        showWords();
+    }
+
     /** Spelling and grammar, from Tools: what was found, switching checking on the first time. */
     function openResults(from: HTMLElement) {
         if (!prefs.on) {
@@ -512,6 +637,8 @@ export function createChecking(host: CheckingHost & { keep: CheckingHost["keep"]
     return {
         openSettings,
         openResults,
+        openDictionary,
+        linesAt,
         /** The findings shown now, for tests. */
         findings: () => shown,
         destroy() {
@@ -527,6 +654,7 @@ export function createChecking(host: CheckingHost & { keep: CheckingHost["keep"]
             surface.element.spellcheck = spellcheckWas;
             for (const menu of [list, pop]) menu.box.remove();
             void settingsDialog?.close();
+            void dictionaryDialog?.close();
             anchor.remove();
             count.remove();
         },

@@ -421,7 +421,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         more,
     });
     // checking (src/quire/check/): underlines, a count at the bar's end, and its settings from Tools
-    const checking = mountChecking({ surface, bar: bar.element, where: () => ({ store, id, name }) });
+    const checking = mountChecking({ surface, bar: bar.element, where: () => ({ store, id, name }), relayout: () => bar.layout() });
     // ---- find and replace, from its button, the Edit menu, Ctrl+F and Ctrl+H ----
     const find = createFind(surface, paper, () => bar.element.getBoundingClientRect().bottom);
     // dictation: a microphone at the end of the bar after the three dots, the shortcut, and its lines in the three-dot menu (src/quire/dictation/)
@@ -871,14 +871,14 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
                 searchMenus: () => bar.search(),
                 // the slash menu opens on the first five again
                 forgetUsed: () => (remember(), bar.setStatus("Forgotten", "What you use most is forgotten: the slash menu opens on its first five again")),
-                tools: () => [...dictation.items(row.words[5]!), ...suggestions.items()],
+                tools: () => [{ label: "Personal dictionary", run: () => checking.dictionary(row.words[5]!) }, ...dictation.items(row.words[5]!), ...suggestions.items()],
                 ...moreCommands(surface, { doing, word: (index) => row.words[index]!, title: () => title.focus() }),
                 selectMatching: () => matching.start(),
     };
     // the command palette: the menus' lines and what fits where the cursor is, from the bottom left corner or a slash on an empty line (palette.ts)
     const palette = createPalette(surface, { menus: () => row.headings(), table: tableTools.lines, picture: pictureTools.lines, pickImage: bar.pickImage, corner: host });
     // a right-click in the text, or the menu key, opens the menus' own lines for it there
-    const textMenu = createTextMenu(surface, () => row.headings());
+    const textMenu = createTextMenu(surface, () => row.headings(), (at) => checking.linesAt(at));
     const row = createMenuRow(() =>
         headings(
             { rich: !!surface.getDocument().quire, contents: !!findContents(surface.getDocument()), matches: () => matchingSpots({ doc: surface.getDocument(), selection: surface.getSelection() }).length, paged: pages.paged(), look, outline: outlineView.isOpen(), markdown: host.classList.contains("markdown"), words: countWords(surface.getDocument()), full, counting: counter.shown(), align: aligned(surface.getDocument(), surface.getSelection().focus.path) },

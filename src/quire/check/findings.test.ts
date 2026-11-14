@@ -4,7 +4,7 @@
 
 import { expect, test } from "bun:test";
 import { DEFAULTS, type Finding } from "./engine";
-import { around, byKind, compare, sameTogether, findingAt, findingKey, loadIgnored, loadOwn, loadPrefs, nextFinding, saveIgnored, saveOwn, savePrefs, shownFindings, type Keep } from "./findings";
+import { around, byKind, cleanWords, compare, FIRST_KINDS, MOST_OWN, sameTogether, findingAt, findingKey, loadIgnored, loadOwn, loadPrefs, nextFinding, saveIgnored, saveOwn, savePrefs, shownFindings, wordsOfText, wordsText, type Keep } from "./findings";
 
 const finding = (path: number[], from: number, to: number, kind: Finding["kind"] = "spelling", word?: string): Finding => ({ rule: kind === "spelling" ? "spelling" : "prose-repeat", kind, severity: "mistake", range: { start: { path, offset: from }, end: { path, offset: to } }, message: "", fixes: [], word });
 const at = (path: number[], offset: number) => ({ path, offset });
@@ -57,19 +57,40 @@ test("findings are grouped by kind in the list's order", () => {
 
 test("settings, her words and what is ignored are kept, and anything kept wrongly is put back", () => {
     const keep = memory();
-    expect(loadPrefs(keep)).toEqual({ on: false, settings: DEFAULTS });
+    // a writer who never set checking has spelling on, alone, in American
+    expect(loadPrefs(keep)).toEqual({ on: true, settings: { ...DEFAULTS, kinds: FIRST_KINDS } });
+    expect(FIRST_KINDS).toEqual({ spelling: true, prose: false, markdown: false, link: false });
     savePrefs(keep, { on: true, settings: { ...DEFAULTS, sentence: 25, dialect: "gb", rules: { "prose-passive": true } } });
     expect(loadPrefs(keep)).toEqual({ on: true, settings: { ...DEFAULTS, sentence: 25, dialect: "gb", rules: { "prose-passive": true } } });
     keep.setItem("quire-check", JSON.stringify({ on: "yes", settings: { sentence: -3, dialect: "fr", kinds: { spelling: "no", prose: false }, rules: { x: 1 } } }));
-    expect(loadPrefs(keep)).toEqual({ on: false, settings: { ...DEFAULTS, kinds: { ...DEFAULTS.kinds, prose: false } } });
+    expect(loadPrefs(keep)).toEqual({ on: true, settings: { ...DEFAULTS, kinds: { ...DEFAULTS.kinds, prose: false } } });
     keep.setItem("quire-check", "not json");
+    expect(loadPrefs(keep).on).toBe(true);
+    // whoever turned it off keeps it off
+    savePrefs(keep, { on: false, settings: DEFAULTS });
     expect(loadPrefs(keep).on).toBe(false);
     saveOwn(keep, new Set(["wgpu", "iroh"]));
     expect([...loadOwn(keep)]).toEqual(["iroh", "wgpu"]);
     saveIgnored(keep, "Browser:one", { words: ["teh"], findings: ["rule:x"] });
     expect(loadIgnored(keep, "Browser:one")).toEqual({ words: ["teh"], findings: ["rule:x"] });
     expect(loadIgnored(keep, "Browser:two")).toEqual({ words: [], findings: [] });
-    expect(loadPrefs(undefined).on).toBe(false);
+    expect(loadPrefs(undefined).on).toBe(true);
+});
+
+test("her dictionary keeps only words: trimmed, each once, no spaces or control characters, none too long", () => {
+    expect(cleanWords([" wgpu ", "iroh", "iroh", "", "two words", "tab\tbed", "x".repeat(65), 7, null, "naïve", "zero\u200bwidth"])).toEqual(["wgpu", "iroh", "naïve"]);
+    expect(cleanWords(Array.from({ length: MOST_OWN + 50 }, (_, index) => `w${index}`))).toHaveLength(MOST_OWN);
+    const keep = memory();
+    keep.setItem("quire-check-words", JSON.stringify({ words: ["fine", { evil: true }, "has space", "  ok  "] }));
+    expect([...loadOwn(keep)]).toEqual(["fine", "ok"]);
+    keep.setItem("quire-check-words", JSON.stringify({ words: "not a list" }));
+    expect([...loadOwn(keep)]).toEqual([]);
+});
+
+test("her dictionary as a text file: one word to a line, sorted, and read back from lines, commas or tabs", () => {
+    expect(wordsText(["wgpu", "Iroh", "apple"])).toBe("apple\nIroh\nwgpu\n");
+    expect(wordsOfText("\uFEFFwgpu\r\niroh\n\n  Bazzite  \nlimine,ryzen\tollama\nnot a word\n")).toEqual(["wgpu", "iroh", "Bazzite", "limine", "ryzen", "ollama"]);
+    expect(wordsOfText(wordsText(["b", "a"]))).toEqual(["a", "b"]);
 });
 
 test("ignoring one finding ignores that one, not every finding of its rule with the same words; keys kept before still work", () => {

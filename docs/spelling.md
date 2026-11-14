@@ -1,20 +1,24 @@
 # Spelling in mdQuire
 
-How mdQuire's spelling check works today, how well it does, what its word list holds and lacks, and the
-questions to settle before it is rebuilt around a dictionary of the site's own (`mdQuire.md`, "Decided,
-not yet built"). Nothing here is a decision. The numbers were measured on 13 November 2026, on `main`
-as it was that night ("before") and after that night's fixes ("after"); how is under "How it was
-measured".
+How mdQuire's spelling check works today, how well it does, what its word list holds and lacks, what
+she decided about it on 13 November 2026 (American and on by default, a personal dictionary she can see,
+her names known from the start, the spellings first in the right-click menu), and the questions still
+open. The numbers were measured on 13 November 2026, on `main` as it was that night ("before") and after
+that night's fixes ("after"); how is under "How it was measured".
 
 ## Where the code is
 
 - `src/quire/check/dictionary.ts`: unpacks the word list, says whether a word is known, and suggests.
 - `src/quire/check/spelling.ts`: the rule, the speller it asks, and what is never checked.
 - `src/quire/check/text.ts`: where the words of a block are (Unicode's word boundaries).
-- `src/quire/check/names.ts`: about sixty names of the site's (projects, tools, places).
+- `src/quire/check/names.ts`: about sixty names of the site's (her name, her projects', tools, places): the
+  small built-in list, known in every document from the start.
 - `src/quire/check/withheld.ts`: words that stay known but are never suggested (slurs, explicit words).
 - `scripts/dictionary.ts`: builds `public/quire/words-en.dat` and its licence from SCOWL, by hand.
-- `src/quire/check/view.ts`: the underlines, the popover, "Add to dictionary" and "Ignore".
+- `src/quire/check/view.ts`: the underlines, the popover, "Add to dictionary" and "Ignore", the lines a
+  misspelling puts first in the text's right-click menu, and the Personal dictionary dialog.
+- `src/quire/check/findings.ts`: what is kept in the browser (whether checking is on, her own words, what
+  is ignored), and the cleaning every word of her dictionary passes through.
 
 ## How it works now
 
@@ -41,13 +45,31 @@ word. Two words run together are offered apart only when both halves are among t
 Withheld words are never offered. Up to five are shown.
 
 **The country** is American unless chosen otherwise in the checking settings; there is no "both" and no
-per-document language. Spelling is off until checking is switched on (Tools, Checking); while it is on,
-the browser's own checker is off for the document, and if the word list does not load the browser's
-checker is put back and the list of findings says so.
+per-document language.
 
-**What she can teach it.** "Add to dictionary" keeps a word in this browser for good (`localStorage`,
-`quire-check-words`); nothing shows or removes those words. "Ignore in this document" keeps a word per
-document, also for good and also unlisted. There is no "ignore once".
+**On from the start.** A writer who has never set checking has it on, with spelling alone (the other
+kinds, Markdown tidiness, links and pictures, and writing, wait until she switches them on in the
+settings), so a misspelling is underlined from the first document. Whoever switched checking off keeps
+it off (`quire-check` kept with `on: false`), and for her nothing of checking loads until Tools, Checking.
+The word list (230 KB, fetched once and then cached by the browser) is fetched when the editor opens.
+While spelling is on, the browser's own checker is off for the document; if the word list does not load
+the browser's checker is put back and the list of findings says so.
+
+**The right-click menu.** A right-click on a misspelled word opens the text's own menu (`text-menu.ts`)
+with, at the top as Docs and the browsers have them, its spellings in strong type (up to five, or "No
+suggestions"), then Add to dictionary and Ignore in this document, a rule, and then Cut, Copy and the
+rest. The menu key or Shift+F10 does the same at the caret. A right-click on any other finding still
+opens its popover; Shift with the right-click is the browser's own menu.
+
+**What she can teach it.** "Add to dictionary" (in the right-click menu and the popover) keeps a word in
+this browser for good (`localStorage`, `quire-check-words`, every word read back cleaned: trimmed, one to
+64 characters, no space or control character, at most 20,000). Tools, Personal dictionary (also a button
+in the checking settings) is a dialog listing her words in order, each with Remove, with Download as text
+(`dictionary.txt`, one word to a line) and Add from a text file (one word to a line, or parted by commas
+or tabs; anything that is not a word is passed over, and it says how many were added). Her names and her
+projects' (`names.ts`: Charlotte, bybrooklyn, mdQuire, imgQuire, Playmatter, Mote, Torrens and the rest)
+are known from the start without being in her list. "Ignore in this document" keeps a word per document,
+also for good and still unlisted. There is no "ignore once".
 
 ## The numbers
 
@@ -120,52 +142,53 @@ after): right words it flags, grouped:
   technology words, words from the last ten years, most identity words beyond the handful added by hand,
   most accented loanwords and names, informal contractions and internet slang.
 
-## Questions to settle
+## Decided
+
+1. **American, British or both?** American, as it was; British stays a choice in the checking settings.
+   Both, and a choice per document, were not taken.
+2. **On or off by default?** On, with spelling alone, for a writer who has never set checking; whoever
+   switched it off keeps it off. The cost is the 230 KB word list fetched when mdQuire first opens a
+   document in a browser, then cached.
+3. **A personal dictionary.** Kept in the browser, listed in Personal dictionary with Remove, and exported
+   and imported as a plain text file, one word to a line. It is not kept in the document or in the
+   repository: a word she adds is known in every document in this browser, and another browser has its
+   own (the text file carries it there).
+4. **Names.** A small built-in list, `names.ts`, of her name, her projects' (mdQuire, imgQuire, Playmatter,
+   Mote), the typefaces (Torrens, Fraunces) and the tools and places she writes about, known in every
+   document from the start; add to it as she names new things. Names are not learned from the document.
+5. **The browser's own checker alongside.** Settled by the two above: spelling being on from the start,
+   the browser's checker is off in the document from the start too (two sets of underlines would
+   disagree), and is put back only where the word list fails to load. It still checks the title and the
+   fields (caption, alt text, components), which mdQuire's does not.
+
+## Still open
 
 Each with its options and what it would cost.
 
-1. **American, British or both?**
-   - American (as now): her British spellings (maths, colours, metres) are flagged.
-   - British: her American ones (color, catalog, center) are flagged.
-   - Both, accepting either: no false alarms from country, at the cost of missing a mix within one word's
-     family; "a word spelled two ways" (which today only works in British, the one country whose list
-     holds both of a pair) could then mark a document that mixes them. Small change: the list already
-     carries both.
-   - Chosen per document (below).
-2. **On or off by default?** Today checking is off until switched on, and the browser's own checker is
-   what she sees until then. On by default would fetch 230 KB on every first visit to mdQuire and show
-   underlines at once; off keeps the page light and leaves spelling to the browser.
-3. **A personal dictionary.** Today "Add to dictionary" is for good, per browser, unlisted, with no way
-   back. Options: a list in the settings with remove (small); kept in the browser (as now), in the
-   document (it travels with the file, as a `.quire` part or a frontmatter line), or both; exported and
-   imported as a text file (small); kept in the repository for the site's own pages under `bun run edit`
-   (a file such as `src/quire/check/words.txt`, built into the list).
-4. **"Ignore once" against "ignore in this document".** Today only the second exists and it is permanent
+1. **"Ignore once" against "ignore in this document".** Today only the second exists and it is permanent
    and unlisted. "Ignore once" (forgotten when the document closes) is a button and a set kept in memory;
    a list of what is ignored, with undo, is a little more.
-5. **A per-document language.** Read from frontmatter (`lang: en-GB`) or chosen in the document's
+2. **A per-document language.** Read from frontmatter (`lang: en-GB`) or chosen in the document's
    settings; a document in another language could switch spelling off rather than flag every word.
    Small for English variants; another language needs another word list (below).
-6. **A bigger or a second word list.** SCOWL's size 70 adds roughly 40,000 rarer words and size 80 roughly
+3. **A bigger or a second word list.** SCOWL's size 70 adds roughly 40,000 rarer words and size 80 roughly
    125,000 more (about 75 KB and 230 KB more on the wire, by the current file's bytes a word); each makes
    a misspelling more likely to be "a word" by accident. A second list of the site's own (names,
    technology, identity, recent words) is small (a few thousand words, a few KB) and is what the rebuild
    is meant to be; it could be built from the site's content at build time. Accented words: SCOWL has
    lists of them the build does not read today.
-7. **Names.** A list of the site's own (today about sixty, by hand in `names.ts`; her posts name about
-   fifty more), built from her content at build time, or learned from the document (a capitalised word
-   used three times is taken as a name), or both. Learning hides real misspellings of names.
-8. **Phonetic suggestions.** Today only seven sound-alike letter pairs: fone, nolej, enuff, bizness and
+4. **More names.** Her posts name about fifty more than `names.ts` holds (the tools and people above):
+   added by hand, or built from her content at build time. Learning them from the document (a capitalised
+   word used three times taken as a name) hides real misspellings of names.
+5. **Phonetic suggestions.** Today only seven sound-alike letter pairs: fone, nolej, enuff, bizness and
    skool get nothing (10 of 30 sound-spelled words absent). A phonetic key (a Metaphone written here)
    would add a second index of about the list's size in memory and a few ms a suggestion.
-9. **Grammar beyond spelling.** Today: a word twice, long sentences and paragraphs, stock phrases, weak
+6. **Grammar beyond spelling.** Today: a word twice, long sentences and paragraphs, stock phrases, weak
    openings, the passive (off), adverbs piled up, quotation marks of two kinds, small first letters.
    More (agreement, its and it's, their and there, a and an) is rule by rule, each with false alarms to
    weigh.
-10. **The browser's own checker alongside.** Today it is off wherever mdQuire's spelling is on, and back
-   on if the list fails to load. Both at once draws two sets of underlines that disagree; the browser's
-   alone cannot be taught her words and differs by browser and system. It still checks the title and
-   the fields (caption, alt text, components), which mdQuire's does not.
+7. **The other kinds by default.** A new writer has spelling alone; whether Markdown tidiness, links and
+   pictures, or the writing rules should also start on.
 
 Also to settle with the above: whether words in all capitals or with a capital inside should be checked
 (RECIEVE, TEh are never flagged today), whether hyphenated words should be accepted when the joined form
