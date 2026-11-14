@@ -9,7 +9,7 @@ const folder = fileURLToPath(new URL("../public/wasm/", import.meta.url));
 describe("engine versions", () => {
     test("every engine in public/wasm has a version of twelve hex digits", () => {
         const versions = versionsOf(folder);
-        expect([...versions.keys()].sort()).toEqual(["generalist-scalar.wasm", "generalist.wasm", "walker-scalar.wasm", "walker.wasm"]);
+        expect([...versions.keys()].sort()).toEqual(["generalist-scalar.wasm", "generalist.wasm", "sand-scalar.wasm", "sand.wasm", "walker-scalar.wasm", "walker.wasm"]);
         for (const version of versions.values()) expect(version).toMatch(/^[0-9a-f]{12}$/);
     });
 

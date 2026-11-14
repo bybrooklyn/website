@@ -38,3 +38,6 @@ walker/target/
 
 # a file the editor is part way through saving (written beside the real one, then moved over it)
 *.saving
+
+# the sand engine's build folder
+sand/target/
