@@ -67,10 +67,10 @@ export const FORMATS: Format[] = [
     { key: "jpeg", label: "JPEG", short: "JPEG", tip: "Photographs, opened by anything", type: "image/jpeg", ending: ".jpg", lossy: true, encode: coded("jpegli", "image/jpeg", 0, {}, true, browser("image/jpeg")) },
     { key: "webp", label: "WebP", short: "WebP", tip: "Photographs on the web, smaller than JPEG", type: "image/webp", ending: ".webp", lossy: true, encode: coded("webp", "image/webp", 4, {}, false, browser("image/webp")) },
     { key: "avif", label: "AVIF", short: "AVIF", tip: "The smallest photographs, slower to make", type: "image/avif", ending: ".avif", lossy: true, encode: coded("avif", "image/avif", 8) },
-    { key: "jxl", label: "JPEG XL", short: "JPEG XL", tip: "Small and sharp; not every browser shows it", type: "image/jxl", ending: ".jxl", lossy: true, encode: coded("jxl", "image/jxl", 3) },
+    { key: "jxl", label: "JPEG XL", short: "JXL", tip: "Small and sharp; not every browser shows it", type: "image/jxl", ending: ".jxl", lossy: true, encode: coded("jxl", "image/jxl", 3) },
     { key: "png", label: "PNG", short: "PNG", tip: "Screenshots, every pixel kept, opened by anything", type: "image/png", ending: ".png", lossy: false, encode: coded("oxipng", "image/png", 2, {}, false, browser("image/png")) },
     { key: "webp-lossless", label: "WebP lossless", short: "WebP", tip: "Screenshots, every pixel kept, smaller than PNG", type: "image/webp", ending: ".webp", lossy: false, encode: coded("webp", "image/webp", 6, { 0: 1 }) },
-    { key: "jxl-lossless", label: "JPEG XL lossless", short: "JPEG XL", tip: "Every pixel kept, the smallest; not every browser shows it", type: "image/jxl", ending: ".jxl", lossy: false, encode: coded("jxl", "image/jxl", 3, { 0: 1 }) },
+    { key: "jxl-lossless", label: "JPEG XL lossless", short: "JXL", tip: "Every pixel kept, the smallest; not every browser shows it", type: "image/jxl", ending: ".jxl", lossy: false, encode: coded("jxl", "image/jxl", 3, { 0: 1 }) },
 ];
 
 /** A format by its key, PNG if there is no such one. */

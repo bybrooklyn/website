@@ -153,10 +153,10 @@ test("on the built /imgquire/ page, a pasted HEIC photograph is read by its modu
         await tab.press("e");
         await until("document.querySelector('.quire-img-export.open')");
         const made: string[] = [];
-        for (const label of ["JPEG", "WebP", "AVIF", "JPEG XL", "PNG"]) {
+        for (const [label, word] of [["JPEG", "JPEG"], ["WebP", "WebP"], ["AVIF", "AVIF"], ["JXL", "JPEG XL"], ["PNG", "PNG"]]) {
             const before = await tab.run<string>("document.querySelector('.quire-img-result')?.textContent ?? ''");
             await tab.run(`[...document.querySelectorAll('.quire-img-format')].find((each) => each.textContent === ${JSON.stringify(label)}).click()`);
-            const ending = label === "JPEG XL" ? "JPEG XL" : label;
+            const ending = word;
             await until(`(document.querySelector('.quire-img-result')?.textContent ?? '').endsWith(${JSON.stringify(` ${ending}`)}) && document.querySelector('.quire-img-result').textContent !== ${JSON.stringify(before)}`);
             made.push(await tab.run<string>("document.querySelector('.quire-img-result').textContent"));
         }
