@@ -634,7 +634,14 @@ export function mountEditor(host: HTMLElement, context: Context) {
                     [{ label: "Export", icon: "export", hint: "E", key: "export-tool", disabled: !picture, run: () => showExportPanel() }],
                 ),
         },
-        { label: "Help", items: () => [{ label: "Keyboard shortcuts", icon: "keyboard", hint: "Ctrl+/", key: "shortcuts", run: () => showKeys() }] },
+        {
+            label: "Help",
+            items: () => [
+                { label: "Keyboard shortcuts", icon: "keyboard", hint: "Ctrl+/", key: "shortcuts", run: () => showKeys() },
+                // the copyright and license texts of the encoders built into the page, beside them
+                { label: "Open-source notices", icon: "file", key: "notices", run: () => void window.open("/quire/codecs/NOTICES.txt", "_blank", "noopener") },
+            ],
+        },
     ]);
 
     /** Edit, Paste: the browser's clipboard if it lets the page read it, else the keys to press. */
