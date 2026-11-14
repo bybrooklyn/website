@@ -585,8 +585,14 @@
     visibility: hidden;
 }
 
-/* on a phone the bar's nine tools fit without sliding: the rules between their groups come closer */
+/* on a phone the bar's ten tools fit without sliding: each a little narrower, and the rules between
+   their groups closer, so that none goes under the ones kept at the end */
 @media (max-width: 40rem) {
+    .quire-img-bar .quire-button {
+        min-width: 2rem;
+        padding: 0 0.25rem;
+    }
+
     .quire-img-bar .quire-bar-group + .quire-bar-group {
         margin-left: 0.15rem;
         padding-left: 0.15rem;
