@@ -21,8 +21,8 @@ export interface CorePage {
     close(): Promise<void>;
 }
 
-/** Builds a page on a script and opens it, or gives undefined where there is no Chromium. `body` is the page's HTML before the script. */
-export async function corePage(script: string, options: { body?: string; width?: number; height?: number } = {}): Promise<CorePage | undefined> {
+/** Builds a page on a script and opens it, or gives undefined where there is no Chromium. `body` is the page's HTML before the script; `args` go to Chromium (WebGPU wants `--enable-unsafe-webgpu` headless). */
+export async function corePage(script: string, options: { body?: string; width?: number; height?: number; args?: string[] } = {}): Promise<CorePage | undefined> {
     if (!chromium()) return undefined;
     const folder = await mkdtemp(join(tmpdir(), "quire-core-"));
     try {
@@ -32,7 +32,7 @@ export async function corePage(script: string, options: { body?: string; width?:
         const theme = ":root{--ground:oklch(0.16 0.035 300);--surface:oklch(0.21 0.045 300);--rule:oklch(0.32 0.055 300);--ink:oklch(0.93 0.02 300);--muted:oklch(0.73 0.045 300);--accent:oklch(0.77 0.16 300)}";
         const css = (await Promise.all(["tokens.css", "base.css", "prose.css", "quire.css", "quire-markdown.css", "quire-extras.css"].map((name) => Bun.file(`${styles}/${name}`).text()))).join("\n");
         await Bun.write(`${folder}/page.html`, `<!doctype html><meta charset="utf-8"><style>${css}${theme}</style><body class="quire-app">${options.body ?? '<div id="host" class="quire-host"></div>'}<script type="module">${await built.outputs[0]!.text()}</script></body>`);
-        const tab = await browser({ width: options.width ?? 1300, height: options.height ?? 800 });
+        const tab = await browser({ width: options.width ?? 1300, height: options.height ?? 800, args: options.args });
         try {
             await tab.open(`file://${folder}/page.html`, 300);
         } catch (error) {
