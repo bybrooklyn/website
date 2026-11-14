@@ -15,7 +15,7 @@ import { isContentsMark, slug } from "./inserts";
 import { isPageBreak } from "./document";
 import { write } from "./write";
 import { cleanHtml, cleanTag, safeAddress, safeValue } from "./html";
-import { pictureType } from "./pictures";
+import { pictureType } from "../core/picture-bytes";
 
 // ---- Markdown ----
 

@@ -53,7 +53,7 @@ import { maths } from "./maths";
 import { namesIn } from "./check/names";
 import { bookmarkName } from "./bookmarks";
 import { afterField, freshFold, type FieldKind } from "./fields";
-import { finishes } from "../core/ui";
+import { altGraph, finishes, type Pressed } from "../core/ui";
 import { webAddress } from "./link-card";
 
 /** What the host gives the surface. `onImage` stores a pasted or dropped picture and gives back its address. */
@@ -120,19 +120,6 @@ export interface Surface {
 
 const MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
 
-/** The parts of a key press the surface reads to tell a shortcut from typing. */
-type Pressed = Pick<KeyboardEvent, "key" | "code" | "ctrlKey" | "altKey" | "metaKey"> & { getModifierState?: (key: string) => boolean };
-
-/**
- * Whether a key press is AltGr typing a character, which is never a shortcut. Windows reports AltGr
- * as Ctrl and Alt held together, so on French, Spanish, German and many other layouts @, #, {, [, |,
- * \, ~ and € arrive as Ctrl+Alt with a digit or letter; what tells them apart from a shortcut is that
- * the key then types a character that is not a plain letter or digit.
- */
-export function altGraph(event: Pressed, mac = MAC): boolean {
-    if (event.getModifierState?.("AltGraph")) return true;
-    return !mac && event.ctrlKey && event.altKey && !event.metaKey && [...event.key].length === 1 && !/^[a-z0-9]$/i.test(event.key);
-}
 
 /**
  * The key a shortcut is matched by. A letter is the letter the key types on this layout, so that

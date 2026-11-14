@@ -7,7 +7,7 @@
 import { expect, test } from "bun:test";
 import { addComment, changeComment, commentAt, deleteComment, inOrder, nextComment, notesData, spansOf, withNotes } from "./comments";
 import { deleteText, insertText, splitBlock, toggleMark, type Document } from "./document";
-import { opened, written } from "../core/quire-file";
+import { opened, written } from "./quire-parts";
 import { read } from "./read";
 import { write } from "./write";
 

@@ -1,32 +1,31 @@
-// mdQuire as a whole, as its public page shows it: the editor, writing to a document in one of the
-// places documents can live, with the documents list growing out of the name in the bar, the way
+// The app every Quire is: a kind of document's editor (kind.ts) writing to a document in one of the
+// places documents can live, with the documents list growing out of the name in the trail, the way
 // to open a file or a folder, and the form that connects a GitHub repository. With nothing open it
-// shows the home screen (shelf.ts): ways to start something new and the recent documents from
-// every place, a row each, each opening by growing out of its row. The document the writer was in is
-// remembered in this browser and opened again next time; leaving it for the home screen forgets it.
+// shows the home screen (shelf.ts): every kind's ways to start something new and the recent
+// documents of every kind from every place, a row each, each opening by growing out of its row.
+// Opening a document of another kind puts that kind's editor in the frame in place of the one
+// there. The document the writer was in is remembered in this browser and opened again next time;
+// leaving it for the home screen forgets it.
 //
-//   const app = await startApp(element, { colors });
+//   const app = await startApp(element, { kinds: [markdown({ colors, sample })], top });
 
-import { createEditor, type Editor } from "../md/editor";
+import { kindFor, type Context, type Editing, type Kind } from "./kind";
 import { documentsList, repositoryForm, type Place } from "./documents";
 import { drivePlace, type DriveOptions } from "./drive-place";
-import { blockPaths, lengthOf } from "../md/document";
-import { read } from "../md/read";
-import { emptyParts, opened, type Parts } from "./quire-file";
-import { copyDocument, fileName, type Entry, type Store } from "./store";
+import { emptyParts } from "./quire-file";
+import { copyDocument, fileName, type Entry, type Opened, type Store } from "./store";
 import { browserStore, indexedTables, memoryTables } from "./store-browser";
-import { filesStore, OPENABLE } from "./store-files";
+import { filesStore } from "./store-files";
 import { canOpen, folderStore, oneFileStore, type FileHandle, type FolderHandle } from "./store-folder";
 import { folderPath, forgetSettings, githubStore, keepSettings, readSettings, repository, type Fetcher } from "./store-github";
-import { boxOf, copyName, createShelf, recent, templates, travel, type Listed, type Template } from "./shelf";
+import { boxOf, copyName, createShelf, recent, travel, type Listed, type Template } from "./shelf";
 import { openDialog } from "./dialog";
 import { flowMenu, make, type Box } from "./ui";
 
 /** What the page gives the app. */
 export interface AppOptions {
-    colors?: { name: string; value: string }[];
-    /** A document with every kind of block, offered on the home screen. */
-    sample?: string;
+    /** The kinds of document, the first taking any document no other claims (kind.ts). */
+    kinds: Kind[];
     /** The network, for the repository store; the browser's own if not given. */
     fetcher?: Fetcher;
     /** The name of the browser database. */
@@ -40,9 +39,6 @@ export interface AppOptions {
 /** Where the writer was, remembered in this browser. */
 const PLACE_KEY = "quire-place";
 
-/** The home screen's ways to start as File, New names them, with their icons. */
-const NEW: Record<string, [string, string]> = { blank: ["Document", "file"], post: ["Blog post", "pen"], notes: ["Notes", "task"], meeting: ["Meeting notes", "comment"], changelog: ["Changelog entry", "history"], project: ["Project page", "component"] };
-
 /** The browser's local storage, or nothing where it may not be used. */
 function local(): Storage | undefined {
     try {
@@ -52,8 +48,10 @@ function local(): Storage | undefined {
     }
 }
 
-/** Starts mdQuire on an element. */
-export async function startApp(host: HTMLElement, options: AppOptions = {}) {
+/** Starts the app on an element. */
+export async function startApp(host: HTMLElement, options: AppOptions) {
+    const kinds = options.kinds;
+    const kindOf = (name: string) => kindFor(kinds, name);
     // a browser that keeps nothing (some private windows, site data blocked) still opens mdQuire: documents
     // are then kept in this tab only, and the status says so, as it does for a file opened from the computer
     const tables = await indexedTables(options.database).catch(() => undefined);
@@ -63,11 +61,11 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
     let settings = readSettings(local());
     let github = settings ? githubStore(settings, options.fetcher) : undefined;
     // Google Drive, locked with a passphrase in this tab (drive-place.ts); signing in again saves what waited
-    const drive = drivePlace({ ...options.drive, onSignedIn: () => void editor.flush() });
+    const drive = drivePlace({ ...options.drive, onSignedIn: () => void editing.flush() });
     const keyOf = (store: Store) => (store === browser ? "browser" : store === github ? "github" : store === files ? "files" : store === drive.store() ? "drive" : "folder");
 
     // ---- where to start ----
-    let start: { store: Store; entry: Entry; text: string; mark: string; quire?: Parts } | undefined;
+    let start: { store: Store; entry: Entry; found: Opened } | undefined;
     const remembered = (() => {
         try {
             return JSON.parse(local()?.getItem(PLACE_KEY) ?? "null") as { place: string; id: string; name: string } | null;
@@ -76,8 +74,8 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
         }
     })();
     const tryOpen = async (store: Store, entry: Entry) => {
-        const opened = await store.open(entry.id).catch(() => undefined);
-        if (opened) start = { store, entry, ...opened };
+        const found = await store.open(entry.id).catch(() => undefined);
+        if (found) start = { store, entry, found };
     };
     if (remembered?.place === "github" && github) await tryOpen(github, { id: remembered.id, name: remembered.name });
     if (!start && remembered?.place === "browser") await tryOpen(browser, { id: remembered.id, name: remembered.name });
@@ -98,36 +96,64 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
     const menu = flowMenu("Documents", { className: "quire-documents-menu" });
     let from: HTMLElement | undefined;
 
-    const editor: Editor = createEditor(host, start ? opened(start.text, start.quire, { mdx: /\.mdx$/i.test(start.entry.id) }) : read(""), {
-        name: start?.entry.name ?? "Untitled",
-        store: start?.store,
-        id: start?.entry.id,
-        mark: start?.mark,
-        versions: browser.versions,
-        colors: options.colors,
+    // what every kind's editor is given; the editor in the frame is the kind of the document open
+    const hostClass = host.className;
+    const context = (begin?: typeof start): Context => ({
         top: options.top,
+        versions: browser.versions,
         richHome: browser,
-        // suggested words are learned from her documents here and in what she has already let mdQuire open; never from GitHub or Drive, which would mean fetching every document
+        // suggested words are learned from her documents here and in what she has already let the app open; never from GitHub or Drive, which would mean fetching every document
         learnFrom: () => [browser, folder, files].filter((store): store is Store => !!store),
-        // the File menu's first lines, as Docs has them: New, with the home screen's ways to start, and Open, the documents list, where the places to open from are
+        // the File menu's first lines, as Docs has them: New, with every kind's ways to start, and Open, the documents list, where the places to open from are
         fileItems: () => [
-            { label: "New", icon: "plus", items: () => templates(new Date()).map((template) => ({ label: NEW[template.key]?.[0] ?? template.label, icon: NEW[template.key]?.[1], words: ["new document"], run: () => void startFrom(template, editor.nameElement()) })), run: () => {} },
-            { label: "Open", icon: "folder", words: ["documents", "open a file", "open a folder", "github", "repository", "google drive"], run: () => ((from = editor.nameElement()), (shown = editor.current().store ?? browser), void showDocuments()) },
+            { label: "New", icon: "plus", items: () => starts().map(([template, kind]) => ({ label: template.said ?? template.label, icon: template.icon, words: ["new document"], run: () => void startFrom(template, editing.nameElement(), kind) })), run: () => {} },
+            { label: "Open", icon: "folder", words: ["documents", "open a file", "open a folder", "github", "repository", "google drive"], run: () => ((from = editing.nameElement()), (shown = editing.current().store ?? browser), void showDocuments()) },
         ],
         onOpen: remember,
         onName: (button) => {
             if (menu.isOpen()) return menu.close(true);
             from = button;
-            shown = editor.current().store ?? browser;
+            shown = editing.current().store ?? browser;
             void showDocuments();
         },
+        start: begin,
     });
+    let kind = kindOf(start?.entry.name ?? "");
+    if (!start) kind = kinds[0]!;
+    let editing: Editing = kind.mount(host, context(start));
+
+    /** Every kind's ways to start, with the kind each belongs to. */
+    function starts(): [Template, Kind][] {
+        const today = new Date();
+        return kinds.flatMap((each) => each.starts(today).map((template): [Template, Kind] => [template, each]));
+    }
+
+    /** Puts a kind's editor in the frame in place of the one there, once that one may be left; false when the writer stays. */
+    async function into(next: Kind): Promise<boolean> {
+        if (next === kind) return true;
+        if (!(await editing.ready())) return false;
+        editing.destroy();
+        // the editor's own state on the element goes with it; the home screen and the file chooser, the app's, stay
+        host.className = hostClass;
+        if (shelf.shown()) host.classList.add("shelved");
+        host.append(chooser, shelf.element);
+        kind = next;
+        editing = next.mount(host, context());
+        return true;
+    }
+
+    /** Opens a document in its own kind's editor; false when it was not opened. */
+    async function openIn(store: Store, entry: Entry): Promise<boolean> {
+        if (!(await into(kindOf(entry.name)))) return false;
+        return editing.open(store, entry);
+    }
+
     if (start) remember(start.store, start.entry);
 
     // ---- choosing files and folders ----
     const chooser = make("input", "quire-file");
     chooser.type = "file";
-    chooser.accept = OPENABLE;
+    chooser.accept = kinds.map((each) => each.files.chooser).join(",");
     chooser.tabIndex = -1;
     chooser.setAttribute("aria-hidden", "true");
     host.append(chooser);
@@ -135,19 +161,19 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
         const picked = chooser.files?.[0];
         chooser.value = "";
         if (!picked) return;
-        const entry = await files.add(picked).catch((error) => void editor.say("Not opened", `${picked.name} was not opened: ${error instanceof Error ? error.message : String(error)}`));
+        const entry = await files.add(picked).catch((error) => void editing.say("Not opened", `${picked.name} was not opened: ${error instanceof Error ? error.message : String(error)}`));
         if (!entry) return;
-        if (!(await editor.open(files, entry))) return;
+        if (!(await openIn(files, entry))) return;
         await showEditor();
-        editor.surface.focus();
+        editing.focus();
     });
     const pickers = globalThis as unknown as { showOpenFilePicker?: (options: object) => Promise<FileHandle[]>; showDirectoryPicker?: (options: object) => Promise<FolderHandle> };
     const able = canOpen();
     const openInPlace = async () => {
-        const [handle] = (await pickers.showOpenFilePicker?.({ types: [{ description: "Markdown and .quire documents", accept: { "text/markdown": [".md", ".mdx", ".markdown", ".txt"], "application/zip": [".quire"] } }] }).catch(() => [])) ?? [];
+        const [handle] = (await pickers.showOpenFilePicker?.({ types: kinds.map((each) => ({ description: each.files.description, accept: each.files.accept })) }).catch(() => [])) ?? [];
         if (!handle) return;
         const store = oneFileStore(handle);
-        if (!(await editor.open(store, { id: handle.name, name: handle.name }))) return;
+        if (!(await openIn(store, { id: handle.name, name: handle.name }))) return;
         menu.close(false);
         await showEditor();
     };
@@ -161,7 +187,7 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
 
     // ---- the documents list ----
     async function showDocuments(problem?: string) {
-        const current = editor.current();
+        const current = editing.current();
         let entries: Entry[] = [];
         let note = problem;
         try {
@@ -193,19 +219,21 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
             open: async (entry) => {
                 menu.close(false);
                 // opened from the list over the home screen, the home screen makes way
-                if (await editor.open(shown, entry)) await showEditor();
-                editor.surface.focus();
+                if (await openIn(shown, entry)) await showEditor();
+                editing.focus();
             },
             create: async () => {
                 menu.close(false);
                 // Google Drive keeps documents by name, as the browser does, and so makes `.quire` ones with a plain name
-                const made = shown === browser || shown === drive.store() ? editor.create(shown, "Untitled", "", emptyParts()) : editor.create(shown, fileName("Untitled"));
+                // a new document is the first kind's, whichever is open
+                if (!(await into(kinds[0]!))) return;
+                const made = shown === browser || shown === drive.store() ? editing.create(shown, "Untitled", "", emptyParts()) : editing.create(shown, fileName("Untitled"));
                 if (await made) await showEditor();
-                editor.surface.focus();
+                editing.focus();
             },
             rename: async (name, done) => {
                 if (done) finish();
-                await editor.rename(name);
+                await editing.rename(name);
                 if (!done && menu.isOpen()) await showDocuments();
             },
             finish,
@@ -224,7 +252,7 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
     /** Closes the documents list and gives the text back. */
     function finish() {
         menu.close(false);
-        if (!shelf.shown()) editor.surface.focus();
+        if (!shelf.shown()) editing.focus();
     }
 
     // ---- connecting a repository: a form of five fields, so a dialog, grown out of what was pressed ----
@@ -235,10 +263,10 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
             settings = undefined;
             const was = github;
             github = undefined;
-            if (editor.current().store === was) {
+            if (editing.current().store === was) {
                 const newest = (await browser.list())[0];
-                if (newest) await editor.open(browser, newest);
-                else await editor.create(browser, "Untitled", "", emptyParts());
+                if (newest) await openIn(browser, newest);
+                else if (await into(kinds[0]!)) await editing.create(browser, "Untitled", "", emptyParts());
             }
             shown = browser;
             await placesChanged();
@@ -309,7 +337,7 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
         const store = await drive.open(button);
         if (!store) return;
         shown = store;
-        from = button?.isConnected ? button : editor.nameElement();
+        from = button?.isConnected ? button : editing.nameElement();
         // its documents are shown at once, with New document among them, from the shelf as from the editor
         if (shelf.shown()) await shelf.refresh();
         await showDocuments();
@@ -318,9 +346,9 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
     /** Locks Google Drive and signs out of it in this tab; a document open from there is left first. */
     async function signOutDrive() {
         const was = drive.store();
-        if (was && editor.current().store === was) {
+        if (was && editing.current().store === was) {
             const newest = (await browser.list())[0];
-            if (!(await (newest ? editor.open(browser, newest) : editor.create(browser, "Untitled", "", emptyParts())))) return;
+            if (!(await (newest ? openIn(browser, newest) : into(kinds[0]!).then((ok) => ok && editing.create(browser, "Untitled", "", emptyParts()))))) return;
         }
         drive.signOut();
         shown = browser;
@@ -337,16 +365,17 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
     // ---- the home screen, with nothing open ----
     const keyFor = (store: Store, id: string) => `${keyOf(store)}:${id}`;
     const shelf = createShelf({
-        templates: templates(new Date()),
-        start: (template, from) => void startFrom(template, from),
+        templates: starts().map(([template]) => template),
+        start: (template, from) => void startFrom(template, from, starts().find(([each]) => each.key === template.key)?.[1] ?? kinds[0]!),
         documents: async () => {
             const places = [browser, github, drive.store(), folder, files].filter((store): store is Store => !!store);
             const lists = await Promise.all(places.map(async (store) => ({ store, entries: await store.list().catch(() => []) })));
             return recent(lists).map(({ store, id, name, modified }): Listed => ({
                 key: keyFor(store, id),
                 name,
-                // the two places that are this machine are said in lowercase, as the row's other words are; a folder or a repository keeps its own name
-                place: store === browser ? "this browser" : store === files ? "this computer" : store.label,
+                // the two places that are this machine are said in lowercase, as the row's other words are; a folder or a repository keeps its own name;
+                // a document of a kind other than the first says its kind first
+                place: [kindOf(name).row, store === browser ? "this browser" : store === files ? "this computer" : store.label].filter(Boolean).join(", "),
                 modified,
                 open: (from) => void enter(store, { id, name }, from),
                 rename: store.can.rename ? async (wanted) => void (await store.rename(id, wanted).catch(() => undefined), await shelf.refresh()) : undefined,
@@ -359,7 +388,7 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
             ...(able.folder ? [{ label: "open a folder", run: (button: HTMLElement) => ((from = button), void openFolder()) }] : []),
             { label: github ? "repository settings" : "connect a repository", run: (button: HTMLElement) => ((from = button), showRepository()) },
             ...(drive.state() !== "not set up" ? [{ label: "google drive", run: (button: HTMLElement) => void openDrive(button) }] : []),
-            ...(options.sample ? [{ label: "see a sample", run: (button: HTMLElement) => void startFrom({ key: "sample", label: "A sample", name: "A sample", text: options.sample!, quire: true }, button) }] : []),
+            ...kinds.flatMap((each) => (each.quiet?.() ?? []).map((template) => ({ label: template.label, run: (button: HTMLElement) => void startFrom(template, button, each) }))),
         ],
     });
     host.append(shelf.element);
@@ -367,21 +396,20 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
     /** Opens a document from its row on the home screen. */
     async function enter(store: Store, entry: Entry, from: HTMLElement) {
         const picture = boxOf(from);
-        if (!(await editor.open(store, entry))) return;
+        if (!(await openIn(store, entry))) return;
         await showEditor(picture);
-        editor.surface.focus();
+        editing.focus();
     }
 
-    /** Makes something new from a way of starting, and opens it from the word pressed. */
-    async function startFrom(template: Template, from: HTMLElement) {
+    /** Makes something new of a kind from a way of starting, and opens it from the word pressed. */
+    async function startFrom(template: Template, from: HTMLElement, of: Kind) {
         const picture = boxOf(from);
-        if (!(await editor.create(browser, template.name, template.text, template.quire ? emptyParts() : undefined))) return;
+        if (!(await into(of))) return;
+        if (!(await editing.create(browser, template.name, template.text, template.quire ? emptyParts() : undefined))) return;
         await showEditor(picture);
-        // the last line a template starts with stands in for what is written there, and is selected, so that typing takes its place
-        const paths = blockPaths(editor.surface.getDocument());
-        const last = paths[paths.length - 1] ?? [0];
-        editor.surface.setSelection({ anchor: { path: last, offset: 0 }, focus: { path: last, offset: lengthOf(editor.surface.getDocument(), last) } });
-        editor.surface.focus();
+        // the kind marks where typing starts (mdQuire selects the last line, which stands in for what is written there)
+        editing.started?.();
+        editing.focus();
     }
 
     /** Puts the home screen away and shows the document, the page growing out of where it was pressed if there is such a place. */
@@ -391,10 +419,10 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
         host.classList.remove("shelved");
         options.top?.classList.remove("away");
         shelf.hide();
-        if (picture) await travel(editor.paper, picture, true);
+        if (picture) await travel(editing.paper, picture, true);
     }
 
-    // "mdQuire" in the page's trail leads to the shelf: with a document open it goes there without leaving the page
+    // the Quire's word in the page's trail ("mdQuire") leads to the shelf: with a document open it goes there without leaving the page
     options.top?.querySelector(".quire-word")?.addEventListener("click", (event) => {
         if (shelf.shown() || (event as MouseEvent).ctrlKey || (event as MouseEvent).metaKey) return;
         event.preventDefault();
@@ -405,9 +433,9 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
     async function home() {
         if (shelf.shown()) return;
         menu.close(false);
-        const current = editor.current();
+        const current = editing.current();
         // words that could not be saved keep the writer in the document until she chooses
-        if (!(await editor.ready())) return;
+        if (!(await editing.ready())) return;
         await shelf.refresh();
         scrollTo({ top: 0, behavior: "instant" });
         options.top?.classList.add("away");
@@ -415,11 +443,11 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
         const row = current.store && current.id ? shelf.rowOf(keyFor(current.store, current.id)) : undefined;
         if (row) {
             row.style.visibility = "hidden";
-            await travel(editor.paper, boxOf(row), false);
+            await travel(editing.paper, boxOf(row), false);
             row.style.visibility = "";
         }
         host.classList.add("shelved");
-        if (!(await editor.leave())) {
+        if (!(await editing.leave())) {
             // typed while going home and not saved: back to the document
             host.classList.remove("shelved");
             options.top?.classList.remove("away");
@@ -436,9 +464,9 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
         options.top?.classList.add("away");
         await shelf.refresh();
         shelf.show();
-        return { editor, browser, files, shelf };
+        return { editing: () => editing, browser, files, shelf };
     }
 
-    editor.surface.focus();
-    return { editor, browser, files, shelf };
+    editing.focus();
+    return { editing: () => editing, browser, files, shelf };
 }

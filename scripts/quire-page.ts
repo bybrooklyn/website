@@ -21,7 +21,7 @@ import { read } from "${quire}/md/read.ts";
 import { write } from "${quire}/md/write.ts";
 import { closeOthers } from "${quire}/core/ui.ts";
 import { memoryStorage } from "${quire}/core/versions.ts";
-import { opened } from "${quire}/core/quire-file.ts";
+import { opened } from "${quire}/md/quire-parts.ts";
 const host = document.querySelector("#host");
 const editor = createEditor(host, read(""), { name: "Test", onImage: async () => "/picture.png", versions: memoryStorage() });
 const surface = editor.surface;

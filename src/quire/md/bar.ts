@@ -54,6 +54,7 @@ import {
     type Selection,
 } from "./document";
 import type { State } from "./history";
+import { nameButton, statusLine, STATUS_PASSES, type NameButton, type StatusLine } from "../core/status";
 import { activeBlock, caret, collapsed, mark, pageBreakAt, paste, rangeOf, sameLeaf, tableOf } from "./keys";
 import { SHORTCUTS } from "./shortcuts";
 import type { Surface } from "./surface";
@@ -559,6 +560,9 @@ export interface BarOptions {
     name: string;
     /** Opens the documents list from the name. */
     onName?: (from: HTMLElement) => void;
+    /** The frame's name button and status line (core/status.ts), when the editor is in a frame; made here if not given, as in the bar's own tests. */
+    nameButton?: NameButton;
+    status?: StatusLine;
     /** The colors offered for text, by name. */
     colors?: { name: string; value: string }[];
     onImage?: (file: File) => Promise<string>;
@@ -595,8 +599,8 @@ interface Tool {
  */
 export const FOLDS = { paint: 1, print: 2, clear: 3, indent: 4, spacing: 5, zoom: 6, spelling: 7, font: 8, highlight: 9, size: 10, strike: 11, underline: 12, color: 13, redo: 14, picture: 15, align: 16, link: 17, style: 18, italic: 19, lists: 20, bold: 21, undo: 22 } as const;
 
-/** How long a message in the status stays before how saving stands comes back, in milliseconds. */
-export const STATUS_PASSES = 5000;
+/** How long a message in the status stays before how saving stands comes back, in milliseconds (the core's status line, core/status.ts). */
+export { STATUS_PASSES };
 
 /** Builds the bar for a surface. */
 export function createBar(surface: Surface, options: BarOptions) {
@@ -647,19 +651,8 @@ export function createBar(surface: Surface, options: BarOptions) {
     const moreButton = dots("More tools");
 
     // the document's name, which the page puts at the end of its trail: pressed, the documents list grows out of it
-    const name = make("button", "quire-button quire-name");
-    name.type = "button";
-    name.setAttribute("aria-haspopup", "menu");
-    const nameText = make("span", "quire-name-text", options.name);
-    name.append(nameText, icon("chevron"));
-    const fitName = (value: string) => {
-        nameText.textContent = value;
-        name.title = value;
-        name.setAttribute("aria-label", `${value}: documents`);
-    };
-    fitName(options.name);
-    name.addEventListener("mousedown", (event) => event.preventDefault());
-    name.addEventListener("click", () => options.onName?.(name));
+    const name = options.nameButton ?? nameButton(options.name, (pressed) => options.onName?.(pressed));
+    const fitName = (value: string) => name.set(value);
 
     // ---- undo, redo, print, spelling, paint format ----
     const undo = () => {
@@ -1095,41 +1088,10 @@ export function createBar(surface: Surface, options: BarOptions) {
     end.append(dotsHolder);
     strip.append(end);
 
-    // how saving stands and the word count, "Saved · 7 words", which the page puts at the right of its first line
-    // the count is not announced as it changes, which in a run of typing would be every quarter second; the word count dialog says it on request
-    const count = make("span", "quire-count");
-    const status = make("span", "quire-status");
-    status.setAttribute("role", "status");
-    let words = make("span", "quire-status-words here");
-    status.append(words);
-    const statusLine = make("p", "quire-status-line");
-    const dot = make("span", "quire-status-dot", "·");
-    dot.setAttribute("aria-hidden", "true");
-    statusLine.append(status, dot, count);
-    const showStatus = (short: string, full: string, tone: "quiet" | "warn") => {
-        status.title = full;
-        status.setAttribute("aria-label", full);
-        status.classList.toggle("warn", tone === "warn");
-        // with nothing said about saving, the dot goes with it (a class, so that no rule has to look inside to know)
-        statusLine.classList.toggle("unsaid", !short);
-        if (words.textContent === short) return;
-        // the new words fade in where the old ones fade out, so that nothing beside them moves
-        const leaving = words;
-        words = make("span", "quire-status-words", short);
-        status.append(words);
-        leaving.classList.remove("here");
-        requestAnimationFrame(() => words.classList.add("here"));
-        setTimeout(() => leaving.remove(), 400);
-    };
-    /** How saving stands, which stays until it changes; a message passes after a few seconds and gives the place back to it. */
-    let standing: [string, string, "quiet" | "warn"] = ["", "", "quiet"];
-    let passing: ReturnType<typeof setTimeout> | undefined;
-    const say = (short: string, full: string, tone: "quiet" | "warn" = "quiet", stays = false) => {
-        clearTimeout(passing);
-        if (stays) standing = [short, full, tone];
-        else passing = setTimeout(() => showStatus(...standing), STATUS_PASSES);
-        showStatus(short, full, tone);
-    };
+    // how saving stands and the word count, "Saved · 7 words", which the page puts at the right of its first line (core/status.ts)
+    const status = options.status ?? statusLine();
+    const statusLine_ = status.element;
+    const say = status.say;
 
     // ---- folding what does not fit ----
 
@@ -1219,7 +1181,7 @@ export function createBar(surface: Surface, options: BarOptions) {
             if (own === undefined) wordsIn.set(block, (own = countWords({ ...doc, blocks: [block] })));
             words += own;
         }
-        count.textContent = `${words.toLocaleString("en")} ${words === 1 ? "word" : "words"}`;
+        status.count(`${words.toLocaleString("en")} ${words === 1 ? "word" : "words"}`);
     };
     counted(surface.getDocument());
     // The count is made after the keystroke, never inside it (counting a long document's every word
@@ -1318,7 +1280,7 @@ export function createBar(surface: Surface, options: BarOptions) {
         },
         menus,
         layout,
-        statusLine,
+        statusLine: statusLine_,
         pickImage: () => chooser.click(),
         setZoom(text: string) {
             zoomLabel.textContent = text;
@@ -1343,7 +1305,7 @@ export function createBar(surface: Surface, options: BarOptions) {
         },
         destroy() {
             surface.element.removeEventListener("keyup", paintKeys);
-            clearTimeout(passing);
+            if (!options.status) status.destroy();
             alignment.shut();
             lists.shut();
         },

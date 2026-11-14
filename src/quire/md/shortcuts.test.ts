@@ -8,7 +8,7 @@ import { documentOf, paragraph } from "./document";
 import { caret, handle } from "./keys";
 import { headings, type Command, type RowActions } from "./menus";
 import { chordFrom, chordOf, findShortcuts, keysFor, SHORTCUTS, shortcutFor, typing } from "./shortcuts";
-import { altGraph } from "./surface";
+import { altGraph } from "../core/ui";
 import { everyLine } from "../core/ui";
 
 test("no two shortcuts with a command share the same keys, unless they run the same command", () => {

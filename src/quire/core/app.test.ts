@@ -23,6 +23,7 @@ const styles = `${here}/../../styles`;
 
 const page = (database: string) => `
 import { startApp } from "${here}/app.ts";
+import { markdown } from "${here}/../md/kind.ts";
 import { write } from "${here}/../md/write.ts";
 import { folderStore, oneFileStore } from "${here}/store-folder.ts";
 import { setStyle } from "${here}/../md/document.ts";
@@ -74,9 +75,9 @@ HTMLAnchorElement.prototype.click = function () {
 window.q = { repo, calls, downloads, bytes, write, folderStore, oneFileStore, setStyle, packQuire, unpackQuire };
 // a browser that keeps nothing, as some private windows are
 if (location.search.includes("no-storage")) indexedDB.open = () => { throw new DOMException("The user denied permission to access the database.", "SecurityError"); };
-startApp(document.querySelector("#host"), { database: ${JSON.stringify(database)}, fetcher, sample: "# A sample\\n", top: document.querySelector(".quire-top") }).then((app) => {
+startApp(document.querySelector("#host"), { kinds: [markdown({ sample: "# A sample\\n" })], database: ${JSON.stringify(database)}, fetcher, top: document.querySelector(".quire-top") }).then((app) => {
     window.q.app = app;
-    window.q.md = () => write(app.editor.surface.getDocument());
+    window.q.md = () => write(app.editing().editor.surface.getDocument());
 });
 `;
 
@@ -134,13 +135,13 @@ used("a browser that keeps nothing still opens mdQuire, and says a document is k
     await tab.open(`http://localhost:${server().port}/page.html?no-storage`, 100);
     for (let tries = 0; tries < 100 && !(await tab.run("!!window.q?.md")); tries++) await tab.wait(50);
     expect(await tab.run("!!window.q.app")).toBe(true);
-    await tab.run(`q.app.editor.create(q.app.browser, "Kept here", "Words.\\n").then(() => q.app.editor.surface.focus())`);
-    await tab.run(`q.app.editor.surface.pasteText("More words")`);
+    await tab.run(`q.app.editing().editor.create(q.app.browser, "Kept here", "Words.\\n").then(() => q.app.editing().editor.surface.focus())`);
+    await tab.run(`q.app.editing().editor.surface.pasteText("More words")`);
     await tab.wait(1400);
     expect(await tab.run<string>("document.querySelector('.quire-status').getAttribute('aria-label')")).toContain("kept in this tab only");
     expect(await tab.run(`(() => { const event = new Event("beforeunload", { cancelable: true }); dispatchEvent(event); return event.defaultPrevented; })()`)).toBe(true);
     // back to the page as the other tests have it, with nothing waiting to be downloaded
-    await tab.run("q.app.editor.commands.subs.downloadAs()[0].run()");
+    await tab.run("q.app.editing().editor.commands.subs.downloadAs()[0].run()");
     await load();
 });
 const status = () => tab.run<string>("document.querySelector('.quire-status').getAttribute('aria-label')");
@@ -233,7 +234,7 @@ used("the documents list flows out of the name: a new document, a rename that En
     expect(await tab.run("document.querySelector('.quire-name-text').textContent")).toBe("Plans");
     // Enter renamed it, closed the list, and gave the text back
     expect(await tab.run("!!document.querySelector('.quire-documents-menu:popover-open')")).toBe(false);
-    expect(await tab.run("document.activeElement === q.app.editor.surface.element")).toBe(true);
+    expect(await tab.run("document.activeElement === q.app.editing().editor.surface.element")).toBe(true);
     await documents();
     // the place shown heads the documents and is not offered again under Open from, and Drive, not set up, is not there at all
     expect(await tab.run("[...document.querySelectorAll('.quire-documents-menu [data-place]')].map((line) => line.dataset.place).includes('browser')")).toBe(false);
@@ -266,7 +267,7 @@ used("a file is opened from the computer, and downloaded again with its own name
     await tab.wait(400);
     expect(await md()).toBe("# A post\n\nFrom a file.\n");
     expect(await tab.run("document.querySelector('.quire-name-text').textContent")).toBe("post.md");
-    await tab.run("q.app.editor.surface.setSelection({ anchor: { path: [1], offset: 12 }, focus: { path: [1], offset: 12 } })");
+    await tab.run("q.app.editing().editor.surface.setSelection({ anchor: { path: [1], offset: 12 }, focus: { path: [1], offset: 12 } })");
     await tab.type(" Edited.");
     await tab.wait(1300);
     expect(await status()).toBe("Kept here. Download it to keep it.");
@@ -297,7 +298,7 @@ used("in a Markdown file the tools it cannot keep are not offered, and turning i
     await tab.wait(500);
     expect(await away()).toEqual([]);
     // a typeface chosen from its button goes on the selection
-    await tab.run("q.app.editor.surface.setSelection({ anchor: { path: [1], offset: 0 }, focus: { path: [1], offset: 4 } })");
+    await tab.run("q.app.editing().editor.surface.setSelection({ anchor: { path: [1], offset: 0 }, focus: { path: [1], offset: 4 } })");
     await press(".quire-font");
     await tab.wait(600);
     await press(".quire-menu.open .quire-menu-line", "System mono");
@@ -333,7 +334,7 @@ used("a repository is connected once, its documents listed, opened and saved as 
     await press(".quire-documents-list .quire-menu-line", "hello.md");
     await tab.wait(300);
     expect(await md()).toBe("# Hello\n\nFrom the repository.\n");
-    await tab.run("q.app.editor.surface.setSelection({ anchor: { path: [1], offset: 20 }, focus: { path: [1], offset: 20 } })");
+    await tab.run("q.app.editing().editor.surface.setSelection({ anchor: { path: [1], offset: 20 }, focus: { path: [1], offset: 20 } })");
     await tab.type(" Again.");
     await tab.wait(1400);
     expect(await status()).toBe("Saved");
@@ -364,7 +365,7 @@ used("a .quire file opens with its look, is written in, and downloads as a .quir
         return { align: getComputedStyle(document.querySelector('.quire h1')).textAlign, font: word.textContent, color: getComputedStyle(word).color };
     })()`);
     expect(seen).toEqual({ align: "center", font: "hello", color: "rgb(213, 45, 0)" });
-    await tab.run("q.app.editor.surface.setSelection({ anchor: { path: [0], offset: 0 }, focus: { path: [0], offset: 0 } })");
+    await tab.run("q.app.editing().editor.surface.setSelection({ anchor: { path: [0], offset: 0 }, focus: { path: [0], offset: 0 } })");
     await tab.type("Old. ");
     await tab.wait(1300);
     await press(".quire-menu-row .quire-row-word", "File");
@@ -392,7 +393,7 @@ used("a document kept in the browser is a .quire one: its look is kept through a
     await press(".quire-documents-new");
     await tab.wait(400);
     await tab.type("Styled words.");
-    await tab.run("q.app.editor.surface.run((doc) => q.setStyle(doc, { start: { path: [0], offset: 0 }, end: { path: [0], offset: 6 } }, { font: 'mono', highlight: '#ff9a56' }))");
+    await tab.run("q.app.editing().editor.surface.run((doc) => q.setStyle(doc, { start: { path: [0], offset: 0 }, end: { path: [0], offset: 6 } }, { font: 'mono', highlight: '#ff9a56' }))");
     await tab.wait(1300);
     await load();
     expect(await tab.run("document.querySelector('.quire [data-font=mono]')?.textContent")).toBe("Styled");
@@ -566,7 +567,7 @@ used("the Blog post on the home screen is made as plain Markdown, and a duplicat
     await tab.wait(900);
     await press(".quire-shelf-kinds .quire-shelf-word", "blog post");
     await tab.wait(900);
-    expect(await tab.run("[q.app.editor.surface.getDocument().quire === undefined, document.querySelector('.quire-editor').classList.contains('rich')]")).toEqual([true, false]);
+    expect(await tab.run("[q.app.editing().editor.surface.getDocument().quire === undefined, document.querySelector('.quire-editor').classList.contains('rich')]")).toEqual([true, false]);
     const made = await tab.run<string>(`(async () => {
         const store = q.app.browser;
         const made = await store.create("With a picture", "![A dot](pictures/dot.png)\\n", { style: "", notes: "" });

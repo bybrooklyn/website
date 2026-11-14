@@ -328,6 +328,23 @@ export function composing(event: KeyboardEvent): boolean {
     return event.isComposing || event.keyCode === 229;
 }
 
+/** True on a Mac, where Option types and AltGr is not sent as Ctrl and Alt. */
+const APPLE = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
+
+/** The parts of a key press read to tell a shortcut from typing. */
+export type Pressed = Pick<KeyboardEvent, "key" | "code" | "ctrlKey" | "altKey" | "metaKey"> & { getModifierState?: (key: string) => boolean };
+
+/**
+ * Whether a key press is AltGr typing a character, which is never a shortcut. Windows reports AltGr
+ * as Ctrl and Alt held together, so on French, Spanish, German and many other layouts @, #, {, [, |,
+ * \, ~ and € arrive as Ctrl+Alt with a digit or letter; what tells them apart from a shortcut is that
+ * the key then types a character that is not a plain letter or digit.
+ */
+export function altGraph(event: Pressed, mac = APPLE): boolean {
+    if (event.getModifierState?.("AltGraph")) return true;
+    return !mac && event.ctrlKey && event.altKey && !event.metaKey && [...event.key].length === 1 && !/^[a-z0-9]$/i.test(event.key);
+}
+
 /** Whether a key is the Enter that finishes a field, and not one an input method uses to choose a word. */
 export function finishes(event: KeyboardEvent): boolean {
     return event.key === "Enter" && !event.shiftKey && !event.isComposing && event.keyCode !== 229;

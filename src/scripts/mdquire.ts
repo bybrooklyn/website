@@ -4,6 +4,7 @@
 import { accents } from "../data/theme";
 import { css } from "../lib/color";
 import { startApp } from "../quire/core/app";
+import { markdown } from "../quire/md/kind";
 
 const SAMPLE = `---
 title: Every kind of block
@@ -57,4 +58,4 @@ const host = document.querySelector<HTMLElement>("#quire");
 const names: Record<string, string> = { violet: "Violet", pink: "Pink", blue: "Blue", mint: "Mint", amber: "Amber" };
 const colors = Object.entries(accents).map(([key, value]) => ({ name: names[key] ?? key, value: css(value) }));
 
-if (host) void startApp(host, { colors, sample: SAMPLE, top: document.querySelector<HTMLElement>(".quire-top") ?? undefined });
+if (host) void startApp(host, { kinds: [markdown({ colors, sample: SAMPLE })], top: document.querySelector<HTMLElement>(".quire-top") ?? undefined });

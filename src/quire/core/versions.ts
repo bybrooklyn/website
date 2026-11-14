@@ -3,17 +3,16 @@
 // knows how many lines it added and removed since the one before. A panel lists them by time,
 // shows a chosen one as it read, and restores it as a new step that can be undone.
 //
-// A snapshot is text: the Markdown, and for a `.quire` document its style.json and notes.json
+// A snapshot is text: the document as its store saves it, and for a `.quire` document its parts
 // after it (snapshotText), so that restoring an old version brings back its typeface, highlight
-// and spacing too. The lines added and removed are counted in the Markdown alone.
+// and spacing too. The lines added and removed are counted in the text alone. How a version is
+// drawn and put back is the kind of document's (a VersionView; mdQuire's is md/history-view.ts).
 //
 // The snapshots are kept through VersionStorage: in the browser's own database for every store
 // (tableVersions in store-browser.ts), or in memory (memoryStorage). Thinning, the summary of
 // changes and when snapshots are taken are pure and tested; the panel is DOM.
 
-import { type Document } from "../md/document";
-import { opened, type Parts } from "./quire-file";
-import { createSurface, type Surface } from "../md/surface";
+import type { Parts } from "./quire-file";
 import { filledButton } from "./dialog";
 import { control, icon, make } from "./ui";
 
@@ -85,30 +84,6 @@ export function snapshotParts(saved: string): { markdown: string; parts?: Parts 
         return { markdown: saved.slice(0, at) };
     }
 }
-
-/** The document a snapshot holds, read as the editor opens a document; a Markdown snapshot of a `.quire` document keeps the page it is restored into. */
-export function snapshotDocument(saved: string, into: Document): Document {
-    const { markdown, parts } = snapshotParts(saved);
-    if (parts) return opened(markdown, parts);
-    const doc = opened(markdown, undefined, { mdx: into.mdx });
-    return into.quire ? { ...doc, quire: into.quire } : doc;
-}
-
-/** Which of a version's top blocks are new since the one before it: those whose Markdown the one before does not have (as many times). */
-export function addedBlocks(before: Document | undefined, after: Document): number[] {
-    const markdown = (block: Document["blocks"][number]) => (block.source ?? JSON.stringify({ ...block, gap: "" })).trim();
-    const left = new Map<string, number>();
-    for (const block of before?.blocks ?? []) left.set(markdown(block), (left.get(markdown(block)) ?? 0) + 1);
-    const added: number[] = [];
-    after.blocks.forEach((block, index) => {
-        const had = left.get(markdown(block)) ?? 0;
-        if (had > 0) left.set(markdown(block), had - 1);
-        else if (markdown(block)) added.push(index);
-    });
-    return added;
-}
-
-// ---- thinning ----
 
 /**
  * Which snapshots to let go, given all of them, so that at most `kept` remain and older ones are
@@ -247,8 +222,16 @@ export function when(time: number, now: number): string {
     return `${day}, ${hour}`;
 }
 
-/** Builds the history panel for a surface. */
-export function createHistoryPanel(surface: Surface, storage: VersionStorage, name: () => string, keeper: ReturnType<typeof createKeeper>) {
+/** How a kind of document shows a version in the panel and puts one back: it draws the snapshot's text (and marks what it added since the older one) into the panel, and restores it as one step that can be undone. */
+export interface VersionView {
+    show(text: string, older: string | undefined, into: HTMLElement): void;
+    restore(text: string): void;
+    /** Gives the keyboard back to the writing. */
+    focus(): void;
+}
+
+/** Builds the history panel for a kind of document. */
+export function createHistoryPanel(view: VersionView, storage: VersionStorage, name: () => string, keeper: ReturnType<typeof createKeeper>) {
     const panel = make("aside", "quire-history");
     panel.setAttribute("aria-label", "Version history");
     panel.inert = true;
@@ -291,19 +274,13 @@ export function createHistoryPanel(surface: Surface, storage: VersionStorage, na
 
     async function showVersion(version: VersionInfo, older?: VersionInfo) {
         const text = await storage.load(version.id);
-        const before = older ? snapshotDocument(await storage.load(older.id), surface.getDocument()) : undefined;
         const shown = make("div", "quire-history-text prose");
-        // the version as it read, styling and all, drawn as the editor draws it, and not editable; what it added since the one before is tinted
-        const doc = snapshotDocument(text, surface.getDocument());
-        const view = createSurface(shown, doc);
-        for (const index of addedBlocks(before, doc)) view.elementAt([index])?.classList.add("quire-history-added");
-        view.destroy();
-        shown.removeAttribute("role");
+        view.show(text, older ? await storage.load(older.id) : undefined, shown);
         const restore = filledButton("Restore this version", () => {
-            surface.run(() => snapshotDocument(text, surface.getDocument()));
+            view.restore(text);
             keeper.now();
             close();
-            surface.focus();
+            view.focus();
         }, "quire-dialog-action quire-restore");
         const head = make("div", "quire-history-chosen");
         head.append(make("p", "quire-history-when", when(version.time, Date.now())), restore);
@@ -341,7 +318,7 @@ export function createHistoryPanel(surface: Surface, storage: VersionStorage, na
 
     function close() {
         // focus that was in the panel goes back to the text rather than nowhere
-        if (panel.contains(document.activeElement)) surface.focus();
+        if (panel.contains(document.activeElement)) view.focus();
         panel.classList.remove("open");
         panel.inert = true;
         document.removeEventListener("keydown", keys);

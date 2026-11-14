@@ -1,6 +1,8 @@
-// The whole editor: the bar, the writing column with the surface in it, and everything around it,
-// put together on one element, writing to one document in one store at a time. The page that shows
-// mdQuire calls createEditor and nothing else.
+// mdQuire's editor: the bar, the writing column with the surface in it, and everything around it,
+// put together on one element in the core's frame (core/frame.ts: the top, the menu row, the keys,
+// the palette, full screen), writing to one document in one store at a time through the core's
+// session (core/session.ts: saving, conflicts, version history, renaming, moving between
+// documents). The app mounts it as mdQuire's kind (kind.ts); `bun run edit` calls createEditor.
 //
 //   const editor = createEditor(element, read(text), { name, store, id, mark, versions, colors });
 //   editor.surface              the editing surface (surface.ts)
@@ -14,10 +16,10 @@
 // Without a store the editor writes nowhere, as in the tests of its parts.
 
 import { addCode, addDivider, addFootnote, addTable, align, aligned, clearFormat, createBar, indentBy, link as linkAction, linkAt, setStyleOf, toggle, toggleList, toggleSubtext, type Action } from "./bar";
-import { createMenuRow, menuFor } from "../core/menu-row";
 import { headings, type RowActions } from "./menus";
 import { blockAt, blockPaths, countWords, documentOf, lengthOf } from "./document";
-import { createConflict } from "../core/conflict";
+import { createFrame } from "../core/frame";
+import { createSession, type Body } from "../core/session";
 import { createDictation } from "./dictation/dictation";
 import { type Document } from "./document";
 import { collapsed, fragment, handle, pageBreakAt } from "./keys";
@@ -29,12 +31,11 @@ import { read } from "./read";
 import { createSelectBar } from "./select-bar";
 import { createLinkCard } from "./link-card";
 import { boxOf, component, definitionList, drawnBlock } from "./slash";
-import { createPalette } from "../core/palette";
 import { createSlashMenu, paletteFor } from "./slash-menu";
 import { createEmojiPicker, emojiAtCursor, emojiGrid, putter } from "./emoji-picker";
-import { copyDocument, createSaver, fileName, said, type Entry, type Opened, type Status, type Store } from "../core/store";
+import { copyDocument, fileName, type Entry, type Status, type Store } from "../core/store";
 import { copyName } from "../core/shelf";
-import { altGraph, createSurface, type Surface } from "./surface";
+import { createSurface, type Surface } from "./surface";
 import { createTableTools } from "./tables";
 import { createPictureTools } from "./picture-tools";
 import { createBlockMenus } from "./block-menus";
@@ -49,10 +50,12 @@ import { chordFrom, findShortcuts, shortcutFor } from "./shortcuts";
 import { findTyping, readOff } from "./vocabulary";
 import { openTyping } from "./typing-panel";
 import { helpBody } from "./help";
-import { changes, createHistoryPanel, createKeeper, memoryStorage, moveVersions, snapshotParts, snapshotText, type VersionStorage } from "../core/versions";
+import { versionView } from "./history-view";
+import { createHistoryPanel, memoryStorage, type VersionStorage } from "../core/versions";
 import { write } from "./write";
-import { asQuire, emptyParts, opened, packQuire, written, type Parts } from "../core/quire-file";
-import { pictureType, withoutMetadata } from "./pictures";
+import { emptyParts, packQuire, type Parts } from "../core/quire-file";
+import { asQuire, opened, written } from "./quire-parts";
+import { pictureType, withoutMetadata } from "../core/picture-bytes";
 import { crc32 } from "../core/zip";
 import { PAGE } from "./styling";
 import { createCaret, FLAG, FLAG_ON_PAPER } from "./caret";
@@ -151,18 +154,16 @@ const OUTLINE_KEY = "quire-outline";
 /** True when the window has room for the outline in the margin beside the writing. */
 const wide = () => typeof matchMedia !== "undefined" && matchMedia("(min-width: 64rem)").matches;
 
-/** A status in a word or two for the bar. */
-const short = (status: Status, note?: string) => (status.state === "saved" ? (note ? "Download" : "Saved") : status.state === "saving" ? "Saving" : status.state === "waiting" ? "Not saved" : status.state === "changed" ? "Changed" : "Not saved");
-
 /** Builds the editor on an element. */
 export function createEditor(host: HTMLElement, doc: Document, options: EditorOptions): Editor {
     host.classList.add("quire-editor");
+    // where the document is: told by the session (core/session.ts) whenever it moves
     let name = options.name;
     let store = options.store;
     let id = options.id;
-    // true when the document lives only in this tab until it is downloaded (a file opened from the computer) and has changed since
-    let undownloaded = false;
     const versions = options.versions ?? memoryStorage();
+    // the core's frame: the top with the name and the status in it, and later the menu row, the keys and the palette
+    const frame = createFrame(host, { top: options.top, name, onName: (from) => options.onName?.(from) });
     const column = make("div", "quire-column");
     const paper = make("div", "quire-paper");
     const text = make("div", "prose");
@@ -213,17 +214,11 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     }
 
     // ---- the title, the first line on the sheet: the document's name ----
-    let renaming = Promise.resolve();
     let typing: ReturnType<typeof setTimeout> | undefined;
     /** True when the title shown is kept in the document rather than its name. */
     const owned = () => !!options.title && options.title.read(surface.getDocument()) !== null;
-    const renameTo = (typed: string) => {
-        const next = nameFor(name, typed);
-        if (next === name) return;
-        // the name typed belongs to the document it was typed in, not to one opened before the rename comes round
-        const meant = { store, id };
-        renaming = renaming.then(() => (store === meant.store && id === meant.id ? renameNow(next) : undefined)).catch(() => undefined);
-    };
+    // the name typed belongs to the document it was typed in, not to one opened before the rename comes round (the session sees to it)
+    const renameTo = (typed: string) => session.renameTo(nameFor(name, typed));
     const title = createTitle({
         goOn: () => {
             surface.setSelection({ anchor: { path: [0], offset: 0 }, focus: { path: [0], offset: 0 } });
@@ -325,13 +320,13 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     const stem = () => name.replace(/^.*\//, "").replace(/\.(md|mdx|markdown|txt|quire)$/i, "") || "Untitled";
     const download = () => {
         const doc = surface.getDocument();
-        if (!doc.quire) undownloaded = false;
+        if (!doc.quire) session.downloaded();
         // a .quire document's Markdown is downloaded with its color, size and centring as small HTML, as a Markdown file keeps them
         const ending = doc.mdx ? ".mdx" : ".md";
         give(new Blob([write(doc)], { type: "text/markdown" }), /\.(md|mdx|markdown|txt)$/i.test(name) ? name.replace(/^.*\//, "") : `${stem()}${ending}`);
     };
     const downloadQuire = async () => {
-        undownloaded = false;
+        session.downloaded();
         const { text: markdown, quire } = written(surface.getDocument(), write);
         const pictures = (store && id && (await store.pictures?.(id).catch(() => undefined))) || new Map<string, Blob>();
         give(new Blob([(await packQuire({ markdown, parts: quire ?? emptyParts(), pictures })) as BlobPart], { type: "application/zip" }), `${stem()}.quire`);
@@ -359,7 +354,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     const downloadAsQuire = async () => {
         const doc = surface.getDocument();
         if (doc.quire) return downloadQuire();
-        undownloaded = false;
+        session.downloaded();
         // a Markdown document goes into the zip as it is, with its notes, as a .quire document of its own
         const { text: markdown, quire } = written(asQuire(doc), write);
         const pictures = (store && id && (await store.pictures?.(id).catch(() => undefined))) || new Map<string, Blob>();
@@ -392,6 +387,8 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     ];
     const bar = createBar(surface, {
         name,
+        nameButton: frame.name,
+        status: frame.status,
         colors: options.colors,
         onImage: keepPicture,
         onName: (from) => options.onName?.(from),
@@ -424,14 +421,8 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         if (getComputedStyle(paper).visibility === "hidden" || (shown && matchMedia("(max-width: 60rem)").matches)) (shown ? markdown.element : surface.element).focus({ preventScroll: true });
     };
     markdown.element.inert = true;
-    // the top: the page's own, or one made above the editor in the same shape; its places are filled below
-    const top = options.top ?? makeTop();
-    if (!options.top) host.prepend(top);
-    else host.classList.add("bar-away");
-    const place = (name: string) => top.querySelector<HTMLElement>(`.quire-${name}-home`)!;
-    place("name").append(bar.name);
-    place("status").append(bar.statusLine);
-    place("bar").append(bar.element);
+    // the top is the frame's: the page's own, or one made above the editor in the same shape; the bar goes in its place
+    frame.place("bar").append(bar.element);
     bar.element.querySelector('[aria-label="Outline"]')?.setAttribute("data-outline-control", "");
     column.append(panes);
 
@@ -521,18 +512,8 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         });
     };
     // as the Markdown opens beside the sheet, or the window (or the browser's own zoom) changes, the sheet's column narrows and the sheet follows it
-    // what the editor listens to on the page and the host, let go when it is destroyed
-    const watchers: ResizeObserver[] = [];
-    const watch = (element: Element, run: () => void) => {
-        if (typeof ResizeObserver === "undefined") return;
-        const watcher = new ResizeObserver(run);
-        watcher.observe(element);
-        watchers.push(watcher);
-    };
-    // side panels start below the top's two lines (--quire-below-bar in quire.css), wherever they end on this window
-    const topEnd = () => document.documentElement.style.setProperty("--quire-top-bottom", `${Math.max(0, Math.round(top.getBoundingClientRect().bottom))}px`);
-    watch(top, topEnd);
-    topEnd();
+    // what the editor listens to on the page and the host, let go with the frame when it is destroyed
+    const watch = frame.watch;
     // only a change of width matters: the editor grows taller with every line typed
     let wideAt = 0;
     watch(markdown.element, () => zoom.refresh(false));
@@ -807,7 +788,7 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
                 date: doing((state) => typeIn(state, dateText(new Date()))),
                 contents: doing(addContents),
                 updateContents: () => (surface.run((doc) => updateContents(doc)), surface.focus()),
-                fullScreen: () => fullScreen(!full),
+                fullScreen: () => fullScreen(!frame.isFull()),
                 liveCount: () => (counter.show(!counter.shown()), counting()),
                 makeCopy: () => void makeCopy(),
                 rename: renameHere,
@@ -860,10 +841,10 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     // the command palette: the menus' lines and what fits where the cursor is, from the bottom left corner or a slash on an empty line (palette.ts)
     // the slash menu first, so that its list is the first of the two in the page, as when they were one
     const slash = createSlashMenu(surface, { pickImage: bar.pickImage });
-    const palette = createPalette({ ...paletteFor(surface, { table: tableTools.lines, picture: pictureTools.lines }), menus: () => row.headings(), reveal: (path) => row.reveal(path), corner: host });
+    const palette = frame.palette(paletteFor(surface, { table: tableTools.lines, picture: pictureTools.lines }));
     // a right-click in the text, or the menu key, opens the menus' own lines for it there
     const textMenu = createTextMenu(surface, () => row.headings(), (at) => checking.linesAt(at));
-    const row = createMenuRow(() =>
+    const row = frame.menus(() =>
         headings(
             {
                 rich: !!surface.getDocument().quire,
@@ -884,25 +865,17 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         ),
     );
     // ---- the keyboard's shortcuts: each runs its command from the one table (shortcuts.ts); the surface's own it has already taken ----
-    const shortcutKey = (event: KeyboardEvent) => {
-        // AltGr types a character (@ # { [ | on many layouts): it is never a shortcut
-        if (event.defaultPrevented || event.isComposing || altGraph(event)) return;
-        // Alt and a menu word's letter, or F10, opens that menu holding the keyboard (menu-row.ts)
-        const word = menuFor(event, MAC);
-        if (word !== undefined) return (event.preventDefault(), row.open(word, true));
+    // the frame opens a menu on Alt and its letter, or F10 (menu-row.ts), and asks here for the rest
+    frame.keys((event) => {
         const found = shortcutFor(chordFrom(event, MAC));
         if (!found?.command || found.surface || found.browser) return;
         // a field of the editor's own (the find bar, a menu's search) keeps the keys that edit text in it
         const field = event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement;
         if (field && ["selectAll", "pastePlain"].includes(found.command)) return;
-        const run = actions[found.command];
-        if (!run) return;
         // Ctrl+Shift+V pastes through the browser's own paste, which the surface takes as plain text
         if (found.command === "pastePlain") return;
-        event.preventDefault();
-        run();
-    };
-    host.addEventListener("keydown", shortcutKey);
+        return actions[found.command];
+    });
     // ---- the word count, Ctrl+Shift+C: a small dialog, as Docs has ----
     const showCount = (from: HTMLElement) => {
         const doc = surface.getDocument();
@@ -959,93 +932,55 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         openDialog(from, { title: "Keyboard shortcuts", body: [field, list], className: "quire-keys-dialog", action: { label: "Done", press: (_, dialog) => void dialog.close() }, onClose: () => surface.focus() });
         field.focus({ preventScroll: true });
     };
-    // the menu words, on the top's first line after the trail
-    place("menus").append(row.element);
 
-    // ---- full screen, from View or Ctrl+Shift+F: the top folds away and leaves the page; Escape ends it,
-    // and the pointer at the window's top edge opens the top again for as long as it stays up there ----
-    let full = false;
-    let unfolding: ReturnType<typeof setTimeout> | undefined;
-    const peek = (on: boolean) => {
-        top.classList.toggle("peek", on);
-        top.inert = full && !on;
-    };
-    const fullScreen = (on: boolean) => {
-        if (on === full) return;
-        full = on;
-        clearTimeout(unfolding);
-        top.classList.toggle("folded", on);
-        host.classList.toggle("full", on);
-        peek(false);
-        // opening again, what is in the top stays cut at its edge until the row has its height
-        top.classList.toggle("unfolding", !on);
-        if (!on) unfolding = setTimeout(() => top.classList.remove("unfolding"), 450);
-        surface.focus();
-    };
-    const fullKeys = (event: KeyboardEvent) => {
-        // an Escape meant for a dialog or a menu is theirs
-        if (!full || event.key !== "Escape" || event.defaultPrevented || (event.target instanceof Element && event.target.closest("dialog, [popover]"))) return;
-        fullScreen(false);
-    };
-    const fullPointer = (event: PointerEvent) => {
-        if (!full) return;
-        if (event.clientY <= 4) peek(true);
-        else if (top.classList.contains("peek") && event.clientY > top.getBoundingClientRect().bottom + 24 && !row.menu.isOpen() && !top.contains(document.activeElement)) peek(false);
-    };
-    addEventListener("keydown", fullKeys);
-    addEventListener("pointermove", fullPointer);
+    // ---- full screen, from View or Ctrl+Shift+F: the frame folds the top away (core/frame.ts) and the keyboard comes back to the writing ----
+    const fullScreen = frame.fullScreen;
+    frame.onFull(() => surface.focus());
 
-    // ---- version history: a snapshot on opening and after each pause in editing, kept by store and document ----
-    const historyKey = () => (store && id ? `${store.label}:${id}` : name);
-    /** The document as a snapshot keeps it: a `.quire` document with its styling. */
-    const snapshot = () => {
-        const { text: markdown, quire } = written(surface.getDocument(), write);
-        return snapshotText(markdown, quire);
+    // ---- the document as the core's session holds it: saving as it changes, conflicts, version history, renaming, moving between documents ----
+    const body: Body = {
+        writing: () => written(surface.getDocument(), write),
+        load: (found, entry) => {
+            surface.setDocument(keptNotes(opened(found.text, found.quire, { mdx: /\.mdx$/i.test(entry.id) || /\.mdx$/i.test(entry.name) }), notesPlace()).doc);
+            notes.opened();
+            showTitle();
+            showView(rememberedView(), false);
+        },
+        replace: (theirs) => surface.run(() => opened(theirs.text, theirs.quire ?? (surface.getDocument().quire ? emptyParts() : undefined), { mdx: surface.getDocument().mdx })),
+        empty: () => {
+            fullScreen(false);
+            if (!wide()) outlineView.close();
+            surface.setDocument(read(""));
+            notes.opened();
+            showTitle();
+        },
+        placed: (where) => {
+            store = where.store;
+            id = where.id;
+            name = where.name;
+        },
+        named: (value) => {
+            bar.setName(value);
+            showTitle();
+        },
+        status: (status) => {
+            if (status.state === "saved") {
+                savedAt = Date.now();
+                suggestions.saved();
+            }
+            showDetails();
+        },
+        leaving: () => notes.keep(),
+        moved: (before) => moveNotes(before, notesPlace() ?? before),
+        download: () => void (surface.getDocument().quire ? downloadQuire() : download()),
+        from: () => bar.statusLine,
+        focus: () => surface.focus(),
     };
-    let keeper = createKeeper(versions, historyKey(), snapshot);
-    void keeper.opened();
-    const history = createHistoryPanel(surface, versions, historyKey, {
-        opened: () => keeper.opened(),
-        edited: () => keeper.edited(),
-        now: () => keeper.now(),
-        settled: () => keeper.settled(),
-        stop: () => keeper.stop(),
-    });
-
-    // ---- saving as you type, and what to do when the document changed elsewhere ----
-    let saver = store && id ? createSaver(store, id, options.mark ?? "") : undefined;
-    let quiet = false;
-    // true while a rename moves the document, and whether anything was typed meanwhile
-    let moving = false;
-    let typedWhileMoving = false;
-    const conflict = createConflict(async (choice) => {
-        const asked = saver;
-        if (!asked) return;
-        if (choice === "mine") return void (await asked.choose("mine"));
-        // what was typed here is kept in the version history before theirs takes its place
-        const mine = snapshot();
-        const key = historyKey();
-        const theirs = await asked.choose("theirs");
-        if (!theirs) return;
-        await versions.save(key, mine, { time: Date.now(), ...changes(theirs.text, snapshotParts(mine).markdown) });
-        // their text is shown only if the writer is still in the document it belongs to
-        if (saver !== asked) return;
-        quiet = true;
-        surface.run(() => opened(theirs.text, theirs.quire ?? (surface.getDocument().quire ? emptyParts() : undefined), { mdx: surface.getDocument().mdx }));
-        quiet = false;
-    }, () => surface.focus());
-    const showStatus = (status: Status) => {
-        if (status.state === "saved") {
-            savedAt = Date.now();
-            suggestions.saved();
-        }
-        showDetails();
-        bar.setStatus(short(status, store?.note), said(status, store?.note), status.state === "changed" || status.state === "failed" ? "warn" : "quiet", true);
-        if (status.state === "changed" && saver) conflict.open(saver.unsaved() ?? write(surface.getDocument()), status.theirs?.text);
-    };
-    let stopListening = saver?.on(showStatus);
-    if (saver) showStatus(saver.status());
-    else bar.setStatus("", "This document is not being saved anywhere", "quiet", true);
+    const session = createSession(body, { name, store, id, mark: options.mark, versions, say: bar.setStatus, onRename: options.onRename, onOpen: options.onOpen });
+    // a rename typed in the title and not yet sent is sent before the document is left
+    session.settle(() => clearTimeout(typing));
+    const { open, create, ready, rename } = session;
+    const history = createHistoryPanel(versionView(surface), versions, session.historyKey, session.keeper);
 
     // what only a .quire document can keep folds away from the bar while the document is Markdown
     const richNow = () => {
@@ -1061,226 +996,23 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
     surface.on("change", () => {
         if (options.title && document.activeElement !== title.element) showTitle();
     });
-    surface.on("change", ({ doc: now }) => {
-        // a document being put in place of another is not an edit of the one leaving
-        if (quiet) return;
-        if (store?.note) undownloaded = true;
-        keeper.edited();
-        if (moving) typedWhileMoving = true;
-        else saver?.changed(() => written(now, write));
-    });
-
-    // leaving the page with words not yet saved: they are saved if there is time, and the browser asks
-    const leaving = (event: BeforeUnloadEvent) => {
-        notes.keep();
-        // a file opened from the computer is kept only in this tab: closing it loses what was not downloaded
-        if (undownloaded) return event.preventDefault();
-        if (saver?.unsaved() === undefined) return;
-        void saver.flush();
-        event.preventDefault();
-    };
-    addEventListener("beforeunload", leaving);
-
-    /** Renames the document, one rename at a time. */
-    function rename(value: string) {
-        const run = renaming.then(() => renameNow(value));
-        renaming = run.catch(() => undefined);
-        return run;
-    }
-
-    async function renameNow(value: string) {
-        if (!store || !id || !store.can.rename) {
-            name = value;
-            bar.setName(value);
-            showTitle();
-            options.onRename?.(value);
-            return;
-        }
-        if (saver?.status().state === "changed") {
-            bar.setName(name);
-            showTitle();
-            bar.setStatus("Not renamed", "Not renamed: it was changed somewhere else; choose which version to keep first", "warn");
-            return;
-        }
-        await saver?.flush();
-        const was = { store, id };
-        // what is typed while the file moves is saved once it is in its new place, not into the old one
-        moving = true;
-        try {
-            const moved = await was.store.rename(was.id, value);
-            if (store !== was.store || id !== was.id) return;
-            if (moved !== was.id) await follow(was.store, was.id, moved);
-            name = (await was.store.list().catch(() => [])).find((entry) => entry.id === moved)?.name ?? value;
-            bar.setName(name);
-            showTitle();
-            options.onRename?.(value);
-            options.onOpen?.(was.store, { id: moved, name });
-        } catch (error) {
-            bar.setName(name);
-            showTitle();
-            bar.setStatus("Not renamed", `Not renamed: ${error instanceof Error ? error.message : String(error)}`, "warn");
-        } finally {
-            moving = false;
-            if (typedWhileMoving) {
-                typedWhileMoving = false;
-                saver?.changed(() => written(surface.getDocument(), write));
-            }
-        }
-    }
-
-    /** After a rename that gave the document a new id (a path in a folder or a repository): saving, its history and its notes go on from there. */
-    async function follow(where: Store, from: string, to: string) {
-        const before = `${where.label}:${from}`;
-        notes.keep();
-        const mark = await (where.markOf ? where.markOf(to) : where.open(to).then((found) => found.mark)).catch(() => "");
-        if (saver?.unsaved() !== undefined) typedWhileMoving = true;
-        saver?.stop();
-        stopListening?.();
-        await keeper.now().catch(() => undefined);
-        keeper.stop();
-        id = to;
-        saver = createSaver(where, to, mark);
-        stopListening = saver.on(showStatus);
-        showStatus(saver.status());
-        await moveVersions(versions, before, historyKey()).catch(() => undefined);
-        keeper = createKeeper(versions, historyKey(), snapshot);
-        moveNotes(before, notesPlace() ?? before);
-    }
-
-    async function create(next: Store, wanted: string, body = "", quire?: Parts) {
-        const made = await next.create(wanted, body, quire);
-        const entry = (await next.list().catch(() => [])).find((each) => each.id === made.id) ?? { id: made.id, name: wanted };
-        return open(next, entry);
-    }
-
-    /** Asks the writer what to do with changes that could not be saved: try again, stay, or leave them. A copy can be downloaded meanwhile. */
-    const askUnsaved = (why: string) =>
-        new Promise<"retry" | "stay" | "discard">((answer) => {
-            let chosen: "retry" | "stay" | "discard" = "stay";
-            // every way out is in the one row: leaving without saving, which loses the words, stands apart at the far left
-            openDialog(bar.statusLine, {
-                title: "Not saved",
-                className: "quire-unsaved-dialog",
-                body: [make("p", "", `The latest changes to this document have not been saved: ${why}. They are still here.`)],
-                others: [
-                    { label: "Leave without saving", far: true, press: (dialog) => ((chosen = "discard"), void dialog.close()) },
-                    { label: "Download a copy", press: () => void (surface.getDocument().quire ? downloadQuire() : download()) },
-                ],
-                action: { label: "Try again", press: (_, open) => ((chosen = "retry"), void open.close()) },
-                dismiss: "Stay",
-                onClose: () => answer(chosen),
-            });
-        });
-
-    /** Saves what is waiting before the document is let go. When it cannot be saved the writer is told and chooses; true when the document may go. */
-    async function ready(): Promise<boolean> {
-        // a rename on its way finishes first, so that what is saved goes to the document's new place
-        await renaming;
-        for (;;) {
-            const now = saver;
-            if (!now || !store?.can.save) return true;
-            await now.flush();
-            // what was typed while that save was on its way
-            if (now.status().state === "waiting") await now.flush();
-            if (now.unsaved() === undefined) return true;
-            // whatever is chosen, what was typed is kept in the version history
-            await keeper.now().catch(() => undefined);
-            const status = now.status();
-            const why = status.state === "failed" ? status.message : status.state === "changed" ? "it was changed somewhere else meanwhile" : "it is still waiting to be saved";
-            const choice = await askUnsaved(why);
-            if (choice === "stay") return false;
-            if (choice === "discard" && saver === now) {
-                now.stop();
-                stopListening?.();
-                stopListening = undefined;
-                saver = undefined;
-                return true;
-            }
-        }
-    }
-
-    /** Moves to a document: saves what is waiting in the old one, opens the new, and starts its saver and history. False when the writer stays where she is, or the new one could not be opened. */
-    async function open(next: Store, entry: Entry): Promise<boolean> {
-        clearTimeout(typing);
-        if (!(await ready())) return false;
-        let found: Opened;
-        try {
-            found = await next.open(entry.id);
-        } catch (error) {
-            // the document open stays open, still saving
-            bar.setStatus("Not opened", `${entry.name} was not opened: ${error instanceof Error ? error.message : String(error)}`, "warn");
-            return false;
-        }
-        // typed while the new one was being fetched
-        if (saver?.unsaved() !== undefined && !(await ready())) return false;
-        await keeper.now().catch(() => undefined);
-        notes.keep();
-        saver?.stop();
-        stopListening?.();
-        keeper.stop();
-        store = next;
-        id = entry.id;
-        name = entry.name;
-        bar.setName(name);
-        quiet = true;
-        surface.setDocument(keptNotes(opened(found.text, found.quire, { mdx: /\.mdx$/i.test(entry.id) || /\.mdx$/i.test(entry.name) }), notesPlace()).doc);
-        quiet = false;
-        notes.opened();
-        showTitle();
-        undownloaded = false;
-        saver = createSaver(next, entry.id, found.mark);
-        stopListening = saver.on(showStatus);
-        showStatus(saver.status());
-        keeper = createKeeper(versions, historyKey(), snapshot);
-        void keeper.opened();
-        showView(rememberedView(), false);
-        options.onOpen?.(next, entry);
-        return true;
-    }
-
-    /** Lets the document go: what is waiting is saved, and the editor holds an empty page kept nowhere. False when the writer stays. */
-    async function leave(): Promise<boolean> {
-        clearTimeout(typing);
-        if (!(await ready())) return false;
-        await keeper.now().catch(() => undefined);
-        notes.keep();
-        saver?.stop();
-        stopListening?.();
-        keeper.stop();
-        saver = undefined;
-        stopListening = undefined;
-        store = undefined;
-        id = undefined;
-        name = "Untitled";
-        bar.setName(name);
-        fullScreen(false);
-        if (!wide()) outlineView.close();
-        quiet = true;
-        surface.setDocument(read(""));
-        quiet = false;
-        notes.opened();
-        showTitle();
-        keeper = createKeeper(memoryStorage(), "", snapshot);
-        bar.setStatus("", "Nothing is open", "quiet", true);
-        return true;
-    }
+    // each edit is saved once typing pauses and kept in the history; a document being put in place of another is not an edit (the session sees to it)
+    surface.on("change", () => session.changed());
 
     return {
         surface,
         /** Every command by name, as the menus, the shortcuts and the Ctrl+/ panel run them. */
         commands: actions,
         paper,
-        leave,
+        leave: session.leave,
         getName: () => name,
         current: () => ({ store, id, name }),
         open,
         create,
         ready,
         say: (short, full) => bar.setStatus(short, full, "warn"),
-        flush: async () => {
-            await saver?.flush();
-        },
-        status: () => saver?.status(),
+        flush: session.flush,
+        status: session.status,
         nameElement: () => bar.name,
         rename,
         view({ outline, markdown: shown, plain }) {
@@ -1289,8 +1021,6 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
             if (shown !== undefined || plain) showMarkdown(plain || !!shown);
         },
         destroy() {
-            removeEventListener("keydown", fullKeys);
-            removeEventListener("pointermove", fullPointer);
             caret.destroy();
             details.destroy();
             counter.destroy();
@@ -1301,13 +1031,11 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
             if (printing) document.adoptedStyleSheets = document.adoptedStyleSheets.filter((sheet) => sheet !== printing);
             find.destroy();
             bar.destroy();
-            if (!options.top) top.remove();
             dictation.destroy();
             surface.destroy();
-            for (const menu of [...bar.menus, links, row.menu, zooms]) menu.box.remove();
+            for (const menu of [...bar.menus, links, zooms]) menu.box.remove();
             selectBar.element.remove();
             linkCard.element.remove();
-            palette.destroy();
             slash.destroy();
             textMenu.destroy();
             emojiList.close();
@@ -1316,27 +1044,12 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
             pictureTools.destroy();
             blockMenus.destroy();
             notes.destroy();
-            keeper.stop();
-            saver?.stop();
+            session.destroy();
             history.element.remove();
-            conflict.element.remove();
-            removeEventListener("beforeunload", leaving);
             host.removeEventListener("keydown", zoomKey);
-            host.removeEventListener("keydown", shortcutKey);
-            for (const watcher of watchers) watcher.disconnect();
+            frame.destroy();
             for (const timer of [typing, easing, detailing]) clearTimeout(timer);
             host.replaceChildren();
         },
     };
-}
-
-/** The top's two lines, for an editor on a page without one of its own: the places the page would mark, in the same shape. */
-function makeTop(): HTMLElement {
-    const top = make("div", "quire-top quire-top-own");
-    const inner = make("div", "quire-top-in");
-    const line = make("div", "quire-top-line");
-    line.append(make("span", "quire-name-home"), make("div", "quire-menus-home"), make("div", "quire-status-home"));
-    inner.append(line, make("div", "quire-bar-home"));
-    top.append(inner);
-    return top;
 }

@@ -26,7 +26,7 @@
 
 import type { Drive, DriveFile } from "./drive";
 import { SignInNeeded } from "./drive";
-import { pictureType } from "../md/pictures";
+import { pictureType } from "./picture-bytes";
 import type { Parts } from "./quire-file";
 import { freeName, StoreError, type Entry, type Opened, type Saved, type Store } from "./store";
 import { Damaged, makeLock, openLock, randomBytes, sealText, seal, unseal, unsealText, type VaultKey } from "./vault";

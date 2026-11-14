@@ -10,16 +10,14 @@
 // document.md sits inside one folder (as zipping a folder gives) opens too.
 //
 // Stores carry a `.quire` document as its Markdown text and its Parts, the two JSON files as text,
-// so that a store need not know what is in them; pictures each store keeps its own way. The editor
-// turns a document into those and back with `written` and `opened`.
+// so that a store need not know what is in them; pictures each store keeps its own way. mdQuire
+// turns a document into those and back (md/quire-parts.ts). The layout is mdQuire's today; a kind
+// whose `.quire` holds other files (imgQuire's original and steps) will need the parts widened to
+// a set of named files, which every store then carries the same way.
 
-import { dropField, type Document } from "../md/document";
-import { read } from "../md/read";
-import { collect, PAGE, readStyle, restore, type StyleFile } from "../md/styling";
-import { notesData, withNotes } from "../md/comments";
 import { readZip, writeZip, ZipError } from "./zip";
 import { freeName } from "./store";
-import { pictureType } from "../md/pictures";
+import { pictureType } from "./picture-bytes";
 
 /** What a `.quire` document carries beside its Markdown: style.json and notes.json, as text. */
 export interface Parts {
@@ -80,48 +78,6 @@ export async function unpackQuire(bytes: Uint8Array): Promise<Bundle> {
 
 /** The names a picture inside a `.quire` file may have: no folder, no backslash, drive or control character, not starting with a dot. */
 const PICTURE_NAME = /^[^./\\:\u0000-\u001f\u007f][^/\\:\u0000-\u001f\u007f]*$/;
-
-/** style.json as text, one style to a line, so that it reads plainly and changes show line by line. */
-export function styleText(style: StyleFile): string {
-    const lines = (items: object[]) => (items.length ? `[\n${items.map((item) => `    ${JSON.stringify(item)}`).join(",\n")}\n  ]` : "[]");
-    return `{\n  "quire": 1,\n  "page": ${JSON.stringify(style.page)},\n  "count": ${style.count},\n  "blocks": ${lines(style.blocks)},\n  "runs": ${lines(style.runs)}\n}\n`;
-}
-
-/** A document as a store saves it: plain text for a Markdown file, and for a `.quire` one its Markdown and its parts. */
-export function written(doc: Document, plain: (doc: Document) => string): { text: string; quire?: Parts } {
-    if (!doc.quire) return { text: plain(doc) };
-    const { markdown, style } = collect(doc);
-    return { text: markdown, quire: { style: styleText(style), notes: notesText(notesData(doc, doc.quire.notes)) } };
-}
-
-/** A Markdown document as a `.quire` one: the same words, with a subtitle kept in style.json and no longer in the frontmatter. */
-export function asQuire(doc: Document): Document {
-    const moved = doc.blocks.some((block) => block.kind === "paragraph" && block.subtitle);
-    return { ...(moved ? dropField(doc, "subtitle") : doc), mdx: false, quire: { page: PAGE, notes: null } };
-}
-
-/** A document as opened from a store: read from its text, and with its parts put back if it is a `.quire` one. */
-export function opened(text: string, quire: Parts | undefined, options: { mdx?: boolean } = {}): Document {
-    const doc = read(text, { mdx: !quire && !!options.mdx, quire: !!quire });
-    if (!quire) return doc;
-    let notes: unknown = null;
-    try {
-        notes = JSON.parse(quire.notes || "null");
-    } catch {
-        notes = null;
-    }
-    const styled = restore({ ...doc, quire: { page: readStyle(quire.style).page, notes } }, readStyle(quire.style));
-    // the writer's notes are marked on their words again (comments.ts)
-    return withNotes(styled, notes).doc;
-}
-
-/** notes.json as text, one note to a line, so that it reads plainly and changes show line by line. */
-export function notesText(data: Record<string, unknown>): string {
-    const { comments, ...rest } = data;
-    const list = Array.isArray(comments) && comments.length ? `[\n${comments.map((each) => `    ${JSON.stringify(each)}`).join(",\n")}\n  ]` : "[]";
-    const head = Object.entries(rest).map(([key, value]) => `  ${JSON.stringify(key)}: ${JSON.stringify(value)},\n`).join("");
-    return `{\n${head}  "comments": ${list}\n}\n`;
-}
 
 /** Pictures kept for `.quire` documents held open by a store that writes them as zip files, until they are saved into one. */
 export function pictureShelf() {

@@ -10,7 +10,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { browser, chromium, type Browser } from "../../../scripts/browser";
-import { altGraph, shortcutKey } from "./surface";
+import { shortcutKey } from "./surface";
+import { altGraph } from "../core/ui";
 
 const here = import.meta.dir;
 

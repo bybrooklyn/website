@@ -1,17 +1,13 @@
 // What the `.quire` file is held to: it is a zip of document.md, style.json, notes.json and
 // pictures/ that the system's unzip opens to a plain Markdown document; it unpacks to what was
-// packed; a document saved through it comes back with its styling; and one that is not quite as
-// made (zipped from a folder, missing its JSON) still opens. Run with `bun test src/quire/quire-file.test.ts`.
+// packed; and one that is not quite as made (zipped from a folder, missing its JSON) still opens.
+// mdQuire's parts are held in md/quire-parts.test.ts. Run with `bun test src/quire/core`.
 
 import { expect, test } from "bun:test";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { blockAt, setStyle, type Paragraph } from "../md/document";
-import { asQuire, opened, packQuire, pictureShelf, unpackQuire, written } from "./quire-file";
-import { markdownFor } from "../md/export";
-import { read } from "../md/read";
-import { write } from "../md/write";
+import { packQuire, pictureShelf, unpackQuire } from "./quire-file";
 import { writeZip } from "./zip";
 
 const parts = { style: '{"quire":1}\n', notes: '{"quire":1}\n' };
@@ -58,35 +54,12 @@ test("only pictures whose names stay in their folder are taken from a .quire fil
     expect(() => shelf.show("a.quire", "pictures/%zz.png")).not.toThrow();
 });
 
-test("style.json and notes.json cannot change what every object has, whatever keys they hold", async () => {
-    const hostile = '{"__proto__": {"polluted": "yes"}, "constructor": {"prototype": {"polluted": "yes"}}, "quire": 1, "blocks": [{"__proto__": {"polluted": "yes"}, "path": [0]}], "runs": [{"path": [0], "from": 0, "to": 1, "__proto__": {"polluted": "yes"}, "color": "red"}]}';
-    const notes = '{"__proto__": {"polluted": "yes"}, "comments": [{"__proto__": {"polluted": "yes"}, "id": "a", "path": [0], "from": 0, "to": 2, "quote": "Hi", "text": "x"}]}';
-    const bundle = await unpackQuire(await writeZip([{ name: "document.md", data: "Hi there.\n" }, { name: "style.json", data: hostile }, { name: "notes.json", data: notes }]));
-    const doc = opened(bundle.markdown, bundle.parts);
-    written(doc, write);
-    expect(({} as Record<string, unknown>).polluted).toBeUndefined();
-    expect((Object.prototype as Record<string, unknown>).polluted).toBeUndefined();
-});
-
 test("a .quire zipped from a folder, or without its JSON files, still opens; one without document.md is refused", async () => {
     const nested = await unpackQuire(await writeZip([{ name: "letter/document.md", data: "Hi.\n" }, { name: "letter/pictures/b.png", data: "b" }]));
     expect(nested.markdown).toBe("Hi.\n");
     expect(nested.parts).toEqual({ style: "", notes: "" });
     expect([...nested.pictures.keys()]).toEqual(["b.png"]);
-    expect(opened(nested.markdown, nested.parts).quire?.page.size).toBe("A4");
     expect(unpackQuire(await writeZip([{ name: "readme.txt", data: "no" }]))).rejects.toThrow("no document.md");
-});
-
-test("a styled document written for a store and opened again is the same document", () => {
-    let doc = opened("Plain words here.\n", { style: "", notes: "" });
-    doc = setStyle(doc, { start: { path: [0], offset: 6 }, end: { path: [0], offset: 11 } }, { color: "#a30262", font: "mono" });
-    const saving = written(doc, write);
-    expect(saving.text).toBe("Plain words here.\n");
-    const back = opened(saving.text, saving.quire);
-    expect((blockAt(back, [0]) as Paragraph).runs[1]).toMatchObject({ text: "words", color: "#a30262", font: "mono" });
-    expect(back.quire).toBeDefined();
-    // a plain Markdown document is written as it always was
-    expect(written(read('A <span style="color:red">red</span> word.\n'), write)).toEqual({ text: 'A <span style="color:red">red</span> word.\n' });
 });
 
 test("pictures on the shelf get free names, are shown by their address and follow a rename", () => {
@@ -102,13 +75,4 @@ test("a picture taken out of the writing is not packed into the file", async () 
     const pictures = new Map([["kept.png", new Blob(["k"])], ["gone.png", new Blob(["g"])], ["my cat.png", new Blob(["c"])]]);
     const bundle = await unpackQuire(await packQuire({ markdown: "![Kept](pictures/kept.png)\n\n![Cat](pictures/my%20cat.png)\n", parts, pictures }));
     expect([...bundle.pictures.keys()].sort()).toEqual(["kept.png", "my cat.png"]);
-});
-
-test("a Markdown document's subtitle becomes a .quire document's, in style.json and out of the frontmatter, and goes back into the frontmatter when downloaded as Markdown", () => {
-    const doc = read("---\ntitle: A post\nsubtitle: Under it\n---\n\nThe text.\n");
-    const saved = written(asQuire(doc), write);
-    expect(saved.text).toBe("---\ntitle: A post\n---\n\nUnder it\n\nThe text.\n");
-    const back = opened(saved.text, saved.quire);
-    expect((back.blocks[0] as Paragraph).subtitle).toBe(true);
-    expect(markdownFor(back)).toBe("---\ntitle: A post\nsubtitle: Under it\n---\n\nThe text.\n");
 });

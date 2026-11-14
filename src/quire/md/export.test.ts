@@ -6,7 +6,7 @@
 import { expect, test } from "bun:test";
 import { setImage, type Document } from "./document";
 import { gatherPictures, heldElsewhere, markdownFor, pageHtml, pictureAddresses, plainText, type Picture } from "./export";
-import { opened, written } from "../core/quire-file";
+import { opened, written } from "./quire-parts";
 import { read } from "./read";
 import { write } from "./write";
 
