@@ -20,11 +20,15 @@ import { decodeHeic, heicIn } from "./codec-run";
 import { COLORS, exportPanel, factsPanel, factsSaid, kindOf, nameFor, resizeBox, SHAPES, toolStrip, WEIGHTS } from "./panels";
 import { blocksOut, factsOf, spaceOf, type Facts, type Keep } from "./metadata";
 import { gradingFor } from "./draw";
-import type { Space } from "./grade";
 import { createStage, type Pen, type Tool } from "./stage";
 import { createReading } from "./reading";
+import { gradePanel } from "./grade-panel";
+import { createMeasure } from "./measure";
+import { autoFix, averageAround, balanceFrom } from "./fix";
+import { prepared } from "./draw";
+import { isNeutral, neutral, trimGrade, type Grade } from "./grade";
 import { megabytes, sizeOf, TIERS } from "./read/models";
-import { createHistory, edited, fresh, look, move, readSteps, remove, setOnly, writeSteps, type Filter, type Kept, type Picture } from "./steps";
+import { createHistory, edited, fresh, gradeOf, look, move, readSteps, remove, setOnly, writeSteps, type Filter, type Kept, type Picture } from "./steps";
 
 /** The file a picture document keeps its steps in, inside its `.quire`. */
 export const MAIN = "steps.json";
@@ -47,7 +51,7 @@ const keep = (key: string, value: string) => {
 };
 
 /** The single keys that pick a tool, while the picture has the keyboard. */
-const TOOL_KEYS: Record<string, Tool | "export" | "facts"> = { KeyC: "crop", KeyR: "hide", KeyA: "arrow", KeyT: "text", KeyB: "box", KeyE: "export", KeyI: "facts", KeyW: "read" };
+const TOOL_KEYS: Record<string, Tool | "export" | "facts"> = { KeyC: "crop", KeyR: "hide", KeyA: "arrow", KeyT: "text", KeyB: "box", KeyE: "export", KeyI: "facts", KeyW: "read", KeyG: "grade" };
 
 /** Hands the writer a file. */
 function give(blob: Blob, name: string) {
@@ -81,7 +85,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
     // what of it goes out with an export: none, unless she chooses, for as long as the document is open
     let keeping: Keep = "none";
     // the space it is graded in, from its colour profile, and whether that was known or guessed
-    let colors: { space: Space; known: boolean; profile?: string } = { space: "srgb", known: true };
+    let colors: ReturnType<typeof spaceOf> = { space: "srgb", known: true };
     let where: { store?: Store; id?: string; name: string } = { name: "Untitled" };
     const history = createHistory([]);
     let pen: Pen = (() => {
@@ -147,7 +151,8 @@ export function mountEditor(host: HTMLElement, context: Context) {
         facts.textContent = picture ? factsSaid(look(picture), picture.original.bytes, kindOf(picture.original)) : "";
         reading.clear();
         stage.clear();
-        stage.setTool("crop");
+        stage.setTool(grading.isOpen() ? "grade" : "crop");
+        measured = false;
         refresh();
         if (text !== undefined && !read) return frame.status.say("Not opened", "This picture's steps could not be read", "warn");
         if (!read) return;
@@ -161,6 +166,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
         if (showing.isOpen()) showing.fill();
         await stage.show(await displayable(found).catch(() => found));
         if (token !== loading) return;
+        if (grading.isOpen()) void measureGrade();
         if (read.dropped) frame.status.say("Steps left out", `${read.dropped} of its steps could not be read and were left out`, "warn");
         refresh();
         estimate.soon();
@@ -191,6 +197,10 @@ export function mountEditor(host: HTMLElement, context: Context) {
         session.changed();
         refresh();
         estimate.soon();
+        if (grading.isOpen()) {
+            grading.fill();
+            void measureGrade();
+        }
     }
     const undo = () => history.undo() && changed();
     const redo = () => history.redo() && changed();
@@ -463,6 +473,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
         hideAll: () => void stage.hideFindings(),
         chooseModel: (from) => reading.choose(from),
         readAgain: () => void reading.start(buttons.read),
+        grade: () => (asking ? { said: asking.said, cancel: () => cancelPick() } : undefined),
     });
     const pickedMark = () => {
         const step = history.now().find((each) => each.id === stage.picked());
@@ -511,6 +522,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
         arrow: tool("Arrow (A)", "arrow", () => pickTool("arrow")),
         box: tool("Box (B)", "box", () => pickTool("box")),
         text: tool("Text (T)", "text", () => pickTool("text")),
+        grade: tool("Grade (G)", "paper", () => showGrade()),
         facts: tool("Facts (I)", "info", () => showFacts()),
         export: tool("Export (E)", "export", () => showExportPanel()),
     };
@@ -523,7 +535,8 @@ export function mountEditor(host: HTMLElement, context: Context) {
         made.append(...items);
         return made;
     };
-    const end = group(buttons.facts, buttons.export);
+    buttons.facts.classList.add("quire-img-bar-facts");
+    const end = group(buttons.grade, buttons.facts, buttons.export);
     end.classList.add("quire-bar-end");
     strip0.append(group(buttons.undo, buttons.redo), group(buttons.crop, buttons.resize, buttons.hide, buttons.read), group(buttons.arrow, buttons.box, buttons.text), end);
     bar.append(strip0);
@@ -531,6 +544,8 @@ export function mountEditor(host: HTMLElement, context: Context) {
 
     function pickTool(next: Tool) {
         if (!picture) return;
+        if (next === "grade") return showGrade();
+        if (grading.isOpen()) grading.close();
         if (stage.tool() === "crop" && next !== "crop") stage.applyCrop();
         stage.setTool(stage.tool() === next && next !== "crop" ? "none" : next);
         stage.element.focus({ preventScroll: true });
@@ -549,8 +564,11 @@ export function mountEditor(host: HTMLElement, context: Context) {
         stage.setTool("none");
         stage.element.focus({ preventScroll: true });
     }
-    /** The picture keeps its room narrowed while one of the two panels is open, and has it back when neither is. */
-    const beside = () => room.classList.toggle("beside", exporting.isOpen() || showing.isOpen());
+    /** The picture keeps its room narrowed while one of the panels is open, and has it back when none is. */
+    const beside = () => {
+        room.classList.toggle("beside", exporting.isOpen() || showing.isOpen() || grading.isOpen());
+        room.classList.toggle("grading", grading.isOpen());
+    };
     const showing = factsPanel({
         closed: () => (beside(), refresh()),
         facts: () => ({ ...said, size: picture ? `${picture.original.width} × ${picture.original.height} px, ${weightSaid(picture.original.bytes)} ${kindOf(picture.original)}` : "" }),
@@ -565,11 +583,139 @@ export function mountEditor(host: HTMLElement, context: Context) {
         },
     });
     document.body.append(showing.panel);
+
+    // ---- grading: the whole picture's grade, on the Grade surface ----
+    const measure = createMeasure();
+    let measured = false;
+    // what a press on the picture will do, when a fix asked for one
+    let asking: { said: string } | undefined;
+    /** The grade of what is picked: the whole picture's. */
+    const currentGrade = (steps = history.now()): Grade => {
+        const step = steps.find((each) => each.type === "grade");
+        return step && step.type === "grade" ? gradeOf(step) : neutral();
+    };
+    /** The steps with the whole picture's grade set to this one, or taken away when it changes nothing. */
+    const withGrade = (grade: Grade): Kept[] => (isNeutral(grade) ? history.now().filter((step) => step.type !== "grade") : setOnly(history.now(), { type: "grade", grade: trimGrade(grade) }));
+    /** Counts the grade on the small copy, in the worker, and draws the counts when they come. */
+    async function measureGrade(steps = history.now()) {
+        const loaded = stage.loaded();
+        if (!loaded || !picture) return;
+        if (!measured) {
+            measured = true;
+            measure.picture(await loaded.small(200), loaded.size);
+        }
+        const shown = look({ ...picture, steps });
+        measure.grade(shown.grades.filter((each) => !isNeutral(each.grade)).map((each) => ({ ready: prepared(each.grade, colors.space) })), shown.crop, colors.space, (counts) => grading.counts(counts));
+    }
+    const grading = gradePanel({
+        closed: () => {
+            cancelPick();
+            stage.hold(false);
+            stage.setSplit(undefined);
+            if (stage.tool() === "grade") stage.setTool("none");
+            beside();
+            refresh();
+        },
+        grade: () => currentGrade(),
+        target: () => "Whole picture",
+        space: () => (colors.space === "p3" ? "Graded in Display P3, as the picture's profile says" : colors.known ? "Graded in sRGB" : `Graded as sRGB: the picture's profile (${colors.profile ?? "unnamed"}) is not one this knows`),
+        preview: (grade) => {
+            const steps = withGrade(grade);
+            stage.preview(steps);
+            void measureGrade(steps);
+        },
+        set: (grade) => {
+            stage.preview(undefined);
+            commit(withGrade(grade));
+        },
+        auto: () => void autoGrade(),
+        balance: () => {
+            if (asking) return cancelPick();
+            asking = { said: "Press something that should be gray" };
+            stage.arm((at) => void balanceAt(at));
+            grading.fill();
+            refresh();
+        },
+        balancing: () => !!asking,
+        hold: (on) => stage.hold(on),
+        split: () => stage.split() !== undefined,
+        setSplit: (on) => stage.setSplit(on ? stage.element.clientWidth / 2 : undefined),
+    });
+    document.body.append(grading.panel);
+    /** Lets a press asked for go, as Escape or Cancel does. */
+    function cancelPick() {
+        if (!asking) return;
+        asking = undefined;
+        stage.arm(undefined);
+        grading.fill();
+        refresh();
+    }
+    /** Balance: the warmth and tint that make the place pressed neutral, from the original's own pixels round it. */
+    async function balanceAt(at: { x: number; y: number }) {
+        asking = undefined;
+        const loaded = stage.loaded();
+        if (!loaded) return;
+        const x = Math.round(Math.max(0, Math.min(loaded.size.width - 1, at.x)));
+        const y = Math.round(Math.max(0, Math.min(loaded.size.height - 1, at.y)));
+        const area = { x: Math.max(0, x - 2), y: Math.max(0, y - 2), width: Math.min(5, loaded.size.width - Math.max(0, x - 2)), height: Math.min(5, loaded.size.height - Math.max(0, y - 2)) };
+        const pixels = await loaded.pixels(area);
+        const { warmth, tint } = balanceFrom(averageAround(pixels, area.width, area.height, x - area.x, y - area.y));
+        commit(withGrade({ ...currentGrade(), warmth, tint }));
+        frame.status.say("Balanced", `Warmth ${warmth}, tint ${tint}: the place pressed is now neutral`);
+        grading.fill();
+        refresh();
+    }
+    /** Auto: the cast taken out and the levels set, as the warmth and tint sliders and the curve's ends. */
+    async function autoGrade() {
+        const loaded = stage.loaded();
+        if (!loaded) return;
+        const small = await loaded.small(256);
+        const fixed = autoFix(small.data, colors.space);
+        const now = currentGrade();
+        commit(withGrade({ ...now, warmth: fixed.warmth, tint: fixed.tint, curves: { ...now.curves, all: fixed.curve } }));
+        frame.status.say("Auto", `Warmth ${fixed.warmth}, tint ${fixed.tint}, and the curve's ends at ${fixed.curve[0]!.x} and ${fixed.curve.at(-1)!.x}`);
+    }
+    /** Opens the Grade surface in the export's place, or closes it. */
+    function showGrade(from: HTMLElement = buttons.grade) {
+        if (grading.isOpen()) return grading.close();
+        if (!picture) return;
+        if (stage.tool() === "crop") stage.applyCrop();
+        exporting.close();
+        showing.close();
+        stage.setTool("grade");
+        grading.fill();
+        grading.open(from);
+        beside();
+        refresh();
+        void measureGrade();
+        grading.sliders[0]?.track.focus({ preventScroll: true });
+    }
+    // the original seen while the backslash is held, wherever the keyboard is in the picture or the surface
+    const holdKey = (event: KeyboardEvent) => {
+        if (event.key !== "\\" || (event.target instanceof HTMLInputElement && event.target.type !== "range")) return;
+        event.preventDefault();
+        stage.hold(event.type === "keydown");
+    };
+    for (const each of [stage.element, grading.panel]) {
+        each.addEventListener("keydown", holdKey);
+        each.addEventListener("keyup", holdKey);
+    }
+    stage.element.addEventListener("blur", () => stage.hold(false));
+    // undo and redo reach the surface too, which lies outside the frame's keys; its number fields keep their own
+    grading.panel.addEventListener("keydown", (event) => {
+        if (!(event.ctrlKey || event.metaKey) || event.altKey || event.target instanceof HTMLInputElement) return;
+        const key = event.key.toLowerCase();
+        const run = key === "z" && !event.shiftKey ? undo : (key === "z" && event.shiftKey) || key === "y" ? redo : undefined;
+        if (!run) return;
+        event.preventDefault();
+        run();
+    });
     /** Opens the facts in the export's place, or closes them. */
     function showFacts(from: HTMLElement = buttons.facts) {
         if (showing.isOpen()) return showing.close();
         if (!picture) return;
         exporting.close();
+        grading.close();
         showing.fill();
         showing.open(from);
         beside();
@@ -581,6 +727,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
         if (stage.tool() === "crop") stage.applyCrop();
         // the picture makes room for the panel, gliding into what is left, rather than lying under it
         showing.close();
+        grading.close();
         room.classList.add("beside");
         exporting.open(from);
         void showExport();
@@ -594,11 +741,11 @@ export function mountEditor(host: HTMLElement, context: Context) {
         empty.inert = has;
         for (const [name, button] of Object.entries(buttons)) {
             button.disabled = !has;
-            button.classList.toggle("pressed", stage.tool() === name || (name === "export" && exporting.isOpen()) || (name === "facts" && showing.isOpen()));
+            button.classList.toggle("pressed", (stage.tool() === name && name !== "grade") || (name === "export" && exporting.isOpen()) || (name === "facts" && showing.isOpen()) || (name === "grade" && grading.isOpen()));
         }
         buttons.undo.disabled = !history.canUndo();
         buttons.redo.disabled = !history.canRedo();
-        const kind = !has ? "none" : stage.tool() === "crop" ? "crop" : stage.tool() === "read" ? "read" : stage.tool() === "arrow" || stage.tool() === "box" || stage.tool() === "text" || pickedMark() ? "mark" : "none";
+        const kind = !has ? "none" : stage.tool() === "crop" ? "crop" : stage.tool() === "read" ? "read" : stage.tool() === "grade" ? "grade" : stage.tool() === "arrow" || stage.tool() === "box" || stage.tool() === "text" || pickedMark() ? "mark" : "none";
         strip.fill(kind);
         if (picture && !facts.textContent) facts.textContent = factsSaid(look(picture), picture.original.bytes, kindOf(picture.original));
         if (!picture) facts.textContent = "";
@@ -679,7 +826,10 @@ export function mountEditor(host: HTMLElement, context: Context) {
                             run: () => {},
                         },
                     ],
-                    [{ label: "Facts", icon: tick(showing.isOpen(), "info"), hint: "I", key: "facts", pressed: showing.isOpen(), disabled: !picture, run: () => showFacts(frame.name) }],
+                    [
+                        { label: "Facts", icon: tick(showing.isOpen(), "info"), hint: "I", key: "facts", pressed: showing.isOpen(), disabled: !picture, run: () => showFacts(frame.name) },
+                        { label: "Split", icon: tick(stage.split() !== undefined, "column"), key: "split", pressed: stage.split() !== undefined, disabled: !picture, run: () => stage.setSplit(stage.split() === undefined ? stage.element.clientWidth / 2 : undefined) },
+                    ],
                     [{ label: "Full screen", icon: "full", hint: "Ctrl+Shift+F", key: "full-screen", run: () => frame.fullScreen(!frame.isFull()) }],
                 ),
         },
@@ -708,6 +858,11 @@ export function mountEditor(host: HTMLElement, context: Context) {
                             run: () => {},
                         },
                         { label: "Remove the resize", icon: "trash", disabled: !history.now().some((step) => step.type === "resize"), run: () => commit(history.now().filter((step) => step.type !== "resize")) },
+                    ],
+                    [
+                        { label: "Grade", icon: tick(grading.isOpen(), "paper"), hint: "G", key: "grade", pressed: grading.isOpen(), disabled: !picture, run: () => showGrade() },
+                        { label: "Auto", icon: "paper", key: "grade-auto", disabled: !picture, run: () => void autoGrade() },
+                        { label: "Remove the grade", icon: "trash", disabled: !history.now().some((step) => step.type === "grade"), run: () => commit(history.now().filter((step) => step.type !== "grade")) },
                     ],
                 ),
         },
@@ -796,6 +951,8 @@ export function mountEditor(host: HTMLElement, context: Context) {
             ["A", "Arrow"],
             ["B", "Box"],
             ["T", "Text"],
+            ["G", "Grade: sliders, curves, wheels, looks, and parts of the picture"],
+            ["\\", "Hold to see the original"],
             ["E", "Export"],
             ["Enter", "Apply the crop"],
             ["Escape", "Leave the tool"],
@@ -835,9 +992,10 @@ export function mountEditor(host: HTMLElement, context: Context) {
         // single keys only while the picture, not a field, has the keyboard
         if (!onPicture || event.altKey || control) return undefined;
         const picked = TOOL_KEYS[event.code];
-        if (picked && !event.shiftKey) return () => (picked === "export" ? showExportPanel() : picked === "facts" ? showFacts() : pickTool(picked));
+        if (picked && !event.shiftKey) return () => (picked === "export" ? showExportPanel() : picked === "facts" ? showFacts() : picked === "grade" ? showGrade() : pickTool(picked));
         if (event.key === "Enter" && stage.tool() === "crop") return applyCrop;
         if (event.key === "Escape") {
+            if (asking) return () => cancelPick();
             if (stage.picked()) return () => stage.pick(undefined);
             if (stage.selected()) return () => stage.selectAll(false);
             if (stage.tool() !== "none") return () => (stage.tool() === "crop" ? stage.setTool("none") : stage.setTool("none"));
@@ -877,9 +1035,13 @@ export function mountEditor(host: HTMLElement, context: Context) {
         steps: () => history.now(),
         changeStep: (id: string, to: Partial<Kept>) => commit(history.now().map((step) => (step.id === id ? ({ ...step, ...to } as Kept) : step))),
         downloadQuire,
+        flatten: () => flattened(),
+        grading,
         destroy() {
             estimate.cancel();
             reading.destroy();
+            measure.destroy();
+            grading.panel.remove();
             document.removeEventListener("paste", pasted);
             session.destroy();
             frame.destroy();

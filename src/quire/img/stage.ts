@@ -25,8 +25,8 @@ import { coverFor, type Line } from "./read/words";
 import type { Finding } from "./read/private";
 import { make } from "../core/ui";
 
-/** The tools: the crop's frame, hiding, the three marks, reading text, or none (dragging then picks and moves, or selects words). */
-export type Tool = "crop" | "hide" | "arrow" | "box" | "text" | "read" | "none";
+/** The tools: the crop's frame, hiding, the three marks, reading text, grading (the picture then pans, and shows the grade's parts), or none (dragging then picks and moves, or selects words). */
+export type Tool = "crop" | "hide" | "arrow" | "box" | "text" | "read" | "grade" | "none";
 
 /** A word on the stage: its text and box, its line, and the cover pressing it makes. */
 export interface PlacedWord {
@@ -128,7 +128,12 @@ export function createStage(hooks: StageHooks) {
     const writing = make("input", "quire-img-writing");
     writing.type = "text";
     writing.setAttribute("aria-label", "Text");
-    element.append(canvas, over, frame, writing);
+    // the split between the original and the grade: a fine line with a grip to drag
+    const splitter = make("div", "quire-img-split");
+    const grip = make("span", "quire-img-split-grip");
+    splitter.append(grip);
+    splitter.setAttribute("aria-hidden", "true");
+    element.append(canvas, over, frame, writing, splitter);
 
     let loaded: Loaded | undefined;
     let blob: Blob | undefined;
@@ -151,6 +156,8 @@ export function createStage(hooks: StageHooks) {
     // the original shown in place of the grade while it is held, and where the split between the two falls (in the stage's own pixels from its left), if it is on
     let holding = false;
     let split: number | undefined;
+    // a press asked for by a tool (Balance, a color picked), taken before anything else the press would do
+    let armed: ((at: Point) => void) | undefined;
 
     const picture = () => {
         const found = hooks.picture();
@@ -233,7 +240,31 @@ export function createStage(hooks: StageHooks) {
             const box = toStage(cropFrame);
             Object.assign(frame.style, { left: `${box.x}px`, top: `${box.y}px`, width: `${box.width}px`, height: `${box.height}px` });
         }
+        splitter.classList.toggle("shown", split !== undefined);
+        if (split !== undefined) splitter.style.left = `${split}px`;
     }
+
+    // the split's grip is dragged along the picture; the line follows the pointer exactly, and the picture each frame
+    let splitting: number | undefined;
+    grip.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        grip.setPointerCapture(event.pointerId);
+        splitting = event.pointerId;
+        splitter.classList.add("dragging");
+    });
+    grip.addEventListener("pointermove", (event) => {
+        if (splitting !== event.pointerId) return;
+        split = Math.max(0, Math.min(element.clientWidth, pointer(event).x));
+        paint();
+    });
+    const splitDone = (event: PointerEvent) => {
+        if (splitting !== event.pointerId) return;
+        splitting = undefined;
+        splitter.classList.remove("dragging");
+    };
+    grip.addEventListener("pointerup", splitDone);
+    grip.addEventListener("pointercancel", splitDone);
 
     /** The words lightly tinted while reading, the one under the pointer more, a run or a selection fully, and what looks private outlined. */
     function drawWords(context: CanvasRenderingContext2D, where: Place, ratio: number) {
@@ -427,6 +458,13 @@ export function createStage(hooks: StageHooks) {
         const at = pointer(event);
         const found = hooks.picture();
         if (!found || !loaded) return;
+        if (armed && event.button === 0 && !spaceHeld) {
+            const done = armed;
+            armed = undefined;
+            element.dataset.armed = "";
+            done(toOriginal(at));
+            return;
+        }
         element.setPointerCapture(event.pointerId);
         if (event.button === 1 || spaceHeld) return void (drag = { kind: "pan", from: at, view });
         const there = toOriginal(at);
@@ -469,7 +507,7 @@ export function createStage(hooks: StageHooks) {
                 drag = { kind: "select", from: word };
                 selection = [word, word];
             }
-        } else if (tool === "none" || tool === "read") {
+        } else if (tool === "none" || tool === "read" || tool === "grade") {
             selection = undefined;
             drag = { kind: "pan", from: at, view };
         } else drag = { kind: "draw", from: there };
@@ -714,6 +752,12 @@ export function createStage(hooks: StageHooks) {
             paint();
         },
         split: () => split,
+        /** The next press on the picture goes to `done`, with its place in the original's pixels, and does nothing else; nothing to take the press back. */
+        arm(done: ((at: Point) => void) | undefined) {
+            armed = done;
+            element.dataset.armed = done ? "yes" : "";
+        },
+        armed: () => !!armed,
         /** Draws the steps given in place of the document's, as a drag does before letting go makes them a change; nothing to go back to the document's. */
         preview(steps: Kept[] | undefined) {
             live = steps;
