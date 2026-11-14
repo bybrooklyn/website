@@ -1,8 +1,8 @@
 # A marble run
 
 A mini: build a marble run in three dimensions and watch marbles go down it. A plan dated 13 November
-2026. Stage 1, what Mote needed, and stage 2, pieces and snapping, were built on 14 November 2026
-(below). The mini is a draft, Marbles, at `/minis/marbles/`.
+2026. Stage 1, what Mote needed, and stage 2, pieces and snapping, were built on 14 November 2026,
+and stage 3, the editor, on 14 November 2026 too (below). The mini is a draft, Marbles, at `/minis/marbles/`.
 
 ## Decided
 
@@ -94,7 +94,7 @@ Mote's broad phase and inertia; see [mote](mote.md)):
 2. Pieces and snapping: the box, joints, placing by drag, supports, and marbles rolling down a run built
    from fixed pieces. **Built** (see below).
 3. The editor: camera, handles, selection, undo, copy and groups, touch throughout, building while it
-   runs with the ghost marble.
+   runs with the ghost marble. **Built**, waiting to be looked at (see below).
 4. Bending, with its limits and warnings.
 5. Moving parts and sound.
 6. The look: wood, glass, shadows.
@@ -289,12 +289,180 @@ Dice, Plinko and Rolling draw as before: Dice and Rolling the same to the pixel.
 - The funnel's hole leaves 1.5 cm clear of its axis for a marble of 0.8; at 1.1 marbles arriving together
   jammed there and fell asleep.
 
+## Stage 3, built
+
+On 14 November 2026, in the draft Marbles: `marbles.ts` rewritten on new files, each with its test:
+`edit.ts` (groups moved, turned, mirrored, fitted and resized, as data), `history.ts` (undo),
+`ghost.ts` (the ghost marble), `handles.ts` (the handles' arithmetic and shapes), and `toolbar.ts` (the
+icons and the bar, wiring only). `orbit.ts` gained the views straight on and the narrow lens; `table.ts`
+a table whose hoppers stay empty, where each hopper's marble waits and which piece a point is in.
+`scripts/browser.ts` gained several fingers at once (`fingers`) and modifiers on `click` and `drag`, each
+with a test. Mote itself is unchanged; every other mini steps as before.
+
+**Choosing.** A tap or click chooses a piece, shown by a lift in tone toward the accent. Shift with a
+click, a long press of a finger (0.45 s, with a small buzz where the device has one), or a tap with the
+select tool on adds it or takes it out again. A box is drawn round many by Control with a drag on the
+table, by a long press on the table and then a drag, or by a drag with the select tool on (B); what
+has its middle inside is chosen. Control and A chooses all, J (or the strip's chain) everything joined
+to what is chosen, comma and full stop the piece before and after; a tap on the table or Escape chooses
+nothing. One finger on the table still turns the view, so the box never fights orbiting.
+
+**Handles**, drawn over everything in the scene and one size on the screen at any distance (an arrow
+74 pixels, the ring 54 across from its middle): an arrow along each axis, red across, green up, blue
+along; a ring about the upright in the accent; and, on one chosen piece that can be resized, a knob
+past its far end. A handle is taken by its outer part and head, from a fingertip (24 pixels) or the
+mouse (13) away, and only once the press moves; over a chosen piece only a press on the handle itself
+takes it, so what is chosen can still be carried where the handles cross it. The arrows move by whole
+cells and the green one by levels, the pointer's nearest point on the axis, so the pieces stay under it;
+the ring turns by quarters about the corner nearest the middle; one piece hanging from one joint goes
+round the ways it fits there instead (`snaps`), so it stays joined. While dragged, only that handle
+shows; joints part and rejoin as pieces pass open ends, with stage 2's click; let go where it does not
+fit, it goes back. The ring's angle is kept to quarters by `turnedBy`; finer angles for bending would
+change only that rounding and `Place.turn`, which is whole quarters today.
+
+**Resizing.** The knob changes the piece's own numbers, its first joint staying where it is, to the
+form whose far joint is nearest the pointer (`resized`): a straight 1 to 6 cells; a slope 1 to 6 cells
+along and 1 to 8 levels down; a curve tight or wide (a quarter or a turn back); an S bend 2 to 4 cells
+along and 1 or 2 aside; a drop 3 to 10 levels; a spiral's drop, at least three levels a turn. A slope, a
+drop and a spiral are dragged in the upright plane along them, the rest on the level of their end. The
+hopper, the tray, the funnel and the loop have no size.
+
+**Carrying.** A drag on a chosen piece carries everything chosen; on another piece, that piece alone.
+Pieces carried leave the table at once, so marbles on them fall (they do not ride). A group snaps when
+one of its open joints comes within 40 pixels (60 for a finger) of an open joint, every way being worked
+out once when it is lifted (`groupSnaps`); one piece snaps by its middle, as in stage 2. The arrows (or
+WASD) lift what is chosen and move it a cell the way the view looks, Q and E or Alt with up and down a
+level; Enter puts it down, Escape puts it back.
+
+**Undo** keeps every state of the run as its text, from the first; a step is the run's text after any
+change (place, move, turn, resize, mirror, take away, paste, load, clear), never two the same running.
+The steps are kept in the browser with the run (the newest that fit in a million characters, all of them
+in memory) and carry on after a reload if the run kept is the one they end at. Putting a run back keeps
+the numbers of the pieces it shares with the run before (`matched`), so only what changed is rebuilt and
+marbles on the rest roll on. Control and Z, Control with Shift and Z or Y, and two buttons. Tested over
+a thousand random changes, undos and redos; in the browser, by mouse and by finger, undoing 21 to 23
+steps back to an empty table and redoing them gave the run's text the same to the character.
+
+**Copy, paste, mirror and pieces of one's own.** Copy keeps what is chosen as a run's text moved so
+its middle is at the corner (`asOwn`), and puts it on the system's clipboard too, so a section can go
+from one browser to another. Pasted with Control and V while the pointer is over the run, it follows
+the mouse and snaps by any open joint, and a click puts it down; from the bar's paste button, or with
+nothing under the pointer, it goes at the open end like a piece pressed in the box, the way marbles
+flow first. Control and D duplicates, Control and X cuts. Mirror flips what is chosen left for right:
+across the line along its one joint to the rest if it has exactly one, so it stays joined and turns the
+other way (a curve to the right becomes one to the left), otherwise across the upright line through its
+middle as the view sees it. The arithmetic: a piece's own mirror reflects it across the row of its
+first joint, half a cell from its corner; reflecting the world across z = k instead turns its turns the
+other way (t becomes -t) and leaves its corner where the reflection of the corner is, less a cell turned
+by -t, so k must be on a cell's edge or through its middle (`mirrored`); the test holds every joint and
+box of every made run to its reflection. Straights, slopes, drops, the hopper and the tray are the same
+mirrored and stay unmirrored in the text. The strip's box with a plus keeps what is chosen as a piece of
+one's own, named in a line that takes its place; it is kept in the browser, shown in the box after the
+made pieces with a picture drawn by the scene's code, placed like any piece (pressed, or dragged up),
+and taken out of the box by the cross in its corner.
+
+**The ghost marble.** A marble from each hopper, let go together as the real ones are, followed on a
+table of its own (`makeTable({ filled: false })`) with the run as it is now, and, while pieces are
+carried and fit where they are, as it would be with them there. It works a few milliseconds a frame
+(2.5 while something is carried, 6 otherwise) and the path grows as it is found; it starts again
+whenever the run it would run on changes. Shown as a thin thread along the top of the marble's way and
+a faint marble going along it at a marble's speed, resting a moment at the end. It ends where the
+marble comes to rest in a tray, stops (slower than 1.5 cm/s for 0.6 s, or asleep), leaves the track and
+lands on the table, or after 40 s. A marble's last piece is the one it is touching, not one it flies
+over (in the air its speed changes by gravity alone). Following a lone marble of the twenty piece run to
+its tray is about 1,540 steps of 1/120 s at 0.17 ms each in Bun, 250 ms in all (Chromium is about a
+third faster), with 5 ms to build its table the first time and 4 to start again; so at the budget the
+whole way is found in about half a second at 60 frames a second when nothing is carried, and about a
+second while something is, the thread growing meanwhile. It never touches the real table; the test holds a real race beside it the same to the bit.
+
+**The marks and the ghost agree** because the marks are now the ghost's: the piece where it stops is
+tinted as too level, the piece it leaves the track from as thrown off; the open ends keep stage 2's
+small squares from `checks.ts`, which are exact. The guesses by energy in `checks.ts` are no longer
+shown: they disagreed with the physics now and then (a run of four long straights stops a marble a
+piece further on than they say; a run too steep for a tight curve threw the marble from the tray's
+chute, not the curve). The test holds the ghost to falling from the piece marked open, stopping within
+a piece of where the guess says, and being thrown off a run too steep. The line of words under the
+scene is gone.
+
+**The camera.** Orbit, pan and zoom as before; views from above, the front and the side, turned to with
+a short eased turn (0.45 s) the short way round, from the little axes in the canvas's top right corner
+(a dot for each axis, coloured as the arrows, the near ones over the far ones, the view it is in
+ringed; pressed, the view looks from there; the hollow ends look from the back and the left), or 7, 1
+and 3. Views straight on use a narrow lens (5 degrees, the eye further back by as much, so what is
+looked at keeps its size), all but a drawing without depth, which lines pieces up as a plan does;
+turning the view by hand eases back to the usual lens, and 5 switches it. From above, the far side of
+the table is up the picture. The fit button fits the run, or what is chosen when something is
+(Home and Shift with Home).
+
+**The panel.** The box stays a strip of pictures. The tools are one raised surface of icon buttons in
+three groups parted by thin rules, drawn in mdQuire's line style with a tooltip naming the key: select,
+undo, redo, paste; let a marble go, a stream, pause, clear the marbles; fit, sound, keys, runs to start
+from. 2.5rem square, 2.75rem where the pointer is a finger; on a phone each group is a row. What acts
+on what is chosen is a strip that grows out of the selection's edge, above it and its handles or under
+them where there is no room: turn, mirror, what is joined, copy, duplicate, keep as one's own, take
+away. The keys (a plain list) and the runs to start from (with an empty table and choosing every piece)
+open as folds under the bar, growing from their button. The canvas never lets the page scroll under a
+finger.
+
+**Measured**, by `scripts/browser.ts` in headless Chromium, built and served from `dist`. With the
+mouse at 1440 by 900: a hopper dragged up from the box and raised 22 levels by its green arrow, fourteen
+pieces pressed in after it, nothing marked, the ghost in the tray; a second hopper dragged out and
+raised; five pieces chosen by Shift and clicks and carried as one until their open end snapped to the
+new hopper; three copied, pasted following the mouse to an open end and put down with a click; mirrored
+by the strip; a straight pressed in at the end and dragged by its knob from 1 cell to 3; all undone back
+to the empty table and all redone, the text the same; three kept as "hairpin" and put in twice from the
+box; the ghost changing from arriving to falling while the tray was carried off; each view from the
+little axes. By finger at 1024 by 768 and 390 by 800, the same, with the select tool and a long press
+for choosing, the strip and the bar for copy, paste, mirror and keeping, the bar for undo, and two
+fingers: spreading them three times as far brought the view three times nearer, moving them together
+panned, turning them by 0.6 rad turned the view by 0.6. At 390 the handles cover a small selection, so
+it was fitted first (the fit button) and then carried. The page did not scroll under a finger and was
+never wider than the window. Every key in the keys list was pressed and did what it says.
+
+With 100 marbles on the twenty piece run (70 in the tray) and ten pieces carried round by the mouse for
+four seconds, on four cores: the physics 1.9 ms a step, the ghost 2.1 ms a frame, everything the scene
+does in a frame 3.2 ms on average and 7.5 at most. The drawing itself is done by headless Chromium in
+software, at about ten frames a second for the whole page whatever the scene does, so frame times on a
+real screen were not measured.
+
+**Choices to confirm.**
+
+- Marbles on a carried piece fall; they do not ride it.
+- The fit button fits what is chosen when something is, and the run otherwise; its icon says which.
+- Handles take a press only once it moves, and over a chosen piece only on the handle itself.
+- A long press adds to the choice; on the table it starts a box. Taps with the select tool add too.
+- The ghost is always shown, faintly, and its marks replace the guesses by energy.
+- A paste by Control and V follows the mouse; from the button it goes at the open end.
+- The little axes in the corner, without letters; the narrow lens in views straight on, by itself.
+- Pieces of one's own are named when kept; they are removed by a cross in the box.
+- The strip covers what is behind it, as mdQuire's does; it keeps clear of the handles only.
+
+**What stage 4, bending, can rely on.**
+
+- The run is still `Placed[]` with quarter turns; every edit is a `Move` (quarters, cells, levels) or a
+  new kind (`resized`), and goes through `groupFits`, `changed()` and a step of undo. A bend will be a
+  new number in the kind or the place, written in the text (which will need `v2`), and undo, copy and
+  pieces of one's own carry it with no more work.
+- Handles: `handles.ts` gives places on the screen, which one a pointer takes, and distances along an
+  axis; control points for bending can be one more kind of handle, drawn and taken the same way.
+- The ghost runs on whatever `table.set` builds, so a bent piece is in it as soon as the table makes
+  it; its marks are where bending limits will show.
+- A piece's shape is cached by its key; a bent piece needs its bend in the key.
+
+**For stage 4 to know.**
+
+- A drag of a chosen piece and a drag of a handle start the same; only the handle's outer part takes
+  a press, and only when it moves. Control points will need room of their own on the screen.
+- The little axes and the strip are drawn over the canvas; their places are worked out each frame.
+- The keys are nearly all taken (the list in the keys panel); bending will want few.
+
 ## Open
 
 - Its name.
 - Two fingers on a real tablet: whether pan, pinch and twist together feel right, and whether a finger
   should turn a piece being carried.
 - Whether a touch on a piece should choose it or carry it at once; for now a press chooses and a drag carries.
+- How the strip and the handles should share a small selection on a phone, where the handles cover it.
 - Whether marbles can be of different sizes and weights.
 - How large a run may be before the page slows, and what is said then.
 - Whether a run can be exported for printing in three dimensions.

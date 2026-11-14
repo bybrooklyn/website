@@ -67,6 +67,10 @@ export interface Table {
     arrived(marble: Solid): boolean;
     /** Told of each marble taken away by the table, so that its drawing can go too. */
     gone?: (marble: Solid) => void;
+    /** Where each hopper's marble waits to be let go, by the hopper's number, in the run's order. */
+    mouths(): { id: number; at: V3 }[];
+    /** The piece whose room a point is in (with a little more round it), if any: the one a marble there is on. */
+    pieceAt(p: V3): number | undefined;
 }
 
 /** Where a marble rests in the groove at a point along a piece of track: the nearest point of its middle line, then down by how far a marble sinks. */
@@ -83,8 +87,11 @@ function restingOn(piece: Piece & { frame?(t: number): { p: V3; up: V3 }; path?:
     return [f.p[0] - f.up[0] * SINK, f.p[1] - f.up[1] * SINK, f.p[2] - f.up[2] * SINK];
 }
 
-/** A table with nothing on it but the ground. */
-export function makeTable(): Table {
+/**
+ * A table with nothing on it but the ground. Hoppers fill themselves with marbles unless `filled` is
+ * false, for a table that only works out where a marble would go (ghost.ts).
+ */
+export function makeTable({ filled = true } = {}): Table {
     const space = marbleSpace();
     const reach = TABLE * CELL + 40;
     space.slab([0, -1, 0], [reach, 1, reach], undefined, CLOTH);
@@ -125,7 +132,7 @@ export function makeTable(): Table {
         if (shape.wait && shape.inside) {
             const chute = world.lengths[0]!.piece;
             const hopper: Hopper = { wait: restingOn(chute, toWorld(piece.place, shape.wait)), inside: restingOn(chute, toWorld(piece.place, shape.inside)) };
-            fill(hopper);
+            if (filled) fill(hopper);
             one.hopper = hopper;
         }
         return one;
@@ -240,10 +247,18 @@ export function makeTable(): Table {
             marbles.length = 0;
             for (const one of built.values()) {
                 const hopper = one.hopper;
-                if (!hopper) continue;
+                if (!hopper || !filled) continue;
                 if (hopper.coming || hopper.waiting) continue;
                 fill(hopper);
             }
+        },
+        mouths: () => table.run.flatMap((piece) => {
+            const hopper = built.get(piece.id)?.hopper;
+            return hopper ? [{ id: piece.id, at: hopper.wait }] : [];
+        }),
+        pieceAt(p) {
+            for (const one of built.values()) if (one.room.some((box) => [0, 1, 2].every((axis) => Math.abs(p[axis]! - box.at[axis]!) <= box.half[axis]! + 0.6))) return one.piece.id;
+            return undefined;
         },
         arrived(marble) {
             for (const one of built.values()) {

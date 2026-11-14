@@ -93,9 +93,52 @@ export function enters(line: Ray, at: V3, half: V3): number | undefined {
     return near;
 }
 
-/** The camera kept within its limits: tipped no further than `TIP`, no nearer or further than `FAR`. */
-export function kept(orbit: Orbit): Orbit {
-    return { at: orbit.at, turn: orbit.turn, tip: Math.max(TIP[0], Math.min(TIP[1], orbit.tip)), far: Math.max(FAR[0], Math.min(FAR[1], orbit.far)) };
+/** How far the views straight on may tip: level with the ground, and all but straight down (straight down has no way round). */
+export const STRAIGHT: [number, number] = [0, Math.PI / 2 - 0.002];
+
+/**
+ * The camera kept within its limits: tipped no further than `TIP`, no nearer or further than `FAR`. Given
+ * where it was, a camera already tipped past `TIP` by a view straight on may stay there and come back,
+ * so that the first drag from the view from above does not jump.
+ */
+export function kept(orbit: Orbit, was?: Orbit): Orbit {
+    const low = Math.max(STRAIGHT[0], Math.min(TIP[0], was?.tip ?? TIP[0]));
+    const high = Math.min(STRAIGHT[1], Math.max(TIP[1], was?.tip ?? TIP[1]));
+    return { at: orbit.at, turn: orbit.turn, tip: Math.max(low, Math.min(high, orbit.tip)), far: Math.max(FAR[0], Math.min(FAR[1], orbit.far)) };
+}
+
+/** The views straight on: from above (the far side up the picture), from the front (looking along -z) and from the side (looking along -x). */
+export const VIEWS = {
+    top: { turn: 0, tip: STRAIGHT[1] },
+    front: { turn: 0, tip: 0 },
+    side: { turn: Math.PI / 2, tip: 0 },
+} as const;
+
+/** The name of a view straight on. */
+export type Straight = keyof typeof VIEWS;
+
+/** A turn about the upright the same as `goal`, but the nearest to `from`: so that turning to a view goes the short way round. */
+export function nearest(from: number, goal: number): number {
+    return goal + Math.round((from - goal) / (2 * Math.PI)) * 2 * Math.PI;
+}
+
+/** Which view straight on the camera is in, if it is, to within a hundredth of a radian. */
+export function straightOn(orbit: Orbit): Straight | undefined {
+    for (const [name, view] of Object.entries(VIEWS) as [Straight, (typeof VIEWS)[Straight]][]) {
+        const turned = Math.abs(nearest(orbit.turn, view.turn) - orbit.turn) < 0.01;
+        if (Math.abs(orbit.tip - view.tip) < 0.01 && (turned || name === "top")) return name;
+    }
+    return undefined;
+}
+
+/**
+ * The narrow lens of the views straight on, in degrees, that is all but a drawing without depth: pieces
+ * line up in it as on a plan. `lensed` moves the eye back so that what was seen at the point looked at
+ * is the same size in it.
+ */
+export const NARROW = 5;
+export function lensed(orbit: Orbit, from: number, to: number): Orbit {
+    return { ...orbit, far: (orbit.far * Math.tan((from * Math.PI) / 360)) / Math.tan((to * Math.PI) / 360) };
 }
 
 /** Moved across the picture by (dx, dy), each a share of its height: the point looked at slides over the ground so that what was under the finger stays under it. */

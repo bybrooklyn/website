@@ -1,4 +1,4 @@
-// The browser driver every browser test stands on: that it leaves nothing behind, and that it sends a modifier alone as a keyboard does. Held true: a
+// The browser driver every browser test stands on: that it leaves nothing behind, that it sends a modifier alone as a keyboard does, and that two fingers are two pointers. Held true: a
 // closed browser leaves no Chromium process and no profile folder; one that fails to start is
 // cleaned up at once, not at the end of the run; when Chromium dies, calls waiting on it fail
 // instead of hanging; and many browsers in one run do not pile up signal handlers. Skipped, with
@@ -102,6 +102,29 @@ used("a modifier pressed alone goes down held and comes up let go, with no chara
         await tab.run(`window.seen = []; for (const type of ["keydown", "keyup"]) addEventListener(type, (event) => seen.push([type, event.key, event.code, event.ctrlKey].join(" ")))`);
         await tab.press("Control");
         expect(await tab.run<string[]>("seen")).toEqual(["keydown Control ControlLeft true", "keyup Control ControlLeft false"]);
+    } finally {
+        await tab.close();
+    }
+});
+
+used("two fingers go down, move and lift as two pointers, each known by its own id from start to end", async () => {
+    const tab = await browser({ width: 400, height: 300 });
+    try {
+        await tab.open("data:text/html,<body style='margin:0;touch-action:none;height:100vh'></body>", 50);
+        await tab.run(`window.seen = []; for (const type of ["pointerdown", "pointermove", "pointerup"]) addEventListener(type, (event) => event.pointerType === "touch" && seen.push([type, event.pointerId, Math.round(event.clientX), Math.round(event.clientY)]))`);
+        await tab.fingers("start", [{ x: 100, y: 100 }, { x: 200, y: 100 }]);
+        await tab.fingers("move", [{ x: 90, y: 100 }, { x: 230, y: 100 }]);
+        await tab.fingers("end", []);
+        const seen = await tab.run<[string, number, number, number][]>("seen");
+        const downs = seen.filter(([type]) => type === "pointerdown");
+        expect(downs.map(([, , x, y]) => [x, y])).toEqual([[100, 100], [200, 100]]);
+        const [a, b] = downs.map(([, id]) => id);
+        expect(a).not.toBe(b);
+        // each finger's move is its own: the first went left, the second right
+        const moves = seen.filter(([type]) => type === "pointermove");
+        expect(moves.find(([, id]) => id === a)?.slice(2)).toEqual([90, 100]);
+        expect(moves.find(([, id]) => id === b)?.slice(2)).toEqual([230, 100]);
+        expect(seen.filter(([type]) => type === "pointerup").map(([, id]) => id).sort()).toEqual([a, b].sort());
     } finally {
         await tab.close();
     }
