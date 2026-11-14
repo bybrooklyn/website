@@ -63,6 +63,8 @@ const editor = createEditor(host, read(opened.text, { mdx: /\.mdx$/.test(first.i
     versions,
     colors,
     top: document.querySelector<HTMLElement>(".quire-top") ?? undefined,
+    // suggested words are learned from the site's own posts and pages
+    learnFrom: () => [store],
     // a post's title is its frontmatter's; a file without one is titled by its name
     title: {
         read: (doc) => fields(doc).find(([field]) => field === "title")?.[1] ?? null,

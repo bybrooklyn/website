@@ -146,6 +146,41 @@ against an English dictionary of its own (about 126,000 words), and prose rules 
 Findings are faint underlines, a popover with fixes, a count and a list. Nothing of it loads until it is
 first switched on.
 
+**Suggested words** (`suggest.ts`, `suggest-learn.ts`, `suggest-view.ts`). As Smart Compose in Gmail and
+Docs: the rest of the word being typed, or the next few words, drawn faintly after the caret. Tab takes
+all of it, Ctrl+Right (Alt+Right on a Mac) the next word, typing on goes through it (it shortens while
+what is typed matches it), and Escape hides it until the next word. It is a drawing laid over the page
+after the caret, as the drawn caret is, never characters in the model, so undo, selection, saving, the
+word count and checking never see it; it shows only at the very end of a paragraph's, heading's or list
+item's text, never in code, maths, a table, a field or the title, and what does not fit on the caret's
+line is left off rather than drawn over the line below. Tab takes it whenever it shows; where none shows,
+Tab is what it was, and a list item's start, having no words, never has any, so Tab indents there. A
+word typed straight after a sign (`:smi`, `/head`, `#tag`) is never finished, so the emoji list and the
+slash keep their own.
+
+There is no model of language: it counts. Every run of words she has written (never across a full stop,
+a comma or a line) is counted as the word that followed each one, two and three words, in two tables of
+numbers kept by hashes. A word is offered only when it followed at least three times (five after a
+single word), twice as often as the next, and as a large enough share of all that followed (40 % after
+three words, 50 % after two, 70 % after one); the longest run seen often enough decides, backing off to
+shorter ones. The word being typed is finished the same way from the words she has used that start with
+its letters (from three letters when there is no word before it). At most four words and 48 characters.
+Case follows her: a capital she typed stays, a word is offered as she writes it mid-sentence (mdQuire,
+I), and capitals typed throughout carry on. Withheld words (`check/withheld.ts`) are never offered.
+
+It learns in the browser, in idle time slices of 8 ms, from her documents in this browser and in a
+folder or file already opened (under `bun run edit`, from the site's own posts and pages; never from
+GitHub or Drive, which would mean fetching every document). The counts are kept in IndexedDB
+(`quire-suggest`), read back on opening so nothing is learned twice; a saved document is learned again
+twenty seconds after its last save, its old words taken back exactly. A document changed elsewhere
+cannot be taken back, so it stays as learned and is counted as out of date, and once a tenth are, all is
+learned again. Tools has the switch, Suggest words as I type (on unless turned off, kept as
+`quire-suggest`), and Forget what it learned, after which documents not written in since are not
+learned again. The tables hold at most 2^18 and 2^17 slots (3 MB each in memory); when full, the rarest
+runs are dropped, below anything that would be offered. Measured: the site's 47 posts, pages and notes
+(35,000 words) make 1.4 MB to keep and learn in 50 ms; 713,000 words make 3.9 MB to keep and 7 MB in
+memory, learned in 0.6 s of idle time; a suggestion takes about 3 microseconds.
+
 **Dictation** (`dictation/`). Speech recognition run in the browser: no sound leaves the machine. Its own
 audio features and decoder for Parakeet-family models, a Moonshine path for phones, three tiers (Accurate,
 Light for desktops and laptops, Tiny for phones), spoken punctuation and commands, and custom words the

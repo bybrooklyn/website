@@ -177,7 +177,7 @@
         0 1.5rem 3rem -1.5rem oklch(0.04 0.02 300 / 0.9);
 }
 
-.quire-paper > :not(.quire-caret, .quire-pages) {
+.quire-paper > :not(.quire-caret, .quire-pages, .quire-suggestion) {
     box-sizing: border-box;
     width: 100%;
     max-width: none;
@@ -441,6 +441,27 @@
 
 .quire-caret.shown.off {
     opacity: 0;
+}
+
+/* Suggested words (suggest-view.ts): laid over the page just after the caret, never part of the text,
+   in the faint ink placeholders use (4.5:1 on its ground, far under the text's own ink, so that it
+   reads as not yet written). One line only, so nothing is drawn over the line below. */
+.quire-suggestion {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 2;
+    white-space: pre;
+    color: var(--quire-faint);
+    pointer-events: none;
+    user-select: none;
+    opacity: 0;
+}
+
+/* it fades in, and goes at once, so that it never lingers over a letter typed where it was */
+.quire-suggestion.shown {
+    opacity: 1;
+    transition: opacity 0.12s var(--ease);
 }
 
 /* while a picture is picked, what the keys act on is the picture, and no caret blinks beside it */

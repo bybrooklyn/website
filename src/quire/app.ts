@@ -104,6 +104,8 @@ export async function startApp(host: HTMLElement, options: AppOptions = {}) {
         colors: options.colors,
         top: options.top,
         richHome: browser,
+        // suggested words are learned from her documents here and in what she has already let mdQuire open; never from GitHub or Drive, which would mean fetching every document
+        learnFrom: () => [browser, folder, files].filter((store): store is Store => !!store),
         // the File menu's first lines: what the home screen and the documents list offer, by name
         fileItems: () => [
             { label: "All documents", icon: "shelf", run: () => void home() },
