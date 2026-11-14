@@ -1,4 +1,6 @@
-// What the stage is held to: a mark's thickness follows the pen and the picture's size; and in
+// What the stage is held to: a mark's thickness follows the pen and the picture's size; a word read
+// from the picture is covered by its box and margin, a run by one cover a line, and a run's text keeps
+// its lines; and in
 // headless Chromium, by real keys and drags, the crop's frame is nudged by the arrows (ten pixels with
 // Shift), held to a square from the strip, and set with Enter; zooming by the keys goes to one to one
 // and back to fitted; a mark picked is moved by the arrows and removed with Delete, and undo brings
