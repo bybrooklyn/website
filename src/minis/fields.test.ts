@@ -45,9 +45,9 @@ test("a field is laid out with adding, multiplying, dividing and square roots on
 /** Every level from 1 to 12, for this many seeds each. */
 const SEEDS = 30;
 const made: Made[][] = [];
-/** How long each field took to make, and the longest stretch between two pauses, in milliseconds. */
+/** How long each field took to make, and each stretch between two pauses, in milliseconds. */
 const took: number[] = [];
-let longestPiece = 0;
+const pieces: number[] = [];
 /** The fields of a level, made the first time a test asks, so that any test can be run alone. */
 const fieldsAt = (level: number): Made[] =>
     (made[level] ??= Array.from({ length: SEEDS }, (_, seed) => {
@@ -57,7 +57,7 @@ const fieldsAt = (level: number): Made[] =>
         for (;;) {
             const next = work.next();
             const now = performance.now();
-            longestPiece = Math.max(longestPiece, now - last);
+            pieces.push(now - last);
             last = now;
             if (next.done) {
                 took.push(now - began);
@@ -85,9 +85,11 @@ test(`every one of ${SEEDS * 12} fields can be won by the launch it comes with, 
 test("making a field never holds a page for long: each piece is short, and a field is made while the one before is played", () => {
     for (let level = 1; level <= 12; level++) fieldsAt(level);
     const slowest = Math.max(...took);
-    console.log(`making a field: median ${median(took).toFixed(0)} ms, slowest ${slowest.toFixed(0)} ms, longest piece between pauses ${longestPiece.toFixed(1)} ms`);
-    // a frame is about 16 ms; a piece longer than this would be felt
-    expect(longestPiece).toBeLessThan(12);
+    const sorted = [...pieces].sort((a, b) => a - b);
+    const nearly = sorted[Math.floor(sorted.length * 0.999)]!;
+    console.log(`making a field: median ${median(took).toFixed(0)} ms, slowest ${slowest.toFixed(0)} ms; pieces between pauses: ${nearly.toFixed(1)} ms or less for all but one in a thousand, the longest ${sorted[sorted.length - 1]!.toFixed(1)} ms`);
+    // a frame is about 16 ms; pieces longer than this would be felt (the very longest is left out, since a busy machine or the collection of garbage can stretch any one)
+    expect(nearly).toBeLessThan(8);
     expect(median(took)).toBeLessThan(1500);
 }, 600_000);
 
