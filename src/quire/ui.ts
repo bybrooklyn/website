@@ -58,6 +58,8 @@ const PATHS: Record<string, string> = {
     outdent: '<path d="M5 5h14M11 10h8M11 14h8M5 19h14"/><path d="M8 9.5 5 12l3 2.5"/>',
     clear: '<path d="M6 5h11M11.5 5 9 15"/><path d="m14 14 5 5M19 14l-5 5"/>',
     find: '<circle cx="10" cy="10" r="5"/><path d="m14 14 5 5"/><path d="M8 10h4" opacity=".6"/>',
+    // a prompt, for the command palette: a chevron and a short line after it
+    command: '<path d="m5.5 7.5 4.5 4.5-4.5 4.5"/><path d="M12.5 17h6"/>',
 };
 
 /** One of mdQuire's small line icons, drawn in the color of the text around it. */

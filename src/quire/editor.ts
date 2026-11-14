@@ -412,8 +412,6 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         onPrint: () => print(),
         onSpelling: (from) => checking.open(from),
         onZoom: (from) => (zooms.isOpen() ? zooms.close(true) : zooms.open(from, zoomLines(() => from), document.activeElement === from)),
-        // every command of the menus, by name, for the search of them
-        commands: () => row.headings().flatMap((heading) => heading.items()),
         onTitle: () => title.focus(),
         more,
     });
@@ -863,7 +861,8 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
                 clear: doing(clearFormat),
                 wordCount: () => showCount(row.words[5]!),
                 shortcuts: () => showShortcuts(row.words[5]!),
-                searchMenus: () => bar.search(),
+                // Docs' Search the menus (Alt+/) is the command palette, which searches every menu line
+                searchMenus: () => palette.open(),
                 // the slash menu opens on the first five again
                 forgetUsed: () => (remember(), bar.setStatus("Forgotten", "What you use most is forgotten: the slash menu opens on its first five again")),
                 tools: () => dictation.items(row.words[5]!),

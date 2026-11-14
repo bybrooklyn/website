@@ -561,8 +561,6 @@ export interface BarOptions {
     onSpelling?: (from: HTMLElement) => void;
     /** Opens the zoom's menu. */
     onZoom?: (from: HTMLElement) => void;
-    /** Every command by name, for the search of the menus. */
-    commands?: () => MenuItem[];
     /** Goes to the title, the line above the writing, as the style Title does. */
     onTitle?: () => void;
 }
@@ -649,61 +647,6 @@ export function createBar(surface: Surface, options: BarOptions) {
     fitName(options.name);
     name.addEventListener("mousedown", (event) => event.preventDefault());
     name.addEventListener("click", () => options.onName?.(name));
-
-    // ---- the search of the menus: type, and every command whose name has it is a line ----
-    const searching = flowMenu("Search the menus", { className: "quire-search-menu" });
-    const searchForm = () => {
-        const form = make("div", "quire-search");
-        const field = make("input", "quire-link-field quire-search-field");
-        field.type = "search";
-        field.placeholder = "Search the menus";
-        field.setAttribute("aria-label", "Search the menus");
-        field.spellcheck = false;
-        const found = make("div", "quire-search-found");
-        found.setAttribute("role", "menu");
-        const all = options.commands?.() ?? [];
-        const show = () => {
-            const wanted = field.value.trim().toLowerCase();
-            const matching = wanted ? all.filter((item) => !item.note && item.label.toLowerCase().includes(wanted)).slice(0, 12) : [];
-            found.replaceChildren(
-                ...matching.map((item) => {
-                    const line = make("button", "quire-menu-line");
-                    line.type = "button";
-                    line.setAttribute("role", "menuitem");
-                    if (item.icon) line.append(typeof item.icon === "string" ? icon(item.icon) : item.icon);
-                    line.append(make("span", "quire-menu-label", item.label));
-                    line.addEventListener("mousedown", (event) => event.preventDefault());
-                    line.addEventListener("click", () => {
-                        searching.close(false);
-                        item.run();
-                    });
-                    return line;
-                }),
-            );
-            if (wanted && !matching.length) found.append(make("p", "quire-menu-note", "Nothing by that name"));
-        };
-        field.addEventListener("input", show);
-        field.addEventListener("keydown", (event) => {
-            if (composing(event)) return;
-            if (event.key === "Enter") found.querySelector<HTMLElement>(".quire-menu-line")?.click();
-            if (event.key === "ArrowDown") {
-                event.preventDefault();
-                // the menu's own arrow keys must not move on again from the line just reached
-                event.stopPropagation();
-                found.querySelector<HTMLElement>(".quire-menu-line")?.focus();
-            }
-        });
-        form.append(field, found);
-        return form;
-    };
-    const searchButton = control("Search the menus", icon("search"), (button) => {
-        if (searching.isOpen()) return searching.close(true);
-        searching.open(button, searchForm());
-        searching.box.querySelector("input")?.focus({ preventScroll: true });
-    });
-    searchButton.setAttribute("aria-haspopup", "menu");
-    searchButton.classList.add("quire-search-button");
-    group(tool(searchButton, FOLDS.search, () => (options.commands ? [{ label: "Search the menus", icon: "search", run: () => (searching.open(moreButton, searchForm()), searching.box.querySelector("input")?.focus({ preventScroll: true })) }] : [])));
 
     // ---- undo, redo, print, spelling, paint format ----
     const undo = () => {
@@ -1061,8 +1004,10 @@ export function createBar(surface: Surface, options: BarOptions) {
     });
     moreButton.setAttribute("aria-haspopup", "menu");
     const end = make("div", "quire-bar-group quire-bar-end");
-    if (options.onFind) end.append(control("Find and replace (Ctrl+F)", icon("find"), () => options.onFind!()));
-    end.append(moreButton);
+    if (options.onFind) end.append(control(named("Find", "find"), icon("find"), () => options.onFind!()));
+    const dotsHolder = make("span", "quire-tool");
+    dotsHolder.append(moreButton);
+    end.append(dotsHolder);
     strip.append(end);
 
     // how saving stands and the word count, "Saved · 7 words", which the page puts at the right of its first line
@@ -1233,7 +1178,7 @@ export function createBar(surface: Surface, options: BarOptions) {
         all[next]!.focus();
         all[next]!.scrollIntoView({ block: "nearest", inline: "nearest" });
     });
-    const menus = [searching, styles, fonts, sizes, colors, highlights, spacings, more];
+    const menus = [styles, fonts, sizes, colors, highlights, spacings, more];
     strip.addEventListener("scroll", () => closeOthers(), { passive: true });
 
     /**
@@ -1286,14 +1231,6 @@ export function createBar(surface: Surface, options: BarOptions) {
         },
         rich: () => richOn,
         seen,
-        /** Opens the search of the menus, from its button or, folded away, from the three dots, its field focused (Alt+/). */
-        search() {
-            if (searching.isOpen()) return searching.box.querySelector("input")?.focus({ preventScroll: true });
-            // a phone's strip scrolled along takes the button out of sight as folding does
-            const from = seen("Search the menus");
-            searching.open(from, searchForm());
-            searching.box.querySelector("input")?.focus({ preventScroll: true });
-        },
         /** Makes the text one size larger or smaller, as the plus and minus beside the size do (Ctrl+Shift+. and Ctrl+Shift+,). */
         sizeBy(by: -1 | 1) {
             setSize(nextSize(sizeAt(), by, richOn));

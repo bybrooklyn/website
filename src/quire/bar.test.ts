@@ -254,7 +254,7 @@ async function onPage(markdown: string, width: number, body: (tab: Browser) => P
             const sheet = document.createElement("div");
             host.append(sheet);
             const surface = createSurface(sheet, read(${JSON.stringify(markdown)}));
-            const bar = createBar(surface, { name: "Test", commands: () => [{ label: "Alpha", run() {} }, { label: "Also", run() {} }, { label: "Another", run() {} }] });
+            const bar = createBar(surface, { name: "Test", onFind() {} });
             host.prepend(bar.element, bar.statusLine);
             Object.assign(window, { surface, bar, model, md: () => write(surface.getDocument()) });`,
         );
@@ -300,15 +300,11 @@ inBrowser("the bar always has one Tab stop, even when the tool that held it fold
     }),
 );
 
-inBrowser("ArrowDown from the search of the menus goes to the first result, not the second", () =>
+inBrowser("the bar has no search of the menus: the magnifier is Find alone", () =>
     onPage("Text\n", 1300, async (tab) => {
         await tab.wait(200);
-        await tab.run("bar.search()");
-        await tab.wait(300);
-        await tab.type("a");
-        await tab.wait(50);
-        await tab.press("ArrowDown");
-        expect(await tab.run<string>("document.activeElement.textContent")).toBe("Alpha");
+        expect(await tab.run<string[]>("[...document.querySelectorAll('.quire-bar button')].map((each) => each.getAttribute('aria-label')).filter((label) => /search/i.test(label ?? ''))")).toEqual([]);
+        expect(await tab.run<string>("document.querySelector('.quire-bar-end button').getAttribute('aria-label')")).toBe("Find (Ctrl+F)");
     }),
 );
 

@@ -178,7 +178,7 @@ export interface PaletteOptions {
 const MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
 
 /** Builds the palette for a surface: its button, its double tap, and the slash way in. */
-export function createPalette(surface: Surface, options: PaletteOptions = {}): { close(): void; destroy(): void } {
+export function createPalette(surface: Surface, options: PaletteOptions = {}): { open(): void; close(): void; destroy(): void } {
     // the slash way in grows from where the cursor is: a box the size of the cursor, never seen, is what it grows out of
     const anchor = make("span", "quire-anchor");
     anchor.setAttribute("aria-hidden", "true");
@@ -207,7 +207,7 @@ export function createPalette(surface: Surface, options: PaletteOptions = {}): {
             if (was === "corner") back();
         },
     });
-    const button = control(MAC ? "Commands (tap ⌘ twice)" : "Commands (tap Ctrl twice)", icon("search"), () => (mode === "corner" ? menu.close(false) : openCorner()), "quire-button quire-palette-button");
+    const button = control(MAC ? "Commands (tap ⌘ twice)" : "Commands (tap Ctrl twice)", icon("command"), () => (mode === "corner" ? menu.close(false) : openCorner()), "quire-button quire-palette-button");
     options.corner?.append(button);
 
     const field = make("input", "quire-link-field quire-palette-field");
@@ -414,6 +414,8 @@ export function createPalette(surface: Surface, options: PaletteOptions = {}): {
     for (const [name, listener] of listened) addEventListener(name, listener, { capture: true, passive: true });
 
     return {
+        /** Opens it from its corner, as its button and two taps of Ctrl do (Alt+/, Docs' Search the menus, too); open already, the field takes the keyboard again. */
+        open: () => (mode === "corner" ? field.focus({ preventScroll: true }) : openCorner()),
         close: () => menu.close(false),
         destroy() {
             menu.close(false);
