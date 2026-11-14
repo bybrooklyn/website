@@ -83,20 +83,28 @@ function toSegment(point: Point, from: Point, to: Point): number {
 
 /** The last drawn mark under a point (within `slack` pixels of the original), as its place in the list, or -1. A box is taken by its edge, not its middle, so what is inside it can still be reached. */
 export function markAt(marks: Mark[], point: Point, slack: number): number {
-    for (let at = marks.length - 1; at >= 0; at--) {
-        const mark = marks[at]!;
-        if (mark.type === "arrow" && toSegment(point, mark.from, mark.to) <= mark.thickness / 2 + slack) return at;
-        if (mark.type === "box") {
-            const { x, y, width, height } = markBox(mark);
-            const corners = [{ x, y }, { x: x + width, y }, { x: x + width, y: y + height }, { x, y: y + height }];
-            if (corners.some((corner, index) => toSegment(point, corner, corners[(index + 1) % 4]!) <= mark.thickness / 2 + slack)) return at;
-        }
-        if (mark.type === "text") {
-            const box = markBox(mark);
-            if (point.x >= box.x - slack && point.x <= box.x + box.width + slack && point.y >= box.y - slack && point.y <= box.y + box.height + slack) return at;
-        }
-    }
-    return -1;
+    return allAt(marks, point, slack)[0] ?? -1;
+}
+
+/** A cover, as picking sees it: taken anywhere inside. */
+type Cover = { type: "cover"; rect: Rect };
+
+/** True when a point is on a mark (within `slack`), or inside a cover. */
+export function touches(item: Mark | Cover, point: Point, slack: number): boolean {
+    const inside = (box: Rect, pad: number) => point.x >= box.x - pad && point.x <= box.x + box.width + pad && point.y >= box.y - pad && point.y <= box.y + box.height + pad;
+    if (item.type === "cover") return inside(item.rect, 0);
+    if (item.type === "arrow") return toSegment(point, item.from, item.to) <= item.thickness / 2 + slack;
+    if (item.type === "text") return inside(markBox(item), slack);
+    const { x, y, width, height } = markBox(item);
+    const corners = [{ x, y }, { x: x + width, y }, { x: x + width, y: y + height }, { x, y: y + height }];
+    return corners.some((corner, index) => toSegment(point, corner, corners[(index + 1) % 4]!) <= item.thickness / 2 + slack);
+}
+
+/** Every mark or cover under a point, as places in the list, the last drawn (the one on top) first. */
+export function allAt(items: (Mark | Cover)[], point: Point, slack: number): number[] {
+    const found: number[] = [];
+    for (let at = items.length - 1; at >= 0; at--) if (touches(items[at]!, point, slack)) found.push(at);
+    return found;
 }
 
 /** A mark moved by an amount, in the original's pixels. */

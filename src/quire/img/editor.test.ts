@@ -1,6 +1,6 @@
 // What imgQuire's editor is held to in headless Chromium, by real keys and presses: the first Ctrl+C
-// asks how to copy and the answer is kept, so the next does not ask; a step switched off in the steps
-// list is left out of what is copied; a width typed in the resize box is applied with Enter; a saved
+// asks how to copy and the answer is kept, so the next does not ask; pressed again where marks lie
+// on one another, the one beneath is picked, Edit brings it forward and Delete takes it away; a width typed in the resize box is applied with Enter; a saved
 // picture is named from its document and carries no metadata; the menus hold the editor's lines, each
 // with an icon; and version history draws a version's steps over the original.
 
@@ -35,30 +35,44 @@ test("the first Ctrl+C asks how to copy and keeps the answer; the next copies wi
     expect(await page.tab.run("!!document.querySelector('dialog[open]')")).toBe(false);
 }, 30_000);
 
-test("a step switched off in the steps list is left out of what is copied, and on again it is back", async () => {
+test("pressed again in the same place, the one beneath is picked; it comes forward from Edit, and Delete takes it away, undo bringing it back", async () => {
     if (!page) return;
     await page.tab.press("r");
     await page.tab.drag(await page.onScreen(56, 188), await page.onScreen(420, 218), 6);
-    await page.until("window.app.editing().steps().length === 1");
-    const steps = await page.middle(".quire-img-bar [aria-label='Steps']");
-    await page.tab.click(steps.x, steps.y);
-    await page.until("document.querySelector('.quire-img-steps.open .quire-switch')");
-    await page.tab.wait(600);
-    expect(await page.tab.run("document.querySelector('.quire-img-steps .quire-switch').textContent")).toBe("Hide");
-    const line = await page.middle(".quire-img-steps .quire-switch");
-    await page.tab.click(line.x, line.y);
-    expect(await page.tab.run("window.app.editing().steps()[0].off")).toBe(true);
+    await page.tab.press("b");
+    await page.tab.drag(await page.onScreen(40, 192), await page.onScreen(440, 232), 6);
+    await page.until("window.app.editing().steps().length === 2");
+    await page.tab.press("Escape");
+    await page.tab.press("Escape");
+    const kinds = () => page!.tab.run<string[]>("window.app.editing().steps().map((step) => step.type)");
+    const picked = () => page!.tab.run<string>("window.app.editing().steps().find((step) => step.id === window.app.editing().stage.picked())?.type ?? ''");
+    const on = await page.onScreen(200, 192);
+    await page.tab.click(on.x, on.y);
+    expect(await picked()).toBe("box");
+    await page.tab.click(on.x, on.y);
+    expect(await picked()).toBe("cover");
+    await page.tab.click(on.x, on.y);
+    expect(await picked()).toBe("box");
+    await page.tab.click(on.x, on.y);
+    // Edit, Bring forward puts the cover over the box
+    await page.tab.press("e", { alt: true });
+    await page.until("document.querySelector('.quire-menu:popover-open .quire-menu-line')");
+    await page.tab.run("[...document.querySelectorAll('.quire-menu:popover-open .quire-menu-line')].find((line) => line.textContent.includes('Bring forward')).click()");
+    expect(await kinds()).toEqual(["box", "cover"]);
     const red = async () => {
         const count = await page!.tab.run<number>("window.copied.length");
         await page!.tab.run("document.querySelector('.quire-img-stage').focus()");
         await page!.tab.press("c", { ctrl: true });
         await page!.until(`window.copied.length > ${count}`);
-        return page!.tab.run<number>("(() => { const copied = window.copied.at(-1); let red = 0; for (let y = 188; y < 218; y++) for (let x = 56; x < 420; x++) { const at = (y * copied.width + x) * 4; if (copied.pixels[at] > 120 && copied.pixels[at + 1] < 90) red++; } return red; })()");
+        return page!.tab.run<number>("(() => { const copied = window.copied.at(-1); let red = 0; for (let y = 196; y < 214; y++) for (let x = 60; x < 400; x++) { const at = (y * copied.width + x) * 4; if (copied.pixels[at] > 120 && copied.pixels[at + 1] < 90 && copied.pixels[at + 2] < 110) red++; } return red; })()");
     };
-    expect(await red()).toBeGreaterThan(100);
-    await page.tab.click(line.x, line.y);
     expect(await red()).toBe(0);
-    await page.tab.press("Escape");
+    await page.tab.press("Delete");
+    expect(await kinds()).toEqual(["box"]);
+    expect(await red()).toBeGreaterThan(100);
+    await page.tab.press("z", { ctrl: true });
+    expect(await kinds()).toEqual(["box", "cover"]);
+    expect(await red()).toBe(0);
 }, 30_000);
 
 test("a width typed in the resize box is applied with Enter, the height following the shape", async () => {

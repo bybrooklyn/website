@@ -22,7 +22,7 @@ remover (`cutout.md`) is to be one of its tools as well as a page of its own.
 - `geometry.ts`: fitting, zooming about a point, and the crop's frame dragged, nudged and held to a shape.
 - `stage.ts`: the picture on the screen and the tools that work on it.
 - `export.ts`: the formats as one table, the weight search, file names, the clipboard.
-- `panels.ts`: the steps list, the export panel, the resize box and the tool's strip.
+- `panels.ts`: the export panel, the resize box and the tool's strip.
 - `editor.ts`: the frame, the session, the bar, the menus' table, the keys, copying and pictures arriving.
 - `kind.ts`: `img()`.
 - `src/pages/imgquire.astro`, `src/scripts/imgquire.ts` and `src/scripts/quire-page.ts` (shared with
@@ -71,12 +71,18 @@ press and moved by a drag or the arrows, and removed with Delete.
 **Zoom and pan.** The wheel and a touchpad's pinch about the pointer, two fingers, Space and a drag or the
 middle button, Ctrl+0 to fit, Ctrl+1 for 100%, Ctrl+= and Ctrl+-.
 
-**Steps.** Hidden until the Steps button grows the list open at the left side: each step a switch (its
-words and a tick) that turns it off and on, a bin that removes it, Alt and the arrows to move it.
+**No list of steps.** Every step is still kept, but nothing lists them: marks and covers are picked by
+pressing them on the picture, and pressed again in the same place without moving, the one beneath is
+picked, round to the top again. What is picked is removed with Delete, Backspace or Edit, Remove, and
+moved in front of the next thing drawn or behind the one before with Edit, Bring forward and Send back.
+The crop and the resize are removed from the Image menu. Undo, redo and version history cover the rest.
+Switching a step off is gone with the list; the file keeps the field and reads it, and nothing offers it.
 
 **Getting it out.** Ctrl+C copies: the first time a dialog asks whether as it looks or as the export is
 set and remembers (`quire-img-copy`; Edit, Copy as changes it). The clipboard is handed a promise of the
-picture at once, so the press counts. The export panel, at the right side: PNG, JPEG or WebP, a quality,
+picture at once, so the press counts. The export panel, at the right side (on a phone, a sheet at the
+foot), never lies over the picture: the picture's room gives the panel its width (or height) and the
+picture glides into what is left as it opens and back as it closes: PNG, JPEG or WebP, a quality,
 or a weight to come in under ("200", "1.5 MB") found by halving the quality seven times, the result's size
 and weight, the same middle part of the original and the export side by side at their own pixels, Copy
 (filled) and Save. Saved files are named from the document (`screenshot-14-nov-2026-01-30.webp`). What the
@@ -139,6 +145,11 @@ hide 0.6 s, mark up 0.5 s. Done by hand-paced drags with pauses to photograph ea
   picture or of parts of it; a picture analysed as it arrives (what is in it, its text, its metadata) so
   that the right tools are offered.
 - Its working name is imgQuire, as part of a Quire suite with mdQuire.
+- **No list of steps.** There is no steps list at all. Marks and covers are picked on the picture, and
+  undo, redo and version history do the rest of what a list would; whatever only a list could do is
+  reachable from the menus or the keys (removing, bringing forward and sending back what is picked).
+- **A panel never covers the picture.** A surface that stays open makes room: the picture is fitted into
+  what is left and glides there. A popover (the resize box, a menu) may lie over it while it is open.
 
 ## Chosen features
 
@@ -184,8 +195,7 @@ All of it is to be simple and easy first, with the depth underneath.
   two large ones. Rust crates do the rest: `oxipng` for PNG, `heic-rs` to read HEIC photographs from a
   phone, `little_exif` for metadata and `moxcms` for colour profiles. Before `libjxl` is relied on, a
   release of it is to be built and its lossy quality compared with the native encoder's.
-- **Working it.** The steps are hidden until wanted: a "steps" button grows the list open at the side.
-  Single keys pick a tool (C crop, R redact, A arrow, T text, B box, G grade, E export), Enter applies,
+- **Working it.** Single keys pick a tool (C crop, R redact, A arrow, T text, B box, G grade, E export), Enter applies,
   Escape leaves, and the palette is mdQuire's. The first Ctrl+C asks whether to copy the picture as it
   looks or as the export is set, and remembers.
 - **Names.** imgQuire, in a suite called Quire: mdQuire, imgQuire, later vidQuire. The trail reads

@@ -80,6 +80,8 @@ test("shrink and convert: a pasted 12 megapixel photograph halved, WebP under 20
     timings.push(`shrink and convert: ${took} ms from paste to copied (${result})`);
     expect(took).toBeLessThan(10_000);
     await page.tab.press("Escape");
+    // the picture glides back into the room the panel gave up
+    await page.tab.wait(700);
 }, 60_000);
 
 test("hide something: R, a drag over the token, and what is copied holds none of the token's red where it was", async () => {

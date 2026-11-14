@@ -14,9 +14,9 @@ import { openDialog } from "../core/dialog";
 import { createHistoryPanel, snapshotParts } from "../core/versions";
 import { control, fieldForm, icon, make, ruled, type MenuItem } from "../core/ui";
 import { copyPicture, encodeAs, exportName, formatOf, readSettings, untouched, weightSaid, type Settings } from "./export";
-import { COLORS, exportPanel, factsSaid, kindOf, nameFor, resizeBox, SHAPES, stepsPanel, toolStrip, WEIGHTS } from "./panels";
+import { COLORS, exportPanel, factsSaid, kindOf, nameFor, resizeBox, SHAPES, toolStrip, WEIGHTS } from "./panels";
 import { createStage, type Pen, type Tool } from "./stage";
-import { createHistory, edited, fresh, look, move, readSteps, remove, setOnly, toggle, writeSteps, type Filter, type Kept, type Picture } from "./steps";
+import { createHistory, edited, fresh, look, move, readSteps, remove, setOnly, writeSteps, type Filter, type Kept, type Picture } from "./steps";
 
 /** The file a picture document keeps its steps in, inside its `.quire`. */
 export const MAIN = "steps.json";
@@ -119,6 +119,8 @@ export function mountEditor(host: HTMLElement, context: Context) {
         picture = read && { original: read.original, steps: read.steps };
         history.reset(read?.steps ?? []);
         original = undefined;
+        // the new picture's size at once, its weight when it is worked out; never the last document's
+        facts.textContent = picture ? factsSaid(look(picture), picture.original.bytes, kindOf(picture.original)) : "";
         stage.clear();
         stage.setTool("crop");
         refresh();
@@ -331,16 +333,8 @@ export function mountEditor(host: HTMLElement, context: Context) {
     }
 
     // ---- what opens round the picture ----
-    const steps = stepsPanel({
-        closed: () => refresh(),
-        steps: () => history.now(),
-        picked: () => stage.picked(),
-        pick: (id) => stage.pick(id),
-        toggle: (id) => commit(toggle(history.now(), id)),
-        remove: (id) => commit(remove(history.now(), id)),
-        move: (id, by) => commit(move(history.now(), id, history.now().findIndex((step) => step.id === id) + by)),
-    });
     const exporting = exportPanel({
+        closed: () => (room.classList.remove("beside"), refresh()),
         settings: () => settings,
         set: (next) => ((settings = next), keep(KEYS.export, JSON.stringify(next)), void showExport(), estimate.soon()),
         copy: () => void copy(),
@@ -400,7 +394,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
         return step && (step.type === "arrow" || step.type === "box" || step.type === "text") ? step : undefined;
     };
     room.append(strip.strip);
-    document.body.append(steps.panel, exporting.panel, resizing.box);
+    document.body.append(exporting.panel, resizing.box);
     const historyPanel = createHistoryPanel(
         {
             show(text, _older, into) {
@@ -441,7 +435,6 @@ export function mountEditor(host: HTMLElement, context: Context) {
         arrow: tool("Arrow (A)", "arrow", () => pickTool("arrow")),
         box: tool("Box (B)", "box", () => pickTool("box")),
         text: tool("Text (T)", "text", () => pickTool("text")),
-        steps: tool("Steps", "steps", () => showSteps()),
         export: tool("Export (E)", "export", () => showExportPanel()),
     };
     const bar = make("div", "quire-bar quire-img-bar");
@@ -453,7 +446,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
         made.append(...items);
         return made;
     };
-    const end = group(buttons.steps, buttons.export);
+    const end = group(buttons.export);
     end.classList.add("quire-bar-end");
     strip0.append(group(buttons.undo, buttons.redo), group(buttons.crop, buttons.resize, buttons.hide), group(buttons.arrow, buttons.box, buttons.text), end);
     bar.append(strip0);
@@ -470,36 +463,29 @@ export function mountEditor(host: HTMLElement, context: Context) {
         stage.setTool("none");
         stage.element.focus({ preventScroll: true });
     }
-    function showSteps(from: HTMLElement = buttons.steps) {
-        if (steps.isOpen()) return steps.close();
-        exporting.close();
-        steps.fill();
-        steps.open(from);
-        steps.panel.querySelector<HTMLElement>(".quire-switch")?.focus({ preventScroll: true });
-    }
     function showExportPanel(from: HTMLElement = buttons.export) {
         if (exporting.isOpen()) return exporting.close();
         if (stage.tool() === "crop") stage.applyCrop();
-        steps.close();
+        // the picture makes room for the panel, gliding into what is left, rather than lying under it
+        room.classList.add("beside");
         exporting.open(from);
         void showExport();
         exporting.copyButton.focus({ preventScroll: true });
     }
 
-    /** The bar, the strip, the steps and the facts follow the document and the tool. */
+    /** The bar, the strip and the facts follow the document and the tool. */
     function refresh() {
         const has = !!picture;
         room.classList.toggle("blank", !has);
         empty.inert = has;
         for (const [name, button] of Object.entries(buttons)) {
-            button.disabled = !has && name !== "steps";
-            button.classList.toggle("pressed", stage.tool() === name || (name === "hide" && stage.tool() === "hide") || (name === "steps" && steps.isOpen()));
+            button.disabled = !has;
+            button.classList.toggle("pressed", stage.tool() === name || (name === "export" && exporting.isOpen()));
         }
         buttons.undo.disabled = !history.canUndo();
         buttons.redo.disabled = !history.canRedo();
         const kind = !has ? "none" : stage.tool() === "crop" ? "crop" : stage.tool() === "arrow" || stage.tool() === "box" || stage.tool() === "text" || pickedMark() ? "mark" : "none";
         strip.fill(kind);
-        if (steps.isOpen()) steps.fill();
         if (picture && !facts.textContent) facts.textContent = factsSaid(look(picture), picture.original.bytes, kindOf(picture.original));
         if (!picture) facts.textContent = "";
     }
@@ -554,7 +540,11 @@ export function mountEditor(host: HTMLElement, context: Context) {
                         },
                         { label: "Paste", icon: "paste", hint: "Ctrl+V", key: "paste", run: () => void pasteFromMenu() },
                     ],
-                    [{ label: "Remove", icon: "trash", hint: "Delete", key: "remove", disabled: !stage.picked(), run: () => removePicked() }],
+                    [
+                        { label: "Remove", icon: "trash", hint: "Delete", key: "remove", disabled: !stage.picked(), run: () => removePicked() },
+                        { label: "Bring forward", icon: "front", key: "forward", disabled: !stage.picked() || history.now().at(-1)?.id === stage.picked(), run: () => restack(1) },
+                        { label: "Send back", icon: "behind", key: "back", disabled: !stage.picked() || firstMarked() === stage.picked(), run: () => restack(-1) },
+                    ],
                 ),
         },
         {
@@ -573,7 +563,6 @@ export function mountEditor(host: HTMLElement, context: Context) {
                             ],
                             run: () => {},
                         },
-                        { label: "Show steps", icon: tick(steps.isOpen(), "steps"), pressed: steps.isOpen(), run: () => showSteps(frame.name) },
                     ],
                     [{ label: "Full screen", icon: "full", hint: "Ctrl+Shift+F", key: "full-screen", run: () => frame.fullScreen(!frame.isFull()) }],
                 ),
@@ -640,6 +629,19 @@ export function mountEditor(host: HTMLElement, context: Context) {
         } catch {
             frame.status.say("Press Ctrl+V", "The browser lets a page paste only from the keys: press Ctrl+V");
         }
+    }
+    /** The first step drawn over the picture (a cover or a mark), which nothing picked can go behind. */
+    const firstMarked = () => history.now().find((step) => step.type !== "crop" && step.type !== "resize")?.id;
+    /** Moves what is picked one place forward (over the next thing drawn) or back (under the one before), skipping the crop and the resize, which are drawn under everything. */
+    function restack(by: 1 | -1) {
+        const id = stage.picked();
+        const steps = history.now();
+        const at = steps.findIndex((step) => step.id === id);
+        if (!id || at < 0) return;
+        let to = at + by;
+        while (steps[to] && (steps[to]!.type === "crop" || steps[to]!.type === "resize")) to += by;
+        if (to < 0 || to >= steps.length) return;
+        commit(move(steps, id, to));
     }
     function removePicked() {
         const id = stage.picked();
@@ -744,7 +746,6 @@ export function mountEditor(host: HTMLElement, context: Context) {
             session.destroy();
             frame.destroy();
             stage.destroy();
-            steps.panel.remove();
             exporting.panel.remove();
             resizing.box.remove();
             historyPanel.close();

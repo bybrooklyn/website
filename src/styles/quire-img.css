@@ -160,7 +160,7 @@
         visibility 0s linear 0.3s;
 }
 
-.quire-img-room.blank .quire-img-empty {
+.quire-host:not(.shelved) .quire-img-room.blank .quire-img-empty {
     opacity: 1;
     scale: 1;
     visibility: visible;
@@ -268,7 +268,7 @@
     box-shadow: inset 0 0 0 0.0625rem oklch(0.5 0 0 / 0.6);
 }
 
-/* the steps at the left side and the export at the right, starting below the bar, as version history does */
+/* the export at the right side, starting below the bar, as version history does; on a phone, a sheet at the foot */
 .quire-img-panel {
     position: fixed;
     top: var(--quire-below-bar);
@@ -289,11 +289,6 @@
         translate 0.35s var(--ease),
         opacity 0.2s ease,
         visibility 0s linear 0.35s;
-}
-
-.quire-img-steps {
-    left: 1rem;
-    translate: calc(-100% - 2rem) 0;
 }
 
 .quire-img-export {
@@ -329,29 +324,31 @@
     overflow-y: auto;
 }
 
-.quire-img-step-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.15rem;
-    margin: 0;
-    padding: 0;
-    list-style: none;
+/* with the export open the picture's room gives the panel its width, and the picture glides into what is
+   left (the stage fits itself to its room as the room narrows), so the panel never lies over it */
+.quire-img-editor .quire-img-room {
+    transition: padding 0.45s var(--ease);
 }
 
-.quire-img-step {
-    display: flex;
-    align-items: center;
-    gap: 0.25rem;
-    border-radius: var(--quire-round-small);
+.quire-img-editor .quire-img-room.beside {
+    padding-right: calc(min(22rem, 100vw - 2rem) + 1.5rem);
 }
 
-.quire-img-step .quire-switch {
-    flex: 1;
-    min-width: 0;
-}
+@media (max-width: 40rem) {
+    .quire-img-export {
+        top: auto;
+        right: 0.5rem;
+        bottom: 0.5rem;
+        left: 0.5rem;
+        width: auto;
+        height: min(26rem, 55dvh);
+        translate: 0 calc(100% + 2rem);
+    }
 
-.quire-img-step.picked {
-    background: color-mix(in oklch, var(--accent) 14%, transparent);
+    .quire-img-editor .quire-img-room.beside {
+        padding-right: 0;
+        padding-bottom: calc(min(26rem, 55dvh) + 0.5rem);
+    }
 }
 
 .quire-img-formats {
@@ -451,11 +448,16 @@
     font-size: 0.85rem;
 }
 
+/* Copy and Save stay in sight at the panel's foot, however much of it scrolls on a small screen */
 .quire-img-actions {
     display: flex;
     justify-content: flex-end;
     gap: 0.4rem;
-    margin-top: auto;
+    position: sticky;
+    bottom: 0;
+    margin: auto -1.1rem -1.1rem;
+    padding: 0.6rem 1.1rem 1.1rem;
+    background: var(--surface);
 }
 
 /* the resize box grows from its button */
@@ -542,6 +544,7 @@
     .quire-img-empty,
     .quire-img-strip,
     .quire-img-panel,
+    .quire-img-editor .quire-img-room,
     .quire-img-lossy,
     .quire-img-resize {
         transition: none !important;
@@ -551,4 +554,16 @@
 /* behind the home screen the picture's room is not seen, nor its line for an empty editor */
 .quire-host.shelved .quire-img-room {
     visibility: hidden;
+}
+
+/* on a phone the bar's nine tools fit without sliding: the rules between their groups come closer */
+@media (max-width: 40rem) {
+    .quire-img-bar .quire-bar-group + .quire-bar-group {
+        margin-left: 0.15rem;
+        padding-left: 0.15rem;
+    }
+
+    .quire-img-bar .quire-bar-group.quire-bar-end {
+        padding-left: 0.15rem;
+    }
 }
