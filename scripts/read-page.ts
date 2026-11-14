@@ -17,8 +17,9 @@ export const TRIALS = `${homedir()}/.cache/quire-model-trials/ocr`;
 const ORT = `${import.meta.dir}/../node_modules/onnxruntime-web/dist/`;
 const QUIRE = `${import.meta.dir}/../src/quire`;
 
-/** The page's script: the fixtures, and reading one with a size's models on a place. */
+/** The worker's script: the fixtures, and reading one with a size's models on a place, off the page's thread as imgQuire reads. */
 const SCRIPT = `
+const window = self;
 import { readText } from "${QUIRE}/img/read/read.ts";
 import { makeModels } from "${QUIRE}/img/read/runtime.ts";
 import { readDictionary } from "${QUIRE}/img/read/dictionary.ts";
@@ -48,7 +49,9 @@ window.draw = (kind) => {
         const lines = [];
         SIDE.forEach((word, at) => { c.font = "15px sans-serif"; c.fillText(word, 32, 120 + at * 40); lines.push({ text: word, size: 15 }); });
         let y = 90;
-        for (const [size, text] of SCREEN) { c.font = (size >= 20 ? "600 " : "") + size + "px sans-serif"; c.fillText(text, 340, y); lines.push({ text, size }); y += size * 2.6 + 10; }
+        // each word's ink as the browser measures it, to hold the words read against
+        const inkOf = (text, x, y) => { let at = 0; return text.split(" ").map((word) => { const start = text.indexOf(word, at); at = start + word.length; const before = c.measureText(text.slice(0, start)).width; const m = c.measureText(word); return { text: word, x: x + before - m.actualBoundingBoxLeft, y: y - m.actualBoundingBoxAscent, width: m.actualBoundingBoxLeft + m.actualBoundingBoxRight, height: m.actualBoundingBoxAscent + m.actualBoundingBoxDescent }; }); };
+        for (const [size, text] of SCREEN) { c.font = (size >= 20 ? "600 " : "") + size + "px sans-serif"; c.fillText(text, 340, y); lines.push({ text, size, words: inkOf(text, 340, y) }); y += size * 2.6 + 10; }
         c.fillStyle = "#2f6fed"; c.fillRect(340, y, 160, 40); c.fillStyle = "#ffffff"; c.font = "14px sans-serif"; c.fillText("Save changes", 372, y + 25); lines.push({ text: "Save changes", size: 14 });
         c.fillStyle = dark ? "#949ba4" : "#6e6e73"; c.font = "11px monospace"; c.fillText("Build 3b18e512 deployed 2026-11-14 10:30", 1400, 1050); lines.push({ text: "Build 3b18e512 deployed 2026-11-14 10:30", size: 11 });
         return { canvas, lines };
@@ -95,11 +98,30 @@ window.readFixture = async (kind, id, place) => {
     const ms = performance.now() - started;
     return { expected: lines, read: read.map((line) => ({ text: line.text, sure: Math.round(line.sure * 100) / 100, words: line.words.map((word) => ({ text: word.text, box: word.box })) })), private: lookPrivate(read), ms: Math.round(ms), place: built.place, threads: built.threads };
 };
+// in its worker, it answers each fixture asked for with what reading it gave
+self.onmessage = (event) => window.readFixture(...event.data).then((found) => self.postMessage(found), (error) => self.postMessage({ error: String(error && error.stack || error) }));
+`;
+
+/** The page's own script: the worker made, and a fixture asked of it, what it gives kept in window.done. */
+const PAGE = `
+const worker = new Worker("/worker.js", { type: "module" });
+worker.onmessage = (event) => (window.done = event.data);
+window.startFixture = (kind, id, place) => { window.done = undefined; worker.postMessage([kind, id, place]); };
 window.ready = true;
 `;
 
+/** What reading a fixture gives: the lines drawn and those read, what looks private, the time and where it ran. */
+export interface Fixture {
+    expected: { text: string; size: number; degrees?: number; words?: { text: string; x: number; y: number; width: number; height: number }[] }[];
+    read: { text: string; sure: number; words: { text: string; box: { at: { x: number; y: number }; along: { x: number; y: number }; length: number; height: number } }[] }[];
+    private: { kind: string; text: string }[];
+    ms: number;
+    place: string;
+    threads: number;
+}
+
 /** Opens the page in a fresh Chromium with these flags, or gives undefined where there is no Chromium or no models. */
-export async function readPage(args: string[] = []): Promise<{ tab: Browser; close(): Promise<void>; origin: string } | undefined> {
+export async function readPage(args: string[] = []): Promise<{ tab: Browser; close(): Promise<void>; origin: string; read(kind: string, tier: string, place: string): Promise<Fixture> } | undefined> {
     if (!chromium() || !(await Bun.file(`${TRIALS}/PP-OCRv6_tiny_det_onnx/inference.onnx`).exists())) return undefined;
     const folder = await mkdtemp(join(tmpdir(), "quire-read-"));
     let script: string;
@@ -116,7 +138,8 @@ export async function readPage(args: string[] = []): Promise<{ tab: Browser; clo
         port: 0,
         async fetch(request) {
             const path = new URL(request.url).pathname;
-            if (path === "/") return new Response(`<!doctype html><meta charset="utf-8"><body><script type="module">${script}</script>`, { headers: { ...isolated, "Content-Type": "text/html" } });
+            if (path === "/") return new Response(`<!doctype html><meta charset="utf-8"><body><script type="module">${PAGE}</script>`, { headers: { ...isolated, "Content-Type": "text/html" } });
+            if (path === "/worker.js") return new Response(script, { headers: { ...isolated, "Content-Type": "text/javascript" } });
             const file = path.startsWith("/ort/") ? Bun.file(ORT + path.slice(5)) : path.startsWith("/models/") ? Bun.file(`${TRIALS}/${path.slice(8)}`) : undefined;
             if (!file || path.includes("..") || !(await file.exists())) return new Response("missing", { status: 404 });
             return new Response(file, { headers: { ...isolated, "Content-Type": path.endsWith(".wasm") ? "application/wasm" : path.endsWith(".mjs") ? "text/javascript" : "application/octet-stream" } });
@@ -134,6 +157,14 @@ export async function readPage(args: string[] = []): Promise<{ tab: Browser; clo
     return {
         tab,
         origin: `http://localhost:${server.port}`,
+        /** Reads a fixture with a size's models on a place, waiting as long as it takes. */
+        async read(kind: string, tier: string, place: string): Promise<Fixture> {
+            await tab.run(`window.startFixture(${JSON.stringify(kind)}, ${JSON.stringify(tier)}, ${JSON.stringify(place)})`);
+            while (!(await tab.run<boolean>("!!window.done"))) await tab.wait(100);
+            const found = await tab.run<Fixture & { error?: string }>("window.done");
+            if (found.error) throw new Error(found.error);
+            return found;
+        },
         async close() {
             await tab.close();
             server.stop(true);
