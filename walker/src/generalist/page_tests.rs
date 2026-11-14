@@ -212,8 +212,9 @@ fn a_policy_on_show_moves_exactly_as_it_would_in_practice() {
         (page.state_room, page.running_room) = (state, running);
         assert!(page.policy_load());
 
-        // the same policy in the same world, as practice and its measuring step it
-        let way = Way::of(legs);
+        // the same policy in the same world, as practice and its measuring step it, born full as the
+        // creature on show is
+        let way = Way { energy: 1.0, play: 0.0, ..Way::of(legs) };
         let mut worlds = Worlds::alone(recipe, way, &[recipe.seed]).unwrap();
         let wide = worlds.actions();
         let (mut sensed, mut asked, mut rewards, mut ends, mut last) = (vec![0.0; senses], vec![0.0; wide], vec![0.0; 1], vec![GOING; 1], vec![0.0; senses]);

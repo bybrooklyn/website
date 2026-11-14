@@ -93,6 +93,11 @@ fn main() {
     let started = Instant::now();
     let say = |steps: u64, measured: Measured, own: f32| {
         let furthest = measured.distances.iter().fold(0.0f32, |a, &b| a.max(b));
+        let w = measured.wants;
+        println!(
+            "{method}-wants {legs} {difficulty} {seed} {steps} food={:.2} resting={:.3} gain={:.4} bouts={:.2} recovered={:.2} went_on={:.2} energy={:.2} lowest={:.2} on={:.3} chance={:.3} still_on={:.3} seen={:.3} gaze={:.0}/{:.0}",
+            w.food, w.resting, w.rest_gain, w.bouts, w.recovered, w.went_on, w.energy, w.lowest, w.on, w.chance, w.resting_on, w.seen, w.gaze, w.gaze_spread
+        );
         let g = measured.gait;
         println!(
             "{method} {legs} {difficulty} {seed} {steps} {:.1} {:.2} {furthest:.2} {own:.2} {:.3} {:.0} low={:.3} belly={:.3} height={:.2}/{:.2} pitch={:.2}/{:.2} together={:.2} cadence={:.2} balance={:.2} variation={:.2} walks={}",
@@ -181,6 +186,15 @@ fn main() {
                 "rate" => settings.rate = value,
                 "spread" => settings.spread_start = value,
                 "gamma" => settings.gamma = value,
+                "needs" => way.needs = on,
+                "gaze" => way.gaze = on,
+                "play" => way.play = value,
+                "appear" => way.appear = value,
+                "comfort" => way.shaping.comfort = value,
+                "place" => way.shaping.place = value,
+                "sight" => way.shaping.sight = value,
+                "progress" => way.shaping.progress = value,
+                "effort" => way.shaping.energy = value,
                 _ => panic!("no setting called {name}"),
             }
         }

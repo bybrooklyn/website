@@ -5,7 +5,7 @@
 // creatures for a learner work. And what roaming.ts is held to: seeds and links.
 
 import { expect, test } from "bun:test";
-import { DEFAULT_RECIPE, KINDS, anotherSeed, brainColumns, counted, rewarded, engineRecipe, fromLink, lasted, linkParts, seedNumber, valid, type Engine } from "./roaming";
+import { DEFAULT_RECIPE, KINDS, anotherSeed, brainColumns, counted, engineRecipe, fromLink, lasted, linkParts, seedNumber, senseLayout, valid, type Engine } from "./roaming";
 
 const path = new URL("../../public/wasm/generalist.wasm", import.meta.url);
 const scalarPath = new URL("../../public/wasm/generalist-scalar.wasm", import.meta.url);
@@ -134,7 +134,7 @@ test("many creatures step together, as fast as this runtime goes", async () => {
 });
 
 /** The native engine's fingerprint of a small learner's state over two updates of practice (walker/src/generalist/practice_tests.rs). */
-const PRACTICE_FINGERPRINT = 0x6cf0f880cc3fbf10n;
+const PRACTICE_FINGERPRINT = 0xb66b94ffb5e3f67cn;
 
 test("practice in the page's engine learns to the bit as natively, with SIMD and without", async () => {
     for (const each of [path, scalarPath]) {
@@ -216,11 +216,45 @@ test("the brain on show is drawn as it thinks, evolution's or practice's", async
     expect(engine.policy_load()).toBe(1);
     for (let i = 0; i < 30; i++) engine.show_step(1 / 60);
     const policy = brainColumns(new Float32Array(engine.memory.buffer, engine.brain_picture(), engine.length()).slice());
-    // practice's policy feels touch too: its body, two feet, being held, and the jolt across and up
-    expect(policy?.lit.map((column) => column.length)).toEqual([16 + 18 + 6, 64, 64, 5]);
-    expect(policy?.flows.map((flow) => flow.length)).toEqual([40 * 64, 64 * 64, 64 * 5]);
+    // practice's policy senses its energy, having eaten and where it looks, and feels touch: its body, two
+    // feet, being held, and the jolt across and up; and it turns its eye, an action before the hop
+    expect(policy?.lit.map((column) => column.length)).toEqual([16 + 18 + 3 + 6, 64, 64, 6]);
+    expect(policy?.flows.map((flow) => flow.length)).toEqual([43 * 64, 64 * 64, 64 * 6]);
     expect(policy?.flows.every((flow) => flow.every(Number.isFinite) && flow.some((amount) => amount !== 0))).toBe(true);
     expect(brainColumns(new Float32Array([2, 3, 1, 0, 0]))).toBeUndefined();
+});
+
+test("a creature that wants things shows its energy, its food and where it looks, and food can be dropped for it", async () => {
+    const engine = await load();
+    engine.create(2, 4, 0.2, 1, 1, 1, 1, 8, 8, 1, 0, 30, 1);
+    // evolution's creature neither eats nor turns its eye
+    expect(floats(engine, engine.show_needs())[0]).toBe(-1);
+    expect(engine.show_drop_food(1, 1)).toBe(0);
+    engine.practice_create(2, 1, 1);
+    const state = new Float32Array(engine.memory.buffer, engine.practice_state(), engine.length()).slice();
+    const running = new Float64Array(engine.memory.buffer, engine.practice_running(), engine.length()).slice();
+    const [stateRoom, runningRoom] = [engine.state_room(0), engine.running_room()];
+    new Float32Array(engine.memory.buffer, stateRoom, state.length).set(state);
+    new Float64Array(engine.memory.buffer, runningRoom, running.length).set(running);
+    expect(engine.policy_load()).toBe(1);
+    // born full, at full strength, looking a little down ahead
+    const [energy, vigour, , , gaze] = floats(engine, engine.show_needs());
+    expect([energy, vigour]).toEqual([1, 1]);
+    expect(gaze).toBeCloseTo((-30 * Math.PI) / 180, 5);
+    for (let i = 0; i < 10; i++) engine.show_step(1 / 60);
+    expect(floats(engine, engine.show_senses()).length).toBe(senseLayout(2).length);
+    expect(floats(engine, engine.show_needs())[0]!).toBeLessThan(1);
+    // food dropped falls and lies on the ground; the rays turn with the eye
+    const before = floats(engine, engine.show_food()).length;
+    expect(engine.show_drop_food(-3, 1.5)).toBe(1);
+    expect(floats(engine, engine.show_food()).length).toBe(before + 2);
+    for (let i = 0; i < 60; i++) engine.show_step(1 / 60);
+    const food = floats(engine, engine.show_food());
+    const dropped = food.findIndex((value, k) => k % 2 === 0 && Math.abs(value + 3) < 1e-4);
+    expect(food[dropped + 1]!).toBeCloseTo(0.08, 3);
+    const angles = floats(engine, engine.ray_angles());
+    expect(angles.length).toBe(16);
+    expect(angles[8]! - angles[7]!).toBeLessThan(angles[1]! - angles[0]!);
 });
 
 test("practice runs as fast as this runtime goes", async () => {
@@ -275,8 +309,3 @@ test("how long it has practised and how many steps are said in plain words", () 
     expect(counted(3_250_000)).toBe("3.3 million");
 });
 
-test("what the creature was rewarded and charged for is said in a few words, the biggest first", () => {
-    expect(rewarded([0.42, 0.12, -0.05, 0, 0])).toEqual([{ words: "forward +0.42", good: true }, { words: "up +0.12", good: true }, { words: "effort \u22120.05", good: false }]);
-    expect(rewarded([-2.9, 0, 0, -0.3, 1])[0]).toEqual({ words: "fell \u22123", good: false });
-    expect(rewarded([0.001, 0, 0, 0, 0])).toEqual([]);
-});

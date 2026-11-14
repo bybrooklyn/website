@@ -4,6 +4,11 @@
 //! behind, the moving platforms driven along their ways, and the whole world moved back whenever the
 //! creature passes 512 m, as the Walker's endless walk is, so an f32 stays fine however far it goes.
 //!
+//! For a creature that eats, the land's food is put out as it comes near, as the things that are bodies
+//! are, and food can be dropped in (by a visitor, or as it appears now and then: `needs`); dropped food
+//! falls to what is under it. Food is not a body: nothing bumps into it, and the eyes find it as they
+//! find hazards.
+//!
 //! Positions in the land are from the start; positions in the physics are less `origin`.
 
 use alloc::rc::Rc;
@@ -33,6 +38,14 @@ const PLANK_DENSITY: f32 = 40.0;
 const MOVER_MASS: f32 = 15.0;
 /// How far a see-saw tips either way, in radians.
 const TIP: f32 = 0.6;
+
+/// A piece of food put out: where its middle is, in the physics, and how fast it is falling (0 once it
+/// lies on something).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Food {
+    pub at: Vec2,
+    pub falling: f32,
+}
 
 /// What sort of thing a body made from the land is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -69,13 +82,18 @@ pub struct Stage {
     laid: f32,
     pieces: usize,
     blocks: usize,
+    /// Whether food is put out, the food put out and not yet eaten, and the next of the land's food to
+    /// put out.
+    pub feeds: bool,
+    pub food: Vec<Food>,
+    next_food: usize,
 }
 
 impl Stage {
     /// The land's start, laid in a new world. The creature is built in it next, before anything else,
     /// so its bodies come first and never change places.
     pub fn new(land: Rc<Land>) -> Stage {
-        let mut stage = Stage { world: World::new(), land, origin: 0.0, made: Vec::new(), next: [0; 3], laid: f32::MIN, pieces: 0, blocks: 0 };
+        let mut stage = Stage { world: World::new(), land, origin: 0.0, made: Vec::new(), next: [0; 3], laid: f32::MIN, pieces: 0, blocks: 0, feeds: false, food: Vec::new(), next_food: 0 };
         stage.lay(AHEAD);
         stage
     }
@@ -93,6 +111,10 @@ impl Stage {
         self.laid = other.laid;
         self.pieces = other.pieces;
         self.blocks = other.blocks;
+        self.feeds = other.feeds;
+        self.food.clear();
+        self.food.extend_from_slice(&other.food);
+        self.next_food = other.next_food;
     }
 
     /// Lays the land's ground and blocks up to `until`, in the land's metres, making more land if it
@@ -132,11 +154,57 @@ impl Stage {
         let mut moved = 0.0;
         if x > REBASE {
             self.world.shift(REBASE);
+            for food in &mut self.food {
+                food.at.x -= REBASE;
+            }
             self.origin += REBASE;
             moved = REBASE;
         }
         self.drive();
+        if self.food.iter().any(|food| food.falling != 0.0) {
+            self.fall();
+        }
         moved
+    }
+
+    /// Puts out a piece of food at `at` in the physics, from where it falls to what is under it.
+    pub fn drop_food(&mut self, at: Vec2) {
+        self.food.push(Food { at, falling: -1e-3 });
+    }
+
+    /// Moves falling food on by a step: down, faster and faster, until it lies on the ground or a
+    /// platform; food that falls past the bottom of the world is gone.
+    fn fall(&mut self) {
+        let mut k = 0;
+        while k < self.food.len() {
+            let Food { at, falling } = self.food[k];
+            if falling == 0.0 {
+                k += 1;
+                continue;
+            }
+            let speed = falling + self.world.gravity.y * STEP;
+            let next = at.y + speed * STEP;
+            let below = self.surface_under(at.x, at.y);
+            if below.is_some_and(|top| next - super::eyes::FOOD_RADIUS <= top) {
+                self.food[k] = Food { at: Vec2::new(at.x, below.unwrap_or(next) + super::eyes::FOOD_RADIUS), falling: 0.0 };
+            } else if next < self.floor(at.x) - 1.0 {
+                self.food.remove(k);
+                continue;
+            } else {
+                self.food[k] = Food { at: Vec2::new(at.x, next), falling: speed };
+            }
+            k += 1;
+        }
+    }
+
+    /// The highest ground or platform top at x in the physics no higher than `y`, if any.
+    fn surface_under(&self, x: f32, y: f32) -> Option<f32> {
+        let ground = self.world.ground_height(x).filter(|&ground| ground <= y + 0.02);
+        let top = self.world.blocks().filter(|(low, high)| low.x <= x && x <= high.x && high.y <= y + 0.02).map(|(_, high)| high.y).fold(None, |best: Option<f32>, top| Some(best.map_or(top, |best| best.max(top))));
+        match (ground, top) {
+            (Some(a), Some(b)) => Some(a.max(b)),
+            (a, b) => a.or(b),
+        }
     }
 
     /// Makes every thing the creature, at `along` in the land, has come near.
@@ -160,6 +228,10 @@ impl Stage {
             self.made.push(Made { thing: Thing::Mover, index: self.next[1], body: index, driven: true });
             self.next[1] += 1;
         }
+        while let Some(&food) = geometry.food.get(self.next_food).filter(|food| self.feeds && food.x < along + NEAR) {
+            self.food.push(Food { at: food - Vec2::new(self.origin, 0.0), falling: 0.0 });
+            self.next_food += 1;
+        }
         while let Some(seesaw) = geometry.seesaws.get(self.next[2]).filter(|seesaw| seesaw.pivot.x - seesaw.half < along + NEAR) {
             let pivot = seesaw.pivot - Vec2::new(self.origin, 0.0);
             let mut plank = Body::new(Shape::Box { half_width: seesaw.half, half_height: PLANK }, pivot, seesaw.resting(), PLANK_DENSITY);
@@ -180,6 +252,7 @@ impl Stage {
 
     /// Takes away things far behind a creature at `x` in the physics.
     fn take_far(&mut self, x: f32) {
+        self.food.retain(|food| food.at.x > x - GONE);
         let mut k = 0;
         while k < self.made.len() {
             let made = self.made[k];

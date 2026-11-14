@@ -11,6 +11,10 @@
 //! so a jump can be learned as one choice rather than found by chance among all the ways of moving
 //! every joint.
 //!
+//! Practice's creatures have two things more (stage 2 of the plan): an eye they turn (`gazing`: one
+//! action more, before the hop, says where to look, and the eye turns there no faster than
+//! `eyes::GAZE_SPEED`), and energy (`needs`), which weakens their muscles when it runs low.
+//!
 //! A hop kicks a body over unless it is hard to tip, so the two-legged one holds its arms out wide,
 //! as someone on a tightrope does, and the four-legged one carries its weight spread along its back.
 //! The arms are stiff, so they are counted as part of the body's weight, making it ten times as hard
@@ -99,6 +103,12 @@ pub struct Body {
     /// Whether it feels touch (`touch::feel`): pressure on its body and feet, a hand holding it, and
     /// the jolt its body feels. Practice's creatures do; evolution's feel as they always did.
     pub touch: bool,
+    /// Whether it turns its eye (one action more, before the hop), and where the eye looks now, in
+    /// radians from level ahead (`eyes::gazed`).
+    pub gazing: bool,
+    pub gaze: f32,
+    /// Its energy, for a body that eats (`needs`).
+    pub needs: Option<super::needs::Needs>,
 }
 
 impl Body {
@@ -110,7 +120,7 @@ impl Body {
         let creature = Creature::build(world, Description { legs, carry: false, leap: false })?;
         let hopping = Hopping::of(legs);
         world.bodies[creature.torso as usize].inverse_inertia /= hopping.steadiness;
-        Some(Body { creature, hop: Hop::Ready, hopping, direct: false, ease: 1.0, aims: Vec::new(), strength: 1.0, clock: true, touch: false })
+        Some(Body { creature, hop: Hop::Ready, hopping, direct: false, ease: 1.0, aims: Vec::new(), strength: 1.0, clock: true, touch: false, gazing: false, gaze: super::eyes::GAZE_REST, needs: None })
     }
 
     pub fn legs(&self) -> usize {
@@ -118,9 +128,11 @@ impl Body {
     }
 
     /// How many numbers the brain gives it: three for each joint and one for the hop, or, direct, one
-    /// for each joint and one for the hop.
+    /// for each joint and one for the hop; and, before the hop, one for where it looks if it turns its
+    /// eye.
     pub fn actions(&self) -> usize {
-        if self.direct { self.creature.joints.len() + 1 } else { self.creature.description.outputs() + 1 }
+        let gaze = usize::from(self.gazing);
+        if self.direct { self.creature.joints.len() + gaze + 1 } else { self.creature.description.outputs() + gaze + 1 }
     }
 
     /// Whether a foot is on something.
@@ -130,7 +142,10 @@ impl Body {
 
     /// Moves the joints as the brain asks, `actions()` numbers from -1 to 1.
     pub fn drive(&mut self, world: &mut World, actions: &[f32]) {
-        let walking = self.actions() - 1;
+        let hop = self.actions() - 1;
+        let walking = hop - usize::from(self.gazing);
+        // tired, its muscles are weaker and slower
+        let vigour = self.needs.as_ref().map_or(1.0, super::needs::Needs::vigour);
         if self.direct {
             // each action from -1 to 1 is an angle from the joint's lower limit to its upper
             if self.aims.len() != walking {
@@ -144,11 +159,19 @@ impl Body {
                 let joint = &mut world.joints[self.creature.joints[i] as usize];
                 joint.torque *= self.strength;
                 joint.speed *= self.strength;
+                if self.needs.is_some() {
+                    joint.torque *= vigour;
+                    joint.speed *= 0.5 + 0.5 * vigour;
+                }
             }
         } else {
             self.creature.drive(world, &actions[..walking]);
         }
-        self.hop(world, clamp(actions[walking], -1.0, 1.0) > 0.5);
+        if self.gazing {
+            let most = super::eyes::GAZE_SPEED * STEP;
+            self.gaze += clamp(super::eyes::gaze_wanted(actions[walking]) - self.gaze, -most, most);
+        }
+        self.hop(world, clamp(actions[hop], -1.0, 1.0) > 0.5);
     }
 
     /// Moves the hop on, starting one if `wanted`, and while it lasts takes the legs over from
@@ -195,10 +218,16 @@ impl Body {
 
     /// How many numbers it feels of itself (`feel`): its body's angle, spin and speed forward and
     /// up; each joint's angle and speed; each foot on something or not; the rhythm's sine and
-    /// cosine; and whether it is hopping and whether it can hop. Then, if it feels touch, what
-    /// `touch::feel` writes after these.
+    /// cosine; and whether it is hopping and whether it can hop. Then, for a body that eats, its
+    /// energy and whether it has just eaten; for one that turns its eye, where it looks. Then, if it
+    /// feels touch, what `touch::feel` writes after these.
     pub fn feelings(&self) -> usize {
-        4 + 2 * self.creature.joints.len() + self.legs() + 2 + 2 + if self.touch { super::touch::felt(self.legs()) } else { 0 }
+        self.inner() + if self.touch { super::touch::felt(self.legs()) } else { 0 }
+    }
+
+    /// What `feel` writes: all it feels but touch.
+    fn inner(&self) -> usize {
+        4 + 2 * self.creature.joints.len() + self.legs() + 2 + 2 + if self.needs.is_some() { 2 } else { 0 } + usize::from(self.gazing)
     }
 
     /// What it feels of itself, written into `into`, `feelings()` long, each about one at most.
@@ -225,5 +254,14 @@ impl Body {
         into[at + 1] = felt * c;
         into[at + 2] = if matches!(self.hop, Hop::Crouch(_) | Hop::Spring(_)) { 1.0 } else { 0.0 };
         into[at + 3] = if self.hop == Hop::Ready { 1.0 } else { 0.0 };
+        at += 4;
+        if let Some(needs) = &self.needs {
+            into[at] = needs.energy;
+            into[at + 1] = needs.ate;
+            at += 2;
+        }
+        if self.gazing {
+            into[at] = self.gaze / crate::math::PI;
+        }
     }
 }

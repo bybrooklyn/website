@@ -6,22 +6,25 @@
 // learns by practice (src/scripts/generalist-practice.ts), or by evolution as the Walker does
 // (src/scripts/generalist-worker.ts), in workers each with its own copy of the engine; this page runs
 // one more copy that shows the newest policy, or the best brain so far, walking the world from the
-// start, with its brain drawn beside it as it thinks. Its rays can be drawn, faint, so a visitor sees
-// what it sees. A press takes hold of it, by its body or a leg, or of a box, a moving platform or a
-// see-saw, with the engine's hand (walker/src/generalist/touch.rs): a spring to the pointer with a cap
-// on its force, so what is held hangs and swings and a heavy thing lags; the keyboard has the same hand.
+// start, with its brain drawn beside it as it thinks. A practised creature wants things (stage 2 of
+// docs/generalist-plan.md): it has energy, which its body glows with and a bar in the column shows, food
+// to find, drawn as plain dots, and an eye it turns, drawn as a line from its eye to where it looks. Its
+// rays can be drawn, faint, so a visitor sees what it sees. A press takes hold of it, by its body or a leg,
+// or of a box, a moving platform or a see-saw, with the engine's hand (walker/src/generalist/touch.rs): a
+// spring to the pointer with a cap on its force, so what is held hangs and swings and a heavy thing lags;
+// the keyboard has the same hand. A tap on nothing drops a piece of food there.
 //
-// The world's and the body's controls are in a strip under the world, and the brain, a chart of how far
-// it gets and the learning in a column beside it, in the panel style the minis use. What this and the
-// worker share is in roaming.ts.
+// The world is on the left and a column on the right: the controls folded at its top, then the brain,
+// what it senses and its energy, drawn live, then a chart of how far it gets, in the panel style the
+// minis use. Nothing is narrated. What this and the worker share is in roaming.ts.
 
 import { el, type Mote, type Scene } from "../mote/stage";
 import type { Kept, Order as PracticeOrder, Report as PracticeReport } from "../scripts/generalist-practice";
 import type { Order, Report } from "../scripts/generalist-worker";
-import { BRAIN, DEFAULT_RECIPE, KINDS, LEGS, POPULATION, SECONDS, SEEN, anotherSeed, brainColumns, counted, engineAddress, rewarded, engineRecipe, fromLink, lasted, linkParts, list, start as startEngine, valid, write, write64, type Engine, type Kind, type Recipe } from "./roaming";
+import { BRAIN, DEFAULT_RECIPE, KINDS, LEGS, POPULATION, SECONDS, SEEN, anotherSeed, brainColumns, counted, engineAddress, engineRecipe, fromLink, lasted, linkParts, list, senseLayout, start as startEngine, valid, write, write64, type Engine, type Kind, type Recipe } from "./roaming";
 import { EFFORTS, machine, tenths, workersFor, type Effort } from "./walking";
 
-export const label = "A little creature with legs, seen from the side, finding its way over gaps, ledges, water and boxes in a world made from a seed. Faint lines from its eye show what it sees. It and the boxes and platforms can be picked up and moved: with the pointer, or with Space to take hold and the arrows to move the hand.";
+export const label = "A little creature with legs, seen from the side, learning from nothing to find its way and its food in a world made from a seed. A line from its eye shows where it looks, and faint lines what it sees; its body glows with the energy it has. It and the boxes and platforms can be picked up and moved: with the pointer, or with Space to take hold and the arrows to move the hand. A tap on nothing drops food there.";
 
 /** How long the creature rests where its run ended before starting again, in seconds. */
 const REST = 1;
@@ -29,6 +32,10 @@ const REST = 1;
 const AHEAD = 40;
 /** How far an arrow key moves the keyboard's hand, in metres. */
 const KEY_STEP = 0.25;
+/** A press that moves less than this, in pixels, and takes hold of nothing, is a tap: it drops food. */
+const TAP = 6;
+/** Below this energy its muscles weaken (walker/src/generalist/needs.rs, `TIRED`). */
+const TIRED = 0.4;
 
 /** How the creature learns: by evolution, the best of many tries kept and varied, or by practice (PPO, in walker/src/generalist/ppo.rs). */
 type How = "evolution" | "practice";
@@ -41,9 +48,12 @@ const keptKey = (recipe: Recipe) => String(recipe.legs);
  * The store's version. At 2 two legs began to practise for a pace, without sensing a rhythm (walker/README.md,
  * "How two legs came to walk"), and opening the store at 2 forgot two-legged learners kept before. At 3 the
  * creatures began to feel touch, so every learner kept before has too few senses to be taken up: opening the
- * store at 3 forgets them all, and learners are kept by body alone from then on, not by kind of world.
+ * store at 3 forgets them all, and learners are kept by body alone from then on, not by kind of world. At 4
+ * they began to want things (walker/README.md, "It wants things"): their energy, having eaten and where their
+ * eye looks are senses, and where to look an action, so again every learner kept before is the wrong shape and
+ * opening the store at 4 forgets them all.
  */
-const KEEPING_VERSION = 3;
+const KEEPING_VERSION = 4;
 
 /** Opens the browser's store for kept learners. */
 function store(): Promise<IDBDatabase> {
@@ -54,7 +64,7 @@ function store(): Promise<IDBDatabase> {
                 asked.result.createObjectStore("kept");
                 return;
             }
-            // every learner kept before version 3 senses too little to be taken up
+            // every learner kept before version 4 senses too little to be taken up
             asked.transaction?.objectStore("kept").clear();
         };
         asked.onsuccess = () => opened(asked.result);
@@ -94,9 +104,10 @@ export default function generalist(m: Mote): Scene {
     let policy: { weights: Float32Array; running: Float64Array } | undefined;
     /** How far it got as it learned, for the chart: steps practised (or generations) against metres. */
     let learned: { x: number; y: number }[] = [];
-    /** What the creature on show was just rewarded and charged for, said beside it, and when it was last read. */
-    let lately: { words: string; good: boolean }[] = [];
-    let heardRewards = 0;
+    /** What the creature on show wants and where it looks, read each frame (`show_needs`): energy, vigour, just ate, resting, gaze, eaten. */
+    let needs = { energy: -1, vigour: 1, ate: 0, resting: 0, gaze: -0.52, eaten: 0 };
+    /** Where a press began on the canvas, and whether it took hold of anything, so a tap on nothing can drop food. */
+    let pressedAt: { x: number; y: number; took: boolean } | undefined;
     /** A learner being forgotten ("start over"), which must be gone before the kept one is read again. */
     let forgetting: Promise<unknown> = Promise.resolve();
     /** The policy last put on show, put on show again at once when the world changes and practice carries on. */
@@ -346,24 +357,33 @@ export default function generalist(m: Mote): Scene {
     let changed = () => {};
     let drawBrain = () => {};
     let drawChart = () => {};
+    let drawSenses = () => {};
+    let drawEnergy = () => {};
     /** The tick the brain was last drawn at; none yet. */
     let brainAt = -1;
     if (!m.preview) {
         const host = m.canvas.parentElement!;
         const side = m.panel();
         side.classList.add("walker-side");
-        // the world's own controls, and the body's, in a strip under the picture, as the Walker's ground has
-        const strip = el("div", { class: "mote-panel walker-ground generalist-world" });
-        host.insertBefore(strip, side);
         const status = el("p", { class: "walker-status" });
         status.setAttribute("aria-hidden", "true");
         const said = el("p", { class: "walker-said unseen" });
         said.setAttribute("aria-live", "polite");
-        host.insertBefore(status, strip);
+        host.insertBefore(status, side);
         side.append(said);
 
         const row = (words: string, ...controls: (Node | string)[]) => [el("span", { class: "walker-label", textContent: words }), el("div", { class: "walker-controls" }, ...controls)];
         const group = (words: string) => el("h3", { class: "walker-group", textContent: words });
+        /** A block that grows open under what opens it and shrinks shut again, never simply appearing. */
+        const opening = (id: string, ...inside: Node[]) => {
+            const block = el("div", { class: "walker-opening fold", id }, el("div", { class: "walker-opening-inside" }, ...inside));
+            const shut = (open: boolean) => {
+                block.classList.toggle("open", open);
+                block.inert = !open;
+            };
+            shut(false);
+            return { block, shut, open: () => block.classList.contains("open") };
+        };
         const choices = <T extends string | number>(name: string, words: string, options: { value: T; text: string }[], chosen: () => T, pick: (value: T) => void) => {
             const set = el("div", { class: "walker-choices" });
             set.setAttribute("role", "radiogroup");
@@ -555,6 +575,23 @@ export default function generalist(m: Mote): Scene {
                     ctx.globalAlpha = 1;
                 });
             });
+            // the neuron for looking around, before the hop at the foot of what it does: ringed, with an eye beside it
+            const moves = lit.length - 1;
+            if (needs.energy >= 0 && lit[moves]!.length >= 2) {
+                const [x, y] = place(moves, lit[moves]!.length - 2);
+                ctx.strokeStyle = accent;
+                ctx.lineWidth = 1.2;
+                ctx.beginPath();
+                ctx.arc(x, y, 6, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.ellipse(x - 13, y, 4.5, 2.6, 0, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.fillStyle = accent;
+                ctx.beginPath();
+                ctx.arc(x - 13, y, 1.2, 0, Math.PI * 2);
+                ctx.fill();
+            }
             ctx.fillStyle = muted;
             ctx.font = `11px ${code}`;
             ctx.textBaseline = "bottom";
@@ -623,17 +660,157 @@ export default function generalist(m: Mote): Scene {
             ctx.fillText(learned.length === 0 ? (evolving ? "generations" : "steps practised") : evolving ? `generation ${lastX}` : `${counted(lastX)} steps`, right, high - 3);
         };
 
-        strip.append(...row("seed", seed, another), ...row("how hard", hard.holder), ...kinds.flat(), ...row("legs", legs), ...row("eyes", el("label", {}, rays, "show what it sees")));
-        side.append(
-            group("brain"),
-            brainPicture,
-            chart,
+        // what it senses, drawn live: each ray of its eye, then touch on its body and feet, held, and the jolt
+        const sensesPicture = el("canvas", { class: "walker-brain-picture generalist-senses" });
+        sensesPicture.setAttribute("role", "img");
+        sensesPicture.setAttribute("aria-label", "What the creature senses now: a cell for each ray of its eye, from low to high, lit by how near what it meets is, food marked with a dot; then how hard things press on its body and each foot, whether it is held, and the push its body feels.");
+        drawSenses = () => {
+            if (!engine) return;
+            const ctx = sensesPicture.getContext("2d");
+            const [wide, high] = [sensesPicture.clientWidth, sensesPicture.clientHeight];
+            if (!ctx || wide === 0) return;
+            const ratio = window.devicePixelRatio || 1;
+            if (sensesPicture.width !== Math.round(wide * ratio) || sensesPicture.height !== Math.round(high * ratio)) [sensesPicture.width, sensesPicture.height] = [Math.round(wide * ratio), Math.round(high * ratio)];
+            ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+            ctx.clearRect(0, 0, wide, high);
+            const sensed = list(engine, engine.show_senses());
+            const legs = engine.legs_length();
+            const layout = senseLayout(legs);
+            const [accent, muted, ink] = [m.color("--accent"), m.color("--muted"), m.color("--ink")];
+            const practised = sensed.length === layout.length;
+            // the eye: sixteen cells, the lowest ray on the left; the middle ones, where it looks, a little taller
+            const [left, right] = [8, wide - 8];
+            const cell = (right - left) / 16;
+            for (let k = 0; k < 16; k++) {
+                const near = sensed[k * 6] ?? 0;
+                const kind = [1, 2, 3, 4, 5].find((slot) => (sensed[k * 6 + slot] ?? 0) > 0.5);
+                const middle = practised && k >= 6 && k <= 9;
+                const [top, tall] = middle ? [6, 30] : [10, 22];
+                ctx.globalAlpha = 0.12 + 0.88 * near;
+                ctx.fillStyle = kind ? accent : muted;
+                ctx.beginPath();
+                ctx.roundRect(left + k * cell + 1, top, cell - 2, tall, 2);
+                ctx.fill();
+                ctx.globalAlpha = 1;
+                if (kind === 5) {
+                    ctx.fillStyle = ink;
+                    ctx.beginPath();
+                    ctx.arc(left + (k + 0.5) * cell, top + tall / 2, Math.min(cell * 0.22, 4), 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+            if (!practised) return;
+            // touch: its body, each foot, held; then the jolt as a short line from a dot
+            const bars = [sensed[layout.touch] ?? 0, ...Array.from({ length: legs }, (_, k) => sensed[layout.footPressed + k] ?? 0)];
+            const [base, most] = [high - 17, Math.max(10, high - 59)];
+            const barWide = Math.min(18, (wide * 0.55) / (bars.length + 1));
+            bars.forEach((value, k) => {
+                const x = left + k * (barWide + 6);
+                ctx.globalAlpha = 0.25;
+                ctx.fillStyle = muted;
+                ctx.fillRect(x, base - most, barWide, most);
+                ctx.globalAlpha = 1;
+                ctx.fillStyle = accent;
+                const tall = (most * Math.min(2, value)) / 2;
+                ctx.fillRect(x, base - tall, barWide, tall);
+            });
+            const heldX = left + bars.length * (barWide + 6) + 8;
+            ctx.beginPath();
+            ctx.arc(heldX, base - most / 2, 5, 0, Math.PI * 2);
+            ctx.strokeStyle = accent;
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+            if ((sensed[layout.held] ?? 0) > 0.5) {
+                ctx.fillStyle = accent;
+                ctx.fill();
+            }
+            const [jx, jy] = [sensed[layout.jolt] ?? 0, sensed[layout.jolt + 1] ?? 0];
+            const [cx, cy] = [right - 22, base - most / 2];
+            ctx.fillStyle = muted;
+            ctx.beginPath();
+            ctx.arc(cx, cy, 2.5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = accent;
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            ctx.lineTo(cx + jx * 9, cy - jy * 9);
+            ctx.stroke();
+            ctx.fillStyle = muted;
+            ctx.font = `11px ${code}`;
+            ctx.textBaseline = "bottom";
+            ctx.textAlign = "left";
+            ctx.fillText("eye", left, high - 3);
+            ctx.textAlign = "center";
+            ctx.fillText("touch", wide / 2, high - 3);
+            ctx.textAlign = "right";
+            ctx.fillText("push", right, high - 3);
+        };
+
+        // its energy: a bar, with a mark where its muscles begin to weaken; a piece of food can be dropped in front of it
+        const energyPicture = el("canvas", { class: "walker-brain-picture generalist-energy" });
+        energyPicture.setAttribute("role", "img");
+        energyPicture.setAttribute("aria-label", "How much energy the creature has, as a bar: it runs down as it moves, comes back as it eats and, slowly, as it rests.");
+        drawEnergy = () => {
+            const ctx = energyPicture.getContext("2d");
+            const [wide, high] = [energyPicture.clientWidth, energyPicture.clientHeight];
+            if (!ctx || wide === 0) return;
+            const ratio = window.devicePixelRatio || 1;
+            if (energyPicture.width !== Math.round(wide * ratio) || energyPicture.height !== Math.round(high * ratio)) [energyPicture.width, energyPicture.height] = [Math.round(wide * ratio), Math.round(high * ratio)];
+            ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+            ctx.clearRect(0, 0, wide, high);
+            const [accent, muted] = [m.color("--accent"), m.color("--muted")];
+            const [left, right, top, bottom] = [8, wide - 8, 8, high - 8];
+            ctx.globalAlpha = 0.2;
+            ctx.fillStyle = muted;
+            ctx.beginPath();
+            ctx.roundRect(left, top, right - left, bottom - top, (bottom - top) / 2);
+            ctx.fill();
+            ctx.globalAlpha = 1;
+            if (needs.energy < 0) return;
+            // resting, it breathes; just fed, it flares
+            const breathing = needs.resting > 0.3 ? 0.15 * needs.resting * (0.5 + 0.5 * Math.sin(m.time * 3)) : 0;
+            ctx.globalAlpha = Math.min(1, 0.55 + 0.45 * needs.energy + breathing + 0.4 * needs.ate);
+            ctx.fillStyle = accent;
+            ctx.beginPath();
+            ctx.roundRect(left, top, Math.max(bottom - top, (right - left) * needs.energy), bottom - top, (bottom - top) / 2);
+            ctx.fill();
+            ctx.globalAlpha = 0.6;
+            ctx.fillStyle = muted;
+            const mark = left + (right - left) * TIRED;
+            ctx.fillRect(mark - 0.5, top - 3, 1, bottom - top + 6);
+            ctx.globalAlpha = 1;
+        };
+        const dropFood = el("button", { type: "button", textContent: "drop food", onclick: () => {
+            if (!engine) return;
+            const [x, y] = torso();
+            if (engine.show_drop_food(x + 1.2, y + 0.8)) speak("A piece of food, dropped in front of it.");
+            m.wake();
+        } });
+
+        // the controls fold away at the top of the column, so the brain, the senses and the energy come first
+        const controls = opening(
+            "generalist-controls",
+            group("world"),
+            ...row("seed", seed, another),
+            ...row("how hard", hard.holder),
+            ...kinds.flat(),
+            ...row("legs", legs),
+            ...row("eyes", el("label", {}, rays, "show what it sees")),
             group("learning"),
             ...row("how it learns", hows),
             explain,
             ...row("learning", pause, el("button", { type: "button", textContent: "start over", onclick: () => restart(true) })),
             ...row("effort", efforts),
         );
+        const fold = el("button", { type: "button", class: "generalist-fold", textContent: "world and learning", onclick: () => {
+            controls.shut(!controls.open());
+            fold.setAttribute("aria-expanded", String(controls.open()));
+            fold.classList.toggle("open", controls.open());
+            m.wake();
+        } });
+        fold.setAttribute("aria-expanded", "false");
+        fold.setAttribute("aria-controls", "generalist-controls");
+        side.append(fold, controls.block, group("brain"), brainPicture, group("senses"), sensesPicture, group("energy"), energyPicture, ...row("food", dropFood), chart);
         // the world is a link from the first, so the address always says which world this is
         for (const [name, value] of linkParts(recipe)) m.link.set(name, value);
 
@@ -796,17 +973,60 @@ export default function generalist(m: Mote): Scene {
         }
     };
 
+    /** The food in its world: plain dots on the ground. */
+    const drawFood = (engine: Engine) => {
+        const { ctx } = m;
+        const food = list(engine, engine.show_food());
+        for (let i = 0; i < food.length; i += 2) {
+            const [sx, sy] = toScreen(food[i]!, food[i + 1]!);
+            if (sx < -10 || sx > m.width + 10) continue;
+            ctx.fillStyle = m.color("--ink");
+            ctx.beginPath();
+            ctx.arc(sx, sy, 0.08 * scale, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = m.color("--accent");
+            ctx.beginPath();
+            ctx.arc(sx - 0.025 * scale, sy - 0.025 * scale, 0.03 * scale, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    };
+
+    /** Where it looks: a line from its eye along the middle of its gaze, as far as what it meets there. */
+    const drawGaze = (engine: Engine) => {
+        const { ctx } = m;
+        const rays = list(engine, engine.show_rays());
+        const [ex, ey] = toScreen(rays[0]!, rays[1]!);
+        // the two middle rays, either side of where it looks
+        const reach = Math.min(rays[2 + 2 * 7]!, rays[2 + 2 * 8]!);
+        const [c, s] = [Math.cos(needs.gaze), Math.sin(needs.gaze)];
+        const [hx, hy] = [ex + c * reach * scale, ey - s * reach * scale];
+        ctx.strokeStyle = m.color("--accent");
+        ctx.globalAlpha = 0.85;
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([5, 4]);
+        ctx.beginPath();
+        ctx.moveTo(ex, ey);
+        ctx.lineTo(hx, hy);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.arc(hx, hy, 3.5, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+    };
+
     /** What it sees: a faint line from its eye to where each ray stopped, and a mark there by what it met. */
     const drawRays = (engine: Engine) => {
         const { ctx } = m;
         const rays = list(engine, engine.show_rays());
+        angles = list(engine, engine.ray_angles());
         const [ex, ey] = toScreen(rays[0]!, rays[1]!);
         for (let k = 0; k < angles.length; k++) {
             const [distance, what] = [rays[2 + 2 * k]!, rays[3 + 2 * k]!];
             const angle = angles[k]!;
             const [hx, hy] = [ex + Math.cos(angle) * distance * scale, ey - Math.sin(angle) * distance * scale];
             const kind = SEEN[what] ?? "nothing";
-            const strong = kind === "hazard" || kind === "edge" || kind === "box" || kind === "moving";
+            const strong = kind === "hazard" || kind === "edge" || kind === "box" || kind === "moving" || kind === "food";
             ctx.strokeStyle = m.color(strong ? "--accent" : "--muted");
             ctx.globalAlpha = kind === "nothing" ? 0.12 : strong ? 0.45 : 0.25;
             ctx.lineWidth = 1;
@@ -894,13 +1114,25 @@ export default function generalist(m: Mote): Scene {
         ctx.save();
         ctx.translate(sx, sy);
         ctx.rotate(-angle);
-        ctx.fillStyle = m.color("--accent");
         ctx.beginPath();
         ctx.roundRect(-hw * scale, -hh * scale, 2 * hw * scale, 2 * hh * scale, Math.min(hw, hh) * scale * 0.95);
+        // its body glows with the energy it has: full, bright; tired, dim; just fed, a flare around it
+        if (needs.energy >= 0) {
+            ctx.fillStyle = m.color("--muted");
+            ctx.fill();
+            ctx.globalAlpha = 0.3 + 0.7 * needs.energy;
+            ctx.shadowColor = m.color("--accent");
+            ctx.shadowBlur = (6 + 10 * needs.ate) * needs.energy;
+        }
+        ctx.fillStyle = m.color("--accent");
         ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.shadowBlur = 0;
         const eye = Math.min(hh * 0.3, 0.065) * scale;
         const front = legs === 4 ? 0.78 : 0.5;
-        const [lx, ly] = [c * looking.x + s * looking.y, -s * looking.x + c * looking.y];
+        // the pupils look where its eye looks, or, for evolution's fixed eyes, the way it goes
+        const look = needs.energy >= 0 ? { x: Math.cos(needs.gaze), y: Math.sin(needs.gaze) } : looking;
+        const [lx, ly] = [c * look.x + s * look.y, -s * look.x + c * look.y];
         for (const [ex, ey, size] of [[hw * front, hh * 0.28, 1], [hw * (front - 0.3), hh * 0.32, 0.9]] as const) {
             const [px, py] = [ex * scale, -ey * scale];
             ctx.fillStyle = m.color("--ink");
@@ -915,23 +1147,6 @@ export default function generalist(m: Mote): Scene {
         ctx.restore();
         for (let i = 0; i < legs; i++) if (near(i)) leg(i, m.color("--ink"));
         if (legs === 2) arm(1, m.color("--ink"));
-    };
-
-    /** What it was just rewarded and charged for, in small words over it, so a visitor can see why it learns what it learns. */
-    const drawRewarded = (engine: Engine) => {
-        if (lately.length === 0) return;
-        const { ctx } = m;
-        const [x, y] = list(engine, engine.show_bodies());
-        const [sx, sy] = toScreen(x!, y!);
-        ctx.font = `11px ${code}`;
-        ctx.textAlign = "center";
-        ctx.textBaseline = "bottom";
-        lately.forEach((each, k) => {
-            // kept inside the picture, where the creature is near its edge on a narrow screen
-            const half = ctx.measureText(each.words).width / 2 + 4;
-            ctx.fillStyle = m.color(each.good ? "--accent" : "--muted");
-            ctx.fillText(each.words, Math.min(m.width - half, Math.max(half, sx)), sy - 0.55 * scale - k * 14);
-        });
     };
 
     /** The flag at the furthest the best run has gone. */
@@ -1035,11 +1250,9 @@ export default function generalist(m: Mote): Scene {
                 const [, hx, hy] = list(engine, engine.show_held());
                 if (hx !== undefined && hy !== undefined) keyHand = { x: hx, y: hy };
             }
-            // twice a second, what it was rewarded and charged for since the last time
-            if (how === "practice" && m.time - heardRewards > 0.5) {
-                heardRewards = m.time;
-                const said = rewarded(list(engine, engine.show_rewards()));
-                if (said.length > 0 || engine.show_over()) lately = said;
+            {
+                const [energy = -1, vigour = 1, ate = 0, resting = 0, gaze = -0.52, eaten = 0] = list(engine, engine.show_needs());
+                needs = { energy, vigour, ate, resting, gaze, eaten };
             }
             // at the end of its run the creature rests a moment, then starts again, with a better brain if there is one
             if (shown && engine.show_over() && !holding) {
@@ -1072,6 +1285,7 @@ export default function generalist(m: Mote): Scene {
             if (!engine) return;
             keyHand = undefined;
             grab(...toWorld(x, y));
+            pressedAt = { x, y, took: holding !== 0 };
             m.wake();
         },
         move(x, y) {
@@ -1089,6 +1303,9 @@ export default function generalist(m: Mote): Scene {
         },
         release(x, y) {
             letGo();
+            // a tap that took hold of nothing drops a piece of food where it was
+            if (engine && pressedAt && !pressedAt.took && Math.hypot(x - pressedAt.x, y - pressedAt.y) < TAP && engine.show_drop_food(...toWorld(x, y))) speak("A piece of food, dropped.");
+            pressedAt = undefined;
             if (engine) m.canvas.style.cursor = engine.show_under(...toWorld(x, y)) ? "grab" : "";
         },
         /** The keyboard's hand: it starts at the creature's body; the arrows move it, and what it holds; Space or Enter takes hold, and lets go. */
@@ -1121,14 +1338,17 @@ export default function generalist(m: Mote): Scene {
             if (!engine) return;
             drawFlag();
             drawThings(engine);
+            drawFood(engine);
             if (showRays && (shown || holding === 1)) drawRays(engine);
+            if (needs.energy >= 0 && (shown || holding === 1)) drawGaze(engine);
             drawCreature(engine);
-            if (how === "practice") drawRewarded(engine);
             // the brain beside it, at half the frame rate, which is as often as a policy decides; and always the
             // first time, and when the creature is at rest, so its box is never left empty
             if (brainAt < 0 || ticks - brainAt >= 2 || ticks === brainAt) {
                 brainAt = ticks;
                 drawBrain();
+                drawSenses();
+                drawEnergy();
             }
             drawHand(engine);
         },

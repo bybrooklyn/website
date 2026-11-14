@@ -9,7 +9,7 @@ doing things, all written from scratch in that engine. An article about it is pl
 
 - `walker/src/generalist/`: the engine side, behind the crate's `generalist` feature. `walker/README.md`,
   section "The generalist", is the full reference, with every measurement.
-- `public/wasm/generalist.wasm` (and its scalar twin): the built module, 320 KiB with SIMD.
+- `public/wasm/generalist.wasm` (and its scalar twin): the built module, 331 KiB with SIMD.
 - `src/minis/generalist.ts`: the page's scene; `src/minis/roaming.ts`: what the page and its workers share;
   `src/scripts/generalist-worker.ts` (evolution) and `src/scripts/generalist-practice.ts` (practice).
 - `src/content/minis/generalist.mdx`: the mini's words. It is marked `draft: true`.
@@ -22,8 +22,10 @@ doing things, all written from scratch in that engine. An article about it is pl
   of four kinds of thing (ground features, hazards, boxes to push, things that move). The recipe is in the
   address, so a world is a link. Every piece laid is checked to be crossable by the creature's reach.
 - **The body**: the Walker's two- and four-legged creatures, with a hop for evolution.
-- **Sight**: sixteen rays from its eye, held level, each saying how near the first thing is and what kind it
-  is. A greyscale picture strip from the same world is made and tested but given to no brain yet.
+- **Sight**: sixteen rays from its eye, held level, each saying how near the first thing is and what kind
+  it is (food among them). Practice's creatures turn their eye: the rays are a fan round where it looks,
+  close together in the middle and far apart at the edges, and where to look is one of its actions. A
+  greyscale picture strip from the same world is made and tested but given to no brain yet.
 - **Learning by evolution**, as the Walker's, and **learning by practice**: proximal policy optimisation
   written from scratch, with its own network and hand-written backward pass. Practice runs in up to four
   workers in the browser, every run in a fresh world of the visitor's kind, measured on held-out worlds.
@@ -33,9 +35,12 @@ doing things, all written from scratch in that engine. An article about it is pl
   down and for leaning; a bonus for being carried tall), a cost on how hard a foot lands, progress paid up
   to 1 m/s and no faster, and a cost for a run that gets nowhere. Two legs no longer sense the legs'
   rhythm, and the reward for exactly one foot down is gone (13 November 2026).
-- **The page**: a wide mini, the world on the left and a column on the right with the controls, then the
-  brain drawn live beside the world from the first second, what it senses, and the reward words (forward,
-  up, effort, in the air for nothing, fell). The page opens on practice: a creature that knows nothing,
+- **The page**: a wide mini, the world on the left and a column on the right: the controls folded at its
+  top, then the brain drawn live from the first second with the eye's neuron ringed, what it senses (each
+  ray, touch on its body and feet, held, the jolt) and its energy as a bar, then a chart of how far it
+  gets. Its body glows with its energy, food is a plain dot, a dashed line goes from its eye to where it
+  looks, and a tap on nothing drops food. Nothing is narrated: the reward words over it are gone. The page
+  opens on practice: a creature that knows nothing,
   learning from the first second; nothing trained is shipped. What is learned is kept in the browser, one
   learner for each body, and taken up again next visit; a new world goes on with it, a new body takes up
   its own or starts afresh, and the page says which; "start over" forgets it.
@@ -47,6 +52,13 @@ doing things, all written from scratch in that engine. An article about it is pl
   taken is a heavy thing while held and stays where it is let go of. Practice's creatures feel touch: how
   hard things press on the body and each foot, a hand holding them, and the jolt the body feels. While
   held, nothing is paid but effort and nothing but time ends a run.
+- **It wants things** (14 November 2026, stage 2 of the plan): energy that the motors' work and being
+  awake spend, and eating and resting restore; tired, its muscles weaken, and nothing ends a run for
+  hunger. Food is laid with the land and now and then appears near it. It is paid for the fall in its
+  discomfort (so eating pays more when hungry), for new places and new things seen (curiosity, which
+  pays a bounded sum for anything it comes back to), and still for progress. One practice run in five is
+  play: energy held full, no food, no progress paid. `walker/README.md`, "It wants things", has every
+  term and number.
 - **Measures**: a gait measure that says whether a run counts as walking, printed three ways (in the
   held-out worlds as a whole, which is the test; on open ground in them; on level ground); a comparison of evolution and
   practice on the same compute (practice goes three to six times as far through unseen worlds for about
@@ -129,6 +141,21 @@ well-trodden.
 
 ## Open
 
+- **Stage 2, for her to say** (14 November 2026). Whether to keep paying progress: paid only for eating
+  and curiosity, both bodies stood still at the start, so progress is still paid and the creature goes on
+  because it is paid to, stopping to rest and eat. Whether one run in five as play is right (it made two
+  legs walk more cleanly, two in five did about as well). Whether the reward words should stay gone, as
+  "no narration" says. Whether a tired creature should be let lie down to rest (two legs' runs still end
+  at the first touch of the body, so they rest standing or crouched). Whether food that appears behind it
+  should stay, since it has not learned to turn for it. The eye does not yet look at things (it is on the
+  nearest thing twice as often as chance, but less often than an eye left looking down ahead would be).
+- **The strict walking test as the bar for shipping.** After stage 2 the view here is that it should not
+  be the bar: no seed of either body walks by it in the held-out worlds as a whole, before or after, and
+  the page's two-legged learner, which walked by it at two minutes in stage 1, no longer does (it leans and
+  leaves the ground with nothing to clear 0.13 of the time). What a visitor reads as alive is whether it
+  wants something and does something about it; the test stays measured and printed, beside the open and
+  level views, as a measure of the gait rather than a gate.
+
 - **Touch, for her to say** (13 November 2026). Two legs practise with a visitor every 8 s who lifts,
   nudges and shoves; four legs feel touch but practise with none, since with one they went less far and
   learned nothing measurable. Whether four legs should have one anyway, and whether 8 s is right, are
@@ -155,7 +182,9 @@ well-trodden.
   at a moving platform or stepping short at an edge counts as a stride. The test is unchanged; the open
   view is offered beside it.
 - **The page text** (`src/content/minis/generalist.mdx`) still says it learns by evolution and that better
-  learning comes next; its controls line was changed and has not been reviewed.
+  learning comes next; its controls line was changed and has not been reviewed. Since stage 2 its line
+  under the mini says the world and the body are set under the picture, which is no longer so (they fold
+  open at the top of the column), and it says nothing of energy, food, the eye, or dropping food with a tap.
 - **Whether the page opens on practice or on evolution.** It opens on practice today.
 - **Two legs walk on open ground, not yet through a whole world by the test.** No high kick or split now:
   a foot always down, upright, about 1 m/s (walker/README.md, "How two legs came to walk", has every

@@ -8,12 +8,19 @@
 //! could not cross is made easier until it can be, or replaced by level ground. So every world can be
 //! crossed from its start to as far as it has been made.
 //!
+//! Food is laid with the land (`Geometry::food`), from a random generator of its own so the pieces are
+//! the same with it as without: on the level ground after a piece, two times in five,
+//! so going on through a world finds it, and some behind the start, off the way, where only a creature
+//! that looks round finds it. Only a creature that eats sees it (`stage::Stage::food`).
+//!
 //! Units are metres with y up. The creature starts at x = 0 on level ground at height 0.
 
 use alloc::vec::Vec;
 
 use super::check::{self, REACH, Reach};
+use super::eyes::FOOD_RADIUS;
 use super::recipe::{Kind, Piece, Plan, Recipe};
+use crate::learn::Random;
 use crate::math::{Vec2, sqrt};
 use crate::physics::Segment;
 
@@ -38,6 +45,9 @@ pub const MOVER_CLEAR: f32 = 0.12;
 /// A see-saw plank's half thickness, and its pivot's radius.
 pub const PLANK: f32 = 0.05;
 pub const PIVOT: f32 = 0.06;
+/// How often food is laid on the level ground after a piece, and how long that ground must be.
+pub const FOOD_CHANCE: f32 = 0.4;
+const FOOD_ROOM: f32 = 1.0;
 
 /// A static box, by its lowest and highest corners.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -111,6 +121,9 @@ pub struct Geometry {
     pub loose: Vec<Loose>,
     pub movers: Vec<Mover>,
     pub seesaws: Vec<Seesaw>,
+    /// Where each piece of food lies at the start, its middle, in order along the way but for those
+    /// behind the start, which come first.
+    pub food: Vec<Vec2>,
 }
 
 /// Builds one piece starting at `at` (where the way is, and its height), into `into`, and returns
@@ -222,12 +235,14 @@ pub struct Land {
     given: Vec<Piece>,
     /// The reach pieces are checked against, or none, to lay them as given.
     reach: Option<Reach>,
+    /// Where food goes, apart from the plan's own numbers.
+    foods: Random,
 }
 
 impl Land {
     /// A world planned from a recipe, built to `until` metres.
     pub fn new(recipe: Recipe, until: f32) -> Land {
-        let mut land = Land::empty(Some(Plan::new(recipe)), Vec::new());
+        let mut land = Land::empty(Some(Plan::new(recipe)), Vec::new(), recipe.seed);
         land.extend(until);
         land
     }
@@ -236,7 +251,7 @@ impl Land {
     pub fn from_pieces(pieces: &[Piece], until: f32) -> Land {
         let mut given: Vec<Piece> = pieces.iter().map(|piece| piece.sane()).collect();
         given.reverse();
-        let mut land = Land::empty(None, given);
+        let mut land = Land::empty(None, given, 0);
         land.extend(until);
         land
     }
@@ -246,16 +261,24 @@ impl Land {
     pub fn from_pieces_unchecked(pieces: &[Piece], until: f32) -> Land {
         let mut given: Vec<Piece> = pieces.iter().map(|piece| piece.sane()).collect();
         given.reverse();
-        let mut land = Land::empty(None, given);
+        let mut land = Land::empty(None, given, 0);
         land.reach = None;
         land.extend(until);
         land
     }
 
-    fn empty(plan: Option<Plan>, given: Vec<Piece>) -> Land {
+    fn empty(plan: Option<Plan>, given: Vec<Piece>, seed: u32) -> Land {
         let mut geometry = Geometry::default();
         geometry.ground.push(Segment { a: Vec2::new(-START_BEHIND, 0.0), b: Vec2::new(START_AHEAD, 0.0) });
-        Land { geometry, pieces: Vec::new(), starts: Vec::new(), reached: Vec2::new(START_AHEAD, 0.0), eased: 0, replaced: 0, plan, given, reach: Some(REACH) }
+        let mut foods = Random::new((seed as u64).wrapping_mul(0xd1b5_4a32_d192_ed03) ^ 0x666f_6f64);
+        // behind the start, off the way, more often than not; and sometimes a little ahead
+        if foods.unit() < 0.6 {
+            geometry.food.push(Vec2::new(-2.0 - 7.0 * foods.unit(), FOOD_RADIUS));
+        }
+        if foods.unit() < 0.5 {
+            geometry.food.push(Vec2::new(2.0 + 1.6 * foods.unit(), FOOD_RADIUS));
+        }
+        Land { geometry, pieces: Vec::new(), starts: Vec::new(), reached: Vec2::new(START_AHEAD, 0.0), eased: 0, replaced: 0, plan, given, reach: Some(REACH), foods }
     }
 
     /// Lays pieces until the way reaches at least `until` metres.
@@ -270,6 +293,12 @@ impl Land {
             self.starts.push(self.reached);
             self.pieces.push(piece);
             self.reached = build(&piece, self.reached, &mut self.geometry);
+            // on the level ground after it, now and then
+            let (chance, along) = (self.foods.unit(), self.foods.unit());
+            if piece.run >= FOOD_ROOM && chance < FOOD_CHANCE {
+                let x = self.reached.x - piece.run * (0.8 - 0.6 * along);
+                self.geometry.food.push(Vec2::new(x, self.reached.y + FOOD_RADIUS));
+            }
         }
     }
 

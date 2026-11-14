@@ -499,20 +499,22 @@ The senses, in the order the brain takes them:
 
 | | numbers | what |
 |---|---|---|
-| rays | 16 times 6 | for each ray, from straight down ahead turning up: how near what it meets is (1 touching, 0 nothing within 6 m), then 1 or 0 for whether it is the edge of a drop (ground or a platform within 0.3 m of where it ends over a gap or something more than 0.12 m lower), a box, a hazard, a moving thing (a moving platform or a see-saw), food (always 0 for now). Ground is what is near with none of these. |
+| rays | 16 times 6 | for each ray, from straight down ahead turning up (for practice's creatures, from the lowest of the fan round where it looks: "It wants things"): how near what it meets is (1 touching, 0 nothing within 6 m), then 1 or 0 for whether it is the edge of a drop (ground or a platform within 0.3 m of where it ends over a gap or something more than 0.12 m lower), a box, a hazard, a moving thing (a moving platform or a see-saw), food (only a creature that eats has food in its world). Ground is what is near with none of these. |
 | body | 4 | its angle (0 upright), its spin times 0.2, its speed forward and up, each times 0.25 |
 | joints | 2 for each | hip then knee, leg by leg: the angle, and the speed times 0.1 |
 | feet | 1 for each | 1 if on something, else 0 |
 | rhythm | 2 | the sine and cosine of the legs' rhythm (0 and 0 for two legs practising: "How two legs came to walk") |
 | hop | 2 | 1 while it hops, else 0; 1 when it can hop, else 0 |
+| energy, ate | 2 | its energy from 0 to 1, and 1 the step it eats, fading by 7 percent a step (practice only: "It wants things") |
+| gaze | 1 | where its eye looks, in radians from level ahead, over pi (practice only) |
 | touch, body | 1 | how hard everything touching its body presses on it, in its own weights, at most 2 (practice only) |
 | touch, feet | 1 for each | the same for each foot: the ground, a box or a platform under it (practice only) |
 | held | 1 | 1 while a hand holds any part of it (practice only) |
 | jolt | 2 | what its body feels pushing it, across and up, in g: its acceleration less gravity, eased over a few steps (35 percent of the way each step), at most 3 either way; standing still it is 0 and 1, falling 0 and 0, lifted more than 1 up, pushed sideways (practice only) |
 
 So two legs sense 96 + 18 = 114 numbers and four legs 96 + 28 = 124, as evolution's brains do; practice's
-creatures feel touch as well (`touch::feel`, "Touching it" below), 6 more for two legs and 8 for four, so
-120 and 132.
+creatures sense their energy, having eaten and where they look (3 more) and feel touch as well
+(`touch::feel`, "Touching it" below), 6 more for two legs and 8 for four, so 123 and 135.
 
 `eyes::picture` makes, from the same world, the picture the creature would see instead: a strip of
 greyscale pixels from 80 degrees down to 60 degrees up, each lit by what its ray meets (a hazard
@@ -1076,7 +1078,234 @@ kept=`). Through `touched.rs` that learner reacts more weakly than the native se
 it ends in a fall 0.07 of the time against 0.12 numb, but a dropped box 0.56 against 0.58, a nudge 0.43
 against 0.43, a lift 0.52 against 0.57. It is one learner of one seed.
 
-A look, which would need eyes that move, is stage 2.
+A look, which would need eyes that move, is stage 2, below.
+
+### It wants things
+
+Stage 2 of the plan, 14 November 2026. A small network trained to avoid costs moves like something
+avoiding costs: it had nothing it wanted, nothing it noticed and nothing it remembered. Now it has
+energy and food to find, curiosity, an eye it turns, and stretches of play. Every part is written here
+and runs in the visitor's browser; nothing trained is shipped.
+
+**Energy** (`src/generalist/needs.rs`). A number in the body from 0 to 1. The motors' work spends it,
+600 J of work for each kilogram the creature weighs being all of it (two legs weigh 10 kg, four legs
+16, and both spend about 15 J a metre for each kilogram walking), so a full two-legged creature walks
+about 40 s on nothing; being awake costs a 240th of it a second. Resting gives it back, at most a 30th
+a second: still (the body slower than 0.3 m/s), a foot on something, not held, and more the lower it
+holds itself (40 percent standing still, all of it crouched half down). Eating a piece of food gives a
+fifth. Tired, its muscles weaken: below 0.4 their strength (`Body::drive`, torque and top speed) falls
+smoothly, to 35 percent with nothing left. Nothing ends a run for hunger, nothing hurts: the weakness
+is the whole of it, and a creature with less than 0.6 that stands still is not ended for getting
+nowhere, so it may rest as long as it likes (one with more is, as before). In practice each run starts
+with energy drawn evenly from 0.2 to full, so it meets every level; the creature on the page is born full
+and keeps its energy from one run to the next.
+
+**Food** is laid with the land (`land.rs`), from a random generator of its own, so every piece of every
+world is what it was (a test holds the laid pieces to the plan's): on the level ground after a piece,
+two times in five (0.40 a piece over 200 worlds at difficulty 0.3, one every 13 m), more often than not
+one somewhere 2 to 9 m behind the start, off the way, and sometimes one 2 to 3.6 m ahead. And now and
+then food appears near it (`needs::Appearing`, every 20 s or so), dropped from 0.8 m up 1.5 to 4 m away,
+behind it three times in five: a new thing appearing, and food off the way it is going. Food is not a
+body: nothing bumps into it, and it is eaten when any part of the creature comes within 4 cm of it. Only
+a creature that eats has food in its world, so evolution's runs are as they were, to the bit.
+
+**What it is paid for.** Its discomfort is `(1 - e) + (1 - e)²` at energy `e`, and each step pays 4
+times what it fell by (`Shaping::comfort`): eating pays more when hungry (a piece at 0.4 is worth
+about 1.6, at 0.9 about 0.4), the motors' work costs more when tired (0.0007 a joule full, 0.0016 at
+0.3), beside the 0.002 a joule it always paid. Curiosity (`curious.rs`) pays 0.3 for coming into each
+half metre along the way for the first time and 0.02 for each cell of the world (a quarter of a metre
+square, and what kind of thing was in it) its rays meet for the first time; coming back to a place or
+seeing a cell again pays 1 / (1 + n)² of that, so the sum for any place or cell, however often, is
+under 1.7 of it. For two legs a new place reached quicker than 1 m/s is worth only what 1 m/s would
+have earned, as progress is. Progress itself is still paid, 1 a metre further than before: dropping it
+was tried, below.
+
+**Eyes it moves** (`eyes.rs`). The sixteen rays are now a fan round where it looks, 4 degrees apart in
+the middle and 28 at the edges, 180 degrees from edge to edge. Where it looks is one action more, before
+the hop: -1 is 80 degrees down, 0 a little down ahead (30 degrees, where the fixed eyes mostly looked),
+1 over the top and behind (200 degrees), and the eye turns there no faster than 5 radians a second.
+What the costs need to know of the ground ahead (`clear_ahead`) is found by the fixed eyes' own rays, so
+where it looks changes nothing it is charged for (a test holds that). Seen food is the sixth number of
+a ray, which had been 0 until now.
+
+**Play.** One practice run in five, drawn by its world, is play: its energy held full, no food in its
+world, progress not paid, so only curiosity and its own costs apply. It is charged for its effort as if
+it were full.
+
+**Senses and actions now.** Two legs sense 123 numbers and four legs 135 (three more: its energy, having
+just eaten, which is 1 the step it eats and fades by 7 percent a step, and where its eye looks, over pi),
+before touch, which stays last. Two legs act with 6 numbers and four legs with 10: the eye's is the one
+before the hop. Every term in play, and what kind of thing it is:
+
+| | what | kind |
+|---|---|---|
+| rays (16 by 6) | how near, and edge, box, hazard, moving thing, food | a sense |
+| body, joints, feet, hop | as before | senses |
+| rhythm | four legs only | a sense (a hint: a clock to step to) |
+| energy, having eaten, where it looks | new | senses |
+| touch on body and feet, held, jolt | as in stage 1 | senses |
+| each joint's angle | an action each | actions |
+| where to look | new | an action |
+| hop | held off | an action it does not have |
+| progress, 1 a metre, up to 1 m/s for two legs | as before | a want (the task) |
+| eating, the fall in discomfort | new | a want |
+| new places, new things seen | new | a want (curiosity) |
+| being up, 0.25 a second | as before | a want |
+| the motors' work, 0.002 a joule, and the rise in discomfort | the second new | costs |
+| in the air with nothing to clear, a fall, a run that stalls, a stamping landing | as before | costs |
+| knees down, carried tall, lean, the run ending at the first touch of the body | two legs, as before | rules about how to move (posture terms) |
+| weaker muscles when tired | new | a consequence, neither paid nor charged |
+| being forgiven for standing still under 0.6 energy | new | a rule about when a run ends |
+
+**What was tried** (`examples/compare.rs` with `needs=`, `gaze=`, `comfort=`, `place=`, `sight=`,
+`progress=`, `play=`, `appear=` and `effort=`; worlds of the page's kind, "meadow" as it opens: 20 of 100
+hard, ground 60, the rest 40; 20 million steps; seeds 1 to 4; measured in the sixteen held-out worlds of
+that kind, each run starting with energy 0.7 and none at play). The columns: distance, in the air for
+nothing, the motors' work a metre, food eaten a minute, the share of the time resting, the share of rests
+of a second or more after which its energy was higher, the share after which it went on a metre or more,
+its energy on average, how often its eye was on the nearest thing worth looking at (food, a box, a moving
+thing within 6 m, the middle of its gaze within 10 degrees) against chance (a gaze anywhere in its range)
+and against an eye left where an action of 0 puts it, and the share of the world round where it went that
+its rays met (`tally.rs`):
+
+| two legs | distance | air | J/m | food /min | resting | recovered | went on | energy | eye on / chance / at rest | seen |
+|---|---|---|---|---|---|---|---|---|---|---|
+| before (stage 1) | 15.3 ± 2.0 m | 0.05 | 171 | | | | | | | |
+| wants, progress paid, curiosity of places not held to the pace ("A") | 14.5 ± 2.8 m | 0.19 | 149 | 7.0 | 0.07 | 0.50 | 0.00 | 0.59 | 0.06 / 0.06 / 0.25 | 0.79 |
+| wants, progress not paid, curiosity 0.3 ("B") | 0.03 m | 0.01 | | 1.8 | 0.31 | 0.50 | 0.00 | 0.61 | 0.00 / 0.06 / 0.05 | 0.65 |
+| A, curiosity of places held to the pace | 10.8 ± 1.5 m | 0.11 | 181 | 4.9 | 0.16 | 0.92 | 0.19 | 0.56 | 0.11 / 0.06 / 0.27 | 0.74 |
+| that, without the 0.002 a joule | 13.9 ± 3.3 m | 0.11 | 233 | 5.6 | 0.10 | 0.75 | 0.12 | 0.46 | 0.08 / 0.06 / 0.26 | 0.78 |
+| that, seeing new things paid 0.1, not 0.02 | 7.9 ± 5.3 m | 0.06 | | 4.8 | 0.04 | 0.50 | 0.00 | 0.56 | 0.10 / 0.05 / 0.24 | 0.80 |
+| **that, one run in five play (kept)** | **10.8 ± 0.7 m** | **0.03** | **175** | **4.8** | **0.13** | **1.00** | **0.00** | **0.58** | **0.10 / 0.05 / 0.28** | **0.75** |
+| that, two runs in five play | 10.9 ± 2.9 m | 0.05 | 207 | 4.8 | 0.10 | 0.75 | 0.33 | 0.57 | 0.17 / 0.05 / 0.25 | 0.73 |
+| kept, without the 0.002 a joule | 12.1 ± 0.8 m | 0.07 | 214 | 5.2 | 0.09 | 0.92 | 0.54 | 0.51 | 0.09 / 0.05 / 0.25 | 0.76 |
+| progress not paid, curiosity of places 1, seeing 0.05 | 6.0 ± 7.0 m | 0.09 | | 5.1 | 0.09 | 0.61 | 0.00 | 0.53 | 0.03 / 0.05 / 0.19 | 0.77 |
+| that, nothing paid for being up or carried tall | 0.02 m | 0.12 | | 5.9 | 0.00 | | | 0.58 | 0.00 / 0.05 / 0.02 | 0.72 |
+
+| four legs | distance | air | J/m | food /min | resting | energy | eye on / chance / at rest | seen |
+|---|---|---|---|---|---|---|---|---|
+| before (stage 1) | 42.7 ± 3.8 m | 0.19 | 201 | | | | | |
+| A, energy 6,000 J whatever the weight | 27.3 ± 1.9 m | 0.11 | 234 | 10.7 | 0.01 | 0.27 | 0.19 / 0.06 / 0.18 | 0.78 |
+| B | 0.5 ± 1.0 m | 0.01 | | 3.0 | 0.40 | 0.61 | 0.11 / 0.06 / 0.09 | 0.73 |
+| A, held to the pace, 600 J a kilogram | 34.0 ± 3.9 m | 0.15 | 245 | 13.3 | 0.01 | 0.48 | 0.12 / 0.06 / 0.18 | 0.78 |
+| that, without the 0.002 a joule | 31.8 ± 4.3 m | 0.15 | 265 | 12.1 | 0.00 | 0.40 | 0.18 / 0.06 / 0.17 | 0.77 |
+| **that, one run in five play (kept)** | **35.2 ± 2.4 m** | **0.16** | **247** | **13.0** | **0.00** | **0.45** | **0.16 / 0.06 / 0.18** | **0.78** |
+| kept, without the 0.002 a joule | 30.5 ± 0.7 m | 0.15 | 276 | 12.3 | 0.01 | 0.40 | 0.17 / 0.06 / 0.17 | 0.78 |
+
+(Four legs have no pace, so holding curiosity to it changes nothing for them; their rows from "held to
+the pace" on are with energy by weight. A blank J/m is a creature that hardly moved.)
+
+What each thing did, plainly:
+
+- **Not paying for progress, it stays where it is.** Paid only for eating and curiosity (B), both bodies
+  learned to stand at the start, resting, eating what fell near them: standing earns being up and risks
+  no fall. With curiosity three times stronger, one seed in four went on and the rest stood; with nothing
+  paid for being up either, two legs went back behind the start, where the ground is level, there is
+  food and every place is new, and never forward. So progress stays paid, and the creature goes on
+  because it is paid to, and stops when it is tired or there is food.
+- **Curiosity not held to the pace made two legs bound again** (in the air for nothing 0.19 of the time
+  against 0.05, feet no longer taking turns): new places reached faster earned more. Held to 1 m/s, as
+  progress is, it halved that.
+- **Play made two legs walk more cleanly**: in the air for nothing 0.03 of the time, less than before
+  stage 2, feet taking turns (together -0.32), and two seeds in four walk by the test on open ground.
+  Two runs in five did about as well, with its eye more often on things (0.17 against chance 0.05), but
+  varied more between seeds. One in five is kept. For four legs it changed little.
+- **The separate cost on the motors' work stays.** Without it two legs went a little further but spent a
+  fifth more a metre; four legs went less far. Discomfort alone is a weaker cost when it is full.
+- **Paying more for seeing new things** left two legs standing about looking, in one seed in four.
+- **Four legs ran out**: at 6,000 J whatever their weight, a galloping four-legged creature emptied in
+  about 16 s, its energy averaging 0.27 and its knees down a quarter of the time (weak). Energy by weight
+  gave them 34 to 35 m.
+
+**What it does now, by the numbers** (the kept way, the bold rows). Two legs eat about five pieces a
+minute and rest about an eighth of the time, every rest of a second or more ending with more energy
+than it began, its energy averaging 0.58 from a start at 0.7. Its eye is on the nearest thing worth
+looking at a tenth of the time, twice chance, but an eye left a little down ahead would be on it more
+often (0.28), since food and boxes lie on the ground ahead: it has learned to look where it is going,
+round a little, not yet at things. It goes about two thirds as far as before (10.8 m against 15.3 in
+30 s), since it stops to rest and to eat, and starts its measured runs part tired. Four legs eat 13
+pieces a minute, almost never rest (energy 0.45; they eat as they gallop), their eye on things 0.16 of
+the time against chance 0.06 and 0.18 for an eye left at rest, and go 35 m against 43.
+
+Learning curves, native (distance in the held-out worlds, then in the air for nothing):
+
+| | 5 M | 10 M | 20 M |
+|---|---|---|---|
+| two legs, before | 13.5 m, 0.09 | 14.5 m, 0.07 | 15.3 m, 0.05 |
+| two legs, kept | 7.8 m, 0.10 | 9.8 m, 0.05 | 10.8 m, 0.03 |
+| four legs, before | 35.1 m, 0.19 | 36.0 m, 0.18 | 42.7 m, 0.19 |
+| four legs, kept | 28.1 m, 0.16 | 29.0 m, 0.15 | 35.2 m, 0.16 |
+
+**The strict walking test.** No seed of either body, before or after, walks by it in the held-out worlds
+as a whole at 20 million steps in worlds of this kind; two legs' strides vary by 0.5 to 0.8 against the
+limit of 0.35, the same failing as before. On open ground two seeds in four walk, kept and before alike.
+It was measured, not tuned for.
+
+**Why the numbers are what they are.** Practice runs about as fast as before (5 million steps in 47 s
+against 44 natively; 97,000 steps a second in the page's engine in Bun). The module is 331 KiB with SIMD
+(321 before).
+
+**In the page.** The built site (drafts shown) served locally and the mini opened fresh in headless
+Chromium as a visitor finds it ("meadow", 20 of 100 hard, two legs, normal effort), browser and all held
+to four cores of the Ryzen 7 9700X with other work going on: it practised in two workers at 170,000 to
+220,000 steps a second. Sampled four times a second throughout, photographed every half second over its
+first ten seconds and at each visit; at two minutes and at ten a visitor left it alone 8 s, dropped food
+1.5 m ahead of it and then 1.5 m behind, carried a box over and dropped it a metre ahead, and lifted it
+by its body and set it down (`page-trial.ts`, kept with the trials, not in the repository).
+
+| | energy (lowest) | resting | its eye on the nearest thing | eaten in a run | where it got |
+|---|---|---|---|---|---|
+| first minute | 0.60 (0.14) | 0.01 | 0.08 | 1 | 12.5 m |
+| first two minutes | 0.42 (0.11) | 0.04 | 0.07 | 1 | 12.5 m |
+| two to ten minutes | 0.57 (0.18) | 0.32 | 0.08 | 2 | 13.0 m |
+| at 2 min, food dropped ahead / behind | 0.48 / 0.40 | 0 / 0 | 0.14 / 0.00 | ate it / did not turn | |
+| at 10 min, food dropped ahead / behind | 0.68 / 0.64 | 0.05 / 0 | 0.36 / 0.00 | ate it / did not turn | |
+| at 2 and 10 min, a box dropped ahead; held; set down | | 0.3 to 0.8 after | 0.00 (looking straight down) | | |
+
+The learner the page kept, measured natively in the sixteen held-out worlds (`compare.rs kept=`; the
+page's engine learns to the bit as the native one does):
+
+| practised | its own steps | distance | air | food /min | resting | recovered | eye on / chance / at rest | walks: worlds, open, level |
+|---|---|---|---|---|---|---|---|---|
+| 1.5 min | 9 M | 11.4 m | 0.13 | 3.6 | 0.05 | | 0.06 / 0.06 / 0.23 | no, no, no (in the air for nothing 0.13 to 0.23) |
+| 9.5 min | 58 M | 11.8 m | 0.13 | 4.4 | 0.25 | 1.00 | 0.12 / 0.06 / 0.33 | no, no, no (in the air 0.13 to 0.22; strides on level ground vary 0.18) |
+
+What a visitor sees, plainly. **The newborn** stands crouched, its eye line swinging down and up, and
+shuffles forward a few centimetres at a time; its first runs end in a fall 2 to 3 m from the start, at 13
+and 21 seconds. At 11 seconds it reaches the piece of food 2.6 m ahead and eats it: the bar jumps (0.79 to
+0.91) and its body brightens. By 35 seconds it shuffles all the way to the first gap, 12 m on, and stands
+at the edge fidgeting while its body dims (0.49 to 0.15 in 15 s), then falls and starts again from the
+start, energy carried, dim. That reads as something learning and tiring more than as a machine, though it
+falls over less than "a newborn falling over" promises: by the second run it already keeps its feet.
+**At two minutes** it
+goes forward in a low lean, one leg stretched far back, a short stride with the front foot, eats the food
+on its way, and stops at the edge of the first gap (the floating platforms at 12 m), where it stands. Food
+dropped in front of it, it steps to and eats (its eye on it 0.14 of the time against 0.10 left alone);
+food dropped behind, it never turns for. **At ten minutes** the same lean and stride, steadier; it rests
+a third of the time, mostly standing at that gap edge with its body dimmed, and its energy comes back (0.4
+to 0.7) and it goes on when its run starts again; food dropped ahead it looks at (0.36 of the time) and
+eats; food behind, it still does not turn for. A box dropped in front of it and the hand lifting it: it
+looks straight down (the eye at its lowest), not at either. Set down, it stands and rests.
+
+Honestly, then: it eats what is in front of it, tires, rests and gets going again, and a visitor can see
+why, from the glow and the bar. It does not look at things: its eye has found that looking down ahead is
+useful for walking, and it lowers it further when touched or when something lands near it, which is a
+reaction but not a look. It has learned nothing about food it cannot see ahead of it. And it still moves
+like a careful machine at the gap, where it stops rather than tries. Two legs no longer walk by the test
+in the page: they lean further and leave the ground with nothing to clear 0.13 of the time (0.04 at
+stage 1's two minutes), and the page's learner rests and starts tired, so it goes about the same distance
+in 30 s as before (11 to 12 m against 15 to 18).
+
+**Four legs in the page**, the same way for two minutes: they gallop from the first minute (21 m through
+"meadow" by the end of it), eat what lies on their way, and spend faster than they find: their energy,
+carried from run to run on the page, reached nothing within the first minute and stayed near it, so the
+four-legged creature on show is a dim, weakened thing scrabbling forward, its knees often down. In
+practice its runs start at any level and last 30 s, so it never learned to stop and rest (0.03 of the
+time). Its eye is on things a little more than two legs' (0.13 to 0.19, and 0.57 of the moment it was
+held up by the hand, looking along the hand's line). That one life on the page empties it is the clearest
+thing stage 2 found wrong: either four legs need to learn to rest, which needs runs long enough to
+outlast their energy, or the page should not carry energy between runs for them; it is left for her to
+say.
 
 ### Practice in the browser
 
@@ -1245,7 +1474,11 @@ creature and its learning per module instance. A function that gives a list give
   and lower part), `show_things()` (six f32 for each box, moving platform and see-saw plank made: 0, 1
   or 2 for which, x, y, angle, half width, half height), `show_rays()` (the eye's x and y, then for
   each ray its distance and what it saw: 0 nothing, 1 ground, 2 an edge, 3 a box, 4 a hazard, 5 a
-  moving thing, 6 food), `ray_angles()`,
+  moving thing, 6 food), `ray_angles()` (the moving eye's, where it looks now, for practice's creature),
+  `show_food()` (two f32 for each piece of food put out: x, y), `show_needs()` (six f32: energy, or -1 for
+  a creature that does not eat, how strong its muscles are, just ate, resting, where its eye looks,
+  pieces eaten in this run), `show_senses()` (what it sensed at its last look, as its brain took it),
+  `show_drop_food(x, y)` (drops a piece of food there, 1 if it did),
   `show_under(x, y)` (what a press there would take hold of: 0 nothing, 1 the creature, 2 a box, a
   moving platform or a see-saw's plank), `show_grab(x, y)` (takes hold of it with the hand, "Touching
   it"), `show_hand(x, y)` (moves the hand), `show_let_go()`, `show_held()` (five f32: what is held, as
@@ -1260,7 +1493,7 @@ creature and its learning per module instance. A function that gives a list give
   `envs_observations()`, `envs_rewards()`, `envs_done()`, `senses_length()`, `actions_length()`,
   `rays_length()`.
 
-The module is 320 KiB with SIMD, 310 KiB without (304 and 296 before touch and the hand, 299 and 291 before two legs were asked for a pace,
+The module is 331 KiB with SIMD, 326 KiB without (320 and 310 before it wanted things, 304 and 296 before touch and the hand, 299 and 291 before two legs were asked for a pace,
 with the costs on landing and leaning; 295 and 287 before the posture terms for two legs,
 which cost 2.8 KiB, and the bonus for taking turns, 1.2 KiB; the gait measures are left out of it; the Walker's is 131 KiB, the physics alone
 37 KiB; what the generalist added to the Walker's own module is 1.3 KiB of physics it does not use,

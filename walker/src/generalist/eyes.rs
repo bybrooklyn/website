@@ -11,7 +11,16 @@
 //! For the brain each ray is six numbers: how near what it meets is (1 touching, 0 nothing within
 //! 6 m), and then 1 or 0 for whether it is the edge of a drop (ground or a platform within 0.3 m of
 //! where it ends over a gap or a drop), a box, a hazard, a moving thing (a moving platform or a
-//! see-saw), or food (always 0 until there is food). Ground is what is near with none of these.
+//! see-saw), or food. Ground is what is near with none of these.
+//!
+//! Those are evolution's eyes, fixed. Practice's creatures have eyes they move (`gazed`): the same
+//! sixteen rays in a fan around where they look, close together in the middle (4 degrees apart) and
+//! far apart at the edges (28 degrees), 180 degrees from edge to edge, so looking straight at a thing
+//! tells it more than seeing it from the corner of its eye. Where it looks is one of its actions,
+//! within limits (from 80 degrees down to 200 degrees, over the top and behind) and no faster than
+//! `GAZE_SPEED` (`body::Body::gaze`). What the costs need to know of the ground ahead (`ahead`) is
+//! found by rays of its own, as the fixed eyes would have seen it, so where it looks changes nothing
+//! it is charged for.
 //!
 //! `picture` lays the ground for a picture of what it sees instead, a strip of greyscale pixels from
 //! the same world, as a creature in a flat world would see. Nothing uses it yet.
@@ -29,6 +38,18 @@ pub const PER_RAY: usize = 6;
 const EDGE: f32 = 0.3;
 const DROP: f32 = 0.12;
 const DEGREE: f32 = crate::math::PI / 180.0;
+/// The moving eye's rays, in degrees from where it looks, from the lowest turning up: close together in
+/// the middle, far apart at the edges.
+const FAN: [f32; RAYS] = [-90.0, -62.0, -42.0, -28.0, -18.0, -11.0, -6.0, -2.0, 2.0, 6.0, 11.0, 18.0, 28.0, 42.0, 62.0, 90.0];
+/// The lowest and highest it can look, in radians from level ahead (more than pi is behind it, over the
+/// top), where an action of 0 has it look (a little down ahead, as the fixed eyes look), and the
+/// fastest it turns its eye, in radians a second.
+pub const GAZE_LOW: f32 = -80.0 * DEGREE;
+pub const GAZE_HIGH: f32 = 200.0 * DEGREE;
+pub const GAZE_REST: f32 = -30.0 * DEGREE;
+pub const GAZE_SPEED: f32 = 5.0;
+/// How big a piece of food is, as a circle, in metres.
+pub const FOOD_RADIUS: f32 = 0.08;
 
 /// What a ray met.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -76,6 +97,19 @@ pub fn angles() -> [f32; RAYS] {
     angles
 }
 
+/// The direction of each ray of the moving eye looking at `gaze`, in radians from straight ahead, from
+/// the lowest turning up.
+pub fn gazed(gaze: f32) -> [f32; RAYS] {
+    FAN.map(|degrees| gaze + degrees * DEGREE)
+}
+
+/// Where an action from -1 to 1 asks the eye to look: 0 a little down ahead, -1 as low as it looks,
+/// 1 over the top and behind; the two halves each a straight line.
+pub fn gaze_wanted(action: f32) -> f32 {
+    let action = action.clamp(-1.0, 1.0);
+    if action < 0.0 { GAZE_REST * (1.0 + action) - GAZE_LOW * action } else { GAZE_REST * (1.0 - action) + GAZE_HIGH * action }
+}
+
 /// Where the eye is: at the front of the body, a little above its middle, where the page draws it.
 pub fn eye(stage: &Stage, torso: u32) -> Vec2 {
     let body = &stage.world.bodies[torso as usize];
@@ -86,6 +120,11 @@ pub fn eye(stage: &Stage, torso: u32) -> Vec2 {
 
 /// What one ray from `from` at `angle` meets: how far, and what kind of thing.
 pub fn look(stage: &Stage, from: Vec2, angle: f32, skip: u32) -> (f32, Seen) {
+    look_for(stage, from, angle, skip, true)
+}
+
+/// `look`, seeing food or not.
+fn look_for(stage: &Stage, from: Vec2, angle: f32, skip: u32, food: bool) -> (f32, Seen) {
     let (s, c) = sin_cos(angle);
     let toward = Vec2::new(c, s);
     let world = &stage.world;
@@ -123,7 +162,26 @@ pub fn look(stage: &Stage, from: Vec2, angle: f32, skip: u32) -> (f32, Seen) {
             seen = Seen::Hazard;
         }
     }
+    // food is not solid either: each piece near is a small circle
+    for food in stage.food.iter().filter(|_| food) {
+        if let Some(t) = ray_circle(from, toward, food.at, FOOD_RADIUS).filter(|&t| t < distance) {
+            distance = t;
+            seen = Seen::Food;
+        }
+    }
     (distance, seen)
+}
+
+/// How far along a ray from `from` going `toward` (of length 1) it first meets a circle, if it does.
+fn ray_circle(from: Vec2, toward: Vec2, centre: Vec2, radius: f32) -> Option<f32> {
+    let to = centre - from;
+    let along = to.x * toward.x + to.y * toward.y;
+    let off = to.x * to.x + to.y * to.y - along * along;
+    if off > radius * radius {
+        return None;
+    }
+    let t = along - crate::math::sqrt(radius * radius - off);
+    (t >= 0.0).then_some(t).or_else(|| (to.x * to.x + to.y * to.y <= radius * radius).then_some(0.0))
 }
 
 /// Whether a ray landing at `at` on a surface from `left` to `right` at `height` is at the edge of a
@@ -141,8 +199,13 @@ fn is_edge(stage: &Stage, at: Vec2, left: f32, right: f32, height: f32) -> bool 
 /// What the creature with this torso sees, written into `into`: `RAYS * PER_RAY` numbers, ray after
 /// ray, as the brain takes them. Gives back each ray's distance and kind too, for drawing.
 pub fn see(stage: &Stage, torso: u32, skip: u32, into: &mut [f32], seen: &mut [(f32, Seen); RAYS]) {
+    see_along(stage, torso, skip, &angles(), into, seen);
+}
+
+/// `see`, along rays in these directions: the fixed eyes' or the moving eye's (`gazed`).
+pub fn see_along(stage: &Stage, torso: u32, skip: u32, angles: &[f32; RAYS], into: &mut [f32], seen: &mut [(f32, Seen); RAYS]) {
     let from = eye(stage, torso);
-    for (k, angle) in angles().iter().enumerate() {
+    for (k, angle) in angles.iter().enumerate() {
         let (distance, what) = look(stage, from, *angle, skip);
         seen[k] = (distance, what);
         let out = &mut into[k * PER_RAY..(k + 1) * PER_RAY];
@@ -151,6 +214,23 @@ pub fn see(stage: &Stage, torso: u32, skip: u32, into: &mut [f32], seen: &mut [(
             out[1 + slot] = if what == *kind { 1.0 } else { 0.0 };
         }
     }
+}
+
+/// Whether there is something ahead worth leaving the ground for, as the fixed eyes would see it
+/// (`practice::clear_ahead`): an edge, a box, a hazard or a moving thing where their five nearest rays
+/// down land, or a wall within a metre of their rays looking level and a little up. For a creature
+/// whose eye looks elsewhere, so what it is charged for does not hang on where it looks.
+pub fn ahead(stage: &Stage, torso: u32, skip: u32) -> bool {
+    let from = eye(stage, torso);
+    let angles = angles();
+    angles.iter().enumerate().take(13).any(|(k, &angle)| match k {
+        0..=4 => matches!(look_for(stage, from, angle, skip, false).1, Seen::Edge | Seen::Box | Seen::Hazard | Seen::Moving),
+        11 | 12 => {
+            let (distance, seen) = look_for(stage, from, angle, skip, false);
+            seen != Seen::Nothing && distance < 1.0
+        }
+        _ => false,
+    })
 }
 
 /// A picture of what the creature sees, from the same world: `into.len()` greyscale pixels from 0 to 1,

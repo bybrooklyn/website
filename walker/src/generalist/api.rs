@@ -170,6 +170,16 @@ list!(show_bodies, |page| page.bodies());
 list!(show_things, |page| page.things());
 list!(show_rays, |page| page.rays());
 list!(ray_angles, |page| page.ray_angles());
+list!(show_food, |page| page.food());
+list!(show_needs, |page| page.needs());
+list!(show_senses, |page| page.sensed());
+
+/// Drops a piece of food at (x, y), from where it falls; 1 if it did (only a creature that eats has
+/// food in its world).
+#[unsafe(no_mangle)]
+pub extern "C" fn show_drop_food(x: f32, y: f32) -> u32 {
+    page().map_or(0, |page| u32::from(page.show_drop_food(Vec2::new(x, y))))
+}
 
 /// What a press at (x, y) would take hold of: 0 nothing, 1 the creature, 2 a thing that moves (a box,
 /// a moving platform, a see-saw's plank). For the pointer to show what can be taken hold of.
