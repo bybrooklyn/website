@@ -2,8 +2,9 @@
 
 A mini: a grid of grains, each of one material, that fall, flow, burn and react with each other. A plan
 dated 13 November 2026. Stage 1, the engine and its tests, was built on 14 November 2026, stage 2, heat
-and reactions, the same day, and stage 3, the page, on 14 and 15 November; the mini is a draft at
-`/minis/sand/`, not listed.
+and reactions, the same day, and stage 3, the page, on 14 and 15 November; after it, how sand and lava move
+and how the flags look were reworked, and stage 4 was measured. The mini is a draft at `/minis/sand/`, not
+listed.
 
 ## Where the code is
 
@@ -800,6 +801,81 @@ alone, best of seven, falling sand is within 2 to 5% of before.
   (two or three cells a step) still mostly freezes as it lands.
 - The grain shade's strength (40 in 255) and how far edges wander and grains stray.
 
+## Stage 4: workers and the graphics card, measured
+
+The plan was to move what spreads (heat, and whatever else measures well) onto workers or the graphics
+card, keeping each only if it measured faster, and to measure first. Nothing was put into the page; what
+was tried and its numbers follow.
+
+**Where a step's time goes**, natively on four cores, with the step's three parts timed in a scratch copy
+of the crate:
+
+| World | Step | Cells moving and reacting | Levelling | Heat |
+|---|---|---|---|---|
+| Forest fire, 373 by 280 (a desktop's page) | 2.21 ms | 1.07 ms (49%) | 0.06 ms | 1.07 ms (49%) |
+| Falling sand, 373 by 280 | 0.24 ms | 0.22 ms (93%) | 0.01 ms | 0.004 ms |
+| Dam of water, 373 by 280 | 0.68 ms | 0.47 ms (70%) | 0.20 ms | 0.001 ms |
+| Lava poured in one place, 373 by 280 | 0.20 ms | 0.06 ms (32%) | 0.03 ms | 0.10 ms (52%) |
+| Forest fire, 1024 by 576 | 8.08 ms | 4.13 ms (51%) | 0.28 ms | 3.67 ms (45%) |
+| Dam of water, 1024 by 576 | 5.98 ms | 4.61 ms (77%) | 1.36 ms | 0.01 ms |
+
+Heat matters only where things burn or lava cools, and is then about half a step.
+
+**What the browser charges**, measured with `scripts/sand-spread.ts` in headless Chromium on four cores,
+which draws in software (SwiftShader):
+
+- A barrier among four workers sharing memory (the page served isolated, with the two headers): about
+  4 to 5 microseconds. Workers are cheap to keep in step.
+- The whole grid sent to the graphics card, run through one pass the size of the heat pass and read back:
+  1.0 to 1.1 ms at 373 by 280 (0.34 of it the reading back) and 5.5 to 5.8 ms at 1024 by 576 (1.8 to 2.6
+  reading back). A step of the forest fire in the built engine is 2.46 ms at 373 by 280, so its heat pass is
+  about 1.2 ms; at 1024 by 576, 8.9 ms and about 4.
+
+**Heat on the graphics card: not kept.** In software the round trip alone, with a trivial pass, costs as
+much as the heat pass it would replace at the page's size, and more at the largest. The real pass would
+cost more: the rounding chance belongs to each side and comes from a 64-bit hash, which WebGL 2's 32-bit
+integers would have to build from halves to stay the same to the bit; the cells that could still carry heat
+would have to be read back too, to keep sleeping exact; and the graphics card would work the whole grid
+every step where the engine works only the awake rectangles (a still world's heat costs nothing now). On a
+real graphics card the pass would be far cheaper but the reading back still waits for it each step; that
+could not be measured here. `bun scripts/sand-spread.ts --serve` serves the same page to open in a browser
+with one.
+
+**Heat on workers: faster in the engine, not put into the page.** The heat pass was split into bands of
+rows of equal work (the awake cells of each row added up), each band working its rows in place from copies
+of the rows at its edges made first, its wakes gathered and applied after. Natively, with four threads
+started every step, it gives the same cells to the bit as one thread, and:
+
+| World | Heat, one thread | Heat, four | Step, one | Step, four |
+|---|---|---|---|---|
+| Forest fire, 373 by 280 | 1.10 ms | 0.57 ms | 2.24 ms | 1.73 ms |
+| Lava poured, 373 by 280 | 0.110 ms | 0.064 ms | 0.209 ms | 0.168 ms |
+| Forest fire, 1024 by 576 | 3.70 ms | 2.05 ms | 8.07 ms | 6.46 ms |
+
+(Bands of equal rows did worse: the empty sky's bands sat idle while the fire's worked.) In the browser it
+would save about half a millisecond of the busiest scene's 2.5 ms step, on a page that already steps sixty
+times a second and whose frame is mostly drawing (about 8 ms in software at one device pixel a CSS pixel).
+To get it, the module would have to share its memory with workers, which needs the core library rebuilt
+with atomics: on this machine's stable Rust that builds only through the compiler's escape hatch for its
+own development (`RUSTC_BOOTSTRAP=1` with `-Z build-std`), tried and working, but a build the site would
+then depend on. The sand page would need the two isolation headers, as mdQuire's pages have, which limit
+what it may load; and the engine would have to step in a worker, since the page's own thread may not wait
+on a barrier, with the drawing reading shared memory. Those costs were judged not worth half a millisecond
+the visitor would not see; the experiment's code was not kept.
+
+**The cells' moving on workers: not tried.** It is the larger part (half the forest fire's step, nine
+tenths of falling sand's), and the checkerboard of four phases already gives the world a split among
+workers would give (`set_order(1)`, tested). It needs the same shared memory, headers and worker as above,
+and the step's marks on neighboring chunks, its counts of reactions and its changed rows kept apart for
+each worker and merged after each phase. If it scaled as the heat did, the forest fire at the page's size
+would step in about 1.2 ms rather than 2.2. Changing the page to the four phases changes the world it makes,
+so the fingerprint would be taken again.
+
+**What is plain from it**: on the machine measured the step is not what holds the page back; the drawing
+in software is (stage 3's table). A phone, with a smaller world, steps faster still. If the step ever does
+hold it back, the order to try is the cells' moving on workers, then heat on workers, each with the build
+and the headers above; heat on the graphics card last.
+
 ## Stages
 
 1. The engine and its tests: the grid, chunks and sleeping, powders, liquids and gases, with sand, water,
@@ -808,7 +884,10 @@ alone, best of seven, falling sand is within 2 to 5% of before.
    tests. Built 14 November 2026, with wet dirt, burning wood and ash besides.
 3. The page: the materials row, brushes, pride sand and the flag brush, links, touch and keys, glow. Built
    14 and 15 November 2026.
-4. Workers and the graphics card for what spreads, each kept only if it measures faster.
+4. Workers and the graphics card for what spreads, each kept only if it measures faster. Measured after
+   the movement, lava and flags were reworked: heat on the graphics card does not win in software; heat on
+   workers is nearly twice as fast in the engine but was not put into the page, for the build and headers
+   it needs against half a millisecond nobody would see. Nothing kept but the measuring script.
 
 ## Open
 
@@ -841,6 +920,7 @@ bun test src/minis/worlds.test.ts src/minis/flags.test.ts   # links and flags
 cd sand && cargo run --release --example speed               # the speed natively
 cd sand && cargo run --release --example speed --features scalar   # without the hand-written SIMD
 bun scripts/sand-speed.ts             # the speed in headless Chromium, both builds
+bun scripts/sand-spread.ts            # what workers and the graphics card would cost (--serve for a real browser)
 ```
 
 The page itself is a draft: `bun run dev` shows it at `/minis/sand/`, as does a build with
