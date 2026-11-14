@@ -31,7 +31,9 @@ function race(table: Table, count: number, every: number, seconds: number): void
     expect(made).toBe(count);
 }
 
-for (const made of RUNS) {
+// every made run with a tray and nothing that holds marbles back; the loop, which has no tray, and the
+// sorting run, whose seesaw and trapdoor hold marbles back in threes and twos, are held to their own in parts.test.ts
+for (const made of RUNS.filter((one) => read(one.text).some((piece) => piece.kind.family === "t") && !read(one.text).some((piece) => piece.kind.family === "e" || piece.kind.family === "j"))) {
     test(`${made.name}: every marble let go reaches the tray and falls asleep there`, () => {
         const table = makeTable();
         table.set(read(made.text));

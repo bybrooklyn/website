@@ -36,10 +36,13 @@ function followed(run: Placed[]) {
 }
 
 for (const made of RUNS) {
-    test(`${made.name}: the ghost arrives in the tray`, () => {
+    // the loop goes round for ever, and the sorting run's first marble waits in its seesaw for two more
+    const ending = made.name.includes("loops") ? "loops" : made.name.includes("sorting") ? "held" : "arrived";
+    test(`${made.name}: the ghost ends as a marble does: ${ending}`, () => {
         const [path] = followed(read(made.text));
-        expect(path!.ending).toBe("arrived");
-        expect(read(made.text).find((piece) => piece.id === path!.last)!.kind.family).toBe("t");
+        expect(path!.ending).toBe(ending);
+        expect(read(made.text).find((piece) => piece.id === path!.last)!.kind.family).toBe(ending === "loops" ? "u" : ending === "held" ? "e" : "t");
+        expect(ghostMarks([path!], [])).toEqual([]);
     }, 60_000);
 }
 

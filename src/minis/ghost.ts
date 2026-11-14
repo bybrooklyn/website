@@ -9,8 +9,12 @@
 //   ghost.work(3);                 // each frame: up to 3 ms more of it
 //   ghost.paths;                   // each marble's places, every sixtieth of a second, and how it ended
 //
-// A marble's way ends where it comes to rest in a tray (arrived), stops on a piece (stopped), lands on
-// the table having left the track (fell, by the piece it was last on), or after `LONGEST` seconds.
+// A marble's way ends where it comes to rest in a tray (arrived), stops on a piece (stopped), waits in a
+// seesaw or on a trapdoor for others (held), comes round to a lift or a hoist it has ridden already
+// (loops), lands on the table having left the track (fell, by the piece it was last on), or after
+// `LONGEST` seconds. Started from a real table, its moving parts begin where the real ones are now
+// (a switch leaning the way it leans, a lift where its car is) and the marbles waiting in a seesaw or
+// on a trapdoor are there too, so it shows what the next marble let go will do.
 
 import { MARBLE, type Solid } from "../mote/space";
 import type { Mark } from "./checks";
@@ -20,7 +24,11 @@ import { makeTable, type Table } from "./table";
 import type { V3 } from "../mote/solids";
 
 /** How a ghost marble's way ended, if it has. */
-export type Ending = "arrived" | "stopped" | "fell" | "long";
+export type Ending = "arrived" | "stopped" | "held" | "loops" | "fell" | "long";
+
+/** The families a marble waits in for others, and the ones that carry it up. */
+const HOLDING = new Set(["e", "j"]);
+const CARRYING = new Set(["u", "y"]);
 
 /** One ghost marble's way: its places every `EVERY` seconds, how it ended, and the piece it was on last. */
 export interface Path {
@@ -49,8 +57,8 @@ export interface Ghost {
     paths: Path[];
     /** Every marble's way has ended. */
     done: boolean;
-    /** Starts again on this run, from each hopper's mouth. */
-    start(run: Placed[]): void;
+    /** Starts again on this run, from each hopper's mouth; with a real table, from where its moving parts are and with the marbles waiting in them. */
+    start(run: Placed[], real?: Table): void;
     /** Works on for up to `ms` milliseconds, or `steps` steps if given (for tests, which must not depend on the machine's speed). */
     work(ms: number, steps?: number): void;
     /** Seconds of marble time worked out so far. */
@@ -59,17 +67,29 @@ export interface Ghost {
 
 export function makeGhost(): Ghost {
     const table = makeTable({ filled: false });
-    let marbles: { solid: Solid; path: Path; slow: number; was: V3 }[] = [];
+    let marbles: { solid: Solid; path: Path; slow: number; was: V3; ridden: Set<number>; riding?: number }[] = [];
+    /** Marbles copied from the real table, waiting in its moving parts. */
+    let waiting: Solid[] = [];
     let steps = 0;
     const ghost: Ghost = {
         table,
         paths: [],
         done: true,
         time: 0,
-        start(run) {
+        start(run, real) {
             for (const one of marbles) table.space.remove(one.solid);
+            for (const one of waiting) table.space.remove(one);
+            waiting = [];
             table.set(run);
-            marbles = table.mouths().map(({ id, at }) => ({ solid: table.space.ball(RADIUS, [...at], MARBLE), path: { hopper: id, places: [[...at]] }, slow: 0, was: [0, 0, 0] }));
+            if (real) {
+                table.setParts(real.parts());
+                const kinds = new Map(run.map((piece) => [piece.id, piece.kind.family]));
+                for (const marble of real.marbles) {
+                    const on = real.pieceAt(marble.p);
+                    if (marble.rest && on !== undefined && HOLDING.has(kinds.get(on) ?? "")) waiting.push(table.space.ball(RADIUS, [...marble.p], MARBLE));
+                }
+            }
+            marbles = table.mouths().map(({ id, at }) => ({ solid: table.space.ball(RADIUS, [...at], MARBLE), path: { hopper: id, places: [[...at]] }, slow: 0, was: [0, 0, 0], ridden: new Set<number>() }));
             ghost.paths = marbles.map((one) => one.path);
             ghost.done = marbles.length === 0;
             ghost.time = 0;
@@ -89,8 +109,11 @@ export function makeGhost(): Ghost {
         one.path.places.push([...one.solid.p]);
         table.space.remove(one.solid);
     };
+    /** Each piece's family, by its number, for the run the ghost is on. */
+    let families = new Map<number, string>();
     const step = () => {
-        table.space.step(STEP);
+        if (steps === 0) families = new Map(table.run.map((piece) => [piece.id, piece.kind.family]));
+        table.step(STEP);
         steps++;
         ghost.time = steps * STEP;
         const keep = steps % 2 === 0;
@@ -102,10 +125,22 @@ export function makeGhost(): Ghost {
             one.was = [...solid.v];
             const on = flying ? undefined : table.pieceAt(solid.p);
             if (on !== undefined) path.last = on;
+            // round to a lift or a hoist it has ridden before: it goes round for ever, and the way is shown once
+            const family = on === undefined ? undefined : families.get(on);
+            const carried = on !== undefined && CARRYING.has(family ?? "");
+            if (carried && on !== one.riding && one.ridden.has(on)) {
+                end(one, "loops");
+                continue;
+            }
+            if (carried) one.ridden.add(on);
+            if (on !== undefined) one.riding = carried ? on : undefined;
             const speed = Math.hypot(solid.v[0], solid.v[1], solid.v[2]);
-            one.slow = speed < SLOW ? one.slow + STEP : 0;
+            // still while it waits for a lift or a hoist to come for it is not stopped: it will be carried
+            one.slow = speed < SLOW && !carried ? one.slow + STEP : 0;
+            if (carried && solid.rest) continue;
             if (solid.p[1] < ON_TABLE) end(one, "fell");
             else if (table.arrived(solid) && (solid.rest || one.slow > STILLNESS)) end(one, "arrived");
+            else if ((solid.rest || one.slow > STILLNESS) && path.last !== undefined && HOLDING.has(families.get(path.last) ?? "")) end(one, "held");
             else if (solid.rest || one.slow > STILLNESS) end(one, "stopped");
             else if (ghost.time >= LONGEST) end(one, "long");
             else if (keep) path.places.push([...solid.p]);
@@ -125,7 +160,7 @@ export function makeGhost(): Ghost {
 export function ghostMarks(paths: Path[], openEnds: Mark[]): Mark[] {
     const marks: Mark[] = [];
     for (const path of paths) {
-        if (path.last === undefined || !path.ending || path.ending === "arrived" || path.ending === "long") continue;
+        if (path.last === undefined || !path.ending || path.ending === "arrived" || path.ending === "long" || path.ending === "held" || path.ending === "loops") continue;
         if (path.ending === "fell" && openEnds.some((mark) => mark.id === path.last)) continue;
         const why = path.ending === "stopped" ? "shallow" : "fast";
         if (!marks.some((mark) => mark.id === path.last && mark.why === why)) marks.push({ id: path.last, why });

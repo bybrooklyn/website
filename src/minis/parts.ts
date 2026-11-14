@@ -173,27 +173,35 @@ function ringed(rings: [number, number][], sides: number, flat = true): Mesh {
 export const BELL: [number, number][] = [[2.2, 0], [2.05, 0.8], [1.55, 2], [0.95, 2.7], [0.45, 3]];
 
 /**
- * The seesaw's counterweights, a pair either side of its tray behind its pivot, as tall as the marbles
- * it holds before it tips need: worked out so that the turning push of the tray and the weights at its
- * resting tilt lies half way between that of `count - 1` marbles lying against its end wall and that of
- * `count`, so that `count` tip it and one fewer never do. Their height, in cm.
+ * The seesaw's counterweights, a pair either side of its tray behind its pivot on arms rising at 60
+ * degrees, as tall as the marbles it holds before it tips need: worked out so that, at its resting
+ * tilt, they turn it back by half way between what `count - 1` marbles lying against its end wall turn
+ * it forward and what `count` do, the tray's own weight counted, so that `count` tip it and one fewer
+ * never do. As it tips their arms turn toward upright, so they pull it back less: it tips all the way
+ * at once and stays tipped until the marbles have rolled out. Their height, in cm.
  */
 export function counterweight(count: number): number {
-    const tray = seesawTray(0);
-    const mass = (4 / 3) * Math.PI * 0.8 ** 3 * 2.5;
-    // marbles in a row against the end wall, from the pivot: 9.2, 7.6, 6.0 and 4.4 cm out
-    const arms = [0, 1, 2, 3].map((k) => SEESAW.wall - 0.8 - 1.6 * k - SEESAW.pivot[0]);
-    const marbles = (n: number) => arms.slice(0, n).reduce((sum, arm) => sum + arm * mass, 0);
+    const marbles = (n: number) => seesawArms().slice(0, n).reduce((sum, arm) => sum + arm * MARBLE_MASS, 0);
     const needed = (marbles(count - 1) + marbles(count)) / 2;
-    // the tray's own turning push toward its end, less the weights' toward its back
-    const own = tray.reduce((sum, one) => sum + one.half[0] * one.half[1] * one.half[2] * 8 * one.density * (one.at[0] - SEESAW.pivot[0]), 0);
-    const weight = needed + own;
-    // two weights of steel 2.4 cm long and 1 cm across, 5.2 cm behind the pivot
-    return weight / (2 * 2.4 * 1 * SEESAW.steel * (SEESAW.pivot[0] - SEESAW.weight));
+    // two blocks of steel 2.4 cm long and 1 cm across, `reach` from the pivot on arms rising at `rise`, turned by the resting tilt
+    const out = SEESAW.reach * cosine(SEESAW.rise - SEESAW.rest);
+    return (needed + seesawOwn()) / (2 * 2.4 * 1 * SEESAW.steel * out);
 }
 
-/** The seesaw's numbers: its pivot, the inner face of its fixed end wall, where its weights are, its resting and tipped tilts, and steel's density. */
-export const SEESAW = { pivot: [11, -3.2, 4] as V3, wall: 21, weight: 5.8, rest: -0.06, tipped: -0.35, steel: 7.8 };
+/** A marble's mass, in grams: glass, 0.8 cm round. */
+const MARBLE_MASS = (4 / 3) * Math.PI * 0.8 ** 3 * 2.5;
+
+/** How far out from the seesaw's pivot each marble lying against its end wall is, in a row: 7.2, 5.6, 4.0 and 2.4 cm. The wall is fixed, so tilting the tray does not move them. */
+export const seesawArms = (): number[] => [0, 1, 2, 3].map((k) => SEESAW.wall - 0.8 - 1.6 * k - SEESAW.pivot[0]);
+
+/** The tray's own turning push toward its end, at its resting tilt: each body's mass times how far its middle is out from the pivot, once turned. */
+export function seesawOwn(): number {
+    const [c, k] = [cosine(SEESAW.rest), sine(SEESAW.rest)];
+    return seesawTray(0).reduce((sum, one) => sum + one.half[0] * one.half[1] * one.half[2] * 8 * one.density * ((one.at[0] - SEESAW.pivot[0]) * c - (one.at[1] - SEESAW.pivot[1]) * k), 0);
+}
+
+/** The seesaw's numbers: its pivot, under the middle of its tray; the inner face of its fixed end wall; how far out and how steeply up its weights' arms go; its resting and tipped tilts; and steel's density. */
+export const SEESAW = { pivot: [13, -3.2, 4] as V3, wall: 21, reach: 5, rise: (65 * Math.PI) / 180, rest: -0.06, tipped: -0.35, steel: 7.8 };
 
 /** The seesaw's tray at angle naught, without its weights: a floor that is a wide shallow V, which catches a marble that comes in rocking and lines the marbles up along its middle, two rails and a low lip at its back. */
 function seesawTray(_count: number): Body[] {
@@ -287,23 +295,25 @@ export function designPart(family: PartFamily, sizes: number[]): PartDesign {
             };
         }
         case "e": {
-            // In along the row, dropping onto a tray on a pivot across it. The tray rests tilted a little
-            // toward its far end, held up there by its counterweights against a stop, so marbles roll to
-            // its fixed end wall and wait. Enough of them outweigh the counterweights: it tips, and they
-            // roll out under the end wall onto the track below, and it swings back.
+            // In along the row, dropping onto a tray on a pivot across its middle. The tray rests tilted a
+            // little toward its far end, held up there by its counterweights against a stop, so marbles
+            // roll to its fixed end wall and wait. Enough of them outweigh the counterweights: it tips, and
+            // they roll out under the end wall onto the track below, and it swings back.
             const count = sizes[0]!;
             const high = counterweight(count);
-            const weights = [0.8, 6.2].map((z) => body([SEESAW.weight - 1.2, -3, z], [SEESAW.weight + 1.2, -3 + high, z + 1], SEESAW.steel));
+            const [wx, wy] = [SEESAW.pivot[0] - SEESAW.reach * cosine(SEESAW.rise), SEESAW.pivot[1] + SEESAW.reach * sine(SEESAW.rise)];
+            const weights = [0.8, 6.2].map((z) => body([wx - 1.2, wy - high / 2, z], [wx + 1.2, wy + high / 2, z + 1], SEESAW.steel));
             return {
                 ...none,
-                joints: [J0, joint([24, -6, 4], [1, 0, 0])],
-                lengths: [groove([[0, 0, 4], [4, 0, 4]], [0, undefined]), groove([[21, -6, 4], [24, -6, 4]], [undefined, 1])],
-                boxes: [span([SEESAW.wall, -3.3, 2.3], [SEESAW.wall + 0.6, -0.2, 5.7])],
-                stands: [span([10.6, -8, 0.6], [11.4, -3.2, 1.2]), span([10.6, -8, 6.8], [11.4, -3.2, 7.4])],
-                holds: [[11, -8, 0.9], [11, -8, 7.1]],
+                joints: [J0, joint([24, -8, 4], [1, 0, 0])],
+                lengths: [groove([[0, 0, 4], [4, 0, 4]], [0, undefined]), groove([[20.6, -6.7, 4], [22, -7.7, 4], [23, -8, 4], [24, -8, 4]], [undefined, 1], [1, -0.6, 0], [1, 0, 0])],
+                // its end wall, and walls along the track out, so that marbles tipped out together do not knock each other off it
+                boxes: [span([SEESAW.wall, -3.3, 2.3], [SEESAW.wall + 0.6, -0.2, 5.7]), span([21.6, -8, 1.8], [24, -5.6, 2.1]), span([21.6, -8, 5.9], [24, -5.6, 6.2])],
+                stands: [span([12.6, -8, 0.4], [13.4, -3.2, 0.8]), span([12.6, -8, 7.2], [13.4, -3.2, 7.6])],
+                holds: [[13, -8, 0.6], [13, -8, 7.4]],
                 moving: { kind: "hinge", sound: "wood", bodies: [...seesawTray(count), ...weights], at: SEESAW.pivot, axis: [0, 0, 1], low: SEESAW.tipped, high: SEESAW.rest, spring: 0, rest: 0, friction: 1.5, start: SEESAW.rest },
-                clear: [span([4.3, -7.2, 1.9], [21.7, 1.2, 6.1]), span([4.3, -5.2, 0.7], [7.3, 0.6, 7.3])],
-                knob: [SEESAW.weight, -3 + high + 0.6, 2],
+                clear: [span([4.3, -7.2, 1.9], [21.7, 1.2, 6.1]), span([wx - 2.4, wy - 2.5, 0.7], [wx + 2.4, wy + 2.5, 7.3])],
+                knob: [wx, wy + high / 2 + 0.6, 1.3],
                 low: -4,
             };
         }
