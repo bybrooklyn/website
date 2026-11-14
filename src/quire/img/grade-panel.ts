@@ -50,15 +50,16 @@ export function typed(text: string): number | undefined {
 }
 
 /** Where a drag takes a slider: the value it started from moved by how far the pointer went (the whole track is the whole range, a tenth of it with Shift), in whole steps (tenths with Shift), snapping to zero within two. */
-export function dragged(start: number, moved: number, track: number, fine = false): number {
-    const raw = start + (moved / Math.max(1, track)) * 200 * (fine ? 0.1 : 1);
-    const value = Math.round(Math.max(-100, Math.min(100, raw)) * (fine ? 10 : 1)) / (fine ? 10 : 1);
+export function dragged(start: number, moved: number, track: number, fine = false, low = -100): number {
+    const raw = start + (moved / Math.max(1, track)) * (100 - low) * (fine ? 0.1 : 1);
+    const value = Math.round(Math.max(low, Math.min(100, raw)) * (fine ? 10 : 1)) / (fine ? 10 : 1);
     return !fine && Math.abs(value) <= 2 ? 0 : value || 0;
 }
 
-/** One slider: its word, the track with the zero marked, and its number. Previews while moving, sets when let go. */
-export function slider(spec: { key: string; label: string; tip: string }, hooks: { value(): number; preview(value: number): void; set(value: number): void }) {
-    const row = make("div", "quire-img-slider");
+/** One slider: its word, the track with the zero marked, and its number. Previews while moving, sets when let go. From -100 to 100, or from `low` (0 for a size) to 100. */
+export function slider(spec: { key: string; label: string; tip: string; low?: number }, hooks: { value(): number; preview(value: number): void; set(value: number): void }) {
+    const low = spec.low ?? -100;
+    const row = make("div", low === 0 ? "quire-img-slider from-zero" : "quire-img-slider");
     row.dataset.key = spec.key;
     const label = make("span", "quire-img-slider-label", spec.label);
     label.title = spec.tip;
@@ -66,7 +67,7 @@ export function slider(spec: { key: string; label: string; tip: string }, hooks:
     track.tabIndex = 0;
     track.setAttribute("role", "slider");
     track.setAttribute("aria-label", spec.label);
-    track.setAttribute("aria-valuemin", "-100");
+    track.setAttribute("aria-valuemin", String(low));
     track.setAttribute("aria-valuemax", "100");
     track.title = `${spec.tip}. Drag, or the arrow keys; a double press puts it back to zero`;
     const zero = make("i", "quire-img-slider-zero");
@@ -81,10 +82,11 @@ export function slider(spec: { key: string; label: string; tip: string }, hooks:
     let shown = 0;
     const show = (value: number) => {
         shown = value;
-        const at = (value + 100) / 2;
+        const at = ((value - low) / (100 - low)) * 100;
+        const zeroAt = (-low / (100 - low)) * 100;
         thumb.style.left = `${at}%`;
-        fill.style.left = `${Math.min(50, at)}%`;
-        fill.style.width = `${Math.abs(at - 50)}%`;
+        fill.style.left = `${Math.min(zeroAt, at)}%`;
+        fill.style.width = `${Math.abs(at - zeroAt)}%`;
         row.classList.toggle("moved", value !== 0);
         track.setAttribute("aria-valuenow", String(value));
         track.setAttribute("aria-valuetext", said(value));
@@ -102,7 +104,7 @@ export function slider(spec: { key: string; label: string; tip: string }, hooks:
     });
     track.addEventListener("pointermove", (event) => {
         if (!drag || event.pointerId !== drag.id) return;
-        const value = dragged(drag.start, event.clientX - drag.x, track.clientWidth, event.shiftKey);
+        const value = dragged(drag.start, event.clientX - drag.x, track.clientWidth, event.shiftKey, low);
         if (Math.abs(event.clientX - drag.x) > 2) drag.moved = true;
         if (value === shown) return;
         show(value);
@@ -128,7 +130,7 @@ export function slider(spec: { key: string; label: string; tip: string }, hooks:
         const by = event.key === "ArrowRight" || event.key === "ArrowUp" ? 1 : event.key === "ArrowLeft" || event.key === "ArrowDown" ? -1 : event.key === "PageUp" ? 10 : event.key === "PageDown" ? -10 : 0;
         if (event.key === "Home" || event.key === "End" || event.key === "0") {
             event.preventDefault();
-            const value = event.key === "Home" ? -100 : event.key === "End" ? 100 : 0;
+            const value = event.key === "Home" ? low : event.key === "End" ? 100 : 0;
             show(value);
             hooks.set(value);
             return;
@@ -136,7 +138,7 @@ export function slider(spec: { key: string; label: string; tip: string }, hooks:
         if (!by) return;
         event.preventDefault();
         event.stopPropagation();
-        const value = Math.round(Math.max(-100, Math.min(100, shown + by * (event.shiftKey ? 10 : 1))) * 10) / 10;
+        const value = Math.round(Math.max(low, Math.min(100, shown + by * (event.shiftKey ? 10 : 1))) * 10) / 10;
         keyed = true;
         show(value);
         hooks.preview(value);
@@ -151,8 +153,9 @@ export function slider(spec: { key: string; label: string; tip: string }, hooks:
         keyed = false;
     });
     const typedIn = () => {
-        const value = typed(number.value);
-        if (value === undefined) return show(hooks.value());
+        const given = typed(number.value);
+        if (given === undefined) return show(hooks.value());
+        const value = Math.max(low, given);
         show(value);
         if (value !== hooks.value()) hooks.set(value);
     };

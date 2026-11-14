@@ -19,18 +19,20 @@ import { copyPicture, encodeAs, exportName, formatOf, FORMATS, readSettings, unt
 import { decodeHeic, heicIn } from "./codec-run";
 import { COLORS, exportPanel, factsPanel, factsSaid, kindOf, nameFor, resizeBox, SHAPES, toolStrip, WEIGHTS } from "./panels";
 import { blocksOut, factsOf, spaceOf, type Facts, type Keep } from "./metadata";
-import { gradingFor } from "./draw";
+import { gradingWith } from "./draw";
 import { createStage, type Pen, type Tool } from "./stage";
 import { createReading } from "./reading";
 import { gradePanel } from "./grade-panel";
 import { gradeMore } from "./grade-more";
 import { gradeLooks, lookStore } from "./looks";
+import { brushRadius, gradeParts, partName, type Brush } from "./grade-parts";
+import { stackFor, type Shape } from "./masks";
 import { createMeasure } from "./measure";
 import { autoFix, averageAround, balanceFrom } from "./fix";
 import { prepared } from "./draw";
 import { gradeOne, hueOf, isNeutral, MOST, neutral, space, trimGrade, type Grade } from "./grade";
 import { megabytes, sizeOf, TIERS } from "./read/models";
-import { createHistory, edited, fresh, gradeOf, look, move, readSteps, remove, setOnly, writeSteps, type Filter, type Kept, type Picture } from "./steps";
+import { add, createHistory, edited, fresh, gradeOf, look, move, readSteps, remove, setOnly, shapeOf, writeSteps, type Filter, type Kept, type Picture } from "./steps";
 
 /** The file a picture document keeps its steps in, inside its `.quire`. */
 export const MAIN = "steps.json";
@@ -108,8 +110,28 @@ export function mountEditor(host: HTMLElement, context: Context) {
         moved: () => refresh(),
         say: (short, full) => frame.status.say(short, full, "warn"),
         space: () => colors.space,
+        parts: {
+            target: () => (grading.isOpen() ? target : undefined),
+            pick: (id) => {
+                target = id;
+                fillGrade();
+                refresh();
+                void measureGrade();
+            },
+            brush: () => (target && brush.on && picture ? { size: brushRadius(brush.size, Math.max(picture.original.width, picture.original.height)), soft: brush.soft / 100, erase: brush.erase } : undefined),
+            gradient: () => making === "gradient",
+            addGradient: (from, to) => {
+                making = undefined;
+                asking = undefined;
+                addPart({ kind: "gradient", from, to, feather: 0 });
+            },
+        },
     });
     room.append(stage.element, empty, facts);
+    // the part being graded (none for the whole picture), what a drag on the picture makes, and the brush
+    let target: string | undefined;
+    let making: "gradient" | "find" | undefined;
+    let brush: Brush = { size: 30, soft: 60, erase: false, on: false };
     host.append(room);
     // the picture's text, read when asked, kept for the picture while it is open
     const reading = createReading({
@@ -153,6 +175,9 @@ export function mountEditor(host: HTMLElement, context: Context) {
         facts.textContent = picture ? factsSaid(look(picture), picture.original.bytes, kindOf(picture.original)) : "";
         reading.clear();
         stage.clear();
+        target = undefined;
+        making = undefined;
+        measuredMasks = undefined;
         stage.setTool(grading.isOpen() ? "grade" : "crop");
         measured = false;
         refresh();
@@ -199,6 +224,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
         session.changed();
         refresh();
         estimate.soon();
+        if (target && !history.now().some((step) => step.id === target)) target = undefined;
         if (grading.isOpen()) {
             fillGrade();
             void measureGrade();
@@ -285,7 +311,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
         const loaded = stage.loaded();
         if (!loaded || !picture) throw new Error("the picture is not shown yet");
         const shown = look(picture);
-        return loaded.flatten(shown, undefined, gradingFor(shown, colors.space, loaded.size));
+        return loaded.flatten(shown, undefined, gradingWith(shown, colors.space, loaded.size));
     };
     /** The export as set, worked out once for each set of steps and settings. */
     function exported() {
@@ -495,7 +521,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
                 const small = look({ original: read.original, steps: [...read.steps, { id: "s0", type: "resize", width, filter: "bilinear" }] });
                 const canvas = make("canvas", "quire-img-version");
                 into.append(canvas, make("p", "quire-history-when", `${shown.width} × ${shown.height} px · ${read.steps.length} ${read.steps.length === 1 ? "step" : "steps"}`));
-                void loaded.flatten(small, undefined, gradingFor(small, colors.space, loaded.size)).then((pixels) => {
+                void loaded.flatten(small, undefined, gradingWith(small, colors.space, loaded.size)).then((pixels) => {
                     canvas.width = pixels.width;
                     canvas.height = pixels.height;
                     canvas.getContext("2d")!.putImageData(pixels, 0, 0);
@@ -589,15 +615,43 @@ export function mountEditor(host: HTMLElement, context: Context) {
     // ---- grading: the whole picture's grade, on the Grade surface ----
     const measure = createMeasure();
     let measured = false;
+    let measuredMasks: ReturnType<typeof stackFor>["stack"];
     // what a press on the picture will do, when a fix asked for one
     let asking: { said: string } | undefined;
     /** The grade of what is picked: the whole picture's. */
     const currentGrade = (steps = history.now()): Grade => {
-        const step = steps.find((each) => each.type === "grade");
-        return step && step.type === "grade" ? gradeOf(step) : neutral();
+        const step = target ? steps.find((each) => each.id === target) : steps.find((each) => each.type === "grade");
+        return step && (step.type === "grade" || step.type === "part") ? gradeOf(step) : neutral();
     };
-    /** The steps with the whole picture's grade set to this one, or taken away when it changes nothing. */
-    const withGrade = (grade: Grade): Kept[] => (isNeutral(grade) ? history.now().filter((step) => step.type !== "grade") : setOnly(history.now(), { type: "grade", grade: trimGrade(grade) }));
+    /** The steps with the grade of what is picked set to this one: a part's, or the whole picture's (taken away when it changes nothing). */
+    const withGrade = (grade: Grade): Kept[] => {
+        const steps = history.now();
+        if (target) return steps.map((step) => (step.id === target && step.type === "part" ? { ...step, grade: trimGrade(grade) } : step));
+        return isNeutral(grade) ? steps.filter((step) => step.type !== "grade") : setOnly(steps, { type: "grade", grade: trimGrade(grade) });
+    };
+    /** The part picked: its step, its name on the surface (its kind and its number among those of its kind) and its shape. */
+    const targetPart = () => {
+        const steps = history.now();
+        const step = steps.find((each) => each.id === target);
+        if (!step || step.type !== "part") return undefined;
+        const number = steps.filter((each) => each.type === "part" && each.kind === step.kind).indexOf(step) + 1;
+        return { id: step.id, name: partName(step.kind, number), shape: shapeOf(step) };
+    };
+    /** A new part, picked, with a grade of its own that changes nothing yet. */
+    function addPart(shape: Shape) {
+        const steps = add(history.now(), { type: "part", ...shape, grade: {} });
+        target = steps.at(-1)!.id;
+        commit(steps);
+        fillGrade();
+        refresh();
+    }
+    /** The part picked taken away, and the whole picture graded again. */
+    function removePart() {
+        if (!target) return;
+        const id = target;
+        target = undefined;
+        commit(remove(history.now(), id));
+    }
     /** Counts the grade on the small copy, in the worker, and draws the counts when they come. */
     async function measureGrade(steps = history.now()) {
         const loaded = stage.loaded();
@@ -607,7 +661,9 @@ export function mountEditor(host: HTMLElement, context: Context) {
             measure.picture(await loaded.small(200), loaded.size);
         }
         const shown = look({ ...picture, steps });
-        measure.grade(shown.grades.filter((each) => !isNeutral(each.grade)).map((each) => ({ ready: prepared(each.grade, colors.space) })), shown.crop, colors.space, (counts) => grading.counts(counts));
+        const stacked = stackFor(shown.grades, loaded.size);
+        if (stacked.stack !== measuredMasks) measure.masks((measuredMasks = stacked.stack));
+        measure.grade(shown.grades.filter((each) => !isNeutral(each.grade)).map((each) => ({ ready: prepared(each.grade, colors.space), ...stacked.layers(each.id) })), shown.crop, colors.space, (counts) => grading.counts(counts));
     }
     const grading = gradePanel({
         closed: () => {
@@ -619,7 +675,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
             refresh();
         },
         grade: () => currentGrade(),
-        target: () => "Whole picture",
+        target: () => targetPart()?.name ?? "Whole picture",
         space: () => (colors.space === "p3" ? "Graded in Display P3, as the picture's profile says" : colors.known ? "Graded in sRGB" : `Graded as sRGB: the picture's profile (${colors.profile ?? "unnamed"}) is not one this knows`),
         preview: (grade) => {
             const steps = withGrade(grade);
@@ -679,10 +735,56 @@ export function mountEditor(host: HTMLElement, context: Context) {
         give,
     });
     grading.looksBody.append(looked.element);
+    // parts: made from the surface, picked on the picture, each with its own few controls
+    const parted = gradeParts({
+        target: () => targetPart(),
+        whole: () => {
+            target = undefined;
+            fillGrade();
+            refresh();
+            void measureGrade();
+            stage.changed();
+        },
+        long: () => (picture ? Math.max(picture.original.width, picture.original.height) : 1000),
+        setShape: (change, live) => {
+            if (!target) return;
+            const id = target;
+            const steps = history.now().map((step) => (step.id === id && step.type === "part" ? ({ ...step, ...change } as Kept) : step));
+            if (live) {
+                stage.preview(steps);
+                void measureGrade(steps);
+            } else {
+                stage.preview(undefined);
+                commit(steps);
+            }
+        },
+        remove: () => removePart(),
+        gradient: () => {
+            if (making === "gradient") return cancelPick();
+            making = "gradient";
+            asking = { said: "Drag across the picture, from where the grade is whole to where it is gone" };
+            fillGrade();
+            refresh();
+        },
+        making: () => making,
+        paint: () => {
+            brush = { ...brush, on: true, erase: false };
+            addPart({ kind: "paint", feather: 0 });
+            asking = undefined;
+        },
+        brush: () => brush,
+        setBrush: (next) => {
+            brush = next;
+            fillGrade();
+            stage.changed();
+        },
+    });
+    grading.parts.append(parted.element);
     grading.looks.addEventListener("toggle", () => grading.looks.open && void looked.fill());
     /** The surface and its deeper controls, as the grade now is. */
     const fillGrade = () => {
         grading.fill();
+        parted.fill();
         if (grading.more.open) deeper.fill();
         if (grading.looks.open) void looked.fill();
     };
@@ -712,6 +814,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
     function cancelPick() {
         if (!asking) return;
         asking = undefined;
+        making = undefined;
         stage.arm(undefined);
         fillGrade();
         refresh();
@@ -1062,12 +1165,21 @@ export function mountEditor(host: HTMLElement, context: Context) {
         if (event.key === "Enter" && stage.tool() === "crop") return applyCrop;
         if (event.key === "Escape") {
             if (asking) return () => cancelPick();
+            if (grading.isOpen() && target)
+                return () => {
+                    target = undefined;
+                    fillGrade();
+                    refresh();
+                    stage.changed();
+                    void measureGrade();
+                };
             if (stage.picked()) return () => stage.pick(undefined);
             if (stage.selected()) return () => stage.selectAll(false);
             if (stage.tool() !== "none") return () => (stage.tool() === "crop" ? stage.setTool("none") : stage.setTool("none"));
             return undefined;
         }
         if ((event.key === "Delete" || event.key === "Backspace") && stage.picked()) return removePicked;
+        if ((event.key === "Delete" || event.key === "Backspace") && grading.isOpen() && target) return removePart;
         return undefined;
     });
     frame.palette({ writing: () => stage.element, back: () => stage.element.focus({ preventScroll: true }) });
@@ -1102,6 +1214,8 @@ export function mountEditor(host: HTMLElement, context: Context) {
         changeStep: (id: string, to: Partial<Kept>) => commit(history.now().map((step) => (step.id === id ? ({ ...step, ...to } as Kept) : step))),
         downloadQuire,
         flatten: () => flattened(),
+        /** Opens the document again from its steps.json, as if it were opened anew. */
+        reopen: () => picture && open(writeSteps(picture)),
         grading,
         destroy() {
             estimate.cancel();

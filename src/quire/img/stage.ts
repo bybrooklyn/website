@@ -14,12 +14,14 @@
 // cover Hide makes; a drag across words hides the run, one cover a line. With no tool, a drag across
 // words selects them, to be copied as text.
 
-import { backendFor, gradingFor, loadPicture, type Loaded, type Scene, type View } from "./draw";
+import { backendFor, gradingWith, loadPicture, type Loaded, type Scene, type View } from "./draw";
+import { maskSize, stackFor, type Stroke } from "./masks";
 import type { Space } from "./grade";
 import { coverColor, ringArea } from "./cover";
 import { dragFrame, fit, HANDLES, oneToOne, shapeFrame, spanned, zoomAt, type Handle } from "./geometry";
 import { allAt, drawMarks, markBox, moved, type Place } from "./marks";
 import { add, change, look, within, type Kept, type Look, type Mark, type Picture, type Point, type Rect } from "./steps";
+import { decodeRuns, type Shape } from "./masks";
 import { corners } from "./read/pixels";
 import { coverFor, type Line } from "./read/words";
 import type { Finding } from "./read/private";
@@ -106,6 +108,32 @@ export interface StageHooks {
     say(short: string, full: string): void;
     /** The space the picture is graded in (sRGB unless its profile says Display P3). */
     space?(): Space;
+    /** With Grade open: the part picked (none for the whole picture), picking another, the brush if painting, whether a drag makes a gradient, and the gradient made. */
+    parts?: {
+        target(): string | undefined;
+        pick(id: string | undefined): void;
+        brush(): { size: number; soft: number; erase: boolean } | undefined;
+        gradient(): boolean;
+        addGradient(from: Point, to: Point): void;
+    };
+}
+
+/** Where a part shows on the picture for picking: a gradient's two ends, or the first place a part was painted, or the middle of what a model found. */
+export function handlesOf(part: Shape, original: { width: number; height: number }): Point[] {
+    if (part.kind === "gradient" && part.from && part.to) return [part.from, part.to];
+    const first = part.strokes?.find((each) => !each.erase);
+    if (part.kind === "found" && part.found) {
+        const { width, height } = part.found;
+        const values = decodeRuns(part.found.runs, width * height);
+        if (values) {
+            let sx = 0;
+            let sy = 0;
+            let count = 0;
+            for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) if (values[y * width + x]! > 127) ((sx += x), (sy += y), count++);
+            if (count) return [{ x: ((sx / count + 0.5) / width) * original.width, y: ((sy / count + 0.5) / height) * original.height }];
+        }
+    }
+    return first ? [{ x: first.points[0]!, y: first.points[1]! }] : [{ x: original.width / 2, y: original.height / 2 }];
 }
 
 /** The thickness of a mark from a pen, in the original's pixels: at least two. */
@@ -212,7 +240,7 @@ export function createStage(hooks: StageHooks) {
         if (!now || !loaded) return;
         const seen = cropping() && cropFrame ? { ...now, crop: cropFrame } : now;
         // the grade drawn unless the original is held in view; left of the split, the original
-        const grading = holding ? undefined : gradingFor(seen, hooks.space?.() ?? "srgb", loaded.size);
+        const grading = holding ? undefined : gradingWith(seen, hooks.space?.() ?? "srgb", loaded.size);
         const scene: Scene = { look: seen, view: { scale: view.scale * ratio, x: view.x * ratio, y: view.y * ratio }, canvas: { width, height }, ...(cropping() ? { cropping: { x: 0, y: 0, ...loaded.size } } : {}), ...(grading ? { grading } : {}), ...(split !== undefined ? { split: split * ratio } : {}) };
         loaded.draw(scene, paint);
         drawn++;
@@ -242,7 +270,135 @@ export function createStage(hooks: StageHooks) {
         }
         splitter.classList.toggle("shown", split !== undefined);
         if (split !== undefined) splitter.style.left = `${split}px`;
+        if (tool === "grade" && hooks.parts) drawParts(context, now, ratio);
     }
+
+    // a part's mask, tinted, for showing where the part picked is; made once for each layer
+    const tints = new WeakMap<Float32Array, OffscreenCanvas>();
+    const tintOf = (layer: Float32Array, size: { width: number; height: number }, color: string) => {
+        let made = tints.get(layer);
+        if (made) return made;
+        made = new OffscreenCanvas(size.width, size.height);
+        const context = made.getContext("2d")!;
+        const image = context.createImageData(size.width, size.height);
+        context.fillStyle = color;
+        context.fillRect(0, 0, 1, 1);
+        const [r, g, b] = context.getImageData(0, 0, 1, 1).data;
+        for (let at = 0; at < layer.length; at++) image.data.set([r!, g!, b!, Math.round(Math.min(1, Math.max(0, layer[at]!)) * 90)], at * 4);
+        context.putImageData(image, 0, 0);
+        tints.set(layer, made);
+        return made;
+    };
+    /** With Grade open, the parts on the picture: the one picked tinted where it reaches, a gradient as its line and two ends, the others as a handle each. */
+    function drawParts(context: CanvasRenderingContext2D, now: Look, ratio: number) {
+        if (!loaded) return;
+        const accent = getComputedStyle(element).getPropertyValue("--accent").trim() || "#b48cff";
+        const target = hooks.parts!.target();
+        const parts = now.grades.filter((each) => each.part);
+        const where = place();
+        const at = (point: Point) => ({ x: (where.x + point.x * where.across) * ratio, y: (where.y + point.y * where.down) * ratio });
+        context.save();
+        const kept = toStage(now.crop);
+        context.beginPath();
+        context.rect(kept.x * ratio, kept.y * ratio, kept.width * ratio, kept.height * ratio);
+        context.clip();
+        const chosen = parts.find((each) => each.id === target);
+        if (chosen) {
+            const stacked = stackFor(now.grades, loaded.size);
+            const layer = stacked.layers(chosen.id).layer;
+            if (stacked.stack && layer !== undefined) {
+                const size = maskSize(loaded.size);
+                const box = toStage({ x: 0, y: 0, ...loaded.size });
+                context.globalCompositeOperation = "source-over";
+                context.imageSmoothingEnabled = true;
+                context.drawImage(tintOf(stacked.stack.layers[layer]!, size, accent), box.x * ratio, box.y * ratio, box.width * ratio, box.height * ratio);
+            }
+        }
+        for (const part of parts) {
+            const mine = part.id === target;
+            const handles = handlesOf(part.part!, loaded.size).map(at);
+            context.lineWidth = 1.5 * ratio;
+            if (part.part!.kind === "gradient" && handles.length === 2) {
+                const [a, b] = handles as [Point, Point];
+                // the line between the ends, and across the picture at each end, where the grade is whole and where it is gone
+                const dx = b.x - a.x;
+                const dy = b.y - a.y;
+                const long = Math.hypot(dx, dy) || 1;
+                const across = { x: (-dy / long) * 4000 * ratio, y: (dx / long) * 4000 * ratio };
+                context.setLineDash([]);
+                for (const [width, color] of [[3 * ratio, "rgba(0, 0, 0, 0.45)"], [1.25 * ratio, mine ? accent : "rgba(255, 255, 255, 0.9)"]] as const) {
+                    context.lineWidth = width;
+                    context.strokeStyle = color;
+                    context.beginPath();
+                    context.moveTo(a.x, a.y);
+                    context.lineTo(b.x, b.y);
+                    for (const end of [a, b]) {
+                        context.moveTo(end.x - across.x, end.y - across.y);
+                        context.lineTo(end.x + across.x, end.y + across.y);
+                    }
+                    context.stroke();
+                }
+            }
+            for (const handle of handles) {
+                context.beginPath();
+                context.arc(handle.x, handle.y, 7 * ratio, 0, Math.PI * 2);
+                context.fillStyle = mine ? accent : "rgba(255, 255, 255, 0.95)";
+                context.fill();
+                context.strokeStyle = "rgba(0, 0, 0, 0.55)";
+                context.lineWidth = 1.25 * ratio;
+                context.stroke();
+            }
+        }
+        // a gradient being dragged out, from where it starts to the pointer
+        if (drag?.kind === "gradient" && pointerAt) {
+            const a = at(drag.from);
+            for (const [width, color] of [[3 * ratio, "rgba(0, 0, 0, 0.45)"], [1.25 * ratio, accent]] as const) {
+                context.lineWidth = width;
+                context.strokeStyle = color;
+                context.beginPath();
+                context.moveTo(a.x, a.y);
+                context.lineTo(pointerAt.x * ratio, pointerAt.y * ratio);
+                context.stroke();
+            }
+        }
+        // the brush, under the pointer, at its size
+        const brush = hooks.parts!.brush();
+        if (brush && pointerAt && !drag) {
+            const radius = brush.size * where.across * ratio;
+            context.beginPath();
+            context.arc(pointerAt.x * ratio, pointerAt.y * ratio, Math.max(2, radius), 0, Math.PI * 2);
+            context.setLineDash(brush.erase ? [4 * ratio, 3 * ratio] : []);
+            for (const [width, color] of [[3 * ratio, "rgba(0, 0, 0, 0.4)"], [1.25 * ratio, "rgba(255, 255, 255, 0.9)"]] as const) {
+                context.lineWidth = width;
+                context.strokeStyle = color;
+                context.stroke();
+            }
+            context.setLineDash([]);
+        }
+        context.restore();
+    }
+    /** The part handle under a place on the stage, if one is near enough to press: its part, and which end of a gradient. */
+    function handleAt(at: Point): { id: string; end?: "from" | "to" | "both" } | undefined {
+        const now = shown();
+        if (!now || !loaded) return undefined;
+        const where = place();
+        let best: { id: string; end?: "from" | "to" | "both"; far: number } | undefined;
+        for (const part of now.grades.filter((each) => each.part)) {
+            const handles = handlesOf(part.part!, loaded.size).map((point) => ({ x: where.x + point.x * where.across, y: where.y + point.y * where.down }));
+            handles.forEach((handle, index) => {
+                const far = Math.hypot(handle.x - at.x, handle.y - at.y);
+                if (far < 14 && (!best || far < best.far)) best = { id: part.id, far, ...(part.part!.kind === "gradient" ? { end: index === 0 ? ("from" as const) : ("to" as const) } : {}) };
+            });
+            // the middle of a gradient's line moves both its ends
+            if (part.part!.kind === "gradient" && handles.length === 2) {
+                const middle = { x: (handles[0]!.x + handles[1]!.x) / 2, y: (handles[0]!.y + handles[1]!.y) / 2 };
+                const far = Math.hypot(middle.x - at.x, middle.y - at.y);
+                if (far < 14 && (!best || far < best.far)) best = { id: part.id, end: "both", far };
+            }
+        }
+        return best && { id: best.id, ...(best.end ? { end: best.end } : {}) };
+    }
+    let pointerAt: Point | undefined;
 
     // the split's grip is dragged along the picture; the line follows the pointer exactly, and the picture each frame
     let splitting: number | undefined;
@@ -422,7 +578,7 @@ export function createStage(hooks: StageHooks) {
     }
 
     // ---- dragging ----
-    type Drag = { kind: "pan"; from: Point; view: View } | { kind: "frame"; handle: Handle; from: Point; start: Rect } | { kind: "draw"; from: Point } | { kind: "move"; id: string; from: Point; steps: Kept[]; beneath?: string } | { kind: "words"; from: number } | { kind: "select"; from: number };
+    type Drag = { kind: "end"; id: string; end: "from" | "to" | "both"; from: Point; steps: Kept[] } | { kind: "gradient"; from: Point } | { kind: "paint"; id: string; stroke: Stroke; steps: Kept[] } | { kind: "pan"; from: Point; view: View } | { kind: "frame"; handle: Handle; from: Point; start: Rect } | { kind: "draw"; from: Point } | { kind: "move"; id: string; from: Point; steps: Kept[]; beneath?: string } | { kind: "words"; from: number } | { kind: "select"; from: number };
     let drag: Drag | undefined;
     let spaceHeld = false;
     const fingers = new Map<number, Point>();
@@ -481,6 +637,26 @@ export function createStage(hooks: StageHooks) {
             startWriting(there);
             return;
         }
+        if (tool === "grade" && hooks.parts) {
+            // a part's handle picks the part, and a gradient's ends are dragged; else a gradient is dragged out, the brush paints, or the picture moves
+            const handle = handleAt(at);
+            if (handle) {
+                hooks.parts.pick(handle.id);
+                if (handle.end) drag = { kind: "end", id: handle.id, end: handle.end, from: there, steps: found.steps };
+                return paint();
+            }
+            if (hooks.parts.gradient()) return void (drag = { kind: "gradient", from: there });
+            const brush = hooks.parts.brush();
+            const target = hooks.parts.target();
+            if (brush && target) {
+                const stroke: Stroke = { size: brush.size, soft: brush.soft, ...(brush.erase ? { erase: true } : {}), points: [Math.round(there.x * 2) / 2, Math.round(there.y * 2) / 2] };
+                drag = { kind: "paint", id: target, stroke, steps: found.steps };
+                live = paintedWith(found.steps, target, stroke);
+                return paint();
+            }
+            drag = { kind: "pan", from: at, view };
+            return;
+        }
         // a mark or a cover under the pointer is picked and can be moved, whatever the tool
         // (covers only with Hide or no tool, so that an arrow can start inside one); pressed again where one
         // is picked and let go without moving, the one beneath it is picked, round to the top again
@@ -516,8 +692,14 @@ export function createStage(hooks: StageHooks) {
     });
 
     /** Follows the pointer: a pinch, a pan, the frame, a mark being drawn or one being moved. */
+    /** The steps with a stroke added to a part's. */
+    const paintedWith = (steps: Kept[], id: string, stroke: Stroke): Kept[] => steps.map((step) => (step.id === id && step.type === "part" ? { ...step, strokes: [...(step.strokes ?? []), stroke] } : step));
     function follow(event: PointerEvent) {
         const at = pointer(event);
+        if (tool === "grade") {
+            pointerAt = at;
+            if (!drag && hooks.parts?.brush()) paint();
+        }
         if (event.pointerType === "touch" && fingers.has(event.pointerId)) {
             fingers.set(event.pointerId, at);
             if (pinch && fingers.size === 2) {
@@ -545,6 +727,22 @@ export function createStage(hooks: StageHooks) {
             else selection = [drag.from, to];
             return paint();
         }
+        if (drag.kind === "end") {
+            const by = { x: there.x - drag.from.x, y: there.y - drag.from.y };
+            const { id, end } = drag;
+            live = drag.steps.map((step) => (step.id !== id || step.type !== "part" || !step.from || !step.to ? step : { ...step, from: end === "to" ? step.from : { x: Math.round(step.from.x + by.x), y: Math.round(step.from.y + by.y) }, to: end === "from" ? step.to : { x: Math.round(step.to.x + by.x), y: Math.round(step.to.y + by.y) } }));
+            return paint();
+        }
+        if (drag.kind === "gradient") return paint();
+        if (drag.kind === "paint") {
+            // a place added once the pointer has moved a sixth of the brush, so that a stroke stays small
+            const points = drag.stroke.points;
+            const last = { x: points[points.length - 2]!, y: points[points.length - 1]! };
+            if (Math.hypot(there.x - last.x, there.y - last.y) < Math.max(1, drag.stroke.size / 6) || points.length >= 8000) return;
+            drag.stroke = { ...drag.stroke, points: [...points, Math.round(there.x * 2) / 2, Math.round(there.y * 2) / 2] };
+            live = paintedWith(drag.steps, drag.id, drag.stroke);
+            return paint();
+        }
         if (drag.kind === "pan") view = { ...drag.view, x: drag.view.x + at.x - drag.from.x, y: drag.view.y + at.y - drag.from.y };
         else if (drag.kind === "frame") cropFrame = dragFrame(drag.start, drag.handle, { x: there.x - drag.from.x, y: there.y - drag.from.y }, loaded.size, aspect ?? (event.shiftKey && drag.handle.length === 2 ? drag.start.width / drag.start.height : undefined));
         else if (drag.kind === "draw") live = drawing(drag.from, there);
@@ -557,6 +755,10 @@ export function createStage(hooks: StageHooks) {
     }
     element.addEventListener("pointermove", follow);
     element.addEventListener("pointerleave", () => {
+        if (pointerAt && !drag) {
+            pointerAt = undefined;
+            paint();
+        }
         if (hover === undefined) return;
         hover = undefined;
         paint();
@@ -573,6 +775,20 @@ export function createStage(hooks: StageHooks) {
         const made = live;
         live = undefined;
         if (was.kind === "frame") return hooks.moved();
+        if (was.kind === "end") {
+            if (made && JSON.stringify(made) !== JSON.stringify(was.steps)) hooks.change(made);
+            return paint();
+        }
+        if (was.kind === "paint") {
+            if (made) hooks.change(made);
+            return paint();
+        }
+        if (was.kind === "gradient") {
+            const to = toOriginal(pointer(event));
+            const where = place();
+            if (Math.hypot(to.x - was.from.x, to.y - was.from.y) * where.across >= 10) hooks.parts?.addGradient({ x: Math.round(was.from.x), y: Math.round(was.from.y) }, { x: Math.round(to.x), y: Math.round(to.y) });
+            return paint();
+        }
         if (was.kind === "select") return hooks.moved();
         if (was.kind === "words") {
             const chosen = run;

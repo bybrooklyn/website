@@ -25,6 +25,7 @@ import { webgpu } from "./gpu";
 import { drawMarks } from "./marks";
 import type { Filter, Look, Rect } from "./steps";
 import { pack, type Packed, type PackedGrade } from "./grade-shader";
+import { stackFor } from "./masks";
 import { isNeutral, prepare, space, type Grade, type Prepared, type Space, type SpaceNumbers } from "./grade";
 
 /** The card's best way on a canvas: WebGPU where the browser has it, else WebGL2 (or WebGL2 when asked, for comparing the two). */
@@ -359,5 +360,10 @@ export function gradingFor(look: Look, name: Space, picture: { width: number; he
     const grading: Grading = { packed: pack(list), numbers: space(name), picture, ...(masks ? { masks } : {}) };
     lastGrading = { name, masks, grades: live, layers: live.map((each) => layers(each.id)), grading };
     return grading;
+}
+/** What the card grades a look with, its parts' masks drawn and stacked (masks.ts); nothing when no grade changes anything. */
+export function gradingWith(look: Look, name: Space, picture: { width: number; height: number }): Grading | undefined {
+    const stacked = stackFor(look.grades, picture);
+    return gradingFor(look, name, picture, stacked.stack, stacked.layers);
 }
 let lastGrading: { name: Space; masks?: MaskStack; grades: Look["grades"]; layers: { layer?: number; invert?: boolean }[]; grading: Grading } | undefined;
