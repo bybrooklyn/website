@@ -264,3 +264,144 @@ export class Grid implements Pairs {
         }
     }
 }
+
+/**
+ * A table for things that never move, such as the chunks of fixed track: filled once, then asked
+ * which of them a box reaches. It is kept apart from the grid above, which is made again each step,
+ * so that a long run of track costs nothing until a ball comes near a piece of it.
+ *
+ *   const kept = new Kept();
+ *   kept.add(low, high);                       // each thing's box, as three numbers each
+ *   kept.build();
+ *   const count = kept.find(low, high);        // then kept.found[0] up to count, rising
+ */
+export class Kept {
+    #low: number[] = [];
+    #high: number[] = [];
+    #side = 1;
+    #mask = 0;
+    /** The table: where each slot's entries begin in the lists below, and one more for where the last ends. */
+    #slots = whole(1);
+    #entry = whole(0);
+    #cube = whole(0);
+    /** Things too large for the table, looked at for every box. */
+    #large: number[] = [];
+    /** Which search last found each thing, so that it is counted once. */
+    #seen = new Uint32Array(0);
+    #search = 0;
+    /** What the last search found, by number, rising. */
+    found = whole(16);
+
+    /** How many things are kept. */
+    get count(): number {
+        return this.#low.length / 3;
+    }
+
+    /** Keeps a thing by its box, and returns its number. `build` must be called before it can be found. */
+    add(low: ArrayLike<number>, high: ArrayLike<number>): number {
+        this.#low.push(low[0]!, low[1]!, low[2]!);
+        this.#high.push(high[0]!, high[1]!, high[2]!);
+        return this.count - 1;
+    }
+
+    /** Forgets everything kept. */
+    clear(): void {
+        this.#low = [];
+        this.#high = [];
+        this.build();
+    }
+
+    /** Lists each thing under the cubes its box covers, the cube's side the mean size of a box. */
+    build(): void {
+        const count = this.count;
+        const low = this.#low;
+        const high = this.#high;
+        let sum = 0;
+        for (let i = 0; i < count; i++) sum += Math.max(high[i * 3]! - low[i * 3]!, high[i * 3 + 1]! - low[i * 3 + 1]!, high[i * 3 + 2]! - low[i * 3 + 2]!);
+        const side = count ? sum / count || 1 : 1;
+        this.#side = side;
+        this.#large = [];
+        const listed: [entry: number, x: number, y: number, z: number][] = [];
+        for (let i = 0; i < count; i++) {
+            const [x0, y0, z0] = [cell(low[i * 3]!, side), cell(low[i * 3 + 1]!, side), cell(low[i * 3 + 2]!, side)];
+            const [x1, y1, z1] = [cell(high[i * 3]!, side), cell(high[i * 3 + 1]!, side), cell(high[i * 3 + 2]!, side)];
+            if ((x1 - x0 + 1) * (y1 - y0 + 1) * (z1 - z0 + 1) > MOST * 4) {
+                this.#large.push(i);
+                continue;
+            }
+            for (let z = z0; z <= z1; z++) for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) listed.push([i, x, y, z]);
+        }
+        let size = 16;
+        while (size < listed.length * 2) size *= 2;
+        this.#mask = size - 1;
+        const slots = whole(size + 1);
+        for (const [, x, y, z] of listed) slots[hash(x, y, z, this.#mask) + 1]!++;
+        for (let slot = 0; slot < size; slot++) slots[slot + 1]! += slots[slot]!;
+        const next = slots.slice(0, size);
+        this.#entry = whole(listed.length);
+        this.#cube = whole(listed.length * 3);
+        for (const [i, x, y, z] of listed) {
+            const at = next[hash(x, y, z, this.#mask)]!++;
+            this.#entry[at] = i;
+            [this.#cube[at * 3], this.#cube[at * 3 + 1], this.#cube[at * 3 + 2]] = [x, y, z];
+        }
+        this.#slots = slots;
+        this.#seen = new Uint32Array(count);
+        this.#search = 0;
+    }
+
+    /** Finds every thing whose box overlaps the box from `low` to `high`, into `found`, by number rising. Returns how many. */
+    find(low: ArrayLike<number>, high: ArrayLike<number>): number {
+        const side = this.#side;
+        const kl = this.#low;
+        const kh = this.#high;
+        const seen = this.#seen;
+        this.#search = (this.#search + 1) >>> 0;
+        if (this.#search === 0) {
+            seen.fill(0);
+            this.#search = 1;
+        }
+        const search = this.#search;
+        let count = 0;
+        const take = (i: number) => {
+            if (seen[i] === search) return;
+            seen[i] = search;
+            for (let axis = 0; axis < 3; axis++) if (kl[i * 3 + axis]! > high[axis]! || low[axis]! > kh[i * 3 + axis]!) return;
+            if (count >= this.found.length) {
+                const more = whole(this.found.length * 2);
+                more.set(this.found);
+                this.found = more;
+            }
+            this.found[count++] = i;
+        };
+        for (const i of this.#large) take(i);
+        const [x0, y0, z0] = [cell(low[0]!, side), cell(low[1]!, side), cell(low[2]!, side)];
+        const [x1, y1, z1] = [cell(high[0]!, side), cell(high[1]!, side), cell(high[2]!, side)];
+        // a box too large to go cube by cube is set against every thing
+        if ((x1 - x0 + 1) * (y1 - y0 + 1) * (z1 - z0 + 1) > MOST * 4) for (let i = 0; i < this.count; i++) take(i);
+        else {
+            for (let z = z0; z <= z1; z++) {
+                for (let y = y0; y <= y1; y++) {
+                    for (let x = x0; x <= x1; x++) {
+                        const slot = hash(x, y, z, this.#mask);
+                        for (let p = this.#slots[slot]!; p < this.#slots[slot + 1]!; p++) {
+                            if (this.#cube[p * 3] === x && this.#cube[p * 3 + 1] === y && this.#cube[p * 3 + 2] === z) take(this.#entry[p]!);
+                        }
+                    }
+                }
+            }
+        }
+        // few are found, so a plain insertion sort puts them in order
+        const found = this.found;
+        for (let k = 1; k < count; k++) {
+            const value = found[k]!;
+            let at = k - 1;
+            while (at >= 0 && found[at]! > value) {
+                found[at + 1] = found[at]!;
+                at--;
+            }
+            found[at + 1] = value;
+        }
+        return count;
+    }
+}
