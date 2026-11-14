@@ -11,7 +11,6 @@ the project's file in [`docs/`](docs/README.md); what has been done is in [`CHAN
 - The site says it does not track, while visitors' browsers ask GitHub for star counts. Reword, or fetch the counts at build time only.
 - The setup page lists a download stack that a reader may take as piracy.
 - The Terrustia recording shows a game server's port (the game's default).
-- The share picture of the colophon post is out of date and is to be made again.
 - Page policy: whether the `blob:` allowance for pictures stays as it is ([mdQuire](docs/mdQuire.md#known-weak-spots)).
 - Looks that are a matter of taste, noted and not changed: terminals and the Playmatter clip play when scrolled to; on the photos page "another" falls just below the fold on a laptop; the mdQuire cover card is narrower than the others; on a phone the back-to-top button sits over text while reading; at 1920 wide the main pages leave the right half empty; on Comet the pull band runs off the left edge.
 
@@ -21,7 +20,6 @@ the project's file in [`docs/`](docs/README.md); what has been done is in [`CHAN
 - Where mdQuire differs from what a Docs user expects: a blank document starts in the body and not the title; Enter in a table cell moves down a row; the status reads "Not saved" while typing; the outline does not scroll to keep the current heading in view; arrow down past a picture lands at the end of the next line. Decide which to change.
 - Right-to-left paragraphs are laid out left to right.
 - About fifteen panels are sized by the window's full width, so in a narrow desktop window with classic scrollbars they meet the left edge.
-- Dictation: the model files are to be pinned to a revision and checked by digest; the hashes are to be read from Hugging Face and written into `models.ts`.
 
 ### The minis and Mote
 

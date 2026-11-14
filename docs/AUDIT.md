@@ -183,8 +183,8 @@ and 390 wide, with the browser at 150% and zoom at 200% and 50%. About 120 state
 - **Not verifiable here.** Safari, Firefox, phones, input methods on real devices, Windows AltGr, screen
   readers, a real voice, a real graphics card, Word, and the live site's headers.
 - **Design decisions.** Each is a line in `TODO.md` under "Waiting on a decision".
-- **Model files for dictation** are not yet pinned to a revision or checked by digest. The code has a place
-  for both.
+- **Model files for dictation** were not pinned at the time of the audit. They have been since: each tier
+  names a commit, and every file its digest, so a file changed upstream is refused.
 - **Slow on hostile input.** A line of 100,000 opening brackets takes the Markdown reader four seconds.
 
 ## The state at the end

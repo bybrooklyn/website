@@ -57,10 +57,10 @@ export interface Tier {
 export const HOST = "https://huggingface.co";
 
 /**
- * The tiers, the most accurate first. Their revisions are still the branch "main" and their files
- * carry no digest yet: pinning each to the commit its sizes were read from, and writing in the
- * SHA-256 of each file, needs those to be read from Hugging Face. The download and the check of
- * kept files use both as soon as they are filled in.
+ * The tiers, the most accurate first. Each is pinned to the commit its sizes and digests were read
+ * from on 13 November 2026 (the repository's listing for the large files, and the small text files
+ * fetched at that commit and hashed), so a file changed upstream is refused and not run. To move a
+ * tier to newer files, change its revision and every size and digest together.
  */
 export const TIERS: Tier[] = [
     {
@@ -72,11 +72,11 @@ export const TIERS: Tier[] = [
         mels: 128,
         card: true,
         repo: "Olicorne/parakeet-tdt-0.6b-v3-ultra-onnx",
-        revision: "main",
+        revision: "b27f93c2238aa35e138996c005a62f1e8430f801",
         files: [
-            { role: "encoder", path: "w4a8/encoder-model.w4a8.onnx", bytes: 383355483 },
-            { role: "decoder", path: "int8/decoder_joint-model.int8.onnx", bytes: 18203490 },
-            { role: "vocab", path: "vocab.txt", bytes: 93939 },
+            { role: "encoder", path: "w4a8/encoder-model.w4a8.onnx", bytes: 383355483, sha256: "500fe613585f866a9c96bfcea11219d3694eaf1f619e99e92ade788005fb8f35" },
+            { role: "decoder", path: "int8/decoder_joint-model.int8.onnx", bytes: 18203490, sha256: "667ffde2242a560923cba6bc7f69ef03d736f8a36ca9588f2e6f9fa818cf2fc1" },
+            { role: "vocab", path: "vocab.txt", bytes: 93939, sha256: "d58544679ea4bc6ac563d1f545eb7d474bd6cfa467f0a6e2c1dc1c7d37e3c35d" },
         ],
         license: "CC BY 4.0",
         credit: "Parakeet Ultra by moondream, trained from NVIDIA Parakeet TDT 0.6b v3; ONNX files by Olicorne",
@@ -89,11 +89,11 @@ export const TIERS: Tier[] = [
         engine: "parakeet",
         mels: 128,
         repo: "Olicorne/parakeet-tdt-0.6b-v3-redux-onnx",
-        revision: "main",
+        revision: "de66c10f18f6d94cb3e910e48034e45ce51109bc",
         files: [
-            { role: "encoder", path: "w2a8/encoder-model.w2a8.onnx", bytes: 189893007 },
-            { role: "decoder", path: "int8/decoder_joint-model.int8.onnx", bytes: 18203490 },
-            { role: "vocab", path: "vocab.txt", bytes: 93939 },
+            { role: "encoder", path: "w2a8/encoder-model.w2a8.onnx", bytes: 189893007, sha256: "7cf42a2785f1d009bdff79d2e9f57165a372923bbfd46c3d65bbd0e332225353" },
+            { role: "decoder", path: "int8/decoder_joint-model.int8.onnx", bytes: 18203490, sha256: "c729ceaebd43ef6581890079505d04ab5b40c0b7a87ca1f78ad6054c1eae3144" },
+            { role: "vocab", path: "vocab.txt", bytes: 93939, sha256: "d58544679ea4bc6ac563d1f545eb7d474bd6cfa467f0a6e2c1dc1c7d37e3c35d" },
         ],
         license: "CC BY 4.0",
         credit: "Parakeet Redux by moondream, trained from NVIDIA Parakeet TDT 0.6b v3; ONNX files by Olicorne",
@@ -105,11 +105,11 @@ export const TIERS: Tier[] = [
         who: "For phones, tablets and slow connections",
         engine: "moonshine",
         repo: "onnx-community/moonshine-tiny-ONNX",
-        revision: "main",
+        revision: "a6da1241cd305dcd64eab1edbd615f2bb9aabb95",
         files: [
-            { role: "encoder", path: "onnx/encoder_model.onnx", bytes: 30882331 },
-            { role: "decoder", path: "onnx/decoder_model_merged_int8.onnx", bytes: 20189512 },
-            { role: "tokenizer", path: "tokenizer.json", bytes: 3761754 },
+            { role: "encoder", path: "onnx/encoder_model.onnx", bytes: 30882331, sha256: "cbbf580f703b2af2137e0f6d14cd87f31cc67bd858bfd8715403a9489982d1a5" },
+            { role: "decoder", path: "onnx/decoder_model_merged_int8.onnx", bytes: 20189512, sha256: "bd126e9e95c62b2236116f676f80877ddde488599631014149f92196cd8ae3a7" },
+            { role: "tokenizer", path: "tokenizer.json", bytes: 3761754, sha256: "7b913404bdd039af4756783218af4440bc07fb7d6d8258d677e34f95b3ec416f" },
         ],
         license: "MIT",
         credit: "Moonshine tiny by Useful Sensors; ONNX files by onnx-community",

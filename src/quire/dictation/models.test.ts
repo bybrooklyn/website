@@ -36,11 +36,16 @@ describe("the tiers", () => {
 
 test("addressOf is the repository's resolve address for the file", () => {
     const tiny = tierOf("tiny");
-    expect(addressOf(tiny, tiny.files[0]!)).toBe("https://huggingface.co/onnx-community/moonshine-tiny-ONNX/resolve/main/onnx/encoder_model.onnx");
+    expect(addressOf(tiny, tiny.files[0]!)).toBe("https://huggingface.co/onnx-community/moonshine-tiny-ONNX/resolve/a6da1241cd305dcd64eab1edbd615f2bb9aabb95/onnx/encoder_model.onnx");
 });
 
 test("addressOf fetches at the tier's revision, which every tier names", () => {
     for (const tier of TIERS) expect(tier.revision.length).toBeGreaterThan(0);
+    // every tier is pinned to a commit, never a branch, and every file has its digest
+    for (const tier of TIERS) {
+        expect(tier.revision).toMatch(/^[0-9a-f]{40}$/);
+        for (const file of tier.files) expect(file.sha256).toMatch(/^[0-9a-f]{64}$/);
+    }
     const tiny = { ...tierOf("tiny"), revision: "0123abcd" };
     expect(addressOf(tiny, tiny.files[0]!)).toBe("https://huggingface.co/onnx-community/moonshine-tiny-ONNX/resolve/0123abcd/onnx/encoder_model.onnx");
 });
