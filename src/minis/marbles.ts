@@ -87,7 +87,7 @@ function drawingOf(kind: Kind): Drawing {
         if (length.section === "tube") glass.push({ mesh: piece.mesh() });
         else {
             const path = length.path;
-            const straight = "points" in path && path.points.length === 2 && path.start[0] * path.end[0] + path.start[1] * path.end[1] + path.start[2] * path.end[2] > 1 - 1e-12;
+            const straight = !length.bend && "points" in path && path.points.length === 2 && path.start[0] * path.end[0] + path.start[1] * path.end[1] + path.start[2] * path.end[2] > 1 - 1e-12;
             wood.push({ mesh: blockMesh(piece, straight) });
         }
     }
@@ -99,6 +99,8 @@ function drawingOf(kind: Kind): Drawing {
     const flat = [...shape.boxes, ...shape.stands].map((box) => ({ mesh: block(box.half), by: box.at }));
     const made: Drawing = { wood: merged(wood, true), flat: merged(flat, false), glass: merged(glass, true) };
     drawings.set(key, made);
+    // a bend dragged is a new drawing at every millimetre; the oldest are let go
+    if (drawings.size > 400) drawings.delete(drawings.keys().next().value!);
     return made;
 }
 
