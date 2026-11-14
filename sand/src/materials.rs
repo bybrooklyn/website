@@ -241,6 +241,8 @@ pub const REACTIONS: &[Reaction] = &[
     line(WOOD, OPEN, 90, 255, EMBER, SAME, 384, Heat::Kept, 0),
     // lava lights what burns where it touches it
     line(WOOD, LAVA, 0, 255, EMBER, SAME, 64, Heat::Kept, 0),
+    // a flame licking wood lights it now and then, however cool the wood still is
+    line(WOOD, FIRE, 0, 255, EMBER, SAME, 48, Heat::Kept, 0),
     // oil hot enough, with air beside it, bursts into flame; a flame lights the oil it touches
     line(OIL, OPEN, 85, 255, FIRE, SAME, 512, Heat::Kept, 230),
     line(OIL, LAVA, 0, 255, FIRE, SAME, 256, Heat::Kept, 230),
