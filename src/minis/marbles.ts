@@ -29,7 +29,7 @@ import { AXES, ARROW, RING, across, along, arrowMesh, layout, ringMesh, standOff
 import { begun, canRedo, canUndo, readSteps, recorded, redone, trimmed, undone, type Steps } from "./history";
 import { NARROW, STRAIGHT, eyeOf, enters, framing, ground, kept, lensed, nearest, panned, project, ray, straightOn, type Orbit } from "./orbit";
 import { BOX, CELL, LEVEL, RADIUS, blockMesh, boxToWorld, keyOf, shapeOf, sweepOf, toWorld, wayToWorld, type Box, type Kind, type Place } from "./pieces";
-import { jointsOf, links, open, read, write, type Open, type Placed } from "./run";
+import { jointsOf, links, open, read, upgraded, write, type Open, type Placed } from "./run";
 import { RUNS } from "./runs";
 import { PILLAR } from "./supports";
 import { makeTable } from "./table";
@@ -261,7 +261,7 @@ export default function marbles(m: Mote): Scene {
     let lens = DEGREES;
     let lensTo = DEGREES;
     /** Every state of the run, for undo; what was copied; the pieces of one's own. */
-    let steps: Steps = begun("v1");
+    let steps: Steps = begun(write([]));
     let clip = "";
     let owns: Own[] = m.preview ? [] : m.recall<Own[]>("marbles-own", [], 1).filter((one) => typeof one?.name === "string" && typeof one?.text === "string");
     /** The handle the mouse is over, lit a little. */
@@ -1340,6 +1340,8 @@ export default function marbles(m: Mote): Scene {
         }
         nextId = run.reduce((most, piece) => Math.max(most, piece.id), 0) + 1;
         const kept = m.preview ? undefined : readSteps(m.recall("marbles-steps", undefined, 1));
+        // steps kept in the form before bends are read in the form written now, so that they still end at the run
+        if (kept) kept.texts = kept.texts.map(upgraded);
         // undo carries on from the last visit, if it was left at this run
         steps = kept && kept.texts[kept.at] === write(run) ? kept : begun(write(run));
         changed(false);

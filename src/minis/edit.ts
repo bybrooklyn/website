@@ -9,10 +9,12 @@
 //   groupSnaps(run, group);               // every way the group fits against an open joint
 //
 // Every move is in whole cells, whole levels and quarter turns, so a group moved stays on the grid and
-// its joints meet others exactly, as single pieces do (run.ts).
+// its joints meet others exactly, as single pieces do (run.ts). A bend (pieces.ts) goes with its piece
+// through all of it: turned and moved with it, reflected with it, and carried to a longer or shorter
+// form of it.
 
-import { CELL, LEVEL, SIZES, allowed, shapeOf, toWorld, type Family, type Kind, type Place } from "./pieces";
-import { fits, jointsOf, links, open, read, type Open, type Placed } from "./run";
+import { BENDABLE, CELL, LEVEL, SIZES, allowed, brokenBy, isBent, keyOf, pointsAt, pointsOf, shapeOf, toWorld, withBend, type Family, type Kind, type Place } from "./pieces";
+import { fits, jointsOf, links, open, read, write, type Open, type Placed } from "./run";
 import type { V3 } from "../mote/solids";
 
 /** A move of pieces as one: quarter turns about the corner at the origin, then whole cells across and along and whole levels up. */
@@ -145,7 +147,12 @@ const PLAIN = new Set<Family>(["s", "d", "v", "h", "t"]);
 export function mirrored(group: Placed[], across: "x" | "z", twice: number): Placed[] {
     return group.map((piece) => {
         const { x, z, y, turn } = piece.place;
-        const kind: Kind = { ...piece.kind, sizes: [...piece.kind.sizes], mirror: PLAIN.has(piece.kind.family) ? false : !piece.kind.mirror };
+        // a piece the same mirrored stays unmirrored, so its bend is reflected instead: each point moved
+        // aside the other way. A piece that is mirrored keeps its bend, which is of the piece before it
+        // is mirrored, and so is reflected with it
+        const plain = PLAIN.has(piece.kind.family);
+        const bend = plain ? piece.kind.bend?.map((value, i) => (i % 2 ? -value : value)) : piece.kind.bend;
+        const kind: Kind = withBend({ ...piece.kind, mirror: plain ? false : !piece.kind.mirror }, bend);
         // A piece's own mirror reflects it across the row of its first joint, a cell's middle from its
         // corner; reflecting the world instead turns its turns the other way, and leaves it that cell's
         // width over, which is taken back (worked out in docs/marbles.md, stage 3)
@@ -192,7 +199,8 @@ export const resizable = (kind: Kind) => RESIZABLE[kind.family] !== undefined;
 export function resized(kind: Kind, wanted: V3): Kind {
     const which = RESIZABLE[kind.family];
     if (!which || !resizable(kind)) return kind;
-    let best = { kind, d: Infinity };
+    // the far joint is where it is whatever the bend, so the forms are compared as made
+    let best = { kind: withBend(kind), d: Infinity };
     const tryIt = (sizes: number[]) => {
         if (!allowed(kind.family, sizes)) return;
         const made: Kind = { family: kind.family, sizes, mirror: kind.mirror };
@@ -207,15 +215,37 @@ export function resized(kind: Kind, wanted: V3): Kind {
         for (let size = limits[at]![0]; size <= limits[at]![1]; size++) grow(index + 1, sizes.map((one, i) => (i === at ? size : one)));
     };
     grow(0, [...kind.sizes]);
-    return best.kind;
+    return sameSize(best.kind, kind) ? kind : rebent(kind, best.kind);
+}
+
+const sameSize = (a: Kind, b: Kind) => a.family === b.family && a.sizes.join() === b.sizes.join();
+
+/**
+ * A bent piece made longer or shorter, still bent: its bend is read at the new piece's points, as far
+ * along each as they are, from the curve through the old ones (so a bow stays a bow), and kept only if
+ * it can still be built there; else the new piece is as made.
+ */
+export function rebent(from: Kind, to: Kind): Kind {
+    if (!isBent(from) || !BENDABLE.has(to.family)) return withBend(to);
+    const [before, after] = [pointsAt(pointsOf(from)), pointsAt(pointsOf(to))];
+    const bend = from.bend!;
+    // each number as a curve along the piece through the old points, naught at both ends: a piecewise line
+    const read = (u: number, which: number) => {
+        const xs = [0, ...before, 1];
+        const ys = [0, ...before.map((_, i) => bend[2 * i + which]!), 0];
+        let k = 0;
+        while (k + 2 < xs.length && u > xs[k + 1]!) k++;
+        return ys[k]! + ((ys[k + 1]! - ys[k]!) * (u - xs[k]!)) / (xs[k + 1]! - xs[k]!);
+    };
+    const kind = withBend(to, after.flatMap((u) => [read(u, 0), read(u, 1)]));
+    return brokenBy(kind) ? withBend(to) : kind;
 }
 
 /** A group as a piece of one's own: written as a run, moved so that its middle is at the corner (0, 0) and its lowest part stands on the ground. */
 export function asOwn(group: Placed[]): string {
     const [px, pz] = pivotOf(group);
     const low = Math.min(...group.map((piece) => piece.place.y + shapeOf(piece.kind).low));
-    const placed = group.map((piece) => moved(piece, { turn: 0, x: -px, z: -pz, y: -low }));
-    return ["v1", ...placed.map((piece) => piece.kind.family + [...piece.kind.sizes, piece.place.x, piece.place.z, piece.place.y, piece.place.turn + (piece.kind.mirror ? 4 : 0)].join("_"))].join(".");
+    return write(group.map((piece) => moved(piece, { turn: 0, x: -px, z: -pz, y: -low })));
 }
 
 /**
@@ -225,10 +255,10 @@ export function asOwn(group: Placed[]): string {
  */
 export function matched(before: Placed[], text: string, next: number): { run: Placed[]; next: number } {
     const free = new Map<string, number[]>();
-    const keyOf = (piece: Placed) => `${piece.kind.family}${piece.kind.sizes.join(".")}${piece.kind.mirror ? "m" : ""} ${piece.place.x} ${piece.place.z} ${piece.place.y} ${piece.place.turn}`;
-    for (const piece of before) free.set(keyOf(piece), [...(free.get(keyOf(piece)) ?? []), piece.id]);
+    const keyFor = (piece: Placed) => `${keyOf(piece.kind)} ${piece.place.x} ${piece.place.z} ${piece.place.y} ${piece.place.turn}`;
+    for (const piece of before) free.set(keyFor(piece), [...(free.get(keyFor(piece)) ?? []), piece.id]);
     const run = read(text).map((piece) => {
-        const ids = free.get(keyOf(piece));
+        const ids = free.get(keyFor(piece));
         const id = ids?.length ? ids.shift()! : next++;
         return { ...piece, id };
     });
