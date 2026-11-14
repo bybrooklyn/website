@@ -33,7 +33,8 @@
 //! `clock=`, `skip=`, `ease=`, `strength=`, `seconds=`, touch's `touch=` (0 for a body that feels no
 //! touch) and `visitor=` (seconds between practice's visitor's visits, 0 for none), and learning's `entropy=`, `rate=`, `spread=`,
 //! `gamma=`; the brain's pool (`generalist::pool`): `memory=`, `rhythm=`, `mood=`, `reads=` and the
-//! window learning goes back through, `window=`. `amounts=a,b,c,d` sets the world's four amounts (1 each unless given). Each mark prints
+//! window learning goes back through, `window=`, and `plastic=0` for memory reads that do
+//! not change during a run; `slip=` the share of practice runs in which the ground goes slippery partway. `amounts=a,b,c,d` sets the world's four amounts (1 each unless given). Each mark prints
 //! an `open` line beside the main one, the gait on open ground in the same worlds, and with `flat=1` a
 //! `flat` line, on level ground with nothing on it. `kept=<path>` measures a learner the page kept
 //! (`<path>.state`, `<path>.running` and, for a brain with a pool, `<path>.form`, one number to a line)
@@ -204,6 +205,8 @@ fn main() {
                 "mood" => settings.shape.mood = value as usize,
                 "reads" => settings.shape.reads = value as usize,
                 "window" => settings.window = value as usize,
+                "plastic" => settings.plastic = on,
+                "slip" => way.slip = value,
                 _ => panic!("no setting called {name}"),
             }
         }

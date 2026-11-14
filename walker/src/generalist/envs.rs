@@ -181,6 +181,10 @@ pub struct Run {
     pub ahead: bool,
     /// What it has been and seen in this run, for a creature that is curious (`curious`).
     pub curiosity: Option<Curiosity>,
+    /// A change of the ground under it during the run, for practice's and the page's creatures that
+    /// meet one: at this step of its run its feet and body grip with this friction from then on (the
+    /// ground's own grip is each body's, `physics::contact`), so the ground has gone slippery.
+    pub slip: Option<(u32, f32)>,
 }
 
 impl Run {
@@ -190,7 +194,7 @@ impl Run {
         let body = Body::build(&mut stage.world, legs)?;
         stage.keep(stage.world.bodies[body.creature.torso as usize].position.x);
         // the jolt of a body at rest: gravity, felt as one up
-        Some(Run { stage, body, judge: Judge::new(seconds), seen: [(0.0, Seen::Nothing); RAYS], feet: [(0.0, true); 4], jolt: Vec2::new(0.0, 1.0), last_velocity: Vec2::ZERO, visits: None, ahead: false, curiosity: None })
+        Some(Run { stage, body, judge: Judge::new(seconds), seen: [(0.0, Seen::Nothing); RAYS], feet: [(0.0, true); 4], jolt: Vec2::new(0.0, 1.0), last_velocity: Vec2::ZERO, visits: None, ahead: false, curiosity: None, slip: None })
     }
 
     /// Makes this run the same as another, reusing its memory.
@@ -202,6 +206,7 @@ impl Run {
         self.feet = other.feet;
         self.jolt = other.jolt;
         self.last_velocity = other.last_velocity;
+        self.slip = other.slip;
         self.visits.clone_from(&other.visits);
         self.ahead = other.ahead;
         self.curiosity.clone_from(&other.curiosity);
@@ -277,7 +282,20 @@ impl Run {
                 needs.appearing = Some(appearing);
             }
         }
+        if let Some((step, friction)) = self.slip
+            && self.judge.steps == step
+        {
+            self.slippery(friction);
+        }
         self.body.drive(&mut self.stage.world, actions);
+    }
+
+    /// Every part of the creature grips with this friction from now on.
+    pub fn slippery(&mut self, friction: f32) {
+        let creature = &self.body.creature;
+        for part in core::iter::once(creature.torso).chain(creature.legs.iter().flat_map(|leg| [leg.upper, leg.lower])) {
+            self.stage.world.bodies[part as usize].friction = friction;
+        }
     }
 
     /// How far it has gone from the start.

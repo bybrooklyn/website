@@ -93,6 +93,8 @@ pub struct Settings {
     /// How many decisions learning goes back through at once with a pool (the most that divides
     /// `steps`).
     pub window: usize,
+    /// Whether the pool's memory reads are plastic (`Pool::plastic`): a trial's switch.
+    pub plastic: bool,
 }
 
 impl Default for Settings {
@@ -118,6 +120,7 @@ impl Default for Settings {
             scale_rewards: true,
             shape: Shape::PLAIN,
             window: 16,
+            plastic: true,
         }
     }
 }
@@ -325,7 +328,8 @@ impl Learner {
         let samples = s.steps * count;
         let minibatch = (samples / s.minibatches.max(1)).max(1);
         let recurrent = pooled.then(|| {
-            let recurrent = Recurrent::new(shape, pool, senses, s.hidden, count, s.steps, s.window, minibatch, at[4] + actions, feelings);
+            let mut recurrent = Recurrent::new(shape, pool, senses, s.hidden, count, s.steps, s.window, minibatch, at[4] + actions, feelings);
+            recurrent.pool.plastic = s.plastic;
             recurrent.pool.first(&mut weights[at[4] + actions..], &mut random);
             alloc::boxed::Box::new(recurrent)
         });

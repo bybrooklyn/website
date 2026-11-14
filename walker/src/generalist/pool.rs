@@ -101,6 +101,9 @@ pub struct Pool {
     pub reads: Vec<u32>,
     /// The same, as places in the list of sources.
     from: Vec<u32>,
+    /// Whether its memory neurons' reads are plastic; without, fast weights stay at nothing (a trial's
+    /// switch, to see what plasticity does; not kept in its form).
+    pub plastic: bool,
 }
 
 /// The rate per decision of the slowest and quickest rhythm at the start, in turns a second for a
@@ -122,7 +125,7 @@ impl Pool {
     /// sensed, the first plain layer and the pool. A mood first reads the senses in `feelings` (energy,
     /// touch and the like), as many as it has room for.
     pub fn new(shape: Shape, senses: usize, plain: usize, feelings: &[usize], random: &mut Random) -> Pool {
-        let mut pool = Pool { shape, senses, plain, reads: Vec::new(), from: Vec::new() };
+        let mut pool = Pool { shape, senses, plain, reads: Vec::new(), from: Vec::new(), plastic: true };
         let all = pool.codes();
         for kind in 0..3 {
             let count = [shape.memory, shape.rhythm, shape.mood][kind];
@@ -259,7 +262,7 @@ impl Pool {
         // each neuron's reads gathered side by side, so the sums over them go as the dense layers' do
         let (mut got, mut through) = (vec![0.0; k], vec![0.0; k]);
         let decays: Vec<f32> = (0..PLASTIC_GROUPS).map(|g| if s.memory > 0 { sigmoid(weights[groups + g]) } else { 0.0 }).collect();
-        let rates: Vec<f32> = (0..PLASTIC_GROUPS).map(|g| if s.memory > 0 { sigmoid(weights[groups + PLASTIC_GROUPS + g]) } else { 0.0 }).collect();
+        let rates: Vec<f32> = (0..PLASTIC_GROUPS).map(|g| if s.memory > 0 && self.plastic { sigmoid(weights[groups + PLASTIC_GROUPS + g]) } else { 0.0 }).collect();
         let mood_rates: Vec<f32> = (0..s.mood).map(|m| sigmoid(weights[mood + m * (k + 2) + k + 1])).collect();
         for r in 0..rows {
             let state = &mut state[r * wide..(r + 1) * wide];
@@ -365,7 +368,7 @@ impl Pool {
         let mut back = vec![0.0f32; wide];
         let (mut got, mut through) = (vec![0.0f32; k], vec![0.0f32; k]);
         let decays: Vec<f32> = (0..PLASTIC_GROUPS).map(|g| if s.memory > 0 { sigmoid(weights[groups + g]) } else { 0.0 }).collect();
-        let rates: Vec<f32> = (0..PLASTIC_GROUPS).map(|g| if s.memory > 0 { sigmoid(weights[groups + PLASTIC_GROUPS + g]) } else { 0.0 }).collect();
+        let rates: Vec<f32> = (0..PLASTIC_GROUPS).map(|g| if s.memory > 0 && self.plastic { sigmoid(weights[groups + PLASTIC_GROUPS + g]) } else { 0.0 }).collect();
         for t in (0..steps).rev() {
             for r in 0..rows {
                 let row = t * rows + r;
@@ -517,7 +520,7 @@ impl Pool {
             };
             found.map(|n| (part << 16) | n as u32)
         };
-        let mut pool = Pool { shape, senses: self.senses, plain: self.plain, reads: Vec::new(), from: Vec::new() };
+        let mut pool = Pool { shape, senses: self.senses, plain: self.plain, reads: Vec::new(), from: Vec::new(), plastic: self.plastic };
         let all = pool.codes();
         let fresh_weights = {
             let mut w = vec![0.0; shape.weights()];
@@ -611,7 +614,7 @@ impl Pool {
         if shape.neurons() > 4096 || shape.reads > 256 || form.len() != 4 + shape.neurons() * shape.reads {
             return None;
         }
-        let mut pool = Pool { shape, senses, plain, reads: form[4..].iter().map(|&x| x as u32).collect(), from: Vec::new() };
+        let mut pool = Pool { shape, senses, plain, reads: form[4..].iter().map(|&x| x as u32).collect(), from: Vec::new(), plastic: true };
         let all = pool.codes();
         if !pool.reads.iter().all(|code| all.contains(code)) {
             return None;

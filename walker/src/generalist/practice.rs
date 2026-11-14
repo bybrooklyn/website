@@ -282,6 +282,10 @@ pub struct Way {
     pub appear: f32,
     /// The energy a run starts with; less than 0 for any, drawn evenly from `LOWEST_START` to full.
     pub energy: f32,
+    /// The share of runs in which the ground goes slippery partway (`Run::slip`): its grip falls to
+    /// `SLIPPERY` at a moment drawn from 5 to 20 seconds in. A world that changes while it lives, for
+    /// connections that change during a run to have something to adapt to.
+    pub slip: f32,
 }
 
 impl Way {
@@ -313,6 +317,13 @@ impl Way {
         }
         if self.needs || self.gaze {
             run.curiosity = Some(super::curious::Curiosity::default());
+        }
+        if self.slip > 0.0 {
+            let mut random = crate::learn::Random::new(seed as u64 ^ 0x736c_6970_0000_0000);
+            if random.unit() < self.slip {
+                let at = (5.0 + 15.0 * random.unit()) / crate::physics::STEP;
+                run.slip = Some((at as u32, SLIPPERY));
+            }
         }
         if self.hip > 0.0 {
             for joints in run.body.creature.joints.chunks(2) {
@@ -366,7 +377,7 @@ impl Way {
         if legs == 2 {
             shaping = Shaping { knee: 1.0, upright: 0.5, down: 0.0, lean: 1.0, pace: 1.0, stall: 3.0, impact: 0.05, ..shaping };
         }
-        Way { legs, direct: true, skip: 4, seconds: 30.0, shaping, hop: false, ramp: 4_000_000, ease: 1.0, strength: 1.0, hip: 0.0, clock: legs != 2, touch: true, visitor: if legs == 2 { VISITOR } else { 0.0 }, visiting: 1.0, needs: true, gaze: true, play: PLAY, appear: APPEAR, energy: -1.0 }
+        Way { legs, direct: true, skip: 4, seconds: 30.0, shaping, hop: false, ramp: 4_000_000, ease: 1.0, strength: 1.0, hip: 0.0, clock: legs != 2, touch: true, visitor: if legs == 2 { VISITOR } else { 0.0 }, visiting: 1.0, needs: true, gaze: true, play: PLAY, appear: APPEAR, energy: -1.0, slip: 0.0 }
     }
 }
 
@@ -388,6 +399,8 @@ const FIRST_MADE: f32 = 30.0;
 pub const LOWEST_START: f32 = 0.2;
 pub const MEASURED_ENERGY: f32 = 0.7;
 pub const RESTFUL: f32 = 0.6;
+/// The grip of a ground gone slippery (`Way::slip`), against the 0.6 every part has.
+pub const SLIPPERY: f32 = 0.15;
 
 /// What a unit of discomfort is worth, what curiosity pays for each unit of new places and of new
 /// things seen, and how many seconds apart food appears, on average (`Shaping`, `Way`).
