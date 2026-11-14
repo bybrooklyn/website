@@ -48,7 +48,7 @@ export async function start(bytes: ArrayBuffer): Promise<Engine> {
 }
 
 /** How a material moves, by the number `kind` gives. */
-export const KINDS = ["empty", "solid", "powder", "liquid", "gas", "void"] as const;
+export const KINDS = ["empty", "solid", "powder", "liquid", "gas", "void", "fire"] as const;
 
 /** A material the brush can pour. */
 export interface Material {

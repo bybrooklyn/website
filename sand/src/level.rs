@@ -71,6 +71,18 @@ impl Levels {
         }
     }
 }
+/// What finding a body came to. Made once a body and used at once, never kept, so the moves are
+/// carried in it rather than put on the heap, which the step never uses.
+#[allow(clippy::large_enum_variant)]
+/// What finding a body came to.
+enum Found {
+    /// It is level: nothing to move.
+    Still,
+    /// It has cells to move, and its highest top is in this column.
+    Top(i64),
+    /// Its moves, how many, and its first cell.
+    Moves([(u32, u32); PER_BODY], usize, u32),
+}
 
 /// Keeps the `PER_BODY` smallest ranks in `list`, smallest first.
 fn keep(list: &mut [(u64, u32)], count: &mut usize, rank: u64, cell: u32) {
@@ -116,7 +128,7 @@ impl World {
                 for x in rect.x0..=rect.x1 {
                     let at = self.index(x, y);
                     let cell = self.cells[at];
-                    if matches!(TABLE[material(cell) as usize].kind, Kind::Liquid | Kind::Gas) && !self.counted(at) {
+                    if TABLE[material(cell) as usize].level && !self.counted(at) {
                         self.body(at);
                     }
                 }
@@ -134,10 +146,15 @@ impl World {
                 let empty = material(there) == crate::materials::EMPTY;
                 if still && open(kind, there) && (empty || clock_of(there) != self.clock) {
                     self.cells[to] = with_state(here, self.clock, 0);
-                    self.cells[from] = if empty { self.clock << 24 } else { with_state(there, self.clock, 0) };
+                    // what was there, air or a gas, goes back with its heat
+                    self.cells[from] = with_state(there, self.clock, 0);
                     let (tx, ty) = self.place(to);
                     self.touch(fx, fy, fx, fy);
                     self.touch(tx, ty, tx, ty);
+                    if crate::world::temperature(here) != crate::world::temperature(there) || crate::world::restless(here) || crate::world::restless(there) {
+                        self.warmed(fx, fy, fx, fy);
+                        self.warmed(tx, ty, tx, ty);
+                    }
                 } else if still {
                     // another body took its place: it tries again next step
                     self.stay(fx, fy);
@@ -161,6 +178,30 @@ impl World {
     /// Finds the body of liquid or gas that the cell at `seed` belongs to, a row of cells at a time,
     /// and keeps what it should move.
     fn body(&mut self, seed: usize) {
+        // Of open places equally low, the nearest to the body's highest top go first, so a lake
+        // poured into at one end rises there first and the water spreads out from it rather than
+        // appearing at the far shore. Where that top is is known only once the body has been
+        // found, so a body with anything to move is found twice, the second time ranking its places
+        // by how far they are from it. A body at rest is found once.
+        let mut reference: Option<i64> = None;
+        loop {
+            let moves = self.find(seed, reference);
+            match moves {
+                Found::Still => return,
+                Found::Top(column) if reference.is_none() => reference = Some(column),
+                Found::Top(_) => return,
+                Found::Moves(moves, length, first) => {
+                    self.keep_moves(moves, length, first);
+                    return;
+                }
+            }
+        }
+    }
+
+    /// Finds the body the cell at `seed` belongs to and what it should move: its highest tops
+    /// paired with its lowest open places, ranked among equals by how far they are from the column
+    /// `reference`, or, with none, gives where its highest top is.
+    fn find(&mut self, seed: usize, reference: Option<i64>) -> Found {
         self.levels.body += 1;
         let id = self.levels.body;
         let liquid = material(self.cells[seed]);
@@ -176,6 +217,9 @@ impl World {
         // ties go to the left on one step and the right on the next, so nothing drifts
         let leftward = self.steps.is_multiple_of(2);
         let tie = |at: usize| if leftward { at as u64 } else { u32::MAX as u64 - at as u64 };
+        // ties of distance go left on one step and right on the next
+        let from = reference.unwrap_or(0);
+        let near = |at: usize| ((at % s) as i64 - from).unsigned_abs() * 2 + (((at % s) as i64 > from) == leftward) as u64;
         let bottom = (self.height + 2 * crate::world::BORDER as i32) as u64;
         let height = |row: u64| if gas { row } else { bottom - row };
         self.levels.tops_count = 0;
@@ -212,7 +256,7 @@ impl World {
                     keep(&mut levels.tops, &mut levels.tops_count, ((bottom - height(row)) << 32) | tie(at), at as u32);
                     if levels.marks[past] != PLACE | id {
                         levels.marks[past] = PLACE | id;
-                        keep(&mut levels.places, &mut levels.places_count, (height(beyond) << 32) | tie(past), past as u32);
+                        keep(&mut levels.places, &mut levels.places_count, (height(beyond) << 32) | if reference.is_some() { near(past) } else { tie(past) }, past as u32);
                     }
                 }
             }
@@ -221,7 +265,7 @@ impl World {
                 let rest = cells[under(end)];
                 if open(kind, cells[end]) && !open(kind, rest) && material(rest) != crate::materials::VOID && levels.marks[end] != PLACE | id {
                     levels.marks[end] = PLACE | id;
-                    keep(&mut levels.places, &mut levels.places_count, (height(row) << 32) | tie(end), end as u32);
+                    keep(&mut levels.places, &mut levels.places_count, (height(row) << 32) | if reference.is_some() { near(end) } else { tie(end) }, end as u32);
                 }
             }
             // the rows above and below: one start for each run of cells that join
@@ -249,9 +293,18 @@ impl World {
             length += 1;
         }
         if length == 0 {
-            return;
+            return Found::Still;
         }
-        // kept in order of first cell; past `BODIES`, the body with the largest first cell waits
+        if reference.is_none() {
+            return Found::Top((levels.tops[0].1 as usize % s) as i64);
+        }
+        Found::Moves(moves, length, first)
+    }
+
+    /// Keeps a body's moves to be made this step, in order of the body's first cell; past
+    /// `BODIES`, the body with the largest first cell waits a step.
+    fn keep_moves(&mut self, moves: [(u32, u32); PER_BODY], length: usize, first: u32) {
+        let levels = &mut self.levels;
         let count = levels.count;
         if count == BODIES && first > levels.keys[BODIES - 1] {
             let (x, y) = self.place(moves[0].0 as usize);

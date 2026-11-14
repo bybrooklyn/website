@@ -1,5 +1,5 @@
-// The sand mini, as stage 1 of docs/sand.md leaves it: a box of sand, water, stone, dirt and steam,
-// poured with the pointer, drawn plainly. The engine is the Rust crate in sand/, built to WebAssembly
+// The sand mini, as stage 2 of docs/sand.md leaves it: a box of every material in the engine's table,
+// each a button, poured with the pointer, drawn plainly. The engine is the Rust crate in sand/, built to WebAssembly
 // (grains.ts). Its cells are drawn through Mote's grid (src/mote/cells.ts), read straight out of the
 // engine's memory, only the rows that changed. The world steps sixty times a second while anything in
 // it moves or a pointer is pouring, and rests otherwise, as Mote does when out of sight.
@@ -8,7 +8,7 @@ import { cells, cellUnder, fitted, type Place } from "../mote/cells";
 import { el, type Mote, type Scene } from "../mote/stage";
 import { engineAddress, fillOf, materials, start, STEPS_PER_SECOND, worldFor, type Engine, type Material } from "./grains";
 
-export const label = "A box of sand, water, stone, dirt and steam, poured with the pointer.";
+export const label = "A box of sand, water, fire, lava and more, poured with the pointer.";
 
 export default function sand(m: Mote): Scene {
     // the cells are drawn on a second canvas under the one that takes the pointer, as Dice's tower is

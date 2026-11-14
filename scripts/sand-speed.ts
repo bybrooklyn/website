@@ -1,5 +1,6 @@
-// How long a step of the sand engine takes in the browser: the worlds of sand/examples/speed.rs (a full
-// world of falling sand, a dam of water let go, a settled world with one small pour), run in the built
+// How long a step of the sand engine takes in the browser: the worlds of sand/examples/speed.rs (a forest
+// fire across a full world, a full world of falling sand, a dam of water let go, a settled world with one
+// small pour), run in the built
 // modules, with SIMD and without, in headless Chromium. Run with `bun scripts/sand-speed.ts`, after
 // `bun run wasm`; to hold it to four cores, `taskset -c 0-3 bun scripts/sand-speed.ts`. Two paths after
 // it measure two other builds in their place, the first called "with SIMD" and the second "without".
@@ -14,8 +15,18 @@ import { at } from "./lib";
 const page = (simd: string, scalar: string) => `<!doctype html><script>
 const bytes = (text) => Uint8Array.from(atob(text), (c) => c.charCodeAt(0));
 const modules = { "with SIMD": bytes("${simd}"), "without SIMD": bytes("${scalar}") };
-const [SAND, WATER, STONE, DIRT] = [1, 2, 3, 4];
+const [SAND, WATER, STONE, DIRT, WOOD, FIRE] = [1, 2, 3, 4, 8, 13];
 const W = 1024, H = 576;
+// the forest of sand/examples/speed.rs: a floor of dirt and trees every 9 cells, each a trunk and a crown
+function forest(e) {
+    e.create(W, H, 1, 0);
+    e.paint(DIRT, 0, H - 6, W - 1, H - 1, 3, 100, 0);
+    for (let x = 6, k = 0; x < W - 4; x += 9, k++) {
+        const top = 220 + ((k * 7) % 5) * 2;
+        e.paint(WOOD, x, top, x, H - 8, 1, 100, 0);
+        e.paint(WOOD, x, top, x, top, 4, 100, 0);
+    }
+}
 function time(e, n, between) {
     let total = 0, slowest = 0;
     for (let k = 0; k < n; k++) {
@@ -44,6 +55,11 @@ window.results = (async () => {
         const fresh = async () => (await WebAssembly.instantiate(code, {})).instance.exports;
         const rows = {};
         let e = await fresh();
+        forest(e);
+        rows["a forest fire lit all along, the first 1200 steps"] = time(e, 1200, (w) => {
+            if (w.steps() < 40) w.paint(FIRE, 0, H - 14, W - 1, H - 14, 2, 30, 0);
+        });
+        e = await fresh();
         e.create(W, H, 1, 0);
         for (let y = 0; y < H; y++) e.paint(SAND, 0, y, W - 1, y, 0, 50, 0);
         rows["falling sand, the first 120 steps"] = time(e, 120);

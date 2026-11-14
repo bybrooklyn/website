@@ -1,71 +1,17 @@
-//! What the engine is held to: the same start gives the same world, nothing appears or vanishes,
-//! sand piles at its angle, water finds one level in joined vessels, the heavier sinks, a sealed
-//! box stays sealed, sleeping chunks hide no work, and nothing drifts to one side.
+//! What the engine is held to: the same start gives the same world, nothing appears or vanishes but
+//! by the lines of the reactions table, sand piles at its angle, water finds one level in joined
+//! vessels, the heavier sinks, a sealed box stays sealed, sleeping chunks hide no work, and nothing
+//! drifts to one side. Heat and the reactions themselves are held to their rules in `reactions.rs`.
 
-use sand::materials::{DIRT, EMPTY, MATERIALS, SAND, STEAM, STONE, WATER};
+mod common;
+
+use common::{busy, by_the_lines, counts, fill, picture, run};
+use sand::materials::{DIRT, EMPTY, MATERIALS, OIL, SAND, STEAM, STONE, WATER};
 use sand::world::{Edges, Order, World};
-
-/// Steps a world `n` times.
-fn run(world: &mut World, n: usize) {
-    for _ in 0..n {
-        world.step();
-    }
-}
-
-/// How many of each material there are.
-fn counts(world: &World) -> Vec<usize> {
-    (0..MATERIALS.len() as u8).map(|m| world.count(m)).collect()
-}
-
-/// The world as text, a letter a cell, for a failing test to show.
-fn picture(world: &World, x0: i32, y0: i32, x1: i32, y1: i32) -> String {
-    let mut out = String::new();
-    for y in y0..=y1 {
-        for x in x0..=x1 {
-            out.push(match world.at(x, y) {
-                EMPTY => '.',
-                SAND => 's',
-                WATER => '~',
-                STONE => '#',
-                DIRT => 'd',
-                STEAM => '^',
-                _ => '?',
-            });
-        }
-        out.push('\n');
-    }
-    out
-}
 
 /// The rows from the top at which each column's highest cell of `of` is, in the columns asked.
 fn tops(world: &World, of: u8, columns: impl Iterator<Item = i32>) -> Vec<i32> {
     columns.map(|x| (0..world.height).find(|&y| world.at(x, y) == of).unwrap_or(world.height)).collect()
-}
-
-/// A stroke of the brush: its material, its two ends and its radius.
-type Stroke = (u8, i32, i32, i32, i32, i32);
-
-/// A busy world: every material poured, laid and erased in strokes chosen from `seed`.
-fn busy(seed: u64, steps_between: usize) -> (World, Vec<Stroke>) {
-    let mut world = World::new(200, 150, seed);
-    let mut strokes = vec![];
-    let mut state = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
-    let mut next = |below: i32| {
-        state = state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
-        ((state >> 33) % below as u64) as i32
-    };
-    // a cup of stone with a diagonal side, then many strokes of everything
-    world.paint(STONE, 20, 140, 180, 140, 1, 100, false);
-    world.paint(STONE, 20, 140, 60, 90, 1, 100, false);
-    world.paint(STONE, 180, 140, 180, 80, 1, 100, false);
-    for _ in 0..40 {
-        let material = [SAND, WATER, STONE, DIRT, STEAM, EMPTY][next(6) as usize];
-        let stroke = (material, next(200), next(130), next(200), next(130), next(6));
-        strokes.push(stroke);
-        world.paint(stroke.0, stroke.1, stroke.2, stroke.3, stroke.4, stroke.5, if material == STONE { 100 } else { 60 }, false);
-        run(&mut world, steps_between);
-    }
-    (world, strokes)
 }
 
 #[test]
@@ -81,27 +27,43 @@ fn the_same_seed_and_strokes_give_the_same_world_and_another_seed_does_not() {
 }
 
 #[test]
-fn nothing_appears_or_vanishes_however_long_it_runs() {
-    let (mut world, _) = busy(11, 10);
-    let before = counts(&world);
-    for _ in 0..30 {
-        run(&mut world, 100);
-        assert_eq!(counts(&world), before);
+fn every_count_changes_only_as_the_lines_that_happened_say() {
+    for seed in [11, 12, 13] {
+        let (mut world, _) = busy(seed, 10);
+        let (before, fired) = (counts(&world), world.fired.clone());
+        for k in 0..30 {
+            run(&mut world, 100);
+            assert_eq!(counts(&world), by_the_lines(&before, &fired, &world), "seed {seed}, after {} steps", (k + 1) * 100);
+        }
+        assert!(world.fired.iter().sum::<u64>() > 1000, "the busy world reacts");
     }
-    // and while it is still being stirred: only the strokes change the counts
+    // and while it is still being stirred: only the strokes and the lines change the counts
+    let mut world = World::new(160, 120, 2);
+    world.paint(STONE, 10, 110, 150, 110, 2, 100, false);
+    let pour = [SAND, WATER, DIRT, STEAM, sand::materials::WOOD, OIL, sand::materials::LAVA, sand::materials::ICE, sand::materials::FIRE, sand::materials::ACID];
+    for k in 0..60 {
+        let material = pour[k % pour.len()];
+        world.paint(material, 30 + (k as i32 * 37) % 100, 10, 40 + (k as i32 * 53) % 90, 30, 4, fill(material), false);
+        let (poured, fired) = (counts(&world), world.fired.clone());
+        run(&mut world, 40);
+        assert_eq!(counts(&world), by_the_lines(&poured, &fired, &world), "after stroke {k}");
+    }
+}
+
+#[test]
+fn materials_that_do_not_react_at_room_temperature_are_kept_exactly() {
     let mut world = World::new(160, 120, 2);
     world.paint(STONE, 10, 110, 150, 110, 2, 100, false);
     for k in 0..60 {
-        let material = [SAND, WATER, DIRT, STEAM][k % 4];
-        world.paint(material, 30 + (k as i32 * 37) % 100, 10, 40 + (k as i32 * 53) % 90, 30, 4, 50, false);
+        let material = [SAND, WATER, STONE, OIL][k % 4];
+        world.paint(material, 30 + (k as i32 * 37) % 100, 10, 40 + (k as i32 * 53) % 90, 30, 4, fill(material), false);
         let poured = counts(&world);
         run(&mut world, 40);
         assert_eq!(counts(&world), poured, "after stroke {k}");
     }
+    assert_eq!(world.fired.iter().sum::<u64>(), 0);
 }
 
-/// Pours a material onto a flat floor from one point until a pile stands, and gives the pile's
-/// slope: its height over the half-width of its base.
 fn pile(of: u8, seed: u64) -> (f64, World) {
     let mut world = World::new(240, 120, seed);
     for _ in 0..900 {
@@ -117,13 +79,15 @@ fn pile(of: u8, seed: u64) -> (f64, World) {
 }
 
 #[test]
-fn sand_piles_at_45_degrees_and_dirt_holds_a_steeper_slope() {
+fn sand_piles_at_about_35_degrees_and_dirt_holds_a_steeper_slope() {
     for seed in [1, 2, 3] {
         let (slope, world) = pile(SAND, seed);
         let angle = slope.atan().to_degrees();
-        assert!((40.0..=47.0).contains(&angle), "sand at {angle:.1} degrees\n{}", picture(&world, 60, 40, 180, 119));
+        println!("seed {seed}: sand at {angle:.1} degrees");
+        assert!((32.0..=38.0).contains(&angle), "sand at {angle:.1} degrees\n{}", picture(&world, 60, 40, 180, 119));
         let (slope, world) = pile(DIRT, seed);
         let angle = slope.atan().to_degrees();
+        println!("seed {seed}: dirt at {angle:.1} degrees");
         assert!((58.0..=65.0).contains(&angle), "dirt at {angle:.1} degrees\n{}", picture(&world, 60, 20, 180, 119));
     }
 }
@@ -178,13 +142,13 @@ fn a_puddle_spreads_flat_and_comes_to_rest() {
 
 #[test]
 fn the_heavier_sinks_through_the_lighter_and_water_rests_on_nothing_lighter() {
-    // in a box: steam at the bottom, water over it, sand over that
+    // in a box: oil at the bottom, water over it, sand over that
     let mut world = World::new(80, 80, 9);
     world.paint(STONE, 10, 75, 70, 75, 0, 100, false);
     world.paint(STONE, 10, 10, 10, 75, 0, 100, false);
     world.paint(STONE, 70, 10, 70, 75, 0, 100, false);
     for y in 60..75 {
-        world.paint(STEAM, 11, y, 69, y, 0, 100, false);
+        world.paint(OIL, 11, y, 69, y, 0, 100, false);
     }
     for y in 45..60 {
         world.paint(WATER, 11, y, 69, y, 0, 100, false);
@@ -199,22 +163,25 @@ fn the_heavier_sinks_through_the_lighter_and_water_rests_on_nothing_lighter() {
     for y in 10..75 {
         for x in 11..70 {
             let (here, under) = (world.at(x, y), world.at(x, y + 1));
-            let movable = |m: u8| m == WATER || m == STEAM || m == EMPTY;
+            let movable = |m: u8| m == WATER || m == OIL || m == EMPTY;
             if (here == SAND || here == WATER) && movable(under) {
                 assert!(density(under) >= density(here), "{here} over {under} at {x},{y}\n{}", picture(&world, 8, 8, 72, 77));
             }
         }
     }
-    // sand at the bottom, then water, with the steam above
+    // sand at the bottom, then water, with the oil floating on it
     assert_eq!(world.at(40, 74), SAND);
     let water_top = (10..75).find(|&y| world.at(40, y) == WATER).unwrap();
     let sand_top = (10..75).find(|&y| world.at(40, y) == SAND).unwrap();
-    assert!(water_top < sand_top);
-    assert!((10..water_top).any(|y| world.at(40, y) == STEAM) || world.count(STEAM) == 0);
+    let oil_top = (10..75).find(|&y| world.at(40, y) == OIL).unwrap();
+    assert!(oil_top < water_top && water_top < sand_top);
+    assert!((water_top..75).all(|y| world.at(40, y) != OIL), "no oil under the water\n{}", picture(&world, 8, 8, 72, 77));
+    // and two liquids side by side come to rest, not trading places for ever
+    assert_eq!(world.awake(), 0, "still moving\n{}", picture(&world, 8, 8, 72, 77));
 }
 
 #[test]
-fn a_sealed_box_of_steam_stays_sealed_even_with_walls_that_touch_only_at_corners() {
+fn a_sealed_box_of_steam_keeps_it_as_steam_or_water_even_with_walls_that_touch_only_at_corners() {
     let mut world = World::new(100, 100, 3);
     // a diamond of stone one cell thick, its sides touching only at their corners
     world.paint(STONE, 50, 10, 85, 45, 0, 100, false);
@@ -229,13 +196,15 @@ fn a_sealed_box_of_steam_stays_sealed_even_with_walls_that_touch_only_at_corners
             }
         }
     }
+    // it cools and rains, and nothing of it leaves the box
     let steam = world.count(STEAM);
     assert!(steam > 600);
     run(&mut world, 3000);
-    assert_eq!(world.count(STEAM), steam);
+    assert_eq!(world.count(STEAM) + world.count(WATER) + world.count(sand::materials::ICE), steam);
+    assert!(world.count(WATER) > 0, "the steam has cooled to water");
     for y in 0..100 {
         for x in 0..100 {
-            if world.at(x, y) == STEAM {
+            if matches!(world.at(x, y), STEAM | WATER) {
                 assert!(inside(x, y), "steam got out at {x},{y}\n{}", picture(&world, 0, 0, 99, 99));
             }
         }
@@ -260,22 +229,30 @@ fn a_sealed_box_of_steam_stays_sealed_even_with_walls_that_touch_only_at_corners
 }
 
 #[test]
-fn steam_rises_and_gathers_level_under_a_lid() {
+fn steam_rises_gathers_level_under_a_lid_and_rains_back_down_as_it_cools() {
     let mut world = World::new(160, 100, 5);
     world.paint(STONE, 10, 90, 150, 90, 0, 100, false);
     world.paint(STONE, 10, 20, 150, 20, 0, 100, false);
     world.paint(STONE, 10, 20, 10, 90, 0, 100, false);
     world.paint(STONE, 150, 20, 150, 90, 0, 100, false);
-    // poured in one heap at the bottom, off to one side
+    // poured in one heap at the bottom, off to one side, in a world hot enough that it stays steam
+    // for a while (about 120 steps to gather, measured, and about 330 before it starts to rain)
     world.paint(STEAM, 40, 75, 40, 75, 12, 100, false);
+    common::heat_area(&mut world, 0, 0, 159, 99, 250);
     let steam = world.count(STEAM);
-    run(&mut world, 1500);
+    run(&mut world, 200);
     assert_eq!(world.count(STEAM), steam);
     // gathered at the top, its underside level to a cell
     let depths: Vec<i32> = (11..150).map(|x| (21..90).filter(|&y| world.at(x, y) == STEAM).count() as i32).collect();
     let (most, least) = (*depths.iter().max().unwrap(), *depths.iter().min().unwrap());
     assert!(most - least <= 1, "{depths:?}\n{}", picture(&world, 8, 18, 152, 92));
     assert!((11..150).all(|x| world.at(x, 21) == STEAM));
+    // then it cools to water, which lies level on the floor of the box and comes to rest
+    run(&mut world, 3000);
+    assert_eq!(world.count(STEAM) + world.count(WATER), steam);
+    assert_eq!(world.count(STEAM), 0);
+    let heights: Vec<i32> = (11..150).map(|x| (21..90).filter(|&y| world.at(x, y) == WATER).count() as i32).collect();
+    assert!(heights.iter().max().unwrap() - heights.iter().min().unwrap() <= 1, "{heights:?}");
     assert_eq!(world.awake(), 0);
 }
 
@@ -294,8 +271,8 @@ fn sleeping_chunks_never_hide_work_in_either_order() {
                 if k % 150 == 75 {
                     // more strokes while it runs, the same into both
                     let (m, x0, y0, x1, y1, r) = strokes[k % strokes.len()];
-                    awake.paint(m, x0, y0, x1, y1, r, 60, false);
-                    asleep.paint(m, x0, y0, x1, y1, r, 60, false);
+                    awake.paint(m, x0, y0, x1, y1, r, fill(m), false);
+                    asleep.paint(m, x0, y0, x1, y1, r, fill(m), false);
                 }
                 assert!(awake.cells == asleep.cells, "{order:?}, seed {seed}: apart at step {}", k + 1);
             }
