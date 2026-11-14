@@ -88,6 +88,23 @@ things".
   just changed.
 - Learning made faster and steadier with it: measured against the plain network on the same computing.
 
+**State (14 November 2026): built, on its branch, to be looked at.** A pool of neurons between the two
+plain layers, each reading a few others: memory neurons with a gate and a time constant of their own and
+plastic reads (a Hebbian rule whose rate and decay are learned), rhythms whose pace the brain sets, and
+moods that turn groups of the plain neurons up or down, reading first its energy and touch; learned back
+through windows of a second, every kind's gradient held to nudging. A cue shown once and asked for five
+decisions later is answered by the pool and not by the plain network. The page starts with 168 neurons
+(32 memory, 4 rhythm, 4 mood, 16 reads each) under a cap of 276 (128, 16, 32 reads); three sliders reshape
+it keeping what was learned; the brain is drawn by kind and a press on a neuron shows what it listens to.
+Two legs learn faster and steadier with it, per step and per second in the browser (13.3 m against 10.8 at
+20 million steps, and every seed past 10 m by 5 million), though they bound more; four legs do not, and
+without a cost for stalling two seeds in four learned to stand still, so four legs now pay it. The page
+practises at 63 percent of the plain network's speed with the page's brain and a quarter at the cap. In
+the page its moods rise when it is startled or lifted and its eye followed food at two minutes, but by ten
+it looks at its feet again; it still never turns for food behind it, and the plastic connections did not
+adapt to a ground gone slippery. Four legs on the page now start each run full, and practice uses what the
+machine has up to four workers. The numbers are in `walker/README.md`, "The brain that was discussed".
+
 ### 4. A world that changes while it lives
 
 - The ground (slippery, sticky, bouncy, soft), gravity and wind, day and night, things dropped in front

@@ -760,7 +760,8 @@ export default function generalist(m: Mote): Scene {
                 ctx.textAlign = "left";
                 ctx.fillText("senses", 2, high - 3);
                 ctx.textAlign = "center";
-                ctx.fillText(kinds ? `${neurons(shape)} neurons` : "neurons", wide / 2, high - 3);
+                // the brain drawn, which until its run ends may be the shape before a slider moved
+                ctx.fillText(kinds ? `${2 * kinds.counts.plain + kinds.counts.memory + kinds.counts.rhythm + kinds.counts.mood} neurons` : "neurons", wide / 2, high - 3);
                 ctx.textAlign = "right";
                 ctx.fillText("moves", wide - 2, high - 3);
             };

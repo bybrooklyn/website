@@ -264,7 +264,8 @@ pub fn into(learner: &Learner, n: usize) -> Vec<Into> {
 /// layer, memory neurons, rhythms, moods and actions; how lit each neuron is in the order `Kinds` numbers
 /// them (a memory by what it holds, a rhythm by the sine of its phase, a mood by its level); how much each
 /// memory and mood moved at the last decision, and each rhythm's phase; then for every neuron
-/// after what it senses, the three connections into it passing the most just then, three numbers each:
+/// after what it senses, the three connections into it passing the most just then (for the second plain
+/// layer, the three from the pool), three numbers each:
 /// where from (-1 for none), what it passed, and how much its weight has changed in this run.
 pub fn pool_picture(learner: &Learner, senses: &[f32], out: &mut Vec<f32>) {
     let kinds = Kinds::of(learner);
@@ -308,7 +309,12 @@ pub fn pool_picture(learner: &Learner, senses: &[f32], out: &mut Vec<f32>) {
         out.push(moved);
     }
     for n in kinds.first_plain()..kinds.count() {
-        let list = into(learner, n);
+        let mut list = into(learner, n);
+        // the second plain layer reads the first densely, and drawn those lines would bury the pool between
+        // them: what it takes from the pool is drawn instead, so the picture shows the pool feeding what it does
+        if n >= kinds.second_plain() && n < kinds.acts() {
+            list.retain(|c| c.from >= kinds.pool() && c.from < kinds.second_plain());
+        }
         let order = pool::strongest(&(0..list.len()).collect::<Vec<_>>(), &|k| list[k].passed.abs());
         for k in 0..3 {
             match order.get(k).map(|&k| &list[k]) {
