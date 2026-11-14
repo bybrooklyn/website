@@ -269,20 +269,25 @@ impl Way {
     /// faster, and a run that gets nowhere for five seconds costs 3, as a fall does. A landing costs
     /// 0.05 for each metre a second the foot comes down at. They sense no rhythm, and nothing rewards
     /// how their feet take turns.
+    ///
+    /// Both feel touch (`touch`). Two legs practise with a visitor every 8 seconds or so, brought in with
+    /// the costs, who lifts, nudges and shoves; four legs practise with none.
     pub fn of(legs: u32) -> Way {
         let mut shaping = Shaping { alive: 0.25, energy: 0.002, air: 2.0, tall: false, smooth: 0.0, fall: 3.0, knee: 0.0, upright: 0.0, down: 1.0, turns: 0.0, pace: 0.0, impact: 0.0, spin: 0.0, bob: 0.0, swing: 0.0, torque: 0.0, stall: 0.0, lean: 0.0 };
         // two legs went on their belly and knees in lunges without these (README, "How it moves")
         if legs == 2 {
             shaping = Shaping { knee: 1.0, upright: 0.5, down: 0.0, lean: 1.0, pace: 1.0, stall: 3.0, impact: 0.05, ..shaping };
         }
-        Way { legs, direct: true, skip: 4, seconds: 30.0, shaping, hop: false, ramp: 4_000_000, ease: 1.0, strength: 1.0, hip: 0.0, clock: legs != 2, touch: true, visitor: VISITOR, visiting: 1.0 }
+        Way { legs, direct: true, skip: 4, seconds: 30.0, shaping, hop: false, ramp: 4_000_000, ease: 1.0, strength: 1.0, hip: 0.0, clock: legs != 2, touch: true, visitor: if legs == 2 { VISITOR } else { 0.0 }, visiting: 1.0 }
     }
 }
 
 /// How far a world is made when a run starts, in metres; the stage makes more as the creature goes.
 const FIRST_MADE: f32 = 30.0;
 
-/// How many seconds apart practice's visitor comes, on average (`Way::visitor`).
+/// How many seconds apart practice's visitor comes, on average (`Way::visitor`), for two legs. Four legs
+/// feel touch but practise with no visitor: with one they went less far (34 m against 40 in held-out
+/// worlds, eight seeds) and learned little from it (walker/README.md, "Touching it").
 pub const VISITOR: f32 = 8.0;
 
 /// The seed of a practice world: run `run` of creature `creature` of stream `stream`, mixed, with the
