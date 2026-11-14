@@ -1,8 +1,8 @@
 # A marble run
 
 A mini: build a marble run in three dimensions and watch marbles go down it. A plan dated 13 November
-2026. Stage 1, what Mote needed, stage 2, pieces and snapping, stage 3, the editor, and stage 4,
-bending, were all built on 14 November 2026 (below). The mini is a draft, Marbles, at `/minis/marbles/`.
+2026. Stage 1, what Mote needed, stage 2, pieces and snapping, stage 3, the editor, stage 4, bending,
+and stage 5, moving parts and sound, were all built on 14 November 2026 (below). The mini is a draft, Marbles, at `/minis/marbles/`.
 
 ## Decided
 
@@ -96,7 +96,7 @@ Mote's broad phase and inertia; see [mote](mote.md)):
 3. The editor: camera, handles, selection, undo, copy and groups, touch throughout, building while it
    runs with the ghost marble. **Built**, waiting to be looked at (see below).
 4. Bending, with its limits and warnings. **Built**, waiting to be looked at (see below).
-5. Moving parts and sound.
+5. Moving parts and sound. **Built**, waiting to be looked at and listened to (see below).
 6. The look: wood, glass, shadows.
 7. Cameras, races, sharing, and the runs to start from.
 
@@ -621,6 +621,175 @@ glass).
   glass it wants a way of its own that still reads on wood.
 - Shapes and strains are cached by key, and a kind whose bend is all naught has no `bend` at all
   (`withBend`), so the same piece always has one key.
+
+## Stage 5, built
+
+On 14 November 2026, in the draft Marbles: Mote gained solids on a hinge, driven solids and fixed solids
+of any shape (`space.ts`, held by `parts.test.ts`) and strikes in its sound (`sound.ts`); the mini gained
+`parts.ts` (the moving and sounding pieces, as data), with their physics in `table.ts`, their drawing in
+`marbles.ts`, the run's text at `v3` (`run.ts`), the ghost's new endings (`ghost.ts`), and three runs to
+start from (`runs.ts`), each with its test. Every other mini steps exactly as before (below, under Mote).
+
+**The moving pieces.** Each is real bodies in Mote, stepped with the marbles; nothing in them is
+scripted but the lift's and the hoist's drives.
+
+| Piece | What it is | Its numbers |
+|---|---|---|
+| Gate | A flap hung over a straight from a bar across it. A marble swings it forward and passes under; gravity brings it back onto its stop with a knock. It cannot swing back, so a marble coming the other way is stopped. | 1 cell; a 4 cm flap of 1.2 g; opens 0.8 to 0.9 rad for a marble at 40 cm/s |
+| Switch | An upright plate in a glass chimney, on a line along the run, with an arm at its foot to each side, heavier above its pivot so that it stays leaning on whichever stop it is put against. Leaning one way, the plate turns a falling marble aside onto the arm that lies level that side; the marble rolls out along it and its weight throws the flipper over, so that arm tips and the marble rolls off into the groove that side, while the other arm comes up level for the next. Out a row to each side, 5 levels down. | leans 0.45 rad each way; holds with 3,500 dyn cm, a marble 0.7 cm out on the arm throws it |
+| Seesaw | A tray (a wide shallow V between rails) on a pivot across its middle, resting tilted 0.06 rad toward its fixed end wall, held there by two steel counterweights on arms rising 65 degrees behind the pivot. Marbles roll to the wall and wait in a row. Enough of them outweigh the weights: it tips to 0.35 rad and they roll out under the wall; as it tips the weights' arms turn toward upright and hold it less, so it tips all the way at once and stays tipped until it is empty, then swings back. | how many it holds before it tips, 1 to 4 (the knob, or N): the weights are 0.23, 0.73, 1.10 and 1.35 cm tall; the marbles lie 7.2, 5.6, 4.0 and 2.4 cm from the pivot |
+| Trapdoor | A flap hinged at its near end between glass walls, sloping 0.04 rad to a 4 mm lip of its own just short of a fixed end wall. Counterweights beside it hold it up with half way between what one and two marbles at the lip turn it by (6.6 and 11.6 times a marble's weight times a centimetre): one waits; a second opens it, all the way at once (the weights' arms turn upright as it opens), both roll over the lip and drop 4 levels to the track out, and it shuts. | holds 9.1 m g cm; opens to 1.25 rad |
+| Spinner | A wheel of steel arms on a line across the run, between glass walls. A marble lands on an arm and turns it by its weight and its blow, and drops off below; the wheel turns on freely, losing 0.4 of its spin a second, and comes to rest. | 3 to 6 arms (the knob, on the axle, or N); 5 cm across |
+| Lift | A car in a glass shaft. Its floor slopes down to the shaft's back wall; marbles roll in and rest against it; the car rises at a steady speed; at the top the wall ends and they roll out over it. A skirt under the car's front closes the way in while it is away, so a waiting marble queues behind it and is never under the car. | 4 to 24 levels high (the knob, at its top, or N); 20 cm/s, easing in and out over 0.12 s, waiting 0.45 s below and 0.5 s above; carries up to 3 a trip; a period of 0.95 s + 2 (rise / 20 + 0.12) s, 2.96 s for 8 levels, about one marble a second |
+| Chain hoist | A groove that climbs at 3 in 4 from a foot behind a step, between glass walls, and turns level at its far joint. Paddles on a chain run up under it, come up through the foot behind each marble, push it up the climb, and go round and back under. | 3 to 6 cells long (rising 8 to 26 cm); 16 cm/s; paddles about 9 cm apart (5 to 12 of them), so about 1.8 marbles a second |
+
+The lift and the hoist are the only things that move without being pushed, and only while a marble is in
+play: any marble let go that is awake, or one waiting at that lift or hoist (asleep there, it would
+otherwise wait for ever). Once the run is empty and still they stop where they are, and a marble let go
+starts them again. A still seesaw, gate or switch falls asleep with whatever rests on it and wakes when a
+marble reaches it. The walls of moving and sounding pieces are smooth (friction 0.05), so that no marble
+pressed against one is held up by it. Every piece is the same mirrored, so mirroring one leaves it as it
+is and none is written mirrored.
+
+**The sounding pieces.** A short groove and a glass tube that turns straight down drop each marble onto
+what it strikes, so it strikes at much the same speed every time (within 10%, measured), and that turns
+it on into the track out: a **chime bar**, tilted, at one of two octaves of C major, C5 to C7, its length
+showing its pitch (7 cm at C5 to 3.5 at C7, as a bar free at both ends sounds at one over its length
+squared), struck at about 78 cm/s and again more softly as it bounces; a **bell**, struck on its shoulder at
+66 cm/s; a **drum**, tilted, struck at 80 cm/s and then softly. The bar's note is set by its knob, at its
+end, or N, and it sounds as it changes, so a tune can be set by ear.
+
+**The run's sound**, made by Mote's strikes (below): each strike is heard as what was struck, marble on
+marble glass, on track, walls and wooden parts wood, on the lift, the hoist or a spinner metal, a chime
+bar at its note, a bell, a drum, the table's cloth a soft low knock; its hardness is its speed over how
+fast that thing is struck hard (wood 150 cm/s, glass 120, metal 130, chime, bell and drum 110). A strike
+and its echo in the next step or two (within 40 ms, the same pair) are one strike. A part knocking against
+its stop knocks. It obeys the bar's sound button and starts only after a press.
+
+**Keys.** One more: N and Shift with N step the one chosen piece's setting (a chime bar's note, a lift's
+height, a hoist's length, a spinner's arms, how many marbles tip a seesaw, and a straight's length or a
+drop's height as its knob would make them), refusing with the small shake where it would not fit.
+
+**The text.** `v3`; the new families are `g` gate, `w` switch, `e` seesaw (marbles it holds), `j`
+trapdoor, `o` spinner (arms), `u` lift (levels), `y` hoist (cells), `m` chime bar (note, 0 to 14), `n`
+bell, `q` drum. Every `v1` and `v2` run is read and written again as `v3`; a `v1` or `v2` run with a moving
+piece in it is not a run of that form and is refused. Undo steps kept in an older form are read again.
+
+**Checks and the ghost.** An open end is marked as before, but not one over a funnel's bowl, which is how
+a run feeds a funnel from above. The guesses by energy stop at a moving or sounding piece. The ghost runs
+the same physics, so it goes through a switch, a seesaw and a lift as the real table will: it starts from
+where the real table's parts are (the switch leaning as it leans, a lift's car where it is) with the
+marbles waiting in a seesaw or on a trapdoor copied in, and starts again whenever a switch flips or a
+marble comes to wait in one. A marble's way ends `held` where it waits in a seesaw or on a trapdoor, and
+`loops` where it comes round to a lift or a hoist it has ridden; neither is marked. While marbles are in
+play the ghost works within its smaller budget, since the parts they turn start it again often.
+
+**The drawing.** Each moving solid is drawn where the physics has it every frame, in its piece's tint;
+the box shows the parts as they rest. The walls round a moving part are drawn as glass, so it can be seen
+working. Nothing more of the look than that; it waits for stage 6.
+
+**Held to arithmetic** (`parts.test.ts`, in the mini):
+
+- A seesaw's counterweights turn it, at its resting tilt, by exactly half way between `n - 1` and `n`
+  marbles at the wall, its own weight counted (to six places); set to hold `n`, it tips when the `n`-th comes
+  to rest in it and never before, for every `n` from 1 to 4, over two rounds each; two marbles laid in it
+  that turn it 3% less than its weights hold it leave it resting, 3% more tip it.
+- A switch alternates exactly, left, right, left, right, for 24 marbles, slow (after a level straight),
+  fast (after two steep slopes), and let go every 0.6 s or as fast as the hopper goes (0.31 s).
+- A trapdoor holds one marble, opens under two to its stop, both reach the tray, and it shuts.
+- A lift's place in time keeps its period exactly, goes at its stated speed between its easings, and never
+  moves faster; six marbles at once ride up in threes, none dropped, all to the tray, and then it stops where
+  it is and a marble let go starts it again.
+- A hoist's chain is joined up all the way round (any two places 1 mm apart round it are 1 mm apart, to
+  0.2 µm); twelve marbles let go every 0.6 s are all carried up.
+- A spinner turns when struck (faster than 1 rad/s), passes every marble on, and falls asleep.
+- A gate opens more than 0.7 rad for each of four marbles and shuts behind each; a marble rolled at it
+  from beyond comes back.
+- A chime bar, a bell and a drum are each struck once hard by each of five marbles, at speeds within 10%
+  of each other, the bar at its note (C5 is 523.251 Hz and C7 2093.005 Hz).
+- The loop's six marbles go round for five minutes, none lost, none at rest; the tune plays G5 C6 E6 D6 B5
+  G5 A5 C6 in order; the sorting run puts six of twelve marbles in each tray.
+- A ghost started from the real table says which way the next marble goes through the switch, and is right
+  three times running; the loop's ghost ends `loops`.
+- The runs with moving parts give the same race twice and in Chromium as in Bun, to the bit (every
+  marble's place, speed and spin and every part's angle, spin or seconds).
+
+**Made runs** (`runs.ts`), shown in the runs to start from: **a lift that loops** (a funnel fed by the
+hopper turns marbles out down a slope into an 11 level lift; up they go, back over the funnel and into it
+again; six marbles go round for as long as they are watched); **a tune on chime bars** (eight bars down a
+line, playing G5 C6 E6 D6 B5 G5 A5 C6, a note a second; made up, a few notes of the scale); **sorting by
+switch and seesaw** (the switch sends marbles left and right in turn, into a seesaw that tips them into a
+tray in threes and a trapdoor that drops them into another in twos).
+
+**Measured**, by `scripts/browser.ts` in headless Chromium, built with `SHOW_DRAFTS=1` and served from
+`.drafts-build`. One script, by mouse at 1440 by 900 and by finger at 1024 by 768 and 390 by 800 (touch
+turned on with a first tap on the table before anything was measured): an empty table from the runs to
+start from; a hopper pressed in the box and raised to level 40 or more (by E with the mouse; by its green
+arrow with a finger, the view drawn back first); then pressed in the box one after another: long straight,
+gate, steep slope, chime bar, gentle slope, spinner, bell, drum, turn back, steep slope, switch, gentle
+slope, seesaw, lift, gentle slope, tray; the switch chosen by a press on it, so the next pieces go at its
+other way out: gentle slope, trapdoor, chain hoist, gentle slope, tray. Every moving and sounding piece
+placed in that order, nothing marked, the ghost through to the seesaw. Ten marbles let go and stepped on
+by hand for 90 s, every place each was on noted every tenth of a second: marbles went through the gate,
+the chime bar, the spinner, the bell, the drum, the switch, the seesaw, the lift, the trapdoor and the
+hoist; 8 to 10 of the ten were in the trays (by mouse 9, by finger 10 and 8), the rest waiting in the
+seesaw or on the trapdoor. Undone all the way back (24 steps, by Control and Z, or the bar's button by
+finger) to the run the page began with, and redone all the way forward: the text the same to the
+character. The page loaded again: the run as it was. The loop opened from the runs to start from and six
+marbles let go, then four minutes stepped by hand: all six still going round, none lost; the lift's
+clock, and every marble's place, came out the same in all three browsers. The made `v1` run with every
+kind of piece opened and written as `v3`; a `v2` run with bends opened, written as `v3`, its ghost in the
+tray. No error on the page in any of the three.
+
+With a hundred marbles let go down that run and the stream left on (110 to 120 on the table, most asleep
+in its two trays), on four cores: the physics 1.2 to 1.3 ms a frame of 1/120 s, the ghost 2.8 to 3.0,
+handing the drawing over 0.3, everything the scene does in a frame 3.6 ms on average and 5.4 at most (7.1
+before the ghost's budget was cut while marbles are in play). With the sound on, the same within 0.1 ms:
+about 93 strikes a second were made and 84 of them were left out or cut short by the limit of fourteen
+voices. Offline, three seconds of strikes three to a frame render in 0.61 s, a fifth of the time they last,
+on one core. Headless Chromium draws in software at 15 to 30 frames a second whatever the scene does, so
+the drawing's own time on a graphics card, and the cost of the audio on a real phone's audio thread, were
+not measured.
+
+**Fell short, said plainly.**
+
+- With eight or more marbles the loop now and then jams in the funnel's neck, as the stage 2 notes found
+  for marbles arriving together, and everything falls asleep there; six go round for ten minutes and more.
+- Two marbles reaching the switch together (bunched by the spinner or let go by a seesaw or trapdoor just
+  before it) may go the same way, and before the glass walls along its ways out one could be knocked off.
+  A switch after a batching piece is not alternating any more; the sorting run puts the switch first.
+- Marbles that come onto a lift or a trapdoor slowly over level track can stop short of it; a slope
+  before them is needed, and the ghost marks such a stop as too level, as for any piece.
+- The hoist's paddles pass through its groove, and the lift's skirt through the table below it when it is
+  low: only balls meet them, and stage 6 should draw slots and a pit.
+
+**Choices to confirm.**
+
+- Which way each piece is made: the seesaw as a tray that tips in batches, the trapdoor opening under two,
+  the spinner as a wheel the marbles drop onto, the gate as one way, the lift as a car with a skirt, the
+  hoist as paddles up a climb of 3 in 4.
+- The settings and their ranges: a seesaw holds 1 to 4 (2 in the box), a spinner has 3 to 6 arms (4), a lift
+  4 to 24 levels (8), a hoist 3 to 6 cells (4), a chime bar one of 15 notes of C major from C5 (G5 in the box);
+  only one scale.
+- The lift at 20 cm/s with three to a trip, the hoist at 16 cm/s; that both run only while a marble is in
+  play or waits at them, and stop where they are.
+- Glass walls round the moving parts, smooth walls on all of them.
+- The sounds' make-up (below, under Mote), fourteen voices, and the strike speeds for full loudness.
+- N for the setting, and the chime sounding as its note changes.
+- The loop run holding six marbles; the tune; sorting by threes and twos.
+
+**What stage 6, the look, can rely on, and should know.**
+
+- A piece's moving part is `shapeOf(kind).moving` (bodies as boxes in the piece's own place, at angle naught,
+  each with its `turn` and `lean`), and in the table `table.movers()` gives each piece's solids, whose `p` and
+  `q` are where they are now; `marbles.ts` draws each from its own points and faces. A drawing made per
+  solid, with grain or brass, needs only its own mesh; it is posed each frame.
+- What is struck is `shapeOf(kind).struck` (a mesh and a tilt); glass walls are `shape.panes`, met like
+  `boxes`. The lift's skirt reaches below its car by its height and two more centimetres, and goes below
+  the table for a low lift; the hoist's paddles cross the groove. Both want a pit and a slot drawn.
+- Materials are already named per solid for sound (`table.heard`): wood, metal, chime, bell, drum. The look
+  can use the same names.
+- Moving parts are tinted like their piece when chosen or marked; a look of wood should keep that.
 
 ## Open
 

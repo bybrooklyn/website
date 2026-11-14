@@ -14,13 +14,13 @@ under the MIT license in that folder (`src/mote/LICENSE`), plainer than the rest
 |---|---|
 | `stage.ts` | The canvas, a loop in fixed steps of 1/120 s, mouse, fingers and keys (several pointers by id, and the wheel, for a scene that asks), the page's colours, a panel for buttons, a little kept between visits, the address. Runs only while seen and stops when the scene rests. |
 | `flat.ts` | 2D physics: boxes, balls, bars and shapes, walls, pins, rods, ropes, a motor, a hand to grab with. |
-| `space.ts` | 3D physics: solids that fall, tumble and hit each other and fixed slabs, each turning by its own inertia tensor; balls that roll; islands that sleep together. |
+| `space.ts` | 3D physics: solids that fall, tumble and hit each other and fixed slabs, each turning by its own inertia tensor; balls that roll; islands that sleep together; for a marble run's moving parts, solids on a hinge, driven solids and fixed solids of any shape, met by balls only. |
 | `track.ts` | Fixed track for balls, worked out by formula: sections swept along curves and helices, and profiles turned into funnels. |
 | `grid.ts` | The broad phase both physics use: which pairs of bodies are near enough to be worth a closer look. |
 | `gl.ts` | 3D drawing on WebGL 2: depth, a sun with shadows, sky light, numbers on faces, floating words, glow. |
 | `cells.ts` | A grid of cells drawn in whole pixels on WebGL 2: four bytes a cell read straight from where they are kept into one texture, colored from a palette and a shade, only changed rows sent. The sand mini draws with it. |
 | `solids.ts` | The shapes of dice and other solids, drawn on a 2D canvas where WebGL 2 is missing. |
-| `sound.ts` | Knocks and notes made by the browser with no files, silent until turned on. |
+| `sound.ts` | Knocks, notes and strikes (wood, glass, metal, a chime bar, a bell, a drum) made by the browser with no files, through a bus with a limit on voices and a limiter; silent until turned on. |
 
 ## Built
 
@@ -204,6 +204,71 @@ ball meets as it meets a curve or a helix. Every
 other mini steps as before: the branch left `src/mote/` alone, and `bun test src/mote` passes unchanged. A
 bent run gives the same race in Chromium as in Bun, to the bit (`table.test.ts`).
 
+## For the marble run's stage 5
+
+Added on 14 November 2026 for the marble run's moving and sounding pieces ([marbles](marbles.md)). Every
+other mini steps exactly as before: a script ran Blocks (900 steps with a throw), Plinko's board, the dice
+tower, a heap of 120 solids, Rolling, and each of the marble run's three earlier made runs (a table racing
+marbles for 25 s, and its ghost), from the code before this stage and from the code after, and hashed
+every number's bits: all the same. The new parts are touched only by a scene that makes them; where a
+shared line had to change, it computes exactly what it did for every solid that is none of them (a
+`give` that is 1 / mass for a free solid keeps the sum `a.im + b.im + ...` in its order, so it rounds the
+same). `pairs.test.ts` and `replay.test.ts` pass unchanged.
+
+- **Solids on a hinge.** `space.hinge(parts, through, axis, { low, high, spring, rest, friction })`: shapes
+  that bulge, held on one fixed line and turning about it together, as one. It is kept in reduced form: the
+  angle and its speed, each solid's place and turn worked out from the angle every part of a step by the
+  sine and cosine of `track.ts`, so nothing drifts off the line. How hard it is to turn is each solid's
+  tensor about its middle along the line, and its mass times its distance from the line squared. A push on
+  any of its solids turns the hinge by the push's turning about the line; gravity on each solid, the
+  spring and the friction are given after the speed a ball strikes at is measured (a light flap pressed up
+  under a marble is then not taken to strike it anew every part). Its stops are one-sided limits on the
+  angle solved as contacts are, closing exactly the gap there is and putting an overlap right softly, their
+  pushes kept from step to step, so a seesaw resting on its stop under marbles is still. Its solids sleep
+  only together, as one island with what rests on them. `space.turnTo` puts one at an angle; `knocked` is told
+  when one strikes a stop, and how fast.
+- **Driven solids.** `space.driven(mesh, at, move)`: `move(dt)` says where the solid is to be at the end
+  of each step; it goes there at the speed that takes, ends the step exactly there, pushes what it meets as
+  if it weighed everything and is pushed by nothing. While it moves it wakes any marble asleep in its way.
+- **Fixed solids of any shape**: `space.fixed(mesh, at, stuff, q)`, a bell or a drum.
+- All three meet balls only and pass through every other solid and the track, and are made and measured
+  with square roots alone (not `Math.hypot`, which the dice keep), so a scene with them is the same to the
+  bit everywhere.
+- **Held to arithmetic** (`parts.test.ts`): a plate on a hinge swings with a pendulum's period, 2 pi
+  root(I / m g d), to a tenth of a percent, and keeps its swing to 1%; a beam with a spring settles where
+  the spring's push and a marble's weight balance, to a tenth of a percent (it first came out 1.7% off: the
+  bearing friction was dividing the spring's push too, now fixed); a seesaw on its stop under a marble is
+  still to a ten thousandth of a radian, falls asleep with it, and wakes and tips when a heavier marble drops
+  on its other arm; a driven plate carries a marble up at its own speed, within 5%, never more than a
+  fortieth of a millimetre into it or off it; no marble fired at a wheel of 3 mm arms turning 40 rad/s, from
+  100 to 1,020 cm/s, nor at a 2 mm plate driven at it, from 200 to 1,300 cm/s, ends inside one or beyond it;
+  a scene of a seesaw, a wheel and a lift gives the same numbers run twice and in Chromium as in Bun.
+- **Strikes** (`sound.ts`): `sound.strike(kind, hard, pitch)`, and `voice(...)`, which builds one into any
+  audio context, so the same code is heard live and rendered to a file. Each is plain sine waves, each
+  with a volume that rises at once (in 0.4 to 3 ms) and falls away as e to the minus time over its own
+  time, and a little filtered white noise for the moment of the hit:
+  - wood: noise through a band about 2.4 kHz (Q 3) falling to a third in 11 ms, over a wave at 1,250 Hz
+    (12 ms) and one at 2.48 times it (8 ms): a short dry click, heard for about a tenth of a second;
+  - glass: waves at 3,950 Hz (22 ms) and 1.55 times it (13 ms), and a tick of noise about 6.5 kHz;
+  - metal: four inharmonic waves at 1,800 Hz and 1.51, 2.36 and 3.12 times it, falling in 120, 85, 55 and
+    35 ms: a short ring;
+  - chime bar: the waves of a bar free at both ends, 1, 2.756 and 5.404 times its note, falling in 0.55 s
+    (longer for a lower note, as (784 / f) to the 0.35), 0.12 s and 0.04 s, the upper two louder for a harder
+    strike, and a tick of noise at 4.2 kHz for the mallet: a clear note that rings and dies away;
+  - bell: a small bell's waves about a prime of 1,047 Hz, a hum an octave below, a minor third, a fifth, the
+    nominal an octave up (loudest) and 2.5, 2.67 and 3 times it, falling in 0.12 to 0.7 s: bright;
+  - drum: a wave at 150 Hz falling from 1.25 to 0.62 of it in 90 ms, with one at 1.59 times it, and dull
+    noise through a low pass at 700 Hz: a soft thud;
+  - harder is louder by the hardness to the power 0.7, from 15% of full, and a touch higher (12% for wood
+    and glass, 5% for metal, 4% for a drum) or, for a tuned bar, brighter rather than higher, so it stays
+    in tune.
+- **Never clipping.** Every strike goes through one bus: a volume of 0.6, then a limiter (threshold -9 dB,
+  ratio 20, attack 2 ms, release 150 ms). At most fourteen strikes sound at once: a new one past that
+  takes the place of the quietest sounding now (by how loud it began and how far its longest wave has
+  fallen), which is faded out in 10 ms, unless the new one would be the quietest itself, when it is left
+  out; and at most six clicks of wood or glass start in any 30 ms. Rendered in Chromium, a hundred
+  marbles' worth of strikes, three a frame for three seconds, peak at 0.82 of full scale and render in 0.61 s.
+
 ## Decided
 
 - **No third-party libraries, by rule.** Nothing forked and nothing added: what Mote needs is written in its
@@ -221,7 +286,8 @@ bent run gives the same race in Chromium as in Bun, to the bit (`table.test.ts`)
   saving a run and playing it back; a debug view of contacts, joints and sleeping bodies; a frame-time meter
   beyond the `?debug` step time; text input.
 - **For the marble run, later:** ball against a solid of faces is soft, so a moving part (a seesaw, a gate)
-  is met as slabs are, not exactly; only balls meet track.
+  is met as slabs are, not exactly (stiffer, as a fixed slab is); only balls meet track. A hinge has one
+  line; a part on two hinges, or a chain of solids joined to each other, would want joints between solids.
 - **For the 3D side:** smooth shading across faces, a shadow under each solid, pictures drawn onto faces,
   loading a simple model from a file, a wireframe view, dice that hit each other corner to corner rather
   than as balls, a camera that can be moved.
@@ -232,12 +298,13 @@ bent run gives the same race in Chromium as in Bun, to the bit (`table.test.ts`)
 ## How to run and test
 
 ```sh
-bun test src/mote     # flat, space, balls, track, grid, pairs, replay, crowd, gl and the rest
+bun test src/mote     # flat, space, balls, track, parts, sound, grid, pairs, replay, crowd, gl and the rest
 ```
 
 `gl.test.ts` draws a scene in headless Chromium and reads its pixels. `replay.test.ts` checks that a scene
 run twice ends the same and that a step is fast enough, and runs a marble race in Bun and in Chromium.
-`balls.test.ts` and `track.test.ts` hold balls and track to the arithmetic of a rolling ball. `grid.test.ts` checks the broad phase against a
+`balls.test.ts` and `track.test.ts` hold balls and track to the arithmetic of a rolling ball, and
+`parts.test.ts` the hinges and driven solids to theirs; `sound.test.ts` renders the strikes in Chromium. `grid.test.ts` checks the broad phase against a
 loop over every pair, and `pairs.test.ts` the minis' scenes with it and without, to the bit. `crowd.test.ts`
 prints step times for 100 to 5,000 bodies and takes about forty seconds; run it on its own with
 `bun test src/mote/crowd.test.ts` when measuring.
