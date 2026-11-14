@@ -290,7 +290,7 @@ export function makeTable({ filled = true } = {}): Table {
         }
         const solids = lengths.map((length) => length.solid);
         if (world.bowl) solids.push(space.track(world.bowl, BOWL));
-        for (const box of shape.boxes) {
+        for (const box of [...shape.boxes, ...(shape.panes ?? [])]) {
             const placed = boxToWorld(piece.place, box);
             // the walls of a moving or sounding piece are smooth, so that a marble pressed against one by a part slides down it and is not held up by it
             solids.push(space.slab(placed.at, placed.half, undefined, { friction: shape.moving || shape.struck ? 0.05 : 0.5, bounce: 0.3, roll: 0.006 }));

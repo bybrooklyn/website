@@ -232,6 +232,8 @@ export interface Shape {
     struck?: Struck;
     /** Room a moving part needs as it moves, kept clear of other pieces. */
     clear?: Box[];
+    /** Walls a marble meets that are drawn as glass, so that a moving part inside them is seen working. */
+    panes?: Box[];
     /** Where the knob that sets a piece's number is, if not past its far joint. */
     knob?: V3;
 }
@@ -512,7 +514,7 @@ export function shapeOf(kind: Kind): Shape {
         shape.room.push(bowl);
         cellsOf(bowl, cells);
     }
-    for (const box of [...shape.boxes, ...shape.stands, ...(shape.clear ?? []), ...(shape.struck ? [struckBox(shape.struck)] : [])]) {
+    for (const box of [...shape.boxes, ...(shape.panes ?? []), ...shape.stands, ...(shape.clear ?? []), ...(shape.struck ? [struckBox(shape.struck)] : [])]) {
         shape.room.push(box);
         cellsOf(box, cells);
     }

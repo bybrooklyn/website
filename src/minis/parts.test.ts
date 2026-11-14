@@ -200,13 +200,13 @@ test("a lift carries up to three marbles a trip, drops none, and stops once the 
     expect(lost.length).toBe(0);
     expect(inTrays(table)).toBe(6);
     // all asleep in the tray: the lift has stopped where it was, and stays there
-    const at = [...car.p];
+    const at: number[] = [...car.p];
     for (let step = 0; step < 240; step++) table.step(1 / 120);
-    expect(car.p).toEqual(at);
+    expect([...car.p]).toEqual(at);
     expect(table.running).toBe(false);
     // and a marble let go starts it again
     roll(table, 1, 1, 1);
-    expect(car.p).not.toEqual(at);
+    expect([...car.p]).not.toEqual(at);
 }, 60_000);
 
 test("a hoist's chain goes round at its speed, joined up all the way, and its paddles carry every marble up", () => {

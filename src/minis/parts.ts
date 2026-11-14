@@ -87,6 +87,8 @@ export interface PartDesign {
     joints: Joint[];
     lengths: Length[];
     boxes: Box[];
+    /** Walls a marble meets that are drawn as glass, so that the part inside them can be seen working. */
+    panes?: Box[];
     stands: Box[];
     holds: V3[];
     low: number;
@@ -286,7 +288,7 @@ export function designPart(family: PartFamily, sizes: number[]): PartDesign {
                     groove([[4, -8, 3.5], [4, -8.8, -1], [4, -10, -8]], [undefined, 1], [0, 0, -1], [0, 0, -1]),
                     groove([[4, -8, 4.5], [4, -8.8, 9], [4, -10, 16]], [undefined, 2], [0, 0, 1], [0, 0, 1]),
                 ],
-                boxes: [span([1.2, -7.8, 0.4], [1.8, -2.1, 7.6]), span([6.3, -7.8, 0.4], [6.9, 3, 7.6])],
+                panes: [span([1.2, -7.8, 0.4], [1.8, -2.1, 7.6]), span([6.3, -7.8, 0.4], [6.9, 3, 7.6])],
                 moving: { kind: "hinge", sound: "wood", bodies: [plate, arm(-1), arm(1)], at: [4, pivot, 4], axis: [1, 0, 0], low: -SWITCH.lean, high: SWITCH.lean, spring: 0, rest: 0, friction: 0.5, start: SWITCH.lean },
                 clear: [span([1.8, -7.8, -0.4], [6.2, 1.2, 8.4])],
                 holds: [],
@@ -308,7 +310,8 @@ export function designPart(family: PartFamily, sizes: number[]): PartDesign {
                 joints: [J0, joint([24, -8, 4], [1, 0, 0])],
                 lengths: [groove([[0, 0, 4], [4, 0, 4]], [0, undefined]), groove([[20.6, -6.7, 4], [22, -7.7, 4], [23, -8, 4], [24, -8, 4]], [undefined, 1], [1, -0.6, 0], [1, 0, 0])],
                 // its end wall, and walls along the track out, so that marbles tipped out together do not knock each other off it
-                boxes: [span([SEESAW.wall, -3.3, 2.3], [SEESAW.wall + 0.6, -0.2, 5.7]), span([21.6, -8, 1.8], [24, -5.6, 2.1]), span([21.6, -8, 5.9], [24, -5.6, 6.2])],
+                boxes: [span([SEESAW.wall, -3.3, 2.3], [SEESAW.wall + 0.6, -0.2, 5.7])],
+                panes: [span([21.6, -8, 1.8], [24, -5.6, 2.1]), span([21.6, -8, 5.9], [24, -5.6, 6.2])],
                 stands: [span([12.6, -8, 0.4], [13.4, -3.2, 0.8]), span([12.6, -8, 7.2], [13.4, -3.2, 7.6])],
                 holds: [[13, -8, 0.6], [13, -8, 7.4]],
                 moving: { kind: "hinge", sound: "wood", bodies: [...seesawTray(count), ...weights], at: SEESAW.pivot, axis: [0, 0, 1], low: SEESAW.tipped, high: SEESAW.rest, spring: 0, rest: 0, friction: 1.5, start: SEESAW.rest },
@@ -338,7 +341,8 @@ export function designPart(family: PartFamily, sizes: number[]): PartDesign {
                 ...none,
                 joints: [J0, joint([16, -12, 4], [1, 0, 0])],
                 lengths: [groove([[0, 0, 4], [4, 0, 4]], [0, undefined]), groove([[4.5, -10, 4], [10, -10.9, 4], [16, -12, 4]], [undefined, 1])],
-                boxes: [span([4, -1.6, 2.75], [12.4, 0.6, 3.05]), span([4, -1.6, 4.95], [12.4, 0.6, 5.25]), span([12, -1.7, 3.05], [12.4, 1, 4.95])],
+                boxes: [span([12, -1.7, 3.05], [12.4, 1, 4.95])],
+                panes: [span([4, -1.6, 2.75], [12.4, 0.6, 3.05]), span([4, -1.6, 4.95], [12.4, 0.6, 5.25])],
                 holds: [],
                 moving: { kind: "hinge", sound: "wood", bodies: [...flap, lip, ...weights], at: [4, -1.75, 4], axis: [0, 0, 1], low: -1.25, high: 0, spring: 0, rest: 0, friction: 1, start: 0 },
                 clear: [span([3.8, -9.5, 2.8], [12.3, -1.0, 5.2]), span([0.4, -2.5, 0.5], [4.2, 1.6, 1.7]), span([0.4, -2.5, 6.3], [4.2, 1.6, 7.5])],
@@ -356,7 +360,7 @@ export function designPart(family: PartFamily, sizes: number[]): PartDesign {
                 ...none,
                 joints: [J0, joint([16, -14, 4], [1, 0, 0])],
                 lengths: [groove([[0, 0, 4], [3, 0, 4]], [0, undefined]), groove([[2.4, -12.4, 4], [9, -13.1, 4], [16, -14, 4]], [undefined, 1])],
-                boxes: [span([2, -12.6, 2.5], [14.5, 0.2, 2.65]), span([2, -12.6, 5.35], [14.5, 0.2, 5.5]), span([2, -12.4, 2.65], [2.4, -2.2, 5.35]), span([13.6, -11.6, 2.65], [14, 0.2, 5.35])],
+                panes: [span([2, -12.6, 2.5], [14.5, 0.2, 2.65]), span([2, -12.6, 5.35], [14.5, 0.2, 5.5]), span([2, -12.4, 2.65], [2.4, -2.2, 5.35]), span([13.6, -11.6, 2.65], [14, 0.2, 5.35])],
                 holds: [],
                 moving: { kind: "hinge", sound: "metal", bodies, at: centre, axis: [0, 0, 1], low: -Infinity, high: Infinity, spring: 0, rest: 0, friction: 0.4, start: 0 },
                 clear: [span([2.8, -11.7, 2.7], [13.2, -1.3, 5.3])],
@@ -377,7 +381,8 @@ export function designPart(family: PartFamily, sizes: number[]): PartDesign {
                 ...none,
                 joints: [J0, joint([16, high, 4], [1, 0, 0])],
                 lengths: [groove([[0, 0, 4], [5.6, -0.5, 4]], [0, undefined], [1, 0, 0], [1, -0.09, 0]), groove([[11.4, high + 0.5, 4], [16, high, 4]], [undefined, 1], [1, -0.11, 0], [1, 0, 0])],
-                boxes: [span([10.8, -3, 2.75], [11.4, high - 1, 5.25]), span([5.8, -3, 2.45], [11.4, high + 1, 2.75]), span([5.8, -3, 5.25], [11.4, high + 1, 5.55]), span([5.4, 0, 2.75], [5.8, high + 1, 5.25]), span([0.3, -0.6, 2.25], [5.8, 1, 2.55]), span([0.3, -0.6, 5.45], [5.8, 1, 5.75])],
+                boxes: [span([10.8, -3, 2.75], [11.4, high - 1, 5.25])],
+                panes: [span([5.8, -3, 2.45], [11.4, high + 1, 2.75]), span([5.8, -3, 5.25], [11.4, high + 1, 5.55]), span([5.4, 0, 2.75], [5.8, high + 1, 5.25]), span([0.3, -0.6, 2.25], [5.8, 1, 2.55]), span([0.3, -0.6, 5.45], [5.8, 1, 5.75])],
                 holds: [[8.6, -3, 2.6], [8.6, -3, 5.4]],
                 moving: { kind: "lift", sound: "metal", bodies: [floor, skirt], rise, speed: LIFT.speed, ease: LIFT.ease, waits: LIFT.waits },
                 clear: [span([6, -3, 2.75], [10.8, high + 1, 5.25])],
