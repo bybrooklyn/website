@@ -40,13 +40,132 @@
     --panel-room: 24rem;
 }
 
-/* Sand's panel is a row of materials and a row of the brush and the rest. */
+/* Sand's panel is a row of materials and a row of the brush and the rest; on a phone, two rows of
+   materials and the rest over three lines. */
 .mini-stage[data-mini="sand"] {
-    --panel-room: 8rem;
+    --panel-room: 9rem;
+}
+
+@media (max-width: 40rem) {
+    .mini-stage[data-mini="sand"] {
+        --panel-room: 15.5rem;
+    }
 }
 
 .mini-stage[data-mini="sand"] canvas {
     cursor: crosshair;
+}
+
+/* Each material is a small square of itself, as the engine colors it, in a target a fingertip can
+   press: fourteen in a row on a wide screen, two rows of seven on a phone. */
+.sand-swatches {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, 2.75rem);
+}
+
+/* The six flags in one row, a phone's width. */
+.sand-flag-row {
+    display: flex;
+}
+
+.sand-swatches {
+    margin: -0.5rem 0 0.4rem -0.5rem;
+}
+
+.mote-panel .sand-swatch {
+    display: grid;
+    place-items: center;
+    width: 100%;
+    height: 2.75rem;
+    text-decoration: none;
+}
+
+.mote-panel .sand-swatch + .sand-swatch {
+    margin-inline-start: 0;
+}
+
+/* Said this firmly, because every other canvas in a mini is stretched to fill its box. */
+.mote .mote-panel canvas:is(.sand-grains, .sand-flag) {
+    display: block;
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 0.1875rem;
+    cursor: inherit;
+    touch-action: manipulation;
+    transition:
+        translate 0.15s var(--ease),
+        outline-color 0.15s ease;
+    outline: 0.125rem solid transparent;
+    outline-offset: 0.1875rem;
+}
+
+.mote .mote-panel canvas.sand-flag {
+    width: 2.25rem;
+    height: 1.5rem;
+    border-radius: 0.125rem;
+}
+
+/* Erasing leaves air: an empty square with a rule round it. */
+.mote .mote-panel canvas.sand-air {
+    box-sizing: border-box;
+    border: 0.0625rem dashed var(--muted);
+}
+
+/* The one chosen has the accent round it. */
+.mote .mote-panel .sand-swatch[aria-pressed="true"] canvas {
+    outline-color: var(--accent);
+}
+
+.sand-swatch:hover:not([aria-pressed="true"]) canvas {
+    translate: 0 -0.125rem;
+}
+
+/* The flags open under the row when pride sand is chosen, with whether to pour stripes or lay a whole flag. */
+.sand-flags {
+    --grow: 0.35s;
+    --fade: 0.25s;
+}
+
+.sand-flags.open {
+    margin-bottom: 0.4rem;
+}
+
+.sand-flag-inside {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0 1.5rem;
+    margin-left: -0.5rem;
+}
+
+.mote-panel .sand-flag-row .sand-swatch {
+    width: 3rem;
+}
+
+/* (the flags' targets reach past the panel's edge, as the swatches' do; the words keep to it) */
+.sand-ways {
+    display: flex;
+    gap: 1.1rem;
+    padding-left: 0.5rem;
+}
+
+.sand-tools {
+    margin-bottom: 0;
+}
+
+.sand-size {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    color: var(--muted);
+}
+
+.sand-size input[type="range"] {
+    width: 7rem;
+}
+
+.sand-chooser {
+    display: none;
 }
 
 /* Comet's panel is one quiet line: which field and the shots on it, and the sound. */
@@ -521,6 +640,10 @@
 @media (prefers-reduced-motion: reduce) {
     .dice-pick:hover .dice-picture {
         transform: none;
+    }
+
+    .sand-swatch:hover:not([aria-pressed="true"]) canvas {
+        translate: none;
     }
 
     .dice-count,

@@ -5,7 +5,8 @@
 //! channels straight out of memory:
 //!
 //! - byte 0, its material (`materials.rs`);
-//! - byte 1, its shade, chosen by chance when it is made, so sand is not one flat color;
+//! - byte 1, its shade, chosen by chance when it is made, so sand is not one flat color (for pride
+//!   sand, the stripe it was poured in);
 //! - byte 2, its temperature, from 0 to 255, room temperature being `ROOM`;
 //! - byte 3, bits 0 to 5 the clock of the step it last moved or changed in, bits 6 and 7 its
 //!   falling speed.
@@ -28,7 +29,7 @@ use alloc::vec;
 use alloc::vec::Vec;
 
 use crate::level::Levels;
-use crate::materials::{EMPTY, Kind, MATERIALS, Props, REACTIONS, ROOM, TABLE, VOID, WALL, deepest, widest};
+use crate::materials::{EMPTY, Kind, MATERIALS, Props, REACTIONS, ROOM, STRIPE, STRIPES, TABLE, VOID, WALL, deepest, widest};
 
 /// The side of a chunk, in cells.
 pub const CHUNK: i32 = 64;
@@ -796,6 +797,24 @@ impl World {
     /// `replace`.
     #[allow(clippy::too_many_arguments)]
     pub fn paint(&mut self, of: u8, x0: i32, y0: i32, x1: i32, y1: i32, radius: i32, fill: u32, replace: bool) {
+        self.pour(of, x0, y0, x1, y1, radius, fill, replace, None);
+    }
+
+    /// Paints as `paint` does, with each cell's shade a stripe of `count` stripes whose colors are
+    /// numbered from `first`: which stripe by where the cell lies across the line, so a stroke lays
+    /// the stripes side by side along it. The first stripe is on the line's upper side, or its left
+    /// side when the line goes straight up or down. A line that goes somewhere lays only the cells
+    /// it has newly reached, beyond the brush at its start, so that a stroke drawn in many short lines
+    /// lays each part of its ribbon once, whole, and it falls as stripes rather than being poured
+    /// over again as it falls. A line of one point, a brush held still, is taken as going down, as its
+    /// grains do: its stripes are side by side across it, and fall as a curtain.
+    #[allow(clippy::too_many_arguments)]
+    pub fn paint_striped(&mut self, of: u8, x0: i32, y0: i32, x1: i32, y1: i32, radius: i32, fill: u32, first: u8, count: u8) {
+        self.pour(of, x0, y0, x1, y1, radius, fill, false, Some(stripes(first, count)));
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn pour(&mut self, of: u8, x0: i32, y0: i32, x1: i32, y1: i32, radius: i32, fill: u32, replace: bool, striped: Option<(u32, u32)>) {
         self.strokes += 1;
         let radius = radius.clamp(0, 256);
         let left = (x0.min(x1) - radius).max(0);
@@ -809,13 +828,20 @@ impl World {
         let reach = radius as f32 + 0.5;
         let (dx, dy) = ((x1 - x0) as f32, (y1 - y0) as f32);
         let long = dx * dx + dy * dy;
+        // across the line, pointing down, or right when the line is upright or a point
+        let (mut nx, mut ny) = if long > 0.0 { (-dy, dx) } else { (1.0, 0.0) };
+        if ny < 0.0 || (ny == 0.0 && nx < 0.0) {
+            (nx, ny) = (-nx, -ny);
+        }
+        let norm = root(nx * nx + ny * ny);
+        let (nx, ny) = (nx / norm, ny / norm);
         let mut painted = false;
         for y in top..=bottom {
             for x in left..=right {
                 let (px, py) = ((x - x0) as f32, (y - y0) as f32);
                 let along = if long > 0.0 { ((px * dx + py * dy) / long).clamp(0.0, 1.0) } else { 0.0 };
                 let (ox, oy) = (px - along * dx, py - along * dy);
-                if ox * ox + oy * oy > reach * reach {
+                if ox * ox + oy * oy > reach * reach || (striped.is_some() && long > 0.0 && px * px + py * py <= reach * reach) {
                     continue;
                 }
                 let at = self.index(x, y);
@@ -834,7 +860,14 @@ impl World {
                 if roll % 100 >= fill {
                     continue;
                 }
-                self.cells[at] = of as u32 | ((roll >> 8) & 0xff) << 8 | (MATERIALS[of as usize].made as u32) << 16;
+                let shade = match striped {
+                    Some((first, count)) => {
+                        let across = ((px * nx + py * ny + reach) / (2.0 * reach) * count as f32) as i32;
+                        stripe_shade(first, across.clamp(0, count as i32 - 1) as u32, roll)
+                    }
+                    None => (roll >> 8) & 0xff,
+                };
+                self.cells[at] = of as u32 | shade << 8 | (MATERIALS[of as usize].made as u32) << 16;
                 painted = true;
             }
         }
@@ -842,6 +875,73 @@ impl World {
             self.touch(left, top, right, bottom);
             self.warmed(left, top, right, bottom);
         }
+    }
+
+    /// Lays a block of `of`, `wide` by `high` cells with its top left at (x, y), in `count` level
+    /// stripes of equal height whose colors are numbered from `first`, top to bottom: a whole flag.
+    /// Only empty cells are filled, every one of them.
+    #[allow(clippy::too_many_arguments)]
+    pub fn flag(&mut self, of: u8, x: i32, y: i32, wide: i32, high: i32, first: u8, count: u8) {
+        self.strokes += 1;
+        let (first, count) = stripes(first, count);
+        let (wide, high) = (wide.clamp(1, 4096), high.clamp(1, 4096));
+        let (left, right) = (x.max(0), (x + wide - 1).min(self.width - 1));
+        let (top, bottom) = (y.max(0), (y + high - 1).min(self.height - 1));
+        if of == EMPTY || left > right || top > bottom {
+            return;
+        }
+        let mut painted = false;
+        for row in top..=bottom {
+            let stripe = ((row - y) as u32 * count / high as u32).min(count - 1);
+            for column in left..=right {
+                let at = self.index(column, row);
+                if material(self.cells[at]) != EMPTY {
+                    continue;
+                }
+                let roll = chance(self.seed ^ 0xf1a6, self.strokes, at);
+                self.cells[at] = of as u32 | stripe_shade(first, stripe, roll) << 8 | (MATERIALS[of as usize].made as u32) << 16;
+                painted = true;
+            }
+        }
+        if painted {
+            self.touch(left, top, right, bottom);
+            self.warmed(left, top, right, bottom);
+        }
+    }
+
+    /// The page has written cells into the grid itself: a world opened from a link or a file, or
+    /// one put back after it was cleared. Every cell is made one the step can work: a number with
+    /// no material, or an edge, becomes air, and each cell's clock and speed go back to nothing.
+    /// With `fresh`, each is also made as the brush makes it, at the temperature of its material,
+    /// with a shade by chance (a stripe keeps its color). Then the whole world is woken and drawn.
+    pub fn rewritten(&mut self, fresh: bool) {
+        self.strokes += 1;
+        for y in 0..self.height {
+            for x in 0..self.width {
+                let at = self.index(x, y);
+                let cell = self.cells[at] & 0x00ff_ffff;
+                let m = material(cell);
+                let real = (m as usize) < MATERIALS.len() && m != WALL && m != VOID;
+                self.cells[at] = if !real || (m == EMPTY && fresh) {
+                    AIR
+                } else if fresh {
+                    let roll = chance(self.seed ^ 0x10ad, self.strokes, at);
+                    let shade = match MATERIALS[m as usize].glow {
+                        3 => (cell >> 8 & 0xfc) | (roll & 3),
+                        _ => (roll >> 8) & 0xff,
+                    };
+                    m as u32 | shade << 8 | (MATERIALS[m as usize].made as u32) << 16
+                } else {
+                    cell
+                };
+            }
+        }
+        for chunk in self.chunks.iter_mut() {
+            *chunk = Chunk::ASLEEP;
+        }
+        self.touch(0, 0, self.width - 1, self.height - 1);
+        self.warmed(0, 0, self.width - 1, self.height - 1);
+        self.changed = (0, self.height - 1);
     }
 
     /// Empties the world.
@@ -855,6 +955,28 @@ impl World {
         }
         self.changed = (0, self.height - 1);
     }
+}
+
+/// The first color and the number of stripes, kept to the colors there are and at least one stripe.
+fn stripes(first: u8, count: u8) -> (u32, u32) {
+    let first = (first as u32).min(STRIPES as u32 - 1);
+    (first, (count as u32).clamp(1, STRIPES as u32 - first))
+}
+
+/// The square root of a number of at least 1, by Newton's method: the browser's build has no
+/// standard library to ask, and sums, products and divisions round the same on every machine.
+fn root(of: f32) -> f32 {
+    let mut guess = of.max(1.0);
+    for _ in 0..24 {
+        guess = 0.5 * (guess + of / guess);
+    }
+    guess
+}
+
+/// The shade of a cell of stripe `stripe` of stripes whose colors begin at `first`, with a slight
+/// shade of its own from `roll`.
+fn stripe_shade(first: u32, stripe: u32, roll: u32) -> u32 {
+    ((first + stripe) * STRIPE as u32) | ((roll >> 8) & (STRIPE as u32 - 1))
 }
 
 /// Whether the four cells from `at` are all empty, so they can be passed over at once. Only the
@@ -883,7 +1005,7 @@ fn four_empty(cells: &[u32], at: usize) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::materials::{SAND, STONE, WATER};
+    use crate::materials::{PRIDE, SAND, STONE, WATER};
 
     #[test]
     fn a_new_world_is_empty_and_walled() {
@@ -948,6 +1070,93 @@ mod tests {
             world.step();
         }
         assert_eq!(world.awake(), 0);
+    }
+
+    /// The stripe a cell of pride sand was poured in.
+    fn stripe(world: &World, x: i32, y: i32) -> u32 {
+        (world.get(x, y) >> 8 & 0xff) / STRIPE as u32
+    }
+
+    #[test]
+    fn a_striped_stroke_lays_its_stripes_side_by_side_along_it_whichever_way_it_goes() {
+        // across, left to right and right to left: the first stripe on top either way
+        for (from, to) in [(10, 60), (60, 10)] {
+            let mut world = World::new(80, 40, 1);
+            world.paint_striped(PRIDE, from, 20, to, 20, 5, 100, 7, 3);
+            // the brush where the line starts was laid by the line before it
+            assert_eq!(world.at(from, 20), EMPTY);
+            let rows: Vec<u32> = (15..=25).map(|y| stripe(&world, 35, y)).collect();
+            assert_eq!(rows, vec![7, 7, 7, 7, 8, 8, 8, 9, 9, 9, 9], "{from} to {to}");
+        }
+        // straight down: the first stripe on the left
+        let mut world = World::new(40, 80, 1);
+        world.paint_striped(PRIDE, 20, 60, 20, 10, 5, 100, 0, 2);
+        assert_eq!((stripe(&world, 15, 30), stripe(&world, 25, 30)), (0, 1));
+        // a brush held still pours its stripes side by side, as a stroke straight down does
+        let mut world = World::new(40, 40, 1);
+        world.paint_striped(PRIDE, 20, 20, 20, 20, 4, 100, 3, 3);
+        assert_eq!((stripe(&world, 16, 20), stripe(&world, 20, 20), stripe(&world, 24, 20)), (3, 4, 5));
+    }
+
+    #[test]
+    fn a_flag_is_laid_whole_in_level_stripes_of_equal_height_into_empty_cells_only() {
+        let mut world = World::new(60, 40, 2);
+        world.paint(STONE, 30, 12, 30, 12, 0, 100, false);
+        world.flag(PRIDE, 10, 5, 30, 20, 10, 5);
+        assert_eq!(world.count(PRIDE), 30 * 20 - 1, "every cell but the stone");
+        assert_eq!(world.at(30, 12), STONE);
+        for y in 5..25 {
+            assert_eq!(stripe(&world, 12, y), 10 + (y as u32 - 5) / 4, "row {y}");
+        }
+        // a flag cut by the world's edge, and stripes past the colors there are, stay inside it
+        world.flag(PRIDE, 50, 30, 30, 30, 62, 9);
+        assert!((30..40).all(|y| stripe(&world, 55, y) >= 62 && stripe(&world, 55, y) < 64));
+    }
+
+    #[test]
+    fn pride_sand_keeps_its_stripes_as_it_falls_and_piles() {
+        let mut world = World::new(120, 100, 4);
+        world.flag(PRIDE, 40, 0, 40, 24, 0, 6);
+        let poured = world.count(PRIDE);
+        for _ in 0..600 {
+            world.step();
+        }
+        assert_eq!(world.count(PRIDE), poured);
+        // every cell keeps the stripe it was laid in: the six stripes are all still there, each as many cells
+        let mut each = [0usize; 6];
+        for y in 0..100 {
+            for x in 0..120 {
+                if world.at(x, y) == PRIDE {
+                    each[stripe(&world, x, y) as usize] += 1;
+                }
+            }
+        }
+        assert_eq!(each, [160; 6]);
+        // and lie mostly in their order: the middle column of the heap, from the top down, never goes back more than a stripe
+        let column: Vec<u32> = (0..100).filter(|&y| world.at(60, y) == PRIDE).map(|y| stripe(&world, 60, y)).collect();
+        assert!(column.windows(2).all(|pair| pair[1] + 1 >= pair[0]), "{column:?}");
+    }
+
+    #[test]
+    fn cells_written_by_the_page_are_made_ones_the_step_can_work_and_the_world_wakes() {
+        let mut world = World::new(64, 64, 5);
+        for _ in 0..10 {
+            world.step();
+        }
+        assert_eq!(world.awake(), 0);
+        let (sand, unknown, edge, pride) = (world.index(3, 3), world.index(4, 3), world.index(5, 3), world.index(6, 3));
+        world.cells[sand] = SAND as u32 | 0xff00_0000;
+        world.cells[unknown] = 200 | 0x0011_2200;
+        world.cells[edge] = WALL as u32;
+        world.cells[pride] = PRIDE as u32 | (9 * STRIPE as u32) << 8;
+        world.rewritten(true);
+        assert_eq!((world.at(3, 3), world.at(4, 3), world.at(5, 3), world.at(6, 3)), (SAND, EMPTY, EMPTY, PRIDE));
+        assert_eq!(world.get(3, 3) >> 24, 0, "no clock, no speed");
+        assert_eq!((world.temperature_at(3, 3), world.temperature_at(4, 3)), (ROOM, ROOM));
+        assert_eq!(stripe(&world, 6, 3), 9, "a stripe keeps its color");
+        assert!(world.awake() > 0 && world.changed() == (0, 63));
+        world.step();
+        assert_eq!(world.at(3, 4), SAND, "it falls");
     }
 
     #[test]

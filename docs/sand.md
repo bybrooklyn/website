@@ -1,8 +1,9 @@
 # A sand simulator
 
 A mini: a grid of grains, each of one material, that fall, flow, burn and react with each other. A plan
-dated 13 November 2026. Stage 1, the engine and its tests, was built on 14 November 2026, and stage 2,
-heat and reactions, the same day; the mini is a draft at `/minis/sand/`, not listed.
+dated 13 November 2026. Stage 1, the engine and its tests, was built on 14 November 2026, stage 2, heat
+and reactions, the same day, and stage 3, the page, on 14 and 15 November; the mini is a draft at
+`/minis/sand/`, not listed.
 
 ## Where the code is
 
@@ -13,8 +14,11 @@ heat and reactions, the same day; the mini is a draft at `/minis/sand/`, not lis
 - `sand/tests/`: `accuracy.rs` (movement, counts, sleeping), `reactions.rs` (heat and every reaction the
   plan names), `unchanged.rs` (the fingerprint), and `common/` what they share.
 - `public/wasm/sand.wasm` and `sand-scalar.wasm`: the built modules, with SIMD and without, committed.
-- `src/mote/cells.ts`: Mote's drawing of a grid of cells, one texture of cell bytes colored in the shader.
-- `src/minis/grains.ts`: what the page needs of the engine; `src/minis/sand.ts`: the scene.
+- `src/mote/cells.ts`: Mote's drawing of a grid of cells, one texture of cell bytes colored in the shader,
+  with stripe colors, light and soft gases.
+- `src/minis/grains.ts`: what the page needs of the engine (the row's order and keys, how hard each
+  material is poured, the world's size, the flag brush's block); `src/minis/sand.ts`: the scene and its
+  panel; `src/minis/flags.ts`: the flags; `src/minis/worlds.ts`: a world as text, for a link or a file.
 - `scripts/sand-speed.ts`: the speed in headless Chromium.
 
 ## Decided
@@ -486,13 +490,169 @@ in software.
   material, which a test checks), and the count test follows from the lines with no change to it.
 - Pride sand is a powder like sand: give it `roll` to rest near 35 degrees, or not to keep 45.
 
+## Built: stage 3
+
+### The page
+
+- **The canvas fills the mini's frame**, the world fitted in whole pixels. **A cell is 2 CSS pixels**,
+  rounded to whole device pixels (`CELL` in `grains.ts`): at 1440 by 900 the frame is 746 CSS pixels and
+  the world 373 by 280; on a phone at three device pixels to a CSS pixel, 6 a cell and about 174 across;
+  on a tablet at two, 4 a cell. Chosen by looking: at one CSS pixel a cell (stage 1) a grain could hardly
+  be seen; at three a desktop world felt cramped. A smaller world steps faster than the measured
+  1024 by 576.
+- **The row of materials**: one swatch for each material the table offers (`paintable`), a square of
+  seven by seven grains of it colored as the grid colors them (`swatchColor`, the shader's sums in
+  TypeScript), in a 44 pixel target. Powders, liquids, solids, gases, fire (`inRow`), then erase, a dashed
+  square of air. The chosen one has the accent round it. Fourteen in a row on a desktop or tablet, two
+  rows of seven on a phone. A name for each as its tooltip and for screen readers, with its key.
+- **Keys**, while the mini has the keyboard, as Mote's own: a letter of each name (`KEYS`): S sand, D dirt,
+  P pride sand, W water, I oil, L lava, A acid, T stone, O wood, C ice, M steam, K smoke, F fire, E erase;
+  the brackets size the brush; Space (or Enter) pauses. The wheel sizes the brush too, only while the
+  mini has the keyboard, so it never stops the page scrolling past.
+- **The brush**: a size of 0 to 24 cells either side, by a slider, the brackets or the wheel; its outline
+  drawn at the pointer inside the canvas (a circle, or the flag the flag brush will lay), for a mouse while
+  it hovers and for a finger while it pours. A drag pours a line with no gaps. A press held still pours as
+  long as it is held.
+- **How hard each is poured** (`fillOf`): moving, 45 in 100; solids laid solid; lava solid, so it lands
+  molten and not as drops that each harden alone (it had made porous crusts and stone towers). Held
+  still, a powder pours about three grains a step whatever the brush's size: a held brush refills the
+  cells that fell out of it, about four rows a step, and at 45 in 100 that is several times what a heap's
+  slopes carry away, so sand stacked up under the brush into a pillar (see weak spots).
+- **Pause, step, clear**, the world resting by itself as before. **Clear is undone once**: the button
+  says "undo clear" until the next stroke and puts the world back as it was, temperatures and all (a copy
+  of the cells, written back and `rewritten(0)`). Undoing a stroke was not built: the world moves on under
+  a stroke, so it would mean putting back everything since, which is a different thing.
+- **Touch**: a finger pours and the page does not scroll (`touch-action: none` on the canvas, checked with
+  real touch events at 390 by 800 and 1024 by 768: the page moved by 0). Only the first finger pours; a
+  second does nothing (`isPrimary`).
+- **Glow** is drawn in Mote's grid and only there: nothing outside the mini changes. Nothing decorative
+  moves by itself: what moves is the world, which runs only when the visitor has touched the mini under
+  reduced motion, as Mote does for every mini.
+
+### Pride sand and the flags
+
+- **Pride sand** (material 18) is one line of `MATERIALS`, sand in every number but its shade, which is a
+  stripe's color times 4 (64 colors), with a slight shade of its own in the lowest two bits. The step never
+  sets it (`glow` 3), so a grain keeps its stripe wherever it goes. No reaction names sand or pride sand,
+  and the count tests include it: its count never changes but by the brush.
+- **The flags** (`flags.ts`): rainbow (six stripes), trans and lesbian in the colors the site draws them in
+  beside its name (`.flag.trans`, `.flag.lesbian` in `base.css`, a test holds them equal), bisexual (2:1:2,
+  written as five stripes), pansexual, nonbinary. 28 stripe colors of the 64. They are laid out as a third
+  row of the drawing's palette.
+- **Pouring in stripes** (`paint_striped`): which stripe by where a cell lies across the line, the first
+  on its upper side (its left when it goes straight up or down). A moving line lays only the cells it has
+  newly reached and lays them solid, so each part of the ribbon is laid once and falls whole: poured
+  again as it fell, as a plain brush is, the stripes mixed to confetti. Held still, the stripes are side by
+  side across the brush and fall as a curtain, after the pointer has stayed in one cell for 0.2 s (before
+  that, the curtain mixed into a slow stroke). Looked at: a quick stroke lands as a low ribbon of
+  readable layers; a slow one as a flatter ribbon, still layered; a held pour as a cone striped from
+  side to side.
+- **The flag brush** (`flag`): a whole flag, two high to three wide, 8 cells high for the smallest brush
+  to 104 for the largest (`flagSize`), laid once a press into the empty cells under the pointer. It falls
+  as a block and settles as a stepped heap with every stripe in order, the top one on top.
+
+### Glow, light and soft gases
+
+In `src/mote/cells.ts`, from what the texture already carries. The palette's second row's fourth byte says
+how a material is drawn (`DRAW_STRIPED`, `DRAW_LIGHT`, `DRAW_SOFT` in `materials.rs`): fire, lava and
+burning wood give light; steam and smoke are soft. Each frame that anything changed:
+
+1. **Gather** at half the grid's size into two pictures: the light of each two by two cells (the cell's
+   own color times its brightness from byte 2, nothing up to 70, the most at 240, eased) and the soft
+   cells' color.
+2. **Blur** both across, then down: four samples each way, each pair of texels read as one between them,
+   a bell of spread 2.6 half-texels, about twelve cells.
+3. **Draw** the cells sharp; a soft cell only faint (0.4) over its blurred haze; the light added over
+   everything, kept a color the page can blend (as opaque as it is bright).
+
+A single hot cell gives little light, as it is averaged over four; a mass of fire or lava glows round
+itself. Nothing cold glows. A draw with no new rows leaves the canvas as it is.
+
+### The world in a link
+
+`worlds.ts`. The bytes: a version, width and height, the striped material's number, then runs of tokens
+(a material, or a stripe past 64) each with its length in LEB128. Squeezed by the browser's
+`CompressionStream("deflate-raw")` (every current browser has it; without it the bytes go plain, marked
+"p"), in base64 with - and _, after `#world=` in the address, so nothing is sent to a server. Temperatures
+and shades are not kept: an opened world is made as the brush makes it (`rewritten(1)`). A world of 300 by
+180 with everything in it, part settled, took under 16,000 characters; the page's world with a floor, a
+flag and a pool took 491. Over `LINK_MOST`, 16,000 characters, "copy link to this world" saves it as a file
+(`world.sand`, the same text) instead, opened by dropping it on the mini or with "open a world". An opened
+world is made at its own size, fitted in whole pixels, and paused. The fragment is taken away at the first
+stroke after it is opened, and a link pasted into the same page opens.
+
+Opening is bounded: text past 4,000,000 characters, a size past 1024 by 576, runs that do not cover the
+world exactly, a token with no meaning, a run longer than three bytes, all are refused quietly, and
+unsqueezing stops at the most a world can take (about 2.4 MB), so 20 MB of squeezed zeros is refused in
+well under two seconds. The engine checks every cell again (`rewritten`).
+
+### The engine, for the page
+
+- `paint_striped`, `flag` and `rewritten` (README.md).
+- **A flame touching wood lights it** (48 in 1024 a step). Fire poured under a beam had warmed it only to
+  about 80, short of the 90 it lights at, as a flame cools as it rises, so nothing a visitor poured under
+  wood caught. Fire still crosses a gap of two cells and not seven, and the candle and forest tests hold.
+  The fingerprint was taken again.
+
+### Speed
+
+The step is unchanged (pride sand is a line of the table; no rule changed but a reaction line). The
+drawing, in headless Chromium, which draws in software (SwiftShader), on a forest of 24 trees burning across
+the world with lava, at 1440 by 900, timed by reading a pixel back after each draw call so each pass's
+time is its own:
+
+| Device pixels to a CSS pixel | A frame's work | Of it, drawing | Gather, blur across, blur down, final | The rest (the step) |
+|---|---|---|---|---|
+| 1 | 9.6 to 10.7 ms (90%: 12.5) | 7.2 to 8.4 ms | 1.4, 1.1, 1.0, 4.0 ms | 2.3 ms |
+| 2 | 22 ms (90%: 24) | 18.5 ms | 1.4, 1.1, 0.9, 15.4 ms | 2.7 ms |
+
+At one device pixel a CSS pixel it holds sixty frames a second in software; at two, the final pass,
+which grows with the canvas's pixels, takes it to about 40 frames a second there. The glow's own passes are at half the
+grid's size and cost about 3.5 ms in software whatever the screen, much of it the forced read back. A
+graphics card does any of these in a small part of a millisecond; measuring on one is left to stage 4.
+
+### Tests
+
+`cargo test` in `sand/`: 32 unit tests (pride sand is sand but for its shade; stripes laid either way and
+held still; a flag's stripes; pride sand keeps every stripe as it falls and piles; written cells made
+workable), 13 accuracy (pride sand in the stirred and kept-exactly worlds), 15 reactions, 1 fingerprint.
+`bun test src/minis src/mote`: grains (the row's order and keys, fill, flag size, swatch colors, world
+size, fingerprint), flags (the site's colors), worlds (to text and back to the byte through the engine,
+squeezed and not; rubbish and a bomb refused), cells (stripes; light round a hot block and none round a
+cold cell; the blur's weights).
+
+Looked at in headless Chromium at 1440 by 900 and by finger at 390 by 800 and 1024 by 768: every
+material poured; each flag poured both ways and laid whole; a wooden frame and a forest lit; lava poured
+into water; clear and undo clear; a link copied and opened in a fresh page, paused, the same; hostile
+links refused with no error.
+
+### What stage 4 can rely on
+
+- The page reads everything from the table: a new material appears in the row by its kind; give it a
+  letter in `KEYS`. A new flag is a line in `FLAGS` (64 stripe colors in all).
+- The page writes cells itself only through `rewritten`; workers must keep that call's meaning.
+- `CELL` sets the world's size; the cells are drawn by `cells.ts`, which needs only the bytes and the
+  palette, so moving heat to the graphics card can use the same texture.
+- The link's format has a version byte; a change to materials' numbers needs a new version.
+
+### To confirm with the owner
+
+- The six flags, their order, and nonbinary's dark stripe, which is near the ground's color.
+- The keys, a letter of each name, with oil I, wood O, ice C, steam M and smoke K.
+- A cell of 2 CSS pixels.
+- A flame touching wood lighting it, a change to stage 2's fire.
+- Held pours of powder at about three grains a step; lava poured solid.
+- Undo of clear only, not of a stroke.
+- Links up to 16,000 characters, then a file.
+
 ## Stages
 
 1. The engine and its tests: the grid, chunks and sleeping, powders, liquids and gases, with sand, water,
    stone and dirt. Drawn plainly. Speed measured. Built 14 November 2026, with steam as the gas.
 2. Heat and reactions: fire, wood, oil, lava, ice, steam, smoke, acid, with the table and the conservation
    tests. Built 14 November 2026, with wet dirt, burning wood and ash besides.
-3. The page: the materials row, brushes, pride sand and the flag brush, links, touch and keys, glow.
+3. The page: the materials row, brushes, pride sand and the flag brush, links, touch and keys, glow. Built
+   14 and 15 November 2026.
 4. Workers and the graphics card for what spreads, each kept only if it measures faster.
 
 ## Open
@@ -521,7 +681,8 @@ bun run wasm                          # builds sand.wasm and sand-scalar.wasm wi
 cd sand && cargo test                 # the rules and every accuracy test, in about five seconds
 cd sand && cargo test -- --nocapture  # the same, printing what each scene measured
 bun test src/minis/grains.test.ts     # the built modules: fingerprint, sleeping, counts, materials
-bun test src/mote/cells.test.ts       # the grid drawn in headless Chromium
+bun test src/mote/cells.test.ts       # the grid drawn in headless Chromium, stripes and light
+bun test src/minis/worlds.test.ts src/minis/flags.test.ts   # links and flags
 cd sand && cargo run --release --example speed               # the speed natively
 cd sand && cargo run --release --example speed --features scalar   # without the hand-written SIMD
 bun scripts/sand-speed.ts             # the speed in headless Chromium, both builds
@@ -548,7 +709,14 @@ The page itself is a draft: `bun run dev` shows it at `/minis/sand/`, as does a 
   slower burn would need a chance on that line.
 - A world sprinkled everywhere with single drops makes the first steps slow while the pass looks at each
   drop as a body (the slowest step of a sprinkled world of water is about 16 ms natively).
-- Touch was checked by the canvas's `touch-action` and Mote's pointer events, not by a real touch drag.
+- **Sand wears away only from its corners.** A resting grain slides only when the cell beside it and the
+  one under that are open, so a pillar comes down about a row every ten steps, from its two top corners:
+  sand poured faster than a heap's slopes carry it stacks up into a pillar. The page pours held powder
+  slowly for this; a real avalanche rule would be stage 1's movement changed, with its angle tests.
+- **Lava poured in one place for long builds a stone pillar** up to the brush: each pour lands on the stone
+  the last one made and hardens there. Moved, it lands as a molten blob.
+- A world opened from a link made on a larger screen is cut at its edges where the canvas is smaller than
+  it at one pixel a cell.
 - The world is made once, for the size the mini has when it loads; a resize keeps it and fits it again in
   whole pixels, cutting its edges if the canvas has grown smaller than it.
 - With no WebGL 2 the page says so and draws nothing.

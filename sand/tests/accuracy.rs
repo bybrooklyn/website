@@ -40,7 +40,7 @@ fn every_count_changes_only_as_the_lines_that_happened_say() {
     // and while it is still being stirred: only the strokes and the lines change the counts
     let mut world = World::new(160, 120, 2);
     world.paint(STONE, 10, 110, 150, 110, 2, 100, false);
-    let pour = [SAND, WATER, DIRT, STEAM, sand::materials::WOOD, OIL, sand::materials::LAVA, sand::materials::ICE, sand::materials::FIRE, sand::materials::ACID];
+    let pour = [SAND, WATER, DIRT, STEAM, sand::materials::WOOD, OIL, sand::materials::LAVA, sand::materials::ICE, sand::materials::FIRE, sand::materials::ACID, sand::materials::PRIDE];
     for k in 0..60 {
         let material = pour[k % pour.len()];
         world.paint(material, 30 + (k as i32 * 37) % 100, 10, 40 + (k as i32 * 53) % 90, 30, 4, fill(material), false);
@@ -55,7 +55,7 @@ fn materials_that_do_not_react_at_room_temperature_are_kept_exactly() {
     let mut world = World::new(160, 120, 2);
     world.paint(STONE, 10, 110, 150, 110, 2, 100, false);
     for k in 0..60 {
-        let material = [SAND, WATER, STONE, OIL][k % 4];
+        let material = [SAND, WATER, STONE, OIL, sand::materials::PRIDE][k % 5];
         world.paint(material, 30 + (k as i32 * 37) % 100, 10, 40 + (k as i32 * 53) % 90, 30, 4, fill(material), false);
         let poured = counts(&world);
         run(&mut world, 40);

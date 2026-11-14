@@ -78,7 +78,8 @@ pub struct Material {
     /// one of these beside it.
     pub airy: bool,
     /// How its shade is chosen: 0 by chance when it is made; 1 by its temperature, so a flame and
-    /// lava are brighter the hotter they are; 2 by its temperature with a flicker each step.
+    /// lava are brighter the hotter they are; 2 by its temperature with a flicker each step; 3 by
+    /// the brush, as a stripe of a flag, which it keeps wherever it goes (`STRIPE`).
     pub glow: u8,
     /// Its color, red, green, blue and opacity, for a shade halfway along.
     pub color: [u8; 4],
@@ -127,6 +128,14 @@ pub const WET_DIRT: u8 = 15;
 pub const EMBER: u8 = 16;
 /// What burnt wood leaves: a light powder that floats.
 pub const ASH: u8 = 17;
+/// Sand in the colors of a flag: sand in every way but its shade, which is a stripe's color.
+pub const PRIDE: u8 = 18;
+
+/// The shade a material with `glow` 3 is given picks its color: a stripe's number times 4, with
+/// the lowest two bits a slight shade of its own, so stripes of 64 colors can be poured.
+pub const STRIPE: u8 = 4;
+/// The most stripe colors there are.
+pub const STRIPES: u8 = 64;
 
 /// Every material, by its number.
 pub const MATERIALS: &[Material] = &[
@@ -148,6 +157,7 @@ pub const MATERIALS: &[Material] = &[
     Material { name: "wet dirt", kind: Kind::Powder, density: 170, slide: 3, roll: 0, spread: 0, fall: 4, pace: 0, level: false, conduct: 12, made: ROOM, latent: 8, warms: 0, toward: 0, airy: false, glow: 0, color: [84, 58, 40, 255], vary: [18, 14, 10], paint: false },
     Material { name: "ember", kind: Kind::Solid, density: 255, slide: 0, roll: 0, spread: 0, fall: 0, pace: 0, level: false, conduct: 20, made: 200, latent: 0, warms: 16, toward: 200, airy: false, glow: 2, color: [196, 70, 26, 255], vary: [70, 80, 30], paint: false },
     Material { name: "ash", kind: Kind::Powder, density: 40, slide: 1, roll: 0, spread: 0, fall: 2, pace: 0, level: false, conduct: 6, made: ROOM, latent: 0, warms: 0, toward: 0, airy: true, glow: 0, color: [150, 146, 140, 255], vary: [24, 24, 24], paint: false },
+    Material { name: "pride sand", kind: Kind::Powder, density: 160, slide: 1, roll: 255, spread: 0, fall: 4, pace: 0, level: false, conduct: 12, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 3, color: [222, 190, 122, 255], vary: [26, 26, 26], paint: true },
 ];
 
 /// In a reaction, a neighbor of any material that lets air in (`airy`).
@@ -231,6 +241,8 @@ pub const REACTIONS: &[Reaction] = &[
     line(WOOD, OPEN, 90, 255, EMBER, SAME, 384, Heat::Kept, 0),
     // lava lights what burns where it touches it
     line(WOOD, LAVA, 0, 255, EMBER, SAME, 64, Heat::Kept, 0),
+    // a flame licking wood lights it now and then, however cool the wood still is
+    line(WOOD, FIRE, 0, 255, EMBER, SAME, 48, Heat::Kept, 0),
     // oil hot enough, with air beside it, bursts into flame; a flame lights the oil it touches
     line(OIL, OPEN, 85, 255, FIRE, SAME, 512, Heat::Kept, 230),
     line(OIL, LAVA, 0, 255, FIRE, SAME, 256, Heat::Kept, 230),
@@ -331,9 +343,11 @@ const fn table() -> [Props; 256] {
     let mut at = 0;
     while at < MATERIALS.len() {
         let m = &MATERIALS[at];
-        let acts = LINES[at].1 > LINES[at].0 || m.glow != 0;
-        let (calm_from, calm_to) = if m.glow != 0 { (1, 0) } else { calm(at) };
-        out[at] = Props { kind: m.kind, density: m.density, slide: m.slide, roll: m.roll, spread: m.spread, fall: m.fall, pace: m.pace, level: m.level, acts, calm_from, calm_to, glow: m.glow, airy: m.airy };
+        // a shade given by the brush is never changed by the step
+        let glow = if m.glow == 3 { 0 } else { m.glow };
+        let acts = LINES[at].1 > LINES[at].0 || glow != 0;
+        let (calm_from, calm_to) = if glow != 0 { (1, 0) } else { calm(at) };
+        out[at] = Props { kind: m.kind, density: m.density, slide: m.slide, roll: m.roll, spread: m.spread, fall: m.fall, pace: m.pace, level: m.level, acts, calm_from, calm_to, glow, airy: m.airy };
         at += 1;
     }
     out
@@ -425,8 +439,17 @@ pub(crate) const fn deepest() -> i32 {
     most
 }
 
+/// How the page draws a material, the fourth byte of its second row in `PALETTE`: its shade picks a
+/// stripe's color (pride sand).
+pub const DRAW_STRIPED: u8 = 1;
+/// It gives light, as bright as it is hot (fire, lava, burning wood).
+pub const DRAW_LIGHT: u8 = 2;
+/// It is drawn softly, spread a little into the air around it (steam, smoke).
+pub const DRAW_SOFT: u8 = 4;
+
 /// The colors the page draws with: 256 materials of red, green, blue and opacity, then 256 of how
-/// far the shade moves red, green and blue (and a 0), as two rows of a picture.
+/// far the shade moves red, green and blue and how the material is drawn (`DRAW_STRIPED`,
+/// `DRAW_LIGHT`, `DRAW_SOFT`), as two rows of a picture.
 pub static PALETTE: [u8; 2048] = palette();
 
 const fn palette() -> [u8; 2048] {
@@ -442,6 +465,12 @@ const fn palette() -> [u8; 2048] {
             }
             k += 1;
         }
+        out[1024 + at * 4 + 3] = match (m.glow, m.kind) {
+            (3, _) => DRAW_STRIPED,
+            (1 | 2, _) => DRAW_LIGHT,
+            (_, Kind::Gas) => DRAW_SOFT,
+            _ => 0,
+        };
         at += 1;
     }
     out
@@ -472,6 +501,7 @@ mod tests {
             (WET_DIRT, "wet dirt"),
             (EMBER, "ember"),
             (ASH, "ash"),
+            (PRIDE, "pride sand"),
         ];
         for (number, name) in named {
             assert_eq!(MATERIALS[number as usize].name, name);
@@ -592,6 +622,25 @@ mod tests {
         assert_eq!(&PALETTE[SAND as usize * 4..SAND as usize * 4 + 4], &MATERIALS[SAND as usize].color);
         assert_eq!(PALETTE[1024 + WATER as usize * 4 + 1], MATERIALS[WATER as usize].vary[1]);
         assert_eq!(PALETTE[3], 0, "empty is see-through");
+    }
+
+    #[test]
+    fn pride_sand_is_sand_in_everything_but_its_shade() {
+        let (sand, pride) = (&MATERIALS[SAND as usize], &MATERIALS[PRIDE as usize]);
+        assert_eq!((pride.kind, pride.density, pride.slide, pride.roll, pride.fall, pride.conduct, pride.made, pride.latent, pride.airy), (sand.kind, sand.density, sand.slide, sand.roll, sand.fall, sand.conduct, sand.made, sand.latent, sand.airy));
+        // no line of the table names either, and anything beside one sees it as it sees sand
+        assert!(REACTIONS.iter().all(|line| ![SAND, PRIDE].contains(&line.a) && ![SAND, PRIDE].contains(&line.b) && ![SAND, PRIDE].contains(&line.a_becomes) && ![SAND, PRIDE].contains(&line.b_becomes)));
+        for m in 0..MATERIALS.len() as u8 {
+            assert_eq!(reactions(m, PRIDE).count(), reactions(m, SAND).count());
+        }
+        // the step never sets its shade, and the page draws it from its stripe
+        let p = TABLE[PRIDE as usize];
+        assert!(!p.acts && p.glow == 0);
+        assert_eq!(PALETTE[1024 + PRIDE as usize * 4 + 3], DRAW_STRIPED);
+        assert_eq!(PALETTE[1024 + FIRE as usize * 4 + 3], DRAW_LIGHT);
+        assert_eq!(PALETTE[1024 + EMBER as usize * 4 + 3], DRAW_LIGHT);
+        assert_eq!(PALETTE[1024 + SMOKE as usize * 4 + 3], DRAW_SOFT);
+        assert_eq!(PALETTE[1024 + SAND as usize * 4 + 3], 0);
     }
 
     #[test]

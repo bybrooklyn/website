@@ -5,7 +5,7 @@
 // the page. `bun run wasm` builds the modules; `bun test` runs this.
 
 import { expect, test } from "bun:test";
-import { engineAddress, fillOf, materials, MOST, start, worldFor, type Engine } from "./grains";
+import { engineAddress, fillOf, flagSize, inRow, KEYS, materials, MOST, start, swatchColor, worldFor, type Engine, type Material } from "./grains";
 
 const simd = new URL("../../public/wasm/sand.wasm", import.meta.url);
 const scalar = new URL("../../public/wasm/sand-scalar.wasm", import.meta.url);
@@ -41,7 +41,7 @@ test("both builds are small and need nothing from the page to load", async () =>
 
 test("the busy world comes out to the byte as it does natively, with SIMD and without", async () => {
     // the number sand/tests/unchanged.rs holds the native build to
-    const native: [number, number] = [0x8453c997, 0x94b9f88b];
+    const native: [number, number] = [0xfe7b20c5, 0x7fcfa07a];
     expect(busy(await load(simd))).toEqual(native);
     expect(busy(await load(scalar))).toEqual(native);
 });
@@ -67,12 +67,27 @@ test("the same world comes out with sleeping off and in the checkerboard order w
 test("the brush is offered every material of the table it should be, and each is poured or laid as it should be", async () => {
     const engine = await load(simd);
     const offered = materials(engine);
-    expect(offered.map((m) => `${m.name} ${m.kind}`)).toEqual(["sand powder", "water liquid", "stone solid", "dirt powder", "steam gas", "wood solid", "oil liquid", "lava liquid", "ice solid", "smoke gas", "fire fire", "acid liquid"]);
+    expect(offered.map((m) => `${m.name} ${m.kind}`)).toEqual(["sand powder", "water liquid", "stone solid", "dirt powder", "steam gas", "wood solid", "oil liquid", "lava liquid", "ice solid", "smoke gas", "fire fire", "acid liquid", "pride sand powder"]);
     // wet dirt, burning wood and ash are made by reactions, not poured
     expect(offered.some((m) => ["wet dirt", "ember", "ash"].includes(m.name))).toBe(false);
-    expect(fillOf("fire")).toBeLessThan(100);
-    expect(fillOf("solid")).toBe(100);
-    expect(fillOf("powder")).toBeLessThan(100);
+    const of = (kind: Material["kind"], striped = false, light = false) => ({ kind, striped, light });
+    expect(fillOf(of("fire"))).toBeLessThan(100);
+    expect(fillOf(of("solid"))).toBe(100);
+    expect(fillOf(of("powder"))).toBeLessThan(100);
+    // a powder held still pours about three grains a step, whatever the brush's size; pride sand along a line is laid whole
+    for (const radius of [2, 4, 8, 16, 24]) {
+        const grains = (fillOf(of("powder"), true, radius) / 100) * 4 * (2 * radius + 1);
+        expect(grains).toBeGreaterThan(1.5);
+        expect(grains).toBeLessThan(4.5);
+    }
+    expect(fillOf(of("powder"), true, 0)).toBe(45);
+    expect(fillOf(of("liquid"), true, 8)).toBe(45);
+    expect(fillOf(of("solid"), true)).toBe(100);
+    // lava is poured thick, fire is not
+    expect(fillOf(of("liquid", false, true))).toBe(100);
+    expect(fillOf(of("fire", false, true))).toBeLessThan(100);
+    expect(fillOf(of("powder", true))).toBe(100);
+    expect(fillOf(of("powder", true), true, 8)).toBeLessThan(100);
 });
 
 test("what does not react at room temperature is kept exactly in the built module, and a world left alone goes to sleep", async () => {
@@ -113,15 +128,56 @@ test("the cells are where the engine says, four bytes each, in a frame of border
     expect(palette[3]).toBe(0);
 });
 
-test("a world is a cell to a CSS pixel in whole device pixels, and never more than the plan's 1024 by 576", () => {
-    expect(worldFor(896, 544, 1)).toEqual({ columns: 896, rows: 544 });
-    expect(worldFor(896, 544, 2)).toEqual({ columns: 896, rows: 544 });
-    // a fractional ratio rounds to whole device pixels a cell
-    expect(worldFor(800, 500, 1.5)).toEqual({ columns: 600, rows: 375 });
-    // a phone: fewer cells, three device pixels each
-    expect(worldFor(360, 400, 3)).toEqual({ columns: 360, rows: 400 });
+test("a world is two CSS pixels a cell in whole device pixels, and never more than the plan's 1024 by 576", () => {
+    expect(worldFor(896, 544, 1)).toEqual({ columns: 448, rows: 272 });
+    // a cell is four device pixels where there are two to a CSS pixel, so the world is the same
+    expect(worldFor(896, 544, 2)).toEqual({ columns: 448, rows: 272 });
+    // a fractional ratio rounds to whole device pixels a cell: 1.5 makes three
+    expect(worldFor(800, 500, 1.5)).toEqual({ columns: 400, rows: 250 });
+    // a phone at three device pixels to a CSS pixel: six to a cell
+    expect(worldFor(360, 400, 3)).toEqual({ columns: 180, rows: 200 });
+    // another size of cell can be asked for
+    expect(worldFor(896, 544, 1, 1)).toEqual({ columns: 896, rows: 544 });
     // a very large canvas is held to the most
-    const big = worldFor(2400, 1300, 1);
+    const big = worldFor(4000, 2400, 1);
     expect(big.columns).toBeLessThanOrEqual(MOST.columns);
     expect(big.rows).toBeLessThanOrEqual(MOST.rows);
+});
+
+test("the row of materials puts like things together and every material has its own key", async () => {
+    const engine = await load(simd);
+    const row = inRow(materials(engine));
+    expect(row.map((m) => m.name)).toEqual(["sand", "dirt", "pride sand", "water", "oil", "lava", "acid", "stone", "wood", "ice", "steam", "smoke", "fire"]);
+    const keys = [...row.map((m) => KEYS[m.name]), KEYS.erase];
+    expect(keys.every((key) => key && key.length === 1)).toBe(true);
+    expect(new Set(keys).size).toBe(keys.length);
+    // each a letter of its name
+    for (const m of row) expect(m.name).toContain(KEYS[m.name]!);
+    // pride sand is the striped one, fire and lava give light
+    expect(row.filter((m) => m.striped).map((m) => m.name)).toEqual(["pride sand"]);
+    expect(row.filter((m) => m.light).map((m) => m.name)).toEqual(["lava", "fire"]);
+});
+
+test("a whole flag is two high to three wide, grows with the brush, and fits the world", () => {
+    expect(flagSize(0, 400, 250)).toEqual({ wide: 12, high: 8 });
+    expect(flagSize(4, 400, 250)).toEqual({ wide: 36, high: 24 });
+    expect(flagSize(24, 400, 250).high).toBe(104);
+    // never more than half the world's height, nor wider than the world
+    expect(flagSize(24, 400, 100).high).toBe(50);
+    expect(flagSize(24, 60, 250).wide).toBeLessThanOrEqual(60);
+});
+
+test("a swatch is colored as the grid draws the cell: a shade moves the color, a stripe takes its flag's", () => {
+    const palette = new Uint8Array(3072);
+    palette.set([100, 100, 100, 255], 4);
+    palette.set([40, 20, 0, 0], 1024 + 4);
+    palette.set([0, 0, 0, 255], 8);
+    palette.set([30, 30, 30, 1], 1024 + 8);
+    palette.set([200, 10, 10, 255], 2048 + 5 * 4);
+    expect(swatchColor(palette, 1, 128)).toEqual([100, 100, 100, 255]);
+    expect(swatchColor(palette, 1, 255)).toEqual([120, 110, 100, 255]);
+    expect(swatchColor(palette, 1, 0)).toEqual([80, 90, 100, 255]);
+    // stripe 5, the slightest shade either way
+    expect(swatchColor(palette, 2, 5 * 4)).toEqual([185, 0, 0, 255]);
+    expect(swatchColor(palette, 2, 5 * 4 + 3)).toEqual([215, 25, 25, 255]);
 });
