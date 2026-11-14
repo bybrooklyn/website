@@ -34,7 +34,7 @@ const KINDS = {
     symbols: "!@#$%^&*()-_=+[]{};:,.?/",
 };
 
-/** Every character a password may be made of. With no kind chosen it is the small letters. */
+/** Every character a password may be made of. With no kind chosen it is the small letters; the page never lets that happen (plinko.ts keeps the last kind ticked), so this is only for settings read from elsewhere. */
 export function alphabet(settings: Pick<Settings, keyof typeof KINDS>): string {
     return (Object.keys(KINDS) as (keyof typeof KINDS)[]).filter((kind) => settings[kind]).map((kind) => KINDS[kind]).join("") || KINDS.lower;
 }
@@ -185,9 +185,11 @@ export function drop(settings: Settings, pick: (below: number) => number = fair,
 export function keptSettings(value: unknown): Settings {
     const kept = record(value) ?? {};
     const yes = (name: "lower" | "upper" | "digits" | "symbols") => (typeof kept[name] === "boolean" ? (kept[name] as boolean) : DEFAULTS[name]);
+    // kept with no kind of character chosen, as an earlier page allowed, it comes back with the small letters chosen, which is what was used then
+    const none = !yes("lower") && !yes("upper") && !yes("digits") && !yes("symbols");
     return {
         length: whole(kept.length, LIMITS.length[0], LIMITS.length[1], DEFAULTS.length),
-        lower: yes("lower"),
+        lower: none || yes("lower"),
         upper: yes("upper"),
         digits: yes("digits"),
         symbols: yes("symbols"),

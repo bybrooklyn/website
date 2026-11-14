@@ -185,14 +185,25 @@ export default function plinko(m: Mote): Scene {
         const describe = (of: Settings = settings) => {
             about.textContent = `${of.length} characters, each one of ${alphabet(of).length}: ${Math.round(strength(of))} bits.`;
         };
+        /** Takes the last password off the page: it fades out, and its characters are then gone from the page itself, not only out of sight. */
+        const forget = () => {
+            word.classList.remove("shown");
+            copy.disabled = true;
+            setTimeout(() => !word.classList.contains("shown") && (word.textContent = ""), 300);
+        };
+        /** At least one kind of character is always chosen: the last one ticked cannot be unticked. */
+        const kinds: HTMLInputElement[] = [];
+        const hold = () => {
+            const ticked = kinds.filter((each) => each.checked);
+            for (const each of kinds) each.disabled = ticked.length === 1 && each.checked;
+        };
         /** A setting changed: it is kept, and the empty board is set up again if nothing is falling. */
         const changed = () => {
             m.keep("plinko", settings);
             // a setting changed while a password is being made is for the next one: this one, and the line about it, stay as they are
             if (dropping) return;
             describe();
-            word.classList.remove("shown");
-            copy.disabled = true;
+            forget();
             said.textContent = "Press drop for a password.";
             board = drop({ ...settings, length: 0 });
             build(settings.length);
@@ -210,8 +221,10 @@ export default function plinko(m: Mote): Scene {
         const tick = (name: "lower" | "upper" | "digits" | "symbols", words: string) => {
             const input = el("input", { type: "checkbox", checked: settings[name], onchange: () => {
                 settings = { ...settings, [name]: input.checked };
+                hold();
                 changed();
             } });
+            kinds.push(input);
             return el("label", {}, input, words);
         };
         panel.append(
@@ -222,10 +235,10 @@ export default function plinko(m: Mote): Scene {
             el("div", { class: "plinko-settings" }, slide("rows", "rows of pegs", 1), slide("bounce", "bounce", 0.05), slide("gravity", "gravity", 0.1)),
         );
         describe();
+        hold();
         ready = () => {
             said.textContent = "Dropping…";
-            word.classList.remove("shown");
-            copy.disabled = true;
+            forget();
             go.disabled = true;
         };
         finish = () => {

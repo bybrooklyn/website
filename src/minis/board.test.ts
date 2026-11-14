@@ -77,6 +77,8 @@ test("on the page a short password takes its time and a long one does not take a
 test("settings kept from an earlier visit are read back inside the limits, and a damaged one still lets a board finish", () => {
     expect(keptSettings({ ...DEFAULTS, length: 20, rows: 6 })).toEqual({ ...DEFAULTS, length: 20, rows: 6 });
     expect(keptSettings({ length: null, rows: "x", bounce: Number.NaN, gravity: 99, lower: "yes" })).toEqual({ ...DEFAULTS, gravity: LIMITS.gravity[1] });
+    // no kind of character kept at all comes back as the small letters, never as none
+    expect(keptSettings({ ...DEFAULTS, lower: false, upper: false, digits: false, symbols: false })).toEqual({ ...DEFAULTS, lower: true, upper: false, digits: false, symbols: false });
     expect(keptSettings({ length: 1e9, rows: 2.5, bounce: -1 })).toEqual({ ...DEFAULTS, length: LIMITS.length[1], rows: LIMITS.rows[0], bounce: LIMITS.bounce[0] });
     for (const value of [null, undefined, 3, "x", []]) expect(keptSettings(value)).toEqual(DEFAULTS);
     // a stored length that was not a number laid no balls, and the board never said it was done
