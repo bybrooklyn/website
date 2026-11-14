@@ -115,8 +115,8 @@ test.skipIf(!live)(
             const seen = order.map((label) => folded.some((each) => each.startsWith(label) || (label === "Indent less" && each.includes("quire-tool-set"))));
             expect({ wide, ordered: seen.every((on, index) => on || !seen.slice(index + 1).some(Boolean)) }).toEqual({ wide, ordered: true });
             expect({ wide, kept: folded.filter((label) => /^(Undo|Style|Bold|Italic|Link|Picture|quire-grow)$/.test(label)) }).toEqual({ wide, kept: [] });
-            // narrower, no fewer fold
-            expect(at.folded.length).toBeGreaterThanOrEqual(before);
+            // below the widths where the page's type still grows with the window, narrower means no fewer fold
+            if (wide <= 1300) expect(at.folded.length).toBeGreaterThanOrEqual(before);
             before = at.folded.length;
         }
     },

@@ -293,8 +293,17 @@ used("the alignment button works from the keyboard alone: Enter opens it, the ar
     await tab.press("Enter");
     await tab.wait(300);
     expect(await tab.run(`${main}.getAttribute("aria-expanded")`)).toBe("true");
-    // the tools after it slid aside: it is as wide as its four choices
-    expect(await tab.run<number>(`document.querySelector('.quire-grow.open').offsetWidth / document.querySelector('.quire-grow.open .quire-grow-line').offsetWidth`)).toBeGreaterThan(2.5);
+    // its choices lie over the tools beside it: the button is as wide as it was, the tool after it has not moved, and the choice in use is where the button is
+    const laid = await tab.run<{ same: boolean; over: boolean; under: number }>(`(() => {
+        const grow = document.querySelector('.quire-grow.open');
+        const row = grow.querySelector('.quire-grow-row').getBoundingClientRect();
+        const button = ${main}.getBoundingClientRect();
+        const used = grow.querySelector('.quire-grow-line.lit').getBoundingClientRect();
+        return { same: Math.abs(grow.offsetWidth - button.width) < 1, over: row.width > button.width * 2.5, under: Math.abs(used.left - button.left) };
+    })()`);
+    expect(laid.same).toBe(true);
+    expect(laid.over).toBe(true);
+    expect(laid.under).toBeLessThan(1.5);
     await tab.press("ArrowRight");
     await tab.press("ArrowRight");
     expect(await tab.run(`${main}.getAttribute("aria-activedescendant")`)).toEndWith("-right");
@@ -310,12 +319,10 @@ used("the alignment button works from the keyboard alone: Enter opens it, the ar
     await tab.wait(300);
     expect(await md()).toBe('<div align="right">\n\nLine\n\n</div>\n');
     expect(await tab.run(`[${main}.getAttribute("aria-expanded"), document.activeElement === ${main}]`)).toEqual(["false", true]);
-    // it opens over time, its width easing out from one button's
+    // it opens over time, uncovered outward from the button
     await tab.run(`${main}.blur()`);
-    const watching = tab.run<number[]>("q.watch('.quire-bar .quire-grow', 'width', 400)");
     await press(`.quire-bar .quire-grow-main[aria-label="Alignment"]`);
-    const widths = (await watching).filter((value) => !Number.isNaN(value));
-    expect(new Set(widths.map(Math.round)).size).toBeGreaterThan(4);
+    expect(await tab.run(`document.querySelector('.quire-grow.open .quire-grow-row').getAnimations().length`)).toBeGreaterThan(0);
     await tab.press("Escape");
     await tab.wait(300);
 });

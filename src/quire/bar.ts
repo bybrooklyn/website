@@ -54,7 +54,6 @@ import {
 } from "./document";
 import type { State } from "./history";
 import { activeBlock, caret, collapsed, mark, pageBreakAt, paste, rangeOf, sameLeaf, tableOf } from "./keys";
-import { growsFrom } from "./dialog";
 import { SHORTCUTS } from "./shortcuts";
 import type { Surface } from "./surface";
 import { closeOthers, composing, control, dots, EASE, flowMenu, glyph, icon, make, MOTION, moveIndex, springCurve, still, type Menu, type MenuItem } from "./ui";
@@ -577,8 +576,6 @@ interface Tool {
     lines: () => MenuItem[];
     /** For a `.quire` document alone: away while the document is Markdown. */
     rich?: boolean;
-    /** How much wider it is open than shut, for a button that grows open in place; the bar keeps that much room for it. */
-    extra?: () => number;
     width: number;
 }
 
@@ -897,10 +894,10 @@ export function createBar(surface: Surface, options: BarOptions) {
     /** Lays the bar out again once a button that grew open has closed (layout is made below). */
     let settled = () => {};
     /**
-     * One button for a few choices side by side, showing the one at the cursor. Pressed, it grows
-     * open in place into all of them, as dictation's Choose grows into its cards (growsFrom), the
-     * tools after it sliding aside to make room and back again after; it is not a menu and covers
-     * nothing. A choice, Escape or a press elsewhere closes it back to one. The keyboard stays on the
+     * One button for a few choices side by side, showing the one at the cursor. Pressed, its choices
+     * open out of it to both sides, lying over the tools beside it, with the one in use where the
+     * button is, under the pointer; nothing else on the bar moves. It is not a menu. A choice, Escape
+     * or a press elsewhere closes it back to one. The keyboard stays on the
      * button: while it is open the side arrows move a lit mark along the choices, and Enter or Space
      * takes the lit one. Each choice's value is also the name of its command, for its shortcut.
      */
@@ -931,24 +928,29 @@ export function createBar(surface: Surface, options: BarOptions) {
             for (const [value, button] of buttons) button.classList.toggle("lit", value === lit);
             main.setAttribute("aria-activedescendant", buttons.get(lit)!.id);
         };
-        /** The change from shut to open or back, made at once; the width it makes is then eased to, and the new face grows out of `from`. */
-        const move = (from: HTMLElement, change: () => void, opening: boolean) => {
-            const before = element.offsetWidth;
-            const sweep = growsFrom(from);
-            change();
-            const after = element.offsetWidth;
-            // on a phone, where no room is kept for it, the row slides along so that the open choices are clear of the end
-            const over = element.getBoundingClientRect().left + after - end.getBoundingClientRect().left;
-            if (opening && over > 0) strip.scrollBy({ left: over + 4, behavior: still() ? "instant" : "smooth" });
-            if (still()) return settled();
+        /** Puts the open choices over the bar so that the one in use lies exactly where the button is, under the pointer, as far as the window's sides allow. They are placed by the window, since the bar cuts off what sticks out of a tool. */
+        const place = () => {
+            const here = main.getBoundingClientRect();
+            const most = innerWidth - 8 - row.offsetWidth;
+            row.style.top = `${here.top}px`;
+            row.style.left = `${Math.max(8, Math.min(here.left - buttons.get(lit)!.offsetLeft, most))}px`;
+        };
+        /** The change from shut to open or back: the choices are uncovered outward from the button to both sides, or covered back into it; nothing else on the bar moves. */
+        const move = (change: () => void, opening: boolean) => {
             element.classList.add("moving");
-            sweep(opening ? row : main, element, MOTION.open);
-            const width = element.animate([{ width: `${before}px` }, { width: `${after}px` }], { duration: opening ? MOTION.open : MOTION.close + 60, easing: opening ? springCurve(MOTION.bounce) : EASE });
+            change();
+            if (opening) place();
             const done = () => {
                 element.classList.remove("moving");
                 if (!open) settled();
             };
-            void width.finished.then(done, done);
+            if (still()) return done();
+            const all = row.getBoundingClientRect();
+            const one = main.getBoundingClientRect();
+            const shutShape = `inset(0 ${Math.max(0, all.right - one.right)}px 0 ${Math.max(0, one.left - all.left)}px round 0.5rem)`;
+            const openShape = "inset(-0.4rem -0.4rem -0.4rem -0.4rem round 0.5rem)";
+            const sweep = row.animate([{ clipPath: opening ? shutShape : openShape }, { clipPath: opening ? openShape : shutShape }], { duration: opening ? MOTION.open : MOTION.close + 60, easing: opening ? springCurve(MOTION.bounce) : EASE });
+            void sweep.finished.then(done, done);
         };
         // while it is open a press anywhere else, or Escape wherever the keyboard is, closes it with nothing changed
         const outside = (event: PointerEvent) => !element.contains(event.target as Node) && shut();
@@ -958,26 +960,32 @@ export function createBar(surface: Surface, options: BarOptions) {
             event.stopPropagation();
             shut();
         };
+        const away = () => shut();
         const grow = () => {
             closeOthers();
             row.replaceChildren(...offered().map((value) => buttons.get(value)!));
             lit = now && offered().includes(now) ? now : offered()[0]!;
             mark();
             main.classList.add("open");
-            move(main, () => {
+            move(() => {
                 open = true;
                 element.classList.add("open");
                 main.setAttribute("aria-expanded", "true");
             }, true);
             document.addEventListener("pointerdown", outside, true);
             document.addEventListener("keydown", escape, true);
+            // placed by the window, the choices would be left behind by anything that moves the bar under them
+            addEventListener("resize", away);
+            addEventListener("scroll", away, true);
         };
-        const shut = (from = buttons.get(lit)!) => {
+        const shut = () => {
             if (!open) return;
             open = false;
             document.removeEventListener("pointerdown", outside, true);
             document.removeEventListener("keydown", escape, true);
-            move(from, () => {
+            removeEventListener("resize", away);
+            removeEventListener("scroll", away, true);
+            move(() => {
                 element.classList.remove("open");
                 main.classList.remove("open");
                 main.setAttribute("aria-expanded", "false");
@@ -988,7 +996,7 @@ export function createBar(surface: Surface, options: BarOptions) {
         const pick = (value: T, keyboard: boolean) => {
             const action = take(value);
             surface.run((doc, selection) => action({ doc, selection }));
-            shut(buttons.get(value));
+            shut();
             if (!keyboard) surface.focus();
         };
         main.addEventListener("keydown", (event) => {
@@ -1020,15 +1028,13 @@ export function createBar(surface: Surface, options: BarOptions) {
             },
             /** Its choices as lines of the three dots, for when it has folded there. */
             lines: (): MenuItem[] => offered().map((value) => ({ label: kinds.find(([each]) => each === value)![1], icon: value, pressed: value === now, run: doing(take(value)) })),
-            /** How much wider it is open than shut. */
-            extra: () => Math.max(0, offered().length - 1) * (main.offsetWidth + 2),
             shut: () => shut(),
         };
     };
 
     // justified is for a .quire document alone
     const alignment = choices("Alignment", ALIGNS, align, () => ALIGNS.map(([value]) => value).filter((value) => value !== "justify" || richOn));
-    group({ ...tool(alignment.element, FOLDS.align, alignment.lines), extra: alignment.extra });
+    group(tool(alignment.element, FOLDS.align, alignment.lines));
 
     // ---- line spacing ----
     const spacings = flowMenu("Line spacing");
@@ -1040,7 +1046,7 @@ export function createBar(surface: Surface, options: BarOptions) {
 
     // ---- checklist, bulleted list, numbered list: the button shows the cursor's list, and its own kind again turns the list off ----
     const lists = choices("Lists", LISTS, toggleList, () => LISTS.map(([kind]) => kind));
-    group({ ...tool(lists.element, FOLDS.lists, lists.lines), extra: lists.extra });
+    group(tool(lists.element, FOLDS.lists, lists.lines));
 
     // ---- indent less, indent more ----
     group(
@@ -1113,9 +1119,8 @@ export function createBar(surface: Surface, options: BarOptions) {
 
     /**
      * Folds the tools that do not fit, least used first, so that nothing wraps and nothing has to be
-     * slid to, at every width; but for a phone's, room is kept for the widest button that grows open
-     * in place to open into. While one is open, or moving, the bar is left as it is, so that nothing
-     * moves by itself.
+     * slid to, at every width. While a button that opens in place is open, or moving, the bar is
+     * left as it is, so that nothing moves by itself.
      */
     function layout() {
         if (strip.querySelector(".quire-grow:is(.open, .moving)")) return;
@@ -1139,7 +1144,6 @@ export function createBar(surface: Surface, options: BarOptions) {
                 const inside = tools.filter((each) => shown.has(each) && element.contains(each.element));
                 if (inside.length) sum += inside.reduce((total, each) => total + each.width, 0) + ruleWidth;
             }
-            if (!narrow) sum += Math.max(0, ...tools.filter((each) => shown.has(each) && each.extra).map((each) => each.extra!()));
             // the first group shown has no rule before it
             return sum - ruleWidth;
         };
@@ -1179,6 +1183,8 @@ export function createBar(surface: Surface, options: BarOptions) {
     if (typeof ResizeObserver !== "undefined") {
         const watcher = new ResizeObserver(soon);
         watcher.observe(strip);
+        // and the end of the bar, which grows when the count of what checking found arrives after the bar was laid out
+        watcher.observe(end);
         for (const each of tools) watcher.observe(each.element.firstElementChild!);
     }
     void document.fonts?.ready.then(soon);

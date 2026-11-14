@@ -847,43 +847,44 @@
     --ring-offset: -0.125rem;
 }
 
-/* Alignment and the lists: one button that grows open in place into its choices side by side (bar.ts,
-   choices). Shut, the choices wait unseen behind the button; open, the button lies over them,
-   unseen but keeping the keyboard, and its focus ring goes round them all. The width between is
-   eased by the script, the tools after it sliding along. */
+/* Alignment and the lists: one button whose choices open out of it to both sides (bar.ts, choices).
+   Shut, the choices wait unseen; open, they lie over the tools beside the button on a raised strip,
+   the one in use where the button is, and the button under them keeps the keyboard. The script
+   uncovers them outward from the button and covers them back; nothing else on the bar moves. */
 .quire-grow {
     position: relative;
     display: flex;
-    overflow: clip;
     border-radius: var(--quire-round-small);
 }
 
 .quire-grow-row {
+    /* by the window, not the bar: a tool and the bar's strip cut off whatever sticks out of them */
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 60;
     display: flex;
     gap: 0.1rem;
     border-radius: var(--quire-round-small);
+    background: var(--panel-raised);
+    /* the strip's own edge, drawn outside its buttons so that the one in use lies exactly on the button */
+    box-shadow:
+        0 0 0 0.3rem var(--panel-raised),
+        0 0 0 0.3625rem var(--rule),
+        0 0.4rem 1rem oklch(0.05 0.02 300 / 0.4);
 }
 
-.quire-grow:not(.open) > .quire-grow-row {
-    position: absolute;
-    inset: 0 auto 0 0;
+.quire-grow:not(.open, .moving) > .quire-grow-row {
     visibility: hidden;
 }
 
+/* under the open choices the button is still there for the keyboard, with nothing of it seen or pressed */
 .quire-grow.open > .quire-grow-main {
-    position: absolute;
-    inset: 0;
-    z-index: 1;
-    background: transparent;
     pointer-events: none;
 }
 
 .quire-grow.open > .quire-grow-main > .quire-icon {
     visibility: hidden;
-}
-
-.quire-grow.open {
-    background: color-mix(in oklch, var(--ink) 6%, transparent);
 }
 
 /* the choice the arrows have reached, while the button keeps the keyboard */
