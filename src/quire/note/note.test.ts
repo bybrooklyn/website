@@ -88,7 +88,7 @@ async function palette(typed: string) {
 used("one shelf offers both kinds' ways to start, and a note started there has its own menus, palette and bar and none of mdQuire's", async () => {
     expect(await run("[...document.querySelectorAll('.quire-shelf-kinds .quire-shelf-word')].map((word) => word.textContent)")).toEqual(["blank", "blog post", "notes", "meeting notes", "changelog entry", "project page", "note"]);
     await press(".quire-shelf-kinds .quire-shelf-word", "note");
-    expect(await run("document.activeElement.classList.contains('quire-note-text')")).toBe(true);
+    expect(await run("document.activeElement.classList.contains('quire-plain-text')")).toBe(true);
     expect(await words()).toEqual(["File", "Edit"]);
     const lines = await menuLines();
     expect(lines).toContain("Insert the date");
@@ -98,11 +98,11 @@ used("one shelf offers both kinds' ways to start, and a note started there has i
     expect(await palette("bold")).toEqual([]);
     expect(await run("[...document.querySelectorAll('.quire-bar-home button')].map((each) => each.getAttribute('aria-label'))")).toEqual(["Insert the date (Ctrl+Shift+D)", "Tidy the lines"]);
     // its own key, and its words saved to the browser
-    await run("document.querySelector('.quire-note-text').focus()");
+    await run("document.querySelector('.quire-plain-text').focus()");
     await page!.tab.type("Buy bread   ");
     await press(".quire-bar-home button", "");
     await run("window.app.editing().flush()");
-    expect(await run("document.querySelector('.quire-note-text').value")).toMatch(/^Buy bread {3}\w+ \d+, \d{4}$/);
+    expect(await run("document.querySelector('.quire-plain-text').value")).toMatch(/^Buy bread {3}\w+ \d+, \d{4}$/);
     await run("[...document.querySelectorAll('.quire-bar-home button')][1].click()");
     expect(await run("document.querySelector('.quire-status-home .quire-count').textContent")).toBe("1 line");
 });
@@ -118,7 +118,7 @@ used("an mdQuire document started from the same shelf has mdQuire's menus, palet
     for (const theirs of ["Insert the date", "Tidy the lines"]) expect(lines).not.toContain(theirs);
     expect(await palette("bold")).toContain("Bold");
     expect(await palette("tidy")).toEqual([]);
-    expect(await run("!!document.querySelector('.quire-bar-home .quire-bar-strip') && !document.querySelector('.quire-note-text')")).toBe(true);
+    expect(await run("!!document.querySelector('.quire-bar-home .quire-bar-strip') && !document.querySelector('.quire-plain-text')")).toBe(true);
     await run("window.app.editing().editor.surface.pasteText('An mdQuire page')");
     await run("window.app.editing().flush()");
 });
@@ -137,7 +137,7 @@ used("both are on the shelf, each with its own row, and each opens again from th
     await press(".quire-name-home .quire-name");
     await press(".quire-documents-menu .quire-documents-item .quire-menu-line", "Untitled.note");
     expect(await words()).toEqual(["File", "Edit"]);
-    expect(await run("document.querySelector('.quire-note-text').value")).toMatch(/^Buy bread {3}\w+ \d+, \d{4}$/);
+    expect(await run("document.querySelector('.quire-plain-text').value")).toMatch(/^Buy bread {3}\w+ \d+, \d{4}$/);
     // and back to mdQuire's document the same way
     await press(".quire-name-home .quire-name");
     await press(".quire-documents-menu .quire-documents-item .quire-menu-line", "Untitled");

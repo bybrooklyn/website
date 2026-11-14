@@ -1255,7 +1255,7 @@ html.quire-counting {
 
 /* ---- a plain note (src/quire/note/note.ts), the core's smallest kind of document: its text field
    is the sheet's writing, in the writing's own type ---- */
-.quire-note-text {
+.quire-plain-text {
     display: block;
     width: 100%;
     min-height: 60vh;

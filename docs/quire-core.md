@@ -80,7 +80,7 @@ export function note(): Kind {
         files: { description: "Notes", accept: { "text/plain": [".note"] }, chooser: ".note" },
         mount(host, context) {
             const frame = createFrame(host, { top: context.top, name: "Untitled", onName: context.onName });
-            const text = make("textarea", "quire-note-text");
+            const text = make("textarea", "quire-plain-text");
             const session = createSession({ writing: () => ({ text: text.value }), load: (found) => void (text.value = found.text), ... }, { ... });
             text.addEventListener("input", () => session.changed());
             frame.menus(() => [{ label: "File", items: context.fileItems }, { label: "Edit", items: () => [stampLine, tidyLine] }]);

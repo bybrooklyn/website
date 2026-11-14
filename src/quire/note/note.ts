@@ -46,8 +46,8 @@ export function note(): Kind {
 function mount(host: HTMLElement, context: Context): Editing {
     host.classList.add("quire-editor");
     const frame = createFrame(host, { top: context.top, name: context.start?.entry.name ?? "Untitled", onName: context.onName });
-    const paper = make("div", "quire-paper quire-note");
-    const text = make("textarea", "quire-note-text");
+    const paper = make("div", "quire-paper quire-plain");
+    const text = make("textarea", "quire-plain-text");
     text.setAttribute("aria-label", "Note");
     text.value = context.start?.found.text ?? "";
     paper.append(text);
