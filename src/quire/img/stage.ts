@@ -284,7 +284,7 @@ export function createStage(hooks: StageHooks) {
         context.fillStyle = color;
         context.fillRect(0, 0, 1, 1);
         const [r, g, b] = context.getImageData(0, 0, 1, 1).data;
-        for (let at = 0; at < layer.length; at++) image.data.set([r!, g!, b!, Math.round(Math.min(1, Math.max(0, layer[at]!)) * 90)], at * 4);
+        for (let at = 0; at < layer.length; at++) image.data.set([r!, g!, b!, Math.round(Math.min(1, Math.max(0, layer[at]!)) * 48)], at * 4);
         context.putImageData(image, 0, 0);
         tints.set(layer, made);
         return made;
