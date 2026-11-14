@@ -13,13 +13,13 @@
 // so that a store need not know what is in them; pictures each store keeps its own way. The editor
 // turns a document into those and back with `written` and `opened`.
 
-import { dropField, type Document } from "./document";
-import { read } from "./read";
-import { collect, PAGE, readStyle, restore, type StyleFile } from "./styling";
-import { notesData, withNotes } from "./comments";
+import { dropField, type Document } from "./md/document";
+import { read } from "./md/read";
+import { collect, PAGE, readStyle, restore, type StyleFile } from "./md/styling";
+import { notesData, withNotes } from "./md/comments";
 import { readZip, writeZip, ZipError } from "./zip";
 import { freeName } from "./store";
-import { pictureType } from "./pictures";
+import { pictureType } from "./md/pictures";
 
 /** What a `.quire` document carries beside its Markdown: style.json and notes.json, as text. */
 export interface Parts {

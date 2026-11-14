@@ -19,7 +19,7 @@ const transition = createHash("sha256").update(readFileSync(new URL("./src/scrip
 // The files of ONNX Runtime that dictation fetches, copied as they are (no hash in the name) into /ort/.
 // The two JavaScript entries are the WebAssembly-only one (ort.wasm.min.mjs) and the one with WebGPU (ort.min.mjs); each is paired with the
 // .wasm file and glue it loads, so a browser downloads only the pair it can use. To ship a smaller
-// build made by hand, replace the files in this list (src/quire/dictation/parakeet/RUNTIME.md).
+// build made by hand, replace the files in this list (src/quire/md/dictation/parakeet/RUNTIME.md).
 const ORT = ["ort.wasm.min.mjs", "ort-wasm-simd-threaded.mjs", "ort-wasm-simd-threaded.wasm", "ort.min.mjs", "ort-wasm-simd-threaded.jsep.mjs", "ort-wasm-simd-threaded.jsep.wasm"];
 const wasmFolder = fileURLToPath(new URL("./public/wasm/", import.meta.url));
 const ortFolder = fileURLToPath(new URL("./node_modules/onnxruntime-web/dist/", import.meta.url));

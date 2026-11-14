@@ -11,9 +11,9 @@
 // (tableVersions in store-browser.ts), or in memory (memoryStorage). Thinning, the summary of
 // changes and when snapshots are taken are pure and tested; the panel is DOM.
 
-import { type Document } from "./document";
+import { type Document } from "./md/document";
 import { opened, type Parts } from "./quire-file";
-import { createSurface, type Surface } from "./surface";
+import { createSurface, type Surface } from "./md/surface";
 import { filledButton } from "./dialog";
 import { control, icon, make } from "./ui";
 

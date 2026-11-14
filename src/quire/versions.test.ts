@@ -4,11 +4,11 @@
 // no more. Run with `bun test src/quire`.
 
 import { expect, test } from "bun:test";
-import { setStyle } from "./document";
+import { setStyle } from "./md/document";
 import { emptyParts, opened, written } from "./quire-file";
-import { read } from "./read";
+import { read } from "./md/read";
 import { addedBlocks, changes, createKeeper, KEPT, memoryStorage, snapshotDocument, snapshotParts, snapshotText, thin, when } from "./versions";
-import { write } from "./write";
+import { write } from "./md/write";
 
 test("a .quire document's snapshot carries its styling, and restoring it brings back the typeface, highlight and spacing", () => {
     const styled = setStyle(opened("A line of words\n", emptyParts()), { start: { path: [0], offset: 2 }, end: { path: [0], offset: 6 } }, { font: "serif", highlight: "yellow" });

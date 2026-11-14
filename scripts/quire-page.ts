@@ -16,9 +16,9 @@ const quire = `${import.meta.dir}/../src/quire`;
 const styles = `${import.meta.dir}/../src/styles`;
 
 const page = `
-import { createEditor } from "${quire}/editor.ts";
-import { read } from "${quire}/read.ts";
-import { write } from "${quire}/write.ts";
+import { createEditor } from "${quire}/md/editor.ts";
+import { read } from "${quire}/md/read.ts";
+import { write } from "${quire}/md/write.ts";
 import { closeOthers } from "${quire}/ui.ts";
 import { memoryStorage } from "${quire}/versions.ts";
 import { opened } from "${quire}/quire-file.ts";

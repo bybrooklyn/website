@@ -5,7 +5,7 @@
 // and say plainly that a lost passphrase cannot be recovered. Run with `bun test src/quire`.
 
 import { expect, test } from "bun:test";
-import { tellsIn } from "./check/tells";
+import { tellsIn } from "./md/check/tells";
 import { DRIVE_WORDS, driveState, passphraseProblem, SHORTEST } from "./drive-place";
 
 test("with no client ID Drive is not set up, whatever else; then signed out, locked, or open", () => {
