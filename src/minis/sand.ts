@@ -258,11 +258,11 @@ export default function sand(m: Mote): Scene {
                 const link = el("a", { href: URL.createObjectURL(new Blob([text], { type: "text/plain" })), download: "world.sand" });
                 link.click();
                 setTimeout(() => URL.revokeObjectURL(link.href), 10_000);
-                return say(share, "too big for a link: saved as a file", "copy link to this world");
+                return say(share, "saved as a file", "copy link to this world");
             }
             history.replaceState(history.state, "", `${location.pathname}${location.search}${LINKED}${text}`);
             linked = true;
-            copyText(share, location.href, { rest: "copy link to this world", done: "link copied", failed: "the link is in the address bar" });
+            copyText(share, location.href, { rest: "copy link to this world", done: "link copied", failed: "link in the address bar" });
         };
         const chooser = el("input", { type: "file", accept: ".sand,text/plain", class: "sand-chooser" });
         chooser.tabIndex = -1;
@@ -270,7 +270,7 @@ export default function sand(m: Mote): Scene {
         const fromFile = async (file: File | undefined) => {
             const opened = file && file.size <= MOST_TEXT ? await unpack((await file.text()).trim()) : undefined;
             if (opened) open(opened);
-            else if (file) say(opener, "that is not a world", "open a world");
+            else if (file) say(opener, "not a world", "open a world");
         };
         chooser.onchange = () => {
             void fromFile(chooser.files?.[0]);

@@ -40,21 +40,32 @@
     --panel-room: 24rem;
 }
 
-/* Sand's panel is a row of materials and a row of the brush and the rest. */
+/* Sand's panel is a row of materials and a row of the brush and the rest; on a phone, two rows of
+   materials and the rest over three lines. */
 .mini-stage[data-mini="sand"] {
     --panel-room: 9rem;
+}
+
+@media (max-width: 40rem) {
+    .mini-stage[data-mini="sand"] {
+        --panel-room: 15.5rem;
+    }
 }
 
 .mini-stage[data-mini="sand"] canvas {
     cursor: crosshair;
 }
 
-/* Each material is a small square of itself, as the engine colors it, in a target a fingertip can press. */
-.sand-swatches,
+/* Each material is a small square of itself, as the engine colors it, in a target a fingertip can
+   press: fourteen in a row on a wide screen, two rows of seven on a phone. */
+.sand-swatches {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, 2.75rem);
+}
+
+/* The six flags in one row, a phone's width. */
 .sand-flag-row {
     display: flex;
-    flex-wrap: wrap;
-    gap: 0.25rem;
 }
 
 .sand-swatches {
@@ -64,7 +75,7 @@
 .mote-panel .sand-swatch {
     display: grid;
     place-items: center;
-    width: 2.75rem;
+    width: 100%;
     height: 2.75rem;
     text-decoration: none;
 }
@@ -128,12 +139,14 @@
 }
 
 .mote-panel .sand-flag-row .sand-swatch {
-    width: 3.1rem;
+    width: 3rem;
 }
 
+/* (the flags' targets reach past the panel's edge, as the swatches' do; the words keep to it) */
 .sand-ways {
     display: flex;
     gap: 1.1rem;
+    padding-left: 0.5rem;
 }
 
 .sand-tools {
