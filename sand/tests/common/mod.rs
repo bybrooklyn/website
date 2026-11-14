@@ -4,7 +4,7 @@
 
 #![allow(dead_code)]
 
-use sand::materials::{ACID, ASH, DIRT, EMBER, EMPTY, FIRE, ICE, LAVA, MATERIALS, OIL, REACTIONS, SAND, SMOKE, STEAM, STONE, WATER, WET_DIRT, WOOD, changes};
+use sand::materials::{ACID, ASH, DIRT, EMBER, EMPTY, FIRE, ICE, LAVA, MATERIALS, OIL, PRIDE, REACTIONS, SAND, SMOKE, STEAM, STONE, WATER, WET_DIRT, WOOD, changes};
 use sand::world::World;
 
 /// Steps a world `n` times.
@@ -54,6 +54,7 @@ pub fn picture(world: &World, x0: i32, y0: i32, x1: i32, y1: i32) -> String {
                 WET_DIRT => 'D',
                 EMBER => 'e',
                 ASH => ',',
+                PRIDE => 'p',
                 _ => '?',
             });
         }
@@ -92,7 +93,7 @@ pub fn busy(seed: u64, steps_between: usize) -> (World, Vec<Stroke>) {
     world.paint(STONE, 20, 140, 180, 140, 1, 100, false);
     world.paint(STONE, 20, 140, 60, 90, 1, 100, false);
     world.paint(STONE, 180, 140, 180, 80, 1, 100, false);
-    let all = [SAND, WATER, STONE, DIRT, STEAM, WOOD, OIL, LAVA, ICE, SMOKE, FIRE, ACID, EMPTY];
+    let all = [SAND, WATER, STONE, DIRT, STEAM, WOOD, OIL, LAVA, ICE, SMOKE, FIRE, ACID, PRIDE, EMPTY];
     for _ in 0..40 {
         let material = all[next(all.len() as i32) as usize];
         let stroke = (material, next(200), next(130), next(200), next(130), next(6));

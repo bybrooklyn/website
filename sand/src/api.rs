@@ -52,6 +52,44 @@ pub extern "C" fn paint(material: u32, x0: i32, y0: i32, x1: i32, y1: i32, radiu
     }
 }
 
+/// Paints as `paint` does, only into empty cells, with each cell's shade a stripe: `count` stripes
+/// whose colors are numbered from `first`, laid side by side along the line by where each cell lies
+/// across it. For pride sand.
+#[unsafe(no_mangle)]
+#[allow(clippy::too_many_arguments)]
+pub extern "C" fn paint_striped(material: u32, x0: i32, y0: i32, x1: i32, y1: i32, radius: i32, fill: u32, first: u32, count: u32) {
+    if let Some(world) = world()
+        && (1..MATERIALS.len()).contains(&(material as usize))
+        && MATERIALS[material as usize].paint
+    {
+        world.paint_striped(material as u8, x0, y0, x1, y1, radius, fill.min(100), first.min(255) as u8, count.min(255) as u8);
+    }
+}
+
+/// Lays a block of a material `wide` by `high` cells, its top left at (x, y), into the empty cells
+/// there, in `count` level stripes whose colors are numbered from `first`: a whole flag.
+#[unsafe(no_mangle)]
+#[allow(clippy::too_many_arguments)]
+pub extern "C" fn flag(material: u32, x: i32, y: i32, wide: i32, high: i32, first: u32, count: u32) {
+    if let Some(world) = world()
+        && (1..MATERIALS.len()).contains(&(material as usize))
+        && MATERIALS[material as usize].paint
+    {
+        world.flag(material as u8, x, y, wide, high, first.min(255) as u8, count.min(255) as u8);
+    }
+}
+
+/// The page has written cells into memory itself: each is made one the step can work (a number
+/// with no material, or an edge, becomes air; its clock and speed go back to nothing) and the whole
+/// world is woken and drawn. With `fresh` 1, each is also made as the brush makes it, at its
+/// material's temperature, with a shade by chance (a stripe keeps its color).
+#[unsafe(no_mangle)]
+pub extern "C" fn rewritten(fresh: u32) {
+    if let Some(world) = world() {
+        world.rewritten(fresh != 0);
+    }
+}
+
 /// Empties the world.
 #[unsafe(no_mangle)]
 pub extern "C" fn clear() {
