@@ -93,11 +93,32 @@ export function wordsOf(characters: Character[], crop: Pixels, line: Slanted, tu
     if (current.length) groups.push(current);
     const ink = inkOf(crop);
     const width = crop.width;
-    const rough = groups.map((group) => [Math.max(0, Math.min(width, group[0]!.first * SLICE)), Math.max(0, Math.min(width, (group.at(-1)!.last + 1) * SLICE))] as const);
+    const clamp = (x: number) => Math.max(0, Math.min(width, x));
+    const rough = groups.map((group) => [clamp(group[0]!.first * SLICE), clamp((group.at(-1)!.last + 1) * SLICE)] as const);
+    // columns with any ink in them
+    const inked = new Uint8Array(width);
+    for (let x = 0; x < width; x++) for (let y = 0; y < crop.height && !inked[x]; y++) inked[x] = ink[y * width + x]!;
+    // Between two words the cut is the middle of the widest gap in the ink between where the last letter
+    // of one was seen and the first letter of the next was seen; with no gap there, halfway between them.
+    const cuts = groups.slice(1).map((group, at) => {
+        const from = clamp(groups[at]!.at(-1)!.first * SLICE);
+        const to = clamp((group[0]!.last + 1) * SLICE);
+        let best = { length: 0, middle: Math.round((rough[at]![1] + rough[at + 1]![0]) / 2) };
+        for (let x = from; x < to; ) {
+            if (inked[x]) {
+                x++;
+                continue;
+            }
+            const start = x;
+            while (x < to && !inked[x]) x++;
+            if (x - start > best.length) best = { length: x - start, middle: Math.round((start + x) / 2) };
+        }
+        return best.middle;
+    });
     return groups.map((group, at) => {
         const [start, end] = rough[at]!;
-        const from = at === 0 ? 0 : Math.round((rough[at - 1]![1] + start) / 2);
-        const to = at === groups.length - 1 ? width : Math.round((end + rough[at + 1]![0]) / 2);
+        const from = at === 0 ? 0 : cuts[at - 1]!;
+        const to = at === groups.length - 1 ? width : cuts[at]!;
         let left = -1;
         let right = -1;
         for (let x = from; x < to; x++)
