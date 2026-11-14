@@ -288,7 +288,8 @@ export function designPart(family: PartFamily, sizes: number[]): PartDesign {
                     groove([[4, -8, 3.5], [4, -8.8, -1], [4, -10, -8]], [undefined, 1], [0, 0, -1], [0, 0, -1]),
                     groove([[4, -8, 4.5], [4, -8.8, 9], [4, -10, 16]], [undefined, 2], [0, 0, 1], [0, 0, 1]),
                 ],
-                panes: [span([1.2, -7.8, 0.4], [1.8, -2.1, 7.6]), span([6.3, -7.8, 0.4], [6.9, 3, 7.6])],
+                // glass walls front and back of the chimney, and along both ways out, so that marbles that come together keep to them
+                panes: [span([1.2, -7.8, 0.4], [1.8, -2.1, 7.6]), span([6.3, -7.8, 0.4], [6.9, 3, 7.6]), span([1.8, -11, -8], [2.1, -7, 0.4]), span([5.9, -11, -8], [6.2, -7, 0.4]), span([1.8, -11, 7.6], [2.1, -7, 16]), span([5.9, -11, 7.6], [6.2, -7, 16])],
                 moving: { kind: "hinge", sound: "wood", bodies: [plate, arm(-1), arm(1)], at: [4, pivot, 4], axis: [1, 0, 0], low: -SWITCH.lean, high: SWITCH.lean, spring: 0, rest: 0, friction: 0.5, start: SWITCH.lean },
                 clear: [span([1.8, -7.8, -0.4], [6.2, 1.2, 8.4])],
                 holds: [],
@@ -342,7 +343,7 @@ export function designPart(family: PartFamily, sizes: number[]): PartDesign {
                 joints: [J0, joint([16, -12, 4], [1, 0, 0])],
                 lengths: [groove([[0, 0, 4], [4, 0, 4]], [0, undefined]), groove([[4.5, -10, 4], [10, -10.9, 4], [16, -12, 4]], [undefined, 1])],
                 boxes: [span([12, -1.7, 3.05], [12.4, 1, 4.95])],
-                panes: [span([4, -1.6, 2.75], [12.4, 0.6, 3.05]), span([4, -1.6, 4.95], [12.4, 0.6, 5.25])],
+                panes: [span([4, -1.6, 2.75], [12.4, 0.6, 3.05]), span([4, -1.6, 4.95], [12.4, 0.6, 5.25]), span([4.5, -12.2, 1.9], [16, -8.4, 2.2]), span([4.5, -12.2, 5.8], [16, -8.4, 6.1])],
                 holds: [],
                 moving: { kind: "hinge", sound: "wood", bodies: [...flap, lip, ...weights], at: [4, -1.75, 4], axis: [0, 0, 1], low: -1.25, high: 0, spring: 0, rest: 0, friction: 1, start: 0 },
                 clear: [span([3.8, -9.5, 2.8], [12.3, -1.0, 5.2]), span([0.4, -2.5, 0.5], [4.2, 1.6, 1.7]), span([0.4, -2.5, 6.3], [4.2, 1.6, 7.5])],
@@ -409,6 +410,8 @@ export function designPart(family: PartFamily, sizes: number[]): PartDesign {
                 joints: [J0, joint([end, 6 * cells - 10, 4], [1, 0, 0])],
                 lengths: [groove([[0, 0, 4], [3.4, 0, 4]], [0, undefined]), groove(points, [undefined, 1])],
                 boxes: [span([3.4, -3.4, 2.2], [3.8, -1.6, 5.8])],
+                // glass walls along the foot, so that marbles that come in fast or together are kept in it
+                panes: [span([0.3, -3.4, 1.9], [11, 1.4, 2.2]), span([0.3, -3.4, 5.8], [11, 1.4, 6.1])],
                 stands: [span([loop.bottom[0] - 0.5, loop.bottom[1] - 0.5, 1.2], [loop.bottom[0] + 0.5, loop.bottom[1] + 0.5, 6.8]), span([loop.top[0] - 0.5, loop.top[1] - 0.5, 1.2], [loop.top[0] + 0.5, loop.top[1] + 0.5, 6.8])],
                 holds: [[loop.bottom[0], loop.bottom[1] - 0.5, 1.5], [loop.top[0], loop.top[1] - 0.5, 1.5]],
                 moving: { kind: "hoist", sound: "metal", bodies: [paddle], loop, speed: HOIST.speed, count: Math.max(2, Math.round(long / HOIST.spacing)) },
