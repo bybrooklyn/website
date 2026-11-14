@@ -1051,8 +1051,71 @@
     font-size: 0.85rem;
 }
 
-.quire-menu-line.pressed {
-    color: var(--accent);
+/* a line that is on shows a tick in its icon's place, never a colour alone */
+.quire-menu-mark {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 1.4rem;
+}
+
+.quire-menu-mark > * {
+    grid-area: 1 / 1;
+    transition: opacity 0.15s ease;
+}
+
+.quire-menu-mark > .quire-tick,
+.quire-menu-line.pressed > .quire-menu-mark > :not(.quire-tick) {
+    opacity: 0;
+}
+
+.quire-menu-line.pressed > .quire-menu-mark > .quire-tick {
+    opacity: 1;
+}
+
+/* a line that opens a menu beside it ends in an arrow, and stays lit while that menu is open */
+.quire-menu-line > .quire-icon.quire-menu-more {
+    flex: none;
+    width: 1rem;
+    margin-right: -0.4rem;
+    color: var(--muted);
+}
+
+.quire-menu-line[aria-expanded="true"] {
+    background: color-mix(in oklch, var(--ink) 8%, transparent);
+}
+
+/* the rule between two groups of lines */
+.quire-menu-rule {
+    flex: none;
+    width: auto;
+    height: 1px;
+    margin: 0.3rem 0.45rem;
+    border: 0;
+    background: var(--rule);
+}
+
+/* a menu too tall for its room fades at the edge where there is more to scroll to */
+.quire-menu-items.more-below {
+    mask-image: linear-gradient(to bottom, var(--ink) calc(100% - 2.5rem), transparent);
+}
+
+.quire-menu-items.more-above {
+    mask-image: linear-gradient(to top, var(--ink) calc(100% - 2.5rem), transparent);
+}
+
+.quire-menu-items.more-above.more-below {
+    mask-image: linear-gradient(to bottom, transparent, var(--ink) 2.5rem, var(--ink) calc(100% - 2.5rem), transparent);
+}
+
+/* the menu itself holds the keyboard before a line does, with no ring of its own */
+.quire-menu-items:focus {
+    outline: none;
+}
+
+/* a menu beside a line sits level with it, no gap above */
+.quire-menu.beside {
+    margin: 0 2px;
 }
 
 .quire-menu-line > .quire-icon,

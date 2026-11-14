@@ -52,12 +52,14 @@ test("it is slid along to stay inside the window at both edges", () => {
     expect(placeNear({ left: 380, top: 300, width: 10, height: 20 }, { width: 300, height: 40 }, { width: 390, height: 800 }).left).toBe(82);
 });
 
-test("a shortcut is drawn as its keys' symbols and said in words; a hint that is not a shortcut stays as it is", () => {
-    expect(keySymbols("Ctrl+B")).toEqual({ shown: "⌃B", words: "Control B" });
-    expect(keySymbols("Ctrl+Shift+Z")).toEqual({ shown: "⌃⇧Z", words: "Control Shift Z" });
-    expect(keySymbols("Ctrl+Alt+2")).toEqual({ shown: "⌃⌥2", words: "Control Alt 2" });
-    expect(keySymbols("Ctrl+Enter")).toEqual({ shown: "⌃↵", words: "Control Enter" });
+test("a shortcut is written as words on Linux and Windows and drawn as the keys' symbols on a Mac, said in words either way; a hint that is not a shortcut stays as it is", () => {
+    expect(keySymbols("Ctrl+B")).toEqual({ shown: "Ctrl+B", words: "Control B" });
+    expect(keySymbols("Ctrl+Shift+Z")).toEqual({ shown: "Ctrl+Shift+Z", words: "Control Shift Z" });
+    expect(keySymbols("Ctrl+Alt+2")).toEqual({ shown: "Ctrl+Alt+2", words: "Control Alt 2" });
     expect(keySymbols("Ctrl+B", true)).toEqual({ shown: "⌘B", words: "Command B" });
+    expect(keySymbols("Ctrl+Shift+Z", true)).toEqual({ shown: "⌘⇧Z", words: "Command Shift Z" });
+    expect(keySymbols("Ctrl+Alt+2", true)).toEqual({ shown: "⌘⌥2", words: "Command Option 2" });
+    expect(keySymbols("Ctrl+Enter", true)).toEqual({ shown: "⌘↵", words: "Command Enter" });
     for (const hint of ["›", ".md", "bring back", "Ctrl+"]) expect(keySymbols(hint)).toEqual({ shown: hint, words: "" });
 });
 
@@ -164,6 +166,59 @@ used("a menu taller than its room is cut to the room and scrolls inside itself",
     expect(await run<boolean>("(() => { const items = window.menu.box.querySelector('.quire-menu-items'); return items.scrollHeight > items.clientHeight; })()")).toBe(true);
     await run("window.menu.close()");
     await settle();
+});
+
+used("a menu too tall for its room fades at the edge where there is more, and at both edges once scrolled", async () => {
+    await run("window.opened('top', 60)");
+    await settle();
+    await tab.wait(50);
+    const edges = () => run<string[]>("[...window.menu.box.querySelector('.quire-menu-items').classList].filter((each) => each.startsWith('more'))");
+    expect(await edges()).toEqual(["more-below"]);
+    await run("(() => { const items = window.menu.box.querySelector('.quire-menu-items'); items.scrollTop = 200; items.dispatchEvent(new Event('scroll')); })()");
+    expect((await edges()).sort()).toEqual(["more-above", "more-below"]);
+    await run("window.menu.close()");
+    await settle();
+});
+
+used("a line with an arrow opens its menu beside it, level with it; Right goes in, Left and Escape come back to the line, and choosing closes both", async () => {
+    await run(`(() => {
+        window.chosen = [];
+        const inner = [{ label: "Apple", run: () => chosen.push("Apple") }, { label: "Banana", run: () => chosen.push("Banana") }];
+        document.getElementById('top').focus();
+        window.menu.open(document.getElementById('top'), [{ label: "First", run() {} }, { label: "Fruit", items: () => inner, run() {} }, { label: "Last", run() {} }], true);
+    })()`);
+    await settle();
+    const focused = () => run<string>("document.activeElement.querySelector('.quire-menu-label')?.textContent ?? document.activeElement.id");
+    await tab.press("ArrowDown");
+    expect(await focused()).toBe("Fruit");
+    await tab.press("ArrowRight");
+    await settle();
+    expect(await focused()).toBe("Apple");
+    const place = await run<{ line: { right: number; top: number }; beside: { left: number; top: number } }>("(() => { const line = [...window.menu.box.querySelectorAll('.quire-menu-line')].find((each) => each.textContent.includes('Fruit')).getBoundingClientRect(); const beside = window.menu.box.querySelector('.quire-menu.beside').getBoundingClientRect(); return { line: { right: line.right, top: line.top }, beside: { left: beside.left, top: beside.top } }; })()");
+    expect(place.beside.left).toBeGreaterThanOrEqual(place.line.right - 1);
+    expect(Math.abs(place.beside.top - place.line.top)).toBeLessThan(10);
+    // a letter goes to its line in the menu beside, and the menu it came from stays open
+    await tab.press("b");
+    expect(await focused()).toBe("Banana");
+    await tab.press("ArrowLeft");
+    await settle();
+    expect(await focused()).toBe("Fruit");
+    expect(await run<boolean>("window.menu.isOpen()")).toBe(true);
+    expect(await run<boolean>("window.menu.box.querySelector('.quire-menu.beside').matches(':popover-open')")).toBe(false);
+    await tab.press("Enter");
+    await settle();
+    expect(await focused()).toBe("Apple");
+    await tab.press("Escape");
+    await settle();
+    expect(await focused()).toBe("Fruit");
+    await tab.press("ArrowRight");
+    await settle();
+    await tab.press("ArrowDown");
+    await tab.press("Enter");
+    await settle();
+    expect(await run<string[]>("chosen")).toEqual(["Banana"]);
+    expect(await run<number>("document.querySelectorAll('.quire-menu:popover-open').length")).toBe(0);
+    expect(await focused()).toBe("top");
 });
 
 used("it stays tied to its control as the page scrolls", async () => {
