@@ -812,6 +812,22 @@ impl Learner {
         Some(Learner::with(Settings { shape, ..settings }, senses, actions, count, seed, &[], (!shape.is_plain()).then_some(pool)))
     }
 
+    /// Acts for one of several creatures, each with its pool's state kept by the caller in `state`
+    /// (empty for a creature not yet begun, which starts afresh); for a plain learner, as `act`.
+    pub fn act_as(&mut self, state: &mut Vec<f32>, senses: &[f32], into: &mut [f32]) {
+        if let Some(r) = &mut self.recurrent {
+            if state.len() != r.show_state.len() {
+                state.resize(r.show_state.len(), 0.0);
+                r.pool.fresh(state);
+            }
+            core::mem::swap(&mut r.show_state, state);
+        }
+        self.act(senses, into);
+        if let Some(r) = &mut self.recurrent {
+            core::mem::swap(&mut r.show_state, state);
+        }
+    }
+
     /// The creature on show starts a run: its pool afresh.
     pub fn forget_show(&mut self) {
         if let Some(r) = &mut self.recurrent {

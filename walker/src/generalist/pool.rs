@@ -31,6 +31,7 @@ use alloc::vec;
 use alloc::vec::Vec;
 
 use crate::learn::Random;
+use super::net::dot;
 use crate::math::{PI, exp, sin_cos, sqrt, tanh};
 
 /// The groups whose plastic connections share a rate and a decay.
@@ -255,6 +256,11 @@ impl Pool {
         let (k, q, wide, outs) = (s.reads, self.sources(), s.state(), s.outputs());
         let [memory, groups, rhythm, mood, _] = s.starts();
         let mut source = vec![0.0; q];
+        // each neuron's reads gathered side by side, so the sums over them go as the dense layers' do
+        let (mut got, mut through) = (vec![0.0; k], vec![0.0; k]);
+        let decays: Vec<f32> = (0..PLASTIC_GROUPS).map(|g| if s.memory > 0 { sigmoid(weights[groups + g]) } else { 0.0 }).collect();
+        let rates: Vec<f32> = (0..PLASTIC_GROUPS).map(|g| if s.memory > 0 { sigmoid(weights[groups + PLASTIC_GROUPS + g]) } else { 0.0 }).collect();
+        let mood_rates: Vec<f32> = (0..s.mood).map(|m| sigmoid(weights[mood + m * (k + 2) + k + 1])).collect();
         for r in 0..rows {
             let state = &mut state[r * wide..(r + 1) * wide];
             source[..self.senses].copy_from_slice(&x[r * self.senses..(r + 1) * self.senses]);
@@ -272,18 +278,18 @@ impl Pool {
                 let reads = &self.from[i * k..(i + 1) * k];
                 let (wz, wc, plastic) = (&weights[at..at + k], &weights[at + k..at + 2 * k], &weights[at + 2 * k..at + 3 * k]);
                 let f = &mut fast[i * k..(i + 1) * k];
-                let (mut gate, mut take) = (weights[at + 3 * k], weights[at + 3 * k + 1]);
+                gather(&source, reads, &mut got);
                 for n in 0..k {
-                    let read = source[reads[n] as usize];
-                    gate += wz[n] * read;
-                    take += (wc[n] + plastic[n] * f[n]) * read;
+                    through[n] = wc[n] + plastic[n] * f[n];
                 }
+                let gate = weights[at + 3 * k] + dot(wz, &got);
+                let take = weights[at + 3 * k + 1] + dot(&through, &got);
                 let (z, c) = (sigmoid(gate), tanh(take));
                 held[i] += z * (c - held[i]);
                 let g = i % PLASTIC_GROUPS;
-                let (decay, rate) = (sigmoid(weights[groups + g]), sigmoid(weights[groups + PLASTIC_GROUPS + g]));
+                let (decay, learn) = (decays[g], rates[g] * c);
                 for n in 0..k {
-                    f[n] = decay * f[n] + rate * c * source[reads[n] as usize];
+                    f[n] = decay * f[n] + learn * got[n];
                 }
                 if let Some(trace) = trace.as_deref_mut() {
                     trace.gates.push(z);
@@ -292,12 +298,8 @@ impl Pool {
             }
             for j in 0..s.rhythm {
                 let at = rhythm + j * (k + 2);
-                let reads = &self.from[(s.memory + j) * k..(s.memory + j + 1) * k];
-                let mut u = weights[at + k];
-                for n in 0..k {
-                    u += weights[at + n] * source[reads[n] as usize];
-                }
-                let pull = tanh(u);
+                gather(&source, &self.from[(s.memory + j) * k..(s.memory + j + 1) * k], &mut got);
+                let pull = tanh(weights[at + k] + dot(&weights[at..at + k], &got));
                 let pace = exp(weights[at + k + 1] + PACE_REACH * pull);
                 // kept within one turn: the gradient does not care, and an f32 keeps its precision
                 let mut phase = phases[j] + pace;
@@ -312,13 +314,9 @@ impl Pool {
             }
             for m in 0..s.mood {
                 let at = mood + m * (k + 2);
-                let reads = &self.from[(s.memory + s.rhythm + m) * k..(s.memory + s.rhythm + m + 1) * k];
-                let mut v = weights[at + k];
-                for n in 0..k {
-                    v += weights[at + n] * source[reads[n] as usize];
-                }
-                let toward = tanh(v);
-                moods[m] += sigmoid(weights[at + k + 1]) * (toward - moods[m]);
+                gather(&source, &self.from[(s.memory + s.rhythm + m) * k..(s.memory + s.rhythm + m + 1) * k], &mut got);
+                let toward = tanh(weights[at + k] + dot(&weights[at..at + k], &got));
+                moods[m] += mood_rates[m] * (toward - moods[m]);
                 if let Some(trace) = trace.as_deref_mut() {
                     trace.towards.push(toward);
                 }
@@ -365,6 +363,7 @@ impl Pool {
         let mut carry = vec![0.0f32; rows * wide];
         let mut ds = vec![0.0f32; q];
         let mut back = vec![0.0f32; wide];
+        let (mut got, mut through) = (vec![0.0f32; k], vec![0.0f32; k]);
         let decays: Vec<f32> = (0..PLASTIC_GROUPS).map(|g| if s.memory > 0 { sigmoid(weights[groups + g]) } else { 0.0 }).collect();
         let rates: Vec<f32> = (0..PLASTIC_GROUPS).map(|g| if s.memory > 0 { sigmoid(weights[groups + PLASTIC_GROUPS + g]) } else { 0.0 }).collect();
         for t in (0..steps).rev() {
@@ -399,33 +398,32 @@ impl Pool {
                     let (decay, rate) = (decays[group], rates[group]);
                     let f_before = &before[fast_at + i * k..fast_at + (i + 1) * k];
                     let gf = &g[fast_at + i * k..fast_at + (i + 1) * k];
+                    gather(source, reads, &mut got);
                     back[i] += gm * (1.0 - z);
                     let dz = gm * (c - held);
-                    let mut dc = gm * z;
-                    let (mut d_decay, mut d_rate) = (0.0, 0.0);
-                    for n in 0..k {
-                        let read = source[reads[n] as usize];
-                        back[fast_at + i * k + n] += gf[n] * decay;
-                        d_decay += gf[n] * f_before[n];
-                        d_rate += gf[n] * c * read;
-                        ds[reads[n] as usize] += gf[n] * rate * c;
-                        dc += gf[n] * rate * read;
-                    }
-                    grads[groups + group] += d_decay * decay * (1.0 - decay);
-                    grads[groups + PLASTIC_GROUPS + group] += d_rate * rate * (1.0 - rate);
+                    // through the fast weights, which moved by rate * c * read
+                    let along = dot(gf, &got);
+                    let dc = gm * z + rate * along;
+                    grads[groups + group] += dot(gf, f_before) * decay * (1.0 - decay);
+                    grads[groups + PLASTIC_GROUPS + group] += c * along * rate * (1.0 - rate);
                     let d_gate = dz * z * (1.0 - z);
                     let d_take = dc * (1.0 - c * c);
                     grads[at + 3 * k] += d_gate;
                     grads[at + 3 * k + 1] += d_take;
+                    let (wz, wc, plastic) = (&weights[at..at + k], &weights[at + k..at + 2 * k], &weights[at + 2 * k..at + 3 * k]);
+                    let (gz, rest) = grads[at..at + 3 * k].split_at_mut(k);
+                    let (gc, gp) = rest.split_at_mut(k);
+                    let fb = &mut back[fast_at + i * k..fast_at + (i + 1) * k];
+                    let learn = rate * c;
                     for n in 0..k {
-                        let read = source[reads[n] as usize];
-                        let (wz, wc, plastic) = (weights[at + n], weights[at + k + n], weights[at + 2 * k + n]);
-                        grads[at + n] += d_gate * read;
-                        grads[at + k + n] += d_take * read;
-                        grads[at + 2 * k + n] += d_take * f_before[n] * read;
-                        ds[reads[n] as usize] += d_gate * wz + d_take * (wc + plastic * f_before[n]);
-                        back[fast_at + i * k + n] += d_take * plastic * read;
+                        let read = got[n];
+                        gz[n] += d_gate * read;
+                        gc[n] += d_take * read;
+                        gp[n] += d_take * f_before[n] * read;
+                        fb[n] += gf[n] * decay + d_take * plastic[n] * read;
+                        through[n] = gf[n] * learn + d_gate * wz[n] + d_take * (wc[n] + plastic[n] * f_before[n]);
                     }
+                    scatter(&mut ds, reads, &through);
                 }
                 for j in 0..s.rhythm {
                     let at = rhythm + j * (k + 2);
@@ -438,10 +436,7 @@ impl Pool {
                     grads[at + k + 1] += d_pace;
                     let du = d_pace * PACE_REACH * (1.0 - pull * pull);
                     grads[at + k] += du;
-                    for n in 0..k {
-                        grads[at + n] += du * source[reads[n] as usize];
-                        ds[reads[n] as usize] += du * weights[at + n];
-                    }
+                    read_back(source, reads, du, &weights[at..at + k], &mut grads[at..at + k], &mut ds, &mut got);
                 }
                 for m in 0..s.mood {
                     let at = mood + m * (k + 2);
@@ -454,10 +449,7 @@ impl Pool {
                     grads[at + k + 1] += gd * (toward - before_mood) * rate * (1.0 - rate);
                     let dv = gd * rate * (1.0 - toward * toward);
                     grads[at + k] += dv;
-                    for n in 0..k {
-                        grads[at + n] += dv * source[reads[n] as usize];
-                        ds[reads[n] as usize] += dv * weights[at + n];
-                    }
+                    read_back(source, reads, dv, &weights[at..at + k], &mut grads[at..at + k], &mut ds, &mut got);
                 }
                 // what was read: the first plain layer's share goes to it, the pool's to its state before
                 let h1 = &mut h1_blame[row * self.plain..(row + 1) * self.plain];
@@ -656,6 +648,32 @@ impl Pool {
         let k = s.reads;
         let at = n * (3 * k + 2);
         weights[at + 2 * k + r] * state.get(s.memory + s.rhythm + s.mood + n * k + r).copied().unwrap_or(0.0)
+    }
+}
+
+/// What `reads` name in `source`, side by side in `into`.
+#[inline]
+fn gather(source: &[f32], reads: &[u32], into: &mut [f32]) {
+    for (got, &read) in into.iter_mut().zip(reads) {
+        *got = source[read as usize];
+    }
+}
+
+/// Adds each of `values` into the place in `into` its read names.
+#[inline]
+fn scatter(into: &mut [f32], reads: &[u32], values: &[f32]) {
+    for (&read, &value) in reads.iter().zip(values) {
+        into[read as usize] += value;
+    }
+}
+
+/// The blame `d` on a sum of reads, sent to its weights (`grads`) and to what it read (`ds`).
+#[inline]
+fn read_back(source: &[f32], reads: &[u32], d: f32, weights: &[f32], grads: &mut [f32], ds: &mut [f32], got: &mut [f32]) {
+    gather(source, reads, got);
+    for ((g, &read), (&w, &r)) in grads.iter_mut().zip(got.iter()).zip(weights.iter().zip(reads)) {
+        *g += d * read;
+        ds[r as usize] += d * w;
     }
 }
 

@@ -259,7 +259,7 @@ fn pass_back(w: &[f32], blame: &[f32], into: &mut [f32], batch: usize, ins: usiz
 
 /// The sum of two lists multiplied, in eight sums side by side, then those eight added in a fixed order.
 #[inline]
-fn dot(a: &[f32], b: &[f32]) -> f32 {
+pub(crate) fn dot(a: &[f32], b: &[f32]) -> f32 {
     let mut sums = [0.0f32; 8];
     let (whole_a, rest_a) = a.split_at(a.len() / 8 * 8);
     let (whole_b, rest_b) = b.split_at(whole_a.len());

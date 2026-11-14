@@ -370,6 +370,16 @@ impl Way {
     }
 }
 
+/// Where what a creature feels of its needs and its touch are among its senses (walker/README.md, "What
+/// it senses"): its energy, touch on its body, being held, the jolt across and up, and having just eaten.
+/// A brain's moods read these first (`pool`). Any not among `senses` are left out.
+pub fn feelings(legs: u32, senses: usize) -> Vec<usize> {
+    let legs = legs as usize;
+    let energy = super::eyes::RAYS * 6 + 4 + 4 * legs + legs + 4;
+    let touch = energy + 3;
+    [energy, touch, touch + 1 + legs, touch + 2 + legs, touch + 3 + legs, energy + 1].into_iter().filter(|&k| k < senses).collect()
+}
+
 /// How far a world is made when a run starts, in metres; the stage makes more as the creature goes.
 const FIRST_MADE: f32 = 30.0;
 
@@ -710,7 +720,7 @@ impl Practice {
     /// learner's first weights from `seed`, its worlds' seeds from `stream`.
     pub fn new(recipe: Recipe, way: Way, settings: Settings, count: usize, seed: u64, stream: u32) -> Option<Practice> {
         let mut worlds = Worlds::new(recipe, way, count, stream)?;
-        let mut learner = Learner::new(settings, worlds.senses, worlds.actions, count, seed);
+        let mut learner = Learner::with(settings, worlds.senses, worlds.actions, count, seed, &feelings(way.legs, worlds.senses), None);
         learner.begin(&mut worlds);
         Some(Practice { learner, worlds, recipe, curriculum: None, shaping: way.shaping })
     }
@@ -778,6 +788,8 @@ impl Practice {
     /// `evaluate`, with how it moved as well as how far.
     pub fn measure(&mut self, seeds: &[u32]) -> Measured {
         let learner = &mut self.learner;
-        measure(self.recipe, self.worlds.way, seeds, |_, senses, actions| learner.act(senses, actions))
+        // each creature its own pool, from a fresh start
+        let mut states: Vec<Vec<f32>> = vec![Vec::new(); seeds.len()];
+        measure(self.recipe, self.worlds.way, seeds, |i, senses, actions| learner.act_as(&mut states[i], senses, actions))
     }
 }

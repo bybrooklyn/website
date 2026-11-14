@@ -181,3 +181,40 @@ fn a_pool_grown_does_what_it_did_and_a_pool_shrunk_keeps_its_most_used() {
     assert!(pool3.reads.iter().all(|&code| code >> 16 != super::pool::MEMORY || (code & 0xffff) < 2));
     assert_eq!(Pool::from_form(&pool3.form(), senses, plain).as_ref(), Some(&pool3));
 }
+
+#[test]
+#[ignore]
+fn pool_speed() {
+    let (senses, plain) = (123, 64);
+    for (memory, reads) in [(32, 16), (64, 16), (128, 16)] {
+        let shape = Shape { memory, rhythm: 4, mood: 4, reads };
+        let mut random = Random::new(7);
+        let pool = Pool::new(shape, senses, plain, &[0, 2], &mut random);
+        let mut weights = vec![0.0; pool.weights()];
+        pool.first(&mut weights, &mut random);
+        let (steps, rows) = (16, 32);
+        let x = noise(&mut random, steps * rows * senses, 1.0);
+        let h1 = noise(&mut random, steps * rows * plain, 0.9);
+        let mut start = vec![0.0; rows * shape.state()];
+        for r in 0..rows {
+            pool.fresh(&mut start[r * shape.state()..(r + 1) * shape.state()]);
+        }
+        let fresh = vec![false; steps * rows];
+        let mut out = vec![0.0; steps * rows * shape.outputs()];
+        let mut trace = Trace::default();
+        let blame = vec![0.01; out.len()];
+        let mut grads = vec![0.0; weights.len()];
+        let mut h1_blame = vec![0.0; h1.len()];
+        let began = std::time::Instant::now();
+        for _ in 0..20 {
+            pool.forward(&weights, &x, &h1, &start, &fresh, steps, rows, &mut out, &mut trace);
+        }
+        let forward = began.elapsed().as_secs_f64() / (20 * steps * rows) as f64;
+        let began = std::time::Instant::now();
+        for _ in 0..20 {
+            pool.backward(&weights, &trace, &blame, &mut grads, &mut h1_blame);
+        }
+        let backward = began.elapsed().as_secs_f64() / (20 * steps * rows) as f64;
+        std::println!("memory {memory} reads {reads}: forward {:.2} us a row, backward {:.2} us a row", forward * 1e6, backward * 1e6);
+    }
+}

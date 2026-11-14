@@ -305,3 +305,21 @@ fn a_run_ends_at_the_first_touch_of_its_body_when_asked() {
     let (graced, ended) = (down_for(1.0), down_for(0.0));
     assert!(graced > 0.0 && ended < graced, "down a share {graced} with a second's grace, {ended} with none");
 }
+
+#[test]
+fn the_feelings_a_mood_reads_first_are_its_energy_and_its_touch() {
+    use super::ppo::Task;
+    for legs in [2, 4] {
+        let recipe = Recipe { seed: 1, difficulty: 0.2, amounts: [0.6, 0.4, 0.4, 0.4] };
+        let mut worlds = super::practice::Worlds::new(recipe, Way::of(legs), 2, 3).unwrap();
+        let senses = worlds.senses();
+        let feelings = super::practice::feelings(legs, senses);
+        assert_eq!(feelings.len(), 6);
+        let mut sensed = alloc::vec![0.0; 2 * senses];
+        worlds.observe(&mut sensed);
+        let energy = worlds.runs[0].body.needs.as_ref().unwrap().energy;
+        assert_eq!(sensed[feelings[0]], energy);
+        // standing on its feet: nothing presses on its body, nothing holds it, and the jolt up is about 1
+        assert_eq!((sensed[feelings[1]], sensed[feelings[2]]), (0.0, 0.0));
+    }
+}
