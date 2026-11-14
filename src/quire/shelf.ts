@@ -28,7 +28,7 @@ export function templates(today: Date): Template[] {
     const said = today.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
     return [
         { key: "blank", label: "blank", name: "Untitled", text: "", quire: true },
-        { key: "post", label: "blog post", name: "A new post", text: `---\ntitle: A new post\ndate: ${day}\ndescription: What it is about, in a line.\n---\n\nThe first paragraph.\n`, quire: false },
+        { key: "post", label: "blog post", name: "A new post", text: `---\ntitle: A new post\ndate: ${day}\nsummary: What it is about, in a line.\n---\n\nThe first paragraph.\n`, quire: false },
         { key: "notes", label: "notes", name: "Notes", text: `${said}\n\n## To do\n\n- [ ] Something to do\n\n## Thoughts\n\nA first thought.\n`, quire: true },
         { key: "meeting", label: "meeting notes", name: "Meeting notes", text: `${said}\n\n## Who was there\n\nNames.\n\n## Decided\n\nWhat was decided.\n\n## Next\n\n- [ ] Something to do\n`, quire: true },
         // as CHANGELOG.md is written: the day as a heading, what changed under it
