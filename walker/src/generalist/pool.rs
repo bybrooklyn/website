@@ -489,8 +489,9 @@ impl Pool {
     /// outputs count for the rest, given by the caller from the weights that read them). Reads of a
     /// neuron dropped, and reads added, start at a weight of 0 from a fresh source; fewer reads drop each
     /// neuron's weakest. Gives the pool and, for each output of the new pool, which output of the old it
-    /// was (or none), so the caller can carry the weights that read it.
-    pub fn reshape(&self, weights: &[f32], used: &[f32], shape: Shape, into: &mut [f32], random: &mut Random) -> (Pool, Vec<Option<usize>>) {
+    /// was (or none), so the caller can carry the weights that read it, and for each of its weights the
+    /// old weight it was carried from (or none), for whatever is kept beside each weight.
+    pub fn reshape(&self, weights: &[f32], used: &[f32], shape: Shape, into: &mut [f32], random: &mut Random) -> (Pool, Vec<Option<usize>>, Vec<Option<usize>>) {
         let old = self.shape;
         let (ok, nk) = (old.reads, shape.reads);
         // which old neuron of each kind each new one is: the most used kept, in their old order
@@ -533,10 +534,14 @@ impl Pool {
             w
         };
         into.copy_from_slice(&fresh_weights);
+        let mut carried: Vec<Option<usize>> = vec![None; shape.weights()];
         let [o_memory, o_groups, o_rhythm, o_mood, _] = old.starts();
         let [n_memory, n_groups, n_rhythm, n_mood, _] = shape.starts();
         if shape.memory > 0 && old.memory > 0 {
             into[n_groups..n_groups + 2 * PLASTIC_GROUPS].copy_from_slice(&weights[o_groups..o_groups + 2 * PLASTIC_GROUPS]);
+            for g in 0..2 * PLASTIC_GROUPS {
+                carried[n_groups + g] = Some(o_groups + g);
+            }
         }
         let mut reads = Vec::with_capacity(shape.neurons() * nk);
         // (kind, sets of reads per weight, the old start and stride, the new start and stride, which old)
@@ -567,17 +572,24 @@ impl Pool {
                     // its biases and own numbers after the reads
                     let tail = o_stride - sets * ok;
                     into[new_at + sets * nk..new_at + sets * nk + tail].copy_from_slice(&weights[old_at + sets * ok..old_at + sets * ok + tail]);
+                    for t in 0..tail {
+                        carried[new_at + sets * nk + t] = Some(old_at + sets * ok + t);
+                    }
                 }
                 pool.draw(&all, &mut mine, random);
                 columns.resize(mine.len(), None);
                 for (r, column) in columns.iter().enumerate() {
                     for set in 0..sets {
+                        if let (Some(o), Some(c)) = (*from, column) {
+                            carried[new_at + set * nk + r] = Some(o_start + o * o_stride + set * ok + c);
+                        }
                         into[new_at + set * nk + r] = match (*from, column) {
                             (Some(o), Some(c)) => weights[o_start + o * o_stride + set * ok + c],
                             // a read added to a neuron kept starts at nothing, so nothing changes
                             (Some(_), None) => 0.0,
-                            // a new neuron's reads keep their small first weights, plasticity none
-                            (None, _) => if set == 2 { 0.0 } else { into[new_at + set * nk + r] },
+                            // a new neuron's reads keep their small first weights, plasticity none; a
+                            // new mood reads nothing at first, so it stays at rest and its gain at 1
+                            (None, _) => if set == 2 || kind == 2 { 0.0 } else { into[new_at + set * nk + r] },
                         };
                     }
                 }
@@ -586,7 +598,7 @@ impl Pool {
         }
         pool.reads = reads;
         pool.resolve();
-        (pool, outputs)
+        (pool, outputs, carried)
     }
 
     /// The pool's form, to keep with its weights: the shape, then every read's code.

@@ -160,7 +160,7 @@ fn a_pool_grown_does_what_it_did_and_a_pool_shrunk_keeps_its_most_used() {
     let used = vec![1.0; shape.outputs()];
     let bigger = Shape { memory: 5, rhythm: 3, mood: 2, reads: 6 };
     let mut grown = vec![0.0; bigger.weights()];
-    let (pool2, map) = pool.reshape(&weights, &used, bigger, &mut grown, &mut random);
+    let (pool2, map, _) = pool.reshape(&weights, &used, bigger, &mut grown, &mut random);
     let after = outputs(&pool2, &grown);
     // every old output is still given, the same to within rounding, by the neuron it maps to
     for (new, old) in map.iter().enumerate() {
@@ -176,7 +176,7 @@ fn a_pool_grown_does_what_it_did_and_a_pool_shrunk_keeps_its_most_used() {
     let used = vec![3.0, 0.1, 2.0, 1.0, 1.0, 1.0, 1.0, 1.0];
     let smaller = Shape { memory: 2, rhythm: 2, mood: 1, reads: 3 };
     let mut shrunk = vec![0.0; smaller.weights()];
-    let (pool3, map) = pool.reshape(&weights, &used, smaller, &mut shrunk, &mut random);
+    let (pool3, map, _) = pool.reshape(&weights, &used, smaller, &mut shrunk, &mut random);
     assert_eq!(&map[..2], &[Some(0), Some(2)]);
     assert!(pool3.reads.iter().all(|&code| code >> 16 != super::pool::MEMORY || (code & 0xffff) < 2));
     assert_eq!(Pool::from_form(&pool3.form(), senses, plain).as_ref(), Some(&pool3));
