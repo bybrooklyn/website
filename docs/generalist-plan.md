@@ -1,8 +1,10 @@
 # The Generalist: the plan
 
 Dated 13 November 2026. Everything decided for the Generalist is in [generalist](generalist.md) under
-"Decided, not yet built". This file puts it in an order to build in, a stage at a time. It is a proposal
-until the owner agrees the order.
+"Decided, not yet built". This file puts it in an order to build in, a stage at a time. The owner has
+agreed this order. The stages run one after another without waiting for her; she watches when she likes
+and the course changes if she says so. Whether the strict walking test stays the bar for shipping is
+decided after stage 2.
 
 ## Where it stands
 
@@ -98,5 +100,5 @@ scratch and playable in a tab.
 
 A stage at a time, each by an agent on a branch of its own, held to four of the machine's cores while
 other work is going on and given the whole machine at night. Each stage ends with a report of what was
-tried and what each thing did, pictures of the page, and the numbers. It is merged when the owner has
-watched it and said yes. The page stays a draft until she says it ships.
+tried and what each thing did, pictures of the page, and the numbers. It is merged when its tests pass and
+it has been looked at in the page. The page stays a draft until the owner says it ships.
