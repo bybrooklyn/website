@@ -79,8 +79,10 @@
     overflow-x: auto;
     margin: calc(var(--line) * -0.4) -0.5rem 0.6rem;
     padding: 0.2rem 0.5rem 0.4rem;
-    /* sideways the strip scrolls; up, a piece is taken out of it */
+    /* sideways the strip scrolls; up, a piece is taken out of it; at its ends a sideways swipe stops
+       there, and is not the browser's swipe back a page */
     touch-action: pan-x;
+    overscroll-behavior-x: contain;
     scrollbar-width: thin;
 }
 

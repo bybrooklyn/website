@@ -6,7 +6,7 @@
 
 import { expect, test } from "bun:test";
 import { RUNS } from "./runs";
-import { read, type Placed } from "./run";
+import { jointsOf, read, type Placed } from "./run";
 import { makeTable, type Table } from "./table";
 
 /** Steps a table for `seconds`, letting a marble go from each hopper every `every` seconds until `count` have gone. */
@@ -96,3 +96,36 @@ test("a hopper holds a marble at its mouth, lets it go, and another comes out of
     table.clear();
     expect(table.marbles.length).toBe(0);
 });
+
+test("a marble crosses every join of a run with no jolt: the track pushes it no harder near a joint than three times its weight", () => {
+    const run = read(RUNS[0]!.text);
+    const table = makeTable();
+    table.set(run);
+    const joints = run.flatMap((piece) => jointsOf(piece));
+    let before: number[] | undefined;
+    const crossed = new Set<string>();
+    let hardest = 0;
+    for (let step = 0; step < 20 * 240; step++) {
+        if (!table.marbles.length) table.letGo();
+        table.step(1 / 240);
+        const marble = table.marbles[0];
+        if (!marble || table.arrived(marble)) {
+            before = undefined;
+            continue;
+        }
+        if (before) {
+            // how hard the track pushed it this step, as the change in its velocity less gravity's, in g
+            const push = (Math.hypot(marble.v[0] - before[0]!, marble.v[1] - before[1]! + 981 / 240, marble.v[2] - before[2]!) * 240) / 981;
+            for (const joint of joints) {
+                // the marble's middle sits 0.7 below the line the track is made along
+                if (Math.hypot(marble.p[0] - joint.at[0], marble.p[1] + 0.7 - joint.at[1], marble.p[2] - joint.at[2]) > 1) continue;
+                crossed.add(`${joint.at}`);
+                hardest = Math.max(hardest, push);
+            }
+        }
+        before = [...marble.v];
+    }
+    // every place two pieces of the run meet, from the hopper's to the tray's
+    expect(crossed.size).toBe(7);
+    expect(hardest).toBeLessThan(3);
+}, 60_000);
