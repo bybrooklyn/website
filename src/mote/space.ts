@@ -17,11 +17,19 @@
 // Before the touches are solved in each part, a solid that is not equally hard
 // to turn every way has its spin changed by itself (`gyroscope`).
 //
-// What it is held to is in space.test.ts.
+// For a marble run's moving parts there are three more kinds, each met by balls
+// only: solids on a hinge, which turn together about one fixed line and nothing
+// else (a seesaw, a gate, a wheel), with stops, a spring and a little friction;
+// solids that are driven, moving only as the scene says (a lift's car, a
+// chain's paddles), which nothing pushes; and fixed solids of any shape that
+// bulges (a bell). They use only + - * / and square roots, and the sine and
+// cosine of track.ts, so a run with them is the same to the bit everywhere.
+//
+// What it is held to is in space.test.ts, and the moving parts in parts.test.ts.
 
 import { Grid, Kept, type Pairs } from "./grid";
 import { block, cross, dot3 as dot, minus as sub, plus as add, scaled as mul, type Mesh, type Turn, type V3 } from "./solids";
-import type { Piece, Touch } from "./track";
+import { cosine, sine, type Piece, type Touch } from "./track";
 
 export type Quat = [x: number, y: number, z: number, w: number];
 
@@ -94,6 +102,12 @@ export interface Solid {
     readonly piece?: Piece;
     /** Asleep with others it touched, when islands sleep together: all of them, itself too, to be woken with it. */
     together?: Solid[];
+    /** On a hinge (`Space.hinge`): it turns with the hinge's other solids about its line, and moves no other way. */
+    hinge?: Hinge;
+    /** Driven (`Space.driven`): told each step where it is to be at the end of the step, and moved there; nothing pushes it. */
+    driven?: (dt: number) => { p: V3; q: Quat };
+    /** Met by balls only: a hinged, driven or fixed part of a marble run, which passes through every other solid. */
+    balls?: boolean;
     // the solver's own: where its corners and faces are in the world, and how far it has moved this step
     wp: V3[];
     wn: V3[];
@@ -101,6 +115,41 @@ export interface Solid {
     offsets: number[];
     dp: V3;
     dq: Quat;
+}
+
+/**
+ * A hinge: solids held on one fixed line, about which they turn together as one and no other way, in
+ * reduced form: the angle and its speed are what is kept, and each solid's place and turn are worked
+ * out from the angle, so nothing drifts off the line. How hard it is to turn is that of all its solids
+ * about the line, each by its inertia tensor and its distance from the line.
+ */
+export interface Hinge {
+    /** A point on the line and the way it runs, a unit vector; the right hand rule gives the way the angle grows. */
+    readonly at: V3;
+    readonly axis: V3;
+    /** Radians turned from where its solids were made, and how fast it turns, radians a second. */
+    angle: number;
+    spin: number;
+    /** 1 / how hard its solids together are to turn about the line. */
+    readonly turning: number;
+    /** Stops: the least and most angle; none for a wheel that turns freely. */
+    low: number;
+    high: number;
+    /** A spring toward `rest`, as a turning push per radian away from it. */
+    spring: number;
+    rest: number;
+    /** How much of its spin it loses each second to friction in its bearing. */
+    friction: number;
+    /** Its solids, and where each was made, at angle 0. */
+    readonly parts: Solid[];
+    readonly made: { p: V3; q: Quat }[];
+    /** The furthest any of it reaches from the line: how fast it strikes a stop is its spin times this. */
+    readonly reach: number;
+    /** What each stop has pushed this step, kept to start from next step; and how fast it closed on each. */
+    pushed: [low: number, high: number];
+    closing: [low: number, high: number];
+    /** The angle as this step began. */
+    begun: number;
 }
 
 interface Spot {
@@ -221,7 +270,8 @@ export function nearestOn(s: Solid, c: V3): { q: V3; n: V3; d: number } {
     return { q, n: d > 0 ? mul(away, 1 / d) : s.wn[face]!, d };
 }
 
-const size = (a: V3) => Math.hypot(a[0], a[1], a[2]);
+const hypot = (a: V3) => Math.hypot(a[0], a[1], a[2]);
+const size = hypot;
 const unit = (a: V3): V3 => mul(a, 1 / (size(a) || 1));
 
 /** A vector turned by a quaternion. */
@@ -268,6 +318,55 @@ function hardness(s: Solid, x: V3): number {
     if (!t) return s.ii * dot(x, x);
     if (!s.ii) return 0;
     return x[0] * (t[0]! * x[0] + t[1]! * x[1] + t[2]! * x[2]) + x[1] * (t[3]! * x[0] + t[4]! * x[1] + t[5]! * x[2]) + x[2] * (t[6]! * x[0] + t[7]! * x[1] + t[8]! * x[2]);
+}
+
+/** From a hinge's line to a point `r` from one of its solids' middles, as the step began (each hinged solid's `dp` is how far it has moved since). */
+function armOf(s: Solid, r: V3): V3 {
+    const at = s.hinge!.at;
+    return [s.p[0] - s.dp[0] - at[0] + r[0], s.p[1] - s.dp[1] - at[1] + r[1], s.p[2] - s.dp[2] - at[2] + r[2]];
+}
+
+/** How much a solid moves where it is pushed, for a push along `d` at `r` from its middle, as the push's share: 1 / its mass for a free solid, and for one on a hinge, its arm about the line squared over how hard the hinge is to turn. */
+function give(s: Solid, r: V3, d: V3): number {
+    const hinge = s.hinge;
+    if (!hinge) return s.im;
+    if (!s.im) return 0;
+    const x = cross(armOf(s, r), d);
+    const k = x[0] * hinge.axis[0] + x[1] * hinge.axis[1] + x[2] * hinge.axis[2];
+    return k * k * hinge.turning;
+}
+
+/** How much a solid turns for a turning push about `d`, as `hardness` says for a free solid; for one on a hinge, only what lies along its line turns it. */
+function giveTurning(s: Solid, d: V3): number {
+    const hinge = s.hinge;
+    if (!hinge) return hardness(s, d);
+    if (!s.im) return 0;
+    const k = d[0] * hinge.axis[0] + d[1] * hinge.axis[1] + d[2] * hinge.axis[2];
+    return k * k * hinge.turning;
+}
+
+/** A hinge's solids made to move as its spin says: each turning with it, its middle going round the line. */
+function synced(hinge: Hinge): void {
+    const [ax, ay, az] = hinge.axis;
+    const s = hinge.spin;
+    for (const part of hinge.parts) {
+        const r = armOf(part, [0, 0, 0]);
+        part.w = [ax * s, ay * s, az * s];
+        part.v = [(ay * r[2] - az * r[1]) * s, (az * r[0] - ax * r[2]) * s, (ax * r[1] - ay * r[0]) * s];
+    }
+}
+
+/** A turn about a unit axis by an angle, by the sine and cosine of track.ts, so it is the same everywhere. */
+function about(axis: V3, angle: number): Quat {
+    const s = sine(angle / 2);
+    return [axis[0] * s, axis[1] * s, axis[2] * s, cosine(angle / 2)];
+}
+
+/** Two turns as one: `b` first, then `a`. */
+function times4(a: Quat, b: Quat): Quat {
+    const [ax, ay, az, aw] = a;
+    const [bx, by, bz, bw] = b;
+    return [aw * bx + ax * bw + ay * bz - az * by, aw * by - ax * bz + ay * bw + az * bx, aw * bz + ax * by - ay * bx + az * bw, aw * bw - ax * bx - ay * by - az * bz];
 }
 
 /** Three rows of three times a vector. */
@@ -375,7 +474,11 @@ function inverse(m: number[]): number[] {
 /** Within this share of each other, a solid's turning about its three axes is taken to be one number. */
 const EVEN = 1e-9;
 
-function make(mesh: Mesh, at: V3, q: Quat, fixed: boolean, stuff: Stuff): Solid {
+function make(mesh: Mesh, at: V3, q: Quat, fixed: boolean, stuff: Stuff, exact = false): Solid {
+    // An exact solid (a marble run's part) is measured by square roots alone, as balls are, so that it
+    // is the same to the bit in every browser; the dice keep Math.hypot, as they always had.
+    const size = exact ? length : hypot;
+    const unit = (a: V3): V3 => mul(a, 1 / (size(a) || 1));
     // Its middle is where it balances. How hard it is to turn is its inertia tensor; where that is the
     // same about every axis (a ball, a cube, every die but the ten) one number stands for it, as it
     // always did, so that those turn exactly as they did before the tensor.
@@ -735,6 +838,91 @@ export class Space {
     #sleepersBuilt = false;
     #low = new Float64Array(3);
     #high = new Float64Array(3);
+    /** The hinges, in the order they were made; and the driven solids. */
+    #hinges: Hinge[] = [];
+    #driven: Solid[] = [];
+    /** Told when a hinge strikes one of its stops, and how fast its furthest part was going: for a sound. */
+    knocked?: (hinge: Hinge, speed: number) => void;
+
+    /**
+     * Solids on a hinge: each a shape that bulges, with its middle at `at` and turned by `q`, held
+     * together on the line through `through` along the unit `axis`, about which they turn as one and
+     * no other way. They meet balls only, and pass through every other solid and the track. Give
+     * stops (`low`, `high`, in radians from where they are made), a spring toward `rest`, and
+     * `friction`, the share of spin lost each second, as the part needs.
+     */
+    hinge(parts: { mesh: Mesh; at: V3; stuff?: Stuff; q?: Quat }[], through: V3, axis: V3, { low = -Infinity, high = Infinity, spring = 0, rest = 0, friction = 0 } = {}): Hinge {
+        const solids = parts.map((part) => make(part.mesh, part.at, part.q ?? [0, 0, 0, 1], false, part.stuff ?? {}, true));
+        // how hard they are to turn about the line: each one's tensor about its middle, along the axis,
+        // and its mass times its distance from the line squared
+        let around = 0;
+        let reach = 0;
+        solids.forEach((s, i) => {
+            const tensor = inertia(s.points, s.faces, parts[i]!.stuff?.density ?? 1);
+            const world = [0, 0, 0, 0, 0, 0, 0, 0, 0];
+            toWorld(s.q, tensor, world);
+            const a = axis;
+            around += a[0] * (world[0]! * a[0] + world[1]! * a[1] + world[2]! * a[2]) + a[1] * (world[3]! * a[0] + world[4]! * a[1] + world[5]! * a[2]) + a[2] * (world[6]! * a[0] + world[7]! * a[1] + world[8]! * a[2]);
+            const r = sub(s.p, through);
+            const off = sub(r, mul(axis, dot(r, axis)));
+            around += s.mass * dot(off, off);
+            for (const p of s.wp) {
+                const out = sub(sub(p, through), mul(axis, dot(sub(p, through), axis)));
+                reach = Math.max(reach, length(out));
+            }
+        });
+        const made: Hinge = {
+            at: [...through], axis: [...axis], angle: 0, spin: 0, turning: 1 / around,
+            low, high, spring, rest, friction,
+            parts: solids, made: solids.map((s) => ({ p: [...s.p], q: [...s.q] })), reach,
+            pushed: [0, 0], closing: [0, 0], begun: 0,
+        };
+        for (const s of solids) {
+            s.hinge = made;
+            s.balls = true;
+            this.solids.push(s);
+        }
+        this.#hinges.push(made);
+        return made;
+    }
+
+    /**
+     * A driven solid: a shape that bulges, which `move` puts where it is to be at the end of each step
+     * of `dt` seconds (and so says how fast it goes). Nothing pushes it, and it pushes what it meets as
+     * if it weighed everything; it meets balls only. A lift's car, a chain's paddles.
+     */
+    driven(mesh: Mesh, at: V3, move: (dt: number) => { p: V3; q: Quat }, stuff: Stuff = {}, q: Quat = [0, 0, 0, 1]): Solid {
+        const made = make(mesh, at, q, true, stuff, true);
+        made.driven = move;
+        made.balls = true;
+        this.solids.push(made);
+        this.#driven.push(made);
+        return made;
+    }
+
+    /** A fixed solid of any shape that bulges, met by balls only, the same everywhere to the bit: a bell, a drum, a bar to strike. */
+    fixed(mesh: Mesh, at: V3, stuff: Stuff = {}, q: Quat = [0, 0, 0, 1]): Solid {
+        const made = make(mesh, at, q, true, stuff, true);
+        made.balls = true;
+        this.solids.push(made);
+        return made;
+    }
+
+    /** Sets a hinge to an angle, at rest: for a part put back as it was. */
+    turnTo(hinge: Hinge, angle: number, speed = 0): void {
+        hinge.angle = angle;
+        hinge.spin = speed;
+        hinge.begun = angle;
+        const turn = about(hinge.axis, angle);
+        hinge.parts.forEach((part, i) => {
+            const made = hinge.made[i]!;
+            part.q = times4(turn, made.q);
+            part.p = add(hinge.at, spin(turn, sub(made.p, hinge.at)));
+            part.dp = [0, 0, 0];
+            place(part);
+        });
+        synced(hinge);
+    }
 
     /** A solid that moves, from a shape that bulges everywhere, with its middle at `at`. */
     solid(mesh: Mesh, at: V3, stuff: Stuff = {}, q: Quat = [0, 0, 0, 1]): Solid {
@@ -831,6 +1019,8 @@ export class Space {
     /** Two solids the broad phase found near each other: where they touch, if they do, added to `manifolds`. */
     #pair(a: Solid, b: Solid, dt: number, was: Map<number, Manifold>, manifolds: Manifold[]): void {
         if (!a.im && !b.im) return;
+        // a marble run's moving and sounding parts meet balls only
+        if ((a.balls || b.balls) && a.radius === undefined && b.radius === undefined) return;
         // a ball is met by its own rules, below
         if (a.radius !== undefined || b.radius !== undefined) {
             const made = this.#round(a, b, dt, was.get(a.id * 2 ** 26 + b.id));
@@ -909,12 +1099,15 @@ export class Space {
         if (!this.#sleeping.length) return;
         const [low, high] = [this.#low, this.#high];
         for (const a of this.solids) {
-            if (!a.im) continue;
+            // a driven solid that is moving wakes what it reaches, so that a lift's car does not pass through a marble asleep on it
+            const driving = a.driven && (a.v[0] || a.v[1] || a.v[2] || a.w[0] || a.w[1] || a.w[2]);
+            if (!a.im && !driving) continue;
             const reach = a.far + this.margin + Math.min((length(a.v) + length(a.w) * a.far) * dt, this.ahead) + 1e-6;
             for (let axis = 0; axis < 3; axis++) [low[axis], high[axis]] = [a.p[axis]! - reach, a.p[axis]! + reach];
             const found = this.#sleepers.find(low, high);
             for (let k = 0; k < found; k++) {
                 const b = this.#sleeping[this.#sleepers.found[k]!]!;
+                if (driving && b.rest && !b.held && b.radius !== undefined) this.#rouse(b);
                 if (b === a || (b.im && b.id < a.id)) continue;
                 if (b.id < a.id) this.#pair(b, a, dt, was, manifolds);
                 else this.#pair(a, b, dt, was, manifolds);
@@ -924,7 +1117,7 @@ export class Space {
 
     /** Where a ball meets another ball or a solid of faces, or comes within reach of it this step: a contact of one point, or none. */
     #round(a: Solid, b: Solid, dt: number, before: Manifold | undefined): Manifold | undefined {
-        const closing = length(sub(b.v, a.v)) + length(a.w) * (a.im ? a.far : 0) + length(b.w) * (b.im ? b.far : 0);
+        const closing = length(sub(b.v, a.v)) + length(a.w) * (a.im || a.driven ? a.far : 0) + length(b.w) * (b.im || b.driven ? b.far : 0);
         const margin = this.margin + Math.min(closing * dt, this.ahead);
         let [n, at, gap]: [V3, V3, number] = [[0, 1, 0], [0, 0, 0], 0];
         if (a.radius !== undefined && b.radius !== undefined) {
@@ -963,12 +1156,13 @@ export class Space {
         const [rollOne, rollTwo] = old ? into(old.rollOne ?? 0, old.rollTwo ?? 0) : [0, 0];
         const ca = sub(ra, mul(n, gap / 2));
         const cb = add(rb, mul(n, gap / 2));
+        // a solid on a hinge moves only by turning about its line: `give` says how much, and `hardness` adds nothing more for it
         const k = (d: V3) => {
-            const sum = a.im + b.im + hardness(a, cross(ra, d)) + hardness(b, cross(rb, d));
+            const sum = give(a, ra, d) + give(b, rb, d) + (a.hinge ? 0 : hardness(a, cross(ra, d))) + (b.hinge ? 0 : hardness(b, cross(rb, d)));
             return sum > 0 ? 1 / sum : 0;
         };
         const turning = (d: V3) => {
-            const sum = hardness(a, d) + hardness(b, d);
+            const sum = giveTurning(a, d) + giveTurning(b, d);
             return sum > 0 ? 1 / sum : 0;
         };
         const radius = Math.min(a.radius ?? Infinity, b.radius ?? Infinity);
@@ -976,7 +1170,7 @@ export class Space {
             a, b, n, t1, t2,
             friction: Math.sqrt(a.friction * b.friction),
             bounce: Math.max(a.bounce, b.bounce),
-            stiff: !a.im || !b.im,
+            stiff: !a.im || !b.im || Boolean(a.hinge || b.hinge),
             round: true,
             roll: Math.max(a.rolling, b.rolling) * radius,
             twist: Math.max(a.twisting, b.twisting) * radius,
@@ -1059,8 +1253,24 @@ export class Space {
     #advance(dt: number): void {
         const { solids } = this;
         const h = dt / this.parts;
+        // a driven solid is told where it is to be at the end of this step, and so how fast it goes
+        const targets: { p: V3; q: Quat }[] = [];
+        for (const s of this.#driven) {
+            const to = s.driven!(dt);
+            targets.push(to);
+            s.v = [(to.p[0] - s.p[0]) / dt, (to.p[1] - s.p[1]) / dt, (to.p[2] - s.p[2]) / dt];
+            // the turn from now to then, small, as an axis whose length is the angle a second
+            let [x, y, z, w] = times4(to.q, [-s.q[0], -s.q[1], -s.q[2], s.q[3]]);
+            if (w < 0) [x, y, z, w] = [-x, -y, -z, -w];
+            s.w = [(2 * x) / dt, (2 * y) / dt, (2 * z) / dt];
+        }
+        for (const hinge of this.#hinges) {
+            hinge.begun = hinge.angle;
+            hinge.closing = [0, 0];
+            for (const part of hinge.parts) part.dp = [0, 0, 0];
+        }
         for (const s of solids) {
-            if (s.im && s.radius === undefined) place(s);
+            if ((s.im || s.driven) && s.radius === undefined) place(s);
             // how hard it is to turn, as it is turned now: the same for the whole step
             if (s.turning && s.turned && (s.im || s.rest)) toWorld(s.q, s.turning, s.turned);
         }
@@ -1147,6 +1357,14 @@ export class Space {
         /** An impulse `j` along `d` on one solid, at `r` from its middle. */
         const push = (solid: Solid, r: V3, d: V3, j: number) => {
             if (!solid.im) return;
+            const hinge = solid.hinge;
+            if (hinge) {
+                // only the turning about its line, which all its solids share
+                const x = cross(armOf(solid, r), d);
+                hinge.spin += (x[0] * hinge.axis[0] + x[1] * hinge.axis[1] + x[2] * hinge.axis[2]) * hinge.turning * j;
+                synced(hinge);
+                return;
+            }
             const x = cross(r, d);
             const t = solid.turned;
             for (let axis = 0; axis < 3; axis++) {
@@ -1236,9 +1454,43 @@ export class Space {
                 }
             }
         };
+        /**
+         * A hinge's stops, each a one-sided limit on its angle solved as a contact is: closing exactly
+         * the gap there is, and an overlap put right softly, the push kept to start from next step, so
+         * that a seesaw resting on its stop under marbles is held still and does not tremble.
+         */
+        const stops = (bias: boolean, first: boolean) => {
+            for (const hinge of this.#hinges) {
+                if (!hinge.parts[0]!.im) continue;
+                for (let side = 0; side < 2; side++) {
+                    const limit = side ? hinge.high : hinge.low;
+                    if (limit === Infinity || limit === -Infinity) continue;
+                    // the low stop pushes the angle up, the high one down
+                    const sign = side ? -1 : 1;
+                    const gap = side ? limit - hinge.angle : hinge.angle - limit;
+                    const leaving = sign * hinge.spin;
+                    const pushed = hinge.pushed[side]!;
+                    if (gap > Math.abs(hinge.spin) * h * 2 + 1e-4 && !pushed) continue;
+                    const springy = gap <= 0 && bias;
+                    const speed = gap > 0 ? gap / h : bias ? Math.max(firm.rate * gap, -this.push / Math.max(hinge.reach, 1e-9)) : 0;
+                    const [mass, scale] = springy ? [firm.mass, firm.impulse] : [1, 0];
+                    const now = Math.max(0, pushed - (mass * (leaving + speed)) / hinge.turning - scale * pushed);
+                    if (first && leaving < 0 && now > 0 && !pushed) hinge.closing[side] = Math.min(hinge.closing[side]!, leaving);
+                    hinge.spin += sign * (now - pushed) * hinge.turning;
+                    hinge.pushed[side] = now;
+                    synced(hinge);
+                }
+            }
+        };
         /** A turning push `j` about `d` on b, and back on a. */
         const turnOne = (solid: Solid, d: V3, by: number) => {
             if (!solid.im) return;
+            const hinge = solid.hinge;
+            if (hinge) {
+                hinge.spin += (d[0] * hinge.axis[0] + d[1] * hinge.axis[1] + d[2] * hinge.axis[2]) * hinge.turning * by;
+                synced(hinge);
+                return;
+            }
             const t = solid.turned;
             for (let axis = 0; axis < 3; axis++) solid.w[axis]! += t ? (t[axis * 3]! * d[0] + t[axis * 3 + 1]! * d[1] + t[axis * 3 + 2]! * d[2]) * by : solid.ii * d[axis]! * by;
         };
@@ -1328,7 +1580,7 @@ export class Space {
                         [s.firm, s.calm] = [undefined, undefined];
                     } else {
                         // against flat faces: from how far each has moved, a ball's surface not turning with it
-                        const [ca, cb] = [a.radius === undefined && a.im ? spin(a.dq, s.ca) : s.ca, b.radius === undefined && b.im ? spin(b.dq, s.cb) : s.cb];
+                        const [ca, cb] = [a.radius === undefined && (a.im || a.driven) ? spin(a.dq, s.ca) : s.ca, b.radius === undefined && (b.im || b.driven) ? spin(b.dq, s.cb) : s.cb];
                         s.now = dot(add(sub(b.dp, a.dp), sub(cb, ca)), n) + s.adjusted;
                         [s.firm, s.calm] = [undefined, undefined];
                     }
@@ -1340,9 +1592,22 @@ export class Space {
         };
 
         // ---- the step, in parts ----
+        const stopping = this.#hinges.length > 0;
         for (let part = 0; part < this.parts; part++) {
+            // a hinge is turned by gravity on each of its solids, its spring and its friction
+            for (const hinge of this.#hinges) {
+                if (!hinge.parts[0]!.im) continue;
+                let push = -hinge.spring * (hinge.angle - hinge.rest);
+                for (const one of hinge.parts) {
+                    const r = sub(one.p, hinge.at);
+                    const g = mul(this.gravity, one.mass);
+                    push += dot(cross(r, g), hinge.axis);
+                }
+                hinge.spin = hinge.spin / (1 + h * hinge.friction) + push * hinge.turning * h;
+                synced(hinge);
+            }
             for (const s of solids) {
-                if (!s.im) continue;
+                if (!s.im || s.hinge) continue;
                 const [slow, turnSlow] = [1 / (1 + h * s.damping), 1 / (1 + h * s.spinDamping)];
                 s.v = [(s.v[0] + this.gravity[0] * h) * slow, (s.v[1] + this.gravity[1] * h) * slow, (s.v[2] + this.gravity[2] * h) * slow];
                 s.w = mul(s.w, turnSlow);
@@ -1362,9 +1627,40 @@ export class Space {
                     if (m.twist) twist(m, m.n, s.spin!);
                 }
             }
+            if (stopping) {
+                for (const hinge of this.#hinges) {
+                    if (!hinge.parts[0]!.im || (!hinge.pushed[0] && !hinge.pushed[1])) continue;
+                    hinge.spin += (hinge.pushed[0] - hinge.pushed[1]) * hinge.turning;
+                    synced(hinge);
+                }
+            }
             contacts(true);
+            if (stopping) stops(true, part === 0);
+            for (const hinge of this.#hinges) {
+                if (!hinge.parts[0]!.im) continue;
+                // turned on by its spin, each solid worked out afresh from the angle, so that nothing drifts off the line
+                hinge.angle += hinge.spin * h;
+                const turn = about(hinge.axis, hinge.angle);
+                const since = about(hinge.axis, hinge.angle - hinge.begun);
+                hinge.parts.forEach((one, i) => {
+                    const made = hinge.made[i]!;
+                    const begun = sub(one.p, one.dp);
+                    one.q = times4(turn, made.q);
+                    one.p = add(hinge.at, spin(turn, sub(made.p, hinge.at)));
+                    one.dp = sub(one.p, begun);
+                    one.dq = since;
+                });
+                synced(hinge);
+            }
+            for (const s of this.#driven) {
+                const [move, by] = [mul(s.v, h), mul(s.w, h)];
+                s.p = add(s.p, move);
+                s.dp = add(s.dp, move);
+                s.q = rolled(s.q, by);
+                s.dq = rolled(s.dq, by);
+            }
             for (const s of solids) {
-                if (!s.im) continue;
+                if (!s.im || s.hinge) continue;
                 const [move, by] = [mul(s.v, h), mul(s.w, h)];
                 s.p = add(s.p, move);
                 s.dp = add(s.dp, move);
@@ -1376,6 +1672,18 @@ export class Space {
                 s.dq = turnedBy(s.dq, by);
             }
             contacts(false);
+            if (stopping) stops(false, false);
+        }
+        // a driven solid ends the step exactly where it was told to be
+        this.#driven.forEach((s, i) => {
+            s.p = [...targets[i]!.p];
+            s.q = [...targets[i]!.q];
+        });
+        if (this.knocked) {
+            for (const hinge of this.#hinges) {
+                const closing = Math.min(hinge.closing[0], hinge.closing[1]) * hinge.reach;
+                if (closing < -this.knock) this.knocked(hinge, -closing);
+            }
         }
 
         if (this.hit) {
@@ -1398,8 +1706,9 @@ export class Space {
 
         for (const s of solids) {
             if (!s.im) continue;
-            s.quiet = (s.radius === undefined ? size(s.v) + size(s.w) * s.far : length(s.v) + length(s.w) * s.far) < this.slow ? s.quiet + dt : 0;
-            if (this.sleeps && !this.islands && s.quiet > this.nap) {
+            s.quiet = (s.radius === undefined && !s.balls ? size(s.v) + size(s.w) * s.far : length(s.v) + length(s.w) * s.far) < this.slow ? s.quiet + dt : 0;
+            // a hinge's solids sleep only together, as an island
+            if (this.sleeps && !this.islands && s.quiet > this.nap && !s.hinge) {
                 s.rest = [s.im, s.ii];
                 [s.im, s.ii, s.v, s.w] = [0, 0, [0, 0, 0], [0, 0, 0]];
             }
@@ -1429,6 +1738,14 @@ export class Space {
         };
         const counts = (s: Solid) => s.im > 0 || (s.rest !== undefined && !s.held);
         for (const s of solids) if (counts(s)) leader.set(s, s);
+        // a hinge's solids are one island, though they do not touch
+        for (const hinge of this.#hinges) {
+            const [first] = hinge.parts;
+            for (const one of hinge.parts) if (one !== first && counts(one) && counts(first!)) {
+                const [a, b] = [find(one), find(first!)];
+                if (a !== b) leader.set(a, b);
+            }
+        }
         for (const m of manifolds) {
             if (!counts(m.a) || !counts(m.b) || (!m.a.im && !m.b.im)) continue;
             // only those truly touching join, not those merely near
@@ -1457,6 +1774,10 @@ export class Space {
                 if (s.im) {
                     s.rest = [s.im, s.ii];
                     [s.im, s.ii, s.v, s.w] = [0, 0, [0, 0, 0], [0, 0, 0]];
+                    if (s.hinge) {
+                        s.hinge.spin = 0;
+                        s.hinge.pushed = [0, 0];
+                    }
                 }
                 s.together = list;
             }
