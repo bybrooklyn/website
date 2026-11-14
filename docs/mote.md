@@ -90,6 +90,26 @@ tensor, from its shape.
   kept, worked out as before, and those solids step exactly as they did, to the bit. The ten-sided die is
   not the same about every axis, so it now turns as its shape says; its fairness test still passes.
 
+## What a marble run would need
+
+Looked into on 13 Nov 2026, after the broad phase and the tensor, for a 3D marble run planned separately.
+Nothing here is built. Measured on four cores of this computer, one step of 1/120 s.
+
+**How many marbles now.** Mote's 3D side has no ball: the roundest cheap solid is the twenty-sided one.
+Marbles of twenty faces poured into a chute of slabs and piling at its end cost 2.1 ms a step for 25,
+4.7 ms for 50, 12.6 ms for 100 and 33 ms for 200. With room left for drawing, that is 50 to 70 marbles.
+A ball of 96 faces costs 6.6 ms for 25. And neither rolls: on a chute tilted 7 degrees the twenty-faced
+marbles slide a little and stop on a face. In 2D, where a ball is a real circle, a pile costs 4.1 ms for
+1,000 balls and 8.3 ms for 2,000.
+
+| Need | What exists | What is missing | How hard |
+|---|---|---|---|
+| **A ball that rolls, with spin** | In 2D: real balls, and rolling that costs a little at any speed so a ball rolls to a stop. In 3D: spin carried by friction at each contact, and `spinDamping`. | A real sphere in 3D, a middle and a radius: against a slab or a sphere it is a distance; against a solid of faces it is the nearest point of the solid, by face, edge or corner. Then rolling resistance (a turn against the spin, in proportion to how hard the ball is pressed, as `flat.ts` does) and a little friction against spinning about the contact's normal. | The sphere is the most work and the most gain: two or three days with tests. Rolling resistance and spin friction are an hour each once the sphere is there. |
+| **Fixed curved track, funnels, spirals** | Only boxes (`slab`) and solids that bulge everywhere. A curved track today is many slabs, and a funnel or a hollow is impossible: nothing fixed can be hollow. | Fixed surfaces a sphere is tested against by a formula, not by faces: a track as a section (a half circle, a U, two rails) swept along a curve, found by the nearest point of the curve to the ball's middle, which for a curve kept as short straight or circular pieces is a short search; a funnel as a profile turned about an axis, which is a 2D nearest point in the plane through the axis; a spiral as a section swept along a helix. Only spheres would need to meet them, which keeps each test to a distance and a direction. They would be drawn from the same description in `gl.ts`. | About a week. Also the grid: a long track piece is a large body and is set against every marble; better to cut it into short pieces, or to give the grid a second table for fixed pieces, filled once and kept. |
+| **A fast marble against a thin rail** | Contacts are found ahead: anything within reach this step (up to 1.5 units a step at 240 steps a second, so 360 units a second) is solved as a contact before it is reached. A cube thrown at 90 units a second does not get through a wall 0.08 thick (`space.test.ts`). | For a sphere against a rail this works while the marble's path in one step is short beside the rail's curve. A ball much faster than the track's bends, or passing a rail's end, would need a sweep: the ball moved along its path to the first touch (conservative advancement), only for the few balls moving fast. | Small to moderate, a day or two, and likely not needed at a marble's speeds; measure first. |
+| **Sleeping** | Both have it. 2D sleeps whole islands of touching bodies together; 3D sleeps each solid on its own after `nap` seconds still, and wakes it when something moving reaches it. | In 3D, an island sleeping as one (as in 2D), so a marble resting on a sleeping pile does not keep waking it; and sleeping solids are still in the grid each step, at small cost. | Small: half a day, from `flat.ts`'s islands. |
+| **Speed** | The broad phase above: finding pairs is no longer the cost. | In 3D the contact code (`touch`, `faceToFace`) makes many small arrays for each pair, and that is now nearly all of a step. A sphere avoids most of it; the rest is worth a pass with arrays kept between steps. | With a sphere, a few hundred marbles at 120 steps a second should be within reach (an estimate from the 2D numbers, not measured); without one, 50 to 70. |
+
 ## Decided
 
 - **No third-party libraries, by rule.** Nothing forked and nothing added: what Mote needs is written in its
@@ -126,6 +146,11 @@ prints step times for 100 to 5,000 bodies and takes about forty seconds; run it 
 `bun test src/mote/crowd.test.ts` when measuring.
 
 ## Known weak spots
+
+- In 3D, now and then a die comes to lean on another and the two keep trembling, so the roll is only
+  called at the nine second limit: about one roll in two hundred over 900 rolls, as often before the
+  inertia tensor as after. `tower.test.ts` lets one roll in forty run that long.
+- In 3D the contact code makes many small arrays in every step; the broad phase makes none.
 
 - `stage.ts`, `solids.ts`, `sound.ts` and `index.ts` have no test beside them; they are on the lint's list
   of files written before the rule, which is not to grow.
