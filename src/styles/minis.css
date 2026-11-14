@@ -49,6 +49,49 @@
     cursor: crosshair;
 }
 
+/* Comet can fill the whole window: the stage is lifted out of the page, over everything fixed on it
+   (the opened panel, the viewer at 60), and grows there from where it was. */
+.mini-stage[data-mini="comet"].comet-whole {
+    position: fixed;
+    inset: 0;
+    z-index: 65;
+    display: flex;
+    flex-direction: column;
+    max-width: none;
+    min-height: 0;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+}
+
+.mini-stage[data-mini="comet"].comet-whole canvas {
+    flex: 1;
+    min-height: 0;
+    height: auto;
+    transition: none;
+}
+
+/* Filling the window, the panel is a short strip, so the field has the room. */
+.mini-stage[data-mini="comet"].comet-whole .mote-panel {
+    padding-block: 0.45rem 0.5rem;
+    font-size: 0.9rem;
+}
+
+.mini-stage[data-mini="comet"].comet-whole :is(.table-said, .comet-counts) {
+    margin-bottom: 0.25rem;
+    font-size: 1rem;
+}
+
+.mini-stage[data-mini="comet"].comet-whole .table-go {
+    gap: 0.2rem 1.1rem;
+    margin-bottom: 0;
+}
+
+/* The page under a stage that fills the window does not scroll. */
+html.comet-holding {
+    overflow: hidden;
+}
+
 .comet-counts {
     margin: 0 0 0.8rem;
     color: var(--muted);
