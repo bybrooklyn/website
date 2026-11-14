@@ -62,6 +62,20 @@ export function runCovers(words: PlacedWord[], indices: number[]): Rect[] {
     return covers;
 }
 
+/** The covers for something that looks private (indices into `words`): one a line, edge to edge from its first word on that line to its last, so that nothing between its parts shows how it is grouped. */
+export function findingCovers(words: PlacedWord[], finding: number[]): Rect[] {
+    const lines = new Map<number, number[]>();
+    for (const at of finding) lines.set(words[at]!.line, [...(lines.get(words[at]!.line) ?? []), at]);
+    return [...lines.values()].flatMap((indices) => {
+        const all: number[] = [];
+        for (let at = Math.min(...indices); at <= Math.max(...indices); at++) all.push(at);
+        return runCovers(words, all);
+    });
+}
+
+/** Whether a rectangle lies wholly inside one of the covers. */
+export const coveredBy = (covers: Rect[], rect: Rect): boolean => covers.some((cover) => cover.x <= rect.x && cover.y <= rect.y && cover.x + cover.width >= rect.x + rect.width && cover.y + cover.height >= rect.y + rect.height);
+
 /** The text of a run of words: words of a line joined by spaces, lines by line breaks. */
 export function runText(words: PlacedWord[], from: number, to: number): string {
     let text = "";
@@ -229,7 +243,7 @@ export function createStage(hooks: StageHooks) {
         context.fillStyle = accent;
         if (tool === "read") {
             words.forEach((_, index) => {
-                if (index >= low && index <= high) return;
+                if ((index >= low && index <= high) ) return;
                 context.globalAlpha = index === hover ? 0.35 : 0.2;
                 quad(index);
                 context.fill();
@@ -248,7 +262,7 @@ export function createStage(hooks: StageHooks) {
         context.strokeStyle = "#ff9f0a";
         context.lineWidth = 1.5 * ratio;
         for (const finding of uncovered())
-            for (const cover of runCovers(words, finding)) {
+            for (const cover of findingCovers(words, finding)) {
                 const [x, y, width, height] = rect(cover);
                 context.setLineDash(height >= 12 * ratio ? [4 * ratio, 3 * ratio] : []);
                 context.strokeRect(x, y, width, height);
@@ -261,10 +275,8 @@ export function createStage(hooks: StageHooks) {
         const found = picture();
         if (!found) return findings;
         const covers = look(found).covers.map((cover) => cover.rect);
-        const inside = (rect: Rect) => covers.some((cover) => cover.x <= rect.x && cover.y <= rect.y && cover.x + cover.width >= rect.x + rect.width && cover.y + cover.height >= rect.y + rect.height);
-        return findings.filter((finding) => runCovers(words, finding).some((rect) => !inside(within(rect, found.original))));
+        return findings.filter((finding) => findingCovers(words, finding).some((rect) => !coveredBy(covers, within(rect, found.original))));
     }
-
     /** The word whose cover a place in the original's pixels is in, the smallest where covers overlap. */
     function wordAt(at: Point): number | undefined {
         let best: number | undefined;
@@ -291,10 +303,18 @@ export function createStage(hooks: StageHooks) {
 
     /** Hides words: one cover over each stretch of them on a line, each in the color round it, all as one change. */
     async function hideWords(indices: number[]) {
+        return hideRects(runCovers(words, indices));
+    }
+    /** Hides everything that looks private and is not yet covered: one cover a line of each thing, all as one change. */
+    async function hideFindings(only?: number[][]) {
+        return hideRects((only ?? uncovered()).flatMap((finding) => findingCovers(words, finding)));
+    }
+    /** Covers rectangles, each in the color round it, as one change. */
+    async function hideRects(rects: Rect[]) {
         const found = hooks.picture();
-        if (!found || !loaded || !indices.length) return;
+        if (!found || !loaded || !rects.length) return;
         let steps = found.steps;
-        for (const cover of runCovers(words, indices)) {
+        for (const cover of rects) {
             const rect = within(cover, found.original);
             const area = ringArea(rect, loaded.size);
             steps = add(steps, { type: "cover", rect, color: coverColor(await loaded.pixels(area), area, rect) });
@@ -506,9 +526,14 @@ export function createStage(hooks: StageHooks) {
             const chosen = run;
             run = undefined;
             if (chosen) {
-                const indices: number[] = [];
-                for (let index = Math.min(...chosen); index <= Math.max(...chosen); index++) indices.push(index);
-                await hideWords(indices);
+                // one word pressed that is part of something that looks private hides the whole of it
+                const whole = chosen[0] === chosen[1] ? findings.find((finding) => finding.includes(chosen[0])) : undefined;
+                if (whole) await hideFindings([whole]);
+                else {
+                    const indices: number[] = [];
+                    for (let index = Math.min(...chosen); index <= Math.max(...chosen); index++) indices.push(index);
+                    await hideWords(indices);
+                }
             }
             hooks.moved();
             return paint();
@@ -688,7 +713,7 @@ export function createStage(hooks: StageHooks) {
         /** Hides words by their indices, one cover a stretch of a line, as one change. */
         hideWords,
         /** Hides everything that looks private, as one change. */
-        hideFindings: () => hideWords(uncovered().flat()),
+        hideFindings: () => hideFindings(),
         /** What looks private and is not yet covered, each thing as the indices of its words. */
         findings: uncovered,
         /** The text selected, or nothing. */

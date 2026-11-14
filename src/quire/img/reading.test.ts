@@ -11,7 +11,10 @@
 //   pressing it again picks that cover; a drag across words makes one cover over the run; Hide all
 //   covers everything that looks private as one step, and undo takes it back;
 // - with no tool, a drag across words selects them and Ctrl+C copies them as text, not the picture;
-// - the size chosen is remembered, and the model is kept: the next picture is read with no dialog.
+// - the size chosen is remembered, and the model is kept: the next picture is read with no dialog;
+// - something that looks private of several words (a phone number) is hidden by one cover, edge to
+//   edge, whether by Hide all or by pressing any one of its words; and a word that is not part of one
+//   is hidden alone.
 //
 // Skipped, with a notice, without a Chromium or without the models in ~/.cache/quire-model-trials/ocr/.
 
@@ -149,6 +152,60 @@ test("reading text: asked first, fetched only when told, shown on the picture, a
         await until("/look private/.test(document.querySelector('.quire-img-strip-said')?.textContent ?? '')", 60_000);
         expect(await tab.run<boolean>("!document.querySelector('.quire-img-read-dialog')")).toBe(true);
         expect(tab.requests.filter((each) => each.url.includes("huggingface")).length).toBe(3);
+        expect(tab.errors.filter((error) => !/onnxruntime|W:onnx/.test(error))).toEqual([]);
+    } finally {
+        await page.close();
+    }
+}, 240_000);
+
+test("a phone number is hidden by one cover edge to edge, by Hide all or by pressing any of its words; and a word apart is hidden alone", async () => {
+    const page = await readingPage("img-read-phone");
+    if (!page) return;
+    const { tab, until } = page;
+    try {
+        await tab.run(`(async () => {
+            const canvas = new OffscreenCanvas(1200, 500);
+            const c = canvas.getContext("2d");
+            c.fillStyle = "#f4f4f6"; c.fillRect(0, 0, 1200, 500); c.fillStyle = "#1d1d1f"; c.font = "26px sans-serif";
+            c.fillText("Phone: +1 415 555 0132", 80, 140); c.fillText("Signed in as Jordan Example", 80, 260);
+            const blob = await canvas.convertToBlob({ type: "image/png" });
+            const data = new DataTransfer(); data.items.add(new File([blob], "image.png", { type: "image/png" }));
+            document.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
+        })()`);
+        await until("window.app.editing().stage?.loaded() && document.querySelector('.quire-img-frame.shown')");
+        await tab.run("document.querySelector('.quire-img-stage').focus()");
+        await tab.press("w");
+        await until("document.querySelector('.quire-img-read-dialog .quire-dialog-action')");
+        await tab.run("document.querySelector('.quire-img-read-dialog .quire-dialog-action').click()");
+        await until("document.querySelector('.quire-img-read-download')");
+        await tab.run("document.querySelector('.quire-img-read-download').click()");
+        await until("/look/.test(document.querySelector('.quire-img-strip-said')?.textContent ?? '')", 90_000);
+        const words = await wordsOf(page);
+        const at = (text: string) => words.findIndex((word) => word.text === text);
+        const [plus, group, last, jordan] = [at("+1"), at("555"), at("0132"), at("Jordan")];
+        expect(Math.min(plus, group, last, jordan)).toBeGreaterThanOrEqual(0);
+        const phone = { x: words[plus]!.cover.x, right: words[last]!.cover.x + words[last]!.cover.width };
+        const middleOf = (index: number) => page.onScreen(words[index]!.cover.x + words[index]!.cover.width / 2, words[index]!.cover.y + words[index]!.cover.height / 2);
+        expect(await tab.run<string>("document.querySelector('.quire-img-strip-said').textContent")).toContain("1 looks private");
+
+        // Hide all: one cover, from the first group's edge to the last's
+        await tab.run("[...document.querySelectorAll('.quire-img-strip-words')].find((button) => button.textContent === 'Hide all').click()");
+        await until("window.app.editing().steps().length === 1");
+        const [all] = await covers(page);
+        expect([all!.rect.x, all!.rect.x + all!.rect.width]).toEqual([phone.x, phone.right]);
+        await tab.press("z", { ctrl: true });
+        await until("window.app.editing().steps().length === 0");
+
+        // pressing one group of the number hides the whole of it, the same cover
+        const press = await middleOf(group);
+        await tab.click(press.x, press.y);
+        await until("window.app.editing().steps().length === 1");
+        expect((await covers(page))[0]!.rect).toEqual(all!.rect);
+        // pressing a word that is not part of anything private hides that word alone
+        const alone = await middleOf(jordan);
+        await tab.click(alone.x, alone.y);
+        await until("window.app.editing().steps().length === 2");
+        expect((await covers(page))[1]!.rect).toEqual(words[jordan]!.cover);
         expect(tab.errors.filter((error) => !/onnxruntime|W:onnx/.test(error))).toEqual([]);
     } finally {
         await page.close();

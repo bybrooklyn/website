@@ -8,10 +8,22 @@
 
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { imgPage, type ImgPage } from "../../../scripts/img-page";
-import { placeWords, runCovers, runText, thickness } from "./stage";
+import { coveredBy, findingCovers, placeWords, runCovers, runText, thickness } from "./stage";
 
 /** Two lines of words, each word 40 wide and 20 high, the second line 60 below the first. */
 const LINES = [0, 1].map((row) => ({ text: "", sure: 1, box: { at: { x: 0, y: row * 60 }, along: { x: 1, y: 0 }, length: 300, height: 30 }, words: ["one", "two", "three"].map((text, at) => ({ text: `${text}${row}`, sure: 1, line: row, box: { at: { x: 10 + at * 60, y: 5 + row * 60 }, along: { x: 1, y: 0 }, length: 40, height: 20 } })) }));
+
+test("something that looks private is covered one cover a line, edge to edge from its first word there to its last, and a rectangle inside a cover is known as covered", () => {
+    const words = placeWords(LINES);
+    // the first line's three words, as a phone number of three groups would be: one cover, not three with gaps
+    expect(findingCovers(words, [0, 1, 2])).toEqual([{ x: 7, y: 2, width: 166, height: 26 }]);
+    // a thing over two lines: one cover a line
+    expect(findingCovers(words, [2, 3, 4])).toEqual([{ x: 127, y: 2, width: 46, height: 26 }, { x: 7, y: 62, width: 106, height: 26 }]);
+    // words of the thing that are not side by side on a line still give one cover, edge to edge
+    expect(findingCovers(words, [0, 2])).toEqual([{ x: 7, y: 2, width: 166, height: 26 }]);
+    expect(coveredBy([{ x: 0, y: 0, width: 200, height: 30 }], words[1]!.cover)).toBe(true);
+    expect(coveredBy([{ x: 0, y: 0, width: 60, height: 30 }], words[1]!.cover)).toBe(false);
+});
 
 test("a word's cover is its box grown by a tenth of its line's height, a run's covers are one a line round its words, and a run's text keeps its lines", () => {
     const words = placeWords(LINES);
