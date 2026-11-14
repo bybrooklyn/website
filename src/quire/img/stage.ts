@@ -225,22 +225,34 @@ export function createStage(hooks: StageHooks) {
         const chosen = run ?? selection;
         const low = chosen ? Math.min(...chosen) : -1;
         const high = chosen ? Math.max(...chosen) : -1;
+        const rect = (cover: Rect) => [where.x + cover.x * where.across, where.y + cover.y * where.down, cover.width * where.across, cover.height * where.down] as const;
         context.fillStyle = accent;
-        words.forEach((_, index) => {
-            const on = index >= low && index <= high;
-            if (tool !== "read" && !on) return;
-            context.globalAlpha = on ? 0.38 : index === hover ? 0.3 : 0.12;
-            quad(index);
-            context.fill();
-        });
+        if (tool === "read") {
+            words.forEach((_, index) => {
+                if (index >= low && index <= high) return;
+                context.globalAlpha = index === hover ? 0.35 : 0.2;
+                quad(index);
+                context.fill();
+            });
+        }
+        // a run or a selection is filled as one stretch a line, the gaps between its words too, as selected text is
+        if (chosen) {
+            context.globalAlpha = 0.38;
+            const indices: number[] = [];
+            for (let index = low; index <= high; index++) indices.push(index);
+            for (const cover of runCovers(words, indices)) context.fillRect(...rect(cover));
+        }
         context.globalAlpha = 1;
         if (tool !== "read") return;
-        // what looks private: a warm dashed line round each stretch of it
+        // what looks private: a warm line round each stretch of it, dashed where it is large enough to show the dashes
         context.strokeStyle = "#ff9f0a";
         context.lineWidth = 1.5 * ratio;
-        context.setLineDash([4 * ratio, 3 * ratio]);
         for (const finding of uncovered())
-            for (const cover of runCovers(words, finding)) context.strokeRect(where.x + cover.x * where.across, where.y + cover.y * where.down, cover.width * where.across, cover.height * where.down);
+            for (const cover of runCovers(words, finding)) {
+                const [x, y, width, height] = rect(cover);
+                context.setLineDash(height >= 12 * ratio ? [4 * ratio, 3 * ratio] : []);
+                context.strokeRect(x, y, width, height);
+            }
         context.setLineDash([]);
     }
 
