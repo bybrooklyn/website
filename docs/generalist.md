@@ -159,7 +159,9 @@ well-trodden.
   one at "normal" (three on a four-core machine, where it used two). Learners kept before the pool are taken
   up as plain networks and grown, not forgotten (store version 5). The second plain layer's lines from the
   first are not drawn, so the pool's into it can be seen. The ground going slippery is in the engine
-  (`Way::slip`) and not used in practice, since practising with it gained nothing.
+  (`Way::slip`) and not used in practice, since practising with it gained nothing. Whether four legs should stop sensing
+  the outside rhythm: with a pool and no clock they went as far and more steadily (28.4 ± 4.3 m against
+  27.2 ± 9.2), so a conducted rhythm can take its place; the plain network without it was not measured.
 - **Stage 3, still open.** It does not turn for food behind it, with or without memory. Its eye looks at
   things more in the page at two minutes (0.54 to 0.71 of the time near food) but goes back to its feet by
   ten, and natively does no better than an eye at rest: the predictor of what it will see next, with

@@ -1378,7 +1378,8 @@ averaged over 30), two legs:
 | 256 memory, 32 rhythm, 4 mood, 32 reads | 420 | 92,445 | 14,000 | |
 | 512 memory, 32 rhythm, 4 mood, 32 reads | 676 | 150,301 | 7,800 | |
 
-A memory neuron costs more than a plain one: two sums over its reads and its fast weights going forward,
+In Bun's JavaScriptCore the page's engine practises with the page's brain at about 59,000 steps a second on
+one core (97,000 with the plain network at stage 2; `src/minis/generalist.test.ts` prints it). A memory neuron costs more than a plain one: two sums over its reads and its fast weights going forward,
 three going back, and its gate and take-in squashed each decision (tanh and exp in the engine's own exact
 maths, about 21 ns the pair natively), all four epochs over every window. Its reads are gathered side by
 side so the sums go as the dense layers' do. The caps (128 memory neurons, 16 rhythms, 32 reads each, 276
@@ -1449,6 +1450,11 @@ What that says, plainly:
   charged for a run that stalls, as two legs pay, no seed stood, and the pool went about as far as the
   plain network does under the same cost (27.2 against 29.8 m, each with one seed that lagged), less far
   than the plain network without it (35.2 m). Four legs now pay it (`Way::of`).
+- **A conducted rhythm lets four legs' outside clock go.** Four legs still sense a steady rhythm from
+  outside, a hint two legs lost on 13 November. Pooled, with 3 for a stall and that clock taken away
+  (`clock=0`), they went 28.4 ± 4.3 m at 20 million steps against 27.2 ± 9.2 m with it, and every seed got
+  somewhere (21 to 32 m): with rhythms of its own to read, the outside beat is not needed. It is still
+  sensed (`Way::of`), since without it the plain network was not measured; taking it away is hers to say.
 - **Its eye still does no better than chance by much**, and not better than an eye left at rest (0.23 to
   0.28 for both brains): memory alone did not give the eye a reason to look at things.
 
@@ -1489,7 +1495,11 @@ minutes of one life in "meadow"), four-legged learners at 20 million steps spent
 with less than a tenth of their energy, plain or pooled, energy carried. Two ways out were tried. Runs of
 60 seconds in practice, long enough to outlast their energy (`seconds=60`), is below. Not carrying energy
 between runs: each run starts full, and the same learners averaged 0.40 to 0.47, under a tenth 0.02 to
-0.07 of the time, and went 60 to 74 m a run in "meadow" (one seed that lagged, 12 m). So four legs on the
+0.07 of the time, and went 60 to 74 m a run in "meadow" (one seed that lagged, 12 m). Runs of 60 seconds in practice
+(four legs, 3 for a run that stalls, seeds 1 to 4, measured in runs of 60 seconds) did not teach them to
+rest: they rested 0.14 of the time, but two pooled seeds of four and one plain seed stayed near the start
+(2 to 9 m in a minute), and the rest went no further in a minute (21.4 ± 15.4 m pooled, 22.5 ± 13.8 m plain)
+than in half a minute before. So four legs on the
 page start each run full (`Page::show_reset`), and two legs, who rest, keep one life. In the page
 itself, four legs from newborn: energy 0.41 on average over their first two minutes, 48 to 65 m.
 

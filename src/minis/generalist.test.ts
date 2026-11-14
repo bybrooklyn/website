@@ -18,6 +18,11 @@ async function load(from: URL = path): Promise<Engine> {
     return instance.exports as unknown as Engine;
 }
 
+/** A view of the engine's memory at a pointer, made after the pointer is given, since the call that gives it can grow memory and leave an older view's buffer detached. */
+function view<T extends Float32Array | Float64Array | Uint32Array>(kind: new (buffer: ArrayBuffer, at: number, length: number) => T, engine: Engine, pointer: number, length: number): T {
+    return new kind(engine.memory.buffer as ArrayBuffer, pointer, length);
+}
+
 /** The list a call just gave, as f32 and as their bits. */
 const floats = (engine: Engine, pointer: number) => Array.from(new Float32Array(engine.memory.buffer, pointer, engine.length()));
 const bits = (engine: Engine, pointer: number, length = engine.length()) => Array.from(new Uint32Array(engine.memory.buffer, pointer, length));
@@ -50,7 +55,7 @@ test("the page's engine gives the very numbers the native engine gives, with SIM
         hash = mix(hash, bits(engine, engine.envs_observations()));
         const wide = engine.actions_length();
         for (let step = 0; step < 600; step++) {
-            const actions = new Float32Array(engine.memory.buffer, engine.envs_actions(), 3 * wide);
+            const actions = view(Float32Array, engine, engine.envs_actions(), 3 * wide);
             // the native test's whole-number pattern, so no sine is needed to make the same actions
             for (let k = 0; k < actions.length; k++) actions[k] = ((((Math.floor(k / wide) * 7 + step * 13 + (k % wide) * 5) % 21) - 10) / 10);
             engine.envs_step(1);
@@ -78,7 +83,7 @@ test("a generation shared out among helpers, as the workers share it, learns exa
         const answers: [number, number, number][] = [];
         helpers.forEach((helper, w) => {
             const share = todo.filter((_, k) => k % 2 === w);
-            new Float32Array(helper.memory.buffer, helper.evaluate_room(share.length), share.length * count).set(share.flatMap((member) => population.slice(member * count, (member + 1) * count)));
+            view(Float32Array, helper, helper.evaluate_room(share.length), share.length * count).set(share.flatMap((member) => population.slice(member * count, (member + 1) * count)));
             const ran = helper.evaluate(share.length);
             const found = floats(helper, helper.evaluated());
             expect(found.length).toBe(2 * ran);
@@ -163,8 +168,8 @@ test("a learner sent with its form goes on in a brain of another shape, and a pl
     const formAt = engine.practice_form();
     const form = new Float32Array(engine.memory.buffer, formAt, engine.length()).slice();
     expect(Array.from(form)).toEqual([0, 0, 0, 0]);
-    const state = new Float32Array(engine.memory.buffer, engine.practice_state(), engine.length()).slice();
-    const running = new Float64Array(engine.memory.buffer, engine.practice_running(), engine.length()).slice();
+    const state = view(Float32Array, engine, engine.practice_state(), engine.length()).slice();
+    const running = view(Float64Array, engine, engine.practice_running(), engine.length()).slice();
     const other = await load();
     other.create(2, 4, 0.2, 1, 1, 1, 1, 8, 8, 1, 0, 30, 1);
     other.practice_create(2, 1, 1);
@@ -196,8 +201,8 @@ test("an update shared out as the workers share it, with one worker, is the upda
     }
     for (let update = 0; update < 2; update++) {
         alone.practice_update();
-        const share = new Float64Array(shared.memory.buffer, shared.practice_local(), shared.length()).slice();
-        const weights = new Float32Array(shared.memory.buffer, shared.practice_weights(), shared.length()).slice();
+        const share = view(Float64Array, shared, shared.practice_local(), shared.length()).slice();
+        const weights = view(Float32Array, shared, shared.practice_weights(), shared.length()).slice();
         const shares = shared.practice_shares_room(1);
         new Float64Array(shared.memory.buffer, shares, share.length).set(share);
         const room = shared.practice_weights_room();
@@ -206,7 +211,7 @@ test("an update shared out as the workers share it, with one worker, is the upda
     }
     expect(shared.practice_updates()).toBe(2);
     expect(bits(shared, shared.practice_state())).toEqual(bits(alone, alone.practice_state()));
-    expect(Array.from(new Float64Array(shared.memory.buffer, shared.practice_running(), shared.length()))).toEqual(Array.from(new Float64Array(alone.memory.buffer, alone.practice_running(), alone.length())));
+    expect(Array.from(view(Float64Array, shared, shared.practice_running(), shared.length()))).toEqual(Array.from(view(Float64Array, alone, alone.practice_running(), alone.length())));
 });
 
 test("a learner kept and taken back is the same learner, and drives the show", async () => {
@@ -214,8 +219,8 @@ test("a learner kept and taken back is the same learner, and drives the show", a
     engine.create(2, 4, 0.2, 1, 1, 1, 1, 8, 8, 1, 0, 30, 1);
     engine.practice_create(2, 1, 1);
     engine.practice_update();
-    const state = new Float32Array(engine.memory.buffer, engine.practice_state(), engine.length()).slice();
-    const running = new Float64Array(engine.memory.buffer, engine.practice_running(), engine.length()).slice();
+    const state = view(Float32Array, engine, engine.practice_state(), engine.length()).slice();
+    const running = view(Float64Array, engine, engine.practice_running(), engine.length()).slice();
     const page = await load();
     page.create(2, 4, 0.2, 1, 1, 1, 1, 8, 8, 1, 0, 30, 1);
     const [stateRoom, runningRoom] = [page.state_room(0), page.running_room()];
@@ -242,19 +247,19 @@ test("the brain on show is drawn as it thinks, evolution's or practice's", async
     engine.create(2, 4, 0.2, 1, 1, 1, 1, 8, 8, 1, 0, 30, 1);
     engine.show_step(0.5);
     // a dot for each ray, then the rest of what it senses; 8 neurons; 13 outputs for evolution's brain
-    const bred = brainColumns(new Float32Array(engine.memory.buffer, engine.brain_picture(), engine.length()).slice());
+    const bred = brainColumns(view(Float32Array, engine, engine.brain_picture(), engine.length()).slice());
     expect(bred?.lit.map((column) => column.length)).toEqual([16 + 18, 8, 13]);
     // the plain network practice had before its pool, drawn in columns as evolution's brain is
     engine.brain_shape(0, 0, 0, 0);
     engine.practice_create(2, 1, 1);
-    const state = new Float32Array(engine.memory.buffer, engine.practice_state(), engine.length()).slice();
-    const running = new Float64Array(engine.memory.buffer, engine.practice_running(), engine.length()).slice();
+    const state = view(Float32Array, engine, engine.practice_state(), engine.length()).slice();
+    const running = view(Float64Array, engine, engine.practice_running(), engine.length()).slice();
     const [stateRoom, runningRoom] = [engine.state_room(0), engine.running_room()];
     new Float32Array(engine.memory.buffer, stateRoom, state.length).set(state);
     new Float64Array(engine.memory.buffer, runningRoom, running.length).set(running);
     expect(engine.policy_load()).toBe(1);
     for (let i = 0; i < 30; i++) engine.show_step(1 / 60);
-    const policy = brainColumns(new Float32Array(engine.memory.buffer, engine.brain_picture(), engine.length()).slice());
+    const policy = brainColumns(view(Float32Array, engine, engine.brain_picture(), engine.length()).slice());
     // practice's policy senses its energy, having eaten and where it looks, and feels touch: its body, two
     // feet, being held, and the jolt across and up; and it turns its eye, an action before the hop
     expect(policy?.lit.map((column) => column.length)).toEqual([16 + 18 + 3 + 6, 64, 64, 6]);
@@ -266,8 +271,8 @@ test("the brain on show is drawn as it thinks, evolution's or practice's", async
     engine.practice_create(2, 1, 1);
     const pooledFormAt = engine.practice_form();
     const form = new Float32Array(engine.memory.buffer, pooledFormAt, engine.length()).slice();
-    const pooled = new Float32Array(engine.memory.buffer, engine.practice_state(), engine.length()).slice();
-    const pooledRunning = new Float64Array(engine.memory.buffer, engine.practice_running(), engine.length()).slice();
+    const pooled = view(Float32Array, engine, engine.practice_state(), engine.length()).slice();
+    const pooledRunning = view(Float64Array, engine, engine.practice_running(), engine.length()).slice();
     const formRoom = engine.form_room(form.length);
     new Float32Array(engine.memory.buffer, formRoom, form.length).set(form);
     const pooledRoom = engine.state_room(0);
@@ -276,7 +281,7 @@ test("the brain on show is drawn as it thinks, evolution's or practice's", async
     new Float64Array(engine.memory.buffer, pooledRunningRoom, pooledRunning.length).set(pooledRunning);
     expect(engine.policy_load()).toBe(1);
     for (let i = 0; i < 30; i++) engine.show_step(1 / 60);
-    const kinds = brainKinds(new Float32Array(engine.memory.buffer, engine.brain_picture(), engine.length()).slice());
+    const kinds = brainKinds(view(Float32Array, engine, engine.brain_picture(), engine.length()).slice());
     expect(kinds?.counts).toEqual({ senses: 43, plain: 64, memory: 32, rhythm: 4, mood: 4, actions: 6 });
     expect(kinds?.lit.every(Number.isFinite)).toBe(true);
     expect(neurons(DEFAULT_SHAPE)).toBe(168);
@@ -308,8 +313,8 @@ test("a creature that wants things shows its energy, its food and where it looks
     expect(floats(engine, engine.show_needs())[0]).toBe(-1);
     expect(engine.show_drop_food(1, 1)).toBe(0);
     engine.practice_create(2, 1, 1);
-    const state = new Float32Array(engine.memory.buffer, engine.practice_state(), engine.length()).slice();
-    const running = new Float64Array(engine.memory.buffer, engine.practice_running(), engine.length()).slice();
+    const state = view(Float32Array, engine, engine.practice_state(), engine.length()).slice();
+    const running = view(Float64Array, engine, engine.practice_running(), engine.length()).slice();
     const [stateRoom, runningRoom] = [engine.state_room(0), engine.running_room()];
     new Float32Array(engine.memory.buffer, stateRoom, state.length).set(state);
     new Float64Array(engine.memory.buffer, runningRoom, running.length).set(running);
