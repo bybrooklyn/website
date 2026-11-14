@@ -527,6 +527,14 @@ export function mountEditor(host: HTMLElement, context: Context) {
         stage.element.focus({ preventScroll: true });
         if (stage.tool() === "read") void reading.start(buttons.read);
     }
+    /** Reads with another size of model, the tool for reading on: at once if it is kept, else asked for. */
+    function useModel(id: string) {
+        if (!picture) return;
+        if (stage.tool() === "crop") stage.applyCrop();
+        if (stage.tool() !== "read") stage.setTool("read");
+        stage.element.focus({ preventScroll: true });
+        void reading.use(id, buttons.read);
+    }
     function applyCrop() {
         stage.applyCrop();
         stage.setTool("none");
@@ -712,7 +720,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
                         {
                             label: "Text model",
                             icon: "settings",
-                            items: () => TIERS.map((each) => ({ label: each.name, icon: tick(reading.tier().id === each.id, "find"), hint: reading.kept(each.id) ? "On this device" : megabytes(sizeOf(each)), pressed: reading.tier().id === each.id, run: () => void (pickTool("read"), reading.use(each.id, buttons.read)) })),
+                            items: () => TIERS.map((each) => ({ label: each.name, icon: tick(reading.tier().id === each.id, "find"), hint: reading.kept(each.id) ? "On this device" : megabytes(sizeOf(each)), pressed: reading.tier().id === each.id, run: () => useModel(each.id) })),
                             run: () => {},
                         },
                         { label: "Hide what looks private", icon: "hide", key: "hide-private", disabled: !stage.findings().length, run: () => void stage.hideFindings() },
