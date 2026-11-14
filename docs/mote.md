@@ -14,7 +14,8 @@ under the MIT license in that folder (`src/mote/LICENSE`), plainer than the rest
 |---|---|
 | `stage.ts` | The canvas, a loop in fixed steps of 1/120 s, mouse and keys, the page's colours, a panel for buttons, a little kept between visits, the address. Runs only while seen and stops when the scene rests. |
 | `flat.ts` | 2D physics: boxes, balls, bars and shapes, walls, pins, rods, ropes, a motor, a hand to grab with. |
-| `space.ts` | 3D physics: solids that fall, tumble and hit each other and fixed slabs, each turning by its own inertia tensor. |
+| `space.ts` | 3D physics: solids that fall, tumble and hit each other and fixed slabs, each turning by its own inertia tensor; balls that roll; islands that sleep together. |
+| `track.ts` | Fixed track for balls, worked out by formula: sections swept along curves and helices, and profiles turned into funnels. |
 | `grid.ts` | The broad phase both physics use: which pairs of bodies are near enough to be worth a closer look. |
 | `gl.ts` | 3D drawing on WebGL 2: depth, a sun with shadows, sky light, numbers on faces, floating words, glow. |
 | `cells.ts` | A grid of cells drawn in whole pixels on WebGL 2: four bytes a cell read straight from where they are kept into one texture, colored from a palette and a shade, only changed rows sent. The sand mini draws with it. |
@@ -91,25 +92,77 @@ tensor, from its shape.
   kept, worked out as before, and those solids step exactly as they did, to the bit. The ten-sided die is
   not the same about every axis, so it now turns as its shape says; its fairness test still passes.
 
-## What a marble run would need
+## Balls, track and sleeping islands, for a marble run
 
-Looked into on 13 Nov 2026, after the broad phase and the tensor, for a 3D marble run planned separately.
-Nothing here is built. Measured on four cores of this computer, one step of 1/120 s.
+Built on 14 November 2026 as stage 1 of the marble run ([marbles](marbles.md)), after the look into what it
+would need (the day before: no ball in 3D, twenty-faced stand-ins that stopped on a face on a 7 degree
+chute, 50 to 70 of them a frame). Nothing that was there steps differently: `pairs.test.ts` holds Blocks,
+Plinko's board, the dice tower and three heaps to the bits they ended at before, and the new parts are off
+unless a scene asks for them.
 
-**How many marbles now.** Mote's 3D side has no ball: the roundest cheap solid is the twenty-sided one.
-Marbles of twenty faces poured into a chute of slabs and piling at its end cost 2.1 ms a step for 25,
-4.7 ms for 50, 12.6 ms for 100 and 33 ms for 200. With room left for drawing, that is 50 to 70 marbles.
-A ball of 96 faces costs 6.6 ms for 25. And neither rolls: on a chute tilted 7 degrees the twenty-faced
-marbles slide a little and stop on a face. In 2D, where a ball is a real circle, a pile costs 4.1 ms for
-1,000 balls and 8.3 ms for 2,000.
+- **A ball.** `space.ball(radius, at, stuff)`: a middle and a radius, met exactly by another ball, and by a
+  solid of faces at its nearest face, edge or corner (`nearestOn`). Its inertia tensor is 2/5 m r^2 about
+  every axis, so the solver takes it by the one-number path a cube takes. It rolls by Coulomb friction at
+  the point it touches: on a slope at 5/7 of g sin(slope) to within half a percent, sliding at
+  g (sin - friction cos) where friction cannot hold the roll. `roll` in its stuff is a rolling cost (a turning
+  push against the roll, up to that share of how hard it is pressed, so it comes to rest on the flat and
+  holds on a slope gentler than it), `twist` a cost of spinning on the spot. A ball's surface does not turn
+  with it, so it is not taken to lift as it rolls; it strikes, bounces and is heard by its speed at the
+  moment it arrives. `marbleSpace()` is a space in centimetres under real gravity, and `MARBLE` a glass
+  marble's stuff on wood.
+- **Track.** `track.ts`, met by balls only. A piece is a section swept along a path (`curve` through points,
+  its end directions held for joints; `line`; `helix`, for spirals and loops) with a frame carried along it
+  untwisted, kept level, banked or twisted, or a profile turned about an upright axis (`turned`, a funnel or a
+  bowl). Sections are lines and arcs with a thickness: `gutter`, `vee`, `bed`, `tube`, `rails`. A ball is met
+  by the nearest point of the path, the root of one equation found by Newton's method inside short chunks,
+  which a fixed table in `grid.ts` (`Kept`, filled once) hands over by where the ball is; then by the nearest
+  point of the section in the plane across the path. That is exact where the frame is carried untwisted, and
+  a degree or so off square where it twists (round a level spiral), smoothly. Where two pieces meet end to
+  end with the same section, facing on the same way and up the same way, Mote joins them itself and a ball
+  feels one surface: a gutter cut into eight runs a ball exactly as one piece does. Each piece draws itself
+  (`piece.mesh()`) from the same numbers.
+- **Landing on the surface.** A ball against track is pushed, each part of a step, square to the surface
+  where it is and just enough to land on it at the end of the part (the rule molecular dynamics calls SHAKE).
+  Aimed anywhere else, a push leans along the ball's path: aimed where it was at the step's start, a ball
+  gained 5% of its energy round a loop; aimed half way round, a funnel took its turning down by 2.5% a
+  second. Landed, a smooth ball keeps its energy round a funnel to 0.2% and its turning about the axis to a
+  part in ten thousand. Where the surface turns more than a few degrees in one part (a thin rail met fast),
+  the ball may only close the gap it has now, and is measured again where it went.
+- **Held to theory** (`balls.test.ts`, `track.test.ts`): rolling and sliding on slopes; rolling cost and
+  spinning cost at the rates they should; bounce to e^2 of the drop; a ball rocking across a gutter at the
+  period of a rolling ball, 2 pi root(7 rho / 5 g), to 0.01%; a loop held from 2.71 loop radii and lost from
+  2.66 (theory 2.70); two rails rolled on at 1 / (1 + 2/5 (r / reach)^2), to 0.2%; a funnel kept as above, and
+  circled down and through with a rolling cost; a banked spiral run down to within 3% of its drop's energy.
+- **Fast marbles and thin rails.** The fastest a metre's drop down a gutter gives is 340 cm/s, 1.4 cm a step.
+  Marbles spinning any way fired at a rod half a millimetre thick from every side, squarely and glancing,
+  at up to 1,500 cm/s, never get through, at 240 steps a second or at 120. So contacts found ahead are enough,
+  and no sweep was written; each marble looks ahead by its own speed, so a slow one costs nothing more.
+- **Islands.** `space.islands = true` (on in a marble space): what touches sleeps together, once all of it has
+  been still for `nap` seconds, and wakes together when anything moving reaches one of it. While asleep it is
+  kept out of the grid, in a table of its own made again only when something falls asleep or wakes, and only
+  what moves is set against it. Sixty marbles poured into a tray are all asleep in two seconds; a marble
+  rolling slowly down a one degree slope never sleeps and arrives when theory says.
+- **The same everywhere.** Balls and track use only + - * /, square roots, and the sine and cosine in
+  `track.ts` made from those, never `Math.hypot` or `Math.sin`, whose last bit differs between engines. Twelve
+  marbles racing down a ramp, a spiral and into a funnel end the same to the bit run twice, and in Chromium
+  as in Bun (`replay.test.ts`). A slab turned by `angled` uses `Math.sin` and so may not.
 
-| Need | What exists | What is missing | How hard |
-|---|---|---|---|
-| **A ball that rolls, with spin** | In 2D: real balls, and rolling that costs a little at any speed so a ball rolls to a stop. In 3D: spin carried by friction at each contact, and `spinDamping`. | A real sphere in 3D, a middle and a radius: against a slab or a sphere it is a distance; against a solid of faces it is the nearest point of the solid, by face, edge or corner. Then rolling resistance (a turn against the spin, in proportion to how hard the ball is pressed, as `flat.ts` does) and a little friction against spinning about the contact's normal. | The sphere is the most work and the most gain: two or three days with tests. Rolling resistance and spin friction are an hour each once the sphere is there. |
-| **Fixed curved track, funnels, spirals** | Only boxes (`slab`) and solids that bulge everywhere. A curved track today is many slabs, and a funnel or a hollow is impossible: nothing fixed can be hollow. | Fixed surfaces a sphere is tested against by a formula, not by faces: a track as a section (a half circle, a U, two rails) swept along a curve, found by the nearest point of the curve to the ball's middle, which for a curve kept as short straight or circular pieces is a short search; a funnel as a profile turned about an axis, which is a 2D nearest point in the plane through the axis; a spiral as a section swept along a helix. Only spheres would need to meet them, which keeps each test to a distance and a direction. They would be drawn from the same description in `gl.ts`. | About a week. Also the grid: a long track piece is a large body and is set against every marble; better to cut it into short pieces, or to give the grid a second table for fixed pieces, filled once and kept. |
-| **A fast marble against a thin rail** | Contacts are found ahead: anything within reach this step (up to 1.5 units a step at 240 steps a second, so 360 units a second) is solved as a contact before it is reached. A cube thrown at 90 units a second does not get through a wall 0.08 thick (`space.test.ts`). | For a sphere against a rail this works while the marble's path in one step is short beside the rail's curve. A ball much faster than the track's bends, or passing a rail's end, would need a sweep: the ball moved along its path to the first touch (conservative advancement), only for the few balls moving fast. | Small to moderate, a day or two, and likely not needed at a marble's speeds; measure first. |
-| **Sleeping** | Both have it. 2D sleeps whole islands of touching bodies together; 3D sleeps each solid on its own after `nap` seconds still, and wakes it when something moving reaches it. | In 3D, an island sleeping as one (as in 2D), so a marble resting on a sleeping pile does not keep waking it; and sleeping solids are still in the grid each step, at small cost. | Small: half a day, from `flat.ts`'s islands. |
-| **Speed** | The broad phase above: finding pairs is no longer the cost. | In 3D the contact code (`touch`, `faceToFace`) makes many small arrays for each pair, and that is now nearly all of a step. A sphere avoids most of it; the rest is worth a pass with arrays kept between steps. | With a sphere, a few hundred marbles at 120 steps a second should be within reach (an estimate from the 2D numbers, not measured); without one, 50 to 70. |
+**How many.** One frame of 1/120 s is two steps of the solver. In milliseconds a frame, on four cores of this
+computer (`crowd.test.ts` prints Bun's; Bun's ran between these and half again more as the machine was
+busier or quieter):
+
+| Marbles | in a gutter, Chromium | Bun | circling a funnel, Chromium | Bun | heaped in a tray, Chromium | Bun | the heap asleep, Bun |
+|---|---|---|---|---|---|---|---|
+| 100 | 1.8 | 2.5 | 1.7 | 2.8 | 0.9 | 1.0 | 0.04 |
+| 200 | 2.6 | 4.6 | 3.4 | 5.3 | 2.1 | 3.1 | 0.05 |
+| 400 | 6.6 | 8.3 | 8.9 | 11.8 | 4.6 | 6.1 | 0.08 |
+| 800 | 12.8 | 26 | 22 | 47 | 11.3 | 21 | 0.16 |
+
+So a few hundred marbles at once at 120 frames a second, with room to draw; 400 asleep in a tray cost
+0.1 ms. Where the time goes, in a funnel of 200: finding where marbles touch the track about 30%,
+measuring each part of the step against it about 30%, the solver about 15%, the broad phase about 6%; the
+rest is spread over small vectors made and dropped. Keeping each knot's point and slope, and working out a
+curve's point, slope and bend in one go, halved a step in a gutter and took two thirds off one in a funnel.
 
 ## Decided
 
@@ -127,6 +180,9 @@ marbles slide a little and stop on a face. In 2D, where a ball is a real circle,
   springs and motors between bodies; one-way platforms, and sensors that notice a body without stopping it;
   saving a run and playing it back; a debug view of contacts, joints and sleeping bodies; a frame-time meter
   beyond the `?debug` step time; touch with two fingers; text input.
+- **For the marble run, later:** ball against a solid of faces is soft, so a moving part (a seesaw, a gate)
+  is met as slabs are, not exactly; only balls meet track; `gl.ts` sees no further than 120 units, so a run in
+  centimetres is drawn at a tenth of its size (Rolling does) until it has a setting for that.
 - **For the 3D side:** smooth shading across faces, a shadow under each solid, pictures drawn onto faces,
   loading a simple model from a file, a wireframe view, dice that hit each other corner to corner rather
   than as balls, a camera that can be moved.
@@ -137,11 +193,12 @@ marbles slide a little and stop on a face. In 2D, where a ball is a real circle,
 ## How to run and test
 
 ```sh
-bun test src/mote     # flat, space, grid, pairs, replay, crowd, gl and the rest
+bun test src/mote     # flat, space, balls, track, grid, pairs, replay, crowd, gl and the rest
 ```
 
 `gl.test.ts` draws a scene in headless Chromium and reads its pixels. `replay.test.ts` checks that a scene
-run twice ends the same and that a step is fast enough. `grid.test.ts` checks the broad phase against a
+run twice ends the same and that a step is fast enough, and runs a marble race in Bun and in Chromium.
+`balls.test.ts` and `track.test.ts` hold balls and track to the arithmetic of a rolling ball. `grid.test.ts` checks the broad phase against a
 loop over every pair, and `pairs.test.ts` the minis' scenes with it and without, to the bit. `crowd.test.ts`
 prints step times for 100 to 5,000 bodies and takes about forty seconds; run it on its own with
 `bun test src/mote/crowd.test.ts` when measuring.
@@ -152,6 +209,9 @@ prints step times for 100 to 5,000 bodies and takes about forty seconds; run it 
   called at the nine second limit: about one roll in two hundred over 900 rolls, as often before the
   inertia tensor as after. `tower.test.ts` lets one roll in forty run that long.
 - In 3D the contact code makes many small arrays in every step; the broad phase makes none.
+- A fast marble in an unbanked tight spiral climbs the outer wall until friction cannot hold its roll, and
+  slips: track should bank into its turns, as real track does. A heavy solid resting on marbles sinks into
+  them by up to a twelfth of a marble's radius, as ball against solid is soft.
 
 - `stage.ts`, `solids.ts`, `sound.ts` and `index.ts` have no test beside them; they are on the lint's list
   of files written before the rule, which is not to grow.

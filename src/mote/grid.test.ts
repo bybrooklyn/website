@@ -1,8 +1,9 @@
 // What the broad phase is held to: it finds every pair whose boxes overlap, and no other, each once,
-// in the order a loop over every pair would meet them. Run with `bun run test`.
+// in the order a loop over every pair would meet them; and the table of things that never move finds
+// every one a box reaches, and no other, once each, in order. Run with `bun run test`.
 
 import { expect, test } from "bun:test";
-import { Grid } from "./grid";
+import { Grid, Kept } from "./grid";
 
 /** Numbers that look random and are the same every time. */
 const dealer = (seed: number) => () => (seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 2 ** 32;
@@ -85,4 +86,28 @@ test("once it has grown to a scene, finding the pairs makes no new arrays", () =
         grid.find(1000);
     }
     arrays().forEach((array, index) => expect(array).toBe(before[index]!));
+});
+
+test("the table of things that never move finds every one a box reaches, and no other, once each, rising", () => {
+    const next = dealer(17);
+    const kept = new Kept();
+    const boxes: [number[], number[]][] = [];
+    // short chunks along a winding line, as track is cut, and a few long ones
+    for (let i = 0; i < 400; i++) {
+        const [x, y, z] = [Math.cos(i * 0.05) * 60, i * -0.1, Math.sin(i * 0.07) * 40];
+        const long = i % 97 === 0 ? 80 : 1.5;
+        const box: [number[], number[]] = [[x - long, y - 1, z - 1], [x + long, y + 1, z + 1]];
+        boxes.push(box);
+        kept.add(box[0], box[1]);
+    }
+    kept.build();
+    for (let n = 0; n < 300; n++) {
+        const middle = [(next() - 0.5) * 140, -next() * 45, (next() - 0.5) * 100];
+        const half = n % 50 === 0 ? 70 : 0.5 + next() * 3;
+        const [low, high] = [middle.map((v) => v - half), middle.map((v) => v + half)];
+        const count = kept.find(low, high);
+        const found = Array.from(kept.found.slice(0, count));
+        const wanted = boxes.flatMap(([l, h], i) => ([0, 1, 2].every((a) => l[a]! <= high[a]! && low[a]! <= h[a]!) ? [i] : []));
+        expect(found).toEqual(wanted);
+    }
 });

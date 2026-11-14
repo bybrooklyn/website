@@ -154,3 +154,43 @@ test("Plinko's board steps to the same place to the bit with the grid as with ev
 test("the dice tower steps to the same place to the bit with the grid as with every pair", () => {
     same(dice(true), dice(false));
 });
+
+/** A short name for a list of numbers, from every bit of each: two lists with the same name are the same to the bit. */
+function print(values: number[]): string {
+    const bits = new Uint32Array(new Float64Array(values).buffer);
+    let [one, two] = [0x811c9dc5, 0x01000193];
+    for (const word of bits) {
+        one = Math.imul(one ^ word, 0x01000193) >>> 0;
+        two = Math.imul(two ^ word, 0x5bd1e995) >>> 0;
+    }
+    return `${values.length}:${one.toString(16)}${two.toString(16)}`;
+}
+
+// What each scene ended at before Mote's 3D side gained balls, track and islands that sleep (13 Nov
+// 2026), with the grid. Those were added beside what was there, so the old scenes end where they did.
+const BEFORE = {
+    blocks: "108:7bc988431ae2ddd3",
+    plinko: "3518:c44eeaad3da60d25",
+    dice: "64:cc59416212cd59c0",
+    crowdFlat: "912:dda840c1e8b8608",
+    crowdSpace: "875:f886ceecaf361992",
+    heap: "403:d23560e1d84fc28f",
+};
+
+/** Thirty cubes and long bars dropped onto a floor, bouncing, with no sleep, for four seconds. */
+function heap(): number[] {
+    const space = new SpaceWorld();
+    const next = dealer(5);
+    space.slab([0, -1, 0], [30, 1, 30], angled(0.02, 0, 0.01), { friction: 0.6 });
+    for (let i = 0; i < 30; i++) {
+        const solid = space.solid(i % 3 ? cube() : { faces: cube().faces, points: cube().points.map(([x, y, z]): V3 => [x * 0.3, y * 0.5, z * 2]) }, [next() * 6 - 3, 2 + i * 2.4, next() * 6 - 3], { bounce: 0.3 });
+        solid.w = [next() * 8 - 4, next() * 8 - 4, next() * 8 - 4];
+    }
+    for (let step = 0; step < 480; step++) space.step(TICK);
+    return space.solids.flatMap((solid) => [...solid.p, ...solid.q, ...solid.v, ...solid.w]);
+}
+
+test("Blocks, Plinko, the dice tower and three heaps end exactly where they ended before balls and track came to 3D", () => {
+    const now = { blocks: print(blocks(false)), plinko: print(plinko(false)), dice: print(dice(false)), crowdFlat: print(crowdFlat(false)), crowdSpace: print(crowdSpace(false)), heap: print(heap()) };
+    expect(now).toEqual(BEFORE);
+}, 60_000);

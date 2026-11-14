@@ -19,8 +19,9 @@
 //
 // What it is held to is in space.test.ts.
 
-import { Grid, type Pairs } from "./grid";
+import { Grid, Kept, type Pairs } from "./grid";
 import { block, cross, dot3 as dot, minus as sub, plus as add, scaled as mul, type Mesh, type Turn, type V3 } from "./solids";
+import type { Piece, Touch } from "./track";
 
 export type Quat = [x: number, y: number, z: number, w: number];
 
@@ -35,6 +36,14 @@ export interface Stuff {
     friction?: number;
     bounce?: number;
     density?: number;
+    /**
+     * For a ball: how much rolling costs, as a share of how hard it is pressed, so that a ball rolling
+     * on the flat comes to rest (it slows by 5/7 of this times gravity, and stays put on a slope
+     * whose rise over run is less than this). None unless said.
+     */
+    roll?: number;
+    /** For a ball: how much spinning in place on the spot it touches costs, the same way. None unless said. */
+    twist?: number;
 }
 
 export interface Solid {
@@ -76,6 +85,15 @@ export interface Solid {
     spinDamping: number;
     /** How long it has been all but still, in seconds. */
     quiet: number;
+    /** A ball: its radius. A ball has no corners or faces; it is met by its middle and this. */
+    readonly radius?: number;
+    /** A ball's rolling and spinning costs, from its stuff. */
+    rolling: number;
+    twisting: number;
+    /** A piece of fixed track (track.ts): it has no faces either, and only balls meet it. */
+    readonly piece?: Piece;
+    /** Asleep with others it touched, when islands sleep together: all of them, itself too, to be woken with it. */
+    together?: Solid[];
     // the solver's own: where its corners and faces are in the world, and how far it has moved this step
     wp: V3[];
     wn: V3[];
@@ -107,6 +125,24 @@ interface Spot {
     start: number;
     closing: number;
     most: number;
+    /**
+     * With a ball: how far apart the two are as the part of a step begins, measured afresh rather than
+     * from how far each has moved; where the ball was then thought to be going, how far apart it would
+     * be there and the way the surface faces there; the speed it may close at, which lands it on the
+     * surface; and the turning pushes that stand for rolling and spinning costs, with how much each takes.
+     */
+    now?: number;
+    going?: V3;
+    there?: number;
+    toward?: V3;
+    firm?: number;
+    calm?: number;
+    rollOne?: number;
+    rollTwo?: number;
+    spin?: number;
+    rollOneMass?: number;
+    rollTwoMass?: number;
+    spinMass?: number;
 }
 
 interface Manifold {
@@ -120,6 +156,69 @@ interface Manifold {
     friction: number;
     bounce: number;
     stiff: boolean;
+    /** With a ball in it: solved by the ball's own rules. Its rolling and spinning costs, as the most turning push for each unit of push. */
+    round?: boolean;
+    roll?: number;
+    twist?: number;
+    /** Against track: which piece, which part of its section, and where along it. */
+    piece?: Piece;
+    part?: number;
+    where?: number;
+}
+
+/** A vector's length by its square root, which every machine works out alike (Math.hypot may differ in its last bit). */
+const length = (a: V3) => Math.sqrt(a[0] * a[0] + a[1] * a[1] + a[2] * a[2]);
+
+/** A quaternion turned further by a small rotation, made whole again by a square root: as `turnedBy`, for balls, whose turn must come out alike everywhere. */
+function rolled(q: Quat, by: V3): Quat {
+    const [x, y, z, w] = q;
+    const [bx, by2, bz] = [by[0] / 2, by[1] / 2, by[2] / 2];
+    const next: Quat = [x + bx * w + by2 * z - bz * y, y + by2 * w + bz * x - bx * z, z + bz * w + bx * y - by2 * x, w - bx * x - by2 * y - bz * z];
+    const long = Math.sqrt(next[0] * next[0] + next[1] * next[1] + next[2] * next[2] + next[3] * next[3]) || 1;
+    return [next[0] / long, next[1] / long, next[2] / long, next[3] / long];
+}
+
+/**
+ * The nearest point of a solid of faces to a point `c`, the way from it to `c`, and how far: less
+ * than none if `c` is inside, then by the face it is least deep behind. Outside, the nearest point is
+ * on a face `c` is in front of, if it lies within that face, or else on an edge or a corner.
+ */
+export function nearestOn(s: Solid, c: V3): { q: V3; n: V3; d: number } {
+    let [best, face] = [-Infinity, 0];
+    for (let f = 0; f < s.wn.length; f++) {
+        const d = dot(s.wn[f]!, c) - s.offsets[f]!;
+        if (d > best) [best, face] = [d, f];
+    }
+    if (best <= 0) return { q: sub(c, mul(s.wn[face]!, best)), n: s.wn[face]!, d: best };
+    for (let f = 0; f < s.wn.length; f++) {
+        const n = s.wn[f]!;
+        const d = dot(n, c) - s.offsets[f]!;
+        if (d <= 0) continue;
+        const corners = s.faces[f]!;
+        let [sign, within] = [0, true];
+        for (let i = 0; i < corners.length && within; i++) {
+            const a = s.wp[corners[i]!]!;
+            const side = dot(cross(sub(s.wp[corners[(i + 1) % corners.length]!]!, a), sub(c, a)), n);
+            if (side === 0) continue;
+            if (!sign) sign = Math.sign(side);
+            else if (Math.sign(side) !== sign) within = false;
+        }
+        if (within) return { q: sub(c, mul(n, d)), n, d };
+    }
+    let [least, q] = [Infinity, c];
+    for (const [i, j] of s.edges) {
+        const [a, b] = [s.wp[i]!, s.wp[j]!];
+        const run = sub(b, a);
+        const long = dot(run, run);
+        const k = long > 0 ? Math.max(0, Math.min(1, dot(sub(c, a), run) / long)) : 0;
+        const on = add(a, mul(run, k));
+        const away = sub(c, on);
+        const far = dot(away, away);
+        if (far < least) [least, q] = [far, on];
+    }
+    const away = sub(c, q);
+    const d = length(away);
+    return { q, n: d > 0 ? mul(away, 1 / d) : s.wn[face]!, d };
 }
 
 const size = (a: V3) => Math.hypot(a[0], a[1], a[2]);
@@ -332,10 +431,34 @@ function make(mesh: Mesh, at: V3, q: Quat, fixed: boolean, stuff: Stuff): Solid 
         friction: stuff.friction ?? 0.4,
         bounce: stuff.bounce ?? 0,
         damping: 0, spinDamping: 0, quiet: 0,
+        rolling: stuff.roll ?? 0, twisting: stuff.twist ?? 0,
         wp: [], wn: [], wr: [], offsets: [], dp: [0, 0, 0], dq: [0, 0, 0, 1],
     };
     place(solid);
     return solid;
+}
+
+/**
+ * A solid with no faces: a ball, met by its middle and radius, or a piece of track, met by its own
+ * formula. A ball's inertia tensor is 2/5 of its mass times its radius squared about every axis; the
+ * same every way, so, as for a cube in `make`, the one number stands for it and the solver's tensor
+ * path takes it as it takes a cube.
+ */
+function bare(at: V3, stuff: Stuff, radius: number | undefined, piece: Piece | undefined): Solid {
+    const density = stuff.density ?? 1;
+    const mass = radius === undefined ? 0 : (4 / 3) * Math.PI * radius * radius * radius * density;
+    const tensor = radius === undefined ? 0 : (2 / 5) * mass * radius * radius;
+    return {
+        id: ++count,
+        p: [...at], q: [0, 0, 0, 1], v: [0, 0, 0], w: [0, 0, 0],
+        points: [], faces: [], normals: [], edges: [], runs: [],
+        far: radius ?? 0, inner: radius ?? 0, mass,
+        im: mass ? 1 / mass : 0, ii: tensor ? 1 / tensor : 0,
+        friction: stuff.friction ?? 0.4, bounce: stuff.bounce ?? 0,
+        damping: 0, spinDamping: 0, quiet: 0,
+        radius, piece, rolling: stuff.roll ?? 0, twisting: stuff.twist ?? 0,
+        wp: [], wn: [], wr: [], offsets: [], dp: [0, 0, 0], dq: [0, 0, 0, 1],
+    };
 }
 
 function place(s: Solid): void {
@@ -488,6 +611,57 @@ export function inside(a: Solid, b: Solid): number {
     return most;
 }
 
+/**
+ * A space for marbles: centimetres and real gravity, with the sizes that depend on units set for
+ * that, and islands that sleep together. A glass marble is a ball of radius 0.8 with friction 0.5,
+ * bounce 0.5 and a small rolling cost (`MARBLE`).
+ */
+export function marbleSpace(): Space {
+    const space = new Space();
+    space.gravity = [0, -981, 0];
+    space.margin = 0.02;
+    space.push = 20;
+    // looked ahead far enough for a marble at 2,800 cm/s, five times as fast as a two metre drop gives
+    space.ahead = 12;
+    space.knock = 5;
+    space.slow = 0.3;
+    space.sleeps = true;
+    space.islands = true;
+    space.nap = 0.5;
+    return space;
+}
+
+/** A glass marble's stuff on wood, in a marble space: its rolling cost brings one rolling at 50 cm/s on the flat to rest in about 18 seconds. */
+export const MARBLE: Stuff = { friction: 0.5, bounce: 0.5, roll: 0.004, twist: 0.005, density: 2.5 };
+
+/**
+ * Pieces of track that meet end to end, with the same section and facing the same way, are joined
+ * there, so that a ball rolls from one to the next with no rim between them. Found by where each end
+ * is, to a thousandth of a unit, then checked closely.
+ */
+export function join(pieces: Piece[]): void {
+    const near = (a: V3, b: V3, by: number) => length(sub(a, b)) <= by;
+    const at = new Map<string, [Piece, number][]>();
+    const key = (p: V3) => p.map((value) => Math.round(value * 1000)).join(" ");
+    for (const piece of pieces) piece.ends?.forEach((end, which) => {
+        for (const dx of [-1, 0, 1]) for (const dy of [-1, 0, 1]) for (const dz of [-1, 0, 1]) {
+            const found = at.get(key(add(end.p, [dx / 1000, dy / 1000, dz / 1000])));
+            for (const [other, side] of found ?? []) {
+                if (other === piece || other.shape !== piece.shape) continue;
+                const there = other.ends![side]!;
+                // one piece's end against the other's start, going on the same way, up the same way
+                const onward = which !== side && dot(end.along, there.along) > 1 - 1e-9 && dot(end.up, there.up) > 1 - 1e-9;
+                if (!onward || !near(end.p, there.p, 1e-6)) continue;
+                piece.joined[which] = true;
+                other.joined[side] = true;
+            }
+        }
+        const list = at.get(key(end.p));
+        if (list) list.push([piece, which]);
+        else at.set(key(end.p), [[piece, which]]);
+    });
+}
+
 // ---- the world ----
 
 interface Soft {
@@ -516,6 +690,22 @@ export class Space {
     /** Whether a solid that has lain still for `nap` seconds goes to sleep, and costs nothing until it is knocked. A full tray needs it. */
     sleeps = false;
     nap = 0.6;
+    /**
+     * Whether solids that touch sleep together and wake together, as islands, rather than each on its
+     * own: a marble resting on a sleeping heap then does not keep waking it. Off unless set, so that
+     * the dice sleep as they always have.
+     */
+    islands = false;
+    /**
+     * Sizes that depend on the scene's units, each as it always was unless set: how near counts as
+     * about to touch, the fastest an overlap is undone, the most that is looked ahead for anything
+     * fast in one step, and the slowest a hit is told of and bounces. A scene in other units (a marble
+     * run in centimetres, with real gravity) sets them for its own.
+     */
+    margin = MARGIN;
+    push = PUSH;
+    ahead = 1.5;
+    knock = 1.2;
     /** Told of each pair that met hard this step, and how fast they were closing. For a sound, or a flash. */
     hit?: (a: Solid, b: Solid, speed: number) => void;
     /**
@@ -527,6 +717,22 @@ export class Space {
     #was = new Map<number, Manifold>();
     #next = new Map<number, Manifold>();
     #owed = 0;
+    /** The track, its chunks in a table of their own that is filled once, and what each entry of the table is. */
+    #pieces: Solid[] = [];
+    #kept = new Kept();
+    #keptPiece: number[] = [];
+    #keptChunk: number[] = [];
+    #built = true;
+    /** Last step's contacts with track, by ball, piece and part; and the map the next step's go in. */
+    #wasOn = new Map<number, Manifold[]>();
+    #nextOn = new Map<number, Manifold[]>();
+    #touches: Touch[] = [];
+    /** When islands sleep: what is asleep, in a table of its own, made again when that changes. */
+    #sleepers = new Kept();
+    #sleeping: Solid[] = [];
+    #sleepersBuilt = false;
+    #low = new Float64Array(3);
+    #high = new Float64Array(3);
 
     /** A solid that moves, from a shape that bulges everywhere, with its middle at `at`. */
     solid(mesh: Mesh, at: V3, stuff: Stuff = {}, q: Quat = [0, 0, 0, 1]): Solid {
@@ -540,6 +746,38 @@ export class Space {
         const made = make(block(half), at, q, true, stuff);
         this.solids.push(made);
         return made;
+    }
+
+    /** A ball that moves: its radius and where its middle is. Its rolling and spinning costs are in its stuff. */
+    ball(radius: number, at: V3, stuff: Stuff = {}): Solid {
+        const made = bare(at, stuff, radius, undefined);
+        this.solids.push(made);
+        return made;
+    }
+
+    /**
+     * A piece of fixed track from track.ts: balls roll on it, by its formula; other solids pass
+     * through it. Its stuff gives its friction, bounce and rolling cost against a ball.
+     */
+    track(piece: Piece, stuff: Stuff = {}): Solid {
+        const made = bare([0, 0, 0], stuff, undefined, piece);
+        this.solids.push(made);
+        this.#pieces.push(made);
+        this.#built = false;
+        return made;
+    }
+
+    /** Takes a solid, a ball or a piece of track out of the world. */
+    remove(solid: Solid): void {
+        const at = this.solids.indexOf(solid);
+        if (at < 0) return;
+        this.solids.splice(at, 1);
+        this.#sleepersBuilt = false;
+        if (solid.piece) {
+            this.#pieces.splice(this.#pieces.indexOf(solid), 1);
+            this.#built = false;
+        }
+        for (const other of solid.together ?? []) if (other !== solid) other.together = other.together?.filter((one) => one !== solid);
     }
 
     /** Moves everything on by `dt` seconds, in steps of 1 / `rate`. A time that is not ahead is ignored, and more than a second is taken as a second. */
@@ -564,6 +802,7 @@ export class Space {
         solid.rest = [solid.im, solid.ii];
         [solid.im, solid.ii] = [0, 0];
         solid.held = true;
+        this.#sleepersBuilt = false;
     }
 
     wake(solid: Solid): void {
@@ -572,13 +811,254 @@ export class Space {
         [solid.im, solid.ii] = solid.rest;
         solid.rest = undefined;
         solid.quiet = 0;
+        this.#rouse(solid);
+    }
+
+    /** Wakes a sleeping solid that is not held, and every solid that went to sleep with it. */
+    #rouse(solid: Solid): void {
+        this.#sleepersBuilt = false;
+        for (const one of solid.together ?? [solid]) {
+            if (!one.rest || one.held) continue;
+            [one.im, one.ii] = one.rest;
+            one.rest = undefined;
+            one.quiet = 0;
+        }
+        for (const one of solid.together ?? []) one.together = undefined;
+    }
+
+    /** Two solids the broad phase found near each other: where they touch, if they do, added to `manifolds`. */
+    #pair(a: Solid, b: Solid, dt: number, was: Map<number, Manifold>, manifolds: Manifold[]): void {
+        if (!a.im && !b.im) return;
+        // a ball is met by its own rules, below
+        if (a.radius !== undefined || b.radius !== undefined) {
+            const made = this.#round(a, b, dt, was.get(a.id * 2 ** 26 + b.id));
+            if (made) manifolds.push(made);
+            return;
+        }
+        const closing = size(sub(b.v, a.v)) + size(a.w) * (a.im ? a.far : 0) + size(b.w) * (b.im ? b.far : 0);
+        const margin = this.margin + Math.min(closing * dt, this.ahead);
+        // Too far off to matter: by their middles, or for something fixed, by how far the other is outside its faces.
+        if (a.im && b.im) {
+            if (size(sub(b.p, a.p)) > a.far + b.far + margin) return;
+        } else {
+            const [box, ball] = a.im ? [b, a] : [a, b];
+            let out = false;
+            for (let f = 0; f < box.wn.length && !out; f++) out = dot(box.wn[f]!, ball.p) - box.offsets[f]! > ball.far + margin;
+            if (out) return;
+        }
+        const found = touch(a, b, margin);
+        if (!found) return;
+        // something asleep is woken by anything that reaches it while moving; something held is not
+        for (const [lying, other] of [[a, b], [b, a]] as const) {
+            if (lying.rest && !lying.held && other.im && size(other.v) + size(other.w) * other.far > 8 * this.slow) this.#rouse(lying);
+        }
+        const before = was.get(a.id * 2 ** 26 + b.id);
+        const n = found.n;
+        const t1 = unit(Math.abs(n[0]) < 0.8 ? cross(n, [1, 0, 0]) : cross(n, [0, 1, 0]));
+        const t2 = cross(n, t1);
+        const back: Quat = [-a.q[0], -a.q[1], -a.q[2], a.q[3]];
+        manifolds.push({
+            a, b, n, t1, t2,
+            friction: Math.sqrt(a.friction * b.friction),
+            bounce: Math.max(a.bounce, b.bounce),
+            stiff: !a.im || !b.im,
+            spots: found.spots.map(([at, gap]): Spot => {
+                const [ra, rb] = [sub(at, a.p), sub(at, b.p)];
+                const la = spin(back, ra);
+                // Found again from last step by where it is on the first solid, so that it starts from last step's answer.
+                let [old, near]: [Spot | undefined, number] = [undefined, 0.06 * Math.max(a.im ? a.far : 0, b.im ? b.far : 0)];
+                for (const spot of before?.spots ?? []) {
+                    const away = size(sub(spot.la, la));
+                    if (away < near) [old, near] = [spot, away];
+                }
+                const [oldOne, oldTwo] = old && before ? [old.one * dot(before.t1, t1) + old.two * dot(before.t2, t1), old.one * dot(before.t1, t2) + old.two * dot(before.t2, t2)] : [0, 0];
+                const ca = sub(ra, mul(n, gap / 2));
+                const cb = add(rb, mul(n, gap / 2));
+                const k = (d: V3) => {
+                    const [xa, xb] = [cross(ra, d), cross(rb, d)];
+                    const sum = a.im + b.im + hardness(a, xa) + hardness(b, xb);
+                    return sum > 0 ? 1 / sum : 0;
+                };
+                return {
+                    ra, rb, ca, cb, la, gap,
+                    adjusted: gap - dot(sub(cb, ca), n),
+                    normalMass: k(n), oneMass: k(t1), twoMass: k(t2),
+                    push: old?.push ?? 0, one: oldOne, two: oldTwo, speed: 0, springy: false, start: 0,
+                    closing: dot(sub(add(b.v, cross(b.w, rb)), add(a.v, cross(a.w, ra))), n),
+                    most: 0,
+                };
+            }),
+        });
+    }
+
+    /**
+     * When islands sleep, what is asleep is kept out of the grid, in a table of its own made again only
+     * when something falls asleep or wakes, and only what moves is set against it: so a tray of
+     * sleeping marbles costs almost nothing while others still roll. Pairs go lower number first.
+     */
+    #nearSleepers(dt: number, was: Map<number, Manifold>, manifolds: Manifold[]): void {
+        if (!this.#sleepersBuilt) {
+            this.#sleepers.clear();
+            this.#sleeping = this.solids.filter((s) => s.rest && !s.held);
+            for (const s of this.#sleeping) this.#sleepers.add([s.p[0] - s.far, s.p[1] - s.far, s.p[2] - s.far], [s.p[0] + s.far, s.p[1] + s.far, s.p[2] + s.far]);
+            this.#sleepers.build();
+            this.#sleepersBuilt = true;
+        }
+        if (!this.#sleeping.length) return;
+        const [low, high] = [this.#low, this.#high];
+        for (const a of this.solids) {
+            if (!a.im) continue;
+            const reach = a.far + this.margin + Math.min((length(a.v) + length(a.w) * a.far) * dt, this.ahead) + 1e-6;
+            for (let axis = 0; axis < 3; axis++) [low[axis], high[axis]] = [a.p[axis]! - reach, a.p[axis]! + reach];
+            const found = this.#sleepers.find(low, high);
+            for (let k = 0; k < found; k++) {
+                const b = this.#sleeping[this.#sleepers.found[k]!]!;
+                if (b === a || (b.im && b.id < a.id)) continue;
+                if (b.id < a.id) this.#pair(b, a, dt, was, manifolds);
+                else this.#pair(a, b, dt, was, manifolds);
+            }
+        }
+    }
+
+    /** Where a ball meets another ball or a solid of faces, or comes within reach of it this step: a contact of one point, or none. */
+    #round(a: Solid, b: Solid, dt: number, before: Manifold | undefined): Manifold | undefined {
+        const closing = length(sub(b.v, a.v)) + length(a.w) * (a.im ? a.far : 0) + length(b.w) * (b.im ? b.far : 0);
+        const margin = this.margin + Math.min(closing * dt, this.ahead);
+        let [n, at, gap]: [V3, V3, number] = [[0, 1, 0], [0, 0, 0], 0];
+        if (a.radius !== undefined && b.radius !== undefined) {
+            const d = sub(b.p, a.p);
+            const long = length(d);
+            gap = long - a.radius - b.radius;
+            if (gap > margin) return undefined;
+            if (long > 0) n = mul(d, 1 / long);
+            at = add(a.p, mul(n, a.radius + gap / 2));
+        } else {
+            const [ball, solid] = a.radius !== undefined ? [a, b] : [b, a];
+            if (solid.piece || length(sub(ball.p, solid.p)) > solid.far + ball.radius! + margin) return undefined;
+            const near = nearestOn(solid, ball.p);
+            gap = near.d - ball.radius!;
+            if (gap > margin) return undefined;
+            at = add(near.q, mul(near.n, gap / 2));
+            n = ball === b ? near.n : mul(near.n, -1);
+        }
+        // something asleep is woken by anything that reaches it while moving; something held is not
+        for (const [lying, other] of [[a, b], [b, a]] as const) {
+            if (lying.rest && !lying.held && other.im && length(other.v) + length(other.w) * other.far > 8 * this.slow) this.#rouse(lying);
+        }
+        return this.#meet(a, b, n, at, gap, before);
+    }
+
+    /** A contact with a ball at one point, `n` from a to b, starting from last step's pushes if it was there then. */
+    #meet(a: Solid, b: Solid, n: V3, at: V3, gap: number, before: Manifold | undefined): Manifold {
+        const across = Math.abs(n[0]) < 0.8 ? cross(n, [1, 0, 0]) : cross(n, [0, 1, 0]);
+        const t1 = mul(across, 1 / length(across));
+        const t2 = cross(n, t1);
+        const [ra, rb] = [sub(at, a.p), sub(at, b.p)];
+        // A ball has one point against anything, so last step's is this one.
+        const old = before?.spots[0];
+        const into = (one: number, two: number): [number, number] => (before ? [one * dot(before.t1, t1) + two * dot(before.t2, t1), one * dot(before.t1, t2) + two * dot(before.t2, t2)] : [0, 0]);
+        const [oldOne, oldTwo] = old ? into(old.one, old.two) : [0, 0];
+        const [rollOne, rollTwo] = old ? into(old.rollOne ?? 0, old.rollTwo ?? 0) : [0, 0];
+        const ca = sub(ra, mul(n, gap / 2));
+        const cb = add(rb, mul(n, gap / 2));
+        const k = (d: V3) => {
+            const sum = a.im + b.im + hardness(a, cross(ra, d)) + hardness(b, cross(rb, d));
+            return sum > 0 ? 1 / sum : 0;
+        };
+        const turning = (d: V3) => {
+            const sum = hardness(a, d) + hardness(b, d);
+            return sum > 0 ? 1 / sum : 0;
+        };
+        const radius = Math.min(a.radius ?? Infinity, b.radius ?? Infinity);
+        return {
+            a, b, n, t1, t2,
+            friction: Math.sqrt(a.friction * b.friction),
+            bounce: Math.max(a.bounce, b.bounce),
+            stiff: !a.im || !b.im,
+            round: true,
+            roll: Math.max(a.rolling, b.rolling) * radius,
+            twist: Math.max(a.twisting, b.twisting) * radius,
+            spots: [{
+                ra, rb, ca, cb, la: ra, gap,
+                adjusted: gap - dot(sub(cb, ca), n),
+                normalMass: k(n), oneMass: k(t1), twoMass: k(t2),
+                push: old?.push ?? 0, one: oldOne, two: oldTwo, speed: 0, springy: false, start: 0,
+                closing: dot(sub(add(b.v, cross(b.w, rb)), add(a.v, cross(a.w, ra))), n),
+                most: 0,
+                rollOne, rollTwo, spin: old?.spin ?? 0,
+                rollOneMass: turning(t1), rollTwoMass: turning(t2), spinMass: turning(n),
+            }],
+        };
+    }
+
+    /**
+     * Every ball that moves against the track near it: the table of chunks gives the chunks its box
+     * reaches, and each chunk's piece says where the ball touches it. A contact is found again from
+     * last step by ball, piece and part, and by being near the same place along the piece.
+     */
+    #onTrack(manifolds: Manifold[], dt: number): void {
+        const kept = this.#kept;
+        if (!this.#built) {
+            kept.clear();
+            this.#keptPiece = [];
+            this.#keptChunk = [];
+            const [low, high] = [new Float64Array(3), new Float64Array(3)];
+            this.#pieces.forEach((solid, index) => {
+                for (let k = 0; k < solid.piece!.chunks; k++) {
+                    solid.piece!.box(k, low, high, 0);
+                    kept.add(low, high);
+                    this.#keptPiece.push(index);
+                    this.#keptChunk.push(k);
+                }
+            });
+            kept.build();
+            this.#built = true;
+            join(this.#pieces.map((solid) => solid.piece!));
+        }
+        const was = this.#wasOn;
+        this.#wasOn = this.#nextOn;
+        this.#nextOn = was;
+        const next = this.#wasOn;
+        next.clear();
+        const [low, high, touches] = [this.#low, this.#high, this.#touches];
+        for (const ball of this.solids) {
+            if (ball.radius === undefined || !ball.im) continue;
+            const within = this.margin + Math.min((length(ball.v) + length(ball.w) * ball.radius) * dt, this.ahead);
+            for (let axis = 0; axis < 3; axis++) {
+                low[axis] = ball.p[axis]! - ball.radius - within;
+                high[axis] = ball.p[axis]! + ball.radius + within;
+            }
+            const found = kept.find(low, high);
+            for (let f = 0; f < found; f++) {
+                const entry = kept.found[f]!;
+                const index = this.#keptPiece[entry]!;
+                const track = this.#pieces[index]!;
+                const piece = track.piece!;
+                touches.length = 0;
+                piece.touch(this.#keptChunk[entry]!, ball.p, ball.radius, within, touches);
+                for (const touch of touches) {
+                    const key = ball.id * 2 ** 16 + index * 16 + touch.part;
+                    // last step's contact with this part, if it was near the same place along the piece
+                    let [before, near]: [Manifold | undefined, number] = [undefined, 2 * (piece.knots[1]! - piece.knots[0]!)];
+                    for (const m of was.get(key) ?? []) {
+                        if (Math.abs(m.where! - touch.where) < near) [before, near] = [m, Math.abs(m.where! - touch.where)];
+                    }
+                    const made = this.#meet(track, ball, touch.n, add(touch.at, mul(touch.n, touch.gap / 2)), touch.gap, before);
+                    [made.piece, made.part, made.where] = [piece, touch.part, touch.where];
+                    manifolds.push(made);
+                    const list = next.get(key);
+                    if (list) list.push(made);
+                    else next.set(key, [made]);
+                }
+            }
+        }
     }
 
     #advance(dt: number): void {
         const { solids } = this;
         const h = dt / this.parts;
         for (const s of solids) {
-            if (s.im) place(s);
+            if (s.im && s.radius === undefined) place(s);
             // how hard it is to turn, as it is turned now: the same for the whole step
             if (s.turning && s.turned && (s.im || s.rest)) toWorld(s.q, s.turning, s.turned);
         }
@@ -597,10 +1077,16 @@ export class Space {
             if (s.im || s.rest) far = Math.max(far, s.far);
             fastest = Math.max(fastest, size(s.v) + size(s.w) * s.far);
         }
-        const reach = far + MARGIN + Math.min(2 * fastest * dt, 1.5) + 1e-6;
+        const reach = far + this.margin + Math.min(2 * fastest * dt, this.ahead) + 1e-6;
         const { low, high } = pairs;
         for (let i = 0; i < count; i++) {
             const s = solids[i]!;
+            if (this.islands && s.rest && !s.held) {
+                // asleep in an island: in the table of sleepers instead, and in no pair here
+                pairs.moves[i] = 0;
+                for (let axis = 0; axis < 3; axis++) [low[i * 3 + axis], high[i * 3 + axis]] = [Infinity, -Infinity];
+                continue;
+            }
             pairs.moves[i] = s.im || s.rest ? 1 : 0;
             if (!s.im && !s.rest) {
                 // Fixed, which only a slab is: a box whose faces are pushed out by `reach` is a box
@@ -619,7 +1105,7 @@ export class Space {
                 continue;
             }
             // as the one that moves: its middle, its size and its share of the margin
-            let out = s.far + MARGIN / 2 + Math.min((size(s.v) + size(s.w) * s.far) * dt, 1.5) + 1e-6;
+            let out = s.far + this.margin / 2 + Math.min((size(s.v) + size(s.w) * s.far) * dt, this.ahead) + 1e-6;
             // Asleep or held, it may also be the one that does not move, its faces each pushed out by
             // `reach`: that lies inside the solid grown about its middle until its nearest face has moved that far.
             if (!s.im) out = Math.max(out, s.far * (1 + reach / s.inner) + 1e-6);
@@ -636,79 +1122,23 @@ export class Space {
         const { start, other } = pairs;
         for (let i = 0; i < count; i++) {
             const a = solids[i]!;
-            for (let k = start[i]!; k < start[i + 1]!; k++) {
-                const b = solids[other[k]!]!;
-                if (!a.im && !b.im) continue;
-                const closing = size(sub(b.v, a.v)) + size(a.w) * (a.im ? a.far : 0) + size(b.w) * (b.im ? b.far : 0);
-                const margin = MARGIN + Math.min(closing * dt, 1.5);
-                // Too far off to matter: by their middles, or for something fixed, by how far the other is outside its faces.
-                if (a.im && b.im) {
-                    if (size(sub(b.p, a.p)) > a.far + b.far + margin) continue;
-                } else {
-                    const [box, ball] = a.im ? [b, a] : [a, b];
-                    let out = false;
-                    for (let f = 0; f < box.wn.length && !out; f++) out = dot(box.wn[f]!, ball.p) - box.offsets[f]! > ball.far + margin;
-                    if (out) continue;
-                }
-                const found = touch(a, b, margin);
-                if (!found) continue;
-                // something asleep is woken by anything that reaches it while moving; something held is not
-                for (const [lying, other] of [[a, b], [b, a]] as const) {
-                    if (lying.rest && !lying.held && other.im && size(other.v) + size(other.w) * other.far > 8 * this.slow) {
-                        [lying.im, lying.ii] = lying.rest;
-                        lying.rest = undefined;
-                        lying.quiet = 0;
-                    }
-                }
-                const before = was.get(a.id * 2 ** 26 + b.id);
-                const n = found.n;
-                const t1 = unit(Math.abs(n[0]) < 0.8 ? cross(n, [1, 0, 0]) : cross(n, [0, 1, 0]));
-                const t2 = cross(n, t1);
-                const back: Quat = [-a.q[0], -a.q[1], -a.q[2], a.q[3]];
-                manifolds.push({
-                    a, b, n, t1, t2,
-                    friction: Math.sqrt(a.friction * b.friction),
-                    bounce: Math.max(a.bounce, b.bounce),
-                    stiff: !a.im || !b.im,
-                    spots: found.spots.map(([at, gap]): Spot => {
-                        const [ra, rb] = [sub(at, a.p), sub(at, b.p)];
-                        const la = spin(back, ra);
-                        // Found again from last step by where it is on the first solid, so that it starts from last step's answer.
-                        let [old, near]: [Spot | undefined, number] = [undefined, 0.06 * Math.max(a.im ? a.far : 0, b.im ? b.far : 0)];
-                        for (const spot of before?.spots ?? []) {
-                            const away = size(sub(spot.la, la));
-                            if (away < near) [old, near] = [spot, away];
-                        }
-                        const [oldOne, oldTwo] = old && before ? [old.one * dot(before.t1, t1) + old.two * dot(before.t2, t1), old.one * dot(before.t1, t2) + old.two * dot(before.t2, t2)] : [0, 0];
-                        const ca = sub(ra, mul(n, gap / 2));
-                        const cb = add(rb, mul(n, gap / 2));
-                        const k = (d: V3) => {
-                            const [xa, xb] = [cross(ra, d), cross(rb, d)];
-                            const sum = a.im + b.im + hardness(a, xa) + hardness(b, xb);
-                            return sum > 0 ? 1 / sum : 0;
-                        };
-                        return {
-                            ra, rb, ca, cb, la, gap,
-                            adjusted: gap - dot(sub(cb, ca), n),
-                            normalMass: k(n), oneMass: k(t1), twoMass: k(t2),
-                            push: old?.push ?? 0, one: oldOne, two: oldTwo, speed: 0, springy: false, start: 0,
-                            closing: dot(sub(add(b.v, cross(b.w, rb)), add(a.v, cross(a.w, ra))), n),
-                            most: 0,
-                        };
-                    }),
-                });
-            }
+            for (let k = start[i]!; k < start[i + 1]!; k++) this.#pair(a, solids[other[k]!]!, dt, was, manifolds);
         }
+        // islands asleep are kept out of the grid; the moving are set against them here
+        if (this.islands) this.#nearSleepers(dt, was, manifolds);
         // Kept by pair for the next step to find each again; the two maps take turns, so neither is made anew.
         this.#was = this.#next;
         this.#next = was;
         this.#next.clear();
         for (const m of manifolds) this.#was.set(m.a.id * 2 ** 26 + m.b.id, m);
+        // balls against track, after every pair, by ball and then by piece and chunk
+        if (this.#pieces.length) this.#onTrack(manifolds, dt);
 
         for (const s of solids) {
             s.dp = [0, 0, 0];
             s.dq = [0, 0, 0, 1];
         }
+        const round = manifolds.some((m) => m.round);
         const contact = soft(Math.min(HERTZ, 0.25 / h), DAMPED, h);
         const firm = soft(Math.min(HERTZ * 2, 0.25 / h), DAMPED, h);
 
@@ -748,12 +1178,20 @@ export class Space {
                 for (let sweep = 0; sweep < (count > 1 ? 4 : 1); sweep++) {
                     for (let k = 0; k < count; k++) {
                         const s = m.spots[backward !== (sweep % 2 === 1) ? count - 1 - k : k]!;
-                        if (!sweep) {
+                        if (!sweep && m.round) {
+                            // With a ball, how far apart they are was measured as this part began. Against
+                            // track or a ball the speed it may close at lands it on the surface, in both
+                            // passes; against flat faces, a ball is pushed out softly as a solid is.
+                            const gap = s.now!;
+                            s.springy = s.calm === undefined && gap <= 0 && bias;
+                            s.speed = (bias ? s.firm : s.calm) ?? (gap > 0 ? gap / h : bias ? Math.max(spring.rate * gap, -this.push) : 0);
+                            s.start = s.push;
+                        } else if (!sweep) {
                             // how far apart they are now, from how far each has moved and turned since the step began
                             const gap = dot(add(sub(b.dp, a.dp), sub(spin(b.dq, s.cb), spin(a.dq, s.ca))), n) + s.adjusted;
                             // Not yet touching: allowed to close exactly the gap, and no more. Overlapping: pushed out, softly.
                             s.springy = gap <= 0 && bias;
-                            s.speed = gap > 0 ? gap / h : bias ? Math.max(spring.rate * gap, -PUSH) : 0;
+                            s.speed = gap > 0 ? gap / h : bias ? Math.max(spring.rate * gap, -this.push) : 0;
                             s.start = s.push;
                         }
                         // a springy point gives a little, by how much it has been pushed since this pass began
@@ -768,11 +1206,133 @@ export class Space {
                     const s = m.spots[backward ? count - 1 - k : k]!;
                     // rubbing: no more than the two are pressed together allows, whichever way it is across the face
                     const [one, two] = [s.one - s.oneMass * leaving(m, s, m.t1), s.two - s.twoMass * leaving(m, s, m.t2)];
-                    const [long, most] = [Math.hypot(one, two), m.friction * s.push];
+                    const [long, most] = [m.round ? Math.sqrt(one * one + two * two) : Math.hypot(one, two), m.friction * s.push];
                     const keep = long > most ? most / long : 1;
                     shove(m, s, m.t1, one * keep - s.one);
                     shove(m, s, m.t2, two * keep - s.two);
                     [s.one, s.two] = [one * keep, two * keep];
+                }
+                if (!m.roll && !m.twist) continue;
+                for (const s of m.spots) {
+                    // Rolling costs a turning push against the roll, up to `roll` for each unit the two are
+                    // pressed together; spinning on the spot costs the same way about the line between them.
+                    if (m.roll) {
+                        const turning = sub(b.w, a.w);
+                        const [one, two] = [s.rollOne! - s.rollOneMass! * dot(turning, m.t1), s.rollTwo! - s.rollTwoMass! * dot(turning, m.t2)];
+                        const [long, most] = [Math.sqrt(one * one + two * two), m.roll * s.push];
+                        const keep = long > most ? most / long : 1;
+                        twist(m, m.t1, one * keep - s.rollOne!);
+                        twist(m, m.t2, two * keep - s.rollTwo!);
+                        [s.rollOne, s.rollTwo] = [one * keep, two * keep];
+                    }
+                    if (m.twist) {
+                        const most = m.twist * s.push;
+                        const spun = Math.max(-most, Math.min(most, s.spin! - s.spinMass! * dot(sub(b.w, a.w), n)));
+                        twist(m, n, spun - s.spin!);
+                        s.spin = spun;
+                    }
+                }
+            }
+        };
+        /** A turning push `j` about `d` on b, and back on a. */
+        const turnOne = (solid: Solid, d: V3, by: number) => {
+            if (!solid.im) return;
+            const t = solid.turned;
+            for (let axis = 0; axis < 3; axis++) solid.w[axis]! += t ? (t[axis * 3]! * d[0] + t[axis * 3 + 1]! * d[1] + t[axis * 3 + 2]! * d[2]) * by : solid.ii * d[axis]! * by;
+        };
+        const twist = (m: Manifold, d: V3, j: number) => {
+            turnOne(m.a, d, -j);
+            turnOne(m.b, d, j);
+        };
+        /** A contact with a ball turned to face `toward` (any length), the two `gap` apart: its point, its directions across, and how much each push takes, made again. */
+        const aim = (m: Manifold, s: Spot, toward: V3, gap: number) => {
+            const long = length(toward);
+            if (!(long > 0)) return;
+            const n = mul(toward, 1 / long);
+            const across = Math.abs(n[0]) < 0.8 ? cross(n, [1, 0, 0]) : cross(n, [0, 1, 0]);
+            const t1 = mul(across, 1 / length(across));
+            const t2 = cross(n, t1);
+            // what has been pushed across so far, said in the new directions
+            const into = (one: number, two: number): [number, number] => [one * dot(m.t1, t1) + two * dot(m.t2, t1), one * dot(m.t1, t2) + two * dot(m.t2, t2)];
+            [s.one, s.two] = into(s.one, s.two);
+            [s.rollOne, s.rollTwo] = into(s.rollOne!, s.rollTwo!);
+            [m.n, m.t1, m.t2] = [n, t1, t2];
+            const { a, b } = m;
+            // the point half way between the two surfaces, from each one's middle
+            const at = b.radius !== undefined ? sub(b.p, mul(n, b.radius + gap / 2)) : add(a.p, mul(n, a.radius! + gap / 2));
+            [s.ra, s.rb] = [sub(at, a.p), sub(at, b.p)];
+            const k = (d: V3) => {
+                const sum = a.im + b.im + hardness(a, cross(s.ra, d)) + hardness(b, cross(s.rb, d));
+                return sum > 0 ? 1 / sum : 0;
+            };
+            [s.normalMass, s.oneMass, s.twoMass] = [k(n), k(t1), k(t2)];
+        };
+        /**
+         * The speed a ball may come in at over a part (less than none: it must be sent away that fast),
+         * so that it ends the part just on the surface, by the surface's own formula: `there` is how far
+         * apart they would be at the end if nothing pushed, `end` the way the surface faces there, `v`
+         * the speed at which they close now, and the push along `n`, the way the surface faces now. A
+         * ball already in deeper than it should be is let stay in, and pushed out at no more than `push`;
+         * the second number is the same without that push out, for the pass after the move, so that
+         * putting an overlap right moves the ball and leaves it no faster, as the soft solver does.
+         *
+         * This is the rule molecular dynamics calls SHAKE: the push is square to the surface where the
+         * ball is, and just enough to land it on the surface. Round a curve or a funnel it keeps both the
+         * ball's energy and its turning about the funnel's axis, where a push aimed anywhere else would
+         * lean along the ball's path and speed it up or slow it down a little every part.
+         */
+        const landing = (now: number, there: number, v: V3, n: V3, end: V3): [number, number] => {
+            const square = dot(n, end);
+            const [allowed, kept] = [now < 0 ? Math.min(0, now + this.push * h) : 0, Math.min(0, now)];
+            // Where the surface turns by more than a few degrees in one part (a thin rail met fast), where
+            // the ball would be at the end says little of what it passed through on the way: then it may
+            // close the gap there is now along the way the surface faces, and no more.
+            if (square > 0.95) return [(there - allowed) / (h * square) - dot(v, n), (there - kept) / (h * square) - dot(v, n)];
+            return [(now - allowed) / h, (now - kept) / h];
+        };
+        /**
+         * For each contact with a ball, as a part of the step begins: how far apart the two are and the
+         * speed the ball may come in at. Against track, that is by where the ball would be at the end
+         * of the part, so that one held round a loop or a funnel is turned with it; the contact is aimed
+         * at the way the surface faces where the ball is now.
+         */
+        const measure = (part: number) => {
+            for (const m of manifolds) {
+                if (!m.round) continue;
+                const { a, b, n } = m;
+                for (const s of m.spots) {
+                    if (m.piece) {
+                        // Where the last part said it would be, put right by where it went; unless the surface
+                        // faced a good deal another way there (it was past a thin rail), when it is measured again.
+                        let [now, toward] = part ? [s.there! + dot(sub(b.p, s.going!), s.toward!), s.toward!] : [s.gap, n];
+                        if (part && dot(toward, n) <= 0.95) {
+                            const again = m.piece.again(m.part!, m.where!, b.p, b.radius!);
+                            [now, toward, m.where] = [again.gap, again.n, again.where];
+                        }
+                        aim(m, s, toward, now);
+                        const going = add(b.p, mul(b.v, h));
+                        const end = m.piece.again(m.part!, m.where!, going, b.radius!);
+                        [m.where, s.there, s.going, s.toward] = [end.where, end.gap, going, end.n];
+                        s.now = now;
+                        [s.firm, s.calm] = landing(now, end.gap, b.v, m.n, end.n);
+                    } else if (a.radius !== undefined && b.radius !== undefined) {
+                        // Ball against ball: measured afresh and aimed between the two middles, but soft, as
+                        // solids are. In a heap one ball often rests on several and against a wall, more
+                        // than can all be held exactly; soft, they share it and settle.
+                        const apart = sub(b.p, a.p);
+                        const near = length(apart);
+                        s.now = near - a.radius - b.radius;
+                        if (near > 0) aim(m, s, apart, s.now);
+                        [s.firm, s.calm] = [undefined, undefined];
+                    } else {
+                        // against flat faces: from how far each has moved, a ball's surface not turning with it
+                        const [ca, cb] = [a.radius === undefined && a.im ? spin(a.dq, s.ca) : s.ca, b.radius === undefined && b.im ? spin(b.dq, s.cb) : s.cb];
+                        s.now = dot(add(sub(b.dp, a.dp), sub(cb, ca)), n) + s.adjusted;
+                        [s.firm, s.calm] = [undefined, undefined];
+                    }
+                    // A ball strikes at the speed it has when it gets there, gravity's last part included,
+                    // not at the speed it had as the step began; its bounce and its sound go by that.
+                    s.closing = Math.min(s.closing, leaving(m, s, m.n));
                 }
             }
         };
@@ -786,11 +1346,18 @@ export class Space {
                 s.w = mul(s.w, turnSlow);
                 if (s.inertia) s.w = gyroscope(s.q, s.inertia, s.w, h);
             }
+            // a contact with a ball is aimed for this part before last part's pushes are given again along it
+            if (round) measure(part);
             for (const m of manifolds) {
                 for (const s of m.spots) {
                     shove(m, s, m.n, s.push);
                     shove(m, s, m.t1, s.one);
                     shove(m, s, m.t2, s.two);
+                    if (m.roll) {
+                        twist(m, m.t1, s.rollOne!);
+                        twist(m, m.t2, s.rollTwo!);
+                    }
+                    if (m.twist) twist(m, m.n, s.spin!);
                 }
             }
             contacts(true);
@@ -799,6 +1366,10 @@ export class Space {
                 const [move, by] = [mul(s.v, h), mul(s.w, h)];
                 s.p = add(s.p, move);
                 s.dp = add(s.dp, move);
+                if (s.radius !== undefined) {
+                    s.q = rolled(s.q, by);
+                    continue;
+                }
                 s.q = turnedBy(s.q, by);
                 s.dq = turnedBy(s.dq, by);
             }
@@ -808,7 +1379,7 @@ export class Space {
         if (this.hit) {
             for (const m of manifolds) {
                 const closing = Math.min(...m.spots.map((s) => s.closing));
-                if (closing < -1.2) this.hit(m.a, m.b, -closing);
+                if (closing < -this.knock) this.hit(m.a, m.b, -closing);
             }
         }
 
@@ -816,7 +1387,7 @@ export class Space {
         for (const m of manifolds) {
             if (!m.bounce) continue;
             for (const s of m.spots) {
-                if (s.closing > -1.2 || !s.most) continue;
+                if (s.closing > -this.knock || !s.most) continue;
                 const push = Math.max(0, s.push - s.normalMass * (leaving(m, s, m.n) + m.bounce * s.closing));
                 shove(m, s, m.n, push - s.push);
                 s.push = push;
@@ -825,10 +1396,67 @@ export class Space {
 
         for (const s of solids) {
             if (!s.im) continue;
-            s.quiet = size(s.v) + size(s.w) * s.far < this.slow ? s.quiet + dt : 0;
-            if (this.sleeps && s.quiet > this.nap) {
+            s.quiet = (s.radius === undefined ? size(s.v) + size(s.w) * s.far : length(s.v) + length(s.w) * s.far) < this.slow ? s.quiet + dt : 0;
+            if (this.sleeps && !this.islands && s.quiet > this.nap) {
                 s.rest = [s.im, s.ii];
                 [s.im, s.ii, s.v, s.w] = [0, 0, [0, 0, 0], [0, 0, 0]];
+            }
+        }
+        if (this.sleeps && this.islands) this.#sleepTogether(manifolds);
+    }
+
+    /**
+     * Islands: solids that touch, and solids asleep that a moving one rests on, are one island, found
+     * by joining the two of every contact. An island all of whose moving solids have been still for
+     * `nap` seconds goes to sleep as one, each solid told of all the others, so that whatever wakes one
+     * wakes them all. Fixed things, track among them, join nothing, or the whole floor would be one island.
+     */
+    #sleepTogether(manifolds: Manifold[]): void {
+        const { solids } = this;
+        const leader = new Map<Solid, Solid>();
+        const find = (s: Solid): Solid => {
+            let top = s;
+            while (leader.get(top) !== top) top = leader.get(top)!;
+            // shorten the way for next time
+            while (s !== top) {
+                const next = leader.get(s)!;
+                leader.set(s, top);
+                s = next;
+            }
+            return top;
+        };
+        const counts = (s: Solid) => s.im > 0 || (s.rest !== undefined && !s.held);
+        for (const s of solids) if (counts(s)) leader.set(s, s);
+        for (const m of manifolds) {
+            if (!counts(m.a) || !counts(m.b) || (!m.a.im && !m.b.im)) continue;
+            // only those truly touching join, not those merely near
+            if (!m.spots.some((spot) => spot.push > 0)) continue;
+            const [one, two] = [find(m.a), find(m.b)];
+            if (one !== two) leader.set(one, two);
+        }
+        const calm = new Map<Solid, boolean>();
+        for (const s of solids) {
+            if (!s.im) continue;
+            const top = find(s);
+            calm.set(top, (calm.get(top) ?? true) && s.quiet > this.nap);
+        }
+        const members = new Map<Solid, Solid[]>();
+        for (const s of solids) {
+            if (!leader.has(s)) continue;
+            const top = find(s);
+            if (!calm.get(top)) continue;
+            let list = members.get(top);
+            if (!list) members.set(top, (list = []));
+            list.push(s);
+        }
+        if (members.size) this.#sleepersBuilt = false;
+        for (const list of members.values()) {
+            for (const s of list) {
+                if (s.im) {
+                    s.rest = [s.im, s.ii];
+                    [s.im, s.ii, s.v, s.w] = [0, 0, [0, 0, 0], [0, 0, 0]];
+                }
+                s.together = list;
             }
         }
     }

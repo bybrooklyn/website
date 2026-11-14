@@ -479,7 +479,16 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
         const used: number[] = [];
         const flat = mesh.faces.map((face) => unit(cross(minus(mesh.points[face[1]!]!, mesh.points[face[0]!]!), minus(mesh.points[face[2]!]!, mesh.points[face[0]!]!))));
         // a smooth mesh is lit as if round: each corner faces the way the faces around it do, taken together
-        const round = mesh.smooth ? mesh.points.map((_, point) => unit(mesh.faces.reduce<V3>((sum, face, number) => (face.includes(point) ? plus(sum, flat[number]!) : sum), [0, 0, 0]))) : undefined;
+        // Summed in one pass over the faces, each face's normal added once to each of its corners, in the
+        // faces' order, so that a long piece of track of thousands of faces is ready at once.
+        let round: V3[] | undefined;
+        if (mesh.smooth) {
+            const sums = mesh.points.map((): V3 => [0, 0, 0]);
+            mesh.faces.forEach((face, number) => {
+                for (const point of new Set(face)) sums[point] = plus(sums[point]!, flat[number]!);
+            });
+            round = sums.map(unit);
+        }
         mesh.faces.forEach((face, number) => {
             const corners = face.map((corner) => mesh.points[corner]!);
             const n = flat[number]!;
