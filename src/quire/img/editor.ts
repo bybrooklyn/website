@@ -24,6 +24,7 @@ import { createStage, type Pen, type Tool } from "./stage";
 import { createReading } from "./reading";
 import { gradePanel } from "./grade-panel";
 import { gradeMore } from "./grade-more";
+import { gradeLooks, lookStore } from "./looks";
 import { createMeasure } from "./measure";
 import { autoFix, averageAround, balanceFrom } from "./fix";
 import { prepared } from "./draw";
@@ -667,10 +668,23 @@ export function mountEditor(host: HTMLElement, context: Context) {
     });
     grading.deeper.append(deeper.element);
     grading.more.addEventListener("toggle", () => grading.more.open && deeper.fill());
+    // Looks: kept in this browser, given to this grade, and read and written as .cube files
+    const looked = gradeLooks({
+        store: lookStore(),
+        grade: () => currentGrade(),
+        set: (grade) => commit(withGrade(grade)),
+        say: (short, full, warn) => frame.status.say(short, full, warn ? "warn" : undefined),
+        name: () => where.name,
+        space: () => colors.space,
+        give,
+    });
+    grading.looksBody.append(looked.element);
+    grading.looks.addEventListener("toggle", () => grading.looks.open && void looked.fill());
     /** The surface and its deeper controls, as the grade now is. */
     const fillGrade = () => {
         grading.fill();
         if (grading.more.open) deeper.fill();
+        if (grading.looks.open) void looked.fill();
     };
     /** A color picked: its hue as the shift will see it (the original's pixels round the place, graded up to the shift), added with nothing moved yet. */
     async function colorAt(at: { x: number; y: number }) {

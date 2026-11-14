@@ -308,9 +308,13 @@ export function gradePanel(hooks: GradeHooks) {
     const summary = make("summary", "", "More");
     const deeper = make("div", "quire-img-grade-deeper");
     more.append(summary, deeper);
+    // Looks, folded too: saved, applied, and read and written as .cube files
+    const looks = make("details", "quire-img-everything quire-img-grade-more quire-img-grade-looks");
+    const looksBody = make("div", "quire-img-grade-deeper");
+    looks.append(make("summary", "", "Looks"), looksBody);
     const parts = make("div", "quire-img-grade-parts");
     const space = make("p", "quire-img-grade-space");
-    side.body.append(target, top, fixes, list, more, parts, space);
+    side.body.append(target, top, fixes, list, more, looks, parts, space);
     // on a phone the sheet's head drags it shorter or taller, the picture above refitting as it goes
     const head = side.panel.querySelector<HTMLElement>(".quire-img-panel-head")!;
     let sheet: { y: number; height: number; id: number } | undefined;
@@ -346,6 +350,9 @@ export function gradePanel(hooks: GradeHooks) {
         more,
         /** Where the parts' own controls go. */
         parts,
+        /** Where the looks go, under Looks. */
+        looks,
+        looksBody,
         /** Shows the counts of the grade as it now is. */
         counts(counts: Counts | undefined) {
             last = counts;
