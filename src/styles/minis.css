@@ -40,6 +40,15 @@
     --panel-room: 24rem;
 }
 
+/* Sand's panel is a row of materials and a row of the brush and the rest. */
+.mini-stage[data-mini="sand"] {
+    --panel-room: 8rem;
+}
+
+.mini-stage[data-mini="sand"] canvas {
+    cursor: crosshair;
+}
+
 /* Comet's panel is a line of what happened, the count, and a row of words. */
 .mini-stage[data-mini="comet"] {
     --panel-room: 10rem;
