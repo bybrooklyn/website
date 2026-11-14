@@ -13,7 +13,7 @@ import type { Edits, Facts, Keep } from "./metadata";
 /** What of the metadata an export keeps, as its three buttons say it, each with its tooltip. */
 export const KEEPS: { key: Keep; label: string; tip: string }[] = [
     { key: "none", label: "None", tip: "Nothing about the picture goes with it" },
-    { key: "noplace", label: "All but place", tip: "Camera, date and the rest, but not where it was taken" },
+    { key: "noplace", label: "No place", tip: "Camera, date and the rest, but not where it was taken" },
     { key: "all", label: "All", tip: "Everything the picture says about itself, where it was taken too" },
 ];
 

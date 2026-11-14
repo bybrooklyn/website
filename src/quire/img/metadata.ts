@@ -272,6 +272,7 @@ export function readExif(tiff: Uint8Array): Entry[] {
 export const TAGS: Record<number, string> = {
     0x010e: "Description", 0x010f: "Make", 0x0110: "Model", 0x0112: "Orientation", 0x011a: "X resolution", 0x011b: "Y resolution", 0x0128: "Resolution unit",
     0x0131: "Software", 0x0132: "Date changed", 0x013b: "Artist", 0x8298: "Copyright", 0x8769: "Exif directory", 0x8825: "GPS directory",
+    0x0213: "YCbCr positioning", 0x9101: "Components", 0x9102: "Compressed bits per pixel", 0xa000: "Flashpix version", 0xa217: "Sensing method", 0xa300: "File source", 0xa401: "Custom rendering", 0xa404: "Digital zoom", 0xa420: "Unique ID", 0x8830: "Sensitivity type", 0x9290: "Subseconds", 0x9291: "Subseconds taken", 0x9292: "Subseconds digitized",
     0x829a: "Exposure time", 0x829d: "F-number", 0x8822: "Exposure program", 0x8827: "ISO", 0x9000: "Exif version", 0x9003: "Date taken",
     0x9004: "Date digitized", 0x9010: "Time zone", 0x9011: "Time zone taken", 0x9201: "Shutter speed", 0x9202: "Aperture", 0x9204: "Exposure bias",
     0x9207: "Metering mode", 0x9209: "Flash", 0x920a: "Focal length", 0x927c: "Maker note", 0x9286: "User comment", 0xa001: "Color space",

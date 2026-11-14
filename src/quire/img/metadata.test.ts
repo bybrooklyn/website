@@ -149,7 +149,7 @@ test("on the built /imgquire/ page, a phone's photograph shows upright with its 
         expect(await tab.run("document.querySelector('.quire-img-room').classList.contains('beside')")).toBe(true);
         await tab.run("const caption = document.querySelector('.quire-img-fields input'); caption.value = 'A cat on a wall'; caption.dispatchEvent(new Event('change'))");
         const saved: Record<string, Uint8Array> = {};
-        for (const [label, keep] of [["JPEG", "None"], ["JPEG", "All but place"], ["WebP", "All but place"], ["PNG", "All but place"], ["AVIF", "All"], ["JXL", "All"]] as const) {
+        for (const [label, keep] of [["JPEG", "None"], ["JPEG", "No place"], ["WebP", "No place"], ["PNG", "No place"], ["AVIF", "All"], ["JXL", "All"]] as const) {
             await tab.run("document.querySelector('.quire-img-stage').focus()");
             if (!(await tab.run<boolean>("!!document.querySelector('.quire-img-export.open:not(.quire-img-facts-panel)')"))) await tab.press("e");
             await until("document.querySelector('.quire-img-export.open:not(.quire-img-facts-panel)')");
@@ -167,7 +167,7 @@ test("on the built /imgquire/ page, a phone's photograph shows upright with its 
         // a picture with no steps going out in its own format is its original with where, when and with what cut out: only how it is turned and its colour profile, which change how it looks, stay
         expect(none.rows.map(([name]) => name).filter((name) => name !== "Color profile" && name !== "Orientation")).toEqual([]);
         expect(none.found.caption).toBeUndefined();
-        for (const key of ["JPEG All but place", "WebP All but place", "PNG All but place"]) {
+        for (const key of ["JPEG No place", "WebP No place", "PNG No place"]) {
             const read = factsOf(saved[key]!);
             expect({ key, caption: read.found.caption, place: read.place, camera: read.rows.find(([name]) => name === "Camera")?.[1] }).toEqual({ key, caption: "A cat on a wall", place: undefined, camera: "PhoneMaker Pocket 9" });
             const theirs = await sharp(saved[key]!).metadata();

@@ -667,3 +667,7 @@
         transition: none;
     }
 }
+
+.quire-img-fields .quire-field {
+    font-size: 0.9rem;
+}
