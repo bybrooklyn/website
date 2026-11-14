@@ -17,6 +17,8 @@
 //!   and seeing what it has not before.
 //! - `gait`: how a creature moves, in numbers: on its feet or its belly, upright, taking turns.
 //! - `mind`: a brain drawn as it thinks, whichever way it learns.
+//! - `pool`: the brain's neurons that carry something from one decision to the next: memory with plastic
+//!   reads, rhythms it conducts, and moods that turn the plain neurons up or down.
 //! - `net`: a small network with its backward pass written by hand, and Adam, for gradient learning.
 //! - `page` and `api`: what the page reaches, and the plain functions it calls in `generalist.wasm`.
 //! - `stage`: a land put into the physics around one creature, laid ahead and dropped behind as it
@@ -38,6 +40,7 @@ pub mod mind;
 pub mod needs;
 pub mod net;
 pub mod page;
+pub mod pool;
 pub mod ppo;
 pub mod practice;
 pub mod recipe;
@@ -55,6 +58,8 @@ mod eyes_tests;
 mod net_tests;
 #[cfg(test)]
 mod page_tests;
+#[cfg(test)]
+mod pool_tests;
 #[cfg(test)]
 mod ppo_tests;
 #[cfg(test)]
