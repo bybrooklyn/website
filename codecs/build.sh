@@ -114,7 +114,12 @@ avif() {
         -DAVIF_CODEC_AOM=SYSTEM -DAVIF_CODEC_AOM_DECODE=OFF -DAVIF_CODEC_AOM_ENCODE=ON -DAOM_INCLUDE_DIR="$SOURCES/aom" \
         -DAOM_LIBRARY="$WORK/aom/libaom.a" -DAVIF_LIBYUV=OFF -DAVIF_LIBSHARPYUV=OFF -DAVIF_LIBXML2=OFF -DAVIF_JPEG=OFF \
         -DAVIF_ZLIBPNG=OFF -DAVIF_BUILD_APPS=OFF
-    module avif "$flags" avif.c -I"$SOURCES/libavif/include" "$WORK/avif/libavif_internal.a" "$WORK/aom/libaom.a"
+    avifmodule
+}
+
+# the AVIF module linked again from the libraries already built, after a change to its wrapper
+avifmodule() {
+    module avif "-Os -msimd128 -flto -DNDEBUG -sSUPPORT_LONGJMP=wasm" avif.c -I"$SOURCES/libavif/include" "$WORK/avif/libavif_internal.a" "$WORK/aom/libaom.a"
 }
 
 # the two written in Rust: oxipng for PNG and heic-rs for reading HEIC, built offline from Cargo's cache
