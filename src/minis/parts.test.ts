@@ -148,6 +148,24 @@ test("a switch sends marbles left, right, left, right, exactly, slow or fast, as
     }
 }, 120_000);
 
+test("a switch needs a quarter of a second between marbles: two let go together by a trapdoor before it go the same way, which is why checks.ts marks such a switch", () => {
+    const run = switched(30, [kind("s", [2]), kind("j"), kind("s", [1])]);
+    const table = makeTable();
+    table.set(run);
+    const [left, right] = run.filter((piece) => piece.kind.family === "t").map((tray) => tray.id);
+    const ways: string[] = [];
+    const told = new Set<Solid>();
+    roll(table, 8, 0.8, 30, () => {
+        for (const marble of table.marbles) {
+            if (told.has(marble) || !table.arrived(marble)) continue;
+            told.add(marble);
+            ways.push(trayOf(run, marble) === left ? "L" : trayOf(run, marble) === right ? "R" : "?");
+        }
+    });
+    expect(ways.join("")).not.toBe("LR".repeat(ways.length / 2));
+    expect(ways.join("")).toMatch(/LL|RR/);
+}, 60_000);
+
 test("a trapdoor holds one marble at its lip, and opens under two, which drop to the track below, and closes again", () => {
     const run = chain(18, [kind("s", [2]), kind("j"), kind("s", [1]), kind("t")]);
     const table = makeTable();

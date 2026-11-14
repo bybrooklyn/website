@@ -4,7 +4,9 @@
 // along the run from each hopper, by a marble's energy: what a drop gives a rolling marble (10/7 g h
 // in v squared), less what rolling and turning cost, at rates fitted to Mote's marbles on the made runs
 // (checks.test.ts holds the guess to the marbles themselves). Not checked: whether a marble comes at
-// the loop fast enough, which depends on how it arrives more than this can tell.
+// the loop fast enough, which depends on how it arrives more than this can tell. A switch that marbles
+// may reach together, after a seesaw, a trapdoor, a lift or a spinner, is marked too: two that touch go
+// the same way.
 //
 //   checks(run);       // [{ id, why: "open", joint }, { id, why: "fast" }, ...]
 
@@ -14,7 +16,7 @@ import { links, open, type Placed } from "./run";
 import type { V3 } from "../mote/solids";
 
 /** Why a piece is marked. */
-export type Why = "open" | "shallow" | "fast";
+export type Why = "open" | "shallow" | "fast" | "batched";
 
 /** A mark on a piece, and on which of its joints for an open end. */
 export interface Mark {
@@ -155,6 +157,43 @@ export function checks(run: Placed[]): Mark[] {
     const marks: Mark[] = [];
     for (const end of open(run)) if (run.find((piece) => piece.id === end.id)!.kind.family !== "t" && !intoBowl(run, end.at, end.way)) marks.push({ id: end.id, why: "open", joint: end.joint });
     marks.push(...walk(run).marks);
+    marks.push(...batched(run));
+    return marks;
+}
+
+/** The pieces that let marbles go together: a seesaw and a trapdoor tip out their batch, a lift its carload, and a spinner may bunch them. */
+const BATCHING = new Set(["e", "j", "u", "o"]);
+
+/**
+ * Switches that marbles may reach together, so that two touching go the same way: those with a
+ * batching piece upstream of them, by the run's joints back from the switch's way in, before any
+ * hopper or piece that spaces marbles out (a hoist carries them a paddle apart, and another switch lets
+ * them by one at a time). A switch alternates only for marbles that come at least a quarter of a
+ * second apart, which no groove can make of two that touch: they keep the same gap in time all the way.
+ */
+export function batched(run: Placed[]): Mark[] {
+    const byId = new Map(run.map((piece) => [piece.id, piece]));
+    const partner = new Map<string, { id: number; joint: number }>();
+    for (const [a, b] of links(run)) {
+        partner.set(`${a.id} ${a.joint}`, { id: b.id, joint: b.joint });
+        partner.set(`${b.id} ${b.joint}`, { id: a.id, joint: a.joint });
+    }
+    const marks: Mark[] = [];
+    for (const one of run.filter((piece) => piece.kind.family === "w")) {
+        let at = partner.get(`${one.id} 0`);
+        const seen = new Set<number>([one.id]);
+        while (at && !seen.has(at.id)) {
+            seen.add(at.id);
+            const family = byId.get(at.id)!.kind.family;
+            if (BATCHING.has(family)) {
+                marks.push({ id: one.id, why: "batched" });
+                break;
+            }
+            // reached by a way out: the way in is joint 0; a hopper, a hoist, a switch or a piece entered backward ends the search
+            if (family === "h" || family === "y" || family === "w" || at.joint === 0) break;
+            at = partner.get(`${at.id} 0`);
+        }
+    }
     return marks;
 }
 

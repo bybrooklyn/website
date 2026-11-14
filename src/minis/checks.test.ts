@@ -33,6 +33,22 @@ test("an open end is marked, but not a tray's", () => {
     expect(checks(chain(5, [kind("s", [1])]))).toEqual([{ id: 2, why: "open", joint: 1 }]);
 });
 
+test("a switch after a trapdoor, a seesaw, a lift or a spinner is marked, since two marbles that come together go the same way; one fed a marble at a time is not", () => {
+    const after = (before: Kind[]) => {
+        const run = chain(30, [kind("s", [2]), ...before, kind("w")]);
+        return checks(run).filter((mark) => mark.why === "batched").map((mark) => run.find((piece) => piece.id === mark.id)!.kind.family);
+    };
+    for (const batching of [kind("j"), kind("e", [2]), kind("o", [4])]) {
+        expect(after([batching])).toEqual(["w"]);
+        expect(after([batching, kind("s", [1]), kind("d", [2, 1])])).toEqual(["w"]);
+    }
+    expect(after([kind("u", [4]), kind("d", [2, 1])])).toEqual(["w"]);
+    expect(after([])).toEqual([]);
+    expect(after([kind("d", [2, 2]), kind("s", [1])])).toEqual([]);
+    // a hoist carries marbles up a paddle apart, so a switch after it is fed one at a time
+    expect(after([kind("j"), kind("s", [1]), kind("y", [4]), kind("s", [1])])).toEqual([]);
+});
+
 test("a run too level to keep a marble rolling is marked where the marble stops, and nothing after it", () => {
     const run = chain(5, [kind("s", [6]), kind("s", [6]), kind("s", [6]), kind("s", [6]), kind("t")]);
     const marks = checks(run);

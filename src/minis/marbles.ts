@@ -541,7 +541,8 @@ export default function marbles(m: Mote): Scene {
     const changed = (record = true) => {
         const now = resting();
         table.set(now);
-        openMarks = checks(now).filter((mark) => mark.why === "open");
+        // open ends, and switches marbles may reach together; the guesses by energy are the ghost's now
+        openMarks = checks(now).filter((mark) => mark.why === "open" || mark.why === "batched");
         ghostMarked = ghostMarked.filter((mark) => now.some((piece) => piece.id === mark.id));
         for (const id of [...chosen]) if (!run.some((piece) => piece.id === id)) chosen.delete(id);
         // presses of a key on one point are one step only until anything else changes
