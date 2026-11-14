@@ -1307,6 +1307,80 @@ thing stage 2 found wrong: either four legs need to learn to rest, which needs r
 outlast their energy, or the page should not carry energy between runs for them; it is left for her to
 say.
 
+### The brain that was discussed
+
+Stage 3 of the plan, 14 November 2026. Until now the brain was a plain network of two layers of 64
+neurons: it carried nothing from one decision to the next, so it could not turn for food it had seen
+behind it, nor keep its eye on something that had just landed. Now a pool of neurons of three kinds sits
+between the two plain layers (`src/generalist/pool.rs`), learned by practice with the rest, back through
+time (`src/generalist/ppo/recurrent.rs`). Every part is written here, forward and backward, and its
+gradient is held to nudging in the tests.
+
+**The kinds.** Each pool neuron reads a few sources, chosen when it is made (`reads` of them: 16 to
+start), from one list: what is sensed (rescaled), the first plain layer, and every pool neuron's output
+as it was before this decision. So a bigger pool costs connections, not a full matrix, and the pool never
+waits on itself within a decision.
+
+| kind | what it is | what it learns |
+|---|---|---|
+| plain | a weighted sum, squashed by tanh; carries nothing (the two layers of 64) | its weights |
+| memory | holds a number, and moves toward what it takes in by a share its gate decides each decision: `m = m + z (c - m)`, `z = sigmoid(gate reads + bias)`, `c = tanh(take-in reads + bias)` | its gate's bias is its own time constant (from a quarter of the way a decision to under a fiftieth at the start), what opens the gate, what it takes in |
+| plastic read (on every memory's take-in) | a fast weight `F` beside each take-in weight, changed during the run by a Hebbian rule, `F = decay F + rate c read`, starting at nothing every run; the read's weight is `w + a F` | `a` for each connection (starting at none), and `rate` and `decay` for each of four groups of memory neurons |
+| rhythm | a phase that goes round at a pace of its own, `phase += pace e^(0.5 tanh(reads + bias))`, giving its sine and cosine to the rest, which may follow it or not | its pace (from half a turn to three turns a second at the start) and what speeds it up or slows it down, by up to two thirds either way |
+| mood | a slow number, `d = d + r (tanh(reads + bias) - d)`, that turns a group of the second plain layer up or down: neuron j of that layer is squashed with a gain of `1 + d` of mood `j % moods` | its rate (a twentieth of the way a decision at the start, about a second and a third to settle) and what moves it; a mood reads first what the creature feels of its needs and touch (energy, touch on its body, being held, the jolt, having just eaten) |
+
+**How it is learned.** A rollout keeps each creature's pool state at the start of every window of 16
+decisions (about a second). An epoch goes over whole windows in a random order: from the state kept, the
+pool is run forward through the window with the weights as they are now, starting afresh where a run
+ended inside the window, and the blame is sent back through the window (truncated backpropagation
+through time). The value does not go back through time: it reads what is sensed and the pool as it was
+before the decision, from the rollout. The plain shape (no pool) never comes here, so it learns exactly as
+before, to the bit (its fingerprint is unchanged, and two legs practised as before go 10.0 to 11.5 m at 20
+million steps, as stage 2 measured).
+
+**Tested** (`pool_tests`, `ppo_tests`, `page_tests`): the gradient of every kind through a window of six
+decisions with a fresh start in the middle, against nudging each weight and each plain neuron; the whole
+loss of PPO with a pool, clipped and not; a fresh start owing nothing to before it; the same seed learning
+the same way; a learner kept and loaded back, grown, grown from the plain network, and shrunk, acting as
+it did (to within 1e-5) and learning on; the show on the page moving exactly as practice does, with a
+pool; and the picture of the brain adding up to what each neuron gave.
+
+**The memory task.** A sign (1 or -1) is shown once, at a run's first decision; five decisions later the
+second sense asks for it, and only that answer is paid, less how far it is from the sign
+(`a_sign_shown_once_is_answered_later...` in `ppo_tests`). Nothing in between says what the sign was.
+After 300 updates of 16 runs at once: the plain network answers 0 and misses by 1.000 every time, the best
+it can do; a pool of 8 memory neurons reading 6 each misses by 0.000, and so does one with 2 rhythms and 2
+moods besides.
+
+**Changing its shape keeps what was learned** (`Learner::reshaped`, `Pool::reshape`). Neurons kept keep
+their reads and every weight into and out of them, with Adam's running averages; new neurons read sources
+drawn at random with small weights, and nothing reads them (their weights into the second plain layer and
+the value start at 0), so it acts exactly as it did; a new mood reads nothing at first, so it rests and its
+gain stays 1; fewer neurons drop those whose outputs count least for the rest (the size of their weights
+into the second plain layer and the value); fewer reads drop each neuron's weakest, and new reads start at
+a weight of 0. A learner is kept and sent with its form (its shape and every read), and taken up into the
+shape asked for.
+
+**Not what was tried before.** Rhythm neurons and memory neurons were tried on 13 November and taken out
+("How it walks, measured"). Those rhythm neurons drove the legs: each leg's swing followed its phase,
+open loop, and the policy had no quick way to catch a lean, so the body tumbled. Here a rhythm is one more
+neuron the rest may read or ignore; nothing follows it unless learning makes it. Those memory neurons were
+written by actions of their own and learned with no gradient through time, and on the walk they changed
+nothing. Here memory is learned back through time, and the walk is not what it is for.
+
+**On the page.** The brain is drawn by kind (`mind::pool_picture`): what it senses on the left, the first
+plain layer in a column, the pool in the middle (memory neurons as small squares filled as full as what they
+hold, ringed brighter when they have just taken something in; rhythms in a row over them as rings with a
+dot going round at their phase; moods in a row under them as bars, to the right as they turn their group up
+and to the left as they quieten it), the second plain layer in a column, and what it does. Into each neuron
+the three connections passing it the most just then are drawn, as bright as they are beside the strongest;
+a plastic connection is drawn thicker the more its weight has changed in this run. A press on a neuron
+draws everything it listens to (`brain_reads`), and a press again lets it go. Three sliders under "brain"
+in the controls set how many memory neurons (0 to 128, by 8), how many rhythms (0 to 16) and how many
+connections each pool neuron reads (4 to 32, by 4); moods come with any pool (4), and memory and rhythm both
+at 0 is the plain network. Moving one carries practice on in the new shape, keeping what was learned, and
+the page says how many neurons it now has.
+
 ### Practice in the browser
 
 On the page, "how it learns" chooses evolution or "by practice", and the page opens on practice: a

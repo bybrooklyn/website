@@ -59,6 +59,15 @@ doing things, all written from scratch in that engine. An article about it is pl
   pays a bounded sum for anything it comes back to), and still for progress. One practice run in five is
   play: energy held full, no food, no progress paid. `walker/README.md`, "It wants things", has every
   term and number.
+- **The brain that was discussed** (14 November 2026, stage 3 of the plan): a pool of neurons between the
+  two plain layers of 64, each reading a few others: memory neurons with a gate and a time constant of their
+  own, whose reads are plastic (a fast weight on each, changed during a run by a Hebbian rule whose rate and
+  decay are learned); rhythms whose pace the brain sets; and moods that turn groups of the plain neurons up
+  or down, reading first what it feels of its energy and touch. Learned back through windows of a second.
+  The page starts with 32 memory neurons, 4 rhythms and 4 moods reading 16 each (168 neurons), and three
+  sliders (memory up to 128, rhythm up to 16, connections 4 to 32) reshape it keeping what was learned. The
+  brain is drawn by kind, and a press on a neuron shows all it listens to. `walker/README.md`, "The brain
+  that was discussed", has every number.
 - **Measures**: a gait measure that says whether a run counts as walking, printed three ways (in the
   held-out worlds as a whole, which is the test; on open ground in them; on level ground); a comparison of evolution and
   practice on the same compute (practice goes three to six times as far through unseen worlds for about

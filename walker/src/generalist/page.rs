@@ -108,8 +108,10 @@ impl Page {
         let weights = if self.evolution.best_score > f32::NEG_INFINITY { self.evolution.best.clone() } else { self.evolution.weights(0).to_vec() };
         self.brain.load(&weights);
         self.shown_weights = weights;
-        // a creature that eats keeps its energy from one run to the next: one life, starting again
-        let carried = self.show.body.needs.as_ref().map(|needs| needs.energy);
+        // two legs keep their energy from one run to the next: one life, starting again. Four legs start each
+        // run full, since a galloping four-legged creature empties within a run and, carried, spent four
+        // fifths of its time with less than a tenth (walker/README.md, "The brain that was discussed")
+        let carried = if self.legs == 2 { self.show.body.needs.as_ref().map(|needs| needs.energy) } else { None };
         self.show.copy_from(&self.start);
         if let (Some(energy), Some(needs)) = (carried, &mut self.show.body.needs) {
             let (appearing, full) = (needs.appearing.take(), needs.full);

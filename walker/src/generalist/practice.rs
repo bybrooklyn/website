@@ -363,6 +363,9 @@ impl Way {
     /// 0.05 for each metre a second the foot comes down at. They sense no rhythm, and nothing rewards
     /// how their feet take turns.
     ///
+    /// Four legs pay 3 for a run that stalls as well (stage 3: with a pool and nothing charged for it, two
+    /// seeds in four learned to stand where they started).
+    ///
     /// Both feel touch (`touch`). Two legs practise with a visitor every 8 seconds or so, brought in with
     /// the costs, who lifts, nudges and shoves; four legs practise with none.
     ///
@@ -373,6 +376,11 @@ impl Way {
     /// five is play. Progress is still paid, as it was.
     pub fn of(legs: u32) -> Way {
         let mut shaping = Shaping { alive: 0.25, energy: 0.002, air: 2.0, tall: false, smooth: 0.0, fall: 3.0, knee: 0.0, upright: 0.0, down: 1.0, turns: 0.0, pace: 0.0, impact: 0.0, spin: 0.0, bob: 0.0, swing: 0.0, torque: 0.0, stall: 0.0, lean: 0.0, comfort: COMFORT, place: PLACE, sight: SIGHT, progress: 1.0 };
+        // four legs pay for a run that stalls too, since with a pool, and nothing charged for it, two seeds in
+        // four learned to stand where they started (README, "The brain that was discussed")
+        if legs == 4 {
+            shaping.stall = 3.0;
+        }
         // two legs went on their belly and knees in lunges without these (README, "How it moves")
         if legs == 2 {
             shaping = Shaping { knee: 1.0, upright: 0.5, down: 0.0, lean: 1.0, pace: 1.0, stall: 3.0, impact: 0.05, ..shaping };
