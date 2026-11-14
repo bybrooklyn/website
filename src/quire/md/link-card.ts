@@ -13,7 +13,7 @@ import { linkAt } from "./bar";
 import { places } from "./bookmarks";
 import { caret, collapsed } from "./keys";
 import type { Surface } from "./surface";
-import { composing, control, icon, make, placeNear, still } from "../core/ui";
+import { composing, control, fieldForm, icon, make, placeNear, still } from "../core/ui";
 
 /** The address, trimmed, when a pasted text is one web address and nothing else: http, https or mailto, never another scheme such as javascript:. */
 export function webAddress(text: string): string | undefined {
@@ -324,4 +324,24 @@ export function createLinkCard(surface: Surface, edit: (from: HTMLElement) => vo
     addEventListener("resize", place);
 
     return { element: pop, hide };
+}
+
+/** A field for a link's address, with a button to set it and, for a link already there, one to take it off. Enter sets, Escape cancels. */
+export function linkForm(current: string | undefined, done: { set(href: string): void; remove(): void; cancel(): void }, places: { label: string; href: string; kind: string }[] = []): HTMLElement {
+    const form = fieldForm({ value: current, label: "Link address", placeholder: "Paste or type an address", type: "url", button: "Set", said: "Set the link" }, { set: (href) => (href ? done.set(href) : current ? done.remove() : done.cancel()), cancel: done.cancel });
+    if (current) form.append(control("Remove the link", icon("trash"), () => done.remove()));
+    if (!places.length) return form;
+    // the document's own headings and bookmarks, to link to by their names
+    const list = make("div", "quire-link-places");
+    list.setAttribute("role", "group");
+    list.setAttribute("aria-label", "In this document");
+    list.append(make("p", "quire-link-places-head", "In this document"));
+    for (const place of places) {
+        const line = control(`Link to ${place.label}`, make("span", "quire-menu-label", place.label), () => done.set(place.href), "quire-menu-line");
+        line.append(make("span", "quire-menu-hint", place.kind === "bookmark" ? "Bookmark" : "Heading"));
+        list.append(line);
+    }
+    const whole = make("div", "quire-link-whole");
+    whole.append(form, list);
+    return whole;
 }

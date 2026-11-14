@@ -29,7 +29,7 @@ import { remember } from "../core/most-used";
 import { createOutline } from "./outline";
 import { read } from "./read";
 import { createSelectBar } from "./select-bar";
-import { createLinkCard } from "./link-card";
+import { createLinkCard, linkForm } from "./link-card";
 import { boxOf, component, definitionList, drawnBlock } from "./slash";
 import { createSlashMenu, paletteFor } from "./slash-menu";
 import { createEmojiPicker, emojiAtCursor, emojiGrid, putter } from "./emoji-picker";
@@ -44,12 +44,12 @@ import { createCommentMargin, keptNotes, moveNotes } from "./comment-margin";
 import { addContents, dateText, findContents, specialGrid, typeIn, typeSpecial, updateContents } from "./inserts";
 import { colorHex, gatherPictures, heldElsewhere, markdownFor, pageHtml, pictureAddresses, plainText, readingStyles, type Picture } from "./export";
 import { docx } from "./docx";
-import { aboutPanel, control, flowMenu, keySymbols, linkForm, make, type MenuItem } from "../core/ui";
+import { control, flowMenu, keySymbols, make, type MenuItem } from "../core/ui";
 import { openDialog } from "../core/dialog";
 import { chordFrom, findShortcuts, shortcutFor } from "./shortcuts";
 import { findTyping, readOff } from "./vocabulary";
 import { openTyping } from "./typing-panel";
-import { helpBody } from "./help";
+import { aboutPanel, helpBody } from "./help";
 import { versionView } from "./history-view";
 import { createHistoryPanel, memoryStorage, type VersionStorage } from "../core/versions";
 import { write } from "./write";
@@ -401,11 +401,11 @@ export function createEditor(host: HTMLElement, doc: Document, options: EditorOp
         // the three dots hold the bar's folded tools; of the page's own only what no menu has (bun run edit's Publish)
         more: () => options.more?.() ?? [],
     });
-    // checking (src/quire/check/): underlines, a count at the bar's end, and its settings from Tools
+    // checking (src/quire/md/check/): underlines, a count at the bar's end, and its settings from Tools
     const checking = mountChecking({ surface, bar: bar.element, where: () => ({ store, id, name }), relayout: () => bar.layout() });
     // ---- find and replace, from its button, the Edit menu, Ctrl+F and Ctrl+H ----
     const find = createFind(surface, paper, () => bar.element.getBoundingClientRect().bottom);
-    // dictation: a microphone at the end of the bar after the three dots, the shortcut, and its lines in the three-dot menu (src/quire/dictation/)
+    // dictation: a microphone at the end of the bar after the three dots, the shortcut, and its lines in the three-dot menu (src/quire/md/dictation/)
     if (!dictation.why) dictation.mount(bar.element.querySelector<HTMLElement>(".quire-bar-end")!);
     // the rich view and the Markdown, side by side when there is room and one in place of the other when not
     const markdown = createMarkdownView(surface);

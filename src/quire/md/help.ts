@@ -1,6 +1,7 @@
 // Help, mdQuire help: a short page in the editor's dialog saying what mdQuire is, where documents
 // are kept, what typing does and how to get a file out. Its words are here, in one place, and its
-// test holds them short; `helpBody` draws them, with the keyboard shortcuts a press away.
+// test holds them short; `helpBody` draws them, with the keyboard shortcuts a press away. About
+// mdQuire, its dialog's few words, is here too (`aboutPanel`).
 
 import { make } from "../core/ui";
 
@@ -26,4 +27,19 @@ export function helpBody(shortcuts: (from: HTMLElement) => void): HTMLElement[] 
         }
         return paragraph;
     });
+}
+
+/** "About mdQuire": what it is and who made it, in the project page's own words, with the way to her site and to the project, for its dialog to hold (the dialog's title is the name). */
+export function aboutPanel(): HTMLElement {
+    const panel = make("div", "quire-about");
+    const said = make("p", "quire-about-text", "A word processor for Markdown files, in the browser. Charlotte made it.");
+    const links = make("p", "quire-about-links");
+    const link = (href: string, words: string) => {
+        const anchor = make("a", "", words);
+        anchor.href = href;
+        return anchor;
+    };
+    links.append(link("/", "Her site"), link("/projects/mdquire/", "The project"));
+    panel.append(said, links);
+    return panel;
 }

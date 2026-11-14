@@ -87,7 +87,8 @@ const live = !!chromium();
 let folder = "";
 let tab: Browser;
 const page = `
-import { control, flowMenu, linkForm } from "${import.meta.dir}/ui.ts";
+import { control, flowMenu } from "${import.meta.dir}/ui.ts";
+import { linkForm } from "${import.meta.dir}/../md/link-card.ts";
 window.linkForm = linkForm;
 window.makeControl = control;
 const lines = (count) => Array.from({ length: count }, (_, at) => ({ label: "Line " + (at + 1), run: () => {} }));

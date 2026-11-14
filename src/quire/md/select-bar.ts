@@ -14,7 +14,8 @@ import { currentStyle, link as linkAction, linkAt, pressedAt, setStyleOf, tip, t
 import { collapsed, rangeOf, tableOf } from "./keys";
 import type { Surface } from "./surface";
 import { placeClear, linesAround } from "../core/strips";
-import { control, glyph, icon, linkForm, mac, make, still } from "../core/ui";
+import { control, glyph, icon, mac, make, still } from "../core/ui";
+import { linkForm } from "./link-card";
 
 /** Whether the selection bar shows for a selection, and which of its buttons are pressed. */
 export function barFor(doc: Document, selection: Selection, marks: Mark[]): { show: boolean; pressed: Record<string, boolean> } {
