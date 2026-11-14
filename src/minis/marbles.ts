@@ -1939,7 +1939,7 @@ export default function marbles(m: Mote): Scene {
         if (!ghost.done) {
             ghost.work(carried || bendDrag || table.running ? GHOST_WORK.carrying : GHOST_WORK.still);
             if (ghost.done && !carried) {
-                ghostMarked = ghostMarks(ghost.paths, openMarks);
+                ghostMarked = ghostMarks(ghost.paths, openMarks.filter((mark) => mark.why === "open"));
                 redraw();
             }
         }
