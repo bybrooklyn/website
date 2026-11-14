@@ -50,6 +50,14 @@ export interface Engine {
     show_hand(x: number, y: number): void;
     show_let_go(): void;
     show_held(): number;
+    /** The food put out in the show's world, two f32 each: x and y. */
+    show_food(): number;
+    /** What the show's creature wants and where it looks, six f32: energy (-1 for one that does not eat), how strong its muscles are, just ate (fading from 1), resting (0 to 1), where its eye looks (radians from level ahead), pieces eaten in this run. */
+    show_needs(): number;
+    /** What the show's creature sensed at its last look, as its brain took it in (`senseLayout` says where each part is). */
+    show_senses(): number;
+    /** Drops a piece of food at (x, y), from where it falls; 1 if it did. */
+    show_drop_food(x: number, y: number): number;
     land_ground(until: number, from: number): number;
     land_blocks(from: number): number;
     land_hazards(from: number): number;
@@ -215,6 +223,21 @@ export function fromLink(get: (name: string) => string | null, otherwise: Recipe
     return valid(recipe) ? recipe : null;
 }
 
+/**
+ * Where each part of what a practised creature senses is, for a body of so many legs (walker/README.md,
+ * "What it senses"): sixteen rays of six numbers, the body's angle, spin and speed, each joint's angle and
+ * speed, each foot down, the rhythm, the hop, its energy and whether it just ate, where its eye looks, then
+ * touch: the body's pressure, each foot's, held, and the jolt across and up.
+ */
+export function senseLayout(legs: number): { rays: number; feet: number; energy: number; ate: number; gaze: number; touch: number; footPressed: number; held: number; jolt: number; length: number } {
+    const rays = 0;
+    const body = 16 * 6;
+    const feet = body + 4 + 4 * legs;
+    const energy = feet + legs + 4;
+    const touch = energy + 3;
+    return { rays, feet, energy, ate: energy + 1, gaze: energy + 2, touch, footPressed: touch + 1, held: touch + 1 + legs, jolt: touch + 2 + legs, length: touch + 4 + legs };
+}
+
 /** What each ray can see, as the engine numbers them. */
 export const SEEN = ["nothing", "ground", "edge", "box", "hazard", "moving", "food"] as const;
 
@@ -230,16 +253,3 @@ export function counted(steps: number): string {
     return steps >= 1e6 ? `${(steps / 1e6).toFixed(1)} million` : steps >= 1e3 ? `${Math.round(steps / 1e3)} thousand` : `${Math.round(steps)}`;
 }
 
-/** What the creature on show was just rewarded and charged for, in a few plain words each, from the engine's five numbers (`show_rewards`): the biggest first, the tiny left out. */
-export function rewarded(parts: ArrayLike<number>): { words: string; good: boolean }[] {
-    const [run = 0, up = 0, effort = 0, air = 0, fell = 0] = Array.from(parts);
-    const said: { words: string; good: boolean; size: number }[] = [];
-    const amount = (value: number) => `${value > 0 ? "+" : "\u2212"}${Math.abs(value).toFixed(2)}`;
-    if (fell) said.push({ words: "fell \u22123", good: false, size: 3 });
-    const forward = fell ? run + 3 : run;
-    if (Math.abs(forward) >= 0.01) said.push({ words: `${forward > 0 ? "forward" : "twitching"} ${amount(forward)}`, good: forward > 0, size: Math.abs(forward) });
-    if (up >= 0.01) said.push({ words: `up ${amount(up)}`, good: true, size: up });
-    if (effort <= -0.01) said.push({ words: `effort ${amount(effort)}`, good: false, size: -effort });
-    if (air <= -0.01) said.push({ words: `in the air for nothing ${amount(air)}`, good: false, size: -air });
-    return said.sort((a, b) => b.size - a.size).slice(0, 3).map(({ words, good }) => ({ words, good }));
-}
