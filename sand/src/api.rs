@@ -184,7 +184,7 @@ pub extern "C" fn paintable(material: u32) -> u32 {
     MATERIALS.get(material as usize).map_or(0, |m| m.paint as u32)
 }
 
-/// What kind a material is: 0 empty, 1 solid, 2 powder, 3 liquid, 4 gas, 5 void.
+/// What kind a material is: 0 empty, 1 solid, 2 powder, 3 liquid, 4 gas, 5 void, 6 fire.
 #[unsafe(no_mangle)]
 pub extern "C" fn kind(material: u32) -> u32 {
     MATERIALS.get(material as usize).map_or(1, |m| m.kind as u32)

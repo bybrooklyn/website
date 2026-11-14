@@ -1,7 +1,9 @@
 //! The sand mini's engine: a grid of cells, each of one material, that fall, flow and rise by
 //! simple rules (`world`), with water carried through a connected body so that it finds one level
-//! (`level`). What each material is lives in a table (`materials`). The page reaches it through
-//! plain exported functions (`api`), described in README.md.
+//! (`level`), that change alone or with a neighbor by the lines of a table (`react`), and whose
+//! heat spreads to their neighbors (`heat`). What each material is, and what it becomes, lives in
+//! tables (`materials`). The page reaches it through plain exported functions (`api`), described
+//! in README.md.
 //!
 //! In the browser it runs without the standard library, on its own allocator (`memory`). The step
 //! uses no floating point, and the brush only sums, products and one division, which every machine
@@ -13,8 +15,10 @@
 extern crate alloc;
 
 pub mod api;
+pub mod heat;
 pub mod level;
 pub mod materials;
+pub mod react;
 pub mod world;
 
 #[cfg(target_arch = "wasm32")]

@@ -6,12 +6,18 @@
 //!
 //! - byte 0, its material (`materials.rs`);
 //! - byte 1, its shade, chosen by chance when it is made, so sand is not one flat color;
-//! - byte 2, kept for stage 2: a lifetime or a temperature;
-//! - byte 3, bits 0 to 5 the clock of the step it last moved in, bits 6 and 7 its falling speed.
+//! - byte 2, its temperature, from 0 to 255, room temperature being `ROOM`;
+//! - byte 3, bits 0 to 5 the clock of the step it last moved or changed in, bits 6 and 7 its
+//!   falling speed.
 //!
-//! An empty cell has material 0, and is all zeros but for the clock of the step something left
-//! it, which tells a cell resting on it that its support has just gone. Around the world is a border of `BORDER` cells, wall or void by the
-//! setting for the edges, so that a cell near the edge can look at its neighbors without a check.
+//! An empty cell is air: material 0 and shade 0, with a temperature, and the clock of the step
+//! something left it, which tells a cell resting on it that its support has just gone. A new world
+//! is air at room temperature (`AIR`). Around the world is a border of `BORDER` cells, wall or void
+//! by the setting for the edges, so that a cell near the edge can look at its neighbors without a
+//! check. The border holds no heat.
+//!
+//! A step moves the cells and works their reactions (`react.rs`) row by row, levels liquids through
+//! their bodies (`level.rs`), then spreads heat (`heat.rs`).
 //!
 //! Each chunk keeps a rectangle of where something may move this step (`now`) and next step
 //! (`next`). A change to a cell adds the cells it could set moving, the cell and a margin around
@@ -22,7 +28,7 @@ use alloc::vec;
 use alloc::vec::Vec;
 
 use crate::level::Levels;
-use crate::materials::{EMPTY, Kind, Props, TABLE, VOID, WALL, widest};
+use crate::materials::{EMPTY, Kind, MATERIALS, Props, REACTIONS, ROOM, TABLE, VOID, WALL, deepest, widest};
 
 /// The side of a chunk, in cells.
 pub const CHUNK: i32 = 64;
@@ -30,10 +36,13 @@ pub const CHUNK: i32 = 64;
 pub const BORDER: usize = 8;
 /// How far sideways a change can set a cell moving: as far as any material looks.
 const MARGIN_X: i32 = widest();
-/// How far up or down a change can set a cell moving: a powder looks two cells under its side.
-const MARGIN_Y: i32 = 2;
+/// How far up or down a change can set a cell moving: as far as a powder looks under its side to
+/// slide, 3 for wet dirt.
+const MARGIN_Y: i32 = deepest();
 /// The clock runs 1 to this, then every cell's clock is set back to 0.
 const CLOCK_MOST: u32 = 63;
+/// An empty cell of air at room temperature, as a new world is filled with.
+pub const AIR: u32 = (ROOM as u32) << 16;
 
 /// What lies past the world's edges.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -78,7 +87,7 @@ impl Rect {
         self.y1 = self.y1.max(y1);
     }
 
-    fn has_row(&self, y: i32) -> bool {
+    pub(crate) fn has_row(&self, y: i32) -> bool {
         self.y0 <= y && y <= self.y1 && self.x0 <= self.x1
     }
 }
@@ -89,17 +98,42 @@ impl Rect {
 pub(crate) struct Chunk {
     pub now: Rect,
     pub next: Rect,
+    /// Where heat may spread this step and next: kept apart from where things move, since sand
+    /// falling through air all at one temperature changes no temperature.
+    pub warm_now: Rect,
+    pub warm_next: Rect,
     stirred: bool,
 }
 
 impl Chunk {
-    const ASLEEP: Chunk = Chunk { now: Rect::EMPTY, next: Rect::EMPTY, stirred: false };
+    const ASLEEP: Chunk = Chunk { now: Rect::EMPTY, next: Rect::EMPTY, warm_now: Rect::EMPTY, warm_next: Rect::EMPTY, stirred: false };
 }
 
 /// The material of a cell.
 #[inline(always)]
 pub fn material(cell: u32) -> u8 {
     cell as u8
+}
+
+/// The temperature of a cell.
+#[inline(always)]
+pub fn temperature(cell: u32) -> u8 {
+    (cell >> 16) as u8
+}
+
+/// Whether a cell is still warming or cooling itself, as burning wood, a flame or hot air do: moved
+/// elsewhere, it must be reached by the heat pass there, though no temperature changed.
+#[inline(always)]
+pub(crate) fn restless(cell: u32) -> bool {
+    let w = crate::materials::WARMTH[material(cell) as usize];
+    let t = temperature(cell) as i32;
+    (w.warms > 0 && t < w.toward) || (w.warms < 0 && t > w.toward)
+}
+
+/// A cell with its temperature set.
+#[inline(always)]
+pub(crate) fn with_temperature(cell: u32, t: u8) -> u32 {
+    (cell & 0xff00_ffff) | (t as u32) << 16
 }
 
 /// The clock of the step a cell last moved in.
@@ -120,7 +154,7 @@ pub(crate) fn with_state(cell: u32, clock: u32, speed: u32) -> u32 {
 }
 
 #[inline(always)]
-fn props(cell: u32) -> Props {
+pub(crate) fn props(cell: u32) -> Props {
     TABLE[material(cell) as usize]
 }
 
@@ -147,7 +181,7 @@ pub struct World {
     pub(crate) chunks: Vec<Chunk>,
     pub(crate) across: i32,
     pub(crate) down: i32,
-    seed: u64,
+    pub(crate) seed: u64,
     /// Steps taken.
     pub steps: u64,
     /// Brush strokes made, a second counter for chance.
@@ -162,6 +196,10 @@ pub struct World {
     /// The first and last rows changed since the page last drew.
     changed: (i32, i32),
     pub(crate) levels: Levels,
+    /// Two rows of cells as they were before the heat pass, kept while it works down the world.
+    pub(crate) rows: Vec<u32>,
+    /// How many times each line of `REACTIONS` has happened, by its place in the table.
+    pub fired: Vec<u64>,
 }
 
 impl World {
@@ -176,7 +214,7 @@ impl World {
             width,
             height,
             stride,
-            cells: vec![0; stride * rows],
+            cells: vec![AIR; stride * rows],
             chunks: vec![Chunk::ASLEEP; (across * down) as usize],
             across,
             down,
@@ -189,6 +227,8 @@ impl World {
             edges: Edges::Walled,
             changed: (0, height - 1),
             levels: Levels::new(stride * rows),
+            rows: vec![0; 2 * stride],
+            fired: vec![0; REACTIONS.len()],
         };
         world.set_edges(Edges::Walled);
         world
@@ -232,9 +272,36 @@ impl World {
         self.touch(0, 0, self.width - 1, self.height - 1);
     }
 
+    /// The temperature at (x, y).
+    pub fn temperature_at(&self, x: i32, y: i32) -> u8 {
+        temperature(self.get(x, y))
+    }
+
+    /// Sets the temperature at (x, y), as a change that wakes what is near it.
+    pub fn set_temperature(&mut self, x: i32, y: i32, t: u8) {
+        let at = self.index(x, y);
+        self.cells[at] = with_temperature(self.cells[at], t);
+        self.touch(x, y, x, y);
+        self.warmed(x, y, x, y);
+    }
+
     /// How many cells of a material there are.
     pub fn count(&self, of: u8) -> usize {
         (0..self.height).map(|y| (0..self.width).filter(|&x| self.at(x, y) == of).count()).sum()
+    }
+
+    /// All the heat in the world: every cell's temperature, and what its material stores beyond it
+    /// (`latent`). Only the reactions that make heat, the materials that warm or cool themselves,
+    /// the brush and an open edge change it.
+    pub fn heat_total(&self) -> i64 {
+        let mut total = 0i64;
+        for y in 0..self.height {
+            let start = self.index(0, y);
+            for &cell in &self.cells[start..start + self.width as usize] {
+                total += temperature(cell) as i64 + MATERIALS.get(material(cell) as usize).map_or(0, |m| m.latent as i64);
+            }
+        }
+        total
     }
 
     /// FNV-1a over every byte of every cell, row after row: a fingerprint of the whole world.
@@ -254,7 +321,7 @@ impl World {
 
     /// How many chunks will be worked through next step.
     pub fn awake(&self) -> usize {
-        self.chunks.iter().filter(|chunk| !chunk.next.is_empty()).count()
+        self.chunks.iter().filter(|chunk| !chunk.next.is_empty() || !chunk.warm_next.is_empty()).count()
     }
 
     /// The first and last rows changed since `forget_changed`, or an empty range.
@@ -297,6 +364,43 @@ impl World {
         chunk.next.add(x, y, x, y);
     }
 
+    /// The cells from (x0, y0) to (x1, y1) are reached next step, by the rules and by the heat
+    /// pass, with no margin: what heat has changed or could change.
+    pub(crate) fn wake(&mut self, x0: i32, y0: i32, x1: i32, y1: i32) {
+        self.each_chunk(x0, y0, x1, y1, |chunk, (left, top, right, bottom)| {
+            chunk.next.add(left, top, right, bottom);
+            chunk.warm_next.add(left, top, right, bottom);
+        });
+    }
+
+    /// The temperature of the cells from (x0, y0) to (x1, y1) changed, by a move, a reaction or
+    /// the brush: they and the cells beside them are reached by the heat pass this step and next.
+    #[inline]
+    pub(crate) fn warmed(&mut self, x0: i32, y0: i32, x1: i32, y1: i32) {
+        self.each_chunk(x0 - 1, y0 - 1, x1 + 1, y1 + 1, |chunk, (left, top, right, bottom)| {
+            chunk.warm_now.add(left, top, right, bottom);
+            chunk.warm_next.add(left, top, right, bottom);
+        });
+    }
+
+    /// Calls `with` for each chunk the cells from (x0, y0) to (x1, y1) lie in, with the part of
+    /// them inside it, all cut to the world.
+    #[inline]
+    fn each_chunk(&mut self, x0: i32, y0: i32, x1: i32, y1: i32, mut with: impl FnMut(&mut Chunk, (i32, i32, i32, i32))) {
+        let (ax, bx) = (x0.max(0), x1.min(self.width - 1));
+        let (ay, by) = (y0.max(0), y1.min(self.height - 1));
+        if ax > bx || ay > by {
+            return;
+        }
+        for cy in ay / CHUNK..=by / CHUNK {
+            let (top, bottom) = (ay.max(cy * CHUNK), by.min(cy * CHUNK + CHUNK - 1));
+            for cx in ax / CHUNK..=bx / CHUNK {
+                let (left, right) = (ax.max(cx * CHUNK), bx.min(cx * CHUNK + CHUNK - 1));
+                with(&mut self.chunks[(cy * self.across + cx) as usize], (left, top, right, bottom));
+            }
+        }
+    }
+
     /// Moves the world on by one step.
     pub fn step(&mut self) {
         self.steps += 1;
@@ -320,13 +424,12 @@ impl World {
             self.clock = 1;
         }
         for (at, chunk) in self.chunks.iter_mut().enumerate() {
-            chunk.now = if self.sleeping {
-                chunk.next
-            } else {
-                let (cx, cy) = (at as i32 % self.across, at as i32 / self.across);
-                Rect { x0: cx * CHUNK, y0: cy * CHUNK, x1: (cx * CHUNK + CHUNK - 1).min(self.width - 1), y1: (cy * CHUNK + CHUNK - 1).min(self.height - 1) }
-            };
+            let (cx, cy) = (at as i32 % self.across, at as i32 / self.across);
+            let whole = Rect { x0: cx * CHUNK, y0: cy * CHUNK, x1: (cx * CHUNK + CHUNK - 1).min(self.width - 1), y1: (cy * CHUNK + CHUNK - 1).min(self.height - 1) };
+            chunk.now = if self.sleeping { chunk.next } else { whole };
+            chunk.warm_now = if self.sleeping { chunk.warm_next } else { whole };
             chunk.next = Rect::EMPTY;
+            chunk.warm_next = Rect::EMPTY;
         }
         // left to right and right to left by turns, so nothing drifts to one side
         let right = self.steps.is_multiple_of(2);
@@ -362,6 +465,7 @@ impl World {
             }
         }
         self.level();
+        self.heat();
         for chunk in self.chunks.iter_mut() {
             chunk.stirred |= !chunk.now.is_empty();
         }
@@ -401,19 +505,24 @@ impl World {
         }
     }
 
-    /// Moves one cell by the rule for its kind.
+    /// Works one cell: its reactions, then, if none happened, the rule for its kind. A cell that
+    /// has moved or changed this step is left alone.
     #[inline(always)]
     fn visit(&mut self, at: usize, x: i32, y: i32) {
         let cell = self.cells[at];
         let p = props(cell);
+        if p.kind == Kind::Empty || clock_of(cell) == self.clock {
+            return;
+        }
+        let t = temperature(cell);
+        if p.acts && !(p.calm_from <= t && t <= p.calm_to) && self.react(at, x, y, cell, p) {
+            return;
+        }
+        let cell = self.cells[at];
         match p.kind {
-            Kind::Powder | Kind::Liquid | Kind::Gas if clock_of(cell) != self.clock => {
-                if p.kind == Kind::Gas {
-                    self.rise(at, x, y, p);
-                } else {
-                    self.fall(at, x, y, cell, p);
-                }
-            }
+            Kind::Powder | Kind::Liquid => self.fall(at, x, y, cell, p),
+            Kind::Gas => self.rise(at, x, y, p),
+            Kind::Fire => self.flicker(at, x, y, p),
             _ => {}
         }
     }
@@ -425,7 +534,7 @@ impl World {
         let p = props(target);
         match p.kind {
             Kind::Empty | Kind::Void => true,
-            Kind::Liquid | Kind::Gas => p.density < density && clock_of(target) != self.clock,
+            Kind::Liquid | Kind::Gas | Kind::Fire => p.density < density && clock_of(target) != self.clock,
             _ => false,
         }
     }
@@ -433,7 +542,7 @@ impl World {
     /// Whether a gas of this density may rise or spread into `target`: it is empty, the edge of an
     /// open world, or a heavier gas that has not moved this step.
     #[inline(always)]
-    fn rises_into(&self, density: u8, target: u32) -> bool {
+    pub(crate) fn rises_into(&self, density: u8, target: u32) -> bool {
         let p = props(target);
         match p.kind {
             Kind::Empty | Kind::Void => true,
@@ -443,21 +552,25 @@ impl World {
     }
 
     /// Moves the cell at `from` to `to`, and what was at `to` back to `from`, both marked as moved
-    /// this step. Into the edge of an open world, the cell is gone.
+    /// this step, each with its heat. Into the edge of an open world, the cell is gone, and air at
+    /// room temperature comes in behind it.
     #[inline(always)]
     fn swap(&mut self, from: usize, to: usize, speed: u32, (x, y): (i32, i32), (tx, ty): (i32, i32)) {
         let mover = with_state(self.cells[from], self.clock, speed);
         let target = self.cells[to];
         // an empty cell left behind keeps the clock, so a cell resting on it knows its support
         // has just gone
-        let left = self.clock << 24;
         if material(target) == VOID {
-            self.cells[from] = left;
+            self.cells[from] = AIR | self.clock << 24;
         } else {
-            self.cells[from] = if material(target) == EMPTY { left } else { with_state(target, self.clock, 0) };
+            self.cells[from] = with_state(target, self.clock, 0);
             self.cells[to] = mover;
         }
         self.touch(x.min(tx), y.min(ty), x.max(tx), y.max(ty));
+        // heat moves with what moves; only where two temperatures were swapped can it spread
+        if temperature(mover) != temperature(target) || restless(mover) || restless(target) || material(target) == VOID {
+            self.warmed(x.min(tx), y.min(ty), x.max(tx), y.max(ty));
+        }
     }
 
     /// The rule for powders and liquids: fall, gathering speed; or slide off a slope; or, for a
@@ -484,8 +597,13 @@ impl World {
             let left = self.slides(at, -1, slide, p.density);
             let right = self.slides(at, 1, slide, p.density);
             if left || right {
+                if !self.paced(roll, x, y, p) {
+                    return;
+                }
                 let side = if left && right { if roll & 1 == 0 { -1 } else { 1 } } else if left { -1 } else { 1 };
-                self.swap(at, (at + s).wrapping_add_signed(side), 0, (x, y), (x + side as i32, y + 1));
+                // a grain that rolls keeps a little speed as it slides, so that where it stops it has
+                // landed and may roll on
+                self.swap(at, (at + s).wrapping_add_signed(side), (p.roll != 0) as u32, (x, y), (x + side as i32, y + 1));
                 return;
             }
         }
@@ -494,9 +612,14 @@ impl World {
             // that a level surface is still; one with something resting on it is pushed, and goes
             // as far as it can, so the face of a heap of water flows out.
             let pushed = matches!(props(self.cells[at - s]).kind, Kind::Liquid | Kind::Powder);
-            let lower = |side: isize| self.sideways(at, side, p.spread as isize, pushed, s as isize, |c| self.sinks_into(p.density, c));
+            // Only into air or a gas, not into a lighter liquid: two liquids side by side would trade
+            // places for ever. A heavier liquid gets under a lighter one by falling and sliding.
+            let lower = |side: isize| self.sideways(at, side, p.spread as isize, pushed, s as isize, |c| props(c).kind != Kind::Liquid && self.sinks_into(p.density, c));
             let (left, right_far) = (lower(-1), lower(1));
             if left > 0 || right_far > 0 {
+                if !self.paced(roll, x, y, p) {
+                    return;
+                }
                 let side = if left > 0 && right_far > 0 { if (roll >> 1) & 1 == 0 { -left } else { right_far } } else if left > 0 { -left } else { right_far };
                 self.swap(at, at.wrapping_add_signed(side), 0, (x, y), (x + side as i32, y));
                 return;
@@ -508,10 +631,70 @@ impl World {
             return;
         }
         if speed != 0 {
-            // it has landed
+            // It has landed. A grain landing on a step with the slope going on below the far side
+            // of it rolls on by chance, so a heap rests at a gentler angle than a grain at rest
+            // could hold.
+            if p.roll != 0 && (roll >> 16) & 255 < p.roll as u32 {
+                let open = |k: isize| self.sinks_into(p.density, self.cells[at.wrapping_add_signed(k)]);
+                let s = s as isize;
+                let step = |side: isize| open(side) && open(2 * side) && open(2 * side + s) && !open(side + s);
+                let (left, right) = (step(-1), step(1));
+                if left || right {
+                    let side = if left && right { if (roll >> 3) & 1 == 0 { -1 } else { 1 } } else if left { -1 } else { 1 };
+                    // it keeps its speed, so where it next stops it may roll again
+                    self.swap(at, at.wrapping_add_signed(side), 1, (x, y), (x + side as i32, y));
+                    return;
+                }
+            }
             self.cells[at] = with_state(cell, clock_of(cell), 0);
             self.touch(x, y, x, y);
         }
+    }
+
+    /// Whether a slow liquid moves this step, by its `pace`. One that does not is reached again
+    /// next step, since it could have.
+    #[inline(always)]
+    fn paced(&mut self, roll: u32, x: i32, y: i32, p: Props) -> bool {
+        if p.pace == 0 || (roll >> 8) & 255 < p.pace as u32 {
+            return true;
+        }
+        self.stay(x, y);
+        false
+    }
+
+    /// The rule for fire: up, or up and to a side by chance, so a flame wavers as it rises; to a
+    /// side now and then when it cannot rise. It is always reached again next step: it is cooling.
+    #[inline(always)]
+    fn flicker(&mut self, at: usize, x: i32, y: i32, p: Props) {
+        let s = self.stride;
+        let roll = chance(self.seed ^ 0xf1a3e, self.steps, at);
+        let up = |side: isize| {
+            let to = (at - s).wrapping_add_signed(side);
+            // not between two cells that touch only at their corners
+            self.rises_into(p.density, self.cells[to]) && (side == 0 || self.rises_into(p.density, self.cells[at.wrapping_add_signed(side)]))
+        };
+        let side: isize = match roll & 7 {
+            0 | 1 => -1,
+            6 | 7 => 1,
+            _ => 0,
+        };
+        let goes = if up(side) {
+            Some(side)
+        } else if side != 0 && up(0) {
+            Some(0)
+        } else {
+            None
+        };
+        if let Some(side) = goes {
+            self.swap(at, (at - s).wrapping_add_signed(side), 0, (x, y), (x + side as i32, y - 1));
+            return;
+        }
+        let side: isize = if (roll >> 3) & 1 == 0 { -1 } else { 1 };
+        if (roll >> 4) & 3 == 0 && self.rises_into(p.density, self.cells[at.wrapping_add_signed(side)]) {
+            self.swap(at, at.wrapping_add_signed(side), 0, (x, y), (x + side as i32, y));
+            return;
+        }
+        self.stay(x, y);
     }
 
     /// Falls: through empty cells, gathering speed, or one cell through a lighter liquid or gas or
@@ -608,8 +791,9 @@ impl World {
 
     /// Paints a line of `of` from (x0, y0) to (x1, y1), `radius` cells either side of it, with no
     /// gaps however long it is. Each cell is filled by a chance of `fill` in 100, so a powder can
-    /// be poured rather than laid. Painting empty erases. Otherwise only empty cells are filled,
-    /// unless `replace`.
+    /// be poured rather than laid, at the temperature its material is made at. Painting empty
+    /// erases, leaving air at room temperature. Otherwise only empty cells are filled, unless
+    /// `replace`.
     #[allow(clippy::too_many_arguments)]
     pub fn paint(&mut self, of: u8, x0: i32, y0: i32, x1: i32, y1: i32, radius: i32, fill: u32, replace: bool) {
         self.strokes += 1;
@@ -638,7 +822,7 @@ impl World {
                 let here = self.cells[at];
                 if of == EMPTY {
                     if material(here) != EMPTY {
-                        self.cells[at] = 0;
+                        self.cells[at] = AIR;
                         painted = true;
                     }
                     continue;
@@ -650,12 +834,13 @@ impl World {
                 if roll % 100 >= fill {
                     continue;
                 }
-                self.cells[at] = of as u32 | ((roll >> 8) & 0xff) << 8;
+                self.cells[at] = of as u32 | ((roll >> 8) & 0xff) << 8 | (MATERIALS[of as usize].made as u32) << 16;
                 painted = true;
             }
         }
         if painted {
             self.touch(left, top, right, bottom);
+            self.warmed(left, top, right, bottom);
         }
     }
 
@@ -663,7 +848,7 @@ impl World {
     pub fn clear(&mut self) {
         for y in 0..self.height {
             let start = self.index(0, y);
-            self.cells[start..start + self.width as usize].fill(0);
+            self.cells[start..start + self.width as usize].fill(AIR);
         }
         for chunk in self.chunks.iter_mut() {
             *chunk = Chunk::ASLEEP;

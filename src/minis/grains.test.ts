@@ -12,14 +12,17 @@ const scalar = new URL("../../public/wasm/sand-scalar.wasm", import.meta.url);
 
 const load = async (from: URL): Promise<Engine> => start(await Bun.file(from).arrayBuffer());
 
+/** What the busy world's strokes pour in turn: sand, water, dirt, steam, wood, oil, lava, ice, smoke, fire and acid. */
+const STROKES = [1, 2, 4, 5, 8, 9, 10, 11, 12, 13, 14];
+
 /** The busy world of sand/tests/unchanged.rs, through the same calls. */
 function busy(engine: Engine): [number, number] {
     expect(engine.create(256, 160, 7, 0)).toBe(1);
     engine.paint(3, 20, 150, 236, 150, 2, 100, 0);
     engine.paint(3, 20, 150, 60, 100, 1, 100, 0);
     engine.paint(3, 236, 150, 236, 90, 1, 100, 0);
-    for (let k = 0; k < 20; k++) {
-        engine.paint([1, 2, 4, 5][k % 4]!, 40 + k * 9, 10, 50 + k * 7, 30, 4, 60, 0);
+    for (let k = 0; k < 22; k++) {
+        engine.paint(STROKES[k % STROKES.length]!, 40 + k * 9, 10, 50 + k * 7, 30, 4, 60, 0);
         engine.step(15);
     }
     engine.paint(0, 100, 120, 140, 140, 6, 100, 0);
@@ -38,7 +41,7 @@ test("both builds are small and need nothing from the page to load", async () =>
 
 test("the busy world comes out to the byte as it does natively, with SIMD and without", async () => {
     // the number sand/tests/unchanged.rs holds the native build to
-    const native: [number, number] = [0x5099eeab, 0xfd485ff9];
+    const native: [number, number] = [0x5201c852, 0x1c6d82ac];
     expect(busy(await load(simd))).toEqual(native);
     expect(busy(await load(scalar))).toEqual(native);
 });
@@ -61,20 +64,24 @@ test("the same world comes out with sleeping off and in the checkerboard order w
     expect(await run(0, 1)).toEqual(await run(1, 1));
 });
 
-test("the brush is offered sand, water, stone, dirt and steam, and each is poured or laid as it should be", async () => {
+test("the brush is offered every material of the table it should be, and each is poured or laid as it should be", async () => {
     const engine = await load(simd);
     const offered = materials(engine);
-    expect(offered.map((m) => `${m.name} ${m.kind}`)).toEqual(["sand powder", "water liquid", "stone solid", "dirt powder", "steam gas"]);
+    expect(offered.map((m) => `${m.name} ${m.kind}`)).toEqual(["sand powder", "water liquid", "stone solid", "dirt powder", "steam gas", "wood solid", "oil liquid", "lava liquid", "ice solid", "smoke gas", "fire fire", "acid liquid"]);
+    // wet dirt, burning wood and ash are made by reactions, not poured
+    expect(offered.some((m) => ["wet dirt", "ember", "ash"].includes(m.name))).toBe(false);
+    expect(fillOf("fire")).toBeLessThan(100);
     expect(fillOf("solid")).toBe(100);
     expect(fillOf("powder")).toBeLessThan(100);
 });
 
-test("no material appears or vanishes in the built module, and a world left alone goes to sleep", async () => {
+test("what does not react at room temperature is kept exactly in the built module, and a world left alone goes to sleep", async () => {
     const engine = await load(simd);
     engine.create(300, 200, 9, 0);
     engine.paint(3, 20, 190, 280, 190, 2, 100, 0);
-    for (const [m, x] of [[1, 60], [2, 120], [4, 180], [5, 240]] as const) engine.paint(m, x, 20, x + 10, 60, 8, 60, 0);
-    const counts = () => [0, 1, 2, 3, 4, 5].map((m) => engine.count(m));
+    // sand, water and oil
+    for (const [m, x] of [[1, 60], [2, 120], [9, 180], [1, 240]] as const) engine.paint(m, x, 20, x + 10, 60, 8, 60, 0);
+    const counts = () => [0, 1, 2, 3, 9].map((m) => engine.count(m));
     const before = counts();
     for (let k = 0; k < 10; k++) {
         engine.step(200);
