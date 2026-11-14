@@ -12,6 +12,7 @@
 
 import type { Edits } from "./metadata";
 import { readGrade, trimGrade, type Grade, type KeptGrade } from "./grade";
+import { decodeRuns, MOST_STROKES, type Shape, type Stroke } from "./masks";
 
 /** A rectangle in the original's pixels. */
 export interface Rect {
@@ -39,8 +40,11 @@ export type Mark =
 /** The whole picture's grade, as steps.json keeps it: only what is away from its zero (grade.ts). */
 export type GradeStep = { type: "grade"; grade: KeptGrade };
 
+/** A part of the picture with a grade of its own: its shape (a gradient, strokes, a found mask; masks.ts) and its grade. */
+export type PartStep = { type: "part"; grade: KeptGrade } & Shape;
+
 /** One thing done to the picture. A resize with no height keeps the crop's shape. */
-export type Step = { type: "crop"; rect: Rect } | { type: "resize"; width: number; height?: number; filter: Filter } | { type: "cover"; rect: Rect; color: string } | GradeStep | Mark;
+export type Step = { type: "crop"; rect: Rect } | { type: "resize"; width: number; height?: number; filter: Filter } | { type: "cover"; rect: Rect; color: string } | GradeStep | PartStep | Mark;
 
 /** A step as the document keeps it: with an id of its own, and switched off if it is. */
 export type Kept = Step & { id: string; off?: boolean };
@@ -70,8 +74,8 @@ export interface Look {
     filter: Filter;
     covers: { rect: Rect; color: string }[];
     marks: Mark[];
-    /** The grades, in the order they are applied: the whole picture's. */
-    grades: { id: string; grade: Grade }[];
+    /** The grades, in the order they are applied: the whole picture's, and each part's with its shape. */
+    grades: { id: string; grade: Grade; part?: Shape }[];
 }
 
 /** The largest side a picture may be made, and the most steps a file is read with: beyond these a file is taken to be damaged. */
@@ -104,6 +108,7 @@ export function look(picture: Picture): Look {
     for (const step of picture.steps) {
         if (step.off) continue;
         if (step.type === "grade") grades.push({ id: step.id, grade: gradeOf(step) });
+        else if (step.type === "part") grades.push({ id: step.id, grade: gradeOf(step), part: shapeOf(step) });
         else if (step.type === "crop") crop = within(step.rect, original);
         else if (step.type === "resize") {
             across = step.width / crop.width;
@@ -119,8 +124,14 @@ export function look(picture: Picture): Look {
 
 // a grade step's whole grade, worked out once for each step as kept, so that drawing many times a second reads it once
 const gradesRead = new WeakMap<object, Grade>();
-/** The whole grade of a grade step, with every field it leaves out at its zero. */
-export function gradeOf(step: GradeStep): Grade {
+/** A part step's shape alone, without its grade or the document's fields. */
+export function shapeOf(step: PartStep): Shape {
+    const { kind, from, to, found, strokes, feather, invert } = step;
+    return { kind, ...(from ? { from } : {}), ...(to ? { to } : {}), ...(found ? { found } : {}), ...(strokes ? { strokes } : {}), feather, ...(invert ? { invert } : {}) };
+}
+
+/** The whole grade of a grade or part step, with every field it leaves out at its zero. */
+export function gradeOf(step: GradeStep | PartStep): Grade {
     let found = gradesRead.get(step.grade);
     if (!found) gradesRead.set(step.grade, (found = readGrade(step.grade)));
     return found;
@@ -268,6 +279,7 @@ function readStep(value: unknown): Step | undefined {
         return width === undefined ? undefined : { type: "resize", width: Math.round(width), ...(height ? { height: Math.round(height) } : {}), filter };
     }
     if (step.type === "grade") return { type: "grade", grade: trimGrade(readGrade(step.grade)) };
+    if (step.type === "part") return readPart(step);
     if (step.type === "cover") {
         const rect = readRect(step.rect);
         return rect && color ? { type: "cover", rect, color } : undefined;
@@ -288,6 +300,42 @@ function readStep(value: unknown): Step | undefined {
         return at && size && text && color ? { type: "text", at, text, color, size } : undefined;
     }
     return undefined;
+}
+
+/** A part step from a file: its kind, gradient, strokes and found mask checked and bounded, its grade read as any grade is. */
+function readPart(step: Record<string, unknown>): PartStep | undefined {
+    const kind = step.kind === "gradient" || step.kind === "paint" || step.kind === "found" ? step.kind : undefined;
+    if (!kind) return undefined;
+    const from = readPoint(step.from);
+    const to = readPoint(step.to);
+    if (kind === "gradient" && (!from || !to)) return undefined;
+    const strokes = Array.isArray(step.strokes)
+        ? step.strokes
+              .slice(0, MOST_STROKES.strokes)
+              .map((each: Record<string, unknown> | null): Stroke | undefined => {
+                  const size = number(each?.size, 0.5, 4_000);
+                  const points = Array.isArray(each?.points) ? (each.points as unknown[]).slice(0, MOST_STROKES.points * 2) : [];
+                  if (size === undefined || points.length < 2 || points.length % 2 || !points.every(isNumber)) return undefined;
+                  return { size, soft: number(each?.soft, 0, 1) ?? 0.5, ...(each?.erase === true ? { erase: true } : {}), points: (points as number[]).map((value) => clamp(value, -FAR, FAR)) };
+              })
+              .filter((each): each is Stroke => !!each)
+        : undefined;
+    const given = step.found as { width?: unknown; height?: unknown; runs?: unknown } | undefined;
+    const width = number(given?.width, 1, 2_048);
+    const height = number(given?.height, 1, 2_048);
+    const found = given && width && height && Number.isInteger(width) && Number.isInteger(height) && typeof given.runs === "string" && decodeRuns(given.runs, width * height) ? { width, height, runs: given.runs } : undefined;
+    if (kind === "found" && !found) return undefined;
+    return {
+        type: "part",
+        kind,
+        ...(from && kind === "gradient" ? { from } : {}),
+        ...(to && kind === "gradient" ? { to } : {}),
+        ...(found ? { found } : {}),
+        ...(strokes?.length ? { strokes } : {}),
+        feather: number(step.feather, 0, 2_000) ?? 0,
+        ...(step.invert === true ? { invert: true } : {}),
+        grade: trimGrade(readGrade(step.grade)),
+    };
 }
 
 /**

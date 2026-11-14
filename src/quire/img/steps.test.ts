@@ -128,3 +128,27 @@ test("the whole picture's grade is one step, kept with only what is away from it
     const hostile = readSteps(JSON.stringify({ quire: 1, original, steps: [{ id: "s1", type: "grade", grade: { light: 1e99, color: "lots", curves: { all: "no" } } }] }))!;
     expect(hostile.steps[0]).toEqual({ id: "s1", type: "grade", grade: { light: 100 } });
 });
+
+test("a part keeps its shape and its own grade in steps.json, comes back the same, is in the look's grades after the whole picture's, and a hostile one is held in or left out", () => {
+    const steps = add(add(setOnly([], { type: "grade", grade: { light: 10 } }), { type: "part", kind: "gradient", from: { x: 0, y: 0 }, to: { x: 0, y: 400 }, feather: 12, grade: { light: -40 } }), { type: "part", kind: "paint", strokes: [{ size: 30, soft: 0.5, points: [10, 10, 40, 40] }, { size: 10, soft: 0, erase: true, points: [20, 20] }], feather: 0, invert: true, grade: { color: 30 } });
+    const picture = { original, steps };
+    const back = readSteps(writeSteps(picture))!;
+    expect(back.steps).toEqual(steps);
+    const shown = look(picture);
+    expect(shown.grades.map((each) => each.id)).toEqual(["s1", "s2", "s3"]);
+    expect(shown.grades[1]!.part).toEqual({ kind: "gradient", from: { x: 0, y: 0 }, to: { x: 0, y: 400 }, feather: 12 });
+    expect(shown.grades[2]!.part!.invert).toBe(true);
+    expect(shown.grades[2]!.grade.color).toBe(30);
+    const hostile = readSteps(JSON.stringify({ quire: 1, original, steps: [
+        { id: "s1", type: "part", kind: "gradient", from: { x: 0, y: 0 }, feather: 1 },
+        { id: "s2", type: "part", kind: "found", found: { width: 4, height: 4, runs: "AAAA" }, feather: 0 },
+        { id: "s3", type: "part", kind: "paint", strokes: [{ size: 1e9, points: [1, 2, 3] }, { size: 5, points: Array.from({ length: 20_000 }, () => 1) }], feather: -5, grade: { light: 500 } },
+        { id: "s4", type: "part", kind: "magic", feather: 0 },
+    ] }))!;
+    expect(hostile.steps.map((step) => step.id)).toEqual(["s3"]);
+    const part = hostile.steps[0] as Extract<Kept, { type: "part" }>;
+    expect(part.strokes).toHaveLength(1);
+    expect(part.strokes![0]!.points).toHaveLength(8_000);
+    expect(part.feather).toBe(0);
+    expect(part.grade).toEqual({ light: 100 });
+});
