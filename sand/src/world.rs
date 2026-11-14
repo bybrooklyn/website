@@ -29,7 +29,7 @@ use alloc::vec;
 use alloc::vec::Vec;
 
 use crate::level::Levels;
-use crate::materials::{EMPTY, Kind, MATERIALS, Props, REACTIONS, ROOM, STRIPE, STRIPES, TABLE, VOID, WALL, deepest, widest};
+use crate::materials::{EMPTY, Kind, MATERIALS, Props, REACTIONS, ROLL_ALONG, ROOM, STRIPE, STRIPES, TABLE, VOID, WALL, deepest, widest};
 
 /// The side of a chunk, in cells.
 pub const CHUNK: i32 = 64;
@@ -38,7 +38,7 @@ pub const BORDER: usize = 8;
 /// How far sideways a change can set a cell moving: as far as any material looks.
 const MARGIN_X: i32 = widest();
 /// How far up or down a change can set a cell moving: as far as a powder looks under its side to
-/// slide, 3 for wet dirt.
+/// slide, 3 for wet dirt, or down the slope it rolls off, 3 for sand.
 const MARGIN_Y: i32 = deepest();
 /// The clock runs 1 to this, then every cell's clock is set back to 0.
 const CLOCK_MOST: u32 = 63;
@@ -575,7 +575,8 @@ impl World {
     }
 
     /// The rule for powders and liquids: fall, gathering speed; or slide off a slope; or, for a
-    /// liquid, spread sideways toward somewhere lower, or anywhere when pushed from above.
+    /// liquid, spread sideways toward somewhere lower, or anywhere when pushed from above; or, for
+    /// sand, roll off a slope steeper than it holds.
     #[inline(always)]
     fn fall(&mut self, at: usize, x: i32, y: i32, cell: u32, p: Props) {
         let s = self.stride;
@@ -584,10 +585,10 @@ impl World {
         let open = self.sinks_into(p.density, below);
         // A resting cell whose support has moved away this step goes to a side if it can, rather
         // than following it down: so the face of a heap of water, all resting on cells that have
-        // just left, flows out at once and does not drop a cell at a time.
+        // just left, flows out at once and does not drop a cell at a time. So does a grain of
+        // powder in a crowded column (`drop` says which).
         let undermined = speed == 0 && material(below) == EMPTY && clock_of(below) == self.clock;
-        if open && !undermined {
-            self.drop(at, x, y, below, speed, p);
+        if open && !undermined && self.drop(at, x, y, below, speed, p, true) {
             return;
         }
         let roll = chance(self.seed, self.steps, at);
@@ -595,16 +596,23 @@ impl World {
         // corners: a wall of cells touching only at their corners holds.
         let slide = if p.kind == Kind::Liquid { 1 } else { p.slide as usize };
         if slide > 0 {
-            let left = self.slides(at, -1, slide, p.density);
-            let right = self.slides(at, 1, slide, p.density);
+            // A grain spilling from a crowded column goes only into open air, not into a cell its
+            // neighbor has just left: so the face of a pillar spills outward, while a block of grains
+            // landing together keeps its order (the stripes of a flag poured from high up land as
+            // stripes, not shuffled).
+            let crowded = open && !undermined;
+            let left = self.slides(at, -1, slide, p.density, !crowded);
+            let right = self.slides(at, 1, slide, p.density, !crowded);
             if left || right {
                 if !self.paced(roll, x, y, p) {
                     return;
                 }
                 let side = if left && right { if roll & 1 == 0 { -1 } else { 1 } } else if left { -1 } else { 1 };
-                // a grain that rolls keeps a little speed as it slides, so that where it stops it has
-                // landed and may roll on
-                self.swap(at, (at + s).wrapping_add_signed(side), (p.roll != 0) as u32, (x, y), (x + side as i32, y + 1));
+                if p.kind == Kind::Liquid {
+                    self.swap(at, (at + s).wrapping_add_signed(side), 0, (x, y), (x + side as i32, y + 1));
+                    return;
+                }
+                self.slide_down(at, (x, y), side, speed, slide, p);
                 return;
             }
         }
@@ -628,7 +636,10 @@ impl World {
         }
         if open {
             // its support has gone and it can go nowhere to the side: it follows it down
-            self.drop(at, x, y, below, speed, p);
+            self.drop(at, x, y, below, speed, p, false);
+            return;
+        }
+        if p.roll != 0 && self.roll_off(at, (x, y), speed, roll, p) {
             return;
         }
         if speed != 0 {
@@ -650,6 +661,45 @@ impl World {
             self.cells[at] = with_state(cell, clock_of(cell), 0);
             self.touch(x, y, x, y);
         }
+    }
+
+    /// A grain of powder slides down to `side`. One already moving goes on down the slope as far
+    /// as its speed and the slope allow, gathering speed as a falling grain does, so that the sides
+    /// of a heap carry away what lands on it and a collapsing face runs out. It keeps that speed,
+    /// so where it stops it has landed and may roll on. Kept out of `fall`, so the path of a
+    /// falling grain stays short.
+    #[inline(never)]
+    fn slide_down(&mut self, at: usize, (x, y): (i32, i32), side: isize, speed: u32, slide: usize, p: Props) {
+        let s = self.stride;
+        let reach = if speed > 0 { (speed + 1).min(p.fall as u32) } else { 1 };
+        let (mut to, mut gone) = ((at + s).wrapping_add_signed(side), 1);
+        while gone < reach && self.slides(to, side, slide, p.density, true) {
+            to = (to + s).wrapping_add_signed(side);
+            gone += 1;
+        }
+        self.swap(at, to, (speed + 1).min(3), (x, y), (x + side as i32 * gone as i32, y + gone as i32));
+    }
+
+    /// Sand rolls one cell along a slope steeper than it holds, at rest or not: one where the
+    /// ground `ROLL_ALONG` cells along is as many or more cells lower. A slope of three in four,
+    /// about 37 degrees, holds; one of 45 does not, so a heap built quickly at 45 degrees settles
+    /// to sand's own angle. The margins a change wakes reach as far as this looks. Gives whether
+    /// it rolled.
+    #[inline(never)]
+    fn roll_off(&mut self, at: usize, (x, y): (i32, i32), speed: u32, roll: u32, p: Props) -> bool {
+        const ROLL: isize = ROLL_ALONG as isize;
+        let s = self.stride as isize;
+        let rolls = |side: isize| {
+            let along = |n: isize, down: isize| self.sinks_into(p.density, self.cells[at.wrapping_add_signed(side * n + down * s)]);
+            (1..ROLL).all(|n| along(n, 0)) && (0..ROLL).all(|down| along(ROLL, down))
+        };
+        let (left, right) = (rolls(-1), rolls(1));
+        if !(left || right) {
+            return false;
+        }
+        let side = if left && right { if (roll >> 5) & 1 == 0 { -1 } else { 1 } } else if left { -1 } else { 1 };
+        self.swap(at, at.wrapping_add_signed(side), speed.max(1), (x, y), (x + side as i32, y));
+        true
     }
 
     /// Whether a slow liquid moves this step, by its `pace`. One that does not is reached again
@@ -699,13 +749,22 @@ impl World {
     }
 
     /// Falls: through empty cells, gathering speed, or one cell through a lighter liquid or gas or
-    /// out of an open world.
+    /// out of an open world. Gives whether it fell.
+    ///
+    /// With `spill`, a grain of powder in a crowded column does not fall but is left to go to a
+    /// side, as a resting cell whose support has gone does: one already moving, with powder
+    /// pressing on it, whose support has gone this step but only one cell, so it can follow it only
+    /// one. In a pillar draining from its foot every grain of its face spills outward as it comes
+    /// down, and the pillar gives way all along its height rather than wearing away only where it
+    /// meets the ground. Grains falling freely, as a stream from the brush, are farther apart and
+    /// fall as a stream. It is found here, where how far it can fall is known.
     #[inline(always)]
-    fn drop(&mut self, at: usize, x: i32, y: i32, below: u32, speed: u32, p: Props) {
+    #[allow(clippy::too_many_arguments)]
+    fn drop(&mut self, at: usize, x: i32, y: i32, below: u32, speed: u32, p: Props, spill: bool) -> bool {
         let s = self.stride;
         if material(below) != EMPTY {
             self.swap(at, at + s, 0, (x, y), (x, y + 1));
-            return;
+            return true;
         }
         let reach = (speed + 1).min(p.fall as u32);
         let (mut to, mut fallen) = (at + s, 1);
@@ -713,7 +772,11 @@ impl World {
             to += s;
             fallen += 1;
         }
+        if spill && fallen == 1 && speed > 0 && p.kind == Kind::Powder && clock_of(below) == self.clock && props(self.cells[at - s]).kind == Kind::Powder {
+            return false;
+        }
         self.swap(at, to, (speed + 1).min(3), (x, y), (x, y + fallen as i32));
+        true
     }
 
     /// How far a liquid or gas goes to one side: to the nearest cell within `reach` with an open
@@ -736,11 +799,13 @@ impl World {
     }
 
     /// Whether a falling cell can slide down to the side: the cell beside it is open, and so are
-    /// `depth` cells under that.
+    /// `depth` cells under that. Unless it `follows`, the cell beside it must not have been left
+    /// this step.
     #[inline(always)]
-    fn slides(&self, at: usize, side: isize, depth: usize, density: u8) -> bool {
+    fn slides(&self, at: usize, side: isize, depth: usize, density: u8, follows: bool) -> bool {
         let beside = at.wrapping_add_signed(side);
-        if !self.sinks_into(density, self.cells[beside]) {
+        let there = self.cells[beside];
+        if !self.sinks_into(density, there) || (!follows && material(there) == EMPTY && clock_of(there) == self.clock) {
             return false;
         }
         (1..=depth).all(|k| self.sinks_into(density, self.cells[beside + k * self.stride]))
@@ -862,8 +927,17 @@ impl World {
                 }
                 let shade = match striped {
                     Some((first, count)) => {
-                        let across = ((px * nx + py * ny + reach) / (2.0 * reach) * count as f32) as i32;
-                        stripe_shade(first, across.clamp(0, count as i32 - 1) as u32, roll)
+                        // which stripe by where it lies across the line, its edge moved a little by
+                        // chance so the stripes meet grainily, as poured sand's do; now and then a
+                        // grain near an edge has strayed across it
+                        let wide = 2.0 * reach / count as f32;
+                        let jitter = (wide * 0.25).min(0.6) * (((roll >> 16) & 255) as f32 / 128.0 - 1.0);
+                        let across = ((px * nx + py * ny + reach + jitter) / wide).max(0.0);
+                        let (mut stripe, into) = (across as i32, across - (across as i32) as f32);
+                        if roll >> 24 < STRAY {
+                            stripe += if into < 0.3 { -1 } else if into > 0.7 { 1 } else { 0 };
+                        }
+                        stripe_shade(first, stripe.clamp(0, count as i32 - 1) as u32, roll)
                     }
                     None => (roll >> 8) & 0xff,
                 };
@@ -877,8 +951,13 @@ impl World {
         }
     }
 
-    /// Lays a block of `of`, `wide` by `high` cells with its top left at (x, y), in `count` level
-    /// stripes of equal height whose colors are numbered from `first`, top to bottom: a whole flag.
+    /// Lays a block of `of`, `wide` by `high` cells with its top left at (x, y), in `count` stripes
+    /// whose colors are numbered from `first`, top to bottom: a whole flag, laid as sand is layered
+    /// in a jar. Each edge between two stripes wanders smoothly along the flag, by up to a quarter of
+    /// a stripe and never more than two rows, so a stripe is a little thicker in one place than
+    /// another; each grain's edge is moved a little more by chance, so the stripes meet grainily;
+    /// and now and then a grain near an edge has strayed across it. Every stripe stays in its order.
+    /// All of it comes from the world's seed and the press, so the same press lays the same flag.
     /// Only empty cells are filled, every one of them.
     #[allow(clippy::too_many_arguments)]
     pub fn flag(&mut self, of: u8, x: i32, y: i32, wide: i32, high: i32, first: u8, count: u8) {
@@ -890,16 +969,32 @@ impl World {
         if of == EMPTY || left > right || top > bottom {
             return;
         }
+        // heights in 256ths of a row: a stripe's, how far an edge wanders, how far a grain's edge is
+        // moved; each a quarter of a stripe at most, so no two edges ever meet
+        let band = high as i64 * 256 / count as i64;
+        let (wander, jitter) = ((band / 4).min(2 * 256), (band / 4).min(160));
+        let mut edges = [0i64; STRIPES as usize];
         let mut painted = false;
-        for row in top..=bottom {
-            let stripe = ((row - y) as u32 * count / high as u32).min(count - 1);
-            for column in left..=right {
+        for column in left..=right {
+            for (k, edge) in edges.iter_mut().enumerate().take(count as usize).skip(1) {
+                *edge = k as i64 * high as i64 * 256 / count as i64 + wander * wandering(self.seed, self.strokes, k, column - x) / 256;
+            }
+            for row in top..=bottom {
                 let at = self.index(column, row);
                 if material(self.cells[at]) != EMPTY {
                     continue;
                 }
                 let roll = chance(self.seed ^ 0xf1a6, self.strokes, at);
-                self.cells[at] = of as u32 | stripe_shade(first, stripe, roll) << 8 | (MATERIALS[of as usize].made as u32) << 16;
+                let middle = (row - y) as i64 * 256 + 128 + (((roll >> 16) & 255) as i64 - 128) * jitter / 128;
+                let mut stripe = edges[1..count as usize].iter().filter(|&&edge| edge <= middle).count();
+                if roll >> 24 < STRAY {
+                    // the nearest edge, if it is within two rows: the grain is of the stripe across it
+                    let near = (1..count as usize).min_by_key(|&k| (edges[k] - middle).abs());
+                    if let Some(k) = near.filter(|&k| (edges[k] - middle).abs() < (2 * 256).min(band)) {
+                        stripe = if middle >= edges[k] { k - 1 } else { k };
+                    }
+                }
+                self.cells[at] = of as u32 | stripe_shade(first, stripe as u32, roll) << 8 | (MATERIALS[of as usize].made as u32) << 16;
                 painted = true;
             }
         }
@@ -971,6 +1066,22 @@ fn root(of: f32) -> f32 {
         guess = 0.5 * (guess + of / guess);
     }
     guess
+}
+
+/// How likely a grain laid in stripes near an edge is to have strayed across it, in 256ths.
+const STRAY: u32 = 9;
+
+/// How far edge `edge` of the flag laid by stroke `stroke` wanders up or down at `column` of it,
+/// from -256 to 255: a smooth curve through a height chosen by chance every `ALONG` columns.
+fn wandering(seed: u64, stroke: u64, edge: usize, column: i32) -> i64 {
+    const ALONG: i32 = 12;
+    let height = |knot: i32| (chance(seed ^ 0xed6e, stroke, edge << 16 | (knot as usize & 0xffff)) >> 23) as i64 - 256;
+    let (knot, into) = (column.div_euclid(ALONG), column.rem_euclid(ALONG) as i64);
+    let (a, b) = (height(knot), height(knot + 1));
+    // eased from one height to the next, so the edge has no corners
+    let t = into * 256 / ALONG as i64;
+    let eased = t * t * (3 * 256 - 2 * t) / (256 * 256);
+    a + (b - a) * eased / 256
 }
 
 /// The shade of a cell of stripe `stripe` of stripes whose colors begin at `first`, with a slight
@@ -1085,8 +1196,12 @@ mod tests {
             world.paint_striped(PRIDE, from, 20, to, 20, 5, 100, 7, 3);
             // the brush where the line starts was laid by the line before it
             assert_eq!(world.at(from, 20), EMPTY);
+            // the middle of each stripe is certain; near an edge a grain may be of either side
             let rows: Vec<u32> = (15..=25).map(|y| stripe(&world, 35, y)).collect();
-            assert_eq!(rows, vec![7, 7, 7, 7, 8, 8, 8, 9, 9, 9, 9], "{from} to {to}");
+            assert_eq!((rows[0], rows[1], rows[5], rows[9], rows[10]), (7, 7, 8, 9, 9), "{from} to {to}: {rows:?}");
+            // and along the stroke the stripes meet grainily: an edge is not one straight line
+            let edge = |x: i32| (15..=25).position(|y| stripe(&world, x, y) == 8).unwrap();
+            assert!((20..50).any(|x| edge(x) != edge(20)), "{from} to {to}");
         }
         // straight down: the first stripe on the left
         let mut world = World::new(40, 80, 1);
@@ -1099,18 +1214,59 @@ mod tests {
     }
 
     #[test]
-    fn a_flag_is_laid_whole_in_level_stripes_of_equal_height_into_empty_cells_only() {
-        let mut world = World::new(60, 40, 2);
-        world.paint(STONE, 30, 12, 30, 12, 0, 100, false);
-        world.flag(PRIDE, 10, 5, 30, 20, 10, 5);
-        assert_eq!(world.count(PRIDE), 30 * 20 - 1, "every cell but the stone");
+    fn a_flag_is_laid_whole_as_layered_sand_every_stripe_in_order_into_empty_cells_only() {
+        let lay = |seed: u64| {
+            let mut world = World::new(160, 100, seed);
+            world.paint(STONE, 30, 12, 30, 12, 0, 100, false);
+            world.flag(PRIDE, 10, 5, 120, 80, 10, 5);
+            world
+        };
+        let world = lay(2);
+        assert_eq!(world.count(PRIDE), 120 * 80 - 1, "every cell but the stone");
         assert_eq!(world.at(30, 12), STONE);
-        for y in 5..25 {
-            assert_eq!(stripe(&world, 12, y), 10 + (y as u32 - 5) / 4, "row {y}");
+        // each stripe about its share, every one of them in every column
+        let mut each = [0usize; 5];
+        for y in 5..85 {
+            for x in 10..130 {
+                if world.at(x, y) == PRIDE {
+                    each[stripe(&world, x, y) as usize - 10] += 1;
+                }
+            }
         }
+        assert!(each.iter().all(|&n| (1700..2140).contains(&n)), "{each:?}");
+        // down every column the stripes come in order, but for a few grains that have strayed
+        // across an edge, never more than a stripe
+        let (mut strayed, mut grains) = (0, 0);
+        for x in 10..130 {
+            let column: Vec<u32> = (5..85).filter(|&y| world.at(x, y) == PRIDE).map(|y| stripe(&world, x, y)).collect();
+            assert_eq!((column[0], *column.last().unwrap()), (10, 14), "column {x}");
+            assert!((10..15).all(|s| column.contains(&s)), "column {x}");
+            for pair in column.windows(2) {
+                assert!(pair[1] + 1 >= pair[0] && pair[1] <= pair[0] + 1, "column {x}: {column:?}");
+                strayed += (pair[1] < pair[0]) as usize;
+            }
+            grains += column.len();
+        }
+        assert!(strayed > 0 && strayed * 100 < grains, "a few strays: {strayed} of {grains}");
+        // each edge wanders along the flag, up to two rows from where it would be level
+        let edge = |w: &World, x: i32| (5..85).filter(|&y| stripe(w, x, y) < 12).count() as i32;
+        let edges: Vec<i32> = (10..130).map(|x| edge(&world, x)).collect();
+        let (low, high) = (*edges.iter().min().unwrap(), *edges.iter().max().unwrap());
+        assert!(high - low >= 2 && (29..=35).contains(&low) && (29..=35).contains(&high), "{edges:?}");
+        // the same press lays the same flag, another world another
+        assert!(lay(2).cells == world.cells);
+        assert!(lay(3).cells != world.cells);
         // a flag cut by the world's edge, and stripes past the colors there are, stay inside it
-        world.flag(PRIDE, 50, 30, 30, 30, 62, 9);
-        assert!((30..40).all(|y| stripe(&world, 55, y) >= 62 && stripe(&world, 55, y) < 64));
+        let mut world = lay(2);
+        world.flag(PRIDE, 150, 80, 30, 30, 62, 9);
+        assert!((80..100).all(|y| stripe(&world, 155, y) >= 62 && stripe(&world, 155, y) < 64));
+        // a flag too small to wander still has every stripe, in order
+        let mut world = World::new(40, 40, 4);
+        world.flag(PRIDE, 5, 5, 12, 8, 0, 4);
+        for x in 5..17 {
+            let column: Vec<u32> = (5..13).map(|y| stripe(&world, x, y)).collect();
+            assert!(column.windows(2).all(|pair| pair[1] + 1 >= pair[0]), "{column:?}");
+        }
     }
 
     #[test]
@@ -1131,7 +1287,7 @@ mod tests {
                 }
             }
         }
-        assert_eq!(each, [160; 6]);
+        assert!(each.iter().all(|&n| (120..200).contains(&n)), "{each:?}");
         // and lie mostly in their order: the middle column of the heap, from the top down, never goes back more than a stripe
         let column: Vec<u32> = (0..100).filter(|&y| world.at(60, y) == PRIDE).map(|y| stripe(&world, 60, y)).collect();
         assert!(column.windows(2).all(|pair| pair[1] + 1 >= pair[0]), "{column:?}");

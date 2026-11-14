@@ -109,19 +109,26 @@ export const KEYS: Record<string, string> = {
     erase: "e",
 };
 
+/** How many grains of powder, and cells of lava, a brush held still pours in a step, whatever its size. */
+export const HELD = { powder: 10, lava: 9 };
+
 /**
  * How many cells in 100 a stroke fills: what falls is poured, so it trickles; stone is laid solid.
- * Lava is poured thick, so that it lands as a molten blob and not as drops that each harden alone.
- * Pride sand drawn along a line is laid solid too (the engine lays each part of its ribbon once), so
- * its stripes fall whole. A brush of `radius` held still pours again every step into the cells that
- * have fallen out of it, about four rows of it a step: a powder is then poured at about three grains a
- * step whatever the brush's size, which is what the slopes of a heap carry away. Poured faster, sand
- * stacks up under the brush into a pillar, which the engine's grains wear down only from its corners.
+ * Lava drawn along a line is poured thick, so that it lands as a molten blob and not as drops. Pride
+ * sand drawn along a line is laid solid too (the engine lays each part of its ribbon once), so its
+ * stripes fall whole. A brush of `radius` held still pours again every step into the cells that have
+ * fallen out of it, about four rows of it a step, so a powder held still is poured at about `HELD`
+ * grains a step whatever the brush's size, as many as the sides of a heap carry away (poured faster
+ * it stands as a column under the brush), and lava at about `HELD` cells a step, as it now drains away
+ * from under the brush into its pool and would otherwise pour as fast as the brush could refill.
  */
 export function fillOf(material: Pick<Material, "kind" | "striped" | "light">, still = false, radius = 0): number {
-    if (material.kind === "solid" || (material.kind === "liquid" && material.light)) return 100;
+    const held = (count: number, most: number) => Math.max(1, Math.min(most, Math.round((100 * count) / (4 * (2 * radius + 1)))));
+    const lava = material.kind === "liquid" && material.light;
+    if (lava) return still ? held(HELD.lava, 100) : 100;
+    if (material.kind === "solid") return 100;
     if (material.striped && !still) return 100;
-    if (still && material.kind === "powder") return Math.max(1, Math.min(45, Math.round(300 / (4 * (2 * radius + 1)))));
+    if (still && material.kind === "powder") return held(HELD.powder, 45);
     return 45;
 }
 
@@ -158,15 +165,20 @@ export const STEPS_PER_SECOND = 60;
 /**
  * The color of a cell of `material` with this shade, red, green, blue and opacity from 0 to 255, as
  * Mote's grid draws it from `palette` (src/mote/cells.ts): the material's color moved lighter or
- * darker by its shade, or for a striped material the stripe's color from the third row, moved a
- * little by the shade's lowest two bits. What the row of materials draws each swatch with.
+ * darker by its shade, or for a striped material the stripe's color from the third row, each grain a
+ * step lighter or darker by the shade's lowest two bits, toward white or black by up to the shade
+ * range's red. What the row of materials draws each swatch with.
  */
 export function swatchColor(palette: Uint8Array, material: number, shade: number): [number, number, number, number] {
     const base = palette.subarray(material * 4, material * 4 + 4);
     const vary = palette.subarray(1024 + material * 4, 1024 + material * 4 + 4);
-    const striped = (vary[3]! & 1) === 1;
-    const from = striped ? palette.subarray(2048 + (shade >> 2) * 4, 2048 + (shade >> 2) * 4 + 3) : base;
-    const by = striped ? (shade & 3) / 3 - 0.5 : shade / 255 - 0.5;
-    const channel = (k: number) => Math.max(0, Math.min(255, Math.round(from[k]! + by * vary[k]!)));
+    if ((vary[3]! & 1) === 1) {
+        const stripe = palette.subarray(2048 + (shade >> 2) * 4, 2048 + (shade >> 2) * 4 + 3);
+        const by = ((shade & 3) / 1.5 - 1) * (vary[0]! / 255);
+        const channel = (k: number) => Math.max(0, Math.min(255, Math.round(by < 0 ? stripe[k]! * (1 + by) : stripe[k]! + (255 - stripe[k]!) * by)));
+        return [channel(0), channel(1), channel(2), base[3]!];
+    }
+    const by = shade / 255 - 0.5;
+    const channel = (k: number) => Math.max(0, Math.min(255, Math.round(base[k]! + by * vary[k]!)));
     return [channel(0), channel(1), channel(2), base[3]!];
 }

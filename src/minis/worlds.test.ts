@@ -40,6 +40,13 @@ test("a world goes into text and back to the byte, squeezed or not, and opens in
         other.rewritten(1);
         expect(seen(other)).toEqual(tokens);
         for (const m of [1, 2, 3, 18]) expect(other.count(m)).toBe(engine.count(m));
+        // the link keeps no shades, but an opened flag is not flat: each grain of pride sand gets a
+        // step of lightness of its own again, every one of the four about as often
+        const cells = view(other);
+        const steps = [0, 0, 0, 0];
+        for (let at = 0; at < cells.length; at += 4) if (cells[at] === 18) steps[cells[at + 1]! & 3]!++;
+        const total = steps.reduce((sum, n) => sum + n, 0);
+        for (const n of steps) expect(n / total).toBeGreaterThan(0.2);
     }
     // squeezed, a world like this goes in a link
     expect((await pack(tokens, 300, 180, 18)).length).toBeLessThan(LINK_MOST);

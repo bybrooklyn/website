@@ -47,8 +47,9 @@ pub struct Material {
     /// slides there: 1 piles at 45 degrees, 2 at about 63, 3 at about 72. 0 never slides.
     pub slide: u8,
     /// For a powder, how likely a grain that has just landed on a step is to roll on over it
-    /// when the slope goes on below, in 256ths: sand rolls, so its heaps are gentler than 45
-    /// degrees.
+    /// when the slope goes on below, in 256ths. A powder that rolls at all also rolls, at rest
+    /// or not, off any slope steeper than about 37 degrees (`ROLL_ALONG`): sand's heaps rest
+    /// near 35 degrees, not at the 45 its sliding alone would hold.
     pub roll: u8,
     /// For a liquid or gas, how many cells sideways it looks in one step for somewhere to go.
     pub spread: u8,
@@ -59,8 +60,10 @@ pub struct Material {
     /// slow: it falls freely but creeps sideways.
     pub pace: u8,
     /// Whether the levelling pass carries it through a connected body (`level.rs`), so that it
-    /// finds one level in joined vessels.
-    pub level: bool,
+    /// finds one level in joined vessels: 0 not, 1 until its surface is level, as water's is. A
+    /// thick liquid that spreads under its own weight but stops while still some cells deep is
+    /// more: its surface comes to rest up to this many cells less one uneven. Lava is 4.
+    pub level: u8,
     /// How readily heat passes through it, from 0 (not at all) to 32. Heat crosses between two
     /// neighbors as fast as the slower of them lets it.
     pub conduct: u8,
@@ -88,6 +91,10 @@ pub struct Material {
     /// Offered to the visitor's brush.
     pub paint: bool,
 }
+
+/// How far along a slope a powder that rolls looks: it rolls when the ground this many cells along
+/// is this many cells lower, so a slope of three in four (about 37 degrees) holds and 45 does not.
+pub const ROLL_ALONG: u8 = 4;
 
 /// Room temperature: what empty air and everything the brush lays cold are made at.
 pub const ROOM: u8 = 40;
@@ -139,25 +146,25 @@ pub const STRIPES: u8 = 64;
 
 /// Every material, by its number.
 pub const MATERIALS: &[Material] = &[
-    Material { name: "empty", kind: Kind::Empty, density: 0, slide: 0, roll: 0, spread: 0, fall: 0, pace: 0, level: false, conduct: 12, made: ROOM, latent: 0, warms: -1, toward: ROOM, airy: true, glow: 0, color: [0, 0, 0, 0], vary: [0, 0, 0], paint: false },
-    Material { name: "sand", kind: Kind::Powder, density: 160, slide: 1, roll: 255, spread: 0, fall: 4, pace: 0, level: false, conduct: 12, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [222, 190, 122, 255], vary: [34, 30, 26], paint: true },
-    Material { name: "water", kind: Kind::Liquid, density: 100, slide: 0, roll: 0, spread: 5, fall: 4, pace: 0, level: true, conduct: 32, made: ROOM, latent: 8, warms: 0, toward: 0, airy: false, glow: 0, color: [52, 118, 214, 235], vary: [10, 16, 18], paint: true },
-    Material { name: "stone", kind: Kind::Solid, density: 255, slide: 0, roll: 0, spread: 0, fall: 0, pace: 0, level: false, conduct: 24, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [122, 120, 126, 255], vary: [22, 22, 22], paint: true },
-    Material { name: "dirt", kind: Kind::Powder, density: 150, slide: 2, roll: 0, spread: 0, fall: 4, pace: 0, level: false, conduct: 12, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [118, 84, 56, 255], vary: [26, 20, 16], paint: true },
-    Material { name: "steam", kind: Kind::Gas, density: 4, slide: 0, roll: 0, spread: 3, fall: 1, pace: 0, level: true, conduct: 12, made: 120, latent: 28, warms: 0, toward: 0, airy: true, glow: 0, color: [206, 214, 224, 150], vary: [18, 18, 18], paint: true },
-    Material { name: "wall", kind: Kind::Solid, density: 255, slide: 0, roll: 0, spread: 0, fall: 0, pace: 0, level: false, conduct: 0, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [0, 0, 0, 0], vary: [0, 0, 0], paint: false },
-    Material { name: "void", kind: Kind::Void, density: 0, slide: 0, roll: 0, spread: 0, fall: 0, pace: 0, level: false, conduct: 0, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [0, 0, 0, 0], vary: [0, 0, 0], paint: false },
-    Material { name: "wood", kind: Kind::Solid, density: 255, slide: 0, roll: 0, spread: 0, fall: 0, pace: 0, level: false, conduct: 24, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [122, 78, 44, 255], vary: [22, 16, 10], paint: true },
-    Material { name: "oil", kind: Kind::Liquid, density: 80, slide: 0, roll: 0, spread: 4, fall: 4, pace: 0, level: true, conduct: 16, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [92, 62, 30, 240], vary: [14, 10, 6], paint: true },
-    Material { name: "lava", kind: Kind::Liquid, density: 200, slide: 0, roll: 0, spread: 2, fall: 3, pace: 96, level: false, conduct: 8, made: 250, latent: 0, warms: 0, toward: 0, airy: false, glow: 1, color: [226, 92, 28, 255], vary: [58, 110, 40], paint: true },
-    Material { name: "ice", kind: Kind::Solid, density: 255, slide: 0, roll: 0, spread: 0, fall: 0, pace: 0, level: false, conduct: 32, made: 0, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [176, 218, 240, 245], vary: [14, 12, 8], paint: true },
-    Material { name: "smoke", kind: Kind::Gas, density: 3, slide: 0, roll: 0, spread: 3, fall: 1, pace: 0, level: false, conduct: 10, made: 90, latent: 0, warms: 0, toward: 0, airy: true, glow: 0, color: [70, 68, 72, 170], vary: [20, 20, 20], paint: true },
-    Material { name: "fire", kind: Kind::Fire, density: 1, slide: 0, roll: 0, spread: 0, fall: 1, pace: 0, level: false, conduct: 32, made: 230, latent: 0, warms: -4, toward: 0, airy: true, glow: 1, color: [236, 116, 34, 255], vary: [40, 200, 80], paint: true },
-    Material { name: "acid", kind: Kind::Liquid, density: 110, slide: 0, roll: 0, spread: 4, fall: 4, pace: 0, level: true, conduct: 28, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [116, 214, 64, 230], vary: [20, 30, 14], paint: true },
-    Material { name: "wet dirt", kind: Kind::Powder, density: 170, slide: 3, roll: 0, spread: 0, fall: 4, pace: 0, level: false, conduct: 12, made: ROOM, latent: 8, warms: 0, toward: 0, airy: false, glow: 0, color: [84, 58, 40, 255], vary: [18, 14, 10], paint: false },
-    Material { name: "ember", kind: Kind::Solid, density: 255, slide: 0, roll: 0, spread: 0, fall: 0, pace: 0, level: false, conduct: 20, made: 200, latent: 0, warms: 16, toward: 200, airy: false, glow: 2, color: [196, 70, 26, 255], vary: [70, 80, 30], paint: false },
-    Material { name: "ash", kind: Kind::Powder, density: 40, slide: 1, roll: 0, spread: 0, fall: 2, pace: 0, level: false, conduct: 6, made: ROOM, latent: 0, warms: 0, toward: 0, airy: true, glow: 0, color: [150, 146, 140, 255], vary: [24, 24, 24], paint: false },
-    Material { name: "pride sand", kind: Kind::Powder, density: 160, slide: 1, roll: 255, spread: 0, fall: 4, pace: 0, level: false, conduct: 12, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 3, color: [222, 190, 122, 255], vary: [26, 26, 26], paint: true },
+    Material { name: "empty", kind: Kind::Empty, density: 0, slide: 0, roll: 0, spread: 0, fall: 0, pace: 0, level: 0, conduct: 12, made: ROOM, latent: 0, warms: -1, toward: ROOM, airy: true, glow: 0, color: [0, 0, 0, 0], vary: [0, 0, 0], paint: false },
+    Material { name: "sand", kind: Kind::Powder, density: 160, slide: 1, roll: 220, spread: 0, fall: 4, pace: 0, level: 0, conduct: 12, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [222, 190, 122, 255], vary: [34, 30, 26], paint: true },
+    Material { name: "water", kind: Kind::Liquid, density: 100, slide: 0, roll: 0, spread: 5, fall: 4, pace: 0, level: 1, conduct: 32, made: ROOM, latent: 8, warms: 0, toward: 0, airy: false, glow: 0, color: [52, 118, 214, 235], vary: [10, 16, 18], paint: true },
+    Material { name: "stone", kind: Kind::Solid, density: 255, slide: 0, roll: 0, spread: 0, fall: 0, pace: 0, level: 0, conduct: 24, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [122, 120, 126, 255], vary: [22, 22, 22], paint: true },
+    Material { name: "dirt", kind: Kind::Powder, density: 150, slide: 2, roll: 0, spread: 0, fall: 4, pace: 0, level: 0, conduct: 12, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [118, 84, 56, 255], vary: [26, 20, 16], paint: true },
+    Material { name: "steam", kind: Kind::Gas, density: 4, slide: 0, roll: 0, spread: 3, fall: 1, pace: 0, level: 1, conduct: 12, made: 120, latent: 28, warms: 0, toward: 0, airy: true, glow: 0, color: [206, 214, 224, 150], vary: [18, 18, 18], paint: true },
+    Material { name: "wall", kind: Kind::Solid, density: 255, slide: 0, roll: 0, spread: 0, fall: 0, pace: 0, level: 0, conduct: 0, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [0, 0, 0, 0], vary: [0, 0, 0], paint: false },
+    Material { name: "void", kind: Kind::Void, density: 0, slide: 0, roll: 0, spread: 0, fall: 0, pace: 0, level: 0, conduct: 0, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [0, 0, 0, 0], vary: [0, 0, 0], paint: false },
+    Material { name: "wood", kind: Kind::Solid, density: 255, slide: 0, roll: 0, spread: 0, fall: 0, pace: 0, level: 0, conduct: 24, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [122, 78, 44, 255], vary: [22, 16, 10], paint: true },
+    Material { name: "oil", kind: Kind::Liquid, density: 80, slide: 0, roll: 0, spread: 4, fall: 4, pace: 0, level: 1, conduct: 16, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [92, 62, 30, 240], vary: [14, 10, 6], paint: true },
+    Material { name: "lava", kind: Kind::Liquid, density: 200, slide: 0, roll: 0, spread: 2, fall: 3, pace: 96, level: 8, conduct: 4, made: 250, latent: 0, warms: 0, toward: 0, airy: false, glow: 1, color: [226, 92, 28, 255], vary: [58, 110, 40], paint: true },
+    Material { name: "ice", kind: Kind::Solid, density: 255, slide: 0, roll: 0, spread: 0, fall: 0, pace: 0, level: 0, conduct: 32, made: 0, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [176, 218, 240, 245], vary: [14, 12, 8], paint: true },
+    Material { name: "smoke", kind: Kind::Gas, density: 3, slide: 0, roll: 0, spread: 3, fall: 1, pace: 0, level: 0, conduct: 10, made: 90, latent: 0, warms: 0, toward: 0, airy: true, glow: 0, color: [70, 68, 72, 170], vary: [20, 20, 20], paint: true },
+    Material { name: "fire", kind: Kind::Fire, density: 1, slide: 0, roll: 0, spread: 0, fall: 1, pace: 0, level: 0, conduct: 32, made: 230, latent: 0, warms: -4, toward: 0, airy: true, glow: 1, color: [236, 116, 34, 255], vary: [40, 200, 80], paint: true },
+    Material { name: "acid", kind: Kind::Liquid, density: 110, slide: 0, roll: 0, spread: 4, fall: 4, pace: 0, level: 1, conduct: 28, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 0, color: [116, 214, 64, 230], vary: [20, 30, 14], paint: true },
+    Material { name: "wet dirt", kind: Kind::Powder, density: 170, slide: 3, roll: 0, spread: 0, fall: 4, pace: 0, level: 0, conduct: 12, made: ROOM, latent: 8, warms: 0, toward: 0, airy: false, glow: 0, color: [84, 58, 40, 255], vary: [18, 14, 10], paint: false },
+    Material { name: "ember", kind: Kind::Solid, density: 255, slide: 0, roll: 0, spread: 0, fall: 0, pace: 0, level: 0, conduct: 20, made: 200, latent: 0, warms: 16, toward: 200, airy: false, glow: 2, color: [196, 70, 26, 255], vary: [70, 80, 30], paint: false },
+    Material { name: "ash", kind: Kind::Powder, density: 40, slide: 1, roll: 0, spread: 0, fall: 2, pace: 0, level: 0, conduct: 6, made: ROOM, latent: 0, warms: 0, toward: 0, airy: true, glow: 0, color: [150, 146, 140, 255], vary: [24, 24, 24], paint: false },
+    Material { name: "pride sand", kind: Kind::Powder, density: 160, slide: 1, roll: 220, spread: 0, fall: 4, pace: 0, level: 0, conduct: 12, made: ROOM, latent: 0, warms: 0, toward: 0, airy: false, glow: 3, color: [222, 190, 122, 255], vary: [40, 40, 40], paint: true },
 ];
 
 /// In a reaction, a neighbor of any material that lets air in (`airy`).
@@ -248,8 +255,7 @@ pub const REACTIONS: &[Reaction] = &[
     line(OIL, LAVA, 0, 255, FIRE, SAME, 256, Heat::Kept, 230),
     // lava that cools hardens where it comes to rest; water on it hardens it and boils away
     resting(line(LAVA, ALONE, 0, 100, STONE, SAME, ALWAYS, Heat::Kept, 0)),
-    line(LAVA, WATER, 0, 255, STONE, STEAM, 640, Heat::Shared, 0),
-    // ice that warms melts
+    line(LAVA, WATER, 0, 255, STONE, STEAM, 640, Heat::Shared, 0),    // ice that warms melts
     line(ICE, ALONE, 28, 255, WATER, SAME, ALWAYS, Heat::Kept, 0),
     // smoke thins to nothing
     line(SMOKE, ALONE, 0, 255, EMPTY, SAME, 12, Heat::Kept, 0),
@@ -323,7 +329,7 @@ pub(crate) struct Props {
     pub spread: u8,
     pub fall: u8,
     pub pace: u8,
-    pub level: bool,
+    pub level: u8,
     /// Whether a visit has anything to do besides moving it: lines, or a shade that follows heat.
     pub acts: bool,
     /// The temperatures, around room temperature, at which none of its lines can happen: water
@@ -339,7 +345,7 @@ pub(crate) struct Props {
 pub(crate) static TABLE: [Props; 256] = table();
 
 const fn table() -> [Props; 256] {
-    let mut out = [Props { kind: Kind::Solid, density: 255, slide: 0, roll: 0, spread: 0, fall: 0, pace: 0, level: false, acts: false, calm_from: 1, calm_to: 0, glow: 0, airy: false }; 256];
+    let mut out = [Props { kind: Kind::Solid, density: 255, slide: 0, roll: 0, spread: 0, fall: 0, pace: 0, level: 0, acts: false, calm_from: 1, calm_to: 0, glow: 0, airy: false }; 256];
     let mut at = 0;
     while at < MATERIALS.len() {
         let m = &MATERIALS[at];
@@ -412,13 +418,18 @@ const fn latent() -> [u8; 256] {
     out
 }
 
-/// The widest any material looks sideways in a step, which is how far a change can reach.
+/// The widest any material looks sideways in a step, which is how far a change can reach: as far as
+/// a liquid or gas spreads, or a powder that rolls looks along a slope (`ROLL_ALONG`).
 pub(crate) const fn widest() -> i32 {
     let mut most = 1;
     let mut at = 0;
     while at < MATERIALS.len() {
-        if MATERIALS[at].spread as i32 > most {
-            most = MATERIALS[at].spread as i32;
+        let m = &MATERIALS[at];
+        if m.spread as i32 > most {
+            most = m.spread as i32;
+        }
+        if m.kind as u8 == Kind::Powder as u8 && m.roll != 0 && ROLL_ALONG as i32 > most {
+            most = ROLL_ALONG as i32;
         }
         at += 1;
     }
@@ -426,13 +437,20 @@ pub(crate) const fn widest() -> i32 {
 }
 
 /// The farthest up or down any rule looks from a cell: a powder looks as many cells under its side
-/// as it needs open to slide, and nothing else looks farther than 2.
+/// as it needs open to slide, a powder that rolls looks `ROLL_ALONG - 1` down the slope ahead of it,
+/// and nothing else looks farther than 2.
 pub(crate) const fn deepest() -> i32 {
     let mut most = 2;
     let mut at = 0;
     while at < MATERIALS.len() {
-        if MATERIALS[at].kind as u8 == Kind::Powder as u8 && MATERIALS[at].slide as i32 > most {
-            most = MATERIALS[at].slide as i32;
+        let m = &MATERIALS[at];
+        if m.kind as u8 == Kind::Powder as u8 {
+            if m.slide as i32 > most {
+                most = m.slide as i32;
+            }
+            if m.roll != 0 && ROLL_ALONG as i32 - 1 > most {
+                most = ROLL_ALONG as i32 - 1;
+            }
         }
         at += 1;
     }

@@ -128,7 +128,7 @@ impl World {
                 for x in rect.x0..=rect.x1 {
                     let at = self.index(x, y);
                     let cell = self.cells[at];
-                    if TABLE[material(cell) as usize].level && !self.counted(at) {
+                    if TABLE[material(cell) as usize].level != 0 && !self.counted(at) {
                         self.body(at);
                     }
                 }
@@ -280,13 +280,15 @@ impl World {
                 }
             }
         }
-        // pair the highest tops with the lowest places, while each place is lower than its top
+        // pair the highest tops with the lowest places, while each place is lower than its top, by
+        // more than a thick liquid's surface may be uneven
+        let uneven = TABLE[liquid as usize].level as u64 - 1;
         let mut moves = [(0u32, 0u32); PER_BODY];
         let mut length = 0;
         for k in 0..levels.tops_count.min(levels.places_count) {
             let (top_rank, top) = levels.tops[k];
             let (place_rank, place) = levels.places[k];
-            if place_rank >> 32 >= bottom - (top_rank >> 32) {
+            if (place_rank >> 32) + uneven >= bottom - (top_rank >> 32) {
                 break;
             }
             moves[length] = (top, place);

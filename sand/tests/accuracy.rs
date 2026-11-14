@@ -92,6 +92,47 @@ fn sand_piles_at_about_35_degrees_and_dirt_holds_a_steeper_slope() {
     }
 }
 
+#[test]
+fn a_pillar_of_powder_comes_down_to_a_heap_at_its_angle_promptly_and_stays_there() {
+    // a pillar 18 wide and 60 tall stood on the floor all at once: 1080 grains. As low as a heap of
+    // them at 45 degrees (sand) or at 63 (dirt) is no column over 34 or 48 high.
+    for (of, low, angles, within) in [(SAND, 34, 32.0..=38.0, 60), (DIRT, 48, 56.0..=65.0, 60)] {
+        for seed in [1, 2, 3] {
+            let mut world = World::new(240, 100, seed);
+            for y in 40..100 {
+                world.paint(of, 111, y, 128, y, 0, 100, false);
+            }
+            let peak = |w: &World| (0..240).map(|x| (0..100).find(|&y| w.at(x, y) == of).map_or(0, |y| 100 - y)).max().unwrap();
+            let mut heap = None;
+            let mut still = None;
+            for k in 0..1000 {
+                world.step();
+                if heap.is_none() && peak(&world) <= low {
+                    heap = Some(k + 1);
+                }
+                if world.awake() == 0 {
+                    still = Some(k + 1);
+                    break;
+                }
+            }
+            let heights: Vec<i32> = (0..240).map(|x| (0..100).find(|&y| world.at(x, y) == of).map_or(0, |y| 100 - y)).collect();
+            let left = heights.iter().position(|&h| h > 0).unwrap() as i32;
+            let right = heights.iter().rposition(|&h| h > 0).unwrap() as i32;
+            let angle = (peak(&world) as f64 / ((right - left + 1) as f64 / 2.0)).atan().to_degrees();
+            println!("{} seed {seed}: a heap after {heap:?} steps, still after {still:?}, at {angle:.1} degrees", MATERIALS[of as usize].name);
+            assert!(heap.is_some_and(|k| k <= within), "a heap within {within} steps\n{}", picture(&world, 60, 30, 180, 99));
+            assert!(still.is_some_and(|k| k <= 400), "and comes to rest");
+            assert!(angles.contains(&angle), "at its angle, not flatter: {angle:.1}\n{}", picture(&world, 60, 30, 180, 99));
+            assert_eq!(world.count(of), 18 * 60);
+            // and once still it stays so: nothing creeps (every cell's material, shade and heat; the
+            // clock a cell last moved in is set back to nothing now and then)
+            let rested: Vec<u32> = world.cells.iter().map(|c| c & 0x00ff_ffff).collect();
+            run(&mut world, 300);
+            assert!(world.cells.iter().map(|c| c & 0x00ff_ffff).eq(rested), "it creeps");
+        }
+    }
+}
+
 /// Two vessels of stone joined at the bottom by a pipe, the left one filled with water.
 fn joined_vessels(seed: u64) -> World {
     let mut world = World::new(120, 100, seed);

@@ -2,8 +2,9 @@
 
 A mini: a grid of grains, each of one material, that fall, flow, burn and react with each other. A plan
 dated 13 November 2026. Stage 1, the engine and its tests, was built on 14 November 2026, stage 2, heat
-and reactions, the same day, and stage 3, the page, on 14 and 15 November; the mini is a draft at
-`/minis/sand/`, not listed.
+and reactions, the same day, and stage 3, the page, on 14 and 15 November; after it, how sand and lava move
+and how the flags look were reworked, and stage 4 was measured. The mini is a draft at `/minis/sand/`, not
+listed.
 
 ## Where the code is
 
@@ -641,9 +642,239 @@ links refused with no error.
 - The keys, a letter of each name, with oil I, wood O, ice C, steam M and smoke K.
 - A cell of 2 CSS pixels.
 - A flame touching wood lighting it, a change to stage 2's fire.
-- Held pours of powder at about three grains a step; lava poured solid.
+- Held pours of powder at about three grains a step; lava poured solid. (Changed after stage 3: see below.)
 - Undo of clear only, not of a stroke.
 - Links up to 16,000 characters, then a file.
+
+## Built after stage 3: how sand and lava move, and flags as poured sand
+
+The owner asked for three things after stage 3: sand that comes down promptly from a column or a steep
+face, lava that pools rather than building a pillar, and pride sand's flags that look like sand poured in
+layers rather than perfect stripes. The first two were each written as a failing test first.
+
+### How powder moves now
+
+Two artifacts made a pillar slow, found by watching one come down cell by cell. In each row the edge grain
+slid out and its neighbor slid into the cell just left, so whole rows shifted a cell sideways together and
+the pillar rocked from side to side; and once that was stopped, the face drained as a falling curtain, all
+the mass leaving through one point at each foot, because a heap's surface carried a grain a step on each
+side. The rules now:
+
+- **A crowded column spills.** A grain of powder already moving, with powder pressing on it, whose
+  support has gone this step but only one cell (so it can follow only one), goes to a side as a resting
+  cell whose support has gone does, rather than following it down. It is found inside `drop`, where how far
+  a grain can fall is already known; as a separate test it cost falling sand 8 to 10%. It spills only into
+  open air, not into a cell its neighbor has just left, so a block of grains landing together keeps its
+  order. Grains falling freely, as a stream from the brush, are farther apart and fall as a stream.
+- **A moving grain slides on.** A grain already moving slides down a slope as far as its speed allows (up
+  to its `fall`), gathering speed, so a heap's sides carry away more of what lands on it (`slide_down`).
+- **Sand rolls off a slope steeper than about 37 degrees**, at rest or not: when the ground `ROLL_ALONG`
+  (4) cells along is that many lower (`roll_off`). A slope of three in four holds, 45 does not, so a heap
+  built quickly at 45 settles to sand's own angle and then stays still. It looks four cells along and three
+  down; `widest` and `deepest` count it, so a change wakes as far as it looks.
+- **Sand's landing roll** is 220 in 256 (it was 255), which with the rule above rests sand near 35 degrees.
+
+Measured, a pillar 18 wide and 60 tall stood on the floor at once (1080 grains), three seeds:
+
+| | Before | After |
+|---|---|---|
+| Sand: no column over 34 (as low as a heap of it at 45 degrees) | 237 to 241 steps | 28 to 36 |
+| Sand: at rest | 308 to 315 steps | 139 to 145 |
+| Sand: its angle at rest | 37.1 degrees | 34.3 to 34.7 |
+| Dirt: no column over 48 | 192 steps | 49 |
+| Dirt: at rest | 271 steps | 81 to 83 |
+| Sand poured from a point (the angle test) | 35.3 degrees | 35.0 to 35.3 |
+| Dirt poured from a point | 63.4 to 63.8 degrees | 61.1 to 61.6 |
+| Wet dirt poured from a point | 71.5 degrees | 68.4 to 68.6 |
+
+Dirt and wet dirt are a little gentler because they slide on too; both stay inside their tests. The test
+`a_pillar_of_powder_comes_down_to_a_heap_at_its_angle_promptly_and_stays_there` holds the pillar to a heap
+within 60 steps, at rest within 400, at its angle, and still afterwards (nothing creeps for 300 steps).
+
+Tried and dropped, by measuring each: a grain at rest not starting into a cell just left (needed until the
+spill existed, then not); a chance for a resting grain to start sliding (no faster); pushing a grain with
+powder over it sideways out of a steep face (no faster, and steepened heaps to 42 degrees); a falling
+grain's speed being the distance it fell (slower, and changed water); toppling only beside a cliff three
+cells deep (weaker); fast slides only for grains pressed from above (slower). With the fast parts alone,
+heaps rested at 38 to 40 degrees: grains glide down a 45 degree face and build it from the foot, so the old
+35 degrees, which came from grains meeting partway down and rolling, needed a rule of its own.
+
+**The held pour.** A brush held still now pours about ten grains of powder a step whatever its size
+(`HELD` in `grains.ts`; it was three, so that sand would not stack into a pillar), 45 in 100 at most. Poured
+from a point at about 5, 7, 9 and 11 grains a step for ten seconds, the heap stood as a cone each time, its
+peak 56, 71, 89 and 105 cells high; at 16 a step it stood as a column under the brush. Ten was chosen by
+looking at it on the page.
+
+### Lava pools
+
+Watching a held pour showed why it built a tower: the stream from the brush thins into separate drops as
+each cell speeds up, and a drop with air on all four sides cooled from 250 to its hardening point in about
+eight steps, so drops landed already cold and hardened where they landed; and lava creeping only 96 steps
+in 256, two cells at most, piled into a mound whose sides hardened into walls that rose with it. Now:
+
+- **A falling cell passes heat at a quarter of its rate** (`conducts` in `heat.rs`), since it meets each
+  cell of air only for a moment and a cell of air here holds as much heat as a cell of lava. Both cells of a
+  side see the same rate, so heat is still kept. A stream of lava lands hot.
+- **Lava levels through its body, but thickly.** The table's `level` is now a number: 0 does not level, 1
+  levels until flat (water, oil, acid, steam), and more rests with the surface that many cells less one
+  uneven. Lava is 8. It spreads under its own weight, so new lava lands in molten lava, but stops while
+  still several cells deep. Levelled flat, it spread one cell thin and froze against the floor: twice as
+  much stone as lava.
+- **Lava passes heat at half its old rate** (conduct 4, was 8), so a body stays molten inside while its
+  open edges harden.
+- **A held pour of lava** is about nine cells a step (`HELD`); drawn along a line it is still laid solid, so
+  it lands as a blob. Poured solid when held, it now drained from under the brush as fast as the brush could
+  refill and flooded the world.
+
+The test `lava_poured_in_one_place_makes_a_molten_pool_with_a_crust_and_not_a_pillar` pours about eleven
+cells a step from high up for 600 steps onto the bottom edge: before, a tower 93 cells high, 322 cells of
+lava and 1,150 of stone; now 28 to 32 high, about 4,700 lava and 450 stone. Left alone, the share of its lava
+with air beside it falls from about a tenth to none by the time half has hardened (a crust all round a
+molten inside), and it is all stone after 3,400 to 4,100 steps.
+
+Tried and dropped: lava pressed by liquid above moving every step regardless of its pace (a dome of lava
+stood under the pour, 51 high, as the levelling never takes a cell that moved from a body's top); stone
+beside lava melting back at 200 or more (it never happened: a body's lava averaged 135 to 145); lava at
+conduct 6 or 8 with levelling (taller and more stone).
+
+Stage 2's tests all hold, some numbers moving inside them: lava poured into water, 185 cells of lava, 72
+hardened by water (was 166 and 46), steam at most 31 (was 19); a wall of ice beside lava half gone in 597
+steps (was 637); the boiling box at most 426 cells of steam (was 513); the burnt-out world asleep after 2,342
+steps (was about 2,300).
+
+### Speed
+
+Measured on four cores (`taskset -c 0-3`), a world of 1024 by 576, the mean step, before and after, in the
+same minutes. Native numbers are from the quieter of two runs; the machine was shared and runs moved by up
+to a fifth.
+
+| World | Native | Chromium, SIMD | Chromium, no SIMD |
+|---|---|---|---|
+| Forest fire, first 1200 steps | 8.00 to 8.07 ms | 9.67 to 9.76 ms | 9.43 to 9.75 ms |
+| Falling sand, first 120 steps | 2.41 to 2.36 ms | 2.83 to 2.65 ms | 2.80 to 3.14 ms |
+| Dam of water let go, first 300 steps | 5.94 to 5.83 ms | 7.61 to 6.91 ms | 7.47 to 7.78 ms |
+| Settled, sand poured in one place | 0.048 to 0.076 ms | 0.070 to 0.101 ms | 0.068 to 0.110 ms |
+| Settled, water poured into the lake | 0.176 to 0.172 ms | 0.258 to 0.227 ms | 0.239 to 0.243 ms |
+| Settled, untouched | 0.020 to 0.021 ms | 0.035 to 0.033 ms | 0.033 to 0.035 ms |
+
+All the same within the runs' noise but the settled world with sand poured into it, which costs a few
+hundredths of a millisecond more because more grains move as the new heap settles to its angle (the
+number of cells that change in falling sand is the same, 11.33 million in 120 steps against 11.32). Timed
+alone, best of seven, falling sand is within 2 to 5% of before.
+
+### Flags as poured sand
+
+- **A whole flag** (`flag`) is laid as sand is layered in a jar: each edge between two stripes wanders
+  smoothly along the flag (`wandering`: a height chosen by chance every 12 columns, eased between) by up to
+  a quarter of a stripe and never more than two rows, so a stripe is thicker in one place than another;
+  each grain's edge is moved by up to 0.6 of a row more by chance, so the stripes meet grainily; and a grain
+  near an edge strays across it 9 times in 256 (`STRAY`). Every stripe stays in order, since no edge moves
+  more than a quarter of a stripe. All of it comes from the world's seed and the press's stroke, so the same
+  press lays the same flag.
+- **Poured stripes** (`paint_striped`) meet grainily and stray the same way across the ribbon.
+- **Each grain has a shade.** A stripe's lowest two bits are a step of lightness, toward black for the two
+  darker steps and toward white for the two lighter, by up to the shade range's red (pride sand's is 40 in
+  255): white can only darken and nonbinary's near black only lighten, and each stripe still reads as its
+  own color. In the shader (`cells.ts`) and in `swatchColor`. The trans and lesbian colors in the palette
+  are still the site's own, as `flags.test.ts` holds.
+- **Links.** The format keeps material and stripe and no shades, as before; an opened world is made with
+  `rewritten(1)`, which already gives each striped grain its step by chance from the engine's seed, so it
+  does not open flat. The format and its version byte are unchanged. `worlds.test.ts` holds that an opened
+  flag has all four steps, each about as often.
+- **Tests**: a flag 120 by 80 has every stripe in every column, in order but for strays never more than a
+  stripe, each stripe within about a tenth of its share, edges that wander by two rows or more, strays under
+  one in a hundred; the same press lays the same cells and another world does not; a flag too small to
+  wander keeps its order. A striped stroke's middle rows are certain and its edges grainy.
+- **Looked at** in headless Chromium at 1440 by 1500 and at 390 by 1400 with three device pixels a CSS
+  pixel, all six flags laid whole on the floor and poured, just laid and settled. Laid whole, a flag now
+  slumps into a mound of curved layers within a second, since sand comes down promptly: every stripe in
+  order, but no longer standing as a rectangle. Poured stripes dropped from mid-height land mixed, as they
+  did before (the stage 3 engine, given the same strokes, lands them the same). The share picture was made
+  again with the same strokes: the trans and lesbian flags as layered heaps, a rainbow ribbon between.
+
+### To confirm with the owner
+
+- A flag laid whole slumping into a layered mound rather than standing as a block.
+- Sand at about 35 degrees and dirt now about 61 (was 63), wet dirt about 68 (was 71.5).
+- Held pours of ten grains a step, and of nine cells of lava; lava drawn along a line still laid solid.
+- Lava that spreads as a thick body and crusts, at half its old rate of passing heat; a trickle of lava
+  (two or three cells a step) still mostly freezes as it lands.
+- The grain shade's strength (40 in 255) and how far edges wander and grains stray.
+
+## Stage 4: workers and the graphics card, measured
+
+The plan was to move what spreads (heat, and whatever else measures well) onto workers or the graphics
+card, keeping each only if it measured faster, and to measure first. Nothing was put into the page; what
+was tried and its numbers follow.
+
+**Where a step's time goes**, natively on four cores, with the step's three parts timed in a scratch copy
+of the crate:
+
+| World | Step | Cells moving and reacting | Levelling | Heat |
+|---|---|---|---|---|
+| Forest fire, 373 by 280 (a desktop's page) | 2.21 ms | 1.07 ms (49%) | 0.06 ms | 1.07 ms (49%) |
+| Falling sand, 373 by 280 | 0.24 ms | 0.22 ms (93%) | 0.01 ms | 0.004 ms |
+| Dam of water, 373 by 280 | 0.68 ms | 0.47 ms (70%) | 0.20 ms | 0.001 ms |
+| Lava poured in one place, 373 by 280 | 0.20 ms | 0.06 ms (32%) | 0.03 ms | 0.10 ms (52%) |
+| Forest fire, 1024 by 576 | 8.08 ms | 4.13 ms (51%) | 0.28 ms | 3.67 ms (45%) |
+| Dam of water, 1024 by 576 | 5.98 ms | 4.61 ms (77%) | 1.36 ms | 0.01 ms |
+
+Heat matters only where things burn or lava cools, and is then about half a step.
+
+**What the browser charges**, measured with `scripts/sand-spread.ts` in headless Chromium on four cores,
+which draws in software (SwiftShader):
+
+- A barrier among four workers sharing memory (the page served isolated, with the two headers): about
+  4 to 5 microseconds. Workers are cheap to keep in step.
+- The whole grid sent to the graphics card, run through one pass the size of the heat pass and read back:
+  1.0 to 1.1 ms at 373 by 280 (0.34 of it the reading back) and 5.5 to 5.8 ms at 1024 by 576 (1.8 to 2.6
+  reading back). A step of the forest fire in the built engine is 2.46 ms at 373 by 280, so its heat pass is
+  about 1.2 ms; at 1024 by 576, 8.9 ms and about 4.
+
+**Heat on the graphics card: not kept.** In software the round trip alone, with a trivial pass, costs as
+much as the heat pass it would replace at the page's size, and more at the largest. The real pass would
+cost more: the rounding chance belongs to each side and comes from a 64-bit hash, which WebGL 2's 32-bit
+integers would have to build from halves to stay the same to the bit; the cells that could still carry heat
+would have to be read back too, to keep sleeping exact; and the graphics card would work the whole grid
+every step where the engine works only the awake rectangles (a still world's heat costs nothing now). On a
+real graphics card the pass would be far cheaper but the reading back still waits for it each step; that
+could not be measured here. `bun scripts/sand-spread.ts --serve` serves the same page to open in a browser
+with one.
+
+**Heat on workers: faster in the engine, not put into the page.** The heat pass was split into bands of
+rows of equal work (the awake cells of each row added up), each band working its rows in place from copies
+of the rows at its edges made first, its wakes gathered and applied after. Natively, with four threads
+started every step, it gives the same cells to the bit as one thread, and:
+
+| World | Heat, one thread | Heat, four | Step, one | Step, four |
+|---|---|---|---|---|
+| Forest fire, 373 by 280 | 1.10 ms | 0.57 ms | 2.24 ms | 1.73 ms |
+| Lava poured, 373 by 280 | 0.110 ms | 0.064 ms | 0.209 ms | 0.168 ms |
+| Forest fire, 1024 by 576 | 3.70 ms | 2.05 ms | 8.07 ms | 6.46 ms |
+
+(Bands of equal rows did worse: the empty sky's bands sat idle while the fire's worked.) In the browser it
+would save about half a millisecond of the busiest scene's 2.5 ms step, on a page that already steps sixty
+times a second and whose frame is mostly drawing (about 8 ms in software at one device pixel a CSS pixel).
+To get it, the module would have to share its memory with workers, which needs the core library rebuilt
+with atomics: on this machine's stable Rust that builds only through the compiler's escape hatch for its
+own development (`RUSTC_BOOTSTRAP=1` with `-Z build-std`), tried and working, but a build the site would
+then depend on. The sand page would need the two isolation headers, as mdQuire's pages have, which limit
+what it may load; and the engine would have to step in a worker, since the page's own thread may not wait
+on a barrier, with the drawing reading shared memory. Those costs were judged not worth half a millisecond
+the visitor would not see; the experiment's code was not kept.
+
+**The cells' moving on workers: not tried.** It is the larger part (half the forest fire's step, nine
+tenths of falling sand's), and the checkerboard of four phases already gives the world a split among
+workers would give (`set_order(1)`, tested). It needs the same shared memory, headers and worker as above,
+and the step's marks on neighboring chunks, its counts of reactions and its changed rows kept apart for
+each worker and merged after each phase. If it scaled as the heat did, the forest fire at the page's size
+would step in about 1.2 ms rather than 2.2. Changing the page to the four phases changes the world it makes,
+so the fingerprint would be taken again.
+
+**What is plain from it**: on the machine measured the step is not what holds the page back; the drawing
+in software is (stage 3's table). A phone, with a smaller world, steps faster still. If the step ever does
+hold it back, the order to try is the cells' moving on workers, then heat on workers, each with the build
+and the headers above; heat on the graphics card last.
 
 ## Stages
 
@@ -653,7 +884,10 @@ links refused with no error.
    tests. Built 14 November 2026, with wet dirt, burning wood and ash besides.
 3. The page: the materials row, brushes, pride sand and the flag brush, links, touch and keys, glow. Built
    14 and 15 November 2026.
-4. Workers and the graphics card for what spreads, each kept only if it measures faster.
+4. Workers and the graphics card for what spreads, each kept only if it measures faster. Measured after
+   the movement, lava and flags were reworked: heat on the graphics card does not win in software; heat on
+   workers is nearly twice as fast in the engine but was not put into the page, for the build and headers
+   it needs against half a millisecond nobody would see. Nothing kept but the measuring script.
 
 ## Open
 
@@ -686,6 +920,7 @@ bun test src/minis/worlds.test.ts src/minis/flags.test.ts   # links and flags
 cd sand && cargo run --release --example speed               # the speed natively
 cd sand && cargo run --release --example speed --features scalar   # without the hand-written SIMD
 bun scripts/sand-speed.ts             # the speed in headless Chromium, both builds
+bun scripts/sand-spread.ts            # what workers and the graphics card would cost (--serve for a real browser)
 ```
 
 The page itself is a draft: `bun run dev` shows it at `/minis/sand/`, as does a build with
@@ -709,12 +944,15 @@ The page itself is a draft: `bun run dev` shows it at `/minis/sand/`, as does a 
   slower burn would need a chance on that line.
 - A world sprinkled everywhere with single drops makes the first steps slow while the pass looks at each
   drop as a body (the slowest step of a sprinkled world of water is about 16 ms natively).
-- **Sand wears away only from its corners.** A resting grain slides only when the cell beside it and the
-  one under that are open, so a pillar comes down about a row every ten steps, from its two top corners:
-  sand poured faster than a heap's slopes carry it stacks up into a pillar. The page pours held powder
-  slowly for this; a real avalanche rule would be stage 1's movement changed, with its angle tests.
-- **Lava poured in one place for long builds a stone pillar** up to the brush: each pour lands on the stone
-  the last one made and hardens there. Moved, it lands as a molten blob.
+- Sand poured faster than about twelve grains a step from one point still stands as a column under the
+  brush while it pours (it comes down within a second once the pour stops); the held pour is ten.
+- A flag laid whole slumps into a mound within a second, its stripes curved but in order; it no longer
+  stands as a block, as sand no longer does.
+- A trickle of lava, two or three cells a step, still mostly hardens as it lands: thin flows freeze. A
+  body of lava levels while any of it is awake, and cooling keeps it awake for a minute or so, so a large
+  pool costs a search of its cells every step until it has hardened.
+- A cell falling through the air passes heat at a quarter of its rate, whatever it is: falling water and
+  sand warm and cool more slowly in flight too (at room temperature this changes nothing).
 - A world opened from a link made on a larger screen is cut at its edges where the canvas is smaller than
   it at one pixel a cell.
 - The world is made once, for the size the mini has when it loads; a resize keeps it and fits it again in
