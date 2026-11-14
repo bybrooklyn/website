@@ -8,14 +8,23 @@ import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 
+/** Modifier keys held down with a key or the mouse. */
+export interface Held {
+    shift?: boolean;
+    ctrl?: boolean;
+    alt?: boolean;
+    meta?: boolean;
+}
+
 export interface Browser {
     /** Goes to an address and waits for the page to load, then `settle` milliseconds more. */
     open(url: string, settle?: number): Promise<void>;
     /** Runs an expression in the page and gives back its value. */
     run<T = unknown>(expression: string): Promise<T>;
-    click(x: number, y: number): Promise<void>;
-    /** Presses the mouse at one place, moves it in `steps` even steps to another with the button held, and lets go there. */
-    drag(from: { x: number; y: number }, to: { x: number; y: number }, steps?: number): Promise<void>;
+    /** A click, with modifiers held if asked: Shift with a click, say. */
+    click(x: number, y: number, held?: Held): Promise<void>;
+    /** Presses the mouse at one place, moves it in `steps` even steps to another with the button held, and lets go there; with modifiers held if asked. */
+    drag(from: { x: number; y: number }, to: { x: number; y: number }, steps?: number, held?: Held): Promise<void>;
     /** Presses the mouse at a place and keeps it held, for a drag that takes its time: `move` it, then `up`. */
     down(x: number, y: number): Promise<void>;
     /** Moves the mouse to a place, with the button held if it is down. */
@@ -205,7 +214,8 @@ export async function browser({ width = 1200, height = 800, scale = 1, port = 0,
         tidy();
         throw error;
     }
-    const mouse = (type: string, x: number, y: number, held = type === "mousePressed") => send("Input.dispatchMouseEvent", { type, x, y, button: "left", buttons: held ? 1 : 0, clickCount: 1 });
+    const flags = (keys: Held = {}) => (keys.alt ? 1 : 0) | (keys.ctrl ? 2 : 0) | (keys.meta ? 4 : 0) | (keys.shift ? 8 : 0);
+    const mouse = (type: string, x: number, y: number, held = type === "mousePressed", keys: Held = {}) => send("Input.dispatchMouseEvent", { type, x, y, button: "left", buttons: held ? 1 : 0, clickCount: 1, modifiers: flags(keys) });
     /** Whether the mouse is held down by `down`, and whether touch has been switched on for `finger`. */
     let pressed = false;
     let touching = false;
@@ -261,17 +271,17 @@ export async function browser({ width = 1200, height = 800, scale = 1, port = 0,
             if (answer.exceptionDetails) throw new Error(answer.exceptionDetails.exception?.description ?? answer.exceptionDetails.text);
             return answer.result?.value;
         },
-        async click(x, y) {
-            await mouse("mousePressed", x, y);
-            await mouse("mouseReleased", x, y);
+        async click(x, y, keys = {}) {
+            await mouse("mousePressed", x, y, true, keys);
+            await mouse("mouseReleased", x, y, false, keys);
         },
-        async drag(from, to, steps = 10) {
-            await mouse("mousePressed", from.x, from.y);
+        async drag(from, to, steps = 10, keys = {}) {
+            await mouse("mousePressed", from.x, from.y, true, keys);
             for (let step = 1; step <= steps; step++) {
-                await mouse("mouseMoved", from.x + ((to.x - from.x) * step) / steps, from.y + ((to.y - from.y) * step) / steps, true);
+                await mouse("mouseMoved", from.x + ((to.x - from.x) * step) / steps, from.y + ((to.y - from.y) * step) / steps, true, keys);
                 await wait(16);
             }
-            await mouse("mouseReleased", to.x, to.y);
+            await mouse("mouseReleased", to.x, to.y, false, keys);
         },
         async down(x, y) {
             pressed = true;

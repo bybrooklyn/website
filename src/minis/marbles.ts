@@ -609,13 +609,15 @@ export default function marbles(m: Mote): Scene {
             const [rx, rz] = rotated(one.pivot[0], one.pivot[2], one.move.turn);
             one.move = { turn: one.move.turn, x: Math.round((want[0] - rx) / CELL), z: Math.round((want[2] - rz) / CELL), y: dy };
         }
-        // the nearest place they fit against an open joint, by where their middle would be on the screen
+        // the nearest place they fit against an open joint: for one piece, by where its middle would be on
+        // the screen; for a group, by how near the joint that would meet is to the joint it would meet
         const aim = onScreen(want) ?? { x, y };
+        const freeMove = { ...one.move };
         let best: { snap: GroupSnap; d: number } | undefined;
         for (const snap of one.snaps) {
-            const seen = onScreen(movedPoint(one.pivot, snap.move));
-            if (!seen) continue;
-            const d = Math.hypot(seen.x - aim.x, seen.y - aim.y);
+            const [seen, goal] = one.home.length > 1 ? [onScreen(movedPoint(snap.joint.at, freeMove)), onScreen(snap.to.at)] : [onScreen(movedPoint(one.pivot, snap.move)), aim];
+            if (!seen || !goal) continue;
+            const d = Math.hypot(seen.x - goal.x, seen.y - goal.y);
             if (!best || d < best.d) best = { snap, d };
         }
         const reach = SNAP[kind] * (one.snap ? 1.4 : 1);
@@ -708,6 +710,9 @@ export default function marbles(m: Mote): Scene {
      */
     const placeAtEnd = (group: Placed[], fromX?: number): boolean => {
         const all = groupSnaps(run, group).filter((snap) => run.find((piece) => piece.id === snap.to.id)?.kind.family !== "t");
+        // the way marbles go first: into an entry of the new pieces from the way out of the run
+        const flows = (snap: GroupSnap) => snap.joint.joint === 0 && group.find((piece) => piece.id === snap.joint.id)?.kind.family !== "h";
+        all.sort((a, b) => Number(flows(b)) - Number(flows(a)));
         const snap = all.find((one) => end && one.to.id === end.id && one.to.joint === end.joint) ?? all[0];
         let move: Move | undefined = snap?.move;
         if (!move) {
@@ -1401,7 +1406,8 @@ export default function marbles(m: Mote): Scene {
     /** Where the little axes are, and each end's place on the screen, made each frame. */
     let gizmo: { x: number; y: number; way: Way; radius: number }[] = [];
     const GIZMO = { radius: 26, margin: 14, dot: 9 };
-    const gizmoAt = (x: number, y: number): Way | undefined => gizmo.find((end) => Math.hypot(end.x - x, end.y - y) < end.radius)?.way;
+    /** The end under a press: the nearest to it, of those near enough. */
+    const gizmoAt = (x: number, y: number): Way | undefined => gizmo.filter((end) => Math.hypot(end.x - x, end.y - y) < end.radius).sort((a, b) => Math.hypot(a.x - x, a.y - y) - Math.hypot(b.x - x, b.y - y))[0]?.way;
 
     // ---- the ghost marble ----
     let ghostKey = "";
@@ -1455,6 +1461,7 @@ export default function marbles(m: Mote): Scene {
         if (key !== ghostKey) {
             ghostKey = key;
             ghost.start(ghostRun());
+            ghostShown = -1;
             ghostPlays = 0;
             if (!carried) ghostClock = 0;
         }
@@ -1468,7 +1475,7 @@ export default function marbles(m: Mote): Scene {
         }
         took.ghost += (performance.now() - before - took.ghost) * 0.05;
         const total = ghost.paths.reduce((sum, path) => sum + path.places.length, 0);
-        if (total !== ghostShown && (ghost.done || total - ghostShown > 40 || total < ghostShown)) {
+        if (total !== ghostShown && (ghost.done || total - ghostShown > 40 || ghostShown < 0)) {
             ghostShown = total;
             if (ghostLine) view.remove(ghostLine);
             const mesh = ghostMesh();
@@ -1505,13 +1512,24 @@ export default function marbles(m: Mote): Scene {
                 chosenChanged();
             },
             chosen: () => [...chosen],
+            under: (x: number, y: number) => pieceAt(x, y)?.id,
+            jointAt: (id: number, joint: number) => {
+                const piece = run.find((one) => one.id === id);
+                return piece && onScreen(jointsOf(piece)[joint]!.at);
+            },
+            /** Points of a piece on the screen where a press takes that piece and no other. */
+            spots: (id: number) => {
+                const piece = run.find((one) => one.id === id);
+                if (!piece) return [];
+                return shapeOf(piece.kind).room.map((box) => onScreen(boxToWorld(piece.place, box).at)).filter((p): p is { x: number; y: number } => Boolean(p) && pieceAt(p!.x, p!.y)?.id === id);
+            },
             handles: () => handlesNow(),
             screen: (p: V3) => onScreen(p),
             text: () => write(run),
             steps: () => ({ at: steps.at, count: steps.texts.length }),
             ghost: () => ({ done: ghost.done, paths: ghost.paths.map((path) => ({ ending: path.ending, last: path.last, length: path.places.length, end: onScreen(path.places.at(-1)!) })) }),
             owns: () => owns.map((one) => one.name),
-            carried: () => carried && { fits: carried.fits, count: carried.home.length, snapped: Boolean(carried.snap) },
+            carried: () => carried && { fits: carried.fits, count: carried.home.length, snapped: Boolean(carried.snap), move: carried.move, pivot: carried.pivot, anchor: carried.anchor, handle: carried.handle, kinds: carried.home.map((piece) => keyOf(piece.kind)), snaps: carried.snaps.map((snap) => ({ to: snap.to.id, joint: snap.joint.id, entry: snap.joint.joint, at: onScreen(movedPoint(snap.joint.at, carried!.move)), goal: onScreen(snap.to.at) })) },
             marbles: () => ({ all: table.marbles.length, arrived: table.marbles.filter(table.arrived).length, asleep: table.marbles.filter((one) => one.rest).length }),
             marks: () => [...openMarks, ...ghostMarked],
             took: () => ({ ...took }),
@@ -1560,7 +1578,8 @@ export default function marbles(m: Mote): Scene {
             }
             if (hand.button === 2 || hand.button === 1 || (hand.button === 0 && hand.shift && !pieceAt(hand.x, hand.y))) one.mode = "pan";
             else {
-                const shown = !carried && chosen.size ? handlesNow() : undefined;
+                // Shift and the select tool are for choosing, so the handles of what is chosen do not take the press
+                const shown = !carried && chosen.size && !hand.shift && !selecting ? handlesNow() : undefined;
                 const handle = shown && which(shown, hand.x, hand.y, hand.kind === "touch" ? "touch" : "mouse");
                 if (handle) {
                     one.mode = "handle";
@@ -1899,6 +1918,11 @@ export default function marbles(m: Mote): Scene {
         strip.inert = !shownStrip;
         if (!shownStrip) return;
         let [left, right, top, bottom] = [Infinity, -Infinity, Infinity, -Infinity];
+        // the handles are kept clear too: the strip goes above the highest of them, or under the lowest
+        const handles = handlesNow();
+        for (const point of [...(handles?.ring ?? []), ...Object.values(handles?.arrows ?? {}).map((arrow) => arrow.to), ...(handles?.knob ? [handles.knob] : [])]) {
+            [top, bottom] = [Math.min(top, point.y - 12), Math.max(bottom, point.y + 12)];
+        }
         for (const piece of pieces) {
             for (const box of shapeOf(piece.kind).room.filter((_, i, all) => i % Math.max(1, Math.floor(all.length / 6)) === 0)) {
                 const at = boxToWorld(piece.place, box).at;
@@ -1909,10 +1933,9 @@ export default function marbles(m: Mote): Scene {
         }
         if (!Number.isFinite(left)) return;
         const [w, h] = [strip.offsetWidth, strip.offsetHeight];
-        // clear of the handles, which reach about an arrow's length above the middle
-        const above = top - h - 30;
+        const above = top - h - 10;
         const below = above < 8;
-        const y = below ? Math.min(m.height - h - 8, bottom + 30) : above;
+        const y = below ? Math.min(m.height - h - 8, bottom + 10) : above;
         const x = Math.max(8, Math.min(m.width - w - 8, (left + right) / 2 - w / 2));
         const place = `${Math.round(x)}px ${Math.round(y)}px`;
         if (strip.style.translate !== place) strip.style.translate = place;
