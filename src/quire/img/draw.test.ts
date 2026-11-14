@@ -122,7 +122,8 @@ test("in Chromium, a 12 megapixel photograph is drawn with its crop moving at sc
                 console.log(`${megapixels} megapixels, ${found.backend}: decoded and on the card in ${found.loaded} ms;${found.perSecond ? ` crop dragged at ${found.perSecond} frames a second, each frame drawn and finished on the card in ${found.drawing} ms;` : ""} flattened to 2000 wide in ${found.flattened} ms`);
                 expect(found.size).toEqual([2000, Math.round((2000 * height!) / width!)]);
                 // a frame drawn and finished in under 16 ms is sixty a second with room to spare, and twice today's 8 ms fails it; what the window shows besides is the machine's, and is only printed
-                if (only === "WebGL2") expect(found.drawing).toBeLessThan(16);
+                // the floor is the 12 megapixel photograph's, which must drag at sixty a second; 50 megapixels must only not fall over, and its time is printed
+                if (only === "WebGL2" && megapixels === 12) expect(found.drawing).toBeLessThan(16);
             }
         }
     } finally {
