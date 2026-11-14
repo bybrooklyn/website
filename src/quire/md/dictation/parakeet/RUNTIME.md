@@ -27,7 +27,7 @@ file (3.28 MB brotli) for every visitor, 3.38 MB brotli.
 **After.** A browser without WebGPU downloads `ort.wasm.min.mjs`, its glue and the 12.3 MB file: 12.37 MB
 raw, **1.99 MB brotli**. A browser with a card downloads the JSEP set, 25.3 MB raw, 3.38 MB brotli, the same
 as before, because WebGPU needs that file. `astro.config.ts` (the `ort-files` integration) copies the six files
-into `/ort/`, unhashed, and `RUNTIME = "/ort/"` in `runtime.ts` is where they are fetched from. Nothing is
+into `/ort/`, unhashed, and `RUNTIME = "/ort/"` in `src/quire/core/onnx.ts` (the loader dictation and imgQuire's text reader share) is where they are fetched from. Nothing is
 bundled; `onnxruntime-web` is read only at build time. The old `?url` import in `engine-worker.ts` that made the
 build emit the 24.9 MB file into `_astro/` is gone: the engine worker now gets ONNX Runtime from `/ort/` through
 `runtime.ts`, and `dist/_astro/` holds no `.wasm`.
@@ -110,7 +110,7 @@ com.microsoft;1;DynamicQuantizeLSTM,MatMulNBits
    `js/web/dist/`; `npm run build` in `js/web`.
 6. Put the new `ort-wasm-simd-threaded.{mjs,wasm}` (and `.jsep.` pair) in `/ort/`: copy them over the ones named
    in `ORT` in `astro.config.ts`, or point that list's folder at your build. If the folder is elsewhere on the
-   site or on a CDN, change `RUNTIME` in `runtime.ts`: **that one line** is the whole switch.
+   site or on a CDN, change `RUNTIME` in `src/quire/core/onnx.ts`: **that one line** is the whole switch.
 
 ## 3. The graphics card
 

@@ -1,17 +1,16 @@
-// ONNX Runtime for the text models: the same build the site already ships for dictation, fetched as
-// plain files from /ort/ only when text is first read, never bundled. The WebAssembly build serves a
-// browser without a usable graphics card and the one with WebGPU (JSEP) the rest, as dictation finds
-// them (src/quire/md/dictation/parakeet/runtime.ts, whose measurements are in RUNTIME.md). A kind of
-// document may not import another's code, so the few lines that find and load the runtime are
-// written here again; they fetch the same files from the same folder.
+// ONNX Runtime for the text models: the same build the site already ships for dictation, found and
+// loaded by the core (core/onnx.ts) from /ort/ only when text is first read, never bundled. The
+// WebAssembly build serves a browser without a usable graphics card and the one with WebGPU (JSEP)
+// the rest, as dictation finds them.
 //
 // The models are made into the four calls the reading takes (read.ts); every PP-OCRv6 file was run
 // on this build on both WebGPU and WebAssembly before it was offered (docs/imgQuire-models.md).
 
 import type { Models } from "./read";
+import { graphicsCard, ortFor as coreOrtFor, provide as coreProvide, settle, threadsHere } from "../../core/onnx";
 
-/** Where ONNX Runtime's files are served from: the folder the build copies them into (astro.config.ts). */
-export const RUNTIME = "/ort/";
+// the card and the threads, as the core finds them
+export { graphicsCard, threadsHere } from "../../core/onnx";
 
 /** The few parts of a tensor used here. */
 interface Tensor {
@@ -33,61 +32,14 @@ export interface Ort {
     Tensor: new (type: string, data: Float32Array, dims: number[]) => Tensor;
 }
 
-/** The two builds: the JavaScript that drives each, and the WebAssembly module and glue it loads. */
-const FILES = {
-    wasm: { api: "ort.wasm.min.mjs", glue: "ort-wasm-simd-threaded.mjs", wasm: "ort-wasm-simd-threaded.wasm" },
-    jsep: { api: "ort.min.mjs", glue: "ort-wasm-simd-threaded.jsep.mjs", wasm: "ort-wasm-simd-threaded.jsep.wasm" },
-} as const;
-
 /** Where the models run. */
 export type Place = "webgpu" | "wasm";
 
-const modules = new Map<string, Promise<Ort>>();
-
-/** ONNX Runtime of one build, fetched from `base` the first time it is wanted. */
-export function ortFor(place: Place, base = RUNTIME): Promise<Ort> {
-    const key = place + base;
-    let loading = modules.get(key);
-    if (!loading) {
-        const where = new URL(base, self.location.href).href;
-        const files = FILES[place === "webgpu" ? "jsep" : "wasm"];
-        loading = import(/* @vite-ignore */ where + files.api).then((module: Ort & { default?: Ort }) => {
-            const ort = module.default ?? module;
-            ort.env.wasm.wasmPaths = { mjs: where + files.glue, wasm: where + files.wasm };
-            return ort;
-        });
-        modules.set(key, loading);
-        // a fetch that failed is not remembered, so the next reading tries again
-        const mine = loading;
-        loading.catch(() => modules.get(key) === mine && modules.delete(key));
-    }
-    return loading;
-}
+/** ONNX Runtime for a place: WebAssembly alone, or with WebGPU (JSEP). */
+export const ortFor = (place: Place, base?: string): Promise<Ort> => coreOrtFor<Ort>(place === "webgpu" ? "jsep" : "wasm", base);
 
 /** Puts an ONNX Runtime in place of the one that would be fetched; for tests. */
-export function provide(place: Place, ort: Ort, base = RUNTIME): void {
-    modules.set(place + base, Promise.resolve(ort));
-}
-
-/** WebAssembly threads here: more than one only where the page is cross-origin isolated, half the processor's threads, from 1 to 8, as dictation measured. */
-export function threadsHere(): number {
-    if (!self.crossOriginIsolated || typeof SharedArrayBuffer === "undefined") return 1;
-    return Math.max(1, Math.min(8, Math.floor((navigator.hardwareConcurrency || 2) / 2)));
-}
-
-/** Whether a real graphics card gives a device: a software stand-in for one runs these models slower than WebAssembly. */
-export async function graphicsCard(): Promise<boolean> {
-    const gpu = (navigator as unknown as { gpu?: { requestAdapter(): Promise<{ info?: { isFallbackAdapter?: boolean }; requestDevice(): Promise<{ destroy?(): void }> } | null> } }).gpu;
-    if (!gpu) return false;
-    try {
-        const adapter = await gpu.requestAdapter();
-        if (!adapter || adapter.info?.isFallbackAdapter) return false;
-        (await adapter.requestDevice()).destroy?.();
-        return true;
-    } catch {
-        return false;
-    }
-}
+export const provide = (place: Place, ort: Ort): void => coreProvide(place === "webgpu" ? "jsep" : "wasm", ort);
 
 /** A tier's models, made: the four calls, where they run, and a way to let them go. */
 export interface Made {
@@ -103,10 +55,8 @@ export async function makeModels(files: { detect: Uint8Array; recognize: Uint8Ar
     const first: Place = prefer ?? ((await graphicsCard()) ? "webgpu" : "wasm");
     for (const place of first === "webgpu" ? (["webgpu", "wasm"] as const) : (["wasm"] as const)) {
         const ort = await ortFor(place);
-        ort.env.wasm.simd = true;
-        // the reader's own worker is already off the page's thread
-        ort.env.wasm.proxy = false;
-        ort.env.wasm.numThreads = threads;
+        // the reader's own worker is already off the page's thread, so no proxy
+        settle(ort, threads);
         const options = { executionProviders: place === "webgpu" ? ["webgpu", "wasm"] : ["wasm"], graphOptimizationLevel: "all" };
         const made: Session[] = [];
         try {

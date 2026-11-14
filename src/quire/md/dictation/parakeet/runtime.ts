@@ -6,12 +6,14 @@
 // ONNX Runtime is not bundled into the page. Its JavaScript and its .wasm files are fetched as
 // plain files from one folder, `RUNTIME`, so that only the build in use is downloaded (the
 // WebAssembly-only one, 12 MB, or the one with WebGPU, 25 MB) and so that a smaller build made by
-// hand can be dropped in by changing that one line.
+// hand can be dropped in by changing that one line. Finding and loading it is the core's
+// (core/onnx.ts), shared with imgQuire's text reader; this file makes Parakeet's sessions on it.
 
 import { frameMajor } from "./decode";
+import { graphicsCard, ortFor as coreOrtFor, provide as coreProvide, settle, threadsHere, type Flavor } from "../../../core/onnx";
 
-/** Where ONNX Runtime's files are served from. The build copies them there (astro.config.ts). */
-export const RUNTIME = "/ort/";
+// the runtime's folder, its builds and the threads it may use, as the core finds them
+export { RUNTIME, threadsHere, type Flavor } from "../../../core/onnx";
 
 /** Where the models run, and with how many WebAssembly threads (the decoder uses them even when the encoder is on the card). */
 export interface Backend {
@@ -58,71 +60,11 @@ export interface Ort {
     Tensor: new (type: string, data: Float32Array | BigInt64Array, dims: number[]) => Tensor;
 }
 
-/** The builds of ONNX Runtime there are, each with the JavaScript that drives it and the WebAssembly module and glue it loads. */
-const FILES = {
-    wasm: { api: "ort.wasm.min.mjs", glue: "ort-wasm-simd-threaded.mjs", wasm: "ort-wasm-simd-threaded.wasm" },
-    jsep: { api: "ort.min.mjs", glue: "ort-wasm-simd-threaded.jsep.mjs", wasm: "ort-wasm-simd-threaded.jsep.wasm" },
-} as const;
-/** The name of a build of ONNX Runtime. */
-export type Flavor = keyof typeof FILES;
-
-const modules = new Map<string, Promise<Ort>>();
-
-/** ONNX Runtime of one build, fetched from `RUNTIME` the first time. */
-export function ortFor(flavor: Flavor, base = RUNTIME): Promise<Ort> {
-    const key = flavor + base;
-    let loading = modules.get(key);
-    if (!loading) {
-        const where = new URL(base, self.location.href).href;
-        const files = FILES[flavor];
-        loading = import(/* @vite-ignore */ where + files.api).then((module: Ort & { default?: Ort }) => {
-            const ort = module.default ?? module;
-            ort.env.wasm.wasmPaths = { mjs: where + files.glue, wasm: where + files.wasm };
-            return ort;
-        });
-        modules.set(key, loading);
-        // a fetch that failed (the connection blinked, a deploy was replacing the files) is not remembered, so the next press tries again
-        const mine = loading;
-        loading.catch(() => {
-            if (modules.get(key) === mine) modules.delete(key);
-        });
-    }
-    return loading;
-}
-
-/** Sets a runtime up for this page: SIMD, the threads, and no proxy worker, because the engine's own worker is already one. */
-function settle(ort: Ort, threads: number): void {
-    ort.env.wasm.simd = true;
-    ort.env.wasm.proxy = false;
-    ort.env.wasm.numThreads = threads;
-}
+/** ONNX Runtime of one build, fetched from `base` the first time (the core's loader). */
+export const ortFor = (flavor: Flavor, base?: string): Promise<Ort> => coreOrtFor<Ort>(flavor, base);
 
 /** Puts an ONNX Runtime in place of the one that would be fetched; for tests, which have no server to fetch from. */
-export function provide(flavor: Flavor, ort: Ort): void {
-    modules.set(flavor + RUNTIME, Promise.resolve(ort));
-}
-
-/** Threads WebAssembly can use here: more than one only when the page is cross-origin isolated, which lets it share memory. Half the processor's threads, between 1 and 8: measured, more than that buys little (RUNTIME.md). */
-export function threadsHere(): number {
-    if (!self.crossOriginIsolated || typeof SharedArrayBuffer === "undefined") return 1;
-    return Math.max(1, Math.min(8, Math.floor((navigator.hardwareConcurrency || 2) / 2)));
-}
-
-/** Whether the browser gives a graphics adapter and a device from it, which is the only way to know WebGPU will work. */
-async function graphicsCard(): Promise<boolean> {
-    const gpu = (navigator as unknown as { gpu?: { requestAdapter(): Promise<{ info?: { isFallbackAdapter?: boolean }; requestDevice(): Promise<{ destroy?(): void }> } | null> } }).gpu;
-    if (!gpu) return false;
-    try {
-        const adapter = await gpu.requestAdapter();
-        // a software stand-in for a card (SwiftShader) runs the encoder ten times slower than WebAssembly does
-        if (!adapter || adapter.info?.isFallbackAdapter) return false;
-        // the device was asked for only to know that one is given; it is let go at once rather than left to be collected
-        (await adapter.requestDevice()).destroy?.();
-        return true;
-    } catch {
-        return false;
-    }
-}
+export const provide = (flavor: Flavor, ort: Ort): void => coreProvide(flavor, ort);
 
 /** The build used when the card is. */
 const WEBGPU: Flavor = "jsep";

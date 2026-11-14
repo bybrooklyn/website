@@ -35,7 +35,7 @@ full screen. The session (`session.ts`): saving as the document changes, a docum
 (`conflict.ts`), version history (`versions.ts`), renaming and moving between documents. And the small
 surfaces every kind uses: menus, tooltips and icons (`ui.ts`), dialogs and switches (`dialog.ts`), strips
 (`strips.ts`), the facts in the margin (`details.ts`), the word counter (`live-count.ts`), what is used
-most (`most-used.ts`).
+most (`most-used.ts`). And the loader of ONNX Runtime (`onnx.ts`), fetched from `/ort/` only when a model is first loaded, which dictation and imgQuire's text reader share.
 
 **The interface.** A kind is one value (`kind.ts`), listed by the page that mounts the app:
 

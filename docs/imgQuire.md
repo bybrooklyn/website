@@ -31,7 +31,7 @@ remover (`cutout.md`) is to be one of its tools as well as a page of its own.
   `codecs/rust/`).
 - `read/`: reading the text in a picture, all by hand but the models and ONNX Runtime. `models.ts`, the
   three sizes of PP-OCRv6 pinned to commits and digests; `store.ts`, fetching and keeping them;
-  `runtime.ts`, the site's ONNX Runtime fetched from `/ort/`; `pixels.ts`, `detect.ts`, `ctc.ts`,
+  `runtime.ts`, the models made into sessions on the site's ONNX Runtime, which the core finds and loads (`core/onnx.ts`, shared with dictation); `pixels.ts`, `detect.ts`, `ctc.ts`,
   `words.ts` and `read.ts`, the steps from pixels to lines and words; `dictionary.ts`, the recognizer's
   characters out of its YAML; `private.ts`, the rules for what looks private; `engine.ts`, the worker.
 - `reading.ts`: the tool as the editor offers it: the first time's dialog, the reading, what was read.
@@ -438,8 +438,6 @@ only with `--enable-unsafe-webgpu`, which the drawing tests pass.
 - The rules for what looks private see only text: faces, number plates and names are not found; a
   label of "key" or "pin" offers whatever follows it ("Key: Escape" too); a long hash is offered as
   a key. Phone numbers are matched by shape, so a long reference number may be offered.
-- The few lines that find and load ONNX Runtime are written twice, in dictation and in `read/runtime.ts`,
-  since a kind may not import another's code; moving them into the core would let both share them.
 - The tests hold that requests carry nothing of the picture through Chromium's own record of requests,
   with Hugging Face answered from the trial copies; a visitor's real download from Hugging Face (its
   redirects to its content network) was not made here.
