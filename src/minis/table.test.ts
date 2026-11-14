@@ -81,7 +81,7 @@ test("a piece taken away while a marble rolls on it takes its track away, and th
 
 test("a hopper holds a marble at its mouth, lets it go, and another comes out of its box to wait", () => {
     const table = makeTable();
-    table.set(read("v1_h.0.0.4.0"));
+    table.set(read("v1.h0_0_4_0"));
     expect(table.letGo()).toEqual([]);
     for (let step = 0; step < 60; step++) table.step(1 / 120);
     expect(table.held().length).toBe(1);

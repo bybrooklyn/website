@@ -67,6 +67,81 @@
     color: var(--muted);
 }
 
+/* The marble run's panel: the box of pieces as a strip of small pictures, then what to press, then a
+   quiet line of what is marked. The strip scrolls sideways; a piece is dragged up out of it. */
+.mini-stage[data-mini="marbles"] {
+    --panel-room: 15rem;
+}
+
+.marbles-box {
+    display: flex;
+    gap: 0.35rem;
+    overflow-x: auto;
+    margin: calc(var(--line) * -0.4) -0.5rem 0.6rem;
+    padding: 0.2rem 0.5rem 0.4rem;
+    /* sideways the strip scrolls; up, a piece is taken out of it */
+    touch-action: pan-x;
+    scrollbar-width: thin;
+}
+
+.mote-panel .marbles-piece {
+    flex: none;
+    display: grid;
+    justify-items: center;
+    gap: 0.1rem;
+    width: 4.6rem;
+    padding: 0.25rem 0.1rem;
+    color: var(--muted);
+    font-size: 0.72rem;
+    line-height: 1.15;
+    text-align: center;
+    text-decoration: none;
+    border-radius: var(--radius);
+    touch-action: pan-x;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.mote-panel .marbles-piece + .marbles-piece {
+    margin-inline-start: 0;
+}
+
+.mote-panel .marbles-piece:hover {
+    color: var(--ink);
+    background: color-mix(in oklch, var(--rule) 45%, transparent);
+}
+
+/* (more particular than the rule that gives a mini's own canvas its height) */
+.mote .marbles-piece canvas {
+    width: 3.6rem;
+    height: 3.6rem;
+    pointer-events: none;
+}
+
+.marbles-go {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.5rem 0;
+    margin-bottom: 0.5rem;
+}
+
+.mote-panel .marbles-go button:disabled {
+    color: color-mix(in oklch, var(--muted) 55%, transparent);
+    cursor: default;
+}
+
+.marbles-said,
+.marbles-runs {
+    margin: 0.2rem 0 0;
+    color: var(--muted);
+}
+
+/* the made runs are words with dots between, so they need no step apart of their own */
+.mote-panel .marbles-runs button + button {
+    margin-inline-start: 0;
+}
+
 /* A mini drawn in 3D has a second canvas for it, under the one that takes the mouse. */
 .mote canvas.mote-gl {
     position: absolute;

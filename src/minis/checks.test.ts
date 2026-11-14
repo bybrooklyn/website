@@ -25,7 +25,7 @@ function chain(level: number, kinds: Kind[]): Placed[] {
 }
 
 test("an open end is marked, but not a tray's", () => {
-    expect(checks(read("v1_s.1.0.0.3.0"))).toEqual([
+    expect(checks(read("v1.s1_0_0_3_0"))).toEqual([
         { id: 1, why: "open", joint: 0 },
         { id: 1, why: "open", joint: 1 },
     ]);

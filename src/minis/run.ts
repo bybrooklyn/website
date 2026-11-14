@@ -3,10 +3,10 @@
 // being placed could snap and how it would be turned and moved to fit, whether pieces overlap, and
 // writes a run as a short line of text and reads it back exactly.
 //
-//   const run: Placed[] = read("v1_h.0.0.6.0_s.1.-1.0.6.0");
+//   const run: Placed[] = read("v1.h0_0_6_0.s1_-1_0_6_0");
 //   links(run);                         // the joints that meet
 //   snaps(run, kind);                   // every place a new piece would fit against an open joint
-//   write(run);                         // "v1_h.0.0.6.0_s.1.-1.0.6.0"
+//   write(run);                         // "v1.h0_0_6_0.s1_-1_0_6_0"
 //
 // Joints are never stored. Two joints of the same kind, at the same place, facing each other, are
 // joined; move a piece and they part. Everything is on the box's grid (pieces.ts), so a joint that
@@ -151,21 +151,22 @@ export function fits(run: Placed[], piece: Placed): boolean {
 export const VERSION = 1;
 
 /**
- * A run as one line of text: `v1`, then each piece in order after `_`, as its family letter, its own
- * numbers, the corner of its first cell across and along, the level of its first joint, and its quarter
- * turns (with 4 added if it is mirrored), each after a dot: a long straight one cell across at level 6,
- * turned once, is `s.2.1.0.6.1`. Only letters, digits, `-`, `.` and `_`, so it can go in an address.
+ * A run as one line of text: `v1`, then each piece in order after a dot, as its family letter and then
+ * its numbers between underscores: its own numbers, the corner of its first cell across and along, the
+ * level of its first joint, and its quarter turns (with 4 added if it is mirrored). A long straight one
+ * cell across at level 6, turned once, is `s2_1_0_6_1`. Only letters, digits, `-`, `.` and `_`, so it
+ * can go in an address as it is.
  */
 export function write(run: Placed[]): string {
-    return [`v${VERSION}`, ...run.map((piece) => [piece.kind.family, ...piece.kind.sizes, piece.place.x, piece.place.z, piece.place.y, (((piece.place.turn % 4) + 4) % 4) + (piece.kind.mirror ? 4 : 0)].join("."))].join("_");
+    return [`v${VERSION}`, ...run.map((piece) => piece.kind.family + [...piece.kind.sizes, piece.place.x, piece.place.z, piece.place.y, (((piece.place.turn % 4) + 4) % 4) + (piece.kind.mirror ? 4 : 0)].join("_"))].join(".");
 }
 
 /** A run read back from its text, its pieces numbered from 1 in order. Text that is not a run of this form throws, saying why. */
 export function read(text: string): Placed[] {
-    const [head, ...pieces] = text.trim().split("_");
+    const [head, ...pieces] = text.trim().split(".");
     if (head !== `v${VERSION}`) throw new Error(`A run starts with v${VERSION}.`);
     return pieces.map((token, index) => {
-        const [family = "", ...rest] = token.split(".");
+        const [family, rest] = [token.slice(0, 1), token.slice(1).split("_")];
         if (!rest.every((part) => /^-?\d+$/.test(part))) throw new Error(`Piece ${index + 1} has a number that is not a whole number.`);
         const numbers = rest.map(Number);
         const sizes = numbers.slice(0, numbers.length - 4);

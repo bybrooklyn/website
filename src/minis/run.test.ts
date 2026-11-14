@@ -88,17 +88,19 @@ test("a run written as text reads back the same, piece for piece, for many runs 
         });
         const text = write(run);
         expect(text).toMatch(/^[A-Za-z0-9._-]+$/);
+        // and nothing in it reads as an address: no four numbers in a row with dots between
+        expect(text).not.toMatch(/\d+\.\d+\.\d+\.\d+/);
         expect(read(text)).toEqual(run);
         expect(write(read(text))).toBe(text);
     }
 });
 
 test("text that is not a run of this form is not read, and says why", () => {
-    expect(() => read("v2_s.1.0.0.3.0")).toThrow("v1");
-    expect(() => read("v1_q.1.0.0.3.0")).toThrow("not a piece");
-    expect(() => read("v1_s.9.0.0.3.0")).toThrow("not a piece");
-    expect(() => read("v1_s.1.0.0.3.8")).toThrow("turned");
-    expect(() => read("v1_s.1.0.0.3.x")).toThrow("whole number");
-    expect(() => read("v1_c.2.1.0.0.3.0")).toThrow("not a piece");
+    expect(() => read("v2.s1_0_0_3_0")).toThrow("v1");
+    expect(() => read("v1.q1_0_0_3_0")).toThrow("not a piece");
+    expect(() => read("v1.s9_0_0_3_0")).toThrow("not a piece");
+    expect(() => read("v1.s1_0_0_3_8")).toThrow("turned");
+    expect(() => read("v1.s1_0_0_3_x")).toThrow("whole number");
+    expect(() => read("v1.c2_1_0_0_3_0")).toThrow("not a piece");
     expect(read("v1")).toEqual([]);
 });
