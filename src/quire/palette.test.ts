@@ -5,7 +5,7 @@
 // commands. Run with `bun test src/quire`.
 
 import { expect, test } from "bun:test";
-import { headings, type Command, type RowActions } from "./menu-row";
+import { headings, type RowActions } from "./menu-row";
 import { caret } from "./keys";
 import { commandLines, headingLines, placeOf, rank, score, tap, TAP, type Line, type Stroke, type Taps } from "./palette";
 import { read } from "./read";
@@ -120,19 +120,26 @@ test("where the cursor is: a picked picture, a table, selected words, a list", (
     expect(placeOf(doc, caret([2, 1, 0], 0))).toBe("table");
 });
 
-test("its commands are the menus' own lines, each once, with the slash items' words, where they fit and their shortcuts", () => {
-    const act = new Proxy({}, { get: (_, name) => (name === "file" || name === "tools" ? undefined : () => {}) }) as RowActions;
-    const lines = commandLines(headings({ rich: false, outline: false, markdown: false, words: 3 }, act));
-    const find = (key: Command) => lines.find((each) => each.key === key)!;
-    expect(find("bold")).toMatchObject({ label: "Bold", menu: "Format", hint: "Ctrl+B", fits: "words" });
-    expect(find("bullet")).toMatchObject({ menu: "Insert", fits: "list" });
+test("its commands are the menus' own lines, each once, those inside a group with the group's path, with their other names, the slash items' words, where they fit and their shortcuts", () => {
+    const given: Record<string, unknown> = { file: undefined, tools: undefined, subs: { size: () => [{ label: "12", hint: "12", run: () => {} }] }, forms: { bookmark: () => ({}) } };
+    const act = new Proxy(given, { get: (_, name: string) => (name in given ? given[name] : () => {}) }) as RowActions;
+    const revealed: string[][] = [];
+    const lines = commandLines(headings({ rich: false, outline: false, markdown: false }, act), (path) => revealed.push(path));
+    const find = (key: string) => lines.find((each) => each.key === key)!;
+    expect(find("bold")).toMatchObject({ label: "Bold", menu: "Format › Text", hint: "Ctrl+B", fits: "words" });
+    expect(find("bullet")).toMatchObject({ menu: "Format › Bullets and numbering", fits: "list" });
     expect(find("task").words).toContain("todo");
     expect(find("picture").words).toContain("photo");
-    // a hint that is not a shortcut is not shown as one, and the word count is not a command
-    expect(find("download").hint).toBeUndefined();
-    expect(lines.some((each) => each.label.endsWith("words"))).toBe(false);
-    // a command in two menus is one line, in the first
-    expect(lines.filter((each) => each.key === "link")).toHaveLength(1);
+    // a hint that is not a shortcut is not shown as one, and a line that only opens a group is not a command
+    expect(find("Format › Text › Size: 12").hint).toBeUndefined();
+    expect(lines.some((each) => each.label === "Text" || each.label === "Size")).toBe(false);
+    // what the wording renamed is found by its old name
+    expect(rank(lines, "indent more", undefined, {})[0]!.key).toBe("indent");
+    expect(rank(lines, "typeface", undefined, {}).length).toBe(0);
+    expect(rank(lines, "the markdown beside", undefined, {})[0]!.key).toBe("markdown");
     expect(rank(lines, "todo", undefined, {})[0]!.key).toBe("task");
     expect(rank(lines, "bold", "words", {})[0]!.key).toBe("bold");
+    // a line whose form opens beside it opens the menus down to it
+    find("bookmark").run();
+    expect(revealed).toEqual([["Insert", "Bookmark"]]);
 });

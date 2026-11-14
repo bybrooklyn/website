@@ -833,6 +833,14 @@
     color: var(--muted);
 }
 
+/* the menus a line from inside a menu is in, said quietly after its words */
+.quire-palette-where {
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 0.8rem;
+    text-overflow: ellipsis;
+}
+
 /* on a phone it spans the window's foot */
 @media (max-width: 30rem) {
     .quire-menu.quire-palette:has(.quire-palette-form) {
