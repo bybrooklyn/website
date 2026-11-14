@@ -200,9 +200,10 @@ function tips() {
         const gone = () => tip.matches(":popover-open") && !over && tip.hidePopover();
         tip.animate([{ opacity: 1, scale: 1 }, { opacity: 0, scale: 0.7 }], { duration: 110, easing: EASE, fill: "forwards" }).finished.then(gone, gone);
     };
-    document.addEventListener("pointerover", (event) => {
-        if (event.pointerType === "touch") return;
-        const found = (event.target as Element | null)?.closest?.<HTMLElement>(".quire-button[title], .quire-size-field[title], .quire-status[title]");
+    /** Shows the label of the control under the pointer: after a rest, at once when moving along from one just shown, and at once when `now` (a control that has just opened under a pointer that did not move). */
+    const point = (target: EventTarget | null, now: boolean) => {
+        // one whose label is up has lent its title to it (data-tip), and is still the same control
+        const found = (target as Element | null)?.closest?.<HTMLElement>(":is(.quire-button, .quire-size-field, .quire-status):is([title], [data-tip])");
         if (found === over) return;
         hide();
         if (!found || !found.title || found.classList.contains("open")) return;
@@ -210,7 +211,7 @@ function tips() {
         found.dataset.tip = found.title;
         found.removeAttribute("title");
         // moving along a row of controls, the next one's label comes at once
-        const warm = performance.now() - shownAt < 400;
+        const warm = now || performance.now() - shownAt < 400;
         waiting = setTimeout(() => {
             if (over !== found || !found.isConnected) return;
             tip.textContent = found.dataset.tip ?? "";
@@ -221,12 +222,18 @@ function tips() {
             const up = tip.getBoundingClientRect().top < found.getBoundingClientRect().top;
             if (!still()) tip.animate([{ opacity: 0, scale: 0.7, transformOrigin: up ? "50% 100%" : "50% 0" }, { opacity: 1, scale: 1, transformOrigin: up ? "50% 100%" : "50% 0" }], { duration: 180, easing: springCurve(MOTION.bounce) });
         }, warm ? 60 : 500);
-    });
+    };
+    document.addEventListener("pointerover", (event) => event.pointerType !== "touch" && point(event.target, false));
+    // a control that opened under a resting pointer asks for its label itself, since no pointer moved onto it (tipNow)
+    document.addEventListener("quire-tip", (event) => point(event.target, true));
     for (const name of ["pointerdown", "scroll", "keydown"]) addEventListener(name, hide, { capture: true, passive: true });
     // the pointer leaving the window, or the window going out of sight, takes the label away too, and gives the control its title back
     document.addEventListener("pointerout", (event) => !event.relatedTarget && hide());
     document.addEventListener("visibilitychange", hide);
 }
+
+/** Shows a control's tooltip at once, for one that has just opened under a pointer already resting there. */
+export const tipNow = (control: HTMLElement) => void control.dispatchEvent(new Event("quire-tip", { bubbles: true }));
 
 /** A button with a label for screen readers (shown as its tooltip too) that leaves the document's selection where it is when pressed. */
 export function control(label: string, content: string | Node, press: (button: HTMLButtonElement) => void, className = "quire-button"): HTMLButtonElement {

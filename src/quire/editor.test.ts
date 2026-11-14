@@ -293,17 +293,17 @@ used("the alignment button works from the keyboard alone: Enter opens it, the ar
     await tab.press("Enter");
     await tab.wait(300);
     expect(await tab.run(`${main}.getAttribute("aria-expanded")`)).toBe("true");
-    // its choices lie over the tools beside it: the button is as wide as it was, the tool after it has not moved, and the choice in use is where the button is
-    const laid = await tab.run<{ same: boolean; over: boolean; under: number }>(`(() => {
+    // its choices lie over the tools beside it, opened to the left and the right alike: the button is as wide as it was, and their middle is the button's
+    const laid = await tab.run<{ same: boolean; over: boolean; left: boolean; right: boolean; on: boolean }>(`(() => {
         const grow = document.querySelector('.quire-grow.open');
         const row = grow.querySelector('.quire-grow-row').getBoundingClientRect();
         const button = ${main}.getBoundingClientRect();
-        const used = grow.querySelector('.quire-grow-line.lit').getBoundingClientRect();
-        return { same: Math.abs(grow.offsetWidth - button.width) < 1, over: row.width > button.width * 2.5, under: Math.abs(used.left - button.left) };
+        const middle = button.left + button.width / 2;
+        const on = [...grow.querySelectorAll('.quire-grow-line')].some((each) => { const box = each.getBoundingClientRect(); return Math.abs(box.left + box.width / 2 - middle) < 1.5; });
+        return { same: Math.abs(grow.offsetWidth - button.width) < 1, over: row.width > button.width * 2.5, left: row.left < button.left - button.width / 2, right: row.right > button.right + button.width / 2, on };
     })()`);
-    expect(laid.same).toBe(true);
-    expect(laid.over).toBe(true);
-    expect(laid.under).toBeLessThan(1.5);
+    // to the left and to the right, with one of the choices, never a gap, on the button
+    expect(laid).toEqual({ same: true, over: true, left: true, right: true, on: true });
     await tab.press("ArrowRight");
     await tab.press("ArrowRight");
     expect(await tab.run(`${main}.getAttribute("aria-activedescendant")`)).toEndWith("-right");
@@ -323,6 +323,9 @@ used("the alignment button works from the keyboard alone: Enter opens it, the ar
     await tab.run(`${main}.blur()`);
     await press(`.quire-bar .quire-grow-main[aria-label="Alignment"]`);
     expect(await tab.run(`document.querySelector('.quire-grow.open .quire-grow-row').getAnimations().length`)).toBeGreaterThan(0);
+    // opened by a press, the choice under the resting pointer says what it is at once
+    await tab.wait(400);
+    expect(await tab.run("document.querySelector('.quire-tip')?.matches(':popover-open') ?? false")).toBe(true);
     await tab.press("Escape");
     await tab.wait(300);
 });

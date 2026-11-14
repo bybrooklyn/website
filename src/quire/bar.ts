@@ -56,7 +56,7 @@ import type { State } from "./history";
 import { activeBlock, caret, collapsed, mark, pageBreakAt, paste, rangeOf, sameLeaf, tableOf } from "./keys";
 import { SHORTCUTS } from "./shortcuts";
 import type { Surface } from "./surface";
-import { closeOthers, composing, control, dots, EASE, flowMenu, glyph, icon, make, MOTION, moveIndex, springCurve, still, type Menu, type MenuItem } from "./ui";
+import { closeOthers, composing, control, dots, EASE, flowMenu, glyph, icon, make, MOTION, moveIndex, springCurve, still, tipNow, type Menu, type MenuItem } from "./ui";
 
 /** What a button does: from the state at the cursor to the next one. */
 export type Action = (state: State) => State;
@@ -895,8 +895,8 @@ export function createBar(surface: Surface, options: BarOptions) {
     let settled = () => {};
     /**
      * One button for a few choices side by side, showing the one at the cursor. Pressed, its choices
-     * open out of it to both sides, lying over the tools beside it, with the one in use where the
-     * button is, under the pointer; nothing else on the bar moves. It is not a menu. A choice, Escape
+     * open out of it to the left and the right alike, a middle one on the button, lying over the
+     * tools beside it; nothing else on the bar moves. It is not a menu. A choice, Escape
      * or a press elsewhere closes it back to one. The keyboard stays on the
      * button: while it is open the side arrows move a lit mark along the choices, and Enter or Space
      * takes the lit one. Each choice's value is also the name of its command, for its shortcut.
@@ -928,12 +928,19 @@ export function createBar(surface: Surface, options: BarOptions) {
             for (const [value, button] of buttons) button.classList.toggle("lit", value === lit);
             main.setAttribute("aria-activedescendant", buttons.get(lit)!.id);
         };
-        /** Puts the open choices over the bar so that the one in use lies exactly where the button is, under the pointer, as far as the window's sides allow. They are placed by the window, since the bar cuts off what sticks out of a tool. */
+        /**
+         * Puts the open choices over the bar so that they open to the left and the right alike, with the
+         * middle choice on the button, under the pointer; of an even number, the one of the middle two
+         * nearer the choice in use, so that the pointer is never in the gap between two. As far as the
+         * window's sides allow; placed by the window, since the bar cuts off what sticks out of a tool.
+         */
         const place = () => {
+            const all = [...row.children] as HTMLElement[];
+            const half = all.length / 2;
+            const under = all[all.length % 2 ? Math.floor(half) : all.indexOf(buttons.get(lit)!) < half ? half - 1 : half]!;
             const here = main.getBoundingClientRect();
-            const most = innerWidth - 8 - row.offsetWidth;
             row.style.top = `${here.top}px`;
-            row.style.left = `${Math.max(8, Math.min(here.left - buttons.get(lit)!.offsetLeft, most))}px`;
+            row.style.left = `${Math.max(8, Math.min(here.left + (here.width - under.offsetWidth) / 2 - under.offsetLeft, innerWidth - 8 - row.offsetWidth))}px`;
         };
         /** The change from shut to open or back: the choices are uncovered outward from the button to both sides, or covered back into it; nothing else on the bar moves. */
         const move = (change: () => void, opening: boolean) => {
@@ -972,6 +979,12 @@ export function createBar(surface: Surface, options: BarOptions) {
                 element.classList.add("open");
                 main.setAttribute("aria-expanded", "true");
             }, true);
+            // opened by a press, the pointer is already on one of the choices and has not moved onto it: its tooltip is shown at once
+            if (element.matches(":hover")) {
+                const middle = main.getBoundingClientRect();
+                const under = [...row.children].find((each) => each.getBoundingClientRect().right > middle.left + middle.width / 2);
+                if (under instanceof HTMLElement) tipNow(under);
+            }
             document.addEventListener("pointerdown", outside, true);
             document.addEventListener("keydown", escape, true);
             // placed by the window, the choices would be left behind by anything that moves the bar under them

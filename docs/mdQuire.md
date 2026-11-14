@@ -211,8 +211,9 @@ and plus; bold, italic, underline, strikethrough, text color, highlight; link, p
 spacing; the lists; indent less and more; clear formatting. Alignment is one button showing the cursor's
 alignment, and the lists one button showing the cursor's list, pressed when it is in one. Pressed, such a
 button's choices open out of it to both sides (left, center, right and justify; checklist, bulleted and
-numbered) on a raised strip that lies over the tools beside it, the one in use exactly where the button
-is, under the pointer; nothing else on the bar moves, and the bar keeps no empty room for it. A choice, a
+numbered) on a raised strip that lies over the tools beside it, a middle choice on the button, so that it
+opens to the left and the right alike and the pointer is on a choice; nothing else on the bar moves, and the bar keeps no empty room for
+it. Opened by a press, the choice under the pointer shows its tooltip at once. A choice, a
 press elsewhere or Escape closes it to one button again. From the keyboard Enter or Space opens it, the
 side arrows move a lit mark along the choices while the keyboard stays on the button, Enter or Space takes
 the lit one, and Escape closes it with nothing changed. The list's own kind again turns the list off. The
