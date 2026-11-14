@@ -13,8 +13,8 @@
 // - with no tool, a drag across words selects them and Ctrl+C copies them as text, not the picture;
 // - the size chosen is remembered, and the model is kept: the next picture is read with no dialog;
 // - something that looks private of several words (a phone number) is hidden by one cover, edge to
-//   edge, whether by Hide all or by pressing any one of its words; and a word that is not part of one
-//   is hidden alone.
+//   edge, whether by Hide all or by pressing any one of its words; a word that is not part of one is
+//   hidden alone; and a word under a cover is drawn as the cover alone, with no tint over it.
 //
 // Skipped, with a notice, without a Chromium or without the models in ~/.cache/quire-model-trials/ocr/.
 
@@ -158,7 +158,7 @@ test("reading text: asked first, fetched only when told, shown on the picture, a
     }
 }, 240_000);
 
-test("a phone number is hidden by one cover edge to edge, by Hide all or by pressing any of its words; and a word apart is hidden alone", async () => {
+test("a phone number is hidden by one cover edge to edge, by Hide all or by pressing any of its words; a word apart is hidden alone; a hidden word has no tint over it", async () => {
     const page = await readingPage("img-read-phone");
     if (!page) return;
     const { tab, until } = page;
@@ -186,13 +186,24 @@ test("a phone number is hidden by one cover edge to edge, by Hide all or by pres
         expect(Math.min(plus, group, last, jordan)).toBeGreaterThanOrEqual(0);
         const phone = { x: words[plus]!.cover.x, right: words[last]!.cover.x + words[last]!.cover.width };
         const middleOf = (index: number) => page.onScreen(words[index]!.cover.x + words[index]!.cover.width / 2, words[index]!.cover.y + words[index]!.cover.height / 2);
+        /** How opaque the drawing over the picture is at a place on the screen: the words' tint shows there. */
+        const tint = async (index: number) => {
+            const point = await middleOf(index);
+            return tab.run<number>(`(() => { const over = document.querySelector('.quire-img-over'); const box = over.getBoundingClientRect(); const ratio = over.width / box.width; return over.getContext('2d').getImageData(Math.round((${point.x} - box.x) * ratio), Math.round((${point.y} - box.y) * ratio), 1, 1).data[3]; })()`);
+        };
         expect(await tab.run<string>("document.querySelector('.quire-img-strip-said').textContent")).toContain("1 looks private");
+        expect(await tint(group)).toBeGreaterThan(0);
 
         // Hide all: one cover, from the first group's edge to the last's
         await tab.run("[...document.querySelectorAll('.quire-img-strip-words')].find((button) => button.textContent === 'Hide all').click()");
         await until("window.app.editing().steps().length === 1");
         const [all] = await covers(page);
         expect([all!.rect.x, all!.rect.x + all!.rect.width]).toEqual([phone.x, phone.right]);
+        // the hidden words are the cover alone, with nothing drawn over it
+        await tab.wait(100);
+        expect(await tint(group)).toBe(0);
+        expect(await tint(plus)).toBe(0);
+        expect(await tint(jordan)).toBeGreaterThan(0);
         await tab.press("z", { ctrl: true });
         await until("window.app.editing().steps().length === 0");
 

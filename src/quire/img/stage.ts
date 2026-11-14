@@ -239,11 +239,12 @@ export function createStage(hooks: StageHooks) {
         const chosen = run ?? selection;
         const low = chosen ? Math.min(...chosen) : -1;
         const high = chosen ? Math.max(...chosen) : -1;
+        const hidden = hiddenWords();
         const rect = (cover: Rect) => [where.x + cover.x * where.across, where.y + cover.y * where.down, cover.width * where.across, cover.height * where.down] as const;
         context.fillStyle = accent;
         if (tool === "read") {
             words.forEach((_, index) => {
-                if ((index >= low && index <= high) ) return;
+                if ((index >= low && index <= high) || hidden.has(index)) return;
                 context.globalAlpha = index === hover ? 0.35 : 0.2;
                 quad(index);
                 context.fill();
@@ -253,7 +254,7 @@ export function createStage(hooks: StageHooks) {
         if (chosen) {
             context.globalAlpha = 0.38;
             const indices: number[] = [];
-            for (let index = low; index <= high; index++) indices.push(index);
+            for (let index = low; index <= high; index++) if (!hidden.has(index)) indices.push(index);
             for (const cover of runCovers(words, indices)) context.fillRect(...rect(cover));
         }
         context.globalAlpha = 1;
@@ -277,6 +278,16 @@ export function createStage(hooks: StageHooks) {
         const covers = look(found).covers.map((cover) => cover.rect);
         return findings.filter((finding) => findingCovers(words, finding).some((rect) => !coveredBy(covers, within(rect, found.original))));
     }
+    /** Which words are under a cover already made, and so are drawn as the cover alone, as it will export. */
+    function hiddenWords(): Set<number> {
+        const found = picture();
+        const hidden = new Set<number>();
+        if (!found) return hidden;
+        const covers = look(found).covers.map((cover) => cover.rect);
+        words.forEach((word, index) => coveredBy(covers, within(word.cover, found.original)) && hidden.add(index));
+        return hidden;
+    }
+
     /** The word whose cover a place in the original's pixels is in, the smallest where covers overlap. */
     function wordAt(at: Point): number | undefined {
         let best: number | undefined;
