@@ -259,7 +259,8 @@ export const MOST_TILT = 30;
  * least three, together at least half the copy's height long, and spread over a fifth of its width, and at
  * least half their length must meet in one place; else there is nothing clear and undefined is given. The
  * lines within 30 degrees of flat are made level too when they are as clear and need a turn of at most 20
- * degrees. Worked with the focal length taken for a picture (`assumedFocal`).
+ * degrees (at most 10 unless they are eight or more). A tilt of more than 15 degrees needs eight upright
+ * lines or more. Worked with the focal length taken for a picture (`assumedFocal`).
  */
 export function straighten(lines: Segment[], small: { width: number; height: number }, size: { width: number; height: number }): Straightening | undefined {
     const scale = size.width / small.width;
@@ -320,9 +321,12 @@ export function straighten(lines: Segment[], small: { width: number; height: num
     const horizontal = degrees(-Math.asin(Math.max(-1, Math.min(1, r20))));
     const vertical = degrees(Math.atan2(r21, r22));
     const turn = degrees(Math.atan2(r10, r00));
-    const without = flat && Math.abs(horizontal) > 20;
+    // a large turn left or right only on the word of many level lines; else the level lines are left out
+    const without = flat && (Math.abs(horizontal) > 20 || (Math.abs(horizontal) > 10 && level < 8));
     if (without) return straighten(lines.filter((s) => tilt(s) < 30), small, size);
     if (Math.abs(vertical) > MOST_TILT || Math.abs(horizontal) > MOST_TILT || Math.abs(turn) > 15) return undefined;
+    // a large tilt only on the word of many upright lines: a few edges of a box or a shelf are not a building
+    if (Math.abs(vertical) > 15 && up.agreeing.length < 8) return undefined;
     const tenth = (value: number) => Math.round(value * 10) / 10 || 0;
     return { vertical: tenth(vertical), horizontal: tenth(horizontal), turn: tenth(turn), upright: up.agreeing.length, level };
 }
