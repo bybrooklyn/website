@@ -166,6 +166,10 @@ Each of these works, and each is what a new kind may need changed.
 
 ## Kept the same for a writer
 
+One look changed for every kind, in November 2026: the status's words used to cross-fade in one place, so a
+picture taken mid-fade showed two words on top of each other; now the old fade out in 0.15 s and the new fade
+in after them, in the same 0.3 s.
+
 No address, menu line, key, saved document or stored choice changed: the keys in `localStorage`
 (`quire-place`, `quire-look`, `quire-outline`, `quire-most-used`, `quire-most-picked` and the rest) and the
 databases (`quire`, `quire-suggest`, `quire-edit`) are named as before. The home list, an open document,

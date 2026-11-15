@@ -2150,7 +2150,7 @@
     opacity: 0.6;
 }
 
-/* the old words fade out where the new fade in, the two in one place */
+/* the old words and the new in one place, one after the other */
 .quire-status {
     display: inline-grid;
 }
@@ -2159,14 +2159,16 @@
     color: var(--accent);
 }
 
+/* the old words fade out first and the new fade in after, so that two never show in one place */
 .quire-status-words {
     grid-area: 1 / 1;
     opacity: 0;
-    transition: opacity 0.3s ease;
+    transition: opacity 0.15s ease;
 }
 
 .quire-status-words.here {
     opacity: 1;
+    transition: opacity 0.15s ease 0.15s;
 }
 
 /* with nothing said about saving, the dot goes with it (bar.ts sets the class) */

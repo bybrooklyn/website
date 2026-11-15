@@ -51,3 +51,18 @@ test.skipIf(!live)("how saving stands stays, a message passes over it and gives 
     await run("window.line.say('', 'Nothing is open', 'quiet', true)");
     expect(await run("window.line.element.classList.contains('unsaid')")).toBe(true);
 }, 20_000);
+
+test.skipIf(!live)("two words are never seen in one place, even when one follows another within a frame or two, as Saved follows Saving", async () => {
+    await run("window.line.say('Not saved', 'Not saved', 'quiet', true)");
+    await page!.tab.wait(600);
+    // looked at once, part way through the old words' fading and not before: asking for a style makes the browser work
+    // one out, which is itself what the new words were missing, so a look every frame hides the fault it is looking for
+    const seen = await run<string[]>(`new Promise((done) => {
+        window.line.say('Saving', 'Saving', 'quiet', true);
+        setTimeout(() => window.line.say('Saved', 'Saved', 'quiet', true), 10);
+        setTimeout(() => done([...document.querySelectorAll('.quire-status-words')].filter((each) => +getComputedStyle(each).opacity > 0.02).map((each) => each.textContent)), 80);
+    })`);
+    expect(seen).toEqual(["Not saved"]);
+    await page!.tab.wait(500);
+    expect(await run("[...document.querySelectorAll('.quire-status-words')].filter((each) => +getComputedStyle(each).opacity > 0.98).map((each) => each.textContent).join()")).toBe("Saved");
+}, 20_000);
