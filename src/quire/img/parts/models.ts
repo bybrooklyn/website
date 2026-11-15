@@ -17,13 +17,13 @@ export interface PartFile extends Pinned {
 
 /** A choice of part models. */
 export interface PartTier {
-    id: "small" | "better";
+    id: string;
     name: string;
     who: string;
     /** How the press-to-select model takes a picture: SAM 2.1 squeezed to 1024 square; SlimSAM its longer side 1024 and padded. */
     select: "sam2" | "slim";
-    /** How the subject model takes a picture: ormbg at 1024 square from 0 to 1; MODNet its shorter side 512, from -1 to 1. */
-    matte: "ormbg" | "modnet";
+    /** How the subject model takes a picture: ormbg at 1024 square from 0 to 1; MODNet its shorter side 512, from -1 to 1; BiRefNet 1024 square, ImageNet's numbers, logits out. */
+    matte: "ormbg" | "modnet" | "birefnet";
     files: PartFile[];
     credit: string;
     /** The models that run right on the graphics card (each was tried there on the site's ONNX Runtime); the rest run on WebAssembly. */
@@ -80,8 +80,31 @@ export const PART_TIERS: PartTier[] = [
     },
 ];
 
-/** The choice with this id, or the smaller. */
-export const partTierOf = (id: string | null | undefined): PartTier => PART_TIERS.find((tier) => tier.id === id) ?? PART_TIERS[0]!;
+const BIREFNET = ["onnx-community/BiRefNet_lite-ONNX", "de15b22ba131738a16dff04aab8bdf8dc32e3ac1"] as const;
+const BIREFNET_WEBGPU = ["wonfy/BiRefNet_lite-ONNX-webgpu", "c40eaa22fb1af9edcf75c7b79d25ed8a8e901140"] as const;
+
+/** BiRefNet lite in fp16, the stock export and a third party's rebuild of its graph for WebGPU (the same weights; its card says MIT, from ZhengPeng7/BiRefNet_lite), both read on 14 November 2026. */
+export const BIREFNET_FILES = {
+    stock: file("matte", ...BIREFNET, "onnx/model_fp16.onnx", 114538221, "d39b897ceb16ae654c1731f3dba0cf9b368d9cae74b5a57459b455cc8bfec402"),
+    webgpu: file("matte", ...BIREFNET_WEBGPU, "onnx/model_fp16.onnx", 123210389, "2290313b335cfdb867eefac47b46aa2b225793fc3deb4da8dbc86e71e9cff2d7"),
+};
+
+const cut = (id: string, name: string, who: string, matte: PartTier["matte"], credit: string, matteFile: PartFile, card: PartTier["card"]): PartTier => ({ id, name, who, select: "slim", matte, credit, card, files: [matteFile] });
+
+/**
+ * The cut-out's three qualities, the smallest first: Quick, MODNet (made for people); Better, ormbg;
+ * Best, BiRefNet lite's rebuild for WebGPU. MODNet and ormbg run on WebAssembly only (see above). Best
+ * runs only on a graphics card: on WebAssembly it runs out of memory, and the stock export does on the
+ * card too (docs/imgQuire-models.md), so it is offered only where there is a card.
+ */
+export const CUT_TIERS: PartTier[] = [
+    cut("cut-quick", "Quick", "People, small and quick", "modnet", "MODNet", PART_TIERS[0]!.files.find((each) => each.role === "matte")!, []),
+    cut("cut-better", "Better", "Most things, clean edges, slower", "ormbg", "ormbg", PART_TIERS[1]!.files.find((each) => each.role === "matte")!, []),
+    cut("cut-best", "Best", "Hair and fine edges, quick on a graphics card", "birefnet", "BiRefNet lite", BIREFNET_FILES.webgpu, ["matte"]),
+];
+
+/** The choice with this id (a part choice or a cut-out's), or the smaller part choice. */
+export const partTierOf = (id: string | null | undefined): PartTier => [...PART_TIERS, ...CUT_TIERS].find((tier) => tier.id === id) ?? PART_TIERS[0]!;
 
 /** A choice's file for a role, if it has one. */
 export const partFile = (tier: PartTier, role: PartRole): PartFile | undefined => tier.files.find((each) => each.role === role);

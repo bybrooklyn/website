@@ -44,6 +44,11 @@
   Cross-Origin-Opener-Policy: same-origin
   Cross-Origin-Embedder-Policy: require-corp
 
+# The cut-out's page runs its models on several threads too.
+/cutout/*
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: require-corp
+
 # A worker's script must carry the embedder policy of the page that starts it, or the browser
 # refuses it: the engine worker lives in /_astro/ and ONNX Runtime's thread workers in /ort/.
 # On a script this header changes nothing for any other page that uses the file.

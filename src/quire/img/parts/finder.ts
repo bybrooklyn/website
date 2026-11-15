@@ -21,7 +21,7 @@ export type Ask =
     | { type: "fetch"; id: number; tier: string; host?: string }
     | { type: "cancel" }
     | { type: "select"; id: number; tier: string; key: string; picture?: ImageBitmap; presses: Press[]; prefer?: "webgpu" | "wasm"; card?: PartTier["card"] }
-    | { type: "matte"; id: number; tier: string; picture: ImageBitmap; prefer?: "webgpu" | "wasm"; card?: PartTier["card"] };
+    | { type: "matte"; id: number; tier: string; picture: ImageBitmap; prefer?: "webgpu" | "wasm"; card?: PartTier["card"]; side?: number };
 
 /** What the worker answers. */
 export type Answer =
@@ -148,7 +148,7 @@ export async function serve(ask: Ask, tools: { shelf(): Promise<Shelf>; say(answ
             const values = await alpha.getData();
             const [height, width] = alpha.dims.slice(-2) as [number, number];
             for (const each of Object.values(out)) each.dispose();
-            return tools.say({ type: "found", id: ask.id, found: foundOf(values, width, height, cropOf(fit, width, height), fit.picture), ms: Math.round(performance.now() - started), place: made.place });
+            return tools.say({ type: "found", id: ask.id, found: foundOf(values, width, height, cropOf(fit, width, height), fit.picture, tier.matte === "birefnet", ask.side), ms: Math.round(performance.now() - started), place: made.place });
         }
         // a picture's encoding is made once and kept, so each press after the first is only the decoder
         if (!state.encoded || state.encoded.key !== ask.key || state.encoded.tier !== tier.id) {
@@ -232,9 +232,9 @@ export function createFinder(make: () => Worker = () => new Worker(new URL("./fi
             const answer = failed(await ask({ type: "select", id: ++next, tier, key, picture, presses, prefer }, undefined, picture ? [picture] : []));
             return answer as Extract<Answer, { type: "found" }>;
         },
-        /** The picture's subject as a mask. */
-        async matte(tier: string, picture: ImageBitmap, prefer?: "webgpu" | "wasm") {
-            const answer = failed(await ask({ type: "matte", id: ++next, tier, picture, prefer }, undefined, [picture]));
+        /** The picture's subject as a mask, at most `side` on its longer side (512 unless asked). */
+        async matte(tier: string, picture: ImageBitmap, prefer?: "webgpu" | "wasm", side?: number) {
+            const answer = failed(await ask({ type: "matte", id: ++next, tier, picture, prefer, side }, undefined, [picture]));
             return answer as Extract<Answer, { type: "found" }>;
         },
         destroy() {
