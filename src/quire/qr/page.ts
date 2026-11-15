@@ -17,7 +17,7 @@ import { normalHex, FLAGS, isHex } from "./colors";
 import { contactText, describe, emailText, EMPTY_CONTACT, fileName, messageText, phoneText, wifiText, type Contact, type Kind, type Wifi } from "./content";
 import type { Code } from "./encode";
 import { readCodes, type Found } from "./read";
-import { codeFor, deepenedAny, drawSvg, eyePath, lookWord, MIDDLE_INSET, MIDDLE_SIZES, middleSquare, PLAIN, type EyeShape, type Look, type Paint, type Shape } from "./style";
+import { codeFor, deepenedAny, drawSvg, eyePath, lookWord, modulesPath, MIDDLE_INSET, MIDDLE_SIZES, middleSquare, PLAIN, type EyeShape, type Look, type Paint, type Shape } from "./style";
 import { dataBytes, type Level } from "./tables";
 
 /** A color offered by name. */
@@ -153,7 +153,10 @@ function field(label: string, options: { multiline?: boolean; placeholder?: stri
 function fold(...content: HTMLElement[]) {
     const outer = make("div", "quire-qr-fold");
     const inner = make("div", "quire-qr-fold-in");
-    inner.append(...content);
+    // the room around the content is inside what is clipped, so a shut fold takes no height at all
+    const pad = make("div", "quire-qr-fold-pad");
+    pad.append(...content);
+    inner.append(pad);
     outer.append(inner);
     return { element: outer, open: (on: boolean) => ((outer.classList.toggle("open", on)), (inner.inert = !on)) };
 }
@@ -175,21 +178,11 @@ function shapeSample(shape: Shape | EyeShape, eye = false): SVGSVGElement {
         svg.innerHTML = `<path fill-rule="evenodd" d="${eyePath(0, 0, shape as EyeShape)}"/>`;
         return svg;
     }
-    // a little pattern of modules: an L, a pair and a single
-    const on = new Set(["0,0", "1,0", "2,0", "0,1", "0,2", "3,2", "4,2", "4,3", "2,4", "1,4", "4,4"]);
-    const d: string[] = [];
-    for (let y = 0; y < 5; y++) {
-        for (let x = 0; x < 5; x++) {
-            if (!on.has(`${x},${y}`)) continue;
-            if (shape === "dots") d.push(`M${x + 0.06} ${y + 0.5}a0.44 0.44 0 1 0 0.88 0a0.44 0.44 0 1 0-0.88 0z`);
-            else if (shape === "rounded") d.push(`M${x + 0.34} ${y + 0.04}h0.32a0.3 0.3 0 0 1 0.3 0.3v0.32a0.3 0.3 0 0 1-0.3 0.3h-0.32a0.3 0.3 0 0 1-0.3-0.3v-0.32a0.3 0.3 0 0 1 0.3-0.3z`);
-            else if (shape === "diamonds") d.push(`M${x + 0.5} ${y - 0.04}l0.54 0.54l-0.54 0.54l-0.54-0.54z`);
-            else d.push(`M${x} ${y}h1v1h-1z`);
-        }
-    }
-    if (shape === "bars") svg.innerHTML = `<path d="M0.1 0.05h0.8v2.9h-0.8zM1.1 0.05h0.8v0.9h-0.8zM2.1 0.05h0.8v0.9h-0.8zM4.1 2.05h0.8v2.9h-0.8zM3.1 2.05h0.8v0.9h-0.8zM1.1 4.05h0.8v0.9h-0.8zM2.1 4.05h0.8v0.9h-0.8z" rx="0.4"/>`;
-    else if (shape === "joined") svg.innerHTML = `<path d="M0.5 0H3V0.5A0.5 0.5 0 0 1 2.5 1H1V2.5A0.5 0.5 0 0 1 0.5 3A0.5 0.5 0 0 1 0 2.5V0.5A0.5 0.5 0 0 1 0.5 0zM3.5 2H4.5A0.5 0.5 0 0 1 5 2.5V4.5A0.5 0.5 0 0 1 4.5 5A0.5 0.5 0 0 1 4 4.5V3H3.5A0.5 0.5 0 0 1 3.5 2zM1.5 4H2.5A0.5 0.5 0 0 1 2.5 5H1.5A0.5 0.5 0 0 1 1.5 4z"/>`;
-    else svg.innerHTML = `<path d="${d.join("")}"/>`;
+    // a little square of modules, drawn by the code's own drawing so the button shows exactly what it makes
+    const pattern = [1, 1, 0, 1, 1, 0, 0, 1, 0, 0, 1, 1, 1, 0, 1, 0];
+    const sample = { side: 4, modules: Uint8Array.from(pattern), parts: new Uint8Array(16) } as unknown as Code;
+    svg.setAttribute("viewBox", "-0.15 -0.15 4.3 4.3");
+    svg.innerHTML = `<path d="${modulesPath(sample, shape as Shape)}"/>`;
     return svg;
 }
 
@@ -603,8 +596,9 @@ export function createQrPage(host: HTMLElement, options: PageOptions = {}) {
     svgButton.title = "Save as SVG (Ctrl+Shift+S)";
     svgButton.addEventListener("click", () => saveSvg());
     const sizes = choices<string>("PNG size", PNG_SIZES.map((size) => ({ value: String(size), content: String(size), tip: `${size} by ${size} pixels` })), String(pngSize), (value) => (pngSize = Number(value)));
-    sizes.element.classList.add("quire-qr-sizes");
-    out.append(copyButton, pngButton, svgButton, sizes.element);
+    const sizeRow = make("div", "quire-qr-sizes");
+    sizeRow.append(make("span", "quire-qr-unit", "PNG size"), sizes.element);
+    out.append(copyButton, pngButton, svgButton, sizeRow);
 
     // ---- the reader's part of the panel ----
     const readChooser = make("input");
@@ -619,7 +613,7 @@ export function createQrPage(host: HTMLElement, options: PageOptions = {}) {
     readPaste.addEventListener("click", () => void pasteFromMenu());
     const readActions = make("div", "quire-qr-actions");
     readActions.append(readChoose, readPaste, readChooser);
-    const readSaid = make("p", "quire-qr-read-said", "Drop, paste or choose a picture with a QR code in it.");
+    const readSaid = make("p", "quire-qr-read-said");
     readSaid.setAttribute("aria-live", "polite");
     const results = make("div", "quire-qr-results");
     readPart.append(readActions, readSaid, results);

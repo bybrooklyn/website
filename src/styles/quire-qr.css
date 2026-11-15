@@ -96,7 +96,8 @@
 }
 
 .quire-qr.blank .quire-qr-ground {
-    opacity: 0.12;
+    border: 0.0625rem dashed var(--rule);
+    background: color-mix(in oklch, var(--ink) 3%, transparent) !important;
 }
 
 .quire-qr-svg,
@@ -213,6 +214,26 @@
     min-height: 1.3rem;
 }
 
+/* while reading, the maker's words fade, keeping their room so nothing moves */
+.quire-qr-said,
+.quire-qr-verdict {
+    transition: opacity 0.25s ease;
+}
+
+.quire-qr.reading :is(.quire-qr-said, .quire-qr-verdict) {
+    opacity: 0;
+}
+
+.quire-qr-read-view {
+    border-radius: var(--quire-round-small);
+    outline: 0.0625rem dashed transparent;
+    outline-offset: -0.0625rem;
+}
+
+.quire-qr.reading:not(.has-picture) .quire-qr-read-view {
+    outline-color: var(--rule);
+}
+
 .quire-qr-verdict.bad {
     color: var(--ink);
     font-weight: 600;
@@ -248,7 +269,10 @@
 }
 
 .quire-qr-sizes {
-    margin-left: auto;
+    display: flex;
+    flex-basis: 100%;
+    align-items: center;
+    gap: 0.6rem;
 }
 
 /* ---- buttons ---- */
@@ -308,8 +332,8 @@
 }
 
 .quire-qr-sample {
-    width: 1.35rem;
-    height: 1.35rem;
+    width: 1.55rem;
+    height: 1.55rem;
     fill: currentColor;
 }
 
@@ -460,26 +484,33 @@
     outline: none;
 }
 
+/* a shut fold takes no room, not even the section's gap before it */
 .quire-qr-fold {
     display: grid;
     grid-template-rows: 0fr;
+    margin-top: -0.55rem;
     opacity: 0;
     transition:
         grid-template-rows 0.35s var(--ease),
+        margin-top 0.35s var(--ease),
         opacity 0.2s ease;
 }
 
 .quire-qr-fold.open {
     grid-template-rows: 1fr;
+    margin-top: 0;
     opacity: 1;
 }
 
 .quire-qr-fold-in {
+    min-height: 0;
+    overflow: hidden;
+}
+
+.quire-qr-fold-pad {
     display: flex;
     flex-direction: column;
     gap: 0.55rem;
-    min-height: 0;
-    overflow: hidden;
     padding: 0.2rem 0.15rem;
 }
 
@@ -658,8 +689,9 @@
         padding-top: 0.75rem;
     }
 
+    /* right under the top, which is 3.35rem tall on a phone */
     .quire-qr-stage {
-        top: 4.25rem;
+        top: 3.35rem;
         z-index: 5;
         align-items: center;
         margin-inline: calc(var(--gutter) * -1);
@@ -669,7 +701,12 @@
     }
 
     .quire-qr-box {
-        width: min(100%, 38dvh);
+        width: min(100%, 30dvh);
+    }
+
+    /* what the keyboard or a scroll brings into view stops below the code, never under it */
+    .quire-qr-panel :is(button, input, textarea, h3) {
+        scroll-margin-top: calc(30dvh + 14rem);
     }
 
     .quire-qr-said,
@@ -686,7 +723,7 @@
     }
 
     .quire-qr-sizes {
-        margin-left: 0;
+        justify-content: center;
     }
 
     .quire-qr-form-wide {
