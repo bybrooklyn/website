@@ -263,6 +263,43 @@ sky with an Alt-press on the figure gave 94 to 95 percent of the sky and none of
 took 81 percent of the figure and nothing else. SAM 2.1's ONNX copy says no licence on its card; its upstream,
 `facebookresearch/sam2`, is Apache-2.0.
 
+### For the cut-out: verified on the site's build (14 November 2026)
+
+The cut-out offers three qualities, quietly, as reading text does: Quick, MODNet fp16 (13 MB); Better, ormbg int8
+(44 MB), where it starts; Best, BiRefNet lite fp16 (123 MB), only where there is a graphics card. The owner
+allowed exactly two more files to be fetched to this machine once, with their small config files, into
+`~/.cache/quire-model-trials/parts/`; each was checked against its listing's digest:
+
+| Repository | Commit | File | Bytes | SHA-256 |
+|---|---|---|---|---|
+| `onnx-community/BiRefNet_lite-ONNX` | de15b22ba131738a16dff04aab8bdf8dc32e3ac1 | onnx/model_fp16.onnx | 114,538,221 | d39b897c…8bfec402 |
+| `wonfy/BiRefNet_lite-ONNX-webgpu` | c40eaa22fb1af9edcf75c7b79d25ed8a8e901140 | onnx/model_fp16.onnx | 123,210,389 | 2290313b…e9cff2d7 |
+
+The full digests are in `src/quire/img/parts/models.ts` (`BIREFNET_FILES`). The rebuild's card says MIT, names
+`ZhengPeng7/BiRefNet_lite` as its base and `onnx-community/BiRefNet_lite-ONNX` as where it started, says the weights
+are unchanged and only the graph rewritten (constants folded, wide Concat and Split nodes made trees, Sum nodes
+made chains of Add, the deformable convolutions' GatherND made a Gather with no int64 left, so every node uses at
+most 7 storage buffers), carries an MIT licence file (Copyright 2024 ZhengPeng) and the scripts that made it. Its
+input is `input_image` (1, 3, 1024, 1024, ImageNet's mean and spread), its output logits.
+
+On the site's onnxruntime-web 1.24.1 in headless Chromium (four cores, two WebAssembly threads, an RTX 3070 Ti),
+each model in a worker and a runtime of its own, on a drawn figure with a head of fine strands on green, at 2
+and 12 megapixels (the model's own work is the same; times warm):
+
+| Model | WebAssembly | WebGPU | Figure kept, ground kept |
+|---|---|---|---|
+| MODNet fp16 | 0.6 s | will not load there (fused convolution); runs on WebAssembly | 70 to 73 percent, 0 |
+| ormbg int8 | 19.5 s | will not load there (pooling); runs on WebAssembly | 94, 0 |
+| BiRefNet lite, stock fp16 | out of memory (`std::bad_alloc` in OrtRun) | out of memory in its operators that fall back to the processor | |
+| BiRefNet lite, rebuild fp16 | out of memory (`std::bad_alloc`) | 0.86 s (2.5 s the first time), 0.90 s at 12 MP | 94, 0 |
+
+So the rebuild is the one offered, on the card only. Whether it gives the stock export's mask within a small
+bound could not be checked here, since the stock file runs nowhere on the site's runtime, and no other runtime
+is on this machine; its card's own comparison (fp16 against the fp32 stock on the processor: at most 0.07
+percent of pixels moved by more than 1/255) is its maker's claim. Once, with the machine busy with another
+test run, the rebuild gave a mask that was all kept; run again alone it gave the right one; the cut-out refuses
+a mask all kept or all gone.
+
 ## 3. Upscaling and restoration
 
 Upscalers trained with a GAN invent texture that was not in the picture. Those trained for PSNR (plain
