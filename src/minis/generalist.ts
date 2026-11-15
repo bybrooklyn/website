@@ -1339,7 +1339,7 @@ export default function generalist(m: Mote): Scene {
             }
         };
         if (ice > 0) {
-            ctx.globalAlpha = 0.45 * ice;
+            ctx.globalAlpha = 0.32 * ice;
             ctx.fillStyle = ICE;
             ctx.fill(fill);
             ctx.globalAlpha = 0.8 * ice;
@@ -1356,7 +1356,7 @@ export default function generalist(m: Mote): Scene {
             ctx.stroke();
         }
         if (sticky > 0) {
-            ctx.globalAlpha = 0.55 * sticky;
+            ctx.globalAlpha = 0.4 * sticky;
             ctx.fillStyle = STICKY;
             ctx.fill(fill);
             ctx.globalAlpha = 0.9 * sticky;
