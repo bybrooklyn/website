@@ -115,6 +115,8 @@ test("a 50 megapixel photograph is run through a tile at a time without being he
     const started = performance.now();
     await runTiles(plan, partOf, blur, (out, part) => {
         for (let at = 0; at < part.data.length; at += 997) sum = (sum + part.data[at]!) % 1_000_003;
+        // what is held, not what waits to be collected: among two hundred other test files the garbage of a few tiles came to more than the bound
+        Bun.gc(true);
         most = Math.max(most, process.memoryUsage().rss);
     });
     const grown = (most - before) / 1e6;
