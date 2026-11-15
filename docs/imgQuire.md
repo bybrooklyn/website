@@ -28,7 +28,16 @@ remover (`cutout.md`) is to be one of its tools as well as a page of its own.
   (`cut.ts`), its edges (`refine.ts`), the full-size pass on the card (`render.ts`), the first-use dialog
   (`asking.ts`) and the page (`page.ts`).
 - `turn.ts`: the horizon's arithmetic: a place on the turned picture and back, the largest upright rectangle
-  inside it, a crop fitted inside, and the turn a line drawn along the horizon asks for.
+  inside it, a crop fitted inside, and the turn a line drawn along the horizon asks for; with a perspective,
+  the same through one plane-to-plane map.
+- `homography.ts`: perspective's arithmetic: the map from four places to four others and back, maps put one
+  after another, a camera tilted about its middle (the keystone dials), the stretch at a place, a rectangle's
+  true proportions guessed from its corners, and the depths the card draws a shape in perspective by.
+- `perspective.ts`: the perspective step: its dials and corners, the map it makes, and when a map is no map.
+- `lines.ts`: a picture's straight lines found, where they meet, and the camera's turn that stands them upright.
+- `deblock.ts`: a JPEG's tables read from its bytes, and its blocks and ringing taken out by hand;
+  `repair.ts`, the same run in a worker, as the editor offers it.
+- `tiles.ts`: a model run over a large picture tile by tile, for when models are chosen.
 - `metadata.ts`: a picture's Exif, XMP, IPTC and colour profile read and written by hand, through the
   core's walkers of a JPEG, PNG and WebP (`core/picture-bytes.ts`) and its own of AVIF, HEIC and JPEG XL
   boxes.
@@ -451,7 +460,7 @@ red mark is the red picked (`profile.test.ts`).
 
 **As a Quire.** Menus File, Edit, View, Image, Tools, Help, as one table, an icon on every line, ticks for
 what is on, submenus for Download, Copy as, Zoom, Crop shape, Resize filter, Mark color and Thickness;
-single keys C, R, A, T, B, E, I, W and G only while the picture has the keyboard, Enter and Escape; the palette is
+single keys C, R, A, T, B, E, I, W, G, K and P only while the picture has the keyboard, Enter and Escape; the palette is
 the core's; version history draws a version's steps over the original, small, and restores it as one step.
 
 **A right-click's menu** (`press-menu.ts`, opened in `editor.ts`), as mdQuire's text has one. On the
@@ -476,6 +485,126 @@ and 2.9 s through WebGPU. The four jobs from paste to clipboard in the browser t
 (with the first-time question), shrink and convert a 12 megapixel photograph to WebP under 200 KB 1.9 s,
 hide 0.6 s, mark up 0.5 s. Done by hand-paced drags with pauses to photograph each stage: 2.1 s, 5.6 s,
 1.7 s and 1.8 s.
+
+**Perspective.** P, the crop strip's perspective button (after the horizon's line button) or Image,
+Perspective fills the crop's strip with perspective's controls: two dials, Vertical and Horizontal, then
+Corners and Auto, and Done. Escape goes back to the crop's strip; a new picture starts with the crop's own.
+
+The dials are the horizon's dial (its ruler twice as long, 30 degrees either way): dragged from wherever they
+are pressed, a tenth as far with Shift, snapping to zero within a quarter of a degree, the arrows a tenth (Shift
+a degree), 0 or a double press back to zero; while one is dragged the picture is drawn straightened live and
+the crop's frame follows; letting go is one step. Vertical is the camera tilted up or down: lines that lean in
+toward the top stand straight. Horizontal is the camera turned left or right: lines that run away to one side
+become level. Each is `K R K⁻¹`, the camera turned about its own middle, with a focal length of the picture's
+longer side (about a 36 mm lens on a full frame), then moved and scaled so that the picture's middle keeps its
+place and its size there.
+
+Corners shows the original as it came, whole, with four round handles (a finger's reach round each) on the
+corners of a rectangle a sixth of the way in, the outside of their shape dimmed and a grid of quarters drawn
+inside it through the map from a square, which shows how the shape will be squared. A handle is dragged from
+wherever it is pressed, so it never jumps; it stops where the shape would bend inward, and stays on the picture.
+Tab reaches the handles and the arrows nudge the one in hand a pixel (Shift ten). Each handle let go or nudged
+is one change: the shape becomes a rectangle of the proportions guessed from it, the dials and the horizon's turn
+go back to none (the corners now say how the picture stands), and the crop becomes that rectangle, so a page or
+a screen comes out alone. Its proportions are found by Zhang and He's method ("Whiteboard scanning and image
+enhancement", 2007): the camera's focal length is read from the four corners, the picture's middle taken as the
+camera's. When one pair of sides is parallel the focal length cannot be read, and the one taken for the dials is
+used. Corners that would throw part of the picture behind the camera or spread it past three times its longer
+side are refused, and the status says "Not a rectangle". Escape (or Corners again) shows the result.
+
+Auto (also Image, Straighten lines, and the picture's right-click menu) finds the picture's straight lines in a
+copy 1024 on its longer side: edges by their gradient, pixels whose edges run the same way within 22.5 degrees
+grown into regions and each fitted with a line, kept when long (4 percent of the longer side) and thin (the line
+segment detector of von Gioi and others, much simplified). The lines within 30 degrees of upright vote on where
+they meet (every pair's crossing, and far away), each scored by the length of the lines that point at it within
+a degree and a half, refined by least squares. They are clear when at least three agree, together half the
+picture's height long and half the upright lines' length, spread over a fifth of its width. Then the camera's
+turn that sends their meeting place to straight up is worked out and read back as tilt, turn left or right and
+roll: the tilt and turn go to the dials and the roll to the horizon's dial, all as one change, one undo. The
+level lines are used too, when they are as clear and need a turn of at most 20 degrees (10 unless there are
+eight or more); a tilt over 15 degrees needs eight upright lines. Past 30 degrees, or a roll past 15, nothing
+is changed. With nothing clear the status says "No clear lines" and nothing is changed. With corners set by
+hand the lines are first put where the corners' map puts them, so the dials straighten what the corners made.
+
+In the document a perspective is one step, `{"type": "perspective", "vertical": 6.2, "horizontal": -1.5,
+"corners": [...], "ratio": 0.707}`, only what is set kept, the dials held to 30 degrees in hundredths, the ratio
+to a twentieth and twenty, corners only as four places; a step of nothing is no step; a file from before it reads
+as it did. It is done before the horizon's turn: the two make one map from the original to the level picture,
+and everything the horizon's arithmetic did reads through it. The crop with none of her own is the largest
+upright rectangle inside the straightened picture, a convex four-sided shape: over any stretch from x0 to x1
+the tallest rectangle is read from the two ends alone (its top edge is convex, its bottom concave), and the best
+stretch is searched on a grid of 200 by 200, then each end on finer grids, and kept for each map since the
+picture is drawn many times a second. A crop of her own is held to the box round the straightened picture,
+then fitted inside as on a turned one (halving, since the map is not straight in the share). No empty corner is
+exported. Covers, marks, parts and words stay where they were put in the original's pixels: a box's corners
+and an arrow's ends are put where the map puts them and drawn straight between, a text and an arrow's head by
+the map's nearest straight-line likeness at their place; a cover is painted into the original before anything
+is sampled, as ever; a part's mask is read through the map back.
+
+On the screen each piece of the picture is four corners where the map puts them, and the card is given each
+corner's depth (the bottom of the map's fraction there, from the map of the unit square to the four corners),
+as the position's last number, so it draws the piece through the map and not as two flat triangles; a picture
+with no perspective draws exactly as before. Flattening, the pass that turned a piece upright follows the whole
+map back to the original, nine numbers, its Lanczos filter of six by six widened by as much as a step of the
+result moves more than a pixel of the original (up to eight times), so a part the map shrinks does not shimmer;
+the part of the original each piece reads is grown by as much, and the pieces made smaller to fit the card.
+
+Measured: the proportions of an A4 page, a 16 by 9 screen and a square photographed by a pinhole camera at
+slants of up to 40 degrees are found within a percent; a building drawn as taken with the camera tilted up 4
+to 12 degrees, turned up to 9 and rolled up to 2 is straightened within 0.6 degrees of tilt and 0.4 of roll
+(`lines.test.ts`); the largest rectangle inside is within 0.2 percent of the closed form with only a turn and at
+least 99.5 percent of a search over many shapes with a perspective (`perspective.test.ts`). Through a keystone
+with a cover and a shrink, and corners with a turn and an enlargement four times over, WebGL2 flattens to the
+same arithmetic done on the processor within one, but for 3 values of 433,200 that are two apart (a rounding of
+the level piece carried by the filter's lobes when much enlarged), and WebGPU to WebGL2 within one (`gl.test.ts`,
+`gpu.test.ts`). On the page (`perspective-tool.test.ts`), Auto on a drawn building taken at a 10 degree tilt and
+a 1 degree roll gave 10.1 and 1, in 49 ms; the vertical dial's keys, the corners dragged and nudged, the crop
+the rectangle's proportions, the export with no clear pixel, and the document opened again drawing the same
+pixels; a photograph of soft shapes got "No clear lines". On 80 photographs from the photos page Auto found
+clear lines in 15; by eye, the upright lines of the street, the rooms, the kitchen and the sign stood straighter,
+which no number here measures.
+
+**Repairing a JPEG.** Image, Repair JPEG, also in the picture's right-click menu, for a JPEG whose own tables
+say it was made at quality 90 or below and which is stored upright (no Exif turn). It is a step, `{"type":
+"repair"}`, taken away again by the same line or by undo. The repair is written by hand and fetches nothing
+(`deblock.ts`): the file's quantization tables and sampling are read from its DQT and frame segments, and the
+quality its luminance table is nearest (libjpeg's scaling of the standard's table) is known. The luminance is
+cut into 8 by 8 blocks again on the grid moved by every even step (sixteen grids), each block's waves (its DCT)
+rounded by the file's own steps and put back, and the sixteen averaged ("re-application of JPEG", Nosratinia
+2001): a real edge survives every grid, a block's edge and the ringing round a real edge differ from grid to grid
+and average away. The result is then held to the file: on its own grid each wave is kept within half a step of
+what was decoded, so the repair only chooses among pictures that would have made the same file. Colour is left
+alone (the code can repair it at the size the file kept it, but measured it sometimes made screenshots worse).
+It runs in a worker of its own (`repair.ts`), once for each picture, about 0.36 s a megapixel on one thread, and
+the repaired pixels take the original's place on the stage, under the cut-out, the models and the export.
+
+Measured (`deblock.test.ts`, sharp's libjpeg at 4:2:0): photographs from the photos page made small (a river,
+flowers, grass), screenshots kept as PNG (three of the site's project pictures) and drawings (a chart made in
+the test and the Torrens Serif cover), each compressed at 10, 20, 30, 50, 75 and 90, the repair against the
+decoded JPEG, by PSNR of red, green and blue against the clean picture, and SSIM of the luminance:
+
+| Kind | 10 | 20 | 30 | 50 | 75 | 90 |
+|---|---|---|---|---|---|---|
+| Photographs, PSNR | +0.43 dB | +0.35 | +0.33 | +0.33 | +0.28 | +0.11 |
+| Photographs, SSIM | +0.019 | +0.011 | +0.008 | +0.006 | +0.003 | +0.001 |
+| Screenshots, PSNR | +0.24 dB | +0.41 | +0.46 | +0.56 | +0.60 | +0.33 |
+| Screenshots, SSIM | −0.0008 | +0.002 | +0.002 | +0.003 | +0.003 | +0.001 |
+| Drawings, PSNR | +0.17 dB | +0.19 | +0.11 | +0.25 | +0.33 | +0.18 |
+| Drawings, SSIM | +0.0005 | +0.004 | +0.004 | +0.004 | +0.002 | +0.001 |
+
+Every picture came nearer by PSNR at every quality but the chart at 30, which tied (0.01 dB below); at quality
+10 the screenshots' SSIM fell by about a thousandth while their PSNR rose. Above 90 it was not measured and is
+not offered. In the editor a 768 by 576 sign at quality 15 went from 35.99 to 36.44 dB (`repair.test.ts`).
+
+**Ready for models.** `tiles.ts` cuts a picture into tiles read with a margin, runs a step on each and keeps
+only its middle, enlarged by the step's scale, handing each finished tile on as it is done. A stand-in that
+blurs twice and enlarges twice gives, tile by tile with a margin as wide as its reach, exactly the pixels it
+gives the whole picture; with no margin the joins show. A 50 megapixel photograph read a tile at a time ran
+through a blur in 54 tiles in 2.1 s, memory growing by 78 MB at most against 200 MB for the picture held whole.
+It says the share done after each tile and stops between tiles when asked. A result past 16,384 a side is
+refused (a 50 megapixel photograph cannot be enlarged at all; a 12 megapixel one four times). The models for
+repairing, restoring and enlarging, and their dialog, wait for the owner's choice; the candidates are listed for
+her with their files, sizes and licences.
 
 ## Decided
 
@@ -686,7 +815,7 @@ only with `--enable-unsafe-webgpu`, which the drawing tests pass.
   past one to one, not as square pixels. A picture resized to another
   shape (width and height both given) and turned has its covers and marks drawn by a turn in the resized pixels,
   which skews them a little. A cover made on a turned picture takes its color from the ring round the upright box
-  about it. Perspective, JPEG repair and restoring detail are left for later.
+  about it.
 - Finding: Better's Subject takes about 20 s, since ormbg will not run on the card's runtime; its SAM 2.1 decoder
   runs there but gives a wrong mask, so it runs on WebAssembly. The models were tried on a drawn scene, not on
   photographs of people, skies or things; MODNet is made for portraits. The found mask is kept at 512 a side.
@@ -707,13 +836,28 @@ only with `--enable-unsafe-webgpu`, which the drawing tests pass.
 - Grading on a phone: on the narrowest screens (under 26rem) Facts leaves the bar for View, Facts and the I key,
   so that the other eleven tools fit; the sheet's drag and the sliders by thumb were tried only in a 390 wide
   window with a mouse, not on a touch screen.
+- Perspective: the dials take the focal length to be the picture's longer side, so a picture taken with a long
+  lens needs more degrees than it was tilted, and a wide one fewer; nothing reads the lens from the Exif. Corners
+  with one pair of sides parallel guess the proportions with that same focal length. Auto was measured on drawn
+  buildings and only looked at by eye on photographs; it takes the meeting of the most upright lines, so a
+  picture of something leaning on purpose is stood up. Exporting the empty corners round a straightened picture,
+  when asked for, is not built: the crop always lies on the picture. A cover made on a straightened picture is
+  upright by the picture's turn only, not by the perspective's own slant there. The picture is drawn on the
+  screen through the map exactly, but marks' text and arrow heads by the map's likeness at their place.
+- Repairing a JPEG: luminance only; colour's blocks stay. About 4 s for a 12 megapixel photograph, on one thread
+  in its worker. Not offered for a JPEG with an Exif turn (the file's grid would no longer lie at the picture's
+  corner) or above quality 90. Measured with libjpeg's own tables at 4:2:0; a phone's encoder with tables of its
+  own, and 4:4:4 files, were not measured.
+- The pictures of the built page were made with software drawing: with Chromium's Vulkan drawing the canvas
+  came out empty in the window's picture, though everything else on the page drew.
 - A picture in an mdQuire document does not yet open in imgQuire and come back: the core has the pieces
   (`takes`, `take`, one editor at a time) but a way for one kind to lend a picture to another and have it
   back is still to be designed.
 
 ## Next slices, in order
 
-1. Perspective, repairing what JPEG took, and restoring detail.
+1. The models for repairing, restoring and enlarging, once the owner has chosen them: their dialog in the
+   reading dialog's family, run through `tiles.ts` in a worker.
 2. More marks: numbered steps, a highlighter, a magnifier, a spotlight, outlined captions.
 3. Many at once: batches through the same steps and export (a look given to a batch), and the cut-out's
    pictures as a zip.
