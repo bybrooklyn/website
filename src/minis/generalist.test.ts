@@ -355,6 +355,20 @@ test("the brain on show is drawn as it thinks, evolution's or practice's", async
     const heardAt = engine.brain_reads(47 + 64);
     const heard = Array.from(new Float32Array(engine.memory.buffer, heardAt, engine.length()));
     expect(heard.length).toBe(3 * DEFAULT_SHAPE.reads);
+    expect(kinds?.growth).toBeUndefined();
+    // switched on, the same brain adds and cuts its connections as it lives, and says how many it keeps and what they cost
+    engine.brain_grow(1);
+    for (let i = 0; i < 600; i++) engine.show_step(1 / 60);
+    const growing = brainKinds(view(Float32Array, engine, engine.brain_picture(), engine.length()).slice());
+    expect(growing?.counts).toEqual(kinds?.counts);
+    expect(growing?.growth?.places).toBe(DEFAULT_SHAPE.memory * DEFAULT_SHAPE.reads);
+    expect(growing!.growth!.joined).toBeGreaterThan(0);
+    expect(growing!.growth!.joined).toBeLessThanOrEqual(growing!.growth!.places);
+    expect(growing!.growth!.cost).toBeGreaterThan(0);
+    expect(growing!.growth!.changes.length % 3).toBe(0);
+    engine.brain_grow(0);
+    for (let i = 0; i < 30; i++) engine.show_step(1 / 60);
+    expect(brainKinds(view(Float32Array, engine, engine.brain_picture(), engine.length()).slice())?.growth).toBeUndefined();
     expect(brainKinds(new Float32Array([-1, 1, 1, 0, 0, 0, 1]))).toBeUndefined();
 });
 
