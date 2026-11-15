@@ -11,7 +11,7 @@ export interface Made {
     listed?: boolean;
 }
 
-/** The made runs: those of the stages before, then the race and the tall bent run of stage 7. */
+/** The made runs: those of the stages before, then the race, the tall bent run, and the run with every moving and sounding piece. */
 export const RUNS: Made[] = [
     { name: "a first run", spot: { at: [-28, 12.4, -12.2], turn: 0.75, tip: 0.55, far: 140 }, text: "v1.h0_0_8_0.s2_0_1_8_2.d2_1_-2_1_8_2.c1_1_-4_1_7_2.d2_2_-5_0_7_3.c1_1_-5_-2_5_7.s1_-5_-2_5_2.t-6_-2_5_2" },
     {
@@ -50,5 +50,13 @@ export const RUNS: Made[] = [
         name: "a tall bent run",
         spot: { at: [31.3, 46.4, 4.1], turn: 0.75, tip: 0.55, far: 223 },
         text: "v3.h0_0_42_2.s2_0_-1_42_0.d2_1_2_-1_42_0b-10_0_-10_0.d2_1_4_-1_41_0b-6_14_-6_-14.d2_1_6_-1_40_0b-10_0_-10_0.c3_2_8_-1_39_0.d2_1_8_3_39_2b-10_0_-10_0.d2_1_6_3_38_2b-6_14_-6_-14.d2_1_4_3_37_2b-10_0_-10_0.c3_2_2_3_36_2.d2_1_2_-1_36_0b-10_0_-10_0.d2_1_4_-1_35_0b-6_14_-6_-14.d2_1_6_-1_34_0b-10_0_-10_0.c3_2_8_-1_33_0.d2_1_8_3_33_2b-10_0_-10_0.d2_1_6_3_32_2b-6_14_-6_-14.d2_1_4_3_31_2b-10_0_-10_0.c3_2_2_3_30_2.d2_1_2_-1_30_0b-10_0_-10_0.d2_1_4_-1_29_0b-6_14_-6_-14.d2_1_6_-1_28_0b-10_0_-10_0.c3_2_8_-1_27_0.d2_1_8_3_27_2b-10_0_-10_0.d2_1_6_3_26_2b-6_14_-6_-14.d2_1_4_3_25_2b-10_0_-10_0.c3_2_2_3_24_2.d2_1_2_-1_24_0.s1_4_-1_23_0.t5_-1_23_0",
+    },
+    // Every moving and sounding piece: down past a gate, a chime bar, a bell and a drum, slowed between them,
+    // to a switch; one way on, a spinner, a lift and a chain hoist to a tray, and the other, a seesaw that tips
+    // at each marble and a trapdoor that drops them two at a time into another.
+    {
+        name: "every moving and sounding piece",
+        spot: { at: [-43.3, 48.4, -8], turn: 0.75, tip: 0.55, far: 478 },
+        text: "v3.h0_0_44_0.s2_0_1_44_2.g-2_1_44_2.d2_2_-3_1_44_2.m4_-5_1_42_2.d2_1_-6_1_39_2.s2_-8_1_38_2.n-10_1_38_2.q-11_1_34_2.c1_2_-12_1_30_6.d2_2_-12_1_30_0.w-10_1_28_0.d2_1_-10_0_23_3.o4_-10_-2_22_3.d2_1_-10_-4_15_3.u8_-10_-6_14_3.d2_1_-10_-8_22_3.y4_-10_-10_21_3.d2_1_-10_-14_28_3.t-10_-16_27_3.d2_1_-9_3_23_1.e1_-9_5_22_1.d2_1_-9_8_18_1.j-9_10_17_1.d2_1_-9_12_11_1.t-9_14_10_1",
     },
 ];
