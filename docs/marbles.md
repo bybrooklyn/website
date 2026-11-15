@@ -2,8 +2,9 @@
 
 A mini: build a marble run in three dimensions and watch marbles go down it. A plan dated 13 November
 2026. Stage 1, what Mote needed, stage 2, pieces and snapping, stage 3, the editor, stage 4, bending,
-and stage 5, moving parts and sound, were all built on 14 November 2026, and stage 6, the look, on
-14 November 2026 too (below). The mini is a draft, Marbles, at `/minis/marbles/`.
+and stage 5, moving parts and sound, were all built on 14 November 2026, stage 6, the look, on
+14 November 2026 too, and stage 7, cameras, races, sharing and the runs to start from, on 15 November 2026
+(below). The mini is a draft, Marbles, at `/minis/marbles/`.
 
 ## Decided
 
@@ -99,7 +100,7 @@ Mote's broad phase and inertia; see [mote](mote.md)):
 4. Bending, with its limits and warnings. **Built**, waiting to be looked at (see below).
 5. Moving parts and sound. **Built**, waiting to be looked at and listened to (see below).
 6. The look: wood, glass, shadows. **Built**, waiting to be looked at (see below).
-7. Cameras, races, sharing, and the runs to start from.
+7. Cameras, races, sharing, and the runs to start from. **Built**, waiting to be looked at (see below).
 
 ## Stage 1, built
 
@@ -940,6 +941,111 @@ would be handed. Every other mini draws as before, to the pixel (below, under Mo
 - Pictures for a visitor should be made on the real card: `--enable-features=Vulkan --use-angle=vulkan`
   with `scripts/browser.ts`; software is ten times slower and goes plain.
 - The test hooks gained `load`, `look`, `timeDraw` and `closeUp`.
+
+## Stage 7, built
+
+On 15 November 2026, in the draft Marbles: `camera.ts` (riding, gliding, touring), `race.ts` (races),
+`share.ts` (links and files), each with its test, and their wiring in `marbles.ts`; `ghost.ts` lends the
+calm line along a groove (`onTrackOf`), `table.ts` lets go from chosen hoppers and says where its trays
+catch, `orbit.ts` lets a view left near by a ride stay near, `worlds.ts` lends the sand mini's bounded
+squeezing, `runs.ts` gained two runs and a spot for each. Mote is unchanged: nothing in `src/mote/` was
+touched (`git diff main -- src/mote` is empty), so every other mini steps and draws exactly as before.
+
+**Cameras.**
+
+- *Riding.* A tap on a rolling marble, V, the ride button or the right-click menu rides it. The eye is on
+  an arm 26 cm behind and above (0.42 rad), looking 5 cm ahead. It follows the groove's calm middle where
+  the marble is on track, as the ghost's thread does, so rocking is not followed; the lag of following is
+  put back along the way it goes and up and down only. It turns behind the way the marble goes, evened over
+  half a second, never faster than 2.4 rad/s; its up is always straight up, so a loop, a drop or a lift
+  cannot flip it. Where wood would come between the marble and the eye, the arm shortens at once; where
+  even a short arm would be in wood (a tray's walls, a hopper's box) the eye rises over it quickly and comes
+  down slowly, and failing that turns aside. Held by test: a steady marble is followed with no lag; a
+  marble rocking 3 mm five times a second moves the view by under 0.6 mm; a half turn turns the view no
+  faster than its rate; a loop turns it by under 0.2 rad; riding a marble down every made run, the eye is
+  never in wood, in Bun and in Chromium on the graphics card (0 frames in wood on all seven). The near plane
+  comes to 0.3 cm while riding. The ride lets go once its marble is still for 0.8 s or gone, and the next
+  marble is offered: a still ring round it and a dot on the ride button. V again rides the next marble.
+- *Spots.* H, or keep this view in the spots fold, keeps the view; up to six, kept with the run in the
+  browser and in a link. G and Shift with G, or a spot's button, glide there the short way round, from 0.45 s
+  up to 1.2 s for a long way. Each made run opens with a spot.
+- *The tour.* T or the tour button: along the first hopper's ghost way at 28 cm/s, further back and
+  higher (46 cm, 0.6 rad), once, then the camera is free. Under reduced motion every camera cuts instead
+  of gliding and the tour stands at a few places along the way, 2.2 s each.
+- Any drag of the view, the wheel, a pinch or a key that moves the view frees the camera at once, the view
+  left as it was drawn; Escape frees it too. Nothing moves by itself.
+
+**Races.** X, or the race fold: two to eight marbles (the fold's minus and plus). A race starts from a new
+table built for the run as it rests, and is stepped in place of the table, step for step as its test runs
+it, so the same run gives the same race every time. Every hopper is a start: marbles are dealt to the
+hoppers in turn in the run's order and each round is let go together, 0.35 s apart; a marble's time runs
+from its own letting go to the moment it first comes into any tray (found to a fraction of a step); the
+first tray reached counts; the order is by those times. One that falls, stops for 1.5 s or goes on past
+90 s does not finish, and says why. The racers look and are named: trans, lesbian, rainbow, bi, pan,
+nonbinary (clear glass, a ribbon of three of that flag's stripes), steel, and violet (opaque, the site's
+accent). The result grows under the bar, never over the scene: place, the racer's colors, name, time to
+the hundredth; a photo finish (within a hundredth) is said. Shift with V, or ride the leader, rides the
+racer furthest along its hopper's ghost way, and stays with it. A change to the run, a marble let go by
+hand, a stream or clearing stops a race, said so. Held: every made run's race of four and of eight the
+same to the bit twice, and in Chromium as in Bun (`race.test.ts`); in the browser on the graphics card,
+races of four and of eight run twice gave the same times to the bit, and the same as Bun's.
+
+**Sharing.** The share button puts the run, its spots and the pieces of one's own it uses (found turned
+and moved as one, `ownsUsed`) in a link's fragment, `#run=` and the squeezed text, puts it in the address
+and copies it; past 6,000 characters it saves a `.marbles` file instead, plain text: `marbles 1`, then
+`run`, `spot` and `own` lines. A link opens the run ready to play, the view cut to its first spot, and
+leaves the address at the first change. A file opens from the runs to start from or dropped on the mini.
+Ctrl+V with a run's link or file text opens that run; a run's bare text is still pieces to paste. The
+scene's own menu, from a right click that does not move or the menu key, grows from the press: Paste run,
+Copy run, Paste pieces, Ride this marble, and what the strip offers for what is chosen; Shift with the right
+click leaves the browser's own. A phone gets paste a run in the runs to start from, which grows a line to
+paste into where the browser will not read the clipboard. Opening takes nothing on trust: text 200,000
+characters, a link 100,000, unsqueezing stopped at its bound (a link that would unsqueeze to 50 MB is refused
+in milliseconds), 1,000 pieces, 6 spots, 12 pieces of one's own, numbers of six digits, names of 30
+letters; a run that does not fit is put together as far as it fits, in order, and says how many pieces were
+left out. Held by test: every made run round trips to the identical text by file and link; links of the
+made runs, each with its spot, are 120 to 261 characters. In the browser: a link opened in a fresh page gave the identical run;
+five hostile links left the page as it was, with no error; a file's text opened gave the identical run.
+
+**Runs to start from**, each opening with its spot: a first run; every kind of piece (the stage 2 run, every
+piece of track); a lift that loops; a tune on chime bars; sorting by switch and seesaw; a race through a
+funnel (new: one lane, so every marble starts alike, and the funnel mixes them; a race of eight finishes in
+4.45 to 12.72 s, no two within a hundredth); a tall bent run (new: bent gentle slopes winding down over
+themselves by wide turns back, 42 levels high). The two new runs were made by hand and checked by the run's
+own checks, the ghost, races of four and eight and ten stepped minutes (a marble every 2.5 s, trays emptied
+every ten seconds: 240 let go, none lost, none on the cloth, none stuck). Twenty pieces is kept for tests
+and no longer offered.
+
+**The controls line** says only what a newcomer needs first; bending and settings moved into the keys
+list. New keys: V, Shift+V, T, H, G, Shift+G, X, the menu key.
+
+**Fell short, said plainly.**
+
+- *No run with every piece.* A run chaining every moving and sounding piece after the stage 2 run, joint by
+  joint, threw marbles off the slope after the chime bar and off the bell and the drum, and a search for one
+  was given up; the run offered as every kind of piece has every piece of track but none of the moving or
+  sounding ones. Stage 5's browser run, built by pressing pieces in, did carry marbles through all of them.
+- *No race track with lanes.* Four lanes turned about a funnel's middle, dropping into its bowl, threw their
+  marbles out of it; the race is one lane through a funnel instead.
+- *A race on a run of moving or sounding pieces loses marbles*: let go 0.35 s apart they bunch and knock
+  each other off at the chime bars, the bell and the drum. One lane with nothing to mix them (the first run,
+  the tall bent run) is a photo finish every time, as it should be.
+- *The ten minutes* were checked for the two new runs (in `runs.test.ts`), and for the loop by stage 6's
+  test; not for the first run, the tune or sorting.
+- The search for runs was first run without a time limit, and an import in the scratch builder that never
+  settled kept it waiting for hours; it was stopped, and the runs above were made by hand.
+- Measured only in headless Chromium: two fingers and a long press on a real phone, and the feel of a
+  glide at a real screen's rate, want looking at.
+
+**Choices to confirm.**
+
+- A race's order by each marble's own time from its letting go, rather than the moment it arrives.
+- The racers' looks and names, and violet and steel as the seventh and eighth.
+- Ride 26 cm behind and 0.42 rad above, looking 5 cm ahead; the tour at 28 cm/s.
+- A tap on a rolling marble rides it rather than choosing the piece under it.
+- Six spots; links up to 6,000 characters, then a file.
+- The race through a funnel as the race track, one lane.
+- The keys V, T, H, G, X.
 
 ## Open
 
