@@ -124,3 +124,54 @@ test("Balance on a gray patch makes it neutral, Auto lands as slider and curve v
     // the histogram has been drawn
     await page.until("(() => { const canvas = document.querySelector('.quire-img-grade-scope'); const data = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data; return data.some((value) => value > 0); })()");
 }, 60_000);
+
+test("an idle Grade surface saves nothing, and a slider, a curve point, a wheel and a brush stroke dragged each save as one change when let go, not on every move", async () => {
+    if (!page) return;
+    // every write to the browser's database is counted, each with the store it went to
+    await page.tab.run(`(() => { window.writes = []; for (const name of ["put", "add"]) { const was = IDBObjectStore.prototype[name]; IDBObjectStore.prototype[name] = function (...args) { window.writes.push(this.name); return was.apply(this, args); }; } })()`);
+    const settle = async () => {
+        // until no write has come for two seconds
+        let seen = -1;
+        while (seen !== (await page!.tab.run<number>("window.writes.length"))) {
+            seen = await page!.tab.run<number>("window.writes.length");
+            await page!.tab.wait(2000);
+        }
+        return seen;
+    };
+    let before = await settle();
+    // idle, with the surface open, its histogram drawn and More open: nothing written
+    await page.tab.run("document.querySelector('.quire-img-grade-more summary').click()");
+    await page.tab.wait(3000);
+    expect(await page.tab.run<number>("window.writes.length")).toBe(before);
+    // one change by a typed number: what one save writes
+    await page.tab.run("(() => { const field = document.querySelector('.quire-img-slider[data-key=\"shadows\"] .quire-img-slider-number'); field.value = '10'; field.dispatchEvent(new Event('change')); })()");
+    const one = (await settle()) - before;
+    expect(one).toBeGreaterThan(0);
+    const changes = async (drag: () => Promise<void>) => {
+        before = await settle();
+        const steps = await page!.tab.run<string>("JSON.stringify(window.app.editing().steps())");
+        await drag();
+        const after = await settle();
+        expect(await page!.tab.run<string>("JSON.stringify(window.app.editing().steps())")).not.toBe(steps);
+        return after - before;
+    };
+    // a slider dragged in twenty moves
+    await page.tab.run("document.querySelector('.quire-img-slider[data-key=\"light\"]').scrollIntoView({ block: 'center' })");
+    const track = await page.boxOf('.quire-img-slider[data-key="light"] .quire-img-slider-track');
+    expect(await changes(() => page!.tab.drag({ x: track.x + track.width / 2, y: track.y + track.height / 2 }, { x: track.x + track.width * 0.8, y: track.y + track.height / 2 }, 20))).toBe(one);
+    // a curve point dragged in twenty moves
+    await page.tab.run("document.querySelector('.quire-img-curve-square').scrollIntoView({ block: 'center' })");
+    await page.tab.wait(300);
+    const square = await page.boxOf(".quire-img-curve-square");
+    const size = square.width - 16;
+    expect(await changes(() => page!.tab.drag({ x: square.x + 8 + 0.5 * size, y: square.y + 8 + 0.5 * size }, { x: square.x + 8 + 0.5 * size, y: square.y + 8 + 0.35 * size }, 20))).toBe(one);
+    // a wheel dragged in twenty moves
+    await page.tab.run("document.querySelector('.quire-img-wheels').scrollIntoView({ block: 'center' })");
+    await page.tab.wait(300);
+    const wheel = await page.boxOf('.quire-img-wheel[data-key="mids"] canvas');
+    expect(await changes(() => page!.tab.drag({ x: wheel.x + wheel.width / 2, y: wheel.y + wheel.width / 2 }, { x: wheel.x + wheel.width * 0.7, y: wheel.y + wheel.width * 0.35 }, 20))).toBe(one);
+    // a brush stroke in twenty moves, on a painted area made first
+    await page.tab.run("document.querySelector('.quire-img-make-paint').click()");
+    await settle();
+    expect(await changes(async () => page!.tab.drag(await page!.onScreen(100, 100), await page!.onScreen(500, 300), 20))).toBe(one);
+}, 120_000);
