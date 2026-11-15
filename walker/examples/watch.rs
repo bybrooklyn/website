@@ -12,8 +12,15 @@
 //! - **slip**: 10 seconds into each run the ground goes slippery (`Run::slippery`), and the same runs
 //!   without: how far it went in each five seconds from 5 to 25, so whether it slows and comes back.
 //!
+//! - **world** (stage 4): in each held-out world, at 6 seconds a box is dropped 1.5 m ahead of it (how much
+//!   of the second and a half after its eye was on the box, against chance); at 12 seconds night falls
+//!   (where its eye looked, on average, in the three seconds before and after, in degrees, and its surprise);
+//!   at 18 seconds a wind of 4 m/s² starts from ahead (the same). And its surprise on average, and when food
+//!   landed behind it, how loud it heard it.
+//!
 //!     cargo run --release --example watch -- kept=<path> legs=2 minutes=5
 
+use walker::generalist::changes::Conditions;
 use walker::generalist::page::Page;
 use walker::generalist::practice::SLIPPERY;
 use walker::generalist::recipe::Recipe;
@@ -175,7 +182,8 @@ fn main() {
             let until = ((5.0 + 5.0 * m as f32) / STEP) as u32;
             while page.show.judge.steps < until && !page.show.judge.over() {
                 if slip && page.show.judge.steps == (10.0 / STEP) as u32 {
-                    page.show.slippery(SLIPPERY);
+                    // the grip every part had at stage 3's slip, as a share of the body's own
+                    page.show_conditions(Conditions { grip: SLIPPERY / 0.6, ..Conditions::REST });
                 }
                 step(&mut page);
             }
@@ -184,4 +192,79 @@ fn main() {
         let spans: Vec<String> = (0..4).map(|s| format!("{:.2}", marks[s + 1] - marks[s])).collect();
         println!("{} {legs} 5-10={} 10-15={} 15-20={} 20-25={} ended={:?} at={:.1}", if slip { "slip" } else { "firm" }, spans[0], spans[1], spans[2], spans[3], page.show.judge.end, page.show.judge.steps as f32 * STEP);
     }
+
+    // the world changing: a box dropped ahead, night falling, a wind rising
+    let (mut box_on, mut box_looked) = (0u32, 0u32);
+    let mut gaze = [[0.0f64; 2]; 2];
+    let mut surprise = [[0.0f64; 2]; 2];
+    let mut samples = [[0u32; 2]; 2];
+    let (mut heard, mut heard_count) = (0.0f64, 0u32);
+    let mut shown_surprise = (0.0f64, 0u32);
+    for &seed in &worlds {
+        let mut page = page_with(Recipe { seed, ..kind }, legs, &kept);
+        let until = |page: &mut Page, at: f32, mut each: Box<dyn FnMut(&mut Page) + '_>| {
+            while page.show.judge.steps < (at / STEP) as u32 && !page.show.judge.over() {
+                step(page);
+                each(page);
+            }
+        };
+        until(&mut page, 6.0, Box::new(|page: &mut Page| {
+            shown_surprise.0 += page.world()[9] as f64;
+            shown_surprise.1 += 1;
+        }));
+        if page.show.judge.over() {
+            continue;
+        }
+        let body = torso(&page);
+        page.show_drop_box(Vec2::new(body.x + 1.5, body.y + 0.9));
+        let dropped = page.show.stage.made.len() - 1;
+        until(&mut page, 7.5, Box::new(|page: &mut Page| {
+            if page.show.judge.steps % 4 == 0 && let Some(made) = page.show.stage.made.get(dropped) {
+                let at = page.show.stage.world.bodies[made.body as usize].position + Vec2::new(page.show.stage.origin, 0.0);
+                box_on += u32::from(looks_at(page, at));
+                box_looked += 1;
+            }
+        }));
+        // night at 12 s, a wind from ahead at 18 s: where it looks before and after each, and its surprise
+        for (which, (at, conditions)) in [(12.0f32, Conditions { light: 0.0, ..Conditions::REST }), (18.0, Conditions { light: 0.0, wind: -4.0, ..Conditions::REST })].into_iter().enumerate() {
+            until(&mut page, at - 3.0, Box::new(|_| {}));
+            for half in 0..2 {
+                if half == 1 {
+                    page.show_conditions(conditions);
+                }
+                until(&mut page, at + 3.0 * half as f32, Box::new(|page: &mut Page| {
+                    gaze[which][half] += page.show.body.gaze.to_degrees() as f64;
+                    surprise[which][half] += page.world()[9] as f64;
+                    samples[which][half] += 1;
+                }));
+            }
+        }
+        // food landing behind it, heard
+        let mut page = page_with(Recipe { seed, ..kind }, legs, &kept);
+        until(&mut page, 5.0, Box::new(|_| {}));
+        if !page.show.judge.over() {
+            let body = torso(&page);
+            page.show_drop_food(Vec2::new(body.x - 1.5, body.y + 0.8));
+            let mut loudest = 0.0f32;
+            until(&mut page, 7.0, Box::new(|page: &mut Page| loudest = loudest.max(page.world()[8])));
+            heard += loudest as f64;
+            heard_count += 1;
+        }
+    }
+    let mean = |sum: f64, n: u32| sum / n.max(1) as f64;
+    println!(
+        "world {legs} box_eye_on={:.3} chance={:.3} night_gaze={:.0}/{:.0} night_surprise={:.4}/{:.4} wind_gaze={:.0}/{:.0} wind_surprise={:.4}/{:.4} surprise={:.4} heard_behind={:.2}",
+        mean(box_on as f64, box_looked),
+        20.0 / 280.0,
+        mean(gaze[0][0], samples[0][0]),
+        mean(gaze[0][1], samples[0][1]),
+        mean(surprise[0][0], samples[0][0]),
+        mean(surprise[0][1], samples[0][1]),
+        mean(gaze[1][0], samples[1][0]),
+        mean(gaze[1][1], samples[1][1]),
+        mean(surprise[1][0], samples[1][0]),
+        mean(surprise[1][1], samples[1][1]),
+        mean(shown_surprise.0, shown_surprise.1),
+        mean(heard, heard_count)
+    );
 }

@@ -331,7 +331,15 @@ impl Run {
         if let Some((step, friction)) = self.slip
             && self.judge.steps == step
         {
-            self.slippery(friction);
+            match &mut self.changes {
+                // in a world that changes, the ground going slippery is one of its changes, as a share of
+                // the grip each part has of its own (the body's 0.6)
+                Some(changes) => {
+                    let aim = super::changes::Conditions { grip: friction / 0.6, ..changes.aim };
+                    changes.aim_at(aim, step);
+                }
+                None => self.slippery(friction),
+            }
         }
         if let Some(mut changes) = self.changes.take() {
             changes.before_step(self);
