@@ -245,7 +245,7 @@ test("in Chromium, a Display P3 photograph that was only cropped goes out in eac
             const converted = made.out.converted!;
             converted.raw.forEach((pixel, index) => expect(near(pixel, converted.expected![index]!, 1)).toBe(true));
             expect(converted.raw[0]).toEqual([255, 0, 0]);
-            expect(converted.icc).toBe(0);
+            expect(converted.icc as unknown).toBe(0);
         }
         const screen = await page.tab.run<{ took: boolean; p3: number[][]; srgb: number[][]; expected: number[][] }>("window.screen()");
         if (screen.took) screen.p3.forEach((pixel, index) => expect(near(pixel, fixture.numbers[index]!, 1)).toBe(true));
