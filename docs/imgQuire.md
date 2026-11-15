@@ -41,7 +41,8 @@ remover (`cutout.md`) is to be one of its tools as well as a page of its own.
   `measure.ts`, the histogram's worker; `cube.ts`, `.cube` files read and written; `masks.ts`, the parts'
   masks drawn into layers; `looks.ts`, looks kept in this browser and the surface's Looks section.
 - `grade-panel.ts`, `grade-more.ts`, `grade-parts.ts`: the Grade surface, its deeper controls under More, and
-  its parts.
+  its parts. `finding.ts`, Find as the surface offers it; `parts/`, the part models pinned (`models.ts`), their
+  arithmetic before and after a run (`segment.ts`) and their worker (`finder.ts`).
 - `panels.ts`: the export panel, the resize box and the tool's strip.
 - `editor.ts`: the frame, the session, the bar, the menus' table, the keys, copying and pictures arriving.
 - `kind.ts`: `img()`.
@@ -234,8 +235,9 @@ the screenshot (6 things) and nothing else was (`read/real.test.ts`, `reading.te
 
 **Grading.** G, the bar's Grade (at its right end, before Facts and Export) or Image, Grade. The Grade
 surface opens where Export and Facts do, one of the three at a time, the picture gliding into the room left
-beside it (on a phone a sheet at the foot, 46 percent of the height to start, which its head drags shorter or
-taller, the picture above refitting as it goes). From the top: what is being graded ("Whole picture", or a
+beside it (on a phone a sheet at the foot, opening at 22rem or 46 percent of the height if less, which its head
+drags as short as 150 pixels or as tall as 80 percent of the window, the picture above refitting as it goes; its
+foot fades over its last 2.25rem, so a row it cuts never shows as a half row). From the top: what is being graded ("Whole picture", or a
 part's name), a small histogram (red, green and blue as fine lines over the luminance, quiet) that follows the
 grade as it moves, pressed for a waveform and back; Auto, Balance and Reset; the six sliders Light, Contrast,
 Shadows, Highlights, Warmth and Color; More, folded (Tint, the curve, the wheels, colors on their own); Looks,
@@ -313,6 +315,30 @@ cover them, and the document opened again draws the same pixels (a test reopens 
 is drawn by the card on the screen as each pixel is drawn, and when flattening in the pass down before
 rounding; covers are graded with what is round them, marks are not. Masks are layers of floats on the card,
 at most 1024 a side, read between their entries by hand so both ways and the reference read them alike.
+
+Find, the third maker in Parts, finds a part with a model. The first time a dialog grows from it, in the
+reading dialog's family: a model is downloaded once from Hugging Face, kept in this browser, run on this
+machine, the picture never leaving it; Choose; two cards, Small (27 MB, quick, on any machine: SlimSAM 77 and
+MODNet) and Better (96 MB, cleaner edges, on a fast machine: SAM 2.1 tiny and ormbg); Download and find, its
+progress in the buttons' place with Cancel. The choice is remembered (`quire-img-parts`). Then the strip says
+"Press a thing to outline it; Alt and press to take away", with Subject and Background beside it. The first
+press makes a found part, picked; each later press (Alt to take away) changes that part, one change each, all
+the presses sent together to the decoder; Subject makes a part of the picture's subject, Background the same
+turned inside out. Escape or Cancel ends finding. The picture is encoded once (the image encoder) and kept in
+the worker, so a press after the first takes only the decoder. A found mask is kept in the document as runs of
+bytes at most 512 on the picture's longer side, so it is drawn the same when the document is opened again
+without the model, and it is a part like any other: feathered, turned inside out, added to or erased with the
+brush. The files are fetched, checked and kept as the text models are (`read/store.ts`, in a folder of their
+own), and run in a worker of their own on the site's ONNX Runtime through the core; on a graphics card only the
+image encoders run there ([imgQuire-models](imgQuire-models.md) says why). The test holds that the only requests
+are the page's own files, ONNX Runtime's and the model's three files, each a GET with no body, and that the
+document reopened draws the same pixels with no request at all (`finding.test.ts`). Measured with the real files
+in headless Chromium (four cores, two WebAssembly threads where isolated; an RTX 3070 Ti), on a 1200 by 800
+scene: a first press, with the encoding and the sessions made, Small 2.7 s on WebAssembly and 2.5 s with the
+encoder on the card, Better 3.8 s and 1.4 s; each press after, 60 to 110 ms; Subject, Small 0.6 s, Better 19 to
+20 s (ormbg runs on WebAssembly only). A press on a figure outlined all of its coat and none of the far sky;
+two presses on the sky and an Alt-press on the figure gave 94 to 95 percent of the sky and none of the coat
+(`parts/real.test.ts`).
 
 Measured: the same grade (every control, a 9 a side look, a part under a mask turned inside out) flattens
 through WebGL2 to the reference arithmetic's pixels, through a crop and a resize, within one, and through
@@ -546,12 +572,20 @@ only with `--enable-unsafe-webgpu`, which the drawing tests pass.
 - The tests hold that requests carry nothing of the picture through Chromium's own record of requests,
   with Hugging Face answered from the trial copies; a visitor's real download from Hugging Face (its
   redirects to its content network) was not made here.
-- Grading: parts a model finds are not built; the Find button is not offered, and the part step reads and draws
-  a found mask (runs of bytes) already. The horizon (straightening) is not built: the drawing's pieces and every
-  place on the stage are level with the picture, and a turn needs the resampler and those places to turn too.
-  Perspective, JPEG repair and restoring detail are left for later.
-- Grading: an exported picture carries no colour profile (as before), so a graded Display P3 photograph is
-  graded correctly in P3 but read as sRGB by whatever opens the export; the screen too shows P3 numbers as sRGB.
+- Grading: the horizon (straightening) is not built: the drawing's pieces and every place on the stage are level
+  with the picture, and a turn needs the resampler and those places to turn too. Perspective, JPEG repair and
+  restoring detail are left for later.
+- Finding: Better's Subject takes about 20 s, since ormbg will not run on the card's runtime; its SAM 2.1 decoder
+  runs there but gives a wrong mask, so it runs on WebAssembly. The models were tried on a drawn scene, not on
+  photographs of people, skies or things; MODNet is made for portraits. The found mask is kept at 512 a side.
+- Colour profiles in exports, from before grading: an exported picture that has any step carries no colour
+  profile (the encoders write none and the metadata writer adds none), so a Display P3 photograph, graded or
+  only cropped, is read as sRGB by whatever opens the export, its colors duller; only a picture with no steps
+  given in its own format keeps its profile. The screen too shows a P3 picture's numbers as sRGB. The fix is not
+  small: either the export converts P3 to sRGB in the float pass (a matrix in linear light, with colors outside
+  sRGB clipped or compressed, and the same on the screen), or each format carries the original's profile (a
+  JPEG's APP2 segments and a WebP's ICCP chunk are simple; a PNG's iCCP wants the profile deflated; JPEG XL and
+  AVIF take it through their encoders, which the modules would need to expose).
   Profiles other than sRGB and Display P3 (Adobe RGB, ProPhoto, a camera's) are graded as sRGB and said to be.
   A profile's curve is not read: P3 is taken to use sRGB's, as Display P3 does.
 - Grading: a part's layer is drawn again on the page's thread whenever its shape changes, so painting with a
@@ -570,10 +604,8 @@ only with `--enable-unsafe-webgpu`, which the drawing tests pass.
 
 ## Next slices, in order
 
-1. The rest of grading: parts a model finds (Find: press-to-select with SlimSAM or SAM 2.1 tiny, Subject and
-   Background with MODNet or ormbg), their models downloaded, pinned and tried on the site's ONNX Runtime, and the
-   horizon straightened as a step.
-2. The cut-out ([cutout](cutout.md)), which shares the models above.
+1. The horizon straightened as a step, and colour profiles carried through or converted on export.
+2. The cut-out ([cutout](cutout.md)), which can share the part models.
 3. Perspective, repairing what JPEG took, and restoring detail.
 4. More marks: numbered steps, a highlighter, a magnifier, a spotlight, outlined captions.
 5. Many at once: batches through the same steps and export (a look given to a batch).

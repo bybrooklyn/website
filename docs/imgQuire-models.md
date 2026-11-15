@@ -222,15 +222,46 @@ invent text).
 
 BEN2 (219 MB, MIT) and InSPyReNet (199 MB, MIT) are the choices just over the large size.
 
-### For grading's parts (chosen, not yet tried)
+### For grading's parts: verified on the site's build (14 November 2026)
 
-Grading a thing a model found is to offer two choices, quietly, as reading text does: small, SlimSAM 77 int8
-(8.9 + 4.9 MB) to press a thing and MODNet fp16 (13.0 MB) for Subject and Background; better, SAM 2.1 tiny q4
-(43.8 + 7.1 MB) and ormbg int8 (44.3 MB). The owner allowed these four repositories, and their small config
-files, to be downloaded to this machine once for trying and pinning. In the first grading slice they were not
-downloaded yet and none of them has been run on the site's ONNX Runtime 1.24.1: which run on WebGPU and on
-WebAssembly, how quickly, and their commits and digests are for the next slice. SAM 2.1's ONNX copy says no
-licence on its card (upstream `facebookresearch/sam2` is Apache-2.0); that is to be checked when it is pinned.
+Grading a thing a model found offers two choices, quietly, as reading text does: small, SlimSAM 77 int8 to press a
+thing and MODNet fp16 for Subject and Background (27 MB); better, SAM 2.1 tiny q4 and ormbg int8 (96 MB). The
+owner allowed these four repositories, with their small config files, to be downloaded to this machine once; they
+are in `~/.cache/quire-model-trials/parts/`, each checked against its listing's digest. Pinned
+(`src/quire/img/parts/models.ts`):
+
+| Repository | Commit | File | Bytes | SHA-256 |
+|---|---|---|---|---|
+| `Xenova/slimsam-77-uniform` | 5850ab45f587c112167512ffef949107115e26a0 | onnx/vision_encoder_quantized.onnx | 8,882,165 | cce23c7b…2e5d4f330932738fb67ba518e04b0d99ccdd1cccd22a7da4e01f2971 |
+| | | onnx/prompt_encoder_mask_decoder_quantized.onnx | 4,903,810 | cb90b279…f549d2cab7fd6e20c38522438c65d84bdcca3d2a764cff7d857fdce2 |
+| `Xenova/modnet` | fa2fa546052fba4c08921230a26cc69a333fca12 | onnx/model_fp16.onnx | 12,984,781 | 25f165da…9bfd30830a575f1f0490f1acd995975cb349bc02f3d79332e1fe5cf6 |
+| `onnx-community/sam2.1-hiera-tiny-ONNX` | 814a066640debee5a91e70aa401fb8e17e030503 | onnx/vision_encoder_q4.onnx (+ .onnx_data) | 366,089 + 43,758,848 | c3efeef6… + ca3afaa9… |
+| | | onnx/prompt_encoder_mask_decoder_q4.onnx (+ .onnx_data) | 226,444 + 7,130,112 | 9d07a46c… + 5e912af5… |
+| `onnx-community/ormbg-ONNX` | 034e2d884afbab897e10e78fc5bb566b29533fd6 | onnx/model_int8.onnx | 44,315,136 | 905f6c0d…4e10d64e9ee54216ab2ae0f6ee01f5ee017dadedaba120c4eb854714 |
+
+The full digests are in the table in code. SAM 2.1's q4 files keep their weights in an `.onnx_data` file beside
+them, given to ONNX Runtime as external data. Inputs, read from the sessions: SlimSAM's encoder `pixel_values`
+(1, 3, 1024, 1024) to `image_embeddings` and `image_positional_embeddings`, its decoder `input_points`,
+`input_labels` (int64) and the two embeddings to `iou_scores` and `pred_masks` (three 256 square masks); SAM
+2.1's encoder gives `image_embeddings.0` to `.2`, its decoder takes those, the points, labels and `input_boxes`
+(given empty) and gives `iou_scores`, `pred_masks` and `object_score_logits`; ormbg `pixel_values` (1, 3, 1024,
+1024, from 0 to 1) to `alphas`; MODNet `input` (shorter side 512 in steps of 32, from -1 to 1) to `output`.
+
+Every session loads and runs right on WebAssembly. On WebGPU (the JSEP build): both image encoders run right;
+SlimSAM's decoder runs right but slower there (210 against 100 ms); SAM 2.1's decoder runs but gives a wrong
+mask (none of a figure pressed); MODNet's fp16 file will not load (a `com.microsoft.FusedConv` node with no
+WebGPU kernel), nor ormbg ("using ceil() in shape computation is not yet supported for MaxPool"). So only the
+encoders are put on the card. Times, a 1200 by 800 scene, four cores (two WebAssembly threads), RTX 3070 Ti:
+
+| Choice | First press (sessions and encoding), WebAssembly | The same, encoder on the card | A press after | Subject |
+|---|---|---|---|---|
+| Small | 2.7 s | 2.5 s | 90 to 110 ms | 0.6 s |
+| Better | 3.8 s | 1.4 s | 60 ms | 19 to 20 s |
+
+A press on a drawn figure outlined all of its coat and none of the far sky with either choice; presses on the
+sky with an Alt-press on the figure gave 94 to 95 percent of the sky and none of the coat; both subject models
+took 81 percent of the figure and nothing else. SAM 2.1's ONNX copy says no licence on its card; its upstream,
+`facebookresearch/sam2`, is Apache-2.0.
 
 ## 3. Upscaling and restoration
 
