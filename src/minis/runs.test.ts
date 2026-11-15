@@ -1,6 +1,7 @@
 // Tests for the runs to start from: every one listed opens with a spot; the race, the tall bent run and the
 // run with every moving and sounding piece carry a marble let go every two and a half seconds for ten
-// minutes of stepped time to their trays, none lost, none on the cloth, none stuck, and in the last a
+// minutes of stepped time to their trays, none lost, none on the cloth, none stuck (one waiting on a trapdoor
+// for its pair, or in a seesaw for fewer than tip it, is waiting, not stuck), and in the last a
 // hundred marbles and more meet each of those ten pieces; the race through a funnel gives a race worth
 // watching.
 
@@ -45,7 +46,20 @@ for (const name of ["a race through a funnel", "a tall bent run", "every moving 
         expect(made).toBe(240);
         expect(lost).toBe(0);
         expect(table.marbles.filter((marble) => marble.p[1] < 1.05).length).toBe(0);
-        expect(table.marbles.filter((marble) => marble.rest && !table.arrived(marble)).length).toBe(0);
+        // at rest and not in a tray is stuck, unless it waits in a seesaw or on a trapdoor for fewer than tip it: one on a trapdoor waits for its pair
+        const waiting = new Map<number, number>();
+        const stuck = table.marbles.filter((marble) => {
+            if (!marble.rest || table.arrived(marble)) return false;
+            const piece = run.find((one) => one.id === table.pieceAt(marble.p));
+            if (piece?.kind.family !== "e" && piece?.kind.family !== "j") return true;
+            waiting.set(piece.id, (waiting.get(piece.id) ?? 0) + 1);
+            return false;
+        });
+        expect(stuck.length).toBe(0);
+        for (const [id, many] of waiting) {
+            const piece = run.find((one) => one.id === id)!;
+            expect({ piece: piece.kind.family, waiting: many }).toEqual({ piece: piece.kind.family, waiting: Math.min(many, piece.kind.family === "j" ? 1 : piece.kind.sizes[0]! - 1) });
+        }
         expect(emptied).toBeGreaterThan(215);
         for (const [id, marbles] of met) expect({ piece: run.find((piece) => piece.id === id)!.kind.family, many: marbles.size > 100 }).toEqual({ piece: run.find((piece) => piece.id === id)!.kind.family, many: true });
     }, 120_000);
