@@ -451,7 +451,8 @@ pub extern "C" fn practice_running() -> *const f64 {
 }
 
 /// Room for a learner's state (or a policy's weights alone, `weights` 1), to write a kept or sent
-/// learner into before `practice_load` or `policy_load`.
+/// learner into before `practice_load` or `policy_load`: of the form written into `form_room` first,
+/// or of the brain practice is to have here if none is (`form_room(0)` forgets one written).
 #[unsafe(no_mangle)]
 pub extern "C" fn state_room(weights: u32) -> *mut f32 {
     let Some(page) = page() else { return core::ptr::null_mut() };
@@ -479,10 +480,7 @@ pub extern "C" fn running_room() -> *mut f64 {
 #[unsafe(no_mangle)]
 pub extern "C" fn practice_load() -> u32 {
     let Some(page) = page() else { return 0 };
-    let (state, running) = (core::mem::take(&mut page.state_room), core::mem::take(&mut page.running_room));
-    let taken = page.practice.as_mut().is_some_and(|practice| practice.load(&state, &running));
-    (page.state_room, page.running_room) = (state, running);
-    u32::from(taken)
+    u32::from(page.practice_load())
 }
 
 /// The show driven, from the start, by the policy written into the rooms; returns 1, or 0 (and the
@@ -544,4 +542,58 @@ pub extern "C" fn show_rewards() -> *const f32 {
 pub extern "C" fn brain_picture() -> *const f32 {
     let Some(page) = page() else { return give(&[]) };
     give(page.brain_picture())
+}
+
+/// Room for a learner's form (`practice_form` gives one), `length` f32, written before its state; 0 forgets
+/// one written, so rooms are of the brain practice is to have here.
+#[unsafe(no_mangle)]
+pub extern "C" fn form_room(length: u32) -> *mut f32 {
+    let Some(page) = page() else { return core::ptr::null_mut() };
+    page.form_room.clear();
+    page.form_room.resize((length as usize).min(1 << 20), 0.0);
+    *LENGTH.get() = page.form_room.len();
+    page.form_room.as_mut_ptr()
+}
+
+/// The form of this worker's learner: its pool's shape and every read (four noughts for the plain network).
+#[unsafe(no_mangle)]
+pub extern "C" fn practice_form() -> *const f32 {
+    let Some(page) = page() else { return give(&[]) };
+    match page.practice.as_ref() {
+        Some(practice) => {
+            page.out = practice.learner.form();
+            give(&page.out)
+        }
+        None => give(&[]),
+    }
+}
+
+/// The brain practice is to have from the next `practice_create` or `practice_load` on: how many memory
+/// neurons, rhythms and moods (0, or 4 if any), and how many others each reads, kept within the caps
+/// (`brain_caps`). All 0 is the plain network.
+#[unsafe(no_mangle)]
+pub extern "C" fn brain_shape(memory: u32, rhythm: u32, mood: u32, reads: u32) {
+    if let Some(page) = page() {
+        page.brain_shape(memory as usize, rhythm as usize, mood as usize, reads as usize);
+    }
+}
+
+/// The caps on the brain, four f32: the most memory neurons, the most rhythms, the fewest and the most
+/// reads each; then the brain practice starts with, four more (memory, rhythm, mood, reads).
+#[unsafe(no_mangle)]
+pub extern "C" fn brain_caps() -> *const f32 {
+    use super::page::{BRAIN, FEWEST_READS, MOST_MEMORY, MOST_READS, MOST_RHYTHM};
+    let Some(page) = page() else { return give(&[]) };
+    page.out.clear();
+    page.out.extend_from_slice(&[MOST_MEMORY as f32, MOST_RHYTHM as f32, FEWEST_READS as f32, MOST_READS as f32, BRAIN.memory as f32, BRAIN.rhythm as f32, BRAIN.mood as f32, BRAIN.reads as f32]);
+    give(&page.out)
+}
+
+/// What a neuron of the brain on show listens to, by its number in `brain_picture`: three f32 for each
+/// connection into it, the neuron it comes from, its weight now, and what it passed at the last decision.
+#[unsafe(no_mangle)]
+pub extern "C" fn brain_reads(neuron: u32) -> *const f32 {
+    let Some(page) = page() else { return give(&[]) };
+    page.brain_reads(neuron as usize);
+    give(&page.out)
 }

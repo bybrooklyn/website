@@ -282,6 +282,10 @@ pub struct Way {
     pub appear: f32,
     /// The energy a run starts with; less than 0 for any, drawn evenly from `LOWEST_START` to full.
     pub energy: f32,
+    /// The share of runs in which the ground goes slippery partway (`Run::slip`): its grip falls to
+    /// `SLIPPERY` at a moment drawn from 5 to 20 seconds in. A world that changes while it lives, for
+    /// connections that change during a run to have something to adapt to.
+    pub slip: f32,
 }
 
 impl Way {
@@ -313,6 +317,13 @@ impl Way {
         }
         if self.needs || self.gaze {
             run.curiosity = Some(super::curious::Curiosity::default());
+        }
+        if self.slip > 0.0 {
+            let mut random = crate::learn::Random::new(seed as u64 ^ 0x736c_6970_0000_0000);
+            if random.unit() < self.slip {
+                let at = (5.0 + 15.0 * random.unit()) / crate::physics::STEP;
+                run.slip = Some((at as u32, SLIPPERY));
+            }
         }
         if self.hip > 0.0 {
             for joints in run.body.creature.joints.chunks(2) {
@@ -352,6 +363,9 @@ impl Way {
     /// 0.05 for each metre a second the foot comes down at. They sense no rhythm, and nothing rewards
     /// how their feet take turns.
     ///
+    /// Four legs pay 3 for a run that stalls as well (stage 3: with a pool and nothing charged for it, two
+    /// seeds in four learned to stand where they started).
+    ///
     /// Both feel touch (`touch`). Two legs practise with a visitor every 8 seconds or so, brought in with
     /// the costs, who lifts, nudges and shoves; four legs practise with none.
     ///
@@ -362,12 +376,27 @@ impl Way {
     /// five is play. Progress is still paid, as it was.
     pub fn of(legs: u32) -> Way {
         let mut shaping = Shaping { alive: 0.25, energy: 0.002, air: 2.0, tall: false, smooth: 0.0, fall: 3.0, knee: 0.0, upright: 0.0, down: 1.0, turns: 0.0, pace: 0.0, impact: 0.0, spin: 0.0, bob: 0.0, swing: 0.0, torque: 0.0, stall: 0.0, lean: 0.0, comfort: COMFORT, place: PLACE, sight: SIGHT, progress: 1.0 };
+        // four legs pay for a run that stalls too, since with a pool, and nothing charged for it, two seeds in
+        // four learned to stand where they started (README, "The brain that was discussed")
+        if legs == 4 {
+            shaping.stall = 3.0;
+        }
         // two legs went on their belly and knees in lunges without these (README, "How it moves")
         if legs == 2 {
             shaping = Shaping { knee: 1.0, upright: 0.5, down: 0.0, lean: 1.0, pace: 1.0, stall: 3.0, impact: 0.05, ..shaping };
         }
-        Way { legs, direct: true, skip: 4, seconds: 30.0, shaping, hop: false, ramp: 4_000_000, ease: 1.0, strength: 1.0, hip: 0.0, clock: legs != 2, touch: true, visitor: if legs == 2 { VISITOR } else { 0.0 }, visiting: 1.0, needs: true, gaze: true, play: PLAY, appear: APPEAR, energy: -1.0 }
+        Way { legs, direct: true, skip: 4, seconds: 30.0, shaping, hop: false, ramp: 4_000_000, ease: 1.0, strength: 1.0, hip: 0.0, clock: legs != 2, touch: true, visitor: if legs == 2 { VISITOR } else { 0.0 }, visiting: 1.0, needs: true, gaze: true, play: PLAY, appear: APPEAR, energy: -1.0, slip: 0.0 }
     }
+}
+
+/// Where what a creature feels of its needs and its touch are among its senses (walker/README.md, "What
+/// it senses"): its energy, touch on its body, being held, the jolt across and up, and having just eaten.
+/// A brain's moods read these first (`pool`). Any not among `senses` are left out.
+pub fn feelings(legs: u32, senses: usize) -> Vec<usize> {
+    let legs = legs as usize;
+    let energy = super::eyes::RAYS * 6 + 4 + 4 * legs + legs + 4;
+    let touch = energy + 3;
+    [energy, touch, touch + 1 + legs, touch + 2 + legs, touch + 3 + legs, energy + 1].into_iter().filter(|&k| k < senses).collect()
 }
 
 /// How far a world is made when a run starts, in metres; the stage makes more as the creature goes.
@@ -378,6 +407,8 @@ const FIRST_MADE: f32 = 30.0;
 pub const LOWEST_START: f32 = 0.2;
 pub const MEASURED_ENERGY: f32 = 0.7;
 pub const RESTFUL: f32 = 0.6;
+/// The grip of a ground gone slippery (`Way::slip`), against the 0.6 every part has.
+pub const SLIPPERY: f32 = 0.15;
 
 /// What a unit of discomfort is worth, what curiosity pays for each unit of new places and of new
 /// things seen, and how many seconds apart food appears, on average (`Shaping`, `Way`).
@@ -710,7 +741,7 @@ impl Practice {
     /// learner's first weights from `seed`, its worlds' seeds from `stream`.
     pub fn new(recipe: Recipe, way: Way, settings: Settings, count: usize, seed: u64, stream: u32) -> Option<Practice> {
         let mut worlds = Worlds::new(recipe, way, count, stream)?;
-        let mut learner = Learner::new(settings, worlds.senses, worlds.actions, count, seed);
+        let mut learner = Learner::with(settings, worlds.senses, worlds.actions, count, seed, &feelings(way.legs, worlds.senses), None);
         learner.begin(&mut worlds);
         Some(Practice { learner, worlds, recipe, curriculum: None, shaping: way.shaping })
     }
@@ -778,6 +809,8 @@ impl Practice {
     /// `evaluate`, with how it moved as well as how far.
     pub fn measure(&mut self, seeds: &[u32]) -> Measured {
         let learner = &mut self.learner;
-        measure(self.recipe, self.worlds.way, seeds, |_, senses, actions| learner.act(senses, actions))
+        // each creature its own pool, from a fresh start
+        let mut states: Vec<Vec<f32>> = vec![Vec::new(); seeds.len()];
+        measure(self.recipe, self.worlds.way, seeds, |i, senses, actions| learner.act_as(&mut states[i], senses, actions))
     }
 }

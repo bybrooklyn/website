@@ -1307,6 +1307,249 @@ thing stage 2 found wrong: either four legs need to learn to rest, which needs r
 outlast their energy, or the page should not carry energy between runs for them; it is left for her to
 say.
 
+### The brain that was discussed
+
+Stage 3 of the plan, 14 November 2026. Until now the brain was a plain network of two layers of 64
+neurons: it carried nothing from one decision to the next, so it could not turn for food it had seen
+behind it, nor keep its eye on something that had just landed. Now a pool of neurons of three kinds sits
+between the two plain layers (`src/generalist/pool.rs`), learned by practice with the rest, back through
+time (`src/generalist/ppo/recurrent.rs`). Every part is written here, forward and backward, and its
+gradient is held to nudging in the tests.
+
+**The kinds.** Each pool neuron reads a few sources, chosen when it is made (`reads` of them: 16 to
+start), from one list: what is sensed (rescaled), the first plain layer, and every pool neuron's output
+as it was before this decision. So a bigger pool costs connections, not a full matrix, and the pool never
+waits on itself within a decision.
+
+| kind | what it is | what it learns |
+|---|---|---|
+| plain | a weighted sum, squashed by tanh; carries nothing (the two layers of 64) | its weights |
+| memory | holds a number, and moves toward what it takes in by a share its gate decides each decision: `m = m + z (c - m)`, `z = sigmoid(gate reads + bias)`, `c = tanh(take-in reads + bias)` | its gate's bias is its own time constant (from a quarter of the way a decision to under a fiftieth at the start), what opens the gate, what it takes in |
+| plastic read (on every memory's take-in) | a fast weight `F` beside each take-in weight, changed during the run by a Hebbian rule, `F = decay F + rate c read`, starting at nothing every run; the read's weight is `w + a F` | `a` for each connection (starting at none), and `rate` and `decay` for each of four groups of memory neurons |
+| rhythm | a phase that goes round at a pace of its own, `phase += pace e^(0.5 tanh(reads + bias))`, giving its sine and cosine to the rest, which may follow it or not | its pace (from half a turn to three turns a second at the start) and what speeds it up or slows it down, by up to two thirds either way |
+| mood | a slow number, `d = d + r (tanh(reads + bias) - d)`, that turns a group of the second plain layer up or down: neuron j of that layer is squashed with a gain of `1 + d` of mood `j % moods` | its rate (a twentieth of the way a decision at the start, about a second and a third to settle) and what moves it; a mood reads first what the creature feels of its needs and touch (energy, touch on its body, being held, the jolt, having just eaten) |
+
+**How it is learned.** A rollout keeps each creature's pool state at the start of every window of 16
+decisions (about a second). An epoch goes over whole windows in a random order: from the state kept, the
+pool is run forward through the window with the weights as they are now, starting afresh where a run
+ended inside the window, and the blame is sent back through the window (truncated backpropagation
+through time). The value does not go back through time: it reads what is sensed and the pool as it was
+before the decision, from the rollout. The plain shape (no pool) never comes here, so it learns exactly as
+before, to the bit (its fingerprint is unchanged, and two legs practised as before go 10.0 to 11.5 m at 20
+million steps, as stage 2 measured).
+
+**Tested** (`pool_tests`, `ppo_tests`, `page_tests`): the gradient of every kind through a window of six
+decisions with a fresh start in the middle, against nudging each weight and each plain neuron; the whole
+loss of PPO with a pool, clipped and not; a fresh start owing nothing to before it; the same seed learning
+the same way; a learner kept and loaded back, grown, grown from the plain network, and shrunk, acting as
+it did (to within 1e-5) and learning on; the show on the page moving exactly as practice does, with a
+pool; and the picture of the brain adding up to what each neuron gave.
+
+**The memory task.** A sign (1 or -1) is shown once, at a run's first decision; five decisions later the
+second sense asks for it, and only that answer is paid, less how far it is from the sign
+(`a_sign_shown_once_is_answered_later...` in `ppo_tests`). Nothing in between says what the sign was.
+After 300 updates of 16 runs at once: the plain network answers 0 and misses by 1.000 every time, the best
+it can do; a pool of 8 memory neurons reading 6 each misses by 0.000, and so does one with 2 rhythms and 2
+moods besides.
+
+**Changing its shape keeps what was learned** (`Learner::reshaped`, `Pool::reshape`). Neurons kept keep
+their reads and every weight into and out of them, with Adam's running averages; new neurons read sources
+drawn at random with small weights, and nothing reads them (their weights into the second plain layer and
+the value start at 0), so it acts exactly as it did; a new mood reads nothing at first, so it rests and its
+gain stays 1; fewer neurons drop those whose outputs count least for the rest (the size of their weights
+into the second plain layer and the value); fewer reads drop each neuron's weakest, and new reads start at
+a weight of 0. A learner is kept and sent with its form (its shape and every read), and taken up into the
+shape asked for.
+
+**What it costs, and the cap.** Natively, practice with 32 creatures on one core of the Ryzen 7 9700X
+(`cargo run --release --example brain_cost`), and in the page, in headless Chromium held to four cores
+(three workers at normal effort, the brain set by its sliders, each shape after 15 seconds' settling,
+averaged over 30), two legs:
+
+| brain | neurons | weights | steps a second, native, one core | in the page, four cores |
+|---|---|---|---|---|
+| plain (stage 2's) | 128 | 24,653 | 111,000 to 118,000 | 275,000 |
+| 32 memory, 4 rhythm, 4 mood, 4 reads | 168 | | | 205,000 |
+| **32 memory, 4 rhythm, 4 mood, 16 reads (the page's)** | **168** | **32,037** | **66,000** | **174,000** |
+| 32 memory, 4 rhythm, 4 mood, 32 reads | 168 | | | 147,000 |
+| 64 memory, 8 rhythm, 4 mood, 16 reads | 204 | 38,829 | 49,000 | 123,000 |
+| 128 memory, 16 rhythm, 4 mood, 16 reads | 276 | 52,413 | 32,000 to 34,000 | 85,000 |
+| 128 memory, 16 rhythm, 4 mood, 32 reads (the caps) | 276 | 58,877 | 25,000 to 29,000 | 71,000 |
+| 256 memory, 32 rhythm, 4 mood, 32 reads | 420 | 92,445 | 14,000 | |
+| 512 memory, 32 rhythm, 4 mood, 32 reads | 676 | 150,301 | 7,800 | |
+
+In Bun's JavaScriptCore the page's engine practises with the page's brain at about 59,000 steps a second on
+one core (97,000 with the plain network at stage 2; `src/minis/generalist.test.ts` prints it). A memory neuron costs more than a plain one: two sums over its reads and its fast weights going forward,
+three going back, and its gate and take-in squashed each decision (tanh and exp in the engine's own exact
+maths, about 21 ns the pair natively), all four epochs over every window. Its reads are gathered side by
+side so the sums go as the dense layers' do. The caps (128 memory neurons, 16 rhythms, 32 reads each, 276
+neurons in all) keep the largest brain at about a quarter of the plain network's speed in the page, about
+8.5 updates a second, still enough that a visitor sees it learn in a minute or two; past them, at 420
+neurons, the page would practise at about 35,000 steps a second. The module is 451 KiB with SIMD and 435
+without (331 and 326 before), under the 512 KiB limit.
+
+**On the same time in the browser.** Two minutes of practice in the page at those rates are about 33
+million steps for the plain network and 21 million for the page's pool; ten seconds are 2.7 and 1.7
+million. Reading the native curves above at those steps: at ten seconds the pool is near 8 m and the
+plain network near 7; at two minutes the pool near 13 m and the plain network near 11. So for two legs
+the pool learns faster per second in the browser as well as per step, though by less than per step. For
+four legs it is not faster per step, so it is slower per second.
+
+**Not what was tried before.** Rhythm neurons and memory neurons were tried on 13 November and taken out
+("How it walks, measured"). Those rhythm neurons drove the legs: each leg's swing followed its phase,
+open loop, and the policy had no quick way to catch a lean, so the body tumbled. Here a rhythm is one more
+neuron the rest may read or ignore; nothing follows it unless learning makes it. Those memory neurons were
+written by actions of their own and learned with no gradient through time, and on the walk they changed
+nothing. Here memory is learned back through time, and the walk is not what it is for.
+
+**On the page.** The brain is drawn by kind (`mind::pool_picture`): what it senses on the left, the first
+plain layer in a column, the pool in the middle (memory neurons as small squares filled as full as what they
+hold, ringed brighter when they have just taken something in; rhythms in a row over them as rings with a
+dot going round at their phase; moods in a row under them as bars, to the right as they turn their group up
+and to the left as they quieten it), the second plain layer in a column, and what it does. Into each neuron
+the three connections passing it the most just then are drawn, as bright as they are beside the strongest;
+a plastic connection is drawn thicker the more its weight has changed in this run. A press on a neuron
+draws everything it listens to (`brain_reads`), and a press again lets it go. Three sliders under "brain"
+in the controls set how many memory neurons (0 to 128, by 8), how many rhythms (0 to 16) and how many
+connections each pool neuron reads (4 to 32, by 4); moods come with any pool (4), and memory and rhythm both
+at 0 is the plain network. Moving one carries practice on in the new shape, keeping what was learned, and
+the page says how many neurons it now has.
+
+**Against the plain network, on the same steps** (`examples/compare.rs` with `memory=`, `rhythm=`,
+`mood=` and `reads=`; worlds of the page's kind, "meadow" as it opens: 20 of 100 hard, ground 60, the rest
+40; seeds 1 to 4; measured in the sixteen held-out worlds of that kind, each run starting with energy 0.7;
+four runs at a time, one to a core of the Ryzen 7 9700X with other work going on). Distance at each mark,
+the mean and its spread over the seeds, then at 20 million steps food eaten a minute, the share of the time
+resting, in the air with nothing ahead to clear, and its eye on the nearest thing worth looking at against
+chance (as "It wants things" measures them):
+
+| two legs | 1 M | 2 M | 5 M | 10 M | 20 M | food /min | resting | air | eye on / chance |
+|---|---|---|---|---|---|---|---|---|---|
+| plain (stage 2's brain) | 4.5 ± 3.4 m | 7.3 ± 2.5 m | 7.8 ± 4.5 m | 9.7 ± 2.2 m | 10.8 ± 0.6 m | 4.8 | 0.13 | 0.03 | 0.10 / 0.05 |
+| **pool: 32 memory, 4 rhythm, 4 mood, 16 reads (the page's)** | **7.3 ± 0.5 m** | **9.5 ± 1.1 m** | **12.6 ± 1.8 m** | **13.0 ± 1.2 m** | **13.3 ± 3.0 m** | **5.8** | **0.10** | **0.11** | **0.11 / 0.06** |
+| pool: 128 memory, 16 rhythm, 4 mood, 16 reads | 6.1 ± 0.8 m | 9.8 ± 1.8 m | 12.0 ± 0.9 m | 13.3 ± 1.1 m | 15.2 ± 2.2 m | 6.3 | 0.07 | 0.14 | 0.11 / 0.06 |
+
+| four legs | 1 M | 2 M | 5 M | 10 M | 20 M | food /min | resting | air | eye on / chance |
+|---|---|---|---|---|---|---|---|---|---|
+| plain, as stage 2 practised | 8.8 ± 2.3 m | 20.1 ± 2.9 m | 28.1 ± 4.7 m | 29.0 ± 5.0 m | 35.2 ± 2.1 m | 13.0 | 0.00 | 0.16 | 0.16 / 0.06 |
+| pool, as stage 2 practised | 4.6 ± 3.9 m | 9.8 ± 8.8 m | 14.1 ± 11.4 m | 15.1 ± 12.0 m | 17.1 ± 13.8 m | 7.8 | 0.29 | 0.07 | 0.12 / 0.06 |
+| plain, 3 for a run that stalls | 4.2 ± 4.2 m | 12.5 ± 6.0 m | 19.0 ± 10.4 m | 21.2 ± 11.1 m | 29.8 ± 10.3 m | 10.2 | 0.08 | 0.14 | 0.14 / 0.06 |
+| **pool, 3 for a run that stalls (kept)** | **3.2 ± 2.7 m** | **11.4 ± 6.9 m** | **17.6 ± 10.0 m** | **23.1 ± 10.6 m** | **27.2 ± 9.2 m** | **9.2** | **0.08** | **0.13** | **0.13 / 0.05** |
+
+What that says, plainly:
+
+- **Two legs learn faster and steadier with the pool, per step.** At a million steps the pool is where the
+  plain network is at two to five million, and every seed is within half a metre of the others (the plain
+  network's seeds range from 0.1 to 7.9 m there). Each seed passes 10 m by 2 to 5 million steps, the plain
+  network's by 5 to 20 million. At 20 million it goes a quarter further and eats a fifth more. The bigger
+  pool goes furthest of all by 20 million steps (15.2 m). But it leaves the ground with nothing to clear more
+  (0.11 to 0.14 of the time against 0.03), so it bounds more than the plain network does.
+- **Four legs do not.** As stage 2 practised them, with nothing charged for a run that stalls, two of four
+  pooled seeds learned to stand where they started and rest (resting 0.46 and 0.70 of the time, 3.4 m): the
+  old trap, standing earns being up and risks nothing, which the plain network did not fall into. With 3
+  charged for a run that stalls, as two legs pay, no seed stood, and the pool went about as far as the
+  plain network does under the same cost (27.2 against 29.8 m, each with one seed that lagged), less far
+  than the plain network without it (35.2 m). Four legs now pay it (`Way::of`).
+- **A conducted rhythm lets four legs' outside clock go.** Four legs still sense a steady rhythm from
+  outside, a hint two legs lost on 13 November. Pooled, with 3 for a stall and that clock taken away
+  (`clock=0`), they went 28.4 ± 4.3 m at 20 million steps against 27.2 ± 9.2 m with it, and every seed got
+  somewhere (21 to 32 m): with rhythms of its own to read, the outside beat is not needed. It is still
+  sensed (`Way::of`), since without it the plain network was not measured; taking it away is hers to say.
+- **Its eye still does no better than chance by much**, and not better than an eye left at rest (0.23 to
+  0.28 for both brains): memory alone did not give the eye a reason to look at things.
+
+**Food behind it, and a thing that has just landed** (`examples/watch.rs`, through the page's own show in
+the sixteen held-out worlds; 6 seconds into each run food is dropped 1.5 m behind it, 16 seconds in 1.5 m
+ahead; the learners at 20 million steps, four seeds each). Two legs, either brain, never turned back for
+food behind (one of 128 drops was followed by its going back half a metre) and ate it 0 to 6 times in 100; they ate food
+dropped ahead 19 to 50 times in 100 (plain) and 12 to 50 (pool). Four legs ate food behind them 31 to 62
+times in 100, never by turning: it lands within reach of a long body going forward. In the second and a
+half after food landed, the eye was on it 0 to 25 times in 100 ahead and never behind, about chance (7 in
+100). So the two gaps stage 2 named are still open: memory gave it the means to keep something in mind, and
+practice in 20 million steps did not find a use for it in turning or in looking.
+
+**Connections that change during a run, and a world that changes.** For plastic connections to have
+something to adapt to, practice was given a ground that goes slippery partway through one run in four
+(`Way::slip`: every part's grip falls from 0.6 to 0.15 at a moment from 5 to 20 seconds in), and the same
+pool was trained with and without plasticity (`plastic=0`), beside the plain network, two legs, seeds 1 to
+4, 20 million steps. Then on level ground the ground went slippery at 10 seconds, against the same run
+without (`watch.rs`); how far it went in the five seconds after, and the five after that, as a share of
+the firm run's:
+
+| two legs, practised with the ground going slippery | held-out worlds, 20 M | first 5 s after | next 5 s |
+|---|---|---|---|
+| plain | 11.7 ± 1.8 m | 0.85 | 0.84 |
+| pool, plastic reads | 10.7 ± 2.1 m | 0.70 | 0.57 (one seed fell) |
+| pool, no plastic reads | 11.4 ± 1.5 m | 0.86 | 0.86 |
+
+Plainly: **the plastic connections did not adapt within the run.** No brain recovered its pace from the
+first five seconds to the next; the pool with plastic reads lost more than the one without, and one of its
+seeds fell. Practising with the ground changing cost all three a little in the held-out worlds. The rule
+and its learned rate and decay are in, tested and drawn; what they need to be useful (a world that changes
+often enough to be worth adapting to, which is stage 4, or a rule that reads a reward signal, as
+neuromodulated plasticity does) is not found yet.
+
+**Four legs on the page, and the stall.** Stage 2 left four legs empty on the page: their energy was
+carried from run to run and they never learned to rest. Through the page's own show (`watch.rs`, five
+minutes of one life in "meadow"), four-legged learners at 20 million steps spent 0.78 to 0.85 of the time
+with less than a tenth of their energy, plain or pooled, energy carried. Two ways out were tried. Runs of
+60 seconds in practice, long enough to outlast their energy (`seconds=60`), is below. Not carrying energy
+between runs: each run starts full, and the same learners averaged 0.40 to 0.47, under a tenth 0.02 to
+0.07 of the time, and went 60 to 74 m a run in "meadow" (one seed that lagged, 12 m). Runs of 60 seconds in practice
+(four legs, 3 for a run that stalls, seeds 1 to 4, measured in runs of 60 seconds) did not teach them to
+rest: they rested 0.14 of the time, but two pooled seeds of four and one plain seed stayed near the start
+(2 to 9 m in a minute), and the rest went no further in a minute (21.4 ± 15.4 m pooled, 22.5 ± 13.8 m plain)
+than in half a minute before. So four legs on the
+page start each run full (`Page::show_reset`), and two legs, who rest, keep one life. In the page
+itself, four legs from newborn: energy 0.41 on average over their first two minutes, 48 to 65 m.
+
+**In the page.** The drafts build served locally, the mini opened fresh in headless Chromium as a visitor
+finds it ("meadow", 20 of 100 hard, normal effort), browser and all held to four cores (`taskset`), as
+stage 2's trial (`page-trial.ts`, kept with the trials): sampled four times a second, photographed, and at
+two minutes and at ten left alone 8 s, food dropped 1.5 m ahead and behind, a box carried and dropped a
+metre ahead, and lifted by its body and set down. `navigator.hardwareConcurrency` said 4, and the page
+practised in three workers (`practiceWorkers`: what the machine has, up to four, leaving one at normal
+effort; stage 2's page used half the cores, so two here) at 160,000 to 180,000 steps a second for two legs
+and 135,000 to 155,000 for four. The mood is the four moods' average level; "memory moved" is how far the
+memory neurons moved in all at a decision.
+
+| two legs | energy (lowest) | resting | its eye on the nearest thing | mood | memory moved |
+|---|---|---|---|---|---|
+| first minute | 0.49 (0.08) | 0.11 | 0.27 | 0.22 | 1.21 |
+| first two minutes | 0.31 (0.03) | 0.28 | 0.37 | 0.25 | 1.07 |
+| at 2 min: alone / food ahead / food behind | 0.27 / 0.21 / 0.19 | 0 / 0.05 / 0 | 0.54 / 0.71 / 0.38 | 0.33 / 0.25 / 0.22 | |
+| at 2 min: box dropped / lifted / set down | | 0.53 / 0 / 0.36 | 0.47 / 0.86 / 0.43 | 0.43 / 0.40 / 0.38 | |
+| two to ten minutes | 0.54 (0.07) | 0.36 | 0.10 | 0.37 | 1.02 |
+| at 10 min: alone / food ahead / food behind | 0.57 / 0.60 / 0.65 | 0.29 / 0.57 / 0 | 0.11 / 0.05 / 0.24 | 0.40 / 0.35 / 0.46 | |
+| at 10 min: box dropped / lifted / set down | | 0 / 0 / 0 | 0.06 / 0 / 0 | 0.30 / 0.52 / 0.32 | |
+
+The learner the page kept, measured natively (`compare.rs kept=`, which takes its form): at a minute and a
+half (5 million of its own steps) 10.7 m through the held-out worlds and 29.3 m on level ground, in the air
+for nothing 0.14 of the time, its eye on things 0.28 (chance 0.07); at nine and a half minutes (34 million)
+11.2 m and 32.6 m, in the air for nothing 0.06, eating 5.7 pieces a minute, resting 0.14, its eye on things
+0.10, and on level ground it walks by the strict test (not in the worlds as a whole). Four legs' at a
+minute and a half: 29.7 m, 61.0 m on level ground.
+
+What a visitor sees, plainly. **The newborn** crouches low and shuffles, its eye line flicking down and up;
+within the first minute it is crossing the 12 m to the first gap, and its eye is on the nearest thing a
+quarter of the time, three times stage 2's newborn. In the brain the memory squares fill and empty, a few
+ringed each moment as they take something in, the rhythms' dots go round at different paces, and the mood
+bars sit a little right of their middle. **At two minutes** it goes forward in a deep crouch, one leg
+stretched back, its eye following food dropped ahead down to the ground (0.71 of the time) and eating it;
+food dropped behind, it does not turn for. A box dropped by it: it stops and rests, and its moods rise (0.22
+to 0.43); lifted, its eye goes straight down and its moods stay up (0.40). Plastic connections into the
+memory neurons are drawn thick, the thickest changing as it walks. **At ten minutes** it rests a third of
+the time, mostly standing at the edge of the gap at 12 m, energy back at about half; its eye has gone back
+to looking down ahead (on things 0.10 of the time) and it no longer follows food down; lifted, its moods
+rise to 0.52 and fall again when it is set down. It still does not turn for food behind.
+
+Honestly: the moods are seen to move with what happens to it (up when startled or lifted, for two legs;
+down while lifted, for four), the memories to take things in, and the rhythms to go round, so a visitor can
+see the brain doing something at each thing that happens. What still looks like a machine: the deep
+crouch with a leg stretched back, standing at the first gap rather than trying it, never turning for food
+behind, and an eye that looked at things at two minutes and went back to looking at its feet by ten. The
+brain is readable at 168 neurons; at 264 the pool's lines into the second plain layer crowd the right half.
+
 ### Practice in the browser
 
 On the page, "how it learns" chooses evolution or "by practice", and the page opens on practice: a
@@ -1493,7 +1736,7 @@ creature and its learning per module instance. A function that gives a list give
   `envs_observations()`, `envs_rewards()`, `envs_done()`, `senses_length()`, `actions_length()`,
   `rays_length()`.
 
-The module is 331 KiB with SIMD, 326 KiB without (320 and 310 before it wanted things, 304 and 296 before touch and the hand, 299 and 291 before two legs were asked for a pace,
+The module is 451 KiB with SIMD, 435 KiB without (331 and 326 before the pool, 320 and 310 before it wanted things, 304 and 296 before touch and the hand, 299 and 291 before two legs were asked for a pace,
 with the costs on landing and leaning; 295 and 287 before the posture terms for two legs,
 which cost 2.8 KiB, and the bonus for taking turns, 1.2 KiB; the gait measures are left out of it; the Walker's is 131 KiB, the physics alone
 37 KiB; what the generalist added to the Walker's own module is 1.3 KiB of physics it does not use,
@@ -1502,7 +1745,11 @@ was 190 KiB; the brain's picture costs 11 KiB more. The functions for practice (
 `practice_update`, `practice_local`, `practice_weights`, `practice_shares_room`,
 `practice_weights_room`, `practice_finish`, `practice_state`, `practice_running`, `state_room`,
 `running_room`, `practice_load`, `policy_load`, `policy_off`, `show_rewards`, `brain_picture` and a
-few numbers) are described where they are, in `src/generalist/api.rs`. `src/minis/generalist.test.ts` holds it to the native engine's
+few numbers) are described where they are, in `src/generalist/api.rs`. Since the pool: `brain_shape(memory,
+rhythm, mood, reads)` sets the brain practice is to have, within `brain_caps()`; a learner's form
+(`practice_form()`) is written into `form_room(length)` before its state, and `practice_load` takes it up
+into the brain asked for; `brain_picture` gives a brain with a pool by kind, starting with -1
+(`mind::pool_picture`), and `brain_reads(n)` every connection into neuron `n`. `src/minis/generalist.test.ts` holds it to the native engine's
 fingerprint of three creatures' 600 steps and three generations of evolution, to the bit, with SIMD
 and without.
 

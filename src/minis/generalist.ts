@@ -21,7 +21,7 @@
 import { el, type Mote, type Scene } from "../mote/stage";
 import type { Kept, Order as PracticeOrder, Report as PracticeReport } from "../scripts/generalist-practice";
 import type { Order, Report } from "../scripts/generalist-worker";
-import { BRAIN, DEFAULT_RECIPE, KINDS, LEGS, POPULATION, SECONDS, SEEN, anotherSeed, brainColumns, counted, engineAddress, engineRecipe, fromLink, lasted, linkParts, list, senseLayout, start as startEngine, valid, write, write64, type Engine, type Kind, type Recipe } from "./roaming";
+import { BRAIN, DEFAULT_RECIPE, DEFAULT_SHAPE, KINDS, LEGS, POPULATION, SECONDS, SEEN, SHAPE_CAPS, anotherSeed, brainColumns, brainKinds, counted, engineAddress, engineRecipe, fromLink, lasted, linkParts, list, neurons, practiceWorkers, senseLayout, start as startEngine, valid, validShape, write, write64, type BrainKinds, type Engine, type Kind, type Recipe, type Shape } from "./roaming";
 import { EFFORTS, machine, tenths, workersFor, type Effort } from "./walking";
 
 export const label = "A little creature with legs, seen from the side, learning from nothing to find its way and its food in a world made from a seed. A line from its eye shows where it looks, and faint lines what it sees; its body glows with the energy it has. It and the boxes and platforms can be picked up and moved: with the pointer, or with Space to take hold and the arrows to move the hand. A tap on nothing drops food there.";
@@ -51,9 +51,12 @@ const keptKey = (recipe: Recipe) => String(recipe.legs);
  * store at 3 forgets them all, and learners are kept by body alone from then on, not by kind of world. At 4
  * they began to want things (walker/README.md, "It wants things"): their energy, having eaten and where their
  * eye looks are senses, and where to look an action, so again every learner kept before is the wrong shape and
- * opening the store at 4 forgets them all.
+ * opening the store at 4 forgets them all. At 5 the brain has a pool of neurons beside its plain ones
+ * (walker/README.md, "The brain that was discussed") and a learner is kept with its form; a learner kept at 4
+ * senses the same and has no form, so it is taken up as the plain network it is and grown into the brain
+ * asked for, keeping what it learned: opening the store at 5 forgets only what is older than 4.
  */
-const KEEPING_VERSION = 4;
+const KEEPING_VERSION = 5;
 
 /** Opens the browser's store for kept learners. */
 function store(): Promise<IDBDatabase> {
@@ -64,8 +67,8 @@ function store(): Promise<IDBDatabase> {
                 asked.result.createObjectStore("kept");
                 return;
             }
-            // every learner kept before version 4 senses too little to be taken up
-            asked.transaction?.objectStore("kept").clear();
+            // every learner kept before version 4 senses too little to be taken up; one kept at 4 is grown
+            if (event.oldVersion < 4) asked.transaction?.objectStore("kept").clear();
         };
         asked.onsuccess = () => opened(asked.result);
         asked.onerror = () => failed(asked.error);
@@ -101,7 +104,12 @@ export default function generalist(m: Mote): Scene {
     let how: How = m.recall<How>("generalist-how", "practice") === "evolution" ? "evolution" : "practice";
     /** How practice goes: how long and how many steps, how far its practice runs get, how far the shown creature got in its last run here, and the next policy to show. */
     let practice = { seconds: 0, steps: 0, reached: 0, here: -1, speed: 0, waited: [0, 0], hard: 0 };
-    let policy: { weights: Float32Array; running: Float64Array } | undefined;
+    let policy: { form: Float32Array; weights: Float32Array; running: Float64Array } | undefined;
+    /** The brain practice has: how much memory and rhythm, and how many connections each of its pool's neurons may afford. */
+    const keptShape = m.recall<Shape>("generalist-brain", DEFAULT_SHAPE, 1);
+    let shape: Shape = validShape(keptShape) ? keptShape : DEFAULT_SHAPE;
+    /** The neuron of the brain's picture pressed, whose every connection in is drawn; none. */
+    let pressedNeuron = -1;
     /** How far it got as it learned, for the chart: steps practised (or generations) against metres. */
     let learned: { x: number; y: number }[] = [];
     /** What the creature on show wants and where it looks, read each frame (`show_needs`): energy, vigour, just ate, resting, gaze, eaten. */
@@ -111,7 +119,7 @@ export default function generalist(m: Mote): Scene {
     /** A learner being forgotten ("start over"), which must be gone before the kept one is read again. */
     let forgetting: Promise<unknown> = Promise.resolve();
     /** The policy last put on show, put on show again at once when the world changes and practice carries on. */
-    let onShow: { weights: Float32Array; running: Float64Array } | undefined;
+    let onShow: { form: Float32Array; weights: Float32Array; running: Float64Array } | undefined;
     /** Said when the store has been read after a change of body: whether it took up a learner kept for that body. */
     let tellKept: ((found: boolean) => void) | undefined;
     /** A few words for a screen reader, said by the live line in the column. */
@@ -217,12 +225,13 @@ export default function generalist(m: Mote): Scene {
     /** What a practice worker is told to begin with: which of the workers it is, and for the first, the learner kept. */
     const practiceOrder = (index: number, kept?: Kept, carry = false): PracticeOrder => {
         const { seed, difficulty, amounts } = engineRecipe(recipe);
-        return { kind: "begin", setup: id, legs: recipe.legs, seed, difficulty, amounts, workers: helpers.length + 1, index, learnerSeed: 1, kept, carry };
+        return { kind: "begin", setup: id, legs: recipe.legs, seed, difficulty, amounts, shape, workers: helpers.length + 1, index, learnerSeed: 1, kept, carry };
     };
 
     /** Puts the newest policy from practice on show, from the start. */
     const takePolicy = () => {
         if (!engine || !policy) return;
+        write(engine, engine.form_room(policy.form.length), policy.form);
         const [stateRoom, runningRoom] = [engine.state_room(1), engine.running_room()];
         if (engine.length() === policy.running.length) {
             write(engine, stateRoom, policy.weights);
@@ -230,6 +239,7 @@ export default function generalist(m: Mote): Scene {
             if (engine.policy_load() === 1) {
                 shown = true;
                 onShow = policy;
+                pressedNeuron = -1;
             }
         }
         policy = undefined;
@@ -311,12 +321,12 @@ export default function generalist(m: Mote): Scene {
     };
 
     /**
-     * How many workers learn at the chosen effort. Practice uses at most four: each update is shared by
-     * averaging every worker's weights, and with more workers each has too few creatures; eight
-     * workers of four creatures learned no faster than one of thirty-two, four of eight 2.3 times as
-     * fast (walker/README.md, "In the browser").
+     * How many workers learn at the chosen effort. Practice uses what the machine has up to four
+     * (`practiceWorkers`): each update is shared by averaging every worker's weights, and with more
+     * workers each has too few creatures; eight workers of four creatures learned no faster than one of
+     * thirty-two, four of eight 2.3 times as fast (walker/README.md, "In the browser").
      */
-    const workersNow = () => Math.min(how === "practice" ? 4 : 16, workersFor(effort, machine()));
+    const workersNow = () => (how === "practice" ? practiceWorkers(effort, machine()) : Math.min(16, workersFor(effort, machine())));
 
     /** Hires the workers for how it learns now, letting any others go. */
     const crew = () => {
@@ -500,21 +510,269 @@ export default function generalist(m: Mote): Scene {
             staff(workersNow() - 1);
         });
 
+        // the brain's shape: how much memory, how much rhythm, how many connections each pool neuron may afford.
+        // Changing it keeps what was learned (the engine reshapes the learner); moods come with any pool.
+        const slider = (words: string, least: number, most: number, step: number, value: () => number, set: (value: number) => void) => {
+            const range = el("input", { type: "range", min: String(least), max: String(most), step: String(step), value: String(value()) });
+            range.setAttribute("aria-label", words);
+            const shownValue = el("output", { class: "walker-far", textContent: `${value()}` });
+            range.addEventListener("input", () => (shownValue.textContent = range.value));
+            range.addEventListener("change", () => set(Number(range.value)));
+            return el("span", { class: "walker-range" }, range, shownValue);
+        };
+        const reshape = (change: Partial<Shape>) => {
+            const next = { ...shape, ...change };
+            next.mood = next.memory + next.rhythm > 0 ? 4 : 0;
+            if (next.memory === shape.memory && next.rhythm === shape.rhythm && next.reads === shape.reads) return;
+            shape = next;
+            m.keep("generalist-brain", shape, 1);
+            if (how !== "practice") return;
+            say(`A brain of ${neurons(shape)} neurons. It goes on with what it has learned.`);
+            begin(true);
+        };
+        const memorySlider = slider("memory neurons", 0, SHAPE_CAPS.memory, 8, () => shape.memory, (value) => reshape({ memory: value }));
+        const rhythmSlider = slider("rhythm neurons", 0, SHAPE_CAPS.rhythm, 1, () => shape.rhythm, (value) => reshape({ rhythm: value }));
+        const readsSlider = slider("connections each pool neuron reads", SHAPE_CAPS.fewestReads, SHAPE_CAPS.reads, 4, () => shape.reads, (value) => reshape({ reads: value }));
+
         // the brain, drawn live from the first second, so a visitor watches it grow as it learns
         const brainPicture = el("canvas", { class: "walker-brain-picture generalist-brain" });
         brainPicture.setAttribute("role", "img");
-        brainPicture.setAttribute("aria-label", "The creature's brain as it thinks: what it senses on the left (a dot for each ray of its eye, then its body), its neurons in the middle, and what it does on the right, lit by what passes through them.");
+        brainPicture.setAttribute("aria-label", "The creature's brain as it thinks: what it senses on the left (a dot for each ray of its eye, then its body), its plain neurons in a column either side of its pool, and what it does on the right. In the pool, small squares are memory neurons filled as full as what they hold, rings with a dot going round are rhythms, and bars under them are moods, which turn groups of the plain neurons up or down. Lines are the connections passing the most, thicker where a connection has changed in this run. Pressing a neuron shows everything it listens to.");
+        /** Where each neuron of a brain with a pool is drawn, by kind, kept until its counts or the canvas change. */
+        let placed: { key: string; at: [number, number][] } = { key: "", at: [] };
+        const placeKinds = (kinds: BrainKinds, wide: number, high: number) => {
+            const { senses, plain, memory, rhythm, mood, actions } = kinds.counts;
+            const key = `${senses} ${plain} ${memory} ${rhythm} ${mood} ${actions} ${wide} ${high}`;
+            if (placed.key === key) return placed.at;
+            const [left, right, top, bottom] = [8, wide - 8, 8, high - 20];
+            const at: [number, number][] = [];
+            const column = (count: number, x: number) => {
+                const gap = Math.min((bottom - top) / Math.max(1, count - 1), 9);
+                for (let i = 0; i < count; i++) at.push([x, (top + bottom) / 2 + (i - (count - 1) / 2) * gap]);
+            };
+            const xAt = (share: number) => left + (right - left) * share;
+            column(senses, xAt(0));
+            column(plain, xAt(0.17));
+            // the pool in the middle: rhythms in a row over the memories, moods in a row under them
+            const [poolLeft, poolRight] = [xAt(0.29), xAt(0.71)];
+            const rhythmRow = top + 7;
+            const moodRow = bottom - 5;
+            const [gridTop, gridBottom] = [rhythm > 0 ? rhythmRow + 12 : top, mood > 0 ? moodRow - 11 : bottom];
+            const across = Math.max(1, Math.ceil(Math.sqrt((memory * (poolRight - poolLeft)) / Math.max(1, gridBottom - gridTop))));
+            const down = Math.max(1, Math.ceil(memory / across));
+            for (let i = 0; i < memory; i++) {
+                const [c, r] = [i % across, Math.floor(i / across)];
+                at.push([poolLeft + ((c + 0.5) * (poolRight - poolLeft)) / across, gridTop + ((r + 0.5) * (gridBottom - gridTop)) / down]);
+            }
+            for (let j = 0; j < rhythm; j++) at.push([poolLeft + ((j + 0.5) * (poolRight - poolLeft)) / rhythm, rhythmRow]);
+            for (let q = 0; q < mood; q++) at.push([poolLeft + ((q + 0.5) * (poolRight - poolLeft)) / mood, moodRow]);
+            column(plain, xAt(0.83));
+            column(actions, xAt(1));
+            placed = { key, at };
+            return at;
+        };
+
+        /** A brain with a pool, drawn by kind: plain neurons as dots, memories as small vessels filled by what they hold, rhythms as rings with a dot going round at their pace, moods as bars filled by their level; into each neuron the connections passing it the most, a plastic one thicker the more it has changed in this run; a neuron pressed shows everything it listens to. */
+        const drawKinds = (ctx: CanvasRenderingContext2D, kinds: BrainKinds, wide: number, high: number) => {
+            const at = placeKinds(kinds, wide, high);
+            const { senses, plain, memory, rhythm, mood, actions } = kinds.counts;
+            const [accent, muted, ink] = [m.color("--accent"), m.color("--muted"), m.color("--ink")];
+            const pool = senses + plain;
+            const count = at.length;
+            let strongest = 1e-6;
+            for (let k = 1; k < kinds.into.length; k += 3) strongest = Math.max(strongest, Math.abs(kinds.into[k]!));
+            const LEVELS = 4;
+            const paths = Array.from({ length: 2 * LEVELS }, () => new Path2D());
+            const plastic: [number, number, number][] = [];
+            for (let n = senses; n < count; n++) {
+                for (let e = 0; e < 3; e++) {
+                    const k = 9 * (n - senses) + 3 * e;
+                    const from = kinds.into[k]!;
+                    if (from < 0 || from >= count) continue;
+                    const passed = kinds.into[k + 1]!;
+                    const changed = kinds.into[k + 2]!;
+                    if (Math.abs(changed) > 0.02) plastic.push([from, n, changed]);
+                    const level = Math.min(LEVELS - 1, Math.floor((Math.abs(passed) / strongest) * LEVELS));
+                    const path = paths[level + (passed > 0 ? 0 : LEVELS)]!;
+                    path.moveTo(...at[from]!);
+                    path.lineTo(...at[n]!);
+                }
+            }
+            ctx.lineWidth = 1;
+            paths.forEach((path, p) => {
+                ctx.globalAlpha = 0.1 + 0.5 * (((p % LEVELS) + 1) / LEVELS);
+                ctx.strokeStyle = p < LEVELS ? accent : muted;
+                ctx.stroke(path);
+            });
+            // a connection that has changed in this run by its own rule, thicker the more it has
+            for (const [from, n, changed] of plastic) {
+                ctx.globalAlpha = 0.75;
+                ctx.strokeStyle = changed > 0 ? accent : muted;
+                ctx.lineWidth = 1 + Math.min(3, Math.abs(changed) * 4);
+                ctx.beginPath();
+                ctx.moveTo(...at[from]!);
+                ctx.lineTo(...at[n]!);
+                ctx.stroke();
+            }
+            // a neuron pressed: everything it listens to
+            if (engine && pressedNeuron >= senses && pressedNeuron < count) {
+                const heard = list(engine, engine.brain_reads(pressedNeuron));
+                let most = 1e-6;
+                for (let k = 2; k < heard.length; k += 3) most = Math.max(most, Math.abs(heard[k]!));
+                for (let k = 0; k + 2 < heard.length; k += 3) {
+                    const from = heard[k]!;
+                    if (from < 0 || from >= count) continue;
+                    ctx.globalAlpha = 0.2 + 0.8 * Math.min(1, Math.abs(heard[k + 2]!) / most);
+                    ctx.strokeStyle = heard[k + 2]! >= 0 ? ink : muted;
+                    ctx.lineWidth = 1.2;
+                    ctx.beginPath();
+                    ctx.moveTo(...at[from]!);
+                    ctx.lineTo(...at[pressedNeuron]!);
+                    ctx.stroke();
+                }
+            }
+            ctx.globalAlpha = 1;
+            const lit = (value: number) => {
+                ctx.globalAlpha = 0.25 + 0.75 * Math.min(1, Math.abs(value));
+                ctx.fillStyle = value >= 0 ? accent : muted;
+            };
+            const ground = m.color("--ground");
+            for (let n = 0; n < count; n++) {
+                const [x, y] = at[n]!;
+                const value = kinds.lit[n]!;
+                if (n >= pool && n < pool + memory) {
+                    // a memory: a small vessel, filled as full as what it holds, ringed brighter when it has just taken something in
+                    const moved = Math.abs(kinds.moved[n - pool]!);
+                    const size = 5;
+                    ctx.globalAlpha = 1;
+                    ctx.fillStyle = ground;
+                    ctx.fillRect(x - size / 2, y - size / 2, size, size);
+                    lit(value);
+                    const full = size * Math.min(1, Math.abs(value));
+                    ctx.fillRect(x - size / 2, y + size / 2 - full, size, full);
+                    ctx.globalAlpha = 0.35 + Math.min(0.65, moved * 6);
+                    ctx.strokeStyle = moved > 0.05 ? ink : muted;
+                    ctx.lineWidth = moved > 0.05 ? 1.2 : 0.7;
+                    ctx.strokeRect(x - size / 2, y - size / 2, size, size);
+                } else if (n >= pool + memory && n < pool + memory + rhythm) {
+                    // a rhythm: a ring, its dot at its phase, so it is seen to go round at the pace the brain sets
+                    const phase = kinds.moved[n - pool]!;
+                    ctx.globalAlpha = 0.6;
+                    ctx.strokeStyle = muted;
+                    ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    ctx.arc(x, y, 4.5, 0, Math.PI * 2);
+                    ctx.stroke();
+                    ctx.globalAlpha = 1;
+                    ctx.fillStyle = accent;
+                    ctx.beginPath();
+                    ctx.arc(x + 4.5 * Math.cos(phase), y - 4.5 * Math.sin(phase), 1.8, 0, Math.PI * 2);
+                    ctx.fill();
+                } else if (n >= pool + memory + rhythm && n < pool + memory + rhythm + mood) {
+                    // a mood: a bar from its middle, to the right as it turns its group up, to the left as it quietens it
+                    const spread = Math.min(16, (wide * 0.42) / Math.max(1, mood) / 2 - 2);
+                    ctx.globalAlpha = 0.25;
+                    ctx.fillStyle = muted;
+                    ctx.beginPath();
+                    ctx.roundRect(x - spread, y - 2.5, 2 * spread, 5, 2.5);
+                    ctx.fill();
+                    lit(value);
+                    ctx.globalAlpha = 0.9;
+                    const reach = spread * Math.max(-1, Math.min(1, value));
+                    ctx.beginPath();
+                    ctx.roundRect(Math.min(x, x + reach), y - 2.5, Math.max(1.5, Math.abs(reach)), 5, 2.5);
+                    ctx.fill();
+                } else {
+                    // what it senses, the plain neurons and what it does: dots
+                    ctx.globalAlpha = 1;
+                    ctx.fillStyle = ground;
+                    ctx.beginPath();
+                    ctx.arc(x, y, 2.2, 0, Math.PI * 2);
+                    ctx.fill();
+                    lit(value);
+                    ctx.fill();
+                }
+                ctx.globalAlpha = 1;
+            }
+            if (pressedNeuron >= 0 && pressedNeuron < count) {
+                const [x, y] = at[pressedNeuron]!;
+                ctx.strokeStyle = ink;
+                ctx.lineWidth = 1.2;
+                ctx.beginPath();
+                ctx.arc(x, y, 6.5, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+            // the neuron for looking around, before the hop at the foot of what it does: ringed, with an eye beside it
+            if (needs.energy >= 0 && actions >= 2) {
+                const [x, y] = at[count - 2]!;
+                ringEye(ctx, x, y, accent);
+            }
+        };
+
+        /** A ring round the neuron for looking around, with an eye beside it. */
+        const ringEye = (ctx: CanvasRenderingContext2D, x: number, y: number, accent: string) => {
+            ctx.globalAlpha = 1;
+            ctx.strokeStyle = accent;
+            ctx.lineWidth = 1.2;
+            ctx.beginPath();
+            ctx.arc(x, y, 6, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.ellipse(x - 13, y, 4.5, 2.6, 0, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.fillStyle = accent;
+            ctx.beginPath();
+            ctx.arc(x - 13, y, 1.2, 0, Math.PI * 2);
+            ctx.fill();
+        };
+
+        // a press on a neuron shows what it listens to; a press on it again, or on nothing, lets it go
+        brainPicture.addEventListener("pointerdown", (event) => {
+            if (!placed.at.length) return;
+            const box = brainPicture.getBoundingClientRect();
+            const [x, y] = [event.clientX - box.left, event.clientY - box.top];
+            let [nearest, best] = [-1, 10 * 10];
+            placed.at.forEach(([px, py], n) => {
+                const d = (px - x) ** 2 + (py - y) ** 2;
+                if (d < best) [nearest, best] = [n, d];
+            });
+            pressedNeuron = nearest === pressedNeuron ? -1 : nearest;
+            m.wake();
+        });
+
         drawBrain = () => {
             if (!engine) return;
-            const picture = brainColumns(list(engine, engine.brain_picture()));
+            const raw = list(engine, engine.brain_picture());
             const ctx = brainPicture.getContext("2d");
-            if (!picture || !ctx) return;
+            if (!ctx) return;
             const ratio = window.devicePixelRatio || 1;
             const [wide, high] = [brainPicture.clientWidth, brainPicture.clientHeight];
             if (wide === 0) return;
             if (brainPicture.width !== Math.round(wide * ratio) || brainPicture.height !== Math.round(high * ratio)) [brainPicture.width, brainPicture.height] = [Math.round(wide * ratio), Math.round(high * ratio)];
             ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
             ctx.clearRect(0, 0, wide, high);
+            const kinds = brainKinds(raw);
+            const words = () => {
+                ctx.globalAlpha = 1;
+                ctx.fillStyle = m.color("--muted");
+                ctx.font = `11px ${code}`;
+                ctx.textBaseline = "bottom";
+                ctx.textAlign = "left";
+                ctx.fillText("senses", 2, high - 3);
+                ctx.textAlign = "center";
+                // the brain drawn, which until its run ends may be the shape before a slider moved
+                ctx.fillText(kinds ? `${2 * kinds.counts.plain + kinds.counts.memory + kinds.counts.rhythm + kinds.counts.mood} neurons` : "neurons", wide / 2, high - 3);
+                ctx.textAlign = "right";
+                ctx.fillText("moves", wide - 2, high - 3);
+            };
+            if (kinds) {
+                drawKinds(ctx, kinds, wide, high);
+                words();
+                return;
+            }
+            placed = { key: "", at: [] };
+            const picture = brainColumns(raw);
+            if (!picture) return;
             const { lit, flows } = picture;
             const [left, right, top, bottom] = [10, wide - 10, 10, high - 22];
             const gaps = lit.map((column) => Math.min((bottom - top) / Math.max(1, column.length - 1), 10));
@@ -577,30 +835,8 @@ export default function generalist(m: Mote): Scene {
             });
             // the neuron for looking around, before the hop at the foot of what it does: ringed, with an eye beside it
             const moves = lit.length - 1;
-            if (needs.energy >= 0 && lit[moves]!.length >= 2) {
-                const [x, y] = place(moves, lit[moves]!.length - 2);
-                ctx.strokeStyle = accent;
-                ctx.lineWidth = 1.2;
-                ctx.beginPath();
-                ctx.arc(x, y, 6, 0, Math.PI * 2);
-                ctx.stroke();
-                ctx.beginPath();
-                ctx.ellipse(x - 13, y, 4.5, 2.6, 0, 0, Math.PI * 2);
-                ctx.stroke();
-                ctx.fillStyle = accent;
-                ctx.beginPath();
-                ctx.arc(x - 13, y, 1.2, 0, Math.PI * 2);
-                ctx.fill();
-            }
-            ctx.fillStyle = muted;
-            ctx.font = `11px ${code}`;
-            ctx.textBaseline = "bottom";
-            ctx.textAlign = "left";
-            ctx.fillText("senses", 2, high - 3);
-            ctx.textAlign = "center";
-            ctx.fillText("neurons", wide / 2, high - 3);
-            ctx.textAlign = "right";
-            ctx.fillText("moves", wide - 2, high - 3);
+            if (needs.energy >= 0 && lit[moves]!.length >= 2) ringEye(ctx, ...place(moves, lit[moves]!.length - 2), accent);
+            words();
         };
 
         // how far it gets, against how long it has practised (or, by evolution, the generations), drawn as it learns
@@ -801,6 +1037,10 @@ export default function generalist(m: Mote): Scene {
             explain,
             ...row("learning", pause, el("button", { type: "button", textContent: "start over", onclick: () => restart(true) })),
             ...row("effort", efforts),
+            group("brain"),
+            ...row("memory", memorySlider),
+            ...row("rhythm", rhythmSlider),
+            ...row("connections", readsSlider),
         );
         const fold = el("button", { type: "button", class: "generalist-fold", textContent: "world and learning", onclick: () => {
             controls.shut(!controls.open());

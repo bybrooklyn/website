@@ -3,6 +3,7 @@
 // helpers hired again; practice must go on, at the newest setting, with its steps rising.
 
 import { expect, test } from "bun:test";
+import { DEFAULT_SHAPE } from "../minis/roaming";
 import type { Order, Report } from "./generalist-practice";
 
 const HARNESS = new URL("./generalist-practice.harness.ts", import.meta.url).href;
@@ -16,7 +17,7 @@ function page() {
     let helpers: Worker[] = [];
     let setup = 0;
     let legs = 2;
-    const begin = (index: number, workers: number): Order => ({ kind: "begin", setup, legs, seed: 3, difficulty: 0.2, amounts: [0.6, 0.4, 0.4, 0.4], workers, index, learnerSeed: 1 });
+    const begin = (index: number, workers: number): Order => ({ kind: "begin", setup, legs, seed: 3, difficulty: 0.2, amounts: [0.6, 0.4, 0.4, 0.4], shape: DEFAULT_SHAPE, workers, index, learnerSeed: 1 });
     /** As the page's `staff`: helpers let go and new ones hired, each told its leader, its share, and the leader told its helpers. */
     const staff = (count: number) => {
         for (const helper of helpers) helper.terminate();
@@ -73,7 +74,7 @@ test("a kept learner of another size is refused before it is written, and practi
     try {
         // running numbers of the right length for two legs (1 + 2 * 120 + 3), and a state far too long
         const kept = { state: new Float32Array(20_000_000), running: new Float64Array(244), seconds: 100, steps: 1e6 };
-        leader.postMessage({ kind: "begin", setup: 1, legs: 2, seed: 3, difficulty: 0.2, amounts: [0.6, 0.4, 0.4, 0.4], workers: 1, index: 0, learnerSeed: 1, kept } satisfies Order);
+        leader.postMessage({ kind: "begin", setup: 1, legs: 2, seed: 3, difficulty: 0.2, amounts: [0.6, 0.4, 0.4, 0.4], shape: DEFAULT_SHAPE, workers: 1, index: 0, learnerSeed: 1, kept } satisfies Order);
         expect(await until(() => reports.length >= 2, 20_000)).toBe(true);
         const first = reports[0]!;
         expect(first.kind).toBe("practised");
@@ -91,7 +92,7 @@ test("a trap in the engine is told to the page, and that setup is not tried agai
     leader.onmessage = (event: MessageEvent<Report>) => reports.push(event.data);
     const beating = setInterval(() => leader.postMessage({ kind: "beat" } satisfies Order), 100);
     try {
-        leader.postMessage({ kind: "begin", setup: 1, legs: 2, seed: 3, difficulty: 0.2, amounts: [0.6, 0.4, 0.4, 0.4], workers: 1, index: 0, learnerSeed: 1 } satisfies Order);
+        leader.postMessage({ kind: "begin", setup: 1, legs: 2, seed: 3, difficulty: 0.2, amounts: [0.6, 0.4, 0.4, 0.4], shape: DEFAULT_SHAPE, workers: 1, index: 0, learnerSeed: 1 } satisfies Order);
         expect(await until(() => reports.some((report) => report.kind === "failed"), 10_000)).toBe(true);
         await wait(1000);
         expect(reports.filter((report) => report.kind === "practised").length).toBe(2);
@@ -148,7 +149,7 @@ test("a new world for the same body goes on with what was learned, and a new bod
     leader.onmessage = (event: MessageEvent<Report>) => reports.push(event.data);
     const beating = setInterval(() => leader.postMessage({ kind: "beat" } satisfies Order), 300);
     const of = (setup: number) => reports.filter((report): report is Extract<Report, { kind: "practised" }> => report.kind === "practised" && report.setup === setup);
-    const begin = (setup: number, legs: number, seed: number): Order => ({ kind: "begin", setup, legs, seed, difficulty: 0.2, amounts: [0.6, 0.4, 0.4, 0.4], workers: 1, index: 0, learnerSeed: 1, carry: true });
+    const begin = (setup: number, legs: number, seed: number): Order => ({ kind: "begin", setup, legs, seed, difficulty: 0.2, amounts: [0.6, 0.4, 0.4, 0.4], shape: DEFAULT_SHAPE, workers: 1, index: 0, learnerSeed: 1, carry: true });
     try {
         leader.postMessage(begin(1, 2, 3));
         expect(await until(() => of(1).length >= 3, 20_000)).toBe(true);

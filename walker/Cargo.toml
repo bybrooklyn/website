@@ -61,3 +61,11 @@ opt-level = 3
 [[example]]
 name = "touched"
 required-features = ["generalist"]
+
+[[example]]
+name = "brain_cost"
+required-features = ["generalist"]
+
+[[example]]
+name = "watch"
+required-features = ["generalist"]

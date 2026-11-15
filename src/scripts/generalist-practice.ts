@@ -14,12 +14,12 @@
 //
 // It practises only while the page is drawing the mini, as the evolution worker does.
 
-import { BRAIN, POPULATION, SECONDS, engineAddress, list, list64, start, write, write64, type Engine } from "../minis/roaming";
+import { BRAIN, POPULATION, SECONDS, engineAddress, list, list64, start, write, write64, type Engine, type Shape } from "../minis/roaming";
 
 /** What the page sends. */
 export type Order =
-    /** Begins practice in a kind of world. With `carry`, a leader already practising with a body of as many legs goes on with what it has learned, in the new kind of world; otherwise it starts from `kept`, or from nothing. */
-    | { kind: "begin"; setup: number; legs: number; seed: number; difficulty: number; amounts: [number, number, number, number]; workers: number; index: number; learnerSeed: number; kept?: Kept; carry?: boolean }
+    /** Begins practice in a kind of world, with a brain of `shape`. With `carry`, a leader already practising with a body of as many legs goes on with what it has learned, in the new kind of world and the shape asked (walker/src/generalist/ppo.rs, `Learner::reshaped`); otherwise it starts from `kept`, reshaped, or from nothing. */
+    | { kind: "begin"; setup: number; legs: number; seed: number; difficulty: number; amounts: [number, number, number, number]; shape: Shape; workers: number; index: number; learnerSeed: number; kept?: Kept; carry?: boolean }
     | { kind: "pause" }
     | { kind: "resume" }
     | { kind: "beat" }
@@ -28,8 +28,9 @@ export type Order =
     /** To a helper: the port its leader's work comes in by. */
     | { kind: "lead"; port: MessagePort };
 
-/** Everything practice has learned, to keep between visits: the learner's state and its running numbers, and how long it had practised. */
+/** Everything practice has learned, to keep between visits: the learner's form (its brain's shape and every connection of its pool; a learner kept before forms were kept has none and is a plain network), its state and its running numbers, and how long it had practised. */
 export interface Kept {
+    form?: Float32Array;
     state: Float32Array;
     running: Float64Array;
     seconds: number;
@@ -38,7 +39,7 @@ export interface Kept {
 
 /** What the leader sends back after each update. */
 export type Report =
-    | { kind: "practised"; setup: number; updates: number; steps: number; seconds: number; reached: number; policy?: { weights: Float32Array; running: Float64Array }; kept?: Kept; speed: number; waited: number[]; hard: number }
+    | { kind: "practised"; setup: number; updates: number; steps: number; seconds: number; reached: number; policy?: { form: Float32Array; weights: Float32Array; running: Float64Array }; kept?: Kept; speed: number; waited: number[]; hard: number }
     | { kind: "failed"; why: string };
 
 /**
@@ -47,7 +48,7 @@ export type Report =
  * gives back, and is always answered: by the update, or by "gone" if the helper is past that setup.
  */
 type Work =
-    | { kind: "start"; setup: number; state: Float32Array; running: Float64Array }
+    | { kind: "start"; setup: number; form: Float32Array; state: Float32Array; running: Float64Array }
     | { kind: "local"; setup: number; asked: number }
     | { kind: "finish"; setup: number; shares: Float64Array; weights: Float32Array; workers: number };
 type Answer = { kind: "local"; setup: number; asked: number; share: Float64Array; weights: Float32Array; steps: number } | { kind: "gone"; setup: number; asked: number };
@@ -98,6 +99,7 @@ const quiet = () => performance.now() - heard > 2500;
 function make(order: Extract<Order, { kind: "begin" }>): void {
     if (!engine) return;
     engine.create(order.legs, order.seed, order.difficulty, ...order.amounts, POPULATION, BRAIN.hidden, BRAIN.layers, BRAIN.memory, SECONDS, 1);
+    engine.brain_shape(order.shape.memory, order.shape.rhythm, order.shape.mood, order.shape.reads);
     const share = Math.max(2, Math.ceil(CREATURES / order.workers));
     // each worker draws its own actions and has worlds of its own; the leader's weights are sent to all
     engine.practice_create(share, (order.learnerSeed + order.index) >>> 0, (order.learnerSeed * 64 + order.index) >>> 0);
@@ -105,9 +107,14 @@ function make(order: Extract<Order, { kind: "begin" }>): void {
     begun = order;
 }
 
-/** Writes a kept learner into the engine's practice. One of another length (kept by an older engine, or for another body) is refused before anything is written, so it never runs past its room. */
-function load(state: Float32Array, running: Float64Array): boolean {
+/** The plain network's form, for a learner kept before forms were. */
+const PLAIN_FORM = new Float32Array(4);
+
+/** Writes a kept learner into the engine's practice, of its own form, which the engine reshapes into the brain asked for. One of another length (kept by an older engine, or for another body) is refused before anything is written, so it never runs past its room. */
+function load(form: Float32Array | undefined, state: Float32Array, running: Float64Array): boolean {
     if (!engine) return false;
+    const shape = form ?? PLAIN_FORM;
+    write(engine, engine.form_room(shape.length), shape);
     const stateRoom = engine.state_room(0);
     if (engine.length() !== state.length) return false;
     const runningRoom = engine.running_room();
@@ -211,12 +218,13 @@ function report(speed: number): void {
         practised.shown = practised.seconds;
         const state = list(engine, engine.practice_state());
         const running = list64(engine, engine.practice_running());
+        const form = list(engine, engine.practice_form());
         // the weights come first, then Adam's two lists as long, then four numbers (walker/src/generalist/ppo.rs, `KEPT_AFTER`)
-        progress.policy = { weights: state.slice(0, (state.length - 4) / 3), running };
+        progress.policy = { form, weights: state.slice(0, (state.length - 4) / 3), running };
         moved.push(progress.policy.weights.buffer);
         if (practised.seconds - practised.kept >= KEEP_EVERY) {
             practised.kept = practised.seconds;
-            progress.kept = { state, running: running.slice(), seconds: practised.seconds, steps: practised.steps };
+            progress.kept = { form: form.slice(), state, running: running.slice(), seconds: practised.seconds, steps: practised.steps };
             moved.push(state.buffer);
         }
     }
@@ -234,7 +242,7 @@ function help(work: Work): void {
         if (work.kind === "local") lead?.postMessage({ kind: "gone", setup: work.setup, asked: work.asked } satisfies Answer);
         return;
     }
-    if (work.kind === "start") load(work.state, work.running);
+    if (work.kind === "start") load(work.form, work.state, work.running);
     else if (work.kind === "finish") finish(work.shares, work.weights, work.workers);
     else {
         const before = engine.practice_steps();
@@ -249,7 +257,8 @@ function startHelpers(): void {
     if (!engine || helpers.length === 0) return;
     const state = list(engine, engine.practice_state());
     const running = list64(engine, engine.practice_running());
-    for (const helper of helpers) helper.port.postMessage({ kind: "start", setup, state: state.slice(), running: running.slice() } satisfies Work);
+    const form = list(engine, engine.practice_form());
+    for (const helper of helpers) helper.port.postMessage({ kind: "start", setup, form: form.slice(), state: state.slice(), running: running.slice() } satisfies Work);
 }
 
 onmessage = async (event: MessageEvent<Order>) => {
@@ -273,9 +282,9 @@ onmessage = async (event: MessageEvent<Order>) => {
         // a leader already practising takes its share for the new number of workers, keeping what it has learned,
         // so effort changes how fast it learns and not what (the page gives the new helpers their shares)
         if (engine && begun && !lead && begun.workers !== helpers.length + 1) {
-            const [state, running] = [list(engine, engine.practice_state()), list64(engine, engine.practice_running())];
+            const [form, state, running] = [list(engine, engine.practice_form()), list(engine, engine.practice_state()), list64(engine, engine.practice_running())];
             make({ ...begun, workers: helpers.length + 1, kept: undefined });
-            load(state, running);
+            load(form, state, running);
         }
         // an answer to a request given up (by time, or by a change of setup) is let go
         for (const helper of helpers) helper.port.onmessage = (message: MessageEvent<Answer>) => {
@@ -287,12 +296,12 @@ onmessage = async (event: MessageEvent<Order>) => {
         if (!engine) return;
         heard = performance.now();
         // the learner it has, taken out before the engine is made again, if it is to be carried into the new world
-        const carried: Kept | undefined = order.carry && begun && begun.legs === order.legs && !lead && setup !== failed ? { state: list(engine, engine.practice_state()).slice(), running: list64(engine, engine.practice_running()).slice(), seconds: practised.seconds, steps: practised.steps } : undefined;
+        const carried: Kept | undefined = order.carry && begun && begun.legs === order.legs && !lead && setup !== failed ? { form: list(engine, engine.practice_form()), state: list(engine, engine.practice_state()).slice(), running: list64(engine, engine.practice_running()).slice(), seconds: practised.seconds, steps: practised.steps } : undefined;
         make(order);
         const from = carried ?? order.kept;
         practised = { seconds: from?.seconds ?? 0, steps: from?.steps ?? 0, shown: -Infinity, kept: from?.seconds ?? 0 };
         reached = [];
-        if (from && !load(from.state, from.running)) practised = { seconds: 0, steps: 0, shown: -Infinity, kept: 0 };
+        if (from && !load(from.form, from.state, from.running)) practised = { seconds: 0, steps: 0, shown: -Infinity, kept: 0 };
         if (lead) {
             for (const work of waitingWork.splice(0)) help(work);
             return;

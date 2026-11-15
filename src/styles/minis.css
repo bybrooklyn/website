@@ -1476,9 +1476,11 @@
     scrollbar-color: var(--rule) transparent;
 }
 
+/* The brain has a pool between its two plain layers (memories, rhythms and moods), so it is given the
+   height to lay out a few hundred neurons by kind. */
 .mote .mote-panel canvas.walker-brain-picture.generalist-brain {
     grid-column: 1 / -1;
-    height: 10rem;
+    height: 14rem;
 }
 
 .mote .mote-panel canvas.walker-brain-picture.generalist-chart {

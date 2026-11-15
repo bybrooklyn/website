@@ -32,10 +32,13 @@
 //! speed paid for), `stall=`, `impact=`, `lean=`, `spin=`, `bob=`, `swing=`, `torque=`, `smooth=`, `hip=`,
 //! `clock=`, `skip=`, `ease=`, `strength=`, `seconds=`, touch's `touch=` (0 for a body that feels no
 //! touch) and `visitor=` (seconds between practice's visitor's visits, 0 for none), and learning's `entropy=`, `rate=`, `spread=`,
-//! `gamma=`. `amounts=a,b,c,d` sets the world's four amounts (1 each unless given). Each mark prints
+//! `gamma=`; the brain's pool (`generalist::pool`): `memory=`, `rhythm=`, `mood=`, `reads=` and the
+//! window learning goes back through, `window=`, and `plastic=0` for memory reads that do
+//! not change during a run; `slip=` the share of practice runs in which the ground goes slippery partway. `amounts=a,b,c,d` sets the world's four amounts (1 each unless given). Each mark prints
 //! an `open` line beside the main one, the gait on open ground in the same worlds, and with `flat=1` a
 //! `flat` line, on level ground with nothing on it. `kept=<path>` measures a learner the page kept
-//! (`<path>.state` and `<path>.running`, one number to a line) instead of practising.
+//! (`<path>.state`, `<path>.running` and, for a brain with a pool, `<path>.form`, one number to a line)
+//! instead of practising, and `save=<path>` keeps the learner at each mark as `<path>-<mark>.*`.
 //!
 //! For the transfer measurement, `easy=0.1 switch=10000000` has practice spend its first ten million
 //! steps in worlds of difficulty 0.1 and the rest in worlds of the difficulty asked, while it is
@@ -61,6 +64,7 @@ fn main() {
     let (mut easy, mut switch): (Option<f32>, u64) = (None, 0);
     let mut trials: Vec<(String, f32)> = Vec::new();
     let mut kept: Option<String> = None;
+    let mut save: Option<String> = None;
     let mut amounts = [1.0f32; 4];
     let mut flat = false;
     for arg in std::env::args().skip(1) {
@@ -80,6 +84,7 @@ fn main() {
             "amounts" => amounts = value.split(',').map(|n| n.parse().unwrap()).collect::<Vec<f32>>().try_into().unwrap(),
             "name" => method = value.to_string(),
             "kept" => kept = Some(value.to_string()),
+            "save" => save = Some(value.to_string()),
             "flat" => flat = value == "1",
             _ => trials.push((name.to_string(), value.parse().unwrap_or_else(|_| panic!("{arg}")))),
         }
@@ -195,6 +200,13 @@ fn main() {
                 "sight" => way.shaping.sight = value,
                 "progress" => way.shaping.progress = value,
                 "effort" => way.shaping.energy = value,
+                "memory" => settings.shape.memory = value as usize,
+                "rhythm" => settings.shape.rhythm = value as usize,
+                "mood" => settings.shape.mood = value as usize,
+                "reads" => settings.shape.reads = value as usize,
+                "window" => settings.window = value as usize,
+                "plastic" => settings.plastic = on,
+                "slip" => way.slip = value,
                 _ => panic!("no setting called {name}"),
             }
         }
@@ -208,6 +220,12 @@ fn main() {
             let read = |path: &str| -> Vec<f64> { std::fs::read_to_string(path).unwrap().split_whitespace().map(|n| n.parse().unwrap()).collect() };
             let state: Vec<f32> = read(&format!("{path}.state")).iter().map(|&n| n as f32).collect();
             let running = read(&format!("{path}.running"));
+            // a learner of a brain with a pool comes with its form, and is made again of it
+            if let Ok(form) = std::fs::read_to_string(format!("{path}.form")) {
+                let form: Vec<f32> = form.split_whitespace().map(|n| n.parse().unwrap()).collect();
+                let learner = &practice.learner;
+                practice.learner = walker::generalist::ppo::Learner::of_form(settings, &form, learner.senses, learner.actions, learner.count, seed).expect("a form that holds together");
+            }
             assert!(practice.load(&state, &running), "the kept learner does not fit this way");
             let own = practice.evaluate(&[1])[0];
             let measured = practice.measure(&seeds);
@@ -229,6 +247,9 @@ fn main() {
             let measured = practice.measure(&seeds);
             also("open", practice.worlds.steps, &measured, measured.open_gait);
             say(practice.worlds.steps, measured, own);
+            if let Some(path) = &save {
+                keep(&practice.learner, &format!("{path}-{mark}"));
+            }
             // the same policy on level ground with nothing on it, where a stride has no reason to vary
             if flat {
                 let recipe = practice.recipe;
@@ -239,4 +260,12 @@ fn main() {
             }
         }
     }
+}
+
+/// Writes a learner as the page keeps one, one number to a line: `<path>.form`, `.state` and `.running`.
+fn keep(learner: &walker::generalist::ppo::Learner, path: &str) {
+    let lines = |numbers: Vec<String>| numbers.join("\n");
+    std::fs::write(format!("{path}.form"), lines(learner.form().iter().map(|n| n.to_string()).collect())).unwrap();
+    std::fs::write(format!("{path}.state"), lines(learner.state().iter().map(|n| n.to_string()).collect())).unwrap();
+    std::fs::write(format!("{path}.running"), lines(learner.running().iter().map(|n| n.to_string()).collect())).unwrap();
 }

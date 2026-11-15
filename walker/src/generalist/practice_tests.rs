@@ -36,8 +36,17 @@ fn fingerprint() -> u64 {
     fingerprint_of(Way::of(2))
 }
 
+/// The fingerprint of the same with the brain the page practises with (stage 3: a pool of memory, rhythm
+/// and mood neurons beside the plain ones, `page::BRAIN`), which the page's engine must give too. The
+/// plain network's, above, is unchanged by it.
+pub const POOL_FINGERPRINT: u64 = 0x0bb9_a9c8_29d2_868a;
+
 fn fingerprint_of(way: Way) -> u64 {
-    let mut practice = Practice::new(recipe(0.5), way, Settings::default(), 2, 7, 3).unwrap();
+    fingerprint_with(way, Settings::default())
+}
+
+fn fingerprint_with(way: Way, settings: Settings) -> u64 {
+    let mut practice = Practice::new(recipe(0.5), way, settings, 2, 7, 3).unwrap();
     let mut hash = 0xcbf2_9ce4_8422_2325;
     for _ in 0..2 {
         practice.update();
@@ -304,4 +313,28 @@ fn a_run_ends_at_the_first_touch_of_its_body_when_asked() {
     // its run is over at the first touch
     let (graced, ended) = (down_for(1.0), down_for(0.0));
     assert!(graced > 0.0 && ended < graced, "down a share {graced} with a second's grace, {ended} with none");
+}
+
+#[test]
+fn the_feelings_a_mood_reads_first_are_its_energy_and_its_touch() {
+    use super::ppo::Task;
+    for legs in [2, 4] {
+        let recipe = Recipe { seed: 1, difficulty: 0.2, amounts: [0.6, 0.4, 0.4, 0.4] };
+        let mut worlds = super::practice::Worlds::new(recipe, Way::of(legs), 2, 3).unwrap();
+        let senses = worlds.senses();
+        let feelings = super::practice::feelings(legs, senses);
+        assert_eq!(feelings.len(), 6);
+        let mut sensed = alloc::vec![0.0; 2 * senses];
+        worlds.observe(&mut sensed);
+        let energy = worlds.runs[0].body.needs.as_ref().unwrap().energy;
+        assert_eq!(sensed[feelings[0]], energy);
+        // standing on its feet: nothing presses on its body, nothing holds it, and the jolt up is about 1
+        assert_eq!((sensed[feelings[1]], sensed[feelings[2]]), (0.0, 0.0));
+    }
+}
+
+#[test]
+fn the_page_s_brain_practises_to_its_own_fingerprint() {
+    let hash = fingerprint_with(Way::of(2), Settings { shape: super::page::BRAIN, ..Settings::default() });
+    assert_eq!(hash, POOL_FINGERPRINT, "{hash:#x}");
 }

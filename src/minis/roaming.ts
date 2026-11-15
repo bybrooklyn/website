@@ -3,7 +3,7 @@
 // recipe as the page holds it and as a link carries it, and turning a typed seed into a number.
 // generalist.test.ts holds these to their word, and the engine to the native one's numbers.
 
-import { hasSimd } from "./walking";
+import { hasSimd, type Effort, type Machine } from "./walking";
 
 /** The functions of public/wasm/generalist.wasm. A function giving a list gives its pointer; `length` then gives how many f32 it holds. */
 export interface Engine {
@@ -88,8 +88,75 @@ export interface Engine {
     policy_off(): void;
     net_work(rounds: number, backward: number): number;
     show_rewards(): number;
-    /** The brain on show as it last thought, laid out as `brainColumns` reads it. */
+    /** The brain on show as it last thought, laid out as `brainColumns` reads it, or for a brain with a pool as `brainKinds` reads it. */
     brain_picture(): number;
+    /** Room for a learner's form, written before its state; 0 forgets one written. */
+    form_room(length: number): number;
+    /** The form of this worker's learner: its pool's shape and every read. */
+    practice_form(): number;
+    /** The brain practice is to have from the next practice_create or practice_load on. */
+    brain_shape(memory: number, rhythm: number, mood: number, reads: number): void;
+    /** The caps on the brain and the brain practice starts with: most memory, most rhythm, fewest and most reads; then memory, rhythm, mood, reads. */
+    brain_caps(): number;
+    /** Every connection into a neuron of the brain on show, by its number in the picture: three f32 each, from, weight, what it passed. */
+    brain_reads(neuron: number): number;
+}
+
+/** A brain's shape as the page holds it: how many memory neurons, rhythms and moods, and how many others each reads. All 0 is the plain network of two layers. */
+export interface Shape {
+    memory: number;
+    rhythm: number;
+    mood: number;
+    reads: number;
+}
+
+/** The brain practice starts with (walker/src/generalist/page.rs, `BRAIN`), and the caps a visitor's sliders keep within. */
+export const DEFAULT_SHAPE: Shape = { memory: 32, rhythm: 4, mood: 4, reads: 16 };
+export const SHAPE_CAPS = { memory: 128, rhythm: 16, fewestReads: 4, reads: 32 };
+
+/** Whether something kept is a shape within the caps. */
+export function validShape(shape: unknown): shape is Shape {
+    const s = shape as Partial<Shape> | null;
+    const whole = (n: unknown, most: number, least = 0) => typeof n === "number" && Number.isInteger(n) && n >= least && n <= most;
+    return !!s && whole(s.memory, SHAPE_CAPS.memory) && whole(s.rhythm, SHAPE_CAPS.rhythm) && whole(s.mood, 4) && whole(s.reads, SHAPE_CAPS.reads, SHAPE_CAPS.fewestReads);
+}
+
+/** How many neurons a brain of this shape has: the two plain layers of 64, and its pool. */
+export const neurons = (shape: Shape): number => 128 + shape.memory + shape.rhythm + shape.mood;
+
+/** A brain with a pool, drawn (`brain_picture`, walker/src/generalist/mind.rs `pool_picture`): how many of each kind, how lit each neuron is, how far each memory and mood moved at the last decision and each rhythm's phase, and into each neuron after what it senses, its three strongest connections (from, what it passed, how much its weight changed in this run). */
+export interface BrainKinds {
+    counts: { senses: number; plain: number; memory: number; rhythm: number; mood: number; actions: number };
+    lit: Float32Array;
+    moved: Float32Array;
+    into: Float32Array;
+}
+
+/** Reads a picture of a brain with a pool, or undefined if it is not one (evolution's and the plain network's are read by `brainColumns`). */
+export function brainKinds(picture: Float32Array): BrainKinds | undefined {
+    if (picture[0] !== -1 || picture.length < 7) return undefined;
+    const [senses, plain, memory, rhythm, mood, actions] = Array.from(picture.subarray(1, 7));
+    const counts = { senses: senses!, plain: plain!, memory: memory!, rhythm: rhythm!, mood: mood!, actions: actions! };
+    const all = counts.senses + 2 * counts.plain + counts.memory + counts.rhythm + counts.mood + counts.actions;
+    const pool = counts.memory + counts.rhythm + counts.mood;
+    const length = 7 + all + pool + 9 * (all - counts.senses);
+    if (picture.length !== length) return undefined;
+    return { counts, lit: picture.subarray(7, 7 + all), moved: picture.subarray(7 + all, 7 + all + pool), into: picture.subarray(7 + all + pool) };
+}
+
+/**
+ * How many workers practise at an effort: what the machine has, up to four. Gentle is one, resting as
+ * long as it works; normal leaves one core for the page and the rest of the machine; all it has takes
+ * every core up to four. A phone, or a machine with little memory, gets fewer. Four at most, since each
+ * update averages every worker's weights and with more each has too few creatures.
+ */
+export function practiceWorkers(effort: Effort, { cores, memory, phone }: Machine): number {
+    if (effort === "gentle") return 1;
+    const whole = Math.max(1, Math.floor(cores) || 1);
+    let most = Math.min(4, effort === "all" ? whole : whole - 1);
+    if (phone) most = Math.min(most, effort === "all" ? 4 : 2);
+    if (memory !== undefined && memory < 4) most = Math.min(most, memory <= 1 ? 1 : 2);
+    return Math.max(1, most);
 }
 
 /** A brain's picture from the engine (`brain_picture`): how lit each dot of each column is, and what flows into each dot from each dot of the column before, dot by dot of the later column. */

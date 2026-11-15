@@ -9,7 +9,7 @@ doing things, all written from scratch in that engine. An article about it is pl
 
 - `walker/src/generalist/`: the engine side, behind the crate's `generalist` feature. `walker/README.md`,
   section "The generalist", is the full reference, with every measurement.
-- `public/wasm/generalist.wasm` (and its scalar twin): the built module, 331 KiB with SIMD.
+- `public/wasm/generalist.wasm` (and its scalar twin): the built module, 451 KiB with SIMD.
 - `src/minis/generalist.ts`: the page's scene; `src/minis/roaming.ts`: what the page and its workers share;
   `src/scripts/generalist-worker.ts` (evolution) and `src/scripts/generalist-practice.ts` (practice).
 - `src/content/minis/generalist.mdx`: the mini's words. It is marked `draft: true`.
@@ -59,6 +59,15 @@ doing things, all written from scratch in that engine. An article about it is pl
   pays a bounded sum for anything it comes back to), and still for progress. One practice run in five is
   play: energy held full, no food, no progress paid. `walker/README.md`, "It wants things", has every
   term and number.
+- **The brain that was discussed** (14 November 2026, stage 3 of the plan): a pool of neurons between the
+  two plain layers of 64, each reading a few others: memory neurons with a gate and a time constant of their
+  own, whose reads are plastic (a fast weight on each, changed during a run by a Hebbian rule whose rate and
+  decay are learned); rhythms whose pace the brain sets; and moods that turn groups of the plain neurons up
+  or down, reading first what it feels of its energy and touch. Learned back through windows of a second.
+  The page starts with 32 memory neurons, 4 rhythms and 4 moods reading 16 each (168 neurons), and three
+  sliders (memory up to 128, rhythm up to 16, connections 4 to 32) reshape it keeping what was learned. The
+  brain is drawn by kind, and a press on a neuron shows all it listens to. `walker/README.md`, "The brain
+  that was discussed", has every number.
 - **Measures**: a gait measure that says whether a run counts as walking, printed three ways (in the
   held-out worlds as a whole, which is the test; on open ground in them; on level ground); a comparison of evolution and
   practice on the same compute (practice goes three to six times as far through unseen worlds for about
@@ -141,6 +150,29 @@ well-trodden.
 
 ## Open
 
+- **Stage 3, for her to say** (14 November 2026). The page's brain (32 memory neurons, 4 rhythms, 4 moods,
+  16 reads each) and the caps (128, 16, 32 reads), set by speed in the browser. Four legs paying for a run
+  that stalls, as two legs do (without it, with a pool, two seeds in four stood still; with it the pool goes
+  about as far as the plain network under the same cost, less far than the plain network without it). Four
+  legs on the page starting each run full rather than carrying their energy (carried, they spent four fifths
+  of their time with less than a tenth). Practice using every core up to four at "all it has" and all but
+  one at "normal" (three on a four-core machine, where it used two). Learners kept before the pool are taken
+  up as plain networks and grown, not forgotten (store version 5). The second plain layer's lines from the
+  first are not drawn, so the pool's into it can be seen. The ground going slippery is in the engine
+  (`Way::slip`) and not used in practice, since practising with it gained nothing. Whether four legs should stop sensing
+  the outside rhythm: with a pool and no clock they went as far and more steadily (28.4 ± 4.3 m against
+  27.2 ± 9.2), so a conducted rhythm can take its place; the plain network without it was not measured.
+- **Stage 3, still open.** It does not turn for food behind it, with or without memory. Its eye looks at
+  things more in the page at two minutes (0.54 to 0.71 of the time near food) but goes back to its feet by
+  ten, and natively does no better than an eye at rest: the predictor of what it will see next, with
+  surprise as the reason to look, is the next thing to try. The plastic connections did not adapt within a
+  run to a ground gone slippery; the pool with them did worse than without. The pool makes two legs bound
+  more (in the air for nothing 0.11 of the time against 0.03).
+- **The page text, after stage 3,** would need to say: that the brain has kinds of neuron (memory, rhythm,
+  mood) beside plain ones, drawn so, and that a press on a neuron shows what it listens to; that three
+  sliders under "brain" set how much memory, how much rhythm and how many connections, and that changing
+  them keeps what was learned; and that four legs start each run with full energy while two legs keep one
+  life.
 - **Stage 2, for her to say** (14 November 2026). Whether to keep paying progress: paid only for eating
   and curiosity, both bodies stood still at the start, so progress is still paid and the creature goes on
   because it is paid to, stopping to rest and eat. Whether one run in five as play is right (it made two
@@ -149,8 +181,9 @@ well-trodden.
   at the first touch of the body, so they rest standing or crouched). Whether food that appears behind it
   should stay, since it has not learned to turn for it. The eye does not yet look at things (it is on the
   nearest thing twice as often as chance, but less often than an eye left looking down ahead would be).
-- **The strict walking test as the bar for shipping.** After stage 2 the view here is that it should not
-  be the bar: no seed of either body walks by it in the held-out worlds as a whole, before or after, and
+- **The strict walking test as the bar for shipping: decided** (14 November 2026). It is not the bar; it
+  stays measured and printed, and the Generalist is judged by watching and by the numbers kept for the
+  article. What led to it: after stage 2 the view here was that it should not be the bar: no seed of either body walks by it in the held-out worlds as a whole, before or after, and
   the page's two-legged learner, which walked by it at two minutes in stage 1, no longer does (it leans and
   leaves the ground with nothing to clear 0.13 of the time). What a visitor reads as alive is whether it
   wants something and does something about it; the test stays measured and printed, beside the open and
@@ -200,6 +233,9 @@ bun test src/minis/generalist.test.ts                   # the built module again
 cd walker && cargo run --release --example practice     # practice, with its learning curve
 cd walker && sh examples/compare.sh                     # evolution against practice (about an hour and a half)
 cd walker && cargo run --release --example touched -- legs=2 seed=1 steps=20000000   # whether being touched changes what it does, and helps
+cd walker && cargo run --release --example compare -- legs=2 memory=32 rhythm=4 mood=4 reads=16 save=keep/pool   # practice with a pool, keeping the learner
+cd walker && cargo run --release --example watch -- kept=keep/pool-20000000 legs=2   # through the page's show: one life, food behind and ahead, the ground going slippery
+cd walker && cargo run --release --example brain_cost -- updates=20   # practice's speed for each size of brain
 ```
 
 ## Known weak spots
@@ -210,8 +246,14 @@ cd walker && cargo run --release --example touched -- legs=2 seed=1 steps=200000
 - How far it gets in the one world on show swings from run to run, since a policy better on average can be
   worse at the first thing in that world.
 - A learner is about 24,000 numbers and does not fit in a link, so a link carries the world and not the brain.
-- Practice uses four workers at most; with more, each has too few creatures and learns less per step.
-- Rhythm neurons, mirroring and memory neurons were tried and taken out again. The commit
-  `walker/README.md` names for them, `61c47e5`, is kept by the tag `gait-trials`.
+- Practice uses four workers at most; with more, each has too few creatures and learns less per step. It
+  uses what the machine has up to that (all but one core at normal effort).
+- Rhythm neurons, mirroring and memory neurons were tried and taken out again in the gait work (the commit
+  `walker/README.md` names for them, `61c47e5`, is kept by the tag `gait-trials`): rhythms that drove the legs
+  open loop, and memory written by actions with no gradient through time. Stage 3's are built differently:
+  rhythms are neurons the rest may read or ignore, and memory is learned back through time.
+- Practising with a pool is slower per step in the browser: the page's brain practises at about 63
+  percent of the plain network's speed, the largest the sliders allow at about a quarter.
+- The engine is 451 KiB with SIMD, nearer the 512 KiB limit than it was (331 KiB before the pool).
 - Centred actions and a curriculum are in the code and unused, and so are the trial knobs of the gait work
   (shorter hips, costs on spin, bobbing, joint speed and torque, easing, the top pace's other values).
