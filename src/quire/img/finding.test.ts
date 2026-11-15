@@ -10,9 +10,10 @@ import { expect, test } from "bun:test";
 import { homedir } from "node:os";
 import { imgPage } from "../../../scripts/img-page";
 import { PART_TIERS } from "./parts/models";
+import { packageAt } from "../../../scripts/lib";
 
 const TRIALS = `${homedir()}/.cache/quire-model-trials/parts/`;
-const ORT = `${import.meta.dir}/../../../node_modules/onnxruntime-web/dist/`;
+const ORT = `${packageAt("onnxruntime-web", "dist")}/`;
 const REPOS = new Set(PART_TIERS.flatMap((tier) => tier.files.map((each) => each.repo)));
 
 test("Find asks first, fetches only when told, and presses, Alt-presses, Subject and Background make found parts that draw the same reopened; the only requests are the model's and the runtime's", async () => {

@@ -12,8 +12,9 @@ import { homedir } from "node:os";
 import { corePage, quire } from "../../../../scripts/core-page";
 import { decodeRuns } from "../masks";
 import { PART_TIERS } from "./models";
+import { packageAt } from "../../../../scripts/lib";
 
-const ORT = `${import.meta.dir}/../../../../node_modules/onnxruntime-web/dist/`;
+const ORT = `${packageAt("onnxruntime-web", "dist")}/`;
 const TRIALS = `${homedir()}/.cache/quire-model-trials/parts/`;
 const there = PART_TIERS.every((tier) => tier.files.every((each) => existsSync(TRIALS + each.repo + "/" + each.path)));
 

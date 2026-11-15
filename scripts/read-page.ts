@@ -11,10 +11,11 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { browser, chromium, type Browser } from "./browser";
+import { packageAt } from "./lib";
 
 /** Where the models were fetched to for trials. */
 export const TRIALS = `${homedir()}/.cache/quire-model-trials/ocr`;
-const ORT = `${import.meta.dir}/../node_modules/onnxruntime-web/dist/`;
+const ORT = `${packageAt("onnxruntime-web", "dist")}/`;
 const QUIRE = `${import.meta.dir}/../src/quire`;
 
 /** The worker's script: the fixtures, and reading one with a size's models on a place, off the page's thread as imgQuire reads. */

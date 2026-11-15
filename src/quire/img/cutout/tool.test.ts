@@ -10,9 +10,10 @@ import { expect, test } from "bun:test";
 import { homedir } from "node:os";
 import { imgPage } from "../../../../scripts/img-page";
 import { CUT_TIERS } from "../parts/models";
+import { packageAt } from "../../../../scripts/lib";
 
 const TRIALS = `${homedir()}/.cache/quire-model-trials/parts/`;
-const ORT = `${import.meta.dir}/../../../../node_modules/onnxruntime-web/dist/`;
+const ORT = `${packageAt("onnxruntime-web", "dist")}/`;
 
 test("in imgQuire, Cut out is asked first, makes a step that exports with transparency at full size, offers a color or PNG for a JPEG, and draws the same reopened with no request", async () => {
     const quick = CUT_TIERS.find((tier) => tier.id === "cut-quick")!;

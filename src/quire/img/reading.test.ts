@@ -22,9 +22,10 @@ import { expect, test } from "bun:test";
 import { homedir } from "node:os";
 import { imgPage, type ImgPage } from "../../../scripts/img-page";
 import { coverFor } from "./read/words";
+import { packageAt } from "../../../scripts/lib";
 
 const TRIALS = `${homedir()}/.cache/quire-model-trials/ocr`;
-const ORT = `${import.meta.dir}/../../../node_modules/onnxruntime-web/dist/`;
+const ORT = `${packageAt("onnxruntime-web", "dist")}/`;
 
 /** The editor's page, served with the reader's worker and ONNX Runtime, and Hugging Face answered from the trial copies. */
 async function readingPage(database: string, size = { width: 1300, height: 820 }): Promise<ImgPage | undefined> {

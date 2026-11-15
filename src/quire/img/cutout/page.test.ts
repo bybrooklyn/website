@@ -15,9 +15,10 @@ import { join } from "node:path";
 import { corePage, quire } from "../../../../scripts/core-page";
 import { CUT_TIERS } from "../parts/models";
 import { cutMenuLines, cutName } from "./page";
+import { packageAt } from "../../../../scripts/lib";
 
 const TRIALS = `${homedir()}/.cache/quire-model-trials/parts/`;
-const ORT = `${import.meta.dir}/../../../../node_modules/onnxruntime-web/dist/`;
+const ORT = `${packageAt("onnxruntime-web", "dist")}/`;
 
 test("the right-click menu holds Paste and Choose a picture when empty, and Copy, Save, Paste, Keep and Remove with a cut-out", () => {
     const run = { copy() {}, save() {}, paste() {}, choose() {}, brush() {} };

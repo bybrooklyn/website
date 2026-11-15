@@ -2,12 +2,24 @@
 // the content files.
 
 import { readdir } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { join, resolve } from "node:path";
 
 export const root = resolve(new URL("..", import.meta.url).pathname);
 
 /** A path inside the repo. */
 export const at = (...parts: string[]) => join(root, ...parts);
+
+/**
+ * A path inside a package, the package found the way an import finds it: a git worktree inside the
+ * repo has no packages of its own and takes the repo's, where a path from the worktree's own root
+ * found nothing and its build and its model tests failed.
+ */
+export function packageAt(name: string, ...parts: string[]): string {
+    const entry = createRequire(import.meta.url).resolve(name);
+    const marker = `/node_modules/${name}/`;
+    return join(entry.slice(0, entry.lastIndexOf(marker) + marker.length), ...parts);
+}
 
 /**
  * One `key: value` line from a file's frontmatter (the lines between the first two `---`), without

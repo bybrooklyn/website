@@ -22,7 +22,7 @@ import { dirname, extname, relative, resolve } from "node:path";
 import { themeStyle } from "../src/lib/color";
 import { forEditor } from "./dictation-stubs";
 import { preview } from "./editor/preview";
-import { at, frontmatter, isDraft, listMdx, root, slug, stem, writeJson } from "./lib";
+import { at, frontmatter, isDraft, listMdx, packageAt, root, slug, stem, writeJson } from "./lib";
 
 const args = process.argv.slice(2);
 const dryRun = args.includes("--dry-run");
@@ -249,7 +249,7 @@ const built = async (name: string) => bundle.outputs.find((output) => output.pat
 const script = await built("main");
 const worker = await built("engine-worker");
 const worklet = await built("capture-worklet");
-const ORT = at("node_modules/onnxruntime-web/dist");
+const ORT = packageAt("onnxruntime-web", "dist");
 
 async function styles(): Promise<string> {
     const sheet = (name: string) => Bun.file(at(`src/styles/${name}`)).text();

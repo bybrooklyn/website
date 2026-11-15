@@ -11,6 +11,7 @@ import { engineVersions } from "./integrations/engine-versions";
 import privateLinks from "./integrations/private-links";
 import pruneAssets from "./integrations/prune-assets";
 import resumePdf from "./integrations/resume-pdf";
+import { packageAt } from "./scripts/lib";
 
 // Astro hashes the scripts it processes, but not one written inline as is. The
 // page-transition script has to be inline, so its hash is worked out here from the same file.
@@ -22,7 +23,7 @@ const transition = createHash("sha256").update(readFileSync(new URL("./src/scrip
 // build made by hand, replace the files in this list (src/quire/md/dictation/parakeet/RUNTIME.md).
 const ORT = ["ort.wasm.min.mjs", "ort-wasm-simd-threaded.mjs", "ort-wasm-simd-threaded.wasm", "ort.min.mjs", "ort-wasm-simd-threaded.jsep.mjs", "ort-wasm-simd-threaded.jsep.wasm"];
 const wasmFolder = fileURLToPath(new URL("./public/wasm/", import.meta.url));
-const ortFolder = fileURLToPath(new URL("./node_modules/onnxruntime-web/dist/", import.meta.url));
+const ortFolder = `${packageAt("onnxruntime-web", "dist")}/`;
 type Answer = { setHeader(name: string, value: string): void; end(body: Buffer): void };
 const ortFiles = {
     name: "ort-files",

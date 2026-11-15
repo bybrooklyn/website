@@ -14,8 +14,9 @@ import { join } from "node:path";
 import { corePage, quire } from "../../../../scripts/core-page";
 import { decodeRuns } from "../masks";
 import { CUT_TIERS } from "../parts/models";
+import { packageAt } from "../../../../scripts/lib";
 
-const ORT = `${import.meta.dir}/../../../../node_modules/onnxruntime-web/dist/`;
+const ORT = `${packageAt("onnxruntime-web", "dist")}/`;
 const TRIALS = `${homedir()}/.cache/quire-model-trials/parts/`;
 const TIERS = CUT_TIERS.filter((tier) => !process.env.ONLY || tier.id === process.env.ONLY);
 const there = TIERS.every((tier) => tier.files.every((each) => existsSync(TRIALS + each.repo + "/" + each.path)));
