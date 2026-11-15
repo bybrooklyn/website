@@ -43,6 +43,8 @@ export interface Look {
     /** For a cloth: how strongly the lines of its grid show, from 0 to 1, and the grid's cell, in the scene's units. */
     grid?: number;
     cell?: number;
+    /** Left out of the map from above that the shadow where things touch is found from: for a part held up off what is under it, whose touching would not show, to save drawing it again. In it unless false. */
+    touches?: boolean;
 }
 
 /**
@@ -89,6 +91,8 @@ export interface Part {
     seed: number;
     /** For a part with a pattern: three colors of its own (a marble's ribbon or stripe). */
     tints: [Color, Color, Color];
+    /** The look it is drawn with. A part with a pattern may be given another look with a pattern (to show a state by a light round its edges, say), and is then drawn with the parts of that look. */
+    look: Look;
 }
 
 /**
@@ -116,7 +120,6 @@ interface Shape {
 }
 
 interface Drawn extends Part {
-    look: Look;
     shape: Shape;
 }
 
@@ -513,7 +516,7 @@ void main() {
         if (pattern == 4) mirror = mix(mirror, room(normalize(r + n * 0.25)), 0.6);
         float rough = pattern == 4 ? 0.5 : 0.2;
         seen = tone * (lamp * lean * light * rough + around * 0.35) + tone * mirror * (0.7 + 0.6 * streak) * mix(1.0, light, 0.6) * mix(0.6, 1.0, sky);
-        shine = lamp * light * tone * pow(max(dot(n, half_), 0.0), tight) * tight / 10.0 * (0.75 + 0.5 * streak);
+        shine = lamp * light * tone * pow(max(dot(n, half_), 0.0), tight) * tight / (pattern == 4 ? 18.0 : 10.0) * (0.75 + 0.5 * streak);
         if (pattern == 4) shine += lamp * light * tone * pow(max(dot(n, half_), 0.0), 160.0) * 4.0;
         seen += shine;
     } else if (pattern == 6) {
@@ -614,7 +617,7 @@ void main() {
     }
 
     // what is chosen or warned of: a light round its edges in that color, and a little over it
-    if (rim.a > 0.0) seen += linear(rim.rgb) * rim.a * (0.08 + 1.3 * pow(1.0 - facingEye, 2.5));
+    if (rim.a > 0.0) seen += linear(rim.rgb) * rim.a * (0.05 + 1.3 * pow(1.0 - facingEye, 2.5));
 
     if (glowing) {
         // only what is brighter than white blooms, warm, as a highlight does
@@ -1073,7 +1076,7 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
         g.useProgram(richDepth.made);
         g.uniformMatrix4fv(richDepth.at("sun"), false, matrix);
         for (const batch of [...batches.solid, ...batches.see]) {
-            if (batch.look.casts === false || batch.shape.count === 0) continue;
+            if (batch.look.casts === false || batch.shape.count === 0 || (into === "contact" && batch.look.touches === false)) continue;
             fillMany(batch);
             g.bindVertexArray(batch.shape.facesArray!);
             g.drawArraysInstanced(g.TRIANGLES, 0, batch.shape.count, batch.parts.length);
@@ -1082,6 +1085,8 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
         }
     };
     const PATTERNS: Record<Pattern, number> = { wood: 0, glass: 1, marble: 2, metal: 3, brushed: 4, skin: 5, cloth: 6 };
+    /** The patterns whose highlights are bright enough to bloom: in the small picture of what shines only these are drawn, so that it costs little; a highlight behind oak may glow a little through it. */
+    const SHINING = new Set<Pattern>(["marble", "metal", "brushed", "glass"]);
     /** Parts with a pattern, from the eye: the solid ones, then the marbles, then the glass; or for the glow, only their highlights. */
     const paintMany = (batches: { solid: Batch[]; see: Batch[] }, glow: boolean, counts: Counts) => {
         if (!rich) return;
@@ -1121,7 +1126,7 @@ export function gl(canvas: HTMLCanvasElement): View | undefined {
         g.uniform1i(r.at("tops"), 4);
         const each = (batch: Batch) => {
             const look = batch.look;
-            if (batch.shape.count === 0) return;
+            if (batch.shape.count === 0 || (glow && !SHINING.has(look.pattern!))) return;
             g.uniform1i(r.at("pattern"), PATTERNS[look.pattern!]);
             g.uniform4f(r.at("color"), ...look.color, look.alpha ?? 1);
             g.uniform4f(r.at("rim"), ...(look.rim ? look.rim[0] : ([0, 0, 0] as Color)), look.rim ? look.rim[1] : 0);

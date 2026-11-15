@@ -172,7 +172,7 @@ function drawingOf(kind: Kind): Drawing {
 }
 
 /** How strong the light round the edges of a piece is that is chosen, carried or warned of. */
-const RIM = 1;
+const RIM = 0.75;
 /** How strongly the grid on the table shows while marbles roll, and while a piece is carried or bent; and how long it takes to come up or fade, in seconds. */
 const GRID = { rolling: 0.16, building: 0.85, ease: 0.35 };
 /** How bright the lamp is, and the little light the dark room gives back from above and from the table. */
@@ -290,7 +290,8 @@ interface BendDrag {
 }
 
 /** A part of a piece as drawn: its look, kept to change its color, the color it has when nothing is said of it, and whether it is glass, which keeps its color. */
-type Drawn = { part: Part; look: Look; base: Color; glass: boolean };
+/** A part of a piece as drawn: the part, the look it has when nothing is said of it, and whether it is glass, which never shows a state. */
+type Drawn = { part: Part; plain: Look; glass: boolean };
 
 /** A pointer held down, and what it is doing. */
 interface Held {
@@ -411,10 +412,23 @@ export default function marbles(m: Mote): Scene {
     const movers = new Map<Solid, { id: number; drawn: Drawn }>();
     const marbleParts = new Map<Solid, Part[]>();
     let pillarParts: Part[] = [];
+    let pillarsMade = "";
+    const moverMeshes = new Map<string, Mesh>();
+    /**
+     * One look for each kind of look and state, shared by every part that has it, so that parts of one
+     * shape (pieces of one kind, a hoist's paddles) are drawn together; a part's state is shown by giving
+     * it another of these.
+     */
+    const sharedLooks = new Map<string, Look>();
+    const shared = (look: Look, rim?: [Color, number]): Look => {
+        const key = `${look.pattern} ${look.color.join(",")} ${look.casts} ${look.touches} ${rim ? `${rim[0].join(",")} ${rim[1]}` : ""}`;
+        let one = sharedLooks.get(key);
+        if (!one) sharedLooks.set(key, (one = { ...look, rim }));
+        return one;
+    };
     let markParts: Part[] = [];
-    const pillarMeshes = new Map<number, Mesh>();
     const disc = block([1.2, 0.15, 1.2]);
-    const marble = ball(RADIUS, 24, 16);
+    const marble = ball(RADIUS, 22, 14);
     /** Every marble is drawn with one look, each its own by its seed and tints (look.ts), so that they are drawn all at once. */
     const marbleLookAll: Look = { color: [1, 1, 1], pattern: "marble" };
 
@@ -428,10 +442,9 @@ export default function marbles(m: Mote): Scene {
         if (!view) return [];
         const out: Drawn[] = [];
         for (const { mesh, look, glass } of piecesLooks(kind, colors, still)) {
-            if (rim && !glass) look.rim = [rim, RIM];
-            const part = view.add(mesh, look);
+            const part = view.add(mesh, shared(look, rim && !glass ? [rim, RIM] : undefined));
             part.seed = seed;
-            out.push({ part, look, base: look.color, glass });
+            out.push({ part, plain: look, glass });
         }
         return out;
     };
@@ -533,23 +546,20 @@ export default function marbles(m: Mote): Scene {
             }
             pose(one.parts, originOf(piece.place), angleOf(piece.place));
             const rim = rimOf(piece.id);
-            for (const part of one.parts) {
-                if (part.glass) continue;
-                part.look.rim = rim;
-            }
+            for (const part of one.parts) if (!part.glass) part.part.look = shared(part.plain, rim);
         }
         drawMovers();
         makeTableTop(resting());
-        // the pillars, from the table, each height's mesh made once, each its own grain
-        for (const part of pillarParts) view.remove(part);
-        pillarParts = table.pillars.map((pillar, index) => {
-            let mesh = pillarMeshes.get(pillar.top);
-            if (!mesh) pillarMeshes.set(pillar.top, (mesh = grainedBox([PILLAR / 2, pillar.top / 2, PILLAR / 2])));
-            const part = view.add(mesh, pillarLook);
-            part.at = [pillar.x, pillar.top / 2, pillar.z];
-            part.seed = woodSeed(1000 + index) + pillar.x * 0.37 + pillar.z * 0.11;
-            return part;
-        });
+        // the pillars, from the table, as one mesh, drawn at once: each its own grain, since the grain is
+        // reckoned from where it stands; made again only when they change
+        const pillarsKey = JSON.stringify(table.pillars);
+        if (pillarsKey !== pillarsMade) {
+            pillarsMade = pillarsKey;
+            for (const part of pillarParts) view.remove(part);
+            const mesh = merged(table.pillars.map((pillar) => ({ mesh: grainedBox([PILLAR / 2, pillar.top / 2, PILLAR / 2], [pillar.x, pillar.top / 2, pillar.z]) })), false);
+            pillarParts = mesh ? [view.add(mesh, pillarLook)] : [];
+            for (const part of pillarParts) part.seed = woodSeed(1000);
+        }
         // a small flat mark on each open end that is not a tray's, and a ring where the next piece goes
         for (const part of markParts) view.remove(part);
         markParts = [];
@@ -612,14 +622,19 @@ export default function marbles(m: Mote): Scene {
                 let one = movers.get(solid);
                 const metal = isMetal(moving.kind === "hoist" ? moving.bodies[0]! : moving.bodies[i]!);
                 if (!one) {
-                    // oak, or steel; the grain along the solid's longest side
-                    const look: Look = metal ? { color: STEEL, pattern: "brushed" } : { color: [1, 1, 1], pattern: "wood" };
-                    const part = view.add(grained({ points: solid.points, faces: solid.faces }), look);
+                    // oak, or steel; the grain along the solid's longest side; solids of one shape (a hoist's
+                    // paddles) share a mesh, so that they are drawn at once; held up off the table, they are
+                    // left out of the map from above
+                    const look: Look = metal ? { color: STEEL, pattern: "brushed", touches: false } : { color: [1, 1, 1], pattern: "wood", touches: false };
+                    const key = solid.points.map((p) => p.map((v) => v.toFixed(3)).join(" ")).join("|");
+                    let mesh = moverMeshes.get(key);
+                    if (!mesh) moverMeshes.set(key, (mesh = grained({ points: solid.points, faces: solid.faces })));
+                    const part = view.add(mesh, shared(look));
                     part.seed = woodSeed(id);
-                    one = { id, drawn: { part, look, base: look.color, glass: false } };
+                    one = { id, drawn: { part, plain: look, glass: false } };
                     movers.set(solid, one);
                 }
-                one.drawn.look.rim = rimOf(id);
+                one.drawn.part.look = shared(one.drawn.plain, rimOf(id));
             });
         }
         for (const [solid, one] of movers) {
@@ -899,7 +914,7 @@ export default function marbles(m: Mote): Scene {
         const one = carried;
         if (!one) return;
         const rim: [Color, number] = one.away ? [colors.lines, RIM * 0.7] : one.fits ? [colors.accent, RIM] : [colors.wrong, RIM * 1.15];
-        for (const parts of one.parts.values()) for (const { look, glass } of parts) if (!glass) look.rim = rim;
+        for (const parts of one.parts.values()) for (const { part, plain, glass } of parts) if (!glass) part.look = shared(plain, rim);
     };
 
     /** Lets go of what is carried: put in the run where it fits, taken away over the box, or back where it was. */
@@ -2213,6 +2228,21 @@ export default function marbles(m: Mote): Scene {
                 took.bendMost = 0;
             },
             gizmo: () => gizmo,
+            /** How long drawing a picture takes, the graphics card's work too (waited for by reading a pixel back), the middle of `count` pictures, in milliseconds. */
+            timeDraw: (count = 30) => {
+                if (!view) return undefined;
+                const g = under.getContext("webgl2")!;
+                const pixel = new Uint8Array(4);
+                const times: number[] = [];
+                for (let i = 0; i < count; i++) {
+                    const before = performance.now();
+                    view.draw();
+                    g.readPixels(0, 0, 1, 1, g.RGBA, g.UNSIGNED_BYTE, pixel);
+                    times.push(performance.now() - before);
+                }
+                times.sort((a, b) => a - b);
+                return { middle: times[Math.floor(count / 2)], most: times[count - 1], counts: view.counts, width: under.width, height: under.height };
+            },
             /** Looks at a point from closer than the camera lets a hand bring it, for a picture of a marble close in. */
             closeUp: (at: V3, far: number, turn = orbit.turn, tip = orbit.tip) => {
                 orbit = { at, far, turn, tip };
