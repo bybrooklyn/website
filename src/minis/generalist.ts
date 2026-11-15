@@ -1122,7 +1122,7 @@ export default function generalist(m: Mote): Scene {
             const range = el("input", { type: "range", min: String(least), max: String(most), step: String(step), value: String(value()) });
             range.setAttribute("aria-label", words);
             range.setAttribute("list", marks.id);
-            const shownValue = el("output", { class: "walker-far", textContent: say(value()) });
+            const shownValue = el("output", { class: "walker-far generalist-worded", textContent: say(value()) });
             range.addEventListener("input", () => {
                 shownValue.textContent = say(Number(range.value));
                 set(Number(range.value));

@@ -1814,6 +1814,14 @@
     text-align: right;
 }
 
+/* A value said in words (gravity "as always", wind "6 behind") takes the room of its longest, so the
+   slider beside it keeps its length while it is dragged and the two sliders end at the same place. */
+.mini-stage[data-mini="generalist"] .generalist-worded {
+    flex: none;
+    width: 4.2rem;
+    white-space: nowrap;
+}
+
 /* Narrower: the world across the top, then the column, all of it in view. */
 @media (max-width: 74rem) {
     .mini-stage[data-mini="generalist"] {
