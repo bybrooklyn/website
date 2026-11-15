@@ -197,6 +197,7 @@ impl Learner {
             for row in self.now.chunks_exact(s) {
                 self.rollout_sensed.add(row);
             }
+            self.foresee_keep();
             let mut input = core::mem::take(&mut self.now);
             self.rescale(&mut input);
             self.seen[t * n * s..(t + 1) * n * s].copy_from_slice(&input);
@@ -229,7 +230,9 @@ impl Learner {
             }
             self.now = input;
             self.taken[t * n * a..(t + 1) * n * a].copy_from_slice(&self.actions_now);
+            self.foresee_before(t);
             task.step(&self.actions_now, &mut self.now, &mut self.step_rewards, &mut self.step_ends, &mut self.last);
+            self.foresee_after(t);
             self.decisions += n as u64;
             if self.step_ends.contains(&CUT) {
                 // valued where it was cut, with the pool as it is after this decision
@@ -429,6 +432,7 @@ impl Learner {
         self.weights = w;
         self.grads = grads;
         self.recurrent = Some(recurrent);
+        self.foresee_gradient(which, self.minibatches_recurrent().0);
     }
 
     /// The policy's action for what the creature on show senses, its pool carried from its last

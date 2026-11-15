@@ -15,6 +15,10 @@
 //! - `practice`: the worlds it practises in, fresh for every run, and measuring on held-out worlds.
 //! - `needs`: energy that runs down and is restored by food and rest; `curious`: something for reaching
 //!   and seeing what it has not before.
+//! - `changes`: a world that changes while it lives: the ground's grip, bounce and softness, gravity,
+//!   wind and light, by stretches, and things dropped near it; and what it hears land.
+//! - `teacher`: world settings bred to stay at the edge of what it can do.
+//! - `expect`: a small predictor of what it will see next, and its surprise, a reason to look.
 //! - `gait`: how a creature moves, in numbers: on its feet or its belly, upright, taking turns.
 //! - `mind`: a brain drawn as it thinks, whichever way it learns.
 //! - `pool`: the brain's neurons that carry something from one decision to the next: memory with plastic
@@ -29,10 +33,12 @@
 #[cfg(not(feature = "walker"))]
 pub mod api;
 pub mod body;
+pub mod changes;
 pub mod check;
 pub mod curious;
 pub mod envs;
 pub mod evolve;
+pub mod expect;
 pub mod eyes;
 pub mod gait;
 pub mod land;
@@ -46,12 +52,17 @@ pub mod practice;
 pub mod recipe;
 pub mod stage;
 pub mod tally;
+pub mod teacher;
 pub mod touch;
 
 #[cfg(test)]
 mod body_tests;
 #[cfg(test)]
+mod changes_tests;
+#[cfg(test)]
 mod envs_tests;
+#[cfg(test)]
+mod expect_tests;
 #[cfg(test)]
 mod eyes_tests;
 #[cfg(test)]
