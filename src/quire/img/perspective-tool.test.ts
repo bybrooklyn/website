@@ -93,6 +93,10 @@ test("Auto stands a tilted building straight as one change; a dial's keys make a
     expect(set.vertical).toBeUndefined();
     expect(set.corners![0]!.x).toBeGreaterThan(startCorner.x + 10);
     expect(set.ratio).toBeGreaterThan(0.5);
+    // with the corners set and cropped to, the original is still drawn whole under the handles: its far corner is picture, not the empty stage
+    const far = await page.onScreen(size.width * 0.97, size.height * 0.97);
+    const drawn = await sharp(await page.tab.picture({ x: Math.round(far.x) - 3, y: Math.round(far.y) - 3, width: 6, height: 6 })).removeAlpha().raw().toBuffer();
+    expect(drawn.reduce((sum, value) => sum + value, 0) / drawn.length).toBeGreaterThan(40);
     // the arrow keys nudge the handle with the keyboard, a pixel each
     await page.tab.run("document.querySelectorAll('.quire-img-corner')[1].focus()");
     const before = set.corners![1]!.x;

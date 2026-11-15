@@ -380,8 +380,9 @@ export function createStage(hooks: StageHooks) {
         if (!now || !loaded) return;
         const live = perspectiveNow();
         const { perspective: _kept, turn: _turned, ...flat } = now;
-        // setting the corners, the original as it came, whole; else as it looks, with the dials' turn and straightening while they are dragged
-        const seen: Look = cornering ? { ...flat, crop: { x: 0, y: 0, ...loaded.size } } : { ...(cropping() && cropFrame ? { ...flat, crop: cropFrame } : flat), ...((turning ?? now.turn) ? { turn: turning ?? now.turn } : {}), ...(live ? { perspective: live } : {}) };
+        // setting the corners, the original as it came, whole and at its own size (a crop or a resize among the steps would draw it smaller than
+        // the handles lie on it); else as it looks, with the dials' turn and straightening while they are dragged
+        const seen: Look = cornering ? { ...flat, ...loaded.size, crop: { x: 0, y: 0, ...loaded.size } } : { ...(cropping() && cropFrame ? { ...flat, crop: cropFrame } : flat), ...((turning ?? now.turn) ? { turn: turning ?? now.turn } : {}), ...(live ? { perspective: live } : {}) };
         // the grade drawn unless the original is held in view; left of the split, the original
         // held, the original's numbers alone, made sRGB all the same where the canvas cannot show Display P3
         const grading = gradingWith(holding ? { ...seen, grades: [] } : seen, hooks.space?.() ?? "srgb", loaded.size, screenConverts);
