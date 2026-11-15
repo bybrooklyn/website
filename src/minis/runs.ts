@@ -56,7 +56,9 @@ export const RUNS: Made[] = [
     // at each marble and a trapdoor that drops them two at a time into another.
     {
         name: "every moving and sounding piece",
-        spot: { at: [-43.3, 48.4, -8], turn: 0.75, tip: 0.55, far: 478 },
+        // its two ways end 240 cm apart, so it opens framed on its start alone, the hopper to the drum (its
+        // first nine pieces), from the way every spot looks; the rest is reached by the tour or the fit button
+        spot: { at: [-40, 77.4, 4], turn: 0.75, tip: 0.55, far: 147 },
         text: "v3.h0_0_44_0.s2_0_1_44_2.g-2_1_44_2.d2_2_-3_1_44_2.m4_-5_1_42_2.d2_1_-6_1_39_2.s2_-8_1_38_2.n-10_1_38_2.q-11_1_34_2.c1_2_-12_1_30_6.d2_2_-12_1_30_0.w-10_1_28_0.d2_1_-10_0_23_3.o4_-10_-2_22_3.d2_1_-10_-4_15_3.u8_-10_-6_14_3.d2_1_-10_-8_22_3.y4_-10_-10_21_3.d2_1_-10_-14_28_3.t-10_-16_27_3.d2_1_-9_3_23_1.e1_-9_5_22_1.d2_1_-9_8_18_1.j-9_10_17_1.d2_1_-9_12_11_1.t-9_14_10_1",
     },
 ];
