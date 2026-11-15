@@ -43,6 +43,11 @@
     cursor: grabbing;
 }
 
+.quire-img-stage[data-tool="cutout"] {
+    cursor: pointer;
+}
+
+.quire-img-under,
 .quire-img-canvas,
 .quire-img-over {
     position: absolute;
@@ -616,7 +621,7 @@
         padding: 0;
     }
 
-    .quire-img-bar .quire-img-bar-facts {
+    .quire-img-bar :is(.quire-img-bar-facts, .quire-img-bar-cutout) {
         display: none;
     }
 }
@@ -667,6 +672,31 @@
     grid-template-columns: auto repeat(3, minmax(0, 1fr));
     gap: 0.25rem;
     align-items: center;
+}
+
+/* a plain word under the format when it cannot keep what the picture has, growing in and folding away */
+.quire-img-note {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem;
+    max-height: 8rem;
+    overflow: clip;
+    color: var(--ink);
+    font-size: 0.9rem;
+    transition:
+        max-height 0.3s var(--ease),
+        opacity 0.2s ease;
+}
+
+.quire-img-note p {
+    flex-basis: 100%;
+    margin: 0;
+}
+
+.quire-img-note.away {
+    max-height: 0;
+    opacity: 0;
 }
 
 /* a Display P3 picture's colors, offered only for one, grow in and fold away as the lossy settings do */
@@ -736,10 +766,32 @@
     mask-image: linear-gradient(to right, transparent, black 18%, black 82%, transparent);
 }
 
-/* on the narrowest screens the dial is shorter, so that the crop's strip keeps Apply in sight */
-@media (max-width: 26rem) {
-    .quire-img-dial {
-        width: 5.4rem;
+/* the horizon's group sits before Apply on a wide screen, and on a narrow one on a row of its own under the
+   shapes and Apply, so that the strip never scrolls to reach its main action */
+.quire-img-strip-horizon {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 0.1rem;
+}
+
+@media (max-width: 34rem) {
+    .quire-img-strip[data-kind="crop"] {
+        /* wide enough for the shapes and Apply on one row, the horizon's group on the next */
+        width: min(calc(100% - 1.5rem), 20rem);
+        flex-wrap: wrap;
+        justify-content: center;
+        row-gap: 0.25rem;
+    }
+
+    .quire-img-strip[data-kind="crop"] .quire-img-strip-horizon {
+        order: 1;
+        flex-basis: 100%;
+        justify-content: center;
+    }
+
+    .quire-img-strip-horizon > .quire-img-strip-rule {
+        display: none;
     }
 }
 

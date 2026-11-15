@@ -137,7 +137,7 @@ async function codecFiles(path: string): Promise<Response | undefined> {
     return undefined;
 }
 
-test("in Chromium, a Display P3 photograph that was only cropped goes out in each of the seven formats with its profile and its numbers, made sRGB its red is sRGB's red, and the screen is handed its P3 numbers in a P3 canvas", async () => {
+test("in Chromium, a Display P3 photograph that was only cropped goes out in each of the seven formats with its profile and its numbers, made sRGB its red is sRGB's red, a mark on it is the red picked either way, and the screen is handed its P3 numbers in a P3 canvas", async () => {
     const page = await corePage(
         `
         import { backendFor, gradingWith, loadPicture } from "${quire}/img/draw.ts";
@@ -195,6 +195,16 @@ test("in Chromium, a Display P3 photograph that was only cropped goes out in eac
             return { name: backend.name, out };
         };
         // the screen: the picture drawn in a canvas put in Display P3, and drawn made sRGB as for a canvas that has none
+        // a red arrow drawn on the P3 photograph: in the export's P3 numbers it is the red picked, and made sRGB too
+        window.marked = async () => {
+            const backend = await backendFor(document.createElement("canvas"), "WebGL2");
+            const picture = await loadPicture(backend, fixture);
+            const steps = look({ original: { name: "pictures/p.png", width: 64, height: 48, type: "image/png", bytes: 1 }, steps: [{ id: "s1", type: "arrow", from: { x: 2, y: 24 }, to: { x: 60, y: 24 }, color: "#ff3b30", thickness: 8 }] });
+            const p3 = await picture.flatten(steps, undefined, undefined, "p3");
+            const srgb = await picture.flatten(steps, undefined, gradingWith(steps, "p3", picture.size, true), "p3");
+            picture.destroy();
+            return { p3: at(p3.data, 20, 24, 64), back: at(pixelsToSrgb(p3.data), 20, 24, 64), srgb: at(srgb.data, 20, 24, 64) };
+        };
         window.screen = async () => {
             const canvas = document.createElement("canvas");
             canvas.width = 64;
@@ -247,6 +257,11 @@ test("in Chromium, a Display P3 photograph that was only cropped goes out in eac
             expect(converted.raw[0]).toEqual([255, 0, 0]);
             expect(converted.icc as unknown).toBe(0);
         }
+        const marked = await page.tab.run<{ p3: number[]; back: number[]; srgb: number[] }>("window.marked()");
+        // the mark's red is #ff3b30 whichever way the export goes; in P3's numbers it is less red than 255
+        expect(near(marked.back, [255, 59, 48], 2)).toBe(true);
+        expect(near(marked.srgb, [255, 59, 48], 2)).toBe(true);
+        expect(marked.p3[0]).toBeLessThan(245);
         const screen = await page.tab.run<{ took: boolean; p3: number[][]; srgb: number[][]; expected: number[][] }>("window.screen()");
         if (screen.took) screen.p3.forEach((pixel, index) => expect(near(pixel, fixture.numbers[index]!, 1)).toBe(true));
         else console.log("this browser's WebGL2 canvas has no Display P3");

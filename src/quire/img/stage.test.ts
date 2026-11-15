@@ -96,6 +96,27 @@ test("turned by the crop's dial, a cover, an arrow and words read stay where the
     // the frame is the largest upright rectangle inside the turned picture
     const frame = await frameOf();
     expect(frame.width).toBeLessThan(1200);
+    // outside the turned picture nothing is drawn, so the room shows; the picture outside the frame is dimmed, not hidden
+    await page.tab.wait(600);
+    // read in the frame the stage draws in, before the canvas is shown and cleared: a paint asked for, then a frame after it
+    const seenAround = await page.tab.run<{ outside: number; dimmed: number[]; whole: boolean }>(`new Promise((done) => { window.app.editing().stage.zoom(1); requestAnimationFrame(() => done((() => {
+        const stage = window.app.editing().stage;
+        const room = document.querySelector(".quire-img-stage");
+        const corners = [[0, 0], [1200, 0], [1200, 700], [0, 700]].map(([x, y]) => stage.toScreen({ x, y }));
+        const left = Math.min(...corners.map((c) => c.x)), top = Math.min(...corners.map((c) => c.y));
+        const right = Math.max(...corners.map((c) => c.x)), bottom = Math.max(...corners.map((c) => c.y));
+        const canvas = document.querySelector(".quire-img-canvas");
+        const copy = new OffscreenCanvas(canvas.width, canvas.height).getContext("2d");
+        copy.drawImage(canvas, 0, 0);
+        const ratio = canvas.width / room.clientWidth;
+        const at = (x, y) => [...copy.getImageData(Math.round(x * ratio), Math.round(y * ratio), 1, 1).data];
+        // the box round the turned picture's top left corner, just inside the box: off the picture
+        const inner = stage.toScreen({ x: 30, y: 650 });
+        return { outside: at(left + 3, top + 3)[3], dimmed: at(inner.x, inner.y), whole: left >= 0 && top >= 0 && right <= room.clientWidth && bottom <= room.clientHeight };
+    })())); })`);
+    expect(seenAround.outside).toBe(0);
+    expect(seenAround.dimmed[3]).toBe(255);
+    expect(seenAround.whole).toBe(true);
     await page.tab.run("document.querySelector('.quire-img-stage').focus()");
     await page.tab.press("Escape");
     // the cover's middle, in the original's pixels, is where it is on the screen now, turned; pressed there it is picked

@@ -1,0 +1,36 @@
+---
+// The background remover as a page of its own: drop, paste or choose a picture and its background
+// comes off, in this browser, at full size (src/quire/img/cutout/page.ts, the same piece imgQuire's
+// Cut out tool uses). It is unlisted, kept out of search and the sitemap, and linked from nowhere,
+// until she says otherwise.
+import Document from "../layouts/Document.astro";
+import Flags from "../components/Flags.astro";
+import { site } from "../data/site";
+import "../styles/quire.css";
+import "../styles/quire-img.css";
+import "../styles/quire-cutout.css";
+---
+
+<Document title="Cut-out" description="Takes the background out of a picture, in your browser." unlisted bodyClass="quire-app quire-cut-page" icon="/mdquire/icon.svg">
+    <header class="quire-top">
+        <div class="quire-top-in">
+            <div class="quire-top-line">
+                <nav class="quire-trail" aria-label="Where you are">
+                    <div class="site-id">
+                        <a class="site-name" href="/">{site.name.toLowerCase()}</a>
+                        <Flags />
+                    </div>
+                    <span class="quire-stroke quire-word-stroke" aria-hidden="true">/</span>
+                    <a class="quire-word" href="/cutout/">cut-out</a>
+                </nav>
+            </div>
+        </div>
+    </header>
+    <main id="main" tabindex="-1">
+        <div id="cutout" class="quire-cut-host"></div>
+    </main>
+</Document>
+
+<script>
+    import "../scripts/cutout";
+</script>

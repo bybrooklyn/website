@@ -150,7 +150,7 @@ export function sidePanel(title: string, className: string, closed?: () => void)
 }
 
 /** The export panel: the format, its quality or a weight to come in under, the result's size, the original and the result side by side at their own pixels, and Copy and Save. */
-export function exportPanel(hooks: { closed?(): void; settings(): Settings; set(settings: Settings): void; keep(): Keep; setKeep(keep: Keep): void; copy(): void; save(): void; wide?(): boolean }) {
+export function exportPanel(hooks: { closed?(): void; settings(): Settings; set(settings: Settings): void; keep(): Keep; setKeep(keep: Keep): void; copy(): void; save(): void; wide?(): boolean; note?(): { text: string; actions: { label: string; press(): void }[] } | undefined }) {
     const side = sidePanel("Export", "quire-img-export", () => hooks.closed?.());
     const formats = make("div", "quire-img-formats");
     formats.setAttribute("role", "radiogroup");
@@ -173,8 +173,8 @@ export function exportPanel(hooks: { closed?(): void; settings(): Settings; set(
     const pair = make("div", "quire-img-pair");
     const before = make("figure", "quire-img-sample");
     const after = make("figure", "quire-img-sample");
-    const beforeCanvas = make("canvas");
-    const afterCanvas = make("canvas");
+    let beforeCanvas = make("canvas");
+    let afterCanvas = make("canvas");
     const beforeSaid = make("figcaption");
     const afterSaid = make("figcaption");
     before.append(beforeCanvas, beforeSaid);
@@ -197,7 +197,10 @@ export function exportPanel(hooks: { closed?(): void; settings(): Settings; set(
     const colors = make("div", "quire-img-keep quire-img-colors");
     colors.setAttribute("role", "radiogroup");
     colors.setAttribute("aria-label", "Colors");
-    side.body.append(formats, lossy, keeping, colors, result, pair, actions);
+    // a plain word when the format chosen cannot keep what the picture has (a cut-out's transparency in a JPEG), with what can be done
+    const note = make("div", "quire-img-note");
+    note.setAttribute("role", "status");
+    side.body.append(formats, lossy, keeping, colors, note, result, pair, actions);
 
     const changed = (to: Partial<Settings>) => {
         const next = { ...hooks.settings(), ...to };
@@ -225,6 +228,9 @@ export function exportPanel(hooks: { closed?(): void; settings(): Settings; set(
                 return button;
             }),
         );
+        const said = hooks.note?.();
+        note.classList.toggle("away", !said);
+        note.replaceChildren(...(said ? [make("p", "", said.text), ...said.actions.map((each) => control(each.label, each.label, () => (each.press(), fill()), "quire-button quire-img-format"))] : []));
         colors.classList.toggle("away", !hooks.wide?.());
         colors.replaceChildren(
             make("span", "quire-img-format-row", "Colors"),
@@ -259,15 +265,25 @@ export function exportPanel(hooks: { closed?(): void; settings(): Settings; set(
     }
 
     /** Shows what the export came to: its size and weight, and the same part of the original and the result at their own pixels. */
-    function shows(found: { width: number; height: number; bytes: number; label: string; over: boolean; quality: number; original: ImageData; exported?: ImageBitmap; at: Rect; originalBytes: number }) {
+    function shows(found: { width: number; height: number; bytes: number; label: string; over: boolean; quality: number; original: ImageData; exported?: ImageBitmap; at: Rect; originalBytes: number; space?: PredefinedColorSpace }) {
         result.textContent = `${found.width} × ${found.height} px · ${weightSaid(found.bytes)} ${found.label}${found.over ? " · over the weight even at the lowest quality" : ""}`;
+        // fresh canvases each time, in the picture's own space (a canvas keeps the space it was first drawn in)
+        const space = found.space ?? "srgb";
+        const fresh = (old: HTMLCanvasElement) => {
+            const made = make("canvas");
+            old.replaceWith(made);
+            return made;
+        };
+        beforeCanvas = fresh(beforeCanvas);
+        afterCanvas = fresh(afterCanvas);
         for (const [canvas, draw] of [
             [beforeCanvas, (context: CanvasRenderingContext2D) => context.putImageData(found.original, 0, 0)],
             [afterCanvas, (context: CanvasRenderingContext2D) => found.exported && context.drawImage(found.exported, found.at.x, found.at.y, found.at.width, found.at.height, 0, 0, found.at.width, found.at.height)],
         ] as const) {
             canvas.width = found.at.width;
             canvas.height = found.at.height;
-            draw(canvas.getContext("2d")!);
+            canvas.dataset.space = space;
+            draw(canvas.getContext("2d", { colorSpace: space })!);
         }
         beforeSaid.textContent = `Original · ${weightSaid(found.originalBytes)}`;
         afterSaid.textContent = `Export · ${weightSaid(found.bytes)}${found.exported ? "" : " · this browser cannot show it"}`;
@@ -395,7 +411,7 @@ export function readSaid(read: ReadSaid): string {
 }
 
 /** The strip for the tool in hand: the crop's shapes and Apply, a mark's colors and thickness, or the reading's few words and buttons. Icons only where it can be, each named in its tooltip. */
-export function toolStrip(hooks: { color(): string; weight(): number; setColor(value: string): void; setWeight(value: number): void; shape(): string; setShape(name: string): void; apply(): void; turn?: TurnHooks; read?(): ReadSaid; hideAll?(): void; chooseModel?(from: HTMLElement): void; readAgain?(): void; grade?(): { said: string; controls?: HTMLElement[]; cancel?(): void } | undefined }) {
+export function toolStrip(hooks: { color(): string; weight(): number; setColor(value: string): void; setWeight(value: number): void; shape(): string; setShape(name: string): void; apply(): void; turn?: TurnHooks; read?(): ReadSaid; hideAll?(): void; chooseModel?(from: HTMLElement): void; readAgain?(): void; grade?(): { said: string; controls?: HTMLElement[]; cancel?(): void } | undefined; cut?(): { said: string; controls?: HTMLElement[]; cancel?(): void } | undefined }) {
     const strip = make("div", "quire-img-strip");
     strip.setAttribute("role", "toolbar");
     strip.setAttribute("aria-label", "Tool");
@@ -419,10 +435,14 @@ export function toolStrip(hooks: { color(): string; weight(): number; setColor(v
     // the horizon's dial and the button that draws a line along it, made once so that a drag on the dial is never cut short by the strip filling again
     const dial = hooks.turn ? turnDial(hooks.turn) : undefined;
     const level = hooks.turn ? control("Draw along the horizon to level it", icon("line"), () => hooks.turn?.setLevelling(!hooks.turn.levelling())) : undefined;
-    function fill(kind: "crop" | "mark" | "read" | "grade" | "none") {
-        const grading = kind === "grade" ? hooks.grade?.() : undefined;
-        if (kind === "grade" && !grading) kind = "none";
+    // the dial and its line button as one group, which a narrow screen puts on a row of its own under the shapes and Apply
+    const horizon = make("div", "quire-img-strip-horizon");
+    if (dial && level) horizon.append(make("span", "quire-img-strip-rule"), dial.element, level);
+    function fill(kind: "crop" | "mark" | "read" | "grade" | "cut" | "none") {
+        const grading = kind === "grade" ? hooks.grade?.() : kind === "cut" ? hooks.cut?.() : undefined;
+        if ((kind === "grade" || kind === "cut") && !grading) kind = "none";
         strip.classList.toggle("open", kind !== "none");
+        strip.dataset.kind = kind;
         strip.inert = kind === "none";
         if (kind === "crop") {
             // the dial keeps the keyboard when the strip is filled again after each turn it makes
@@ -434,7 +454,7 @@ export function toolStrip(hooks: { color(): string; weight(): number; setColor(v
                     button.classList.toggle("pressed", hooks.shape() === shape.name);
                     return button;
                 }),
-                ...(dial && level ? [make("span", "quire-img-strip-rule"), dial.element, level] : []),
+                ...(dial && level ? [horizon] : []),
                 make("span", "quire-img-strip-rule"),
                 control("Apply (Enter)", icon("tick"), () => hooks.apply()),
             );

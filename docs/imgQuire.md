@@ -24,6 +24,9 @@ remover (`cutout.md`) is to be one of its tools as well as a page of its own.
 - `export.ts`: the formats as one table, the weight search, file names, the clipboard.
 - `profile.ts`: colour profiles: checked and bounded, put into a JPEG, WebP and PNG, the Display P3 profile
   written from its published numbers, and Display P3 made sRGB.
+- `cutout/`: the cut-out, the same piece as the page `/cutout/` ([cutout](cutout.md)): what a cut-out is
+  (`cut.ts`), its edges (`refine.ts`), the full-size pass on the card (`render.ts`), the first-use dialog
+  (`asking.ts`) and the page (`page.ts`).
 - `turn.ts`: the horizon's arithmetic: a place on the turned picture and back, the largest upright rectangle
   inside it, a crop fitted inside, and the turn a line drawn along the horizon asks for.
 - `metadata.ts`: a picture's Exif, XMP, IPTC and colour profile read and written by hand, through the
@@ -430,6 +433,22 @@ eight degrees by the dial's keys: a cover made before is picked by a press where
 by a press on it, a box made then is upright on the screen, and the export draws the cover and the arrow in their
 places (`stage.test.ts`).
 
+**Cut out.** K, the bar's scissors or Tools, Cut out: the background taken out of the picture, the same piece
+as the page `/cutout/`, its result a step. Asked once in the reading dialog's family, the model runs in the
+worker Find uses; the stage then shows the cut-out's pixels in place of the original's, on a checkerboard
+where clear, everything else drawn over them; the strip lays it on nothing, one of the mark colors or the old
+picture blurred, paints Keep and Remove, changes the quality and takes it away, and a press keeps the thing
+pressed. A JPEG export says it has no transparency and offers a color or PNG. What it is and what was
+measured are in [cutout](cutout.md).
+
+**Since the horizon.** Round a turned picture the room shows through: the crop's dimming only darkens what
+is drawn and adds nothing where there is no picture (the corners used to be a black box), and when the turn
+changes the view glides until the turned picture and its frame are whole. On a narrow screen the crop's
+strip puts the dial and its line button on a row of their own under the shapes, so Apply is always in sight,
+and the picture is fitted under the strip as tall as it is. The export panel's samples are drawn in the
+picture's own space (a Display P3 canvas for a P3 picture), and marks are drawn into a P3 export in P3, so a
+red mark is the red picked (`profile.test.ts`).
+
 **As a Quire.** Menus File, Edit, View, Image, Tools, Help, as one table, an icon on every line, ticks for
 what is on, submenus for Download, Copy as, Zoom, Crop shape, Resize filter, Mark color and Thickness;
 single keys C, R, A, T, B, E, I, W and G only while the picture has the keyboard, Enter and Escape; the palette is
@@ -664,8 +683,7 @@ only with `--enable-unsafe-webgpu`, which the drawing tests pass.
   with Hugging Face answered from the trial copies; a visitor's real download from Hugging Face (its
   redirects to its content network) was not made here.
 - The horizon: Auto is not offered (no reliable arithmetic for it was found). A turned picture is drawn smoothed
-  past one to one, not as square pixels. The crop's view is not fitted again when the turn changes, so at 15
-  degrees the corners of the turned picture can reach past the room until Ctrl+0. A picture resized to another
+  past one to one, not as square pixels. A picture resized to another
   shape (width and height both given) and turned has its covers and marks drawn by a turn in the resized pixels,
   which skews them a little. A cover made on a turned picture takes its color from the ring round the upright box
   about it. Perspective, JPEG repair and restoring detail are left for later.
@@ -675,10 +693,10 @@ only with `--enable-unsafe-webgpu`, which the drawing tests pass.
 - Colour profiles: only Display P3 can be converted to sRGB; another profile (Adobe RGB, ProPhoto, a camera's) is
   carried out byte for byte and its picture graded as sRGB and said to be, and Copy as it looks hands the clipboard
   its numbers as if they were sRGB. Colors outside sRGB are clipped channel by channel, which can shift the hue of
-  the most saturated colors. A profile's curve is not read: P3 is taken to use sRGB's, as Display P3 does. The
-  export panel's side by side samples are drawn in an sRGB canvas, so a P3 picture's samples look duller there
-  than the export will. The marks are drawn in sRGB numbers onto a P3 picture's, so their colors come out a little
-  more saturated in a P3 export. Tried in Chromium only; the profile in a JPEG XL is read back only by decoding.
+  the most saturated colors. A profile's curve is not read: P3 is taken to use sRGB's, as Display P3 does. Tried in Chromium only; the profile in a JPEG XL is read back only by decoding.
+- The cut-out: a cover's color is taken from the cut-out's pixels once a picture is cut out; making the cut-out
+  again (each brush stroke) puts the whole picture on the card again, about half a second at 12 megapixels.
+  Its weak spots as a page are in [cutout](cutout.md).
 - Grading: a part's layer is drawn again on the page's thread whenever its shape changes, so painting with a
   wide feather draws about 25 ms a frame; masks are at most 1024 a side, so a hard brush on a 50 megapixel
   photograph has an edge about eight pixels soft. A .cube larger than 33 a side is kept at 33, sampled between
@@ -695,8 +713,8 @@ only with `--enable-unsafe-webgpu`, which the drawing tests pass.
 
 ## Next slices, in order
 
-1. The cut-out ([cutout](cutout.md)), which can share the part models.
-2. Perspective, repairing what JPEG took, and restoring detail.
-3. More marks: numbered steps, a highlighter, a magnifier, a spotlight, outlined captions.
-4. Many at once: batches through the same steps and export (a look given to a batch).
-5. From the phone, and opening a picture from mdQuire and back.
+1. Perspective, repairing what JPEG took, and restoring detail.
+2. More marks: numbered steps, a highlighter, a magnifier, a spotlight, outlined captions.
+3. Many at once: batches through the same steps and export (a look given to a batch), and the cut-out's
+   pictures as a zip.
+4. From the phone, and opening a picture from mdQuire and back.

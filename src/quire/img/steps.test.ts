@@ -5,6 +5,7 @@
 // be read of it, quickly, and never throws.
 
 import { expect, test } from "bun:test";
+import { encodeRuns } from "./masks";
 import { add, change, createHistory, edited, fresh, LIMITS, look, move, readSteps, remove, setOnly, toggle, within, writeSteps, type Kept } from "./steps";
 
 const original = { name: "pictures/cat.png", width: 1200, height: 800, type: "image/png", bytes: 52_000 };
@@ -170,3 +171,15 @@ test("a turn levels the picture: its crop is the largest upright rectangle insid
     expect(wild.steps[0]).toEqual({ id: "s1", type: "turn", angle: 15 });
     expect("angle" in wild.steps[1]!).toBe(false);
 });
+
+test("a cut-out step reads back from steps.json with its mask, strokes and background, and a damaged one is left out", () => {
+    const found = { width: 2, height: 1, runs: encodeRuns(Uint8Array.of(255, 0)) };
+    const picture = { original, steps: [{ id: "s1", type: "cutout", found, strokes: [{ size: 8, soft: 0.5, erase: true, points: [1, 2] }], background: "color", color: "#ffffff" }] as Kept[] };
+    const read = readSteps(writeSteps(picture))!;
+    expect(read.steps).toEqual(picture.steps);
+    expect(look(read).cutout).toEqual({ found, strokes: [{ size: 8, soft: 0.5, erase: true, points: [1, 2] }], background: "color", color: "#ffffff" });
+    const bad = readSteps('{"quire": 1, "original": {"name": "a.png", "width": 10, "height": 10}, "steps": [{"type": "cutout", "found": {"width": 4, "height": 4, "runs": "AAAA"}, "background": "sky"}]}')!;
+    expect(bad.steps).toEqual([]);
+    expect(bad.dropped).toBe(1);
+});
+

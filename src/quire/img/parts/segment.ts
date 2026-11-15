@@ -11,8 +11,8 @@
 
 import { encodeRuns, type Found } from "../masks";
 
-/** How a model takes a picture. */
-export type Way = "sam2" | "slim" | "ormbg" | "modnet";
+/** How a model takes a picture: BiRefNet as ormbg does, 1024 square, but with ImageNet's mean and spread, and logits out. */
+export type Way = "sam2" | "slim" | "ormbg" | "modnet" | "birefnet";
 
 /** Where a picture lies in a model's input: the input's size, the part of it the picture fills, and the picture's own size. */
 export interface Fit {
@@ -28,7 +28,7 @@ export const FOUND_SIDE = 512;
 /** Where a picture of a size lies in a model's input. */
 export function fitOf(way: Way, width: number, height: number): Fit {
     const picture = { width, height };
-    if (way === "sam2" || way === "ormbg") return { way, input: { width: 1024, height: 1024 }, filled: { width: 1024, height: 1024 }, picture };
+    if (way === "sam2" || way === "ormbg" || way === "birefnet") return { way, input: { width: 1024, height: 1024 }, filled: { width: 1024, height: 1024 }, picture };
     if (way === "slim") {
         const scale = 1024 / Math.max(width, height);
         return { way, input: { width: 1024, height: 1024 }, filled: { width: Math.round(width * scale), height: Math.round(height * scale) }, picture };
@@ -82,9 +82,9 @@ export const bestOf = (scores: ArrayLike<number>): number => {
     return best;
 };
 
-/** A model's answer as a found mask: the values (logits when `logits`, else 0 to 1) of a grid, read between their entries over the part the picture fills, at most `FOUND_SIDE` on the picture's longer side, kept as runs of bytes. */
-export function foundOf(values: ArrayLike<number>, width: number, height: number, crop: { x: number; y: number; width: number; height: number }, picture: { width: number; height: number }, logits = false): Found {
-    const scale = Math.min(1, FOUND_SIDE / Math.max(picture.width, picture.height));
+/** A model's answer as a found mask: the values (logits when `logits`, else 0 to 1) of a grid, read between their entries over the part the picture fills, at most `side` (`FOUND_SIDE` unless asked) on the picture's longer side, kept as runs of bytes. */
+export function foundOf(values: ArrayLike<number>, width: number, height: number, crop: { x: number; y: number; width: number; height: number }, picture: { width: number; height: number }, logits = false, side = FOUND_SIDE): Found {
+    const scale = Math.min(1, side / Math.max(picture.width, picture.height));
     const outWidth = Math.max(1, Math.round(picture.width * scale));
     const outHeight = Math.max(1, Math.round(picture.height * scale));
     const bytes = new Uint8Array(outWidth * outHeight);

@@ -1,0 +1,251 @@
+/* The cut-out's page (src/quire/img/cutout/page.ts): the picture in the room under the top, the cut-out
+   on a checkerboard, and under it, never over it, the bar of what can be done with it. Its buttons are
+   the editor's own (quire-img.css); what is new is laid out here. */
+
+.quire-cut-page main {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    flex: 1;
+}
+
+.quire-cut-host {
+    display: flex;
+    flex: 1;
+    min-height: calc(100dvh - 4.5rem);
+}
+
+.quire-cut {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem;
+    font-family: var(--font-text);
+}
+
+.quire-cut-room {
+    position: relative;
+    display: flex;
+    flex: 1;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: 16rem;
+    border-radius: var(--quire-round);
+    transition: outline-color 0.15s ease;
+    outline: 0.125rem dashed transparent;
+    outline-offset: -0.25rem;
+}
+
+.quire-cut.dropping .quire-cut-room {
+    outline-color: var(--accent);
+}
+
+/* the empty page: one line and its buttons, folding away when a picture comes */
+.quire-cut-empty {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1.1rem;
+    padding: 1rem;
+    color: var(--muted);
+    text-align: center;
+    transition:
+        opacity 0.2s ease,
+        scale 0.3s var(--ease),
+        visibility 0s linear 0s;
+}
+
+.quire-cut.shown .quire-cut-empty {
+    opacity: 0;
+    scale: 0.97;
+    visibility: hidden;
+    transition:
+        opacity 0.15s ease,
+        scale 0.2s var(--ease),
+        visibility 0s linear 0.2s;
+}
+
+.quire-cut-line {
+    max-width: 30rem;
+    margin: 0;
+    font-size: 1.1rem;
+    line-height: 1.5;
+}
+
+.quire-cut-empty-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.quire-cut :is(.quire-dialog-action, .quire-dialog-dismiss) {
+    min-height: 2.4rem;
+    padding: 0 1.1rem;
+    border: 0;
+    border-radius: var(--quire-round-small);
+    font: inherit;
+    cursor: pointer;
+}
+
+.quire-cut .quire-dialog-action {
+    background: var(--accent);
+    color: var(--ground);
+    font-weight: 600;
+}
+
+.quire-cut .quire-dialog-dismiss {
+    background: color-mix(in oklch, var(--ink) 8%, transparent);
+    color: var(--ink);
+}
+
+/* a phone has no right-click and no keys to paste with: there, and only there, a plain Paste button */
+.quire-cut-paste {
+    display: none;
+}
+
+@media (pointer: coarse) {
+    .quire-cut-paste {
+        display: inline-block;
+    }
+}
+
+/* the picture, fitted to the room, on a checkerboard while nothing is behind the cut-out */
+.quire-cut-view {
+    position: relative;
+    display: grid;
+    max-width: 100%;
+    max-height: 100%;
+    opacity: 0;
+    scale: 0.98;
+    transition:
+        opacity 0.25s ease,
+        scale 0.35s var(--ease);
+}
+
+.quire-cut.shown .quire-cut-view {
+    opacity: 1;
+    scale: 1;
+}
+
+.quire-cut-view > canvas {
+    grid-area: 1 / 1;
+    max-width: min(100%, calc(100vw - 2rem));
+    max-height: calc(100dvh - 13rem);
+    width: auto;
+    height: auto;
+    touch-action: none;
+}
+
+.quire-cut.clear .quire-cut-canvas {
+    background:
+        repeating-conic-gradient(oklch(0.34 0.02 300) 0 25%, oklch(0.27 0.02 300) 0 50%) 0 0 / 1rem 1rem;
+}
+
+.quire-cut-over {
+    pointer-events: none;
+}
+
+.quire-cut-view[data-brush="keep"],
+.quire-cut-view[data-brush="remove"] {
+    cursor: crosshair;
+}
+
+.quire-cut.cut .quire-cut-view:not([data-brush="keep"], [data-brush="remove"]) {
+    cursor: pointer;
+}
+
+/* while the picture is cut out, a quiet line over its foot, which grows in and fades away */
+.quire-cut-working {
+    position: absolute;
+    bottom: 0.75rem;
+    left: 50%;
+    margin: 0;
+    padding: 0.35rem 0.8rem;
+    border-radius: 999rem;
+    background: color-mix(in oklch, var(--ground) 80%, transparent);
+    color: var(--muted);
+    font-size: 0.9rem;
+    opacity: 0;
+    scale: 0.92;
+    translate: -50% 0.3rem;
+    transition:
+        opacity 0.2s ease,
+        scale 0.2s var(--ease),
+        translate 0.2s var(--ease);
+    pointer-events: none;
+}
+
+.quire-cut-working.shown {
+    opacity: 1;
+    scale: 1;
+    translate: -50% 0;
+    animation: quire-cut-breathe 1.6s ease-in-out infinite;
+}
+
+@keyframes quire-cut-breathe {
+    50% {
+        color: var(--ink);
+    }
+}
+
+/* the bar under the picture: quiet until there is a cut-out, only what is chosen tinted */
+.quire-cut-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 0.25rem;
+    max-width: 100%;
+    opacity: 0;
+    translate: 0 0.4rem;
+    transition:
+        opacity 0.25s ease,
+        translate 0.3s var(--ease);
+}
+
+.quire-cut.cut .quire-cut-bar {
+    opacity: 1;
+    translate: 0 0;
+}
+
+.quire-cut-word {
+    min-height: 2.2rem;
+    padding: 0 0.7rem;
+    font: inherit;
+    font-size: 0.92rem;
+}
+
+.quire-cut-swatches {
+    display: flex;
+    gap: 0.1rem;
+    max-width: 0;
+    overflow: hidden;
+    opacity: 0;
+    transition:
+        max-width 0.35s var(--ease),
+        opacity 0.2s ease;
+}
+
+.quire-cut-swatches.open {
+    max-width: 22rem;
+    opacity: 1;
+}
+
+.quire-cut-said {
+    min-height: 1.4rem;
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.9rem;
+    text-align: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .quire-cut-working.shown {
+        animation: none;
+    }
+}
