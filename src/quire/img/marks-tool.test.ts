@@ -300,3 +300,23 @@ test("the bar keeps the mark last used one press away, beside a menu of all seve
     expect(await page.tab.run("window.app.editing().stage.tool()")).toBe("spotlight");
     expect(await page.tab.run("document.querySelector('.quire-img-bar [aria-label=\"Spotlight (S)\"]') !== null")).toBe(true);
 }, 60_000);
+
+test("a number put down before a spotlight is as bright in the export as one put down after it", async () => {
+    if (!page) return;
+    await page.paste("screenshot");
+    await focus();
+    await page.tab.press("n");
+    const first = await page.onScreen(1000, 150);
+    await page.tab.click(first.x, first.y);
+    await page.tab.press("s");
+    await page.tab.drag(await page.onScreen(500, 100), await page.onScreen(700, 300), 8);
+    await page.tab.press("n");
+    const second = await page.onScreen(1000, 400);
+    await page.tab.click(second.x, second.y);
+    const numbers = (await stepsOf()).filter((step) => step.type === "number") as unknown as { at: { x: number; y: number }; size: number }[];
+    expect(numbers.length).toBe(2);
+    // a point inside each circle, beside its figure; and one of the picture, far from both and from the spotlight
+    const [before, after, shaded] = await exported([...numbers.map(({ at, size }) => ({ x: at.x - size * 0.36, y: at.y })), { x: 1100, y: 650 }]);
+    expect(before).toEqual(after);
+    expect(shaded![0]).toBeLessThan(120);
+}, 60_000);

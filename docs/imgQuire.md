@@ -637,8 +637,9 @@ picture keep a turn of their own, `angle`, and are upright on the screen).
   the last one drawn while a new one is made, so it never blinks while dragged.
 - **Spotlight** (S, `{"type": "spotlight", "rect", "round"?, "dim"}`): a drag leaves a rectangle, or an ellipse
   (the strip's Rectangle and Ellipse), bright while all the rest of the picture is shaded. Every spotlight is one
-  shade with all their shapes cut out, drawn at the place of the first, so two shapes that overlap leave their
-  overlap bright; the strip's Light, Medium and Dark shade (0.35, 0.55, 0.75 of black) change every spotlight at
+  shade with all their shapes cut out, so two shapes that overlap leave their overlap bright, and it lies on the
+  picture under every other mark whenever each was made (at first it lay at the place of the first spotlight,
+  which dimmed a number or a lens made before it and left one made after it bright); the strip's Light, Medium and Dark shade (0.35, 0.55, 0.75 of black) change every spotlight at
   once, and a new one takes the shade there is. A spotlight is picked by its edge, as a box is, so what is inside it
   can still be pressed.
 - **Text** (T): Enter keeps it and Shift and Enter starts another line; the field grows with what is typed and

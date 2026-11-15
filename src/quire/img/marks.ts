@@ -8,7 +8,8 @@
 // on the screen it needs the picture under it on the same canvas; the stage copies it there first. A magnifier's
 // lens shows the picture as it looks, which only the card can draw: it is handed in drawn (`Lenses`), the part of
 // the level picture it shows given by `lensRegion`. The spotlights are drawn as one shade with every spotlight's
-// shape cut out of it, at the place of the first, so that two shapes that overlap leave their overlap bright.
+// shape cut out of it, so that two shapes that overlap leave their overlap bright, and under every other mark
+// whenever each was made, so that a number made before a spotlight is as bright as one made after it.
 //
 // On a picture whose perspective is set, the 2D canvas cannot draw through a plane-to-plane map, so a box's
 // corners, a rectangle's, and an arrow's and a highlighter's ends are each put where the map puts them and drawn
@@ -270,7 +271,7 @@ function drawLens(context: Context, mark: Extract<Mark, { type: "magnifier" }>, 
     context.stroke();
 }
 
-/** The spotlights, as one shade over everything drawn so far with each spotlight's shape cut out of it, as dark as the first says. */
+/** The spotlights, as one shade over the picture with each spotlight's shape cut out of it, as dark as the first says. */
 function drawSpotlights(context: Context, spots: Extract<Mark, { type: "spotlight" }>[], place: Place) {
     const { width, height } = context.canvas;
     const layer = new OffscreenCanvas(width, height);
@@ -344,12 +345,18 @@ export function drawMarks(context: Context, marks: Mark[], place: Place, lenses?
     placeOn(context, place);
     context.lineCap = "round";
     context.lineJoin = "round";
+    // the spotlights' shade lies on the picture and under every other mark, whenever each was made: a number or a lens
+    // put down before a spotlight is as bright as one put down after it
     const spots = marks.filter((mark): mark is Extract<Mark, { type: "spotlight" }> => mark.type === "spotlight");
-    const firstSpot = marks.findIndex((mark) => mark.type === "spotlight");
+    if (spots.length) {
+        context.save();
+        drawSpotlights(context, spots, place);
+        context.restore();
+    }
     marks.forEach((mark, index) => {
         context.save();
         if (mark.type === "spotlight") {
-            if (index === firstSpot) drawSpotlights(context, spots, place);
+            // drawn already, under the rest
         } else if (mark.type === "magnifier") drawLens(context, mark, place, lenses?.(index));
         else if (mark.type === "highlight") drawHighlight(context, mark, place);
         else if (mark.type === "text") {
