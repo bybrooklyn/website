@@ -5,7 +5,7 @@
 // any other view. Nothing here reads the clock or the page: the scene says how much time has passed.
 //
 //   let ride = rideFrom(orbit, marble.p, marble.v);
-//   ride = riding(ride, calm, marble.v, dt, blockedBy(obstaclesOf(run)));   // each frame
+//   ride = riding(ride, calm, marble.v, seconds, blockedBy(obstaclesOf(run)));   // each frame
 //   view = ride.orbit;
 //
 // A ride never rolls or turns over: its up is always straight up and its tip rises only to look over

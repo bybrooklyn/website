@@ -20,7 +20,7 @@
 // table it turns the view; two fingers, the other button, or Shift with the main one, move the view; a
 // pinch or the wheel brings it nearer. A tap chooses a piece; Shift, a long press, or the select tool
 // adds to the choice; a long press on the table, Control with a drag, or the select tool draws a box
-// round many. Keys are listed in the keys panel and in the keydown handler below.
+// round many. Keys are listed in the keys panel and in the `keydown` handler below.
 
 import { gl, type Color, type Look, type Part, type Pattern, type View } from "../mote/gl";
 import { turn as turnOf, type Hinge, type Solid } from "../mote/space";

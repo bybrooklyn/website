@@ -450,7 +450,7 @@ export default function generalist(m: Mote): Scene {
         };
         speak = (words: string) => (said.textContent = words);
         // a finger that has taken hold of something drags it, and the page does not scroll under it; one that
-        // has not scrolls the page as usual (a touch's pointerdown comes before its touchstart and touchmove)
+        // has not scrolls the page as usual (a touch's `pointerdown` comes before its `touchstart` and `touchmove`)
         const still = (event: TouchEvent) => holding && event.cancelable && event.preventDefault();
         m.canvas.addEventListener("touchstart", still, { passive: false });
         m.canvas.addEventListener("touchmove", still, { passive: false });
