@@ -26,7 +26,8 @@ import { gradePanel } from "./grade-panel";
 import { gradeMore } from "./grade-more";
 import { gradeLooks, lookStore } from "./looks";
 import { brushRadius, gradeParts, partName, type Brush } from "./grade-parts";
-import { stackFor, type Shape } from "./masks";
+import { stackFor, type Found, type Shape } from "./masks";
+import { createFinding } from "./finding";
 import { createMeasure } from "./measure";
 import { autoFix, averageAround, balanceFrom } from "./fix";
 import { prepared } from "./draw";
@@ -501,7 +502,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
         hideAll: () => void stage.hideFindings(),
         chooseModel: (from) => reading.choose(from),
         readAgain: () => void reading.start(buttons.read),
-        grade: () => (asking ? { said: asking.said, cancel: () => cancelPick() } : undefined),
+        grade: () => (asking ? { said: making === "find" ? findSaid() : asking.said, ...(making === "find" && finding.state() === "ready" ? { controls: [subjectButton, backgroundButton] } : {}), cancel: () => cancelPick() } : undefined),
     });
     const pickedMark = () => {
         const step = history.now().find((each) => each.id === stage.picked());
@@ -767,6 +768,15 @@ export function mountEditor(host: HTMLElement, context: Context) {
             refresh();
         },
         making: () => making,
+        find: () => {
+            if (making === "find") return cancelPick();
+            making = "find";
+            asking = { said: "" };
+            findTarget = undefined;
+            void finding.start(grading.panel.querySelector<HTMLElement>(".quire-img-make-find") ?? undefined);
+            fillGrade();
+            refresh();
+        },
         paint: () => {
             brush = { ...brush, on: true, erase: false };
             addPart({ kind: "paint", feather: 0 });
@@ -780,6 +790,49 @@ export function mountEditor(host: HTMLElement, context: Context) {
         },
     });
     grading.parts.append(parted.element);
+    // a thing a model finds: presses outline it, each press one change to the same part; Subject and Background find the picture's subject
+    let findTarget: string | undefined;
+    const finding = createFinding({
+        bitmap: async () => stage.loaded()?.bitmap(),
+        key: () => `${where.id ?? ""} ${picture?.original.name ?? ""}`,
+        found: (found: Found, presses) => {
+            const step = findTarget && presses.length > 1 ? history.now().find((each) => each.id === findTarget && each.type === "part") : undefined;
+            if (step) commit(history.now().map((each) => (each.id === findTarget ? ({ ...each, found } as Kept) : each)));
+            else {
+                addPart({ kind: "found", found, feather: 2 });
+                findTarget = target;
+            }
+        },
+        subject: (found, background) => {
+            addPart({ kind: "found", found, feather: 0, ...(background ? { invert: true } : {}) });
+            findTarget = undefined;
+            finding.fresh();
+        },
+        say: (short, full, tone) => frame.status.say(short, full, tone),
+        moved: () => {
+            // while finding, each press on the picture goes to the model
+            if (making === "find" && finding.state() === "ready" && !stage.armed()) stage.arm((at, how) => void finding.press(at, !how.alt));
+            if (making === "find" && finding.state() === "idle") {
+                making = undefined;
+                asking = undefined;
+                stage.arm(undefined);
+            }
+            fillGrade();
+            refresh();
+        },
+        returnTo: () => stage.element,
+    });
+    const stripButton = (label: string, tip: string, press: () => void) => {
+        const button = make("button", "quire-img-strip-words", label);
+        button.type = "button";
+        button.title = tip;
+        button.addEventListener("click", press);
+        return button;
+    };
+    /** What the strip says while finding. */
+    const findSaid = () => ({ idle: "Find", asking: "Choosing a model", fetching: "Downloading the model", finding: "Finding", ready: "Press a thing to outline it; Alt and press to take away" })[finding.state()];
+    const subjectButton = stripButton("Subject", "The picture's subject, found by a model", () => void finding.subject(false));
+    const backgroundButton = stripButton("Background", "Everything but the picture's subject", () => void finding.subject(true));
     grading.looks.addEventListener("toggle", () => grading.looks.open && void looked.fill());
     /** The surface and its deeper controls, as the grade now is. */
     const fillGrade = () => {
@@ -814,6 +867,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
     function cancelPick() {
         if (!asking) return;
         asking = undefined;
+        if (making === "find") finding.stop();
         making = undefined;
         stage.arm(undefined);
         fillGrade();
@@ -1221,6 +1275,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
             estimate.cancel();
             reading.destroy();
             measure.destroy();
+            finding.destroy();
             grading.panel.remove();
             document.removeEventListener("paste", pasted);
             session.destroy();

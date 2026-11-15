@@ -4,7 +4,7 @@
 // and with nothing kept says so rather than trying to run. The real models are run in real.test.ts.
 
 import { expect, test } from "bun:test";
-import { serve, type Answer } from "./engine";
+import { serve, type Answer } from "./finder";
 import { PART_TIERS } from "./models";
 import { keptName } from "../read/models";
 import type { Shelf } from "../read/store";

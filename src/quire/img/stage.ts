@@ -185,7 +185,7 @@ export function createStage(hooks: StageHooks) {
     let holding = false;
     let split: number | undefined;
     // a press asked for by a tool (Balance, a color picked), taken before anything else the press would do
-    let armed: ((at: Point) => void) | undefined;
+    let armed: ((at: Point, how: { alt: boolean }) => void) | undefined;
 
     const picture = () => {
         const found = hooks.picture();
@@ -618,7 +618,7 @@ export function createStage(hooks: StageHooks) {
             const done = armed;
             armed = undefined;
             element.dataset.armed = "";
-            done(toOriginal(at));
+            done(toOriginal(at), { alt: event.altKey });
             return;
         }
         element.setPointerCapture(event.pointerId);
@@ -969,7 +969,7 @@ export function createStage(hooks: StageHooks) {
         },
         split: () => split,
         /** The next press on the picture goes to `done`, with its place in the original's pixels, and does nothing else; nothing to take the press back. */
-        arm(done: ((at: Point) => void) | undefined) {
+        arm(done: ((at: Point, how: { alt: boolean }) => void) | undefined) {
             armed = done;
             element.dataset.armed = done ? "yes" : "";
         },

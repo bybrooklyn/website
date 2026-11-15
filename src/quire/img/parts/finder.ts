@@ -190,7 +190,7 @@ if (inWorker) {
 }
 
 /** The page's side: the worker made the first time it is wanted, and a promise for each answer. */
-export function createFinder(make: () => Worker = () => new Worker(new URL("./engine.ts", import.meta.url), { type: "module" })) {
+export function createFinder(make: () => Worker = () => new Worker(new URL("./finder.ts", import.meta.url), { type: "module" })) {
     let worker: Worker | undefined;
     let next = 0;
     const waiting = new Map<number, { done(answer: Answer): void; progress?(done: number): void }>();

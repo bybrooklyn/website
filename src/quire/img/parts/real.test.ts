@@ -39,7 +39,7 @@ test("each choice of part models runs on the site's ONNX Runtime, on WebAssembly
     if (!there) return console.warn("part models skipped: they are not in ~/.cache/quire-model-trials/parts/");
     const page = await corePage(
         `
-        import { serve } from "${quire}/img/parts/engine.ts";
+        import { serve } from "${quire}/img/parts/finder.ts";
         import { PART_TIERS } from "${quire}/img/parts/models.ts";
         import { keptName } from "${quire}/img/read/models.ts";
         import { graphicsCard } from "${quire}/core/onnx.ts";

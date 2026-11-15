@@ -860,6 +860,11 @@
     font-size: 0.9rem;
 }
 
+/* finding a part offers two choices, side by side */
+.quire-img-find-cards {
+    grid-template-columns: repeat(2, 1fr);
+}
+
 /* on a phone the cards stand in one column, each a row: its name and size on one line, who it suits under, so the dialog fits the screen */
 @media (max-width: 34rem) {
     .quire-img-read-cards {
