@@ -203,6 +203,8 @@ export function createStage(hooks: StageHooks) {
     // a line being drawn along the horizon, from where it started to the pointer, in the stage's own pixels
     let levelLine: { from: Point; to: Point } | undefined;
     let levelling_ = false;
+    // the turn last drawn from the steps, to know when it changed
+    let shownTurn = 0;
     // whether the picture's Display P3 numbers are made sRGB on the screen, the canvas having no Display P3
     let screenConverts = false;
     let blob: Blob | undefined;
@@ -652,9 +654,38 @@ export function createStage(hooks: StageHooks) {
         if (!now || !loaded) return;
         // the room under the tool's strip, so that the strip never lies over the picture when it is fitted
         const below = 52;
-        view = fit(cropping() ? levelBox(turnNow()) : now, { width: element.clientWidth, height: element.clientHeight - below });
-        view = { ...view, y: view.y + below };
+        view = fittedView() ?? view;
+        gliding = undefined;
         paint();
+    }
+    /** The view that fits what is shown into the room under the strip. */
+    function fittedView(): View | undefined {
+        const now = shown();
+        if (!now || !loaded) return undefined;
+        const below = 52;
+        const found = fit(cropping() ? levelBox(turnNow()) : now, { width: element.clientWidth, height: element.clientHeight - below });
+        return { ...found, y: found.y + below };
+    }
+    // a view glided to, a share of the way each frame, so that the picture flows to where it fits rather than jumping
+    let gliding: View | undefined;
+    function glideToFit() {
+        const target = fittedView();
+        if (!target) return;
+        if (matchMedia?.("(prefers-reduced-motion: reduce)").matches) return fitView();
+        const started = !gliding;
+        gliding = target;
+        if (!started) return;
+        const step = () => {
+            if (!gliding) return;
+            const goal = gliding;
+            view = { scale: view.scale + (goal.scale - view.scale) * 0.3, x: view.x + (goal.x - view.x) * 0.3, y: view.y + (goal.y - view.y) * 0.3 };
+            if (Math.abs(goal.scale - view.scale) < 1e-4 && Math.abs(goal.x - view.x) < 0.3 && Math.abs(goal.y - view.y) < 0.3) {
+                view = goal;
+                gliding = undefined;
+            } else requestAnimationFrame(step);
+            draw();
+        };
+        requestAnimationFrame(step);
     }
     const zoom = (by: number, at: Point = { x: element.clientWidth / 2, y: element.clientHeight / 2 }) => ((view = zoomAt(view, by, at)), paint());
 
@@ -1210,7 +1241,11 @@ export function createStage(hooks: StageHooks) {
         },
         /** After the steps changed from outside (undo, a version, the steps list): the frame follows the crop and it is drawn again. */
         changed() {
+            const was = shownTurn;
+            shownTurn = shown()?.turn ?? 0;
             if (tool === "crop") cropFrame = shown()?.crop;
+            // a new turn while cropping: the turned picture and its frame glide to fit the room whole
+            if (tool === "crop" && was !== shownTurn && turning === undefined) glideToFit();
             if (picked && !hooks.picture()?.steps.some((step) => step.id === picked)) picked = undefined;
             paint();
         },
@@ -1226,6 +1261,7 @@ export function createStage(hooks: StageHooks) {
             turning = degrees;
             const found = picture();
             if (found && tool === "crop") cropFrame = look({ ...found, steps: degrees === undefined ? found.steps : setTurn(found.steps, degrees) }).crop;
+            if (tool === "crop") glideToFit();
             paint();
         },
         /** Whether the next drag on the picture draws a line along the horizon, which levels it when let go. */

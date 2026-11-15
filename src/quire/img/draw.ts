@@ -144,12 +144,13 @@ export interface Drawn {
     sharp: boolean;
 }
 
-/** A solid shape drawn over the images: a rectangle of the canvas, or four corners (`quad`), its color, and whether the grade reaches it (a cover does). */
+/** A solid shape drawn over the images: a rectangle of the canvas, or four corners (`quad`), its color, and whether the grade reaches it (a cover does). A `dim` shape only darkens what is drawn under it and leaves the rest of the canvas clear, as the outside of the crop is dimmed while nothing is drawn round a turned picture. */
 export interface Fill {
     rect: Rect;
     quad?: Quad;
     color: Color;
     graded?: boolean;
+    dim?: boolean;
 }
 
 /** A cover as a piece being flattened takes it: in the piece's own pixels, with its own turn if it has one. */
@@ -345,10 +346,10 @@ export async function loadPicture(backend: Backend, blob: Blob) {
                 const all = place(scene.cropping);
                 const dim: Color = [0, 0, 0, 0.55];
                 fills.push(
-                    { rect: { x: all.x, y: all.y, width: all.width, height: inside.y - all.y }, color: dim },
-                    { rect: { x: all.x, y: inside.y + inside.height, width: all.width, height: all.y + all.height - inside.y - inside.height }, color: dim },
-                    { rect: { x: all.x, y: inside.y, width: inside.x - all.x, height: inside.height }, color: dim },
-                    { rect: { x: inside.x + inside.width, y: inside.y, width: all.x + all.width - inside.x - inside.width, height: inside.height }, color: dim },
+                    { rect: { x: all.x, y: all.y, width: all.width, height: inside.y - all.y }, color: dim, dim: true },
+                    { rect: { x: all.x, y: inside.y + inside.height, width: all.width, height: all.y + all.height - inside.y - inside.height }, color: dim, dim: true },
+                    { rect: { x: all.x, y: inside.y, width: inside.x - all.x, height: inside.height }, color: dim, dim: true },
+                    { rect: { x: inside.x + inside.width, y: inside.y, width: all.x + all.width - inside.x - inside.width, height: inside.height }, color: dim, dim: true },
                 );
             }
             backend.grading(scene.grading);

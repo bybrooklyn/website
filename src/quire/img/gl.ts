@@ -337,6 +337,9 @@ export function webgl2(canvas: HTMLCanvasElement | OffscreenCanvas): Backend | u
                 gl.drawArrays(gl.TRIANGLES, 0, 6);
             }
             for (const fill of fills) {
+                // a dimming shape darkens what is drawn and leaves the canvas's clear places clear
+                if (fill.dim) gl.blendFuncSeparate(gl.ONE, gl.ONE_MINUS_SRC_ALPHA, gl.ZERO, gl.ONE);
+                else gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
                 gl.uniform1i(screen.at("grade"), graded && given && fill.graded ? 1 : 0);
                 gl.uniform4f(screen.at("fill"), ...fill.color);
                 gl.uniform4f(screen.at("to"), fill.rect.x, fill.rect.y, fill.rect.width, fill.rect.height);

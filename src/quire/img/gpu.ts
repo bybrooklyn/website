@@ -158,6 +158,11 @@ export async function webgpu(canvas: HTMLCanvasElement | OffscreenCanvas): Promi
     };
     const screen = pipeline(SCREEN(false), format, true);
     const screenGraded = pipeline(SCREEN(true), format, true);
+    // a dimming shape darkens what is drawn and leaves the canvas's clear places clear: its alpha never adds
+    const dimming = (() => {
+        const module = device.createShaderModule({ code: SCREEN(false) });
+        return device.createRenderPipeline({ layout: "auto", vertex: { module, entryPoint: "vertex" }, fragment: { module, entryPoint: "fragment", targets: [{ format, blend: { color: { srcFactor: "one", dstFactor: "one-minus-src-alpha" }, alpha: { srcFactor: "zero", dstFactor: "one" } } }] }, primitive: { topology: "triangle-list" } });
+    })();
     const fillInto = pipeline(SCREEN(false), "rgba8unorm", false);
     const resampler = pipeline(RESAMPLE(false), "rgba8unorm", false);
     const resamplerGraded = pipeline(RESAMPLE(true), "rgba8unorm", false);
@@ -295,7 +300,16 @@ export async function webgpu(canvas: HTMLCanvasElement | OffscreenCanvas): Promi
             if (on) pass.setBindGroup(1, gradeGroup(using));
             if (clip) scissor(pass, clip, width, height);
             paint(pass, using, drawn.map((image) => ({ texture: textures.get(image.texture), sharp: image.sharp })), 0);
-            paint(pass, using, fills.map(() => ({})), drawn.length);
+            fills.forEach((fill, at) => {
+                if (fill.dim) {
+                    pass.setPipeline(dimming);
+                    paint(pass, dimming, [{}], drawn.length + at);
+                } else {
+                    pass.setPipeline(using);
+                    if (on) pass.setBindGroup(1, gradeGroup(using));
+                    paint(pass, using, [{}], drawn.length + at);
+                }
+            });
             pass.end();
             device.queue.submit([encoder.finish()]);
         },
