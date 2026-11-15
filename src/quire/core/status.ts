@@ -56,7 +56,16 @@ export function statusLine() {
         words = make("span", "quire-status-words", short);
         status.append(words);
         leaving.classList.remove("here");
-        requestAnimationFrame(() => words.classList.add("here"));
+        // two frames, and for these words only: the first draws them unseen, so that the second's class is a change to fade
+        // from. Marked in the frame they were made in, as when "Saved" follows "Saving" within a frame or two and an
+        // earlier call's turn marked whatever was newest, the browser first met them already marked and showed them at
+        // once, over the words still fading out
+        const coming = words;
+        requestAnimationFrame(() =>
+            requestAnimationFrame(() => {
+                if (coming === words) coming.classList.add("here");
+            }),
+        );
         setTimeout(() => leaving.remove(), 400);
     };
     /** How saving stands, which stays until it changes; a message passes after a few seconds and gives the place back to it. */
