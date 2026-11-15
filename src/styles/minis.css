@@ -558,6 +558,12 @@
     pointer-events: none;
 }
 
+/* A scene that draws flat things over its 3D one: placed, so that it and its focus ring are over the 3D
+   canvas, which is placed too, and not under it where the 3D canvas is solid. */
+.mote canvas.mote-over {
+    position: relative;
+}
+
 .mote canvas {
     display: block;
     width: 100%;

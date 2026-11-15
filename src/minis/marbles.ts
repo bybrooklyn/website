@@ -331,6 +331,8 @@ export default function marbles(m: Mote): Scene {
     const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
     const under = document.createElement("canvas");
     under.className = "mote-gl";
+    // the canvas of what is drawn flat (the little axes, the box drawn to choose, the focus ring) over the scene's, not under it
+    m.canvas.classList.add("mote-over");
     const view = gl(under);
     if (view) m.canvas.parentElement!.insertBefore(under, m.canvas);
     if (view) view.range = [2, 4000];
