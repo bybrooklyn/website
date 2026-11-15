@@ -195,7 +195,7 @@ fn creatures_stepped_for_a_learner_step() {
 
 #[test]
 fn a_policy_on_show_moves_exactly_as_it_would_in_practice() {
-    use super::ppo::{GOING, Learner, Settings, Task};
+    use super::ppo::{GOING, Settings, Task};
     use super::practice::{Way, Worlds};
     use alloc::vec;
     for legs in [2, 4] {
@@ -209,7 +209,7 @@ fn a_policy_on_show_moves_exactly_as_it_would_in_practice() {
         let (hidden, senses, actions) = (learner.settings.hidden, learner.senses, learner.actions);
         assert!(learner.pool().is_some(), "the page practises with a pool");
         state[learner.at[1] + hidden * actions + actions - 1] = 5.0;
-        let mut policy = Learner::of_form(Settings::default(), &learner.form(), senses, actions, 1, 0).unwrap();
+        let mut policy = super::practice::learner_of_form(&Way::of(legs), Settings::default(), &learner.form(), senses, actions, 1, 0).unwrap();
         assert!(policy.load(&state, &running));
         page.form_room = learner.form();
         (page.state_room, page.running_room) = (state, running);
@@ -306,7 +306,7 @@ fn a_learner_kept_goes_on_in_a_brain_of_another_shape_doing_what_it_did() {
         }
         action
     };
-    let mut before = super::ppo::Learner::of_form(super::ppo::Settings::default(), &form, learner.senses, learner.actions, 1, 0).unwrap();
+    let mut before = super::practice::learner_of_form(&super::practice::Way::of(2), super::ppo::Settings::default(), &form, learner.senses, learner.actions, 1, 0).unwrap();
     assert!(before.load(&state, &running));
     let wanted = acts(&mut before);
     page.brain_shape(96, 12, 4, 24);

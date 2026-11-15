@@ -11,6 +11,7 @@ use alloc::rc::Rc;
 use alloc::vec;
 use alloc::vec::Vec;
 
+use super::changes::{Changes, Conditions, Setting};
 use super::envs::{Envs, Run, SECONDS};
 use super::evolve::Evolution;
 use super::eyes::{self, RAYS};
@@ -25,6 +26,8 @@ use crate::brain::Brain;
 use crate::math::Vec2;
 use crate::physics::STEP;
 
+/// The half size of a box the visitor drops, in metres.
+const DROPPED_BOX: f32 = 0.16;
 /// How near a body's surface a press must be to take hold of it, in metres.
 const REACH: f32 = 0.15;
 /// The most steps one call to `show_step` takes, so a page hidden a while does not freeze catching up.
@@ -74,7 +77,20 @@ pub struct Page {
     pub parts: super::practice::Parts,
     /// The weights of evolution's brain on show, to draw it.
     pub shown_weights: Vec<f32>,
+    /// The world's conditions as the visitor last set them, whether it changes by itself (the visitor's
+    /// changing world, `CHANGING`), the runs shown since the page began (for seeding a changing world
+    /// afresh each run), and the pool's state when the world last changed, so the picture of the brain
+    /// can show what changed since, with how many changes that was at.
+    pub conditions: Conditions,
+    pub changing: bool,
+    runs_shown: u32,
+    since: Vec<f32>,
+    changes_seen: u32,
 }
+
+/// How the page's world changes when the visitor switches its changing world on: some of everything,
+/// a change every eight seconds or so and something dropped every seventeen.
+pub const CHANGING: Setting = Setting { amounts: [0.7; 6], often: 0.55, drops: 0.5, rough: 0.5 };
 
 /// Creatures stepped together for a learner, and the lists they read from and write into.
 pub struct Stepped {
@@ -97,7 +113,7 @@ impl Page {
         let land = Rc::new(super::land::Land::new(recipe, super::envs::MADE));
         let start = Run::new(land, legs, seconds)?;
         let layout = evolution.layout;
-        let mut page = Page { recipe, legs, seconds, brain: Brain::new(layout), senses: vec![0.0; layout.inputs], show: start.clone(), start, evolution, leftover: 0.0, out: Vec::new(), weights_room: vec![0.0; layout.weights()], evaluate_room: Vec::new(), evaluated: Vec::new(), envs: None, practice: None, policy: None, held_actions: Vec::new(), asked: Vec::new(), running_out: Vec::new(), running_room: Vec::new(), state_room: Vec::new(), form_room: Vec::new(), shape: BRAIN, parts: Default::default(), shown_weights: Vec::new() };
+        let mut page = Page { recipe, legs, seconds, brain: Brain::new(layout), senses: vec![0.0; layout.inputs], show: start.clone(), start, evolution, leftover: 0.0, out: Vec::new(), weights_room: vec![0.0; layout.weights()], evaluate_room: Vec::new(), evaluated: Vec::new(), envs: None, practice: None, policy: None, held_actions: Vec::new(), asked: Vec::new(), running_out: Vec::new(), running_room: Vec::new(), state_room: Vec::new(), form_room: Vec::new(), shape: BRAIN, parts: Default::default(), shown_weights: Vec::new(), conditions: Conditions::REST, changing: false, runs_shown: 0, since: Vec::new(), changes_seen: 0 };
         page.show_reset();
         Some(page)
     }
@@ -112,7 +128,15 @@ impl Page {
         // run full, since a galloping four-legged creature empties within a run and, carried, spent four
         // fifths of its time with less than a tenth (walker/README.md, "The brain that was discussed")
         let carried = if self.legs == 2 { self.show.body.needs.as_ref().map(|needs| needs.energy) } else { None };
+        // the world's conditions go on as they were: a run starting again is not the world changing
+        let mut changes = self.show.changes.take().unwrap_or_else(|| Changes::still(self.conditions));
         self.show.copy_from(&self.start);
+        self.runs_shown += 1;
+        changes.set_going(self.changing.then_some(CHANGING), self.recipe.seed ^ self.runs_shown);
+        (changes.changed, changes.changes) = (0, 0);
+        self.show.changes = Some(changes);
+        self.changes_seen = 0;
+        self.since.clear();
         if let (Some(energy), Some(needs)) = (carried, &mut self.show.body.needs) {
             let (appearing, full) = (needs.appearing.take(), needs.full);
             *needs = super::needs::Needs { full, ..super::needs::Needs::new(energy) };
@@ -138,15 +162,38 @@ impl Page {
     }
 
     /// A learner for `count` creatures of the form written into `form_room`, or of the brain practice
-    /// is to have here if none is written; none if the form does not hold together.
+    /// is to have here if none is written, with its predictor of what it will see; none if the form does
+    /// not hold together.
     fn learner_of_form(&self, count: usize) -> Option<Learner> {
         let dressed = self.dressed();
         let (senses, actions) = (dressed.senses(), dressed.body.actions());
+        self.learner_sensing(count, senses, actions).map(|learner| super::practice::foreseeing(learner, &Way::of(self.legs)))
+    }
+
+    /// The same, sensing `senses` numbers, without a predictor.
+    fn learner_sensing(&self, count: usize, senses: usize, actions: usize) -> Option<Learner> {
         if self.form_room.is_empty() {
             Some(Learner::new(Settings { shape: self.shape, ..Settings::default() }, senses, actions, count, 0))
         } else {
             Learner::of_form(Settings::default(), &self.form_room, senses, actions, count, 0)
         }
+    }
+
+    /// The learner written into the rooms, for `count` creatures: as it was kept, or, kept before the
+    /// creature sensed a changing world (stage 3, store version 5), as it was then, grown to sense the new
+    /// senses (`Learner::grown`) and given a predictor, keeping all it learned. None if it fits neither.
+    fn loaded(&self, count: usize) -> Option<Learner> {
+        let mut learner = self.learner_of_form(count)?;
+        if learner.load(&self.state_room, &self.running_room) {
+            return Some(learner);
+        }
+        let (senses, actions) = (learner.senses, learner.actions);
+        let mut older = self.learner_sensing(count, senses.checked_sub(super::changes::SENSES)?, actions)?;
+        if !older.load(&self.state_room, &self.running_room) {
+            return None;
+        }
+        let grown = older.grown(senses, &super::practice::feelings(self.legs, senses))?;
+        Some(super::practice::foreseeing(grown, &Way::of(self.legs)))
     }
 
     /// The show's start dressed as practice dresses its creatures, to count what they sense.
@@ -161,10 +208,7 @@ impl Page {
     /// learned (`Learner::reshaped`). False, and nothing changed, if it does not fit.
     pub fn practice_load(&mut self) -> bool {
         let Some(count) = self.practice.as_ref().map(|practice| practice.learner.count) else { return false };
-        let Some(mut learner) = self.learner_of_form(count) else { return false };
-        if !learner.load(&self.state_room, &self.running_room) {
-            return false;
-        }
+        let Some(mut learner) = self.loaded(count) else { return false };
         if learner.settings.shape != self.shape {
             learner = learner.reshaped(self.shape, self.recipe.seed as u64);
         }
@@ -225,11 +269,74 @@ impl Page {
             self.show.sense(&mut self.senses);
             self.leftover -= STEP;
             taken += 1;
+            self.note_change();
         }
         if taken == MOST_STEPS || self.show.judge.over() {
             self.leftover = 0.0;
         }
         taken
+    }
+
+    /// When the world has changed since last seen, keeps the pool's state as it is now, so the picture of
+    /// the brain can draw what changes from here.
+    fn note_change(&mut self) {
+        let count = self.show.changes.as_ref().map_or(0, |changes| changes.changes);
+        if count != self.changes_seen {
+            self.changes_seen = count;
+            self.since.clear();
+            if let Some((_, state)) = self.policy.as_ref().and_then(|policy| policy.shown()) {
+                self.since.extend_from_slice(state);
+            }
+        }
+    }
+
+    /// Sets the world's conditions, as the visitor's controls have them: the ground at once, gravity, the
+    /// wind and the light eased to theirs.
+    pub fn show_conditions(&mut self, conditions: Conditions) {
+        self.conditions = conditions.clamped();
+        let step = self.show.judge.steps;
+        let changes = self.show.changes.get_or_insert_with(|| Changes::still(Conditions::REST));
+        changes.aim_at(self.conditions, step);
+        self.note_change();
+    }
+
+    /// Switches the visitor's changing world on or off: on, the world changes by itself as `CHANGING` has
+    /// it, from the conditions it is in; off, it stays as it is until the visitor changes it.
+    pub fn show_changing(&mut self, on: bool) {
+        self.changing = on;
+        self.runs_shown += 1;
+        let seed = self.recipe.seed ^ self.runs_shown;
+        if let Some(changes) = &mut self.show.changes {
+            changes.set_going(on.then_some(CHANGING), seed);
+            // aims a changed world had are now the visitor's to keep
+            self.conditions = changes.aim;
+        }
+    }
+
+    /// The world as the show's creature meets it, eleven numbers: its conditions now (grip, bounce, soft,
+    /// gravity, wind, light), the seconds since it last changed, what the creature hears ahead and behind,
+    /// and its surprise and the level of surprise it is used to.
+    pub fn world(&mut self) -> &[f32] {
+        self.out.clear();
+        let changes = self.show.changes.as_ref();
+        let now = changes.map_or(Conditions::REST, |changes| changes.now);
+        self.out.extend_from_slice(&now.list());
+        let since = changes.map_or(0, |changes| self.show.judge.steps.saturating_sub(changes.changed));
+        self.out.push(since as f32 * STEP);
+        self.out.extend_from_slice(&self.show.heard);
+        let (surprise, usual) = self.policy.as_ref().map_or((0.0, 0.0), |policy| policy.surprise());
+        self.out.extend_from_slice(&[surprise, usual]);
+        &self.out
+    }
+
+    /// Drops a box at a point, in metres from the start, from where it falls; returns whether it did.
+    pub fn show_drop_box(&mut self, at: Vec2) -> bool {
+        if self.show.stage.made.len() > 40 {
+            return false;
+        }
+        let origin = self.show.stage.origin;
+        self.show.stage.place_box(at - Vec2::new(origin, 0.0), DROPPED_BOX);
+        true
     }
 
     /// What is under a point, in metres from the start, to take hold of: the creature's part or the thing
@@ -496,14 +603,10 @@ impl Page {
             }
             start.stage.feeds = true;
         }
-        let Some(mut learner) = self.learner_of_form(1) else {
+        let Some(learner) = self.loaded(1) else {
             self.policy_off();
             return false;
         };
-        if !learner.load(&self.state_room, &self.running_room) {
-            self.policy_off();
-            return false;
-        }
         self.held_actions = vec![0.0; start.body.actions()];
         self.asked = vec![0.0; start.body.actions()];
         self.start = start;
@@ -541,7 +644,7 @@ impl Page {
     /// is on show, else evolution's brain.
     pub fn brain_picture(&mut self) -> &[f32] {
         match &self.policy {
-            Some(policy) if policy.pool().is_some() => super::mind::pool_picture(policy, &self.senses, &mut self.out),
+            Some(policy) if policy.pool().is_some() => super::mind::pool_picture(policy, &self.senses, (!self.since.is_empty()).then_some(self.since.as_slice()), &mut self.out),
             Some(policy) => super::mind::picture(policy, &self.senses, &mut self.out),
             None => super::mind::picture(&super::mind::Bred { brain: &self.brain, weights: &self.shown_weights }, &self.senses, &mut self.out),
         }
