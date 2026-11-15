@@ -669,6 +669,21 @@
     align-items: center;
 }
 
+/* a Display P3 picture's colors, offered only for one, grow in and fold away as the lossy settings do */
+.quire-img-colors {
+    grid-template-columns: auto repeat(2, minmax(0, 1fr));
+    max-height: 3rem;
+    overflow: clip;
+    transition:
+        max-height 0.3s var(--ease),
+        opacity 0.2s ease;
+}
+
+.quire-img-colors.away {
+    max-height: 0;
+    opacity: 0;
+}
+
 /* "Everything" grows open and folds away rather than appearing */
 .quire-img-everything {
     interpolate-size: allow-keywords;

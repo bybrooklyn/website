@@ -164,6 +164,8 @@ export function createStage(hooks: StageHooks) {
     element.append(canvas, over, frame, writing, splitter);
 
     let loaded: Loaded | undefined;
+    // whether the picture's Display P3 numbers are made sRGB on the screen, the canvas having no Display P3
+    let screenConverts = false;
     let blob: Blob | undefined;
     let tool: Tool = "crop";
     let view: View = { scale: 1, x: 0, y: 0 };
@@ -240,7 +242,8 @@ export function createStage(hooks: StageHooks) {
         if (!now || !loaded) return;
         const seen = cropping() && cropFrame ? { ...now, crop: cropFrame } : now;
         // the grade drawn unless the original is held in view; left of the split, the original
-        const grading = holding ? undefined : gradingWith(seen, hooks.space?.() ?? "srgb", loaded.size);
+        // held, the original's numbers alone, made sRGB all the same where the canvas cannot show Display P3
+        const grading = gradingWith(holding ? { ...seen, grades: [] } : seen, hooks.space?.() ?? "srgb", loaded.size, screenConverts);
         const scene: Scene = { look: seen, view: { scale: view.scale * ratio, x: view.x * ratio, y: view.y * ratio }, canvas: { width, height }, ...(cropping() ? { cropping: { x: 0, y: 0, ...loaded.size } } : {}), ...(grading ? { grading } : {}), ...(split !== undefined ? { split: split * ratio } : {}) };
         loaded.draw(scene, paint);
         drawn++;
@@ -942,7 +945,12 @@ export function createStage(hooks: StageHooks) {
             loaded = undefined;
             void prepare("WebGL2").then((again) => ((loaded = again), paint()));
         });
-        return loadPicture(backend, blob);
+        const made = await loadPicture(backend, blob);
+        // a Display P3 picture is shown in a canvas in Display P3 where the browser has one; else it is made sRGB as it is drawn
+        const p3 = hooks.space?.() === "p3";
+        screenConverts = p3 && !made.colors(p3 ? "display-p3" : "srgb");
+        if (!p3) made.colors("srgb");
+        return made;
     }
 
     return {
@@ -1019,6 +1027,8 @@ export function createStage(hooks: StageHooks) {
             hooks.moved();
         },
         loaded: () => loaded,
+        /** Whether the screen shows the picture made sRGB, its canvas having no Display P3. */
+        screenConverts: () => screenConverts,
         tool: () => tool,
         setTool,
         applyCrop,

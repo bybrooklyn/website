@@ -20,7 +20,7 @@ import { pressLines } from "./press-menu";
 import { copyPicture, encodeAs, exportName, formatOf, FORMATS, readSettings, untouched, weightSaid, type Settings } from "./export";
 import { decodeHeic, heicIn } from "./codec-run";
 import { COLORS, exportPanel, factsPanel, factsSaid, kindOf, nameFor, resizeBox, SHAPES, toolStrip, WEIGHTS } from "./panels";
-import { blocksOut, factsOf, spaceOf, type Facts, type Keep } from "./metadata";
+import { blocksOut, factsOf, profileOf, spaceOf, type Facts, type Keep } from "./metadata";
 import { gradingWith } from "./draw";
 import { createStage, type Pen, type Tool } from "./stage";
 import { createReading } from "./reading";
@@ -93,6 +93,8 @@ export function mountEditor(host: HTMLElement, context: Context) {
     let keeping: Keep = "none";
     // the space it is graded in, from its colour profile, and whether that was known or guessed
     let colors: ReturnType<typeof spaceOf> = { space: "srgb", known: true };
+    // the colour profile its numbers are in, checked, which an export carries unless it is made sRGB
+    let profile: Uint8Array | undefined;
     let where: { store?: Store; id?: string; name: string } = { name: "Untitled" };
     const history = createHistory([]);
     let pen: Pen = (() => {
@@ -174,6 +176,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
         original = undefined;
         said = { rows: [], everything: [], found: {} };
         colors = { space: "srgb", known: true };
+        profile = undefined;
         // the new picture's size at once, its weight when it is worked out; never the last document's
         facts.textContent = picture ? factsSaid(look(picture), picture.original.bytes, kindOf(picture.original)) : "";
         reading.clear();
@@ -192,7 +195,10 @@ export function mountEditor(host: HTMLElement, context: Context) {
         original = found;
         const bytes = new Uint8Array(await found.arrayBuffer());
         said = factsOf(bytes);
-        colors = spaceOf(bytes);
+        const colored = await profileOf(bytes);
+        if (token !== loading) return;
+        colors = colored.space;
+        profile = colored.icc;
         if (showing.isOpen()) showing.fill();
         await stage.show(await displayable(found).catch(() => found));
         if (token !== loading) return;
@@ -309,16 +315,18 @@ export function mountEditor(host: HTMLElement, context: Context) {
 
     // ---- getting it out ----
     const exportCache: { key?: string; done?: Promise<{ blob: Blob; quality: number; over: boolean; pixels?: ImageData }> } = {};
-    /** The picture as it looks, at full size. */
-    const flattened = async () => {
+    /** Whether the export is made sRGB: when she chose it and the picture is in Display P3. */
+    const converting = () => settings.srgb === true && colors.space === "p3";
+    /** The picture as it looks, at full size; made sRGB from Display P3 when `srgb`. */
+    const flattened = async (srgb = false) => {
         const loaded = stage.loaded();
         if (!loaded || !picture) throw new Error("the picture is not shown yet");
         const shown = look(picture);
-        return loaded.flatten(shown, undefined, gradingWith(shown, colors.space, loaded.size));
+        return loaded.flatten(shown, undefined, gradingWith(shown, colors.space, loaded.size, srgb && colors.space === "p3"));
     };
     /** The export as set, worked out once for each set of steps and settings. */
     function exported() {
-        const key = `${picture ? writeSteps(picture) : ""}\n${JSON.stringify(settings)}\n${keeping}`;
+        const key = `${picture ? writeSteps(picture) : ""}\n${JSON.stringify(settings)}\n${keeping}\n${colors.space}`;
         if (exportCache.key === key && exportCache.done) return exportCache.done;
         exportCache.key = key;
         const now = picture!;
@@ -327,7 +335,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
             // a picture with no steps given in its own format is its original, with where and when it was taken cut out
             // a picture with no steps given in its own format keeping all it says, and nothing changed in it, is its original byte for byte
             const changedNothing = !now.edits || Object.values(now.edits).every((value) => value === undefined);
-            if (!edited(now) && !settings.target && format.type === now.original.type && original && (keeping === "none" || (keeping === "all" && changedNothing))) {
+            if (!edited(now) && !settings.target && !converting() && format.type === now.original.type && original && (keeping === "none" || (keeping === "all" && changedNothing))) {
                 try {
                     const bytes = new Uint8Array(await original.arrayBuffer());
                     return { blob: new Blob([(keeping === "all" ? bytes : untouched(bytes)) as BlobPart], { type: format.type }), quality: settings.quality, over: false };
@@ -335,9 +343,11 @@ export function mountEditor(host: HTMLElement, context: Context) {
                     // one that cannot be read through is written again, which leaves everything out
                 }
             }
-            const pixels = await flattened();
+            const pixels = await flattened(converting());
             const meta = keeping === "none" || !original ? {} : blocksOut(new Uint8Array(await original.arrayBuffer()), keeping, now.edits ?? {});
-            return { ...(await encodeAs(pixels, settings, meta)), pixels };
+            // the colour profile goes out with the numbers it describes, unless they were made sRGB
+            const icc = converting() ? undefined : profile;
+            return { ...(await encodeAs(pixels, settings, { ...meta, ...(icc ? { icc } : {}) })), pixels };
         })();
         exportCache.done.catch(() => (exportCache.key = undefined));
         return exportCache.done;
@@ -382,13 +392,14 @@ export function mountEditor(host: HTMLElement, context: Context) {
             else context.drawImage(source, 0, 0);
             return canvas.convertToBlob({ type: "image/png" });
         };
+        // the clipboard's picture is sRGB, since most places a picture is pasted into read no profile
         const png = (async () => {
-            if (way === "looks") return pngOf(await flattened());
+            if (way === "looks") return pngOf(await flattened(true));
             const done = await exported();
-            if (done.blob.type === "image/png") return done.blob;
+            if (done.blob.type === "image/png" && (!profile || converting())) return done.blob;
             // a format this browser cannot show (JPEG XL in some) is copied as it looks
             const bitmap = await createImageBitmap(done.blob).catch(() => undefined);
-            return pngOf(bitmap ?? (await flattened()));
+            return pngOf(bitmap ?? (await flattened(true)));
         })();
         try {
             await copyPicture(png);
@@ -448,6 +459,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
         set: (next) => ((settings = next), keep(KEYS.export, JSON.stringify(next)), void showExport(), estimate.soon()),
         copy: () => void copy(),
         save: () => void save(),
+        wide: () => colors.space === "p3",
     });
     async function showExport() {
         exporting.fill();

@@ -1,5 +1,6 @@
 /* JPEG XL through libjxl: RGBA8 in, a .jxl file out. q is the quality from 0 to 100 (libjxl turns it
-   into a distance), speed the effort from 1 to 9; option 0 set to 1 makes it lossless. */
+   into a distance), speed the effort from 1 to 9; option 0 set to 1 makes it lossless; options 12 and 13
+   a colour profile's place and length, which the pixels are then taken to be in (else sRGB). */
 #include "qabi.h"
 #include "jxl/encode.h"
 
@@ -11,9 +12,13 @@ QX int encode(uint8_t *p, int len, int w, int h, float q, int speed) {
   bi.num_extra_channels = 1; bi.alpha_bits = 8;
   bi.uses_original_profile = q_o[0] ? JXL_TRUE : JXL_FALSE;
   if (JxlEncoderSetBasicInfo(e, &bi)) { JxlEncoderDestroy(e); return -1; }
-  JxlColorEncoding ce;
-  JxlColorEncodingSetToSRGB(&ce, JXL_FALSE);
-  JxlEncoderSetColorEncoding(e, &ce);
+  if (q_o[12] && q_o[13] > 0) {
+    if (JxlEncoderSetICCProfile(e, (const uint8_t *)(intptr_t)q_o[12], (size_t)q_o[13]) != JXL_ENC_SUCCESS) { JxlEncoderDestroy(e); return -4; }
+  } else {
+    JxlColorEncoding ce;
+    JxlColorEncodingSetToSRGB(&ce, JXL_FALSE);
+    JxlEncoderSetColorEncoding(e, &ce);
+  }
   JxlEncoderFrameSettings *fs = JxlEncoderFrameSettingsCreate(e, NULL);
   JxlEncoderFrameSettingsSetOption(fs, JXL_ENC_FRAME_SETTING_EFFORT, speed);
   if (q_o[0]) JxlEncoderSetFrameLossless(fs, JXL_TRUE);

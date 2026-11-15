@@ -9,7 +9,7 @@ import type { Rect } from "./steps";
 import { GRADE_WGSL } from "./grade-shader";
 
 // with no grade the programs are built with a `graded` that gives the color back, so that drawing without one costs what it did
-const UNGRADED = "fn graded(c: vec3f, place: vec2f) -> vec3f { return c; }";
+const UNGRADED = "fn graded(c: vec3f, place: vec2f) -> vec3f { return c; } fn converted(c: vec3f) -> vec3f { return c; }";
 
 const SCREEN = (grading: boolean) => /* wgsl */ `
 struct Draw { to: vec4f, canvas: vec2f, fill: vec4f, toOriginal: vec4f, grade: f32, split: f32 };
@@ -26,7 +26,11 @@ struct Out { @builtin(position) at: vec4f, @location(0) place: vec2f };
 ${grading ? GRADE_WGSL : UNGRADED}
 @fragment fn fragment(in: Out) -> @location(0) vec4f {
     var found = select(textureSample(image, soft, in.place), draw.fill, draw.fill.a >= 0);
-    if (draw.grade == 1.0 && in.at.x >= draw.split) { found = vec4f(graded(clamp(found.rgb, vec3f(0.0), vec3f(1.0)), draw.toOriginal.xy + in.at.xy * draw.toOriginal.zw), found.a); }
+    // left of the split the original, made sRGB all the same where the screen asks it
+    if (draw.grade == 1.0) {
+        if (in.at.x >= draw.split) { found = vec4f(graded(clamp(found.rgb, vec3f(0.0), vec3f(1.0)), draw.toOriginal.xy + in.at.xy * draw.toOriginal.zw), found.a); }
+        else { found = vec4f(converted(clamp(found.rgb, vec3f(0.0), vec3f(1.0))), found.a); }
+    }
     return vec4f(found.rgb * found.a, found.a);
 }`;
 
@@ -127,7 +131,7 @@ export async function webgpu(canvas: HTMLCanvasElement | OffscreenCanvas): Promi
     const blank = device.createTexture({ size: [1, 1], format: "rgba8unorm", usage: TEXTURE.TEXTURE_BINDING });
     let numbers = device.createBuffer({ size: SLOT * 64, usage: BUFFER.UNIFORM | BUFFER.COPY_DST });
     // the grade's three buffers, given when the grade changes: its few numbers, the packed grades and the masks
-    const gradeHead = device.createBuffer({ size: 96, usage: BUFFER.UNIFORM | BUFFER.COPY_DST });
+    const gradeHead = device.createBuffer({ size: 112, usage: BUFFER.UNIFORM | BUFFER.COPY_DST });
     let gradeData = device.createBuffer({ size: 16, usage: BUFFER.STORAGE | BUFFER.COPY_DST });
     let gradeMasks = device.createBuffer({ size: 16, usage: BUFFER.STORAGE | BUFFER.COPY_DST });
     let given: Grading | undefined;
@@ -182,6 +186,15 @@ export async function webgpu(canvas: HTMLCanvasElement | OffscreenCanvas): Promi
 
     return {
         name: "WebGPU",
+        colors(space) {
+            try {
+                context.configure({ device, format, alphaMode: "premultiplied", colorSpace: space });
+                return true;
+            } catch {
+                context.configure({ device, format, alphaMode: "premultiplied" });
+                return space === "srgb";
+            }
+        },
         lost: device.lost.then(() => undefined),
         most: device.limits.maxTextureDimension2D,
         texture(image) {
@@ -199,11 +212,13 @@ export async function webgpu(canvas: HTMLCanvasElement | OffscreenCanvas): Promi
             if (next === given) return;
             given = next;
             if (!next) return;
-            const head = new ArrayBuffer(96);
+            const head = new ArrayBuffer(112);
             const floats = new Float32Array(head);
             const { luma, back } = next.numbers;
             floats.set([luma[0], luma[1], luma[2], 0, back[0]!, back[1]!, back[2]!, 0, back[3]!, back[4]!, back[5]!, 0, back[6]!, back[7]!, back[8]!, 0, next.masks?.width ?? 1, next.masks?.height ?? 1, next.picture.width, next.picture.height]);
             new Int32Array(head, 80, 2).set([next.packed.count, next.masks?.layers.length ?? 0]);
+            floats[22] = next.convert ? 1 : 0;
+            floats.set(next.turn ?? [1, 0, 0, 0], 24);
             device.queue.writeBuffer(gradeHead, 0, head);
             if (next.packed.data.byteLength > gradeData.size) {
                 gradeData.destroy();

@@ -29,7 +29,7 @@ export const PINS: Record<string, Pin> = Object.fromEntries((pins as Pin[]).map(
 export const HOME = "/quire/codecs/";
 
 /** One job for a module: encode pixels, or decode a file. */
-export type Job = { name: string; pixels: ArrayBuffer; width: number; height: number; quality: number; speed: number; options: Record<number, number>; meta?: { exif?: Uint8Array; xmp?: Uint8Array } } | { name: string; file: ArrayBuffer };
+export type Job = { name: string; pixels: ArrayBuffer; width: number; height: number; quality: number; speed: number; options: Record<number, number>; meta?: { exif?: Uint8Array; xmp?: Uint8Array; icc?: Uint8Array } } | { name: string; file: ArrayBuffer };
 
 /** The hex SHA-256 of some bytes. */
 export async function sha256(bytes: ArrayBuffer): Promise<string> {
@@ -82,8 +82,8 @@ export function run(found: WebAssembly.Instance, job: Job): { bytes: Uint8Array;
     if ("file" in job) size = calls.decode!(at, input.length);
     else {
         for (const [key, value] of Object.entries(job.options)) calls.q_opt?.(Number(key), value);
-        // metadata for an encoder that writes it itself (AVIF): its place and length as options 8 and 9 (Exif), 10 and 11 (XMP)
-        for (const [key, block] of [[8, job.meta?.exif], [10, job.meta?.xmp]] as const) {
+        // metadata for an encoder that writes it itself (AVIF): its place and length as options 8 and 9 (Exif), 10 and 11 (XMP); a colour profile as 12 and 13 (AVIF and JPEG XL)
+        for (const [key, block] of [[8, job.meta?.exif], [10, job.meta?.xmp], [12, job.meta?.icc]] as const) {
             if (!block?.length) continue;
             const place = calls.q_alloc(block.length);
             new Uint8Array(calls.memory.buffer, place, block.length).set(block);
@@ -142,8 +142,8 @@ function ask(job: Job): Promise<{ bytes: Uint8Array; width?: number; height?: nu
     });
 }
 
-/** Encodes pixels with a module: quality from 0 to 100, its speed, its options (0 = lossless), and the metadata of an encoder that writes it itself. */
-export async function encodeWith(name: string, pixels: ImageData, quality: number, speed: number, options: Record<number, number> = {}, type = "application/octet-stream", meta?: { exif?: Uint8Array; xmp?: Uint8Array }): Promise<Blob> {
+/** Encodes pixels with a module: quality from 0 to 100, its speed, its options (0 = lossless), and the metadata and colour profile of an encoder that writes them itself. */
+export async function encodeWith(name: string, pixels: ImageData, quality: number, speed: number, options: Record<number, number> = {}, type = "application/octet-stream", meta?: { exif?: Uint8Array; xmp?: Uint8Array; icc?: Uint8Array }): Promise<Blob> {
     const copy = pixels.data.slice().buffer;
     const { bytes } = await ask({ name, pixels: copy, width: pixels.width, height: pixels.height, quality, speed, options, meta });
     return new Blob([bytes as BlobPart], { type });

@@ -20,7 +20,7 @@ void main() {
 }`;
 
 // with no grade the programs are built with a `graded` that gives the color back, so that drawing without one costs what it did
-const UNGRADED = "vec3 graded(vec3 c, vec2 place) { return c; }";
+const UNGRADED = "vec3 graded(vec3 c, vec2 place) { return c; } vec3 converted(vec3 c) { return c; }";
 
 const PAINT = (grading: boolean) => `#version 300 es
 precision highp float;
@@ -38,7 +38,8 @@ void main() {
     vec4 found = fill.a >= 0.0 ? fill : texture(image, place);
     if (grade == 1) {
         vec2 at = vec2(gl_FragCoord.x, canvasHeight - gl_FragCoord.y);
-        if (at.x >= split) found.rgb = graded(clamp(found.rgb, 0.0, 1.0), toOriginal.xy + at * toOriginal.zw);
+        // left of the split the original, made sRGB all the same where the screen asks it
+        found.rgb = at.x >= split ? graded(clamp(found.rgb, 0.0, 1.0), toOriginal.xy + at * toOriginal.zw) : converted(clamp(found.rgb, 0.0, 1.0));
     }
     color = vec4(found.rgb * found.a, found.a);
 }`;
@@ -172,6 +173,8 @@ export function webgl2(canvas: HTMLCanvasElement | OffscreenCanvas): Backend | u
         const masks = given.masks;
         gl.uniform2f(made.at("maskSize"), masks?.width ?? 1, masks?.height ?? 1);
         gl.uniform2f(made.at("pictureSize"), given.picture.width, given.picture.height);
+        gl.uniform1i(made.at("gradeConvert"), given.convert ? 1 : 0);
+        gl.uniform4f(made.at("gradeTurn"), ...(given.turn ?? [1, 0, 0, 0]));
     };
 
     // half floats can be drawn into where the card allows it, so that a graded picture is never held in 8 bits between the passes
@@ -206,6 +209,13 @@ export function webgl2(canvas: HTMLCanvasElement | OffscreenCanvas): Backend | u
 
     return {
         name: "WebGL2",
+        colors(space) {
+            // a browser without the setting draws in sRGB alone
+            const drawing = gl as WebGL2RenderingContext & { drawingBufferColorSpace?: string };
+            if (!("drawingBufferColorSpace" in drawing)) return space === "srgb";
+            drawing.drawingBufferColorSpace = space;
+            return drawing.drawingBufferColorSpace === space;
+        },
         most: gl.getParameter(gl.MAX_TEXTURE_SIZE) as number,
         texture(image) {
             const made = { width: image.width, height: image.height };

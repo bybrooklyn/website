@@ -17,6 +17,12 @@ export const KEEPS: { key: Keep; label: string; tip: string }[] = [
     { key: "all", label: "All", tip: "Everything the picture says about itself, where it was taken too" },
 ];
 
+/** How a Display P3 picture's colors go out, as its two buttons say it: kept with its profile, or made sRGB. */
+export const COLOR_CHOICES: { srgb: boolean; label: string; tip: string }[] = [
+    { srgb: false, label: "Display P3", tip: "Its own colors, with its color profile" },
+    { srgb: true, label: "sRGB", tip: "Converted to sRGB, for places that ignore color profiles" },
+];
+
 /** The fields she may change, in the order the facts show them. */
 export const FIELDS: { key: keyof Edits; label: string }[] = [
     { key: "caption", label: "Caption" },
@@ -144,7 +150,7 @@ export function sidePanel(title: string, className: string, closed?: () => void)
 }
 
 /** The export panel: the format, its quality or a weight to come in under, the result's size, the original and the result side by side at their own pixels, and Copy and Save. */
-export function exportPanel(hooks: { closed?(): void; settings(): Settings; set(settings: Settings): void; keep(): Keep; setKeep(keep: Keep): void; copy(): void; save(): void }) {
+export function exportPanel(hooks: { closed?(): void; settings(): Settings; set(settings: Settings): void; keep(): Keep; setKeep(keep: Keep): void; copy(): void; save(): void; wide?(): boolean }) {
     const side = sidePanel("Export", "quire-img-export", () => hooks.closed?.());
     const formats = make("div", "quire-img-formats");
     formats.setAttribute("role", "radiogroup");
@@ -187,7 +193,11 @@ export function exportPanel(hooks: { closed?(): void; settings(): Settings; set(
     const keeping = make("div", "quire-img-keep");
     keeping.setAttribute("role", "radiogroup");
     keeping.setAttribute("aria-label", "Metadata");
-    side.body.append(formats, lossy, keeping, result, pair, actions);
+    // a Display P3 picture's colors: kept with its profile, or made sRGB for places that read no profile
+    const colors = make("div", "quire-img-keep quire-img-colors");
+    colors.setAttribute("role", "radiogroup");
+    colors.setAttribute("aria-label", "Colors");
+    side.body.append(formats, lossy, keeping, colors, result, pair, actions);
 
     const changed = (to: Partial<Settings>) => {
         const next = { ...hooks.settings(), ...to };
@@ -212,6 +222,18 @@ export function exportPanel(hooks: { closed?(): void; settings(): Settings; set(
                 button.setAttribute("role", "radio");
                 button.setAttribute("aria-checked", String(hooks.keep() === each.key));
                 button.classList.toggle("pressed", hooks.keep() === each.key);
+                return button;
+            }),
+        );
+        colors.classList.toggle("away", !hooks.wide?.());
+        colors.replaceChildren(
+            make("span", "quire-img-format-row", "Colors"),
+            ...COLOR_CHOICES.map((each) => {
+                const on = (settings.srgb === true) === each.srgb;
+                const button = control(each.tip, each.label, () => changed({ srgb: each.srgb }), "quire-button quire-img-format");
+                button.setAttribute("role", "radio");
+                button.setAttribute("aria-checked", String(on));
+                button.classList.toggle("pressed", on);
                 return button;
             }),
         );

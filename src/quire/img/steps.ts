@@ -76,6 +76,8 @@ export interface Look {
     marks: Mark[];
     /** The grades, in the order they are applied: the whole picture's, and each part's with its shape. */
     grades: { id: string; grade: Grade; part?: Shape }[];
+    /** How far the picture is turned to level it, in degrees, clockwise; none when level. */
+    turn?: number;
 }
 
 /** The largest side a picture may be made, and the most steps a file is read with: beyond these a file is taken to be damaged. */

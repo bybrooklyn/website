@@ -10,6 +10,10 @@
 //   gl: GRADE_GLSL in a fragment shader, then graded(color, place)
 
 import { CURVE, type Prepared } from "./grade";
+import { P3_TO_SRGB } from "./profile";
+
+// linear Display P3 to linear sRGB, by columns as both languages build a matrix
+const columns = [0, 3, 6, 1, 4, 7, 2, 5, 8].map((at) => P3_TO_SRGB[at]!.toFixed(9)).join(", ");
 
 /** How many entries a row of the packed run has, as WebGL2's texture holds it. */
 export const ROW = 1024;
@@ -76,6 +80,9 @@ uniform vec3 backG;
 uniform vec3 backB;
 uniform vec2 maskSize;
 uniform vec2 pictureSize;
+uniform int gradeConvert;
+uniform vec4 gradeTurn;
+const mat3 P3_TO_SRGB = mat3(${columns});
 const float PIVOT = ${Math.fround(1.055 * Math.pow(0.18, 1 / 2.4) - 0.055).toFixed(9)};
 vec4 entry(int i) { return texelFetch(gradeData, ivec2(i % ${ROW}, i / ${ROW}), 0); }
 float encode1(float x) { return x <= 0.0031308 ? 12.92 * x : 1.055 * pow(x, 1.0 / 2.4) - 0.055; }
@@ -207,7 +214,15 @@ float maskAt(int layer, vec2 place) {
     float m11 = texelFetch(gradeMasks, ivec3(b.x, b.y, layer), 0).r;
     return mix(mix(m00, m10, f.x), mix(m01, m11, f.x), f.y);
 }
-vec3 graded(vec3 c, vec2 place) {
+// a place on the turned picture back to the original's pixels, where the masks are: gradeTurn is the turn's cosine and sine and the middle it turns about
+vec2 unturned(vec2 p) {
+    vec2 d = p - gradeTurn.zw;
+    return vec2(gradeTurn.x * d.x + gradeTurn.y * d.y, -gradeTurn.y * d.x + gradeTurn.x * d.y) + gradeTurn.zw;
+}
+// Display P3 made sRGB when asked: through linear light, each channel clipped
+vec3 converted(vec3 c) { return gradeConvert == 1 ? encode3(clamp(P3_TO_SRGB * decode3(c), 0.0, 1.0)) : c; }
+vec3 graded(vec3 c, vec2 given) {
+    vec2 place = unturned(given);
     for (int k = 0; k < ${MOST_GRADES}; k++) {
         if (k >= gradeCount) break;
         int base = int(entry(k).x);
@@ -221,17 +236,18 @@ vec3 graded(vec3 c, vec2 place) {
         vec3 g = gradeOne(c, base);
         c = m >= 1.0 ? g : c + (g - c) * m;
     }
-    return c;
+    return converted(c);
 }
 `;
 
 /** The grade in WGSL for WebGPU, the same sums: `graded(color, place)`. Its bindings are `@group(1)`, set by gpu.ts. */
 export const GRADE_WGSL = /* wgsl */ `
-struct Grading { luma: vec4f, backR: vec4f, backG: vec4f, backB: vec4f, maskSize: vec2f, pictureSize: vec2f, count: i32, layers: i32, pad: vec2f };
+struct Grading { luma: vec4f, backR: vec4f, backG: vec4f, backB: vec4f, maskSize: vec2f, pictureSize: vec2f, count: i32, layers: i32, convert: f32, pad: f32, turn: vec4f };
 @group(1) @binding(0) var<uniform> grading: Grading;
 @group(1) @binding(1) var<storage, read> gradeData: array<vec4f>;
 @group(1) @binding(2) var<storage, read> gradeMasks: array<f32>;
 const PIVOT = ${Math.fround(1.055 * Math.pow(0.18, 1 / 2.4) - 0.055).toFixed(9)};
+const P3_TO_SRGB = mat3x3f(${columns});
 fn entry(i: i32) -> vec4f { return gradeData[i]; }
 fn encode1(x: f32) -> f32 { if (x <= 0.0031308) { return 12.92 * x; } return 1.055 * pow(x, 1.0 / 2.4) - 0.055; }
 fn decode1(v: f32) -> f32 { if (v <= 0.04045) { return v / 12.92; } return pow((v + 0.055) / 1.055, 2.4); }
@@ -369,8 +385,18 @@ fn maskAt(layer: i32, place: vec2f) -> f32 {
     let b = vec2i(clamp(low + 1.0, vec2f(0.0), grading.maskSize - 1.0));
     return mix(mix(maskTexel(layer, a.x, a.y), maskTexel(layer, b.x, a.y), f.x), mix(maskTexel(layer, a.x, b.y), maskTexel(layer, b.x, b.y), f.x), f.y);
 }
-fn graded(given: vec3f, place: vec2f) -> vec3f {
+fn unturned(p: vec2f) -> vec2f {
+    let t = grading.turn;
+    let d = p - t.zw;
+    return vec2f(t.x * d.x + t.y * d.y, -t.y * d.x + t.x * d.y) + t.zw;
+}
+fn converted(c: vec3f) -> vec3f {
+    if (grading.convert == 1.0) { return encode3(clamp(P3_TO_SRGB * decode3(c), vec3f(0.0), vec3f(1.0))); }
+    return c;
+}
+fn graded(given: vec3f, at: vec2f) -> vec3f {
     var c = given;
+    let place = unturned(at);
     for (var k = 0; k < ${MOST_GRADES}; k++) {
         if (k >= grading.count) { break; }
         let base = i32(entry(k).x);
@@ -384,7 +410,7 @@ fn graded(given: vec3f, place: vec2f) -> vec3f {
         let g = gradeOne(c, base);
         if (m >= 1.0) { c = g; } else { c = c + (g - c) * m; }
     }
-    return c;
+    return converted(c);
 }
 `;
 

@@ -140,12 +140,14 @@ export interface MaskStack {
     layers: Float32Array[];
 }
 
-/** What the card grades with: the grades packed, the space's numbers, the original's size (which the masks are laid over), and the masks of the parts. */
+/** What the card grades with: the grades packed, the space's numbers, the original's size (which the masks are laid over), and the masks of the parts; whether the result is made sRGB from Display P3 after the grades; and the picture's turn (its cosine, its sine and the middle it turns about), by which a place on the turned picture is taken back to the original's pixels for the masks. */
 export interface Grading {
     packed: Packed;
     numbers: SpaceNumbers;
     picture: { width: number; height: number };
     masks?: MaskStack;
+    convert?: boolean;
+    turn?: [number, number, number, number];
 }
 
 /** On the screen, where a canvas pixel is in the original (`x + canvas * across`, the same down) and where the split between the original and the graded falls, in canvas pixels from the left; pixels left of it are drawn as they were. */
@@ -168,6 +170,8 @@ export interface Backend {
     draw(images: Drawn[], fills: { rect: Rect; color: Color; graded?: boolean }[], clip?: Rect, graded?: ScreenGrade): void;
     /** Resamples one piece: the part of the original given, covers painted into it, then the two passes, giving the result's pixels, RGBA, row by row from the top. With `graded` (where a result pixel of the piece is in the original: `x + column * across`, the same down), the pass down grades each pixel before it is rounded. */
     resample(part: ImageBitmap, covers: { rect: Rect; color: Color }[], piece: Piece, graded?: [number, number, number, number]): Promise<Uint8Array>;
+    /** Says which space the canvas's numbers are in, sRGB or Display P3, so that the browser shows them right on the screen; false when the canvas cannot take that space (the picture is then made sRGB as it is drawn). */
+    colors(space: "srgb" | "display-p3"): boolean;
     /** Hands the card the grades and masks to grade with; nothing to stop grading. Masks are sent again only when their stack is another. */
     grading(given: Grading | undefined): void;
     destroy(): void;
@@ -240,6 +244,8 @@ export async function loadPicture(backend: Backend, blob: Blob) {
     return {
         size,
         backend: backend.name,
+        /** Puts the canvas in a space: true when it took it. */
+        colors: (space: "srgb" | "display-p3") => backend.colors(space),
         /** Draws the picture on the canvas as the scene says. */
         draw(scene: Scene, again?: () => void) {
             drawAgain = again;
@@ -351,19 +357,27 @@ export function prepared(grade: Grade, name: Space): Prepared {
  * What the card grades a look with, or nothing when its grades change nothing. Worked out again only
  * when the look's grades or the masks are others than last time, so drawing a frame again packs nothing.
  */
-export function gradingFor(look: Look, name: Space, picture: { width: number; height: number }, masks?: MaskStack, layers: (id: string) => { layer?: number; invert?: boolean } = () => ({})): Grading | undefined {
+export function gradingFor(look: Look, name: Space, picture: { width: number; height: number }, masks?: MaskStack, layers: (id: string) => { layer?: number; invert?: boolean } = () => ({}), convert = false): Grading | undefined {
     const live = look.grades.filter((each) => !isNeutral(each.grade));
-    if (!live.length) return undefined;
+    if (!live.length && !convert) return undefined;
     const last = lastGrading;
-    if (last && last.name === name && last.masks === masks && last.grading.picture.width === picture.width && last.grading.picture.height === picture.height && last.grades.length === live.length && last.grades.every((each, at) => each.grade === live[at]!.grade && each.id === live[at]!.id && JSON.stringify(last.layers[at]) === JSON.stringify(layers(each.id)))) return last.grading;
+    const turn = turnNumbers(look.turn ?? 0, picture);
+    if (last && last.name === name && last.convert === convert && JSON.stringify(last.grading.turn) === JSON.stringify(turn) && last.masks === masks && last.grading.picture.width === picture.width && last.grading.picture.height === picture.height && last.grades.length === live.length && last.grades.every((each, at) => each.grade === live[at]!.grade && each.id === live[at]!.id && JSON.stringify(last.layers[at]) === JSON.stringify(layers(each.id)))) return last.grading;
     const list: PackedGrade[] = live.map((each) => ({ ready: prepared(each.grade, name), ...layers(each.id) }));
-    const grading: Grading = { packed: pack(list), numbers: space(name), picture, ...(masks ? { masks } : {}) };
-    lastGrading = { name, masks, grades: live, layers: live.map((each) => layers(each.id)), grading };
+    const grading: Grading = { packed: pack(list), numbers: space(name), picture, ...(masks ? { masks } : {}), ...(convert ? { convert } : {}), ...(turn ? { turn } : {}) };
+    lastGrading = { name, convert, masks, grades: live, layers: live.map((each) => layers(each.id)), grading };
     return grading;
 }
-/** What the card grades a look with, its parts' masks drawn and stacked (masks.ts); nothing when no grade changes anything. */
-export function gradingWith(look: Look, name: Space, picture: { width: number; height: number }): Grading | undefined {
+/** What the card grades a look with, its parts' masks drawn and stacked (masks.ts), made sRGB after if `convert`; nothing when nothing would change. */
+export function gradingWith(look: Look, name: Space, picture: { width: number; height: number }, convert = false): Grading | undefined {
     const stacked = stackFor(look.grades, picture);
-    return gradingFor(look, name, picture, stacked.stack, stacked.layers);
+    return gradingFor(look, name, picture, stacked.stack, stacked.layers, convert);
 }
-let lastGrading: { name: Space; masks?: MaskStack; grades: Look["grades"]; layers: { layer?: number; invert?: boolean }[]; grading: Grading } | undefined;
+let lastGrading: { name: Space; convert: boolean; masks?: MaskStack; grades: Look["grades"]; layers: { layer?: number; invert?: boolean }[]; grading: Grading } | undefined;
+
+/** A turn in degrees as the card takes it: its cosine, its sine and the original's middle, which it turns about; nothing for no turn. */
+export function turnNumbers(degrees: number, picture: { width: number; height: number }): [number, number, number, number] | undefined {
+    if (!degrees) return undefined;
+    const radians = (degrees * Math.PI) / 180;
+    return [Math.cos(radians), Math.sin(radians), picture.width / 2, picture.height / 2];
+}
