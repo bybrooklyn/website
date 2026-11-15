@@ -25,7 +25,9 @@
 //! Its weights are a flat list (`Pool::weights` long), neuron by neuron: each memory neuron's gate
 //! reads, take-in reads and plasticity, then its two biases; the four groups' rate and decay; each
 //! rhythm neuron's reads, bias and pace; each mood's reads, bias and rate. Its state, for each
-//! creature: each memory, each phase, each mood, then each memory neuron's fast weights.
+//! creature: each memory, each phase, each mood, then each memory neuron's fast weights, and for a pool
+//! that grows (`wiring`), which of its memory neurons' places hold a connection, their traces and a
+//! count of decisions.
 
 use alloc::vec;
 use alloc::vec::Vec;
@@ -33,6 +35,7 @@ use alloc::vec::Vec;
 use crate::learn::Random;
 use super::net::dot;
 use crate::math::{PI, exp, sin_cos, sqrt, tanh};
+use super::wiring::{self, Growth};
 
 /// The groups whose plastic connections share a rate and a decay.
 pub const PLASTIC_GROUPS: usize = 4;
@@ -104,6 +107,9 @@ pub struct Pool {
     /// Whether its memory neurons' reads are plastic; without, fast weights stay at nothing (a trial's
     /// switch, to see what plasticity does; not kept in its form).
     pub plastic: bool,
+    /// Whether its memory neurons' connections are added and cut while it lives, and by what rule
+    /// (`wiring`); none for the pool of stage 3, every place always joined. Not kept in its form.
+    pub grow: Option<Growth>,
 }
 
 /// The rate per decision of the slowest and quickest rhythm at the start, in turns a second for a
@@ -125,7 +131,7 @@ impl Pool {
     /// sensed, the first plain layer and the pool. A mood first reads the senses in `feelings` (energy,
     /// touch and the like), as many as it has room for.
     pub fn new(shape: Shape, senses: usize, plain: usize, feelings: &[usize], random: &mut Random) -> Pool {
-        let mut pool = Pool { shape, senses, plain, reads: Vec::new(), from: Vec::new(), plastic: true };
+        let mut pool = Pool { shape, senses, plain, reads: Vec::new(), from: Vec::new(), plastic: true, grow: None };
         let all = pool.codes();
         for kind in 0..3 {
             let count = [shape.memory, shape.rhythm, shape.mood][kind];
@@ -188,6 +194,37 @@ impl Pool {
         self.shape.weights()
     }
 
+    /// The state it carries for each creature: the shape's, and its growth's if it grows.
+    pub fn state(&self) -> usize {
+        self.shape.state() + self.grow.map_or(0, |_| Growth::state(self.shape.memory, self.shape.reads))
+    }
+
+    /// How many of its memory neurons' places hold a connection in a creature's state, and how many
+    /// places there are; every place, for a pool that does not grow.
+    pub fn joined(&self, state: &[f32]) -> (usize, usize) {
+        let (s, places) = (self.shape, self.shape.memory * self.shape.reads);
+        match self.grow {
+            Some(_) if state.len() == self.state() => (wiring::joined(&state[s.state()..], s.memory, s.reads), places),
+            _ => (places, places),
+        }
+    }
+
+    /// Whether memory neuron `n`'s place `r` holds a connection in a creature's state: always, for a
+    /// pool that does not grow.
+    pub fn is_joined(&self, state: &[f32], n: usize, r: usize) -> bool {
+        let s = self.shape;
+        self.grow.is_none() || n >= s.memory || state.get(s.state() + n * s.reads + r).is_none_or(|&j| j > 0.5)
+    }
+
+    /// What its connections cost each second in a creature's state, as a share of all its energy: none
+    /// for a pool that does not grow.
+    pub fn cost(&self, state: &[f32]) -> f32 {
+        self.grow.map_or(0.0, |growth| {
+            let (joined, places) = self.joined(state);
+            growth.cost(joined, places)
+        })
+    }
+
     /// First weights: reads drawn evenly at a spread of about one over the square root of how many,
     /// plasticity at none, memory gates from quick to slow, rhythms from slow to quick, moods slow.
     pub fn first(&self, weights: &mut [f32], random: &mut Random) {
@@ -235,6 +272,9 @@ impl Pool {
             // each its own phase, by the golden angle, so a rhythm added later does not move the others
             state[s.memory + j] = (j as f32 * GOLDEN) % (2.0 * PI);
         }
+        if let Some(growth) = &self.grow {
+            growth.fresh(s.memory, s.reads, &mut state[s.state()..]);
+        }
     }
 
     /// What the pool gives the rest, from a creature's state.
@@ -252,11 +292,13 @@ impl Pool {
 
     /// One decision for `rows` creatures: each reads what it senses (`x`, rescaled), the first plain
     /// layer (`h1`) and the pool as it was (`state`), and its state moves on in place. What the pool
-    /// gives after it goes into `out`. With `trace`, what backward needs is kept.
+    /// gives after it goes into `out`. With `trace`, what backward needs is kept. A pool that grows reads
+    /// each creature's three signals in `signals` (`Growth::signals_of`), and its rule acts here.
     #[allow(clippy::too_many_arguments)]
-    pub fn step(&self, weights: &[f32], x: &[f32], h1: &[f32], state: &mut [f32], out: &mut [f32], rows: usize, mut trace: Option<&mut Trace>) {
+    pub fn step(&self, weights: &[f32], x: &[f32], h1: &[f32], signals: &[f32], state: &mut [f32], out: &mut [f32], rows: usize, mut trace: Option<&mut Trace>) {
         let s = self.shape;
-        let (k, q, wide, outs) = (s.reads, self.sources(), s.state(), s.outputs());
+        let (k, q, wide, outs) = (s.reads, self.sources(), self.state(), s.outputs());
+        let mut passing = vec![0.0; if self.grow.is_some() { k } else { 0 }];
         let [memory, groups, rhythm, mood, _] = s.starts();
         let mut source = vec![0.0; q];
         // each neuron's reads gathered side by side, so the sums over them go as the dense layers' do
@@ -273,9 +315,19 @@ impl Pool {
                 trace.sources.extend_from_slice(&source);
                 trace.before.extend_from_slice(state);
             }
-            let (held, rest) = state.split_at_mut(s.memory);
+            let (own, growing) = state.split_at_mut(s.state());
+            let (held, rest) = own.split_at_mut(s.memory);
             let (phases, rest) = rest.split_at_mut(s.rhythm);
             let (moods, fast) = rest.split_at_mut(s.mood);
+            let (joined, rest) = growing.split_at_mut(if self.grow.is_some() { s.memory * k } else { 0 });
+            let (traces, clock) = rest.split_at_mut(if self.grow.is_some() { s.memory * k } else { 0 });
+            // the rule acts every `PERIOD` decisions once a run is warm, at thresholds from its signals now
+            let rewiring = self.grow.and_then(|growth| {
+                let decisions = clock[0] as u32;
+                clock[0] += 1.0;
+                let signal = &signals[r * 3..r * 3 + 3];
+                (decisions >= wiring::WARM && decisions.is_multiple_of(wiring::PERIOD)).then(|| growth.rule.thresholds(signal[0], signal[1], signal[2]))
+            });
             for i in 0..s.memory {
                 let at = memory + i * (3 * k + 2);
                 let reads = &self.from[i * k..(i + 1) * k];
@@ -285,6 +337,15 @@ impl Pool {
                 for n in 0..k {
                     through[n] = wc[n] + plastic[n] * f[n];
                 }
+                if self.grow.is_some() {
+                    // a connection's trace is what it carries; an empty place reads nothing, and its trace is
+                    // what it would read times what the neuron takes in (`passing` holds the read till then)
+                    let mine = &joined[i * k..(i + 1) * k];
+                    for n in 0..k {
+                        passing[n] = if mine[n] > 0.5 { (through[n] * got[n]).abs() } else { got[n].abs() };
+                        got[n] *= mine[n];
+                    }
+                }
                 let gate = weights[at + 3 * k] + dot(wz, &got);
                 let take = weights[at + 3 * k + 1] + dot(&through, &got);
                 let (z, c) = (sigmoid(gate), tanh(take));
@@ -293,6 +354,18 @@ impl Pool {
                 let (decay, learn) = (decays[g], rates[g] * c);
                 for n in 0..k {
                     f[n] = decay * f[n] + learn * got[n];
+                }
+                if let Some(growth) = &self.grow {
+                    let (mine, kept) = (&mut joined[i * k..(i + 1) * k], &mut traces[i * k..(i + 1) * k]);
+                    for n in 0..k {
+                        if mine[n] <= 0.5 {
+                            passing[n] *= c.abs();
+                        }
+                    }
+                    growth.trace(kept, &passing);
+                    if let Some(thresholds) = rewiring {
+                        growth.rewire(mine, kept, thresholds);
+                    }
                 }
                 if let Some(trace) = trace.as_deref_mut() {
                     trace.gates.push(z);
@@ -332,10 +405,12 @@ impl Pool {
     /// `h1` laid out so: decision 0's rows, then decision 1's). `start` is each creature's state at the
     /// window's start, and `fresh[t * rows + r]` says that creature's run started again just before
     /// decision t, so it begins that decision from a fresh state. What the pool gives at each decision
-    /// goes into `out`, laid out as `x` is, and `trace` keeps what `backward` needs.
+    /// goes into `out`, laid out as `x` is, and `trace` keeps what `backward` needs. A pool that grows reads
+    /// each decision's signals from `signals`, three a row, laid out as `x` is.
     #[allow(clippy::too_many_arguments)]
-    pub fn forward(&self, weights: &[f32], x: &[f32], h1: &[f32], start: &[f32], fresh: &[bool], steps: usize, rows: usize, out: &mut [f32], trace: &mut Trace) {
-        let (wide, outs) = (self.shape.state(), self.shape.outputs());
+    pub fn forward(&self, weights: &[f32], x: &[f32], h1: &[f32], signals: &[f32], start: &[f32], fresh: &[bool], steps: usize, rows: usize, out: &mut [f32], trace: &mut Trace) {
+        let (wide, outs) = (self.state(), self.shape.outputs());
+        let signalled = if self.grow.is_some() { 3 } else { 0 };
         trace.clear();
         trace.rows = rows;
         trace.steps = steps;
@@ -347,7 +422,7 @@ impl Pool {
                 }
             }
             let span = t * rows..(t + 1) * rows;
-            self.step(weights, &x[span.start * self.senses..span.end * self.senses], &h1[span.start * self.plain..span.end * self.plain], &mut state, &mut out[span.start * outs..span.end * outs], rows, Some(trace));
+            self.step(weights, &x[span.start * self.senses..span.end * self.senses], &h1[span.start * self.plain..span.end * self.plain], &signals[span.start * signalled..span.end * signalled], &mut state, &mut out[span.start * outs..span.end * outs], rows, Some(trace));
         }
         trace.fresh.clear();
         trace.fresh.extend_from_slice(&fresh[..steps * rows]);
@@ -359,7 +434,8 @@ impl Pool {
     /// `h1` was). What came before the window's start, or before a fresh start, is not blamed.
     pub fn backward(&self, weights: &[f32], trace: &Trace, blame: &[f32], grads: &mut [f32], h1_blame: &mut [f32]) {
         let s = self.shape;
-        let (k, q, wide, outs) = (s.reads, self.sources(), s.state(), s.outputs());
+        let (k, q, wide, outs) = (s.reads, self.sources(), self.state(), s.outputs());
+        let joined_at = s.state();
         let [memory, groups, rhythm, mood, _] = s.starts();
         let (rows, steps) = (trace.rows, trace.steps);
         // the blame carried back on each creature's state, from the decision after
@@ -402,6 +478,11 @@ impl Pool {
                     let f_before = &before[fast_at + i * k..fast_at + (i + 1) * k];
                     let gf = &g[fast_at + i * k..fast_at + (i + 1) * k];
                     gather(source, reads, &mut got);
+                    // the connections as they were: an empty place read nothing and is blamed for nothing
+                    let mine = if self.grow.is_some() { Some(&before[joined_at + i * k..joined_at + (i + 1) * k]) } else { None };
+                    if let Some(mine) = mine {
+                        got.iter_mut().zip(mine).for_each(|(read, &j)| *read *= j);
+                    }
                     back[i] += gm * (1.0 - z);
                     let dz = gm * (c - held);
                     // through the fast weights, which moved by rate * c * read
@@ -425,6 +506,9 @@ impl Pool {
                         gp[n] += d_take * f_before[n] * read;
                         fb[n] += gf[n] * decay + d_take * plastic[n] * read;
                         through[n] = gf[n] * learn + d_gate * wz[n] + d_take * (wc[n] + plastic[n] * f_before[n]);
+                    }
+                    if let Some(mine) = mine {
+                        through.iter_mut().zip(mine).for_each(|(t, &j)| *t *= j);
                     }
                     scatter(&mut ds, reads, &through);
                 }
@@ -519,7 +603,7 @@ impl Pool {
             };
             found.map(|n| (part << 16) | n as u32)
         };
-        let mut pool = Pool { shape, senses: self.senses, plain: self.plain, reads: Vec::new(), from: Vec::new(), plastic: self.plastic };
+        let mut pool = Pool { shape, senses: self.senses, plain: self.plain, reads: Vec::new(), from: Vec::new(), plastic: self.plastic, grow: self.grow };
         let all = pool.codes();
         let fresh_weights = {
             let mut w = vec![0.0; shape.weights()];
@@ -612,7 +696,7 @@ impl Pool {
         if shape.neurons() > 4096 || shape.reads > 256 || form.len() != 4 + shape.neurons() * shape.reads {
             return None;
         }
-        let mut pool = Pool { shape, senses, plain, reads: form[4..].iter().map(|&x| x as u32).collect(), from: Vec::new(), plastic: true };
+        let mut pool = Pool { shape, senses, plain, reads: form[4..].iter().map(|&x| x as u32).collect(), from: Vec::new(), plastic: true, grow: None };
         let all = pool.codes();
         if !pool.reads.iter().all(|code| all.contains(code)) {
             return None;
@@ -629,6 +713,9 @@ impl Pool {
         let k = s.reads;
         let [memory, _, rhythm, mood, _] = s.starts();
         if n < s.memory {
+            if !self.is_joined(state, n, r) {
+                return 0.0;
+            }
             let at = memory + n * (3 * k + 2);
             let fast = state.get(s.memory + s.rhythm + s.mood + n * k + r).copied().unwrap_or(0.0);
             weights[at + k + r] + weights[at + 2 * k + r] * fast

@@ -711,6 +711,12 @@ impl Task for Worlds {
         }
     }
 
+    fn brain(&mut self, costs: &[f32]) {
+        for (run, &cost) in self.runs.iter_mut().zip(costs) {
+            charge_brain(run, cost);
+        }
+    }
+
     fn step(&mut self, actions: &[f32], into: &mut [f32], rewards: &mut [f32], ends: &mut [u8], last: &mut [f32]) {
         self.advance(actions, rewards, ends, last);
         self.observe(into);
@@ -731,6 +737,16 @@ impl Task for Worlds {
                 tallies[i].look(run);
             }
         }
+    }
+}
+
+/// Tells a run's body what its brain costs each second now (`needs::Needs::brain`); a body at play, whose
+/// energy is held full, or one without energy, is not charged.
+pub fn charge_brain(run: &mut Run, cost: f32) {
+    if let Some(needs) = &mut run.body.needs
+        && !needs.play
+    {
+        needs.brain = cost;
     }
 }
 
@@ -766,6 +782,14 @@ impl Measured {
 /// Held-out worlds do not change unless the way given changes them always by one setting
 /// (`Changing::Fixed`), as `Practice::measure_changing` asks.
 pub fn measure(recipe: Recipe, way: Way, seeds: &[u32], mut act: impl FnMut(usize, &[f32], &mut [f32])) -> Measured {
+    measure_paying(recipe, way, seeds, |i, senses, actions| {
+        act(i, senses, actions);
+        0.0
+    })
+}
+
+/// `measure`, `act` saying too what the creature's brain costs each second now (`charge_brain`).
+pub fn measure_paying(recipe: Recipe, way: Way, seeds: &[u32], mut act: impl FnMut(usize, &[f32], &mut [f32]) -> f32) -> Measured {
     let changing = if matches!(way.changing, Changing::Fixed(_)) { way.changing } else { Changing::Still };
     let way = Way { energy: if way.energy < 0.0 { MEASURED_ENERGY } else { way.energy }, play: 0.0, changing, ..way };
     let Some(mut worlds) = Worlds::alone(recipe, way, seeds) else { return Measured::default() };
@@ -778,7 +802,10 @@ pub fn measure(recipe: Recipe, way: Way, seeds: &[u32], mut act: impl FnMut(usiz
     while (0..count).any(|i| worlds.going[i]) {
         for i in 0..count {
             if worlds.going[i] {
-                act(i, &sensed[i * senses..(i + 1) * senses], &mut actions[i * wide..(i + 1) * wide]);
+                let cost = act(i, &sensed[i * senses..(i + 1) * senses], &mut actions[i * wide..(i + 1) * wide]);
+                if cost > 0.0 {
+                    charge_brain(&mut worlds.runs[i], cost);
+                }
             }
         }
         worlds.step(&actions, &mut sensed, &mut rewards, &mut ends, &mut last);
@@ -802,6 +829,9 @@ pub struct Practice {
     pub curriculum: Option<Curriculum>,
     /// The full costs, which `Way::ramp` brings the worlds' up to.
     pub shaping: Shaping,
+    /// The share of a growing brain's places that held a connection over the last measuring (1 for a
+    /// brain that does not grow).
+    pub joined: f32,
 }
 
 /// A simple curriculum: practice starts in the easiest worlds, and each time most practice runs get
@@ -830,7 +860,7 @@ impl Practice {
         let learner = Learner::with(settings, worlds.senses, worlds.actions, count, seed, &feelings(way.legs, worlds.senses), None);
         let mut learner = foreseeing(learner, &way);
         learner.begin(&mut worlds);
-        Some(Practice { learner, worlds, recipe, curriculum: None, shaping: way.shaping })
+        Some(Practice { learner, worlds, recipe, curriculum: None, shaping: way.shaping, joined: 1.0 })
     }
 
     /// The same, practising by a curriculum from the easiest worlds up to the recipe's difficulty.
@@ -905,8 +935,16 @@ impl Practice {
 
     fn measure_with(&mut self, way: Way, seeds: &[u32]) -> Measured {
         let learner = &mut self.learner;
-        // each creature its own pool, from a fresh start
+        // each creature its own pool, from a fresh start, paying for its connections if it grows them
         let mut states: Vec<Vec<f32>> = vec![Vec::new(); seeds.len()];
-        measure(self.recipe, way, seeds, |i, senses, actions| learner.act_as(&mut states[i], senses, actions))
+        let (mut joined, mut places) = (0u64, 0u64);
+        let measured = measure_paying(self.recipe, way, seeds, |i, senses, actions| {
+            learner.act_as(&mut states[i], senses, actions);
+            let (cost, now, of) = learner.brain_cost(&states[i]);
+            (joined, places) = (joined + now as u64, places + of as u64);
+            cost
+        });
+        self.joined = if places > 0 { joined as f32 / places as f32 } else { 1.0 };
+        measured
     }
 }

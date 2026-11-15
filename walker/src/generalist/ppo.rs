@@ -22,6 +22,7 @@ use alloc::vec::Vec;
 
 use super::net::{Adam, Layer, Net, Squash, Work, length};
 use super::pool::{Pool, Shape};
+use super::wiring::Grow;
 use crate::learn::Random;
 use crate::math::{clamp, exp, ln, sin_cos, sqrt};
 
@@ -49,6 +50,9 @@ pub trait Task {
     /// again, so what it senses is its new run's first; for one cut short, what it sensed where it was
     /// cut goes into `last`, laid out as `into` is.
     fn step(&mut self, actions: &[f32], into: &mut [f32], rewards: &mut [f32], ends: &mut [u8], last: &mut [f32]);
+    /// What each one's brain costs each second while it acts on this decision, as a share of all its
+    /// energy (a brain that grows its connections, `wiring`); a task without energy ignores it.
+    fn brain(&mut self, _costs: &[f32]) {}
 }
 
 /// Every number that shapes learning. `Settings::default()` is what was settled on for the
@@ -101,6 +105,10 @@ pub struct Settings {
     /// (`foreseeing`), and what a unit of its surprise above the usual is worth as a reason to look.
     pub foresee: bool,
     pub wonder: f32,
+    /// Whether a pool's memory neurons add and cut their connections while it lives, by what rule and at
+    /// what price (`wiring`, stage 5); none for stage 4's brain. It needs the predictor, whose surprise the
+    /// rule reads.
+    pub grow: Option<Grow>,
 }
 
 impl Default for Settings {
@@ -129,6 +137,7 @@ impl Default for Settings {
             plastic: true,
             foresee: true,
             wonder: 1.0,
+            grow: None,
         }
     }
 }
@@ -835,6 +844,47 @@ impl Learner {
     /// The pool, if it has one.
     pub fn pool(&self) -> Option<&Pool> {
         self.recurrent.as_ref().map(|r| &r.pool)
+    }
+
+    /// Makes its pool add and cut connections while it lives by `grow`, or stop (none): kept in its
+    /// settings, and put into its pool if it has one and a predictor to read surprise from. Nothing it
+    /// learned changes, since a rule has no weights; every run goes on from a fresh pool.
+    pub fn grow(&mut self, grow: Option<Grow>) {
+        self.settings.grow = grow;
+        let look = self.foresee.as_ref().map(|f| f.look);
+        if let Some(r) = &mut self.recurrent {
+            let growth = grow.zip(look).map(|(grow, look)| {
+                // its energy is two before where its eye is sensed, and having just eaten one before
+                let energy = look.gaze - 2;
+                super::wiring::Growth { rule: grow.rule, price: grow.price, signals: [energy, energy + 1, look.surprise] }
+            });
+            if growth != r.pool.grow {
+                r.regrow(growth);
+            }
+        }
+    }
+
+    /// What the brain of a creature whose state is kept in `state` (as `act_as` keeps it) costs each
+    /// second, as a share of all its energy, and how many of its places hold a connection of how many.
+    pub fn brain_cost(&self, state: &[f32]) -> (f32, usize, usize) {
+        match &self.recurrent {
+            Some(r) if r.pool.grow.is_some() && state.len() >= r.pool.state() => {
+                let mine = &state[..r.pool.state()];
+                let (joined, places) = r.pool.joined(mine);
+                (r.pool.cost(mine), joined, places)
+            }
+            _ => (0.0, 0, 0),
+        }
+    }
+
+    /// The same for the creature on show.
+    pub fn show_cost(&self) -> (f32, usize, usize) {
+        self.recurrent.as_ref().map_or((0.0, 0, 0), |r| self.brain_cost(&r.show_state))
+    }
+
+    /// The share of its places joined over its last rollout: 1 for a brain that does not grow.
+    pub fn joined_share(&self) -> f32 {
+        self.recurrent.as_ref().filter(|r| r.pool.grow.is_some()).map_or(1.0, |r| r.joined)
     }
 
     /// A learner of the form given (from `form`), otherwise as `Learner::with`; none if the form does

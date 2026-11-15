@@ -9,12 +9,17 @@
 //! (`Settings::window`); learning goes over whole windows in random order, from the state kept,
 //! starting each run afresh where one ended inside a window, and back through the window. The policy
 //! of the plain shape never comes here, so it learns exactly as it did.
+//!
+//! A pool that grows (`wiring`) reads three signals at each decision, as they were sensed before
+//! rescaling; the rollout keeps them, so learning runs the rule again as it ran then. What its
+//! connections cost is told to the task each decision (`Task::brain`), which takes it from the body.
 
 use alloc::vec;
 use alloc::vec::Vec;
 
 use super::super::net::{Layer, Net, Squash, Work};
 use super::super::pool::{Pool, Shape, Trace};
+use super::super::wiring::Growth;
 use super::{CUT, GOING, HALF_LOG_TAU, Learner, Task};
 use crate::learn::Random;
 use crate::math::{clamp, exp, sqrt, tanh};
@@ -84,6 +89,12 @@ pub struct Recurrent {
     /// The creature on show's state, and what it last thought.
     pub show_state: Vec<f32>,
     pub shown: Shown,
+    /// For a pool that grows: each decision's signals in the rollout (three a creature), a minibatch's,
+    /// what each creature's connections cost now, and the share of places joined over the last rollout.
+    signals: Vec<f32>,
+    rows_signals: Vec<f32>,
+    costs: Vec<f32>,
+    pub joined: f32,
 }
 
 /// The largest number of decisions no more than `window` that a rollout of `steps` divides into.
@@ -123,6 +134,10 @@ impl Recurrent {
             picks: vec![0; minibatch],
             show_state: vec![0.0; shape.state()],
             shown: Shown::default(),
+            signals: Vec::new(),
+            rows_signals: Vec::new(),
+            costs: Vec::new(),
+            joined: 1.0,
             one,
             two,
             pool,
@@ -138,15 +153,35 @@ impl Recurrent {
     fn windows(&self) -> usize {
         self.order.len()
     }
+
+    /// The pool made to grow by `growth`, or not to, with room for its state; every creature's run, and
+    /// the creature on show's, goes on from a fresh pool.
+    pub fn regrow(&mut self, growth: Option<Growth>) {
+        self.pool.grow = growth;
+        let wide = self.pool.state();
+        let count = self.restarted.len();
+        self.state = vec![0.0; count * wide];
+        for i in 0..count {
+            self.pool.fresh(&mut self.state[i * wide..(i + 1) * wide]);
+        }
+        self.starts = vec![0.0; self.windows() * wide];
+        self.show_state = vec![0.0; wide];
+        self.pool.fresh(&mut self.show_state);
+        self.shown.before.clear();
+        let signalled = if growth.is_some() { 3 } else { 0 };
+        self.signals = vec![0.0; self.fresh.len() * signalled];
+        self.rows_signals = vec![0.0; self.rows_fresh.len() * signalled];
+        self.costs = vec![0.0; count];
+    }
 }
 
 /// The policy's means for `rows` rescaled inputs, the pool moving on from `state`: into `head_work`'s
 /// output. The value's input (what is sensed, then the pool as it was) is left in the room.
 #[allow(clippy::too_many_arguments)]
-fn think(recurrent_pool: &Pool, one: &Net, two: &Net, weights: &[f32], at: &[usize; 5], pool_at: usize, head: &Net, input: &[f32], rows: usize, state: &mut [f32], room: &mut Room, head_work: &mut Work) {
+fn think(recurrent_pool: &Pool, one: &Net, two: &Net, weights: &[f32], at: &[usize; 5], pool_at: usize, head: &Net, input: &[f32], signals: &[f32], rows: usize, state: &mut [f32], room: &mut Room, head_work: &mut Work) {
     let shape = recurrent_pool.shape;
     let (s, h, p) = (one.inputs(), one.outputs(), shape.outputs());
-    let wide = shape.state();
+    let wide = recurrent_pool.state();
     for r in 0..rows {
         room.value_in[r * (s + p)..r * (s + p) + s].copy_from_slice(&input[r * s..(r + 1) * s]);
         recurrent_pool.give(&state[r * wide..(r + 1) * wide], &mut room.value_in[r * (s + p) + s..(r + 1) * (s + p)]);
@@ -154,7 +189,7 @@ fn think(recurrent_pool: &Pool, one: &Net, two: &Net, weights: &[f32], at: &[usi
     let first = one.weights();
     one.forward(&weights[..first], input, rows, &mut room.one);
     let h1 = &room.one.outs[0][..rows * h];
-    recurrent_pool.step(&weights[pool_at..pool_at + shape.weights()], input, h1, state, &mut room.outs, rows, None);
+    recurrent_pool.step(&weights[pool_at..pool_at + shape.weights()], input, h1, signals, state, &mut room.outs, rows, None);
     mix_and_gain(recurrent_pool, two, &weights[first..at[1]], rows, room);
     head.forward(&weights[at[1]..at[2]], &room.h2[..rows * h], rows, head_work);
 }
@@ -188,12 +223,21 @@ impl Learner {
         let (n, s, a, steps) = (self.count, self.senses, self.actions, self.settings.steps);
         let (gamma, lambda) = (self.settings.gamma, self.settings.lambda);
         let shape = recurrent.pool.shape;
-        let (p, wide, window) = (shape.outputs(), shape.state(), recurrent.window);
+        let (p, wide, window) = (shape.outputs(), recurrent.pool.state(), recurrent.window);
         self.rollout_sensed.clear();
         self.rollout_returned.clear();
         let mut works = core::mem::replace(&mut self.acting, [Work::empty(), Work::empty(), Work::empty(), Work::empty()]);
         let spreads: Vec<f32> = self.weights[self.at[4]..self.at[4] + a].iter().map(|&log| exp(log)).collect();
+        let growth = recurrent.pool.grow;
+        let signalled = if growth.is_some() { 3 } else { 0 };
+        let mut places_joined = 0usize;
         for t in 0..steps {
+            if let Some(growth) = &growth {
+                for i in 0..n {
+                    let k = t * n + i;
+                    growth.signals_of(&self.now[i * s..(i + 1) * s], &mut recurrent.signals[k * 3..k * 3 + 3]);
+                }
+            }
             for row in self.now.chunks_exact(s) {
                 self.rollout_sensed.add(row);
             }
@@ -209,8 +253,17 @@ impl Learner {
                 let w = t / window;
                 recurrent.starts[w * n * wide..(w + 1) * n * wide].copy_from_slice(&recurrent.state);
             }
-            let Recurrent { pool, one, two, at: pool_at, state, acting, .. } = &mut *recurrent;
-            think(pool, one, two, &self.weights, &self.at, *pool_at, &self.head, &input, n, state, acting, &mut works[1]);
+            let Recurrent { pool, one, two, at: pool_at, state, acting, signals, costs, .. } = &mut *recurrent;
+            think(pool, one, two, &self.weights, &self.at, *pool_at, &self.head, &input, &signals[t * n * signalled..(t + 1) * n * signalled], n, state, acting, &mut works[1]);
+            if growth.is_some() {
+                // what each creature's connections cost now, taken from its body while it acts on this decision
+                for (i, cost) in costs.iter_mut().enumerate() {
+                    let mine = &state[i * wide..(i + 1) * wide];
+                    *cost = pool.cost(mine);
+                    places_joined += pool.joined(mine).0;
+                }
+                task.brain(costs);
+            }
             recurrent.prior[t * n * p..(t + 1) * n * p].copy_from_slice(&value_prior(&recurrent.acting.value_in, n, s, p));
             for i in 0..n {
                 let mut chance = 0.0;
@@ -258,6 +311,9 @@ impl Learner {
                 self.ends[t * n + i] = self.step_ends[i];
             }
         }
+        if growth.is_some() {
+            recurrent.joined = places_joined as f32 / (steps * n * shape.memory * shape.reads).max(1) as f32;
+        }
         let mut input = self.now.clone();
         self.rescale(&mut input);
         let value_in = joined(&input, &recurrent, n, s, p);
@@ -295,8 +351,9 @@ impl Learner {
         let (s, a, h) = (self.senses, self.actions, self.settings.hidden);
         let (n, set) = (self.count, self.settings);
         let shape = recurrent.pool.shape;
-        let (p, wide, window) = (shape.outputs(), shape.state(), recurrent.window);
+        let (p, wide, window) = (shape.outputs(), recurrent.pool.state(), recurrent.window);
         let rows = each * window;
+        let signalled = if recurrent.pool.grow.is_some() { 3 } else { 0 };
         // the rows, decision by decision within the window, window by window within each decision
         recurrent.rows_start.clear();
         for b in 0..each {
@@ -309,6 +366,9 @@ impl Learner {
                 recurrent.picks[r] = k;
                 recurrent.rows_x[r * s..(r + 1) * s].copy_from_slice(&self.seen[k * s..(k + 1) * s]);
                 recurrent.rows_fresh[r] = recurrent.fresh[k];
+                if signalled > 0 {
+                    recurrent.rows_signals[r * 3..r * 3 + 3].copy_from_slice(&recurrent.signals[k * 3..k * 3 + 3]);
+                }
                 let room = &mut recurrent.training;
                 room.value_in[r * (s + p)..r * (s + p) + s].copy_from_slice(&self.seen[k * s..(k + 1) * s]);
                 room.value_in[r * (s + p) + s..(r + 1) * (s + p)].copy_from_slice(&recurrent.prior[k * p..(k + 1) * p]);
@@ -328,9 +388,9 @@ impl Learner {
         let spreads: Vec<f32> = log_spreads.iter().map(|&log| exp(log)).collect();
 
         // the policy, forward through the window
-        let Recurrent { pool, one, two, training: room, trace, rows_x, rows_start, rows_fresh, .. } = &mut *recurrent;
+        let Recurrent { pool, one, two, training: room, trace, rows_x, rows_start, rows_fresh, rows_signals, .. } = &mut *recurrent;
         one.forward(&w[..first], &rows_x[..rows * s], rows, &mut room.one);
-        pool.forward(pool_weights, &rows_x[..rows * s], &room.one.outs[0][..rows * h], rows_start, &rows_fresh[..rows], window, each, &mut room.outs, trace);
+        pool.forward(pool_weights, &rows_x[..rows * s], &room.one.outs[0][..rows * h], &rows_signals[..rows * signalled], rows_start, &rows_fresh[..rows], window, each, &mut room.outs, trace);
         mix_and_gain(pool, two, &w[first..self.at[1]], rows, room);
         self.head.forward(&w[self.at[1]..self.at[2]], &room.h2[..rows * h], rows, &mut works[1]);
         let (mut policy_loss, mut moved, mut clipped) = (0.0, 0.0, 0.0);
@@ -443,8 +503,12 @@ impl Learner {
         input.copy_from_slice(&senses[..self.senses]);
         self.rescale(&mut input);
         recurrent.shown.before.clone_from(&recurrent.show_state);
+        let mut signals = [0.0; 3];
+        if let Some(growth) = &recurrent.pool.grow {
+            growth.signals_of(senses, &mut signals);
+        }
         let Recurrent { pool, one, two, at: pool_at, show_state, showing, .. } = &mut *recurrent;
-        think(pool, one, two, &self.weights, &self.at, *pool_at, &self.head, &input, 1, show_state, showing, &mut self.showing[1]);
+        think(pool, one, two, &self.weights, &self.at, *pool_at, &self.head, &input, &signals, 1, show_state, showing, &mut self.showing[1]);
         let room = &recurrent.showing;
         recurrent.shown.plain_one.clone_from(&room.one.outs[0]);
         recurrent.shown.plain_two.clone_from(&room.h2);
@@ -469,7 +533,7 @@ fn value_prior(value_in: &[f32], rows: usize, s: usize, p: usize) -> Vec<f32> {
 
 /// The value's input for these rescaled rows, with each creature's pool as it is now.
 fn joined(input: &[f32], recurrent: &Recurrent, rows: usize, s: usize, p: usize) -> Vec<f32> {
-    let wide = recurrent.pool.shape.state();
+    let wide = recurrent.pool.state();
     let mut out = vec![0.0; rows * (s + p)];
     for r in 0..rows {
         out[r * (s + p)..r * (s + p) + s].copy_from_slice(&input[r * s..(r + 1) * s]);

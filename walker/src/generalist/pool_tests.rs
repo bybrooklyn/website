@@ -52,7 +52,7 @@ fn the_gradient_through_a_window_is_what_nudging_shows_for_every_kind() {
     let mut out = vec![0.0; steps * rows * outs];
     let mut trace = Trace::default();
     let run = |weights: &[f32], h1: &[f32], out: &mut [f32], trace: &mut Trace| {
-        pool.forward(weights, &x, h1, &start, &fresh, steps, rows, out, trace);
+        pool.forward(weights, &x, h1, &[], &start, &fresh, steps, rows, out, trace);
         loss(out, &coefficients)
     };
     run(&weights, &h1, &mut out, &mut trace);
@@ -102,7 +102,7 @@ fn a_fresh_start_owes_nothing_to_before_it() {
     fresh[2] = true;
     let mut out = vec![0.0; steps * shape.outputs()];
     let mut trace = Trace::default();
-    pool.forward(&weights, &x, &h1, &start, &fresh, steps, rows, &mut out, &mut trace);
+    pool.forward(&weights, &x, &h1, &[], &start, &fresh, steps, rows, &mut out, &mut trace);
     // blame only on the last decision, after a fresh start at decision 2: nothing reaches decisions 0 and 1
     let mut blame = vec![0.0; out.len()];
     blame[3 * shape.outputs()..].fill(1.0);
@@ -153,7 +153,7 @@ fn a_pool_grown_does_what_it_did_and_a_pool_shrunk_keeps_its_most_used() {
         let mut start = vec![0.0; pool.shape.state()];
         pool.fresh(&mut start);
         let mut out = vec![0.0; steps * pool.shape.outputs()];
-        pool.forward(weights, &x, &h1, &start, &fresh, steps, rows, &mut out, &mut Trace::default());
+        pool.forward(weights, &x, &h1, &[], &start, &fresh, steps, rows, &mut out, &mut Trace::default());
         out
     };
     let before = outputs(&pool, &weights);
@@ -207,7 +207,7 @@ fn pool_speed() {
         let mut h1_blame = vec![0.0; h1.len()];
         let began = std::time::Instant::now();
         for _ in 0..20 {
-            pool.forward(&weights, &x, &h1, &start, &fresh, steps, rows, &mut out, &mut trace);
+            pool.forward(&weights, &x, &h1, &[], &start, &fresh, steps, rows, &mut out, &mut trace);
         }
         let forward = began.elapsed().as_secs_f64() / (20 * steps * rows) as f64;
         let began = std::time::Instant::now();
