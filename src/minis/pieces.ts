@@ -556,6 +556,7 @@ function mirrored(shape: Shape): void {
     const box = (one: Box): Box => ({ at: reflect(one.at), half: one.half });
     shape.boxes = shape.boxes.map(box);
     shape.stands = shape.stands.map(box);
+    if (shape.panes) shape.panes = shape.panes.map(box);
     shape.holds = shape.holds.map(reflect);
     if (shape.bowl) shape.bowl = { ...shape.bowl, at: reflect(shape.bowl.at) };
     if (shape.catches) shape.catches = box(shape.catches);
