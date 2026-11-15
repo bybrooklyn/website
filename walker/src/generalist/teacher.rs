@@ -104,11 +104,15 @@ impl Teacher {
     fn breed(&mut self) {
         self.since = 0;
         self.bred += 1;
-        let mut order: Vec<usize> = (0..self.members.len()).collect();
         let scores: Vec<f32> = self.members.iter().map(|member| member.score().unwrap_or(0.0)).collect();
         let score = |k: usize| scores[k];
-        // lowest first; ties by place, so the order is the same every time
-        order.sort_by(|&a, &b| score(a).partial_cmp(&score(b)).unwrap_or(core::cmp::Ordering::Equal).then(a.cmp(&b)));
+        // lowest first, ties by place, so the order is the same every time: a few at most, so put in order
+        // by insertion, which is small to carry in the module
+        let mut order: Vec<usize> = Vec::with_capacity(scores.len());
+        for k in 0..scores.len() {
+            let at = order.iter().position(|&o| score(k) < score(o)).unwrap_or(order.len());
+            order.insert(at, k);
+        }
         let (low, rest) = order.split_at(REPLACED);
         for &replaced in low {
             let (a, b) = (rest[self.random.below(rest.len())], rest[self.random.below(rest.len())]);

@@ -322,3 +322,26 @@ fn a_learner_kept_goes_on_in_a_brain_of_another_shape_doing_what_it_did() {
     page.practice.as_mut().unwrap().update();
     assert!(page.practice.as_ref().unwrap().learner.weights.iter().all(|w| w.is_finite()));
 }
+
+#[test]
+fn a_learner_kept_at_stage_3_is_taken_up_by_the_page_and_grown_keeping_its_updates_and_steps() {
+    use super::practice::{Changing, Practice, Way};
+    let recipe = Recipe { seed: 1, difficulty: 0.3, amounts: [1.0; 4] };
+    let old_way = Way { hears: false, changing: Changing::Still, ..Way::of(2) };
+    let settings = super::ppo::Settings { steps: 16, shape: super::page::BRAIN, ..super::ppo::Settings::default() };
+    let mut old = Practice::new(recipe, old_way, settings, 4, 2, 2).unwrap();
+    old.update();
+    let mut page = page(2);
+    page.practice_create(4, 3, 3);
+    page.form_room = old.learner.form();
+    (page.state_room, page.running_room) = (old.learner.state(), old.learner.running());
+    assert!(page.practice_load(), "a stage 3 learner is taken up");
+    let learner = &page.practice.as_ref().unwrap().learner;
+    assert_eq!(learner.senses, old.learner.senses + super::changes::SENSES);
+    assert!(learner.foresee.is_some());
+    assert_eq!((learner.updates, learner.practised), (old.learner.updates, old.learner.practised));
+    // and the page's show takes it up too
+    page.form_room = old.learner.form();
+    (page.state_room, page.running_room) = (old.learner.state(), old.learner.running());
+    assert!(page.policy_load());
+}
