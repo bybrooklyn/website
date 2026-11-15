@@ -47,6 +47,9 @@ pub struct Contact {
     pub restitution: f32,
     pub points: [Point; 2],
     pub count: usize,
+    /// How far into soft ground a body may sink before it is pushed out, in metres (`World::give`): 0
+    /// for anything firm, which is all there was before the ground could be soft.
+    pub give: f32,
 }
 
 impl Contact {
@@ -175,7 +178,11 @@ pub fn solve(bodies: &mut [Body], contact: &mut Contact, soft: Soft, inverse_h: 
         // how far apart the surfaces are now, followed from where they were as the bodies move
         let at_a = position_a + rotation_a.apply(point.local_a);
         let at_b = position_b + rotation_b.apply(point.local_b);
-        let separation = normal.dot(at_b - at_a) + point.separation;
+        let mut separation = normal.dot(at_b - at_a) + point.separation;
+        // soft ground lets a body sink a little before it pushes back; firm ground is left exactly as it was
+        if contact.give != 0.0 {
+            separation += contact.give;
+        }
         let (bias, mass_scale, impulse_scale) = if separation > 0.0 {
             // apart still: allow just the speed that closes the gap within this substep
             (separation * inverse_h, 1.0, 0.0)

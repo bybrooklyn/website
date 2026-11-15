@@ -215,3 +215,24 @@ fn known_limit_a_body_fast_enough_can_pass_through_a_static_block() {
     assert_eq!(drops_through(ball, 0.0, 0.0, 30.0), 0);
     assert!(drops_through(ball, 0.0, 0.0, FASTEST) > 0);
 }
+
+#[test]
+fn soft_ground_lets_a_box_sink_a_little_and_holds_it_there_while_firm_ground_does_not() {
+    let rest = |give: f32| {
+        let mut world = World::new();
+        world.give = give;
+        flat(&mut world);
+        world.add_body(square(0.2, Vec2::new(0.0, 1.0)));
+        // a box on a block beside it, which stays firm however soft the ground
+        world.add_blocks(&[(Vec2::new(2.0, 0.0), Vec2::new(3.0, 0.5))]);
+        world.add_body(square(0.2, Vec2::new(2.5, 1.5)));
+        run(&mut world, 3.0);
+        (world.bodies[0].position.y - 0.2, world.bodies[1].position.y - 0.7, world.bodies[0].velocity.length(), world.bodies[0].touching)
+    };
+    let (firm, on_block, _, _) = rest(0.0);
+    let (soft, on_soft_block, speed, touching) = rest(1.0);
+    assert!(firm.abs() < 0.01, "firm ground holds the box at its surface, it is {firm} off");
+    assert!(soft < -0.5 * GIVE && soft > -1.2 * GIVE, "the softest ground lets it sink about {GIVE} m, it sank {}", -soft);
+    assert!(speed < 0.01 && touching, "and holds it still there, touching");
+    assert!(on_block.abs() < 0.01 && on_soft_block.abs() < 0.01, "a block stays firm: {on_block} and {on_soft_block}");
+}
