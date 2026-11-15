@@ -5,14 +5,15 @@
 //! gravity, a wind from ahead, a wind from behind, or night. Every copy goes on to twenty seconds, its brain
 //! carried on as it was (its pool, its plastic connections, its predictor).
 //!
-//! `worlds=` sets how many held-out worlds (48 unless given; the first sixteen are the ones every other
+//! `worlds=` sets how many held-out worlds (200 unless given; the first sixteen are the ones every other
 //! measure uses).
 //!
 //! For each change it prints how far the changed copies went in each two and a half seconds after the
 //! change, as a share of how far the unchanged copies went in the same time (over the worlds in which the
 //! unchanged copy was still going at twenty seconds), the share of changed copies whose run ended, and
 //! two summaries: the pace kept in the first five seconds and in the next five, and the recovery, the second
-//! over the first. With `hears=0` the learner senses nothing of a changing world, as before stage 4.
+//! over the first; then the same over only the changed copies whose run did not end (`up_`), the pace kept
+//! while it stays on its feet, so a fall does not hide whether it found its pace again. With `hears=0` the learner senses nothing of a changing world, as before stage 4.
 //!
 //!     cargo run --release --example adapt -- kept=<path> legs=2
 
@@ -38,7 +39,7 @@ struct Going {
 }
 
 fn main() {
-    let (mut kept, mut legs, mut hears, mut count) = (String::new(), 2u32, true, 48usize);
+    let (mut kept, mut legs, mut hears, mut count) = (String::new(), 2u32, true, 200usize);
     for arg in std::env::args().skip(1) {
         match arg.split_once('=') {
             Some(("kept", v)) => kept = v.to_string(),
@@ -69,6 +70,9 @@ fn main() {
     let mut gone = vec![[0.0f64; 4]; changes.len()];
     let mut base = [0.0f64; 4];
     let mut ended = vec![0u32; changes.len()];
+    // the same, over the copies whose run did not end: the pace kept while it stays up
+    let mut gone_up = vec![[0.0f64; 4]; changes.len()];
+    let mut base_up = vec![[0.0f64; 4]; changes.len()];
     let mut counted = 0u32;
     let seeds = held_out(count);
     for &seed in &seeds {
@@ -118,16 +122,25 @@ fn main() {
             let mut world = Changes::still(Conditions::REST);
             world.aim_at(*conditions, changed.run.judge.steps);
             changed.run.changes = Some(world);
+            let mut went = [0.0f64; 4];
             for m in 0..4 {
-                gone[c][m] += walk(&mut changed, marks[m + 1]) as f64 - start;
+                went[m] = walk(&mut changed, marks[m + 1]) as f64 - start;
+                gone[c][m] += went[m];
             }
             ended[c] += u32::from(changed.run.judge.over());
+            if !changed.run.judge.over() {
+                for m in 0..4 {
+                    gone_up[c][m] += went[m];
+                    base_up[c][m] += plain[m];
+                }
+            }
         }
     }
     let windows = |g: &[f64; 4]| [g[0], g[1] - g[0], g[2] - g[1], g[3] - g[2]];
     let base_w = windows(&base);
     println!("adapt {kept} legs={legs} worlds={counted} unchanged_metres={:.2}/{:.2}/{:.2}/{:.2}", base_w[0] / counted as f64, base_w[1] / counted as f64, base_w[2] / counted as f64, base_w[3] / counted as f64);
     let (mut first_sum, mut second_sum) = (0.0, 0.0);
+    let (mut first_up, mut second_up) = (0.0, 0.0);
     for (c, (name, _)) in changes.iter().enumerate() {
         let w = windows(&gone[c]);
         let share: Vec<f64> = (0..4).map(|m| w[m] / base_w[m].max(1e-6)).collect();
@@ -135,11 +148,26 @@ fn main() {
         let kept_second = (w[2] + w[3]) / (base_w[2] + base_w[3]).max(1e-6);
         first_sum += kept_first;
         second_sum += kept_second;
+        let (u, b) = (windows(&gone_up[c]), windows(&base_up[c]));
+        let up_first = (u[0] + u[1]) / (b[0] + b[1]).max(1e-6);
+        let up_second = (u[2] + u[3]) / (b[2] + b[3]).max(1e-6);
+        first_up += up_first;
+        second_up += up_second;
         println!(
-            "change {name} kept={:.2}/{:.2}/{:.2}/{:.2} first5={kept_first:.2} next5={kept_second:.2} recovery={:.2} ended={:.2}",
+            "change {name} kept={:.2}/{:.2}/{:.2}/{:.2} first5={kept_first:.2} next5={kept_second:.2} recovery={:.2} ended={:.2} up_first5={up_first:.2} up_next5={up_second:.2}",
             share[0], share[1], share[2], share[3], kept_second / kept_first.max(1e-6), ended[c] as f64 / counted.max(1) as f64
         );
     }
-    let n = changes.len() as f64;
-    println!("all first5={:.3} next5={:.3} recovery={:.3}", first_sum / n, second_sum / n, (second_sum / n) / (first_sum / n).max(1e-6));
+    // every change together: the metres gone over the metres the unchanged copies went, summed, so a change
+    // whose few runs went little cannot swing it
+    let pooled = |gone: &[[f64; 4]], base: &[[f64; 4]]| {
+        let first = gone.iter().map(|g| g[1]).sum::<f64>() / base.iter().map(|b| b[1]).sum::<f64>().max(1e-6);
+        let next = gone.iter().map(|g| g[3] - g[1]).sum::<f64>() / base.iter().map(|b| b[3] - b[1]).sum::<f64>().max(1e-6);
+        (first, next)
+    };
+    let every_base: Vec<[f64; 4]> = changes.iter().map(|_| base).collect();
+    let (first, next) = pooled(&gone, &every_base);
+    let (up_first, up_next) = pooled(&gone_up, &base_up);
+    let _ = (first_sum, second_sum, first_up, second_up);
+    println!("all first5={first:.3} next5={next:.3} recovery={:.3} up_first5={up_first:.3} up_next5={up_next:.3} up_recovery={:.3} ended={:.3}", next / first.max(1e-6), up_next / up_first.max(1e-6), ended.iter().sum::<u32>() as f64 / (counted.max(1) as f64 * changes.len() as f64));
 }
