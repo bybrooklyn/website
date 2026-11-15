@@ -28,7 +28,7 @@
 //! Its state, after the pool's own, for each creature: whether each place holds a connection (1 or 0),
 //! each place's trace, and the decisions since the run began.
 
-use crate::math::{clamp, exp};
+use crate::math::clamp;
 
 /// How many numbers a rule has.
 pub const NUMBERS: usize = 7;
@@ -84,6 +84,13 @@ impl Rule {
         let short = 1.0 + exp(n[5]) * clamp((SHORT - energy) / SHORT, 0.0, 1.0);
         (exp(n[1]) * short / lively, exp(n[2]) * short * lively)
     }
+}
+
+/// e to the power of `x`, kept in one place in the module rather than written out at every use, which
+/// costs the page's module more than the few calls cost in time.
+#[inline(never)]
+fn exp(x: f32) -> f32 {
+    crate::math::exp(x)
 }
 
 /// A pool's growth: its rule, what a connection costs, and where among the senses it finds its energy,

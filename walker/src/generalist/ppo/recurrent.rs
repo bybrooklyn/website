@@ -257,11 +257,7 @@ impl Learner {
             think(pool, one, two, &self.weights, &self.at, *pool_at, &self.head, &input, &signals[t * n * signalled..(t + 1) * n * signalled], n, state, acting, &mut works[1]);
             if growth.is_some() {
                 // what each creature's connections cost now, taken from its body while it acts on this decision
-                for (i, cost) in costs.iter_mut().enumerate() {
-                    let mine = &state[i * wide..(i + 1) * wide];
-                    *cost = pool.cost(mine);
-                    places_joined += pool.joined(mine).0;
-                }
+                places_joined += pool.costs(state, costs);
                 task.brain(costs);
             }
             recurrent.prior[t * n * p..(t + 1) * n * p].copy_from_slice(&value_prior(&recurrent.acting.value_in, n, s, p));

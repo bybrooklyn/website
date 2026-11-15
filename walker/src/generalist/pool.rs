@@ -216,6 +216,19 @@ impl Pool {
         self.grow.is_none() || n >= s.memory || state.get(s.state() + n * s.reads + r).is_none_or(|&j| j > 0.5)
     }
 
+    /// What each of `costs.len()` creatures' connections cost each second, their states one after
+    /// another in `states`, into `costs`; and how many places hold a connection, all of them together.
+    #[inline(never)]
+    pub fn costs(&self, states: &[f32], costs: &mut [f32]) -> usize {
+        let wide = self.state();
+        let mut joined = 0;
+        for (cost, mine) in costs.iter_mut().zip(states.chunks_exact(wide)) {
+            *cost = self.cost(mine);
+            joined += self.joined(mine).0;
+        }
+        joined
+    }
+
     /// What its connections cost each second in a creature's state, as a share of all its energy: none
     /// for a pool that does not grow.
     pub fn cost(&self, state: &[f32]) -> f32 {
@@ -264,7 +277,8 @@ impl Pool {
     }
 
     /// The state a run starts with, for one creature: nothing held, each rhythm at its own phase, every
-    /// mood at rest, no fast weight.
+    /// mood at rest, no fast weight. Called from many places, so written out once in the module.
+    #[inline(never)]
     pub fn fresh(&self, state: &mut [f32]) {
         let s = self.shape;
         state.fill(0.0);
@@ -295,6 +309,7 @@ impl Pool {
     /// gives after it goes into `out`. With `trace`, what backward needs is kept. A pool that grows reads
     /// each creature's three signals in `signals` (`Growth::signals_of`), and its rule acts here.
     #[allow(clippy::too_many_arguments)]
+    #[inline(never)]
     pub fn step(&self, weights: &[f32], x: &[f32], h1: &[f32], signals: &[f32], state: &mut [f32], out: &mut [f32], rows: usize, mut trace: Option<&mut Trace>) {
         let s = self.shape;
         let (k, q, wide, outs) = (s.reads, self.sources(), self.state(), s.outputs());
