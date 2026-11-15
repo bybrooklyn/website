@@ -139,8 +139,13 @@ export function createCutoutPage(host: HTMLElement, options: PageOptions = {}) {
     const quality = control("Quality", asking.tier().name, (button) => void chooseQuality(button), "quire-button quire-cut-word");
     const original = control("Hold to see the original (\\)", icon("paper"), () => {}, "quire-button quire-cut-hold");
     const another = control("Choose another picture", icon("image"), () => chooser.click());
-    const rule = () => make("span", "quire-img-strip-rule");
-    bar.append(copyButton, saveButton, rule(), ...layButtons, swatches, rule(), keepButton, removeButton, rule(), quality, original, another);
+    // the bar in groups that wrap whole: getting it out, what it is laid on, the brush, and the rest; the colors grow out as a row of their own
+    const group = (name: string, ...items: HTMLElement[]) => {
+        const made = make("div", `quire-cut-group quire-cut-group-${name}`);
+        made.append(...items);
+        return made;
+    };
+    bar.append(group("out", copyButton, saveButton), group("brush", keepButton, removeButton), group("laid", ...layButtons), group("more", quality, original, another), swatches);
 
     function fill() {
         root.classList.toggle("shown", !!picture);

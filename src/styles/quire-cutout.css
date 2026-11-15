@@ -213,6 +213,54 @@
     translate: 0 0;
 }
 
+/* each group keeps its buttons together; on a wide screen a fine line goes between groups, never at a row's ends */
+.quire-cut-group {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.quire-cut-group + .quire-cut-group {
+    padding-left: 0.5rem;
+    border-left: 0.0625rem solid var(--rule);
+}
+
+.quire-cut-group-out .quire-dialog-action {
+    min-width: 6rem;
+}
+
+/* on a narrow screen the groups stand two to a row, lined up, with no lines between them; the colors take a row of their own */
+@media (max-width: 40rem) {
+    .quire-cut-bar {
+        display: grid;
+        grid-template-columns: repeat(2, auto);
+        justify-content: center;
+        justify-items: start;
+        column-gap: 1rem;
+        row-gap: 0.4rem;
+    }
+
+    .quire-cut-group + .quire-cut-group {
+        padding-left: 0;
+        border-left: 0;
+    }
+
+    .quire-cut-swatches {
+        grid-column: 1 / -1;
+        justify-self: center;
+        max-width: none;
+        max-height: 0;
+        transition:
+            max-height 0.35s var(--ease),
+            opacity 0.2s ease;
+    }
+
+    .quire-cut-swatches.open {
+        max-height: 3rem;
+    }
+}
+
 .quire-cut-word {
     min-height: 2.2rem;
     padding: 0 0.7rem;
