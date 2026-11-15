@@ -173,8 +173,8 @@ export function exportPanel(hooks: { closed?(): void; settings(): Settings; set(
     const pair = make("div", "quire-img-pair");
     const before = make("figure", "quire-img-sample");
     const after = make("figure", "quire-img-sample");
-    const beforeCanvas = make("canvas");
-    const afterCanvas = make("canvas");
+    let beforeCanvas = make("canvas");
+    let afterCanvas = make("canvas");
     const beforeSaid = make("figcaption");
     const afterSaid = make("figcaption");
     before.append(beforeCanvas, beforeSaid);
@@ -259,15 +259,25 @@ export function exportPanel(hooks: { closed?(): void; settings(): Settings; set(
     }
 
     /** Shows what the export came to: its size and weight, and the same part of the original and the result at their own pixels. */
-    function shows(found: { width: number; height: number; bytes: number; label: string; over: boolean; quality: number; original: ImageData; exported?: ImageBitmap; at: Rect; originalBytes: number }) {
+    function shows(found: { width: number; height: number; bytes: number; label: string; over: boolean; quality: number; original: ImageData; exported?: ImageBitmap; at: Rect; originalBytes: number; space?: PredefinedColorSpace }) {
         result.textContent = `${found.width} × ${found.height} px · ${weightSaid(found.bytes)} ${found.label}${found.over ? " · over the weight even at the lowest quality" : ""}`;
+        // fresh canvases each time, in the picture's own space (a canvas keeps the space it was first drawn in)
+        const space = found.space ?? "srgb";
+        const fresh = (old: HTMLCanvasElement) => {
+            const made = make("canvas");
+            old.replaceWith(made);
+            return made;
+        };
+        beforeCanvas = fresh(beforeCanvas);
+        afterCanvas = fresh(afterCanvas);
         for (const [canvas, draw] of [
             [beforeCanvas, (context: CanvasRenderingContext2D) => context.putImageData(found.original, 0, 0)],
             [afterCanvas, (context: CanvasRenderingContext2D) => found.exported && context.drawImage(found.exported, found.at.x, found.at.y, found.at.width, found.at.height, 0, 0, found.at.width, found.at.height)],
         ] as const) {
             canvas.width = found.at.width;
             canvas.height = found.at.height;
-            draw(canvas.getContext("2d")!);
+            canvas.dataset.space = space;
+            draw(canvas.getContext("2d", { colorSpace: space })!);
         }
         beforeSaid.textContent = `Original · ${weightSaid(found.originalBytes)}`;
         afterSaid.textContent = `Export · ${weightSaid(found.bytes)}${found.exported ? "" : " · this browser cannot show it"}`;

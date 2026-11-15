@@ -358,7 +358,7 @@ export async function loadPicture(backend: Backend, blob: Blob) {
             backend.draw(images, fills, scene.cropping ? undefined : place(look.crop), graded);
         },
         /** The picture as it looks, at full size: its pixels, the covers painted in before resampling so that nothing they hide is read, and the marks drawn over. */
-        async flatten(look: Look, most = PIECE, grading?: Grading): Promise<ImageData> {
+        async flatten(look: Look, most = PIECE, grading?: Grading, space: Space = "srgb"): Promise<ImageData> {
             const result = new ImageData(look.width, look.height);
             backend.grading(grading);
             const stepX = look.crop.width / look.width;
@@ -387,11 +387,14 @@ export async function loadPicture(backend: Backend, blob: Blob) {
                 for (let row = 0; row < piece.out.height; row++) result.data.set(pixels.subarray(row * piece.out.width * 4, (row + 1) * piece.out.width * 4), ((piece.out.y + row) * look.width + piece.out.x) * 4);
             }
             if (look.marks.length) {
+                // the marks drawn in the result's own space, so that a mark on a Display P3 picture is the color picked, the browser turning its sRGB color into P3 numbers
+                const p3 = space === "p3" && !grading?.convert;
+                const tagged: ImageDataSettings = { colorSpace: p3 ? "display-p3" : "srgb" };
                 const canvas = new OffscreenCanvas(look.width, look.height);
-                const context = canvas.getContext("2d")!;
-                context.putImageData(result, 0, 0);
+                const context = canvas.getContext("2d", tagged)!;
+                context.putImageData(new ImageData(result.data, look.width, look.height, tagged), 0, 0);
                 drawMarks(context, look.marks, resultPlace(look, size));
-                return context.getImageData(0, 0, look.width, look.height);
+                return new ImageData(context.getImageData(0, 0, look.width, look.height, tagged).data, look.width, look.height);
             }
             return result;
         },

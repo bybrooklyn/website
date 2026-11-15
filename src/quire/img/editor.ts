@@ -323,7 +323,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
         const loaded = stage.loaded();
         if (!loaded || !picture) throw new Error("the picture is not shown yet");
         const shown = look(picture);
-        return loaded.flatten(shown, undefined, gradingWith(shown, colors.space, loaded.size, srgb && colors.space === "p3"));
+        return loaded.flatten(shown, undefined, gradingWith(shown, colors.space, loaded.size, srgb && colors.space === "p3"), colors.space);
     };
     /** The export as set, worked out once for each set of steps and settings. */
     function exported() {
@@ -473,9 +473,11 @@ export function mountEditor(host: HTMLElement, context: Context) {
         const side = Math.min(180, shown.width, shown.height);
         const at = { x: Math.floor((shown.width - side) / 2), y: Math.floor((shown.height - side) / 2), width: side, height: side };
         const pixels = done.pixels ?? (await flattened());
-        const part = new ImageData(side, side);
+        // the samples are drawn in the same space as the picture's numbers, so that a Display P3 picture's look as bright there as on the stage and in the export
+        const sampleSpace = colors.space === "p3" && !converting() ? "display-p3" : "srgb";
+        const part = new ImageData(side, side, { colorSpace: sampleSpace });
         for (let row = 0; row < side; row++) part.data.set(pixels.data.subarray(((at.y + row) * shown.width + at.x) * 4, ((at.y + row) * shown.width + at.x + side) * 4), row * side * 4);
-        exporting.shows({ width: shown.width, height: shown.height, bytes: done.blob.size, label: formatOf(settings.format).label, over: done.over, quality: done.quality, original: part, exported: await createImageBitmap(done.blob).catch(() => undefined), at, originalBytes: now.original.bytes });
+        exporting.shows({ width: shown.width, height: shown.height, bytes: done.blob.size, label: formatOf(settings.format).label, over: done.over, quality: done.quality, original: part, exported: await createImageBitmap(done.blob).catch(() => undefined), at, originalBytes: now.original.bytes, space: sampleSpace });
     }
     const resizing = resizeBox({
         size: () => (picture ? look(picture) : { width: 1, height: 1 }),
@@ -544,7 +546,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
                 const small = look({ original: read.original, steps: [...read.steps, { id: "s0", type: "resize", width, filter: "bilinear" }] });
                 const canvas = make("canvas", "quire-img-version");
                 into.append(canvas, make("p", "quire-history-when", `${shown.width} × ${shown.height} px · ${read.steps.length} ${read.steps.length === 1 ? "step" : "steps"}`));
-                void loaded.flatten(small, undefined, gradingWith(small, colors.space, loaded.size)).then((pixels) => {
+                void loaded.flatten(small, undefined, gradingWith(small, colors.space, loaded.size), colors.space).then((pixels) => {
                     canvas.width = pixels.width;
                     canvas.height = pixels.height;
                     canvas.getContext("2d")!.putImageData(pixels, 0, 0);
