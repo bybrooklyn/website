@@ -652,8 +652,6 @@ export function createStage(hooks: StageHooks) {
     function fitView() {
         const now = shown();
         if (!now || !loaded) return;
-        // the room under the tool's strip, so that the strip never lies over the picture when it is fitted
-        const below = 52;
         view = fittedView() ?? view;
         gliding = undefined;
         paint();
@@ -662,7 +660,9 @@ export function createStage(hooks: StageHooks) {
     function fittedView(): View | undefined {
         const now = shown();
         if (!now || !loaded) return undefined;
-        const below = 52;
+        // the room under the tool's strip, which is taller on a phone when it wraps to two rows
+        const strip = element.parentElement?.querySelector<HTMLElement>(".quire-img-strip.open");
+        const below = Math.max(52, strip ? strip.offsetTop + strip.offsetHeight + 8 : 0);
         const found = fit(cropping() ? levelBox(turnNow()) : now, { width: element.clientWidth, height: element.clientHeight - below });
         return { ...found, y: found.y + below };
     }

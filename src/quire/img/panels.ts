@@ -419,10 +419,14 @@ export function toolStrip(hooks: { color(): string; weight(): number; setColor(v
     // the horizon's dial and the button that draws a line along it, made once so that a drag on the dial is never cut short by the strip filling again
     const dial = hooks.turn ? turnDial(hooks.turn) : undefined;
     const level = hooks.turn ? control("Draw along the horizon to level it", icon("line"), () => hooks.turn?.setLevelling(!hooks.turn.levelling())) : undefined;
+    // the dial and its line button as one group, which a narrow screen puts on a row of its own under the shapes and Apply
+    const horizon = make("div", "quire-img-strip-horizon");
+    if (dial && level) horizon.append(make("span", "quire-img-strip-rule"), dial.element, level);
     function fill(kind: "crop" | "mark" | "read" | "grade" | "none") {
         const grading = kind === "grade" ? hooks.grade?.() : undefined;
         if (kind === "grade" && !grading) kind = "none";
         strip.classList.toggle("open", kind !== "none");
+        strip.dataset.kind = kind;
         strip.inert = kind === "none";
         if (kind === "crop") {
             // the dial keeps the keyboard when the strip is filled again after each turn it makes
@@ -434,7 +438,7 @@ export function toolStrip(hooks: { color(): string; weight(): number; setColor(v
                     button.classList.toggle("pressed", hooks.shape() === shape.name);
                     return button;
                 }),
-                ...(dial && level ? [make("span", "quire-img-strip-rule"), dial.element, level] : []),
+                ...(dial && level ? [horizon] : []),
                 make("span", "quire-img-strip-rule"),
                 control("Apply (Enter)", icon("tick"), () => hooks.apply()),
             );
