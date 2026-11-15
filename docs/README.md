@@ -19,6 +19,7 @@ open, how to run and test it, and its known weak spots.
 - [marbles.md](marbles.md): a marble run mini with an editor in three dimensions, as planned; nothing built.
 - [sand.md](sand.md): a sand simulator mini and its Rust engine in `sand/`: the plan, and stage 1 (the engine and its tests) as built, a draft.
 - [cutout.md](cutout.md): a background remover, a page of its own and a tool of imgQuire; nothing built.
+- [qr.md](qr.md): a QR code maker and reader, a hidden page of its own at `/qr/`, written with no library; built.
 - [mote.md](mote.md): the small engine the minis run on, with no third-party libraries.
 - [minis.md](minis.md): the minis page and the small minis (Blocks, Dice, Plinko) and the terminal player.
 - [walker.md](walker.md): the Walker mini and its Rust engine.
