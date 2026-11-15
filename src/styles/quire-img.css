@@ -1144,6 +1144,12 @@
         height: var(--quire-img-sheet, min(22rem, 46dvh));
     }
 
+    /* the sheet's foot fades, so a row cut by it never shows as a half row; the last row can scroll above the fade */
+    .quire-img-grade-panel .quire-img-panel-body {
+        padding-bottom: 2.5rem;
+        mask-image: linear-gradient(to bottom, black calc(100% - 2.25rem), transparent);
+    }
+
     .quire-img-editor .quire-img-room.beside.grading {
         padding-bottom: calc(var(--quire-img-sheet, min(22rem, 46dvh)) + 0.5rem);
     }
@@ -1240,10 +1246,11 @@
     touch-action: none;
 }
 
+/* the focus ring drawn inside, so that the surface's edge never cuts it */
 .quire-img-curve-square:focus-visible,
 .quire-img-wheel-disc:focus-visible {
     outline: 0.125rem solid var(--accent);
-    outline-offset: 0.1rem;
+    outline-offset: -0.125rem;
 }
 
 .quire-img-wheels {
@@ -1261,7 +1268,7 @@
 
 .quire-img-wheel-disc {
     display: block;
-    width: 100%;
+    width: 92%;
     aspect-ratio: 1;
     border-radius: 50%;
     color: var(--ink);
