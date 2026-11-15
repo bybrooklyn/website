@@ -176,12 +176,12 @@ const RIM = 0.75;
 /** How strongly the grid on the table shows while marbles roll, and while a piece is carried or bent; and how long it takes to come up or fade, in seconds. */
 const GRID = { rolling: 0.16, building: 0.85, ease: 0.35 };
 /** How bright the lamp is, and the little light the dark room gives back from above and from the table. */
-const LAMP = { sun: 2.3, sky: 0.22, ground: 0.1 };
+const LAMP = { sun: 2.3, sky: 0.55, ground: 0.2 };
 /** Where the lamp is for a run between two corners: above it and off to one side, a little in front. */
 function lampAt(low: V3, high: V3): V3 {
     const middle: V3 = [(low[0] + high[0]) / 2, 0, (low[2] + high[2]) / 2];
     const wide = Math.max(60, high[0] - low[0], high[2] - low[2]);
-    return [middle[0] - wide * 0.55, high[1] + wide * 1.1 + 60, middle[2] + wide * 0.35];
+    return [middle[0] - wide * 0.4, high[1] + wide * 1.1 + 60, middle[2] + wide * 0.55];
 }
 /** The pillars' look: oak, each its own grain by its seed. */
 const pillarLook: Look = { color: [1, 1, 1], pattern: "wood" };
