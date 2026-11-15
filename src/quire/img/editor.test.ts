@@ -6,10 +6,18 @@
 
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { imgPage, type ImgPage } from "../../../scripts/img-page";
-import { MAIN } from "./editor";
+import { MAIN, readPen } from "./editor";
 
 test("a picture document keeps its steps in steps.json", () => {
     expect(MAIN).toBe("steps.json");
+});
+
+test("the pen kept in this browser is read field by field, what is missing or wrong taken from the start, a pen from before reading as it did", () => {
+    expect(readPen(null)).toEqual({ color: "#ff3b30", weight: 0.005, outlineWeight: 0.08, align: "left", zoom: 2, dim: 0.55, mark: "arrow" });
+    expect(readPen('{"color":"#0a84ff","weight":0.009}')).toMatchObject({ color: "#0a84ff", weight: 0.009, mark: "arrow" });
+    expect(readPen('{"color":"red","weight":7,"outline":"#000000","align":"center","zoom":4,"dim":0.75,"round":true,"mark":"spotlight"}')).toEqual({ color: "#ff3b30", weight: 0.005, outline: "#000000", outlineWeight: 0.08, align: "center", zoom: 4, dim: 0.75, round: true, mark: "spotlight" });
+    expect(readPen('{"zoom":40,"mark":"explode","align":"justify","outline":"#123456"}')).toEqual(readPen(null));
+    expect(readPen("not json")).toEqual(readPen(null));
 });
 
 let page: ImgPage | undefined;

@@ -12,13 +12,14 @@ remover (`cutout.md`) is to be one of its tools as well as a page of its own.
 
 - `steps.ts`: the picture document. The original (its name in the `.quire`, size, type and weight) and a
   list of steps, each a small plain record: a crop, a resize with a named filter, a cover in a solid color,
-  an arrow, a box, a line of text. `look` applies the steps that are on, in order; every place and size is
-  in the original's pixels. Changing, removing, moving and switching off a step, undo and redo, and
+  and the marks (an arrow, a box, text, a numbered step, a highlighter's stroke, a magnifier, a spotlight).
+  `look` applies the steps that are on, in order; every place and size is in the original's pixels. Changing, removing, moving and switching off a step, undo and redo, and
   `steps.json` written one step to a line and read back checked field by field.
 - `cover.ts`: a cover's color, from a thin ring of the picture round it.
 - `draw.ts`, `gl.ts`, `gpu.ts`, `marks.ts`: drawing. One small interface (`Backend`) with two ways written
   by hand, WebGPU first and WebGL2 where it is missing; the plan for flattening piece by piece; marks drawn
-  by the 2D canvas for both.
+  by the 2D canvas for both, by `marks.ts` alone on the screen and in the export, which also says which mark
+  is under a place, how far each reaches and the ring round it when picked.
 - `geometry.ts`: fitting, zooming about a point, and the crop's frame dragged, nudged and held to a shape.
 - `stage.ts`: the picture on the screen and the tools that work on it.
 - `export.ts`: the formats as one table, the weight search, file names, the clipboard.
@@ -460,7 +461,7 @@ red mark is the red picked (`profile.test.ts`).
 
 **As a Quire.** Menus File, Edit, View, Image, Tools, Help, as one table, an icon on every line, ticks for
 what is on, submenus for Download, Copy as, Zoom, Crop shape, Resize filter, Mark color and Thickness;
-single keys C, R, A, T, B, E, I, W, G, K and P only while the picture has the keyboard, Enter and Escape; the palette is
+single keys C, R, A, T, B, N, H, M, S, E, I, W, G, K and P only while the picture has the keyboard, Enter and Escape; the palette is
 the core's; version history draws a version's steps over the original, small, and restores it as one step.
 
 **A right-click's menu** (`press-menu.ts`, opened in `editor.ts`), as mdQuire's text has one. On the
@@ -595,6 +596,85 @@ decoded JPEG, by PSNR of red, green and blue against the clean picture, and SSIM
 Every picture came nearer by PSNR at every quality but the chart at 30, which tied (0.01 dB below); at quality
 10 the screenshots' SSIM fell by about a thousandth while their PSNR rose. Above 90 it was not measured and is
 not offered. In the editor a 768 by 576 sign at quality 15 went from 35.99 to 36.44 dB (`repair.test.ts`).
+
+**More marks.** Four more marks join the arrow, the box and the text, and the text gains lines, an outline and an
+alignment. Each is a step like the arrow: made on the picture, picked by a press on it (pressed again in the same
+place, the one beneath), moved by a drag or the arrows (Shift ten pixels), restyled from the strip while picked,
+removed with Delete, brought forward and sent back from Edit and the right-click menu, undone and redone, kept in
+`steps.json` and read back bounded; a file from before reads and draws as it did. Every mark is drawn by
+`marks.ts` alone, on the screen over the picture and into the export in every format, so the two are the same; and
+each follows a crop, a turn and a perspective as the arrow does (a number, a text and a spotlight made on a turned
+picture keep a turn of their own, `angle`, and are upright on the screen).
+
+- **Numbered step** (N, `{"type": "number", "at", "color", "size", "value"?}`): each press puts down a filled
+  circle with the next number, in the pen's color, its figure black or white, whichever reads on that color; a drag
+  places it where it is let go. The numbers are counted in the order the steps were made (their ids), not the
+  order they are drawn in, so bringing one forward never renumbers them; one taken away renumbers the rest. Picked,
+  its number shows in a field in the strip: a number typed there and kept with Enter is set by hand (`value`, 0 to
+  9999), kept when others are taken away, and the count goes on from it. In order, beside the field, and Edit or the
+  right-click menu's Number in order, let it be counted again. Its size is the pen's thickness seven times over.
+- **Highlighter** (H, `{"type": "highlight", "from", "to", "color", "thickness"}`): a straight stroke, square at
+  its ends, level on the screen as it is dragged (with Shift, at any angle), four times the pen's thickness. It
+  multiplies what is under it, in its color a third of the way to white (as a highlighter's ink is lighter than
+  paint), so a white page under it takes its color and black letters stay black; two strokes over each other are
+  darker where they cross. On the screen the picture under each stroke is copied onto the marks' canvas first, so
+  the same drawing multiplies the same pixels as in the export. Where the text reader has read this picture, a
+  drag that starts on a word lies along that word's line, through its middle, from the first word to the word under
+  the pointer on the same line and a tenth of the line's height past each, as thick as the line and a tenth more,
+  slanted with the line; the reader is never run for it.
+- **Magnifier** (M, `{"type": "magnifier", "at", "from", "radius", "zoom", "color", "thickness"}`): a drag from
+  what is to be enlarged to where the lens goes; a press alone puts the lens half a lens up and to the right of
+  the place pressed, or the first other side where it lies whole on the picture. A fine ring marks the place it
+  looks at, a line runs from there to the lens, and the lens shows the square round that place, as wide as the
+  lens over its enlargement (2, 3 or 4 times, from the strip; read back from 1.25 to 8). The weights become Small,
+  Medium and Large lens (a radius of 0.048, 0.08 and 0.144 of the picture's longer side). Pressing the lens moves
+  the lens; pressing the ring round the place it looks at moves that alone; the arrows move the part last pressed,
+  the lens to start. What the lens shows is a look of its own (`lensLook` in `draw.ts`): the picture's grades,
+  covers, repair, cut-out, turn and perspective, and the marks drawn before it but other lenses and spotlights,
+  over that square of the level picture, flattened by the card exactly as the export is, as many pixels across as
+  the lens is where it is drawn. So in the export it is sharp at full size from the original's own pixels, even when
+  the picture is made smaller; and on the screen the stage flattens it the same way at the screen's size, keeping
+  the last one drawn while a new one is made, so it never blinks while dragged.
+- **Spotlight** (S, `{"type": "spotlight", "rect", "round"?, "dim"}`): a drag leaves a rectangle, or an ellipse
+  (the strip's Rectangle and Ellipse), bright while all the rest of the picture is shaded. Every spotlight is one
+  shade with all their shapes cut out, drawn at the place of the first, so two shapes that overlap leave their
+  overlap bright; the strip's Light, Medium and Dark shade (0.35, 0.55, 0.75 of black) change every spotlight at
+  once, and a new one takes the shade there is. A spotlight is picked by its edge, as a box is, so what is inside it
+  can still be pressed.
+- **Text** (T): Enter keeps it and Shift and Enter starts another line; the field grows with what is typed and
+  shows the outline and the alignment as they will be drawn. The strip's Align left, Align center and Align right
+  lay the lines on the place pressed (`align`); changing it on a text picked moves its place by as much as keeps
+  the block where it is. Outline opens a small menu grown from its button: No outline or one of the six colors, and
+  Thin, Medium or Thick outline (0.05, 0.08, 0.13 of the text's size; `outline`, `outlineWidth`), drawn under the
+  letters. The pen remembers all of these, and the mark last used, in `quire-img-pen`.
+
+**Where the marks are.** The bar had room on a wide window for all seven, but not at 390 pixels, where it already
+left Facts and Cut out out. So the bar has one button for the mark last used, one press away, its icon and tooltip
+the mark's, and beside it a narrow Marks button (an arrow down) that opens a menu of all seven, grown from where it
+was pressed, each line its icon, its name and its key, the mark in hand ticked; Tools lists them too. The menu takes
+the keyboard when opened, so Escape closes it and leaves the tool in hand as it was (the outline's menu likewise).
+That is one button fewer than the arrow, the box and the text had, which gives Cut out back to the narrowest
+screens. Measured with a pasted screenshot, the room between the middle groups and the end group, and the buttons
+shown: at 1300 wide 683 pixels before and 735 after (13 buttons, then 12); at 1024, 441 and 492; at 390, 11 buttons
+in 336 pixels of 350 before (Facts and Cut out left out) and 11 in 328 after (Facts alone left out), one row each.
+
+The keys: N numbered step, H highlighter, M magnifier, S spotlight, each listed in Help. The right-click menu on a
+number set by hand has Number in order after Remove, Bring forward and Send back.
+
+Measured (`marks-tool.test.ts`, headless Chromium, software drawing): three presses make 1, 2 and 3, the first
+taken away leaves 1 and 2, a 7 typed is kept and Number in order puts it back, each change one undo. A highlighter
+dragged crooked is level, with Shift it is not, and started on read words it lies on their line to within a
+millionth of a pixel; under yellow the page is yellow and a letter stays under 90 of 255. A picture of one-pixel
+stripes made half as large loses them (within 60 of gray), while a lens four times enlarged over them draws each
+stripe two pixels wide at 37 and 218; a lens looking at a red square has the square's middle at its own and its
+edges within four pixels of where twice its size puts them; on the screen the lens shows the square too. Two
+spotlights leave their overlap at 244 of 244 and shade the rest to 110, then 61 with Dark shade. A white text with a
+black outline has both inks, its middle within four pixels of the place pressed. Turned eight degrees, a number is
+picked where it now is; straightened eight degrees, a text's ink starts within six pixels of the corner of a box made
+at the same place (it had been drawn hundreds of pixels away before: the text was drawn at the map's likeness of the
+origin, not of its own place). On a 4000 by 3000 photograph the export took 518 to 541 ms, 552 to 573 ms with a
+magnifier; on the screen a lens is drawn again within about 57 ms of the place it looks at moving (the test's
+waiting goes in steps of 50 ms, so this is an upper bound). A tap of a finger puts down a number and a magnifier.
 
 **Ready for models.** `tiles.ts` cuts a picture into tiles read with a margin, runs a step on each and keeps
 only its middle, enlarged by the step's scale, handing each finished tile on as it is done. A stand-in that
@@ -743,8 +823,8 @@ Each of these is a question to settle before building.
 - **Hiding things.** Blur can sometimes be undone and a solid block cannot: which is the default. Text
   that looks private is now found and offered (Reading text, above), never hidden by itself; whether
   it should also be offered as a picture arrives, without the tool being chosen, is still open.
-- **Marking up.** Which of arrows, boxes, numbered steps, text, a highlighter, a magnifier and a pointer;
-  whether marks stay editable after saving, which needs a file format of its own.
+- **Marking up.** Arrows, boxes, numbered steps, text, a highlighter, a magnifier and a spotlight are built and
+  stay editable in the `.quire`; a pointer (a drawn mouse cursor) is still to be settled.
 - **Photo fixing.** Which of light, colour, curves, white balance, straightening, perspective, sharpening,
   noise, healing a blemish, removing an object and removing a background are real needs; raw files or not;
   HEIC files from a phone.
@@ -850,6 +930,19 @@ only with `--enable-unsafe-webgpu`, which the drawing tests pass.
   own, and 4:4:4 files, were not measured.
 - The pictures of the built page were made with software drawing: with Chromium's Vulkan drawing the canvas
   came out empty in the window's picture, though everything else on the page drew.
+- More marks: a magnifier's lens shows the picture and the marks drawn before it, but not another lens or a
+  spotlight's shade. Its size is measured on the level picture, so on a picture resized to another shape (width and
+  height both given) the lens is round by its width and its picture a little squeezed; with a perspective it is round
+  on the screen and does not take the map's slant where it lies. A lens looking past the picture's edge shows a quiet
+  gray there. On the screen each lens is flattened by the card whenever what it shows changes, one at a time; with
+  many lenses on a large picture they catch up a little after a drag. A text's width is measured by the browser's
+  canvas, so picking a text and aligning it are exact in the browser and a close guess elsewhere (the tests without a
+  browser). The text field grows with what is typed by CSS `field-sizing`, which Firefox does not have (there it is a
+  field of fixed width). The highlighter's copy of the picture under it, on the screen, goes through the marks'
+  canvas, which is sRGB, so under a highlighter a Display P3 picture is shown in sRGB's colors; the export is right.
+  A number set by hand and a spotlight's shade are changed from the strip only; a text already made cannot have its
+  words changed, only be made again. Not tried on a real touch screen: a finger's tap was tried in the headless
+  browser.
 - A picture in an mdQuire document does not yet open in imgQuire and come back: the core has the pieces
   (`takes`, `take`, one editor at a time) but a way for one kind to lend a picture to another and have it
   back is still to be designed.
@@ -858,7 +951,6 @@ only with `--enable-unsafe-webgpu`, which the drawing tests pass.
 
 1. The models for repairing, restoring and enlarging, once the owner has chosen them: their dialog in the
    reading dialog's family, run through `tiles.ts` in a worker.
-2. More marks: numbered steps, a highlighter, a magnifier, a spotlight, outlined captions.
-3. Many at once: batches through the same steps and export (a look given to a batch), and the cut-out's
+2. Many at once: batches through the same steps and export (a look given to a batch), and the cut-out's
    pictures as a zip.
-4. From the phone, and opening a picture from mdQuire and back.
+3. From the phone, and opening a picture from mdQuire and back.

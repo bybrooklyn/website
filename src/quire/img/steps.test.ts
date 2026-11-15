@@ -6,7 +6,7 @@
 
 import { expect, test } from "bun:test";
 import { encodeRuns } from "./masks";
-import { add, change, createHistory, edited, fresh, LIMITS, look, move, readSteps, remove, setOnly, toggle, within, writeSteps, type Kept } from "./steps";
+import { add, change, createHistory, edited, fresh, isMark, LIMITS, look, move, numbersOf, readSteps, remove, setOnly, toggle, within, writeSteps, ZOOMS, type Kept } from "./steps";
 
 const original = { name: "pictures/cat.png", width: 1200, height: 800, type: "image/png", bytes: 52_000 };
 
@@ -202,5 +202,56 @@ test("a perspective straightens the picture before it is turned, keeps its dials
     const thrown = look({ original, steps: [{ id: "s1", type: "perspective", corners: [{ x: 590, y: 790 }, { x: 610, y: 790 }, { x: 1190, y: 799 }, { x: 10, y: 799 }], ratio: 1 }] as Kept[] });
     expect(thrown.perspective).toBeUndefined();
     expect(thrown.crop).toEqual({ x: 0, y: 0, width: 1200, height: 800 });
+});
+
+test("numbered steps count by themselves in the order they were made, keep a number set by hand and count on from it, and taking one away renumbers the rest", () => {
+    const at = (x: number) => ({ type: "number" as const, at: { x, y: 10 }, color: "#ff3b30", size: 40 });
+    let steps = add(add(add([], at(10)), at(20)), at(30));
+    expect([...numbersOf(steps).values()]).toEqual([1, 2, 3]);
+    // brought forward, they keep their numbers, being counted in the order they were made
+    expect(look({ original, steps: move(steps, "s1", 2) }).marks.map((mark) => (mark as { value: number }).value)).toEqual([2, 3, 1]);
+    // the first taken away: the others are counted again
+    expect([...numbersOf(remove(steps, "s1")).values()]).toEqual([1, 2]);
+    // the second set to 7 by hand: kept, and the third counts on from it; the first taken away leaves 7 as it is
+    steps = change(steps, "s2", { value: 7 });
+    expect([...numbersOf(steps).values()]).toEqual([1, 7, 8]);
+    expect([...numbersOf(remove(steps, "s1")).values()]).toEqual([7, 8]);
+});
+
+test("the new marks and a text's outline and alignment read back from steps.json, bounded, and a text from before reads as it did", () => {
+    let steps: Kept[] = add([], { type: "text", at: { x: 40, y: 50 }, text: "Top line\nand the next", color: "#ffffff", size: 32, outline: "#000000", outlineWidth: 3, align: "center" });
+    steps = add(steps, { type: "number", at: { x: 5, y: 6 }, color: "#0a84ff", size: 30, value: 4, angle: -3 });
+    steps = add(steps, { type: "highlight", from: { x: 1, y: 2 }, to: { x: 300, y: 2 }, color: "#ffd60a", thickness: 18 });
+    steps = add(steps, { type: "magnifier", at: { x: 500, y: 300 }, from: { x: 100, y: 120 }, radius: 90, zoom: 3, color: "#ff3b30", thickness: 4 });
+    steps = add(steps, { type: "spotlight", rect: { x: 10, y: 10, width: 200, height: 100 }, round: true, dim: 0.75 });
+    const written = writeSteps({ original, steps });
+    expect(readSteps(written)).toEqual({ original, steps, dropped: 0 });
+    // a text as it was written before outlines: no outline, no alignment, drawn as it was
+    const before = readSteps(JSON.stringify({ quire: 1, original, steps: [{ type: "text", at: { x: 1, y: 1 }, text: "Here", color: "#ffffff", size: 20, id: "s1" }] }))!;
+    expect(before.steps[0]).toEqual({ type: "text", at: { x: 1, y: 1 }, text: "Here", color: "#ffffff", size: 20, id: "s1" });
+    // hostile numbers held in, and marks that are not whole left out
+    const hostile = readSteps(
+        JSON.stringify({
+            quire: 1,
+            original,
+            steps: [
+                { type: "number", at: { x: 1, y: 1 }, color: "#000000", size: 1e9, value: -5 },
+                { type: "magnifier", at: { x: 1, y: 1 }, from: { x: 2, y: 2 }, radius: 1e9, zoom: 400, color: "#000000", thickness: 2 },
+                { type: "spotlight", rect: { x: 0, y: 0, width: 5, height: 5 }, dim: 7, round: "yes" },
+                { type: "text", at: { x: 1, y: 1 }, text: "x", color: "#000000", size: 10, outline: "#00000", outlineWidth: 4, align: "justify" },
+                { type: "highlight", from: { x: 1, y: 1 }, color: "#000000", thickness: 3 },
+                { type: "magnifier", at: { x: 1, y: 1 }, from: { x: 2, y: 2 }, radius: 10, color: "#000000", thickness: 2 },
+            ],
+        }),
+    )!;
+    expect(hostile.dropped).toBe(2);
+    expect(hostile.steps[0]).toMatchObject({ size: 4_000, value: 0 });
+    expect(hostile.steps[1]).toMatchObject({ radius: LIMITS.side, zoom: ZOOMS.most });
+    expect(hostile.steps[2]).toEqual({ type: "spotlight", rect: { x: 0, y: 0, width: 5, height: 5 }, dim: 0.95, id: "s3" });
+    expect(hostile.steps[3]).toEqual({ type: "text", at: { x: 1, y: 1 }, text: "x", color: "#000000", size: 10, id: "s4" });
+    // every new mark is drawn over the picture, a number with the number it shows
+    expect(look({ original, steps }).marks.map((mark) => mark.type)).toEqual(["text", "number", "highlight", "magnifier", "spotlight"]);
+    expect(look({ original, steps }).marks[1]).toMatchObject({ value: 4 });
+    expect(steps.every((step) => isMark(step))).toBe(true);
 });
 

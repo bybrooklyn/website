@@ -151,6 +151,12 @@ const PATHS: Record<string, string> = {
     line: '<path d="M4 12h16"/>',
     perspective: '<path d="M7.5 5h9l3.5 14H4z"/><path d="M12 5v14"/>',
     corners: '<path d="M6 6.5 18 5l1.5 13.5h-15z" stroke-dasharray="2.5 2.5"/><circle cx="6" cy="6.5" r="1.6" fill="currentColor"/><circle cx="18" cy="5" r="1.6" fill="currentColor"/><circle cx="19.5" cy="18.5" r="1.6" fill="currentColor"/><circle cx="4.5" cy="18.5" r="1.6" fill="currentColor"/>',
+    // the marks that came after: a numbered step, a lens looking at a point, a shape left bright in a shade, an ellipse, letters with an outline
+    step: '<circle cx="12" cy="12" r="8"/><path d="M10.2 9.2 12.5 7.6V16.5M10.2 16.5h4.6"/>',
+    lens: '<circle cx="15" cy="9" r="5.5"/><circle cx="6" cy="17.5" r="2"/><path d="m7.6 16.3 3.3-3.3" opacity=".6"/>',
+    spotlight: '<path d="M3.5 4.5h17v15h-17zM7.5 8v8h9V8z" fill="currentColor" fill-rule="evenodd" opacity=".35" stroke="none"/><rect x="7.5" y="8" width="9" height="8" rx="1"/>',
+    ellipse: '<ellipse cx="12" cy="12" rx="8.5" ry="6"/>',
+    outlined: '<path d="M5 19 11 5h2l6 14M7.5 14h9" stroke-width="4" opacity=".3"/><path d="M5 19 11 5h2l6 14M7.5 14h9"/>',
 };
 
 // the six heading levels: the heading sign with its number beside it

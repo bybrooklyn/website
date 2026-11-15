@@ -14,15 +14,16 @@ import { copyDocument, type Store } from "../core/store";
 import { packQuire, type Parts } from "../core/quire-file";
 import { openDialog } from "../core/dialog";
 import { createHistoryPanel, snapshotParts } from "../core/versions";
-import { control, fieldForm, flowMenu, icon, make, ruled, type MenuItem } from "../core/ui";
+import { control, enterGivesBack, fieldForm, flowMenu, icon, make, ruled, type MenuItem } from "../core/ui";
 import type { Heading } from "../core/menu-row";
 import { pressLines } from "./press-menu";
 import { copyPicture, encodeAs, exportName, formatOf, FORMATS, readSettings, untouched, weightSaid, type Settings } from "./export";
 import { decodeHeic, heicIn } from "./codec-run";
-import { COLORS, exportPanel, factsPanel, factsSaid, kindOf, nameFor, resizeBox, SHAPES, toolStrip, WEIGHTS } from "./panels";
+import { COLORS, exportPanel, factsPanel, factsSaid, kindOf, MARK_TOOLS, nameFor, OUTLINES, resizeBox, SHADES, SHAPES, toolStrip, WEIGHTS, ZOOM_STEPS, type MarkControls } from "./panels";
 import { blocksOut, factsOf, profileOf, spaceOf, type Facts, type Keep } from "./metadata";
 import { gradingWith } from "./draw";
-import { createStage, setPerspective, setTurn, type Pen, type Tool } from "./stage";
+import { createStage, PEN, setPerspective, setTurn, sizesFor, type Pen, type Tool } from "./stage";
+import { alignShare, textWidth } from "./marks";
 import { perspectiveMap, rectangleOf, type Corners, type Perspective } from "./perspective";
 import { apply, ratioOf } from "./homography";
 import { grey, segments, straighten } from "./lines";
@@ -44,7 +45,7 @@ import { autoFix, averageAround, balanceFrom } from "./fix";
 import { prepared } from "./draw";
 import { gradeOne, hueOf, isNeutral, MOST, neutral, space, trimGrade, type Grade } from "./grade";
 import { megabytes, sizeOf, TIERS } from "./read/models";
-import { add, createHistory, edited, fresh, gradeOf, look, move, readSteps, remove, setOnly, shapeOf, writeSteps, type Filter, type Kept, type Picture } from "./steps";
+import { add, createHistory, edited, fresh, gradeOf, isMark, look, MARK_KINDS, move, MOST_NUMBER, numbersOf, readSteps, remove, setOnly, shapeOf, writeSteps, type Align, type Filter, type Kept, type Mark, type MarkKind, type Picture } from "./steps";
 
 /** The file a picture document keeps its steps in, inside its `.quire`. */
 export const MAIN = "steps.json";
@@ -67,7 +68,29 @@ const keep = (key: string, value: string) => {
 };
 
 /** The single keys that pick a tool, while the picture has the keyboard. */
-const TOOL_KEYS: Record<string, Tool | "export" | "facts" | "perspective"> = { KeyC: "crop", KeyR: "hide", KeyA: "arrow", KeyT: "text", KeyB: "box", KeyE: "export", KeyI: "facts", KeyW: "read", KeyG: "grade", KeyK: "cutout", KeyP: "perspective" };
+const TOOL_KEYS: Record<string, Tool | "export" | "facts" | "perspective"> = { KeyC: "crop", KeyR: "hide", KeyA: "arrow", KeyT: "text", KeyB: "box", KeyN: "number", KeyH: "highlight", KeyM: "magnifier", KeyS: "spotlight", KeyE: "export", KeyI: "facts", KeyW: "read", KeyG: "grade", KeyK: "cutout", KeyP: "perspective" };
+
+/** The pen as this browser kept it, each field checked, with what is missing or wrong taken from the start: the first color, a medium line, no outline, left aligned, twice as large, a medium shade, a rectangle; and the mark last used, an arrow to start. */
+export function readPen(text: string | null | undefined): Pen & { mark: MarkKind } {
+    let kept: Partial<Pen & { mark: string }> | null = null;
+    try {
+        kept = JSON.parse(text ?? "null");
+    } catch {
+        kept = null;
+    }
+    const given = kept && typeof kept === "object" ? kept : {};
+    return {
+        color: COLORS.some((each) => each.value === given.color) ? given.color! : COLORS[0]!.value,
+        weight: WEIGHTS.some((each) => each.value === given.weight) ? given.weight! : WEIGHTS[1]!.value,
+        ...(COLORS.some((each) => each.value === given.outline) ? { outline: given.outline } : {}),
+        outlineWeight: OUTLINES.some((each) => each.value === given.outlineWeight) ? given.outlineWeight! : PEN.outlineWeight,
+        align: given.align === "center" || given.align === "right" ? given.align : "left",
+        zoom: ZOOM_STEPS.includes(given.zoom as number) ? given.zoom! : PEN.zoom,
+        dim: SHADES.some((each) => each.value === given.dim) ? given.dim! : PEN.dim,
+        ...(given.round === true ? { round: true } : {}),
+        mark: (MARK_KINDS as string[]).includes(given.mark as string) ? (given.mark as MarkKind) : "arrow",
+    };
+}
 
 /** Hands the writer a file. */
 function give(blob: Blob, name: string) {
@@ -106,14 +129,12 @@ export function mountEditor(host: HTMLElement, context: Context) {
     let profile: Uint8Array | undefined;
     let where: { store?: Store; id?: string; name: string } = { name: "Untitled" };
     const history = createHistory([]);
-    let pen: Pen = (() => {
-        try {
-            const kept = JSON.parse(local()?.getItem(KEYS.pen) ?? "null") as Partial<Pen> | null;
-            return { color: COLORS.some((each) => each.value === kept?.color) ? kept!.color! : COLORS[0]!.value, weight: WEIGHTS.some((each) => each.value === kept?.weight) ? kept!.weight! : WEIGHTS[1]!.value };
-        } catch {
-            return { color: COLORS[0]!.value, weight: WEIGHTS[1]!.value };
-        }
-    })();
+    // the pen, and the mark last used, which the bar keeps one press away
+    let pen: Pen & { mark: MarkKind } = readPen(local()?.getItem(KEYS.pen));
+    const keepPen = (next: Partial<Pen & { mark: MarkKind }>) => {
+        pen = { ...pen, ...next };
+        keep(KEYS.pen, JSON.stringify(pen));
+    };
     let settings: Settings = readSettings(local()?.getItem(KEYS.export));
     // the part models' worker, shared by Find and the cut-out, made when first asked
     const sharedFinder = createFinder();
@@ -524,25 +545,40 @@ export function mountEditor(host: HTMLElement, context: Context) {
         done: () => stage.element.focus({ preventScroll: true }),
     });
     const strip = toolStrip({
-        color: () => pickedMark()?.color ?? pen.color,
+        color: () => {
+            const mark = pickedMark();
+            return mark && "color" in mark ? mark.color : pen.color;
+        },
         weight: () => pen.weight,
         setColor: (value) => {
-            pen = { ...pen, color: value };
-            keep(KEYS.pen, JSON.stringify(pen));
+            keepPen({ color: value });
             const mark = pickedMark();
-            if (mark) commit(history.now().map((step) => (step.id === mark.id ? ({ ...step, color: value } as Kept) : step)));
+            if (mark && "color" in mark) changeMark(mark.id, { color: value });
             refresh();
         },
         setWeight: (value) => {
-            pen = { ...pen, weight: value };
-            keep(KEYS.pen, JSON.stringify(pen));
+            keepPen({ weight: value });
             const mark = pickedMark();
             if (mark && picture) {
-                const line = Math.max(2, Math.round(Math.max(picture.original.width, picture.original.height) * value));
-                commit(history.now().map((step) => (step.id !== mark.id ? step : step.type === "text" ? { ...step, size: line * 6 } : step.type === "arrow" || step.type === "box" ? { ...step, thickness: line } : step)));
+                const sizes = sizesFor(pen, picture.original);
+                // each kind's own size from the pen: a line's thickness, a text's size (its outline in step), a number's circle, a highlighter's stroke, a lens
+                const sized: Partial<Mark> | undefined =
+                    mark.type === "arrow" || mark.type === "box"
+                        ? { thickness: sizes.line }
+                        : mark.type === "text"
+                          ? { size: sizes.text, ...(mark.outlineWidth ? { outlineWidth: Math.round(((mark.outlineWidth * sizes.text) / mark.size) * 2) / 2 } : {}) }
+                          : mark.type === "number"
+                            ? { size: sizes.number }
+                            : mark.type === "highlight"
+                              ? { thickness: sizes.highlight }
+                              : mark.type === "magnifier"
+                                ? { radius: sizes.lens }
+                                : undefined;
+                if (sized) changeMark(mark.id, sized);
             }
             refresh();
         },
+        mark: () => markControls(),
         shape: () => shape,
         setShape: (name) => {
             shape = name;
@@ -578,10 +614,156 @@ export function mountEditor(host: HTMLElement, context: Context) {
         cut: () => cutStrip(),
         grade: () => (asking ? { said: making === "find" ? findSaid() : asking.said, ...(making === "find" && finding.state() === "ready" ? { controls: [subjectButton, backgroundButton] } : {}), cancel: () => cancelPick() } : undefined),
     });
-    const pickedMark = () => {
+    /** The mark picked, if what is picked is a mark. */
+    const pickedMark = (): (Kept & Mark) | undefined => {
         const step = history.now().find((each) => each.id === stage.picked());
-        return step && (step.type === "arrow" || step.type === "box" || step.type === "text") ? step : undefined;
+        return step && isMark(step) ? step : undefined;
     };
+    /** The numbered step picked, when its number was set by hand. */
+    const numberSetByHand = () => {
+        const mark = pickedMark();
+        return mark?.type === "number" && mark.value !== undefined ? mark : undefined;
+    };
+    /** The numbered step picked counted in order again, its number set by hand let go. */
+    const numberInOrder = () => {
+        const mark = numberSetByHand();
+        if (mark) changeMark(mark.id, { value: undefined });
+    };
+    /** Changes one mark, as one undo. */
+    const changeMark = (id: string, to: Partial<Mark>) => commit(history.now().map((step) => (step.id === id ? ({ ...step, ...to } as Kept) : step)));
+    /** The kind of mark the strip is for: the one picked, else the tool's. */
+    const markKind = (): MarkKind | undefined => pickedMark()?.type ?? ((MARK_KINDS as string[]).includes(stage.tool()) ? (stage.tool() as MarkKind) : undefined);
+    /** A button of the strip for a mark, pressed when it is what the mark has. */
+    const markButton = (label: string, content: string | Node, on: boolean, press: () => void) => {
+        const button = control(label, typeof content === "string" ? icon(content) : content, () => (press(), refresh()));
+        button.classList.toggle("pressed", on);
+        return button;
+    };
+    /** A word button of the strip for a mark, pressed when it is what the mark has. */
+    const markWords = (label: string, tip: string, on: boolean, press: () => void) => {
+        const button = stripButton(label, tip, () => (press(), refresh()));
+        button.classList.toggle("pressed", on);
+        return button;
+    };
+    // a numbered step's number, typed: kept with Enter or on leaving the field, which gives the keyboard back to the picture
+    const numberField = make("input", "quire-img-strip-number");
+    numberField.type = "text";
+    numberField.inputMode = "numeric";
+    numberField.setAttribute("aria-label", "Number");
+    numberField.title = "Number";
+    enterGivesBack(
+        numberField,
+        (value) => {
+            const mark = pickedMark();
+            const typed = Number.parseInt(value, 10);
+            if (mark?.type !== "number") return;
+            if (!/^\d+$/.test(value)) return refresh();
+            changeMark(mark.id, { value: Math.min(MOST_NUMBER, typed) });
+        },
+        () => {
+            stage.element.focus({ preventScroll: true });
+            refresh();
+        },
+    );
+    // left by a press elsewhere, the strip is filled again too, as it was not while the field had the keyboard
+    numberField.addEventListener("blur", () => queueMicrotask(refresh));
+    // a text's outline: none, or a color and a width, from a small menu grown from its button
+    const outlineMenu = flowMenu("Outline", { className: "quire-img-outline-menu" });
+    const outlineLines = (): MenuItem[] => {
+        const mark = pickedMark();
+        const color = mark?.type === "text" ? mark.outline : pen.outline;
+        const share = mark?.type === "text" && mark.outlineWidth ? mark.outlineWidth / mark.size : (pen.outlineWeight ?? PEN.outlineWeight);
+        const set = (next: { outline?: string; outlineWeight?: number }) => {
+            keepPen(next);
+            const now = pickedMark();
+            if (now?.type === "text" && picture) {
+                const outline = "outline" in next ? next.outline : now.outline;
+                const width = Math.max(1, Math.round(now.size * (next.outlineWeight ?? (now.outlineWidth ? now.outlineWidth / now.size : (pen.outlineWeight ?? PEN.outlineWeight))) * 2) / 2);
+                commit(history.now().map((step) => (step.id !== now.id ? step : ({ ...step, outline: undefined, outlineWidth: undefined, ...(outline ? { outline, outlineWidth: width } : {}) } as Kept))));
+            }
+            refresh();
+        };
+        const swatchOf = (value: string) => {
+            const mark = make("span", "quire-img-swatch");
+            mark.style.background = value;
+            return mark;
+        };
+        return ruled(
+            [{ label: "No outline", icon: "close", group: "outline", pressed: !color, run: () => set({ outline: undefined }) }, ...COLORS.map((each): MenuItem => ({ label: each.name, icon: swatchOf(each.value), group: "outline", pressed: color === each.value, run: () => set({ outline: each.value }) }))],
+            OUTLINES.map((each, at): MenuItem => {
+                const line = icon("line");
+                line.style.strokeWidth = String(1.2 + at * 1.4);
+                return { label: each.name, icon: line, group: "outline-width", pressed: Math.abs(share - each.value) < 0.015, run: () => set({ outlineWeight: each.value }) };
+            }),
+        );
+    };
+    // made once, so that its menu keeps its place while the strip is filled again behind it
+    const outlineButton: HTMLButtonElement = control("Outline", icon("outlined"), () => (outlineMenu.isOpen() ? outlineMenu.close() : openHolding(outlineMenu, outlineButton, outlineLines())));
+    /** Moves a text's place so that its block stays where it is when its lines are aligned another way. */
+    const realigned = (mark: Extract<Mark, { type: "text" }>, align: Align): Partial<Mark> => {
+        const by = (alignShare(align) - alignShare(mark.align)) * textWidth(mark);
+        const radians = ((mark.angle ?? 0) * Math.PI) / 180;
+        return { at: { x: mark.at.x + by * Math.cos(radians), y: mark.at.y + by * Math.sin(radians) }, align: align === "left" ? undefined : align };
+    };
+    /** What the strip shows for the mark picked, or the mark tool in hand. */
+    function markControls(): MarkControls {
+        const kind = markKind();
+        const mark = pickedMark();
+        const lines = WEIGHTS.map((each) => `${each.name} line`);
+        if (kind === "spotlight") {
+            const round = mark?.type === "spotlight" ? !!mark.round : !!pen.round;
+            const shade = (mark?.type === "spotlight" ? mark.dim : undefined) ?? pen.dim ?? PEN.dim;
+            const setRound = (on: boolean) => {
+                keepPen({ round: on || undefined });
+                if (mark?.type === "spotlight") changeMark(mark.id, { round: on ? true : undefined });
+            };
+            // every spotlight shades alike, so the shade is changed for all of them at once
+            const setShade = (value: number) => {
+                keepPen({ dim: value });
+                if (history.now().some((step) => step.type === "spotlight")) commit(history.now().map((step) => (step.type === "spotlight" ? ({ ...step, dim: value } as Kept) : step)));
+            };
+            const shadeSwatch = (value: number) => {
+                const swatch = make("span", "quire-img-swatch quire-img-shade");
+                swatch.style.setProperty("--shade", String(value));
+                return swatch;
+            };
+            return {
+                colors: false,
+                extra: [
+                    [markButton("Rectangle", "box", !round, () => setRound(false)), markButton("Ellipse", "ellipse", round, () => setRound(true))],
+                    SHADES.map((each) => markButton(each.name, shadeSwatch(each.value), Math.abs(shade - each.value) < 0.01, () => setShade(each.value))),
+                ],
+            };
+        }
+        if (kind === "text") {
+            const align = (mark?.type === "text" ? mark.align : pen.align) ?? "left";
+            const outline = mark?.type === "text" ? mark.outline : pen.outline;
+            const setAlign = (next: Align) => {
+                keepPen({ align: next });
+                if (mark?.type === "text") changeMark(mark.id, realigned(mark, next));
+            };
+            outlineButton.classList.toggle("pressed", !!outline);
+            return {
+                colors: true,
+                weights: lines,
+                extra: [[markButton("Align left", "left", align === "left", () => setAlign("left")), markButton("Align center", "center", align === "center", () => setAlign("center")), markButton("Align right", "right", align === "right", () => setAlign("right"))], [outlineButton]],
+            };
+        }
+        if (kind === "number") {
+            if (mark?.type !== "number") return { colors: true, weights: lines, extra: [] };
+            numberField.value = String(numbersOf(history.now()).get(mark.id) ?? 1);
+            return { colors: true, weights: lines, extra: [[numberField, ...(mark.value !== undefined ? [markWords("In order", "Number it in order again", false, () => numberInOrder())] : [])]] };
+        }
+        if (kind === "magnifier") {
+            const zoom = (mark?.type === "magnifier" ? mark.zoom : pen.zoom) ?? PEN.zoom;
+            const setZoom = (value: number) => {
+                keepPen({ zoom: value });
+                if (mark?.type === "magnifier") changeMark(mark.id, { zoom: value });
+            };
+            return { colors: true, weights: WEIGHTS.map((each) => `${each.name === "Thin" ? "Small" : each.name === "Thick" ? "Large" : each.name} lens`), extra: [ZOOM_STEPS.map((each) => markWords(`${each}×`, `Enlarge ${each} times`, zoom === each, () => setZoom(each)))] };
+        }
+        return { colors: true, weights: lines, extra: [] };
+    }
     room.append(strip.strip);
     document.body.append(exporting.panel, resizing.box);
     const historyPanel = createHistoryPanel(
@@ -756,9 +938,9 @@ export function mountEditor(host: HTMLElement, context: Context) {
         hide: tool("Hide (R)", "hide", () => pickTool("hide")),
         read: tool("Read text (W)", "find", () => pickTool("read")),
         cutout: tool("Cut out (K)", "cut", () => pickTool("cutout")),
-        arrow: tool("Arrow (A)", "arrow", () => pickTool("arrow")),
-        box: tool("Box (B)", "box", () => pickTool("box")),
-        text: tool("Text (T)", "text", () => pickTool("text")),
+        // the mark last used, one press away, and beside it every mark, in a menu grown from where it was pressed
+        mark: tool(`${MARK_TOOLS[pen.mark].label} (${MARK_TOOLS[pen.mark].key})`, MARK_TOOLS[pen.mark].icon, () => pickTool(pen.mark)),
+        marks: tool("Marks", "chevron", () => toggleMarks()),
         grade: tool("Grade (G)", "paper", () => showGrade()),
         facts: tool("Facts (I)", "info", () => showFacts()),
         export: tool("Export (E)", "export", () => showExportPanel()),
@@ -772,20 +954,46 @@ export function mountEditor(host: HTMLElement, context: Context) {
         made.append(...items);
         return made;
     };
+    // on the narrowest screens Facts is left to View, Facts and the I key, so that the other tools fit
     buttons.facts.classList.add("quire-img-bar-facts");
-    // on the narrowest screens Cut out is left to Tools, Cut out and the K key, as Facts is, so that the other tools fit
-    buttons.cutout.classList.add("quire-img-bar-cutout");
     const end = group(buttons.grade, buttons.facts, buttons.export);
     end.classList.add("quire-bar-end");
-    strip0.append(group(buttons.undo, buttons.redo), group(buttons.crop, buttons.resize, buttons.hide, buttons.read, buttons.cutout), group(buttons.arrow, buttons.box, buttons.text), end);
+    buttons.marks.classList.add("quire-img-bar-more");
+    buttons.marks.setAttribute("aria-haspopup", "menu");
+    strip0.append(group(buttons.undo, buttons.redo), group(buttons.crop, buttons.resize, buttons.hide, buttons.read, buttons.cutout), group(buttons.mark, buttons.marks), end);
     bar.append(strip0);
     frame.place("bar").append(bar);
+    const marksMenu = flowMenu("Marks", { className: "quire-img-marks-menu" });
+    /** Every mark, as lines of a menu: its icon, its name and its key, the one in hand ticked. */
+    const markLines = (): MenuItem[] => MARK_KINDS.map((kind) => ({ label: MARK_TOOLS[kind].label, icon: tick(stage.tool() === kind, MARK_TOOLS[kind].icon), hint: MARK_TOOLS[kind].key, key: kind, pressed: stage.tool() === kind, disabled: !picture, run: () => pickTool(kind) }));
+    /** Opens the marks' menu under its button, or closes it. */
+    function toggleMarks() {
+        if (marksMenu.isOpen()) return marksMenu.close();
+        openHolding(marksMenu, buttons.marks, markLines());
+    }
+    /** Opens a menu from a button, the keyboard in it even when opened by the pointer (no line of it yet), so that Escape closes it and not the tool under it; the first line too when opened from the keyboard. */
+    function openHolding(menu: ReturnType<typeof flowMenu>, from: HTMLElement, lines: MenuItem[]) {
+        const keyboard = from.matches(":focus-visible");
+        menu.open(from, lines, keyboard);
+        if (!keyboard) menu.box.querySelector<HTMLElement>(".quire-menu-items")?.focus({ preventScroll: true });
+    }
+    /** The bar's mark button shows the mark last used. */
+    let shownMark: MarkKind | undefined;
+    function showLastMark() {
+        if (shownMark === pen.mark) return;
+        shownMark = pen.mark;
+        const { label, icon: name, key } = MARK_TOOLS[pen.mark];
+        buttons.mark.setAttribute("aria-label", `${label} (${key})`);
+        buttons.mark.title = `${label} (${key})`;
+        buttons.mark.replaceChildren(icon(name));
+    }
 
     function pickTool(next: Tool) {
         if (!picture) return;
         if (next === "grade") return showGrade();
         if (grading.isOpen()) grading.close();
         if (stage.tool() === "crop" && next !== "crop") stage.applyCrop();
+        if ((MARK_KINDS as string[]).includes(next)) keepPen({ mark: next as MarkKind });
         stage.setTool(stage.tool() === next && next !== "crop" ? "none" : next);
         stage.element.focus({ preventScroll: true });
         if (stage.tool() === "read") void reading.start(buttons.read);
@@ -1242,14 +1450,16 @@ export function mountEditor(host: HTMLElement, context: Context) {
         const has = !!picture;
         room.classList.toggle("blank", !has);
         empty.inert = has;
+        showLastMark();
+        const marking = (MARK_KINDS as string[]).includes(stage.tool());
         for (const [name, button] of Object.entries(buttons)) {
             button.disabled = !has;
-            button.classList.toggle("pressed", (stage.tool() === name && name !== "grade") || (name === "export" && exporting.isOpen()) || (name === "facts" && showing.isOpen()) || (name === "grade" && grading.isOpen()));
+            button.classList.toggle("pressed", (stage.tool() === name && name !== "grade") || (name === "mark" && marking) || (name === "export" && exporting.isOpen()) || (name === "facts" && showing.isOpen()) || (name === "grade" && grading.isOpen()));
         }
         buttons.undo.disabled = !history.canUndo();
         buttons.redo.disabled = !history.canRedo();
         if (stage.tool() !== "crop") straightening = false;
-        const kind = !has ? "none" : stage.tool() === "crop" ? (straightening ? "perspective" : "crop") : stage.tool() === "read" ? "read" : stage.tool() === "grade" ? "grade" : stage.tool() === "cutout" ? "cut" : stage.tool() === "arrow" || stage.tool() === "box" || stage.tool() === "text" || pickedMark() ? "mark" : "none";
+        const kind = !has ? "none" : stage.tool() === "crop" ? (straightening ? "perspective" : "crop") : stage.tool() === "read" ? "read" : stage.tool() === "grade" ? "grade" : stage.tool() === "cutout" ? "cut" : marking || pickedMark() ? "mark" : "none";
         strip.fill(kind);
         if (picture && !facts.textContent) facts.textContent = factsSaid(look(picture), picture.original.bytes, kindOf(picture.original));
         if (!picture) facts.textContent = "";
@@ -1310,6 +1520,8 @@ export function mountEditor(host: HTMLElement, context: Context) {
                         { label: "Remove", icon: "trash", hint: "Delete", key: "remove", disabled: !stage.picked(), run: () => removePicked() },
                         { label: "Bring forward", icon: "front", key: "forward", disabled: !stage.picked() || history.now().at(-1)?.id === stage.picked(), run: () => restack(1) },
                         { label: "Send back", icon: "behind", key: "back", disabled: !stage.picked() || firstMarked() === stage.picked(), run: () => restack(-1) },
+                        // a numbered step whose number was set by hand, counted in order again
+                        { label: "Number in order", icon: "step", key: "renumber", disabled: !numberSetByHand(), run: () => numberInOrder() },
                     ],
                 ),
         },
@@ -1387,11 +1599,9 @@ export function mountEditor(host: HTMLElement, context: Context) {
                         [
                             ["Crop", "crop", "C"],
                             ["Hide", "hide", "R"],
-                            ["Arrow", "arrow", "A"],
-                            ["Box", "box", "B"],
-                            ["Text", "text", "T"],
                         ] as const
                     ).map(([label, name, key]): MenuItem => ({ label, icon: tick(stage.tool() === name, name), hint: key, key: name, pressed: stage.tool() === name, disabled: !picture, run: () => pickTool(name) })),
+                    markLines(),
                     [
                         { label: "Read text", icon: tick(stage.tool() === "read", "find"), hint: "W", key: "read", pressed: stage.tool() === "read", disabled: !picture, run: () => pickTool("read") },
                         { label: "Cut out", icon: tick(stage.tool() === "cutout", "cut"), hint: "K", key: "cutout", pressed: stage.tool() === "cutout", disabled: !picture, run: () => pickTool("cutout") },
@@ -1404,8 +1614,8 @@ export function mountEditor(host: HTMLElement, context: Context) {
                         { label: "Hide what looks private", icon: "hide", key: "hide-private", disabled: !stage.findings().length, run: () => void stage.hideFindings() },
                     ],
                     [
-                        { label: "Mark color", icon: "color", items: () => COLORS.map((each) => ({ label: each.name, icon: tick(pen.color === each.value, "color"), pressed: pen.color === each.value, run: () => strip && ((pen = { ...pen, color: each.value }), keep(KEYS.pen, JSON.stringify(pen)), refresh()) })), run: () => {} },
-                        { label: "Thickness", icon: "line", items: () => WEIGHTS.map((each) => ({ label: each.name, icon: tick(pen.weight === each.value, "line"), pressed: pen.weight === each.value, run: () => ((pen = { ...pen, weight: each.value }), keep(KEYS.pen, JSON.stringify(pen)), refresh()) })), run: () => {} },
+                        { label: "Mark color", icon: "color", items: () => COLORS.map((each) => ({ label: each.name, icon: tick(pen.color === each.value, "color"), pressed: pen.color === each.value, run: () => (keepPen({ color: each.value }), refresh()) })), run: () => {} },
+                        { label: "Thickness", icon: "line", items: () => WEIGHTS.map((each) => ({ label: each.name, icon: tick(pen.weight === each.value, "line"), pressed: pen.weight === each.value, run: () => (keepPen({ weight: each.value }), refresh()) })), run: () => {} },
                     ],
                     [{ label: "Export", icon: "export", hint: "E", key: "export-tool", disabled: !picture, run: () => showExportPanel() }],
                 ),
@@ -1501,7 +1711,11 @@ export function mountEditor(host: HTMLElement, context: Context) {
             ["W", "Read text: press a word to hide it, drag to hide a run"],
             ["A", "Arrow"],
             ["B", "Box"],
-            ["T", "Text"],
+            ["T", "Text: Enter keeps it, Shift and Enter starts another line"],
+            ["N", "Numbered step: each press puts down the next number"],
+            ["H", "Highlighter: level as dragged (Shift: at any angle), along the words read"],
+            ["M", "Magnifier: drag from what to enlarge to where the lens goes"],
+            ["S", "Spotlight: drag a shape to leave bright"],
             ["G", "Grade: sliders, curves, wheels, looks, and parts of the picture"],
             ["\\", "Hold to see the original"],
             ["E", "Export"],
@@ -1612,6 +1826,8 @@ export function mountEditor(host: HTMLElement, context: Context) {
             grading.panel.remove();
             document.removeEventListener("paste", pasted);
             pressMenu.close(false);
+            marksMenu.close(false);
+            outlineMenu.close(false);
             pressAnchor.remove();
             session.destroy();
             frame.destroy();

@@ -8,7 +8,34 @@
 
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { imgPage, type ImgPage } from "../../../scripts/img-page";
-import { coveredBy, findingCovers, placeWords, runCovers, runText, thickness } from "./stage";
+import { coveredBy, findingCovers, lensBeside, onWords, placeWords, runCovers, runText, sizesFor, thickness } from "./stage";
+
+test("a highlighter laid on words read runs along their line through its middle, a tenth of its height past the first and last word, as thick as the line and a tenth more, a slanted line too", () => {
+    const line = { text: "", sure: 1, box: { at: { x: 100, y: 50 }, along: { x: 1, y: 0 }, length: 300, height: 20 }, words: [] };
+    const word = (x: number, length: number) => ({ text: "w", sure: 1, line: 0, box: { at: { x, y: 52 }, along: { x: 1, y: 0 }, length, height: 16 } });
+    expect(onWords(line, [word(110, 40), word(160, 60)])).toEqual({ from: { x: 108, y: 60 }, to: { x: 222, y: 60 }, thickness: 22 });
+    expect(onWords(line, [])).toBeUndefined();
+    // a line slanted 90 degrees: the stroke runs down it
+    const down = { ...line, box: { at: { x: 100, y: 50 }, along: { x: 0, y: 1 }, length: 300, height: 20 } };
+    const laid = onWords(down, [{ text: "w", sure: 1, line: 0, box: { at: { x: 98, y: 60 }, along: { x: 0, y: 1 }, length: 40, height: 16 } }])!;
+    expect(laid.from.x).toBeCloseTo(90);
+    expect(laid.from.y).toBeCloseTo(58);
+    expect(laid.to.y).toBeCloseTo(102);
+});
+
+test("a lens put down by a press goes half a lens up and to the right of what it looks at, or the first other side where it lies whole on the picture", () => {
+    const room = { x: 0, y: 0, width: 1000, height: 800 };
+    expect(lensBeside({ x: 500, y: 400 }, 100, room)).toEqual({ x: 650, y: 250 });
+    expect(lensBeside({ x: 900, y: 400 }, 100, room)).toEqual({ x: 750, y: 250 });
+    expect(lensBeside({ x: 500, y: 100 }, 100, room)).toEqual({ x: 650, y: 250 });
+    expect(lensBeside({ x: 900, y: 100 }, 100, room)).toEqual({ x: 750, y: 250 });
+});
+
+test("new marks' sizes follow the pen and the picture's longer side: a number's circle, a highlighter's stroke, a text's outline, a lens", () => {
+    const sizes = sizesFor({ color: "#000000", weight: 0.005, outlineWeight: 0.08 }, { width: 1200, height: 700 });
+    expect(sizes).toEqual({ line: 6, text: 36, outline: 3, number: 42, highlight: 24, lens: 96 });
+    expect(sizesFor({ color: "#000000", weight: 0.003 }, { width: 100, height: 50 }).lens).toBe(12);
+});
 
 /** Two lines of words, each word 40 wide and 20 high, the second line 60 below the first. */
 const LINES = [0, 1].map((row) => ({ text: "", sure: 1, box: { at: { x: 0, y: row * 60 }, along: { x: 1, y: 0 }, length: 300, height: 30 }, words: ["one", "two", "three"].map((text, at) => ({ text: `${text}${row}`, sure: 1, line: row, box: { at: { x: 10 + at * 60, y: 5 + row * 60 }, along: { x: 1, y: 0 }, length: 40, height: 20 } })) }));

@@ -35,11 +35,40 @@ export interface Point {
 /** How a picture is resampled when its size changes: Lanczos for photographs and screenshots, bilinear for speed, nearest for pixel art. */
 export type Filter = "lanczos" | "bilinear" | "nearest";
 
-/** The marks, drawn over the picture: an arrow, a box and a line of text. A box or a text made on a turned picture keeps the turn that makes it upright there (`angle`, in degrees, about a box's middle or a text's place), so that it turns with the picture after. */
+/** How a text's lines lie against its place: left (where none is kept), about it, or ending at it. */
+export type Align = "left" | "center" | "right";
+
+/**
+ * The marks, drawn over the picture: an arrow, a box, text (its lines, an outline round its letters and how its
+ * lines are aligned), a numbered step (a filled circle with a number, counted by itself unless `value` was set by
+ * hand), a highlighter's stroke, a magnifier (a round lens at `at` showing the picture round `from` enlarged
+ * `zoom` times) and a spotlight's shape (a rectangle, or an ellipse when `round`, left bright while all round it
+ * is dimmed by `dim`). A box, a text, a number or a spotlight made on a turned picture keeps the turn that makes it
+ * upright there (`angle`, in degrees, about its middle or its place), so that it turns with the picture after.
+ */
 export type Mark =
     | { type: "arrow"; from: Point; to: Point; color: string; thickness: number }
     | { type: "box"; rect: Rect; color: string; thickness: number; angle?: number }
-    | { type: "text"; at: Point; text: string; color: string; size: number; angle?: number };
+    | { type: "text"; at: Point; text: string; color: string; size: number; angle?: number; outline?: string; outlineWidth?: number; align?: "center" | "right" }
+    | { type: "number"; at: Point; color: string; size: number; value?: number; angle?: number }
+    | { type: "highlight"; from: Point; to: Point; color: string; thickness: number }
+    | { type: "magnifier"; at: Point; from: Point; radius: number; zoom: number; color: string; thickness: number }
+    | { type: "spotlight"; rect: Rect; round?: true; dim: number; angle?: number };
+
+/** The kinds of mark. */
+export type MarkKind = Mark["type"];
+
+/** Every kind of mark, in the order the tools offer them. */
+export const MARK_KINDS: MarkKind[] = ["arrow", "box", "text", "number", "highlight", "magnifier", "spotlight"];
+
+/** True when a step is a mark. */
+export const isMark = <T extends { type: string }>(step: T): step is T & Mark => (MARK_KINDS as string[]).includes(step.type);
+
+/** The most a number set by hand may be. */
+export const MOST_NUMBER = 9_999;
+
+/** How little and how much a magnifier may enlarge. */
+export const ZOOMS = { least: 1.25, most: 8 };
 
 /** A cover as the picture has it: its rectangle, its color, and its turn about its middle if it was made on a turned picture. */
 export type Cover = { rect: Rect; color: string; angle?: number };
@@ -135,6 +164,7 @@ export function look(picture: Picture): Look {
     const grades: Look["grades"] = [];
     let cutout: Cut | undefined;
     let repair = false;
+    const numbers = numbersOf(picture.steps);
     for (const step of picture.steps) {
         if (step.off) continue;
         if (step.type === "grade") grades.push({ id: step.id, grade: gradeOf(step) });
@@ -147,11 +177,29 @@ export function look(picture: Picture): Look {
         } else if (step.type === "cover") covers.push({ rect: step.angle ? step.rect : within(step.rect, original), color: step.color, ...(step.angle ? { angle: step.angle } : {}) });
         else if (step.type === "cutout") cutout = cutOf(step);
         else if (step.type === "repair") repair = true;
+        else if (step.type === "number") marks.push({ ...(withoutId(step) as Extract<Mark, { type: "number" }>), value: numbers.get(step.id) ?? 1 });
         else if (step.type !== "turn" && step.type !== "perspective") marks.push(withoutId(step) as Mark);
     }
     const width = clamp(Math.round(crop.width * across), 1, LIMITS.side);
     const height = clamp(Math.round(crop.height * down), 1, LIMITS.side);
     return { crop, width, height, filter, covers, marks, grades, ...(turn.degrees ? { turn: turn.degrees } : {}), ...(perspective ? { perspective } : {}), ...(cutout ? { cutout } : {}), ...(repair ? { repair: true as const } : {}) };
+}
+
+/**
+ * The number each numbered step shows, by its id: counted in the order the steps were made (their ids), not
+ * the order they are drawn in, so that bringing one forward never renumbers them. A number set by hand is kept,
+ * and the count goes on from it; taking one away renumbers the ones counted by themselves after it.
+ */
+export function numbersOf(steps: Kept[]): Map<string, number> {
+    const order = (id: string) => Number(/^s(\d+)$/.exec(id)?.[1] ?? 0);
+    const counted = steps.filter((step) => step.type === "number" && !step.off).sort((a, b) => order(a.id) - order(b.id)) as (Kept & { type: "number"; value?: number })[];
+    const shown = new Map<string, number>();
+    let count = 0;
+    for (const step of counted) {
+        count = step.value ?? count + 1;
+        shown.set(step.id, count);
+    }
+    return shown;
 }
 
 /** A rectangle with its corners in either order, kept inside a box and at least a pixel each way, in whole pixels. */
@@ -353,7 +401,35 @@ function readStep(value: unknown): Step | undefined {
         const at = readPoint(step.at);
         const size = number(step.size, 1, 4_000);
         const text = typeof step.text === "string" ? step.text.slice(0, LIMITS.text) : undefined;
-        return at && size && text && color ? { type: "text", at, text, color, size, ...turned } : undefined;
+        // an outline needs its color and its width; a text from before has neither, and is drawn as it was
+        const outline = typeof step.outline === "string" && COLOR.test(step.outline) ? step.outline.toLowerCase() : undefined;
+        const outlineWidth = number(step.outlineWidth, 0.25, 1_000);
+        const align = step.align === "center" || step.align === "right" ? step.align : undefined;
+        return at && size && text && color ? { type: "text", at, text, color, size, ...turned, ...(outline && outlineWidth ? { outline, outlineWidth } : {}), ...(align ? { align } : {}) } : undefined;
+    }
+    if (step.type === "number") {
+        const at = readPoint(step.at);
+        const size = number(step.size, 1, 4_000);
+        const value = number(step.value, 0, MOST_NUMBER);
+        return at && size && color ? { type: "number", at, color, size, ...(value !== undefined ? { value: Math.round(value) } : {}), ...turned } : undefined;
+    }
+    if (step.type === "highlight") {
+        const from = readPoint(step.from);
+        const to = readPoint(step.to);
+        const wide = number(step.thickness, 0.5, 4_000);
+        return from && to && color && wide ? { type: "highlight", from, to, color, thickness: wide } : undefined;
+    }
+    if (step.type === "magnifier") {
+        const at = readPoint(step.at);
+        const from = readPoint(step.from);
+        const radius = number(step.radius, 1, LIMITS.side);
+        const zoom = number(step.zoom, ZOOMS.least, ZOOMS.most);
+        return at && from && radius && zoom && color && thickness ? { type: "magnifier", at, from, radius, zoom: Math.round(zoom * 100) / 100, color, thickness } : undefined;
+    }
+    if (step.type === "spotlight") {
+        const rect = readRect(step.rect);
+        const dim = number(step.dim, 0.05, 0.95) ?? 0.55;
+        return rect ? { type: "spotlight", rect, ...(step.round === true ? { round: true as const } : {}), dim: Math.round(dim * 100) / 100, ...turned } : undefined;
     }
     return undefined;
 }

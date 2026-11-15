@@ -7,7 +7,7 @@
 import { control, icon, make, still, tipAway } from "../core/ui";
 import { switchButton } from "../core/dialog";
 import { FORMATS, readWeight, weightSaid, type Settings } from "./export";
-import type { Original, Rect } from "./steps";
+import type { MarkKind, Original, Rect } from "./steps";
 import type { Edits, Facts, Keep } from "./metadata";
 
 /** What of the metadata an export keeps, as its three buttons say it, each with its tooltip. */
@@ -87,6 +87,34 @@ export const WEIGHTS = [
     { name: "Thin", value: 0.003 },
     { name: "Medium", value: 0.005 },
     { name: "Thick", value: 0.009 },
+];
+
+/** The marks as the bar, the menus and the keys offer them: each one's name, icon and key. */
+export const MARK_TOOLS: Record<MarkKind, { label: string; icon: string; key: string }> = {
+    arrow: { label: "Arrow", icon: "arrow", key: "A" },
+    box: { label: "Box", icon: "box", key: "B" },
+    text: { label: "Text", icon: "text", key: "T" },
+    number: { label: "Numbered step", icon: "step", key: "N" },
+    highlight: { label: "Highlighter", icon: "highlight", key: "H" },
+    magnifier: { label: "Magnifier", icon: "lens", key: "M" },
+    spotlight: { label: "Spotlight", icon: "spotlight", key: "S" },
+};
+
+/** How far a magnifier enlarges. */
+export const ZOOM_STEPS = [2, 3, 4];
+
+/** How dark the spotlight shades everything round its shapes. */
+export const SHADES = [
+    { name: "Light shade", value: 0.35 },
+    { name: "Medium shade", value: 0.55 },
+    { name: "Dark shade", value: 0.75 },
+];
+
+/** How wide a text's outline is drawn, as a share of the text's size. */
+export const OUTLINES = [
+    { name: "Thin outline", value: 0.05 },
+    { name: "Medium outline", value: 0.08 },
+    { name: "Thick outline", value: 0.13 },
 ];
 
 /** The shapes the crop's frame can be held to, width over height; the original's own is worked out when chosen. */
@@ -410,8 +438,15 @@ export function readSaid(read: ReadSaid): string {
     return read.private ? `${count}, ${read.private} ${read.private === 1 ? "looks" : "look"} private` : count;
 }
 
+/** What the strip shows for a mark: whether its colors, the names of its three sizes (none when it has no size), and groups of controls of its own, each after a rule. */
+export interface MarkControls {
+    colors: boolean;
+    weights?: string[];
+    extra: HTMLElement[][];
+}
+
 /** The strip for the tool in hand: the crop's shapes and Apply, perspective's dials and corners, a mark's colors and thickness, or the reading's few words and buttons. Icons only where it can be, each named in its tooltip. */
-export function toolStrip(hooks: { color(): string; weight(): number; setColor(value: string): void; setWeight(value: number): void; shape(): string; setShape(name: string): void; apply(): void; turn?: TurnHooks; perspective?: PerspectiveHooks; read?(): ReadSaid; hideAll?(): void; chooseModel?(from: HTMLElement): void; readAgain?(): void; grade?(): { said: string; controls?: HTMLElement[]; cancel?(): void } | undefined; cut?(): { said: string; controls?: HTMLElement[]; cancel?(): void } | undefined }) {
+export function toolStrip(hooks: { color(): string; weight(): number; setColor(value: string): void; setWeight(value: number): void; mark?(): MarkControls; shape(): string; setShape(name: string): void; apply(): void; turn?: TurnHooks; perspective?: PerspectiveHooks; read?(): ReadSaid; hideAll?(): void; chooseModel?(from: HTMLElement): void; readAgain?(): void; grade?(): { said: string; controls?: HTMLElement[]; cancel?(): void } | undefined; cut?(): { said: string; controls?: HTMLElement[]; cancel?(): void } | undefined }) {
     const strip = make("div", "quire-img-strip");
     strip.setAttribute("role", "toolbar");
     strip.setAttribute("aria-label", "Tool");
@@ -420,10 +455,10 @@ export function toolStrip(hooks: { color(): string; weight(): number; setColor(v
         mark.style.background = color.value;
         return control(color.name, mark, () => hooks.setColor(color.value));
     };
-    const weight = (each: { name: string; value: number }, at: number) => {
+    const weight = (each: { name: string; value: number }, at: number, label = `${each.name} line`) => {
         const line = icon("line");
         line.style.strokeWidth = String(1.2 + at * 1.4);
-        return control(`${each.name} line`, line, () => hooks.setWeight(each.value));
+        return control(label, line, () => hooks.setWeight(each.value));
     };
     const words = (label: string, press: (button: HTMLButtonElement) => void, tip: string, filled = false) => {
         const button = make("button", filled ? "quire-img-strip-words filled" : "quire-img-strip-words", label);
@@ -477,19 +512,34 @@ export function toolStrip(hooks: { color(): string; weight(): number; setColor(v
             across.show();
             corners.classList.toggle("pressed", keystone.cornering());
         } else if (kind === "mark") {
-            strip.replaceChildren(
-                ...COLORS.map((color) => {
-                    const button = swatch(color);
-                    button.classList.toggle("pressed", hooks.color() === color.value);
-                    return button;
-                }),
-                make("span", "quire-img-strip-rule"),
-                ...WEIGHTS.map((each, at) => {
-                    const button = weight(each, at);
-                    button.classList.toggle("pressed", hooks.weight() === each.value);
-                    return button;
-                }),
-            );
+            // the colors and the sizes where the mark has them, then what is its own (a spotlight has neither: it only shades)
+            const own = hooks.mark?.() ?? { colors: true, weights: WEIGHTS.map((each) => `${each.name} line`), extra: [] };
+            const had = [...strip.querySelectorAll<HTMLElement>("input")].some((each) => document.activeElement === each);
+            const parts: HTMLElement[] = [];
+            if (own.colors)
+                parts.push(
+                    ...COLORS.map((color) => {
+                        const button = swatch(color);
+                        button.classList.toggle("pressed", hooks.color() === color.value);
+                        return button;
+                    }),
+                );
+            if (own.weights) {
+                if (parts.length) parts.push(make("span", "quire-img-strip-rule"));
+                parts.push(
+                    ...WEIGHTS.map((each, at) => {
+                        const button = weight(each, at, own.weights![at]);
+                        button.classList.toggle("pressed", hooks.weight() === each.value);
+                        return button;
+                    }),
+                );
+            }
+            for (const group of own.extra) {
+                if (parts.length) parts.push(make("span", "quire-img-strip-rule"));
+                parts.push(...group);
+            }
+            // a field being typed in keeps the keyboard when the strip is filled again
+            if (!had) strip.replaceChildren(...parts);
         } else if (grading) {
             // what a press on the picture will do now, in a few words, and a way not to
             const said = make("span", "quire-img-strip-said", grading.said);
