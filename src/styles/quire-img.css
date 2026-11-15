@@ -216,12 +216,14 @@
 .quire-img-strip {
     position: absolute;
     top: 0.6rem;
-    left: 50%;
+    /* in the middle of what the room has left beside a panel (--beside is the panel's width, or nothing), so that
+       the strip is over the picture and never runs under the panel */
+    left: calc((100% - var(--beside, 0px)) / 2);
     z-index: 2;
     display: flex;
     align-items: center;
     gap: 0.1rem;
-    max-width: calc(100% - 1.5rem);
+    max-width: calc(100% - var(--beside, 0px) - 1.5rem);
     padding: 0.25rem;
     overflow-x: auto;
     border-radius: var(--quire-round);
@@ -239,6 +241,7 @@
         opacity 0.14s ease,
         scale 0.14s var(--ease),
         translate 0.14s var(--ease),
+        left 0.45s var(--ease),
         visibility 0s linear 0.14s;
 }
 
@@ -250,7 +253,8 @@
     transition:
         opacity 0.2s ease,
         scale 0.2s var(--quire-spring),
-        translate 0.2s var(--quire-spring);
+        translate 0.2s var(--quire-spring),
+        left 0.45s var(--ease);
 }
 
 .quire-img-strip-rule {
@@ -331,7 +335,8 @@
 }
 
 .quire-img-editor .quire-img-room.beside {
-    padding-right: calc(min(22rem, 100vw - 2rem) + 1.5rem);
+    --beside: calc(min(22rem, 100vw - 2rem) + 1.5rem);
+    padding-right: var(--beside);
 }
 
 @media (max-width: 40rem) {
@@ -346,6 +351,7 @@
     }
 
     .quire-img-editor .quire-img-room.beside {
+        --beside: 0px;
         padding-right: 0;
         padding-bottom: calc(min(26rem, 55dvh) + 0.5rem);
     }

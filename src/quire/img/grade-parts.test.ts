@@ -43,6 +43,13 @@ test("a gradient dragged out is a part of its own: its grade darkens the top, it
     // the picture glides into the room the surface leaves it; its places are read once it has settled
     await page.tab.wait(800);
     await page.tab.run("document.querySelector('.quire-img-make-gradient').click()");
+    // the strip that says what to do is over the picture, in the middle of the room the surface leaves, and never under the surface
+    await page.tab.wait(600);
+    const strip = await page.boxOf(".quire-img-strip.open");
+    const surface = await page.boxOf(".quire-img-grade-panel");
+    const stage = await page.boxOf(".quire-img-stage");
+    expect(strip.x + strip.width).toBeLessThanOrEqual(surface.x);
+    expect(Math.abs(strip.x + strip.width / 2 - (stage.x + stage.width / 2))).toBeLessThan(2);
     await page.tab.drag(await page.onScreen(2000, 600), await page.onScreen(2000, 1800), 8);
     const made = (await steps()).find((step) => step.type === "part")!;
     expect(made.kind).toBe("gradient");
