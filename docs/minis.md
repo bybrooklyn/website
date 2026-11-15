@@ -45,8 +45,8 @@ How to add a mini is in `src/mote/README.md`.
   loop, along a banked spiral and through a funnel into a tray, one after another; a click lets another go
   and Space rides along with one. It stays a draft.
 - **Marbles** (a draft, 3D; `marbles.ts` on `pieces.ts`, `parts.ts`, `run.ts`, `edit.ts`, `history.ts`,
-  `ghost.ts`, `handles.ts`, `table.ts`, `supports.ts`, `checks.ts`, `orbit.ts`, `runs.ts`, `toolbar.ts`): the
-  marble run, stages 2 to 5 of its plan ([marbles](marbles.md)). A box of pieces whose ends snap together, dragged up
+  `ghost.ts`, `handles.ts`, `table.ts`, `supports.ts`, `checks.ts`, `orbit.ts`, `runs.ts`, `toolbar.ts`, `look.ts`): the
+  marble run, stages 2 to 6 of its plan ([marbles](marbles.md)). A box of pieces whose ends snap together, dragged up
   from a strip under the scene or pressed to go at the end of the run; pillars made by themselves; hoppers
   that let marbles go; an editor with a choice of many, handles to move, turn and lengthen, undo, copy,
   mirror, pieces of one's own and views straight on; straights, curves, slopes and S bends bent by
@@ -54,7 +54,10 @@ How to add a mini is in `src/mote/README.md`.
   of near them; a ghost marble showing where a marble would go, and quiet marks where marbles will fall
   off or stop; moving pieces (a gate, an alternating switch, a seesaw, a trapdoor, a spinner, a lift and a
   chain hoist) that are real bodies in Mote's physics, and sounding ones (chime bars tuned to notes, a bell, a
-  drum), with the run's own sound made by Mote's strikes. Touch first, with the mouse and keys as well.
+  drum), with the run's own sound made by Mote's strikes; all of it drawn as a set on a table: oak with its
+  grain along every piece, glass marbles with a ribbon of a pride flag's colors inside, steel and brass, on a
+  dark cloth under one warm lamp, with soft shadows, by Mote's patterns, and a plainer look that comes on by
+  itself where frames come slowly. Touch first, with the mouse and keys as well.
 
 ## Decided
 

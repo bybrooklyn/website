@@ -2,7 +2,8 @@
 
 A mini: build a marble run in three dimensions and watch marbles go down it. A plan dated 13 November
 2026. Stage 1, what Mote needed, stage 2, pieces and snapping, stage 3, the editor, stage 4, bending,
-and stage 5, moving parts and sound, were all built on 14 November 2026 (below). The mini is a draft, Marbles, at `/minis/marbles/`.
+and stage 5, moving parts and sound, were all built on 14 November 2026, and stage 6, the look, on
+14 November 2026 too (below). The mini is a draft, Marbles, at `/minis/marbles/`.
 
 ## Decided
 
@@ -97,7 +98,7 @@ Mote's broad phase and inertia; see [mote](mote.md)):
    runs with the ghost marble. **Built**, waiting to be looked at (see below).
 4. Bending, with its limits and warnings. **Built**, waiting to be looked at (see below).
 5. Moving parts and sound. **Built**, waiting to be looked at and listened to (see below).
-6. The look: wood, glass, shadows.
+6. The look: wood, glass, shadows. **Built**, waiting to be looked at (see below).
 7. Cameras, races, sharing, and the runs to start from.
 
 ## Stage 1, built
@@ -790,6 +791,155 @@ not measured.
 - Materials are already named per solid for sound (`table.heard`): wood, metal, chime, bell, drum. The look
   can use the same names.
 - Moving parts are tinted like their piece when chosen or marked; a look of wood should keep that.
+
+## Stage 6, built
+
+On 14 November 2026, in the draft Marbles: Mote gained patterns in its drawing (`gl.ts`, held by
+`gl.test.ts`; [mote](mote.md) has the detail); the mini gained `look.ts` (which marble is which, the
+places in the pattern for boxes and glass, the table with its pits), with its test, and its drawing in
+`marbles.ts` moved onto the patterns; `pieces.ts` draws a block with rounded edges, its grain and, for
+the hoist, a slot. Before the look, what stage 5 left.
+
+**Left over from stage 5.**
+
+- *The loop jammed with eight marbles or more.* Followed marble by marble, three things. Most marbles
+  are in the funnel's bowl at once, since each circles it for about ten seconds and the lift takes about
+  one a second, so marbles reach the hole together; one pressed into the mouth of the neck by those above
+  it, against the tube's wall, was held there by the wall's friction (a wood's 0.5), and every marble
+  above it rested on it and fell asleep. The neck is glass and is now as smooth as the glass walls (0.05),
+  and glass walls are smooth everywhere. A marble coming fast out of the neck onto others queued before
+  the lift was knocked over the groove's side: the funnel's groove out now has glass walls, and the lift's
+  way in has its walls 2.5 cm high. And a marble left half over the lift's threshold as the car rose was
+  lifted on the skirt's lip into the shaft's front wall and squeezed out at 190 cm/s: the skirt's top is
+  now under the floor's front edge. The lift lets its marbles out down a fall of 1.5 cm (its car rises a
+  centimetre more), so that they leave at 40 cm/s or more, enough to carry them round a level turn. The
+  made loop now feeds the lift straight from the funnel and comes back level over it (the old one lost
+  marbles off its slope before the lift and over the bowl's far side). A test runs twenty marbles round
+  it for ten minutes of stepped time: none lost, none on the cloth, more than forty out of the top of the
+  lift every minute; thirty went round ten minutes too. Mote is unchanged by this: only the pieces.
+- *A switch after a batching piece.* It cannot be made to alternate for marbles that touch. The switch
+  needs about a quarter of a second between marbles to throw its flipper over (measured: two marbles at
+  50 cm/s 0.13 s apart or less go the same way, 0.27 s apart they alternate; at 60 cm/s 0.17 s still the
+  same way), and two that touch keep the gap in time they had wherever they go down a groove, since the
+  second follows the first's path behind it; a narrowed entry does not part them in time. Only a separate
+  part that holds one back while the other goes, an escapement, would, and that wants a second moving
+  part in the piece. So the marks say so: a switch with a seesaw, a trapdoor, a lift or a spinner
+  upstream of it, before any hoist or other switch, is marked (`batched` in `checks.ts`), a warm light
+  round its edges like every mark; a test shows two let go together by a trapdoor going the same way.
+- *Slow marbles at a lift or a trapdoor.* The trapdoor's way in now falls 0.35 cm from its joint to the
+  flap (everything after it as much lower); the lift's already fell 0.5 cm, from the joint. A test rolls a
+  marble at 2 cm/s over level track to each, and it goes in: onto the flap, or into the car and up. Marbles
+  queued on level track before a lift still wait there, as real ones would: a loop wants a fall before its
+  lift.
+- *The strip off the screen.* While what is chosen is off the screen, too little of it seen, the strip
+  shrinks away, and it grows again by the pieces when they come back into view; it goes above them and
+  their handles, under them, or beside them, wholly on the screen and never over them, measured by the
+  corners of the room the pieces take up, and where none of those has room it is not shown
+  (`stripPlace` in `handles.ts`, held by test over two thousand places).
+
+**The look.** All drawn by Mote's own shaders from numbers, no image files (gl.ts' patterns).
+
+- *Oak.* Every wooden piece. Its grain is a solid pattern in the piece's own places along it: how far
+  along the track, and up and across from its line, from the sweep's frame, so that it runs along a
+  curve and bends with a bent piece; a cut end shows the rings, since they are about a line along the
+  grain. The heart of the log each piece was cut from is off to one side and below, its axis leaning a
+  little, so the rings show as long arches on the faces; the late wood of each ring darker, the early
+  wood with large pores, rays as pale flecks, a fine fibre. Each piece has its own grain and a little of
+  its own tone (by its number). Boxes, stands and pillars have their grain along their longest side.
+  Detail finer than a pixel fades to its average rather than shimmering. The top edges of a block and
+  the lips of its groove are rounded (1.8 and 1.4 mm), so that they catch the light. Oiled: a soft sheen.
+- *Marbles.* Decided by each marble's number on the table, so a run replayed looks the same: 68 in a
+  hundred clear glass with a ribbon of three vanes inside, 24 opaque glossy glass with a stripe, 8 steel;
+  the first is always clear. The ribbon's colors are three stripes of a pride flag (trans, lesbian, rainbow,
+  bisexual, pansexual, nonbinary, the trans and lesbian flags twice as often, a near black stripe left
+  out) or the site's accents. The ribbon is found by the shader along the ray into the glass, bent by it
+  (refraction 1.5) and twisted up the marble, and turns with the marble as it rolls. The glass is clear
+  face on and darker and more reflecting toward its edge, where it shows the room: dark, with the lamp a
+  bright warm disc, so each marble holds a sharp highlight. Steel is a mirror of the room; opaque glass a
+  clear coat over its color.
+- *Metal.* Counterweights, a spinner's arms, a lift's car and a hoist's paddles brushed steel (a broad
+  streaked sheen and a sharper one), chime bars a paler brushed steel, the bell polished brass. The drum
+  has a skin on its top over an oak shell.
+- *Glass.* Walls and chimneys clear, the room's reflection at a glance, their edges showing where two
+  faces meet; tubes show their outline by the reflection alone.
+- *The room.* The table is a dark cloth in the site's purple, a fine weave; one warm lamp above and to
+  one side in front of the run, lighting a pool round it; a dark room giving back a little light. Shadows
+  from the lamp soften the further they fall behind what casts them; where things touch (a marble on the
+  cloth, a piece on it, a marble in the groove) a soft shadow from what lies close above. Highlights on
+  marbles and metal bloom a little, warm.
+- *The grid.* Drawn by the cloth's pattern, a hair wide on the screen at any distance: faint while
+  marbles roll (0.16), stronger while a piece is carried or bent (0.85), easing between in a third of a
+  second, at once under reduced motion.
+- *Pit and slot.* The hoist's paddles are now 6 mm across (they carried every marble still) and come up
+  through a slot 8 mm wide drawn down the middle of its climbing groove. Where a lift's skirt reaches below
+  the table, the table has a pit, a slot through it with a dark floor under it.
+- *States, on oak.* A light round a part's edges, the wood left to be seen: the accent where chosen or
+  carried, warm where a bend is near a limit (even while chosen) or where the ghost marks a piece or a
+  switch is marked, red where a drag holds a bend at a limit or a carried piece does not fit, grey over
+  the box. The small warm discs of open ends and near limits stay. The ghost marble and its thread stay
+  plain, faint and see-through, unlit; the thread is thinner (1.8 mm) and smoothed, so it reads as a way
+  and not as the marble's rocking.
+- *The box's pictures* are drawn by the same code, in oak under the lamp. Copied pixel by pixel into a
+  picture kept by the processor: on the graphics card, a picture copied from the canvas, or kept on the
+  card, came out empty once the context drawn in was let go (headless Chromium on the real card showed
+  it; software did not).
+- *Nothing moves by itself:* no shimmer, no drifting light; the pattern of the soft shadow's samples is
+  turned by the pixel, still while the view is.
+
+**Full and plain.** The full look has the soft shadows that widen with distance, the shadow where things
+touch, the bloom, and the ribbon bent by the glass. The plain look has a shadow softened a little at its
+edge, none where things touch, no bloom, and the ribbon seen straight. The look goes plain by itself where
+frames come slowly: when the middle of the last two seconds' frames (at least eight), while the scene
+moves, takes longer than a fortieth of a second. L switches it, and once switched by hand it stays.
+
+**Backends.** Mote draws in 3D on WebGL 2 only; WebGPU is in imgQuire, not in Mote. Within WebGL 2 the
+patterns degrade quietly: where the graphics card cannot compile their program, parts with a pattern are
+drawn by the plain program in their colors, as stage 5 drew (oak a plain warm brown, glass and the
+marbles see-through), with its plainer shadows. Without WebGL 2 the mini draws nothing, as before.
+
+**Measured.** On the 22 piece run with every moving and sounding piece and a hundred marbles (99 on the
+table, the stream on), at 1440 by 900 (the canvas 744 by 558): a picture hands the graphics card 147 draw
+calls in all, 44 for the lamp's shadow, 30 for the map from above, 18 for the bloom, 55 from the eye, and
+327,000 triangles; the plain look 99 calls and 180,000 triangles. Before pieces of one kind shared a look,
+the pillars were one mesh and the bloom drew only what shines, it was 360 calls. Many parts of one shape
+and look are one call: the hundred marbles are one in each pass (held by `gl.test.ts`). In headless
+Chromium on this machine's graphics card (an RTX 3070 Ti, through Vulkan: `--enable-features=Vulkan
+--use-angle=vulkan`), a picture with the card's work waited for takes 2.2 ms (3.4 at most) full and 1.5
+plain, frames come at the screen's 60 a second without a miss, and everything the scene does in a frame
+is 0.66 ms. In software (SwiftShader, four cores) a picture of the first run takes 280 ms full and 220
+plain: four frames a second, where the flat look of stage 5 drew at 15 to 30; there the look goes plain
+by itself within a few seconds. A laptop's graphics were not measured: the counts above are what it
+would be handed. Every other mini draws as before, to the pixel (below, under Mote, and in [mote](mote.md)).
+
+**Pictures**, made on the real graphics card, are kept out of git in `docs/pictures-marbles/`.
+
+**Choices to confirm.**
+
+- The oak's tone (a warm, golden mid-brown), how strong its rings are, and the rounded edges.
+- Marbles: 68 clear, 24 opaque, 8 steel in a hundred; the ribbon of three vanes, twisted; the flags and
+  the site's accents for their colors; the first always clear.
+- The lamp in front of the run and to its left, high, its pool of light; how dark the room is.
+- States as a light round the edges, in the accent, warm, red and grey; the ghost left unlit.
+- The grid at 0.16 while marbles roll and 0.85 while building.
+- The look going plain by itself, and L to switch it.
+- A switch after a batching piece marked rather than made to alternate.
+- The loop's new shape (the lift straight after the funnel, level back over it); the lift's faster fall
+  out, its skirt and higher walls; the hoist's narrower paddles.
+
+**What the last stage (cameras, races, sharing, the runs to start from) can rely on, and should know.**
+
+- A marble's look is `marbleLook(table.numberOf(marble))`: its number counts the marbles made on that
+  table, so a race replayed on a new table looks the same; a race in the flags' colors can choose numbers,
+  or set a part's `seed` and `tints` itself (kind by the seed's whole part, the ribbon's three colors).
+- A camera riding along brings the eye close to a marble: the marble's ribbon is worked out per pixel, so
+  close in costs no more triangles; the camera's near plane is 2% of its distance (`view.range`).
+- The share picture is made by `scripts/pictures.ts` (the loop, in software); a run shared as a link could
+  be photographed the same way.
+- Drawing is bounded by kinds, not by count: a new piece kind or a moving solid of a new shape adds a call
+  to each pass; more marbles add triangles only.
+- Pictures for a visitor should be made on the real card: `--enable-features=Vulkan --use-angle=vulkan`
+  with `scripts/browser.ts`; software is ten times slower and goes plain.
+- The test hooks gained `load`, `look`, `timeDraw` and `closeUp`.
 
 ## Open
 

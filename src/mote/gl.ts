@@ -1,12 +1,15 @@
 // Mote's 3D drawing: solids of flat faces, drawn by the graphics card with
 // real depth, so nothing shows through anything, one sun with shadows, light
 // from the sky, and a picture (a number, say) on a face. What shines by its own
-// light bleeds a little of it around itself. WebGL 2, no library.
+// light bleeds a little of it around itself. A part with a pattern (oak, glass,
+// a glass marble, metal) is drawn by a program of its own, lit as by a lamp,
+// with soft shadows and a shadow where things touch. WebGL 2, no library.
 //
 //   const view = gl(canvas);                      // undefined where WebGL 2 is missing
 //   const die = view.add(mesh, { color: view.color("oklch(0.8 0.12 300)"), marks: (face) => String(face + 1) });
 //   view.look([8, 10, 19], [0, 4, 0], 30);
 //   die.at = [0, 1, 0]; die.turn = turn;
+//   const plank = view.add({ ...block([6, 1, 2]), grain }, { color: oak, pattern: "wood" });
 //   view.draw();
 
 import { cross, dot3 as dot, minus, plus, scaled, upright, type Mesh, type Turn, type V3 } from "./solids";

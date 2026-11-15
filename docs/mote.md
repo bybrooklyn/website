@@ -17,7 +17,7 @@ under the MIT license in that folder (`src/mote/LICENSE`), plainer than the rest
 | `space.ts` | 3D physics: solids that fall, tumble and hit each other and fixed slabs, each turning by its own inertia tensor; balls that roll; islands that sleep together; for a marble run's moving parts, solids on a hinge, driven solids and fixed solids of any shape, met by balls only. |
 | `track.ts` | Fixed track for balls, worked out by formula: sections swept along curves and helices, and profiles turned into funnels. |
 | `grid.ts` | The broad phase both physics use: which pairs of bodies are near enough to be worth a closer look. |
-| `gl.ts` | 3D drawing on WebGL 2: depth, a sun with shadows, sky light, numbers on faces, floating words, glow. |
+| `gl.ts` | 3D drawing on WebGL 2: depth, a sun with shadows, sky light, numbers on faces, floating words, glow; and parts with a pattern drawn by the shader (oak, glass, glass marbles, metal, a skin, a cloth) under a lamp, with shadows that soften with distance and where things touch, many of a kind in one call. |
 | `cells.ts` | A grid of cells drawn in whole pixels on WebGL 2: four bytes a cell read straight from where they are kept into one texture, colored from a palette and a shade, only changed rows sent. The sand mini draws with it. |
 | `solids.ts` | The shapes of dice and other solids, drawn on a 2D canvas where WebGL 2 is missing. |
 | `sound.ts` | Knocks, notes and strikes (wood, glass, metal, a chime bar, a bell, a drum) made by the browser with no files, through a bus with a limit on voices and a limiter; silent until turned on. |
@@ -268,6 +268,85 @@ same). `pairs.test.ts` and `replay.test.ts` pass unchanged.
   fallen), which is faded out in 10 ms, unless the new one would be the quietest itself, when it is left
   out; and at most six clicks of wood or glass start in any 30 ms. Rendered in Chromium, a hundred
   marbles' worth of strikes, three a frame for three seconds, peak at 0.82 of full scale and render in 0.61 s.
+
+## For the marble run's stage 6
+
+Added on 14 November 2026 for the marble run's look ([marbles](marbles.md)): patterns, in `gl.ts`. A
+scene that asks for none sets up and draws exactly as before: the program for patterns is made only when
+a part with a pattern is first added, and the old program's passes are untouched. Checked by drawing four
+scenes (a cube with numbers, a ball, a slab, a see-through ball, a sign; then shining, a lit mark, the
+shade, a longer range) through the `gl.ts` from before this stage and the one after, in headless Chromium
+in software and on the graphics card, and comparing every pixel's bytes: the same. And by photographing
+Dice, Rolling, Plinko and Blocks from a build before and a build after (below).
+
+- **A part with a pattern.** `look.pattern` names what it is made of: `"wood"` (oak), `"glass"`,
+  `"marble"`, `"metal"`, `"brushed"` (metal with fine streaks), `"skin"` (a drum's, on oak), `"cloth"` (a
+  table's, with a grid, `look.grid` from 0 to 1 and `look.cell`). The pattern is worked out by the shader
+  from each corner's place in it, `mesh.grain` (a place for each point; left out, the point's own place),
+  so oak's grain runs along whatever the scene makes its first place: the marble run gives how far along
+  a piece, so the grain bends with a bent piece. A part's `seed` makes it unlike others of its look (a
+  piece of oak its own heart and tone; a marble its kind and the turn of its ribbon) and its `tints` are
+  three colors of its own (a marble's ribbon or stripe). `look.rim`, a color and a strength, lights its
+  edges, for a state. Such a part may be given another look with a pattern (`part.look`).
+- **Oak**: rings about the heart of a log off to one side and below, its axis leaning a little, distorted
+  by smooth noise at two sizes, so they show as long arches on the faces and as rings on a cut end; the late
+  wood closing each ring darker, the early wood's pores as short dark streaks, the rays as pale flecks
+  across the rings, a fibre along the grain; each piece warmer or paler by its seed. Every detail finer
+  than a pixel fades to its average (by how fast it changes across the pixel), so nothing shimmers far
+  off. Oiled: a soft Fresnel sheen.
+- **Glass**: Fresnel (0.04 face on), the room reflected; a box's edges drawn where two of its places in
+  the pattern (from -1 to 1 across it) are near their ends, a pixel and a half wide.
+- **A marble**: the eye and the sun are taken into the marble's own place in the vertex shader, so what is
+  inside turns with it. Clear (seed 0 to 1): the ray into the glass is bent by refraction (1.5) and met with
+  three vanes through the middle, each a narrow leaf twisted up the marble (found again at the twist
+  where it is met), lit by the side that faces the sun; the glass is see-through face on and darker and
+  more reflecting toward its edge, with a little of the ribbon's color gathered opposite the lamp.
+  Opaque (1 to 2): its color with a wavy stripe and a thin one, under a clear coat. Steel (2 to 3): a
+  mirror of the room. Each holds the lamp as a sharp highlight.
+- **Metal**: the room reflected in its color, a sharp highlight; brushed, a broad streaked sheen and a
+  sharper one.
+- **The room** a polished part reflects: dark, a little lighter above, with the lamp a bright warm disc
+  (`view.lamp.size`, its angular size) and a glow about it.
+- **The lamp**: `view.lamp` gives the sun's, the sky's and the ground's colors for patterned parts, the
+  lamp's size, and `pool`, a place and radius where it lights most, falling to 0.3 beyond. Lit in linear
+  light, then a gentle shoulder (the ACES curve fitted by Narkowicz) so a highlight goes to white.
+- **Shadows** from the sun's map, looked up a texel and a half out from the face on the side toward the sun
+  (a mesh's faces may be wound either way, so its own normal may point in), each look compared with the
+  face's own plane where it looks (the change of its depth across the map, from the screen's derivatives),
+  so that a wide soft edge does not shade the face itself. Full: what casts the shadow is searched for over
+  1.6 cm (eight looks at the map read as depths, through a second sampler on the same texture), and the
+  edge is as wide as how far behind it the face is times the lamp's size, from 1.2 to 14 texels, averaged
+  over twelve looks on a disc turned by the pixel. Plain: four looks a texel and a half out.
+- **Where things touch**: a second map from straight above (1024 square), of how high the highest thing is
+  everywhere. A face looks at eight places round it (0.7 and 1.8 cm off): each that is higher by `over`
+  hides as much of the sky as `over^2 / (over^2 + reach^2)`, fading with `e^(-over / 2.5)` so that only what
+  lies close above counts. It darkens the sky's light, and half the sun's. A part with `look.touches`
+  false is left out of the map.
+- **Bloom**: `view.bloom`; what is brighter than white of a highlight on a marble, metal or glass goes into
+  the small picture of what shines, which is blurred and added as before. Only those patterns are drawn in
+  it (a highlight behind wood may glow a little through it).
+- **Many in one call**: patterned parts are gathered by shape and look and drawn instanced, each part's
+  place, seed and tints in one shared buffer; see-through ones sorted furthest first, marbles (keeping their
+  depth) before glass (not). The depth passes draw them the same way.
+- **`view.quality`**: `"full"`, or `"plain"` (no search for what casts a shadow, no map from above, no
+  bloom, the ribbon not bent). **`view.counts`**: the last picture's draw calls in all, its triangles, and
+  the calls of each pass (the sun's shadow, the map from above, the bloom, the eye's). **`view.patterns`**:
+  false where the program could not be made; parts with a pattern are then drawn by the old program in
+  their color.
+- **Held** (`gl.test.ts`): oak is warm and its color changes five times as much across its grain as along
+  it; a block's shadow falls on the cloth away from the lamp; a clear, an opaque and a steel marble each show
+  as themselves; sixty more marbles of one shape and look add triangles and no calls, in every pass; the
+  plain look leaves out the map from above and the bloom.
+- **Measured** on the marble run ([marbles](marbles.md)): 147 calls a picture for a hundred marbles on a
+  run of 22 pieces with every moving part, 2.2 ms with the graphics card's work on an RTX 3070 Ti; in
+  software 280 ms for a small run, where the old look took about 50.
+
+Dice, Rolling, Plinko and Blocks, photographed in headless Chromium from the drafts build before this
+stage and the one after, the same way (the page opened, 1.5 s, or 3 for Rolling, the canvas photographed),
+in software and on the graphics card: Dice the same to the pixel both ways, Rolling the same in software.
+Rolling on the card, Plinko and Blocks differed, as they differ from themselves: the build before,
+photographed twice, differed the same way (they move by the time the frames come, or by chance; Blocks
+does not draw with `gl.ts` at all). The drawing itself is shown the same by the comparison above.
 
 ## Decided
 
