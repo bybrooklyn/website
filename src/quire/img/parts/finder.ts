@@ -79,6 +79,8 @@ async function madeFor(given: PartTier, shelf: Shelf, prefer?: "webgpu" | "wasm"
     if (before) await before.then((made) => Promise.all(Object.values(made.sessions).map((each) => each?.release()))).catch(() => undefined);
     state.madeFor = key;
     state.made = (async () => {
+        // a choice whose files are not all kept is said before the runtime is asked for, so a press that cannot be answered fetches nothing
+        if (!(await keptAll(shelf, tier))) throw new Error(`the ${tier.id} models are not kept whole; choose them again to fetch them`);
         const card = prefer !== "wasm" && (prefer === "webgpu" || (await graphicsCard()));
         // the build with WebGPU (JSEP) runs WebAssembly too, so with a card one runtime serves every session, each on the card where it runs right there
         const ort = await ortFor<Ort>(card ? "jsep" : "wasm");
