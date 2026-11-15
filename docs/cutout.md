@@ -37,25 +37,34 @@ opens a menu in the site's family: Paste and Choose a picture when empty; Copy, 
 Remove with a cut-out; Shift leaves the browser's own.
 
 **The qualities.** Quick, MODNet (13 MB, made for people); Better, ormbg (44 MB); Best, BiRefNet lite's
-rebuild for WebGPU (123 MB), offered only where there is a graphics card. Better is where it starts: the
-smallest that cut the drawn fixtures cleanly (MODNet kept 70 percent of a drawn figure, ormbg and BiRefNet
-94). The choice is kept in this browser (`quire-cutout`).
+rebuild for WebGPU (123 MB), offered only where there is a graphics card. Each card says its time in plain
+words: "Under a second a picture, people only", "About 20 seconds a picture, most things", "About a second a
+picture, hair and fine edges". With nothing remembered, the dialog comes with Best picked where a graphics
+card gives WebGPU, and Better where there is none (with Quick beside it); a quality chosen on a past visit
+wins (`quire-cutout`). While Better works the line says "Cutting out, usually about 20 seconds".
 
 **Edges.** The model's mask is found at its own size and kept at most 1024 a side, and applied at full size:
-a guided filter (radius 2, epsilon 1e-4) fits at each place of the mask the line `a × lightness + b` that best
-matches it, the lines averaged, worked out on the processor at the mask's size; on the card each full-size
-pixel takes its mask from that line at its own lightness, so hair finer than the mask's pixels follows the
-real pixels. The old background's color is taken out of the edges: a pixel seen is `alpha × kept +
+a guided filter in the picture's colors (radius 2, epsilon 1e-4) fits at each place of the mask the plane
+`a · rgb + b` that best matches it (from the colors' 3 by 3 spread there), the planes averaged, worked out on
+the processor at the mask's size; on the card each full-size pixel takes its mask from that plane at its own
+color, so hair finer than the mask's pixels follows the real pixels, and a red coat is told from green grass of
+the same lightness. Where a model's mask is soft across an edge the picture has sharp, the plane gives the
+two sides shares short of whole and of nothing, a rim on a new background; so where the mask within 4 of its
+pixels runs from under a tenth to over nine tenths, the plane's shares there are stretched from their least
+to their most and an eighth at each end dropped. The old background's color is taken out of the edges: a pixel seen is `alpha × kept +
 (1 − alpha) × ground`, solved for what is kept, with the ground's and the kept color near each place averaged
 at the mask's size (three box blurs of radius 8 weighted by the mask and by what is not in it); below a share
 of 0.02 the kept color nearby stands in, blended up to 0.3. The card's pass reads those numbers between their
 entries by hand, so it gives the processor's pixels within one, on every background (`render.test.ts`).
 
 Measured on a figure with forty strands a pixel wide against a green ground, its true mask known, the mask
-given at a quarter size (`refine.test.ts`): over 5,039 edge pixels the mask's error is 4.0 of 255 guided
-against 87.8 simply enlarged; the halo, the edge color's distance from the figure's own, is 15.5 of 255 with
-the ground taken out against 52.7 with the picture's own edge colors. A mask that is itself blurred is not
-made sharp again: softened once more at its quarter size, the guided mask's error is 78 against 96.
+given at a quarter size (`refine.test.ts`): over 5,039 edge pixels the mask's error is 6.0 of 255 guided
+against 87.8 simply enlarged; the halo, the edge color's distance from the figure's own, is 15.6 of 255 with
+the ground taken out against 52.7 with the picture's own edge colors (15.5 before sharp edges were
+tightened; held under 16). Across a sharp, straight edge between a red coat and green grass of the same
+lightness, its mask given at a quarter size and softened once more as a model's is, the band of partly clear
+pixels (a share from 0.05 to 0.95) is 1.0 pixel wide in the cut against 11 in the mask enlarged (held to at
+most 1.5).
 
 **Full size out.** A 12 megapixel picture is cut and saved at 12 megapixels. Saved as a PNG through the
 browser's own encoder, with the picture's colour profile when it has one (a Display P3 photograph keeps its
@@ -69,8 +78,9 @@ size), warm:
 | Better (ormbg) | 19.5 s | runs on WebAssembly: 19.5 s |
 | Best (BiRefNet lite) | does not run: out of memory | 0.86 s (2 MP), 0.90 s (12 MP); 2.5 s the first time |
 
-and the edges worked out and the cut-out laid at full size, 12 megapixels: 0.56 s through WebGL2 on the
-processor's software drawing in headless Chromium.
+and the edges worked out and the cut-out laid at full size, 12 megapixels: 1.3 s (the color guide and the
+stretch at the mask's size on the processor, the full-size pass through WebGL2 on software drawing, in
+headless Chromium).
 
 **In imgQuire.** K, the bar's scissors or Tools, Cut out. The cut-out is a step (`cutout` in `steps.json`:
 the mask as runs, the strokes, the subject pressed, what it is laid on and its color), so it is undone,
@@ -108,8 +118,15 @@ Runtime's and the model's one file, each a GET with no body (`page.test.ts`, `cu
 - Best's rebuild (wonfy/BiRefNet_lite-ONNX-webgpu, MIT, a third party's rewrite of the stock graph with
   the same weights) could not be checked against the stock export here: the stock file runs out of memory on
   the site's runtime both on WebAssembly and on the card. Its card says its fp16 file differs from the fp32
-  stock one by at most 0.07 percent of pixels; that is its maker's claim. Once, with the machine busy, the
-  rebuild gave a mask that was all kept; the page and the tool refuse a mask all kept or all gone and say so.
+  stock one by at most 0.07 percent of pixels; that is its maker's claim.
+- Best beside another browser drawing hard on the same graphics card: a buffer of the model fails to be made,
+  every buffer after it is invalid ("Invalid Buffer is invalid due to a previous error"), and ONNX Runtime goes
+  on giving answers of nothing (all kept) or of part nothing, run after run, without a word. Reproduced three
+  times in about sixty runs beside the drawing tests. The card's errors are now watched for each run (error scopes for
+  memory, validation and internal errors, the device's loss and errors no one caught), such a run is no
+  answer named by its cause, and the cut-out runs it once more by itself in a fresh worker (a fresh runtime
+  and hold on the card) before telling the person "the graphics card was too busy to finish". A mask all kept
+  or all gone is refused the same way. A wrong mask that raised no error on the card would still not be caught.
 - The brush's strokes are painted into the mask at its own size (at most 1024 a side), so on a large
   picture their edge is soft by a few pixels, then follows the picture by the guided filter.
 - A press keeps what the cut-out found inside the thing pressed (its outline by SlimSAM, widened a little);
