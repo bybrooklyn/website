@@ -96,6 +96,8 @@ export interface Engine {
     practice_form(): number;
     /** The brain practice is to have from the next practice_create or practice_load on. */
     brain_shape(memory: number, rhythm: number, mood: number, reads: number): void;
+    /** Whether the brain adds and cuts its connections while it lives (1) or not (0), for practice from the next practice_create or practice_load on, and the policy on show at once. */
+    brain_grow(on: number): void;
     /** The caps on the brain and the brain practice starts with: most memory, most rhythm, fewest and most reads; then memory, rhythm, mood, reads. */
     brain_caps(): number;
     /** Every connection into a neuron of the brain on show, by its number in the picture: three f32 each, from, weight, what it passed. */
@@ -209,6 +211,8 @@ export interface BrainKinds {
     lit: Float32Array;
     moved: Float32Array;
     into: Float32Array;
+    /** For a brain that adds and cuts its connections: how many of its memory neurons' places hold one, of how many, what they cost each second as a share of all its energy, and the places changed at its last decision, three numbers each (into, from, 1 added or -1 cut). */
+    growth?: { joined: number; places: number; cost: number; changes: Float32Array };
 }
 
 /** Reads a picture of a brain with a pool, or undefined if it is not one (evolution's and the plain network's are read by `brainColumns`). */
@@ -219,8 +223,12 @@ export function brainKinds(picture: Float32Array): BrainKinds | undefined {
     const all = counts.senses + 2 * counts.plain + counts.memory + counts.rhythm + counts.mood + counts.actions;
     const pool = counts.memory + counts.rhythm + counts.mood;
     const length = 7 + all + pool + 9 * (all - counts.senses);
-    if (picture.length !== length) return undefined;
-    return { counts, lit: picture.subarray(7, 7 + all), moved: picture.subarray(7 + all, 7 + all + pool), into: picture.subarray(7 + all + pool) };
+    const kinds = { counts, lit: picture.subarray(7, 7 + all), moved: picture.subarray(7 + all, 7 + all + pool), into: picture.subarray(7 + all + pool, length) };
+    if (picture.length === length) return kinds;
+    // a brain that grows its connections says how many it has, what they cost, and which changed
+    const changed = picture[length + 3] ?? -1;
+    if (changed < 0 || picture.length !== length + 4 + 3 * changed) return undefined;
+    return { ...kinds, growth: { joined: picture[length]!, places: picture[length + 1]!, cost: picture[length + 2]!, changes: picture.subarray(length + 4) } };
 }
 
 /**

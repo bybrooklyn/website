@@ -17,6 +17,9 @@
 //!
 //! A run may be play (`Needs::play`): its energy held full and no food put out, so only curiosity and
 //! its own costs apply.
+//!
+//! A brain that grows its connections (`wiring`) spends from the same energy, a little each second for
+//! each connection it keeps (`Needs::brain`).
 
 use super::envs::Run;
 use super::eyes::FOOD_RADIUS;
@@ -69,12 +72,15 @@ pub struct Needs {
     pub appearing: Option<Appearing>,
     /// All of its energy, in joules (`FULL` for each kilogram).
     pub full: f32,
+    /// What its brain's connections cost each second now, as a share of all of it: nothing but for a
+    /// brain that grows them, which says so each decision.
+    pub brain: f32,
 }
 
 impl Needs {
     pub fn new(energy: f32) -> Needs {
         let d = discomfort(energy);
-        Needs { energy: clamp(energy, 0.0, 1.0), ate: 0.0, eaten: 0, resting: 0.0, play: false, comfort: [d; 3], appearing: None, full: 10.0 * FULL }
+        Needs { energy: clamp(energy, 0.0, 1.0), ate: 0.0, eaten: 0, resting: 0.0, play: false, comfort: [d; 3], appearing: None, full: 10.0 * FULL, brain: 0.0 }
     }
 
     /// The same, for this creature: all of its energy is `FULL` for each kilogram it weighs.
@@ -111,7 +117,10 @@ pub fn rest(run: &Run) -> f32 {
 pub fn after_step(run: &mut Run) {
     let Some(mut needs) = run.body.needs.take() else { return };
     let before = discomfort(needs.energy);
-    let spent = run.body.creature.effort(&run.stage.world) / needs.full + AWAKE * STEP;
+    let mut spent = run.body.creature.effort(&run.stage.world) / needs.full + AWAKE * STEP;
+    if needs.brain > 0.0 {
+        spent += needs.brain * STEP;
+    }
     needs.resting = if needs.energy < 1.0 { rest(run) } else { 0.0 };
     needs.energy = clamp(needs.energy - spent + REST * STEP * needs.resting, 0.0, 1.0);
     let rested = discomfort(needs.energy);

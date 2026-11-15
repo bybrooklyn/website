@@ -19,7 +19,7 @@ import { BRAIN, POPULATION, SECONDS, engineAddress, list, list64, start, write, 
 /** What the page sends. */
 export type Order =
     /** Begins practice in a kind of world, with a brain of `shape`. With `carry`, a leader already practising with a body of as many legs goes on with what it has learned, in the new kind of world and the shape asked (walker/src/generalist/ppo.rs, `Learner::reshaped`); otherwise it starts from `kept`, reshaped, or from nothing. */
-    | { kind: "begin"; setup: number; legs: number; seed: number; difficulty: number; amounts: [number, number, number, number]; shape: Shape; workers: number; index: number; learnerSeed: number; kept?: Kept; carry?: boolean }
+    | { kind: "begin"; setup: number; legs: number; seed: number; difficulty: number; amounts: [number, number, number, number]; shape: Shape; workers: number; index: number; learnerSeed: number; kept?: Kept; carry?: boolean; grows?: boolean }
     | { kind: "pause" }
     | { kind: "resume" }
     | { kind: "beat" }
@@ -100,6 +100,7 @@ function make(order: Extract<Order, { kind: "begin" }>): void {
     if (!engine) return;
     engine.create(order.legs, order.seed, order.difficulty, ...order.amounts, POPULATION, BRAIN.hidden, BRAIN.layers, BRAIN.memory, SECONDS, 1);
     engine.brain_shape(order.shape.memory, order.shape.rhythm, order.shape.mood, order.shape.reads);
+    engine.brain_grow(order.grows ? 1 : 0);
     const share = Math.max(2, Math.ceil(CREATURES / order.workers));
     // each worker draws its own actions and has worlds of its own; the leader's weights are sent to all
     engine.practice_create(share, (order.learnerSeed + order.index) >>> 0, (order.learnerSeed * 64 + order.index) >>> 0);

@@ -345,3 +345,45 @@ fn a_learner_kept_at_stage_3_is_taken_up_by_the_page_and_grown_keeping_its_updat
     (page.state_room, page.running_room) = (old.learner.state(), old.learner.running());
     assert!(page.policy_load());
 }
+
+#[test]
+fn switched_on_the_page_s_brain_grows_its_connections_pays_for_them_and_draws_them_and_switched_off_it_is_as_before() {
+    let recipe = Recipe { seed: 8, difficulty: 0.2, amounts: [1.0; 4] };
+    let mut page = Page::new(recipe, 2, 8, 8, 1, 0, 30.0, 2).unwrap();
+    assert!(!page.grow, "it does not grow unless the visitor switches it on");
+    page.practice_create(4, 5, 3);
+    let learner = &page.practice.as_ref().unwrap().learner;
+    assert!(learner.pool().is_some_and(|pool| pool.grow.is_none()));
+    let (form, state, running) = (learner.form(), learner.state(), learner.running());
+    page.form_room = form.clone();
+    (page.state_room, page.running_room) = (state.clone(), running.clone());
+    assert!(page.policy_load());
+    for _ in 0..30 {
+        page.show_step(1.0 / 60.0);
+    }
+    let still = page.brain_picture().to_vec();
+    // switched on: practice made again grows, a learner kept before is taken up as it was, and the show grows at once
+    page.brain_grow(true);
+    page.practice_create(4, 5, 3);
+    assert!(page.practice.as_ref().unwrap().learner.pool().is_some_and(|pool| pool.grow.is_some()));
+    page.form_room = form;
+    (page.state_room, page.running_room) = (state, running);
+    assert!(page.practice_load());
+    assert!(page.policy_load());
+    let mut spent = 0.0;
+    for _ in 0..600 {
+        page.show_step(1.0 / 60.0);
+        spent += page.show.body.needs.as_ref().map_or(0.0, |needs| needs.brain);
+    }
+    assert!(spent > 0.0, "its connections cost it energy");
+    let grown = page.brain_picture().to_vec();
+    // the picture is the one before with how many connections it keeps, of how many, what they cost, and what changed
+    assert!(grown.len() >= still.len() + 4);
+    let tail = &grown[still.len()..];
+    let (joined, places, cost, changed) = (tail[0], tail[1], tail[2], tail[3]);
+    assert_eq!(places, 32.0 * 16.0);
+    assert!(joined > 0.0 && joined <= places && cost > 0.0);
+    assert_eq!(tail.len(), 4 + 3 * changed as usize);
+    page.brain_grow(false);
+    assert!(page.policy.as_ref().unwrap().pool().is_some_and(|pool| pool.grow.is_none()));
+}

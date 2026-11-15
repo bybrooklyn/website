@@ -48,6 +48,13 @@
 //! `changes::Setting::TEST` has them, its eye on things there, and for the teacher what its settings
 //! ask on average and the share of runs the creature comes through.
 //!
+//! A brain that adds and cuts its connections while it lives (stage 5, walker/README.md "The risky bet"):
+//! `grow=1` for the rule the page carries, `rule=a,b,c,d,e,f,g` for another rule's seven numbers
+//! (`wiring::Rule`), and `price=` for what every connection there could be costs together each second, as
+//! a share of what being awake costs (1 unless given). The `world` line then says the share of places
+//! joined over the measuring in changing worlds (`joined=`) and over the last rollout of practice
+//! (`practised=`).
+//!
 //! For the transfer measurement, `easy=0.1 switch=10000000` has practice spend its first ten million
 //! steps in worlds of difficulty 0.1 and the rest in worlds of the difficulty asked, while it is
 //! measured all along in held-out worlds of the difficulty asked:
@@ -75,6 +82,8 @@ fn main() {
     let mut save: Option<String> = None;
     let mut amounts = [1.0f32; 4];
     let mut flat = false;
+    let mut grow: Option<walker::generalist::wiring::Grow> = None;
+    let mut price = 1.0f32;
     for arg in std::env::args().skip(1) {
         let Some((name, value)) = arg.split_once('=') else { continue };
         match name {
@@ -94,6 +103,12 @@ fn main() {
             "kept" => kept = Some(value.to_string()),
             "save" => save = Some(value.to_string()),
             "flat" => flat = value == "1",
+            "grow" => grow = (value == "1").then_some(walker::generalist::wiring::Grow::PAGE),
+            "rule" => {
+                let numbers: Vec<f32> = value.split(',').map(|n| n.parse().unwrap()).collect();
+                grow = Some(walker::generalist::wiring::Grow { rule: walker::generalist::wiring::Rule { numbers: numbers.try_into().expect("seven numbers") }, price: 1.0 });
+            }
+            "price" => price = value.parse().unwrap(),
             _ => trials.push((name.to_string(), value.parse().unwrap_or_else(|_| panic!("{arg}")))),
         }
     }
@@ -222,6 +237,7 @@ fn main() {
                 _ => panic!("no setting called {name}"),
             }
         }
+        settings.grow = grow.map(|grow| walker::generalist::wiring::Grow { price, ..grow });
         // practising first in easier worlds, if asked, while measured in worlds of the difficulty asked
         let first = Recipe { difficulty: easy.unwrap_or(difficulty), ..recipe };
         let mut practice = Practice::new(first, way, settings, 32, seed, seed as u32).unwrap();
@@ -284,13 +300,17 @@ fn world(practice: &mut Practice, seeds: &[u32], method: &str, legs: u32, diffic
     let (amount, share) = practice.worlds.teacher.as_ref().map_or((0.0, 0.0), |teacher| teacher.standing());
     let (surprised, paid, missed) = practice.learner.foresee.as_ref().map_or((0.0, 0.0, 0.0), |f| (f.surprised / f.looks.max(1) as f32, f.paid / f.looks.max(1) as f32, f.missed));
     println!(
-        "{method}-world {legs} {difficulty} {seed} {} changing={:.2} air={:.3} food={:.2} on={:.3} chance={:.3} taught={amount:.3} through={share:.2} surprise={surprised:.4} paid={paid:.5} missed={missed:.4}",
+        "{method}-world {legs} {difficulty} {seed} {} changing={:.2} air={:.3} food={:.2} on={:.3} chance={:.3} taught={amount:.3} through={share:.2} surprise={surprised:.4} paid={paid:.5} missed={missed:.4} joined={:.3} practised={:.3} energy={:.2} resting={:.3}",
         practice.worlds.steps,
         changing.mean(),
         changing.idle_air,
         changing.wants.food,
         changing.wants.on,
-        changing.wants.chance
+        changing.wants.chance,
+        practice.joined,
+        practice.learner.joined_share(),
+        changing.wants.energy,
+        changing.wants.resting
     );
 }
 

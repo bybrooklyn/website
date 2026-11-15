@@ -76,6 +76,10 @@ impl Learner {
             looks: 0,
             missed: 0.0,
         }));
+        // a pool that grows reads surprise, so it grows once it has a predictor
+        if self.settings.grow.is_some() {
+            self.grow(self.settings.grow);
+        }
         self
     }
 

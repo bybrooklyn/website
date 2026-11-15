@@ -140,6 +140,23 @@ energy from the food it finds, the rule for adding and cutting found by evolutio
 the weights. If it works, neurons whose whole rule is an evolved program. If it does not, stage 3 is the
 base and the article says so.
 
+**State (15 November 2026): built, on its branch, to be looked at; the bet did not pay.** Each memory
+neuron's 16 places either hold a connection or not, and a rule of seven numbers, every half second, joins
+the empty place where the two neurons have been most active together and cuts the connection that carries
+least, readier to change when surprised and to cut when short of energy. A whole brain costs as much energy
+as being awake, and a hungry brain thins; nothing worse happens to it. Evolution bred the rule over eight
+generations of eight, each candidate practising from scratch, and moved little within its own noise; the
+page carries the seven numbers it ended on. Against stage 4's brain at the same steps, four seeds, every
+measure is within the spread: two legs 14.3 ± 0.3 m against 13.2 ± 1.8, four legs 27.6 ± 5.9 against 21.9 ±
+11.8, the eye on things 0.23 against 0.16, and the rule evolution started from did as well as the one it
+found. It still does not find its pace again within a change (0.97 of its pace kept while up, as stage 4's
+0.98, the plain network's 1.05 and a never-changed creature's 1.07), though the change does move its wiring.
+Connections free, it has more energy and goes as far. On the page a switch under "brain", off as it opens,
+turns it on; the brain's picture then grows each new connection out of the neuron it reads, draws each cut
+one back in, and says how many it keeps and what they cost. Practice is a tenth slower natively and about a
+fifth in the page, and the module is 507 KiB of 512. Neurons whose whole rule is an evolved program were not
+started. Stage 4's brain stays the default. The numbers are in `walker/README.md`, "The risky bet".
+
 ### 6. Doing things, and a second creature
 
 - Using things: push a box to a ledge, ride a platform, press a switch.

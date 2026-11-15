@@ -1808,6 +1808,172 @@ still looks like a machine: it never turns for food it heard fall behind it, it 
 falls, it meets most changes by standing still rather than finding a new way to move, and its pace does not
 come back within a change. The plastic connections are drawn changing, but they do not measurably help.
 
+### The risky bet
+
+Stage 5 of the plan, 15 November 2026: a brain of a fixed number of neurons that adds and cuts its
+connections while it lives, each paid for in energy from the food it finds, the rule for adding and cutting
+found by evolution while practice trains the weights. Built, measured, and on the page behind a switch that
+is off. **The bet did not pay.** On every measure the growing brain is within the spread over seeds of
+stage 4's, and it still does not find its pace again within a change. Neurons whose whole rule is an evolved
+program were not started, since the plan makes them conditional on this working.
+
+**What it is** (`src/generalist/wiring.rs`). The pool keeps its neurons. Each memory neuron has its 16
+places a connection may be (`Shape::reads`), and practice trains a weight for every place, as before. During
+a run each place either holds a connection or does not; an empty place reads nothing, and its weights learn
+nothing while it is empty. Every place keeps a trace of what passes there: for a connection, how much it
+carries (its weight times what it reads); for an empty place, how much the two neurons it would join are
+active together (what it would read times what the neuron takes in). Every eight decisions (about half a
+second), once a run is a second old, each memory neuron joins its empty place of the greatest trace if that
+trace is over the rule's threshold for growing, and cuts its connection of the least trace if under the
+threshold for cutting. Surprise and having just eaten move both thresholds (by as much as the rule says, or
+not at all); short of energy, it grows less and cuts more. Every connection costs energy each second: a
+whole brain (all 512 places joined) costs `price` times what being awake costs (`needs::AWAKE`, a quarter
+of all its energy a minute), taken from the body's own energy (`needs::Needs::brain`), which food restores.
+Nothing more is done to it: a brain short of energy thins its connections, and the creature tires and rests
+as it always has. It never starves or dies of it.
+
+The rule is seven numbers (`wiring::Rule`): how long a trace keeps, the two thresholds, how much surprise
+and eating move them, how much readier it is to cut short of energy, and the share of places joined when a
+run begins. It reads its signals (energy, having just eaten, surprise) as they were sensed, before
+rescaling; a rollout keeps them, so learning back through a window runs the rule again as it ran then, and
+takes the connections as they were. What a connection does is never blamed on the rule. It is not learned by
+practice and keeps nothing with the learner, so a learner kept at any earlier stage opens as it was, and
+switching it on or off keeps everything learned.
+
+Every term now, and what kind of thing it is:
+
+| | what | kind |
+|---|---|---|
+| whether each of a memory neuron's places holds a connection | new | part of its brain's state in a run, changed by the rule; starts again each run |
+| each place's trace | new | part of its brain's state in a run |
+| the rule's seven numbers | new | found by evolution, carried by the page; not learned by practice, not kept with the learner |
+| a connection's cost, `price` a whole brain | new | a cost to its energy each second, which food pays |
+| the weights at every place | as before | learned by practice; an empty place's learn nothing while it is empty |
+| everything of stages 1 to 4 | as before | as "A world that changes while it lives" lists them |
+
+**Tested** (`wiring_tests`, `page_tests`, `src/minis/generalist.test.ts`): with places empty, the gradient
+through a window of six decisions with a fresh start in the middle is what nudging each weight shows, and a
+place empty throughout learns nothing; the rule joins the greatest empty place over its threshold and cuts the
+least connection under its own, and does nothing between; short of energy both thresholds rise, and a rule
+that heeds surprise changes sooner when surprised; over 300 decisions connections come and go and never cost
+more than the price; switched on, the learner keeps nothing more, and the same seed practises the same way to
+the bit; a growing brain's body is charged for it and a free one is not; the page's brain switched on grows,
+pays, and draws how many connections it keeps, what they cost and which changed, and switched off is as before.
+With it off, practice gives stage 4's fingerprints to the bit, the plain network's and the page's brain's, and
+the Walker's module is the same to the byte.
+
+**The rule, found by evolution** (`examples/rule.rs`). A cross-entropy search over the seven numbers: eight
+rules a generation, drawn about the mean of the best half so far (the mean itself always one of them); each
+given to a learner of the page's brain practising from scratch for three million steps, all of a generation
+from the same seed, a new seed each generation; each scored by how far it then goes in the sixteen held-out
+worlds, still and changing, half each. Eight generations, two legs, price 1, four rules at once on four cores,
+about 17 minutes. The scores within a generation spread from 8 to 12.7 m, as much as from one generation's
+seed to the next, and the mean rule scored best of its generation only twice in eight: the search moved
+little and mostly within its own noise. Where it ended (`Rule::FOUND`, what the page carries): traces kept
+0.84 a decision (`1.645`), growing over a trace of 0.14 (`-1.993`), cutting under 0.026 (`-3.639`), a little
+readier to change when surprised (`0.198`) and a little less just after eating (`-0.371`), about three times
+as ready to cut when short of energy (`1.178`), half the places joined at birth (`0.066`). Against where it
+started (`Rule::FIRST`: growing over 0.3, cutting under 0.05, surprise and eating ignored), it grows more
+readily and keeps more: 0.53 of its places joined over practice against 0.35. That is all that is shipped of
+it: seven numbers, found by search, not a trained network.
+
+**Against stage 4's brain, on the same steps** (`examples/compare.rs` with `rule=` and `price=`; worlds of
+the page's kind, two legs and four, seeds 1 to 4, 20 million steps, the teacher's worlds as stage 4 practises,
+four at a time on four cores of the Ryzen 7 9700X; stage 4's own rows are its runs, which the same code gives
+to the bit with growth off). The mean and spread over the seeds; at 20 million steps the share of the time in
+the air with nothing to clear, the eye on the nearest thing against chance, the share of its places joined
+in the changing held-out worlds and over practice's last rollout, and its energy on average in the held-out
+worlds:
+
+| two legs | 1 M | 2 M | 5 M | 10 M | 20 M, still | 20 M, changing | air | eye on / chance | joined, measured / practice | energy |
+|---|---|---|---|---|---|---|---|---|---|---|
+| stage 4's brain (the teacher's worlds) | 5.9 ± 1.9 m | 10.0 ± 2.3 m | 12.2 ± 0.7 m | 12.1 ± 0.8 m | 13.2 ± 1.8 m | 12.6 ± 1.9 m | 0.11 | 0.16 ± 0.10 / 0.06 | all | 0.57 |
+| **growing, the rule found, price 1 (the page's)** | 5.9 ± 0.9 m | 9.2 ± 0.4 m | 12.4 ± 1.3 m | 13.1 ± 1.7 m | **14.3 ± 0.3 m** | **13.2 ± 0.5 m** | 0.08 | **0.23 ± 0.07 / 0.05** | 0.56 / 0.53 | 0.50 |
+| growing, the rule found, price 0 (connections free) | 5.4 ± 2.4 m | 8.2 ± 1.5 m | 12.4 ± 2.4 m | 12.9 ± 2.5 m | 14.0 ± 3.2 m | 13.6 ± 3.4 m | 0.13 | 0.21 ± 0.07 / 0.06 | 0.58 / 0.54 | 0.61 |
+| growing, the rule evolution started from, price 1 | 6.7 ± 1.3 m | 9.2 ± 1.2 m | 12.6 ± 1.2 m | 12.0 ± 1.1 m | 13.6 ± 0.9 m | 13.6 ± 1.0 m | 0.08 | 0.18 ± 0.07 / 0.05 | 0.33 / 0.35 | 0.54 |
+| the plain network (stage 4's, for reference) | 6.0 ± 1.5 m | 8.0 ± 0.7 m | 10.6 ± 0.7 m | 12.0 ± 2.4 m | 11.2 ± 1.6 m | 10.8 ± 1.3 m | 0.05 | 0.18 ± 0.10 / 0.05 | | 0.57 |
+
+| four legs | 1 M | 2 M | 5 M | 10 M | 20 M, still | 20 M, changing | air | eye on / chance | joined, measured / practice | energy |
+|---|---|---|---|---|---|---|---|---|---|---|
+| stage 4's brain (the teacher's worlds) | 6.8 ± 3.9 m | 14.0 ± 7.8 m | 19.2 ± 10.4 m | 20.6 ± 12.0 m | 21.9 ± 11.8 m | 20.5 ± 10.3 m | 0.16 | 0.18 ± 0.08 / 0.06 | all | 0.54 |
+| **growing, the rule found, price 1** | 5.7 ± 4.2 m | 14.3 ± 8.4 m | 19.2 ± 10.3 m | 26.1 ± 10.1 m | **27.6 ± 5.9 m** | **27.3 ± 7.2 m** | 0.15 | 0.19 ± 0.06 / 0.05 | 0.53 / 0.50 | 0.47 |
+
+(Stage 4's four-legged 21.9 m is three seeds at 22 to 34 m and one that stood still, 2.7 m. No growing seed
+stood still: 19 to 34 m.)
+
+What that says, plainly:
+
+- **Distance: no difference.** Two legs growing went 14.3 m at 20 million steps against 13.2, and four legs
+  27.6 against 21.9, but each is within the spread over seeds of stage 4's, so neither is a difference. What
+  does stand out is that the four growing two-legged seeds ended within a metre of each other (14.0 to 14.8
+  m) where stage 4's spread from 10.3 to 15.0; with four seeds that is a hint, not a result.
+- **Its eye: no difference.** On things 0.23 of the time against stage 4's 0.16, chance 0.05, within the
+  spread (stage 4's seeds range from a little over chance to 0.3).
+- **How many connections it keeps.** Over practice it keeps about half its places joined, a little more than
+  it is born with; within a life, the creature measured in changing worlds keeps 0.56 on average. On the page
+  a hungry two-legged creature thinned to 0.28 (below).
+- **What the price does.** With connections free the learners kept a few more (0.58 against 0.56), had more
+  energy (0.61 against 0.50: the brain at price 1 costs about a fifth of a full creature's being awake on
+  average) and went as far, with a wider spread. The price costs it energy and nothing measurable in
+  distance or looking.
+- **What evolution did.** The rule it started from, which keeps a third of its places, did as well as the
+  rule it found, within the spread on every measure. Evolution over eight noisy generations did not find a
+  rule measurably better than a hand-set one.
+
+**Adapting, measured as stage 4 measured it** (`examples/adapt.rs` with `rule=` and `price=`; the growing
+brain grows and pays as it walks). Each learner at 20 million steps, 200 held-out worlds, the world changed at
+ten seconds into one of nine changes and kept so; pooled over the changes; "while up" over the changed copies
+still going at twenty seconds; recovery the second five seconds over the first. Seeds 1 to 4:
+
+| two legs | kept, first 5 s | next 5 s | recovery | while up, first / next | recovery while up | fell |
+|---|---|---|---|---|---|---|
+| stage 4's brain (the teacher's worlds) | 0.79 ± 0.04 | 0.56 ± 0.06 | 0.70 ± 0.05 | 0.84 / 0.82 | 0.98 ± 0.06 | 0.39 ± 0.05 |
+| **growing, the rule found, price 1** | 0.84 ± 0.09 | 0.58 ± 0.08 | 0.69 ± 0.07 | 0.88 / 0.86 | **0.97 ± 0.02** | 0.42 ± 0.08 |
+| growing, price 0 | 0.81 ± 0.04 | 0.51 ± 0.06 | 0.63 ± 0.08 | 0.84 / 0.79 | 0.93 ± 0.05 | 0.44 ± 0.08 |
+| the plain network (stage 4's) | 0.81 ± 0.10 | 0.55 ± 0.04 | 0.68 ± 0.03 | 0.88 / 0.93 | 1.05 ± 0.08 | 0.41 ± 0.09 |
+| a still world, never practised a change (stage 4's) | 0.77 ± 0.10 | 0.58 ± 0.13 | 0.77 ± 0.18 | 0.91 / 0.97 | 1.07 ± 0.14 | 0.48 ± 0.12 |
+
+Four legs growing kept 0.76 of their pace in the first five seconds and 0.56 in the next, 0.85 / 0.76 while
+up (recovery 0.90 ± 0.03), and fell after 0.29 of changes; stage 4's brain, its standing seed left out, kept
+0.77 and 0.57, 0.93 while up, falling 0.33; never practised a change, 0.82, 0.62, 0.95, falling 0.24.
+
+Plainly: **it does not find its pace again within a change**, and does no better than stage 4's brain, the
+plain network, or a creature that never practised a change; every difference is within the spread. While up
+it goes on at the pace the change first left it (0.97 of it), as every brain before it did. Its connections
+do respond to the change: at twenty seconds the changed copies kept 0.57 of their places joined against 0.53
+in the unchanged ones (two legs), so the change moved the wiring, but the moving did not buy back any pace.
+
+**What it costs.** Natively, practice with the page's brain on one core goes 60,600 steps a second growing
+against 67,500 not (`brain_cost.rs grow=1`), a tenth slower: the traces, the rule and the masks forward and
+back. In the page (three workers, headless Chromium on four cores), 139,000 steps a second growing against
+169,000 not, measured a minute and a half apart in the same visit. The module is 507 KiB with SIMD and 491
+without (494 and 477 before), under the 512 KiB limit: the first build came to 512.4 KiB, and writing the
+pool's fresh start, its costs and the rule's powers of e once each, rather than at every use, brought it back.
+The Walker's module is the same to the byte.
+
+**On the page.** Under "brain" in the folded controls, a switch, "adds and cuts connections as it lives", off as
+the page opens and not kept between visits. Switched on, practice goes on with what it has learned (the
+workers are begun again carrying the learner), the policy on show starts its connections afresh, and the
+creature on show pays for its connections from its energy. In the brain's picture a connection just added
+grows out of the neuron it reads, bright, and a connection just cut draws back into it, fading, each over a
+second; the words under the picture say how many connections it keeps and what share of all its energy they
+cost a minute. In headless Chromium (the drafts build, "meadow", two legs, normal effort, browser and all
+on four cores; `smoke5.ts` with the trials): growth off for the first minute, then on for two. A creature born
+with half its 512 places joined thinned to 134 on average over the next two minutes, costing it 6.5 percent of
+its energy a minute, about two places changing at each decision; its energy over those minutes was 0.21 on
+average, low enough that the rule's hunger cut much of what it grew. The lines growing and drawing back are
+plain to see at about two a decision; what the creature does is not visibly different, as the numbers say.
+No error in the page's console.
+
+To rerun, from `walker/`:
+
+```sh
+cargo run --release --example rule -- legs=2 generations=8 population=8 steps=3000000 threads=4   # the rule, by evolution
+cargo run --release --example compare -- legs=2 difficulty=0.2 amounts=0.6,0.4,0.4,0.4 memory=32 rhythm=4 mood=4 reads=16 seed=1 steps=20000000 grow=1 save=keep/grow   # the page's growing brain (rule=a,b,c,d,e,f,g for another, price= for its cost)
+cargo run --release --example adapt -- kept=keep/grow-20000000 legs=2 grow=1   # the world changed at ten seconds into 200 held-out worlds, growing as it goes
+cargo run --release --example brain_cost -- updates=20 most=2 grow=1   # practice's speed with the brain growing
+```
+
 ### Practice in the browser
 
 On the page, "how it learns" chooses evolution or "by practice", and the page opens on practice: a

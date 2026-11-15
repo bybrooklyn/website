@@ -73,3 +73,7 @@ required-features = ["generalist"]
 [[example]]
 name = "adapt"
 required-features = ["generalist"]
+
+[[example]]
+name = "rule"
+required-features = ["generalist"]

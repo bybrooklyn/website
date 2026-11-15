@@ -140,6 +140,8 @@ export default function generalist(m: Mote): Scene {
     /** The world's conditions as the visitor set them (none of it kept between visits, so the page opens on the world at rest), whether it changes by itself, what a tap on nothing drops, the world as the creature last met it, and its surprise over the last few seconds. */
     let conditions: Conditions = { ...REST_CONDITIONS };
     let changing = false;
+    /** Whether its brain adds and cuts its connections while it lives (stage 5), off until the visitor switches it on; not kept between visits. */
+    let grows = false;
     let drops: "food" | "box" = "food";
     let world: WorldNow = worldNow([]);
     const surprises: number[] = [];
@@ -213,6 +215,7 @@ export default function generalist(m: Mote): Scene {
         if (engine) {
             engine.create(recipe.legs, seed, difficulty, ...amounts, POPULATION, BRAIN.hidden, BRAIN.layers, BRAIN.memory, SECONDS, brainSeed);
             putWorld();
+            engine.brain_grow(grows ? 1 : 0);
             [ground, blocks, hazards, reached] = [[], [], [], 0];
             extend(20);
             angles = list(engine, engine.ray_angles());
@@ -252,7 +255,7 @@ export default function generalist(m: Mote): Scene {
     /** What a practice worker is told to begin with: which of the workers it is, and for the first, the learner kept. */
     const practiceOrder = (index: number, kept?: Kept, carry = false): PracticeOrder => {
         const { seed, difficulty, amounts } = engineRecipe(recipe);
-        return { kind: "begin", setup: id, legs: recipe.legs, seed, difficulty, amounts, shape, workers: helpers.length + 1, index, learnerSeed: 1, kept, carry };
+        return { kind: "begin", setup: id, legs: recipe.legs, seed, difficulty, amounts, shape, workers: helpers.length + 1, index, learnerSeed: 1, kept, carry, grows };
     };
 
     /** Puts the newest policy from practice on show, from the start. */
@@ -562,11 +565,22 @@ export default function generalist(m: Mote): Scene {
         const memorySlider = slider("memory neurons", 0, SHAPE_CAPS.memory, 8, () => shape.memory, (value) => reshape({ memory: value }));
         const rhythmSlider = slider("rhythm neurons", 0, SHAPE_CAPS.rhythm, 1, () => shape.rhythm, (value) => reshape({ rhythm: value }));
         const readsSlider = slider("connections each pool neuron reads", SHAPE_CAPS.fewestReads, SHAPE_CAPS.reads, 4, () => shape.reads, (value) => reshape({ reads: value }));
+        // whether its memory neurons add and cut their connections as it lives, each paid for from its energy; it keeps what it learned
+        const growing = el("input", { type: "checkbox", checked: grows, onchange: () => {
+            grows = growing.checked;
+            engine?.brain_grow(grows ? 1 : 0);
+            flashes.clear();
+            say(grows ? "Its memory neurons add and cut their connections as it lives now, each paid for from its energy. It goes on with what it has learned." : "Its connections stay as they are. It goes on with what it has learned.");
+            if (how === "practice") begin(true);
+        } });
 
         // the brain, drawn live from the first second, so a visitor watches it grow as it learns
         const brainPicture = el("canvas", { class: "walker-brain-picture generalist-brain" });
         brainPicture.setAttribute("role", "img");
-        brainPicture.setAttribute("aria-label", "The creature's brain as it thinks: what it senses on the left (a dot for each ray of its eye, then its body), its plain neurons in a column either side of its pool, and what it does on the right. In the pool, small squares are memory neurons filled as full as what they hold, rings with a dot going round are rhythms, and bars under them are moods, which turn groups of the plain neurons up or down. Lines are the connections passing the most, thicker where a connection has changed since the world last changed. A small trace in the corner is its surprise: how wrong its guess of what it would see was. Pressing a neuron shows everything it listens to.");
+        brainPicture.setAttribute("aria-label", "The creature's brain as it thinks: what it senses on the left (a dot for each ray of its eye, then its body), its plain neurons in a column either side of its pool, and what it does on the right. In the pool, small squares are memory neurons filled as full as what they hold, rings with a dot going round are rhythms, and bars under them are moods, which turn groups of the plain neurons up or down. Lines are the connections passing the most, thicker where a connection has changed since the world last changed. A small trace in the corner is its surprise: how wrong its guess of what it would see was. Pressing a neuron shows everything it listens to. With growth switched on, a connection just added grows out of the neuron it reads and one just cut draws back into it, and the words under the brain say how many connections it keeps and what share of all its energy they cost a minute.");
+        /** Connections just added or cut in a brain that grows them, by where they go into and come from: whether added, and when it was seen. Each is drawn for `FLASH` seconds, an added one growing out of the neuron it reads, a cut one drawn back into it. */
+        const flashes = new Map<string, { from: number; into: number; added: boolean; at: number }>();
+        const FLASH = 1.2;
         /** Where each neuron of a brain with a pool is drawn, by kind, kept until its counts or the canvas change. */
         let placed: { key: string; at: [number, number][] } = { key: "", at: [] };
         const placeKinds = (kinds: BrainKinds, wide: number, high: number) => {
@@ -642,6 +656,33 @@ export default function generalist(m: Mote): Scene {
                 ctx.moveTo(...at[from]!);
                 ctx.lineTo(...at[n]!);
                 ctx.stroke();
+            }
+            // connections just added grow out of the neuron they read, and connections just cut draw back into it
+            if (kinds.growth) {
+                const { changes } = kinds.growth;
+                for (let k = 0; k + 2 < changes.length; k += 3) {
+                    const [into, from, added] = [changes[k]!, changes[k + 1]!, changes[k + 2]! > 0];
+                    const key = `${into} ${from}`;
+                    if (flashes.get(key)?.added !== added) flashes.set(key, { from, into, added, at: m.time });
+                }
+                for (const [key, flash] of flashes) {
+                    const age = (m.time - flash.at) / FLASH;
+                    if (age >= 1 || age < 0 || flash.from >= count || flash.into >= count) {
+                        flashes.delete(key);
+                        continue;
+                    }
+                    const [[fx, fy], [ix, iy]] = [at[flash.from]!, at[flash.into]!];
+                    // quick to start and slow to settle
+                    const eased = 1 - (1 - Math.min(1, age * 2.5)) ** 3;
+                    const reach = flash.added ? eased : 1 - eased;
+                    ctx.globalAlpha = flash.added ? 0.95 * (1 - age * 0.6) : 0.7 * (1 - age);
+                    ctx.strokeStyle = flash.added ? ink : muted;
+                    ctx.lineWidth = flash.added ? 1.6 : 1;
+                    ctx.beginPath();
+                    ctx.moveTo(fx, fy);
+                    ctx.lineTo(fx + (ix - fx) * reach, fy + (iy - fy) * reach);
+                    ctx.stroke();
+                }
             }
             // a neuron pressed: everything it listens to
             if (engine && pressedNeuron >= senses && pressedNeuron < count) {
@@ -789,8 +830,14 @@ export default function generalist(m: Mote): Scene {
                 ctx.textAlign = "left";
                 ctx.fillText("senses", 2, high - 3);
                 ctx.textAlign = "center";
-                // the brain drawn, which until its run ends may be the shape before a slider moved
-                ctx.fillText(kinds ? `${2 * kinds.counts.plain + kinds.counts.memory + kinds.counts.rhythm + kinds.counts.mood} neurons` : "neurons", wide / 2, high - 3);
+                // the brain drawn, which until its run ends may be the shape before a slider moved; one that grows its
+                // connections says how many it keeps and what share of its energy they cost a minute
+                const growth = kinds?.growth;
+                const percent = growth ? growth.cost * 6000 : 0;
+                const brainWords = growth
+                    ? wide > 280 ? `${growth.joined} connections, ${percent < 1 ? percent.toFixed(1) : Math.round(percent)}% a minute` : `${growth.joined} connections`
+                    : kinds ? `${2 * kinds.counts.plain + kinds.counts.memory + kinds.counts.rhythm + kinds.counts.mood} neurons` : "neurons";
+                ctx.fillText(brainWords, wide / 2, high - 3);
                 ctx.textAlign = "right";
                 ctx.fillText("moves", wide - 2, high - 3);
             };
@@ -1183,6 +1230,7 @@ export default function generalist(m: Mote): Scene {
             ...row("memory", memorySlider),
             ...row("rhythm", rhythmSlider),
             ...row("connections", readsSlider),
+            ...row("growth", el("label", {}, growing, "adds and cuts connections as it lives")),
         );
         const fold = el("button", { type: "button", class: "generalist-fold", textContent: "world and learning", onclick: () => {
             controls.shut(!controls.open());

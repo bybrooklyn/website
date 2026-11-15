@@ -23,6 +23,8 @@
 //! - `mind`: a brain drawn as it thinks, whichever way it learns.
 //! - `pool`: the brain's neurons that carry something from one decision to the next: memory with plastic
 //!   reads, rhythms it conducts, and moods that turn the plain neurons up or down.
+//! - `wiring`: a pool whose memory neurons add and cut their connections while it lives, by an evolved
+//!   rule, each connection paid for from its energy.
 //! - `net`: a small network with its backward pass written by hand, and Adam, for gradient learning.
 //! - `page` and `api`: what the page reaches, and the plain functions it calls in `generalist.wasm`.
 //! - `stage`: a land put into the physics around one creature, laid ahead and dropped behind as it
@@ -54,6 +56,7 @@ pub mod stage;
 pub mod tally;
 pub mod teacher;
 pub mod touch;
+pub mod wiring;
 
 #[cfg(test)]
 mod body_tests;
@@ -83,3 +86,5 @@ mod tests;
 mod touch_tests;
 #[cfg(test)]
 mod wants_tests;
+#[cfg(test)]
+mod wiring_tests;

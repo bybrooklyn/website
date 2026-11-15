@@ -15,11 +15,17 @@
 //! over the first; then the same over only the changed copies whose run did not end (`up_`), the pace kept
 //! while it stays on its feet, so a fall does not hide whether it found its pace again. With `hears=0` the learner senses nothing of a changing world, as before stage 4.
 //!
+//! A learner that grew its connections in practice (stage 5) is measured growing them by the same rule:
+//! `grow=1` for the page's rule, `rule=a,b,c,d,e,f,g` for another, `price=` as `compare.rs` has it. It pays
+//! for them from its energy as it goes, and the last line says the share of its places joined at twenty
+//! seconds in the unchanged copies and the changed ones.
+//!
 //!     cargo run --release --example adapt -- kept=<path> legs=2
 
 use walker::generalist::changes::{Changes, Conditions};
 use walker::generalist::envs::Run;
-use walker::generalist::practice::{Changing, Way, Worlds, held_out, learner_of_form, shaped};
+use walker::generalist::practice::{Changing, Way, Worlds, charge_brain, held_out, learner_of_form, shaped};
+use walker::generalist::wiring::{Grow, Rule};
 use walker::generalist::ppo::Settings;
 use walker::generalist::recipe::Recipe;
 use walker::physics::STEP;
@@ -36,16 +42,22 @@ struct Going {
     held: Vec<f32>,
     senses: Vec<f32>,
     asked: Vec<f32>,
+    /// The share of its brain's places joined at its last decision (1 for a brain that does not grow).
+    joined: f64,
 }
 
 fn main() {
     let (mut kept, mut legs, mut hears, mut count) = (String::new(), 2u32, true, 200usize);
+    let (mut grow, mut price): (Option<Grow>, f32) = (None, 1.0);
     for arg in std::env::args().skip(1) {
         match arg.split_once('=') {
             Some(("kept", v)) => kept = v.to_string(),
             Some(("legs", v)) => legs = v.parse().unwrap(),
             Some(("hears", v)) => hears = v == "1",
             Some(("worlds", v)) => count = v.parse().unwrap(),
+            Some(("grow", v)) => grow = (v == "1").then_some(Grow::PAGE),
+            Some(("rule", v)) => grow = Some(Grow { rule: Rule { numbers: v.split(',').map(|n| n.parse().unwrap()).collect::<Vec<f32>>().try_into().expect("seven numbers") }, price: 1.0 }),
+            Some(("price", v)) => price = v.parse().unwrap(),
             _ => {}
         }
     }
@@ -74,18 +86,24 @@ fn main() {
     let mut gone_up = vec![[0.0f64; 4]; changes.len()];
     let mut base_up = vec![[0.0f64; 4]; changes.len()];
     let mut counted = 0u32;
+    let grow = grow.map(|grow| Grow { price, ..grow });
+    // the share of places joined at twenty seconds, unchanged and changed, summed over the copies counted
+    let (mut joined_unchanged, mut joined_changed) = (0.0f64, 0.0f64);
     let seeds = held_out(count);
     for &seed in &seeds {
         let worlds = Worlds::alone(Recipe { seed, ..kind }, way, &[seed]).unwrap();
         let (senses, actions) = (worlds.runs[0].senses(), worlds.runs[0].body.actions());
-        let mut learner = learner_of_form(&way, Settings::default(), &form, senses, actions, 1, 0).expect("a form that holds together");
+        let mut learner = learner_of_form(&way, Settings { grow, ..Settings::default() }, &form, senses, actions, 1, 0).expect("a form that holds together");
         assert!(learner.load(&state, &running), "the kept learner does not fit this way (hears={hears})");
-        let mut first = Going { run: worlds.runs[0].clone(), state: Vec::new(), held: vec![0.0; actions], senses: vec![0.0; senses], asked: vec![0.0; actions] };
+        let mut first = Going { run: worlds.runs[0].clone(), state: Vec::new(), held: vec![0.0; actions], senses: vec![0.0; senses], asked: vec![0.0; actions], joined: 1.0 };
         first.run.sense(&mut first.senses);
         // walks until `until` seconds, or its run ends
         let mut walk = |going: &mut Going, until: f32| {
             while (going.run.judge.steps as f32) * STEP < until - 1e-4 && !going.run.judge.over() {
                 learner.act_as(&mut going.state, &going.senses, &mut going.asked);
+                let (cost, joined, places) = learner.brain_cost(&going.state);
+                charge_brain(&mut going.run, cost);
+                going.joined = if places > 0 { joined as f64 / places as f64 } else { 1.0 };
                 way.hold(&going.asked, &mut going.held);
                 for _ in 0..way.skip {
                     going.run.before_step(&going.held);
@@ -117,6 +135,7 @@ fn main() {
         for m in 0..4 {
             base[m] += plain[m];
         }
+        joined_unchanged += unchanged.joined;
         for (c, (_, conditions)) in changes.iter().enumerate() {
             let mut changed = first.clone();
             let mut world = Changes::still(Conditions::REST);
@@ -128,6 +147,7 @@ fn main() {
                 gone[c][m] += went[m];
             }
             ended[c] += u32::from(changed.run.judge.over());
+            joined_changed += changed.joined;
             if !changed.run.judge.over() {
                 for m in 0..4 {
                     gone_up[c][m] += went[m];
@@ -169,5 +189,6 @@ fn main() {
     let (first, next) = pooled(&gone, &every_base);
     let (up_first, up_next) = pooled(&gone_up, &base_up);
     let _ = (first_sum, second_sum, first_up, second_up);
+    println!("joined unchanged={:.3} changed={:.3}", joined_unchanged / counted.max(1) as f64, joined_changed / (counted.max(1) as f64 * changes.len() as f64));
     println!("all first5={first:.3} next5={next:.3} recovery={:.3} up_first5={up_first:.3} up_next5={up_next:.3} up_recovery={:.3} ended={:.3}", next / first.max(1e-6), up_next / up_first.max(1e-6), ended.iter().sum::<u32>() as f64 / (counted.max(1) as f64 * changes.len() as f64));
 }
