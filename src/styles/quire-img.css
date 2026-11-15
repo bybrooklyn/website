@@ -43,6 +43,11 @@
     cursor: grabbing;
 }
 
+.quire-img-stage[data-tool="cutout"] {
+    cursor: pointer;
+}
+
+.quire-img-under,
 .quire-img-canvas,
 .quire-img-over {
     position: absolute;
@@ -667,6 +672,31 @@
     grid-template-columns: auto repeat(3, minmax(0, 1fr));
     gap: 0.25rem;
     align-items: center;
+}
+
+/* a plain word under the format when it cannot keep what the picture has, growing in and folding away */
+.quire-img-note {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem;
+    max-height: 8rem;
+    overflow: clip;
+    color: var(--ink);
+    font-size: 0.9rem;
+    transition:
+        max-height 0.3s var(--ease),
+        opacity 0.2s ease;
+}
+
+.quire-img-note p {
+    flex-basis: 100%;
+    margin: 0;
+}
+
+.quire-img-note.away {
+    max-height: 0;
+    opacity: 0;
 }
 
 /* a Display P3 picture's colors, offered only for one, grow in and fold away as the lossy settings do */

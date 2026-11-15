@@ -14,6 +14,7 @@ import type { Edits } from "./metadata";
 import { readGrade, trimGrade, type Grade, type KeptGrade } from "./grade";
 import { decodeRuns, MOST_STROKES, type Shape, type Stroke } from "./masks";
 import { fitInside, largestInside, MOST_TURN, turnOf } from "./turn";
+import type { Cut } from "./cutout/cut";
 
 /** A rectangle in the original's pixels. */
 export interface Rect {
@@ -47,8 +48,11 @@ export type GradeStep = { type: "grade"; grade: KeptGrade };
 /** A part of the picture with a grade of its own: its shape (a gradient, strokes, a found mask; masks.ts) and its grade. */
 export type PartStep = { type: "part"; grade: KeptGrade } & Shape;
 
-/** One thing done to the picture. A resize with no height keeps the crop's shape. A turn levels the picture (degrees, clockwise), the crop then upright on the turned picture. */
-export type Step = { type: "crop"; rect: Rect } | { type: "resize"; width: number; height?: number; filter: Filter } | { type: "turn"; angle: number } | ({ type: "cover" } & Cover) | GradeStep | PartStep | Mark;
+/** The picture cut out of its background (cutout/cut.ts): the mask a model found, the brush's strokes, the subject pressed, and what it is laid on. */
+export type CutStep = { type: "cutout" } & Cut;
+
+/** One thing done to the picture. A resize with no height keeps the crop's shape. A turn levels the picture (degrees, clockwise), the crop then upright on the turned picture. A cut-out takes the background away first, before anything else is drawn. */
+export type Step = { type: "crop"; rect: Rect } | { type: "resize"; width: number; height?: number; filter: Filter } | { type: "turn"; angle: number } | ({ type: "cover" } & Cover) | GradeStep | PartStep | CutStep | Mark;
 
 /** A step as the document keeps it: with an id of its own, and switched off if it is. */
 export type Kept = Step & { id: string; off?: boolean };
@@ -82,6 +86,8 @@ export interface Look {
     grades: { id: string; grade: Grade; part?: Shape }[];
     /** How far the picture is turned to level it, in degrees, clockwise; none when level. */
     turn?: number;
+    /** The picture cut out of its background, if it is. */
+    cutout?: Cut;
 }
 
 /** The largest side a picture may be made, and the most steps a file is read with: beyond these a file is taken to be damaged. */
@@ -114,6 +120,7 @@ export function look(picture: Picture): Look {
     const covers: Look["covers"] = [];
     const marks: Mark[] = [];
     const grades: Look["grades"] = [];
+    let cutout: Cut | undefined;
     for (const step of picture.steps) {
         if (step.off) continue;
         if (step.type === "grade") grades.push({ id: step.id, grade: gradeOf(step) });
@@ -124,11 +131,12 @@ export function look(picture: Picture): Look {
             down = step.height ? step.height / crop.height : across;
             filter = step.filter;
         } else if (step.type === "cover") covers.push({ rect: step.angle ? step.rect : within(step.rect, original), color: step.color, ...(step.angle ? { angle: step.angle } : {}) });
+        else if (step.type === "cutout") cutout = cutOf(step);
         else if (step.type !== "turn") marks.push(withoutId(step) as Mark);
     }
     const width = clamp(Math.round(crop.width * across), 1, LIMITS.side);
     const height = clamp(Math.round(crop.height * down), 1, LIMITS.side);
-    return { crop, width, height, filter, covers, marks, grades, ...(turn.degrees ? { turn: turn.degrees } : {}) };
+    return { crop, width, height, filter, covers, marks, grades, ...(turn.degrees ? { turn: turn.degrees } : {}), ...(cutout ? { cutout } : {}) };
 }
 
 // a grade step's whole grade, worked out once for each step as kept, so that drawing many times a second reads it once
@@ -144,6 +152,12 @@ export function gradeOf(step: GradeStep | PartStep): Grade {
     let found = gradesRead.get(step.grade);
     if (!found) gradesRead.set(step.grade, (found = readGrade(step.grade)));
     return found;
+}
+
+/** A cut-out step's cut alone, without the document's fields. */
+export function cutOf(step: CutStep): Cut {
+    const { found, strokes, pick, background, color } = step;
+    return { found, ...(strokes ? { strokes } : {}), ...(pick ? { pick } : {}), background, ...(color ? { color } : {}) };
 }
 
 /** A step without the document's own fields. */
@@ -194,7 +208,7 @@ export function toggle(steps: Kept[], id: string): Kept[] {
 }
 
 /** The list with the picture's one crop (or one resize, or its whole grade) set: the step changed where there is one, added where there is not. */
-export function setOnly(steps: Kept[], step: Extract<Step, { type: "crop" | "resize" | "grade" | "turn" }>): Kept[] {
+export function setOnly(steps: Kept[], step: Extract<Step, { type: "crop" | "resize" | "grade" | "turn" | "cutout" }>): Kept[] {
     const there = steps.find((each) => each.type === step.type);
     return there ? change(steps, there.id, step) : add(steps, step);
 }
@@ -296,6 +310,7 @@ function readStep(value: unknown): Step | undefined {
     const angle = number(step.angle, -MOST_TURN, MOST_TURN);
     const turned = angle ? { angle } : {};
     if (step.type === "part") return readPart(step);
+    if (step.type === "cutout") return readCut(step);
     if (step.type === "cover") {
         const rect = readRect(step.rect);
         return rect && color ? { type: "cover", rect, color, ...turned } : undefined;
@@ -316,6 +331,40 @@ function readStep(value: unknown): Step | undefined {
         return at && size && text && color ? { type: "text", at, text, color, size, ...turned } : undefined;
     }
     return undefined;
+}
+
+/** A found mask from a file, checked: whole sizes up to 2048 a side, and runs that read to exactly its size. */
+function readFound(value: unknown): { width: number; height: number; runs: string } | undefined {
+    const given = value as { width?: unknown; height?: unknown; runs?: unknown } | undefined;
+    const width = number(given?.width, 1, 2_048);
+    const height = number(given?.height, 1, 2_048);
+    return given && width && height && Number.isInteger(width) && Number.isInteger(height) && typeof given.runs === "string" && given.runs.length <= LIMITS.file && decodeRuns(given.runs, width * height) ? { width, height, runs: given.runs } : undefined;
+}
+
+/** The brush's strokes from a file, each checked and bounded. */
+function readStrokes(value: unknown): Stroke[] | undefined {
+    if (!Array.isArray(value)) return undefined;
+    const strokes = value
+        .slice(0, MOST_STROKES.strokes)
+        .map((each: Record<string, unknown> | null): Stroke | undefined => {
+            const size = number(each?.size, 0.5, 4_000);
+            const points = Array.isArray(each?.points) ? (each.points as unknown[]).slice(0, MOST_STROKES.points * 2) : [];
+            if (size === undefined || points.length < 2 || points.length % 2 || !points.every(isNumber)) return undefined;
+            return { size, soft: number(each?.soft, 0, 1) ?? 0.5, ...(each?.erase === true ? { erase: true } : {}), points: (points as number[]).map((point) => clamp(point, -FAR, FAR)) };
+        })
+        .filter((each): each is Stroke => !!each);
+    return strokes.length ? strokes : undefined;
+}
+
+/** A cut-out step from a file: its mask checked, its strokes and the subject pressed bounded, its background one of the three. */
+function readCut(step: Record<string, unknown>): CutStep | undefined {
+    const found = readFound(step.found);
+    if (!found) return undefined;
+    const pick = readFound(step.pick);
+    const strokes = readStrokes(step.strokes);
+    const background = step.background === "color" || step.background === "blur" ? step.background : "clear";
+    const color = typeof step.color === "string" && COLOR.test(step.color) ? step.color.toLowerCase() : undefined;
+    return { type: "cutout", found, ...(strokes ? { strokes } : {}), ...(pick ? { pick } : {}), background, ...(color ? { color } : {}) };
 }
 
 /** A part step from a file: its kind, gradient, strokes and found mask checked and bounded, its grade read as any grade is. */

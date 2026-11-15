@@ -263,7 +263,7 @@ export const quadBox = (quad: Quad): Rect => {
 };
 
 /** The original, decoded once by the browser and kept on the card, drawn and flattened through a backend. */
-export async function loadPicture(backend: Backend, blob: Blob) {
+export async function loadPicture(backend: Backend, blob: Blob | ImageBitmap) {
     const full = await createImageBitmap(blob, { colorSpaceConversion: "none", premultiplyAlpha: "none" });
     const size = { width: full.width, height: full.height };
     const long = Math.max(size.width, size.height);

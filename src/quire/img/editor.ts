@@ -30,6 +30,10 @@ import { gradeLooks, lookStore } from "./looks";
 import { brushRadius, gradeParts, partName, type Brush } from "./grade-parts";
 import { stackFor, type Found, type Shape } from "./masks";
 import { createFinding } from "./finding";
+import { createFinder } from "./parts/finder";
+import { PART_TIERS } from "./parts/models";
+import { createAsking } from "./cutout/asking";
+import { cutOut, CUT_SIDE, valuesOf, type Cut, type Laid } from "./cutout/cut";
 import { createMeasure } from "./measure";
 import { autoFix, averageAround, balanceFrom } from "./fix";
 import { prepared } from "./draw";
@@ -58,7 +62,7 @@ const keep = (key: string, value: string) => {
 };
 
 /** The single keys that pick a tool, while the picture has the keyboard. */
-const TOOL_KEYS: Record<string, Tool | "export" | "facts"> = { KeyC: "crop", KeyR: "hide", KeyA: "arrow", KeyT: "text", KeyB: "box", KeyE: "export", KeyI: "facts", KeyW: "read", KeyG: "grade" };
+const TOOL_KEYS: Record<string, Tool | "export" | "facts"> = { KeyC: "crop", KeyR: "hide", KeyA: "arrow", KeyT: "text", KeyB: "box", KeyE: "export", KeyI: "facts", KeyW: "read", KeyG: "grade", KeyK: "cutout" };
 
 /** Hands the writer a file. */
 function give(blob: Blob, name: string) {
@@ -106,6 +110,8 @@ export function mountEditor(host: HTMLElement, context: Context) {
         }
     })();
     let settings: Settings = readSettings(local()?.getItem(KEYS.export));
+    // the part models' worker, shared by Find and the cut-out, made when first asked
+    const sharedFinder = createFinder();
     let shape = "Free";
 
     const stage = createStage({
@@ -114,6 +120,12 @@ export function mountEditor(host: HTMLElement, context: Context) {
         pen: () => pen,
         moved: () => refresh(),
         turned: (degrees) => turnTo(degrees),
+        clear: () => !!picture && look(picture).cutout?.background === "clear",
+        cutout: {
+            brush: () => (cutBrush && picture ? { size: Math.max(4, Math.round(Math.max(picture.original.width, picture.original.height) / 60)), erase: cutBrush === "remove" } : undefined),
+            stroke: (stroke) => changeCut((cut) => ({ ...cut, strokes: [...(cut.strokes ?? []), stroke] })),
+            press: (at) => void pickSubject(at),
+        },
         say: (short, full) => frame.status.say(short, full, "warn"),
         space: () => colors.space,
         parts: {
@@ -201,7 +213,10 @@ export function mountEditor(host: HTMLElement, context: Context) {
         colors = colored.space;
         profile = colored.icc;
         if (showing.isOpen()) showing.fill();
-        await stage.show(await displayable(found).catch(() => found));
+        shownSource = await displayable(found).catch(() => found);
+        cutKey = "";
+        await stage.show(shownSource);
+        void showCut();
         if (token !== loading) return;
         if (grading.isOpen()) void measureGrade();
         if (read.dropped) frame.status.say("Steps left out", `${read.dropped} of its steps could not be read and were left out`, "warn");
@@ -230,6 +245,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
     function changed() {
         if (!picture) return;
         picture = { ...picture, steps: history.now() };
+        void showCut();
         stage.changed();
         session.changed();
         refresh();
@@ -461,6 +477,11 @@ export function mountEditor(host: HTMLElement, context: Context) {
         copy: () => void copy(),
         save: () => void save(),
         wide: () => colors.space === "p3",
+        // a cut-out laid on nothing has transparency, which a JPEG cannot keep: said, with what can be done
+        note: () =>
+            picture && look(picture).cutout?.background === "clear" && formatOf(settings.format).key === "jpeg"
+                ? { text: "JPEG has no transparency: what is clear comes out white.", actions: [{ label: "Lay it on a color", press: () => setLaid("color", "#ffffff") }, { label: "Use PNG", press: () => ((settings = { ...settings, format: "png" }), keep(KEYS.export, JSON.stringify(settings)), estimate.soon()) }] }
+                : undefined,
     });
     async function showExport() {
         exporting.fill();
@@ -526,6 +547,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
         hideAll: () => void stage.hideFindings(),
         chooseModel: (from) => reading.choose(from),
         readAgain: () => void reading.start(buttons.read),
+        cut: () => cutStrip(),
         grade: () => (asking ? { said: making === "find" ? findSaid() : asking.said, ...(making === "find" && finding.state() === "ready" ? { controls: [subjectButton, backgroundButton] } : {}), cancel: () => cancelPick() } : undefined),
     });
     const pickedMark = () => {
@@ -563,6 +585,102 @@ export function mountEditor(host: HTMLElement, context: Context) {
         session.keeper as Parameters<typeof createHistoryPanel>[3],
     );
 
+    // ---- the cut-out, as a tool: the same piece as the page at /cutout/, its result a step ----
+    // the picture as it came (shown through a PNG for a HEIC), and the cut-out's pixels put on the stage in its place
+    let shownSource: Blob | undefined;
+    let cutKey = "";
+    let cutBrush: "keep" | "remove" | undefined;
+    let cutBusy = false;
+    const cutAsking = createAsking({ finder: () => sharedFinder, returnTo: () => buttons.cutout, moved: () => refresh() });
+    /** The original as a bitmap, its numbers as they are, for the models and for cutting out. */
+    const sourceBitmap = async () => (shownSource ? createImageBitmap(shownSource, { colorSpaceConversion: "none", premultiplyAlpha: "none" }) : undefined);
+    /** After the steps change: the cut-out made again when it changed, and put on the stage in place of the original (or the original back). */
+    async function showCut() {
+        const cut = picture ? look(picture).cutout : undefined;
+        const key = cut ? JSON.stringify(cut) : "";
+        if (key === cutKey || !shownSource) return;
+        cutKey = key;
+        if (!cut) return void (await stage.swap(shownSource));
+        const source = await sourceBitmap();
+        if (!source) return;
+        const made = await cutOut(source, cut);
+        source.close();
+        if (!made || key !== cutKey) return;
+        await stage.swap(await createImageBitmap(made, { premultiplyAlpha: "none", colorSpaceConversion: "none" }));
+        estimate.soon();
+    }
+    /** The model run on the picture, its mask the cut-out step, laid on nothing to start. */
+    async function startCut() {
+        if (!picture || cutBusy || !(await cutAsking.ready(buttons.cutout))) return refresh();
+        cutBusy = true;
+        refresh();
+        try {
+            const source = await sourceBitmap();
+            if (!source) return;
+            const started = performance.now();
+            const answer = await sharedFinder.matte(cutAsking.tier().id, source, undefined, CUT_SIDE);
+            const values = valuesOf(answer.found);
+            const share = values ? values.reduce((sum, value) => sum + value, 0) / values.length : 1;
+            if (share > 0.985 || share < 0.002) throw new Error("the model found nothing to cut out; try again, or another quality");
+            commit(setOnly(history.now(), { type: "cutout", found: answer.found, background: "clear" }));
+            frame.status.say("Cut out", `Cut out in ${((performance.now() - started) / 1000).toFixed(1)} s with ${cutAsking.tier().name}`);
+        } catch (error) {
+            frame.status.say("Not cut out", `The picture was not cut out: ${error instanceof Error ? error.message : String(error)}`, "warn");
+        } finally {
+            cutBusy = false;
+            refresh();
+        }
+    }
+    /** Changes the cut-out step, as one undo. */
+    function changeCut(to: (cut: Cut) => Cut) {
+        const step = history.now().find((each) => each.type === "cutout");
+        if (!step || step.type !== "cutout") return;
+        const { id: _id, off: _off, type: _type, ...cut } = step;
+        commit(history.now().map((each) => (each === step ? ({ ...to(cut as Cut), type: "cutout", id: step.id } as Kept) : each)));
+    }
+    /** Keeps the thing pressed: the press-to-select model outlines it, and only what the cut-out found inside it stays. */
+    async function pickSubject(at: { x: number; y: number }) {
+        if (!picture || !look(picture).cutout || cutBusy || !(await cutAsking.picking(stage.element))) return;
+        cutBusy = true;
+        refresh();
+        try {
+            const answer = await sharedFinder.select(PART_TIERS[0]!.id, `cut ${where.id ?? ""} ${picture.original.name}`, await sourceBitmap(), [{ x: Math.round(at.x), y: Math.round(at.y), add: true }]);
+            changeCut((cut) => ({ ...cut, pick: answer.found }));
+        } catch (error) {
+            frame.status.say("Not chosen", `The thing pressed was not found: ${error instanceof Error ? error.message : String(error)}`, "warn");
+        } finally {
+            cutBusy = false;
+            refresh();
+        }
+    }
+    const setLaid = (laid: Laid, color?: string) => changeCut((cut) => ({ ...cut, background: laid, ...(laid === "color" ? { color: color ?? cut.color ?? "#ffffff" } : { color: undefined }) }));
+    /** The strip while cutting out: what it is laid on, the brush, the quality, and taking the cut-out away. */
+    function cutStrip(): { said: string; controls: HTMLElement[] } {
+        const cut = picture ? look(picture).cutout : undefined;
+        if (cutBusy) return { said: "Cutting out", controls: [] };
+        if (!cut) return { said: "Not cut out", controls: [stripButton("Cut out", "Run the model again", () => void startCut())] };
+        const pressed = (button: HTMLElement, on: boolean) => (button.classList.toggle("pressed", on), button);
+        const swatches = COLORS.map((each) => {
+            const mark = make("span", "quire-img-swatch");
+            mark.style.background = each.value;
+            return pressed(control(each.name, mark, () => setLaid("color", each.value)), cut.background === "color" && cut.color === each.value);
+        });
+        return {
+            said: cutBrush === "keep" ? "Paint what should stay" : cutBrush === "remove" ? "Paint what should go" : "Press a thing to keep it",
+            controls: [
+                pressed(stripButton("Clear", "Nothing behind it, exported with transparency", () => setLaid("clear")), cut.background === "clear"),
+                ...swatches,
+                pressed(stripButton("Blur", "The old background behind it, blurred", () => setLaid("blur")), cut.background === "blur"),
+                make("span", "quire-img-strip-rule"),
+                pressed(stripButton("Keep", "Paint what should stay", () => ((cutBrush = cutBrush === "keep" ? undefined : "keep"), refresh())), cutBrush === "keep"),
+                pressed(stripButton("Remove", "Paint what should go", () => ((cutBrush = cutBrush === "remove" ? undefined : "remove"), refresh())), cutBrush === "remove"),
+                make("span", "quire-img-strip-rule"),
+                stripButton(cutAsking.tier().name, "Quality", () => void cutAsking.choose(buttons.cutout).then((chosen) => void (chosen && startCut()))),
+                stripButton("Take away", "Bring the background back", () => commit(history.now().filter((each) => each.type !== "cutout"))),
+            ],
+        };
+    }
+
     // ---- the bar ----
     const tool = (label: string, name: string, run: () => void) => control(label, icon(name), run);
     const buttons = {
@@ -572,6 +690,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
         resize: tool("Resize", "resize", () => (resizing.isOpen() ? resizing.close() : resizing.open(buttons.resize))),
         hide: tool("Hide (R)", "hide", () => pickTool("hide")),
         read: tool("Read text (W)", "find", () => pickTool("read")),
+        cutout: tool("Cut out (K)", "cut", () => pickTool("cutout")),
         arrow: tool("Arrow (A)", "arrow", () => pickTool("arrow")),
         box: tool("Box (B)", "box", () => pickTool("box")),
         text: tool("Text (T)", "text", () => pickTool("text")),
@@ -591,7 +710,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
     buttons.facts.classList.add("quire-img-bar-facts");
     const end = group(buttons.grade, buttons.facts, buttons.export);
     end.classList.add("quire-bar-end");
-    strip0.append(group(buttons.undo, buttons.redo), group(buttons.crop, buttons.resize, buttons.hide, buttons.read), group(buttons.arrow, buttons.box, buttons.text), end);
+    strip0.append(group(buttons.undo, buttons.redo), group(buttons.crop, buttons.resize, buttons.hide, buttons.read, buttons.cutout), group(buttons.arrow, buttons.box, buttons.text), end);
     bar.append(strip0);
     frame.place("bar").append(bar);
 
@@ -603,6 +722,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
         stage.setTool(stage.tool() === next && next !== "crop" ? "none" : next);
         stage.element.focus({ preventScroll: true });
         if (stage.tool() === "read") void reading.start(buttons.read);
+        if (stage.tool() === "cutout" && !look(picture).cutout) void startCut();
     }
     /** Reads with another size of model, the tool for reading on: at once if it is kept, else asked for. */
     function useModel(id: string) {
@@ -825,6 +945,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
     // a thing a model finds: presses outline it, each press one change to the same part; Subject and Background find the picture's subject
     let findTarget: string | undefined;
     const finding = createFinding({
+        finder: sharedFinder,
         bitmap: async () => stage.loaded()?.bitmap(),
         key: () => `${where.id ?? ""} ${picture?.original.name ?? ""}`,
         found: (found: Found, presses) => {
@@ -1000,7 +1121,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
         }
         buttons.undo.disabled = !history.canUndo();
         buttons.redo.disabled = !history.canRedo();
-        const kind = !has ? "none" : stage.tool() === "crop" ? "crop" : stage.tool() === "read" ? "read" : stage.tool() === "grade" ? "grade" : stage.tool() === "arrow" || stage.tool() === "box" || stage.tool() === "text" || pickedMark() ? "mark" : "none";
+        const kind = !has ? "none" : stage.tool() === "crop" ? "crop" : stage.tool() === "read" ? "read" : stage.tool() === "grade" ? "grade" : stage.tool() === "cutout" ? "cut" : stage.tool() === "arrow" || stage.tool() === "box" || stage.tool() === "text" || pickedMark() ? "mark" : "none";
         strip.fill(kind);
         if (picture && !facts.textContent) facts.textContent = factsSaid(look(picture), picture.original.bytes, kindOf(picture.original));
         if (!picture) facts.textContent = "";
@@ -1136,6 +1257,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
                     ).map(([label, name, key]): MenuItem => ({ label, icon: tick(stage.tool() === name, name), hint: key, key: name, pressed: stage.tool() === name, disabled: !picture, run: () => pickTool(name) })),
                     [
                         { label: "Read text", icon: tick(stage.tool() === "read", "find"), hint: "W", key: "read", pressed: stage.tool() === "read", disabled: !picture, run: () => pickTool("read") },
+                        { label: "Cut out", icon: tick(stage.tool() === "cutout", "cut"), hint: "K", key: "cutout", pressed: stage.tool() === "cutout", disabled: !picture, run: () => pickTool("cutout") },
                         {
                             label: "Text model",
                             icon: "settings",
