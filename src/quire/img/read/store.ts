@@ -5,7 +5,11 @@
 // short, is fetched again rather than trusted. The storage and the network are passed in, so this
 // runs on the private file storage in the worker and on plain objects in the tests.
 
-import { addressOf, HOST, keptName, type ModelFile, type Tier } from "./models";
+import { addressOf, HOST, keptName, type Pinned } from "./models";
+
+/** What is fetched together: a size's files, of the text models or another tool's. */
+type Tier = { files: readonly Pinned[] };
+type ModelFile = Pinned;
 
 /** Where the files are kept: written whole, read whole, marked, and their sizes known. */
 export interface Shelf {

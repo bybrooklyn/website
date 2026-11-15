@@ -93,11 +93,14 @@ export const TIERS: Tier[] = [
 /** The tier with this id, or the smallest. */
 export const tierOf = (id: string | null | undefined): Tier => TIERS.find((tier) => tier.id === id) ?? TIERS[0]!;
 
+/** A file as the store fetches and keeps it, whatever it is for: its repository, commit, path, size and digest. */
+export type Pinned = Omit<ModelFile, "role">;
+
 /** Where one file is fetched from: the host, its repository, the pinned commit and its path. */
-export const addressOf = (each: ModelFile, host = HOST): string => `${host}/${each.repo}/resolve/${each.revision}/${each.path.split("/").map(encodeURIComponent).join("/")}`;
+export const addressOf = (each: Pinned, host = HOST): string => `${host}/${each.repo}/resolve/${each.revision}/${each.path.split("/").map(encodeURIComponent).join("/")}`;
 
 /** The name a file is kept under in the browser: its repository, commit and path, so that two sizes sharing a file keep it once, and a file of another commit is never taken for it. */
-export const keptName = (each: ModelFile): string => `${each.repo.replace(/\W+/g, "-")}-${each.revision.slice(0, 12)}-${each.path.replace(/\W+/g, "-")}`;
+export const keptName = (each: Pinned): string => `${each.repo.replace(/\W+/g, "-")}-${each.revision.slice(0, 12)}-${each.path.replace(/\W+/g, "-")}`;
 
 /** The whole download of a tier, in bytes. */
 export const sizeOf = (tier: Tier): number => tier.files.reduce((sum, each) => sum + each.bytes, 0);
