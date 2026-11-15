@@ -72,6 +72,13 @@ test("a view straight on stays where it is put, and the first drag from it does 
     expect(straightOn(orbit)).toBeUndefined();
 });
 
+test("a view nearer than the free camera may come, left by a camera that rode a marble, stays as near at the first touch and may only draw back", () => {
+    const close = { ...orbit, far: 6 };
+    expect(kept({ ...close, far: 6.5 }, close).far).toBe(6.5);
+    expect(kept({ ...close, far: 5 }, close).far).toBe(6);
+    expect(kept({ ...close, far: 5 }).far).toBe(FAR[0]);
+});
+
 test("from above, the far side is up the picture; from the front and the side, the upright is up and the ground is level", () => {
     const at: V3 = [0, 0, 0];
     const top = project({ at, far: 100, ...VIEWS.top }, 40, 1, [0, 0, -10])!;

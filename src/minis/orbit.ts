@@ -99,12 +99,14 @@ export const STRAIGHT: [number, number] = [0, Math.PI / 2 - 0.002];
 /**
  * The camera kept within its limits: tipped no further than `TIP`, no nearer or further than `FAR`. Given
  * where it was, a camera already tipped past `TIP` by a view straight on may stay there and come back,
- * so that the first drag from the view from above does not jump.
+ * so that the first drag from the view from above does not jump; and one nearer than `FAR` allows, as a
+ * camera riding a marble leaves it, may stay as near and draw back.
  */
 export function kept(orbit: Orbit, was?: Orbit): Orbit {
     const low = Math.max(STRAIGHT[0], Math.min(TIP[0], was?.tip ?? TIP[0]));
     const high = Math.min(STRAIGHT[1], Math.max(TIP[1], was?.tip ?? TIP[1]));
-    return { at: orbit.at, turn: orbit.turn, tip: Math.max(low, Math.min(high, orbit.tip)), far: Math.max(FAR[0], Math.min(FAR[1], orbit.far)) };
+    const near = Math.min(FAR[0], was?.far ?? FAR[0]);
+    return { at: orbit.at, turn: orbit.turn, tip: Math.max(low, Math.min(high, orbit.tip)), far: Math.max(near, Math.min(FAR[1], orbit.far)) };
 }
 
 /** The views straight on: from above (the far side up the picture), from the front (looking along -z) and from the side (looking along -x). */

@@ -180,6 +180,24 @@ const ON_TRACK = 1.2;
  * rocks from side to side); where it flies between pieces, or circles a bowl, its own places smoothed.
  */
 export function threadOf(places: V3[], run: Placed[]): V3[] {
+    const onTrack = onTrackOf(run);
+    const snapped = places.map(onTrack);
+    return places.map((p, i) => {
+        const on = snapped[i];
+        if (on) return on;
+        // in the air or a bowl: smoothed over its neighbours, those on track taken where the track is
+        const near: V3[] = [];
+        for (let j = Math.max(0, i - 4); j <= Math.min(places.length - 1, i + 4); j++) near.push(snapped[j] ?? places[j]!);
+        return [0, 1, 2].map((axis) => near.reduce((sum, q) => sum + q[axis]!, 0) / near.length) as V3;
+    });
+}
+
+/**
+ * Where a marble rests in the groove nearest a point, if the point is within a rocking marble's reach of
+ * a groove of the run: the groove's own middle line at a resting marble's height, calm however the
+ * marble rocks from side to side. For the ghost's thread, and for the camera that rides a marble.
+ */
+export function onTrackOf(run: Placed[]): (p: V3) => V3 | undefined {
     // where a marble rests along every length of track, every 4 mm, kept in a grid of 4 cm cells; made
     // again only when the run changes, since the thread is drawn again as the ghost's way grows
     const runKey = JSON.stringify(run.map((piece) => [piece.kind, piece.place]));
@@ -202,7 +220,7 @@ export function threadOf(places: V3[], run: Placed[]): V3[] {
             }
         }
     }
-    const onTrack = (p: V3): V3 | undefined => {
+    return (p: V3): V3 | undefined => {
         let best: { at: V3; d: number } | undefined;
         const [cx, cy, cz] = [Math.floor(p[0] / 4), Math.floor(p[1] / 4), Math.floor(p[2] / 4)];
         for (let x = cx - 1; x <= cx + 1; x++) {
@@ -223,13 +241,4 @@ export function threadOf(places: V3[], run: Placed[]): V3[] {
         }
         return best && best.d < ON_TRACK ? best.at : undefined;
     };
-    const snapped = places.map(onTrack);
-    return places.map((p, i) => {
-        const on = snapped[i];
-        if (on) return on;
-        // in the air or a bowl: smoothed over its neighbours, those on track taken where the track is
-        const near: V3[] = [];
-        for (let j = Math.max(0, i - 4); j <= Math.min(places.length - 1, i + 4); j++) near.push(snapped[j] ?? places[j]!);
-        return [0, 1, 2].map((axis) => near.reduce((sum, q) => sum + q[axis]!, 0) / near.length) as V3;
-    });
 }

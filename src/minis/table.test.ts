@@ -107,6 +107,20 @@ test("a hopper holds a marble at its mouth, lets it go, and another comes out of
     expect(table.marbles.length).toBe(0);
 });
 
+test("only the hoppers asked let their marbles go, and each tray says where it catches", () => {
+    const table = makeTable();
+    table.set(read("v3.h0_0_4_0.h0_4_4_0.t2_0_6_0"));
+    for (let step = 0; step < 60; step++) table.step(1 / 120);
+    const [one] = table.letGo(new Set([2]));
+    expect(one).toBeDefined();
+    expect(Math.round(one!.p[2])).toBe(36);
+    expect(table.letGo(new Set([2]))).toEqual([]);
+    expect(table.letGo().length).toBe(1);
+    const [tray] = table.trays();
+    expect(table.trays().length).toBe(1);
+    expect(tray!.at[0]).toBeCloseTo(16 + 16, 9);
+});
+
 test("a marble crosses every join of a run with no jolt: the track pushes it no harder near a joint than three times its weight", () => {
     const run = read(RUNS[0]!.text);
     const table = makeTable();

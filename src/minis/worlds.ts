@@ -135,7 +135,7 @@ export function fromText(text: string): Uint8Array | undefined {
 export const canSqueeze = (): boolean => typeof CompressionStream === "function" && typeof DecompressionStream === "function";
 
 /** Bytes put through a stream, stopping and giving undefined once more than `most` come out, or if the stream fails. */
-async function through(bytes: Uint8Array, stream: CompressionStream | DecompressionStream, most: number): Promise<Uint8Array | undefined> {
+export async function through(bytes: Uint8Array, stream: CompressionStream | DecompressionStream, most: number): Promise<Uint8Array | undefined> {
     const writer = stream.writable.getWriter();
     writer.write(bytes as Uint8Array<ArrayBuffer>).catch(() => {});
     writer.close().catch(() => {});

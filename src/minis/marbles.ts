@@ -7,12 +7,14 @@
 // frame, and the run's own sound, each strike made by Mote's sound code from how fast it was and what
 // was struck; then the look: oak with its grain along every piece, glass marbles with a ribbon inside,
 // steel and brass, on a dark cloth under one warm lamp, with soft shadows, drawn by Mote's patterns (gl.ts)
-// from look.ts.
+// from look.ts; then cameras that ride a marble, keep spots and tour the run, races in the flags'
+// colors, and a run shared as a link or a file, with the scene's own small menu for pasting.
 //
 // What it stands on: pieces.ts (the box) and parts.ts (its moving and sounding pieces), run.ts (a run as data), edit.ts (groups moved, turned,
 // mirrored, resized), history.ts (undo), ghost.ts (the ghost marble), handles.ts (the handles),
 // table.ts (Mote's physics for a run), supports.ts (pillars), checks.ts (open ends), orbit.ts (the
-// camera), runs.ts (made runs), toolbar.ts (the icons and the bar).
+// camera) and camera.ts (riding, gliding, touring), race.ts (races), share.ts (links and files),
+// runs.ts (made runs), toolbar.ts (the icons and the bar).
 //
 // One finger or the main button on a piece carries it (the whole selection if it is in it); on the
 // table it turns the view; two fingers, the other button, or Shift with the main one, move the view; a
@@ -21,7 +23,7 @@
 // round many. Keys are listed in the keys panel and in the keydown handler below.
 
 import { gl, type Color, type Look, type Part, type Pattern, type View } from "../mote/gl";
-import { turn as turnOf, type Solid } from "../mote/space";
+import { turn as turnOf, type Hinge, type Solid } from "../mote/space";
 import { ball, block, type Mesh, type Turn, type V3 } from "../mote/solids";
 import { grained, grainedBox, marbleLook, merged, pane, tableMesh, woodSeed, type Hole } from "./look";
 import { sounds, type Sounds, type Strike } from "../mote/sound";
@@ -29,7 +31,10 @@ import { el, type Hand, type Mote, type Scene } from "../mote/stage";
 import { turned } from "../mote/track";
 import { checks, type Mark } from "./checks";
 import { STILL as NO_MOVE, about, asOwn, groupFits, groupSnaps, joinedTo, knobAt, matched, middleOf, mirrored, mirrorLine, moved, movedPoint, pivotOf, RESIZABLE, rebent, resizable, resized, rotated, then, type GroupSnap, type Move } from "./edit";
-import { ghostMarks, makeGhost, threadOf } from "./ghost";
+import { PACE, RIDE, TOUR, blockedBy, eased, glide, glideTime, obstaclesOf, rideFrom, riding, tourAt, tourOf, tourSteps, within, type Blocked, type Ride, type Tour } from "./camera";
+import { ghostMarks, makeGhost, onTrackOf, threadOf } from "./ghost";
+import { OUT_WORDS, RACE, RACERS, makeRace, progress, standing, timeOf, type Race } from "./race";
+import { LINKED, LINK_MOST, MOST, openText, ownsUsed, packShared, unpackShared, writeShared, type Opened } from "./share";
 import { AXES, ARROW, RING, across, along, arrowMesh, dragged, freedomOf, layout, pixelsOf, pointOf, pointsLayout, ringMesh, snapped, standOff, stripPlace, turnedBy, which, type Freedom, type Handle, type Rect, type Shown, type Snaps } from "./handles";
 import { begun, canRedo, canUndo, readSteps, recorded, redone, replaced, trimmed, undone, type Steps } from "./history";
 import { NARROW, STRAIGHT, eyeOf, enters, framing, ground, kept, lensed, nearest, panned, project, ray, straightOn, type Orbit } from "./orbit";
@@ -38,7 +43,7 @@ import { fits, jointsOf, links, open, read, upgraded, write, type Open, type Pla
 import { RUNS } from "./runs";
 import { PILLAR } from "./supports";
 import { NOTES, type Body, type Moving } from "./parts";
-import { chainAt, chainLength, makeTable } from "./table";
+import { chainAt, chainLength, makeTable, type Table } from "./table";
 import { fold, icon, stacking, swap, tool } from "./toolbar";
 
 export const label = "A marble run to build: pieces from a box snap together end to end, and marbles roll down what is built.";
@@ -366,7 +371,8 @@ export default function marbles(m: Mote): Scene {
     const css = { x: "oklch(0.7 0.16 25)", y: "oklch(0.8 0.15 145)", z: "oklch(0.72 0.13 250)" };
     const sound: Sounds | undefined = m.preview ? undefined : sounds(m);
 
-    const table = makeTable();
+    // the table is made new for a race, so that the same run gives the same race (race.ts)
+    let table: Table = makeTable();
     const ghost = makeGhost();
     let run: Placed[] = [];
     let nextId = 1;
@@ -397,7 +403,7 @@ export default function marbles(m: Mote): Scene {
     const flying: { parts: { part: Part }[]; from: Pose; to: Pose; time: number; then: () => void }[] = [];
     let orbit: Orbit = { at: [0, 10, 0], turn: 0.75, tip: 0.62, far: 220 };
     /** Where the camera eases to, after a view or a fit was asked for. */
-    let easing: { from: Orbit; to: Orbit; time: number } | undefined;
+    let easing: { from: Orbit; to: Orbit; time: number; length: number } | undefined;
     /** The lens: the usual one, or the narrow one of the views straight on, easing from one to the other. */
     let lens = DEGREES;
     let lensTo = DEGREES;
@@ -671,6 +677,9 @@ export default function marbles(m: Mote): Scene {
     /** After any change: the table, the marks, what is kept, the drawing; and, unless `record` is false, a step for undo. */
     const changed = (record = true) => {
         const now = resting();
+        // a race is stopped by any change to the run, and a link the run was opened from leaves the address
+        stopRace();
+        if (record) forgetLink();
         table.set(now);
         // open ends, and switches marbles may reach together; the guesses by energy are the ghost's now
         openMarks = checks(now).filter((mark) => mark.why === "open" || mark.why === "batched");
@@ -726,6 +735,7 @@ export default function marbles(m: Mote): Scene {
         if (!canUndo(steps)) return refuse();
         steps = undone(steps);
         restore(steps.texts[steps.at]!);
+        forgetLink();
         changed(false);
         keepSteps();
         sound?.knock(0.25, 900);
@@ -734,6 +744,7 @@ export default function marbles(m: Mote): Scene {
         if (!canRedo(steps)) return refuse();
         steps = redone(steps);
         restore(steps.texts[steps.at]!);
+        forgetLink();
         changed(false);
         keepSteps();
         sound?.knock(0.25, 1300);
@@ -753,11 +764,13 @@ export default function marbles(m: Mote): Scene {
         const found = project(seen, degrees, aspect(), p);
         return found && { x: ((found.x + 1) / 2) * m.width, y: ((1 - found.y) / 2) * m.height };
     };
-    const easeTo = (to: Orbit) => {
+    /** The view eased to another, over `length` seconds (a view's own short turn unless said), or cut to it under reduced motion; the camera is free again. */
+    const easeTo = (to: Orbit, length = 0.45) => {
+        toFree();
         if (reduced) {
             orbit = to;
             easing = undefined;
-        } else easing = { from: orbit, to, time: 0 };
+        } else easing = { from: orbit, to, time: 0, length };
         m.wake();
     };
     /** The view framing pieces, from the way it looks now: the run, or what is chosen. */
@@ -783,6 +796,158 @@ export default function marbles(m: Mote): Scene {
     const free = () => {
         lensTo = DEGREES;
     };
+
+    // ---- cameras that ride a marble, keep spots and tour the run (camera.ts) ----
+    // The free camera is the view as it is. A ride or a tour works out a view every step and puts it in
+    // `orbit`, so that everything that reads the view (pressing, the handles, the little axes) reads the
+    // view that is drawn, and a touch of the view by hand takes it back to free with nothing to jump.
+    type Camera =
+        | { kind: "free" }
+        | { kind: "ride"; marble: Solid; ride: Ride; still: number }
+        | { kind: "tour"; tour: Tour; along: number; ride: Ride; steps?: number[]; step: number; wait: number };
+    let camera: Camera = { kind: "free" };
+    /** A glide into a ride or a tour from the view there was, drawn part way between until it is done. */
+    let blending: { from: Orbit; time: number; length: number } | undefined;
+    /** The marble offered once a ride lets go: the next one, ringed, ridden by the ride button or V. */
+    let offered: Solid | undefined;
+    /** What is in the eye's way, for the run as it rests, made again when the run changes. */
+    let obstacles: { key: string; blocked?: Blocked } = { key: "" };
+    const blockedNow = (): Blocked => {
+        const key = write(resting());
+        if (key !== obstacles.key || !obstacles.blocked) obstacles = { key, blocked: blockedBy(obstaclesOf(resting())) };
+        return obstacles.blocked!;
+    };
+    /** Where a marble is followed: the groove's calm middle where it is on track, so that its rocking is not, else where it is. */
+    const calmOf = (p: V3): V3 => onTrackOf(resting())(p) ?? p;
+    /** The camera free again, the view left as it is drawn. */
+    function toFree() {
+        if (camera.kind === "free" && !blending) return;
+        camera = { kind: "free" };
+        blending = undefined;
+        tell();
+    }
+    /** Marbles that can be ridden: those let go that are still going, in the order they went, then the one waiting at each hopper. */
+    const rideable = () => [...table.marbles.filter((one) => !one.rest), ...table.held()];
+    /** The camera goes with a marble, gliding there from the view there was. */
+    const rideOn = (marble: Solid) => {
+        offered = undefined;
+        easing = undefined;
+        lensTo = DEGREES;
+        const held = table.held().includes(marble);
+        const ride = rideFrom(orbit, calmOf(marble.p), held ? [0, 0, 0] : marble.v, RIDE, blockedNow());
+        camera = { kind: "ride", marble, ride, still: 0 };
+        blending = reduced ? undefined : { from: { ...orbit, at: [...orbit.at] }, time: 0, length: glideTime(orbit, ride.orbit) };
+        if (reduced) orbit = ride.orbit;
+        sound?.knock(0.2, 1800);
+        tell();
+        m.wake();
+    };
+    /** The next marble to ride: riding, the one let go after it, round again; else the one offered, the last let go that still goes, or the one waiting at a hopper. */
+    const rideNext = () => {
+        const all = rideable();
+        if (camera.kind === "ride") {
+            const next = all[(all.indexOf(camera.marble) + 1) % Math.max(1, all.length)];
+            return next && next !== camera.marble ? rideOn(next) : refuse();
+        }
+        const pick = (offered && all.includes(offered) ? offered : undefined) ?? table.marbles.filter((one) => !one.rest).at(-1) ?? table.held()[0];
+        return pick ? rideOn(pick) : refuse();
+    };
+    /** A ride lets go once its marble stops or goes: the camera is free, and the next marble is offered. */
+    const letRideGo = (marble: Solid) => {
+        toFree();
+        const all = table.marbles.filter((one) => !one.rest && one !== marble);
+        offered = all.find((one) => table.marbles.indexOf(one) > table.marbles.indexOf(marble)) ?? all[0] ?? table.held()[0];
+        sound?.knock(0.15, 1400);
+    };
+    /** A slow tour of the run by itself, only when asked: along the way the first hopper's marble goes, from the hopper to where it ends, at a calm pace; it steps instead under reduced motion. */
+    const tourRun = () => {
+        const path = ghost.paths[0];
+        if (!path || path.places.length < 2) return refuse();
+        const tour = tourOf(threadOf(path.places, ghostRun()));
+        const start = tourAt(tour, 0);
+        const ride = rideFrom(orbit, start.at, start.v, TOUR, blockedNow());
+        offered = undefined;
+        easing = undefined;
+        lensTo = DEGREES;
+        camera = { kind: "tour", tour, along: 0, ride, step: 0, wait: 0, steps: reduced ? tourSteps(tour) : undefined };
+        blending = reduced ? undefined : { from: { ...orbit, at: [...orbit.at] }, time: 0, length: glideTime(orbit, ride.orbit) };
+        if (reduced) orbit = ride.orbit;
+        sound?.knock(0.2, 1600);
+        tell();
+        m.wake();
+    };
+    /** The ride or the tour a step on, and the view it makes put in `orbit`. */
+    const stepCamera = (dt: number) => {
+        if (camera.kind === "ride") {
+            const marble = camera.marble;
+            const held = table.held().includes(marble);
+            if (!held && !table.marbles.includes(marble)) return letRideGo(marble);
+            const speed = Math.hypot(marble.v[0], marble.v[1], marble.v[2]);
+            camera.still = !held && (marble.rest || speed < 1.5) ? camera.still + dt : 0;
+            camera.ride = riding(camera.ride, calmOf(marble.p), held ? [0, 0, 0] : marble.v, dt, blockedNow());
+            if (camera.still > 0.8) return letRideGo(marble);
+        } else if (camera.kind === "tour") {
+            const tour = camera.tour;
+            if (camera.steps) {
+                // under reduced motion it stands at each of a few places along the way for a while, cut from one to the next
+                camera.wait += dt;
+                if (camera.wait < 2.2) return;
+                camera.wait = 0;
+                camera.step++;
+                if (camera.step >= camera.steps.length) return toFree();
+                const here = tourAt(tour, camera.steps[camera.step]!);
+                camera.ride = rideFrom(camera.ride.orbit, here.at, here.v, TOUR, blockedNow());
+            } else {
+                camera.along += PACE * dt;
+                const here = tourAt(tour, camera.along);
+                camera.ride = riding(camera.ride, here.at, here.v, dt, blockedNow());
+                if (camera.along >= tour.length) {
+                    orbit = camera.ride.orbit;
+                    sound?.knock(0.15, 1400);
+                    return toFree();
+                }
+            }
+        } else return;
+        let seen = camera.ride.orbit;
+        if (blending) {
+            blending.time += dt;
+            seen = glide(blending.from, seen, eased(blending.time / blending.length));
+            if (blending.time >= blending.length) blending = undefined;
+        }
+        orbit = seen;
+    };
+
+    // the spots kept with the run: a view kept, glided back to when pressed
+    const readSpots = (kept: unknown): Orbit[] =>
+        Array.isArray(kept) ? kept.filter((one): one is Orbit => Boolean(one) && Array.isArray(one.at) && one.at.length === 3 && [...one.at, one.turn, one.tip, one.far].every((value) => typeof value === "number" && Number.isFinite(value))).slice(0, MOST.spots) : [];
+    let spots: Orbit[] = m.preview ? [] : readSpots(m.recall("marbles-spots", [], 1));
+    /** The spot glided to last, so that the next press goes on to the one after it. */
+    let spotAt = -1;
+    let paintSpots = () => {};
+    const setSpots = (next: Orbit[]) => {
+        spots = next.slice(0, MOST.spots);
+        spotAt = Math.min(spotAt, spots.length - 1);
+        if (!m.preview) m.keep("marbles-spots", spots, 1);
+        paintSpots();
+    };
+    /** The view as it is now kept as a spot, up to six. */
+    const keepSpot = () => {
+        if (spots.length >= MOST.spots) return refuse();
+        setSpots([...spots, { at: [...orbit.at], turn: orbit.turn, tip: orbit.tip, far: orbit.far }]);
+        spotAt = spots.length - 1;
+        sound?.knock(0.3, 1900);
+    };
+    /** Glides to a spot: eased, the short way round, longer for a longer way. */
+    const glideTo = (index: number) => {
+        const spot = spots[index];
+        if (!spot) return refuse();
+        spotAt = index;
+        lensTo = DEGREES;
+        const to = { ...spot, turn: nearest(orbit.turn, spot.turn) };
+        easeTo(to, glideTime(orbit, to));
+        sound?.knock(0.15, 1800);
+    };
+    const glideStep = (by: number) => (spots.length ? glideTo((((spotAt < 0 && by < 0 ? 0 : spotAt) + by) % spots.length + spots.length) % spots.length) : refuse());
 
     /**
      * The piece of the run under a point of the picture, by the boxes of room it takes up with `wide`
@@ -816,6 +981,20 @@ export default function marbles(m: Mote): Scene {
     };
     /** How far round a finger's press a piece is still taken, in pixels: half a fingertip. */
     const FINGERTIP = 12;
+    /** The marble going down the run under a press, if any: the nearest whose drawing is within a fingertip's slack of it. Marbles at rest are left to the piece they rest on. */
+    const marbleAt = (x: number, y: number, kind: "touch" | "mouse" | "pen" = "mouse"): Solid | undefined => {
+        const { orbit: seen, degrees } = cam();
+        let best: { marble: Solid; d: number } | undefined;
+        for (const marble of table.marbles) {
+            if (marble.rest) continue;
+            const at = onScreen(marble.p);
+            if (!at) continue;
+            const d = Math.hypot(at.x - x, at.y - y);
+            const reach = RADIUS / across(seen, degrees, m.height, marble.p) + (kind === "touch" ? FINGERTIP : 6);
+            if (d < reach && (!best || d < best.d)) best = { marble, d };
+        }
+        return best?.marble;
+    };
 
     // ---- carrying ----
     /** Where carried pieces would go now. */
@@ -1355,20 +1534,172 @@ export default function marbles(m: Mote): Scene {
 
     // ---- what the bar, the strip and the keys do ----
     const letGo = () => {
+        stopRace();
         const out = table.letGo();
         for (const one of out) show(one);
         m.wake();
     };
+
+    // ---- races (race.ts) ----
+    // A race starts from a new table for the run as it rests, so that the same run gives the same race
+    // every time; it is stepped in place of the table, step for step as the test runs it. Anything that
+    // changes the run or lets other marbles go stops it, and what it had found so far is kept, said so.
+    let race: Race | undefined;
+    let raceCount = 4;
+    let raceStopped = false;
+    /** What the result said last, so that it is written again only when it changes. */
+    let raceSaid = "";
+    let paintRace = (_why?: string) => {};
+    const startRace = () => {
+        if (!resting().some((piece) => piece.kind.family === "h") || !resting().some((piece) => piece.kind.family === "t")) {
+            paintRace("A race needs a hopper and a tray.");
+            return refuse();
+        }
+        if (carried) cancel();
+        streaming = false;
+        playing = true;
+        offered = undefined;
+        if (camera.kind === "ride") toFree();
+        freshTable();
+        race = makeRace(table, raceCount);
+        raceStopped = false;
+        raceSaid = "";
+        sound?.knock(0.4, 1500);
+        paintRace();
+        tell();
+        m.wake();
+    };
+    function stopRace() {
+        if (!race || race.done || raceStopped) return;
+        raceStopped = true;
+        raceSaid = "";
+        paintRace();
+    }
+    /** Rides the racer furthest along the way a marble from its hopper goes, now; it stays with that marble until asked again. */
+    const rideLeader = () => {
+        if (!race || raceStopped) return refuse();
+        const going = race.racers.filter((racer) => racer.marble && racer.time === undefined && !racer.out && table.marbles.includes(racer.marble));
+        if (!going.length) return refuse();
+        const along = (racer: (typeof going)[number]) => {
+            const path = ghost.paths.find((one) => one.hopper === racer.hopper);
+            return path ? progress(path.places, racer.marble!.p) : 0;
+        };
+        rideOn(going.reduce((best, racer) => (along(racer) > along(best) ? racer : best)).marble!);
+    };
+    const raceBy = (by: number) => {
+        raceCount = Math.max(RACE[0], Math.min(RACE[1], raceCount + by));
+        sound?.knock(0.15, 1500 + raceCount * 60);
+        paintRace();
+    };
+
+    // ---- sharing (share.ts) ----
+    // A run is shared as a link while its squeezed text is short, and saved as a .marbles file past
+    // that. A run opened from a link is taken out of the address at the first change, as the sand
+    // mini's worlds are. Opening takes nothing on trust (share.ts).
+    let linked = !m.preview && location.hash.startsWith(LINKED);
+    const forgetLink = () => {
+        if (!linked) return;
+        linked = false;
+        history.replaceState(history.state, "", location.pathname + location.search);
+    };
+    /** A short word said quietly under the bar, grown from the button pressed, gone after a moment. */
+    let say = (_words: string, _from?: HTMLElement) => {};
+    const sharedNow = () => ({ run: resting(), spots, owns: ownsUsed(resting(), owns) });
+    const saveFile = (text: string) => {
+        const link = el("a", { href: URL.createObjectURL(new Blob([text], { type: "text/plain" })), download: "marble run.marbles" });
+        link.click();
+        setTimeout(() => URL.revokeObjectURL(link.href), 10_000);
+    };
+    /** The run as a link, put in the address and copied; past the length a link may be, saved as a file. */
+    const shareRun = async (from?: HTMLElement) => {
+        const shared = sharedNow();
+        const packed = await packShared(shared);
+        if (packed.length > LINK_MOST) {
+            saveFile(writeShared(shared));
+            return say("saved as a file", from);
+        }
+        history.replaceState(history.state, "", `${location.pathname}${location.search}${LINKED}${packed}`);
+        linked = true;
+        sound?.knock(0.25, 2200);
+        try {
+            await navigator.clipboard.writeText(location.href);
+            say("link copied", from);
+        } catch {
+            say("the link is in the address bar", from);
+        }
+    };
+    /** The run copied as text to paste elsewhere: its link, or past that length its file's text; the address is left as it is. */
+    const copyRun = async (from?: HTMLElement) => {
+        const shared = sharedNow();
+        const packed = await packShared(shared);
+        const text = packed.length > LINK_MOST ? writeShared(shared) : `${location.origin}${location.pathname}${location.search}${LINKED}${packed}`;
+        try {
+            await navigator.clipboard.writeText(text);
+            sound?.knock(0.2, 2400);
+            say("run copied", from);
+        } catch {
+            refuse();
+        }
+    };
+    /** A shared run put on the table, a change that undo takes back; its spots kept and its pieces of one's own added to the box; a plain word if some of it did not fit. */
+    const openShared = (opened: Opened, from?: HTMLElement, cut = false) => {
+        stopRace();
+        load(write(opened.run));
+        setSpots(opened.spots);
+        spotAt = opened.spots.length ? 0 : -1;
+        const fresh = opened.owns.filter((own) => !owns.some((one) => one.text === own.text));
+        if (fresh.length) {
+            owns = [...owns, ...fresh];
+            if (!m.preview) m.keep("marbles-own", owns, 1);
+            ownBox(owns.length - 1);
+        }
+        if (opened.spots[0]) {
+            if (cut) [orbit, easing] = [{ ...opened.spots[0] }, undefined];
+            else glideTo(0);
+        } else fitRun(cut);
+        if (opened.left) say(`${opened.left} ${opened.left === 1 ? "piece did" : "pieces did"} not fit and ${opened.left === 1 ? "was" : "were"} left out`, from);
+        else if (from) say("run opened", from);
+    };
+    /** Text pasted or dropped that holds a run (a link, a file's text, a run's text) opened, or a small no. */
+    const openFromText = async (text: string, from?: HTMLElement) => {
+        const opened = await openText(text.trim());
+        if (opened) openShared(opened, from);
+        else {
+            refuse();
+            say("that is not a run", from);
+        }
+    };
+    /** Paste run: the system's clipboard read, where the browser lets it be; else a word on how. */
+    const pasteRun = async (from?: HTMLElement) => {
+        let text: string | undefined;
+        try {
+            text = await navigator.clipboard.readText();
+        } catch {
+            text = undefined;
+        }
+        if (text === undefined) return say("press Ctrl+V to paste a run", from);
+        await openFromText(text, from);
+    };
+    /** A .marbles file opened, from the button or dropped on the mini. */
+    const openFile = async (file: File | undefined, from?: HTMLElement) => {
+        if (!file) return;
+        if (file.size > MOST.text) {
+            refuse();
+            return say("that is not a run", from);
+        }
+        await openFromText(await file.text(), from);
+    };
     const show = (one: Solid) => {
         if (!view || marbleParts.has(one)) return;
-        // its look by its number, so that a run replayed looks the same
-        const { seed, tints } = marbleLook(table.numberOf(one));
+        // its look by its number, so that a run replayed looks the same; a racer looks as it was named
+        const racer = race?.racerOf(one);
+        const { seed, tints } = racer ? RACERS[racer.index]! : marbleLook(table.numberOf(one));
         const part = view.add(marble, marbleLookAll);
         part.seed = seed;
         part.tints = tints;
         marbleParts.set(one, [part]);
     };
-    table.gone = (one) => {
+    const gone = (one: Solid) => {
         for (const part of marbleParts.get(one) ?? []) view?.remove(part);
         marbleParts.delete(one);
     };
@@ -1379,7 +1710,7 @@ export default function marbles(m: Mote): Scene {
      * its echo in the next step or two are one strike.
      */
     const lastStruck = new Map<number, number>();
-    table.space.hit = (a, b, speed) => {
+    const hit = (a: Solid, b: Solid, speed: number) => {
         if (!sound) return;
         const pair = a.id * 65536 + b.id;
         if (time - (lastStruck.get(pair) ?? -1) < 0.04) return;
@@ -1392,10 +1723,30 @@ export default function marbles(m: Mote): Scene {
         sound.strike(kind, hard, kind === "chime" ? heard?.pitch : heard?.soft ? 0.6 : undefined);
     };
     // a seesaw, a trapdoor, a gate or a switch knocking against its stop
-    table.space.knocked = (hinge, speed) => {
+    const knocked = (hinge: Hinge, speed: number) => {
         const id = table.hingeOf(hinge);
         const piece = run.find((one) => one.id === id);
         sound?.strike(piece && shapeOf(piece.kind).moving?.sound === "metal" ? "metal" : "wood", speed / HARD.wood, 0.75);
+    };
+    /** A table told how to say a marble has gone and how its strikes sound. */
+    const attach = (one: Table) => {
+        one.gone = gone;
+        one.space.hit = hit;
+        one.space.knocked = knocked;
+    };
+    attach(table);
+    /**
+     * A new table for the run as it rests, in place of the one there was, every marble taken away and
+     * its moving parts as they are made: what a race starts from, so that the same run gives the same
+     * race every time (race.ts). The ghost and the drawing follow it.
+     */
+    const freshTable = () => {
+        for (const one of [...table.marbles, ...table.held()]) gone(one);
+        table = makeTable();
+        attach(table);
+        table.set(resting());
+        ghostKey = "";
+        redraw();
     };
     /** Pieces of the run changed in place, if they fit there; a small no if not. */
     const commit = (changedPieces: Placed[], pitch = 1500) => {
@@ -1580,6 +1931,7 @@ export default function marbles(m: Mote): Scene {
     };
     const toggleStream = () => {
         streaming = !streaming;
+        if (streaming) stopRace();
         streamWait = 0;
         tell();
         m.wake();
@@ -1590,6 +1942,7 @@ export default function marbles(m: Mote): Scene {
         m.wake();
     };
     const clearMarbles = () => {
+        stopRace();
         table.clear();
         m.wake();
     };
@@ -1601,6 +1954,16 @@ export default function marbles(m: Mote): Scene {
     // ---- the panel: the box, the bar, the strip by the selection ----
     let tell = () => {};
     let toggleKeys = () => {};
+    let keepOwn = () => {};
+    let showRace = () => {};
+    let openMenu = (_x: number, _y: number, _keyboard: boolean) => {};
+    let closeMenu = (): boolean => false;
+    /** Whether the scene's menu is open; the strip by what is chosen keeps away while it is. */
+    let menuShown = false;
+    /** The next press on the scene shut the menu, and does nothing more. */
+    let swallow = false;
+    /** What to undo when the mini goes: listeners on the page, and things added to it. */
+    const leaving: (() => void)[] = [];
     let ownBox = (_grown?: number) => {};
     const strip = el("div", { class: "marbles-strip", role: "toolbar", ariaLabel: "what is chosen" });
     if (!m.preview) {
@@ -1706,13 +2069,86 @@ export default function marbles(m: Mote): Scene {
             tell();
         });
         const keysTool = tool("keys", "Keys", "?", () => toggleKeys());
-        const runsTool = tool("runs", "Start from", "", () => {
-            keys.open(keysTool, false);
-            runs.open(runsTool);
-        });
+        const runsTool = tool("runs", "Start from", "", () => only(runs, runsTool));
+        const raceTool = tool("race", "Race", "X", () => only(raceFold, raceTool));
+        const rideTool = tool("ride", "Ride along with a marble", "V", rideNext, true);
+        rideTool.classList.add("marbles-ride");
+        const spotsTool = tool("spots", "Spots", "H, G", () => only(spotsFold, spotsTool));
+        const tourTool = tool("tour", "A tour of the run", "T", () => (camera.kind === "tour" ? toFree() : tourRun()), true);
+        const shareTool = tool("share", "Share: copy a link to this run", "", () => void shareRun(shareTool));
         const group = (...tools: HTMLElement[]) => el("div", { class: "marbles-group" }, ...tools);
-        const bar = el("div", { class: "marbles-bar", role: "toolbar", ariaLabel: "tools" }, group(selectTool, undoTool, redoTool, pasteTool), group(goTool, streamTool, pauseTool, resetTool), group(fitTool, soundTool, keysTool, runsTool));
+        const bar = el("div", { class: "marbles-bar", role: "toolbar", ariaLabel: "tools" }, group(selectTool, undoTool, redoTool, pasteTool), group(goTool, streamTool, pauseTool, resetTool, raceTool), group(fitTool, rideTool, spotsTool, tourTool), group(shareTool, soundTool, keysTool, runsTool));
         queueMicrotask(() => stacking(bar));
+        /** Each fold under the bar, one open at a time: opening one shuts the others back into their buttons. */
+        const folds: { box: HTMLElement; open(from: HTMLElement, open?: boolean): boolean; shown(): boolean; from: () => HTMLElement }[] = [];
+        const only = (which: (typeof folds)[number], from: HTMLElement) => {
+            for (const other of folds) if (other !== which && other.shown()) other.open(other.from(), false);
+            which.open(from);
+        };
+
+        // the race: how many, go, ride the leader, and the result, small and quiet under the bar
+        const fewer = el("button", { type: "button", class: "marbles-step", textContent: "−", ariaLabel: "one marble fewer", onclick: () => raceBy(-1) });
+        const more = el("button", { type: "button", class: "marbles-step", textContent: "+", ariaLabel: "one marble more", onclick: () => raceBy(1) });
+        const counted = el("span", { class: "marbles-race-count" });
+        const goRace = el("button", { type: "button", textContent: "race them", onclick: startRace });
+        const leader = el("button", { type: "button", textContent: "ride the leader", onclick: rideLeader });
+        const placings = el("ol", { class: "marbles-race-list" });
+        const raceNote = el("p", { class: "marbles-race-note" });
+        const raceFold = { ...fold("marbles-race", el("div", { class: "marbles-race-row" }, fewer, counted, more, goRace, leader), placings, raceNote), from: () => raceTool };
+        paintRace = (why?: string) => {
+            counted.textContent = `${raceCount} marbles`;
+            fewer.disabled = raceCount <= RACE[0];
+            more.disabled = raceCount >= RACE[1];
+            leader.disabled = !race || race.done || raceStopped;
+            const placed = race ? standing(race) : [];
+            placings.replaceChildren(...placed.map((one, place) => {
+                const look = RACERS[one.racer.index]!;
+                const swatch = el("span", { class: "marbles-swatch" });
+                const css = (c: [number, number, number]) => `rgb(${c.map((v) => Math.round(v * 255)).join(" ")})`;
+                swatch.style.background = `linear-gradient(135deg, ${css(look.tints[0])} 0 33%, ${css(look.tints[1])} 33% 66%, ${css(look.tints[2])} 66%)`;
+                const said = one.time !== undefined ? timeOf(one.time) : one.racer.out ? OUT_WORDS[one.racer.out] : raceStopped ? "stopped" : "going";
+                return el("li", { class: one.time === undefined ? "marbles-out" : "" }, el("span", { class: "marbles-place", textContent: one.time !== undefined ? String(place + 1) : "" }), swatch, el("span", { textContent: one.racer.name }), el("span", { class: "marbles-time", textContent: said }));
+            }));
+            raceNote.textContent = why ?? (raceStopped ? "Stopped before the end." : race?.done && placed.some((one) => one.close) ? "A photo finish: within a hundredth of a second." : "");
+        };
+        paintRace();
+        folds.push(raceFold);
+        showRace = () => {
+            if (!raceFold.shown()) only(raceFold, raceTool);
+        };
+
+        // the spots kept with the run, each glided to when pressed, and the view kept as one more
+        const spotRow = el("div", { class: "marbles-spot-row" });
+        const keepView = el("button", { type: "button", textContent: "keep this view", onclick: keepSpot });
+        const spotsFold = { ...fold("marbles-spots", spotRow, el("p", { class: "marbles-race-row" }, keepView)), from: () => spotsTool };
+        paintSpots = () => {
+            spotRow.replaceChildren(...spots.map((_, index) => {
+                const button = el("button", { type: "button", class: "marbles-spot", textContent: String(index + 1), title: `Glide to spot ${index + 1} (G)`, ariaLabel: `glide to spot ${index + 1}`, onclick: () => glideTo(index) });
+                const away = el("span", { class: "marbles-unkeep", role: "button", tabIndex: 0, title: `Forget spot ${index + 1}`, ariaLabel: `forget spot ${index + 1}` }, icon("close"));
+                const forget = (event: Event) => {
+                    event.stopPropagation();
+                    setSpots(spots.filter((__, i) => i !== index));
+                };
+                away.addEventListener("click", forget);
+                away.addEventListener("keydown", (event) => (event.key === "Enter" || event.key === " ") && forget(event));
+                button.append(away);
+                return button;
+            }));
+            keepView.disabled = spots.length >= MOST.spots;
+        };
+        paintSpots();
+        folds.push(spotsFold);
+
+        // a short word said under the bar, grown from the button pressed and gone after a moment
+        const words = el("span", {});
+        const saying = { ...fold("marbles-said", words), from: () => shareTool };
+        let hush: ReturnType<typeof setTimeout> | undefined;
+        say = (text: string, from?: HTMLElement) => {
+            words.textContent = text;
+            clearTimeout(hush);
+            saying.open(from ?? shareTool, true);
+            hush = setTimeout(() => saying.open(from ?? shareTool, false), 2600);
+        };
 
         // the keys, a plain list, and the runs to start from, each in a fold under the bar
         const KEYS: [string, string][] = [
@@ -1721,22 +2157,30 @@ export default function marbles(m: Mote): Scene {
             ["Ctrl and drag, long press on the table", "choose many in a box"],
             ["B", "the select tool"],
             ["Ctrl+A, J", "choose all, choose what is joined"],
-            ["Escape", "choose nothing, or put back"],
+            ["Escape", "free the camera, put back, or choose nothing"],
             ["arrows or WASD", "lift and move a cell"],
             ["Q, E, Alt+up and down", "a level down, up"],
             ["Enter", "put down"],
             ["R, F", "turn, mirror"],
-            ["K", "bend what is chosen by its points"],
+            ["K, the bend button", "bend what is chosen by its points, its ends staying put"],
             ["bending: arrows, Q, E", "move the point aside, up, down"],
             ["bending: comma, full stop, Delete", "the point before, after; straighten it"],
             ["Alt or a second finger, dragging a point", "no snapping"],
-            ["N, Shift+N", "the next or last setting: a chime bar's note, a lift's height, a spinner's arms, how many marbles tip a seesaw, a length"],
+            ["N, Shift+N, its knob", "the next or last setting: a chime bar's note, a lift's height, a spinner's arms, how many marbles tip a seesaw, a length"],
             ["Delete", "take away"],
             ["Ctrl+C, X, V, D", "copy, cut, paste, duplicate"],
+            ["Ctrl+V", "with a run's link or text copied, open that run"],
+            ["right click, menu key", "the run's menu: paste or copy the run, and what is chosen"],
+            ["Shift and right click", "the browser's own menu"],
             ["Ctrl+Z, Ctrl+Shift+Z", "undo, redo"],
             ["comma, full stop", "the piece before, after"],
             ["Space, Shift+Space", "let a marble go, a stream"],
             ["P, C", "pause, clear the marbles"],
+            ["X", "race the marbles"],
+            ["tap a marble, V", "ride along with it, with the next marble"],
+            ["Shift+V", "ride the leader of a race"],
+            ["T", "a tour of the run"],
+            ["H, G, Shift+G", "keep this view as a spot, glide to the next spot, the last"],
             ["7, 1, 3", "from above, the front, the side"],
             ["5", "the narrow lens"],
             ["Home, Shift+Home", "fit the run, what is chosen"],
@@ -1746,16 +2190,18 @@ export default function marbles(m: Mote): Scene {
         ];
         const list = el("dl", { class: "marbles-keys-list" });
         for (const [key, what] of KEYS) list.append(el("dt", { textContent: key }), el("dd", { textContent: what }));
-        const keys = fold("marbles-keys", list);
-        toggleKeys = () => {
-            runs.open(runsTool, false);
-            keys.open(keysTool);
-        };
+        const keys = { ...fold("marbles-keys", list), from: () => keysTool };
+        toggleKeys = () => only(keys, keysTool);
         const runList = el("ul", { class: "marbles-runs" });
-        for (const one of [...RUNS, { name: "an empty table", text: "v1" }]) {
+        for (const one of [...RUNS.filter((made) => made.listed !== false), { name: "an empty table", text: "v1" }]) {
             runList.append(el("li", {}, el("button", { type: "button", textContent: one.name, onclick: () => {
+                stopRace();
                 load(one.text);
-                fitRun();
+                // a made run opens with the spot that shows it well
+                const spot = "spot" in one ? one.spot : undefined;
+                setSpots(spot ? [spot] : []);
+                if (spot) glideTo(0);
+                else fitRun();
                 runs.open(runsTool, false);
             } })));
         }
@@ -1763,8 +2209,49 @@ export default function marbles(m: Mote): Scene {
             selectAll();
             runs.open(runsTool, false);
         } })));
-        const runs = fold("marbles-menu", runList);
-        panel.append(box, bar, keys.box, runs.box);
+        // a run shared as a file, opened from here or dropped on the mini; and a run's link or text pasted, for a phone, which has no keys for it
+        const chooser = el("input", { type: "file", accept: ".marbles,text/plain", class: "marbles-chooser" });
+        chooser.tabIndex = -1;
+        const opener = el("button", { type: "button", textContent: "open a run from a file", onclick: () => chooser.click() });
+        chooser.onchange = () => {
+            void openFile(chooser.files?.[0], opener).then(() => runs.open(runsTool, false));
+            chooser.value = "";
+        };
+        const pasted = el("input", { type: "text", class: "marbles-paste", ariaLabel: "a run's link or text", placeholder: "paste a run's link or text here" });
+        pasted.inert = true;
+        const paster = el("button", { type: "button", textContent: "paste a run", onclick: async () => {
+            try {
+                const text = await navigator.clipboard.readText();
+                await openFromText(text, paster);
+                runs.open(runsTool, false);
+            } catch {
+                // where the browser does not let the clipboard be read, a line to paste into, grown in its place
+                pasted.inert = false;
+                pasted.classList.add("shown");
+                pasted.focus();
+            }
+        } });
+        pasted.addEventListener("keydown", (event) => event.stopPropagation());
+        pasted.addEventListener("paste", (event) => {
+            const text = event.clipboardData?.getData("text/plain") ?? "";
+            event.preventDefault();
+            void openFromText(text, paster).then(() => {
+                pasted.classList.remove("shown");
+                pasted.inert = true;
+                runs.open(runsTool, false);
+            });
+        });
+        runList.append(el("li", { class: "marbles-rule" }, opener, chooser), el("li", {}, paster, pasted));
+        const runs = { ...fold("marbles-menu", runList), from: () => runsTool };
+        folds.push(keys, runs);
+        panel.append(box, bar, keys.box, runs.box, raceFold.box, spotsFold.box, saying.box);
+        // a file dropped anywhere on the mini opens
+        const host = m.canvas.parentElement!;
+        host.addEventListener("dragover", (event) => event.preventDefault());
+        host.addEventListener("drop", (event) => {
+            event.preventDefault();
+            void openFile(event.dataTransfer?.files[0]);
+        });
 
         // the strip by what is chosen
         const turnTool = tool("turn", "Turn", "R", () => turnChosen(1));
@@ -1808,6 +2295,100 @@ export default function marbles(m: Mote): Scene {
         };
         m.canvas.parentElement!.append(strip);
 
+        // The scene's own small menu, from a right click that does not move or the keyboard's menu key: Paste
+        // run and Copy run, Ride this marble over a marble, and what the strip offers for what is chosen. It
+        // grows from the press and shrinks back into it. Shift with the right click leaves the browser's own.
+        const menu = el("div", { class: "marbles-menu-box", role: "menu", ariaLabel: "the run's menu" });
+        menu.inert = true;
+        m.canvas.parentElement!.append(menu);
+        closeMenu = () => {
+            if (!menuShown) return false;
+            menuShown = false;
+            menu.classList.remove("shown");
+            menu.inert = true;
+            m.canvas.focus({ preventScroll: true });
+            m.wake();
+            return true;
+        };
+        openMenu = (x: number, y: number, keyboard: boolean) => {
+            const piece = pieceAt(x, y, 1.2);
+            if (piece && !chosen.has(piece.id)) {
+                chosen.clear();
+                chosen.add(piece.id);
+                chosenChanged();
+            }
+            const marble = marbleAt(x, y);
+            const one = chosen.size === 1 ? run.find((each) => chosen.has(each.id)) : undefined;
+            type Line = { name: string; key: string; icon: string; act: () => void };
+            const groups: Line[][] = [];
+            if (marble) groups.push([{ name: "Ride this marble", key: "V", icon: "ride", act: () => rideOn(marble) }]);
+            groups.push([
+                { name: "Paste run", key: "Ctrl+V", icon: "paste", act: () => void pasteRun() },
+                { name: "Copy run", key: "", icon: "share", act: () => void copyRun() },
+                ...(clip ? [{ name: "Paste pieces", key: "", icon: "paste", act: () => paste(clip, false) }] : []),
+            ]);
+            if (chosen.size) {
+                groups.push([
+                    { name: "Turn", key: "R", icon: "turn", act: () => turnChosen(1) },
+                    { name: "Mirror", key: "F", icon: "mirror", act: mirrorChosen },
+                    ...(one && pointsOf(one.kind) ? [{ name: "Bend", key: "K", icon: "bend", act: () => toggleBending(true) }] : []),
+                    ...(one && isBent(one.kind) ? [{ name: "Straighten", key: "", icon: "straighten", act: straightenChosen }] : []),
+                    { name: "Choose what is joined", key: "J", icon: "joined", act: selectJoined },
+                    { name: "Copy", key: "Ctrl+C", icon: "copy", act: () => void copyChosen() },
+                    { name: "Duplicate", key: "Ctrl+D", icon: "duplicate", act: () => duplicate(false) },
+                    { name: "Keep as a piece of your own", key: "", icon: "keep", act: () => keepOwn() },
+                    { name: "Take away", key: "Delete", icon: "remove", act: removeChosen },
+                ]);
+            }
+            menu.replaceChildren(...groups.flatMap((lines, index) => [
+                ...(index ? [el("hr", { class: "marbles-menu-rule" })] : []),
+                ...lines.map((line) => {
+                    const button = el("button", { type: "button", class: "marbles-menu-line", role: "menuitem", onclick: () => {
+                        closeMenu();
+                        line.act();
+                    } }, icon(line.icon), el("span", { textContent: line.name }), el("kbd", { textContent: line.key }));
+                    return button;
+                }),
+            ]));
+            // where it fits, on the side of the press that has room, growing out of the press
+            const [w, h] = [menu.offsetWidth, menu.offsetHeight];
+            const left = x + w > m.width && x - w >= 0 ? x - w : Math.max(0, Math.min(x, m.width - w));
+            const top = y + h > m.height && y - h >= 0 ? y - h : Math.max(0, Math.min(y, m.height - h));
+            menu.style.translate = `${Math.round(left)}px ${Math.round(top)}px`;
+            menu.style.transformOrigin = `${Math.round(x - left)}px ${Math.round(y - top)}px`;
+            menuShown = true;
+            menu.inert = false;
+            menu.classList.add("shown");
+            if (keyboard) (menu.querySelector("button") as HTMLButtonElement | null)?.focus();
+            sound?.knock(0.12, 2000);
+            m.wake();
+        };
+        menu.addEventListener("keydown", (event) => {
+            event.stopPropagation();
+            const lines = [...menu.querySelectorAll<HTMLButtonElement>("button")];
+            const at = lines.indexOf(document.activeElement as HTMLButtonElement);
+            if (event.key === "Escape") closeMenu();
+            else if (event.key === "ArrowDown" || event.key === "ArrowUp") lines[(at + (event.key === "ArrowDown" ? 1 : lines.length - 1) + lines.length) % lines.length]?.focus();
+            else return;
+            event.preventDefault();
+        });
+        // a press anywhere else shuts it
+        const shut = (event: PointerEvent) => {
+            if (!menuShown || menu.contains(event.target as Node)) return;
+            closeMenu();
+            // a press on the scene that shuts the menu does nothing else
+            if (event.target === m.canvas) swallow = true;
+        };
+        document.addEventListener("pointerdown", shut, true);
+        leaving.push(() => {
+            document.removeEventListener("pointerdown", shut, true);
+            menu.remove();
+        });
+        // Shift with the right click: the browser's own menu, heard before Mote's canvas would keep it away
+        m.canvas.parentElement!.addEventListener("contextmenu", (event) => {
+            if (event.shiftKey) event.stopPropagation();
+        }, true);
+
         tell = () => {
             selectTool.setAttribute("aria-pressed", String(selecting));
             streamTool.setAttribute("aria-pressed", String(streaming));
@@ -1826,7 +2407,11 @@ export default function marbles(m: Mote): Scene {
             fitTool.replaceChildren(icon(chosen.size ? "fit-chosen" : "fit"));
             fitTool.title = chosen.size ? "Fit what is chosen (Shift+Home)" : "Fit the run (Home)";
             fitTool.onclick = () => (chosen.size ? fitChosen() : fitRun());
+            rideTool.setAttribute("aria-pressed", String(camera.kind === "ride"));
+            rideTool.classList.toggle("offering", Boolean(offered));
+            tourTool.setAttribute("aria-pressed", String(camera.kind === "tour"));
         };
+        keepOwn = () => naming(true);
     }
 
     // ---- start ----
@@ -1848,6 +2433,21 @@ export default function marbles(m: Mote): Scene {
     const resize = () => view?.size(m.width, m.height);
     resize();
     fitRun(true);
+    // A run opened from a link is put on the table ready to play, the view cut to its first spot; the
+    // link stays in the address until the first change. A link pasted into the address opens too.
+    const followLink = async (packed: string) => {
+        const opened = await unpackShared(packed);
+        if (!opened) return forgetLink();
+        openShared(opened, undefined, true);
+        history.replaceState(history.state, "", `${location.pathname}${location.search}${LINKED}${packed}`);
+        linked = true;
+    };
+    const followed = () => {
+        if (location.hash.startsWith(LINKED)) void followLink(location.hash.slice(LINKED.length));
+    };
+    if (linked) followed();
+    if (!m.preview) window.addEventListener("hashchange", followed);
+    leaving.push(() => window.removeEventListener("hashchange", followed));
 
     // ---- the look ----
     /** Whether a piece is being built with now: carried, bent, or its points shown. */
@@ -1891,6 +2491,17 @@ export default function marbles(m: Mote): Scene {
         m.canvas.addEventListener("keydown", (event) => {
             const key = event.key;
             const lower = key.toLowerCase();
+            if (key === "Escape" && closeMenu()) {
+                event.preventDefault();
+                return;
+            }
+            // the keyboard's menu key, or Shift and F10: the run's menu, by what is chosen or in the middle
+            if (key === "ContextMenu" || (key === "F10" && event.shiftKey)) {
+                event.preventDefault();
+                const middle = chosen.size ? onScreen(handleMiddle(chosenPieces())) : undefined;
+                openMenu(middle?.x ?? m.width / 2, middle?.y ?? m.height / 2, true);
+                return;
+            }
             if (event.ctrlKey || event.metaKey) {
                 if (lower === "z" && event.shiftKey) redo();
                 else if (lower === "z") undo();
@@ -1957,6 +2568,7 @@ export default function marbles(m: Mote): Scene {
             } else if (lower === "k") toggleBending();
             else if (event.shiftKey && key.startsWith("Arrow")) {
                 free();
+                toFree();
                 if (key === "ArrowLeft") orbit = kept({ ...orbit, turn: orbit.turn - 0.15 }, orbit);
                 if (key === "ArrowRight") orbit = kept({ ...orbit, turn: orbit.turn + 0.15 }, orbit);
                 if (key === "ArrowUp") orbit = kept({ ...orbit, tip: orbit.tip + 0.08 }, orbit);
@@ -1973,6 +2585,7 @@ export default function marbles(m: Mote): Scene {
                 if (carried) drop();
             } else if (key === "Escape") {
                 if (carried) cancel();
+                else if (camera.kind !== "free") toFree();
                 else {
                     chosen.clear();
                     boxing = undefined;
@@ -1995,11 +2608,21 @@ export default function marbles(m: Mote): Scene {
             else if (key === "7") look("top");
             else if (key === "1") look("front");
             else if (key === "3") look("side");
-            else if (key === "5") lensTo = lensTo === DEGREES ? NARROW : DEGREES;
-            else if (key === "Home" || key === "0") (event.shiftKey ? fitChosen : () => fitRun())();
-            else if (key === "+" || key === "=") orbit = kept({ ...orbit, far: orbit.far / 1.15 }, orbit);
-            else if (key === "-") orbit = kept({ ...orbit, far: orbit.far * 1.15 }, orbit);
-            else return;
+            else if (key === "5") {
+                toFree();
+                lensTo = lensTo === DEGREES ? NARROW : DEGREES;
+            } else if (key === "Home" || key === "0") (event.shiftKey ? fitChosen : () => fitRun())();
+            else if (key === "+" || key === "=" || key === "-") {
+                toFree();
+                orbit = kept({ ...orbit, far: orbit.far * (key === "-" ? 1.15 : 1 / 1.15) }, orbit);
+            } else if (lower === "v") (event.shiftKey && race && !race.done && !raceStopped ? rideLeader : rideNext)();
+            else if (lower === "t") (camera.kind === "tour" ? toFree : tourRun)();
+            else if (lower === "h") keepSpot();
+            else if (lower === "g") glideStep(event.shiftKey ? -1 : 1);
+            else if (lower === "x") {
+                showRace();
+                startRace();
+            } else return;
             event.preventDefault();
             m.wake();
         });
@@ -2015,6 +2638,13 @@ export default function marbles(m: Mote): Scene {
         });
         m.canvas.addEventListener("paste", (event) => {
             const text = event.clipboardData?.getData("text/plain")?.trim() ?? "";
+            // a whole run, as a link to it or a file's text, opens that run; a run's text alone is pieces to paste
+            if (text.includes(LINKED) || text.startsWith("marbles 1")) {
+                clearTimeout(pasting);
+                event.preventDefault();
+                void openFromText(text);
+                return;
+            }
             try {
                 if (!read(text).length) return;
             } catch {
@@ -2259,6 +2889,43 @@ export default function marbles(m: Mote): Scene {
                 m.wake();
                 return { ...orbit, lens };
             },
+            /** The camera: free, riding (which marble, by its place among those let go) or touring, the view, whether it glides in, whether a marble is offered. */
+            camera: () => ({ kind: camera.kind, marble: camera.kind === "ride" ? table.marbles.indexOf(camera.marble) : null, held: camera.kind === "ride" && table.held().includes(camera.marble), along: camera.kind === "tour" ? camera.along : null, length: camera.kind === "tour" ? camera.tour.length : null, orbit: { ...orbit, at: [...orbit.at] }, blending: Boolean(blending), offered: offered ? table.marbles.indexOf(offered) : null }),
+            /** Where each marble let go is on the screen, and whether it rests. */
+            marblesOnScreen: () => table.marbles.map((one) => ({ at: onScreen(one.p), rest: Boolean(one.rest) })),
+            ride: (index?: number) => (index === undefined ? rideNext() : rideOn(table.marbles[index]!)),
+            tour: () => tourRun(),
+            kept: () => spots.map((one) => ({ ...one, at: [...one.at] })),
+            keepSpot: () => keepSpot(),
+            glideTo: (index: number) => glideTo(index),
+            /** The wood the eye is in now, if any, for looking for a ride or a tour that cuts into a piece. */
+            inside: () => {
+                const eye = eyeOf(cam().orbit);
+                return obstaclesOf(resting()).filter((one) => !one.glass && within(one, eye)).length;
+            },
+            race: (count?: number) => {
+                if (count) raceCount = count;
+                showRace();
+                startRace();
+            },
+            /** The race as it stands: done or stopped, each placing's name, time (and its bits) or why not. */
+            raced: () => race && { done: race.done, stopped: raceStopped, clock: race.clock, placings: standing(race).map((one) => ({ name: one.racer.name, time: one.time ?? null, bits: one.time === undefined ? null : [...new Uint32Array(new Float64Array([one.time]).buffer)].map((word) => word.toString(16)).join(""), out: one.racer.out ?? null, close: one.close })) },
+            /** Steps as the scene does, the race or the table and the camera, as many steps of 1/120 s as asked: for watching minutes without waiting minutes. */
+            advance: (count: number) => {
+                for (let i = 0; i < count; i++) {
+                    if (race && !race.done && !raceStopped) race.step(1 / 120);
+                    else table.step(1 / 120);
+                    stepCamera(1 / 120);
+                }
+                for (const one of table.marbles) show(one);
+                raceSaid = "";
+                paintRace();
+                m.wake();
+            },
+            /** The run as it would be shared: its link's squeezed text, and the file's text. */
+            shared: async () => ({ packed: await packShared(sharedNow()), file: writeShared(sharedNow()) }),
+            openText: (text: string) => openFromText(text),
+            linked: () => linked,
         };
     }
 
@@ -2267,6 +2934,13 @@ export default function marbles(m: Mote): Scene {
             if (m.preview) return;
             easing = undefined;
             const one: Held = { hand, start: { x: hand.x, y: hand.y }, last: { x: hand.x, y: hand.y }, since: time, mode: "press" };
+            // a press that shut the menu, or Shift with the other button (the browser's own menu), does nothing more
+            if (swallow || (hand.button === 2 && hand.shift)) {
+                swallow = false;
+                one.mode = "done";
+                held.set(hand.id, one);
+                return;
+            }
             // a paste that follows the mouse is put down where it is pressed
             if (carried?.hand === "hover") {
                 one.mode = "done";
@@ -2333,6 +3007,7 @@ export default function marbles(m: Mote): Scene {
             if (one.mode === "pinch") {
                 const now = pinchOf();
                 if (now && pinch) {
+                    toFree();
                     orbit = panned(orbit, DEGREES, -(now.x - pinch.x) / m.height, -(now.y - pinch.y) / m.height);
                     const twist = now.angle - pinch.angle;
                     if (Math.abs(twist) > 1e-4) free();
@@ -2366,13 +3041,17 @@ export default function marbles(m: Mote): Scene {
                 } else {
                     one.mode = "turn";
                     free();
+                    toFree();
                 }
             } else if (one.mode === "carry") follow(hand.x, hand.y, hand.kind === "touch" ? "touch" : "mouse");
             else if (one.mode === "bend") dragBend(hand.x, hand.y, hand.kind === "touch" ? "touch" : "mouse", loose || hand.alt);
             else if (one.mode === "handle") dragHandle(hand.x, hand.y);
             else if (one.mode === "box" && boxing) boxing.to = { x: hand.x, y: hand.y };
             else if (one.mode === "turn") orbit = kept({ ...orbit, turn: orbit.turn - dx * 0.008, tip: orbit.tip + dy * 0.006 }, orbit);
-            else if (one.mode === "pan") orbit = panned(orbit, DEGREES, -dx / m.height, -dy / m.height);
+            else if (one.mode === "pan" && (dx || dy)) {
+                toFree();
+                orbit = panned(orbit, DEGREES, -dx / m.height, -dy / m.height);
+            }
             m.wake();
         },
         up(hand, cancelled) {
@@ -2408,6 +3087,12 @@ export default function marbles(m: Mote): Scene {
                 // a tap on a point picks it for the keys, and leaves the choice as it is
                 bendPoint = pointOf(one.handle)!;
                 sound?.knock(0.15, 2000);
+            } else if (one.mode === "pan" && hand.button === 2 && !cancelled && Math.hypot(hand.x - one.start.x, hand.y - one.start.y) < STILL) {
+                // the other button pressed and let go without moving the view: the run's menu
+                openMenu(hand.x, hand.y, false);
+            } else if (one.mode === "press" && !hand.shift && !selecting && marbleAt(hand.x, hand.y, hand.kind)) {
+                // a press on a marble going down the run: the camera rides it
+                rideOn(marbleAt(hand.x, hand.y, hand.kind)!);
             } else if (one.mode === "press") {
                 // a press that did not move: on a piece it is chosen (added with Shift or the select
                 // tool); on the table, the choice is let go
@@ -2425,6 +3110,7 @@ export default function marbles(m: Mote): Scene {
             m.wake();
         },
         wheel(_x, _y, by, isPinch) {
+            toFree();
             orbit = kept({ ...orbit, far: orbit.far * Math.exp(by * (isPinch ? 0.01 : 0.0012)) }, orbit);
             easing = undefined;
             m.wake();
@@ -2461,8 +3147,21 @@ export default function marbles(m: Mote): Scene {
                 }
             }
             const before = performance.now();
-            if (playing) table.step(dt);
+            // a race steps the table itself, step for step as its test does, and times its marbles
+            const racing = race && !race.done && !raceStopped;
+            if (playing && racing) race!.step(dt);
+            else if (playing) table.step(dt);
             took.step += (performance.now() - before - took.step) * 0.05;
+            if (racing) {
+                for (const one of table.marbles) show(one);
+                const said = `${race!.done} ${standing(race!).map((one) => `${one.racer.index}:${one.time?.toFixed(2) ?? one.racer.out ?? ""}`).join(" ")}`;
+                if (said !== raceSaid) {
+                    raceSaid = said;
+                    paintRace();
+                    if (race!.done) sound?.knock(0.3, 1700);
+                }
+            }
+            stepCamera(dt);
             // what is carried eases to where it would go: quick to start and slow to settle
             if (carried) {
                 const goal = target(carried);
@@ -2482,7 +3181,7 @@ export default function marbles(m: Mote): Scene {
                 }
             }
             if (easing) {
-                easing.time = Math.min(1, easing.time + dt / 0.45);
+                easing.time = Math.min(1, easing.time + dt / easing.length);
                 const k = 1 - (1 - easing.time) ** 3;
                 const [a, b] = [easing.from, easing.to];
                 orbit = { at: [a.at[0] + (b.at[0] - a.at[0]) * k, a.at[1] + (b.at[1] - a.at[1]) * k, a.at[2] + (b.at[2] - a.at[2]) * k], turn: a.turn + (b.turn - a.turn) * k, tip: a.tip + (b.tip - a.tip) * k, far: a.far + (b.far - a.far) * k };
@@ -2496,11 +3195,12 @@ export default function marbles(m: Mote): Scene {
             }
             shake = Math.max(0, shake - dt);
         },
-        resting: () => !m.preview && gridShown === (building() ? GRID.building : GRID.rolling) && !carried && !bendDrag && !flying.length && !easing && lens === lensTo && !streaming && shake <= 0 && (!playing || (table.marbles.every((one) => one.rest) && table.movers().every(({ solids }) => solids.every((solid) => solid.rest || (solid.driven && !table.running && !solid.v.some((x) => x !== 0)))))) && !held.size && ghost.done && ghostPlays >= 1,
+        resting: () => !m.preview && camera.kind === "free" && !blending && !(race && !race.done && !raceStopped) && gridShown === (building() ? GRID.building : GRID.rolling) && !carried && !bendDrag && !flying.length && !easing && lens === lensTo && !streaming && shake <= 0 && (!playing || (table.marbles.every((one) => one.rest) && table.movers().every(({ solids }) => solids.every((solid) => solid.rest || (solid.driven && !table.running && !solid.v.some((x) => x !== 0)))))) && !held.size && ghost.done && ghostPlays >= 1,
         resize,
         debug: () => [`${run.length} pieces, ${table.marbles.length} marbles, ${table.marbles.filter((one) => one.rest).length} asleep`, `ghost ${took.ghost.toFixed(2)} ms, frame ${took.frame.toFixed(2)} ms`],
         destroy: () => {
             strip.remove();
+            for (const one of leaving) one();
             view?.dispose();
         },
         draw() {
@@ -2510,7 +3210,8 @@ export default function marbles(m: Mote): Scene {
             const dt = Math.min(0.05, gap);
             lastFrame = started;
             const { orbit: seen, degrees } = cam();
-            view.range = [Math.max(2, seen.far * 0.02), seen.far + 4000];
+            // close in, as a ride or a tour brings the eye, the near plane comes nearer, so that nothing near is cut away
+            view.range = [seen.far < 18 || camera.kind !== "free" ? Math.max(0.3, seen.far * 0.02) : Math.max(2, seen.far * 0.02), seen.far + 4000];
             view.look(eyeOf(seen), seen.at, degrees);
             // what could not be done shakes a little, side to side, dying away
             const wobble = shake > 0 ? Math.sin(shake * 60) * shake * 1.2 : 0;
@@ -2607,6 +3308,18 @@ export default function marbles(m: Mote): Scene {
     /** What is drawn flat over the scene: the box being drawn to choose many, the little axes, and the strip's place by the selection. */
     function overlay() {
         const ctx = m.ctx;
+        // the marble offered once a ride lets go: a thin still ring round it, until it is ridden or goes
+        if (offered && camera.kind === "free" && (table.marbles.includes(offered) || table.held().includes(offered))) {
+            const at = onScreen(offered.p);
+            if (at) {
+                const { orbit: seen, degrees } = cam();
+                ctx.strokeStyle = m.color("--accent");
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.arc(at.x, at.y, RADIUS / across(seen, degrees, m.height, offered.p) + 5, 0, 2 * Math.PI);
+                ctx.stroke();
+            }
+        }
         if (boxing) {
             const [x, y] = [Math.min(boxing.from.x, boxing.to.x), Math.min(boxing.from.y, boxing.to.y)];
             const [w, h] = [Math.abs(boxing.to.x - boxing.from.x), Math.abs(boxing.to.y - boxing.from.y)];
@@ -2677,7 +3390,7 @@ export default function marbles(m: Mote): Scene {
         ctx.globalAlpha = 1;
         // the strip grows by what is chosen, above it, or under it where there is no room above
         const pieces = chosenPieces();
-        const wanted = pieces.length > 0 && !carried && !bendDrag && !boxing && ![...held.values()].some((one) => one.mode === "turn" || one.mode === "pinch" || one.mode === "pan");
+        const wanted = pieces.length > 0 && !menuShown && !carried && !bendDrag && !boxing && ![...held.values()].some((one) => one.mode === "turn" || one.mode === "pinch" || one.mode === "pan");
         // where it goes: by what is chosen, measured by the corners of the room its pieces take up, and
         // clear of the handles; nowhere while what is chosen is off the screen (it shrinks away, and grows
         // again by the pieces when they come back into view), so that it never floats over the empty table
