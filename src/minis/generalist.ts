@@ -870,10 +870,11 @@ export default function generalist(m: Mote): Scene {
             drawSurprise(ctx, wide);
         };
 
-        /** Its surprise over the last few seconds, a small trace in the brain's top corner: how wrong its guess of what it would see was, with the level it is used to under it. Nothing for a brain with no predictor. */
+        /** Its surprise over the last few seconds, a small trace in the brain's top right corner, over what it does: how wrong its guess of what it would see was, with the level it is used to under it. Nothing for a brain with no predictor. */
         const drawSurprise = (ctx: CanvasRenderingContext2D, wide: number) => {
             if (surprises.length < 2 || !surprises.some((value) => value > 0)) return;
-            const [left, right, top, bottom] = [wide * 0.74, wide - 8, 6, 24];
+            // over what it does, which sits low in its column, clear of the second plain layer's
+            const [left, right, top, bottom] = [wide * 0.87, wide - 4, 4, 18];
             const most = Math.max(0.05, ...surprises);
             const at = (k: number, value: number): [number, number] => [left + ((right - left) * k) / (TRACED - 1), bottom - ((bottom - top) * Math.min(value, most)) / most];
             const start = TRACED - surprises.length;
@@ -892,7 +893,7 @@ export default function generalist(m: Mote): Scene {
             ctx.font = `11px ${code}`;
             ctx.textBaseline = "top";
             ctx.textAlign = "right";
-            ctx.fillText("surprise", left - 4, top - 1);
+            ctx.fillText("surprise", right, bottom + 2);
         };
 
         // how far it gets, against how long it has practised (or, by evolution, the generations), drawn as it learns
