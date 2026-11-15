@@ -2568,6 +2568,14 @@ body.quire-app,
     margin: 0;
 }
 
+/* how this page's documents arrive, said first on a page that is one kind's own (imgQuire: paste, drop or open a picture) */
+.quire-shelf-lead {
+    margin: 0 0 calc(var(--line) * 1.25);
+    color: var(--ink);
+    font-size: 1.35rem;
+    line-height: 1.3;
+}
+
 /* the ways to start: the label, then the three kinds as words on the same line */
 .quire-shelf-new {
     display: flex;

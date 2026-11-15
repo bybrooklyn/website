@@ -60,7 +60,7 @@ const host = document.querySelector<HTMLElement>("#quire");
 const names: Record<string, string> = { violet: "Violet", pink: "Pink", blue: "Blue", mint: "Mint", amber: "Amber" };
 const colors = Object.entries(accents).map(([key, value]) => ({ name: names[key] ?? key, value: css(value) }));
 
-/** Starts the app on the page, with both kinds of document on its shelf. */
-export function startQuire() {
-    if (host) void startApp(host, { kinds: [markdown({ colors, sample: SAMPLE }), img()], top: document.querySelector<HTMLElement>(".quire-top") ?? undefined });
+/** Starts the app on the page, with both kinds of document on its shelf; `home` is the kind whose own page it is ("md", "img"), whose ways to start are the ones offered there. */
+export function startQuire(home: "md" | "img") {
+    if (host) void startApp(host, { kinds: [markdown({ colors, sample: SAMPLE }), img()], home, top: document.querySelector<HTMLElement>(".quire-top") ?? undefined });
 }

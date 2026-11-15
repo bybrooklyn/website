@@ -26,6 +26,12 @@ import { flowMenu, make, type Box } from "./ui";
 export interface AppOptions {
     /** The kinds of document, the first taking any document no other claims (kind.ts). */
     kinds: Kind[];
+    /**
+     * The key of the kind whose own page this is (mdQuire's, imgQuire's). Its ways to start are the only ones offered, it alone takes a
+     * file chosen, pasted or dropped on the home screen, and the home screen says its words; documents of every kind are still listed
+     * and open, each of another kind saying which it is. Not given, every kind's ways are offered, in the kinds' order.
+     */
+    home?: string;
     /** The network, for the repository store; the browser's own if not given. */
     fetcher?: Fetcher;
     /** The name of the browser database. */
@@ -51,6 +57,11 @@ function local(): Storage | undefined {
 /** Starts the app on an element. */
 export async function startApp(host: HTMLElement, options: AppOptions) {
     const kinds = options.kinds;
+    // the kind whose own page this is, if it is one kind's; and the kinds whose ways to start the page offers: that one alone, or all
+    const own = kinds.find((each) => each.key === options.home);
+    const offered = own ? [own] : kinds;
+    // the kind a new document is when nothing says which: the page's own, else the first
+    const first = own ?? kinds[0]!;
     const kindOf = (name: string, main?: string) => kindFor(kinds, name, main);
     // which files in a folder or chosen from the computer are documents: those with an ending some kind opens; and the main files a `.quire` may keep its text in
     const openable = { opens: (name: string) => /\.[a-z0-9]{1,8}$/i.test(name) && kinds.some((each) => each.opens(name)), mains: kinds.flatMap((each) => (each.main ? [each.main] : [])) };
@@ -121,13 +132,13 @@ export async function startApp(host: HTMLElement, options: AppOptions) {
         start: begin,
     });
     let kind = kindOf(start?.entry.name ?? "", start?.found.main);
-    if (!start) kind = kinds[0]!;
+    if (!start) kind = first;
     let editing: Editing = kind.mount(host, context(start));
 
     /** Every kind's ways to start, with the kind each belongs to. */
     function starts(): [Template, Kind][] {
         const today = new Date();
-        return kinds.flatMap((each) => each.starts(today).map((template): [Template, Kind] => [template, each]));
+        return offered.flatMap((each) => each.starts(today).map((template): [Template, Kind] => [template, each]));
     }
 
     /** Puts a kind's editor in the frame in place of the one there, once that one may be left; false when the writer stays. */
@@ -158,7 +169,14 @@ export async function startApp(host: HTMLElement, options: AppOptions) {
     // ---- choosing files and folders ----
     const chooser = make("input", "quire-file");
     chooser.type = "file";
-    chooser.accept = kinds.map((each) => each.files.chooser).join(",");
+    // what Open offers: every kind's files, or on one kind's own page its files and any `.quire`
+    const offeredToOpen = own ? `${own.files.chooser},.quire` : kinds.map((each) => each.files.chooser).join(",");
+    chooser.accept = offeredToOpen;
+    /** Asks for a file: of the kinds given (a picture, for a new one from a file), else whatever Open offers. */
+    const pick = (accept = offeredToOpen) => {
+        chooser.accept = accept;
+        chooser.click();
+    };
     chooser.tabIndex = -1;
     chooser.setAttribute("aria-hidden", "true");
     host.append(chooser);
@@ -175,7 +193,7 @@ export async function startApp(host: HTMLElement, options: AppOptions) {
     });
     /** A file some kind makes a new document of (a picture, for imgQuire): that kind's editor takes it, and the home screen makes way. True when a kind took it. */
     async function takeIn(file: File): Promise<boolean> {
-        const taker = kinds.find((each) => each.takes?.(file));
+        const taker = offered.find((each) => each.takes?.(file));
         if (!taker) return false;
         if (!(await into(taker)) || !(await editing.take?.(file))) return true;
         await showEditor();
@@ -183,7 +201,7 @@ export async function startApp(host: HTMLElement, options: AppOptions) {
         return true;
     }
     // a picture pasted or dropped on the home screen becomes a document of the kind that takes it; in an editor, the editor's own
-    const fileIn = (data: DataTransfer | null) => [...(data?.files ?? [])].find((file) => kinds.some((each) => each.takes?.(file)));
+    const fileIn = (data: DataTransfer | null) => [...(data?.files ?? [])].find((file) => offered.some((each) => each.takes?.(file)));
     document.addEventListener("paste", (event) => {
         const file = shelf.shown() && !event.defaultPrevented ? fileIn(event.clipboardData) : undefined;
         if (!file) return;
@@ -229,7 +247,7 @@ export async function startApp(host: HTMLElement, options: AppOptions) {
         }
         const places: Place[] = [
             { key: "browser", label: "This browser", current: shown === browser, choose: () => ((shown = browser), void showDocuments()) },
-            { key: "file", label: "A file, as a copy", choose: () => chooser.click() },
+            { key: "file", label: "A file, as a copy", choose: () => pick() },
             able.file ? { key: "in-place", label: "A file, saving to it", choose: () => void openInPlace() } : { key: "in-place", label: "", absent: "This browser cannot save to a file; Chrome and Edge can.", choose: () => {} },
             able.folder ? { key: "folder", label: folder ? `Folder: ${folder.label}` : "A folder", current: shown === folder && !!folder, choose: () => (folder && shown !== folder ? ((shown = folder), void showDocuments()) : void openFolder()) } : { key: "folder", label: "", absent: "Folders can be opened in Chrome and Edge.", choose: () => {} },
             github
@@ -257,8 +275,8 @@ export async function startApp(host: HTMLElement, options: AppOptions) {
             create: async () => {
                 menu.close(false);
                 // Google Drive keeps documents by name, as the browser does, and so makes `.quire` ones with a plain name
-                // a new document is the first kind's, whichever is open
-                if (!(await into(kinds[0]!))) return;
+                // a new document is the page's own kind, or the first kind's, whichever is open
+                if (!(await into(first))) return;
                 const made = shown === browser || shown === drive.store() ? editing.create(shown, "Untitled", "", emptyParts()) : editing.create(shown, fileName("Untitled"));
                 if (await made) await showEditor();
                 editing.focus();
@@ -298,7 +316,7 @@ export async function startApp(host: HTMLElement, options: AppOptions) {
             if (editing.current().store === was) {
                 const newest = (await browser.list())[0];
                 if (newest) await openIn(browser, newest);
-                else if (await into(kinds[0]!)) await editing.create(browser, "Untitled", "", emptyParts());
+                else if (await into(first)) await editing.create(browser, "Untitled", "", emptyParts());
             }
             shown = browser;
             await placesChanged();
@@ -380,7 +398,7 @@ export async function startApp(host: HTMLElement, options: AppOptions) {
         const was = drive.store();
         if (was && editing.current().store === was) {
             const newest = (await browser.list())[0];
-            if (!(await (newest ? openIn(browser, newest) : into(kinds[0]!).then((ok) => ok && editing.create(browser, "Untitled", "", emptyParts()))))) return;
+            if (!(await (newest ? openIn(browser, newest) : into(first).then((ok) => ok && editing.create(browser, "Untitled", "", emptyParts()))))) return;
         }
         drive.signOut();
         shown = browser;
@@ -398,7 +416,7 @@ export async function startApp(host: HTMLElement, options: AppOptions) {
     const keyFor = (store: Store, id: string) => `${keyOf(store)}:${id}`;
     const shelf = createShelf({
         templates: starts().map(([template]) => template),
-        start: (template, from) => void startFrom(template, from, starts().find(([each]) => each.key === template.key)?.[1] ?? kinds[0]!),
+        start: (template, from) => void startFrom(template, from, starts().find(([each]) => each.key === template.key)?.[1] ?? first),
         documents: async () => {
             const places = [browser, github, drive.store(), folder, files].filter((store): store is Store => !!store);
             const lists = await Promise.all(places.map(async (store) => ({ store, entries: await store.list().catch(() => []) })));
@@ -407,7 +425,7 @@ export async function startApp(host: HTMLElement, options: AppOptions) {
                 name,
                 // the two places that are this machine are said in lowercase, as the row's other words are; a folder or a repository keeps its own name;
                 // a document of a kind other than the first says its kind first
-                place: [kindOf(name, main).row, store === browser ? "this browser" : store === files ? "this computer" : store.label].filter(Boolean).join(", "),
+                place: [kindOf(name, main) === first ? undefined : kindOf(name, main).row, store === browser ? "this browser" : store === files ? "this computer" : store.label].filter(Boolean).join(", "),
                 modified,
                 open: (from) => void enter(store, { id, name, ...(main ? { main } : {}) }, from),
                 rename: store.can.rename ? async (wanted) => void (await store.rename(id, wanted).catch(() => undefined), await shelf.refresh()) : undefined,
@@ -416,12 +434,16 @@ export async function startApp(host: HTMLElement, options: AppOptions) {
             }));
         },
         ways: () => [
-            { label: "open a file", run: () => chooser.click() },
+            { label: "open a file", run: () => pick() },
             ...(able.folder ? [{ label: "open a folder", run: (button: HTMLElement) => ((from = button), void openFolder()) }] : []),
             { label: github ? "repository settings" : "connect a repository", run: (button: HTMLElement) => ((from = button), showRepository()) },
             ...(drive.state() !== "not set up" ? [{ label: "google drive", run: (button: HTMLElement) => void openDrive(button) }] : []),
-            ...kinds.flatMap((each) => (each.quiet?.() ?? []).map((template) => ({ label: template.label, run: (button: HTMLElement) => void startFrom(template, button, each) }))),
+            ...offered.flatMap((each) => (each.quiet?.() ?? []).map((template) => ({ label: template.label, run: (button: HTMLElement) => void startFrom(template, button, each) }))),
         ],
+        // on one kind's own page: how its documents arrive, a new one from a file where it makes one of a file, and its words for an empty shelf
+        ...(own?.lead ? { lead: own.lead } : {}),
+        ...(own?.none ? { none: own.none } : {}),
+        ...(own?.takes ? { more: () => [{ label: "from a file", run: () => pick(own.files.chooser) }] } : {}),
     });
     host.append(shelf.element);
 

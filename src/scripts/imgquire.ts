@@ -3,4 +3,4 @@
 
 import { startQuire } from "./quire-page";
 
-startQuire();
+startQuire("img");
