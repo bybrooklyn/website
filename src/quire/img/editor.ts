@@ -26,6 +26,8 @@ import { createStage, setPerspective, setTurn, type Pen, type Tool } from "./sta
 import { perspectiveMap, rectangleOf, type Corners, type Perspective } from "./perspective";
 import { apply, ratioOf } from "./homography";
 import { grey, segments, straighten } from "./lines";
+import { createRepair } from "./repair";
+import { jpegFacts, worthRepairing } from "./deblock";
 import { createReading } from "./reading";
 import { gradePanel } from "./grade-panel";
 import { gradeMore } from "./grade-more";
@@ -200,6 +202,9 @@ export function mountEditor(host: HTMLElement, context: Context) {
         facts.textContent = picture ? factsSaid(look(picture), picture.original.bytes, kindOf(picture.original)) : "";
         reading.clear();
         stage.clear();
+        originalBytes = undefined;
+        repairable = false;
+        repaired = undefined;
         target = undefined;
         making = undefined;
         measuredMasks = undefined;
@@ -217,6 +222,9 @@ export function mountEditor(host: HTMLElement, context: Context) {
         original = found;
         const bytes = new Uint8Array(await found.arrayBuffer());
         said = factsOf(bytes);
+        // a JPEG compressed hard enough to be worth repairing, kept upright as stored (the repair follows the file's own grid)
+        originalBytes = bytes;
+        repairable = worthRepairing(jpegFacts(bytes)) && (!said.orientation || said.orientation === 1);
         const colored = await profileOf(bytes);
         if (token !== loading) return;
         colors = colored.space;
@@ -612,15 +620,57 @@ export function mountEditor(host: HTMLElement, context: Context) {
     let cutBrush: "keep" | "remove" | undefined;
     let cutBusy = false;
     const cutAsking = createAsking({ finder: () => sharedFinder, returnTo: () => buttons.cutout, moved: () => refresh() });
-    /** The original as a bitmap, its numbers as they are, for the models and for cutting out. */
-    const sourceBitmap = async () => (shownSource ? createImageBitmap(shownSource, { colorSpaceConversion: "none", premultiplyAlpha: "none" }) : undefined);
-    /** After the steps change: the cut-out made again when it changed, and put on the stage in place of the original (or the original back). */
+    /** The original as a bitmap, its numbers as they are (repaired, when that step is on), for the models and for cutting out. */
+    const sourceBitmap = async () => {
+        const base = await baseSource();
+        return base ? createImageBitmap(base, { colorSpaceConversion: "none", premultiplyAlpha: "none" }) : undefined;
+    };
+    // ---- repairing a JPEG: the original's pixels with its blocks and ringing taken out (deblock.ts), in a worker ----
+    const repairer = createRepair();
+    let originalBytes: Uint8Array | undefined;
+    let repairable = false;
+    let repaired: Promise<ImageBitmap | undefined> | undefined;
+    /** The pixels the steps start from: the picture as it came, or with its JPEG repaired when that step is on, worked out once for each picture. */
+    async function baseSource(): Promise<Blob | ImageBitmap | undefined> {
+        if (!shownSource || !picture || !look(picture).repair || !repairable || !originalBytes) return shownSource;
+        repaired ??= repairNow(shownSource, originalBytes);
+        return (await repaired) ?? shownSource;
+    }
+    async function repairNow(source: Blob, bytes: Uint8Array): Promise<ImageBitmap | undefined> {
+        const token = loading;
+        const bitmap = await createImageBitmap(source, { colorSpaceConversion: "none", premultiplyAlpha: "none" });
+        const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+        const drawing = canvas.getContext("2d")!;
+        drawing.drawImage(bitmap, 0, 0);
+        bitmap.close();
+        frame.status.say("Repairing", "Taking the JPEG's blocks and ringing out");
+        const started = performance.now();
+        const made = await repairer.run(bytes, drawing.getImageData(0, 0, canvas.width, canvas.height)).catch(() => undefined);
+        if (token !== loading) return undefined;
+        if (!made) {
+            frame.status.say("Not repaired", "This JPEG could not be repaired", "warn");
+            return undefined;
+        }
+        frame.status.say("Repaired", `The JPEG's blocks and ringing taken out in ${((performance.now() - started) / 1000).toFixed(1)} s`);
+        return createImageBitmap(made, { premultiplyAlpha: "none", colorSpaceConversion: "none" });
+    }
+    /** Repairs the JPEG, or stops repairing it, as one step. */
+    function toggleRepair() {
+        if (!picture || !repairable) return;
+        commit(look(picture).repair ? history.now().filter((step) => step.type !== "repair") : setOnly(history.now(), { type: "repair" }));
+    }
+    /** After the steps change: the cut-out made again when it changed (or the repair), and put on the stage in place of the original (or the original back). */
     async function showCut() {
         const cut = picture ? look(picture).cutout : undefined;
-        const key = cut ? JSON.stringify(cut) : "";
+        const key = (cut ? JSON.stringify(cut) : "") + (picture && look(picture).repair && repairable ? " repaired" : "");
         if (key === cutKey || !shownSource) return;
         cutKey = key;
-        if (!cut) return void (await stage.swap(shownSource));
+        if (!cut) {
+            const base = await baseSource();
+            if (base && key === cutKey) await stage.swap(base);
+            estimate.soon();
+            return;
+        }
         const source = await sourceBitmap();
         if (!source) return;
         const made = await cutOut(source, cut);
@@ -1321,6 +1371,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
                     [
                         { label: "Grade", icon: tick(grading.isOpen(), "paper"), hint: "G", key: "grade", pressed: grading.isOpen(), disabled: !picture, run: () => showGrade() },
                         { label: "Auto", icon: "paper", key: "grade-auto", disabled: !picture, run: () => void autoGrade() },
+                        { label: "Repair JPEG", icon: tick(!!picture && !!look(picture).repair, "paint"), key: "repair", pressed: !!picture && !!look(picture).repair, disabled: !picture || !repairable, run: () => toggleRepair() },
                         { label: "Remove the grade", icon: "trash", disabled: !history.now().some((step) => step.type === "grade"), run: () => commit(history.now().filter((step) => step.type !== "grade")) },
                     ],
                 ),
@@ -1553,6 +1604,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
             estimate.cancel();
             reading.destroy();
             measure.destroy();
+            repairer.destroy();
             finding.destroy();
             grading.panel.remove();
             document.removeEventListener("paste", pasted);

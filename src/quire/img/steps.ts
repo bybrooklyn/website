@@ -56,8 +56,8 @@ export type CutStep = { type: "cutout" } & Cut;
 /** The picture straightened by a perspective (perspective.ts): the keystone dials, and corners set by hand with their rectangle's proportions. */
 export type PerspectiveStep = { type: "perspective" } & Perspective;
 
-/** One thing done to the picture. A resize with no height keeps the crop's shape. A turn levels the picture (degrees, clockwise), the crop then upright on the turned picture; a perspective straightens it before it is turned. A cut-out takes the background away first, before anything else is drawn. */
-export type Step = { type: "crop"; rect: Rect } | { type: "resize"; width: number; height?: number; filter: Filter } | { type: "turn"; angle: number } | PerspectiveStep | ({ type: "cover" } & Cover) | GradeStep | PartStep | CutStep | Mark;
+/** One thing done to the picture. A resize with no height keeps the crop's shape. A turn levels the picture (degrees, clockwise), the crop then upright on the turned picture; a perspective straightens it before it is turned. A repair takes a JPEG's blocks and ringing out of the original's pixels (deblock.ts) before anything else. A cut-out takes the background away first, before anything else is drawn. */
+export type Step = { type: "crop"; rect: Rect } | { type: "resize"; width: number; height?: number; filter: Filter } | { type: "turn"; angle: number } | PerspectiveStep | { type: "repair" } | ({ type: "cover" } & Cover) | GradeStep | PartStep | CutStep | Mark;
 
 /** A step as the document keeps it: with an id of its own, and switched off if it is. */
 export type Kept = Step & { id: string; off?: boolean };
@@ -95,6 +95,8 @@ export interface Look {
     perspective?: Matrix;
     /** The picture cut out of its background, if it is. */
     cutout?: Cut;
+    /** Whether a JPEG's blocks and ringing are taken out of the original's pixels first. */
+    repair?: true;
 }
 
 /** The largest side a picture may be made, and the most steps a file is read with: beyond these a file is taken to be damaged. */
@@ -132,6 +134,7 @@ export function look(picture: Picture): Look {
     const marks: Mark[] = [];
     const grades: Look["grades"] = [];
     let cutout: Cut | undefined;
+    let repair = false;
     for (const step of picture.steps) {
         if (step.off) continue;
         if (step.type === "grade") grades.push({ id: step.id, grade: gradeOf(step) });
@@ -143,11 +146,12 @@ export function look(picture: Picture): Look {
             filter = step.filter;
         } else if (step.type === "cover") covers.push({ rect: step.angle ? step.rect : within(step.rect, original), color: step.color, ...(step.angle ? { angle: step.angle } : {}) });
         else if (step.type === "cutout") cutout = cutOf(step);
+        else if (step.type === "repair") repair = true;
         else if (step.type !== "turn" && step.type !== "perspective") marks.push(withoutId(step) as Mark);
     }
     const width = clamp(Math.round(crop.width * across), 1, LIMITS.side);
     const height = clamp(Math.round(crop.height * down), 1, LIMITS.side);
-    return { crop, width, height, filter, covers, marks, grades, ...(turn.degrees ? { turn: turn.degrees } : {}), ...(perspective ? { perspective } : {}), ...(cutout ? { cutout } : {}) };
+    return { crop, width, height, filter, covers, marks, grades, ...(turn.degrees ? { turn: turn.degrees } : {}), ...(perspective ? { perspective } : {}), ...(cutout ? { cutout } : {}), ...(repair ? { repair: true as const } : {}) };
 }
 
 /** A rectangle with its corners in either order, kept inside a box and at least a pixel each way, in whole pixels. */
@@ -227,7 +231,7 @@ export function toggle(steps: Kept[], id: string): Kept[] {
 }
 
 /** The list with the picture's one crop (or one resize, or its whole grade) set: the step changed where there is one, added where there is not. */
-export function setOnly(steps: Kept[], step: Extract<Step, { type: "crop" | "resize" | "grade" | "turn" | "perspective" | "cutout" }>): Kept[] {
+export function setOnly(steps: Kept[], step: Extract<Step, { type: "crop" | "resize" | "grade" | "turn" | "perspective" | "repair" | "cutout" }>): Kept[] {
     const there = steps.find((each) => each.type === step.type);
     return there ? change(steps, there.id, step) : add(steps, step);
 }
@@ -326,6 +330,7 @@ function readStep(value: unknown): Step | undefined {
         return angle === undefined ? undefined : { type: "turn", angle: Math.round(angle * 100) / 100 };
     }
     if (step.type === "perspective") return readPerspective(step);
+    if (step.type === "repair") return { type: "repair" };
     // a box's, a text's or a cover's own turn, if it has one
     const angle = number(step.angle, -MOST_TURN, MOST_TURN);
     const turned = angle ? { angle } : {};
