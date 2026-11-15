@@ -22,6 +22,10 @@ remover (`cutout.md`) is to be one of its tools as well as a page of its own.
 - `geometry.ts`: fitting, zooming about a point, and the crop's frame dragged, nudged and held to a shape.
 - `stage.ts`: the picture on the screen and the tools that work on it.
 - `export.ts`: the formats as one table, the weight search, file names, the clipboard.
+- `profile.ts`: colour profiles: checked and bounded, put into a JPEG, WebP and PNG, the Display P3 profile
+  written from its published numbers, and Display P3 made sRGB.
+- `turn.ts`: the horizon's arithmetic: a place on the turned picture and back, the largest upright rectangle
+  inside it, a crop fitted inside, and the turn a line drawn along the horizon asks for.
 - `metadata.ts`: a picture's Exif, XMP, IPTC and colour profile read and written by hand, through the
   core's walkers of a JPEG, PNG and WebP (`core/picture-bytes.ts`) and its own of AVIF, HEIC and JPEG XL
   boxes.
@@ -150,7 +154,7 @@ with a tooltip saying what it is good for:
 | JPEG | jpegli 031a007, `-Oz` | 32 KB | quality, progressive 4:2:0, laid on white |
 | WebP | libwebp f9c049d, `-Oz` | 58 KB | quality, method 4 |
 | AVIF | libavif 90d3b66 with libaom bcc98e0, `-Os`, 8-bit | 779 KB | quality, speed 8 |
-| JPEG XL | libjxl 9e02071, `-Os` | 552 KB | quality (libjxl's distance), effort 3 |
+| JPEG XL | libjxl 9e02071, `-Os` | 554 KB | quality (libjxl's distance), effort 3 |
 | PNG | oxipng 10.2.1, Rust `opt-level "s"` | 62 KB | level 2 |
 | WebP lossless | the WebP module | | preset 6 |
 | JPEG XL lossless | the JPEG XL module | | effort 3 |
@@ -348,6 +352,83 @@ packed, sent and drawn: 2.4 ms on a 12 megapixel photograph and 2.5 to 3.6 ms at
 with no grade costs what it did (7.5 ms a frame of the crop's drag on SwiftShader). The histogram and waveform
 of a 200 by 150 copy with every control: 18 ms, in their worker. A part's layer: a gradient 1.3 ms, with a 100
 pixel feather 25 ms, a stroke of 60 places 6 ms (on the page's thread, when the shape changes).
+
+**Colours going out.** A picture's colour profile goes out with it in every format: the original's own profile
+byte for byte, after it is checked (at least 132 bytes and at most 4 MB, no longer in its header than the bytes
+there are, signed `acsp`, for RGB numbers, at most 200 tags, each inside it); a broken one is never carried and
+the picture is taken to be sRGB, said to be a guess. A PNG's profile is read from its iCCP chunk inflated by the
+browser's own `DecompressionStream`, stopped past 4 MB; an AVIF's or HEIC's from its colour box, and one that says
+Display P3 by numbers (its nclx box: primaries 12) is given the Display P3 profile written by hand in `profile.ts`
+from P3's published primaries and white (made D50 by Bradford's adaptation) and sRGB's curve as a parametric curve
+of type 3, 532 bytes, whose red, green and blue match Apple's own profile to within 0.0005. Where each format keeps
+it: a JPEG's APP2 segments (`ICC_PROFILE`, 65,519 bytes a segment, after the JFIF header and Exif), a WebP's ICCP
+chunk straight after its extended header (made where there was none, its profile flag set), a PNG's iCCP chunk
+after its header, the profile deflated by the browser's `CompressionStream`; AVIF and JPEG XL through their
+encoders, whose wrappers now take a profile as options 12 and 13 (libavif's `avifImageSetProfileICC`, libjxl's
+`JxlEncoderSetICCProfile`, its pixels then taken to be in that profile; the two modules were linked again from the
+libraries already built and pinned anew). libjxl keeps a Display P3 profile inside its codestream, as numbers in a
+lossy file and compressed in a lossless one, where only a decoder reads it.
+
+Export offers, for a Display P3 picture only, Colors: Display P3 (the start: its own colors, with its profile) or
+sRGB (converted, for places that ignore profiles). The conversion is done on the card in the pass down, after the
+grade and before the result is rounded: the numbers made linear by sRGB's curve, the matrix from linear P3 to
+linear sRGB worked out from the two sets of primaries, each channel clipped to the range, and sRGB's curve again;
+P3's own red (255, 0, 0) comes out as sRGB's (255, 0, 0). The choice is kept with the export's settings. The
+clipboard always takes sRGB, since most places a picture is pasted into read no profile: as it looks, converted on
+the card; as the export is set, the export decoded by the browser through its profile.
+
+On the screen a Display P3 picture is drawn into a canvas put in Display P3 (WebGL2's `drawingBufferColorSpace`,
+WebGPU's `colorSpace`), so a screen that shows P3 shows its colors and the browser maps them for one that cannot;
+where the canvas has no Display P3 the picture is made sRGB as it is drawn, by the same conversion, the original
+seen while held and left of the split too.
+
+Measured (`profile.test.ts`): a P3 canvas's red and a green inside sRGB, given out as a PNG with the profile,
+cropped and exported in all seven formats through WebGL2 and WebGPU: each file reads back with its profile byte
+for byte (but JPEG XL, which keeps it in its codestream), its numbers the same (to the bit in the lossless ones,
+within 6 in the lossy), and the browser, drawing each into a P3 canvas through its profile, gives back the same
+numbers, JPEG XL too; made sRGB, the red is (255, 0, 0) and the file has no profile; and the screen's canvas is
+handed P3's numbers in Display P3 and, made sRGB, the converted ones within one. Hostile profiles (cut short, too
+long in their header, unsigned, for CMYK, a tag table or tag past the end, 100,000 tags, over 4 MB, a PNG whose
+profile inflates past 4 MB or is not deflated) are refused in under 50 ms all told.
+
+**The horizon.** The crop's strip has a dial: a ruler of degrees under a fixed middle line, dragged from wherever
+it is pressed (the whole width 30 degrees, a tenth as far with Shift), the turn said above it in tenths
+("2.4°"), snapping to level within a quarter of a degree, at most 15 either way; the arrow keys turn it by a tenth
+(Shift, a degree), 0 or a double press levels it. While it is dragged the picture turns live with a faint grid of
+ninths over the frame; letting go is one step, one undo, a `turn` step in `steps.json` (degrees, clockwise). Beside
+it, a line button: then a drag on the picture draws a line, and letting go turns the picture so that the line is
+level, or plumb when it is nearer upright than flat. Auto is left out: finding the horizon by plain arithmetic
+(the dominant long edges) could not be made reliable on the drawn fixtures here, and a wrong level is worse than
+none.
+
+The picture turns about its middle and is cut, with no crop of her own, to the largest upright rectangle inside
+the turned one: when the shorter side is short against the longer (`short ≤ 2 sin cos long`) it touches two
+corners and has half the shorter side over the sine and the cosine; otherwise it touches all four sides and solves
+`w cos + h sin = W`, `w sin + h cos = H`; rounded inward to whole pixels. The test checks it lies inside, touches
+(a pixel more each way does not), and is within 0.2 percent of a search over 2,000 shapes, for wide, tall, square
+and thin pictures at 3 to 15 degrees (`turn.test.ts`). A crop of her own is kept where it lies on the turned
+picture, else made smaller about its middle, its shape kept; a crop's frame dragged stops where it would leave the
+picture. While cropping the whole turned picture is shown, fitted.
+
+Everything on the picture stays where it was put on it: covers, marks, parts and found words are kept in the
+original's pixels as before and turn with the picture. A cover, a box or a text made on a turned picture is upright
+on the screen: it keeps a turn of its own (`angle`, the picture's turn back) and so turns with the picture after.
+On the card a turned picture is drawn as its pieces turned, four corners each, nearest pixels no longer used; when
+flattening, each piece of the result reads the part of the original under it (the box round the piece turned back,
+and four pixels more), the covers painted in first (a cover with a turn of its own drawn at its four corners grown
+by half a pixel's diagonal, so that every pixel it touches is painted), then turns it upright in a pass of its own
+(a six by six Lanczos filter at one to one) before the two passes of the resize; a part's mask is read at the place
+turned back. With no turn, everything is drawn and flattened exactly as before. The marks are drawn by the 2D
+canvas turned the same way.
+
+Measured: through crops, a shrink, an enlargement and covers of both kinds, WebGL2 flattens a turned picture to the
+arithmetic done on the processor within one (but the pixels near a turned cover's edge, which a card's rasterizer
+may take either way and the test leaves out: 4 percent of a shrunk result), and WebGPU to WebGL2 within one
+(`gl.test.ts`, `gpu.test.ts`); nothing under a turned cover is left. A round part painted on a picture turned 12
+degrees is graded where it is on the turned picture, the same through both (`turn.test.ts`). On the page, turned
+eight degrees by the dial's keys: a cover made before is picked by a press where it now is, a word read is hidden
+by a press on it, a box made then is upright on the screen, and the export draws the cover and the arrow in their
+places (`stage.test.ts`).
 
 **As a Quire.** Menus File, Edit, View, Image, Tools, Help, as one table, an icon on every line, ticks for
 what is on, submenus for Download, Copy as, Zoom, Crop shape, Resize filter, Mark color and Thickness;
@@ -582,22 +663,22 @@ only with `--enable-unsafe-webgpu`, which the drawing tests pass.
 - The tests hold that requests carry nothing of the picture through Chromium's own record of requests,
   with Hugging Face answered from the trial copies; a visitor's real download from Hugging Face (its
   redirects to its content network) was not made here.
-- Grading: the horizon (straightening) is not built: the drawing's pieces and every place on the stage are level
-  with the picture, and a turn needs the resampler and those places to turn too. Perspective, JPEG repair and
-  restoring detail are left for later.
+- The horizon: Auto is not offered (no reliable arithmetic for it was found). A turned picture is drawn smoothed
+  past one to one, not as square pixels. The crop's view is not fitted again when the turn changes, so at 15
+  degrees the corners of the turned picture can reach past the room until Ctrl+0. A picture resized to another
+  shape (width and height both given) and turned has its covers and marks drawn by a turn in the resized pixels,
+  which skews them a little. A cover made on a turned picture takes its color from the ring round the upright box
+  about it. Perspective, JPEG repair and restoring detail are left for later.
 - Finding: Better's Subject takes about 20 s, since ormbg will not run on the card's runtime; its SAM 2.1 decoder
   runs there but gives a wrong mask, so it runs on WebAssembly. The models were tried on a drawn scene, not on
   photographs of people, skies or things; MODNet is made for portraits. The found mask is kept at 512 a side.
-- Colour profiles in exports, from before grading: an exported picture that has any step carries no colour
-  profile (the encoders write none and the metadata writer adds none), so a Display P3 photograph, graded or
-  only cropped, is read as sRGB by whatever opens the export, its colors duller; only a picture with no steps
-  given in its own format keeps its profile. The screen too shows a P3 picture's numbers as sRGB. The fix is not
-  small: either the export converts P3 to sRGB in the float pass (a matrix in linear light, with colors outside
-  sRGB clipped or compressed, and the same on the screen), or each format carries the original's profile (a
-  JPEG's APP2 segments and a WebP's ICCP chunk are simple; a PNG's iCCP wants the profile deflated; JPEG XL and
-  AVIF take it through their encoders, which the modules would need to expose).
-  Profiles other than sRGB and Display P3 (Adobe RGB, ProPhoto, a camera's) are graded as sRGB and said to be.
-  A profile's curve is not read: P3 is taken to use sRGB's, as Display P3 does.
+- Colour profiles: only Display P3 can be converted to sRGB; another profile (Adobe RGB, ProPhoto, a camera's) is
+  carried out byte for byte and its picture graded as sRGB and said to be, and Copy as it looks hands the clipboard
+  its numbers as if they were sRGB. Colors outside sRGB are clipped channel by channel, which can shift the hue of
+  the most saturated colors. A profile's curve is not read: P3 is taken to use sRGB's, as Display P3 does. The
+  export panel's side by side samples are drawn in an sRGB canvas, so a P3 picture's samples look duller there
+  than the export will. The marks are drawn in sRGB numbers onto a P3 picture's, so their colors come out a little
+  more saturated in a P3 export. Tried in Chromium only; the profile in a JPEG XL is read back only by decoding.
 - Grading: a part's layer is drawn again on the page's thread whenever its shape changes, so painting with a
   wide feather draws about 25 ms a frame; masks are at most 1024 a side, so a hard brush on a 50 megapixel
   photograph has an edge about eight pixels soft. A .cube larger than 33 a side is kept at 33, sampled between
@@ -614,9 +695,8 @@ only with `--enable-unsafe-webgpu`, which the drawing tests pass.
 
 ## Next slices, in order
 
-1. The horizon straightened as a step, and colour profiles carried through or converted on export.
-2. The cut-out ([cutout](cutout.md)), which can share the part models.
-3. Perspective, repairing what JPEG took, and restoring detail.
-4. More marks: numbered steps, a highlighter, a magnifier, a spotlight, outlined captions.
-5. Many at once: batches through the same steps and export (a look given to a batch).
-6. From the phone, and opening a picture from mdQuire and back.
+1. The cut-out ([cutout](cutout.md)), which can share the part models.
+2. Perspective, repairing what JPEG took, and restoring detail.
+3. More marks: numbered steps, a highlighter, a magnifier, a spotlight, outlined captions.
+4. Many at once: batches through the same steps and export (a look given to a batch).
+5. From the phone, and opening a picture from mdQuire and back.

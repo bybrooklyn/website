@@ -5,13 +5,15 @@
 // libjxl for JPEG XL and oxipng for PNG, each fetched only when its format is picked (codec-run.ts);
 // should one not arrive, JPEG, WebP and PNG fall back to the browser's own. None of them writes
 // metadata, so where, when and with what a photograph was taken never leaves with it; an original
-// given out unchanged has those cut out without being encoded again (core/picture-bytes.ts).
+// given out unchanged has those cut out without being encoded again (core/picture-bytes.ts). The
+// picture's colour profile goes out with it in every format (profile.ts), unless it is converted to sRGB.
 
 import { crc32 } from "../core/zip";
 import { withoutMetadata } from "../core/picture-bytes";
 import { fileName } from "../core/store";
 import { encodeWith } from "./codec-run";
 import { withMetadata } from "./metadata";
+import { deflated, withProfile } from "./profile";
 
 /** A format a picture can be written in, and how. `lossy` says whether a quality and a weight to aim for mean anything; `short` is its button's word, `tip` what it is good for. */
 export interface Format {
@@ -25,8 +27,8 @@ export interface Format {
     encode(pixels: ImageData, quality: number, meta?: Meta): Promise<Blob>;
 }
 
-/** The metadata that goes out with a picture, as metadata.ts makes it: an Exif block, an XMP packet, IPTC records. */
-export type Meta = { exif?: Uint8Array; xmp?: string; iptc?: Uint8Array };
+/** The metadata that goes out with a picture, as metadata.ts makes it: an Exif block, an XMP packet, IPTC records; and the colour profile its numbers are in (profile.ts), carried byte for byte. */
+export type Meta = { exif?: Uint8Array; xmp?: string; iptc?: Uint8Array; icc?: Uint8Array };
 
 /** Pixels laid on white, for a format with no transparency, so that what was clear is white rather than black. */
 export function onWhite(pixels: Uint8ClampedArray): Uint8ClampedArray<ArrayBuffer> {
@@ -45,8 +47,8 @@ const coded =
     (name: string, type: string, speed: number, options: Record<number, number> = {}, solid = false, otherwise?: (pixels: ImageData, quality: number) => Promise<Blob>) =>
     async (pixels: ImageData, quality: number, meta: Meta = {}): Promise<Blob> => {
         const given = solid ? new ImageData(onWhite(pixels.data), pixels.width, pixels.height) : pixels;
-        // AVIF's encoder writes the metadata into its file itself; the others' files take it afterwards
-        const itself = name === "avif" ? { exif: meta.exif, xmp: meta.xmp === undefined ? undefined : new TextEncoder().encode(meta.xmp) } : undefined;
+        // AVIF's encoder writes the metadata and the profile into its file itself, JPEG XL's the profile; the others' files take them afterwards
+        const itself = name === "avif" ? { exif: meta.exif, xmp: meta.xmp === undefined ? undefined : new TextEncoder().encode(meta.xmp), icc: meta.icc } : name === "jxl" && meta.icc ? { icc: meta.icc } : undefined;
         let made: Blob;
         try {
             made = await encodeWith(name, given, Math.round(quality * 100), speed, options, type, itself);
@@ -54,8 +56,10 @@ const coded =
             if (!otherwise) throw error;
             made = await otherwise(given, quality);
         }
-        if (itself || (!meta.exif && !meta.xmp && !meta.iptc)) return made;
-        return new Blob([withMetadata(new Uint8Array(await made.arrayBuffer()), meta, crc32, pixels) as BlobPart], { type });
+        if (name === "avif" || (!meta.exif && !meta.xmp && !meta.iptc && !meta.icc)) return made;
+        let bytes = withMetadata(new Uint8Array(await made.arrayBuffer()), meta, crc32, pixels);
+        if (meta.icc && name !== "jxl") bytes = withProfile(bytes, meta.icc, crc32, pixels, type === "image/png" ? await deflated(meta.icc) : undefined);
+        return new Blob([bytes as BlobPart], { type });
     };
 
 /** Writes pixels through the browser's own encoder, for when one built to WebAssembly cannot be had. */
@@ -85,11 +89,12 @@ export const FORMATS: Format[] = [
 /** A format by its key, PNG if there is no such one. */
 export const formatOf = (key: string): Format => FORMATS.find((format) => format.key === key) ?? FORMATS.find((format) => format.key === "png")!;
 
-/** How a picture is to be exported: its format, its quality from 0 to 1, and a weight in bytes to come in under, if one is set. */
+/** How a picture is to be exported: its format, its quality from 0 to 1, a weight in bytes to come in under, if one is set, and whether a Display P3 picture is made sRGB. */
 export interface Settings {
     format: string;
     quality: number;
     target?: number;
+    srgb?: boolean;
 }
 
 /** What a picture is exported as when nothing has been chosen: WebP at 0.85, the site's own format. */
@@ -101,7 +106,7 @@ export function readSettings(text: string | null | undefined): Settings {
         const kept = JSON.parse(text ?? "null") as Partial<Settings> | null;
         const quality = typeof kept?.quality === "number" && kept.quality >= 0.05 && kept.quality <= 1 ? kept.quality : SETTINGS.quality;
         const target = typeof kept?.target === "number" && kept.target >= 1_000 && kept.target <= 100_000_000 ? Math.round(kept.target) : undefined;
-        return { format: formatOf(String(kept?.format ?? SETTINGS.format)).key, quality, ...(target ? { target } : {}) };
+        return { format: formatOf(String(kept?.format ?? SETTINGS.format)).key, quality, ...(target ? { target } : {}), ...(kept?.srgb === true ? { srgb: true } : {}) };
     } catch {
         return { ...SETTINGS };
     }

@@ -98,6 +98,11 @@ jxl() {
         -DJPEGXL_ENABLE_EXAMPLES=OFF -DJPEGXL_ENABLE_JNI=OFF -DJPEGXL_ENABLE_SJPEG=OFF -DJPEGXL_ENABLE_OPENEXR=OFF \
         -DJPEGXL_BUNDLE_LIBPNG=OFF -DJPEGXL_ENABLE_SKCMS=ON -DJPEGXL_ENABLE_TRANSCODE_JPEG=OFF -DJPEGXL_ENABLE_BOXES=OFF \
         -DJPEGXL_ENABLE_WASM_THREADS=OFF -DJPEGXL_ENABLE_FUZZERS=OFF
+    jxlmodule
+}
+
+# the JPEG XL module linked again from the libraries already built, after a change to its wrapper
+jxlmodule() {
     module jxl "-Os -msimd128 -flto -sDEFAULT_TO_CXX=1 -lc++ -lc++abi" jxl.c -I"$SOURCES/libjxl/lib/include" -I"$WORK/jxl/lib/include" \
         $(find "$WORK/jxl" -name '*.a' | sort)
 }

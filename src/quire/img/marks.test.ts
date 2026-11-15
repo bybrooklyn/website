@@ -4,7 +4,7 @@
 // browser tests of the editor.
 
 import { expect, test } from "bun:test";
-import { headOf, markAt, markBox, moved } from "./marks";
+import { allAt, headOf, markAt, markBox, moved } from "./marks";
 import type { Mark } from "./steps";
 
 const arrow: Mark = { type: "arrow", from: { x: 10, y: 10 }, to: { x: 110, y: 10 }, color: "#d52d00", thickness: 4 };
@@ -31,4 +31,14 @@ test("a moved mark keeps its shape", () => {
     expect(moved(arrow, { x: 5, y: -5 })).toMatchObject({ from: { x: 15, y: 5 }, to: { x: 115, y: 5 } });
     expect(moved(box, { x: 1, y: 1 })).toMatchObject({ rect: { x: 51, y: 51, width: 100, height: 60 } });
     expect(moved(text, { x: -200, y: 0 })).toMatchObject({ at: { x: 0, y: 200 }, text: "Here" });
+});
+
+test("a box and a cover turned on their own are taken where they are turned, and not where they would be upright", () => {
+    const box: Mark = { type: "box", rect: { x: 0, y: 0, width: 200, height: 20 }, color: "#000000", thickness: 4, angle: 30 };
+    // the box's right end, turned 30 degrees about its middle (100, 10): about (186.6, 60)
+    expect(markAt([box], { x: 186.6, y: 60 }, 2)).toBe(0);
+    expect(markAt([box], { x: 200, y: 10 }, 2)).toBe(-1);
+    const cover = { type: "cover" as const, rect: { x: 0, y: 0, width: 200, height: 20 }, angle: -30 };
+    expect(allAt([cover], { x: 150, y: -20 }, 0)).toEqual([0]);
+    expect(allAt([cover], { x: 150, y: 15 }, 0)).toEqual([]);
 });

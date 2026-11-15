@@ -4,23 +4,29 @@
 // grade as they go when given a grade (grade-shader.ts): the screen each pixel drawn, the resampler
 // in its pass down, before the result is rounded.
 
-import type { Backend, Color, Drawn, Grading, Piece, ScreenGrade, Texture } from "./draw";
+import { grownQuad, type Backend, type Drawn, type Fill, type Grading, type Piece, type PieceCover, type Quad, type ScreenGrade, type Texture, type TurnPass } from "./draw";
 import type { Rect } from "./steps";
 import { GRADE_GLSL, ROW } from "./grade-shader";
 
+// a rectangle, or four corners (`quadOn`: the top left and top right in quadA, the bottom left and bottom right in quadB);
+// `flip` is -1 when drawing into a texture, whose first row is the picture's top
 const SCREEN = `#version 300 es
 in vec2 corner;
 uniform vec4 to;
 uniform vec2 canvas;
+uniform int quadOn;
+uniform vec4 quadA;
+uniform vec4 quadB;
+uniform float flip;
 out vec2 place;
 void main() {
     place = corner;
-    vec2 at = to.xy + corner * to.zw;
-    gl_Position = vec4(at.x / canvas.x * 2.0 - 1.0, 1.0 - at.y / canvas.y * 2.0, 0.0, 1.0);
+    vec2 at = quadOn == 1 ? mix(mix(quadA.xy, quadA.zw, corner.x), mix(quadB.xy, quadB.zw, corner.x), corner.y) : to.xy + corner * to.zw;
+    gl_Position = vec4(at.x / canvas.x * 2.0 - 1.0, flip * (1.0 - at.y / canvas.y * 2.0), 0.0, 1.0);
 }`;
 
 // with no grade the programs are built with a `graded` that gives the color back, so that drawing without one costs what it did
-const UNGRADED = "vec3 graded(vec3 c, vec2 place) { return c; }";
+const UNGRADED = "vec3 graded(vec3 c, vec2 place) { return c; } vec3 converted(vec3 c) { return c; }";
 
 const PAINT = (grading: boolean) => `#version 300 es
 precision highp float;
@@ -38,7 +44,8 @@ void main() {
     vec4 found = fill.a >= 0.0 ? fill : texture(image, place);
     if (grade == 1) {
         vec2 at = vec2(gl_FragCoord.x, canvasHeight - gl_FragCoord.y);
-        if (at.x >= split) found.rgb = graded(clamp(found.rgb, 0.0, 1.0), toOriginal.xy + at * toOriginal.zw);
+        // left of the split the original, made sRGB all the same where the screen asks it
+        found.rgb = at.x >= split ? graded(clamp(found.rgb, 0.0, 1.0), toOriginal.xy + at * toOriginal.zw) : converted(clamp(found.rgb, 0.0, 1.0));
     }
     color = vec4(found.rgb * found.a, found.a);
 }`;
@@ -101,6 +108,41 @@ void main() {
     color = found;
 }`;
 
+// a piece of the original turned upright: each pixel of the level piece reads the original about its place there, by a
+// Lanczos filter of six by six at one to one, between the edges of the part given
+const TURN = `#version 300 es
+precision highp float;
+precision highp int;
+uniform highp sampler2D source;
+uniform vec4 turn;
+uniform vec2 back;
+out vec4 color;
+float lanczos(float given) {
+    float x = abs(given);
+    if (x < 1e-5) return 1.0;
+    if (x >= 3.0) return 0.0;
+    float p = 3.14159265358979 * x;
+    return 3.0 * sin(p) * sin(p / 3.0) / (p * p);
+}
+void main() {
+    vec2 q = turn.zw + floor(gl_FragCoord.xy) + 0.5;
+    vec2 u = vec2(turn.x * q.x + turn.y * q.y, -turn.y * q.x + turn.x * q.y) + back;
+    ivec2 size = textureSize(source, 0);
+    vec2 first = floor(u) - 2.0;
+    float wx[6];
+    float wy[6];
+    for (int i = 0; i < 6; i++) { wx[i] = lanczos(first.x + float(i) - u.x); wy[i] = lanczos(first.y + float(i) - u.y); }
+    vec4 sum = vec4(0.0);
+    float total = 0.0;
+    for (int j = 0; j < 6; j++) for (int i = 0; i < 6; i++) {
+        ivec2 at = clamp(ivec2(first) + ivec2(i, j), ivec2(0), size - 1);
+        float w = wx[i] * wy[j];
+        sum += w * texelFetch(source, at, 0);
+        total += w;
+    }
+    color = sum / total;
+}`;
+
 /** The filters by their number in the shaders. */
 const FILTERS = { lanczos: 0, bilinear: 1, nearest: 2 } as const;
 
@@ -127,6 +169,11 @@ export function webgl2(canvas: HTMLCanvasElement | OffscreenCanvas): Backend | u
     const resampling = program(WHOLE, RESAMPLE(false));
     const screenGraded = program(SCREEN, PAINT(true));
     const resamplerGraded = program(WHOLE, RESAMPLE(true));
+    const turning = program(WHOLE, TURN);
+    for (const made of [plain, screenGraded]) {
+        gl.useProgram(made.made);
+        gl.uniform1f(made.at("flip"), 1);
+    }
     // one square, two triangles, from 0 to 1, for every draw
     const square = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, square);
@@ -172,6 +219,8 @@ export function webgl2(canvas: HTMLCanvasElement | OffscreenCanvas): Backend | u
         const masks = given.masks;
         gl.uniform2f(made.at("maskSize"), masks?.width ?? 1, masks?.height ?? 1);
         gl.uniform2f(made.at("pictureSize"), given.picture.width, given.picture.height);
+        gl.uniform1i(made.at("gradeConvert"), given.convert ? 1 : 0);
+        gl.uniform4f(made.at("gradeTurn"), ...(given.turn ?? [1, 0, 0, 0]));
     };
 
     // half floats can be drawn into where the card allows it, so that a graded picture is never held in 8 bits between the passes
@@ -195,6 +244,13 @@ export function webgl2(canvas: HTMLCanvasElement | OffscreenCanvas): Backend | u
         gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
         return frame;
     };
+    /** Draws the next shape at four corners, or as its rectangle when there are none. */
+    const corners = (made: ReturnType<typeof program>, quad: Quad | undefined) => {
+        gl.uniform1i(made.at("quadOn"), quad ? 1 : 0);
+        if (!quad) return;
+        gl.uniform4f(made.at("quadA"), quad[0], quad[1], quad[2], quad[3]);
+        gl.uniform4f(made.at("quadB"), quad[4], quad[5], quad[6], quad[7]);
+    };
     /** Clips to a rectangle given from the top, in the window's own way of counting from the bottom when drawing to the screen. */
     const scissor = (rect: Rect, height: number, fromTop: boolean) => {
         const x = Math.max(0, Math.floor(rect.x));
@@ -206,6 +262,13 @@ export function webgl2(canvas: HTMLCanvasElement | OffscreenCanvas): Backend | u
 
     return {
         name: "WebGL2",
+        colors(space) {
+            // a browser without the setting draws in sRGB alone
+            const drawing = gl as WebGL2RenderingContext & { drawingBufferColorSpace?: string };
+            if (!("drawingBufferColorSpace" in drawing)) return space === "srgb";
+            drawing.drawingBufferColorSpace = space;
+            return drawing.drawingBufferColorSpace === space;
+        },
         most: gl.getParameter(gl.MAX_TEXTURE_SIZE) as number,
         texture(image) {
             const made = { width: image.width, height: image.height };
@@ -237,7 +300,7 @@ export function webgl2(canvas: HTMLCanvasElement | OffscreenCanvas): Backend | u
             }
             gl.activeTexture(gl.TEXTURE0);
         },
-        draw(images: Drawn[], fills: { rect: Rect; color: Color; graded?: boolean }[], clip?: Rect, graded?: ScreenGrade) {
+        draw(images: Drawn[], fills: Fill[], clip?: Rect, graded?: ScreenGrade) {
             const { width, height } = canvas;
             gl.bindFramebuffer(gl.FRAMEBUFFER, null);
             gl.viewport(0, 0, width, height);
@@ -270,30 +333,64 @@ export function webgl2(canvas: HTMLCanvasElement | OffscreenCanvas): Backend | u
                 gl.uniform1i(screen.at("grade"), graded && given ? 1 : 0);
                 gl.uniform4f(screen.at("fill"), 0, 0, 0, -1);
                 gl.uniform4f(screen.at("to"), image.to.x, image.to.y, image.to.width, image.to.height);
+                corners(screen, image.quad);
                 gl.drawArrays(gl.TRIANGLES, 0, 6);
             }
             for (const fill of fills) {
                 gl.uniform1i(screen.at("grade"), graded && given && fill.graded ? 1 : 0);
                 gl.uniform4f(screen.at("fill"), ...fill.color);
                 gl.uniform4f(screen.at("to"), fill.rect.x, fill.rect.y, fill.rect.width, fill.rect.height);
+                corners(screen, fill.quad);
                 gl.drawArrays(gl.TRIANGLES, 0, 6);
             }
             gl.disable(gl.SCISSOR_TEST);
             gl.disable(gl.BLEND);
         },
-        async resample(part, covers, piece: Piece, graded?: [number, number, number, number]) {
+        async resample(part, covers: PieceCover[], piece: Piece, graded?: [number, number, number, number], turned?: TurnPass) {
             const input = store(part.width, part.height, part);
             const frames: WebGLFramebuffer[] = [target(input)];
             // the covers painted straight into the piece read, so that what they hide is gone before any of it is sampled
             gl.enable(gl.SCISSOR_TEST);
-            for (const cover of covers) {
+            for (const cover of covers.filter((each) => !each.angle)) {
                 scissor(cover.rect, part.height, false);
                 gl.clearColor(...cover.color);
                 gl.clear(gl.COLOR_BUFFER_BIT);
             }
             gl.disable(gl.SCISSOR_TEST);
             gl.disable(gl.BLEND);
+            // a cover turned on its own: its four corners, grown by half a pixel's diagonal, drawn into the piece
+            const turnedCovers = covers.filter((each) => each.angle);
+            if (turnedCovers.length) {
+                gl.viewport(0, 0, part.width, part.height);
+                gl.useProgram(plain.made);
+                gl.uniform2f(plain.at("canvas"), part.width, part.height);
+                gl.uniform1f(plain.at("flip"), -1);
+                gl.uniform1i(plain.at("grade"), 0);
+                // the piece is what is drawn into, so it must not also be what the program could read, which WebGL refuses
+                gl.activeTexture(gl.TEXTURE0);
+                gl.bindTexture(gl.TEXTURE_2D, null);
+                for (const cover of turnedCovers) {
+                    gl.uniform4f(plain.at("fill"), ...cover.color);
+                    corners(plain, grownQuad(cover));
+                    gl.drawArrays(gl.TRIANGLES, 0, 6);
+                }
+                gl.uniform1f(plain.at("flip"), 1);
+                corners(plain, undefined);
+            }
             gl.activeTexture(gl.TEXTURE0);
+            // turned, the piece is first made upright: the level piece read from the original's part
+            let level = input;
+            if (turned) {
+                level = store(turned.width, turned.height, undefined, false, !!graded && !!given && halves);
+                frames.push(target(level));
+                gl.viewport(0, 0, turned.width, turned.height);
+                gl.useProgram(turning.made);
+                gl.uniform1i(turning.at("source"), 0);
+                gl.uniform4f(turning.at("turn"), turned.cos, turned.sin, turned.from[0], turned.from[1]);
+                gl.uniform2f(turning.at("back"), turned.back[0], turned.back[1]);
+                gl.bindTexture(gl.TEXTURE_2D, input);
+                gl.drawArrays(gl.TRIANGLES, 0, 6);
+            }
             const pass = (from: WebGLTexture, width: number, height: number, axis: 0 | 1) => {
                 const resampler = axis === 1 && graded && given ? resamplerGraded : resampling;
                 gl.useProgram(resampler.made);
@@ -312,12 +409,12 @@ export function webgl2(canvas: HTMLCanvasElement | OffscreenCanvas): Backend | u
                 gl.drawArrays(gl.TRIANGLES, 0, 6);
                 return into;
             };
-            const across = pass(input, piece.out.width, part.height, 0);
+            const across = pass(level, piece.out.width, turned ? turned.height : part.height, 0);
             const done = pass(across, piece.out.width, piece.out.height, 1);
             const pixels = new Uint8Array(piece.out.width * piece.out.height * 4);
             gl.readPixels(0, 0, piece.out.width, piece.out.height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
             for (const frame of frames) gl.deleteFramebuffer(frame);
-            for (const texture of [input, across, done]) gl.deleteTexture(texture);
+            for (const texture of new Set([input, level, across, done])) gl.deleteTexture(texture);
             gl.bindFramebuffer(gl.FRAMEBUFFER, null);
             return pixels;
         },

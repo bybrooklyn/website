@@ -13,6 +13,8 @@ QX int encode(uint8_t *p, int len, int w, int h, float q, int speed) {
   /* metadata the page wrote with q_alloc: options 8 and 9 an Exif block's place and length, 10 and 11 an XMP packet's */
   if (q_o[8] && q_o[9] > 0) (void)avifImageSetMetadataExif(im, (const uint8_t *)(intptr_t)q_o[8], q_o[9]);
   if (q_o[10] && q_o[11] > 0) (void)avifImageSetMetadataXMP(im, (const uint8_t *)(intptr_t)q_o[10], q_o[11]);
+  /* options 12 and 13: a colour profile's place and length, carried as the file's prof colour box */
+  if (q_o[12] && q_o[13] > 0 && avifImageSetProfileICC(im, (const uint8_t *)(intptr_t)q_o[12], q_o[13]) != AVIF_RESULT_OK) { avifImageDestroy(im); return -3; }
   avifEncoder *e = avifEncoderCreate();
   e->quality = (int)q; e->qualityAlpha = 100; e->speed = speed; e->maxThreads = 1;
   avifRWData out = AVIF_DATA_EMPTY;

@@ -50,7 +50,7 @@ afterAll(async () => {
     await page?.close();
 });
 const frameOf = () => page!.tab.run<{ x: number; y: number; width: number; height: number }>("window.app.editing().stage.frame()");
-const stepsOf = () => page!.tab.run<{ type: string; id: string; from?: { x: number }; rect?: { x: number; width: number; height: number } }[]>("window.app.editing().steps()");
+const stepsOf = () => page!.tab.run<{ type: string; id: string; from?: { x: number }; rect?: { x: number; y: number; width: number; height: number } }[]>("window.app.editing().steps()");
 
 test("the crop's frame is nudged by the arrows, held to a square from the strip, and set with Enter", async () => {
     if (!page) return;
@@ -75,6 +75,78 @@ test("the crop's frame is nudged by the arrows, held to a square from the strip,
     expect(steps[0]!.rect!.width).toBe(held.width);
     expect(await page.tab.run("window.app.editing().stage.tool()")).toBe("none");
 }, 30_000);
+
+test("turned by the crop's dial, a cover, an arrow and words read stay where they were on the picture: pressed where they now are they are picked or hidden, a new box is upright on the screen, and the export draws each in its place", async () => {
+    if (!page) return;
+    await page.paste("screenshot");
+    // a cover over the blue button (60 to 240 across, 260 to 308 down) and an arrow, made before turning
+    await page.tab.press("r");
+    await page.tab.drag(await page.onScreen(70, 265), await page.onScreen(230, 303), 6);
+    await page.tab.press("a");
+    await page.tab.drag(await page.onScreen(700, 400), await page.onScreen(1000, 400), 6);
+    const before = await stepsOf();
+    expect(before.map((step) => step.type)).toEqual(["cover", "arrow"]);
+    // eight degrees by the dial's keys, a degree a press with Shift
+    await page.tab.press("c");
+    await page.tab.run("document.querySelector('.quire-img-dial').focus()");
+    for (let at = 0; at < 8; at++) await page.tab.press("ArrowRight", { shift: true });
+    const steps = await page.tab.run<{ type: string; angle?: number }[]>("window.app.editing().steps()");
+    expect(steps.find((step) => step.type === "turn")?.angle).toBe(8);
+    expect(await page.tab.run("document.querySelector('.quire-img-dial-said').textContent")).toBe("8.0°");
+    // the frame is the largest upright rectangle inside the turned picture
+    const frame = await frameOf();
+    expect(frame.width).toBeLessThan(1200);
+    await page.tab.run("document.querySelector('.quire-img-stage').focus()");
+    await page.tab.press("Escape");
+    // the cover's middle, in the original's pixels, is where it is on the screen now, turned; pressed there it is picked
+    const cover = before[0]!;
+    const middle = { x: cover.rect!.x + cover.rect!.width / 2, y: cover.rect!.y + cover.rect!.height / 2 };
+    const seen = await page.onScreen(middle.x, middle.y);
+    const turned = await page.tab.run<{ x: number; y: number }>(`(() => { const s = window.app.editing().stage; const a = s.toScreen({ x: 600, y: 350 }); const b = s.toScreen({ x: 700, y: 350 }); return { x: b.x - a.x, y: b.y - a.y }; })()`);
+    // a line along the original's rows now slopes down by eight degrees on the screen
+    expect((Math.atan2(turned.y, turned.x) * 180) / Math.PI).toBeCloseTo(8, 4);
+    await page.tab.press("r");
+    await page.tab.click(seen.x, seen.y);
+    expect(await page.tab.run("window.app.editing().stage.picked()")).toBe(cover.id);
+    await page.tab.press("Escape");
+    // words read, laid where the reader found them in the original: pressed where they are now, the word is hidden
+    await page.tab.run(`window.app.editing().stage.setWords(${JSON.stringify([{ text: "", sure: 1, box: { at: { x: 400, y: 500 }, along: { x: 1, y: 0 }, length: 300, height: 30 }, words: [{ text: "secret", sure: 1, line: 0, box: { at: { x: 410, y: 505 }, along: { x: 1, y: 0 }, length: 120, height: 20 } }] }])})`);
+    await page.tab.press("w");
+    await page.tab.run("window.app.editing().reading?.cancel?.()");
+    const word = await page.onScreen(470, 515);
+    await page.tab.run("window.app.editing().stage.setTool('read')");
+    await page.tab.click(word.x, word.y);
+    const hidden = (await stepsOf()).filter((step) => step.type === "cover");
+    expect(hidden).toHaveLength(2);
+    expect(hidden[1]!.rect).toEqual({ x: 407, y: 502, width: 126, height: 26 });
+    await page.tab.run("window.app.editing().stage.setTool('none')");
+    // a box made now is upright on the screen: kept turned back by the picture's eight degrees
+    await page.tab.press("b");
+    const corner = await page.onScreen(800, 150);
+    await page.tab.drag(corner, { x: corner.x + 120, y: corner.y + 60 }, 6);
+    const box = (await page.tab.run<{ type: string; angle?: number; rect: { width: number; height: number } }[]>("window.app.editing().steps()")).at(-1)!;
+    expect(box.type).toBe("box");
+    expect(box.angle).toBe(-8);
+    const scale = await page.tab.run<number>("window.app.editing().stage.scale()");
+    expect(box.rect.width * scale).toBeCloseTo(120, 0);
+    // the export draws the cover and the arrow where they are on the turned picture
+    const out = await page.tab.run<{ width: number; cover: number[]; arrow: number[] }>(`(async () => {
+        const editing = window.app.editing();
+        const pixels = await editing.flatten();
+        const look = editing.stage.toScreen;
+        const turn = 8 * Math.PI / 180;
+        const level = (p) => ({ x: Math.cos(turn) * (p.x - 600) - Math.sin(turn) * (p.y - 350) + 600, y: Math.sin(turn) * (p.x - 600) + Math.cos(turn) * (p.y - 350) + 350 });
+        const crop = editing.steps().find((step) => step.type === "crop");
+        const frame = ${JSON.stringify(frame)};
+        const at = (p) => { const q = level(p); const x = Math.round(q.x - frame.x), y = Math.round(q.y - frame.y); return [...pixels.data.slice((y * pixels.width + x) * 4, (y * pixels.width + x) * 4 + 3)]; };
+        return { width: pixels.width, cover: at(${JSON.stringify(middle)}), arrow: at({ x: 850, y: 400 }), crop: !!crop };
+    })()`);
+    expect(out.width).toBe(frame.width);
+    // the button's blue is under a cover of the color round it, the page's near white; the arrow is red
+    expect(out.cover[2]! < 200 && out.cover[0]! < 100).toBe(false);
+    expect(out.arrow[0]!).toBeGreaterThan(200);
+    expect(out.arrow[1]!).toBeLessThan(120);
+}, 60_000);
 
 test("Ctrl+1 shows the picture at one to one and Ctrl+0 fits it again", async () => {
     if (!page) return;

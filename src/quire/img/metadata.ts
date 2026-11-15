@@ -11,6 +11,7 @@
 // are, and with the place emptied when it is not kept.
 
 import { jpegParts, pngParts, webpParts } from "../core/picture-bytes";
+import { checkProfile, displayP3Profile, pngProfile } from "./profile";
 
 /** What the person may change: the notes decide a date, author and copyright, alt text and a caption. */
 export interface Edits {
@@ -30,6 +31,8 @@ export interface Blocks {
     xmp?: string;
     iptc?: Uint8Array;
     icc?: Uint8Array;
+    /** An AVIF's or HEIC's colour said by numbers (its nclx colr box) rather than by a profile: its primaries and its curve, as ITU-T H.273 numbers them. */
+    cicp?: { primaries: number; transfer: number };
     comments: string[];
 }
 
@@ -83,6 +86,14 @@ function heifBlocks(bytes: Uint8Array, blocks: Blocks) {
             if (type === "Exif") kinds.set(id, "exif");
             else if (type === "mime" && rest.includes("application/rdf+xml")) kinds.set(id, "xmp");
         }
+    }
+    // the colour, in the item properties: a profile (prof, rICC) or numbers (nclx)
+    const iprp = inside.find((box) => box.type === "iprp");
+    const ipco = iprp && boxes(bytes, iprp.body, iprp.end, count).find((box) => box.type === "ipco");
+    for (const colr of ipco ? boxes(bytes, ipco.body, ipco.end, count).filter((box) => box.type === "colr") : []) {
+        const kind = ascii(bytes.subarray(colr.body, colr.body + 4));
+        if ((kind === "prof" || kind === "rICC") && colr.end - colr.body <= BOUNDS.bytes) blocks.icc ??= bytes.subarray(colr.body + 4, colr.end);
+        else if (kind === "nclx" && colr.body + 8 <= colr.end) blocks.cicp ??= { primaries: view.getUint16(colr.body + 4), transfer: view.getUint16(colr.body + 6) };
     }
     const iloc = inside.find((box) => box.type === "iloc");
     if (iloc && kinds.size) {
@@ -385,8 +396,11 @@ export function primariesOf(icc: Uint8Array): { red: [number, number]; green: [n
 }
 
 /** The space a picture is graded in, from its colour profile: sRGB with none or an sRGB one, Display P3 for a P3 one (by its primaries), and for any other sRGB, said to be a guess. */
-export function spaceOf(bytes: Uint8Array): { space: "srgb" | "p3"; known: boolean; profile?: string } {
-    const icc = blocksOf(bytes).icc;
+export function spaceOf(bytes: Uint8Array, given?: Uint8Array): { space: "srgb" | "p3"; known: boolean; profile?: string } {
+    const blocks = blocksOf(bytes);
+    const icc = given ?? blocks.icc;
+    // numbers for P3's primaries (12) with sRGB's curve (13), or sRGB's own (1)
+    if (!icc && blocks.cicp) return blocks.cicp.primaries === 12 ? { space: "p3", known: true, profile: "Display P3" } : { space: "srgb", known: blocks.cicp.primaries === 1 || blocks.cicp.primaries === 2 };
     if (!icc) return { space: "srgb", known: true };
     const profile = profileName(icc);
     const primaries = primariesOf(icc);
@@ -394,6 +408,21 @@ export function spaceOf(bytes: Uint8Array): { space: "srgb" | "p3"; known: boole
     if (primaries && near(primaries.red, [0.4361, 0.2225]) && near(primaries.green, [0.3851, 0.7169])) return { space: "srgb", known: true, ...(profile ? { profile } : {}) };
     if (primaries && near(primaries.red, [0.5151, 0.2412]) && near(primaries.green, [0.292, 0.6922])) return { space: "p3", known: true, ...(profile ? { profile } : {}) };
     return { space: "srgb", known: false, ...(profile ? { profile } : {}) };
+}
+
+/**
+ * The profile a picture's colors are given out with, read and checked, and its space: the original's
+ * own profile byte for byte where it has one fit to carry (a PNG's deflated one too), the Display P3
+ * profile written here for an AVIF or HEIC that says P3 by numbers, none for sRGB or a broken profile.
+ */
+export async function profileOf(bytes: Uint8Array): Promise<{ icc?: Uint8Array; space: ReturnType<typeof spaceOf> }> {
+    const blocks = blocksOf(bytes);
+    const found = bytes[0] === 0x89 ? await pngProfile(bytes) : blocks.icc;
+    const icc = checkProfile(found);
+    // a profile that is broken is not carried, and the picture is taken to be sRGB, said to be a guess
+    const space = found && !icc ? { space: "srgb" as const, known: false } : spaceOf(bytes, icc);
+    if (!icc && space.space === "p3" && blocks.cicp) return { icc: displayP3Profile(), space };
+    return { ...(icc ? { icc } : {}), space };
 }
 
 // ---- the facts ----

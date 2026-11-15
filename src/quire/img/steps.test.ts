@@ -152,3 +152,21 @@ test("a part keeps its shape and its own grade in steps.json, comes back the sam
     expect(part.feather).toBe(0);
     expect(part.grade).toEqual({ light: 100 });
 });
+
+test("a turn levels the picture: its crop is the largest upright rectangle inside it, a crop of her own is fitted inside, and steps.json keeps the turn and a cover's own turn, bounded", () => {
+    const turned = look({ original, steps: [{ id: "s1", type: "turn", angle: 5 }] });
+    expect(turned.turn).toBe(5);
+    expect(turned.crop.width).toBeLessThan(1200);
+    expect(turned.width).toBe(turned.crop.width);
+    // a crop of her own reaching past the turned picture is made smaller about its middle
+    const cropped = look({ original, steps: [{ id: "s1", type: "crop", rect: { x: 0, y: 0, width: 600, height: 400 } }, { id: "s2", type: "turn", angle: -5 }] });
+    expect(cropped.crop.width).toBeLessThan(600);
+    expect(Math.abs(cropped.crop.width / cropped.crop.height - 1.5)).toBeLessThan(0.01);
+    // at no turn the picture is as it was
+    expect(look({ original, steps: [{ id: "s1", type: "turn", angle: 0 }] }).crop).toEqual({ x: 0, y: 0, width: 1200, height: 800 });
+    const picture = { original, steps: [{ id: "s1", type: "turn", angle: 4.25 }, { id: "s2", type: "cover", rect: { x: 10, y: 10, width: 50, height: 20 }, color: "#123456", angle: -4.25 }] as Kept[] };
+    expect(readSteps(writeSteps(picture))!.steps).toEqual(picture.steps);
+    const wild = readSteps('{"quire": 1, "original": {"name": "a.png", "width": 10, "height": 10}, "steps": [{"type": "turn", "angle": 400}, {"type": "box", "rect": {"x": 0, "y": 0, "width": 4, "height": 4}, "color": "#ffffff", "thickness": 2, "angle": "x"}]}')!;
+    expect(wild.steps[0]).toEqual({ id: "s1", type: "turn", angle: 15 });
+    expect("angle" in wild.steps[1]!).toBe(false);
+});

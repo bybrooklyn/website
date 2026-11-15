@@ -5,12 +5,40 @@
 
 import type { Mark, Point, Rect } from "./steps";
 
-/** Where the original's pixels fall on what is drawn: pixels per pixel each way, and where its corner falls. */
+/** Where the original's pixels fall on what is drawn: pixels per pixel each way, and where its corner falls, on the level picture; and, for a turned picture, its turn (degrees, clockwise) about the original's middle, made before the rest. */
 export interface Place {
     across: number;
     down: number;
     x: number;
     y: number;
+    turn?: { degrees: number; x: number; y: number };
+}
+
+/** Sets a 2D canvas to draw in the original's pixels: placed, then turned about the original's middle if the picture is. */
+export function placeOn(context: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D, place: Place) {
+    context.setTransform(place.across, 0, 0, place.down, place.x, place.y);
+    if (!place.turn?.degrees) return;
+    context.translate(place.turn.x, place.turn.y);
+    context.rotate((place.turn.degrees * Math.PI) / 180);
+    context.translate(-place.turn.x, -place.turn.y);
+}
+
+/** Where a mark or a cover turns about when it has a turn of its own: a box's or a cover's middle, a text's place. */
+export function pivotOf(item: Mark | { type: "cover"; rect: Rect }): Point {
+    if (item.type === "text") return item.at;
+    if (item.type === "box" || item.type === "cover") return { x: item.rect.x + item.rect.width / 2, y: item.rect.y + item.rect.height / 2 };
+    return item.from;
+}
+
+/** A point taken into an item's own upright frame, where the item has a turn of its own. */
+function intoItem(item: Mark | { type: "cover"; rect: Rect; angle?: number }, point: Point): Point {
+    const angle = "angle" in item ? item.angle : undefined;
+    if (!angle) return point;
+    const pivot = pivotOf(item);
+    const radians = (-angle * Math.PI) / 180;
+    const dx = point.x - pivot.x;
+    const dy = point.y - pivot.y;
+    return { x: pivot.x + Math.cos(radians) * dx - Math.sin(radians) * dy, y: pivot.y + Math.sin(radians) * dx + Math.cos(radians) * dy };
 }
 
 /** The typeface marks' text is drawn in. */
@@ -22,17 +50,29 @@ export const headOf = (thickness: number): number => Math.max(10, thickness * 4.
 /** Draws the marks, in order, onto a 2D canvas. */
 export function drawMarks(context: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D, marks: Mark[], place: Place) {
     context.save();
-    context.setTransform(place.across, 0, 0, place.down, place.x, place.y);
+    placeOn(context, place);
     context.lineCap = "round";
     context.lineJoin = "round";
     for (const mark of marks) {
+        context.save();
+        // a box or a text made on a turned picture turns by its own angle about its middle or its place
+        const angle = mark.type === "arrow" ? 0 : (mark.angle ?? 0);
+        if (angle) {
+            const pivot = pivotOf(mark);
+            context.translate(pivot.x, pivot.y);
+            context.rotate((angle * Math.PI) / 180);
+            context.translate(-pivot.x, -pivot.y);
+        }
         context.strokeStyle = context.fillStyle = mark.color;
         if (mark.type === "box") {
             context.lineWidth = mark.thickness;
             context.strokeRect(mark.rect.x, mark.rect.y, mark.rect.width, mark.rect.height);
         } else if (mark.type === "arrow") {
             const length = Math.hypot(mark.to.x - mark.from.x, mark.to.y - mark.from.y);
-            if (length < 0.5) continue;
+            if (length < 0.5) {
+                context.restore();
+                continue;
+            }
             const head = Math.min(headOf(mark.thickness), length);
             const along = { x: (mark.to.x - mark.from.x) / length, y: (mark.to.y - mark.from.y) / length };
             const base = { x: mark.to.x - along.x * head, y: mark.to.y - along.y * head };
@@ -53,6 +93,7 @@ export function drawMarks(context: CanvasRenderingContext2D | OffscreenCanvasRen
             context.textBaseline = "top";
             context.fillText(mark.text, mark.at.x, mark.at.y);
         }
+        context.restore();
     }
     context.restore();
 }
@@ -86,11 +127,12 @@ export function markAt(marks: Mark[], point: Point, slack: number): number {
     return allAt(marks, point, slack)[0] ?? -1;
 }
 
-/** A cover, as picking sees it: taken anywhere inside. */
-type Cover = { type: "cover"; rect: Rect };
+/** A cover, as picking sees it: taken anywhere inside, its own turn taken into account. */
+type Cover = { type: "cover"; rect: Rect; angle?: number };
 
-/** True when a point is on a mark (within `slack`), or inside a cover. */
-export function touches(item: Mark | Cover, point: Point, slack: number): boolean {
+/** True when a point is on a mark (within `slack`), or inside a cover; a point is first taken into the frame of an item turned on its own. */
+export function touches(item: Mark | Cover, given: Point, slack: number): boolean {
+    const point = intoItem(item, given);
     const inside = (box: Rect, pad: number) => point.x >= box.x - pad && point.x <= box.x + box.width + pad && point.y >= box.y - pad && point.y <= box.y + box.height + pad;
     if (item.type === "cover") return inside(item.rect, 0);
     if (item.type === "arrow") return toSegment(point, item.from, item.to) <= item.thickness / 2 + slack;

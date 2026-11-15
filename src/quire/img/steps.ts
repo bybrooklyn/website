@@ -13,6 +13,7 @@
 import type { Edits } from "./metadata";
 import { readGrade, trimGrade, type Grade, type KeptGrade } from "./grade";
 import { decodeRuns, MOST_STROKES, type Shape, type Stroke } from "./masks";
+import { fitInside, largestInside, MOST_TURN, turnOf } from "./turn";
 
 /** A rectangle in the original's pixels. */
 export interface Rect {
@@ -31,11 +32,14 @@ export interface Point {
 /** How a picture is resampled when its size changes: Lanczos for photographs and screenshots, bilinear for speed, nearest for pixel art. */
 export type Filter = "lanczos" | "bilinear" | "nearest";
 
-/** The marks, drawn over the picture: an arrow, a box and a line of text. */
+/** The marks, drawn over the picture: an arrow, a box and a line of text. A box or a text made on a turned picture keeps the turn that makes it upright there (`angle`, in degrees, about a box's middle or a text's place), so that it turns with the picture after. */
 export type Mark =
     | { type: "arrow"; from: Point; to: Point; color: string; thickness: number }
-    | { type: "box"; rect: Rect; color: string; thickness: number }
-    | { type: "text"; at: Point; text: string; color: string; size: number };
+    | { type: "box"; rect: Rect; color: string; thickness: number; angle?: number }
+    | { type: "text"; at: Point; text: string; color: string; size: number; angle?: number };
+
+/** A cover as the picture has it: its rectangle, its color, and its turn about its middle if it was made on a turned picture. */
+export type Cover = { rect: Rect; color: string; angle?: number };
 
 /** The whole picture's grade, as steps.json keeps it: only what is away from its zero (grade.ts). */
 export type GradeStep = { type: "grade"; grade: KeptGrade };
@@ -43,8 +47,8 @@ export type GradeStep = { type: "grade"; grade: KeptGrade };
 /** A part of the picture with a grade of its own: its shape (a gradient, strokes, a found mask; masks.ts) and its grade. */
 export type PartStep = { type: "part"; grade: KeptGrade } & Shape;
 
-/** One thing done to the picture. A resize with no height keeps the crop's shape. */
-export type Step = { type: "crop"; rect: Rect } | { type: "resize"; width: number; height?: number; filter: Filter } | { type: "cover"; rect: Rect; color: string } | GradeStep | PartStep | Mark;
+/** One thing done to the picture. A resize with no height keeps the crop's shape. A turn levels the picture (degrees, clockwise), the crop then upright on the turned picture. */
+export type Step = { type: "crop"; rect: Rect } | { type: "resize"; width: number; height?: number; filter: Filter } | { type: "turn"; angle: number } | ({ type: "cover" } & Cover) | GradeStep | PartStep | Mark;
 
 /** A step as the document keeps it: with an id of its own, and switched off if it is. */
 export type Kept = Step & { id: string; off?: boolean };
@@ -72,10 +76,12 @@ export interface Look {
     width: number;
     height: number;
     filter: Filter;
-    covers: { rect: Rect; color: string }[];
+    covers: Cover[];
     marks: Mark[];
     /** The grades, in the order they are applied: the whole picture's, and each part's with its shape. */
     grades: { id: string; grade: Grade; part?: Shape }[];
+    /** How far the picture is turned to level it, in degrees, clockwise; none when level. */
+    turn?: number;
 }
 
 /** The largest side a picture may be made, and the most steps a file is read with: beyond these a file is taken to be damaged. */
@@ -98,7 +104,10 @@ export function within(rect: Rect, original: { width: number; height: number }):
 /** Applies the steps that are on, in order, to give the picture as it looks. A later crop takes the place of an earlier one, and a resize keeps the width it was given when the crop under it changes, its height following the crop's shape unless it was given one too. */
 export function look(picture: Picture): Look {
     const { original } = picture;
-    let crop: Rect = { x: 0, y: 0, width: original.width, height: original.height };
+    // the turn first, wherever it is in the list, since the crop is upright on the turned picture
+    const turning = picture.steps.find((step) => step.type === "turn" && !step.off) as { angle: number } | undefined;
+    const turn = turnOf(turning?.angle ?? 0, original);
+    let crop: Rect = largestInside(turn);
     let across = 1;
     let down = 1;
     let filter: Filter = "lanczos";
@@ -109,17 +118,17 @@ export function look(picture: Picture): Look {
         if (step.off) continue;
         if (step.type === "grade") grades.push({ id: step.id, grade: gradeOf(step) });
         else if (step.type === "part") grades.push({ id: step.id, grade: gradeOf(step), part: shapeOf(step) });
-        else if (step.type === "crop") crop = within(step.rect, original);
+        else if (step.type === "crop") crop = fitInside(within(step.rect, original), turn);
         else if (step.type === "resize") {
             across = step.width / crop.width;
             down = step.height ? step.height / crop.height : across;
             filter = step.filter;
-        } else if (step.type === "cover") covers.push({ rect: within(step.rect, original), color: step.color });
-        else marks.push(withoutId(step) as Mark);
+        } else if (step.type === "cover") covers.push({ rect: step.angle ? step.rect : within(step.rect, original), color: step.color, ...(step.angle ? { angle: step.angle } : {}) });
+        else if (step.type !== "turn") marks.push(withoutId(step) as Mark);
     }
     const width = clamp(Math.round(crop.width * across), 1, LIMITS.side);
     const height = clamp(Math.round(crop.height * down), 1, LIMITS.side);
-    return { crop, width, height, filter, covers, marks, grades };
+    return { crop, width, height, filter, covers, marks, grades, ...(turn.degrees ? { turn: turn.degrees } : {}) };
 }
 
 // a grade step's whole grade, worked out once for each step as kept, so that drawing many times a second reads it once
@@ -185,7 +194,7 @@ export function toggle(steps: Kept[], id: string): Kept[] {
 }
 
 /** The list with the picture's one crop (or one resize, or its whole grade) set: the step changed where there is one, added where there is not. */
-export function setOnly(steps: Kept[], step: Extract<Step, { type: "crop" | "resize" | "grade" }>): Kept[] {
+export function setOnly(steps: Kept[], step: Extract<Step, { type: "crop" | "resize" | "grade" | "turn" }>): Kept[] {
     const there = steps.find((each) => each.type === step.type);
     return there ? change(steps, there.id, step) : add(steps, step);
 }
@@ -279,10 +288,17 @@ function readStep(value: unknown): Step | undefined {
         return width === undefined ? undefined : { type: "resize", width: Math.round(width), ...(height ? { height: Math.round(height) } : {}), filter };
     }
     if (step.type === "grade") return { type: "grade", grade: trimGrade(readGrade(step.grade)) };
+    if (step.type === "turn") {
+        const angle = number(step.angle, -MOST_TURN, MOST_TURN);
+        return angle === undefined ? undefined : { type: "turn", angle: Math.round(angle * 100) / 100 };
+    }
+    // a box's, a text's or a cover's own turn, if it has one
+    const angle = number(step.angle, -MOST_TURN, MOST_TURN);
+    const turned = angle ? { angle } : {};
     if (step.type === "part") return readPart(step);
     if (step.type === "cover") {
         const rect = readRect(step.rect);
-        return rect && color ? { type: "cover", rect, color } : undefined;
+        return rect && color ? { type: "cover", rect, color, ...turned } : undefined;
     }
     if (step.type === "arrow") {
         const from = readPoint(step.from);
@@ -291,13 +307,13 @@ function readStep(value: unknown): Step | undefined {
     }
     if (step.type === "box") {
         const rect = readRect(step.rect);
-        return rect && color && thickness ? { type: "box", rect, color, thickness } : undefined;
+        return rect && color && thickness ? { type: "box", rect, color, thickness, ...turned } : undefined;
     }
     if (step.type === "text") {
         const at = readPoint(step.at);
         const size = number(step.size, 1, 4_000);
         const text = typeof step.text === "string" ? step.text.slice(0, LIMITS.text) : undefined;
-        return at && size && text && color ? { type: "text", at, text, color, size } : undefined;
+        return at && size && text && color ? { type: "text", at, text, color, size, ...turned } : undefined;
     }
     return undefined;
 }

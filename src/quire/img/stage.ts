@@ -19,8 +19,9 @@ import { maskSize, stackFor, type Stroke } from "./masks";
 import type { Space } from "./grade";
 import { coverColor, ringArea } from "./cover";
 import { dragFrame, fit, HANDLES, oneToOne, shapeFrame, spanned, zoomAt, type Handle } from "./geometry";
-import { allAt, drawMarks, markBox, moved, type Place } from "./marks";
-import { add, change, look, within, type Kept, type Look, type Mark, type Picture, type Point, type Rect } from "./steps";
+import { allAt, drawMarks, markBox, moved, pivotOf, placeOn, type Place } from "./marks";
+import { cornersOf, fromLevel, keepInside, levelBox, fitInside, levelling, toLevel, turnOf, type Turn } from "./turn";
+import { add, change, look, setOnly, within, type Kept, type Look, type Mark, type Picture, type Point, type Rect } from "./steps";
 import { decodeRuns, type Shape } from "./masks";
 import { corners } from "./read/pixels";
 import { coverFor, type Line } from "./read/words";
@@ -105,6 +106,8 @@ export interface StageHooks {
     pen(): Pen;
     /** The tool changed, or the frame, or what is picked: the bar and the strip follow. */
     moved(): void;
+    /** A line drawn along the horizon asks for this turn, in degrees. */
+    turned?(degrees: number): void;
     say(short: string, full: string): void;
     /** The space the picture is graded in (sRGB unless its profile says Display P3). */
     space?(): Space;
@@ -136,6 +139,37 @@ export function handlesOf(part: Shape, original: { width: number; height: number
     return first ? [{ x: first.points[0]!, y: first.points[1]! }] : [{ x: original.width / 2, y: original.height / 2 }];
 }
 
+/** The rectangle a drag from one place to another (both in the original's pixels) spans upright on the turned picture, as the document keeps it: its size there, its middle back in the original's pixels, to be turned back by the picture's turn. */
+export function uprightRect(from: Point, to: Point, turn: Turn): Rect {
+    const a = toLevel(from, turn);
+    const b = toLevel(to, turn);
+    const middle = fromLevel({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, turn);
+    const width = Math.abs(b.x - a.x);
+    const height = Math.abs(b.y - a.y);
+    return { x: middle.x - width / 2, y: middle.y - height / 2, width, height };
+}
+
+/** The upright box round some places. */
+export function boxAround(points: Point[]): Rect {
+    const x = Math.min(...points.map((point) => point.x));
+    const y = Math.min(...points.map((point) => point.y));
+    return { x, y, width: Math.max(...points.map((point) => point.x)) - x, height: Math.max(...points.map((point) => point.y)) - y };
+}
+
+/** A place turned by some degrees about a pivot. */
+export function turnAbout(point: Point, pivot: Point, degrees: number): Point {
+    const radians = (degrees * Math.PI) / 180;
+    const dx = point.x - pivot.x;
+    const dy = point.y - pivot.y;
+    return { x: pivot.x + Math.cos(radians) * dx - Math.sin(radians) * dy, y: pivot.y + Math.sin(radians) * dx + Math.cos(radians) * dy };
+}
+
+/** The steps with the picture's turn set: the turn step changed, added, or taken away at none. */
+export function setTurn(steps: Kept[], degrees: number): Kept[] {
+    if (!degrees) return steps.filter((step) => step.type !== "turn");
+    return setOnly(steps, { type: "turn", angle: degrees });
+}
+
 /** The thickness of a mark from a pen, in the original's pixels: at least two. */
 export const thickness = (pen: Pen, size: { width: number; height: number }) => Math.max(2, Math.round(Math.max(size.width, size.height) * pen.weight));
 
@@ -164,6 +198,13 @@ export function createStage(hooks: StageHooks) {
     element.append(canvas, over, frame, writing, splitter);
 
     let loaded: Loaded | undefined;
+    // the turn the dial gives while it is dragged, drawn before letting go makes it a step, and the faint grid shown while it turns
+    let turning: number | undefined;
+    // a line being drawn along the horizon, from where it started to the pointer, in the stage's own pixels
+    let levelLine: { from: Point; to: Point } | undefined;
+    let levelling_ = false;
+    // whether the picture's Display P3 numbers are made sRGB on the screen, the canvas having no Display P3
+    let screenConverts = false;
     let blob: Blob | undefined;
     let tool: Tool = "crop";
     let view: View = { scale: 1, x: 0, y: 0 };
@@ -196,22 +237,43 @@ export function createStage(hooks: StageHooks) {
         return found && look(found);
     };
     const cropping = () => tool === "crop";
-    /** Where the original's pixels fall on the stage, in its own CSS pixels. */
-    const place = (): Place => {
+    /** The picture's turn: the dial's while it is being turned, else the steps'. */
+    const turnNow = (): Turn => turnOf(turning ?? shown()?.turn ?? 0, loaded?.size ?? picture()?.original ?? { width: 1, height: 1 });
+    /** Where the level picture's pixels fall on the stage, in its own CSS pixels: the whole turned picture while cropping, the crop otherwise. */
+    const levelPlace = (): { across: number; down: number; x: number; y: number } => {
         const now = shown();
-        if (!now || cropping()) return { across: view.scale, down: view.scale, x: view.x, y: view.y };
+        if (!now || cropping()) {
+            const box = levelBox(turnNow());
+            return { across: view.scale, down: view.scale, x: view.x - box.x * view.scale, y: view.y - box.y * view.scale };
+        }
         const across = (view.scale * now.width) / now.crop.width;
         const down = (view.scale * now.height) / now.crop.height;
         return { across, down, x: view.x - now.crop.x * across, y: view.y - now.crop.y * down };
     };
-    const toOriginal = (at: Point): Point => {
-        const where = place();
+    /** Where the original's pixels fall on the stage: the level picture's place, and the turn about the original's middle. */
+    const place = (): Place => {
+        const turn = turnNow();
+        return { ...levelPlace(), ...(turn.degrees ? { turn: { degrees: turn.degrees, x: turn.width / 2, y: turn.height / 2 } } : {}) };
+    };
+    /** A place on the stage on the level picture. */
+    const toLevelAt = (at: Point): Point => {
+        const where = levelPlace();
         return { x: (at.x - where.x) / where.across, y: (at.y - where.y) / where.down };
     };
-    const toStage = (rect: Rect): Rect => {
-        const where = place();
+    const toOriginal = (at: Point): Point => fromLevel(toLevelAt(at), turnNow());
+    /** A place in the original's pixels on the stage. */
+    const pointOnStage = (point: Point): Point => {
+        const where = levelPlace();
+        const level = toLevel(point, turnNow());
+        return { x: where.x + level.x * where.across, y: where.y + level.y * where.down };
+    };
+    /** An upright rectangle on the level picture (a crop) on the stage. */
+    const levelOnStage = (rect: Rect): Rect => {
+        const where = levelPlace();
         return { x: where.x + rect.x * where.across, y: where.y + rect.y * where.down, width: rect.width * where.across, height: rect.height * where.down };
     };
+    /** A rectangle of the original (turned on its own by `angle`, about its pivot) as its four corners on the stage. */
+    const cornersOnStage = (rect: Rect, angle = 0, pivot?: Point): Point[] => cornersOf(rect).map((corner) => (angle ? turnAbout(corner, pivot ?? { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }, angle) : corner)).map(pointOnStage);
     const pointer = (event: { clientX: number; clientY: number }): Point => {
         const box = element.getBoundingClientRect();
         return { x: event.clientX - box.left, y: event.clientY - box.top };
@@ -238,39 +300,76 @@ export function createStage(hooks: StageHooks) {
         context.clearRect(0, 0, width, height);
         frame.classList.toggle("shown", !!now && !!loaded && cropping() && !!cropFrame);
         if (!now || !loaded) return;
-        const seen = cropping() && cropFrame ? { ...now, crop: cropFrame } : now;
+        const seen = { ...(cropping() && cropFrame ? { ...now, crop: cropFrame } : now), ...(turning !== undefined ? { turn: turning } : {}) };
         // the grade drawn unless the original is held in view; left of the split, the original
-        const grading = holding ? undefined : gradingWith(seen, hooks.space?.() ?? "srgb", loaded.size);
-        const scene: Scene = { look: seen, view: { scale: view.scale * ratio, x: view.x * ratio, y: view.y * ratio }, canvas: { width, height }, ...(cropping() ? { cropping: { x: 0, y: 0, ...loaded.size } } : {}), ...(grading ? { grading } : {}), ...(split !== undefined ? { split: split * ratio } : {}) };
+        // held, the original's numbers alone, made sRGB all the same where the canvas cannot show Display P3
+        const grading = gradingWith(holding ? { ...seen, grades: [] } : seen, hooks.space?.() ?? "srgb", loaded.size, screenConverts);
+        const scene: Scene = { look: seen, view: { scale: view.scale * ratio, x: view.x * ratio, y: view.y * ratio }, canvas: { width, height }, ...(cropping() ? { cropping: levelBox(turnNow()) } : {}), ...(grading ? { grading } : {}), ...(split !== undefined ? { split: split * ratio } : {}) };
         loaded.draw(scene, paint);
         drawn++;
         const where = place();
-        const scaled = { across: where.across * ratio, down: where.down * ratio, x: where.x * ratio, y: where.y * ratio };
+        const scaled = { ...where, across: where.across * ratio, down: where.down * ratio, x: where.x * ratio, y: where.y * ratio };
         // marks are seen in crop mode too, but cut to the frame as they will be
         context.save();
-        const kept = toStage(cropping() && cropFrame ? cropFrame : now.crop);
+        const kept = levelOnStage(cropping() && cropFrame ? cropFrame : now.crop);
         context.beginPath();
         context.rect(kept.x * ratio, kept.y * ratio, kept.width * ratio, kept.height * ratio);
         context.clip();
         drawMarks(context, now.marks, scaled);
-        if (words.length && (tool === "read" || selection)) drawWords(context, scaled, ratio);
+        if (words.length && (tool === "read" || selection)) drawWords(context, ratio);
         context.restore();
         // what is picked: a fine ring round it in the page's accent
         const chosen = picture()?.steps.find((step) => step.id === picked);
         if (chosen && (chosen.type === "cover" || chosen.type === "arrow" || chosen.type === "box" || chosen.type === "text")) {
-            const box = toStage(chosen.type === "cover" ? chosen.rect : markBox(chosen));
+            // a fine ring round it, four screen pixels out, turned with the picture and with the thing's own turn
+            const box = chosen.type === "cover" ? chosen.rect : markBox(chosen);
+            const angle = chosen.type === "cover" || chosen.type === "box" || chosen.type === "text" ? (chosen.angle ?? 0) : 0;
+            const out = 4 / Math.max(1e-6, place().across);
+            const ring = cornersOnStage({ x: box.x - out, y: box.y - out, width: box.width + 2 * out, height: box.height + 2 * out }, angle, angle ? pivotOf(chosen as never) : undefined);
             context.strokeStyle = getComputedStyle(element).getPropertyValue("--accent") || "#b48cff";
             context.lineWidth = 1.5 * ratio;
             context.setLineDash([5 * ratio, 4 * ratio]);
-            context.strokeRect((box.x - 4) * ratio, (box.y - 4) * ratio, (box.width + 8) * ratio, (box.height + 8) * ratio);
+            context.beginPath();
+            ring.forEach((corner, at) => (at ? context.lineTo(corner.x * ratio, corner.y * ratio) : context.moveTo(corner.x * ratio, corner.y * ratio)));
+            context.closePath();
+            context.stroke();
+            context.setLineDash([]);
         }
         if (cropping() && cropFrame) {
-            const box = toStage(cropFrame);
+            const box = levelOnStage(cropFrame);
             Object.assign(frame.style, { left: `${box.x}px`, top: `${box.y}px`, width: `${box.width}px`, height: `${box.height}px` });
         }
         splitter.classList.toggle("shown", split !== undefined);
         if (split !== undefined) splitter.style.left = `${split}px`;
         if (tool === "grade" && hooks.parts) drawParts(context, now, ratio);
+        // while the dial turns, a faint grid of thirds and finer over what is kept, to level against
+        if (turning !== undefined && cropping() && cropFrame) {
+            const box = levelOnStage(cropFrame);
+            context.strokeStyle = "rgba(255, 255, 255, 0.28)";
+            context.lineWidth = 1 * ratio;
+            context.beginPath();
+            for (let step = 1; step < 9; step++) {
+                const x = Math.round((box.x + (box.width * step) / 9) * ratio) + 0.5;
+                const y = Math.round((box.y + (box.height * step) / 9) * ratio) + 0.5;
+                context.moveTo(x, box.y * ratio);
+                context.lineTo(x, (box.y + box.height) * ratio);
+                context.moveTo(box.x * ratio, y);
+                context.lineTo((box.x + box.width) * ratio, y);
+            }
+            context.stroke();
+        }
+        // a line being drawn along the horizon
+        if (levelLine) {
+            const accent = getComputedStyle(element).getPropertyValue("--accent").trim() || "#b48cff";
+            for (const [width, color] of [[3 * ratio, "rgba(0, 0, 0, 0.45)"], [1.5 * ratio, accent]] as const) {
+                context.lineWidth = width;
+                context.strokeStyle = color;
+                context.beginPath();
+                context.moveTo(levelLine.from.x * ratio, levelLine.from.y * ratio);
+                context.lineTo(levelLine.to.x * ratio, levelLine.to.y * ratio);
+                context.stroke();
+            }
+        }
     }
 
     // a part's mask, tinted, for showing where the part picked is; made once for each layer
@@ -296,9 +395,12 @@ export function createStage(hooks: StageHooks) {
         const target = hooks.parts!.target();
         const parts = now.grades.filter((each) => each.part);
         const where = place();
-        const at = (point: Point) => ({ x: (where.x + point.x * where.across) * ratio, y: (where.y + point.y * where.down) * ratio });
+        const at = (point: Point) => {
+            const onStage = pointOnStage(point);
+            return { x: onStage.x * ratio, y: onStage.y * ratio };
+        };
         context.save();
-        const kept = toStage(now.crop);
+        const kept = levelOnStage(now.crop);
         context.beginPath();
         context.rect(kept.x * ratio, kept.y * ratio, kept.width * ratio, kept.height * ratio);
         context.clip();
@@ -308,10 +410,13 @@ export function createStage(hooks: StageHooks) {
             const layer = stacked.layers(chosen.id).layer;
             if (stacked.stack && layer !== undefined) {
                 const size = maskSize(loaded.size);
-                const box = toStage({ x: 0, y: 0, ...loaded.size });
                 context.globalCompositeOperation = "source-over";
                 context.imageSmoothingEnabled = true;
-                context.drawImage(tintOf(stacked.stack.layers[layer]!, size, accent), box.x * ratio, box.y * ratio, box.width * ratio, box.height * ratio);
+                // the mask laid over the original, turned with the picture
+                context.save();
+                placeOn(context, { ...where, across: where.across * ratio, down: where.down * ratio, x: where.x * ratio, y: where.y * ratio });
+                context.drawImage(tintOf(stacked.stack.layers[layer]!, size, accent), 0, 0, loaded.size.width, loaded.size.height);
+                context.restore();
             }
         }
         for (const part of parts) {
@@ -381,10 +486,9 @@ export function createStage(hooks: StageHooks) {
     function handleAt(at: Point): { id: string; end?: "from" | "to" | "both" } | undefined {
         const now = shown();
         if (!now || !loaded) return undefined;
-        const where = place();
         let best: { id: string; end?: "from" | "to" | "both"; far: number } | undefined;
         for (const part of now.grades.filter((each) => each.part)) {
-            const handles = handlesOf(part.part!, loaded.size).map((point) => ({ x: where.x + point.x * where.across, y: where.y + point.y * where.down }));
+            const handles = handlesOf(part.part!, loaded.size).map(pointOnStage);
             handles.forEach((handle, index) => {
                 const far = Math.hypot(handle.x - at.x, handle.y - at.y);
                 if (far < 14 && (!best || far < best.far)) best = { id: part.id, far, ...(part.part!.kind === "gradient" ? { end: index === 0 ? ("from" as const) : ("to" as const) } : {}) };
@@ -423,10 +527,13 @@ export function createStage(hooks: StageHooks) {
     grip.addEventListener("pointercancel", splitDone);
 
     /** The words lightly tinted while reading, the one under the pointer more, a run or a selection fully, and what looks private outlined. */
-    function drawWords(context: CanvasRenderingContext2D, where: Place, ratio: number) {
+    function drawWords(context: CanvasRenderingContext2D, ratio: number) {
         const accent = getComputedStyle(element).getPropertyValue("--accent").trim() || "#b48cff";
         const quad = (index: number) => {
-            const points = corners(words[index]!.box).map((point) => ({ x: where.x + point.x * where.across, y: where.y + point.y * where.down }));
+            const points = corners(words[index]!.box).map((point) => {
+                const onStage = pointOnStage(point);
+                return { x: onStage.x * ratio, y: onStage.y * ratio };
+            });
             context.beginPath();
             context.moveTo(points[0]!.x, points[0]!.y);
             for (const point of points.slice(1)) context.lineTo(point.x, point.y);
@@ -436,7 +543,16 @@ export function createStage(hooks: StageHooks) {
         const low = chosen ? Math.min(...chosen) : -1;
         const high = chosen ? Math.max(...chosen) : -1;
         const hidden = hiddenWords();
-        const rect = (cover: Rect) => [where.x + cover.x * where.across, where.y + cover.y * where.down, cover.width * where.across, cover.height * where.down] as const;
+        // an upright rectangle of the original, turned with the picture, as a shape on the canvas
+        const shape = (cover: Rect) => {
+            const points = cornersOf(cover).map((point) => {
+                const onStage = pointOnStage(point);
+                return { x: onStage.x * ratio, y: onStage.y * ratio };
+            });
+            context.beginPath();
+            points.forEach((point, at) => (at ? context.lineTo(point.x, point.y) : context.moveTo(point.x, point.y)));
+            context.closePath();
+        };
         context.fillStyle = accent;
         if (tool === "read") {
             words.forEach((_, index) => {
@@ -451,14 +567,20 @@ export function createStage(hooks: StageHooks) {
             context.globalAlpha = 0.38;
             const indices: number[] = [];
             for (let index = low; index <= high; index++) if (!hidden.has(index)) indices.push(index);
-            for (const cover of runCovers(words, indices)) context.fillRect(...rect(cover));
+            for (const cover of runCovers(words, indices)) {
+                shape(cover);
+                context.fill();
+            }
         }
         context.globalAlpha = 1;
         if (tool !== "read") return;
         // what looks private: a warm solid line round each line of it, the same at every size, where its cover would go
         context.strokeStyle = "#ff9f0a";
         context.lineWidth = 1.5 * ratio;
-        for (const finding of uncovered()) for (const cover of findingCovers(words, finding)) context.strokeRect(...rect(cover));
+        for (const finding of uncovered()) for (const cover of findingCovers(words, finding)) {
+            shape(cover);
+            context.stroke();
+        }
     }
 
     /** What looks private and is not yet under a cover: each thing whose words are not all inside covers already made. */
@@ -530,7 +652,7 @@ export function createStage(hooks: StageHooks) {
         if (!now || !loaded) return;
         // the room under the tool's strip, so that the strip never lies over the picture when it is fitted
         const below = 52;
-        view = fit(cropping() ? loaded.size : now, { width: element.clientWidth, height: element.clientHeight - below });
+        view = fit(cropping() ? levelBox(turnNow()) : now, { width: element.clientWidth, height: element.clientHeight - below });
         view = { ...view, y: view.y + below };
         paint();
     }
@@ -561,8 +683,10 @@ export function createStage(hooks: StageHooks) {
         if (!found || !cropFrame) return false;
         const rect = within(cropFrame, found.original);
         const now = look(found).crop;
-        const whole = rect.x === 0 && rect.y === 0 && rect.width === found.original.width && rect.height === found.original.height;
         const there = found.steps.find((step) => step.type === "crop");
+        // the crop the picture has with none of her own: the whole picture, or turned, the largest upright rectangle inside it
+        const bare = look({ ...found, steps: found.steps.filter((step) => step !== there) }).crop;
+        const whole = rect.x === bare.x && rect.y === bare.y && rect.width === bare.width && rect.height === bare.height;
         if (rect.x === now.x && rect.y === now.y && rect.width === now.width && rect.height === now.height) return false;
         // a frame back on the whole picture takes the crop away rather than keeping one that does nothing
         hooks.change(there ? (whole ? found.steps.filter((step) => step !== there) : change(found.steps, there.id, { rect })) : add(found.steps, { type: "crop", rect }));
@@ -572,13 +696,13 @@ export function createStage(hooks: StageHooks) {
     /** Holds the frame to a shape, or lets it go free. */
     function setAspect(next: number | undefined) {
         aspect = next;
-        if (next && cropFrame && loaded) cropFrame = shapeFrame(cropFrame, next, loaded.size);
+        if (next && cropFrame && loaded) cropFrame = fitInside(shapeFrame(cropFrame, next, loaded.size), turnNow());
         paint();
         hooks.moved();
     }
 
     // ---- dragging ----
-    type Drag = { kind: "end"; id: string; end: "from" | "to" | "both"; from: Point; steps: Kept[] } | { kind: "gradient"; from: Point } | { kind: "paint"; id: string; stroke: Stroke; steps: Kept[] } | { kind: "pan"; from: Point; view: View } | { kind: "frame"; handle: Handle; from: Point; start: Rect } | { kind: "draw"; from: Point } | { kind: "move"; id: string; from: Point; steps: Kept[]; beneath?: string } | { kind: "words"; from: number } | { kind: "select"; from: number };
+    type Drag = { kind: "level" } | { kind: "end"; id: string; end: "from" | "to" | "both"; from: Point; steps: Kept[] } | { kind: "gradient"; from: Point } | { kind: "paint"; id: string; stroke: Stroke; steps: Kept[] } | { kind: "pan"; from: Point; view: View } | { kind: "frame"; handle: Handle; from: Point; start: Rect } | { kind: "draw"; from: Point } | { kind: "move"; id: string; from: Point; steps: Kept[]; beneath?: string } | { kind: "words"; from: number } | { kind: "select"; from: number };
     let drag: Drag | undefined;
     let spaceHeld = false;
     const fingers = new Map<number, Point>();
@@ -590,8 +714,12 @@ export function createStage(hooks: StageHooks) {
         if (!found) return undefined;
         const pen = hooks.pen();
         const line = thickness(pen, found.original);
-        if (tool === "hide") return add(found.steps, { type: "cover", rect: spanned(from, to), color: "#000000" });
-        if (tool === "box") return add(found.steps, { type: "box", rect: spanned(from, to), color: pen.color, thickness: line });
+        // on a turned picture a cover or a box is upright on the screen: spanned on the level picture, kept turned back by the picture's turn
+        const turn = turnNow();
+        const rect = turn.degrees ? uprightRect(from, to, turn) : spanned(from, to);
+        const angle = turn.degrees ? { angle: -turn.degrees } : {};
+        if (tool === "hide") return add(found.steps, { type: "cover", rect, color: "#000000", ...angle });
+        if (tool === "box") return add(found.steps, { type: "box", rect, color: pen.color, thickness: line, ...angle });
         if (tool === "arrow") return add(found.steps, { type: "arrow", from, to, color: pen.color, thickness: line });
         return undefined;
     }
@@ -626,12 +754,20 @@ export function createStage(hooks: StageHooks) {
         element.setPointerCapture(event.pointerId);
         if (event.button === 1 || spaceHeld) return void (drag = { kind: "pan", from: at, view });
         const there = toOriginal(at);
+        if (tool === "crop" && levelling_) {
+            // a line drawn along the horizon, which levels the picture when let go
+            levelLine = { from: at, to: at };
+            drag = { kind: "level" };
+            return paint();
+        }
         if (tool === "crop") {
+            // the crop's frame is upright on the level picture, and dragged in its pixels
+            const level = toLevelAt(at);
             const handle = (event.target as HTMLElement).dataset?.handle as Handle | undefined;
-            const inside = cropFrame && there.x >= cropFrame.x && there.x <= cropFrame.x + cropFrame.width && there.y >= cropFrame.y && there.y <= cropFrame.y + cropFrame.height;
+            const inside = cropFrame && level.x >= cropFrame.x && level.x <= cropFrame.x + cropFrame.width && level.y >= cropFrame.y && level.y <= cropFrame.y + cropFrame.height;
             // pressed outside the frame, a new one is dragged out from there
-            if (!handle && !inside) cropFrame = { x: Math.round(there.x), y: Math.round(there.y), width: 1, height: 1 };
-            drag = { kind: "frame", handle: handle ?? (inside ? "move" : "se"), from: there, start: cropFrame! };
+            if (!handle && !inside) cropFrame = { x: Math.round(level.x), y: Math.round(level.y), width: 1, height: 1 };
+            drag = { kind: "frame", handle: handle ?? (inside ? "move" : "se"), from: level, start: cropFrame! };
             return;
         }
         if (tool === "text") {
@@ -746,7 +882,14 @@ export function createStage(hooks: StageHooks) {
             return paint();
         }
         if (drag.kind === "pan") view = { ...drag.view, x: drag.view.x + at.x - drag.from.x, y: drag.view.y + at.y - drag.from.y };
-        else if (drag.kind === "frame") cropFrame = dragFrame(drag.start, drag.handle, { x: there.x - drag.from.x, y: there.y - drag.from.y }, loaded.size, aspect ?? (event.shiftKey && drag.handle.length === 2 ? drag.start.width / drag.start.height : undefined));
+        else if (drag.kind === "frame") {
+            const level = toLevelAt(at);
+            const wanted = dragFrame(drag.start, drag.handle, { x: level.x - drag.from.x, y: level.y - drag.from.y }, loaded.size, aspect ?? (event.shiftKey && drag.handle.length === 2 ? drag.start.width / drag.start.height : undefined));
+            // on a turned picture the frame stops where it would leave the picture
+            cropFrame = keepInside(drag.start, wanted, turnNow());
+        } else if (drag.kind === "level") {
+            if (levelLine) levelLine = { ...levelLine, to: at };
+        }
         else if (drag.kind === "draw") live = drawing(drag.from, there);
         else {
             const by = { x: there.x - drag.from.x, y: there.y - drag.from.y };
@@ -777,6 +920,14 @@ export function createStage(hooks: StageHooks) {
         const made = live;
         live = undefined;
         if (was.kind === "frame") return hooks.moved();
+        if (was.kind === "level") {
+            const line = levelLine;
+            levelLine = undefined;
+            paint();
+            // a line long enough to mean something levels the picture: the turn that makes it flat, or plumb
+            if (line && Math.hypot(line.to.x - line.from.x, line.to.y - line.from.y) >= 12) hooks.turned?.(levelling(line.from, line.to, turnNow().degrees));
+            return;
+        }
         if (was.kind === "end") {
             if (made && JSON.stringify(made) !== JSON.stringify(was.steps)) hooks.change(made);
             return paint();
@@ -810,7 +961,7 @@ export function createStage(hooks: StageHooks) {
         }
         if (was.kind === "move") {
             const still = !made || made.every((step, at) => step === was.steps[at] || JSON.stringify(step) === JSON.stringify(was.steps[at]));
-            if (!still) hooks.change(made!.map((step) => (step.type === "cover" && step.id === was.id ? { ...step, rect: within(step.rect, hooks.picture()!.original) } : step)));
+            if (!still) hooks.change(made!.map((step) => (step.type === "cover" && step.id === was.id && !step.angle ? { ...step, rect: within(step.rect, hooks.picture()!.original) } : step)));
             else if (was.beneath) {
                 picked = was.beneath;
                 hooks.moved();
@@ -824,11 +975,12 @@ export function createStage(hooks: StageHooks) {
         const size = step.type === "arrow" ? Math.hypot(step.to.x - step.from.x, step.to.y - step.from.y) * where.across : step.type === "cover" || step.type === "box" ? Math.min(step.rect.width, step.rect.height) * where.across : 0;
         if (size < 4) return paint();
         if (step.type === "cover") {
-            // the cover takes the color round where it was put, from the original's own pixels
-            const rect = within(step.rect, hooks.picture()!.original);
-            const area = ringArea(rect, loaded!.size);
-            const color = coverColor(await loaded!.pixels(area), area, rect);
-            hooks.change(made.map((each) => (each.id === step.id ? { ...each, rect, color } as Kept : each)));
+            // the cover takes the color round where it was put, from the original's own pixels (round the box about a turned one)
+            const rect = step.angle ? step.rect : within(step.rect, hooks.picture()!.original);
+            const box = step.angle ? within(boxAround(cornersOf(rect, step.angle)), hooks.picture()!.original) : rect;
+            const area = ringArea(box, loaded!.size);
+            const color = coverColor(await loaded!.pixels(area), area, box);
+            hooks.change(made.map((each) => (each.id === step.id ? ({ ...each, rect, color } as Kept) : each)));
         } else hooks.change(made);
         picked = step.type === "cover" ? undefined : step.id;
         hooks.moved();
@@ -861,7 +1013,7 @@ export function createStage(hooks: StageHooks) {
     function startWriting(at: Point) {
         keepWriting();
         writingAt = at;
-        const where = toStage({ ...at, width: 0, height: 0 });
+        const where = pointOnStage(at);
         const found = hooks.picture();
         const size = found ? thickness(hooks.pen(), found.original) * 6 : 24;
         Object.assign(writing.style, { left: `${where.x}px`, top: `${where.y}px`, fontSize: `${Math.max(12, size * place().across)}px`, color: hooks.pen().color });
@@ -876,7 +1028,8 @@ export function createStage(hooks: StageHooks) {
         const found = hooks.picture();
         if (!at || !found || !writing.value.trim()) return;
         const pen = hooks.pen();
-        const next = add(found.steps, { type: "text", at, text: writing.value.trim().slice(0, 400), color: pen.color, size: thickness(pen, found.original) * 6 });
+        const turn = turnNow();
+        const next = add(found.steps, { type: "text", at, text: writing.value.trim().slice(0, 400), color: pen.color, size: thickness(pen, found.original) * 6, ...(turn.degrees ? { angle: -turn.degrees } : {}) });
         picked = next.at(-1)!.id;
         hooks.change(next);
     }
@@ -910,9 +1063,14 @@ export function createStage(hooks: StageHooks) {
         if (!by || event.ctrlKey || event.metaKey || event.altKey) return;
         event.preventDefault();
         const found = hooks.picture();
-        if (tool === "crop" && cropFrame && loaded) cropFrame = dragFrame(cropFrame, "move", by, loaded.size);
+        if (tool === "crop" && cropFrame && loaded) cropFrame = keepInside(cropFrame, dragFrame(cropFrame, "move", by, loaded.size), turnNow());
         else if (picked && found) {
             const id = picked;
+            // the arrows move what is picked the way they point on the screen, whatever the picture's turn
+            const turn = turnNow();
+            const along = turn.degrees ? { x: turn.cos * by.x + turn.sin * by.y, y: -turn.sin * by.x + turn.cos * by.y } : by;
+            by.x = along.x;
+            by.y = along.y;
             hooks.change(found.steps.map((each) => (each.id !== id ? each : each.type === "cover" ? { ...each, rect: { ...each.rect, x: each.rect.x + by.x, y: each.rect.y + by.y } } : each.type === "arrow" || each.type === "box" || each.type === "text" ? ({ ...moved(each, by), id } as Kept) : each)));
         } else view = { ...view, x: view.x - by.x * 10, y: view.y - by.y * 10 };
         paint();
@@ -942,7 +1100,12 @@ export function createStage(hooks: StageHooks) {
             loaded = undefined;
             void prepare("WebGL2").then((again) => ((loaded = again), paint()));
         });
-        return loadPicture(backend, blob);
+        const made = await loadPicture(backend, blob);
+        // a Display P3 picture is shown in a canvas in Display P3 where the browser has one; else it is made sRGB as it is drawn
+        const p3 = hooks.space?.() === "p3";
+        screenConverts = p3 && !made.colors(p3 ? "display-p3" : "srgb");
+        if (!p3) made.colors("srgb");
+        return made;
     }
 
     return {
@@ -1019,6 +1182,8 @@ export function createStage(hooks: StageHooks) {
             hooks.moved();
         },
         loaded: () => loaded,
+        /** Whether the screen shows the picture made sRGB, its canvas having no Display P3. */
+        screenConverts: () => screenConverts,
         tool: () => tool,
         setTool,
         applyCrop,
@@ -1055,7 +1220,21 @@ export function createStage(hooks: StageHooks) {
         scale: () => view.scale,
         /** How many times the picture has been drawn, for tests. */
         drawn: () => drawn,
-        toScreen: (point: Point) => toStage({ ...point, width: 0, height: 0 }),
+        toScreen: (point: Point) => pointOnStage(point),
+        /** Draws the picture turned by the dial's degrees before letting go makes it a step, with a faint grid over the crop; nothing to stop. The frame follows the crop the turn would give. */
+        turning(degrees: number | undefined) {
+            turning = degrees;
+            const found = picture();
+            if (found && tool === "crop") cropFrame = look({ ...found, steps: degrees === undefined ? found.steps : setTurn(found.steps, degrees) }).crop;
+            paint();
+        },
+        /** Whether the next drag on the picture draws a line along the horizon, which levels it when let go. */
+        setLevelling(on: boolean) {
+            levelling_ = on;
+            element.dataset.levelling = on ? "yes" : "";
+            hooks.moved();
+        },
+        levelling: () => levelling_,
         destroy() {
             watcher?.disconnect();
             loaded?.destroy();
