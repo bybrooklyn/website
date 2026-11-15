@@ -211,6 +211,9 @@ export function createCutoutPage(host: HTMLElement, options: PageOptions = {}) {
             return fill();
         }
         busy++;
+        // a slow quality says how long it usually takes, so the wait is known
+        const wait = asking.tier().wait;
+        working.textContent = wait ? `${CUT_WORDS.working}, usually ${wait}` : CUT_WORDS.working;
         fill();
         const started = performance.now();
         try {

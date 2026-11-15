@@ -26,6 +26,8 @@ export interface PartTier {
     matte: "ormbg" | "modnet" | "birefnet";
     files: PartFile[];
     credit: string;
+    /** How long a picture usually takes on the machine it is offered on, in plain words, for a slow choice to say while it works. */
+    wait?: string;
     /** The models that run right on the graphics card (each was tried there on the site's ONNX Runtime); the rest run on WebAssembly. */
     card: ("encode" | "decode" | "matte")[];
 }
@@ -89,7 +91,7 @@ export const BIREFNET_FILES = {
     webgpu: file("matte", ...BIREFNET_WEBGPU, "onnx/model_fp16.onnx", 123210389, "2290313b335cfdb867eefac47b46aa2b225793fc3deb4da8dbc86e71e9cff2d7"),
 };
 
-const cut = (id: string, name: string, who: string, matte: PartTier["matte"], credit: string, matteFile: PartFile, card: PartTier["card"]): PartTier => ({ id, name, who, select: "slim", matte, credit, card, files: [matteFile] });
+const cut = (id: string, name: string, who: string, matte: PartTier["matte"], credit: string, matteFile: PartFile, card: PartTier["card"], wait?: string): PartTier => ({ id, name, who, select: "slim", matte, credit, card, files: [matteFile], ...(wait ? { wait } : {}) });
 
 /**
  * The cut-out's three qualities, the smallest first: Quick, MODNet (made for people); Better, ormbg;
@@ -98,9 +100,9 @@ const cut = (id: string, name: string, who: string, matte: PartTier["matte"], cr
  * card too (docs/imgQuire-models.md), so it is offered only where there is a card.
  */
 export const CUT_TIERS: PartTier[] = [
-    cut("cut-quick", "Quick", "People, small and quick", "modnet", "MODNet", PART_TIERS[0]!.files.find((each) => each.role === "matte")!, []),
-    cut("cut-better", "Better", "Most things, clean edges, slower", "ormbg", "ormbg", PART_TIERS[1]!.files.find((each) => each.role === "matte")!, []),
-    cut("cut-best", "Best", "Hair and fine edges, quick on a graphics card", "birefnet", "BiRefNet lite", BIREFNET_FILES.webgpu, ["matte"]),
+    cut("cut-quick", "Quick", "Under a second a picture, people only", "modnet", "MODNet", PART_TIERS[0]!.files.find((each) => each.role === "matte")!, []),
+    cut("cut-better", "Better", "About 20 seconds a picture, most things", "ormbg", "ormbg", PART_TIERS[1]!.files.find((each) => each.role === "matte")!, [], "about 20 seconds"),
+    cut("cut-best", "Best", "About a second a picture, hair and fine edges", "birefnet", "BiRefNet lite", BIREFNET_FILES.webgpu, ["matte"]),
 ];
 
 /** The choice with this id (a part choice or a cut-out's), or the smaller part choice. */

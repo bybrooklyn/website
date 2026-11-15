@@ -24,19 +24,23 @@ export const CUT_INTRO = "Cutting out needs a model, downloaded once from Huggin
 /** What it says before the model that picks a subject by a press is fetched. */
 export const PICK_INTRO = "Pressing a thing to keep it needs one more model, downloaded once from Hugging Face and kept in this browser.";
 
-/** The quality remembered in this browser, or Better, the smallest that cut the drawn fixtures cleanly (Quick is made for people). */
-export function rememberedCut(): PartTier {
+/** The quality remembered in this browser from a past visit, if one is. */
+export function rememberedCut(): PartTier | undefined {
     try {
         const id = globalThis.localStorage?.getItem(KEPT_CUT);
-        return CUT_TIERS.find((tier) => tier.id === id) ?? CUT_TIERS[1]!;
+        return CUT_TIERS.find((tier) => tier.id === id);
     } catch {
-        return CUT_TIERS[1]!;
+        return undefined;
     }
 }
 
+/** The quality to start on: the one remembered, else by the machine: Best where a graphics card gives WebGPU (about a second a picture), else Better (about 20 seconds; Quick, under a second, is made for people). */
+export const startingCut = (card: boolean, remembered = rememberedCut()): PartTier => remembered ?? CUT_TIERS.find((tier) => tier.id === (card ? "cut-best" : "cut-better"))!;
+
 /** Builds the asking, over a finder (the part models' worker, which the cut-out shares). */
 export function createAsking(hooks: { finder(): Finder; returnTo(): HTMLElement | undefined; moved?(): void }) {
-    let tier = rememberedCut();
+    let tier = rememberedCut() ?? CUT_TIERS[1]!;
+    let chosenByMachine = !rememberedCut();
     const kept = new Map<string, boolean>();
     let fetching = false;
     const have = async (each: PartTier) => {
@@ -177,6 +181,11 @@ export function createAsking(hooks: { finder(): Finder; returnTo(): HTMLElement 
         /** True once the quality's model is kept, asking first (once) if it is not. */
         async ready(from?: HTMLElement): Promise<boolean> {
             const choices = await offered();
+            // with nothing remembered, the machine says where to start
+            if (chosenByMachine) {
+                tier = startingCut(!!card, undefined);
+                chosenByMachine = false;
+            }
             if (!choices.includes(tier)) tier = choices.at(-1)!;
             for (const each of choices) void have(each);
             if (await have(tier)) return true;

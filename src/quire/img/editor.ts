@@ -657,7 +657,7 @@ export function mountEditor(host: HTMLElement, context: Context) {
     /** The strip while cutting out: what it is laid on, the brush, the quality, and taking the cut-out away. */
     function cutStrip(): { said: string; controls: HTMLElement[] } {
         const cut = picture ? look(picture).cutout : undefined;
-        if (cutBusy) return { said: "Cutting out", controls: [] };
+        if (cutBusy) return { said: cutAsking.tier().wait ? `Cutting out, usually ${cutAsking.tier().wait}` : "Cutting out", controls: [] };
         if (!cut) return { said: "Not cut out", controls: [stripButton("Cut out", "Run the model again", () => void startCut())] };
         const pressed = (button: HTMLElement, on: boolean) => (button.classList.toggle("pressed", on), button);
         const swatches = COLORS.map((each) => {
