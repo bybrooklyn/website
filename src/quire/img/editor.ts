@@ -1371,8 +1371,11 @@ export function mountEditor(host: HTMLElement, context: Context) {
                     [
                         { label: "Grade", icon: tick(grading.isOpen(), "paper"), hint: "G", key: "grade", pressed: grading.isOpen(), disabled: !picture, run: () => showGrade() },
                         { label: "Auto", icon: "paper", key: "grade-auto", disabled: !picture, run: () => void autoGrade() },
-                        { label: "Repair JPEG", icon: tick(!!picture && !!look(picture).repair, "paint"), key: "repair", pressed: !!picture && !!look(picture).repair, disabled: !picture || !repairable, run: () => toggleRepair() },
                         { label: "Remove the grade", icon: "trash", disabled: !history.now().some((step) => step.type === "grade"), run: () => commit(history.now().filter((step) => step.type !== "grade")) },
+                    ],
+                    // a JPEG's repair is a step of its own, on or off, and no part of the grade
+                    [
+                        { label: "Repair JPEG", icon: tick(!!picture && !!look(picture).repair, "paint"), key: "repair", pressed: !!picture && !!look(picture).repair, disabled: !picture || !repairable, run: () => toggleRepair() },
                     ],
                 ),
         },
