@@ -621,7 +621,7 @@
         padding: 0;
     }
 
-    .quire-img-bar .quire-img-bar-facts {
+    .quire-img-bar :is(.quire-img-bar-facts, .quire-img-bar-cutout) {
         display: none;
     }
 }
@@ -777,6 +777,8 @@
 
 @media (max-width: 34rem) {
     .quire-img-strip[data-kind="crop"] {
+        /* wide enough for the shapes and Apply on one row, the horizon's group on the next */
+        width: min(calc(100% - 1.5rem), 20rem);
         flex-wrap: wrap;
         justify-content: center;
         row-gap: 0.25rem;

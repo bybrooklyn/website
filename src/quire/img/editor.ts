@@ -708,6 +708,8 @@ export function mountEditor(host: HTMLElement, context: Context) {
         return made;
     };
     buttons.facts.classList.add("quire-img-bar-facts");
+    // on the narrowest screens Cut out is left to Tools, Cut out and the K key, as Facts is, so that the other tools fit
+    buttons.cutout.classList.add("quire-img-bar-cutout");
     const end = group(buttons.grade, buttons.facts, buttons.export);
     end.classList.add("quire-bar-end");
     strip0.append(group(buttons.undo, buttons.redo), group(buttons.crop, buttons.resize, buttons.hide, buttons.read, buttons.cutout), group(buttons.arrow, buttons.box, buttons.text), end);
