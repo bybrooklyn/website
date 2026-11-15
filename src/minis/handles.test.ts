@@ -6,7 +6,7 @@
 // pointer, or moves along the one way the view sees, and snaps each way on its own. Run with `bun run test`.
 
 import { expect, test } from "bun:test";
-import { ARROW, GAP, REACH, across, along, arrowMesh, dragged, freedomOf, layout, pixelsOf, pointOf, pointsLayout, ringMesh, snapped, standOff, toSegment, turnedBy, which } from "./handles";
+import { ARROW, GAP, REACH, across, along, arrowMesh, dragged, freedomOf, layout, pixelsOf, pointOf, pointsLayout, ringMesh, snapped, standOff, stripPlace, toSegment, turnedBy, which, type Rect } from "./handles";
 import { project, type Orbit } from "./orbit";
 import { normals, type V3 } from "../mote/solids";
 
@@ -166,4 +166,35 @@ test("on a small selection the handles stand off from it: every arrow starts and
     }
     expect(standOff(0, width, height)).toBe(0);
     expect(standOff(10000, width, height)).toBe(most);
+});
+
+test("the strip by what is chosen sits above it, under it, or beside it, wholly on the screen, never over it; and nowhere while it is off the screen", () => {
+    const strip = { w: 300, h: 50 };
+    const overlaps = (a: { x: number; y: number }, b: Rect) => a.x < b.right && a.x + strip.w > b.left && a.y < b.bottom && a.y + strip.h > b.top;
+    const middle: Rect = { left: 400, right: 600, top: 300, bottom: 400 };
+    expect(stripPlace(middle, undefined, strip, width, height)).toEqual({ x: 350, y: 240, below: false });
+    // no room above: under it
+    expect(stripPlace({ ...middle, top: 20 }, undefined, strip, width, height)?.below).toBe(true);
+    // the handles are kept clear too
+    expect(stripPlace(middle, { left: 450, right: 550, top: 200, bottom: 500 }, strip, width, height)?.y).toBe(140);
+    // filling the screen up and down: beside it, or nowhere
+    const tall: Rect = { left: 100, right: 400, top: -50, bottom: 760 };
+    const beside = stripPlace(tall, undefined, strip, width, height)!;
+    expect(beside.x).toBe(410);
+    expect(stripPlace({ left: -10, right: 1010, top: -10, bottom: 710 }, undefined, strip, width, height)).toBeUndefined();
+    // off the screen to the lower left, as it was seen floating over the empty table: nowhere
+    expect(stripPlace({ left: -500, right: -100, top: 800, bottom: 900 }, undefined, strip, width, height)).toBeUndefined();
+    expect(stripPlace({ left: -500, right: 10, top: 300, bottom: 400 }, undefined, strip, width, height)).toBeUndefined();
+    // and wherever it goes, it is on the screen and not over what is chosen
+    for (let i = 0; i < 2000; i++) {
+        const [x, y, w, h] = [Math.random() * 1400 - 200, Math.random() * 1000 - 150, Math.random() * 600, Math.random() * 500];
+        const chosen: Rect = { left: x, right: x + w, top: y, bottom: y + h };
+        const place = stripPlace(chosen, undefined, strip, width, height);
+        if (!place) continue;
+        expect(place.x).toBeGreaterThanOrEqual(8);
+        expect(place.x + strip.w).toBeLessThanOrEqual(width - 8);
+        expect(place.y).toBeGreaterThanOrEqual(8);
+        expect(place.y + strip.h).toBeLessThanOrEqual(height - 8);
+        expect(overlaps(place, chosen)).toBe(false);
+    }
 });

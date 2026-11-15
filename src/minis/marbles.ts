@@ -27,7 +27,7 @@ import { turned } from "../mote/track";
 import { checks, type Mark } from "./checks";
 import { STILL as NO_MOVE, about, asOwn, groupFits, groupSnaps, joinedTo, knobAt, matched, middleOf, mirrored, mirrorLine, moved, movedPoint, pivotOf, RESIZABLE, rebent, resizable, resized, rotated, then, type GroupSnap, type Move } from "./edit";
 import { ghostMarks, makeGhost } from "./ghost";
-import { AXES, ARROW, RING, across, along, arrowMesh, dragged, freedomOf, layout, pixelsOf, pointOf, pointsLayout, ringMesh, snapped, standOff, turnedBy, which, type Freedom, type Handle, type Shown, type Snaps } from "./handles";
+import { AXES, ARROW, RING, across, along, arrowMesh, dragged, freedomOf, layout, pixelsOf, pointOf, pointsLayout, ringMesh, snapped, standOff, stripPlace, turnedBy, which, type Freedom, type Handle, type Rect, type Shown, type Snaps } from "./handles";
 import { begun, canRedo, canUndo, readSteps, recorded, redone, replaced, trimmed, undone, type Steps } from "./history";
 import { NARROW, STRAIGHT, eyeOf, enters, framing, ground, kept, lensed, nearest, panned, project, ray, straightOn, type Orbit } from "./orbit";
 import { BOX, CELL, FURTHEST, LEVEL, RADIUS, SIZES, allowed, bendAllowed, blockMesh, boxToWorld, brokenBy, isBent, keyOf, pointsIn, pointsOf, shapeOf, strainOf, sweepOf, toWorld, warned, wayToWorld, withBend, type Box, type Broken, type Kind, type Place } from "./pieces";
@@ -2468,33 +2468,35 @@ export default function marbles(m: Mote): Scene {
         ctx.globalAlpha = 1;
         // the strip grows by what is chosen, above it, or under it where there is no room above
         const pieces = chosenPieces();
-        const shownStrip = pieces.length > 0 && !carried && !bendDrag && !boxing && ![...held.values()].some((one) => one.mode === "turn" || one.mode === "pinch" || one.mode === "pan");
-        strip.classList.toggle("shown", shownStrip);
-        strip.inert = !shownStrip;
-        if (!shownStrip) return;
-        let [left, right, top, bottom] = [Infinity, -Infinity, Infinity, -Infinity];
-        // the handles are kept clear too: the strip goes above the highest of them, or under the lowest
-        const handles = handlesNow();
-        for (const point of [...(handles?.ring ?? []), ...Object.values(handles?.arrows ?? {}).map((arrow) => arrow.to), ...(handles?.knob ? [handles.knob] : [])]) {
-            [top, bottom] = [Math.min(top, point.y - 12), Math.max(bottom, point.y + 12)];
-        }
-        for (const piece of pieces) {
-            for (const box of shapeOf(piece.kind).room.filter((_, i, all) => i % Math.max(1, Math.floor(all.length / 6)) === 0)) {
-                const at = boxToWorld(piece.place, box).at;
-                const seenAt = onScreen(at);
-                if (!seenAt) continue;
-                [left, right, top, bottom] = [Math.min(left, seenAt.x), Math.max(right, seenAt.x), Math.min(top, seenAt.y), Math.max(bottom, seenAt.y)];
+        const wanted = pieces.length > 0 && !carried && !bendDrag && !boxing && ![...held.values()].some((one) => one.mode === "turn" || one.mode === "pinch" || one.mode === "pan");
+        // where it goes: by what is chosen, measured by the corners of the room its pieces take up, and
+        // clear of the handles; nowhere while what is chosen is off the screen (it shrinks away, and grows
+        // again by the pieces when they come back into view), so that it never floats over the empty table
+        let place: ReturnType<typeof stripPlace>;
+        if (wanted) {
+            const chosenRect: Rect = { left: Infinity, right: -Infinity, top: Infinity, bottom: -Infinity };
+            for (const piece of pieces) {
+                const room = shapeOf(piece.kind).room;
+                for (const box of room.filter((_, i) => i % Math.max(1, Math.floor(room.length / 12)) === 0 || i === room.length - 1)) {
+                    const placed = boxToWorld(piece.place, box);
+                    for (const corner of [0, 1, 2, 3, 4, 5, 6, 7]) {
+                        const seenAt = onScreen([0, 1, 2].map((axis) => placed.at[axis]! + placed.half[axis]! * ((corner >> axis) & 1 ? 1 : -1)) as V3);
+                        if (!seenAt) continue;
+                        [chosenRect.left, chosenRect.right, chosenRect.top, chosenRect.bottom] = [Math.min(chosenRect.left, seenAt.x), Math.max(chosenRect.right, seenAt.x), Math.min(chosenRect.top, seenAt.y), Math.max(chosenRect.bottom, seenAt.y)];
+                    }
+                }
             }
+            const handles = handlesNow();
+            const points = [...(handles?.ring ?? []), ...Object.values(handles?.arrows ?? {}).map((arrow) => arrow.to), ...(handles?.knob ? [handles.knob] : [])];
+            const kept: Rect | undefined = points.length ? { left: Math.min(...points.map((p) => p.x - 12)), right: Math.max(...points.map((p) => p.x + 12)), top: Math.min(...points.map((p) => p.y - 12)), bottom: Math.max(...points.map((p) => p.y + 12)) } : undefined;
+            if (Number.isFinite(chosenRect.left)) place = stripPlace(chosenRect, kept, { w: strip.offsetWidth, h: strip.offsetHeight }, m.width, m.height);
         }
-        if (!Number.isFinite(left)) return;
-        const [w, h] = [strip.offsetWidth, strip.offsetHeight];
-        const above = top - h - 10;
-        const below = above < 8;
-        const y = below ? Math.min(m.height - h - 8, bottom + 10) : above;
-        const x = Math.max(8, Math.min(m.width - w - 8, (left + right) / 2 - w / 2));
-        const place = `${Math.round(x)}px ${Math.round(y)}px`;
-        if (strip.style.translate !== place) strip.style.translate = place;
-        strip.classList.toggle("below", below);
+        strip.classList.toggle("shown", Boolean(place));
+        strip.inert = !place;
+        if (!place) return;
+        const at = `${Math.round(place.x)}px ${Math.round(place.y)}px`;
+        if (strip.style.translate !== at) strip.style.translate = at;
+        strip.classList.toggle("below", place.below);
     }
 }
 
