@@ -88,8 +88,13 @@ test("on the picture it offers Copy, Paste and Export; on a mark that mark is pi
     await shut();
     expect(await page.tab.run("document.activeElement === document.querySelector('.quire-img-stage')")).toBe(true);
     // a box drawn, then nothing picked, then a right-click on its edge
+    // (the menu is seen going back for a moment after it closes, over where the drag starts: on a busy machine that
+    // moment is long enough to take the press, so the drag waits for it, for the tool, and then for the box it made)
+    await page.tab.wait(400);
     await page.tab.press("b");
+    await page.until("window.app.editing().stage.tool() === 'box'");
     await page.tab.drag(await page.onScreen(60, 40), await page.onScreen(200, 150), 6);
+    await page.until("window.app.editing().steps().some((step) => step.type === 'box')");
     await page.tab.press("Escape");
     await page.tab.run("window.app.editing().stage.pick(undefined)");
     const edge = await page.onScreen(60, 90);
